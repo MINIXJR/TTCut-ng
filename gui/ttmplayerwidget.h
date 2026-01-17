@@ -59,6 +59,7 @@ public:
 protected:
     bool playMplayer(QString videoFile);
     bool stopMplayer();
+    void connectSignals();
 
 protected slots:
     void mplayerStarted();
@@ -69,7 +70,7 @@ protected slots:
 
 private:
     TTMessageLogger*   log;
-    QProcess*          mplayerProc;      
+    QProcess*          mplayerProc;
 };
 
 #endif

@@ -103,6 +103,8 @@ void TTThreadTaskPool::cleanUpQueue()
   mOverallStepCount   = 0;
   mEstimateTaskCount  = 1;
   mCompleted          = 0.0;
+  mTotalMap.clear();
+  mProgressMap.clear();
 }
 
 /**
@@ -203,25 +205,23 @@ void TTThreadTaskPool::onStatusReport(TTThreadTask* task, int state, const QStri
   if (state == StatusReportArgs::Start)
   {
     qDebug() << task->taskID() << " total steps " << value;
-    //mTotalMap.insert(task->taskID(), value);
-    //mProgressMap.insert(task->taskID(), 0);
-    mOverallTotalSteps = value;
+    mTotalMap.insert(task->taskID(), value);
+    mProgressMap.insert(task->taskID(), 0);
   }
 
   if (state == StatusReportArgs::Step)
   {
-    //qDebug() << "thread step " << value;
-    //mProgressMap[task->taskID()] = value;
-    mOverallStepCount = value;
+    mProgressMap[task->taskID()] = value;
   }
 
   if (state == StatusReportArgs::Finished)
   {
     qDebug() << task->taskID() << " finished " << value;
-    //mProgressMap[task->taskID()] = value;
-    mCompleted += overallPercentage() - mCompleted;
+    // Mark this task as 100% complete
+    if (mTotalMap.contains(task->taskID())) {
+      mProgressMap[task->taskID()] = mTotalMap[task->taskID()];
+    }
   }
-
 
   emit statusReport(task, state, msg, value);
 }
@@ -257,11 +257,25 @@ void TTThreadTaskPool::onUserAbortRequest()
 
 int TTThreadTaskPool::overallPercentage()
 {
-  double percent = (mOverallStepCount > 0)
-    ? (int) ((double) (mOverallStepCount) / (double) (mOverallTotalSteps) * 1000.0 / mEstimateTaskCount)
-    : 0;
+  // Sum progress and totals from all tracked tasks
+  quint64 totalProgress = 0;
+  quint64 totalSteps = 0;
 
-  return mCompleted + percent;
+  QMapIterator<QUuid, quint64> it(mTotalMap);
+  while (it.hasNext()) {
+    it.next();
+    QUuid taskId = it.key();
+    totalSteps += it.value();
+    if (mProgressMap.contains(taskId)) {
+      totalProgress += mProgressMap[taskId];
+    }
+  }
+
+  if (totalSteps == 0)
+    return 0;
+
+  // Return percentage in permille (0-1000 = 0-100%)
+  return (int)((double)totalProgress / (double)totalSteps * 1000.0);
 }
 
 //! Calculate the total progress time value of all enqueued tasks
