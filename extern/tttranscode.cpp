@@ -48,7 +48,7 @@ TTTranscodeProvider::TTTranscodeProvider(TTEncodeParameter& enc_par )
 {
   log               = TTMessageLogger::getInstance();
   this->enc_par     = enc_par;
-  str_command       = "transcode";
+  str_command       = "ffmpeg";
   transcode_success = false;
 
   buildCommandLine();
@@ -62,29 +62,45 @@ TTTranscodeProvider::~TTTranscodeProvider()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Parameter for the encoder
+ * Parameter for the encoder (ffmpeg)
  */
 void TTTranscodeProvider::buildCommandLine()
 {
-  //transcode -i encode.avi --pre_clip 0 -y ffmpeg --export_prof dvd-pal --export_asr 2 -o encode
-  QString str_aspect  = QString("%1").arg(enc_par.videoAspectCode());
-  QString str_format  = QString("%1x%2").arg(enc_par.videoWidth()).arg(enc_par.videoHeight());
-  QString str_bitrate = QString("%1").arg(enc_par.videoBitrate());
+  // ffmpeg command for MPEG-2 DVD-compliant encoding
+  // Input: AVI file with raw frames
+  // Output: MPEG-2 elementary stream (.m2v)
+
+  // Convert aspect ratio code to ffmpeg aspect string
+  // MPEG-2 aspect codes: 1=1:1, 2=4:3, 3=16:9, 4=2.21:1
+  QString str_aspect;
+  switch (enc_par.videoAspectCode()) {
+    case 2:  str_aspect = "4:3";   break;
+    case 3:  str_aspect = "16:9";  break;
+    default: str_aspect = "4:3";   break;
+  }
+
+  QString str_bitrate = QString("%1k").arg((int)enc_par.videoBitrate());
+  QString str_maxrate = QString("%1k").arg((int)(enc_par.videoBitrate() * 1.5));
+
+  // Output file needs .m2v extension for ffmpeg
+  QString outputFile = enc_par.mpeg2FileInfo().absoluteFilePath() + ".m2v";
 
   strl_command_line.clear();
 
-  strl_command_line << "-i"
-		    << enc_par.aviFileInfo().absoluteFilePath()
-		    << "--pre_clip"
-		    << "0"
-	      << "--export_prof"
-		    << "dvd"            // dvd-pal
-		    << "--export_asr"
-		    << str_aspect
-		    << "-o"
-		    << enc_par.mpeg2FileInfo().absoluteFilePath();
+  strl_command_line << "-y"                    // Overwrite output without asking
+                    << "-i"
+                    << enc_par.aviFileInfo().absoluteFilePath()
+                    << "-c:v" << "mpeg2video"  // MPEG-2 video codec
+                    << "-b:v" << str_bitrate   // Video bitrate
+                    << "-maxrate" << str_maxrate
+                    << "-bufsize" << "1835k"   // DVD VBV buffer size
+                    << "-g" << "15"            // GOP size (15 for PAL)
+                    << "-bf" << "2"            // B-frames
+                    << "-aspect" << str_aspect // Aspect ratio
+                    << "-f" << "mpeg2video"    // Force MPEG-2 format
+                    << outputFile;
 
-  log->infoMsg(__FILE__, __LINE__, QString("%1").arg(strl_command_line.join(" ")));
+  log->infoMsg(__FILE__, __LINE__, QString("ffmpeg %1").arg(strl_command_line.join(" ")));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -183,11 +199,11 @@ void TTTranscodeProvider::onProcFinished(int e_code, QProcess::ExitStatus e_stat
 
   switch (e_status) {
     case QProcess::NormalExit:
-      procMsg = tr("Transcode exit normally ... done(0)");
+      procMsg = tr("ffmpeg exited normally ... done(0)");
       transcode_success = true;
       break;
     case QProcess::CrashExit:
-      procMsg = tr("Transcode crashed");
+      procMsg = tr("ffmpeg crashed");
       transcode_success = false;
       break;
     default:
