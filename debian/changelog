@@ -1,3 +1,21 @@
+ttcut (0.30.0+git20260117-78-c74629c-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:50:15 +0100
+
+ttcut (0.30.0+git20260117.78.c74629c-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:48:34 +0100
+
+ttcut (0.30.0-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:43:00 +0100
+
 ttcut (0.30.0) unstable; urgency=medium
 
   * Qt5 migration release

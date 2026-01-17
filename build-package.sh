@@ -21,15 +21,19 @@ fi
 GIT_DATE=$(git log -1 --format=%cd --date=format:%Y%m%d)
 GIT_HASH=$(git rev-parse --short HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+GIT_COMMIT_COUNT=$(git rev-list --count HEAD)
 
 echo "==> Building TTCut Debian package"
 echo "==> Version: ${VERSION}"
-echo "==> Git info: ${GIT_DATE}-${GIT_HASH}"
+echo "==> Git date: ${GIT_DATE}"
+echo "==> Git commit: ${GIT_HASH}"
+echo "==> Git commit count: ${GIT_COMMIT_COUNT}"
 echo "==> Git branch: $GIT_BRANCH"
 echo "==> Distribution: $DISTRO"
 echo ""
 
-BUILD_VERSION="${VERSION}"
+# Build version includes git info: VERSION+gitDATE-COUNT-HASH
+BUILD_VERSION="${VERSION}+git${GIT_DATE}-${GIT_COMMIT_COUNT}-${GIT_HASH}"
 BUILD_DIR="${BUILD_BASE_DIR}/${PACKAGE_NAME}-${BUILD_VERSION}"
 
 # Prompt for changelog description
