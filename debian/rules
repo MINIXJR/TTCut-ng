@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	qmake ttcut.pro
+
+override_dh_auto_build:
+	$(MAKE)
+
+override_dh_auto_install:
+	install -D -m 0755 ttcut $(CURDIR)/debian/ttcut/usr/bin/ttcut
+
+override_dh_auto_clean:
+	$(MAKE) clean || true
+	rm -f Makefile
