@@ -16,7 +16,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
          libqt5gui5t64,
          libqt5widgets5t64,
          libmpeg2-4
-Recommends: ffmpeg, mjpegtools, mplayer
+Recommends: ffmpeg, mjpegtools, mpv
 Description: MPEG-2 video cutting tool
  TTCut is a video cutting tool for MPEG-2 streams that avoids re-encoding
  the entire video. Only frames around cut points are selectively re-encoded.
