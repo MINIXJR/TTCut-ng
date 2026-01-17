@@ -1,14 +1,14 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2008 / www.tritime.org                         */
+/* COPYRIGHT: Minei3oat (c) 2019 / github.com/Minei3oat                       */
 /*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2006                                                      */
-/* FILE     : ttcurrentframe.h                                                */
+/* PROJEKT  : TTCUT 2019                                                      */
+/* FILE     : ttopensubtitletask.h                                            */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 02/19/2006 */
+/* AUTHOR  : Minei3oat                                       DATE: 12/30/2019 */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
-// TTCURRENTFRAME
+// TTOPENSUBTITLETASK
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -27,66 +27,37 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#ifndef TTCURRENTFRAME_H
-#define TTCURRENTFRAME_H
+#include "common/ttthreadtask.h"
 
-#include "ui_currentframewidget.h"
+#include <QString>
+#include <QFileInfo>
 
-#include "../common/ttcut.h"
-#include "../avstream//ttmpeg2videostream.h"
-
-class TTAVItem;
+class TTSubtitleType;
 class TTSubtitleStream;
+class TTAVItem;
 
-class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
+//! Runable task for opening subtitle streams
+class TTOpenSubtitleTask : public TTThreadTask
 {
-	Q_OBJECT
+  Q_OBJECT
 
-		public:
-		TTCurrentFrame(QWidget* parent = 0);
+  public:
+    TTOpenSubtitleTask(TTAVItem* avItem, QString filePath, int order);
 
-		void setTitle(const QString & title);
-		void controlEnabled(bool enabled);
-		int currentFramePos();
-		void saveCurrentFrame();
-		void closeVideoStream();
-		void setSubtitleStream(TTSubtitleStream* subtitleStream);
-		void clearSubtitleStream();
+  protected:
+    void cleanUp();
+    void operation();
 
-		void wheelEvent(QWheelEvent * e);
+  public slots:
+    void onUserAbort();
 
-	public slots:
-		void onAVDataChanged(TTAVItem* avData);
-		void onPrevIFrame();
-		void onNextIFrame();
-		void onPrevPFrame();
-		void onNextPFrame();
-		void onPrevBFrame();
-		void onNextBFrame();
-		void onSetMarker();
-		void onGotoMarker(int markerPos);
-		void onSetCutIn(int cutInPos);
-		void onSetCutOut(int cutOutPos);
-		void onGotoCutIn(int pos);
-		void onGotoCutOut(int pos);
-		void onGotoFrame(int pos);
-		void onGotoFrame(int pos, int fast);
-		void onMoveNumSteps(int);
-		void onMoveToHome();
-		void onMoveToEnd();
+  signals:
+    void finished(TTAVItem*, TTSubtitleStream*, int);
 
-	signals:
-		void newFramePosition(int);
-    void prevFrame();
-    void nextFrame();
-    void setMarker(int);
-
-	private:
-		void updateCurrentPosition();
-
-	private:
-		bool                isControlEnabled;
-		TTMpeg2VideoStream* mpeg2Stream;
+  private:
+    TTAVItem*         mpAVItem;
+    int               mOrder;
+    QString           mFilePath;
+    TTSubtitleStream* mpSubtitleStream;
+    TTSubtitleType*   mpSubtitleType;
 };
-
-#endif //TTCURRENTFRAME_H

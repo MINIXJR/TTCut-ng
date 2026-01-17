@@ -284,3 +284,65 @@ int TTBreakObject::restartObjectIndex()
   return restart_object_index;
 }
 
+// /////////////////////////////////////////////////////////////////////////////
+// -----------------------------------------------------------------------------
+// *** TTSubtitleHeader
+// -----------------------------------------------------------------------------
+// /////////////////////////////////////////////////////////////////////////////
+TTSubtitleHeader::TTSubtitleHeader()
+{
+  mText = "";
+  mStartMSec = 0;
+  mEndMSec = 0;
+}
+
+QString TTSubtitleHeader::text()
+{
+  return mText;
+}
+
+void TTSubtitleHeader::setText(QString text)
+{
+  mText = text;
+}
+
+QTime TTSubtitleHeader::startTime()
+{
+  return QTime::fromMSecsSinceStartOfDay(mStartMSec);
+}
+
+int TTSubtitleHeader::startMSec()
+{
+  return mStartMSec;
+}
+
+void TTSubtitleHeader::setStartTime(QTime start)
+{
+  mStartMSec = start.msecsSinceStartOfDay();
+}
+
+void TTSubtitleHeader::setStartTime(int mSec)
+{
+  mStartMSec = mSec;
+}
+
+QTime TTSubtitleHeader::endTime()
+{
+  return QTime::fromMSecsSinceStartOfDay(mEndMSec);
+}
+
+int TTSubtitleHeader::endMSec()
+{
+  return mEndMSec;
+}
+
+void TTSubtitleHeader::setEndTime(QTime end)
+{
+  mEndMSec = end.msecsSinceStartOfDay();
+}
+
+void TTSubtitleHeader::setEndTime(int mSec)
+{
+  mEndMSec = mSec;
+}
+

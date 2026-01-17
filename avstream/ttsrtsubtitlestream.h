@@ -1,15 +1,30 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2008 / www.tritime.org                         */
+/* COPYRIGHT: Minei3oat (c) 2019 / github.com/Minei3oat                       */
 /*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2008                                                      */
-/* FILE     : ttmplayerwidget.cpp                                             */
+/* PROJEKT  : TTCUT 2019                                                      */
+/* FILE     : ttsrtsubtitlestream.h                                           */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 05/06/2008 */
+/* AUTHOR  : Minei3oat                                       DATE: 12/29/2019 */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
-// TTMPLAYERWIDGET
+// TTSRTSUBTITLESTREAM
 // ----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Overview
+// -----------------------------------------------------------------------------
+//
+//                               +- TTMpegAudioStream
+//             +- TTAudioStream -|
+//             |                 +- TTAC3AudioStream
+// TTAVStream -|
+//             |
+//             +- TTVideoStream - TTMpeg2VideoStream
+//             |
+//             +- TTSubtitleStream - TTSrtSubtitleStream
+//
+// -----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
 /* This program is free software; you can redistribute it and/or modify it    */
@@ -27,53 +42,27 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#include <QObject>
-#include <QProcess>
+#ifndef TTSRTSUBTITLESTREAM_H
+#define TTSRTSUBTITLESTREAM_H
 
-#include "../common/ttcut.h"
-#include "../common/ttmessagelogger.h"
-#include "ttvideoplayer.h"
+#include "ttavstream.h"
+#include "common/ttmessagelogger.h"
 
-#ifndef TTMPLAYERWIDGET_H
-#define TTMPLAYERWIDGET_H
-
-class TTMplayerWidget : public TTVideoPlayer
+class TTSrtSubtitleStream : public TTSubtitleStream
 {
-    Q_OBJECT
-    Q_PROPERTY(bool getControlsVisible READ getControlsVisible WRITE setControlsVisible)
+  public:
+    TTSrtSubtitleStream(const QFileInfo &f_info);
+    virtual ~TTSrtSubtitleStream();
 
-public:
-    TTMplayerWidget(QWidget *parent);
-    ~TTMplayerWidget();
-    
-    QSize sizeHint() const;
+    virtual TTAVTypes::AVStreamType streamType() const;
 
-    bool getControlsVisible() const;
-    void setControlsVisible(bool visible);
+    virtual void cut(int start, int end, TTCutParameter* cp);
 
-    void cleanUp();
-    void load(QString value);
-    void play();
-    void stop();
-    void setSubtitleFile(QString subtitleFile);
-    void clearSubtitleFile();
+    virtual int  createHeaderList();
+    virtual int  createIndexList(){return 0;}
 
-protected:
-    bool playMplayer(QString videoFile);
-    bool stopMplayer();
-    void connectSignals();
-
-protected slots:
-    void mplayerStarted();
-    void readFromStdout();
-    void exitMplayer(int e_code, QProcess::ExitStatus e_status);
-    void errorMplayer(QProcess::ProcessError);
-    void stateChangedMplayer(QProcess::ProcessState newState);
-
-private:
-    TTMessageLogger*   log;
-    QProcess*          mplayerProc;
-    QString            currentSubtitleFile;
+    QString      streamExtension();
+    QTime        streamLengthTime();
 };
 
-#endif
+#endif // TTSRTSUBTITLESTREAM_H

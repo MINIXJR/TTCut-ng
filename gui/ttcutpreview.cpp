@@ -152,11 +152,22 @@ void TTCutPreview::initPreview(TTCutList* cutList)
 void TTCutPreview::onCutSelectionChanged( int iCut )
 {
   QString   preview_video_name;
+  QString   preview_subtitle_name;
   QFileInfo preview_video_info;
+  QFileInfo preview_subtitle_info;
 
   preview_video_name = QString("preview_%1.mpg").arg(iCut+1, 3, 10, QChar('0'));
   preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
   current_video_file = preview_video_info.absoluteFilePath();
+
+  // Check for subtitle file
+  preview_subtitle_name = QString("preview_%1.srt").arg(iCut+1, 3, 10, QChar('0'));
+  preview_subtitle_info.setFile( QDir(TTCut::tempDirPath), preview_subtitle_name );
+  if (preview_subtitle_info.exists()) {
+    videoPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
+  } else {
+    videoPlayer->clearSubtitleFile();
+  }
 
   qDebug("load preview %s", qPrintable(current_video_file));
   videoPlayer->load(current_video_file);

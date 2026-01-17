@@ -45,9 +45,11 @@
 
 #include "ttopenvideotask.h"
 #include "ttopenaudiotask.h"
+#include "ttopensubtitletask.h"
 #include "ttcutpreviewtask.h"
 #include "ttcutvideotask.h"
 #include "ttcutaudiotask.h"
+#include "ttcutsubtitletask.h"
 #include "ttframesearchtask.h"
 
 #include <QThreadPool>
@@ -121,6 +123,14 @@ void TTAVData::clear()
 void TTAVData::appendAudioStream(TTAVItem* avItem, const QFileInfo& fInfo, int)
 {
   doOpenAudioStream(avItem, fInfo.absoluteFilePath());
+}
+
+/*!
+ * appendSubtitleStream
+ */
+void TTAVData::appendSubtitleStream(TTAVItem* avItem, const QFileInfo& fInfo, int)
+{
+  doOpenSubtitleStream(avItem, fInfo.absoluteFilePath());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -260,7 +270,7 @@ TTAVItem* TTAVData::createAVItem()
 
 /*!
  * openAVStreams
- * Open the video stream and all according audio streams and add them to AVData
+ * Open the video stream and all according audio and subtitle streams and add them to AVData
  */
 void TTAVData::openAVStreams(const QString& videoFilePath)
 {
@@ -270,11 +280,18 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
   TTAVItem* avItem = doOpenVideoStream(videoFilePath);
 
   QFileInfoList audioInfoList = getAudioNames(QFileInfo(videoFilePath));
-	QListIterator<QFileInfo> info(audioInfoList);
+	QListIterator<QFileInfo> audioInfo(audioInfoList);
 
-	while (info.hasNext()) {
-		doOpenAudioStream(avItem, info.next().absoluteFilePath());
+	while (audioInfo.hasNext()) {
+		doOpenAudioStream(avItem, audioInfo.next().absoluteFilePath());
 	}
+
+  QFileInfoList subtitleInfoList = getSubtitleNames(QFileInfo(videoFilePath));
+  QListIterator<QFileInfo> subtitleInfo(subtitleInfoList);
+
+  while (subtitleInfo.hasNext()) {
+    doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
+  }
 }
 
 // *****************************************************************************
@@ -326,6 +343,19 @@ void TTAVData::doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int 
 }
 
 /*!
+ * doOpenSubtitleStream
+ */
+void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, int order)
+{
+  TTOpenSubtitleTask* openSubtitleTask = new TTOpenSubtitleTask(avItem, filePath, order);
+
+  connect(openSubtitleTask, SIGNAL(finished(TTAVItem*, TTSubtitleStream*, int)),
+          this,             SLOT(onOpenSubtitleFinished(TTAVItem*, TTSubtitleStream*, int)));
+
+  mpThreadTaskPool->start(openSubtitleTask);
+}
+
+/*!
  * onOpenVideoFinished
  */
 void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int)
@@ -368,6 +398,25 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 void TTAVData::onOpenAudioAborted(TTAVItem*)
 {
   qDebug("TTAVData::onOpenAudioAborted called...");
+}
+
+/*!
+ * onOpenSubtitleFinished
+ */
+void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStream, int order)
+{
+  if (avItem  == 0) return;
+  if (sStream == 0) return;
+
+  avItem->appendSubtitleEntry(sStream, order);
+}
+
+/*!
+ * onOpenSubtitleAborted
+ */
+void TTAVData::onOpenSubtitleAborted(TTAVItem*)
+{
+  qDebug("TTAVData::onOpenSubtitleAborted called...");
 }
 
 /*  ////////////////////////////////////////////////////////////////////////////
@@ -485,6 +534,24 @@ QFileInfoList TTAVData::getAudioNames(const QFileInfo& vFileInfo)
 	audioDir.setFilter(QDir::Files);
 
 	return audioDir.entryInfoList();
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * getSubtitleNames
+ * Search for subtitle files according to the video file name; Valid subtitle extensions
+ * are: srt
+ */
+QFileInfoList TTAVData::getSubtitleNames(const QFileInfo& vFileInfo)
+{
+	QDir subtitleDir(vFileInfo.absoluteDir());
+
+	QStringList subtitleFilters;
+	subtitleFilters << vFileInfo.completeBaseName() + "*" + ".srt";
+
+	subtitleDir.setNameFilters(subtitleFilters);
+	subtitleDir.setFilter(QDir::Files);
+
+	return subtitleDir.entryInfoList();
 }
 
 // ////////////////////////////////////////////////////////////////////////////
@@ -615,6 +682,19 @@ QString TTAVData::createAudioCutFileName(QString cutBaseFileName, QString audioF
   return QFileInfo(QDir(TTCut::cutDirPath), audioCutFileName).absoluteFilePath();
 }
 
+/*!
+ * createSubtitleCutFileName
+ */
+QString TTAVData::createSubtitleCutFileName(QString cutBaseFileName, QString subtitleFileName, int index)
+{
+  QString subtitleCutFileName = QString("%1_%2.%3").
+    arg(QFileInfo(cutBaseFileName).completeBaseName()).
+    arg(index, 3, 10, QLatin1Char('0')).
+    arg(QFileInfo(subtitleFileName).suffix());
+
+  return QFileInfo(QDir(TTCut::cutDirPath), subtitleCutFileName).absoluteFilePath();
+}
+
 // /////////////////////////////////////////////////////////////////////////////
 // Audio and video cut
 //
@@ -654,6 +734,29 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     cutAudioTask->init(tgtAudioFilePath, cutList, i, cutVideoTask->muxListItem());
 
     mpThreadTaskPool->start(cutAudioTask);
+  }
+
+  // cut subtitle streams
+  for (int i = 0; i < cutList->at(0).avDataItem()->subtitleCount(); i++) {
+    TTSubtitleStream* subtitleStream = cutList->at(0).avDataItem()->subtitleStreamAt(i);
+
+    QString tgtSubtitleFilePath = createSubtitleCutFileName(tgtFileName, subtitleStream->fileName(), i+1);
+
+    log->debugMsg(__FILE__, __LINE__, QString("current subtitle stream %1").arg(subtitleStream->fileName()));
+    log->debugMsg(__FILE__, __LINE__, QString("subtitle cut file %1").arg(tgtSubtitleFilePath));
+
+    // subtitle file exists
+    if (QFileInfo(tgtSubtitleFilePath).exists()) {
+      log->warningMsg(__FILE__, __LINE__, QString(tr("deleting existing subtitle cut file: %1").arg(tgtSubtitleFilePath)));
+      QFile tempFile(tgtSubtitleFilePath);
+      tempFile.remove();
+      tempFile.close();
+    }
+
+    cutSubtitleTask = new TTCutSubtitleTask();
+    cutSubtitleTask->init(tgtSubtitleFilePath, cutList, i, cutVideoTask->muxListItem());
+
+    mpThreadTaskPool->start(cutSubtitleTask);
   }
 }
 
