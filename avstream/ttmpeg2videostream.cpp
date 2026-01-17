@@ -260,12 +260,15 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
   quint8         headerType;
   TTVideoHeader* newHeader;
   QElapsedTimer  time;
+  QElapsedTimer  updateTime;
+  const int      updateIntervalMs = 1000;  // Only update UI every 1 second
 
   header_list->clear();
 
   try
   {
     time.start();
+    updateTime.start();
     emit statusReport(StatusReportArgs::Start, tr("Creating Mpeg2-Header List"), stream_buffer->size());
 
     while(!stream_buffer->atEnd())
@@ -313,7 +316,11 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
         header_list->add( newHeader );
       }
 
-      emit statusReport(StatusReportArgs::Step, QString(tr("Found %1 header")).arg(header_list->count()), stream_buffer->position());
+      // Throttle status updates to reduce UI flickering
+      if (updateTime.elapsed() >= updateIntervalMs) {
+        emit statusReport(StatusReportArgs::Step, QString(tr("Found %1 header")).arg(header_list->count()), stream_buffer->position());
+        updateTime.restart();
+      }
     }
     log->debugMsg(__FILE__, __LINE__, QString("time for creating header list %1ms").
         arg(time.elapsed()));

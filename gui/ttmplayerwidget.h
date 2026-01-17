@@ -71,9 +71,6 @@ protected slots:
 private:
     TTMessageLogger*   log;
     QProcess*          mplayerProc;
-    QString            currentMovie;
-    bool               mIsPlaying;
-    bool               areControlsVisible;
 };
 
 #endif

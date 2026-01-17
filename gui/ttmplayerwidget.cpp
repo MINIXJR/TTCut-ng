@@ -41,6 +41,10 @@ TTMplayerWidget::TTMplayerWidget(QWidget *parent)
   log = TTMessageLogger::getInstance();
   mplayerProc = nullptr;
   mIsPlaying = false;
+
+  // Ensure this widget gets a native window for embedding
+  setAttribute(Qt::WA_NativeWindow);
+  setAttribute(Qt::WA_DontCreateNativeAncestors);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
