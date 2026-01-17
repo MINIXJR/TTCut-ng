@@ -12,6 +12,8 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	install -D -m 0755 ttcut $(CURDIR)/debian/ttcut/usr/bin/ttcut
+	install -D -m 0644 ttcut.desktop $(CURDIR)/debian/ttcut/usr/share/applications/ttcut.desktop
+	install -D -m 0644 ui/pixmaps/ttcut_logo_001.png $(CURDIR)/debian/ttcut/usr/share/pixmaps/ttcut.png
 
 override_dh_auto_clean:
 	$(MAKE) clean || true

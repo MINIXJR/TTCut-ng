@@ -2,8 +2,8 @@
 Name=TTCut
 Comment=Frame-accurate MPEG-2 video cutter
 GenericName=Video Editor
-Exec=/usr/local/src/TTCut-ng/ttcut.sh %f
-Icon=/usr/local/src/TTCut-ng/ui/pixmaps/ttcut_logo_001.png
+Exec=env QT_QPA_PLATFORM=xcb /usr/bin/ttcut %f
+Icon=ttcut
 Terminal=false
 Type=Application
 Categories=AudioVideo;Video;AudioVideoEditing;
