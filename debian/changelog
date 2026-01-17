@@ -1,0 +1,9 @@
+ttcut (0.30.0) unstable; urgency=medium
+
+  * Qt5 migration release
+  * Complete Qt5 migration from Qt4
+  * All compiler warnings fixed
+  * Replaced discontinued transcode with ffmpeg for frame-accurate cutting
+  * Wayland-compatible (uses QLabel for frame display)
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 14:30:00 +0100

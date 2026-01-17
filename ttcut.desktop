@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=TTCut
+Comment=Frame-accurate MPEG-2 video cutter
+GenericName=Video Editor
+Exec=env QT_QPA_PLATFORM=xcb /usr/bin/ttcut %f
+Icon=ttcut
+Terminal=false
+Type=Application
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mpeg;video/x-mpeg;
+Keywords=video;cut;edit;mpeg;dvb;
