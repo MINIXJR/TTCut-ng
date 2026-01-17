@@ -29,7 +29,7 @@
 
 #include "ttmplayerwidget.h"
 
-#include <QtGui/QLayout>
+#include <QLayout>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Constructor for MplayerWidget

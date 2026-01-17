@@ -10,8 +10,8 @@
 #
 #
 PROJECT     = TTCut
-CONFIG      += qt warn_on debug
-QT          += xml phonon
+CONFIG      += qt warn_on debug c++14
+QT          += core widgets gui xml
 DEFINES     += _FILE_OFFSET_BITS=64
 DIST        = ttcut
 TARGET      = ttcut
@@ -139,7 +139,6 @@ HEADERS     = common/ttcut.h\
               gui/tttaskprogress.h\
               gui/ttcutpreview.h\
               gui/ttvideoplayer.h\
-              gui/ttphononwidget.h\
               gui/ttmplayerwidget.h\
               gui/ttcutaboutdlg.h\
               gui/ttcutavcutdlg.h\
@@ -208,7 +207,6 @@ SOURCES     = common/ttcut.cpp\
               gui/ttprocessform.cpp\
               gui/ttcutpreview.cpp\
               gui/ttvideoplayer.cpp\
-              gui/ttphononwidget.cpp\
               gui/ttmplayerwidget.cpp\
               gui/ttcutaboutdlg.cpp\
               gui/ttcutavcutdlg.cpp\

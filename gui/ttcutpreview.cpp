@@ -34,7 +34,6 @@
 #include "../data/ttavlist.h"
 #include "../data/ttcutpreviewtask.h"
 #include "ttmplayerwidget.h"
-#include "ttphononwidget.h"
 
 #include <QApplication>
 #include <QDir>
@@ -47,7 +46,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 {
   setupUi(this);
 
-  videoPlayer = new TTPhononWidget(videoFrame);
+  videoPlayer = new TTMplayerWidget(videoFrame);
 
   setObjectName("TTCutPreview");
 

@@ -311,7 +311,7 @@ void TTCurrentFrame::saveCurrentFrame()
   // input filename specified
   if ( fileDlg->exec() == QDialog::Accepted )
   {
-    szTemp   = fileDlg->selectedFilter();
+    szTemp   = fileDlg->selectedNameFilter();
     fileList = fileDlg->selectedFiles();
     fileName = fileList.at(0);
 

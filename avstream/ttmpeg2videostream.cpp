@@ -1011,7 +1011,7 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   // remove temporary files
   QString rmCmd = QString("rm %1/encode.*").arg(mpeg2FileInfo.absolutePath());
 
-  if (system(rmCmd.toAscii().data()) < 0)
+  if (system(rmCmd.toLatin1().data()) < 0)
     log->errorMsg(__FILE__, __LINE__, QString(tr("system call %1 failed!")).arg(rmCmd));
 
   cr->setIsWriteMaxBitrate(savIsWriteMaxBitrate);
