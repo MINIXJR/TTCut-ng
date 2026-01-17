@@ -150,12 +150,10 @@ bool TTMplayerWidget::playMplayer(QString videoFile)
   mplayer_cmd << "-slave"
               << "-identify"
               << "-quiet"
-              << "-wid";
-  str_cmd.sprintf( "%ld",(long)winId() );
-  mplayer_cmd << str_cmd
-              << "-geometry";
-  str_cmd.sprintf( "%dx%d+0+0", movieSize.width(), movieSize.height());
-  mplayer_cmd << str_cmd
+              << "-wid"
+              << QString::number((long)winId())
+              << "-geometry"
+              << QString("%1x%2+0+0").arg(movieSize.width()).arg(movieSize.height())
               << videoFile;
 
   log->infoMsg(__FILE__, __LINE__, QString("mplayer command: %1").arg(mplayer_cmd.join(" ")));

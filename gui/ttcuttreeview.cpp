@@ -173,11 +173,11 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
 
   if (editItemIndex >= 0) {
     editItemIndex = -1;
-    treeItem->setBackgroundColor(0, Qt::white);
-    treeItem->setBackgroundColor(1, Qt::white);
-    treeItem->setBackgroundColor(2, Qt::white);
-    treeItem->setBackgroundColor(3, Qt::white);
-    treeItem->setBackgroundColor(4, Qt::white);
+    treeItem->setBackground(0, Qt::white);
+    treeItem->setBackground(1, Qt::white);
+    treeItem->setBackground(2, Qt::white);
+    treeItem->setBackground(3, Qt::white);
+    treeItem->setBackground(4, Qt::white);
   }
 
   emit itemUpdated(cItem);
@@ -327,14 +327,14 @@ void TTCutTreeView::onEntryEdit()
   QTreeWidgetItem* curItem = videoCutList->currentItem();
   editItemIndex = videoCutList->indexOfTopLevelItem(curItem);
 
-  curItem->setBackgroundColor(0, Qt::lightGray);
-  curItem->setBackgroundColor(1, Qt::lightGray);
-  curItem->setBackgroundColor(2, Qt::lightGray);
-  curItem->setBackgroundColor(3, Qt::lightGray);
-  curItem->setBackgroundColor(4,Qt::lightGray);
+  curItem->setBackground(0, Qt::lightGray);
+  curItem->setBackground(1, Qt::lightGray);
+  curItem->setBackground(2, Qt::lightGray);
+  curItem->setBackground(3, Qt::lightGray);
+  curItem->setBackground(4,Qt::lightGray);
 
   // deselect item
-  videoCutList->setItemSelected(curItem, false);
+  curItem->setSelected(false);
 
   TTCutItem cutItem = mAVData->cutItemAt(editItemIndex);
   emit entryEdit(cutItem);

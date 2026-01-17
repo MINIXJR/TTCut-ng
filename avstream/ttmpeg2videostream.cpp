@@ -48,6 +48,7 @@
 #include "../data/ttcutparameter.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <stdio.h>
 #include <stdlib.h>
 #include <QDir>
@@ -142,7 +143,7 @@ int TTMpeg2VideoStream::createIndexList()
   int    current_pic_num = 0;
   int    index           = 0;
   quint8 start_code      = 0xFF;
-  QTime  time;
+  QElapsedTimer  time;
   TTPicturesHeader* current_pic  = NULL;
 
   index_list  = new TTVideoIndexList();
@@ -258,7 +259,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
 {
   quint8         headerType;
   TTVideoHeader* newHeader;
-  QTime          time;
+  QElapsedTimer  time;
 
   header_list->clear();
 

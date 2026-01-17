@@ -44,6 +44,8 @@
 
 #include "ttaudioheaderlist.h"
 
+#include <algorithm>
+
 bool audioHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
 
 TTAudioHeaderList::TTAudioHeaderList( int size )
@@ -81,7 +83,7 @@ int TTAudioHeaderList::searchTimeIndex( double s_time )
 
 void TTAudioHeaderList::sort()
 {
-  qSort( begin(), end(), audioHeaderListCompareItems );
+  std::sort( begin(), end(), audioHeaderListCompareItems );
 }
 
 bool audioHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 )

@@ -312,13 +312,13 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line, QString 
 
   //if (!logEnabled && msgType != ERROR) return;
 
-  if (logLevel == NONE & ((msgType != ERROR) & (msgType != FATAL))) return;
+  if ((logLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
 
-  if (logLevel == MINIMAL & ((msgType != ERROR) & (msgType != FATAL) &
-                             (msgType != WARNING))) return;
+  if ((logLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
+                                (msgType != WARNING))) return;
 
-  if (logLevel == EXTENDED & ((msgType != ERROR)   & (msgType != FATAL) &
-                              (msgType != WARNING) & (msgType != INFO))) return;
+  if ((logLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
+                                 (msgType != WARNING) && (msgType != INFO))) return;
 
   if(msgType == INFO)
     msgTypeStr = "info";
@@ -337,8 +337,8 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line, QString 
       : QString("[%1][%2][%3] %4").arg(msgTypeStr).arg(QDateTime::currentDateTime().toString("hh:mm:ss")).arg(msgCaller).arg(msgString);
 
   // show message window
-  if (show)
-    ;
+  // TODO: implement message window display
+  (void)show;
 
   if (logMode & CONSOLE || msgType == ERROR)
     qDebug(logMsgStr.toUtf8().data());

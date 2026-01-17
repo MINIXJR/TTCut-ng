@@ -100,7 +100,7 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
         wheelDelta += TTCut::stepPlusCtrl;
 
   //wheel was rotated forwards away from the user
-  if ( e->delta() > 0 )
+  if ( e->angleDelta().y() > 0 )
     currentPosition -= wheelDelta;
   else
     currentPosition += wheelDelta;
@@ -273,7 +273,7 @@ void TTCurrentFrame::updateCurrentPosition()
 
   szTemp1 = mpeg2Stream->currentFrameTime().toString("hh:mm:ss.zzz");
 
-  szTemp2.sprintf(" (%d)",mpeg2Stream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(mpeg2Stream->currentIndex());
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";

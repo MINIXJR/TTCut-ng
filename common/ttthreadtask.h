@@ -32,7 +32,7 @@
 
 #include <QRunnable>
 #include <QObject>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QUuid>
 
 #include "../common/istatusreporter.h"
@@ -82,7 +82,7 @@ signals:
 
 protected:
   QUuid mTaskID; /**<unique task ID                             */
-  QTime mTaskTime; /**<time set to current time when task started */
+  QElapsedTimer mTaskTime; /**<timer started when task started */
   quint64 mTotalSteps; /**<estimate count of total task steps         */
   quint64 mStepCount; /**<current step count                         */
   TTMessageLogger* log; /**<message logger istance                     */

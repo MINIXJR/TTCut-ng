@@ -121,10 +121,11 @@ void TTCutPreview::initPreview(TTCutList* cutList)
 
       TTCutItem item1 = cutList->at(iPos);
       TTCutItem item2 = cutList->at(iPos+1);
-      selectionString.sprintf( "Cut %d-%d: %s - %s",i,i+1,
-            qPrintable(item1.cutInTime().toString("hh:mm:ss")),
-            qPrintable(item2.cutOutTime().toString("hh:mm:ss")));
-        cbCutPreview->addItem( selectionString );
+      selectionString = QString("Cut %1-%2: %3 - %4")
+            .arg(i).arg(i+1)
+            .arg(item1.cutInTime().toString("hh:mm:ss"))
+            .arg(item2.cutOutTime().toString("hh:mm:ss"));
+      cbCutPreview->addItem( selectionString );
     }
 
     //last cut out
@@ -132,13 +133,13 @@ void TTCutPreview::initPreview(TTCutList* cutList)
       iPos = (i-1)*2+1;
 
       TTCutItem item = cutList->at(iPos);
-      selectionString.sprintf( "End: %s", qPrintable(item.cutOutTime().toString("hh:mm:ss")));
+      selectionString = QString("End: %1").arg(item.cutOutTime().toString("hh:mm:ss"));
       cbCutPreview->addItem( selectionString );
     }
   }
 
   // set the current cut preview to the first cut clip
-  preview_video_name.sprintf("preview_001.mpg");
+  preview_video_name = "preview_001.mpg";
   preview_video_info.setFile(QDir(TTCut::tempDirPath), preview_video_name);
 
   current_video_file = preview_video_info.absoluteFilePath();
@@ -153,7 +154,7 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   QString   preview_video_name;
   QFileInfo preview_video_info;
 
-  preview_video_name.sprintf("preview_%03d.mpg",iCut+1);
+  preview_video_name = QString("preview_%1.mpg").arg(iCut+1, 3, 10, QChar('0'));
   preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
   current_video_file = preview_video_info.absoluteFilePath();
 

@@ -80,7 +80,6 @@ void TTNavigatorDisplay::drawCutList()
 {
   int   cutIn;
   int   cutOut;
-  int   cutWidth;
   QRect clientRect = navigatorDisplay->geometry();
   int   startX = clientRect.x();
   int   startY = clientRect.y();
@@ -100,7 +99,6 @@ void TTNavigatorDisplay::drawCutList()
 
       cutIn    = item.cutInIndex();
       cutOut   = item.cutOutIndex();
-      cutWidth = cutOut - cutIn;
       startX   = clientRect.x() + (int)(cutIn*scaleFactor);
       width    = (int)((cutOut-cutIn)*scaleFactor);
 
