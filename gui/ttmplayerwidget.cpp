@@ -31,6 +31,7 @@
 #include "ttmplayerwidget.h"
 
 #include <QLayout>
+#include <QFile>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Constructor for MplayerWidget (now uses mpv)
@@ -107,6 +108,22 @@ void TTMplayerWidget::load(QString fileName)
   emit optimalSizeChanged();
 }
 
+/* /////////////////////////////////////////////////////////////////////////////
+ * Set the subtitle file for playback
+ */
+void TTMplayerWidget::setSubtitleFile(QString subtitleFile)
+{
+  currentSubtitleFile = subtitleFile;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Clear the subtitle file
+ */
+void TTMplayerWidget::clearSubtitleFile()
+{
+  currentSubtitleFile.clear();
+}
+
 QSize TTMplayerWidget::sizeHint() const
 {
   if (parentWidget() == nullptr)
@@ -177,8 +194,14 @@ bool TTMplayerWidget::playMplayer(QString videoFile)
           << "--no-osc"                           // Disable on-screen controller
           << "--no-input-default-bindings"        // Disable keyboard shortcuts
           << "--keep-open=no"                     // Exit when done
-          << "--force-window=yes"                 // Force window creation
-          << videoFile;
+          << "--force-window=yes";                // Force window creation
+
+  // Add subtitle file if set
+  if (!currentSubtitleFile.isEmpty() && QFile::exists(currentSubtitleFile)) {
+    mpv_cmd << QString("--sub-file=%1").arg(currentSubtitleFile);
+  }
+
+  mpv_cmd << videoFile;
 
   log->infoMsg(__FILE__, __LINE__, QString("mpv command: mpv %1").arg(mpv_cmd.join(" ")));
 

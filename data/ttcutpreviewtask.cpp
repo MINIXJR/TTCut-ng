@@ -39,6 +39,7 @@
 #include "../avstream/ttavstream.h"
 #include "../data/ttcutaudiotask.h"
 #include "../data/ttcutvideotask.h"
+#include "../data/ttcutsubtitletask.h"
 #include "../data/ttmuxlistdata.h"
 
 #include <QCoreApplication>
@@ -52,10 +53,11 @@
 TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
                   TTThreadTask("CutPreviewTask")
 {
-	mpAVData     = avData;
-	mpCutList    = cutList;
- 	cutVideoTask = new TTCutVideoTask(mpAVData);
-	cutAudioTask = new TTCutAudioTask();
+	mpAVData        = avData;
+	mpCutList       = cutList;
+ 	cutVideoTask    = new TTCutVideoTask(mpAVData);
+	cutAudioTask    = new TTCutAudioTask();
+	cutSubtitleTask = new TTCutSubtitleTask();
 }
 
 /**
@@ -129,6 +131,12 @@ void TTCutPreviewTask::operation()
     		hasAudio = true;
     		cutAudioTask->init(createPreviewFileName(i + 1, "mpa"), tmpCutList, 0, cutVideoTask->muxListItem());
     		mpAVData->threadTaskPool()->start(cutAudioTask, true);
+    	}
+
+    	// Cut subtitle stream if available (use first subtitle stream)
+    	if (tmpCutList->at(0).avDataItem()->subtitleCount() > 0) {
+    		cutSubtitleTask->init(createPreviewFileName(i + 1, "srt"), tmpCutList, 0, cutVideoTask->muxListItem());
+    		mpAVData->threadTaskPool()->start(cutSubtitleTask, true);
     	}
     }
     catch (TTException* ex)

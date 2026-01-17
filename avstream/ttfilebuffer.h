@@ -55,6 +55,7 @@ public:
   // read / write
   void    readByte( quint8 &byte1 );
   int     readByte( quint8* byteArray, int length);
+  QString readLine(QString delimiter = "\n");
 
   // search
   void    nextStartCodeBF();

@@ -36,6 +36,7 @@ class TTAVData;
 class TTCutList;
 class TTCutVideoTask;
 class TTCutAudioTask;
+class TTCutSubtitleTask;
 
 //! Runable task for creating cut preview clips
 class TTCutPreviewTask : public TTThreadTask
@@ -61,11 +62,12 @@ class TTCutPreviewTask : public TTThreadTask
 		TTCutList* createPreviewCutList(TTCutList* cutList);
 
 	private:
-		TTAVData*       mpAVData;
-		TTCutList*      mpCutList;
-		TTCutList*      mpPreviewCutList;
-		TTCutVideoTask* cutVideoTask;
-		TTCutAudioTask* cutAudioTask;
+		TTAVData*          mpAVData;
+		TTCutList*         mpCutList;
+		TTCutList*         mpPreviewCutList;
+		TTCutVideoTask*    cutVideoTask;
+		TTCutAudioTask*    cutAudioTask;
+		TTCutSubtitleTask* cutSubtitleTask;
 };
 
 

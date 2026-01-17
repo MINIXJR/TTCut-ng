@@ -305,6 +305,32 @@ int TTFileBuffer::readByte(quint8* byteArray, int length)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Read a line from the file buffer up to the given delimiter
+ */
+QString TTFileBuffer::readLine(QString delimiter)
+{
+  QString line;
+  quint8 byte;
+
+  try {
+    while (!atEnd()) {
+      byte = readByte();
+      line.append(QChar(byte));
+
+      if (line.endsWith(delimiter)) {
+        // Remove delimiter from result
+        line.chop(delimiter.length());
+        break;
+      }
+    }
+  } catch (TTFileBufferException) {
+    // End of file reached
+  }
+
+  return line;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  *
  */
 void TTFileBuffer::readUInt16(quint16 &byte2)
