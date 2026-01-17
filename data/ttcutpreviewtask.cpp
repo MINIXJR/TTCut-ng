@@ -219,7 +219,7 @@ QString TTCutPreviewTask::createPreviewFileName(int index, QString extension)
 {
 	 QString   previewFileName;
 
-	 previewFileName.sprintf("preview_%03d.%s", index, qPrintable(extension));
+	 previewFileName = QString("preview_%1.%2").arg(index, 3, 10, QChar('0')).arg(extension);
 
 	 return QFileInfo(QDir(TTCut::tempDirPath), previewFileName).absoluteFilePath();
 }

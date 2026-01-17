@@ -140,7 +140,7 @@ void TTMplexProvider::mplexPart(int index)
   int  update      = EVENT_LOOP_INTERVALL;
   proc             = new QProcess();
 
-  proc->setReadChannelMode( QProcess::MergedChannels );
+  proc->setProcessChannelMode( QProcess::MergedChannels );
   qApp->processEvents();
 
   connect(proc, SIGNAL(error(QProcess::ProcessError)),        SLOT(onProcError(QProcess::ProcessError)));

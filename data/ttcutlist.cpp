@@ -39,6 +39,8 @@
 #include <QFileInfo>
 #include <QString>
 
+#include <algorithm>
+
 /*!
  * TTCutItem
  */
@@ -363,7 +365,7 @@ int TTCutList::count()
  */
 void TTCutList::swap(int a, int b)
 {
-  data.swap(a, b);
+  data.swapItemsAt(a, b);
   updateOrder();
 }
 
@@ -433,5 +435,5 @@ void TTCutList::onRefreshData(TTAVItem*)
  */
 void TTCutList::sortByOrder()
 {
-  qSort(data.begin(), data.end());
+  std::sort(data.begin(), data.end());
 }

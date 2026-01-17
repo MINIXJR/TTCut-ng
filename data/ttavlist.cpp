@@ -194,7 +194,7 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 	TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
 
 	for (int i = 0; i < cutCount(); i++) {
-		TTCutItem         cutItem1 = cutListItemAt(i);
+		(void)i; // Loop index used implicitly
 		TTSequenceHeader* seqIn1   = video2->getSequenceHeader(cutIn);
 		TTSequenceHeader* seqOut1  = video2->getSequenceHeader(cutOut);
 
@@ -348,7 +348,7 @@ void TTAVList::swap(int a, int b)
 	if ((a < 0 || b < 0) || (a >= count() || b >= count()))
 		return; //TODO: throw an index out of bound exception
 
-	mpAVList.swap(a, b);
+	mpAVList.swapItemsAt(a, b);
 
   emit itemsSwapped(a, b);
 }

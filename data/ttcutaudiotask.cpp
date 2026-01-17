@@ -62,7 +62,7 @@ void TTCutAudioTask::init(QString tgtFilePath, TTCutList* cutList, int srcAudioI
 void TTCutAudioTask::onUserAbort()
 {
   if (mpCutStream == 0) 
-    throw new TTAbortException(QString("Task %1 with UUID %2 aborted").arg(taskName()).arg(taskID()));
+    throw new TTAbortException(QString("Task %1 with UUID %2 aborted").arg(taskName()).arg(taskID().toString()));
 
    mpCutStream->setAbort(true);
 }

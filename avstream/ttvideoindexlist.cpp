@@ -34,6 +34,8 @@
 #include "ttvideoindexlist.h"
 #include "../common/ttexception.h"
 
+#include <algorithm>
+
 const char c_name[] = "TTVIDEOINDEX  : ";
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -143,7 +145,7 @@ int  TTVideoIndexList::pictureCodingType( int index )
  */
 void TTVideoIndexList::sort()
 {
-  qSort( begin(), end(), compareFunc );
+  std::sort( begin(), end(), compareFunc );
 }
 
 /*! ///////////////////////////////////////////////////////////////////////////// 

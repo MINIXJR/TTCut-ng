@@ -33,6 +33,8 @@
 #include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
+#include <algorithm>
+
 #include <QFileInfo>
 #include <QString>
 
@@ -294,7 +296,7 @@ int  TTAudioList::count()
  */
 void TTAudioList::sortByOrder()
 {
-  qSort(data.begin(), data.end());
+  std::sort(data.begin(), data.end());
 }
 
 /*!
@@ -310,7 +312,7 @@ int TTAudioList::indexOf(const TTAudioItem& item)
  */
 void TTAudioList::swap(int a, int b)
 {
-  data.swap(a, b);
+  data.swapItemsAt(a, b);
   emit itemsSwapped(a, b);
 }
 

@@ -28,7 +28,7 @@
 /*----------------------------------------------------------------------------*/
 
 #ifndef TTTRANSCODE_H
-#define TTTRASNCODE_H
+#define TTTRANSCODE_H
 
 #include "../common/ttmessagelogger.h"
 #include "../common/istatusreporter.h"

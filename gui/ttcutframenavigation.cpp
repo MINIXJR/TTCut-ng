@@ -250,7 +250,7 @@ void TTCutFrameNavigation::onSetCutIn()
 	cutInPosition = currentPosition;
 
 	szTemp1 = currentTime;
-	szTemp2.sprintf(" (%d)", cutInPosition);
+	szTemp2 = QString(" (%1)").arg(cutInPosition);
 
 	if (currentFrameType == 1)
 		szTemp2 += " [I]";
@@ -273,7 +273,7 @@ void TTCutFrameNavigation::onSetCutOut()
 	cutOutPosition = currentPosition;
 
 	szTemp1 = currentTime;
-	szTemp2.sprintf(" (%d)", cutOutPosition);
+	szTemp2 = QString(" (%1)").arg(cutOutPosition);
 
 	if (currentFrameType == 1)
 		szTemp2 += " [I]";
@@ -332,7 +332,7 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 
 	//szTemp1 = cutData.getCutInTime().toString("hh:mm:ss.zzz");
 	szTemp1 = cutData.cutInTime().toString("hh:mm:ss");
-		szTemp2.sprintf(" (%d)", cutInPosition);
+		szTemp2 = QString(" (%1)").arg(cutInPosition);
 
 	if (cutData.cutInFrameType() == 1)
 		szTemp2 += " [I]";
@@ -346,7 +346,7 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 
 	//szTemp1 = cutData.getCutOutTime().toString("hh:mm:ss.zzz");
 	szTemp1 = cutData.cutOutTime().toString("hh:mm:ss");
-	szTemp2.sprintf(" (%d)", cutOutPosition);
+	szTemp2 = QString(" (%1)").arg(cutOutPosition);
 
 	if (cutData.cutOutFrameType() == 1)
 		szTemp2 += " [I]";

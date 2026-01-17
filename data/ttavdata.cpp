@@ -251,7 +251,7 @@ TTAVItem* TTAVData::createAVItem()
 
   	return avItem;
 	}
-  catch (TTException ex)
+  catch (const TTException& ex)
   {
 		log->fatalMsg(__FILE__, __LINE__, tr("exception in createAVDataItem!"));
 		return 0;

@@ -142,6 +142,7 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
  */
 void TTThreadTaskPool::onThreadTaskStarted(TTThreadTask* task)
 {
+  (void)task;
 }
 
 /**

@@ -196,7 +196,7 @@ void TTCutOutFrame::updateCurrentPosition()
 
   szTemp1 = mpeg2Stream->currentFrameTime().toString("hh:mm:ss.zzz");
 
-  szTemp2.sprintf(" (%d)",mpeg2Stream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(mpeg2Stream->currentIndex());
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";

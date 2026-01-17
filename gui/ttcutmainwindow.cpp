@@ -341,7 +341,7 @@ void TTCutMainWindow::onFileSave()
   {
     mpAVData->writeProjectFile(fInfo);
   }
-  catch (TTException ex)
+  catch (const TTException& ex)
   {
     log->errorMsg(__FILE__, __LINE__, QString(tr("error save project file: %1").arg(TTCut::projectFileName)));
     return;
