@@ -21,7 +21,7 @@ LIBS        = -lmpeg2 -lmpeg2convert
 # libav/ffmpeg libraries for H.264/H.265 support
 unix {
   CONFIG += link_pkgconfig
-  PKGCONFIG += libavformat libavcodec libavutil
+  PKGCONFIG += libavformat libavcodec libavutil libswscale
 }
 
 unix {

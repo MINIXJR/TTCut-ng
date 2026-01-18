@@ -36,6 +36,7 @@
 #include <QFileInfo>
 #include <QList>
 #include <QObject>
+#include <QImage>
 
 // Forward declarations for libav types (avoid including C headers in .h)
 struct AVFormatContext;
@@ -43,6 +44,7 @@ struct AVCodecContext;
 struct AVStream;
 struct AVPacket;
 struct AVFrame;
+struct SwsContext;
 
 // ----------------------------------------------------------------------------
 // Stream information structure
@@ -157,6 +159,17 @@ public:
     int64_t secondsToPts(double seconds, int streamIndex) const;
     QString formatTimestamp(int64_t pts, int streamIndex) const;
 
+    // Frame decoding for preview
+    bool seekToFrame(int frameIndex);
+    QImage decodeFrame(int frameIndex);
+    QImage decodeCurrentFrame();
+    int videoWidth() const;
+    int videoHeight() const;
+
+    // Segment extraction (for cutting)
+    bool extractSegment(const QString& outputFile, int startFrame, int endFrame, bool reencode = false);
+    bool concatenateSegments(const QString& outputFile, const QStringList& segmentFiles);
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -167,10 +180,14 @@ private:
     // Libav contexts
     AVFormatContext* mFormatCtx;
     AVCodecContext* mVideoCodecCtx;
+    SwsContext* mSwsCtx;        // For pixel format conversion
+    AVFrame* mDecodedFrame;     // Reusable decoded frame
+    AVFrame* mRgbFrame;         // Reusable RGB frame for QImage
 
     // Cached stream info
     int mVideoStreamIndex;
     int mAudioStreamIndex;
+    int mCurrentFrameIndex;
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;

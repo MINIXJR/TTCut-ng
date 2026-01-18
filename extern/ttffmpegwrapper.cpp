@@ -32,6 +32,9 @@
 
 #include <QDebug>
 #include <QTime>
+#include <QProcess>
+#include <QFile>
+#include <QTextStream>
 
 // Include libav headers (C libraries)
 extern "C" {
@@ -39,6 +42,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
 }
 
 // Static initialization flag
@@ -51,8 +55,12 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     : QObject()
     , mFormatCtx(nullptr)
     , mVideoCodecCtx(nullptr)
+    , mSwsCtx(nullptr)
+    , mDecodedFrame(nullptr)
+    , mRgbFrame(nullptr)
     , mVideoStreamIndex(-1)
     , mAudioStreamIndex(-1)
+    , mCurrentFrameIndex(-1)
 {
     initializeFFmpeg();
 }
@@ -150,6 +158,21 @@ void TTFFmpegWrapper::closeFile()
     mFrameIndex.clear();
     mGOPIndex.clear();
 
+    if (mRgbFrame) {
+        av_frame_free(&mRgbFrame);
+        mRgbFrame = nullptr;
+    }
+
+    if (mDecodedFrame) {
+        av_frame_free(&mDecodedFrame);
+        mDecodedFrame = nullptr;
+    }
+
+    if (mSwsCtx) {
+        sws_freeContext(mSwsCtx);
+        mSwsCtx = nullptr;
+    }
+
     if (mVideoCodecCtx) {
         avcodec_free_context(&mVideoCodecCtx);
         mVideoCodecCtx = nullptr;
@@ -162,6 +185,7 @@ void TTFFmpegWrapper::closeFile()
 
     mVideoStreamIndex = -1;
     mAudioStreamIndex = -1;
+    mCurrentFrameIndex = -1;
 }
 
 // ----------------------------------------------------------------------------
@@ -545,6 +569,8 @@ QString TTFFmpegWrapper::avErrorToString(int errnum)
 // ----------------------------------------------------------------------------
 int TTFFmpegWrapper::getFrameType(AVPacket* packet, AVCodecContext* codecCtx)
 {
+    Q_UNUSED(codecCtx);
+
     // Simple check: keyframe flag
     if (packet->flags & AV_PKT_FLAG_KEY) {
         return AV_PICTURE_TYPE_I;
@@ -554,4 +580,304 @@ int TTFFmpegWrapper::getFrameType(AVPacket* packet, AVCodecContext* codecCtx)
     // and check frame->pict_type
     // This is a simplification for initial implementation
     return AV_PICTURE_TYPE_P;
+}
+
+// ----------------------------------------------------------------------------
+// Get video width
+// ----------------------------------------------------------------------------
+int TTFFmpegWrapper::videoWidth() const
+{
+    if (mVideoCodecCtx) {
+        return mVideoCodecCtx->width;
+    }
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
+// Get video height
+// ----------------------------------------------------------------------------
+int TTFFmpegWrapper::videoHeight() const
+{
+    if (mVideoCodecCtx) {
+        return mVideoCodecCtx->height;
+    }
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
+// Seek to specific frame index
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::seekToFrame(int frameIndex)
+{
+    if (!mFormatCtx || mVideoStreamIndex < 0) {
+        setError("No file open or no video stream");
+        return false;
+    }
+
+    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+        setError(QString("Frame index %1 out of range").arg(frameIndex));
+        return false;
+    }
+
+    // Seek to the keyframe before this frame
+    int keyframeIndex = frameIndex;
+    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+        keyframeIndex--;
+    }
+
+    int64_t seekPts = mFrameIndex[keyframeIndex].pts;
+
+    int ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
+    if (ret < 0) {
+        setError(QString("Seek failed: %1").arg(avErrorToString(ret)));
+        return false;
+    }
+
+    // Flush codec buffers after seek
+    if (mVideoCodecCtx) {
+        avcodec_flush_buffers(mVideoCodecCtx);
+    }
+
+    mCurrentFrameIndex = keyframeIndex;
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Decode frame at specific index and return as QImage
+// ----------------------------------------------------------------------------
+QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
+{
+    if (!seekToFrame(frameIndex)) {
+        return QImage();
+    }
+
+    // Decode frames until we reach the target frame
+    while (mCurrentFrameIndex < frameIndex) {
+        QImage img = decodeCurrentFrame();
+        if (img.isNull()) {
+            return QImage();
+        }
+        mCurrentFrameIndex++;
+    }
+
+    return decodeCurrentFrame();
+}
+
+// ----------------------------------------------------------------------------
+// Decode current frame and return as QImage
+// ----------------------------------------------------------------------------
+QImage TTFFmpegWrapper::decodeCurrentFrame()
+{
+    if (!mFormatCtx || !mVideoCodecCtx) {
+        setError("No file open or decoder not initialized");
+        return QImage();
+    }
+
+    // Allocate frames if needed
+    if (!mDecodedFrame) {
+        mDecodedFrame = av_frame_alloc();
+        if (!mDecodedFrame) {
+            setError("Could not allocate decoded frame");
+            return QImage();
+        }
+    }
+
+    if (!mRgbFrame) {
+        mRgbFrame = av_frame_alloc();
+        if (!mRgbFrame) {
+            setError("Could not allocate RGB frame");
+            return QImage();
+        }
+
+        // Allocate buffer for RGB frame
+        int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24,
+            mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
+        uint8_t* buffer = (uint8_t*)av_malloc(numBytes);
+        av_image_fill_arrays(mRgbFrame->data, mRgbFrame->linesize, buffer,
+            AV_PIX_FMT_RGB24, mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
+    }
+
+    // Initialize scaler if needed
+    if (!mSwsCtx) {
+        mSwsCtx = sws_getContext(
+            mVideoCodecCtx->width, mVideoCodecCtx->height, mVideoCodecCtx->pix_fmt,
+            mVideoCodecCtx->width, mVideoCodecCtx->height, AV_PIX_FMT_RGB24,
+            SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+        if (!mSwsCtx) {
+            setError("Could not create scaler context");
+            return QImage();
+        }
+    }
+
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) {
+        setError("Could not allocate packet");
+        return QImage();
+    }
+
+    QImage result;
+
+    // Read packets until we get a complete frame
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == mVideoStreamIndex) {
+            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
+            if (ret < 0) {
+                av_packet_unref(packet);
+                continue;
+            }
+
+            ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+            if (ret == 0) {
+                // Convert to RGB
+                sws_scale(mSwsCtx,
+                    mDecodedFrame->data, mDecodedFrame->linesize,
+                    0, mVideoCodecCtx->height,
+                    mRgbFrame->data, mRgbFrame->linesize);
+
+                // Create QImage from RGB data
+                result = QImage(mRgbFrame->data[0],
+                    mVideoCodecCtx->width, mVideoCodecCtx->height,
+                    mRgbFrame->linesize[0],
+                    QImage::Format_RGB888).copy();
+
+                av_packet_unref(packet);
+                break;
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    av_packet_free(&packet);
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Extract segment from video (for cutting)
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::extractSegment(const QString& outputFile, int startFrame,
+                                      int endFrame, bool reencode)
+{
+    if (!mFormatCtx || mFrameIndex.isEmpty()) {
+        setError("No file open or frame index not built");
+        return false;
+    }
+
+    if (startFrame < 0 || endFrame >= mFrameIndex.size() || startFrame > endFrame) {
+        setError("Invalid frame range");
+        return false;
+    }
+
+    // Get timestamps
+    double startTime = ptsToSeconds(mFrameIndex[startFrame].pts, mVideoStreamIndex);
+    double endTime = ptsToSeconds(mFrameIndex[endFrame].pts, mVideoStreamIndex);
+    double duration = endTime - startTime;
+
+    // Build ffmpeg command
+    QStringList args;
+    args << "-y"  // Overwrite
+         << "-ss" << QString::number(startTime, 'f', 6)
+         << "-i" << QString::fromUtf8(mFormatCtx->url)
+         << "-t" << QString::number(duration, 'f', 6);
+
+    if (reencode) {
+        // Re-encode with H.264
+        args << "-c:v" << "libx264"
+             << "-preset" << "medium"
+             << "-crf" << "18"
+             << "-pix_fmt" << "yuv420p";
+    } else {
+        // Stream copy (only works between keyframes)
+        args << "-c:v" << "copy";
+    }
+
+    args << "-an"  // No audio for now
+         << outputFile;
+
+    qDebug() << "FFmpeg extract command:" << args.join(" ");
+
+    QProcess proc;
+    proc.start("/usr/bin/ffmpeg", args);
+
+    if (!proc.waitForStarted(5000)) {
+        setError("FFmpeg failed to start");
+        return false;
+    }
+
+    if (!proc.waitForFinished(300000)) {
+        setError("FFmpeg timed out");
+        proc.kill();
+        return false;
+    }
+
+    if (proc.exitCode() != 0) {
+        setError(QString("FFmpeg failed: %1").arg(
+            QString::fromUtf8(proc.readAllStandardError())));
+        return false;
+    }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Concatenate multiple video segments
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::concatenateSegments(const QString& outputFile,
+                                           const QStringList& segmentFiles)
+{
+    if (segmentFiles.isEmpty()) {
+        setError("No segments to concatenate");
+        return false;
+    }
+
+    // Create concat list file
+    QString listFile = outputFile + ".txt";
+    QFile file(listFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        setError("Could not create concat list file");
+        return false;
+    }
+
+    QTextStream out(&file);
+    for (const QString& segment : segmentFiles) {
+        out << "file '" << segment << "'\n";
+    }
+    file.close();
+
+    // Build ffmpeg concat command
+    QStringList args;
+    args << "-y"
+         << "-f" << "concat"
+         << "-safe" << "0"
+         << "-i" << listFile
+         << "-c" << "copy"
+         << outputFile;
+
+    qDebug() << "FFmpeg concat command:" << args.join(" ");
+
+    QProcess proc;
+    proc.start("/usr/bin/ffmpeg", args);
+
+    if (!proc.waitForStarted(5000)) {
+        setError("FFmpeg failed to start");
+        QFile::remove(listFile);
+        return false;
+    }
+
+    if (!proc.waitForFinished(300000)) {
+        setError("FFmpeg timed out");
+        proc.kill();
+        QFile::remove(listFile);
+        return false;
+    }
+
+    QFile::remove(listFile);
+
+    if (proc.exitCode() != 0) {
+        setError(QString("FFmpeg concat failed: %1").arg(
+            QString::fromUtf8(proc.readAllStandardError())));
+        return false;
+    }
+
+    return true;
 }
