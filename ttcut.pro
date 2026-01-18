@@ -116,7 +116,9 @@ HEADERS     = common/ttcut.h\
               avstream/ttfilebuffer.h\ 
               avstream/ttheaderlist.h\ 
               avstream/ttmpeg2videoheader.h\
-              avstream/ttmpeg2videostream.h\   
+              avstream/ttmpeg2videostream.h\
+              avstream/tth264videoheader.h\
+              avstream/tth264videostream.h\   
               avstream/ttmpegaudioheader.h\
               avstream/ttmpegaudiostream.h\
               avstream/ttvideoheaderlist.h\
@@ -192,7 +194,9 @@ SOURCES     = common/ttcut.cpp\
               avstream/ttfilebuffer.cpp\ 
               avstream/ttheaderlist.cpp\ 
               avstream/ttmpeg2videoheader.cpp\
-              avstream/ttmpeg2videostream.cpp\   
+              avstream/ttmpeg2videostream.cpp\
+              avstream/tth264videoheader.cpp\
+              avstream/tth264videostream.cpp\   
               avstream/ttmpegaudioheader.cpp\
               avstream/ttmpegaudiostream.cpp\
               avstream/ttvideoheaderlist.cpp\

@@ -72,6 +72,8 @@ class TTAVTypes
     ac3_audio,
     mpeg2_demuxed_video,
     mpeg2_mplexed_video,
+    h264_video,           // H.264/AVC video
+    h265_video,           // H.265/HEVC video
     srt_subtitle,
     unknown
   };
