@@ -51,6 +51,7 @@
 #include "ttmpegaudioheader.h"
 #include "ttmpeg2videostream.h"
 #include "tth264videostream.h"
+#include "tth265videostream.h"
 #include "ttsrtsubtitlestream.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttexception.h"
@@ -308,10 +309,7 @@ TTVideoStream* TTVideoType::createVideoStream()
       return new TTH264VideoStream(*av_stream_info);
 
     case h265_video:
-      // H.265 not yet implemented, fall through to error
-      log->errorMsg(__FILE__, __LINE__,
-          "H.265/HEVC video streams are not yet supported!");
-      return nullptr;
+      return new TTH265VideoStream(*av_stream_info);
 
     default:
       log->errorMsg(__FILE__, __LINE__,
