@@ -110,6 +110,28 @@ enum TTVideoCodecType {
 };
 
 // ----------------------------------------------------------------------------
+// Container types
+// ----------------------------------------------------------------------------
+enum TTContainerType {
+    CONTAINER_UNKNOWN = 0,
+    CONTAINER_ELEMENTARY,   // Elementary stream (.m2v, .h264, .h265)
+    CONTAINER_TS,           // MPEG Transport Stream (.ts, .m2ts)
+    CONTAINER_PS,           // MPEG Program Stream (.mpg, .mpeg)
+    CONTAINER_MKV,          // Matroska (.mkv)
+    CONTAINER_MP4           // ISOBMFF (.mp4, .m4v)
+};
+
+// ----------------------------------------------------------------------------
+// Output container types for muxing
+// ----------------------------------------------------------------------------
+enum TTOutputContainer {
+    OUTPUT_TS = 0,          // MPEG Transport Stream
+    OUTPUT_MKV,             // Matroska (via mkvmerge)
+    OUTPUT_MP4,             // ISOBMFF (via ffmpeg)
+    OUTPUT_ELEMENTARY       // No container, just ES
+};
+
+// ----------------------------------------------------------------------------
 // TTFFmpegWrapper class
 // ----------------------------------------------------------------------------
 class TTFFmpegWrapper : public QObject
@@ -138,6 +160,14 @@ public:
     // Detect video codec type
     TTVideoCodecType detectVideoCodec() const;
     static QString codecTypeToString(TTVideoCodecType type);
+
+    // Detect container type
+    TTContainerType detectContainer() const;
+    static QString containerTypeToString(TTContainerType type);
+    bool isContainerFormat() const;
+
+    // Demux container to elementary streams
+    bool demuxToElementary(const QString& outputDir, QString* videoFile = nullptr, QString* audioFile = nullptr);
 
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);

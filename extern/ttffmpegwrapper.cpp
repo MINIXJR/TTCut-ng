@@ -34,6 +34,7 @@
 #include <QTime>
 #include <QProcess>
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
 
 // Include libav headers (C libraries)
@@ -304,6 +305,163 @@ QString TTFFmpegWrapper::codecTypeToString(TTVideoCodecType type)
         case CODEC_H265:  return "H.265/HEVC";
         default:          return "Unknown";
     }
+}
+
+// ----------------------------------------------------------------------------
+// Detect container type
+// ----------------------------------------------------------------------------
+TTContainerType TTFFmpegWrapper::detectContainer() const
+{
+    if (!mFormatCtx || !mFormatCtx->iformat) {
+        return CONTAINER_UNKNOWN;
+    }
+
+    QString formatName = QString::fromUtf8(mFormatCtx->iformat->name);
+
+    // Check for common container formats
+    if (formatName.contains("mpegts") || formatName.contains("ts")) {
+        return CONTAINER_TS;
+    }
+    if (formatName.contains("mpeg") || formatName.contains("vob")) {
+        return CONTAINER_PS;
+    }
+    if (formatName.contains("matroska") || formatName.contains("webm")) {
+        return CONTAINER_MKV;
+    }
+    if (formatName.contains("mp4") || formatName.contains("mov") || formatName.contains("m4v")) {
+        return CONTAINER_MP4;
+    }
+    if (formatName.contains("h264") || formatName.contains("hevc") ||
+        formatName.contains("mpegvideo") || formatName.contains("m2v")) {
+        return CONTAINER_ELEMENTARY;
+    }
+
+    return CONTAINER_UNKNOWN;
+}
+
+// ----------------------------------------------------------------------------
+// Convert container type to string
+// ----------------------------------------------------------------------------
+QString TTFFmpegWrapper::containerTypeToString(TTContainerType type)
+{
+    switch (type) {
+        case CONTAINER_ELEMENTARY: return "Elementary Stream";
+        case CONTAINER_TS:         return "MPEG Transport Stream";
+        case CONTAINER_PS:         return "MPEG Program Stream";
+        case CONTAINER_MKV:        return "Matroska";
+        case CONTAINER_MP4:        return "MP4/ISOBMFF";
+        default:                   return "Unknown";
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Check if file is a container format (not elementary stream)
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::isContainerFormat() const
+{
+    TTContainerType ct = detectContainer();
+    return ct != CONTAINER_UNKNOWN && ct != CONTAINER_ELEMENTARY;
+}
+
+// ----------------------------------------------------------------------------
+// Demux container to elementary streams
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::demuxToElementary(const QString& outputDir, QString* videoFile, QString* audioFile)
+{
+    if (!mFormatCtx) {
+        setError("No file open");
+        return false;
+    }
+
+    if (!isContainerFormat()) {
+        // Already elementary, just return the source file
+        if (videoFile) {
+            *videoFile = QString::fromUtf8(mFormatCtx->url);
+        }
+        return true;
+    }
+
+    QString sourceFile = QString::fromUtf8(mFormatCtx->url);
+    QFileInfo fileInfo(sourceFile);
+    QString baseName = fileInfo.completeBaseName();
+
+    // Determine output file names based on codec
+    TTVideoCodecType codec = detectVideoCodec();
+    QString videoExt;
+    switch (codec) {
+        case CODEC_MPEG2: videoExt = ".m2v"; break;
+        case CODEC_H264:  videoExt = ".h264"; break;
+        case CODEC_H265:  videoExt = ".h265"; break;
+        default:          videoExt = ".es"; break;
+    }
+
+    QString videoOutput = outputDir + "/" + baseName + videoExt;
+    QString audioOutput = outputDir + "/" + baseName + ".ac3";  // Assume AC3 for now
+
+    // Build ffmpeg demux command
+    QStringList args;
+    args << "-y"
+         << "-i" << sourceFile;
+
+    // Extract video stream
+    if (mVideoStreamIndex >= 0) {
+        args << "-map" << QString("0:%1").arg(mVideoStreamIndex)
+             << "-c:v" << "copy"
+             << "-an"  // No audio
+             << "-f" << "rawvideo"
+             << videoOutput;
+    }
+
+    qDebug() << "FFmpeg demux video command:" << args.join(" ");
+
+    QProcess procVideo;
+    procVideo.start("/usr/bin/ffmpeg", args);
+
+    if (!procVideo.waitForStarted(5000)) {
+        setError("FFmpeg failed to start for video demux");
+        return false;
+    }
+
+    if (!procVideo.waitForFinished(300000)) {
+        setError("FFmpeg video demux timed out");
+        procVideo.kill();
+        return false;
+    }
+
+    if (procVideo.exitCode() != 0) {
+        setError(QString("FFmpeg video demux failed: %1").arg(
+            QString::fromUtf8(procVideo.readAllStandardError())));
+        return false;
+    }
+
+    if (videoFile) {
+        *videoFile = videoOutput;
+    }
+
+    // Extract audio stream if present
+    if (mAudioStreamIndex >= 0 && audioFile) {
+        QStringList audioArgs;
+        audioArgs << "-y"
+                  << "-i" << sourceFile
+                  << "-map" << QString("0:%1").arg(mAudioStreamIndex)
+                  << "-c:a" << "copy"
+                  << "-vn"  // No video
+                  << audioOutput;
+
+        qDebug() << "FFmpeg demux audio command:" << audioArgs.join(" ");
+
+        QProcess procAudio;
+        procAudio.start("/usr/bin/ffmpeg", audioArgs);
+
+        if (procAudio.waitForStarted(5000) && procAudio.waitForFinished(300000)) {
+            if (procAudio.exitCode() == 0) {
+                *audioFile = audioOutput;
+            }
+        }
+    }
+
+    qDebug() << "Demux complete. Video:" << videoOutput;
+    return true;
 }
 
 // ----------------------------------------------------------------------------
