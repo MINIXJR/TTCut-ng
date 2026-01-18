@@ -2,6 +2,39 @@
 TTCut-Changelog
 --------------------------------------------------------------------------------
 
+0.40.0: * Adopt UI design and bug fixes from ttcut fork
+        * UI restructuring:
+          - Restructure Cut List to 3-column layout with buttons on left/right
+          - Add Copy button to Cut List for duplicating cut entries
+          - Move file list buttons to left column (video, audio, subtitle)
+          - Rename tabs: Cut -> Videofile, Files -> Audiofiles
+          - Add separate Subtitles tab in main window
+          - Show video file list in Videofile tab
+        * Bug fixes:
+          - Fix stream navigator display not showing cut markers
+          - Fix FFmpeg encoding parameters for better compatibility
+          - Fix Audiooffset column showing GUID instead of "0"
+        * Project file improvements:
+          - Add subtitle support to XML project file format
+        * Add media file extensions to .gitignore (*.m2v, *.ac3, *.mp2, etc.)
+
+0.30.0: * Add SRT subtitle support with preview integration
+        * Auto-loading: SRT files matching video filename are automatically loaded
+        * Preview overlay: Subtitles displayed in main video frame using QPainter
+        * mpv preview: Subtitles passed to mpv via --sub-file parameter
+        * Cutting: Subtitle streams are cut along with video/audio during editing
+        * Preview clips: Subtitle previews generated for cut preview dialog
+        * New classes:
+          - TTSrtSubtitleStream: SRT file parser and stream handler
+          - TTSubtitleHeaderList: Manages subtitle entries with time-based search
+          - TTCutSubtitleTask: Task for cutting subtitle streams
+          - TTSubtitleTreeView: UI widget for subtitle file list
+        * Migrate from deprecated QGLWidget to modern QOpenGLWidget
+        * Full Wayland compatibility
+        * Replace discontinued transcode with ffmpeg for frame-accurate cutting
+        * Migrate from mplayer to mpv for preview playback
+        * Include git commit count and hash in package version
+
 0.20.4: * New TTCut official release candidat for upcoming release 0.21.0
         * Thread support and thread abort should work
         * Minor fixes
