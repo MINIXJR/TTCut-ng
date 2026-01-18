@@ -50,12 +50,15 @@
 #include "ttmpegaudiostream.h"
 #include "ttmpegaudioheader.h"
 #include "ttmpeg2videostream.h"
+#include "tth264videostream.h"
 #include "ttsrtsubtitlestream.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttexception.h"
+#include "../extern/ttffmpegwrapper.h"
 
 #include <QString>
-#include <qfileinfo.h>
+#include <QFileInfo>
+#include <QDebug>
 
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -292,16 +295,93 @@ TTVideoType::~TTVideoType()
 // -----------------------------------------------------------------------------
 TTVideoStream* TTVideoType::createVideoStream()
 {
-  return (av_stream_exists)
-      ? new TTMpeg2VideoStream(*av_stream_info)
-      : (TTVideoStream*)NULL;
+  if (!av_stream_exists) {
+    return nullptr;
+  }
+
+  switch (av_stream_type) {
+    case mpeg2_demuxed_video:
+    case mpeg2_mplexed_video:
+      return new TTMpeg2VideoStream(*av_stream_info);
+
+    case h264_video:
+      return new TTH264VideoStream(*av_stream_info);
+
+    case h265_video:
+      // H.265 not yet implemented, fall through to error
+      log->errorMsg(__FILE__, __LINE__,
+          "H.265/HEVC video streams are not yet supported!");
+      return nullptr;
+
+    default:
+      log->errorMsg(__FILE__, __LINE__,
+          QString("Unknown video stream type: %1").arg(av_stream_type));
+      return nullptr;
+  }
 }
 
 // evaluate video stream and estimate video stream type
-// currently we use only mpeg2 video, so this is a simple task
+// Uses FFmpeg/libav to detect the actual codec type
 void TTVideoType::getVideoStreamType()
 {
-  av_stream_type = mpeg2_demuxed_video;
+  // Try to detect codec using FFmpeg wrapper
+  TTFFmpegWrapper ffmpeg;
+
+  if (!ffmpeg.openFile(av_stream_info->filePath())) {
+    // Fallback to MPEG-2 if FFmpeg can't open the file
+    log->warningMsg(__FILE__, __LINE__,
+        QString("FFmpeg could not open file, assuming MPEG-2: %1")
+            .arg(av_stream_info->filePath()));
+    av_stream_type = mpeg2_demuxed_video;
+    return;
+  }
+
+  TTVideoCodecType codecType = ffmpeg.detectVideoCodec();
+
+  switch (codecType) {
+    case CODEC_MPEG2:
+      log->infoMsg(__FILE__, __LINE__,
+          QString("Detected MPEG-2 video: %1").arg(av_stream_info->filePath()));
+      av_stream_type = mpeg2_demuxed_video;
+      break;
+
+    case CODEC_H264:
+      log->infoMsg(__FILE__, __LINE__,
+          QString("Detected H.264 video: %1").arg(av_stream_info->filePath()));
+      av_stream_type = h264_video;
+      break;
+
+    case CODEC_H265:
+      log->infoMsg(__FILE__, __LINE__,
+          QString("Detected H.265/HEVC video: %1").arg(av_stream_info->filePath()));
+      av_stream_type = h265_video;
+      break;
+
+    default:
+      // Try to detect by file extension as fallback
+      QString suffix = av_stream_info->suffix().toLower();
+      if (suffix == "m2v" || suffix == "mpv" || suffix == "mpeg" || suffix == "mpg") {
+        log->infoMsg(__FILE__, __LINE__,
+            QString("Unknown codec, assuming MPEG-2 by extension: %1").arg(suffix));
+        av_stream_type = mpeg2_demuxed_video;
+      } else if (suffix == "h264" || suffix == "264" || suffix == "avc") {
+        log->infoMsg(__FILE__, __LINE__,
+            QString("Unknown codec, assuming H.264 by extension: %1").arg(suffix));
+        av_stream_type = h264_video;
+      } else if (suffix == "h265" || suffix == "265" || suffix == "hevc") {
+        log->infoMsg(__FILE__, __LINE__,
+            QString("Unknown codec, assuming H.265 by extension: %1").arg(suffix));
+        av_stream_type = h265_video;
+      } else {
+        log->warningMsg(__FILE__, __LINE__,
+            QString("Could not detect video codec, assuming MPEG-2: %1")
+                .arg(av_stream_info->filePath()));
+        av_stream_type = mpeg2_demuxed_video;
+      }
+      break;
+  }
+
+  ffmpeg.closeFile();
 }
 
 
