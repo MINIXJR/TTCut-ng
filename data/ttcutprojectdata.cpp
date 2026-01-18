@@ -29,8 +29,9 @@
 
 #include "ttcutprojectdata.h"
 #include "ttavdata.h"
-#include "ttavdata.h"
+#include "ttsubtitlelist.h"
 #include "../avstream/ttavstream.h"
+#include "../avstream/ttsrtsubtitlestream.h"
 #include "../common/ttexception.h"
 
 
@@ -96,6 +97,12 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   	TTMarkerItem mItem = vItem->markerAt(i);
   	writeMarkerSection(video, mItem.markerPos(), 1, mItem.order());
   }
+
+  for (int i = 0; i < vItem->subtitleCount(); i++) {
+    TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
+    TTSubtitleStream* sStream = sItem.getSubtitleStream();
+    writeSubtitleSection(video, sStream->filePath(), sItem.order());
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -147,6 +154,9 @@ void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
     }
     else if (videoNodesList.at(i).nodeName() == "Marker") {
     	parseMarkerSection(videoNodesList.at(i).childNodes(), avItem);
+    }
+    else if (videoNodesList.at(i).nodeName() == "Subtitle") {
+      parseSubtitleSection(videoNodesList.at(i).childNodes(), avData, avItem);
     }
     else {
       qDebug("unkown node!");
@@ -277,6 +287,38 @@ QDomElement TTCutProjectData::writeMarkerSection(QDomElement& parent, int marker
   xmlMarkerType.appendChild(xmlDocument->createTextNode(QString("%1").arg(markerType)));
 
   return marker;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Write subtitle section to XML
+ */
+QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order)
+{
+  QDomElement subtitle = xmlDocument->createElement("Subtitle");
+  parent.appendChild(subtitle);
+
+  QDomElement xmlOrder = xmlDocument->createElement("Order");
+  subtitle.appendChild(xmlOrder);
+  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+
+  QDomElement name = xmlDocument->createElement("Name");
+  subtitle.appendChild(name);
+  name.appendChild(xmlDocument->createTextNode(filePath));
+
+  return subtitle;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Parse subtitle section from XML
+ */
+void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem)
+{
+  int     order = subtitleNodesList.at(0).toElement().text().toInt();
+  QString name  = subtitleNodesList.at(1).toElement().text();
+
+  qDebug("TTCutProjectData::parseSubtitleSection -> before doOpenSubtitleStream...");
+  avData->doOpenSubtitleStream(avItem, name, order);
+  qDebug("after doOpenSubtitleStream...");
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

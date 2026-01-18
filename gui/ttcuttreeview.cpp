@@ -65,11 +65,14 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbEntryUp,       SIGNAL(clicked()), 																							SLOT(onEntryUp()));
+  connect(pbEntryUp,       SIGNAL(clicked()),                                 SLOT(onEntryUp()));
   connect(pbEntryDown,     SIGNAL(clicked()),                                 SLOT(onEntryDown()));
   connect(pbEntryDelete,   SIGNAL(clicked()),                                 SLOT(onEntryDelete()));
+  connect(pbEntryCopy,     SIGNAL(clicked()),                                 SLOT(onEntryDuplicate()));
   connect(pbPreview,       SIGNAL(clicked()),                                 SLOT(onPreview()));
-  connect(pbCutAudioVideo, SIGNAL(clicked()), 						  					        SLOT(onAVCut()));
+  connect(pbCutAudioVideo, SIGNAL(clicked()),                                 SLOT(onAVCut()));
+  connect(pbCutSelected,   SIGNAL(clicked()),                                 SLOT(onAVSelCut()));
+  connect(pbCutAudio,      SIGNAL(clicked()),                                 SLOT(onAudioCut()));
   connect(videoCutList,    SIGNAL(doubleClicked(const QModelIndex)),          SLOT(onSetCutOut()));
   connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
   connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
@@ -83,8 +86,11 @@ void TTCutTreeView::controlEnabled(bool value)
 	pbEntryUp->setEnabled(value);
 	pbEntryDown->setEnabled(value);
 	pbEntryDelete->setEnabled(value);
+	pbEntryCopy->setEnabled(value);
 	pbPreview->setEnabled(value);
 	pbCutAudioVideo->setEnabled(value);
+	pbCutSelected->setEnabled(value);
+	pbCutAudio->setEnabled(value);
 	videoCutList->setEnabled(value);
 }
 
@@ -135,7 +141,7 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
   treeItem->setText(1, item.cutInString());
   treeItem->setText(2, item.cutOutString());
   treeItem->setText(3, item.cutLengthString());
-  treeItem->setText(4, item.ID().toString());
+  treeItem->setText(4, "0");
 
   //emit refreshDisplay();
 }

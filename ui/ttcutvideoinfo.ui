@@ -82,7 +82,7 @@
          <string/>
         </property>
         <property name="icon" >
-         <iconset resource="../../ttcut_mac/ui/videofileinfowidget.qrc" >
+         <iconset resource="videofileinfowidget.qrc" >
           <normaloff>:/pixmaps/pixmaps/folder-open.png</normaloff>:/pixmaps/pixmaps/folder-open.png</iconset>
         </property>
         <property name="iconSize" >
@@ -215,7 +215,7 @@
          <string/>
         </property>
         <property name="icon" >
-         <iconset resource="../../ttcut_mac/ui/videofileinfowidget.qrc" >
+         <iconset resource="videofileinfowidget.qrc" >
           <normaloff>:/pixmaps/pixmaps/goto-prev.png</normaloff>:/pixmaps/pixmaps/goto-prev.png</iconset>
         </property>
         <property name="iconSize" >
@@ -232,7 +232,7 @@
          <string/>
         </property>
         <property name="icon" >
-         <iconset resource="../../ttcut_mac/ui/videofileinfowidget.qrc" >
+         <iconset resource="videofileinfowidget.qrc" >
           <normaloff>:/pixmaps/pixmaps/goto-next.png</normaloff>:/pixmaps/pixmaps/goto-next.png</iconset>
         </property>
         <property name="iconSize" >
@@ -249,7 +249,7 @@
   </layout>
  </widget>
  <resources>
-  <include location="../../ttcut_mac/ui/videofileinfowidget.qrc" />
+  <include location="videofileinfowidget.qrc" />
  </resources>
  <connections/>
 </ui>
