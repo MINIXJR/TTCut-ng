@@ -18,7 +18,7 @@ TTCut-Changelog
           - Add subtitle support to XML project file format
         * Add media file extensions to .gitignore (*.m2v, *.ac3, *.mp2, etc.)
 
-0.30.0: * Add SRT subtitle support with preview integration
+0.30.0: * Add SRT subtitle support with preview integration (by Minei3oat)
         * Auto-loading: SRT files matching video filename are automatically loaded
         * Preview overlay: Subtitles displayed in main video frame using QPainter
         * mpv preview: Subtitles passed to mpv via --sub-file parameter
