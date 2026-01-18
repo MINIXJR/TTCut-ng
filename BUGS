@@ -2,7 +2,4 @@
 TTCut-Buglist (Known issues)
 -------------------------------------------------------------------------------
 
-* Preview is still playin while closing the preview window
-
-* Sometimes TTCut crashed while executing transcode and forces the xserver
-  to shut down.
+No known issues at this time.
