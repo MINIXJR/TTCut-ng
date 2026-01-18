@@ -403,12 +403,31 @@ bool TTFFmpegWrapper::demuxToElementary(const QString& outputDir, QString* video
     args << "-y"
          << "-i" << sourceFile;
 
+    // Determine output format based on codec
+    QString outputFormat;
+    switch (codec) {
+        case CODEC_MPEG2: outputFormat = "mpeg2video"; break;
+        case CODEC_H264:  outputFormat = "h264"; break;
+        case CODEC_H265:  outputFormat = "hevc"; break;
+        default:          outputFormat = "rawvideo"; break;
+    }
+
     // Extract video stream
     if (mVideoStreamIndex >= 0) {
         args << "-map" << QString("0:%1").arg(mVideoStreamIndex)
              << "-c:v" << "copy"
-             << "-an"  // No audio
-             << "-f" << "rawvideo"
+             << "-an";  // No audio
+
+        // Add bitstream filter for H.264/H.265 from MP4/MKV containers
+        // to convert from AVCC/HVCC to Annex B format
+        TTContainerType container = detectContainer();
+        if (codec == CODEC_H264 && (container == CONTAINER_MP4 || container == CONTAINER_MKV)) {
+            args << "-bsf:v" << "h264_mp4toannexb";
+        } else if (codec == CODEC_H265 && (container == CONTAINER_MP4 || container == CONTAINER_MKV)) {
+            args << "-bsf:v" << "hevc_mp4toannexb";
+        }
+
+        args << "-f" << outputFormat
              << videoOutput;
     }
 

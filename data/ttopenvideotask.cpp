@@ -29,9 +29,15 @@
 
 #include "ttopenvideotask.h"
 
+#include "../common/ttcut.h"
 #include "../common/ttexception.h"
 #include "../data/ttavlist.h"
+#include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../extern/ttffmpegwrapper.h"
+
+#include <QDir>
+#include <QDebug>
 
 /**
  * Open video stream task
@@ -41,8 +47,9 @@ TTOpenVideoTask::TTOpenVideoTask(TTAVItem* avItem, QString fileName, int order) 
 {
   mpAVItem      = avItem;
   mOrder        = order;
-	mFileName     = fileName;
-	mpVideoStream = 0;
+  mFileName     = fileName;
+  mpVideoStream = 0;
+  mpVideoType   = 0;
 }
 
 /**
@@ -56,7 +63,7 @@ void TTOpenVideoTask::onUserAbort()
     mpVideoStream->setAbort(true);
 
   if (!mpAVItem->isInList())
-		delete mpAVItem;
+    delete mpAVItem;
 }
 
 /**
@@ -68,7 +75,7 @@ void TTOpenVideoTask::cleanUp()
   if (mpVideoStream == 0) return;
 
   disconnect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
- 					   this,          SLOT(onStatusReport(int, const QString&, quint64)));
+             this,          SLOT(onStatusReport(int, const QString&, quint64)));
 }
 
 /**
@@ -76,29 +83,83 @@ void TTOpenVideoTask::cleanUp()
  */
 void TTOpenVideoTask::operation()
 {
-	QFileInfo fInfo(mFileName);
+  QFileInfo fInfo(mFileName);
 
-	if (!fInfo.exists())
-		throw new TTFileNotFoundException(__FILE__, __LINE__, QString(tr("file %1 does not exists!")).arg(fInfo.filePath()));
+  if (!fInfo.exists())
+    throw new TTFileNotFoundException(__FILE__, __LINE__, QString(tr("file %1 does not exists!")).arg(fInfo.filePath()));
 
-	mpVideoType = new TTVideoType(fInfo.absoluteFilePath());
+  QString videoFilePath = fInfo.absoluteFilePath();
 
-	if (mpVideoType->avStreamType() != TTAVTypes::mpeg2_demuxed_video) 
-		throw new TTDataFormatException(__FILE__, __LINE__, QString(tr("unsupported video type %1")).arg(fInfo.filePath()));
+  // Check if this is a container format that needs demuxing
+  TTFFmpegWrapper ffmpeg;
+  if (ffmpeg.openFile(videoFilePath)) {
+    TTContainerType containerType = ffmpeg.detectContainer();
 
-	mpVideoStream = new TTMpeg2VideoStream(fInfo);
+    qDebug() << "Container type:" << TTFFmpegWrapper::containerTypeToString(containerType);
 
-	connect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
-					this,          SLOT(onStatusReport(int, const QString&, quint64)));
+    if (containerType != CONTAINER_ELEMENTARY && containerType != CONTAINER_UNKNOWN) {
+      // This is a container (TS, MKV, MP4, PS) - need to demux first
+      qDebug() << "Detected container format, demuxing to elementary streams...";
+
+      QString demuxDir = TTCut::tempDirPath;
+      QString demuxedVideo;
+      QString demuxedAudio;
+
+      if (ffmpeg.demuxToElementary(demuxDir, &demuxedVideo, &demuxedAudio)) {
+        qDebug() << "Demuxed video:" << demuxedVideo;
+        qDebug() << "Demuxed audio:" << demuxedAudio;
+
+        // Use the demuxed elementary stream instead
+        if (!demuxedVideo.isEmpty()) {
+          videoFilePath = demuxedVideo;
+          fInfo = QFileInfo(videoFilePath);
+        } else {
+          ffmpeg.closeFile();
+          throw new TTDataFormatException(__FILE__, __LINE__,
+              QString(tr("Failed to extract video stream from container: %1")).arg(mFileName));
+        }
+      } else {
+        ffmpeg.closeFile();
+        throw new TTDataFormatException(__FILE__, __LINE__,
+            QString(tr("Failed to demux container: %1 - %2")).arg(mFileName).arg(ffmpeg.lastError()));
+      }
+    }
+    ffmpeg.closeFile();
+  }
+
+  // Now open the (possibly demuxed) elementary stream
+  mpVideoType = new TTVideoType(videoFilePath);
+
+  TTAVTypes::AVStreamType streamType = mpVideoType->avStreamType();
+  qDebug() << "Video stream type:" << streamType;
+
+  // Check for supported video types
+  if (streamType != TTAVTypes::mpeg2_demuxed_video &&
+      streamType != TTAVTypes::mpeg2_mplexed_video &&
+      streamType != TTAVTypes::h264_video &&
+      streamType != TTAVTypes::h265_video) {
+    throw new TTDataFormatException(__FILE__, __LINE__,
+        QString(tr("unsupported video type %1")).arg(fInfo.filePath()));
+  }
+
+  // Use factory method to create the appropriate video stream
+  mpVideoStream = mpVideoType->createVideoStream();
+
+  if (mpVideoStream == nullptr) {
+    throw new TTDataFormatException(__FILE__, __LINE__,
+        QString(tr("failed to create video stream for %1")).arg(fInfo.filePath()));
+  }
+
+  connect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
+          this,          SLOT(onStatusReport(int, const QString&, quint64)));
 
   mpVideoStream->createHeaderList();
- 	mpVideoStream->createIndexList();
+  mpVideoStream->createIndexList();
 
-	mpVideoStream->indexList()->sortDisplayOrder();
+  mpVideoStream->indexList()->sortDisplayOrder();
 
   if (mpVideoType != 0) delete mpVideoType;
   mpVideoType = 0;
 
-	emit finished(mpAVItem, mpVideoStream, mOrder);
+  emit finished(mpAVItem, mpVideoStream, mOrder);
 }
-
