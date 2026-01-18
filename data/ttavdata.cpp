@@ -279,18 +279,30 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
 
   TTAVItem* avItem = doOpenVideoStream(videoFilePath);
 
-  QFileInfoList audioInfoList = getAudioNames(QFileInfo(videoFilePath));
-	QListIterator<QFileInfo> audioInfo(audioInfoList);
+  // Check if this is a container file - if so, skip auto-loading audio/subtitles
+  // because they will be demuxed from the container instead
+  QFileInfo fileInfo(videoFilePath);
+  QString suffix = fileInfo.suffix().toLower();
+  bool isContainer = (suffix == "ts" || suffix == "m2ts" || suffix == "mkv" ||
+                      suffix == "mp4" || suffix == "m4v" || suffix == "mpg" ||
+                      suffix == "mpeg" || suffix == "vob");
 
-	while (audioInfo.hasNext()) {
-		doOpenAudioStream(avItem, audioInfo.next().absoluteFilePath());
-	}
+  if (!isContainer) {
+    // Only auto-load audio for elementary stream files
+    QFileInfoList audioInfoList = getAudioNames(QFileInfo(videoFilePath));
+    QListIterator<QFileInfo> audioInfo(audioInfoList);
 
-  QFileInfoList subtitleInfoList = getSubtitleNames(QFileInfo(videoFilePath));
-  QListIterator<QFileInfo> subtitleInfo(subtitleInfoList);
+    while (audioInfo.hasNext()) {
+      doOpenAudioStream(avItem, audioInfo.next().absoluteFilePath());
+    }
 
-  while (subtitleInfo.hasNext()) {
-    doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
+    // Only auto-load subtitles for elementary stream files
+    QFileInfoList subtitleInfoList = getSubtitleNames(QFileInfo(videoFilePath));
+    QListIterator<QFileInfo> subtitleInfo(subtitleInfoList);
+
+    while (subtitleInfo.hasNext()) {
+      doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
+    }
   }
 }
 
@@ -318,8 +330,8 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
   TTAVItem*        avItem        = createAVItem();
   TTOpenVideoTask* openVideoTask = new TTOpenVideoTask(avItem, filePath, order);
 
-  connect(openVideoTask, SIGNAL(finished(TTAVItem*, TTVideoStream*, int)),
-          this,          SLOT(onOpenVideoFinished(TTAVItem*, TTVideoStream*, int)));
+  connect(openVideoTask, SIGNAL(finished(TTAVItem*, TTVideoStream*, int, const QString&)),
+          this,          SLOT(onOpenVideoFinished(TTAVItem*, TTVideoStream*, int, const QString&)));
 
   int audioCount = getAudioNames(QFileInfo(filePath)).count();
 
@@ -358,7 +370,7 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
 /*!
  * onOpenVideoFinished
  */
-void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int)
+void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int, const QString& demuxedAudio)
 {
   avItem->setVideoStream(vStream);
 
@@ -370,6 +382,15 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   mpCurrentAVItem = avItem;
   emit currentAVItemChanged(avItem);
+
+  // Load demuxed audio if available
+  if (!demuxedAudio.isEmpty()) {
+    QFileInfo audioInfo(demuxedAudio);
+    if (audioInfo.exists()) {
+      qDebug() << "Loading demuxed audio:" << demuxedAudio;
+      doOpenAudioStream(avItem, demuxedAudio);
+    }
+  }
 }
 
 void TTAVData::onOpenAVStreamsAborted()

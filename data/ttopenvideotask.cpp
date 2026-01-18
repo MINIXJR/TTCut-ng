@@ -45,11 +45,13 @@
 TTOpenVideoTask::TTOpenVideoTask(TTAVItem* avItem, QString fileName, int order) :
                  TTThreadTask("OpenVideoTask")
 {
-  mpAVItem      = avItem;
-  mOrder        = order;
-  mFileName     = fileName;
-  mpVideoStream = 0;
-  mpVideoType   = 0;
+  mpAVItem          = avItem;
+  mOrder            = order;
+  mFileName         = fileName;
+  mOriginalFileName = fileName;
+  mDemuxedAudio     = "";
+  mpVideoStream     = 0;
+  mpVideoType       = 0;
 }
 
 /**
@@ -113,6 +115,8 @@ void TTOpenVideoTask::operation()
         if (!demuxedVideo.isEmpty()) {
           videoFilePath = demuxedVideo;
           fInfo = QFileInfo(videoFilePath);
+          // Store demuxed audio path for later loading
+          mDemuxedAudio = demuxedAudio;
         } else {
           ffmpeg.closeFile();
           throw new TTDataFormatException(__FILE__, __LINE__,
@@ -161,5 +165,5 @@ void TTOpenVideoTask::operation()
   if (mpVideoType != 0) delete mpVideoType;
   mpVideoType = 0;
 
-  emit finished(mpAVItem, mpVideoStream, mOrder);
+  emit finished(mpAVItem, mpVideoStream, mOrder, mDemuxedAudio);
 }

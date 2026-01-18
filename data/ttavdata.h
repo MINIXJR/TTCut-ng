@@ -137,7 +137,7 @@ class TTAVData : public QObject
     void onMplexStep(const QString& msg, quint64 value);
 
   private slots:
-    void onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int order);
+    void onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int order, const QString& demuxedAudio);
     void onOpenAVStreamsAborted();
 
     void onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int order);
