@@ -43,6 +43,7 @@
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
+#include "../avstream/ttmpeg2videoheader.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -187,8 +188,10 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(nextIFrame()),          currentFrame, SLOT(onNextIFrame()));
   connect(navigation, SIGNAL(prevPFrame()),          currentFrame, SLOT(onPrevPFrame()));
   connect(navigation, SIGNAL(nextPFrame()),          currentFrame, SLOT(onNextPFrame()));
-  //connect(navigation, SIGNAL(prevBFrame()),          currentFrame, SLOT(onPrevBFrame()));
-  //connect(navigation, SIGNAL(nextBFrame()),          currentFrame, SLOT(onNextBFrame()));
+  connect(navigation, SIGNAL(prevBFrame()),          currentFrame, SLOT(onPrevBFrame()));
+  connect(navigation, SIGNAL(nextBFrame()),          currentFrame, SLOT(onNextBFrame()));
+  connect(navigation, SIGNAL(prevFrame()),           currentFrame, SLOT(onPrevBFrame()));
+  connect(navigation, SIGNAL(nextFrame()),           currentFrame, SLOT(onNextBFrame()));
   connect(navigation, SIGNAL(setCutOut(int)),        this, SLOT(onSetCutOut(int)));
 
   connect(navigation, SIGNAL(setCutOut(int)),        cutOutFrame,  SLOT(onGotoCutOut(int)));
@@ -197,10 +200,11 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(gotoCutIn(int)),        currentFrame, SLOT(onGotoCutIn(int)));
   connect(navigation, SIGNAL(gotoCutOut(int)),       currentFrame, SLOT(onGotoCutOut(int)));
   connect(navigation, SIGNAL(addCutRange(int, int)),               SLOT(onAppendCutEntry(int, int)));
-  //connect(navigation, SIGNAL(gotoMarker(int)),     currentFrame, SLOT(onGotoMarker(int)));
+  connect(navigation, SIGNAL(gotoMarker(int)),       currentFrame, SLOT(onGotoMarker(int)));
   connect(navigation, SIGNAL(moveNumSteps(int)),     currentFrame, SLOT(onMoveNumSteps(int)));
   connect(navigation, SIGNAL(moveToHome()),          currentFrame, SLOT(onMoveToHome()));
   connect(navigation, SIGNAL(moveToEnd()),           currentFrame, SLOT(onMoveToEnd()));
+  connect(navigation, SIGNAL(streamPoints()),        this,         SLOT(onStreamPoints()));
 
   // Connect signal from video slider
   // --------------------------------------------------------------------------
@@ -571,6 +575,34 @@ void TTCutMainWindow::onGotoMarker(const TTMarkerItem& marker)
 	mpAVData->onChangeCurrentAVItem(marker.avDataItem());
 
 	onVideoSliderChanged(marker.markerPos());
+}
+
+void TTCutMainWindow::onStreamPoints()
+{
+	if (mpCurrentAVDataItem == 0) {
+		QMessageBox::information(this, tr("Stream Points"),
+			tr("No video stream loaded."));
+		return;
+	}
+
+	TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+	if (vs == 0) return;
+
+	TTSequenceHeader* seqHeader = vs->currentSequenceHeader();
+
+	QString info;
+	info += tr("Video File: %1\n\n").arg(vs->fileName());
+	info += tr("Total Frames: %1\n").arg(vs->frameCount());
+	info += tr("Frame Rate: %1 fps\n").arg(vs->frameRate());
+	if (seqHeader) {
+		info += tr("Resolution: %1 x %2\n").arg(seqHeader->horizontalSize()).arg(seqHeader->verticalSize());
+		info += tr("Aspect Ratio: %1\n").arg(seqHeader->aspectRatioText());
+	}
+	info += tr("Bitrate: %1 kbit/s\n\n").arg(vs->bitRate() / 1000);
+	info += tr("Current Position: %1\n").arg(vs->currentIndex());
+	info += tr("Current Time: %1\n").arg(vs->currentFrameTime().toString("hh:mm:ss.zzz"));
+
+	QMessageBox::information(this, tr("Stream Information"), info);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

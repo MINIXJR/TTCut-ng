@@ -4,6 +4,15 @@ Make*
 ttcut
 logfile.log
 
+# ignore media files (input/output)
+*.m2v
+*.ac3
+*.mp2
+*.mpg
+*.mpeg
+*.vob
+*.srt
+
 # ignore pattern for common files to ignore
 *.o
 *.tmp

@@ -52,7 +52,7 @@
       </size>
      </property>
      <property name="title" >
-      <string/>
+      <string>Cut-Out Frame</string>
      </property>
      <layout class="QGridLayout" >
       <property name="margin" >

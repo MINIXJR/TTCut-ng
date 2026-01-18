@@ -54,13 +54,19 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	connect(pbPrevIFrame, SIGNAL(clicked()), SLOT(onPrevIFrame()));
 	connect(pbNextPFrame, SIGNAL(clicked()), SLOT(onNextPFrame()));
 	connect(pbPrevPFrame, SIGNAL(clicked()), SLOT(onPrevPFrame()));
-	//connect(pbNextBFrame, SIGNAL(clicked()), SLOT(onNextBFrame()));
-	//connect(pbPrevBFrame, SIGNAL(clicked()), SLOT(onPrevBFrame()));
+	connect(pbNextBFrame, SIGNAL(clicked()), SLOT(onNextBFrame()));
+	connect(pbPrevBFrame, SIGNAL(clicked()), SLOT(onPrevBFrame()));
+	connect(pbNextFrame, SIGNAL(clicked()), SLOT(onNextFrame()));
+	connect(pbPrevFrame, SIGNAL(clicked()), SLOT(onPrevFrame()));
 	connect(pbSetCutIn, SIGNAL(clicked()), SLOT(onSetCutIn()));
 	connect(pbSetCutOut, SIGNAL(clicked()), SLOT(onSetCutOut()));
 	connect(pbGotoCutIn, SIGNAL(clicked()), SLOT(onGotoCutIn()));
 	connect(pbGotoCutOut, SIGNAL(clicked()), SLOT(onGotoCutOut()));
 	connect(pbAddCut, SIGNAL(clicked()), SLOT(onAddCutRange()));
+	connect(pbQuickJump, SIGNAL(clicked()), SLOT(onQuickJump()));
+	connect(pbStreamPoints, SIGNAL(clicked()), SLOT(onStreamPoints()));
+	connect(pbSetMarker, SIGNAL(clicked()), SLOT(onSetMarker()));
+	connect(pbGotoMarker, SIGNAL(clicked()), SLOT(onGotoMarker()));
 }
 
 //void TTCutFrameNavigation::setTitle(const QString & title)
@@ -74,13 +80,19 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbPrevIFrame->setEnabled(enabled);
 	pbNextPFrame->setEnabled(enabled);
 	pbPrevPFrame->setEnabled(enabled);
-	//pbNextBFrame->setEnabled(enabled);
-	//pbPrevBFrame->setEnabled(enabled);
+	pbNextBFrame->setEnabled(enabled);
+	pbPrevBFrame->setEnabled(enabled);
+	pbNextFrame->setEnabled(enabled);
+	pbPrevFrame->setEnabled(enabled);
 	pbSetCutIn->setEnabled(enabled);
 	pbSetCutOut->setEnabled(enabled);
 	pbGotoCutIn->setEnabled(enabled);
 	pbGotoCutOut->setEnabled(enabled);
 	pbAddCut->setEnabled(enabled);
+	pbQuickJump->setEnabled(enabled);
+	pbStreamPoints->setEnabled(enabled);
+	pbSetMarker->setEnabled(enabled);
+	pbGotoMarker->setEnabled(enabled);
 }
 
 void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData)
@@ -198,14 +210,25 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 		// ---------------------------------------------------------------------------
 		// B-frame
 		// ---------------------------------------------------------------------------
-/*	case Qt::Key_B:
+	case Qt::Key_B:
 		// previous B-Frame
 		if (e->modifiers() == Qt::ControlModifier)
 			emit prevBFrame();
 		// next B-frame
 		else
 			emit nextBFrame();
-		break;*/
+		break;
+		// ---------------------------------------------------------------------------
+		// Single frame
+		// ---------------------------------------------------------------------------
+	case Qt::Key_F:
+		// previous frame
+		if (e->modifiers() == Qt::ControlModifier)
+			emit prevFrame();
+		// next frame
+		else
+			emit nextFrame();
+		break;
 
 	default:
 		break;
@@ -364,4 +387,52 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 	pbAddCut->setText(tr("Update range in cut list"));
 
 	emit gotoCutIn(cutInPosition);
+}
+
+void TTCutFrameNavigation::onPrevFrame()
+{
+	emit prevFrame();
+}
+
+void TTCutFrameNavigation::onNextFrame()
+{
+	emit nextFrame();
+}
+
+void TTCutFrameNavigation::onQuickJump()
+{
+	emit moveNumSteps(TTCut::stepQuickJump);
+}
+
+void TTCutFrameNavigation::onStreamPoints()
+{
+	emit streamPoints();
+}
+
+void TTCutFrameNavigation::onSetMarker()
+{
+	QString szTemp1, szTemp2;
+
+	markerPosition = currentPosition;
+
+	szTemp1 = currentTime;
+	szTemp2 = QString(" (%1)").arg(markerPosition);
+
+	if (currentFrameType == 1)
+		szTemp2 += " [I]";
+	if (currentFrameType == 2)
+		szTemp2 += " [P]";
+	if (currentFrameType == 3)
+		szTemp2 += " [B]";
+
+	szTemp1 += szTemp2;
+	laMarkerPosition->setText(szTemp1);
+
+	emit setMarker();
+}
+
+void TTCutFrameNavigation::onGotoMarker()
+{
+	if (markerPosition >= 0)
+		emit gotoMarker(markerPosition);
 }
