@@ -30,21 +30,24 @@
 #include "ttcutsettingsmuxer.h"
 
 #include "../common/ttcut.h"
+#include "../extern/ttmkvmergeprovider.h"
 
 #include <QFileDialog>
-  
+
 TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
 :QWidget(parent)
 {
   setupUi(this);
 
-  // enabled if we have a plugin for the muxer
-  cbMuxerProg->setEnabled(false);
-  cbMuxTarget->setEnabled(false);
-  pbConfigureMuxer->setEnabled(false);
-
+  // Initialize combo boxes
   initMuxProgList();
   initMuxTargetList();
+  initOutputContainerList();
+
+  // Enable muxer selection now that we have multiple options
+  cbMuxerProg->setEnabled(true);
+  cbMuxTarget->setEnabled(true);
+  pbConfigureMuxer->setEnabled(false);
 
   connect(rbCreateMuxScript, SIGNAL(clicked()),         SLOT(onCreateMuxScript()));
   connect(rbMuxStreams,      SIGNAL(clicked()),         SLOT(onCreateMuxStreams()));
@@ -52,6 +55,7 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   connect(btnOutputPath,     SIGNAL(clicked()),         SLOT(onOpenOutputPath()));
   connect(cbDeleteES,        SIGNAL(stateChanged(int)), SLOT(onStateDeleteES(int)));
   connect(cbPause,           SIGNAL(stateChanged(int)), SLOT(onStatePause(int)));
+  connect(cbMuxerProg,       SIGNAL(currentIndexChanged(int)), SLOT(onMuxerProgChanged(int)));
 }
 
 void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
@@ -60,8 +64,17 @@ void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
 
 void TTCutSettingsMuxer::initMuxProgList()
 {
-  cbMuxerProg->insertItem(0, "Mplex");
-  cbMuxerProg->setCurrentIndex(0);
+  cbMuxerProg->clear();
+  cbMuxerProg->insertItem(0, "Mplex (MPEG-2)");
+  cbMuxerProg->insertItem(1, "mkvmerge (MKV)");
+  cbMuxerProg->insertItem(2, "FFmpeg (MP4/TS)");
+
+  // Check availability and set default
+  if (TTMkvMergeProvider::isMkvMergeInstalled()) {
+    cbMuxerProg->setCurrentIndex(1);  // Default to mkvmerge if available
+  } else {
+    cbMuxerProg->setCurrentIndex(0);  // Fallback to mplex
+  }
 }
 
 void TTCutSettingsMuxer::initMuxTargetList()
@@ -96,8 +109,10 @@ void TTCutSettingsMuxer::setTabData()
       break;
   }
 
-  cbMuxerProg->setCurrentIndex(0);
+  // Set muxer program based on outputContainer setting
+  cbMuxerProg->setCurrentIndex(TTCut::outputContainer);
   cbMuxTarget->setCurrentIndex(TTCut::mpeg2Target);
+  updateMuxerVisibility();
 
   leOutputPath->setText(TTCut::muxOutputPath);
 
@@ -173,4 +188,37 @@ void TTCutSettingsMuxer::onStatePause(int state)
     TTCut::muxPause = false;
   else
     TTCut::muxPause = true;
+}
+
+void TTCutSettingsMuxer::initOutputContainerList()
+{
+  // This function is for future use when we add a separate output container combo box
+  // For now, the muxer program selection determines the output format
+}
+
+void TTCutSettingsMuxer::updateMuxerVisibility()
+{
+  int muxerIndex = cbMuxerProg->currentIndex();
+
+  // Show/hide MPEG-2 specific options based on muxer selection
+  switch (muxerIndex) {
+    case 0:  // Mplex - show MPEG-2 targets
+      cbMuxTarget->setEnabled(true);
+      break;
+    case 1:  // mkvmerge - hide MPEG-2 targets
+    case 2:  // FFmpeg - hide MPEG-2 targets
+      cbMuxTarget->setEnabled(false);
+      break;
+  }
+}
+
+void TTCutSettingsMuxer::onMuxerProgChanged(int index)
+{
+  TTCut::outputContainer = index;
+  updateMuxerVisibility();
+}
+
+void TTCutSettingsMuxer::onOutputContainerChanged(int index)
+{
+  TTCut::outputContainer = index;
 }

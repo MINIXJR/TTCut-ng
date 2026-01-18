@@ -137,6 +137,10 @@ class TTCut
    // --------------------------------------------------------------
    // Options
    static bool    encoderMode;
+   static int     encoderCodec;       // 0=MPEG-2, 1=H.264, 2=H.265
+   static int     encoderPreset;      // 0-8: ultrafast to veryslow
+   static int     encoderCrf;         // 0-51, quality factor (lower=better, 23 default)
+   static int     encoderProfile;     // Codec-specific profile
 
    // --------------------------------------------------------------
    // muxer settings
@@ -150,6 +154,9 @@ class TTCut
    static QString muxOutputPath;
    static bool    muxDeleteES;
    static bool    muxPause;
+
+   // Output container type (0=TS, 1=MKV, 2=MP4, 3=Elementary)
+   static int     outputContainer;
 
    // --------------------------------------------------------------
    // chapter settings

@@ -27,7 +27,7 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#ifndef TTCUTSETTINGSENCODER_H 
+#ifndef TTCUTSETTINGSENCODER_H
 #define TTCUTSETTINGSENCODER_H
 
 #include "ui_ttcutsettingsencoder.h"
@@ -45,6 +45,15 @@ class TTCutSettingsEncoder : public QWidget, Ui::TTCutSettingsEncoder
     void setTitle( const QString& title );
     void setTabData();
     void getTabData();
+
+  private:
+    void initCodecList();
+    void initPresetList();
+    void updateProfileList();
+
+  protected slots:
+    void onCodecChanged(int index);
+    void onEncodingModeChanged(int state);
 };
 
 #endif

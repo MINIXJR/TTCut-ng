@@ -262,7 +262,14 @@ void TTCutMainWindow::onOpenVideoFile()
   QString fn = QFileDialog::getOpenFileName( this,
       tr("Open video file"),
       TTCut::lastDirPath,
-      "Video (*.m2v *.mpv)" );
+      tr("All Video Files (*.m2v *.mpv *.h264 *.264 *.avc *.h265 *.265 *.hevc *.ts *.m2ts *.mkv *.mp4);;"
+         "MPEG-2 Video (*.m2v *.mpv);;"
+         "H.264/AVC Video (*.h264 *.264 *.avc);;"
+         "H.265/HEVC Video (*.h265 *.265 *.hevc);;"
+         "Transport Stream (*.ts *.m2ts);;"
+         "Matroska (*.mkv);;"
+         "MP4 (*.mp4);;"
+         "All Files (*)"));
 
   if (fn.isEmpty()) return;
 
@@ -281,7 +288,12 @@ void TTCutMainWindow::onOpenAudioFile()
 	QString fn = QFileDialog::getOpenFileName( this,
       tr("Open audio file"),
       TTCut::lastDirPath,
-      "Audio (*.mpa *.mp2 *.ac3)" );
+      tr("All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;"
+         "MPEG Audio (*.mpa *.mp2);;"
+         "AC3/Dolby Digital (*.ac3 *.eac3);;"
+         "AAC Audio (*.aac *.m4a);;"
+         "DTS Audio (*.dts);;"
+         "All Files (*)"));
 
   if (fn.isEmpty())
     return;

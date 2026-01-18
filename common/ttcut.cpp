@@ -135,6 +135,10 @@ QString TTCut::versionString = "TTCut - 0.40.0";
 
 // Options
 bool TTCut::encoderMode = false;
+int  TTCut::encoderCodec = 1;      // Default to H.264
+int  TTCut::encoderPreset = 5;     // Default to 'medium'
+int  TTCut::encoderCrf = 23;       // Default CRF value
+int  TTCut::encoderProfile = 2;    // Default to 'high' for H.264
 
 // --------------------------------------------------------------
 // muxer settings
@@ -148,6 +152,7 @@ QString TTCut::muxProgCmd    = "-f 8";
 QString TTCut::muxOutputPath = QDir::homePath();
 bool    TTCut::muxDeleteES   = false;
 bool    TTCut::muxPause      = true;
+int     TTCut::outputContainer = 1;  // Default to MKV for modern codecs
 
 // --------------------------------------------------------------
 // chapter settings
