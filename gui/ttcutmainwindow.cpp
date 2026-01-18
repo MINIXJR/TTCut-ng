@@ -262,13 +262,8 @@ void TTCutMainWindow::onOpenVideoFile()
   QString fn = QFileDialog::getOpenFileName( this,
       tr("Open video file"),
       TTCut::lastDirPath,
-      tr("All Video Files (*.m2v *.mpv *.h264 *.264 *.avc *.h265 *.265 *.hevc *.ts *.m2ts *.mkv *.mp4);;"
-         "MPEG-2 Video (*.m2v *.mpv);;"
-         "H.264/AVC Video (*.h264 *.264 *.avc);;"
-         "H.265/HEVC Video (*.h265 *.265 *.hevc);;"
-         "Transport Stream (*.ts *.m2ts);;"
-         "Matroska (*.mkv);;"
-         "MP4 (*.mp4);;"
+      tr("MPEG-2 Video (*.m2v *.mpv);;"
+         "MPEG-2 Transport Stream (*.ts *.m2ts);;"
          "All Files (*)"));
 
   if (fn.isEmpty()) return;

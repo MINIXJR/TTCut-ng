@@ -157,10 +157,21 @@ void TTOpenVideoTask::operation()
   connect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
           this,          SLOT(onStatusReport(int, const QString&, quint64)));
 
-  mpVideoStream->createHeaderList();
-  mpVideoStream->createIndexList();
+  int headerCount = mpVideoStream->createHeaderList();
+  if (headerCount <= 0) {
+    throw new TTDataFormatException(__FILE__, __LINE__,
+        QString(tr("Failed to parse video stream headers: %1")).arg(fInfo.filePath()));
+  }
 
-  mpVideoStream->indexList()->sortDisplayOrder();
+  int indexCount = mpVideoStream->createIndexList();
+  if (indexCount <= 0) {
+    throw new TTDataFormatException(__FILE__, __LINE__,
+        QString(tr("Failed to create video index: %1")).arg(fInfo.filePath()));
+  }
+
+  if (mpVideoStream->indexList() != nullptr) {
+    mpVideoStream->indexList()->sortDisplayOrder();
+  }
 
   if (mpVideoType != 0) delete mpVideoType;
   mpVideoType = 0;
