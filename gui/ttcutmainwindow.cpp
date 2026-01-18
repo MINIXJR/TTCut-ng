@@ -263,7 +263,9 @@ void TTCutMainWindow::onOpenVideoFile()
       tr("Open video file"),
       TTCut::lastDirPath,
       tr("MPEG-2 Video (*.m2v *.mpv);;"
-         "MPEG-2 Transport Stream (*.ts *.m2ts);;"
+         "Transport Stream (*.ts *.m2ts);;"
+         "Matroska (*.mkv);;"
+         "MP4 (*.mp4 *.m4v);;"
          "All Files (*)"));
 
   if (fn.isEmpty()) return;
