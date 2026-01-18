@@ -193,6 +193,8 @@ void TTOpenVideoTask::operation()
         QString(tr("failed to create video stream for %1")).arg(fInfo.filePath()));
   }
 
+  qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
+
   connect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
           this,          SLOT(onStatusReport(int, const QString&, quint64)));
 

@@ -34,6 +34,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QTextStream>
+#include <QDir>
 
 // Standard mkvmerge paths to check
 static const QStringList sMkvMergePaths = {
@@ -298,4 +300,62 @@ void TTMkvMergeProvider::setError(const QString& error)
 {
     mLastError = error;
     qDebug() << "TTMkvMergeProvider error:" << error;
+}
+
+// -----------------------------------------------------------------------------
+// Generate chapter file for MKV
+// Creates a simple chapter file in OGM/Matroska format
+// Returns the path to the generated chapter file, or empty string on failure
+// -----------------------------------------------------------------------------
+QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalMinutes,
+                                                  const QString& outputDir)
+{
+    if (durationMs <= 0 || intervalMinutes <= 0) {
+        qDebug() << "Invalid parameters for chapter generation";
+        return QString();
+    }
+
+    qint64 intervalMs = static_cast<qint64>(intervalMinutes) * 60 * 1000;
+
+    // Generate chapter file path
+    QString chapterFilePath = QDir(outputDir).filePath("chapters.txt");
+
+    QFile chapterFile(chapterFilePath);
+    if (!chapterFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Failed to create chapter file:" << chapterFilePath;
+        return QString();
+    }
+
+    QTextStream out(&chapterFile);
+
+    int chapterNum = 1;
+    qint64 currentTime = 0;
+
+    while (currentTime < durationMs) {
+        // Convert milliseconds to HH:MM:SS.mmm format
+        int hours = currentTime / (1000 * 60 * 60);
+        int minutes = (currentTime / (1000 * 60)) % 60;
+        int seconds = (currentTime / 1000) % 60;
+        int millis = currentTime % 1000;
+
+        // Write chapter entry in simple chapter format
+        // CHAPTER01=00:00:00.000
+        // CHAPTER01NAME=Chapter 1
+        out << QString("CHAPTER%1=%2:%3:%4.%5\n")
+               .arg(chapterNum, 2, 10, QChar('0'))
+               .arg(hours, 2, 10, QChar('0'))
+               .arg(minutes, 2, 10, QChar('0'))
+               .arg(seconds, 2, 10, QChar('0'))
+               .arg(millis, 3, 10, QChar('0'));
+        out << QString("CHAPTER%1NAME=Chapter %1\n")
+               .arg(chapterNum, 2, 10, QChar('0'));
+
+        chapterNum++;
+        currentTime += intervalMs;
+    }
+
+    chapterFile.close();
+
+    qDebug() << "Generated chapter file with" << (chapterNum - 1) << "chapters:" << chapterFilePath;
+    return chapterFilePath;
 }

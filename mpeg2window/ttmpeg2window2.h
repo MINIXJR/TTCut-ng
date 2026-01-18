@@ -46,6 +46,8 @@
 #include "../avstream/ttmpeg2videostream.h"
 #include "../avstream/ttsubtitleheaderlist.h"
 #include "../avstream/ttavheader.h"
+#include "../avstream/ttavtypes.h"
+#include "../extern/ttffmpegwrapper.h"
 
 class TTSubtitleStream;
 
@@ -59,8 +61,11 @@ class TTMPEG2Window2 : public QLabel
     void resizeEvent(QResizeEvent * event);
 
     void openVideoFile(QString fName, TTVideoIndexList* viIndex=0, TTVideoHeaderList* viHeader=0);
-    void openVideoStream(TTMpeg2VideoStream* v_stream);
+    void openVideoStream(TTVideoStream* vStream);
     void closeVideoStream();
+
+    // Check if using FFmpeg decoder (H.264/H.265)
+    bool isFFmpegStream() const { return mUseFFmpeg; }
 
     // navigation
     void moveToFirstFrame(bool show = true);
@@ -91,6 +96,11 @@ class TTMPEG2Window2 : public QLabel
     TTSubtitleStream*   mpSubtitleStream;
     TTMessageLogger*    log;
     TTMpeg2Decoder*     mpeg2Decoder;
+
+    // FFmpeg decoder for H.264/H.265
+    TTFFmpegWrapper*    mpFFmpegWrapper;
+    bool                mUseFFmpeg;
+    QImage              mCurrentFrame;   // For FFmpeg decoded frames
 };
 
 #endif //TTMPEG2WINDOW_H

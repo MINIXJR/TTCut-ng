@@ -51,6 +51,13 @@ TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
   // signal and slot connections
   connect(okButton,     SIGNAL(clicked()), SLOT(onDlgOk()));
   connect(cancelButton, SIGNAL(clicked()), SLOT(onDlgCancel()));
+
+  // Connect encoder codec change to muxer visibility update
+  connect(encodingPage, SIGNAL(codecChanged(int)),
+          muxingPage,   SLOT(onEncoderCodecChanged(int)));
+
+  // Initial sync of muxer visibility based on current codec
+  muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);
 }
 
 // save the tabs data

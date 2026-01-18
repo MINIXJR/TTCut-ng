@@ -138,9 +138,29 @@ class TTCut
    // Options
    static bool    encoderMode;
    static int     encoderCodec;       // 0=MPEG-2, 1=H.264, 2=H.265
+
+   // Current working values (copied from codec-specific settings)
    static int     encoderPreset;      // 0-8: ultrafast to veryslow
    static int     encoderCrf;         // 0-51, quality factor (lower=better, 23 default)
    static int     encoderProfile;     // Codec-specific profile
+
+   // MPEG-2 specific settings
+   static int     mpeg2Preset;        // Preset for MPEG-2
+   static int     mpeg2Crf;           // Quality for MPEG-2
+   static int     mpeg2Profile;       // Profile for MPEG-2
+   static int     mpeg2Muxer;         // Preferred muxer (0=mplex)
+
+   // H.264 specific settings
+   static int     h264Preset;         // Preset for H.264
+   static int     h264Crf;            // CRF for H.264 (default 23)
+   static int     h264Profile;        // Profile for H.264 (2=high)
+   static int     h264Muxer;          // Preferred muxer (1=mkvmerge)
+
+   // H.265 specific settings
+   static int     h265Preset;         // Preset for H.265
+   static int     h265Crf;            // CRF for H.265 (default 28)
+   static int     h265Profile;        // Profile for H.265 (0=main)
+   static int     h265Muxer;          // Preferred muxer (1=mkvmerge)
 
    // --------------------------------------------------------------
    // muxer settings
@@ -155,8 +175,12 @@ class TTCut
    static bool    muxDeleteES;
    static bool    muxPause;
 
-   // Output container type (0=TS, 1=MKV, 2=MP4, 3=Elementary)
+   // Output container type (0=mplex/TS, 1=MKV, 2=MP4, 3=Elementary)
    static int     outputContainer;
+
+   // MKV chapter settings
+   static bool    mkvCreateChapters;   // Create chapters in MKV (default: true)
+   static int     mkvChapterInterval;  // Chapter interval in minutes (default: 5)
 
    // --------------------------------------------------------------
    // chapter settings

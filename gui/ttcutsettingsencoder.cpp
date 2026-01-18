@@ -107,10 +107,59 @@ void TTCutSettingsEncoder::updateProfileList()
   }
 }
 
+void TTCutSettingsEncoder::updateQualityUI(int codec)
+{
+  // Block signals to prevent recursive updates
+  slCrf->blockSignals(true);
+  sbCrf->blockSignals(true);
+
+  switch (codec) {
+    case 0:  // MPEG-2 uses qscale (2-31, lower = better)
+      lblCrf->setText(tr("Quality (qscale):"));
+      slCrf->setMinimum(2);
+      slCrf->setMaximum(31);
+      sbCrf->setMinimum(2);
+      sbCrf->setMaximum(31);
+      lblCrfInfo->setText(tr("MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6"));
+      slCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality, 31 = worst quality"));
+      sbCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality, 31 = worst quality"));
+      break;
+
+    case 1:  // H.264 uses CRF (0-51, lower = better)
+      lblCrf->setText(tr("Quality (CRF):"));
+      slCrf->setMinimum(0);
+      slCrf->setMaximum(51);
+      sbCrf->setMinimum(0);
+      sbCrf->setMaximum(51);
+      lblCrfInfo->setText(tr("H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 23"));
+      slCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 23 = default, 51 = worst quality"));
+      sbCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 23 = default, 51 = worst quality"));
+      break;
+
+    case 2:  // H.265 uses CRF (0-51, lower = better, but values ~6 higher than H.264)
+      lblCrf->setText(tr("Quality (CRF):"));
+      slCrf->setMinimum(0);
+      slCrf->setMaximum(51);
+      sbCrf->setMinimum(0);
+      sbCrf->setMaximum(51);
+      lblCrfInfo->setText(tr("H.265 CRF: 0-51 (lower = better quality). Typical: 24-34, default: 28 (≈ H.264 CRF 23)"));
+      slCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 28 = default (similar to H.264 CRF 23), 51 = worst"));
+      sbCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 28 = default (similar to H.264 CRF 23), 51 = worst"));
+      break;
+  }
+
+  slCrf->blockSignals(false);
+  sbCrf->blockSignals(false);
+}
+
 void TTCutSettingsEncoder::setTabData()
 {
   cbEncodingMode->setChecked(TTCut::encoderMode);
   cbCodec->setCurrentIndex(TTCut::encoderCodec);
+
+  // Update quality UI (label, range, tooltip) based on current codec
+  updateQualityUI(TTCut::encoderCodec);
+
   cbPreset->setCurrentIndex(TTCut::encoderPreset);
   slCrf->setValue(TTCut::encoderCrf);
   sbCrf->setValue(TTCut::encoderCrf);
@@ -126,28 +175,119 @@ void TTCutSettingsEncoder::getTabData()
 {
   TTCut::encoderMode = cbEncodingMode->isChecked();
   TTCut::encoderCodec = cbCodec->currentIndex();
-  TTCut::encoderPreset = cbPreset->currentIndex();
-  TTCut::encoderCrf = sbCrf->value();
-  TTCut::encoderProfile = cbProfile->currentIndex();
+
+  // Save current UI values to the current codec's settings
+  saveCurrentCodecSettings();
 }
 
-void TTCutSettingsEncoder::onCodecChanged(int index)
+void TTCutSettingsEncoder::saveCurrentCodecSettings()
 {
-  Q_UNUSED(index);
-  updateProfileList();
+  int codec = cbCodec->currentIndex();
+  int preset = cbPreset->currentIndex();
+  int crf = sbCrf->value();
+  int profile = cbProfile->currentIndex();
 
-  // Reset profile to a sensible default for the new codec
-  switch (cbCodec->currentIndex()) {
+  switch (codec) {
     case 0:  // MPEG-2
-      cbProfile->setCurrentIndex(0);
+      TTCut::mpeg2Preset = preset;
+      TTCut::mpeg2Crf = crf;
+      TTCut::mpeg2Profile = profile;
       break;
     case 1:  // H.264
-      cbProfile->setCurrentIndex(2);  // high
+      TTCut::h264Preset = preset;
+      TTCut::h264Crf = crf;
+      TTCut::h264Profile = profile;
       break;
     case 2:  // H.265
-      cbProfile->setCurrentIndex(0);  // main
+      TTCut::h265Preset = preset;
+      TTCut::h265Crf = crf;
+      TTCut::h265Profile = profile;
       break;
   }
+
+  // Also update the current working values
+  TTCut::encoderPreset = preset;
+  TTCut::encoderCrf = crf;
+  TTCut::encoderProfile = profile;
+}
+
+void TTCutSettingsEncoder::loadCodecSettings(int codec)
+{
+  int preset, crf, profile;
+
+  switch (codec) {
+    case 0:  // MPEG-2
+      preset = TTCut::mpeg2Preset;
+      crf = TTCut::mpeg2Crf;
+      profile = TTCut::mpeg2Profile;
+      break;
+    case 1:  // H.264
+      preset = TTCut::h264Preset;
+      crf = TTCut::h264Crf;
+      profile = TTCut::h264Profile;
+      break;
+    case 2:  // H.265
+    default:
+      preset = TTCut::h265Preset;
+      crf = TTCut::h265Crf;
+      profile = TTCut::h265Profile;
+      break;
+  }
+
+  // Update quality UI (label, range, tooltip) before setting value
+  updateQualityUI(codec);
+
+  // Update UI values
+  cbPreset->setCurrentIndex(preset);
+  slCrf->setValue(crf);
+  sbCrf->setValue(crf);
+
+  // Update profile list first, then set profile
+  updateProfileList();
+  if (profile < cbProfile->count()) {
+    cbProfile->setCurrentIndex(profile);
+  }
+}
+
+void TTCutSettingsEncoder::onCodecChanged(int newCodec)
+{
+  // Save settings of the previous codec before switching
+  // The previous codec is stored in TTCut::encoderCodec
+  int oldCodec = TTCut::encoderCodec;
+
+  if (oldCodec != newCodec) {
+    // Save current UI values to the old codec
+    int preset = cbPreset->currentIndex();
+    int crf = sbCrf->value();
+    int profile = cbProfile->currentIndex();
+
+    switch (oldCodec) {
+      case 0:  // MPEG-2
+        TTCut::mpeg2Preset = preset;
+        TTCut::mpeg2Crf = crf;
+        TTCut::mpeg2Profile = profile;
+        break;
+      case 1:  // H.264
+        TTCut::h264Preset = preset;
+        TTCut::h264Crf = crf;
+        TTCut::h264Profile = profile;
+        break;
+      case 2:  // H.265
+        TTCut::h265Preset = preset;
+        TTCut::h265Crf = crf;
+        TTCut::h265Profile = profile;
+        break;
+    }
+
+    // Update current codec
+    TTCut::encoderCodec = newCodec;
+
+    // Load settings for the new codec
+    loadCodecSettings(newCodec);
+  }
+
+  // Notify other tabs about codec change (for muxer visibility)
+  emit codecChanged(newCodec);
 }
 
 void TTCutSettingsEncoder::onEncodingModeChanged(int state)

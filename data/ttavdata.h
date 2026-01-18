@@ -156,6 +156,7 @@ class TTAVData : public QObject
     void onThreadPoolExit();
 
     void onStatusReport(int state, const QString& msg, quint64 value);
+    void onMuxProgress(int percent, const QString& msg);
 
   signals:
     void threadPoolExit();
@@ -194,6 +195,9 @@ class TTAVData : public QObject
     QFileInfoList  getSubtitleNames(const QFileInfo& vFileInfo);
     QString        createAudioCutFileName(QString cutBaseFileName, QString audioFileName, int index);
     QString        createSubtitleCutFileName(QString cutBaseFileName, QString subtitleFileName, int index);
+    void           deleteElementaryStreams(const QString& videoFilePath,
+                                           const QStringList& audioFilePaths,
+                                           const QStringList& subtitleFilePaths = QStringList());
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;

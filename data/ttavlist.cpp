@@ -39,6 +39,7 @@
 
 #include <QList>
 #include <QDir>
+#include <QDebug>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTAVItem
@@ -347,6 +348,10 @@ TTAVList::~TTAVList()
  */
 void TTAVList::append(TTAVItem* item)
 {
+	if (item == nullptr) {
+		return;
+	}
+
 	item->mIsInList = true;
 	mpAVList.append(item);
 	emit itemAppended(*item);

@@ -30,7 +30,7 @@
 #ifndef TTCUTOUTFRAME_H
 
 #include "../ui_h/ui_cutoutframewidget.h"
-#include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/ttavstream.h"
 #include "../data/ttcutlist.h"
 #include "ttprogressbar.h"
 
@@ -65,10 +65,8 @@ class TTCutOutFrame: public QWidget, Ui::TTCutOutFrameWidget
 
 	private:
 		TTAVItem*           currentAVItem;
-		//const TTCutItem*    currentCutItem;
 		int                 currentCutItemIndex;
-		TTMpeg2VideoStream* mpeg2Stream;
-		TTMpeg2VideoStream* currentMpeg2Stream;
+		TTVideoStream*      videoStream;
 		int                 currentPosition;
 		bool                isCutOut;
 };

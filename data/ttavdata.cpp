@@ -42,6 +42,7 @@
 #include "../common/istatusreporter.h"
 
 #include "../extern/ttmplexprovider.h"
+#include "../extern/ttmkvmergeprovider.h"
 
 #include "ttopenvideotask.h"
 #include "ttopenaudiotask.h"
@@ -331,7 +332,8 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
   TTOpenVideoTask* openVideoTask = new TTOpenVideoTask(avItem, filePath, order);
 
   connect(openVideoTask, SIGNAL(finished(TTAVItem*, TTVideoStream*, int, const QString&)),
-          this,          SLOT(onOpenVideoFinished(TTAVItem*, TTVideoStream*, int, const QString&)));
+          this,          SLOT(onOpenVideoFinished(TTAVItem*, TTVideoStream*, int, const QString&)),
+          Qt::QueuedConnection);
 
   int audioCount = getAudioNames(QFileInfo(filePath)).count();
 
@@ -349,7 +351,8 @@ void TTAVData::doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int 
   TTOpenAudioTask* openAudioTask = new TTOpenAudioTask(avItem, filePath, order);
 
   connect(openAudioTask, SIGNAL(finished(TTAVItem*, TTAudioStream*, int)),
-          this,          SLOT(onOpenAudioFinished(TTAVItem*, TTAudioStream*, int)));
+          this,          SLOT(onOpenAudioFinished(TTAVItem*, TTAudioStream*, int)),
+          Qt::QueuedConnection);
 
   mpThreadTaskPool->start(openAudioTask);
 }
@@ -362,7 +365,8 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
   TTOpenSubtitleTask* openSubtitleTask = new TTOpenSubtitleTask(avItem, filePath, order);
 
   connect(openSubtitleTask, SIGNAL(finished(TTAVItem*, TTSubtitleStream*, int)),
-          this,             SLOT(onOpenSubtitleFinished(TTAVItem*, TTSubtitleStream*, int)));
+          this,             SLOT(onOpenSubtitleFinished(TTAVItem*, TTSubtitleStream*, int)),
+          Qt::QueuedConnection);
 
   mpThreadTaskPool->start(openSubtitleTask);
 }
@@ -372,7 +376,19 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
  */
 void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int, const QString& demuxedAudio)
 {
+  if (avItem == nullptr) {
+    return;
+  }
+
+  qDebug() << "TTAVData::onOpenVideoFinished: vStream type =" << (vStream ? vStream->streamType() : -1);
+
   avItem->setVideoStream(vStream);
+
+  qDebug() << "TTAVData::onOpenVideoFinished: avItem->videoStream() type =" << (avItem->videoStream() ? avItem->videoStream()->streamType() : -1);
+
+  if (mpAVList == nullptr) {
+    return;
+  }
 
   mpAVList->append(avItem);
 
@@ -787,20 +803,180 @@ void TTAVData::onCutFinished()
   disconnect(mpThreadTaskPool, SIGNAL(exit()), this, SLOT(onCutFinished()));
 
   mpMuxList->appendItem(*(cutVideoTask->muxListItem()));
+  mpMuxList->print();
 
- // mux list / direct mux
- mpMuxList->print();
- TTMplexProvider* mplexProvider = new TTMplexProvider(mpMuxList);
+  int lastIdx = mpMuxList->count() - 1;
+  TTMuxListDataItem& muxItem = mpMuxList->itemAt(lastIdx);
 
- connect(mplexProvider, SIGNAL(statusReport(int, const QString&, quint64)), 
-         this,          SLOT(onStatusReport(int, const QString&, quint64)));
+  qDebug() << "onCutFinished: outputContainer =" << TTCut::outputContainer;
+  qDebug() << "onCutFinished: muxMode =" << TTCut::muxMode;
+  qDebug() << "onCutFinished: video =" << muxItem.getVideoName();
+  qDebug() << "onCutFinished: audio =" << muxItem.getAudioNames();
+  qDebug() << "onCutFinished: subtitle =" << muxItem.getSubtitleNames();
 
- if (TTCut::muxMode == 1)
-   mplexProvider->writeMuxScript();
- else
-   mplexProvider->mplexPart(mpMuxList->count()-1);
+  // Select muxer based on outputContainer setting
+  // 0 = TS (Transport Stream, mplex)
+  // 1 = MKV (mkvmerge)
+  // 2 = MP4 (FFmpeg)
+  // 3 = Elementary (no muxing)
 
- delete mplexProvider;
+  switch (TTCut::outputContainer) {
+    case 1: // MKV - use mkvmerge
+      {
+        TTMkvMergeProvider* mkvProvider = new TTMkvMergeProvider();
+
+        connect(mkvProvider, SIGNAL(progressChanged(int, const QString&)),
+                this,        SLOT(onMuxProgress(int, const QString&)));
+
+        // Build MKV output filename
+        QFileInfo videoInfo(muxItem.getVideoName());
+        QString mkvOutput = QFileInfo(QDir(TTCut::cutDirPath),
+                                       videoInfo.completeBaseName() + ".mkv").absoluteFilePath();
+
+        // Generate chapters if enabled
+        QString chapterFile;
+        if (TTCut::mkvCreateChapters && TTCut::mkvChapterInterval > 0) {
+          // Calculate total duration from cut list
+          qint64 totalDurationMs = 0;
+          for (int i = 0; i < mpCutList->count(); i++) {
+            QTime cutLength = mpCutList->at(i).cutLengthTime();
+            totalDurationMs += cutLength.hour() * 3600000 +
+                               cutLength.minute() * 60000 +
+                               cutLength.second() * 1000 +
+                               cutLength.msec();
+          }
+
+          qDebug() << "Total cut duration:" << totalDurationMs << "ms";
+
+          if (totalDurationMs > 0) {
+            chapterFile = TTMkvMergeProvider::generateChapterFile(
+                totalDurationMs, TTCut::mkvChapterInterval, TTCut::cutDirPath);
+            if (!chapterFile.isEmpty()) {
+              mkvProvider->setChapterFile(chapterFile);
+            }
+          }
+        }
+
+        qDebug() << "Muxing to MKV:" << mkvOutput;
+
+        bool muxSuccess = mkvProvider->mux(mkvOutput,
+                             muxItem.getVideoName(),
+                             muxItem.getAudioNames(),
+                             muxItem.getSubtitleNames());
+
+        if (muxSuccess) {
+          qDebug() << "MKV muxing completed successfully";
+
+          // Delete elementary streams if option is set
+          if (TTCut::muxDeleteES) {
+            deleteElementaryStreams(muxItem.getVideoName(),
+                                    muxItem.getAudioNames(),
+                                    muxItem.getSubtitleNames());
+          }
+        } else {
+          qDebug() << "MKV muxing failed:" << mkvProvider->lastError();
+        }
+
+        // Clean up chapter file
+        if (!chapterFile.isEmpty()) {
+          QFile::remove(chapterFile);
+        }
+
+        delete mkvProvider;
+      }
+      break;
+
+    case 2: // MP4 - use FFmpeg
+      {
+        // Build MP4 output filename
+        QFileInfo videoInfo(muxItem.getVideoName());
+        QString mp4Output = QFileInfo(QDir(TTCut::cutDirPath),
+                                       videoInfo.completeBaseName() + ".mp4").absoluteFilePath();
+
+        qDebug() << "Muxing to MP4:" << mp4Output;
+
+        QStringList ffmpegArgs;
+        ffmpegArgs << "-y";  // Overwrite
+
+        // Input video
+        ffmpegArgs << "-i" << muxItem.getVideoName();
+
+        // Input audio files
+        QStringList audioNames = muxItem.getAudioNames();
+        for (const QString& audio : audioNames) {
+          ffmpegArgs << "-i" << audio;
+        }
+
+        // Input subtitle files
+        QStringList subtitleNames = muxItem.getSubtitleNames();
+        for (const QString& sub : subtitleNames) {
+          ffmpegArgs << "-i" << sub;
+        }
+
+        // Map all streams
+        int inputIdx = 0;
+        ffmpegArgs << "-map" << QString::number(inputIdx++);  // Video
+        for (int i = 0; i < audioNames.count(); i++) {
+          ffmpegArgs << "-map" << QString::number(inputIdx++);
+        }
+        for (int i = 0; i < subtitleNames.count(); i++) {
+          ffmpegArgs << "-map" << QString::number(inputIdx++);
+        }
+
+        // Copy streams (no re-encoding)
+        ffmpegArgs << "-c" << "copy";
+
+        // Output
+        ffmpegArgs << mp4Output;
+
+        qDebug() << "FFmpeg command:" << ffmpegArgs.join(" ");
+
+        QProcess ffmpegProc;
+        ffmpegProc.start("/usr/bin/ffmpeg", ffmpegArgs);
+
+        bool muxSuccess = false;
+        if (ffmpegProc.waitForStarted(5000) && ffmpegProc.waitForFinished(600000)) {
+          if (ffmpegProc.exitCode() == 0) {
+            qDebug() << "MP4 muxing completed successfully";
+            muxSuccess = true;
+          } else {
+            qDebug() << "MP4 muxing failed, exit code:" << ffmpegProc.exitCode();
+            qDebug() << "stderr:" << QString::fromUtf8(ffmpegProc.readAllStandardError());
+          }
+        } else {
+          qDebug() << "FFmpeg process error";
+        }
+
+        // Delete elementary streams if option is set and muxing succeeded
+        if (muxSuccess && TTCut::muxDeleteES) {
+          deleteElementaryStreams(muxItem.getVideoName(),
+                                  audioNames,
+                                  subtitleNames);
+        }
+      }
+      break;
+
+    case 3: // Elementary - no muxing
+      qDebug() << "Elementary output selected, skipping muxing";
+      break;
+
+    case 0: // TS - use mplex (default, existing behavior)
+    default:
+      {
+        TTMplexProvider* mplexProvider = new TTMplexProvider(mpMuxList);
+
+        connect(mplexProvider, SIGNAL(statusReport(int, const QString&, quint64)),
+                this,          SLOT(onStatusReport(int, const QString&, quint64)));
+
+        if (TTCut::muxMode == 1)
+          mplexProvider->writeMuxScript();
+        else
+          mplexProvider->mplexPart(lastIdx);
+
+        delete mplexProvider;
+      }
+      break;
+  }
 }
 
 void TTAVData::onCutAborted()
@@ -819,4 +995,37 @@ void TTAVData::onMplexStep(const QString& msg, quint64 value)
 {
   emit statusReport(0, StatusReportArgs::Step, msg, value);
   qApp->processEvents();
+}
+
+void TTAVData::onMuxProgress(int percent, const QString& msg)
+{
+  emit statusReport(0, StatusReportArgs::Step, msg, percent);
+  qApp->processEvents();
+}
+
+void TTAVData::deleteElementaryStreams(const QString& videoFilePath,
+                                        const QStringList& audioFilePaths,
+                                        const QStringList& subtitleFilePaths)
+{
+  // Delete video file
+  QFile videoFile(videoFilePath);
+  bool success = videoFile.remove();
+  log->debugMsg(__FILE__, __LINE__, QString("Removing video stream %1 (%2)").
+      arg(videoFilePath).arg(success ? "ok" : "failed"));
+
+  // Delete audio files
+  for (const QString& audioPath : audioFilePaths) {
+    QFile audioFile(audioPath);
+    success = audioFile.remove();
+    log->debugMsg(__FILE__, __LINE__, QString("Removing audio stream %1 (%2)").
+        arg(audioPath).arg(success ? "ok" : "failed"));
+  }
+
+  // Delete subtitle files
+  for (const QString& subtitlePath : subtitleFilePaths) {
+    QFile subtitleFile(subtitlePath);
+    success = subtitleFile.remove();
+    log->debugMsg(__FILE__, __LINE__, QString("Removing subtitle stream %1 (%2)").
+        arg(subtitlePath).arg(success ? "ok" : "failed"));
+  }
 }

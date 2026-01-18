@@ -78,6 +78,16 @@ TTAVTypes::AVStreamType TTH265VideoStream::streamType() const
 }
 
 // -----------------------------------------------------------------------------
+// Return frame rate (using stored value from FFmpeg)
+// -----------------------------------------------------------------------------
+float TTH265VideoStream::frameRate()
+{
+    // Use the frame_rate member stored in createHeaderList()
+    // This avoids trying to access MPEG-2 sequence headers which don't exist in H.265
+    return frame_rate;
+}
+
+// -----------------------------------------------------------------------------
 // Open stream using FFmpeg wrapper
 // -----------------------------------------------------------------------------
 bool TTH265VideoStream::openStream()

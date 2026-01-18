@@ -57,6 +57,9 @@ public:
     // Stream type identification
     virtual TTAVTypes::AVStreamType streamType() const override;
 
+    // Frame rate (override to use stored value instead of MPEG-2 sequence header)
+    virtual float frameRate() override;
+
     // Header and index list creation (using libav)
     virtual int createHeaderList() override;
     virtual int createIndexList() override;

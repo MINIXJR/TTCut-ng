@@ -33,6 +33,8 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/tth264videostream.h"
+#include "../avstream/tth265videostream.h"
 
 #include <QFileInfo>
 #include <QFileDialog>
@@ -89,26 +91,49 @@ void TTCutVideoInfo::onAVDataChanged(TTAVData* av, TTAVItem* avData)
 		return;
 	}
 
-  TTMpeg2VideoStream* mpeg2Stream     = (TTMpeg2VideoStream*)avData->videoStream();
-  TTSequenceHeader*   currentSequence = mpeg2Stream->currentSequenceHeader();
-
-  if (currentSequence == NULL)
-	return;
+  TTVideoStream* videoStream = avData->videoStream();
+  if (videoStream == nullptr) {
+    clearControl();
+    return;
+  }
 
   // video file name
-  videoName->setText(mpeg2Stream->fileName());
+  videoName->setText(videoStream->fileName());
 
   // video length
-  int   numFrames = mpeg2Stream->frameCount();
-  QTime time      = ttFramesToTime( numFrames, mpeg2Stream->frameRate());
+  int   numFrames = videoStream->frameCount();
+  QTime time      = ttFramesToTime(numFrames, videoStream->frameRate());
   setLength(time, numFrames);
 
-  // set video resolution
-  setResolution(mpeg2Stream->currentSequenceHeader()->horizontalSize(),
-                mpeg2Stream->currentSequenceHeader()->verticalSize());
+  // Get resolution and aspect based on stream type
+  TTAVTypes::AVStreamType streamType = videoStream->streamType();
 
-  // set aspect
-  videoAspectratio->setText(mpeg2Stream->currentSequenceHeader()->aspectRatioText());
+  if (streamType == TTAVTypes::h264_video) {
+    // H.264 stream - get info from SPS
+    TTH264VideoStream* h264Stream = dynamic_cast<TTH264VideoStream*>(videoStream);
+    if (h264Stream && h264Stream->getSPS()) {
+      setResolution(h264Stream->getSPS()->width(), h264Stream->getSPS()->height());
+      // H.264 typically uses square pixels unless SAR says otherwise
+      videoAspectratio->setText("16:9"); // Default assumption for HD content
+    }
+  } else if (streamType == TTAVTypes::h265_video) {
+    // H.265 stream - get info from SPS
+    TTH265VideoStream* h265Stream = dynamic_cast<TTH265VideoStream*>(videoStream);
+    if (h265Stream && h265Stream->getSPS()) {
+      setResolution(h265Stream->getSPS()->width(), h265Stream->getSPS()->height());
+      videoAspectratio->setText("16:9"); // Default assumption for HD content
+    }
+  } else {
+    // MPEG-2 stream - use sequence header
+    TTMpeg2VideoStream* mpeg2Stream = dynamic_cast<TTMpeg2VideoStream*>(videoStream);
+    if (mpeg2Stream) {
+      TTSequenceHeader* currentSequence = mpeg2Stream->currentSequenceHeader();
+      if (currentSequence != nullptr) {
+        setResolution(currentSequence->horizontalSize(), currentSequence->verticalSize());
+        videoAspectratio->setText(currentSequence->aspectRatioText());
+      }
+    }
+  }
 
   // set index
   currentIndex->setText(QString("%1/%2").arg(av->avIndexOf(avData)+1).arg(av->avCount()));
@@ -121,18 +146,33 @@ void TTCutVideoInfo::refreshInfo(TTAVItem* avItem)
 {
 	if (avItem == 0)  return;
 
-	TTMpeg2VideoStream* mpeg2Stream     = (TTMpeg2VideoStream*)avItem->videoStream();
-  TTSequenceHeader*   currentSequence = mpeg2Stream->currentSequenceHeader();
+  TTVideoStream* videoStream = avItem->videoStream();
+  if (videoStream == nullptr) return;
 
-  if (currentSequence == NULL)
-	return;
+  TTAVTypes::AVStreamType streamType = videoStream->streamType();
 
-  // set video resolution
-  setResolution(mpeg2Stream->currentSequenceHeader()->horizontalSize(),
-                mpeg2Stream->currentSequenceHeader()->verticalSize());
-
-  // set aspect
-  videoAspectratio->setText(mpeg2Stream->currentSequenceHeader()->aspectRatioText());
+  if (streamType == TTAVTypes::h264_video) {
+    TTH264VideoStream* h264Stream = dynamic_cast<TTH264VideoStream*>(videoStream);
+    if (h264Stream && h264Stream->getSPS()) {
+      setResolution(h264Stream->getSPS()->width(), h264Stream->getSPS()->height());
+      videoAspectratio->setText("16:9");
+    }
+  } else if (streamType == TTAVTypes::h265_video) {
+    TTH265VideoStream* h265Stream = dynamic_cast<TTH265VideoStream*>(videoStream);
+    if (h265Stream && h265Stream->getSPS()) {
+      setResolution(h265Stream->getSPS()->width(), h265Stream->getSPS()->height());
+      videoAspectratio->setText("16:9");
+    }
+  } else {
+    TTMpeg2VideoStream* mpeg2Stream = dynamic_cast<TTMpeg2VideoStream*>(videoStream);
+    if (mpeg2Stream) {
+      TTSequenceHeader* currentSequence = mpeg2Stream->currentSequenceHeader();
+      if (currentSequence != nullptr) {
+        setResolution(currentSequence->horizontalSize(), currentSequence->verticalSize());
+        videoAspectratio->setText(currentSequence->aspectRatioText());
+      }
+    }
+  }
 }
 
 /*

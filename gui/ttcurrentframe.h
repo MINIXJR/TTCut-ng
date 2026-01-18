@@ -33,7 +33,7 @@
 #include "ui_currentframewidget.h"
 
 #include "../common/ttcut.h"
-#include "../avstream//ttmpeg2videostream.h"
+#include "../avstream/ttavstream.h"
 
 class TTAVItem;
 class TTSubtitleStream;
@@ -86,7 +86,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 	private:
 		bool                isControlEnabled;
-		TTMpeg2VideoStream* mpeg2Stream;
+		TTVideoStream*      videoStream;
 };
 
 #endif //TTCURRENTFRAME_H

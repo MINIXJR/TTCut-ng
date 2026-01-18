@@ -32,6 +32,8 @@
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QDebug>
+#include <QFileInfo>
+#include <QTimer>
 
 #ifdef MACX
 #include <QMacStyle>
@@ -41,6 +43,7 @@
 #include "ttcutmainwindow.h"
 
 #include "../common/ttmessagelogger.h"
+#include "../common/ttcut.h"
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCut main
@@ -92,6 +95,30 @@ int main( int argc, char **argv )
 
     // set initial size of applications main window
     mainWnd->resize(1024, 768);
+
+    // Process command line arguments for video file
+    QStringList args = a.arguments();
+    QString videoFile;
+    for (int i = 1; i < args.size(); i++) {
+      QString arg = args.at(i);
+      // Skip options starting with -
+      if (arg.startsWith("-")) continue;
+      // Check if it's a file that exists
+      QFileInfo fInfo(arg);
+      if (fInfo.exists() && fInfo.isFile()) {
+        videoFile = fInfo.absoluteFilePath();
+        TTCut::lastDirPath = fInfo.absolutePath();
+        break;
+      }
+    }
+
+    // Open video file from command line after event loop starts
+    if (!videoFile.isEmpty()) {
+      qDebug() << "Opening video file from command line:" << videoFile;
+      QTimer::singleShot(100, [mainWnd, videoFile]() {
+        mainWnd->onReadVideoStream(videoFile);
+      });
+    }
 
     a.connect( &a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()) );
     // Execute application and start event loop

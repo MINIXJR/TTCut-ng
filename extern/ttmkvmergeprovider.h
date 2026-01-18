@@ -71,6 +71,10 @@ public:
     static QString mkvMergeVersion();
     static QString mkvMergePath();
 
+    // Chapter generation
+    static QString generateChapterFile(qint64 durationMs, int intervalMinutes,
+                                        const QString& outputDir);
+
 signals:
     void progressChanged(int percent, const QString& message);
     void processOutput(const QString& output);

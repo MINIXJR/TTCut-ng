@@ -30,6 +30,7 @@
 #include "ttcurrentframe.h"
 #include "../data/ttavlist.h"
 
+#include <QDebug>
 #include <QWheelEvent>
 
 //! Default constructor
@@ -38,7 +39,7 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
 {
   setupUi( this );
 
-  mpeg2Stream      = 0;
+  videoStream      = 0;
   isControlEnabled = true;
 
   connect(pbPrevFrame, SIGNAL(clicked()), this, SLOT(onPrevBFrame()));
@@ -66,21 +67,34 @@ void TTCurrentFrame::controlEnabled( bool enabled )
 
 void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 {
+	qDebug() << "TTCurrentFrame::onAVDataChanged() called";
+
 	if (avData == 0) {
+		qDebug() << "avData is null, closing stream";
 		mpegWindow->closeVideoStream();
 		return;
 	}
 
-	mpeg2Stream = (TTMpeg2VideoStream*)avData->videoStream();
+	qDebug() << "Getting video stream from avData";
+	videoStream = avData->videoStream();
 
-	mpegWindow->openVideoStream(mpeg2Stream);
+	if (videoStream == 0) {
+		qDebug() << "videoStream is null!";
+		return;
+	}
+
+	qDebug() << "Video stream type:" << videoStream->streamType();
+	qDebug() << "Opening video stream in mpegWindow";
+	mpegWindow->openVideoStream(videoStream);
+	qDebug() << "Calling moveToFirstFrame";
 	mpegWindow->moveToFirstFrame();
+	qDebug() << "TTCurrentFrame::onAVDataChanged() done";
 }
 
 //! Returns the current frame position in stream
 int TTCurrentFrame::currentFramePos()
 {
-  return mpeg2Stream->currentIndex();
+  return videoStream->currentIndex();
 }
 
 void TTCurrentFrame::closeVideoStream()
@@ -103,7 +117,7 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
   if (!isControlEnabled)
     return;
 
-  int currentPosition = mpeg2Stream->currentIndex();
+  int currentPosition = videoStream->currentIndex();
   int wheelDelta      = TTCut::stepMouseWheel;
 
   if ( e->modifiers() == Qt::ControlModifier )
@@ -118,8 +132,8 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
   if ( currentPosition < 0 )
     currentPosition = 0;
 
-  if( currentPosition >= (int)mpeg2Stream->frameCount() )
-    currentPosition = mpeg2Stream->frameCount()-1;
+  if( currentPosition >= (int)videoStream->frameCount() )
+    currentPosition = videoStream->frameCount()-1;
 
   onGotoFrame(currentPosition, 0);
 }
@@ -132,7 +146,7 @@ void TTCurrentFrame::onPrevIFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToPrevIFrame( );
+  newFramePos = videoStream->moveToPrevIFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -143,7 +157,7 @@ void TTCurrentFrame::onNextIFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToNextIFrame( );
+  newFramePos = videoStream->moveToNextIFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -154,7 +168,7 @@ void TTCurrentFrame::onPrevPFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToPrevPIFrame( );
+  newFramePos = videoStream->moveToPrevPIFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -165,7 +179,7 @@ void TTCurrentFrame::onNextPFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToNextPIFrame( );
+  newFramePos = videoStream->moveToNextPIFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -176,7 +190,7 @@ void TTCurrentFrame::onPrevBFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToPrevFrame( );
+  newFramePos = videoStream->moveToPrevFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -187,7 +201,7 @@ void TTCurrentFrame::onNextBFrame()
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToNextFrame( );
+  newFramePos = videoStream->moveToNextFrame( );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -198,7 +212,7 @@ void TTCurrentFrame::onGotoMarker(int markerPos)
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToIndexPos(markerPos);
+  newFramePos = videoStream->moveToIndexPos(markerPos);
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -206,9 +220,9 @@ void TTCurrentFrame::onGotoMarker(int markerPos)
 
 void TTCurrentFrame::onSetMarker()
 {
-	if (mpeg2Stream == 0) return;
+	if (videoStream == 0) return;
 
-	emit setMarker(mpeg2Stream->currentIndex());
+	emit setMarker(videoStream->currentIndex());
 }
 
 //! Cut in position was set
@@ -226,7 +240,7 @@ void TTCurrentFrame::onGotoCutIn(int pos)
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToIndexPos(pos);
+  newFramePos = videoStream->moveToIndexPos(pos);
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -237,7 +251,7 @@ void TTCurrentFrame::onGotoCutOut(int pos)
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToIndexPos(pos);
+  newFramePos = videoStream->moveToIndexPos(pos);
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -253,7 +267,7 @@ void TTCurrentFrame::onGotoFrame(int pos, int fast)
 {
   int newFramePos;
 
-  newFramePos = mpeg2Stream->moveToIndexPos( pos, fast );
+  newFramePos = videoStream->moveToIndexPos( pos, fast );
   mpegWindow->showFrameAt( newFramePos );
 
   updateCurrentPosition();
@@ -261,7 +275,7 @@ void TTCurrentFrame::onGotoFrame(int pos, int fast)
 
 void TTCurrentFrame::onMoveNumSteps(int steps)
 {
-  int position = mpeg2Stream->currentIndex()+steps;
+  int position = videoStream->currentIndex()+steps;
   onGotoFrame(position, 0);
 }
 
@@ -272,18 +286,18 @@ void TTCurrentFrame::onMoveToHome()
 
 void TTCurrentFrame::onMoveToEnd()
 {
-  onGotoFrame(mpeg2Stream->frameCount(), 0);
+  onGotoFrame(videoStream->frameCount(), 0);
 }
 
 void TTCurrentFrame::updateCurrentPosition()
 {
   QString szTemp;
   QString szTemp1, szTemp2;
-  int     frame_type = mpeg2Stream->currentFrameType();
+  int     frame_type = videoStream->currentFrameType();
 
-  szTemp1 = mpeg2Stream->currentFrameTime().toString("hh:mm:ss.zzz");
+  szTemp1 = videoStream->currentFrameTime().toString("hh:mm:ss.zzz");
 
-  szTemp2 = QString(" (%1)").arg(mpeg2Stream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(videoStream->currentIndex());
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";
@@ -294,7 +308,7 @@ void TTCurrentFrame::updateCurrentPosition()
 
   laCurrentPosition->update();
 
-  emit newFramePosition( mpeg2Stream->currentIndex() );
+  emit newFramePosition( videoStream->currentIndex() );
 }
 
 void TTCurrentFrame::saveCurrentFrame()
@@ -306,7 +320,7 @@ void TTCurrentFrame::saveCurrentFrame()
   QString      fileName;
   QFileDialog* fileDlg;
 
-  if (mpeg2Stream == 0) return;
+  if (videoStream == 0) return;
 
   // get the image file name
   fileDlg = new QFileDialog( this,

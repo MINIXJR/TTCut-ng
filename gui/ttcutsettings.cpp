@@ -115,20 +115,61 @@ void TTCutSettings::readSettings()
   // Encoder settings
   // ---------------------------------------------------------------------------
   beginGroup( "/Encoder" );
-  TTCut::encoderMode = value( "EncoderMode/", TTCut::encoderMode ).toBool();
+  TTCut::encoderMode    = value( "EncoderMode/",    TTCut::encoderMode ).toBool();
+  TTCut::encoderCodec   = value( "EncoderCodec/",   TTCut::encoderCodec ).toInt();
+
+  // MPEG-2 specific settings
+  TTCut::mpeg2Preset    = value( "Mpeg2Preset/",    TTCut::mpeg2Preset ).toInt();
+  TTCut::mpeg2Crf       = value( "Mpeg2Crf/",       TTCut::mpeg2Crf ).toInt();
+  TTCut::mpeg2Profile   = value( "Mpeg2Profile/",   TTCut::mpeg2Profile ).toInt();
+  TTCut::mpeg2Muxer     = value( "Mpeg2Muxer/",     TTCut::mpeg2Muxer ).toInt();
+
+  // H.264 specific settings
+  TTCut::h264Preset     = value( "H264Preset/",     TTCut::h264Preset ).toInt();
+  TTCut::h264Crf        = value( "H264Crf/",        TTCut::h264Crf ).toInt();
+  TTCut::h264Profile    = value( "H264Profile/",    TTCut::h264Profile ).toInt();
+  TTCut::h264Muxer      = value( "H264Muxer/",      TTCut::h264Muxer ).toInt();
+
+  // H.265 specific settings
+  TTCut::h265Preset     = value( "H265Preset/",     TTCut::h265Preset ).toInt();
+  TTCut::h265Crf        = value( "H265Crf/",        TTCut::h265Crf ).toInt();
+  TTCut::h265Profile    = value( "H265Profile/",    TTCut::h265Profile ).toInt();
+  TTCut::h265Muxer      = value( "H265Muxer/",      TTCut::h265Muxer ).toInt();
+
+  // Load current working values from selected codec
+  switch (TTCut::encoderCodec) {
+    case 0:  // MPEG-2
+      TTCut::encoderPreset  = TTCut::mpeg2Preset;
+      TTCut::encoderCrf     = TTCut::mpeg2Crf;
+      TTCut::encoderProfile = TTCut::mpeg2Profile;
+      break;
+    case 1:  // H.264
+      TTCut::encoderPreset  = TTCut::h264Preset;
+      TTCut::encoderCrf     = TTCut::h264Crf;
+      TTCut::encoderProfile = TTCut::h264Profile;
+      break;
+    case 2:  // H.265
+      TTCut::encoderPreset  = TTCut::h265Preset;
+      TTCut::encoderCrf     = TTCut::h265Crf;
+      TTCut::encoderProfile = TTCut::h265Profile;
+      break;
+  }
   endGroup();
 
   // Muxer settings
   // ---------------------------------------------------------------------------
   beginGroup( "/Muxer" );
-  TTCut::muxMode       = value( "MuxMode/",      TTCut::muxMode ).toInt();
-  TTCut::mpeg2Target   = value( "Mpeg2Target/",  TTCut::mpeg2Target ).toInt();
-  TTCut::muxProg       = value( "MuxProg/",      TTCut::muxProg ).toString();
-  TTCut::muxProgPath   = value( "MuxProgPath/",  TTCut::muxProgPath ).toString();
-  TTCut::muxProgCmd    = value( "MuxProgCmd/",   TTCut::muxProgCmd ).toString();
-  TTCut::muxOutputPath = value( "MuxOutputDir/", TTCut::muxOutputPath ).toString();
-  TTCut::muxDeleteES   = value( "MuxDeleteES/",  TTCut::muxDeleteES ).toBool();
-  TTCut::muxPause      = value( "MuxPause/",     TTCut::muxPause ).toBool();
+  TTCut::muxMode         = value( "MuxMode/",         TTCut::muxMode ).toInt();
+  TTCut::mpeg2Target     = value( "Mpeg2Target/",     TTCut::mpeg2Target ).toInt();
+  TTCut::outputContainer = value( "OutputContainer/", TTCut::outputContainer ).toInt();
+  TTCut::muxProg         = value( "MuxProg/",         TTCut::muxProg ).toString();
+  TTCut::muxProgPath     = value( "MuxProgPath/",     TTCut::muxProgPath ).toString();
+  TTCut::muxProgCmd      = value( "MuxProgCmd/",      TTCut::muxProgCmd ).toString();
+  TTCut::muxOutputPath   = value( "MuxOutputDir/",    TTCut::muxOutputPath ).toString();
+  TTCut::muxDeleteES     = value( "MuxDeleteES/",     TTCut::muxDeleteES ).toBool();
+  TTCut::muxPause        = value( "MuxPause/",        TTCut::muxPause ).toBool();
+  TTCut::mkvCreateChapters  = value( "MkvCreateChapters/",  TTCut::mkvCreateChapters ).toBool();
+  TTCut::mkvChapterInterval = value( "MkvChapterInterval/", TTCut::mkvChapterInterval ).toInt();
   endGroup();
 
   // Chapter settings
@@ -233,7 +274,26 @@ void TTCutSettings::writeSettings()
   // Encoder settings
   // ---------------------------------------------------------------------------
   beginGroup( "/Encoder" );
-  setValue( "EncoderMode/",     TTCut::encoderMode );
+  setValue( "EncoderMode/",    TTCut::encoderMode );
+  setValue( "EncoderCodec/",   TTCut::encoderCodec );
+
+  // MPEG-2 specific settings
+  setValue( "Mpeg2Preset/",    TTCut::mpeg2Preset );
+  setValue( "Mpeg2Crf/",       TTCut::mpeg2Crf );
+  setValue( "Mpeg2Profile/",   TTCut::mpeg2Profile );
+  setValue( "Mpeg2Muxer/",     TTCut::mpeg2Muxer );
+
+  // H.264 specific settings
+  setValue( "H264Preset/",     TTCut::h264Preset );
+  setValue( "H264Crf/",        TTCut::h264Crf );
+  setValue( "H264Profile/",    TTCut::h264Profile );
+  setValue( "H264Muxer/",      TTCut::h264Muxer );
+
+  // H.265 specific settings
+  setValue( "H265Preset/",     TTCut::h265Preset );
+  setValue( "H265Crf/",        TTCut::h265Crf );
+  setValue( "H265Profile/",    TTCut::h265Profile );
+  setValue( "H265Muxer/",      TTCut::h265Muxer );
   endGroup();
 
   // Muxer settings
@@ -241,12 +301,15 @@ void TTCutSettings::writeSettings()
   beginGroup( "/Muxer" );
   setValue( "MuxMode/",         TTCut::muxMode );
   setValue( "Mpeg2Target/",     TTCut::mpeg2Target );
+  setValue( "OutputContainer/", TTCut::outputContainer );
   setValue( "MuxProg/",         TTCut::muxProg );
   setValue( "MuxProgPath/",     TTCut::muxProgPath );
   setValue( "MuxProgCmd/",      TTCut::muxProgCmd );
   setValue( "MuxOutputDir/",    TTCut::muxOutputPath );
   setValue( "MuxDeleteES/",     TTCut::muxDeleteES );
   setValue( "MuxPause/",        TTCut::muxPause );
+  setValue( "MkvCreateChapters/",  TTCut::mkvCreateChapters );
+  setValue( "MkvChapterInterval/", TTCut::mkvChapterInterval );
   endGroup();
 
   // Chapter settings

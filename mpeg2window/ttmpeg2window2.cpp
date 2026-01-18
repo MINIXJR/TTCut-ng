@@ -30,6 +30,8 @@
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
 
+#include <QDebug>
+
 /*!
  * TTMPEG2Window2
  */
@@ -45,6 +47,8 @@ TTMPEG2Window2::TTMPEG2Window2(QWidget *parent )
   mpVideoStream    = 0;
   mpSubtitleStream = 0;
   mpeg2Decoder     = 0;
+  mpFFmpegWrapper  = 0;
+  mUseFFmpeg       = false;
   currentIndex     = 0;
   picBuffer        = 0;
   videoWidth       = 0;
@@ -61,35 +65,45 @@ void TTMPEG2Window2::resizeEvent (QResizeEvent*)
 }
 
 /*!
- * show the current video frame (picBuffer)
+ * show the current video frame (picBuffer or FFmpeg QImage)
  */
 void TTMPEG2Window2::showVideoFrame()
 {
-	if (mpeg2Decoder == 0) return;
-	if (frameInfo    == 0) return;
+  QImage frameToShow;
 
-   float scaleFactorY = 1.0;
+  if (mUseFFmpeg) {
+    // Use FFmpeg decoded frame
+    if (mCurrentFrame.isNull()) return;
+    frameToShow = mCurrentFrame;
+    videoWidth = frameToShow.width();
+    videoHeight = frameToShow.height();
+  } else {
+    // Use MPEG-2 decoder
+    if (mpeg2Decoder == 0) return;
+    if (frameInfo    == 0) return;
+    if (picBuffer    == 0) return;
 
-  if (mpVideoStream != 0) {
-  	TTSequenceHeader* seqHeader = mpVideoStream->getSequenceHeader(currentIndex);
-  	if (seqHeader->aspectRatio() == 3) {
-  		scaleFactorY = (float)(videoWidth*9.0/(videoHeight*16.0));
-  	}
+    frameToShow = QImage(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32);
   }
 
-  if (picBuffer != 0)
-  {
-    QImage frame(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32);
-    QImage scale = frame.scaled(videoWidth, videoHeight*scaleFactorY, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+  float scaleFactorY = 1.0;
 
-    // Draw subtitle overlay if available
-    QString subtitleText = getSubtitleTextAtCurrentFrame();
-    if (!subtitleText.isEmpty()) {
-      drawSubtitleOnImage(scale, subtitleText);
+  if (mpVideoStream != 0 && !mUseFFmpeg) {
+    TTSequenceHeader* seqHeader = mpVideoStream->getSequenceHeader(currentIndex);
+    if (seqHeader != 0 && seqHeader->aspectRatio() == 3) {
+      scaleFactorY = (float)(videoWidth*9.0/(videoHeight*16.0));
     }
-
-    this->setPixmap(QPixmap::fromImage(scale.scaled(width(), height(), Qt::KeepAspectRatio, Qt::SmoothTransformation)));
   }
+
+  QImage scale = frameToShow.scaled(videoWidth, videoHeight*scaleFactorY, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+  // Draw subtitle overlay if available
+  QString subtitleText = getSubtitleTextAtCurrentFrame();
+  if (!subtitleText.isEmpty()) {
+    drawSubtitleOnImage(scale, subtitleText);
+  }
+
+  this->setPixmap(QPixmap::fromImage(scale.scaled(width(), height(), Qt::KeepAspectRatio, Qt::SmoothTransformation)));
 }
 
 /*!
@@ -187,6 +201,29 @@ void TTMPEG2Window2::showFrameAt(int index)
  */
 void TTMPEG2Window2::moveToFirstFrame(bool show)
 {
+  qDebug() << "TTMPEG2Window2::moveToFirstFrame() called, mUseFFmpeg=" << mUseFFmpeg;
+
+  if (mUseFFmpeg) {
+    // Use FFmpeg decoder for H.264/H.265
+    if (mpFFmpegWrapper == 0) {
+      qDebug() << "mpFFmpegWrapper is null, returning";
+      return;
+    }
+
+    qDebug() << "Decoding first frame...";
+    mCurrentFrame = mpFFmpegWrapper->decodeFrame(0);
+    currentIndex = 0;
+    qDebug() << "First frame decoded, isNull=" << mCurrentFrame.isNull();
+
+    if (show && !mCurrentFrame.isNull()) {
+      qDebug() << "Showing video frame...";
+      showVideoFrame();
+      qDebug() << "Video frame shown";
+    }
+    return;
+  }
+
+  // Use MPEG-2 decoder
 	if (mpeg2Decoder == 0) return;
 
 	try
@@ -223,25 +260,82 @@ void TTMPEG2Window2::openVideoFile( QString fName, TTVideoIndexList* viIndex, TT
 }
 
 /*!
- * openVideoStream
+ * openVideoStream - supports MPEG-2, H.264, and H.265
  */
-void TTMPEG2Window2::openVideoStream(TTMpeg2VideoStream* vStream)
+void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
 {
-	mpVideoStream = vStream;
-	openVideoFile(vStream->filePath(), vStream->indexList(), vStream->headerList());
+  qDebug() << "TTMPEG2Window2::openVideoStream() called";
+  mpVideoStream = vStream;
+
+  // Check stream type
+  TTAVTypes::AVStreamType streamType = vStream->streamType();
+  qDebug() << "Stream type:" << streamType;
+
+  if (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video) {
+    // Use FFmpeg for H.264/H.265
+    mUseFFmpeg = true;
+    qDebug() << "Using FFmpeg for H.264/H.265";
+
+    if (mpFFmpegWrapper != 0) {
+      mpFFmpegWrapper->closeFile();
+      delete mpFFmpegWrapper;
+    }
+
+    mpFFmpegWrapper = new TTFFmpegWrapper();
+    if (!mpFFmpegWrapper->openFile(vStream->filePath())) {
+      log->errorMsg(__FILE__, __LINE__,
+          QString("Failed to open H.264/H.265 stream: %1").arg(mpFFmpegWrapper->lastError()));
+      delete mpFFmpegWrapper;
+      mpFFmpegWrapper = 0;
+      return;
+    }
+
+    // Build frame index for seeking/decoding
+    qDebug() << "Building frame index for preview...";
+    if (!mpFFmpegWrapper->buildFrameIndex()) {
+      log->errorMsg(__FILE__, __LINE__,
+          QString("Failed to build frame index: %1").arg(mpFFmpegWrapper->lastError()));
+    }
+    qDebug() << "Frame index built:" << mpFFmpegWrapper->frameCount() << "frames";
+
+    qDebug() << "Opened H.264/H.265 stream with FFmpeg decoder";
+  } else {
+    // Use MPEG-2 decoder for MPEG-2 streams
+    mUseFFmpeg = false;
+    qDebug() << "Using MPEG-2 decoder";
+    TTMpeg2VideoStream* mpeg2Stream = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+    if (mpeg2Stream) {
+      openVideoFile(mpeg2Stream->filePath(), mpeg2Stream->indexList(), mpeg2Stream->headerList());
+    }
+  }
+  qDebug() << "TTMPEG2Window2::openVideoStream() done";
 }
 
 /*!
- * Close vide stream
+ * Close video stream
  */
 void TTMPEG2Window2::closeVideoStream()
 {
+  // Clean up FFmpeg decoder
+  if (mpFFmpegWrapper != 0)
+  {
+    mpFFmpegWrapper->closeFile();
+    delete mpFFmpegWrapper;
+    mpFFmpegWrapper = 0;
+    mCurrentFrame = QImage();
+  }
+
+  // Clean up MPEG-2 decoder
   if (mpeg2Decoder != 0)
   {
     delete mpeg2Decoder;
     mpeg2Decoder = 0;
     picBuffer    = 0;
   }
+
+  mUseFFmpeg = false;
+  mpVideoStream = 0;
+  currentIndex = 0;
 
   QImage dummy;
   this->setPixmap(QPixmap::fromImage(dummy));
@@ -253,8 +347,20 @@ void TTMPEG2Window2::closeVideoStream()
  */
 void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
 {
-	if (mpeg2Decoder == 0)            return;
-	if (iFramePos    == currentIndex) return;
+  if (iFramePos == currentIndex) return;
+
+  if (mUseFFmpeg) {
+    // Use FFmpeg decoder for H.264/H.265
+    if (mpFFmpegWrapper == 0) return;
+
+    mCurrentFrame = mpFFmpegWrapper->decodeFrame(iFramePos);
+    currentIndex = iFramePos;
+    showVideoFrame();
+    return;
+  }
+
+  // Use MPEG-2 decoder
+	if (mpeg2Decoder == 0) return;
 
 	try
 	{
