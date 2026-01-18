@@ -18,6 +18,12 @@ TARGET      = ttcut
 ICON        = ui/pixmaps/ttcut_logo_001.icns
 LIBS        = -lmpeg2 -lmpeg2convert
 
+# libav/ffmpeg libraries for H.264/H.265 support
+unix {
+  CONFIG += link_pkgconfig
+  PKGCONFIG += libavformat libavcodec libavutil
+}
+
 unix {
   DEFINES += UNIX
   DEFINES -= MACX
@@ -124,6 +130,7 @@ HEADERS     = common/ttcut.h\
               extern/imuxprovider.h\
               extern/tttranscode.h\
               extern/ttmplexprovider.h\
+              extern/ttffmpegwrapper.h\
               gui/ttcutsettings.h\
               gui/ttcutsettingschapter.h\
               gui/ttcutsettingsmuxer.h\
@@ -198,6 +205,7 @@ SOURCES     = common/ttcut.cpp\
               avilib/avilib.c\
               extern/tttranscode.cpp\
               extern/ttmplexprovider.cpp\
+              extern/ttffmpegwrapper.cpp\
               gui/ttcutsettings.cpp\
               gui/ttcutsettingschapter.cpp\
               gui/ttcutsettingsmuxer.cpp\
