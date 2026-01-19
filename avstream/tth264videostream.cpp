@@ -33,6 +33,7 @@
 #include "ttvideoindexlist.h"
 #include "../data/ttcutparameter.h"
 #include "../common/ttcut.h"
+#include "../common/istatusreporter.h"
 
 #include <QDebug>
 #include <QDir>
@@ -140,16 +141,22 @@ bool TTH264VideoStream::closeStream()
 // -----------------------------------------------------------------------------
 int TTH264VideoStream::createHeaderList()
 {
+    // Emit Start with total=100 for percentage-based progress
+    emit statusReport(StatusReportArgs::Start, tr("Opening H.264 stream..."), 100);
+
     if (!openStream()) {
+        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.264 stream"), 0);
         return -1;
     }
 
     mLog->infoMsg(__FILE__, __LINE__, "Creating H.264 header list...");
+    emit statusReport(StatusReportArgs::Step, tr("Creating H.264 header list..."), 10);
 
     // Get stream info and create SPS
     int videoStreamIdx = mFFmpeg->findBestVideoStream();
     if (videoStreamIdx < 0) {
         mLog->errorMsg(__FILE__, __LINE__, "No video stream found");
+        emit statusReport(StatusReportArgs::Error, tr("No video stream found"), 0);
         return -1;
     }
 
@@ -180,15 +187,22 @@ int TTH264VideoStream::createHeaderList()
             .arg(mSPS->profileString())
             .arg(mSPS->levelString()));
 
+    emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 20);
+
     // Build frame index
     if (!mFFmpeg->buildFrameIndex(videoStreamIdx)) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("Failed to build frame index: %1").arg(mFFmpeg->lastError()));
+        emit statusReport(StatusReportArgs::Error, tr("Failed to build frame index"), 0);
         return -1;
     }
 
+    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 70);
+
     // Build GOP index
     mFFmpeg->buildGOPIndex();
+
+    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 80);
 
     // Create access units from frame index
     buildHeaderListFromFFmpeg();
@@ -197,6 +211,8 @@ int TTH264VideoStream::createHeaderList()
         QString("H.264 header list created: %1 frames, %2 GOPs")
             .arg(mAccessUnits.size())
             .arg(mFFmpeg->gopCount()));
+
+    emit statusReport(StatusReportArgs::Finished, tr("H.264 header list created"), 100);
 
     return mAccessUnits.size();
 }
@@ -300,24 +316,46 @@ int TTH264VideoStream::createIndexList()
 }
 
 // -----------------------------------------------------------------------------
-// Check if position is valid cut-in point (must be IDR frame)
+// Check if position is valid cut-in point
+// With encoder mode: any frame is valid (will be re-encoded)
+// Without encoder mode: must be IDR frame for lossless cutting
+// pos < 0 means use currentIndex() (like MPEG-2 implementation)
 // -----------------------------------------------------------------------------
 bool TTH264VideoStream::isCutInPoint(int pos)
 {
-    if (pos < 0 || pos >= mAccessUnits.size()) {
+    // When encoder mode is enabled, any frame can be a cut-in point
+    // (frames will be re-encoded around cut points)
+    if (TTCut::encoderMode) {
+        return true;
+    }
+
+    // Use current position if pos < 0 (same convention as MPEG-2)
+    int index = (pos < 0) ? currentIndex() : pos;
+
+    if (index < 0 || index >= mAccessUnits.size()) {
         return false;
     }
 
-    return mAccessUnits[pos]->isIDR();
+    return mAccessUnits[index]->isIDR();
 }
 
 // -----------------------------------------------------------------------------
 // Check if position is valid cut-out point
-// Any frame can be cut-out, but non-IDR requires re-encoding
+// With encoder mode: any frame is valid
+// Without encoder mode: any frame (will re-encode at boundaries if needed)
+// pos < 0 means use currentIndex()
 // -----------------------------------------------------------------------------
 bool TTH264VideoStream::isCutOutPoint(int pos)
 {
-    if (pos < 0 || pos >= mAccessUnits.size()) {
+    // When encoder mode is enabled, any frame can be a cut-out point
+    if (TTCut::encoderMode) {
+        return true;
+    }
+
+    // Use current position if pos < 0 (same convention as MPEG-2)
+    int index = (pos < 0) ? currentIndex() : pos;
+
+    if (index < 0 || index >= mAccessUnits.size()) {
         return false;
     }
 

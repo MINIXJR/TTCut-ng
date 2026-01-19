@@ -60,6 +60,7 @@ class TTCutPreviewTask : public TTThreadTask
 
 	private:
 		TTCutList* createPreviewCutList(TTCutList* cutList);
+		void createH264PreviewClip(TTCutList* cutList, const QString& outputFile);
 
 	private:
 		TTAVData*          mpAVData;

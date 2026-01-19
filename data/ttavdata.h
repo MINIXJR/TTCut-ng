@@ -187,6 +187,7 @@ class TTAVData : public QObject
 
     void foundEqualFrame(int index);
     void cutPreviewFinished(TTCutList* cutList);
+    void cutFinished();
 
   private:
     TTAVItem*      createAVItem();
@@ -198,6 +199,7 @@ class TTAVData : public QObject
     void           deleteElementaryStreams(const QString& videoFilePath,
                                            const QStringList& audioFilePaths,
                                            const QStringList& subtitleFilePaths = QStringList());
+    void           doH264Cut(QString tgtFileName, TTCutList* cutList);
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;

@@ -33,6 +33,7 @@
 #include "ttvideoindexlist.h"
 #include "../data/ttcutparameter.h"
 #include "../common/ttexception.h"
+#include "../common/ttcut.h"
 
 #include <QDebug>
 #include <QDir>
@@ -348,37 +349,59 @@ void TTH265VideoStream::cut(int start, int end, TTCutParameter* cp)
 }
 
 // -----------------------------------------------------------------------------
-// Check if position is valid cut-in point (must be RAP for lossless)
+// Check if position is valid cut-in point
+// With encoder mode: any frame is valid (will be re-encoded)
+// Without encoder mode: must be RAP for lossless cutting
+// pos < 0 means use currentIndex() (like MPEG-2 implementation)
 // -----------------------------------------------------------------------------
 bool TTH265VideoStream::isCutInPoint(int pos)
 {
-    if (pos < 0 || pos >= mAccessUnits.size()) {
+    // When encoder mode is enabled, any frame can be a cut-in point
+    if (TTCut::encoderMode) {
+        return true;
+    }
+
+    // Use current position if pos < 0 (same convention as MPEG-2)
+    int index = (pos < 0) ? currentIndex() : pos;
+
+    if (index < 0 || index >= mAccessUnits.size()) {
         return false;
     }
 
     // For lossless cutting, must be a Random Access Point
-    TTH265AccessUnit* au = mAccessUnits[pos];
+    TTH265AccessUnit* au = mAccessUnits[index];
     return au->isRAP();
 }
 
 // -----------------------------------------------------------------------------
 // Check if position is valid cut-out point
+// With encoder mode: any frame is valid
+// Without encoder mode: any frame (will re-encode at boundaries if needed)
+// pos < 0 means use currentIndex()
 // -----------------------------------------------------------------------------
 bool TTH265VideoStream::isCutOutPoint(int pos)
 {
-    if (pos < 0 || pos >= mAccessUnits.size()) {
+    // When encoder mode is enabled, any frame can be a cut-out point
+    if (TTCut::encoderMode) {
+        return true;
+    }
+
+    // Use current position if pos < 0 (same convention as MPEG-2)
+    int index = (pos < 0) ? currentIndex() : pos;
+
+    if (index < 0 || index >= mAccessUnits.size()) {
         return false;
     }
 
     // For lossless cutting, should be the frame before a RAP
     // Or the last frame
-    if (pos == mAccessUnits.size() - 1) {
+    if (index == mAccessUnits.size() - 1) {
         return true;
     }
 
     // Check if next frame is a RAP
-    if (pos + 1 < mAccessUnits.size()) {
-        TTH265AccessUnit* nextAU = mAccessUnits[pos + 1];
+    if (index + 1 < mAccessUnits.size()) {
+        TTH265AccessUnit* nextAU = mAccessUnits[index + 1];
         if (nextAU->isRAP()) {
             return true;
         }

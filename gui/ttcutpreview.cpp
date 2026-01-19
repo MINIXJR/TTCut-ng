@@ -139,8 +139,15 @@ void TTCutPreview::initPreview(TTCutList* cutList)
   }
 
   // set the current cut preview to the first cut clip
-  preview_video_name = "preview_001.mpg";
+  // Check for H.264/H.265 (.mkv) or MPEG-2 (.mpg) preview files
+  // Try .mkv first (mkvmerge output for H.264/H.265)
+  preview_video_name = "preview_001.mkv";
   preview_video_info.setFile(QDir(TTCut::tempDirPath), preview_video_name);
+  if (!preview_video_info.exists()) {
+    // Fallback to .mpg for MPEG-2
+    preview_video_name = "preview_001.mpg";
+    preview_video_info.setFile(QDir(TTCut::tempDirPath), preview_video_name);
+  }
 
   current_video_file = preview_video_info.absoluteFilePath();
   onCutSelectionChanged(0);
@@ -156,8 +163,13 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   QFileInfo preview_video_info;
   QFileInfo preview_subtitle_info;
 
-  preview_video_name = QString("preview_%1.mpg").arg(iCut+1, 3, 10, QChar('0'));
+  // Try .mkv first (H.264/H.265 via mkvmerge), then .mpg (MPEG-2 via mplex)
+  preview_video_name = QString("preview_%1.mkv").arg(iCut+1, 3, 10, QChar('0'));
   preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
+  if (!preview_video_info.exists()) {
+    preview_video_name = QString("preview_%1.mpg").arg(iCut+1, 3, 10, QChar('0'));
+    preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
+  }
   current_video_file = preview_video_info.absoluteFilePath();
 
   // Check for subtitle file

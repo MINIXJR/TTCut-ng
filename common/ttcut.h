@@ -204,6 +204,7 @@ class TTCut
    static QString muxFileName;
    static QString cutDirPath;
    static QString cutVideoName;
+   static bool    cutAddSuffix;        // Add "_cut" suffix to output filename
    static bool    cutWriteMaxBitrate;
    static bool    cutWriteSeqEnd;
    static bool    correctCutTimeCode;

@@ -183,6 +183,7 @@ void TTCutSettings::readSettings()
   beginGroup( "/CutOptions" );
   TTCut::cutDirPath         = value( "DirPath/", TTCut::cutDirPath ).toString();
   TTCut::cutVideoName       = value( "VideoName/", TTCut::cutVideoName ).toString();
+  TTCut::cutAddSuffix       = value( "AddSuffix/", TTCut::cutAddSuffix ).toBool();
   TTCut::cutWriteMaxBitrate = value( "WriteMaxBitrate/", TTCut::cutWriteMaxBitrate ).toBool();
   TTCut::cutWriteSeqEnd     = value( "WriteSeqEnd/", TTCut::cutWriteSeqEnd ).toBool();
   TTCut::correctCutTimeCode = value( "CorrectTimeCode/", TTCut::correctCutTimeCode ).toBool();
@@ -323,6 +324,7 @@ void TTCutSettings::writeSettings()
   beginGroup( "/CutOptions" );
   setValue( "DirPath/",         TTCut::cutDirPath );
   setValue( "VideoName/",       TTCut::cutVideoName );
+  setValue( "AddSuffix/",       TTCut::cutAddSuffix );
   setValue( "WriteMaxBitrate/", TTCut::cutWriteMaxBitrate );
   setValue( "WriteSeqEnd/",     TTCut::cutWriteSeqEnd );
   setValue( "CorrectTimeCode/", TTCut::correctCutTimeCode );
