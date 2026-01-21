@@ -41,6 +41,7 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
@@ -992,6 +993,583 @@ bool TTFFmpegWrapper::extractSegment(const QString& outputFile, int startFrame,
             QString::fromUtf8(proc.readAllStandardError())));
         return false;
     }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Helper: Check if timestamp is within any of the "keep" segments
+// ----------------------------------------------------------------------------
+static bool isTimestampIncluded(double ts, const QList<QPair<double, double>>& keepList)
+{
+    for (const auto& segment : keepList) {
+        if (ts >= segment.first && ts < segment.second) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+// Helper: Check if a range overlaps with any "keep" segment
+// Returns: 0 = no overlap (drop), 1 = full overlap (copy), 2 = partial overlap (encode)
+// ----------------------------------------------------------------------------
+static int getRangeMode(double startTs, double endTs, const QList<QPair<double, double>>& keepList)
+{
+    bool anyIncluded = false;
+    bool anyExcluded = false;
+
+    // Check start and end
+    if (isTimestampIncluded(startTs, keepList)) anyIncluded = true;
+    else anyExcluded = true;
+
+    if (isTimestampIncluded(endTs, keepList)) anyIncluded = true;
+    else anyExcluded = true;
+
+    // Check if any keepList boundary falls within this range
+    for (const auto& segment : keepList) {
+        if (segment.first > startTs && segment.first < endTs) {
+            // A cut-in point is within this range
+            anyIncluded = true;
+            anyExcluded = true;
+        }
+        if (segment.second > startTs && segment.second < endTs) {
+            // A cut-out point is within this range
+            anyIncluded = true;
+            anyExcluded = true;
+        }
+    }
+
+    if (anyIncluded && anyExcluded) return 2;  // Partial - need to encode
+    if (anyIncluded) return 1;                  // Full copy
+    return 0;                                   // Full drop
+}
+
+// ----------------------------------------------------------------------------
+// Smart cut using avcut approach
+// Direct writing to single output, no global headers, GOP-based processing
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::smartCut(const QString& outputFile,
+                                const QList<QPair<double, double>>& cutList)
+{
+    if (!mFormatCtx) {
+        setError("No input file open");
+        return false;
+    }
+
+    if (cutList.isEmpty()) {
+        setError("Cut list is empty");
+        return false;
+    }
+
+    if (mVideoStreamIndex < 0) {
+        setError("No video stream found");
+        return false;
+    }
+
+    qDebug() << "smartCut: Starting avcut-style processing";
+    qDebug() << "  Input:" << QString::fromUtf8(mFormatCtx->url);
+    qDebug() << "  Output:" << outputFile;
+    qDebug() << "  Keep segments:" << cutList.size();
+
+    int ret;
+    AVFormatContext* outFmtCtx = nullptr;
+    AVCodecContext* encCtx = nullptr;
+    AVCodecContext* decCtx = nullptr;
+    AVBSFContext* bsfDumpExtra = nullptr;
+    AVBSFContext* bsfToAnnexB = nullptr;
+
+    // Input stream info
+    AVStream* inVideoStream = mFormatCtx->streams[mVideoStreamIndex];
+    AVStream* inAudioStream = (mAudioStreamIndex >= 0) ? mFormatCtx->streams[mAudioStreamIndex] : nullptr;
+
+    // Calculate stream start time offset (video streams may not start at 0)
+    double streamStartTime = 0.0;
+    if (inVideoStream->start_time != AV_NOPTS_VALUE) {
+        streamStartTime = inVideoStream->start_time * av_q2d(inVideoStream->time_base);
+    } else if (mFormatCtx->start_time != AV_NOPTS_VALUE) {
+        streamStartTime = mFormatCtx->start_time / (double)AV_TIME_BASE;
+    }
+    qDebug() << "  Stream start time offset:" << streamStartTime << "seconds";
+
+    // === Open output file ===
+    ret = avformat_alloc_output_context2(&outFmtCtx, nullptr, "matroska", outputFile.toUtf8().constData());
+    if (ret < 0 || !outFmtCtx) {
+        setError(QString("Could not create output context: %1").arg(avErrorToString(ret)));
+        return false;
+    }
+
+    // === Create output video stream ===
+    AVStream* outVideoStream = avformat_new_stream(outFmtCtx, nullptr);
+    if (!outVideoStream) {
+        setError("Could not create output video stream");
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+
+    // Copy codec parameters from input
+    ret = avcodec_parameters_copy(outVideoStream->codecpar, inVideoStream->codecpar);
+    if (ret < 0) {
+        setError(QString("Could not copy codec parameters: %1").arg(avErrorToString(ret)));
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+    outVideoStream->time_base = inVideoStream->time_base;
+    outVideoStream->codecpar->codec_tag = 0;  // Let muxer choose
+
+    // === Create output audio stream if present ===
+    AVStream* outAudioStream = nullptr;
+    if (inAudioStream) {
+        outAudioStream = avformat_new_stream(outFmtCtx, nullptr);
+        if (outAudioStream) {
+            avcodec_parameters_copy(outAudioStream->codecpar, inAudioStream->codecpar);
+            outAudioStream->time_base = inAudioStream->time_base;
+            outAudioStream->codecpar->codec_tag = 0;
+        }
+    }
+
+    // === Open decoder for video ===
+    const AVCodec* decoder = avcodec_find_decoder(inVideoStream->codecpar->codec_id);
+    if (!decoder) {
+        setError("Could not find video decoder");
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+
+    decCtx = avcodec_alloc_context3(decoder);
+    avcodec_parameters_to_context(decCtx, inVideoStream->codecpar);
+    decCtx->framerate = av_guess_frame_rate(mFormatCtx, inVideoStream, nullptr);
+    decCtx->time_base = av_inv_q(decCtx->framerate);
+
+    ret = avcodec_open2(decCtx, decoder, nullptr);
+    if (ret < 0) {
+        setError(QString("Could not open decoder: %1").arg(avErrorToString(ret)));
+        avcodec_free_context(&decCtx);
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+
+    // === Setup encoder (will be opened when needed) ===
+    const AVCodec* encoder = nullptr;
+    if (inVideoStream->codecpar->codec_id == AV_CODEC_ID_H264) {
+        encoder = avcodec_find_encoder_by_name("libx264");
+    } else if (inVideoStream->codecpar->codec_id == AV_CODEC_ID_HEVC) {
+        encoder = avcodec_find_encoder_by_name("libx265");
+    } else {
+        encoder = avcodec_find_encoder(inVideoStream->codecpar->codec_id);
+    }
+
+    if (!encoder) {
+        setError("Could not find video encoder");
+        avcodec_free_context(&decCtx);
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+
+    // === Setup bitstream filters ===
+    // dump_extra: Add SPS/PPS to keyframes (for encoded output)
+    const AVBitStreamFilter* bsfDumpExtraFilter = av_bsf_get_by_name("dump_extra");
+    if (bsfDumpExtraFilter) {
+        av_bsf_alloc(bsfDumpExtraFilter, &bsfDumpExtra);
+        avcodec_parameters_copy(bsfDumpExtra->par_in, inVideoStream->codecpar);
+        av_bsf_init(bsfDumpExtra);
+    }
+
+    // h264_mp4toannexb: Convert AVCC to Annex B if needed
+    const AVBitStreamFilter* bsfAnnexBFilter = av_bsf_get_by_name("h264_mp4toannexb");
+    if (bsfAnnexBFilter && inVideoStream->codecpar->codec_id == AV_CODEC_ID_H264) {
+        av_bsf_alloc(bsfAnnexBFilter, &bsfToAnnexB);
+        avcodec_parameters_copy(bsfToAnnexB->par_in, inVideoStream->codecpar);
+        av_bsf_init(bsfToAnnexB);
+    }
+
+    // === Open output file ===
+    if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&outFmtCtx->pb, outputFile.toUtf8().constData(), AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            setError(QString("Could not open output file: %1").arg(avErrorToString(ret)));
+            avcodec_free_context(&decCtx);
+            if (bsfDumpExtra) av_bsf_free(&bsfDumpExtra);
+            if (bsfToAnnexB) av_bsf_free(&bsfToAnnexB);
+            avformat_free_context(outFmtCtx);
+            return false;
+        }
+    }
+
+    // Write header
+    ret = avformat_write_header(outFmtCtx, nullptr);
+    if (ret < 0) {
+        setError(QString("Could not write header: %1").arg(avErrorToString(ret)));
+        avcodec_free_context(&decCtx);
+        if (bsfDumpExtra) av_bsf_free(&bsfDumpExtra);
+        if (bsfToAnnexB) av_bsf_free(&bsfToAnnexB);
+        avio_closep(&outFmtCtx->pb);
+        avformat_free_context(outFmtCtx);
+        return false;
+    }
+
+    // === Process packets ===
+    AVPacket* packet = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+
+    // GOP buffer
+    QList<AVPacket*> gopPackets;
+    QList<AVFrame*> gopFrames;
+
+    // Timing state
+    int64_t videoDtsOffset = 0;
+    int64_t audioDtsOffset = 0;
+    int64_t lastVideoDts = 0;
+    int64_t lastAudioDts = 0;
+    int64_t droppedVideoDuration = 0;
+    int64_t droppedAudioDuration = 0;
+    bool encoderOpen = false;
+
+    // Calculate frame duration in stream timebase (for encoded packets that may have duration=0)
+    // Frame duration = timebase * fps = 1/90000 * 50 = 1800 ticks for 50fps @ 90kHz
+    int64_t frameDurationInStreamTB = av_rescale_q(1, av_inv_q(inVideoStream->avg_frame_rate), inVideoStream->time_base);
+    qDebug() << "  Frame duration in stream timebase:" << frameDurationInStreamTB;
+
+    // Counters (declared here so lambdas can capture them)
+    int packetsWritten = 0;
+    int framesEncoded = 0;
+
+    // Lambda to open encoder
+    auto openEncoder = [&]() -> bool {
+        if (encoderOpen && encCtx) {
+            avcodec_free_context(&encCtx);
+        }
+
+        encCtx = avcodec_alloc_context3(encoder);
+        if (!encCtx) return false;
+
+        encCtx->width = decCtx->width;
+        encCtx->height = decCtx->height;
+        encCtx->pix_fmt = decCtx->pix_fmt;
+        encCtx->time_base = decCtx->time_base;
+        encCtx->framerate = decCtx->framerate;
+        encCtx->sample_aspect_ratio = decCtx->sample_aspect_ratio;
+        encCtx->color_primaries = decCtx->color_primaries;
+        encCtx->color_trc = decCtx->color_trc;
+        encCtx->colorspace = decCtx->colorspace;
+        encCtx->color_range = decCtx->color_range;
+        encCtx->profile = decCtx->profile;
+        encCtx->level = decCtx->level;
+
+        // Quality settings
+        encCtx->qmin = 16;
+        encCtx->qmax = 26;
+        encCtx->max_qdiff = 4;
+
+        // IMPORTANT: Disable B-frames for encoding to avoid PTS/DTS complexity
+        // This matches avcut's approach - re-encoded sections use I/P only
+        // This makes DTS = PTS for all encoded packets, simplifying timestamp handling
+        encCtx->max_b_frames = 0;
+
+        encCtx->thread_count = 1;
+        encCtx->codec_tag = 0;
+
+        // CRITICAL: Do NOT use global header - we need SPS/PPS in-stream
+        // This is the key avcut insight!
+        // enc_cctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;  // DON'T DO THIS
+
+        int ret = avcodec_open2(encCtx, encoder, nullptr);
+        if (ret < 0) {
+            qDebug() << "Failed to open encoder:" << avErrorToString(ret);
+            return false;
+        }
+
+        encoderOpen = true;
+        return true;
+    };
+
+    // Lambda to close encoder (flush and close)
+    auto closeEncoder = [&]() {
+        if (!encoderOpen || !encCtx) return;
+
+        // Flush encoder
+        qDebug() << "    Flushing encoder...";
+        avcodec_send_frame(encCtx, nullptr);
+        AVPacket* encPkt = av_packet_alloc();
+        int flushedPackets = 0;
+        while (avcodec_receive_packet(encCtx, encPkt) == 0) {
+            encPkt->stream_index = 0;
+            // Without B-frames: DTS = PTS (decode order = presentation order)
+            int64_t dtsInEncTimebase = av_rescale_q(lastVideoDts, inVideoStream->time_base, encCtx->time_base);
+            encPkt->dts = dtsInEncTimebase;
+            encPkt->pts = dtsInEncTimebase;  // Same as DTS since no B-frames
+            // Increment lastVideoDts by one frame duration
+            lastVideoDts += frameDurationInStreamTB;
+            av_packet_rescale_ts(encPkt, encCtx->time_base, outVideoStream->time_base);
+            av_interleaved_write_frame(outFmtCtx, encPkt);
+            av_packet_unref(encPkt);
+            packetsWritten++;
+            framesEncoded++;
+            flushedPackets++;
+        }
+        av_packet_free(&encPkt);
+        qDebug() << "    Flushed" << flushedPackets << "encoded packets";
+
+        avcodec_free_context(&encCtx);
+        encoderOpen = false;
+    };
+
+    qDebug() << "smartCut: Starting packet processing";
+    for (int i = 0; i < cutList.size(); i++) {
+        qDebug() << "  Keep segment" << i << ":" << cutList[i].first << "-" << cutList[i].second << "seconds";
+    }
+
+    // Seek to beginning
+    av_seek_frame(mFormatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
+    avcodec_flush_buffers(decCtx);
+
+    int packetsRead = 0;
+    bool firstGopLogged = false;
+
+    // For proper timecode: output should start at 0, so we need to track
+    // the timestamp of the first frame that gets written
+    double firstKeptTimestamp = cutList.first().first;  // Start of first keep segment
+    int64_t firstKeptPts = (int64_t)((firstKeptTimestamp + streamStartTime) / av_q2d(inVideoStream->time_base));
+    qDebug() << "  First kept timestamp:" << firstKeptTimestamp << "seconds, PTS offset:" << firstKeptPts;
+
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        packetsRead++;
+
+        if (packet->stream_index == mVideoStreamIndex) {
+            double packetPts = packet->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+            bool isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
+
+            // If this is a keyframe and we have buffered packets, process the GOP
+            if (isKeyframe && !gopPackets.isEmpty()) {
+                double gopStartTs = gopPackets.first()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+                double gopEndTs = gopPackets.last()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+
+                int mode = getRangeMode(gopStartTs, gopEndTs, cutList);
+
+                // Log first few GOPs to verify timestamp calculation
+                if (!firstGopLogged || packetsWritten > 0) {
+                    qDebug() << "GOP: start=" << gopStartTs << "end=" << gopEndTs << "mode=" << mode
+                             << (mode == 0 ? "(drop)" : mode == 1 ? "(copy)" : "(encode)");
+                    if (!firstGopLogged) firstGopLogged = true;
+                }
+
+                if (mode == 1) {
+                    // Full copy - stream copy all packets in GOP
+                    static bool firstCopyDebug = true;
+                    if (firstCopyDebug) {
+                        qDebug() << "  First copy GOP: droppedVideoDuration=" << droppedVideoDuration
+                                 << "firstKeptPts=" << firstKeptPts;
+                        firstCopyDebug = false;
+                    }
+                    for (AVPacket* gopPkt : gopPackets) {
+                        AVPacket* outPkt = av_packet_clone(gopPkt);
+                        outPkt->stream_index = 0;
+                        // Adjust PTS to start at 0: subtract first kept PTS and any dropped duration
+                        int64_t origPts = outPkt->pts;
+                        outPkt->pts = outPkt->pts - firstKeptPts - droppedVideoDuration;
+                        static int ptsDebugCount = 0;
+                        if (ptsDebugCount < 3) {
+                            qDebug() << "    Packet: origPts=" << origPts << "newPts=" << outPkt->pts
+                                     << "dts=" << lastVideoDts;
+                            ptsDebugCount++;
+                        }
+                        outPkt->dts = lastVideoDts;
+                        lastVideoDts += outPkt->duration;
+                        av_packet_rescale_ts(outPkt, inVideoStream->time_base, outVideoStream->time_base);
+                        av_interleaved_write_frame(outFmtCtx, outPkt);
+                        av_packet_free(&outPkt);
+                        packetsWritten++;
+                    }
+                } else if (mode == 2) {
+                    // Partial - need to decode and encode
+                    qDebug() << "  Encoding GOP at" << gopStartTs << "-" << gopEndTs;
+
+                    if (!encoderOpen) {
+                        if (!openEncoder()) {
+                            qDebug() << "  ERROR: Failed to open encoder!";
+                            continue;
+                        }
+                    }
+
+                    // Lambda to process a decoded frame
+                    int gopFrameIdx = 0;
+                    auto processFrame = [&](AVFrame* f) {
+                        double frameTs = f->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+                        bool included = isTimestampIncluded(frameTs, cutList);
+                        // Show first 3 and last 3 frames of each GOP, plus any included frames
+                        if (gopFrameIdx < 3 || included) {
+                            qDebug() << "    Frame" << gopFrameIdx << "PTS:" << f->pts
+                                     << "frameTs:" << frameTs << "included:" << included;
+                        }
+                        gopFrameIdx++;
+
+                        if (included) {
+                            // Adjust PTS to start at 0
+                            f->pts = f->pts - firstKeptPts - droppedVideoDuration;
+                            f->pict_type = AV_PICTURE_TYPE_NONE;  // Let encoder decide
+
+                            int ret = avcodec_send_frame(encCtx, f);
+                            if (ret < 0) {
+                                qDebug() << "    ERROR sending frame to encoder:" << avErrorToString(ret);
+                                return;
+                            }
+                            static int framesSentToEncoder = 0;
+                            framesSentToEncoder++;
+                            if (framesSentToEncoder <= 5) {
+                                qDebug() << "    Sent frame to encoder, total sent:" << framesSentToEncoder;
+                            }
+
+                            AVPacket* encPkt = av_packet_alloc();
+                            while (avcodec_receive_packet(encCtx, encPkt) == 0) {
+                                encPkt->stream_index = 0;
+                                // Without B-frames: DTS = PTS (decode order = presentation order)
+                                int64_t dtsInEncTimebase = av_rescale_q(lastVideoDts, inVideoStream->time_base, encCtx->time_base);
+                                encPkt->dts = dtsInEncTimebase;
+                                encPkt->pts = dtsInEncTimebase;  // Same as DTS since no B-frames
+                                // Increment lastVideoDts by one frame duration
+                                lastVideoDts += frameDurationInStreamTB;
+                                av_packet_rescale_ts(encPkt, encCtx->time_base, outVideoStream->time_base);
+                                av_interleaved_write_frame(outFmtCtx, encPkt);
+                                av_packet_unref(encPkt);
+                                packetsWritten++;
+                                framesEncoded++;
+                            }
+                            av_packet_free(&encPkt);
+                        } else {
+                            // Only track dropped frames that are AFTER firstKeptTimestamp
+                            // (frames before are already accounted for by firstKeptPts subtraction)
+                            if (frameTs >= firstKeptTimestamp) {
+                                droppedVideoDuration += f->duration;
+                            }
+                        }
+                    };
+
+                    // Send all packets to decoder
+                    int gopFramesDecoded = 0;
+                    for (AVPacket* gopPkt : gopPackets) {
+                        int ret = avcodec_send_packet(decCtx, gopPkt);
+                        if (ret < 0) {
+                            qDebug() << "    ERROR sending packet to decoder:" << avErrorToString(ret);
+                            continue;
+                        }
+                        while (avcodec_receive_frame(decCtx, frame) == 0) {
+                            gopFramesDecoded++;
+                            processFrame(frame);
+                            av_frame_unref(frame);
+                        }
+                    }
+
+                    // Flush decoder to get remaining B-frames
+                    avcodec_send_packet(decCtx, nullptr);
+                    while (avcodec_receive_frame(decCtx, frame) == 0) {
+                        gopFramesDecoded++;
+                        processFrame(frame);
+                        av_frame_unref(frame);
+                    }
+                    avcodec_flush_buffers(decCtx);
+
+                    qDebug() << "    Decoded" << gopFramesDecoded << "frames, encoded" << framesEncoded;
+
+                    // Flush and restart encoder after encoding section
+                    closeEncoder();
+                } else {
+                    // Full drop - only track if this GOP is AFTER the first kept segment
+                    // (otherwise it's already accounted for by firstKeptPts subtraction)
+                    if (gopEndTs >= cutList.first().first) {
+                        for (AVPacket* gopPkt : gopPackets) {
+                            droppedVideoDuration += gopPkt->duration;
+                        }
+                    }
+                }
+
+                // Clear GOP buffer
+                for (AVPacket* gopPkt : gopPackets) {
+                    av_packet_free(&gopPkt);
+                }
+                gopPackets.clear();
+            }
+
+            // Add current packet to GOP buffer
+            gopPackets.append(av_packet_clone(packet));
+
+        } else if (packet->stream_index == mAudioStreamIndex && outAudioStream) {
+            // Audio packet - check if timestamp is in keep range
+            // Use video start time as reference since cutList is relative to video
+            double audioTs = packet->pts * av_q2d(inAudioStream->time_base) - streamStartTime;
+
+            if (isTimestampIncluded(audioTs, cutList)) {
+                AVPacket* outPkt = av_packet_clone(packet);
+                outPkt->stream_index = outAudioStream->index;
+                // Calculate audio firstKeptPts in audio time_base
+                int64_t audioFirstKeptPts = (int64_t)((firstKeptTimestamp + streamStartTime) / av_q2d(inAudioStream->time_base));
+                outPkt->pts = outPkt->pts - audioFirstKeptPts - droppedAudioDuration;
+                outPkt->dts = lastAudioDts;
+                lastAudioDts += outPkt->duration;
+                av_packet_rescale_ts(outPkt, inAudioStream->time_base, outAudioStream->time_base);
+                av_interleaved_write_frame(outFmtCtx, outPkt);
+                av_packet_free(&outPkt);
+            } else {
+                // Only track dropped audio that is AFTER the first kept segment
+                // (audio before firstKeptTimestamp is already accounted for by audioFirstKeptPts subtraction)
+                if (audioTs >= firstKeptTimestamp) {
+                    droppedAudioDuration += packet->duration;
+                }
+            }
+        }
+
+        av_packet_unref(packet);
+    }
+
+    // Process remaining GOP
+    if (!gopPackets.isEmpty()) {
+        double gopStartTs = gopPackets.first()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+        double gopEndTs = gopPackets.last()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+        int mode = getRangeMode(gopStartTs, gopEndTs, cutList);
+
+        if (mode >= 1) {
+            // Copy remaining packets (simplified for last GOP)
+            for (AVPacket* gopPkt : gopPackets) {
+                double pktTs = gopPkt->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+                if (isTimestampIncluded(pktTs, cutList)) {
+                    AVPacket* outPkt = av_packet_clone(gopPkt);
+                    outPkt->stream_index = 0;
+                    // Adjust PTS to start at 0
+                    outPkt->pts = outPkt->pts - firstKeptPts - droppedVideoDuration;
+                    outPkt->dts = lastVideoDts;
+                    lastVideoDts += outPkt->duration;
+                    av_packet_rescale_ts(outPkt, inVideoStream->time_base, outVideoStream->time_base);
+                    av_interleaved_write_frame(outFmtCtx, outPkt);
+                    av_packet_free(&outPkt);
+                    packetsWritten++;
+                }
+            }
+        }
+
+        for (AVPacket* gopPkt : gopPackets) {
+            av_packet_free(&gopPkt);
+        }
+        gopPackets.clear();
+    }
+
+    // Cleanup
+    closeEncoder();
+    av_write_trailer(outFmtCtx);
+
+    qDebug() << "smartCut: Complete";
+    qDebug() << "  Packets read:" << packetsRead;
+    qDebug() << "  Packets written:" << packetsWritten;
+    qDebug() << "  Frames encoded:" << framesEncoded;
+
+    av_packet_free(&packet);
+    av_frame_free(&frame);
+    avcodec_free_context(&decCtx);
+    if (bsfDumpExtra) av_bsf_free(&bsfDumpExtra);
+    if (bsfToAnnexB) av_bsf_free(&bsfToAnnexB);
+
+    if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE)) {
+        avio_closep(&outFmtCtx->pb);
+    }
+    avformat_free_context(outFmtCtx);
 
     return true;
 }

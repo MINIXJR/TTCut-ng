@@ -200,6 +200,10 @@ public:
     bool extractSegment(const QString& outputFile, int startFrame, int endFrame, bool reencode = false);
     bool concatenateSegments(const QString& outputFile, const QStringList& segmentFiles);
 
+    // Smart cut using avcut approach (direct writing, no global headers, GOP-based)
+    // cutList contains pairs of (startTime, endTime) in seconds - segments to KEEP
+    bool smartCut(const QString& outputFile, const QList<QPair<double, double>>& cutList);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

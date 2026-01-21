@@ -48,6 +48,7 @@
 
 #include "../extern/ttmplexprovider.h"
 #include "../extern/ttmkvmergeprovider.h"
+#include "../extern/ttffmpegwrapper.h"
 
 #include "ttopenvideotask.h"
 #include "ttopenaudiotask.h"
@@ -846,10 +847,19 @@ static double getStreamStartTime(const QString& filePath)
   return 0.0;
 }
 
+// Structure to hold keyframe timing info
+struct KeyframeInfo {
+  double pts;  // Presentation timestamp (display time)
+  double dts;  // Decode timestamp (stream position - use this for seeking with -ss before -i)
+
+  KeyframeInfo(double p = 0, double d = 0) : pts(p), dts(d) {}
+};
+
 // Helper: Find keyframe timestamps using ffprobe
-static QList<double> getKeyframeTimestamps(const QString& filePath, double startTime, double endTime)
+// Returns both PTS (for re-encoding timing) and DTS (for stream-copy seeking)
+static QList<KeyframeInfo> getKeyframeTimestamps(const QString& filePath, double startTime, double endTime)
 {
-  QList<double> keyframes;
+  QList<KeyframeInfo> keyframes;
 
   // Get stream start time offset (DVB recordings often have large offsets)
   double streamStart = getStreamStartTime(filePath);
@@ -861,12 +871,13 @@ static QList<double> getKeyframeTimestamps(const QString& filePath, double start
   qDebug() << "Keyframe search: relative" << startTime << "-" << endTime
            << "absolute" << absStartTime << "-" << absEndTime;
 
-  // Use ffprobe to get keyframe timestamps - try with frames first (more reliable)
-  // Using -show_frames instead of -show_packets for better keyframe detection
+  // Use ffprobe to get keyframe timestamps with both PTS and DTS
+  // PTS = presentation time (when frame is displayed)
+  // DTS = decode time (position in stream - needed for seeking with -ss before -i)
   double margin = 2.0; // 2 second margin
   QString cmd = QString("ffprobe -v error -select_streams v:0 -skip_frame nokey "
                         "-read_intervals %1\\%%2 "
-                        "-show_entries frame=pts_time,pict_type -of csv=p=0 \"%3\" 2>&1")
+                        "-show_entries frame=pts_time,pkt_dts_time,pict_type -of csv=p=0 \"%3\" 2>&1")
       .arg(qMax(0.0, absStartTime - margin), 0, 'f', 3)
       .arg(absEndTime + margin, 0, 'f', 3)
       .arg(filePath);
@@ -884,14 +895,17 @@ static QList<double> getKeyframeTimestamps(const QString& filePath, double start
         qDebug() << "ffprobe output line:" << line;
       }
       if (!line.isEmpty()) {
-        // Output format: pts_time,pict_type (e.g., "40408.123,I")
+        // Output format: pts_time,pkt_dts_time,pict_type (e.g., "40529.358722,40529.798722,I")
         QStringList parts = line.split(',');
-        if (parts.size() >= 1) {
-          bool ok;
-          double ts = parts[0].toDouble(&ok);
-          if (ok && ts > 0) {
+        if (parts.size() >= 2) {
+          bool okPts, okDts;
+          double pts = parts[0].toDouble(&okPts);
+          double dts = parts[1].toDouble(&okDts);
+          if (okPts && pts > 0) {
             // Convert back to relative time (subtract stream start)
-            keyframes.append(ts - streamStart);
+            double relPts = pts - streamStart;
+            double relDts = okDts ? (dts - streamStart) : relPts; // Use PTS if DTS not available
+            keyframes.append(KeyframeInfo(relPts, relDts));
           }
         }
       }
@@ -908,7 +922,7 @@ static QList<double> getKeyframeTimestamps(const QString& filePath, double start
 
     // Try without -read_intervals (read entire file, filter in code)
     QString cmd2 = QString("ffprobe -v error -select_streams v:0 -skip_frame nokey "
-                          "-show_entries frame=pts_time -of csv=p=0 \"%1\" 2>&1 | head -1000")
+                          "-show_entries frame=pts_time,pkt_dts_time -of csv=p=0 \"%1\" 2>&1 | head -1000")
         .arg(filePath);
 
     qDebug() << "Alternative ffprobe command:" << cmd2;
@@ -921,15 +935,21 @@ static QList<double> getKeyframeTimestamps(const QString& filePath, double start
         QString line = QString(buffer).trimmed();
         lineCount++;
         if (!line.isEmpty()) {
-          bool ok;
-          double ts = line.toDouble(&ok);
-          if (ok && ts > 0) {
-            double relTime = ts - streamStart;
-            // Only include keyframes in our range (with margin)
-            if (relTime >= startTime - margin && relTime <= endTime + margin) {
-              keyframes.append(relTime);
-              if (keyframes.size() <= 5) {
-                qDebug() << "Found keyframe at relative time:" << relTime;
+          QStringList parts = line.split(',');
+          if (parts.size() >= 1) {
+            bool okPts, okDts;
+            double pts = parts[0].toDouble(&okPts);
+            double dts = (parts.size() >= 2) ? parts[1].toDouble(&okDts) : pts;
+            if (!okDts) dts = pts;
+            if (okPts && pts > 0) {
+              double relPts = pts - streamStart;
+              double relDts = dts - streamStart;
+              // Only include keyframes in our range (with margin)
+              if (relPts >= startTime - margin && relPts <= endTime + margin) {
+                keyframes.append(KeyframeInfo(relPts, relDts));
+                if (keyframes.size() <= 5) {
+                  qDebug() << "Found keyframe at PTS:" << relPts << "DTS:" << relDts;
+                }
               }
             }
           }
@@ -940,17 +960,20 @@ static QList<double> getKeyframeTimestamps(const QString& filePath, double start
     }
   }
 
-  std::sort(keyframes.begin(), keyframes.end());
+  // Sort by PTS
+  std::sort(keyframes.begin(), keyframes.end(), [](const KeyframeInfo& a, const KeyframeInfo& b) {
+    return a.pts < b.pts;
+  });
   return keyframes;
 }
 
-// Helper: Find nearest keyframe at or before given time
-static double findKeyframeBefore(const QList<double>& keyframes, double time)
+// Helper: Find nearest keyframe at or before given time (returns index, -1 if not found)
+static int findKeyframeIndexBefore(const QList<KeyframeInfo>& keyframes, double time)
 {
-  double result = -1;
-  for (double kf : keyframes) {
-    if (kf <= time + 0.001) { // Small tolerance for floating point
-      result = kf;
+  int result = -1;
+  for (int i = 0; i < keyframes.size(); i++) {
+    if (keyframes[i].pts <= time + 0.001) { // Small tolerance for floating point
+      result = i;
     } else {
       break;
     }
@@ -958,34 +981,38 @@ static double findKeyframeBefore(const QList<double>& keyframes, double time)
   return result;
 }
 
-// Helper: Find nearest keyframe at or after given time
-static double findKeyframeAfter(const QList<double>& keyframes, double time)
+// Helper: Find nearest keyframe at or after given time (returns index, -1 if not found)
+static int findKeyframeIndexAfter(const QList<KeyframeInfo>& keyframes, double time)
 {
-  for (double kf : keyframes) {
-    if (kf >= time - 0.001) { // Small tolerance for floating point
-      return kf;
+  for (int i = 0; i < keyframes.size(); i++) {
+    if (keyframes[i].pts >= time - 0.001) { // Small tolerance for floating point
+      return i;
     }
   }
   return -1;
 }
 
+// Legacy helpers for backwards compatibility (return PTS only)
+static double findKeyframeBefore(const QList<KeyframeInfo>& keyframes, double time)
+{
+  int idx = findKeyframeIndexBefore(keyframes, time);
+  return (idx >= 0) ? keyframes[idx].pts : -1;
+}
+
+static double findKeyframeAfter(const QList<KeyframeInfo>& keyframes, double time)
+{
+  int idx = findKeyframeIndexAfter(keyframes, time);
+  return (idx >= 0) ? keyframes[idx].pts : -1;
+}
+
 void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 {
-  log->infoMsg(__FILE__, __LINE__, "Using ffmpeg for H.264/H.265 cutting with smart boundary re-encoding");
+  log->infoMsg(__FILE__, __LINE__, "Using avcut-style smart cut (direct writing, no global headers, GOP-based)");
 
   // Get source file and frame rate from first cut item
   TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
   QString sourceFile = vStream->filePath();
   double frameRate = vStream->frameRate();
-  TTAVTypes::AVStreamType streamType = vStream->streamType();
-
-  // Determine encoder based on stream type
-  QString encoder = (streamType == TTAVTypes::h265_video) ? "libx265" : "libx264";
-  QString encoderOpts = (streamType == TTAVTypes::h265_video)
-      ? "-c:v libx265 -crf 20 -preset medium -tag:v hvc1"
-      : "-c:v libx264 -crf 18 -preset medium";
-
-  log->infoMsg(__FILE__, __LINE__, QString("Using encoder: %1").arg(encoder));
 
   emit statusReport(StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
 
@@ -996,19 +1023,9 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
                            fi.completeBaseName() + ".mkv").absoluteFilePath();
   }
 
-  QString tempDir = TTCut::cutDirPath;
-  int numSegments = cutList->count();
-
-  // Collect all video parts (stream-copied and re-encoded) for concatenation
-  QStringList videoParts;
-  QStringList audioParts;
-  int partIndex = 0;
-
-  // Get stream start time for absolute timestamp calculations
-  double streamStart = getStreamStartTime(sourceFile);
-  log->infoMsg(__FILE__, __LINE__, QString("Stream start time: %1").arg(streamStart, 0, 'f', 3));
-
-  for (int i = 0; i < numSegments; i++) {
+  // Build cut list as pairs of (startTime, endTime) in seconds - segments to KEEP
+  QList<QPair<double, double>> keepList;
+  for (int i = 0; i < cutList->count(); i++) {
     TTCutItem item = cutList->at(i);
     int startFrame = item.cutInIndex();
     int endFrame = item.cutOutIndex();
@@ -1020,234 +1037,28 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
         .arg(i+1).arg(startFrame).arg(endFrame)
         .arg(cutInTime, 0, 'f', 3).arg(cutOutTime, 0, 'f', 3));
 
-    emit statusReport(StatusReportArgs::Step,
-        QString(tr("Analyzing segment %1...")).arg(i+1), i);
-
-    // Get keyframes for this segment (with some margin)
-    QList<double> keyframes = getKeyframeTimestamps(sourceFile, cutInTime - 1.0, cutOutTime + 1.0);
-
-    if (keyframes.isEmpty()) {
-      log->warningMsg(__FILE__, __LINE__, "No keyframes found, falling back to full re-encode for segment");
-      // Fall back to re-encoding entire segment
-      QString partFile = QFileInfo(QDir(tempDir), QString("part_%1.mkv").arg(partIndex)).absoluteFilePath();
-      QString audioFile = QFileInfo(QDir(tempDir), QString("audio_%1.mka").arg(partIndex)).absoluteFilePath();
-
-      // Use -ss after -i for accurate seeking
-      QString cmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 %4 -an \"%5\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6)
-          .arg(cutOutTime - cutInTime, 0, 'f', 6)
-          .arg(encoderOpts).arg(partFile);
-      log->infoMsg(__FILE__, __LINE__, QString("Re-encode segment: %1").arg(cmd));
-      system(qPrintable(cmd));
-      videoParts << partFile;
-
-      // Audio for this segment
-      QString audioCmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 -vn -c:a copy \"%4\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6)
-          .arg(cutOutTime - cutInTime, 0, 'f', 6).arg(audioFile);
-      system(qPrintable(audioCmd));
-      audioParts << audioFile;
-      partIndex++;
-      continue;
-    }
-
-    log->infoMsg(__FILE__, __LINE__, QString("Found %1 keyframes in range").arg(keyframes.size()));
-
-    // Find relevant keyframes
-    double kfAfterCutIn = findKeyframeAfter(keyframes, cutInTime);
-    double kfBeforeCutOut = findKeyframeBefore(keyframes, cutOutTime);
-
-    log->infoMsg(__FILE__, __LINE__, QString("cutIn=%1, kfAfter=%2, kfBefore=%3, cutOut=%4")
-        .arg(cutInTime, 0, 'f', 3).arg(kfAfterCutIn, 0, 'f', 3)
-        .arg(kfBeforeCutOut, 0, 'f', 3).arg(cutOutTime, 0, 'f', 3));
-
-    bool cutInOnKeyframe = (kfAfterCutIn >= 0 && qAbs(cutInTime - kfAfterCutIn) < 0.001) ||
-                           (findKeyframeBefore(keyframes, cutInTime) >= 0 &&
-                            qAbs(cutInTime - findKeyframeBefore(keyframes, cutInTime)) < 0.001);
-    bool cutOutOnKeyframe = (kfBeforeCutOut >= 0 && qAbs(cutOutTime - kfBeforeCutOut) < 0.001);
-
-    // Check if we have a meaningful middle section to stream copy
-    bool hasMiddleSection = (kfAfterCutIn >= 0 && kfBeforeCutOut >= 0 &&
-                             kfBeforeCutOut > kfAfterCutIn + 0.5);
-
-    if (!hasMiddleSection) {
-      // Segment is too short or no keyframes between cut points - re-encode entire segment
-      log->infoMsg(__FILE__, __LINE__, "No middle section, re-encoding entire segment");
-
-      QString partFile = QFileInfo(QDir(tempDir), QString("part_%1.mkv").arg(partIndex)).absoluteFilePath();
-      QString audioFile = QFileInfo(QDir(tempDir), QString("audio_%1.mka").arg(partIndex)).absoluteFilePath();
-
-      // Use -ss after -i for accurate seeking
-      QString cmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 %4 -an \"%5\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6)
-          .arg(cutOutTime - cutInTime, 0, 'f', 6)
-          .arg(encoderOpts).arg(partFile);
-      log->infoMsg(__FILE__, __LINE__, QString("Re-encode segment: %1").arg(cmd));
-      system(qPrintable(cmd));
-      videoParts << partFile;
-
-      // Use -ss after -i for accurate seeking
-      QString audioCmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 -vn -c:a copy \"%4\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6)
-          .arg(cutOutTime - cutInTime, 0, 'f', 6).arg(audioFile);
-      system(qPrintable(audioCmd));
-      audioParts << audioFile;
-      partIndex++;
-      continue;
-    }
-
-    // === SMART RENDER: Re-encode boundaries, stream-copy middle ===
-
-    // Part 1: Pre-boundary (cut-in to first keyframe) - RE-ENCODE if not on keyframe
-    // Use -ss AFTER -i for accurate seeking (required for re-encoding short segments)
-    if (!cutInOnKeyframe && kfAfterCutIn > cutInTime) {
-      QString preFile = QFileInfo(QDir(tempDir), QString("part_%1.mkv").arg(partIndex)).absoluteFilePath();
-      QString preAudio = QFileInfo(QDir(tempDir), QString("audio_%1.mka").arg(partIndex)).absoluteFilePath();
-      double preDuration = kfAfterCutIn - cutInTime;
-
-      log->infoMsg(__FILE__, __LINE__, QString("Pre-boundary re-encode: %1 to %2 (duration %3)")
-          .arg(cutInTime, 0, 'f', 3).arg(kfAfterCutIn, 0, 'f', 3).arg(preDuration, 0, 'f', 3));
-
-      // -ss after -i = accurate seek (slower but required for short segments)
-      QString cmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 %4 -an \"%5\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6)
-          .arg(preDuration, 0, 'f', 6).arg(encoderOpts).arg(preFile);
-      log->infoMsg(__FILE__, __LINE__, QString("Pre-encode cmd: %1").arg(cmd));
-      system(qPrintable(cmd));
-      videoParts << preFile;
-
-      QString audioCmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 -vn -c:a copy \"%4\" 2>&1")
-          .arg(sourceFile).arg(cutInTime, 0, 'f', 6).arg(preDuration, 0, 'f', 6).arg(preAudio);
-      system(qPrintable(audioCmd));
-      audioParts << preAudio;
-      partIndex++;
-    }
-
-    // Part 2: Middle section (keyframe to keyframe) - STREAM COPY
-    // Use -ss BEFORE -i for fast keyframe-aligned seeking (OK for stream copy)
-    double middleStart = cutInOnKeyframe ? cutInTime : kfAfterCutIn;
-    double middleEnd = kfBeforeCutOut;
-
-    if (middleEnd > middleStart + 0.1) {
-      QString midFile = QFileInfo(QDir(tempDir), QString("part_%1.mkv").arg(partIndex)).absoluteFilePath();
-      QString midAudio = QFileInfo(QDir(tempDir), QString("audio_%1.mka").arg(partIndex)).absoluteFilePath();
-      double midDuration = middleEnd - middleStart;
-
-      log->infoMsg(__FILE__, __LINE__, QString("Middle stream-copy: %1 to %2 (duration %3)")
-          .arg(middleStart, 0, 'f', 3).arg(middleEnd, 0, 'f', 3).arg(midDuration, 0, 'f', 3));
-
-      // -ss before -i = fast keyframe seek (fine since we start at keyframe)
-      QString cmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -c:v copy -an \"%4\" 2>&1")
-          .arg(middleStart, 0, 'f', 6).arg(sourceFile)
-          .arg(midDuration, 0, 'f', 6).arg(midFile);
-      log->infoMsg(__FILE__, __LINE__, QString("Stream-copy cmd: %1").arg(cmd));
-      system(qPrintable(cmd));
-      videoParts << midFile;
-
-      QString audioCmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -vn -c:a copy \"%4\" 2>&1")
-          .arg(middleStart, 0, 'f', 6).arg(sourceFile).arg(midDuration, 0, 'f', 6).arg(midAudio);
-      system(qPrintable(audioCmd));
-      audioParts << midAudio;
-      partIndex++;
-    }
-
-    // Part 3: Post-boundary (last keyframe to cut-out) - RE-ENCODE if not on keyframe
-    // Use -ss AFTER -i for accurate seeking (required for re-encoding short segments)
-    if (!cutOutOnKeyframe && cutOutTime > kfBeforeCutOut) {
-      QString postFile = QFileInfo(QDir(tempDir), QString("part_%1.mkv").arg(partIndex)).absoluteFilePath();
-      QString postAudio = QFileInfo(QDir(tempDir), QString("audio_%1.mka").arg(partIndex)).absoluteFilePath();
-      double postDuration = cutOutTime - kfBeforeCutOut;
-
-      log->infoMsg(__FILE__, __LINE__, QString("Post-boundary re-encode: %1 to %2 (duration %3)")
-          .arg(kfBeforeCutOut, 0, 'f', 3).arg(cutOutTime, 0, 'f', 3).arg(postDuration, 0, 'f', 3));
-
-      // -ss after -i = accurate seek (slower but required for short segments)
-      QString cmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 %4 -an \"%5\" 2>&1")
-          .arg(sourceFile).arg(kfBeforeCutOut, 0, 'f', 6)
-          .arg(postDuration, 0, 'f', 6).arg(encoderOpts).arg(postFile);
-      log->infoMsg(__FILE__, __LINE__, QString("Post-encode cmd: %1").arg(cmd));
-      system(qPrintable(cmd));
-      videoParts << postFile;
-
-      QString audioCmd = QString("ffmpeg -y -i \"%1\" -ss %2 -t %3 -vn -c:a copy \"%4\" 2>&1")
-          .arg(sourceFile).arg(kfBeforeCutOut, 0, 'f', 6).arg(postDuration, 0, 'f', 6).arg(postAudio);
-      system(qPrintable(audioCmd));
-      audioParts << postAudio;
-      partIndex++;
-    }
+    keepList.append(qMakePair(cutInTime, cutOutTime));
   }
 
-  // === Concatenate all video parts ===
-  emit statusReport(StatusReportArgs::Step, tr("Concatenating segments..."), numSegments);
-
-  QString videoConcat = QFileInfo(QDir(tempDir), "video_concat.txt").absoluteFilePath();
-  QString audioConcat = QFileInfo(QDir(tempDir), "audio_concat.txt").absoluteFilePath();
-  QString videoOnly = QFileInfo(QDir(tempDir), "temp_video.mkv").absoluteFilePath();
-  QString audioOnly = QFileInfo(QDir(tempDir), "temp_audio.mka").absoluteFilePath();
-
-  // Write video concat file
-  QFile vConcatFile(videoConcat);
-  if (vConcatFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    QTextStream out(&vConcatFile);
-    for (const QString& part : videoParts) {
-      out << "file '" << part << "'\n";
-    }
-    vConcatFile.close();
+  // Use TTFFmpegWrapper's smartCut method (avcut-style processing)
+  TTFFmpegWrapper ffmpeg;
+  if (!ffmpeg.openFile(sourceFile)) {
+    log->errorMsg(__FILE__, __LINE__, QString("Failed to open source file: %1").arg(ffmpeg.lastError()));
+    emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not open source"), 0);
+    return;
   }
 
-  // Write audio concat file
-  QFile aConcatFile(audioConcat);
-  if (aConcatFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    QTextStream out(&aConcatFile);
-    for (const QString& part : audioParts) {
-      out << "file '" << part << "'\n";
-    }
-    aConcatFile.close();
+  log->infoMsg(__FILE__, __LINE__, QString("Starting smartCut: %1 segments to keep").arg(keepList.size()));
+
+  bool success = ffmpeg.smartCut(finalOutput, keepList);
+
+  if (!success) {
+    log->errorMsg(__FILE__, __LINE__, QString("smartCut failed: %1").arg(ffmpeg.lastError()));
+    emit statusReport(StatusReportArgs::Finished, tr("Cutting failed"), 0);
+    return;
   }
 
-  log->infoMsg(__FILE__, __LINE__, QString("Concatenating %1 video parts and %2 audio parts")
-      .arg(videoParts.size()).arg(audioParts.size()));
-
-  // Concatenate video parts
-  QString videoConcatCmd = QString("ffmpeg -y -f concat -safe 0 -i \"%1\" -c:v copy \"%2\" 2>&1")
-      .arg(videoConcat).arg(videoOnly);
-  log->infoMsg(__FILE__, __LINE__, QString("Video concat: %1").arg(videoConcatCmd));
-  int ret = system(qPrintable(videoConcatCmd));
-  if (ret != 0) {
-    log->errorMsg(__FILE__, __LINE__, QString("Video concat failed with code: %1").arg(ret));
-  }
-
-  // Concatenate audio parts
-  QString audioConcatCmd = QString("ffmpeg -y -f concat -safe 0 -i \"%1\" -c:a copy \"%2\" 2>&1")
-      .arg(audioConcat).arg(audioOnly);
-  log->infoMsg(__FILE__, __LINE__, QString("Audio concat: %1").arg(audioConcatCmd));
-  ret = system(qPrintable(audioConcatCmd));
-  if (ret != 0) {
-    log->errorMsg(__FILE__, __LINE__, QString("Audio concat failed with code: %1").arg(ret));
-  }
-
-  // === Final mux ===
-  emit statusReport(StatusReportArgs::Step, tr("Muxing video and audio..."), numSegments + 1);
-
-  QString muxCmd = QString("ffmpeg -y -i \"%1\" -i \"%2\" -c:v copy -c:a copy \"%3\" 2>&1")
-      .arg(videoOnly).arg(audioOnly).arg(finalOutput);
-  log->infoMsg(__FILE__, __LINE__, QString("Final mux: %1").arg(muxCmd));
-  ret = system(qPrintable(muxCmd));
-  if (ret != 0) {
-    log->errorMsg(__FILE__, __LINE__, QString("Final mux failed with code: %1").arg(ret));
-  }
-
-  // Clean up temp files
-  QFile::remove(videoOnly);
-  QFile::remove(audioOnly);
-  QFile::remove(videoConcat);
-  QFile::remove(audioConcat);
-  for (const QString& part : videoParts) {
-    QFile::remove(part);
-  }
-  for (const QString& part : audioParts) {
-    QFile::remove(part);
-  }
+  log->infoMsg(__FILE__, __LINE__, "smartCut completed successfully");
 
   // Add chapters if enabled (MKV only)
   if (TTCut::mkvCreateChapters && TTCut::mkvChapterInterval > 0 &&
@@ -1279,9 +1090,9 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
         mkvProvider.setChapterFile(chapterFile);
 
         // Mux existing file with chapters
-        bool success = mkvProvider.mux(tempOutput, finalOutput, QStringList(), QStringList());
+        bool muxSuccess = mkvProvider.mux(tempOutput, finalOutput, QStringList(), QStringList());
 
-        if (success) {
+        if (muxSuccess) {
           // Replace original with version containing chapters
           QFile::remove(finalOutput);
           QFile::rename(tempOutput, finalOutput);
@@ -1302,10 +1113,6 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   // Create a mux list item for the finished signal
   TTMuxListDataItem muxItem;
   muxItem.setVideoName(finalOutput);
-
-  // Note: Audio and subtitle cutting for H.264/H.265 is not yet implemented
-  // The ffmpeg -c copy includes audio if present in source
-  // Subtitles would need separate handling
 
   mpMuxList->appendItem(muxItem);
   mpMuxList->print();
