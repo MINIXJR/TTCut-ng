@@ -184,6 +184,28 @@ A small stutter (~0.14 seconds / ~7 frames) may occur at middle cut points. This
 - Investigate how other tools (LosslessCut, avidemux) handle this
 - Consider a completely different approach (e.g., full re-encode with hardware acceleration)
 
+### H.264/H.265 Stream Preparation Tools (Companion Project)
+
+A set of analysis and preparation tools is being developed in the h264bitstream fork:
+**Repository:** https://github.com/MINIXJR/h264bitstream (branch: `feature-fix-mmco-rplr-writing`)
+
+**Available tools:**
+- `h264_dpb_analyze` - H.264 bitstream analyzer (MMCO/RPLR errors, filler NALUs)
+- `h265_analyze` - H.265/HEVC bitstream analyzer (filler NALUs, stream structure)
+- `tools/h264_prepare.sh` - Workflow script for stream preparation
+
+**Key findings:**
+- DVB H.264 recordings typically contain 8% filler NALUs (can be safely removed)
+- MMCO/RPLR reference errors from mid-GOP recording starts are common but tolerable
+- H.265/HEVC recordings have minimal filler (~0.1%)
+
+**Planned integration:**
+The tools will provide ProjectX-style preprocessing for H.264/H.265:
+1. Analyze stream for issues
+2. Strip filler NALUs (space savings)
+3. Demux to elementary streams with correct timing
+4. Feed to TTCut for frame-accurate cutting
+
 The project now builds cleanly with Qt 5.15 on modern Linux systems and has full Wayland support.
 
 ## Running on Wayland
