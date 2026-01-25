@@ -27,8 +27,8 @@ TODO list for project TTCut-ng
 
 [ ] Make the current frame position clickable (enter frame number directly)
 [ ] More keyboard shortcuts
-[ ] User warning when clicking "New Project" with video stream loaded
-[ ] Display the resulting stream lengths after cut
+[DONE] User warning when clicking "New Project" with video stream loaded
+[DONE] Display file size after cut completion
 [ ] Remove unused settings and buttons without function
 
 === Playback ===
@@ -54,4 +54,4 @@ TODO list for project TTCut-ng
 
 === Other ===
 
-[ ] Show warning if audio and video length are different
+[DONE] Show warning if audio and video length are different (>1 second)
