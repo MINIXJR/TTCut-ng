@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttffmpegwrapper.h"
+#include "../avstream/ttesinfo.h"
 
 #include <QDebug>
 #include <QTime>
@@ -571,6 +572,58 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 
     qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
              << (currentGOP + 1) << "GOPs";
+
+    // For elementary streams without PTS/DTS, calculate timestamps from frame rate
+    if (!mFrameIndex.isEmpty() && mFrameIndex[0].pts == AV_NOPTS_VALUE) {
+        qDebug() << "Elementary stream detected - calculating PTS/DTS from frame rate";
+
+        // Get frame rate from .info file if available, otherwise from stream
+        double frameRate = streamInfo.frameRate;
+        QString sourceFile = QString::fromUtf8(mFormatCtx->url);
+        QString infoFile = TTESInfo::findInfoFile(sourceFile);
+
+        if (!infoFile.isEmpty()) {
+            TTESInfo esInfo(infoFile);
+            if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+                frameRate = esInfo.frameRate();
+                qDebug() << "Using frame rate from .info file:" << frameRate;
+            }
+        }
+
+        // Validate frame rate
+        if (frameRate <= 0 || frameRate > 120) {
+            frameRate = 25.0; // Default fallback
+            qDebug() << "Invalid frame rate, using default:" << frameRate;
+        }
+
+        // Get time base from stream
+        AVStream* videoStream = mFormatCtx->streams[videoStreamIndex];
+        AVRational timeBase = videoStream->time_base;
+
+        // Calculate frame duration in stream time base
+        // pts_increment = time_base / frame_rate
+        // For time_base = 1/90000 and frame_rate = 25, pts_increment = 3600
+        int64_t frameDuration = av_rescale_q(1, av_make_q(1, static_cast<int>(frameRate * 1000)), timeBase) / 1000;
+        if (frameDuration <= 0) {
+            frameDuration = av_rescale_q(1, av_make_q(1, 25), timeBase); // Fallback to 25fps
+        }
+
+        qDebug() << "Time base:" << timeBase.num << "/" << timeBase.den;
+        qDebug() << "Frame rate:" << frameRate << "fps";
+        qDebug() << "Frame duration:" << frameDuration << "ticks";
+
+        // Assign sequential PTS/DTS values
+        int64_t currentPts = 0;
+        for (int i = 0; i < mFrameIndex.size(); ++i) {
+            mFrameIndex[i].pts = currentPts;
+            mFrameIndex[i].dts = currentPts;
+            currentPts += frameDuration;
+        }
+
+        qDebug() << "Calculated timestamps for" << mFrameIndex.size() << "frames";
+        qDebug() << "First PTS:" << mFrameIndex.first().pts
+                 << "Last PTS:" << mFrameIndex.last().pts;
+    }
 
     emit progressChanged(100, QString("Indexed %1 frames").arg(mFrameIndex.size()));
 
