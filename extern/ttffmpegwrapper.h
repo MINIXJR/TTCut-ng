@@ -213,6 +213,21 @@ public:
     bool cutElementaryStream(const QString& inputFile, const QString& outputFile,
                              const QList<QPair<double, double>>& cutList);
 
+    // Audio ES cutting - time-based with FFmpeg (ms-accurate)
+    bool cutAudioStream(const QString& inputFile, const QString& outputFile,
+                        const QList<QPair<double, double>>& cutList);
+
+    // SRT subtitle cutting - text-based time filtering
+    bool cutSrtSubtitle(const QString& inputFile, const QString& outputFile,
+                        const QList<QPair<double, double>>& cutList);
+
+    // Complete ES cutting workflow: video + audio + srt + mux
+    // Takes video ES + audio ES files, cuts both, muxes to final output
+    bool cutAndMuxElementaryStreams(const QString& videoES, const QString& audioES,
+                                    const QString& outputFile,
+                                    const QList<QPair<double, double>>& cutList,
+                                    double frameRate = -1);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

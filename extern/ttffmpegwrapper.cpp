@@ -37,6 +37,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
+#include <QRegularExpression>
 
 // Include libav headers (C libraries)
 extern "C" {
@@ -1314,6 +1315,435 @@ bool TTFFmpegWrapper::cutElementaryStream(const QString& inputFile,
 
     qDebug() << "cutElementaryStream: Complete";
     qDebug() << "  Bytes written:" << totalBytesWritten;
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Cut audio elementary stream using FFmpeg
+// Audio is cut time-based (ms-accurate) using ffmpeg concat demuxer
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
+                                      const QString& outputFile,
+                                      const QList<QPair<double, double>>& cutList)
+{
+    if (!QFile::exists(inputFile)) {
+        setError(QString("Audio file not found: %1").arg(inputFile));
+        return false;
+    }
+
+    if (cutList.isEmpty()) {
+        setError("Cut list is empty");
+        return false;
+    }
+
+    qDebug() << "cutAudioStream: Time-based audio cutting";
+    qDebug() << "  Input:" << inputFile;
+    qDebug() << "  Output:" << outputFile;
+    qDebug() << "  Segments:" << cutList.size();
+
+    // For single segment, use direct cut
+    if (cutList.size() == 1) {
+        double startTime = cutList[0].first;
+        double duration = cutList[0].second - cutList[0].first;
+
+        QStringList args;
+        args << "-y"
+             << "-ss" << QString::number(startTime, 'f', 6)
+             << "-i" << inputFile
+             << "-t" << QString::number(duration, 'f', 6)
+             << "-c:a" << "copy"
+             << outputFile;
+
+        qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
+
+        QProcess proc;
+        proc.start("/usr/bin/ffmpeg", args);
+
+        if (!proc.waitForStarted(5000)) {
+            setError("FFmpeg failed to start");
+            return false;
+        }
+
+        if (!proc.waitForFinished(300000)) {
+            setError("FFmpeg timed out");
+            proc.kill();
+            return false;
+        }
+
+        if (proc.exitCode() != 0) {
+            setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
+            return false;
+        }
+
+        return true;
+    }
+
+    // For multiple segments, cut each and concatenate
+    QFileInfo outInfo(outputFile);
+    QString tempDir = outInfo.absolutePath();
+    QStringList segmentFiles;
+
+    for (int i = 0; i < cutList.size(); ++i) {
+        double startTime = cutList[i].first;
+        double duration = cutList[i].second - cutList[i].first;
+
+        QString segmentFile = QString("%1/.audio_seg_%2.%3")
+            .arg(tempDir).arg(i).arg(outInfo.suffix());
+
+        QStringList args;
+        args << "-y"
+             << "-ss" << QString::number(startTime, 'f', 6)
+             << "-i" << inputFile
+             << "-t" << QString::number(duration, 'f', 6)
+             << "-c:a" << "copy"
+             << segmentFile;
+
+        qDebug() << "  Segment" << i << ":" << startTime << "->" << (startTime + duration);
+
+        QProcess proc;
+        proc.start("/usr/bin/ffmpeg", args);
+
+        if (!proc.waitForStarted(5000) || !proc.waitForFinished(300000)) {
+            for (const QString& f : segmentFiles) QFile::remove(f);
+            setError("FFmpeg failed for segment");
+            return false;
+        }
+
+        if (proc.exitCode() != 0) {
+            for (const QString& f : segmentFiles) QFile::remove(f);
+            setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
+            return false;
+        }
+
+        segmentFiles.append(segmentFile);
+    }
+
+    // Create concat list file
+    QString concatList = tempDir + "/.concat_audio.txt";
+    QFile listFile(concatList);
+    if (!listFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        for (const QString& f : segmentFiles) QFile::remove(f);
+        setError("Cannot create concat list");
+        return false;
+    }
+
+    QTextStream out(&listFile);
+    for (const QString& seg : segmentFiles) {
+        out << "file '" << seg << "'\n";
+    }
+    listFile.close();
+
+    // Concatenate segments
+    QStringList concatArgs;
+    concatArgs << "-y" << "-f" << "concat" << "-safe" << "0"
+               << "-i" << concatList
+               << "-c:a" << "copy"
+               << outputFile;
+
+    qDebug() << "  Concatenating" << segmentFiles.size() << "segments";
+
+    QProcess concatProc;
+    concatProc.start("/usr/bin/ffmpeg", concatArgs);
+
+    if (!concatProc.waitForStarted(5000) || !concatProc.waitForFinished(300000)) {
+        setError("FFmpeg concat failed");
+    }
+
+    // Cleanup temp files
+    QFile::remove(concatList);
+    for (const QString& f : segmentFiles) {
+        QFile::remove(f);
+    }
+
+    if (concatProc.exitCode() != 0) {
+        setError(QString("FFmpeg concat failed: %1").arg(QString::fromUtf8(concatProc.readAllStandardError())));
+        return false;
+    }
+
+    qDebug() << "cutAudioStream: Complete";
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Cut SRT subtitle file
+// SRT is text-based, so we parse and filter by time ranges
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
+                                      const QString& outputFile,
+                                      const QList<QPair<double, double>>& cutList)
+{
+    if (!QFile::exists(inputFile)) {
+        setError(QString("SRT file not found: %1").arg(inputFile));
+        return false;
+    }
+
+    qDebug() << "cutSrtSubtitle: Cutting SRT file";
+    qDebug() << "  Input:" << inputFile;
+    qDebug() << "  Output:" << outputFile;
+
+    QFile inFile(inputFile);
+    if (!inFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        setError("Cannot open input SRT file");
+        return false;
+    }
+
+    QFile outFile(outputFile);
+    if (!outFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        inFile.close();
+        setError("Cannot create output SRT file");
+        return false;
+    }
+
+    QTextStream in(&inFile);
+    QTextStream srtOut(&outFile);
+
+    int outputIndex = 1;
+    QString line;
+    int state = 0; // 0=expect index, 1=expect time, 2=expect text
+
+    double startTime = 0, endTime = 0;
+    QStringList textLines;
+
+    // Calculate cumulative duration for offset calculation
+    QList<double> cumulativeDurations;
+    double totalKept = 0;
+    for (int i = 0; i < cutList.size(); ++i) {
+        cumulativeDurations.append(totalKept);
+        totalKept += cutList[i].second - cutList[i].first;
+    }
+
+    while (!in.atEnd()) {
+        line = in.readLine();
+
+        if (state == 0) {
+            // Expect subtitle index
+            bool ok;
+            line.trimmed().toInt(&ok);
+            if (ok) {
+                state = 1;
+            }
+        }
+        else if (state == 1) {
+            // Expect time code: 00:01:23,456 --> 00:01:25,789
+            QRegularExpression timeRe("(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})\\s*-->\\s*(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})");
+            QRegularExpressionMatch match = timeRe.match(line);
+
+            if (match.hasMatch()) {
+                startTime = match.captured(1).toInt() * 3600 +
+                            match.captured(2).toInt() * 60 +
+                            match.captured(3).toInt() +
+                            match.captured(4).toInt() / 1000.0;
+                endTime = match.captured(5).toInt() * 3600 +
+                          match.captured(6).toInt() * 60 +
+                          match.captured(7).toInt() +
+                          match.captured(8).toInt() / 1000.0;
+                state = 2;
+                textLines.clear();
+            } else {
+                state = 0;
+            }
+        }
+        else if (state == 2) {
+            // Collect text lines until empty line
+            if (line.trimmed().isEmpty()) {
+                // End of subtitle entry - check if it falls within kept segments
+                for (int i = 0; i < cutList.size(); ++i) {
+                    double segStart = cutList[i].first;
+                    double segEnd = cutList[i].second;
+
+                    // Check if subtitle overlaps with this segment
+                    if (startTime < segEnd && endTime > segStart) {
+                        // Calculate adjusted times
+                        double adjStart = qMax(startTime, segStart) - segStart + cumulativeDurations[i];
+                        double adjEnd = qMin(endTime, segEnd) - segStart + cumulativeDurations[i];
+
+                        // Format time code
+                        auto formatTime = [](double t) -> QString {
+                            int h = static_cast<int>(t / 3600);
+                            int m = static_cast<int>((t - h * 3600) / 60);
+                            int s = static_cast<int>(t - h * 3600 - m * 60);
+                            int ms = static_cast<int>((t - static_cast<int>(t)) * 1000);
+                            return QString("%1:%2:%3,%4")
+                                .arg(h, 2, 10, QChar('0'))
+                                .arg(m, 2, 10, QChar('0'))
+                                .arg(s, 2, 10, QChar('0'))
+                                .arg(ms, 3, 10, QChar('0'));
+                        };
+
+                        srtOut << outputIndex++ << "\n";
+                        srtOut << formatTime(adjStart) << " --> " << formatTime(adjEnd) << "\n";
+                        for (const QString& textLine : textLines) {
+                            srtOut << textLine << "\n";
+                        }
+                        srtOut << "\n";
+                        break; // Only write once per subtitle
+                    }
+                }
+                state = 0;
+            } else {
+                textLines.append(line);
+            }
+        }
+    }
+
+    inFile.close();
+    outFile.close();
+
+    qDebug() << "cutSrtSubtitle: Complete";
+    qDebug() << "  Subtitles written:" << (outputIndex - 1);
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Complete ES cutting workflow: video + audio + subtitles + mux
+// This is the main entry point for cutting demuxed ES files
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::cutAndMuxElementaryStreams(const QString& videoES,
+                                                  const QString& audioES,
+                                                  const QString& outputFile,
+                                                  const QList<QPair<double, double>>& cutList,
+                                                  double frameRate)
+{
+    qDebug() << "cutAndMuxElementaryStreams: Complete ES workflow";
+    qDebug() << "  Video ES:" << videoES;
+    qDebug() << "  Audio ES:" << audioES;
+    qDebug() << "  Output:" << outputFile;
+
+    // Get frame rate from .info file if not provided
+    QString infoFile = TTESInfo::findInfoFile(videoES);
+    if (!infoFile.isEmpty()) {
+        TTESInfo esInfo(infoFile);
+        if (esInfo.isLoaded() && frameRate <= 0 && esInfo.frameRate() > 0) {
+            frameRate = esInfo.frameRate();
+        }
+    }
+    if (frameRate <= 0) frameRate = 25.0;
+
+    qDebug() << "  Frame rate:" << frameRate << "fps";
+
+    // Create temp file paths
+    QFileInfo videoInfo(videoES);
+    QString tempDir = videoInfo.absolutePath();
+    QString cutVideoES = tempDir + "/." + videoInfo.completeBaseName() + "_cut." + videoInfo.suffix();
+    QString cutAudioES;
+    QString cutSrtFile;
+
+    // Step 1: Open and index the video ES
+    if (!openFile(videoES)) {
+        setError(QString("Cannot open video ES: %1").arg(lastError()));
+        return false;
+    }
+
+    if (!buildFrameIndex()) {
+        closeFile();
+        setError(QString("Cannot build frame index: %1").arg(lastError()));
+        return false;
+    }
+
+    // Step 2: Cut video ES (byte-level)
+    qDebug() << "Step 1: Cutting video ES...";
+    if (!cutElementaryStream(videoES, cutVideoES, cutList)) {
+        closeFile();
+        setError(QString("Video cut failed: %1").arg(lastError()));
+        return false;
+    }
+    closeFile();
+
+    // Step 3: Cut audio ES (time-based) if provided
+    bool hasAudio = !audioES.isEmpty() && QFile::exists(audioES);
+    if (hasAudio) {
+        QFileInfo audioFileInfo(audioES);
+        cutAudioES = tempDir + "/." + audioFileInfo.completeBaseName() + "_cut." + audioFileInfo.suffix();
+
+        qDebug() << "Step 2: Cutting audio ES...";
+        if (!cutAudioStream(audioES, cutAudioES, cutList)) {
+            QFile::remove(cutVideoES);
+            setError(QString("Audio cut failed: %1").arg(lastError()));
+            return false;
+        }
+    }
+
+    // Step 4: Cut SRT subtitles if present
+    // Look for SRT file matching video name
+    QString baseName = videoInfo.completeBaseName();
+    if (baseName.endsWith("_video")) {
+        baseName = baseName.left(baseName.length() - 6);
+    }
+    QString srtFile = tempDir + "/" + baseName + ".srt";
+
+    bool hasSrt = QFile::exists(srtFile);
+    if (hasSrt) {
+        cutSrtFile = tempDir + "/." + baseName + "_cut.srt";
+
+        qDebug() << "Step 3: Cutting SRT subtitles...";
+        if (!cutSrtSubtitle(srtFile, cutSrtFile, cutList)) {
+            qDebug() << "  Warning: SRT cutting failed, continuing without subtitles";
+            hasSrt = false;
+        }
+    }
+
+    // Step 5: Mux to final output using mkvmerge
+    qDebug() << "Step 4: Muxing to final output...";
+
+    // Calculate frame duration in nanoseconds
+    int64_t frameDurationNs = static_cast<int64_t>(1000000000.0 / frameRate);
+
+    QStringList muxArgs;
+    muxArgs << "-o" << outputFile
+            << "--default-duration" << QString("0:%1ns").arg(frameDurationNs)
+            << cutVideoES;
+
+    if (hasAudio) {
+        muxArgs << cutAudioES;
+    }
+
+    if (hasSrt) {
+        muxArgs << cutSrtFile;
+    }
+
+    qDebug() << "  mkvmerge" << muxArgs.join(" ");
+
+    QProcess muxProc;
+    muxProc.start("mkvmerge", muxArgs);
+
+    if (!muxProc.waitForStarted(5000)) {
+        QFile::remove(cutVideoES);
+        if (hasAudio) QFile::remove(cutAudioES);
+        if (hasSrt) QFile::remove(cutSrtFile);
+        setError("mkvmerge failed to start");
+        return false;
+    }
+
+    if (!muxProc.waitForFinished(300000)) {
+        QFile::remove(cutVideoES);
+        if (hasAudio) QFile::remove(cutAudioES);
+        if (hasSrt) QFile::remove(cutSrtFile);
+        setError("mkvmerge timed out");
+        muxProc.kill();
+        return false;
+    }
+
+    // Cleanup temp files
+    QFile::remove(cutVideoES);
+    if (hasAudio) QFile::remove(cutAudioES);
+    if (hasSrt) QFile::remove(cutSrtFile);
+
+    if (muxProc.exitCode() != 0 && muxProc.exitCode() != 1) {
+        setError(QString("mkvmerge failed (exit %1): %2")
+            .arg(muxProc.exitCode())
+            .arg(QString::fromUtf8(muxProc.readAllStandardError())));
+        return false;
+    }
+
+    if (!QFile::exists(outputFile)) {
+        setError("mkvmerge did not create output file");
+        return false;
+    }
+
+    qDebug() << "cutAndMuxElementaryStreams: Complete!";
+    qDebug() << "  Output:" << outputFile;
 
     return true;
 }
