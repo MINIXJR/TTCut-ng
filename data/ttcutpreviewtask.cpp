@@ -212,6 +212,14 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   QString sourceFile = vStream->filePath();
   double frameRate = vStream->frameRate();
 
+  // Check for audio stream
+  QString audioFile;
+  bool hasAudio = (firstItem.avDataItem()->audioCount() > 0);
+  if (hasAudio) {
+    audioFile = firstItem.avDataItem()->audioStreamAt(0)->filePath();
+    qDebug() << "H.264 preview with audio:" << audioFile;
+  }
+
   // Calculate time range from frame indices
   // For multiple cuts, we need to handle each segment
   double totalDuration = 0;
@@ -247,12 +255,25 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     if (isES) {
       // ES files: -ss after -i (slower but works), need to re-encode for accurate cuts
       // Also need to set frame rate since ES has no timestamps
-      ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -ss %3 -t %4 -c:v libx264 -preset ultrafast -crf 18 \"%5\" 2>&1")
-          .arg(frameRate, 0, 'f', 3)
-          .arg(sourceFile)
-          .arg(startTime, 0, 'f', 3)
-          .arg(duration, 0, 'f', 3)
-          .arg(segmentFile);
+      if (hasAudio && !audioFile.isEmpty()) {
+        // Include audio from separate ES file
+        ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -i \"%3\" -ss %4 -t %5 "
+                           "-map 0:v -map 1:a -c:v libx264 -preset ultrafast -crf 18 -c:a copy \"%6\" 2>&1")
+            .arg(frameRate, 0, 'f', 3)
+            .arg(sourceFile)
+            .arg(audioFile)
+            .arg(startTime, 0, 'f', 3)
+            .arg(duration, 0, 'f', 3)
+            .arg(segmentFile);
+      } else {
+        // Video only
+        ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -ss %3 -t %4 -c:v libx264 -preset ultrafast -crf 18 \"%5\" 2>&1")
+            .arg(frameRate, 0, 'f', 3)
+            .arg(sourceFile)
+            .arg(startTime, 0, 'f', 3)
+            .arg(duration, 0, 'f', 3)
+            .arg(segmentFile);
+      }
     } else {
       // Container files: -ss before -i for fast seeking with stream copy
       ffmpegCmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -c copy \"%4\" 2>&1")

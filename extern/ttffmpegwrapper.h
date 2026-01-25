@@ -174,6 +174,9 @@ public:
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
     int frameCount() const { return mFrameIndex.size(); }
 
+    // Get actual frame rate used (after buildFrameIndex, includes .info file override)
+    double actualFrameRate() const { return mActualFrameRate; }
+
     // Build GOP index
     bool buildGOPIndex();
     const QList<TTGOPInfo>& gopIndex() const { return mGOPIndex; }
@@ -250,6 +253,9 @@ private:
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;
     QList<TTGOPInfo> mGOPIndex;
+
+    // Actual frame rate (from .info file or stream analysis)
+    double mActualFrameRate;
 
     // Error handling
     QString mLastError;

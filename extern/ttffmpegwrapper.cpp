@@ -65,6 +65,7 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mVideoStreamIndex(-1)
     , mAudioStreamIndex(-1)
     , mCurrentFrameIndex(-1)
+    , mActualFrameRate(0)
 {
     initializeFFmpeg();
 }
@@ -657,6 +658,9 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
             frameRate = 25.0; // Default fallback
             qDebug() << "Invalid frame rate, using default:" << frameRate;
         }
+
+        // Store the actual frame rate being used
+        mActualFrameRate = frameRate;
 
         // Get time base from stream
         AVStream* videoStream = mFormatCtx->streams[videoStreamIndex];
@@ -1708,7 +1712,7 @@ bool TTFFmpegWrapper::cutAndMuxElementaryStreams(const QString& videoES,
                                                   const QList<QPair<double, double>>& cutList,
                                                   double frameRate)
 {
-    qDebug() << "cutAndMuxElementaryStreams: Complete ES workflow";
+    qDebug() << "cutAndMuxElementaryStreams: FFmpeg-based ES workflow (same as preview)";
     qDebug() << "  Video ES:" << videoES;
     qDebug() << "  Audio ES:" << audioES;
     qDebug() << "  Output:" << outputFile;
@@ -1725,122 +1729,95 @@ bool TTFFmpegWrapper::cutAndMuxElementaryStreams(const QString& videoES,
 
     qDebug() << "  Frame rate:" << frameRate << "fps";
 
-    // Create temp file paths
+    bool hasAudio = !audioES.isEmpty() && QFile::exists(audioES);
     QFileInfo videoInfo(videoES);
     QString tempDir = videoInfo.absolutePath();
-    QString cutVideoES = tempDir + "/." + videoInfo.completeBaseName() + "_cut." + videoInfo.suffix();
-    QString cutAudioES;
-    QString cutSrtFile;
 
-    // Step 1: Open and index the video ES
-    if (!openFile(videoES)) {
-        setError(QString("Cannot open video ES: %1").arg(lastError()));
-        return false;
-    }
+    // Use same approach as preview: ffmpeg with re-encoding for each segment, then concat
+    QStringList segmentFiles;
 
-    if (!buildFrameIndex()) {
-        closeFile();
-        setError(QString("Cannot build frame index: %1").arg(lastError()));
-        return false;
-    }
+    for (int i = 0; i < cutList.size(); i++) {
+        double startTime = cutList[i].first;
+        double duration = cutList[i].second - cutList[i].first;
 
-    // Step 2: Cut video ES (byte-level)
-    qDebug() << "Step 1: Cutting video ES...";
-    if (!cutElementaryStream(videoES, cutVideoES, cutList)) {
-        closeFile();
-        setError(QString("Video cut failed: %1").arg(lastError()));
-        return false;
-    }
-    closeFile();
+        QString segmentFile = QString("%1/.segment_%2.mkv").arg(tempDir).arg(i);
+        segmentFiles << segmentFile;
 
-    // Step 3: Cut audio ES (time-based) if provided
-    bool hasAudio = !audioES.isEmpty() && QFile::exists(audioES);
-    if (hasAudio) {
-        QFileInfo audioFileInfo(audioES);
-        cutAudioES = tempDir + "/." + audioFileInfo.completeBaseName() + "_cut." + audioFileInfo.suffix();
+        // Build ffmpeg command - same as preview approach
+        QString ffmpegCmd;
+        if (hasAudio) {
+            // Include audio from separate ES file
+            ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -i \"%3\" -ss %4 -t %5 "
+                               "-map 0:v -map 1:a -c:v libx264 -preset fast -crf 18 -c:a copy \"%6\" 2>&1")
+                .arg(frameRate, 0, 'f', 3)
+                .arg(videoES)
+                .arg(audioES)
+                .arg(startTime, 0, 'f', 3)
+                .arg(duration, 0, 'f', 3)
+                .arg(segmentFile);
+        } else {
+            // Video only
+            ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -ss %3 -t %4 -c:v libx264 -preset fast -crf 18 \"%5\" 2>&1")
+                .arg(frameRate, 0, 'f', 3)
+                .arg(videoES)
+                .arg(startTime, 0, 'f', 3)
+                .arg(duration, 0, 'f', 3)
+                .arg(segmentFile);
+        }
 
-        qDebug() << "Step 2: Cutting audio ES...";
-        if (!cutAudioStream(audioES, cutAudioES, cutList)) {
-            QFile::remove(cutVideoES);
-            setError(QString("Audio cut failed: %1").arg(lastError()));
+        qDebug() << "Segment" << i << "extract:" << ffmpegCmd;
+        int ret = system(qPrintable(ffmpegCmd));
+        if (ret != 0) {
+            qDebug() << "ffmpeg segment extraction failed with code:" << ret;
+            // Cleanup
+            for (const QString& seg : segmentFiles) {
+                QFile::remove(seg);
+            }
+            setError(QString("FFmpeg segment %1 failed").arg(i));
             return false;
         }
     }
 
-    // Step 4: Cut SRT subtitles if present
-    // Look for SRT file matching video name
-    QString baseName = videoInfo.completeBaseName();
-    if (baseName.endsWith("_video")) {
-        baseName = baseName.left(baseName.length() - 6);
-    }
-    QString srtFile = tempDir + "/" + baseName + ".srt";
+    // Concatenate all segments
+    if (segmentFiles.size() == 1) {
+        // Single segment - just rename
+        QFile::rename(segmentFiles[0], outputFile);
+    } else if (segmentFiles.size() > 1) {
+        // Multiple segments - use ffmpeg concat
+        QString concatFile = QString("%1/.concat_list.txt").arg(tempDir);
+        QFile listFile(concatFile);
+        if (listFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&listFile);
+            for (const QString& seg : segmentFiles) {
+                out << "file '" << seg << "'\n";
+            }
+            listFile.close();
 
-    bool hasSrt = QFile::exists(srtFile);
-    if (hasSrt) {
-        cutSrtFile = tempDir + "/." + baseName + "_cut.srt";
+            QString concatCmd = QString("ffmpeg -y -f concat -safe 0 -i \"%1\" -c copy \"%2\" 2>&1")
+                .arg(concatFile).arg(outputFile);
+            qDebug() << "Concat:" << concatCmd;
+            int ret = system(qPrintable(concatCmd));
 
-        qDebug() << "Step 3: Cutting SRT subtitles...";
-        if (!cutSrtSubtitle(srtFile, cutSrtFile, cutList)) {
-            qDebug() << "  Warning: SRT cutting failed, continuing without subtitles";
-            hasSrt = false;
+            QFile::remove(concatFile);
+
+            if (ret != 0) {
+                qDebug() << "ffmpeg concat failed with code:" << ret;
+                for (const QString& seg : segmentFiles) {
+                    QFile::remove(seg);
+                }
+                setError("FFmpeg concat failed");
+                return false;
+            }
+        }
+
+        // Cleanup segment files
+        for (const QString& seg : segmentFiles) {
+            QFile::remove(seg);
         }
     }
 
-    // Step 5: Mux to final output using mkvmerge
-    qDebug() << "Step 4: Muxing to final output...";
-
-    // Calculate frame duration in nanoseconds
-    int64_t frameDurationNs = static_cast<int64_t>(1000000000.0 / frameRate);
-
-    QStringList muxArgs;
-    muxArgs << "-o" << outputFile
-            << "--default-duration" << QString("0:%1ns").arg(frameDurationNs)
-            << cutVideoES;
-
-    if (hasAudio) {
-        muxArgs << cutAudioES;
-    }
-
-    if (hasSrt) {
-        muxArgs << cutSrtFile;
-    }
-
-    qDebug() << "  mkvmerge" << muxArgs.join(" ");
-
-    QProcess muxProc;
-    muxProc.start("mkvmerge", muxArgs);
-
-    if (!muxProc.waitForStarted(5000)) {
-        QFile::remove(cutVideoES);
-        if (hasAudio) QFile::remove(cutAudioES);
-        if (hasSrt) QFile::remove(cutSrtFile);
-        setError("mkvmerge failed to start");
-        return false;
-    }
-
-    if (!muxProc.waitForFinished(300000)) {
-        QFile::remove(cutVideoES);
-        if (hasAudio) QFile::remove(cutAudioES);
-        if (hasSrt) QFile::remove(cutSrtFile);
-        setError("mkvmerge timed out");
-        muxProc.kill();
-        return false;
-    }
-
-    // Cleanup temp files
-    QFile::remove(cutVideoES);
-    if (hasAudio) QFile::remove(cutAudioES);
-    if (hasSrt) QFile::remove(cutSrtFile);
-
-    if (muxProc.exitCode() != 0 && muxProc.exitCode() != 1) {
-        setError(QString("mkvmerge failed (exit %1): %2")
-            .arg(muxProc.exitCode())
-            .arg(QString::fromUtf8(muxProc.readAllStandardError())));
-        return false;
-    }
-
     if (!QFile::exists(outputFile)) {
-        setError("mkvmerge did not create output file");
+        setError("Output file was not created");
         return false;
     }
 

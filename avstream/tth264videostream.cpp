@@ -197,6 +197,13 @@ int TTH264VideoStream::createHeaderList()
         return -1;
     }
 
+    // Update frame rate from actual value used (may come from .info file)
+    if (mFFmpeg->actualFrameRate() > 0) {
+        frame_rate = static_cast<float>(mFFmpeg->actualFrameRate());
+        mSPS->setFrameRate(mFFmpeg->actualFrameRate());
+        qDebug() << "Updated frame rate from buildFrameIndex:" << frame_rate;
+    }
+
     emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 70);
 
     // Build GOP index

@@ -1010,9 +1010,24 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   log->infoMsg(__FILE__, __LINE__, "Using avcut-style smart cut (direct writing, no global headers, GOP-based)");
 
   // Get source file and frame rate from first cut item
-  TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
+  TTAVItem* avItem = cutList->at(0).avDataItem();
+  TTVideoStream* vStream = avItem->videoStream();
   QString sourceFile = vStream->filePath();
   double frameRate = vStream->frameRate();
+
+  // Check for audio stream
+  QString audioFile;
+  bool hasAudio = (avItem->audioCount() > 0);
+  if (hasAudio) {
+    audioFile = avItem->audioStreamAt(0)->filePath();
+    log->infoMsg(__FILE__, __LINE__, QString("Audio file: %1").arg(audioFile));
+  }
+
+  // Check if source is an elementary stream
+  QString suffix = QFileInfo(sourceFile).suffix().toLower();
+  bool isES = (suffix == "264" || suffix == "h264" ||
+               suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+               suffix == "m2v" || suffix == "mpv");
 
   emit statusReport(StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
 
@@ -1040,17 +1055,24 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     keepList.append(qMakePair(cutInTime, cutOutTime));
   }
 
-  // Use TTFFmpegWrapper's smartCut method (avcut-style processing)
   TTFFmpegWrapper ffmpeg;
-  if (!ffmpeg.openFile(sourceFile)) {
-    log->errorMsg(__FILE__, __LINE__, QString("Failed to open source file: %1").arg(ffmpeg.lastError()));
-    emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not open source"), 0);
-    return;
+  bool success;
+
+  // For ES files with audio, use cutAndMuxElementaryStreams which handles audio properly
+  if (isES) {
+    log->infoMsg(__FILE__, __LINE__, "Using cutAndMuxElementaryStreams for ES file");
+    success = ffmpeg.cutAndMuxElementaryStreams(sourceFile, audioFile, finalOutput, keepList, frameRate);
+  } else {
+    // For container files, use smartCut
+    if (!ffmpeg.openFile(sourceFile)) {
+      log->errorMsg(__FILE__, __LINE__, QString("Failed to open source file: %1").arg(ffmpeg.lastError()));
+      emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not open source"), 0);
+      return;
+    }
+
+    log->infoMsg(__FILE__, __LINE__, QString("Starting smartCut: %1 segments to keep").arg(keepList.size()));
+    success = ffmpeg.smartCut(finalOutput, keepList);
   }
-
-  log->infoMsg(__FILE__, __LINE__, QString("Starting smartCut: %1 segments to keep").arg(keepList.size()));
-
-  bool success = ffmpeg.smartCut(finalOutput, keepList);
 
   if (!success) {
     log->errorMsg(__FILE__, __LINE__, QString("smartCut failed: %1").arg(ffmpeg.lastError()));
