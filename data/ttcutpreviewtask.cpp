@@ -29,6 +29,8 @@
 
 #include "ttcutpreviewtask.h"
 
+#include <QFileInfo>
+
 #include "../common/ttexception.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/istatusreporter.h"
@@ -234,12 +236,31 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     }
 
     // Build ffmpeg command
-    // Use -ss before -i for fast seeking, then -t for duration
-    QString ffmpegCmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -c copy \"%4\" 2>&1")
-        .arg(startTime, 0, 'f', 3)
-        .arg(sourceFile)
-        .arg(duration, 0, 'f', 3)
-        .arg(segmentFile);
+    // For ES files (no timestamps), put -ss AFTER -i for accurate seeking
+    // For container files, -ss before -i is faster
+    QString suffix = QFileInfo(sourceFile).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
+
+    QString ffmpegCmd;
+    if (isES) {
+      // ES files: -ss after -i (slower but works), need to re-encode for accurate cuts
+      // Also need to set frame rate since ES has no timestamps
+      ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -ss %3 -t %4 -c:v libx264 -preset ultrafast -crf 18 \"%5\" 2>&1")
+          .arg(frameRate, 0, 'f', 3)
+          .arg(sourceFile)
+          .arg(startTime, 0, 'f', 3)
+          .arg(duration, 0, 'f', 3)
+          .arg(segmentFile);
+    } else {
+      // Container files: -ss before -i for fast seeking with stream copy
+      ffmpegCmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -c copy \"%4\" 2>&1")
+          .arg(startTime, 0, 'f', 3)
+          .arg(sourceFile)
+          .arg(duration, 0, 'f', 3)
+          .arg(segmentFile);
+    }
 
     qDebug() << "H.264 preview extract:" << ffmpegCmd;
     int ret = system(qPrintable(ffmpegCmd));

@@ -1852,6 +1852,16 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         qDebug() << "smartCut: Input is elementary stream - using byte-level cutting";
         qDebug() << "  (This avoids timestamp discontinuity issues)";
 
+        // Build frame index first (required for byte-level cutting)
+        if (mFrameIndex.isEmpty()) {
+            qDebug() << "smartCut: Building frame index for ES cutting...";
+            if (!buildFrameIndex()) {
+                setError("Failed to build frame index for ES cutting");
+                return false;
+            }
+            qDebug() << "smartCut: Frame index built:" << mFrameIndex.size() << "frames";
+        }
+
         QString esFile = QString::fromUtf8(mFormatCtx->url);
         QString esOutput = outputFile;
 
