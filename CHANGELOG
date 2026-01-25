@@ -2,6 +2,23 @@
 TTCut-Changelog
 --------------------------------------------------------------------------------
 
+0.50.0: * H.264/H.265 Elementary Stream (ES) support (by MINIXJR & Claude)
+        * Frame-accurate cutting for H.264/H.265 ES files using FFmpeg re-encoding
+        * ES file handling:
+          - Byte-based seeking with avio_seek (ES files have no timestamps)
+          - Frame rate detection from companion .info files
+          - Separate audio ES file support with proper muxing
+        * Stutter-free cutting using segment extraction and concatenation
+        * Preview generation for H.264/H.265 with audio support
+        * UI improvements:
+          - Audio/video stream length mismatch warning (>1 second difference)
+          - Confirmation dialog when clicking "New Project" with loaded video
+          - Cut completion dialog now shows output file size
+          - Prev/Next buttons in Preview dialog for quick cut navigation
+        * Documentation updates:
+          - CLAUDE.md updated with ES file handling documentation
+          - TODO reorganized with priority features
+
 0.40.0: * Adopt UI design and bug fixes from ttcut fork
         * UI restructuring:
           - Restructure Cut List to 3-column layout with buttons on left/right
