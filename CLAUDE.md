@@ -168,6 +168,7 @@ A small stutter (~0.14 seconds / ~7 frames) may occur at middle cut points. This
 **IMPORTANT - Lessons learned from experimentation (do NOT repeat these):**
 - **Re-encode as little as possible** - Encoding more frames (e.g., to 2nd keyframe instead of 1st) makes stutter WORSE, not better
 - **Do NOT try encoding larger sections** - This was tested and increases stutter at transitions
+- **Do NOT try MMCO fix (encoding extra GOP after encode sections)** - Tested 2026-01-25, makes stutter significantly WORSE
 - The best results come from encoding only the minimum required frames (from cut point to next keyframe)
 - Using `-bf 0` (no B-frames) in encoded sections slightly improves transitions
 - Various concat methods (FFmpeg concat demuxer, concat protocol, tsMuxeR) all have similar stutter issues
