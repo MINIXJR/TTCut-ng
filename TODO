@@ -23,6 +23,36 @@ TODO list for project TTCut-ng
     - Currently requires companion .info file from demux script
     - Could parse SPS for frame rate hints
 
+=== Priority Features (User Requests) ===
+
+[ ] Stream change detection on file load
+    - Detect resolution changes during playback
+    - Detect AC3 audio format changes (e.g., stereo→5.1 or codec switch)
+    - Automatically save detected change points as markers
+    - Useful for finding ad breaks in DVB recordings
+
+[ ] Video zoom to remove black bars
+    - Zoom video display so top black bar is not visible
+    - Useful for 16:9 content with letterboxing
+    - Should be toggleable
+
+[ ] I-Frame thumbnail browser popup
+    - New popup window showing I-frames as thumbnails from current position
+    - Grid layout: 6x6 thumbnails per page
+    - Paginated navigation (next/prev page)
+    - Double-click on thumbnail: jump to that frame position and close popup
+    - Useful for quick visual navigation to scene changes
+
+[ ] Play button in "Current Frame" window
+    - Add Play/Stop button to play video from current position
+    - Playback within the current frame widget (not external player)
+    - Click Play again or Stop button to pause
+    - Frame-by-frame control remains available
+
+[ ] Jump to next cut in Preview dialog
+    - Add "Next Cut" button in preview window
+    - Quickly navigate between cut points during preview review
+
 === UI Improvements ===
 
 [ ] Make the current frame position clickable (enter frame number directly)
