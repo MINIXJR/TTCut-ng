@@ -1,18 +1,57 @@
 -------------------------------------------------------------------------------
-TODO list for project TTCut
+TODO list for project TTCut-ng
 -------------------------------------------------------------------------------
 
-* Show a warning if audio and video length are different
+=== H.264/H.265 Support ===
 
-* Remove some unused settings and buttons without function
-* Find a solution for realtime playback demuxed video stream (play-button)
-* Add option settings for transcode and mplex
-* Implement plugin interface for external tools (transcode, mplex, mplayer)
-* Write a FAQ
-  1) If mplayer don't work properly check your default -vo settings. 
-     TTCut assumes that you use -vo x11.
-     Also check that you have the right permissons to /dev/dsp
-* Make the current frame position clickable (enter current frame positon)
-* More keyboard short cuts
-* User warning when click "New Project" an video stream is loaded
-* Display the resulting stream lengths after cut
+[DONE] ES file frame-accurate cutting with FFmpeg re-encoding
+[DONE] ES file seeking (avio_seek for byte-based access)
+[DONE] Frame rate detection from .info files
+[DONE] Audio support for ES files in preview and cutting
+[DONE] Preview generation for H.264/H.265
+
+[ ] Container smartCut stutter at middle cut points (~0.14s)
+    - Caused by B-frame reordering discontinuities at encode→copy transitions
+    - See H264_SMART_CUT_TRACKING.md for tested approaches
+    - Low priority: ES workflow works perfectly
+
+[ ] Hardware-accelerated encoding (VAAPI/NVENC)
+    - Would speed up ES cutting significantly
+    - Currently uses libx264 software encoding
+
+[ ] Auto-detect .info file or extract frame rate from stream
+    - Currently requires companion .info file from demux script
+    - Could parse SPS for frame rate hints
+
+=== UI Improvements ===
+
+[ ] Make the current frame position clickable (enter frame number directly)
+[ ] More keyboard shortcuts
+[ ] User warning when clicking "New Project" with video stream loaded
+[ ] Display the resulting stream lengths after cut
+[ ] Remove unused settings and buttons without function
+
+=== Playback ===
+
+[DONE] Migrated from mplayer to mpv for preview playback
+[DONE] Subtitle overlay in mpv preview (--sub-file)
+
+[ ] Realtime playback of demuxed video stream (play-button)
+    - Currently opens external mpv process
+    - Consider embedded playback widget?
+
+=== External Tools ===
+
+[ ] Add option settings for transcode (ffmpeg) and mplex
+[ ] Implement plugin interface for external tools (ffmpeg, mplex, mpv, mkvmerge)
+
+=== Documentation ===
+
+[ ] Write/update FAQ
+    - mpv configuration (replaced mplayer)
+    - H.264/H.265 workflow with ES files
+    - Wayland requirements (QT_QPA_PLATFORM=xcb)
+
+=== Other ===
+
+[ ] Show warning if audio and video length are different
