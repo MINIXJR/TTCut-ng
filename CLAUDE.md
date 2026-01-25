@@ -165,6 +165,9 @@ Frame-accurate cutting for H.264/H.265 video streams using an avcut-style approa
 **Known limitation:**
 A small stutter (~0.14 seconds / ~7 frames) may occur at middle cut points. This is caused by B-frame reordering discontinuities when transitioning from encoded sections to stream-copied sections. Various approaches were tried (DTS alignment, gap filling, ffmpeg genpts, mkvmerge fix-bitstream) but none fully resolved this issue.
 
+**IMPORTANT: See `H264_SMART_CUT_TRACKING.md` for detailed tracking of all tested approaches!**
+This file documents 20+ approaches that have been tested, including what worked, what failed, and why. ALWAYS read this file before attempting new solutions to avoid repeating failed experiments.
+
 **IMPORTANT - Lessons learned from experimentation (do NOT repeat these):**
 - **Re-encode as little as possible** - Encoding more frames (e.g., to 2nd keyframe instead of 1st) makes stutter WORSE, not better
 - **Do NOT try encoding larger sections** - This was tested and increases stutter at transitions
