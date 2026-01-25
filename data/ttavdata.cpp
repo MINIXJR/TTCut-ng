@@ -437,6 +437,27 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
   if (aStream == 0) return;
 
   avItem->appendAudioEntry(aStream, order);
+
+  // Check for stream length mismatch
+  TTVideoStream* vStream = avItem->videoStream();
+  if (vStream != 0) {
+    QTime videoLength = vStream->streamLengthTime();
+    QTime audioLength = aStream->streamLengthTime();
+
+    // Calculate difference in milliseconds
+    int videoMs = QTime(0, 0, 0).msecsTo(videoLength);
+    int audioMs = QTime(0, 0, 0).msecsTo(audioLength);
+    int diffMs = qAbs(videoMs - audioMs);
+
+    // Warn if difference exceeds 1 second
+    if (diffMs > 1000) {
+      QString videoStr = videoLength.toString("hh:mm:ss.zzz");
+      QString audioStr = audioLength.toString("hh:mm:ss.zzz");
+      QString audioFile = QFileInfo(aStream->filePath()).fileName();
+      qDebug() << "Stream length mismatch: Video=" << videoStr << "Audio=" << audioStr << "Diff=" << diffMs << "ms";
+      emit streamLengthMismatch(videoStr, audioStr, audioFile);
+    }
+  }
 }
 
 /*!

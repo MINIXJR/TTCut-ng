@@ -236,6 +236,8 @@ TTCutMainWindow::TTCutMainWindow()
 
   connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)), SLOT(onAVItemChanged(TTAVItem*)));
   connect(mpAVData, SIGNAL(foundEqualFrame(int)),           currentFrame, SLOT(onGotoFrame(int)));
+  connect(mpAVData, SIGNAL(streamLengthMismatch(const QString&, const QString&, const QString&)),
+          this,     SLOT(onStreamLengthMismatch(const QString&, const QString&, const QString&)));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -327,6 +329,15 @@ void TTCutMainWindow::onOpenSubtitleFile()
 void TTCutMainWindow::onFileNew()
 {
   if (mpAVData->avCount() == 0) return;
+
+  // Warn user before closing current project
+  QMessageBox::StandardButton reply = QMessageBox::question(this,
+      tr("New Project"),
+      tr("This will close the current project.\n\nAll unsaved changes will be lost.\n\nContinue?"),
+      QMessageBox::Yes | QMessageBox::No,
+      QMessageBox::No);
+
+  if (reply != QMessageBox::Yes) return;
 
   closeProject();
 }
@@ -723,8 +734,30 @@ void TTCutMainWindow::onCutFinished()
   QString outputFile = QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath();
   qDebug() << "Showing completion dialog for:" << outputFile;
 
+  // Get output file info for duration display
+  QFileInfo outInfo(outputFile);
+  QString sizeStr;
+  if (outInfo.exists()) {
+    double sizeMB = outInfo.size() / (1024.0 * 1024.0);
+    sizeStr = QString::number(sizeMB, 'f', 1) + " MB";
+  }
+
   QMessageBox::information(this, tr("Cutting Complete"),
-      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile));
+      tr("Video cutting has finished successfully.\n\nOutput file:\n%1\n\nSize: %2")
+      .arg(outputFile).arg(sizeStr));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Stream length mismatch warning
+ */
+void TTCutMainWindow::onStreamLengthMismatch(const QString& videoLength, const QString& audioLength, const QString& audioFile)
+{
+  QMessageBox::warning(this, tr("Stream Length Mismatch"),
+      tr("Audio and video stream lengths differ:\n\n"
+         "Video: %1\n"
+         "Audio: %2 (%3)\n\n"
+         "This may cause synchronization issues.")
+      .arg(videoLength).arg(audioLength).arg(audioFile));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

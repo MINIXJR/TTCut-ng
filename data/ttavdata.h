@@ -188,6 +188,7 @@ class TTAVData : public QObject
     void foundEqualFrame(int index);
     void cutPreviewFinished(TTCutList* cutList);
     void cutFinished();
+    void streamLengthMismatch(const QString& videoLength, const QString& audioLength, const QString& audioFile);
 
   private:
     TTAVItem*      createAVItem();

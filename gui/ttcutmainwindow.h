@@ -110,6 +110,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onOpenProjectFileFinished(const QString&);
 
 		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
+		void onStreamLengthMismatch(const QString& videoLength, const QString& audioLength, const QString& audioFile);
 
 		signals:
 
