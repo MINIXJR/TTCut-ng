@@ -188,6 +188,60 @@ This file documents 20+ approaches that have been tested, including what worked,
 - Investigate how other tools (LosslessCut, avidemux) handle this
 - Consider a completely different approach (e.g., full re-encode with hardware acceleration)
 
+### H.264/H.265 Elementary Stream (ES) File Support
+
+ES files (.264, .h264, .265, .h265, .hevc) require special handling because they lack container metadata:
+
+**Key Technical Challenges Solved:**
+
+1. **ES File Seeking** - ES files have no timestamps, only byte offsets
+   - `av_seek_frame()` fails with EPERM on ES files after building frame index
+   - Solution: Use `avio_seek()` (byte-based seeking) for ES files
+   - After `buildFrameIndex()`, seek back to byte 0 with `avio_seek(mFormatCtx->pb, 0, SEEK_SET)`
+   - For frame seeking, use `mFrameIndex[keyframeIndex].fileOffset` byte positions
+
+2. **Frame Rate Detection** - FFmpeg defaults to 25fps for raw H.264
+   - The raw h264 demuxer cannot determine frame rate from ES data alone
+   - Solution: Read frame rate from companion .info file (created by demux script)
+   - Store in `mActualFrameRate` member and propagate to stream's `frame_rate` after index build
+   - Without this, 50fps video plays in slow motion at 25fps
+
+3. **Audio Handling for ES Files** - Audio is a separate ES file
+   - Container files (MKV/TS) have audio muxed in; ES files don't
+   - Solution: Detect ES by extension, get audio path from `avItem->audioStreamAt(0)->filePath()`
+   - Use separate `-i` input for audio: `ffmpeg -r FPS -i video.264 -i audio.ac3 ...`
+   - Map streams explicitly: `-map 0:v -map 1:a`
+
+4. **Stutter-Free Cutting** - Byte-level copying preserves B-frame problems
+   - Direct ES byte copying (like smartCut for containers) causes stutter at cut points
+   - Solution: Use FFmpeg re-encoding for ES files (`-c:v libx264 -preset fast -crf 18`)
+   - Same approach as preview generation - eliminates B-frame reordering issues
+   - Each segment extracted separately, then concatenated with ffmpeg concat demuxer
+
+**ES Cutting Workflow (cutAndMuxElementaryStreams):**
+```
+1. For each cut segment:
+   - Calculate start time and duration from frame indices and frame rate
+   - Extract with: ffmpeg -y -r RATE -i video.es -i audio.es -ss START -t DUR \
+       -map 0:v -map 1:a -c:v libx264 -preset fast -crf 18 -c:a copy segment_N.mkv
+2. Create concat list file
+3. Concatenate: ffmpeg -y -f concat -safe 0 -i list.txt -c copy output.mkv
+4. Clean up temp segment files
+```
+
+**Verified Results:**
+- Test file: 50fps H.264 ES with AC3 audio
+- Cut: 2 segments (3264 + 1237 frames = 4501 frames expected)
+- Output: 4501 frames, 90.048s duration, no integrity errors
+- Quality: No stutter at any cut point, audio in sync
+
+**Key Files Modified:**
+- `extern/ttffmpegwrapper.h` - Added `actualFrameRate()` getter and `mActualFrameRate` member
+- `extern/ttffmpegwrapper.cpp` - ES seeking, frame rate storage, `cutAndMuxElementaryStreams()` rewrite
+- `avstream/tth264videostream.cpp` - Frame rate update after buildFrameIndex
+- `data/ttcutpreviewtask.cpp` - Audio support in H.264 preview generation
+- `data/ttavdata.cpp` - ES detection and audio path handling in doH264Cut
+
 ### H.264/H.265 Stream Preparation Tools (Companion Project)
 
 A set of analysis and preparation tools is being developed in the h264bitstream fork:
