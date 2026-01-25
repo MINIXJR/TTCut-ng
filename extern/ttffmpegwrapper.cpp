@@ -1269,10 +1269,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         encCtx->thread_count = 1;
         encCtx->codec_tag = 0;
 
-        // TEST: Closed GOP - each GOP is self-contained without external references
-        // This may help with transitions between encoded and stream-copied sections
-        encCtx->flags |= AV_CODEC_FLAG_CLOSED_GOP;
-
         // CRITICAL: Do NOT use global header - we need SPS/PPS in-stream
         // This is the key avcut insight!
         // enc_cctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;  // DON'T DO THIS
@@ -1287,10 +1283,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         return true;
     };
 
-    // Queue to track PTS of frames sent to encoder (encoder may not preserve our PTS values)
-    // With max_b_frames=0, output order matches input order, so we can use a simple queue
-    QList<int64_t> encoderPtsQueue;
-
     // Lambda to close encoder (flush and close)
     auto closeEncoder = [&]() {
         if (!encoderOpen || !encCtx) return;
@@ -1302,15 +1294,13 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         int flushedPackets = 0;
         while (avcodec_receive_packet(encCtx, encPkt) == 0) {
             encPkt->stream_index = 0;
-            // Use our tracked PTS from the queue
-            int64_t ptsInStreamTB = encoderPtsQueue.isEmpty() ? lastVideoDts : encoderPtsQueue.takeFirst();
-            encPkt->pts = ptsInStreamTB;
-            encPkt->dts = ptsInStreamTB;
-            // Track last DTS for continuity
-            if (ptsInStreamTB + frameDurationInStreamTB > lastVideoDts) {
-                lastVideoDts = ptsInStreamTB + frameDurationInStreamTB;
-            }
-            av_packet_rescale_ts(encPkt, inVideoStream->time_base, outVideoStream->time_base);
+            // Without B-frames: DTS = PTS (decode order = presentation order)
+            int64_t dtsInEncTimebase = av_rescale_q(lastVideoDts, inVideoStream->time_base, encCtx->time_base);
+            encPkt->dts = dtsInEncTimebase;
+            encPkt->pts = dtsInEncTimebase;  // Same as DTS since no B-frames
+            // Increment lastVideoDts by one frame duration
+            lastVideoDts += frameDurationInStreamTB;
+            av_packet_rescale_ts(encPkt, encCtx->time_base, outVideoStream->time_base);
             av_interleaved_write_frame(outFmtCtx, encPkt);
             av_packet_unref(encPkt);
             packetsWritten++;
@@ -1328,24 +1318,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
     for (int i = 0; i < cutList.size(); i++) {
         qDebug() << "  Keep segment" << i << ":" << cutList[i].first << "-" << cutList[i].second << "seconds";
     }
-
-    // Keep track of previous GOP for decoder priming
-    // This is needed because B-frames may reference the previous GOP
-    QList<AVPacket*> prevGopPackets;
-
-    // Track the highest timestamp that was written via copying
-    // This prevents duplicate frames when priming outputs B-frames that were already copied
-    double lastCopiedTs = -1.0;
-
-    // Track whether the previous GOP was copied (mode=1)
-    // We should only prime when the previous GOP was copied, not when it was dropped
-    bool prevGopWasCopied = false;
-
-    // Track whether the previous GOP was encoded (mode=2)
-    // When transitioning from ENCODE to COPY, the first COPY GOP must also be re-encoded
-    // to avoid MMCO reference issues (copied frames have MMCO commands that reference
-    // the original stream's reference structure, not our re-encoded structure)
-    bool prevModeWasEncode = false;
 
     // Seek to beginning
     av_seek_frame(mFormatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
@@ -1369,30 +1341,10 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
 
             // If this is a keyframe and we have buffered packets, process the GOP
             if (isKeyframe && !gopPackets.isEmpty()) {
-                // Find actual min/max PTS in GOP (packets are in decode order, not presentation order!)
-                // Due to B-frame reordering, first/last packets may not have min/max PTS
-                int64_t minPts = gopPackets.first()->pts;
-                int64_t maxPts = gopPackets.first()->pts;
-                for (AVPacket* gopPkt : gopPackets) {
-                    if (gopPkt->pts < minPts) minPts = gopPkt->pts;
-                    if (gopPkt->pts > maxPts) maxPts = gopPkt->pts;
-                }
-                double gopStartTs = minPts * av_q2d(inVideoStream->time_base) - streamStartTime;
-                double gopEndTs = maxPts * av_q2d(inVideoStream->time_base) - streamStartTime;
+                double gopStartTs = gopPackets.first()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+                double gopEndTs = gopPackets.last()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
 
                 int mode = getRangeMode(gopStartTs, gopEndTs, cutList);
-
-                // MMCO FIX: When transitioning from ENCODE (mode 2) to COPY (mode 1),
-                // force the first COPY GOP to be re-encoded as well.
-                // This avoids MMCO reference issues: copied frames have MMCO commands
-                // that expect the original stream's reference picture buffer state,
-                // but after re-encoding, our buffer state is different.
-                // By re-encoding the first GOP after a cut point, we create clean
-                // references without stale MMCO commands.
-                if (mode == 1 && prevModeWasEncode) {
-                    qDebug() << "  MMCO FIX: Forcing ENCODE for first GOP after encode transition";
-                    mode = 2;
-                }
 
                 // Log first few GOPs to verify timestamp calculation
                 if (!firstGopLogged || packetsWritten > 0) {
@@ -1412,58 +1364,25 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                     for (AVPacket* gopPkt : gopPackets) {
                         AVPacket* outPkt = av_packet_clone(gopPkt);
                         outPkt->stream_index = 0;
-                        // Adjust both PTS and DTS by the same offset to preserve their relationship
-                        // This is critical for B-frames where PTS and DTS differ
+                        // Adjust PTS to start at 0: subtract first kept PTS and any dropped duration
                         int64_t origPts = outPkt->pts;
-                        int64_t origDts = outPkt->dts;
-                        int64_t timeOffset = firstKeptPts + droppedVideoDuration;
-                        outPkt->pts = origPts - timeOffset;
-                        outPkt->dts = origDts - timeOffset;
+                        outPkt->pts = outPkt->pts - firstKeptPts - droppedVideoDuration;
                         static int ptsDebugCount = 0;
-                        if (ptsDebugCount < 5) {
-                            qDebug() << "    Packet: origPts=" << origPts << "origDts=" << origDts
-                                     << "newPts=" << outPkt->pts << "newDts=" << outPkt->dts;
+                        if (ptsDebugCount < 3) {
+                            qDebug() << "    Packet: origPts=" << origPts << "newPts=" << outPkt->pts
+                                     << "dts=" << lastVideoDts;
                             ptsDebugCount++;
                         }
-                        // Track last DTS for continuity with next GOP
-                        if (outPkt->dts + outPkt->duration > lastVideoDts) {
-                            lastVideoDts = outPkt->dts + outPkt->duration;
-                        }
+                        outPkt->dts = lastVideoDts;
+                        lastVideoDts += outPkt->duration;
                         av_packet_rescale_ts(outPkt, inVideoStream->time_base, outVideoStream->time_base);
                         av_interleaved_write_frame(outFmtCtx, outPkt);
                         av_packet_free(&outPkt);
                         packetsWritten++;
                     }
-                    // Track the highest timestamp that was copied
-                    // This is used to prevent duplicate frames when encoding with priming
-                    if (gopEndTs > lastCopiedTs) {
-                        lastCopiedTs = gopEndTs;
-                    }
-                    prevGopWasCopied = true;
-                    prevModeWasEncode = false;  // MMCO FIX: Track mode for next GOP
                 } else if (mode == 2) {
                     // Partial - need to decode and encode
                     qDebug() << "  Encoding GOP at" << gopStartTs << "-" << gopEndTs;
-
-                    // Prime decoder with previous GOP ONLY if it was copied (mode=1)
-                    // This is needed because B-frames at the start of this GOP may reference
-                    // frames from the previous GOP. Without priming, those B-frames can't be decoded.
-                    // BUT: Don't prime if the previous GOP was dropped - that would create invalid references.
-                    if (!prevGopPackets.isEmpty() && prevGopWasCopied) {
-                        qDebug() << "  Priming decoder with previous GOP (" << prevGopPackets.size() << " packets)";
-                        for (AVPacket* prevPkt : prevGopPackets) {
-                            avcodec_send_packet(decCtx, prevPkt);
-                            // Drain output frames (we don't need them, just building reference picture buffer)
-                            while (avcodec_receive_frame(decCtx, frame) == 0) {
-                                av_frame_unref(frame);
-                            }
-                        }
-                        qDebug() << "  Decoder primed";
-                    } else if (!prevGopPackets.isEmpty()) {
-                        qDebug() << "  Skipping priming (previous GOP was not copied)";
-                    }
-                    prevGopWasCopied = false;  // Reset for next iteration
-                    prevModeWasEncode = true;  // MMCO FIX: Track that we encoded this GOP
 
                     if (!encoderOpen) {
                         if (!openEncoder()) {
@@ -1477,22 +1396,16 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                     auto processFrame = [&](AVFrame* f) {
                         double frameTs = f->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
                         bool included = isTimestampIncluded(frameTs, cutList);
-                        // Skip frames that were already written via copying (prevents duplicates from priming)
-                        bool alreadyCopied = (lastCopiedTs >= 0 && frameTs <= lastCopiedTs);
-                        // Show first 3 frames, plus any included frames
-                        if (gopFrameIdx < 3 || (included && !alreadyCopied)) {
+                        // Show first 3 and last 3 frames of each GOP, plus any included frames
+                        if (gopFrameIdx < 3 || included) {
                             qDebug() << "    Frame" << gopFrameIdx << "PTS:" << f->pts
-                                     << "frameTs:" << frameTs << "included:" << included
-                                     << (alreadyCopied ? "(already copied, skip)" : "");
+                                     << "frameTs:" << frameTs << "included:" << included;
                         }
                         gopFrameIdx++;
 
-                        if (included && !alreadyCopied) {
-                            // Adjust PTS to start at 0 (relative to output timeline)
-                            int64_t adjustedPts = f->pts - firstKeptPts - droppedVideoDuration;
-                            // Save the adjusted PTS - we'll apply it to the output packet
-                            encoderPtsQueue.append(adjustedPts);
-                            f->pts = adjustedPts;
+                        if (included) {
+                            // Adjust PTS to start at 0
+                            f->pts = f->pts - firstKeptPts - droppedVideoDuration;
                             f->pict_type = AV_PICTURE_TYPE_NONE;  // Let encoder decide
 
                             int ret = avcodec_send_frame(encCtx, f);
@@ -1503,37 +1416,32 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                             static int framesSentToEncoder = 0;
                             framesSentToEncoder++;
                             if (framesSentToEncoder <= 5) {
-                                qDebug() << "    Sent frame to encoder, adjustedPts:" << adjustedPts;
+                                qDebug() << "    Sent frame to encoder, total sent:" << framesSentToEncoder;
                             }
 
                             AVPacket* encPkt = av_packet_alloc();
                             while (avcodec_receive_packet(encCtx, encPkt) == 0) {
                                 encPkt->stream_index = 0;
-                                // Use our tracked PTS (encoder may not preserve input PTS)
-                                int64_t ptsInStreamTB = encoderPtsQueue.isEmpty() ? 0 : encoderPtsQueue.takeFirst();
-                                // DTS = PTS since we encode without B-frames
-                                encPkt->pts = ptsInStreamTB;
-                                encPkt->dts = ptsInStreamTB;
-                                // Track last DTS for continuity
-                                if (ptsInStreamTB + frameDurationInStreamTB > lastVideoDts) {
-                                    lastVideoDts = ptsInStreamTB + frameDurationInStreamTB;
-                                }
-                                av_packet_rescale_ts(encPkt, inVideoStream->time_base, outVideoStream->time_base);
+                                // Without B-frames: DTS = PTS (decode order = presentation order)
+                                int64_t dtsInEncTimebase = av_rescale_q(lastVideoDts, inVideoStream->time_base, encCtx->time_base);
+                                encPkt->dts = dtsInEncTimebase;
+                                encPkt->pts = dtsInEncTimebase;  // Same as DTS since no B-frames
+                                // Increment lastVideoDts by one frame duration
+                                lastVideoDts += frameDurationInStreamTB;
+                                av_packet_rescale_ts(encPkt, encCtx->time_base, outVideoStream->time_base);
                                 av_interleaved_write_frame(outFmtCtx, encPkt);
                                 av_packet_unref(encPkt);
                                 packetsWritten++;
                                 framesEncoded++;
                             }
                             av_packet_free(&encPkt);
-                        } else if (!alreadyCopied) {
+                        } else {
                             // Only track dropped frames that are AFTER firstKeptTimestamp
                             // (frames before are already accounted for by firstKeptPts subtraction)
-                            // Don't track alreadyCopied frames - they were written via copy, not dropped
                             if (frameTs >= firstKeptTimestamp) {
                                 droppedVideoDuration += f->duration;
                             }
                         }
-                        // alreadyCopied frames: do nothing (they were already written via copy)
                     };
 
                     // Send all packets to decoder
@@ -1572,17 +1480,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                             droppedVideoDuration += gopPkt->duration;
                         }
                     }
-                    prevGopWasCopied = false;  // Don't prime next GOP with dropped content
-                    prevModeWasEncode = false;  // MMCO FIX: Drop doesn't count as encode
-                }
-
-                // Save current GOP for potential decoder priming in next iteration
-                for (AVPacket* p : prevGopPackets) {
-                    av_packet_free(&p);
-                }
-                prevGopPackets.clear();
-                for (AVPacket* gopPkt : gopPackets) {
-                    prevGopPackets.append(av_packet_clone(gopPkt));
                 }
 
                 // Clear GOP buffer
@@ -1625,15 +1522,8 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
 
     // Process remaining GOP
     if (!gopPackets.isEmpty()) {
-        // Find actual min/max PTS (same fix as main loop)
-        int64_t minPts = gopPackets.first()->pts;
-        int64_t maxPts = gopPackets.first()->pts;
-        for (AVPacket* gopPkt : gopPackets) {
-            if (gopPkt->pts < minPts) minPts = gopPkt->pts;
-            if (gopPkt->pts > maxPts) maxPts = gopPkt->pts;
-        }
-        double gopStartTs = minPts * av_q2d(inVideoStream->time_base) - streamStartTime;
-        double gopEndTs = maxPts * av_q2d(inVideoStream->time_base) - streamStartTime;
+        double gopStartTs = gopPackets.first()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
+        double gopEndTs = gopPackets.last()->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
         int mode = getRangeMode(gopStartTs, gopEndTs, cutList);
 
         if (mode >= 1) {
@@ -1643,16 +1533,10 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                 if (isTimestampIncluded(pktTs, cutList)) {
                     AVPacket* outPkt = av_packet_clone(gopPkt);
                     outPkt->stream_index = 0;
-                    // Adjust both PTS and DTS by the same offset to preserve their relationship
-                    int64_t origPts = outPkt->pts;
-                    int64_t origDts = outPkt->dts;
-                    int64_t timeOffset = firstKeptPts + droppedVideoDuration;
-                    outPkt->pts = origPts - timeOffset;
-                    outPkt->dts = origDts - timeOffset;
-                    // Track last DTS for continuity with next section
-                    if (outPkt->dts + outPkt->duration > lastVideoDts) {
-                        lastVideoDts = outPkt->dts + outPkt->duration;
-                    }
+                    // Adjust PTS to start at 0
+                    outPkt->pts = outPkt->pts - firstKeptPts - droppedVideoDuration;
+                    outPkt->dts = lastVideoDts;
+                    lastVideoDts += outPkt->duration;
                     av_packet_rescale_ts(outPkt, inVideoStream->time_base, outVideoStream->time_base);
                     av_interleaved_write_frame(outFmtCtx, outPkt);
                     av_packet_free(&outPkt);
@@ -1666,12 +1550,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         }
         gopPackets.clear();
     }
-
-    // Cleanup prevGopPackets
-    for (AVPacket* p : prevGopPackets) {
-        av_packet_free(&p);
-    }
-    prevGopPackets.clear();
 
     // Cleanup
     closeEncoder();
