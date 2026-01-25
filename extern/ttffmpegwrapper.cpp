@@ -617,11 +617,23 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 
     av_packet_free(&packet);
 
-    // Seek back to beginning
-    av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    // Seek back to beginning - use avio_seek for ES files
+    if (isES && mFormatCtx->pb) {
+        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
+        avformat_flush(mFormatCtx);
+        qDebug() << "ES file: seeked back to byte 0 after index build";
+    } else {
+        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    }
 
     qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
              << (currentGOP + 1) << "GOPs";
+
+    // Debug: Check first frame's fileOffset for ES files
+    if (isES && !mFrameIndex.isEmpty()) {
+        qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
+                 << "packetSize:" << mFrameIndex[0].packetSize;
+    }
 
     // For elementary streams without PTS/DTS, calculate timestamps from frame rate
     if (!mFrameIndex.isEmpty() && mFrameIndex[0].pts == AV_NOPTS_VALUE) {
@@ -913,18 +925,40 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
                  suffix == "m2v" || suffix == "mpv");
 
     int ret;
-    if (isES && mFormatCtx->pb && mFrameIndex[keyframeIndex].fileOffset >= 0) {
+    if (isES && mFormatCtx->pb) {
         // For ES files, use byte-based seeking
         int64_t byteOffset = mFrameIndex[keyframeIndex].fileOffset;
+
+        // If fileOffset is -1 (unknown), seek to byte 0 for first keyframe
+        if (byteOffset < 0) {
+            if (keyframeIndex == 0) {
+                byteOffset = 0;
+            } else {
+                // For other frames, try to find a valid offset
+                // Walk back to find a frame with valid offset
+                for (int i = keyframeIndex; i >= 0; i--) {
+                    if (mFrameIndex[i].fileOffset >= 0) {
+                        byteOffset = mFrameIndex[i].fileOffset;
+                        break;
+                    }
+                }
+                if (byteOffset < 0) byteOffset = 0;  // Fallback to start
+            }
+            qDebug() << "ES seek: fileOffset was -1, using" << byteOffset;
+        }
+
         ret = avio_seek(mFormatCtx->pb, byteOffset, SEEK_SET);
+        qDebug() << "ES seek to byte" << byteOffset << "avio_seek result:" << ret;
         if (ret >= 0) {
             avformat_flush(mFormatCtx);
             ret = 0;  // Success
+        } else {
+            qDebug() << "avio_seek failed with:" << ret << avErrorToString(ret);
         }
-        qDebug() << "ES seek to byte" << byteOffset << "result:" << ret;
     } else {
         // For container formats, use timestamp-based seeking
         int64_t seekPts = mFrameIndex[keyframeIndex].pts;
+        qDebug() << "Container seek to PTS" << seekPts;
         ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
     }
 
