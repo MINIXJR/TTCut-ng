@@ -204,6 +204,15 @@ public:
     // cutList contains pairs of (startTime, endTime) in seconds - segments to KEEP
     bool smartCut(const QString& outputFile, const QList<QPair<double, double>>& cutList);
 
+    // Elementary stream support
+    // Wrap ES in MKV container with proper timestamps
+    QString wrapElementaryStream(const QString& esFile, double frameRate = -1);
+
+    // Byte-level ES cutting (avoids timestamp issues!)
+    // Returns cut ES file - caller must mux to container if needed
+    bool cutElementaryStream(const QString& inputFile, const QString& outputFile,
+                             const QList<QPair<double, double>>& cutList);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

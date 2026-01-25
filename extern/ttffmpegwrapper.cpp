@@ -1099,8 +1099,229 @@ static int getRangeMode(double startTs, double endTs, const QList<QPair<double, 
 }
 
 // ----------------------------------------------------------------------------
+// Wrap elementary stream in MKV container with proper timestamps
+// Used for ES files that have no PTS/DTS - mkvmerge assigns timestamps
+// based on frame duration.
+// Returns path to temporary MKV file, or empty string on failure.
+// ----------------------------------------------------------------------------
+QString TTFFmpegWrapper::wrapElementaryStream(const QString& esFile, double frameRate)
+{
+    if (!QFile::exists(esFile)) {
+        setError(QString("ES file not found: %1").arg(esFile));
+        return QString();
+    }
+
+    // Determine codec from file extension
+    QString ext = QFileInfo(esFile).suffix().toLower();
+    bool isH264 = (ext == "264" || ext == "h264" || ext == "avc");
+    bool isH265 = (ext == "265" || ext == "h265" || ext == "hevc");
+
+    if (!isH264 && !isH265) {
+        setError(QString("Unsupported ES format: %1").arg(ext));
+        return QString();
+    }
+
+    // Try to get frame rate from .info file if not provided
+    if (frameRate <= 0) {
+        QString infoFile = TTESInfo::findInfoFile(esFile);
+        if (!infoFile.isEmpty()) {
+            TTESInfo info(infoFile);
+            if (info.isLoaded() && info.frameRate() > 0) {
+                frameRate = info.frameRate();
+                qDebug() << "Using frame rate from .info file:" << frameRate;
+            }
+        }
+    }
+
+    // Default to 25fps if still no frame rate
+    if (frameRate <= 0) {
+        frameRate = 25.0;
+        qDebug() << "No frame rate found, using default:" << frameRate;
+    }
+
+    // Calculate frame duration in nanoseconds for mkvmerge
+    // 50fps = 20,000,000 ns, 25fps = 40,000,000 ns
+    int64_t frameDurationNs = static_cast<int64_t>(1000000000.0 / frameRate);
+
+    // Create temporary output file
+    QFileInfo esInfo(esFile);
+    QString tempMkv = esInfo.absolutePath() + "/." + esInfo.completeBaseName() + "_temp.mkv";
+
+    qDebug() << "Wrapping ES in MKV container";
+    qDebug() << "  Input:" << esFile;
+    qDebug() << "  Output:" << tempMkv;
+    qDebug() << "  Frame rate:" << frameRate << "fps";
+    qDebug() << "  Frame duration:" << frameDurationNs << "ns";
+
+    // Build mkvmerge command
+    QStringList args;
+    args << "-o" << tempMkv
+         << "--default-duration" << QString("0:%1ns").arg(frameDurationNs)
+         << esFile;
+
+    QProcess proc;
+    proc.start("mkvmerge", args);
+
+    if (!proc.waitForStarted(5000)) {
+        setError("mkvmerge failed to start");
+        return QString();
+    }
+
+    if (!proc.waitForFinished(300000)) { // 5 minute timeout
+        setError("mkvmerge timed out");
+        proc.kill();
+        return QString();
+    }
+
+    if (proc.exitCode() != 0 && proc.exitCode() != 1) {
+        // mkvmerge returns 1 for warnings, 0 for success, 2+ for errors
+        setError(QString("mkvmerge failed (exit code %1): %2")
+            .arg(proc.exitCode())
+            .arg(QString::fromUtf8(proc.readAllStandardError())));
+        return QString();
+    }
+
+    if (!QFile::exists(tempMkv)) {
+        setError("mkvmerge did not create output file");
+        return QString();
+    }
+
+    qDebug() << "ES wrapped successfully:" << tempMkv;
+    return tempMkv;
+}
+
+// ----------------------------------------------------------------------------
+// Cut elementary stream at byte level
+// This copies NAL units between keyframes, avoiding timestamp issues entirely.
+// Times are converted to frame indices using the frame index.
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::cutElementaryStream(const QString& inputFile,
+                                           const QString& outputFile,
+                                           const QList<QPair<double, double>>& cutList)
+{
+    if (mFrameIndex.isEmpty()) {
+        setError("Frame index not built - call buildFrameIndex first");
+        return false;
+    }
+
+    // Get frame rate for time-to-frame conversion
+    double frameRate = 25.0;
+    QString infoFile = TTESInfo::findInfoFile(inputFile);
+    if (!infoFile.isEmpty()) {
+        TTESInfo info(infoFile);
+        if (info.isLoaded() && info.frameRate() > 0) {
+            frameRate = info.frameRate();
+        }
+    }
+
+    qDebug() << "cutElementaryStream: Byte-level ES cutting";
+    qDebug() << "  Input:" << inputFile;
+    qDebug() << "  Output:" << outputFile;
+    qDebug() << "  Frame rate:" << frameRate << "fps";
+    qDebug() << "  Total frames:" << mFrameIndex.size();
+
+    // Open input file for reading
+    QFile inFile(inputFile);
+    if (!inFile.open(QIODevice::ReadOnly)) {
+        setError(QString("Cannot open input file: %1").arg(inputFile));
+        return false;
+    }
+
+    // Open output file for writing
+    QFile outFile(outputFile);
+    if (!outFile.open(QIODevice::WriteOnly)) {
+        inFile.close();
+        setError(QString("Cannot create output file: %1").arg(outputFile));
+        return false;
+    }
+
+    int64_t totalBytesWritten = 0;
+
+    // Process each segment to keep
+    for (int segIdx = 0; segIdx < cutList.size(); ++segIdx) {
+        double startTime = cutList[segIdx].first;
+        double endTime = cutList[segIdx].second;
+
+        // Convert times to frame indices
+        int startFrame = qRound(startTime * frameRate);
+        int endFrame = qRound(endTime * frameRate);
+
+        // Clamp to valid range
+        startFrame = qBound(0, startFrame, mFrameIndex.size() - 1);
+        endFrame = qBound(0, endFrame, mFrameIndex.size() - 1);
+
+        if (startFrame >= endFrame) {
+            qDebug() << "  Segment" << segIdx << "is empty, skipping";
+            continue;
+        }
+
+        // Find keyframe at or before start (for clean cut-in)
+        int keyframeStart = startFrame;
+        while (keyframeStart > 0 && !mFrameIndex[keyframeStart].isKeyframe) {
+            keyframeStart--;
+        }
+
+        // Get byte range to copy
+        int64_t startOffset = mFrameIndex[keyframeStart].fileOffset;
+        int64_t endOffset;
+
+        if (endFrame < mFrameIndex.size() - 1) {
+            endOffset = mFrameIndex[endFrame + 1].fileOffset;
+        } else {
+            // Last frame - read to end of file
+            endOffset = inFile.size();
+        }
+
+        int64_t bytesToCopy = endOffset - startOffset;
+
+        qDebug() << "  Segment" << segIdx << ":"
+                 << "frames" << keyframeStart << "->" << endFrame
+                 << "(" << (endFrame - keyframeStart + 1) << "frames)"
+                 << ", bytes" << startOffset << "->" << endOffset
+                 << "(" << bytesToCopy << "bytes)";
+
+        // Seek and copy
+        if (!inFile.seek(startOffset)) {
+            setError(QString("Cannot seek to position %1").arg(startOffset));
+            inFile.close();
+            outFile.close();
+            return false;
+        }
+
+        // Copy in chunks
+        const int64_t chunkSize = 1024 * 1024; // 1 MB chunks
+        int64_t remaining = bytesToCopy;
+
+        while (remaining > 0) {
+            int64_t toRead = qMin(remaining, chunkSize);
+            QByteArray chunk = inFile.read(toRead);
+
+            if (chunk.isEmpty()) {
+                setError("Read error during copying");
+                inFile.close();
+                outFile.close();
+                return false;
+            }
+
+            outFile.write(chunk);
+            remaining -= chunk.size();
+            totalBytesWritten += chunk.size();
+        }
+    }
+
+    inFile.close();
+    outFile.close();
+
+    qDebug() << "cutElementaryStream: Complete";
+    qDebug() << "  Bytes written:" << totalBytesWritten;
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
 // Smart cut using avcut approach
 // Direct writing to single output, no global headers, GOP-based processing
+// For ES input: uses byte-level cutting (no timestamp issues)
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::smartCut(const QString& outputFile,
                                 const QList<QPair<double, double>>& cutList)
@@ -1124,6 +1345,63 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
     qDebug() << "  Input:" << QString::fromUtf8(mFormatCtx->url);
     qDebug() << "  Output:" << outputFile;
     qDebug() << "  Keep segments:" << cutList.size();
+
+    // Check if input is an elementary stream
+    // For ES files, use byte-level cutting (no timestamp issues!)
+    bool inputIsES = (detectContainer() == CONTAINER_ELEMENTARY);
+
+    if (inputIsES) {
+        qDebug() << "smartCut: Input is elementary stream - using byte-level cutting";
+        qDebug() << "  (This avoids timestamp discontinuity issues)";
+
+        QString esFile = QString::fromUtf8(mFormatCtx->url);
+        QString esOutput = outputFile;
+
+        // If output is MKV/TS/MP4, cut to temp ES first, then mux
+        QString outExt = QFileInfo(outputFile).suffix().toLower();
+        bool outputIsContainer = (outExt == "mkv" || outExt == "ts" || outExt == "mp4" || outExt == "m2ts");
+
+        if (outputIsContainer) {
+            // Output to temp ES file, then mux to final container
+            esOutput = QFileInfo(esFile).absolutePath() + "/." +
+                       QFileInfo(esFile).completeBaseName() + "_cut." +
+                       QFileInfo(esFile).suffix();
+        }
+
+        // Perform byte-level ES cutting
+        bool result = cutElementaryStream(esFile, esOutput, cutList);
+
+        if (!result) {
+            return false;
+        }
+
+        // If output should be container, mux the cut ES
+        if (outputIsContainer) {
+            // Get frame rate from .info file
+            double frameRate = -1;
+            QString infoFile = TTESInfo::findInfoFile(esFile);
+            if (!infoFile.isEmpty()) {
+                TTESInfo info(infoFile);
+                if (info.isLoaded()) {
+                    frameRate = info.frameRate();
+                }
+            }
+            if (frameRate <= 0) frameRate = 25.0;
+
+            // Mux with mkvmerge
+            QString tempMkv = wrapElementaryStream(esOutput, frameRate);
+            if (!tempMkv.isEmpty()) {
+                // Rename to final output
+                QFile::remove(outputFile);
+                QFile::rename(tempMkv, outputFile);
+            }
+
+            // Cleanup temp ES
+            QFile::remove(esOutput);
+        }
+
+        return true;
+    }
 
     int ret;
     AVFormatContext* outFmtCtx = nullptr;
