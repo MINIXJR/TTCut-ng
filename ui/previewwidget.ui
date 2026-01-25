@@ -67,6 +67,26 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="pbPrevCut" >
+       <property name="text" >
+        <string>&lt; Prev</string>
+       </property>
+       <property name="toolTip" >
+        <string>Jump to previous cut</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextCut" >
+       <property name="text" >
+        <string>Next &gt;</string>
+       </property>
+       <property name="toolTip" >
+        <string>Jump to next cut</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer>
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>

@@ -75,6 +75,8 @@ protected slots:
 	void onPlayerFinished();
 	void onCutSelectionChanged(int iCut);
 	void onPlayPreview();
+	void onPrevCut();
+	void onNextCut();
 	void onExitPreview();
 
 private:

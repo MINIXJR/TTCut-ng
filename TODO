@@ -49,8 +49,8 @@ TODO list for project TTCut-ng
     - Click Play again or Stop button to pause
     - Frame-by-frame control remains available
 
-[ ] Jump to next cut in Preview dialog
-    - Add "Next Cut" button in preview window
+[DONE] Jump to next/prev cut in Preview dialog
+    - Added "< Prev" and "Next >" buttons in preview window
     - Quickly navigate between cut points during preview review
 
 === UI Improvements ===
