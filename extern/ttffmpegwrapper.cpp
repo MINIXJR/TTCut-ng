@@ -109,11 +109,46 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
 {
     closeFile();
 
+    // Check if this is an elementary stream (by extension)
+    QString suffix = QFileInfo(filePath).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
+
+    AVDictionary* opts = nullptr;
+    const AVInputFormat* inputFmt = nullptr;
+
+    if (isES) {
+        // For elementary streams, we need special handling
+        // Set large probesize and analyzeduration for proper detection
+        av_dict_set(&opts, "probesize", "50000000", 0);  // 50MB
+        av_dict_set(&opts, "analyzeduration", "10000000", 0);  // 10 seconds
+
+        // Force input format based on extension
+        if (suffix == "264" || suffix == "h264") {
+            inputFmt = av_find_input_format("h264");
+        } else if (suffix == "265" || suffix == "h265" || suffix == "hevc") {
+            inputFmt = av_find_input_format("hevc");
+        } else if (suffix == "m2v" || suffix == "mpv") {
+            inputFmt = av_find_input_format("mpegvideo");
+        }
+
+        qDebug() << "Opening ES file with forced format:" << (inputFmt ? inputFmt->name : "auto");
+    }
+
     int ret = avformat_open_input(&mFormatCtx, filePath.toUtf8().constData(),
-                                   nullptr, nullptr);
+                                   inputFmt, &opts);
+    av_dict_free(&opts);
+
     if (ret < 0) {
         setError(QString("Could not open file: %1").arg(avErrorToString(ret)));
         return false;
+    }
+
+    // For ES files, set larger analyze duration
+    if (isES) {
+        mFormatCtx->max_analyze_duration = 10 * AV_TIME_BASE;  // 10 seconds
+        mFormatCtx->probesize = 50000000;  // 50MB
     }
 
     ret = avformat_find_stream_info(mFormatCtx, nullptr);
@@ -507,8 +542,22 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 
     mFrameIndex.clear();
 
-    // Seek to beginning
-    av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    // For raw ES files, seek to byte 0 instead of using av_seek_frame
+    // av_seek_frame doesn't work well with raw h264/hevc demuxers
+    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
+
+    if (isES && mFormatCtx->pb) {
+        // For ES files, seek to byte 0 and flush
+        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
+        avformat_flush(mFormatCtx);
+        qDebug() << "ES file: seeked to byte 0";
+    } else {
+        // For container formats, use normal seek
+        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    }
 
     AVPacket* packet = av_packet_alloc();
     if (!packet) {
@@ -857,9 +906,28 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         keyframeIndex--;
     }
 
-    int64_t seekPts = mFrameIndex[keyframeIndex].pts;
+    // Check if this is an ES file (needs byte-based seeking)
+    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
 
-    int ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
+    int ret;
+    if (isES && mFormatCtx->pb && mFrameIndex[keyframeIndex].fileOffset >= 0) {
+        // For ES files, use byte-based seeking
+        int64_t byteOffset = mFrameIndex[keyframeIndex].fileOffset;
+        ret = avio_seek(mFormatCtx->pb, byteOffset, SEEK_SET);
+        if (ret >= 0) {
+            avformat_flush(mFormatCtx);
+            ret = 0;  // Success
+        }
+        qDebug() << "ES seek to byte" << byteOffset << "result:" << ret;
+    } else {
+        // For container formats, use timestamp-based seeking
+        int64_t seekPts = mFrameIndex[keyframeIndex].pts;
+        ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
+    }
+
     if (ret < 0) {
         setError(QString("Seek failed: %1").arg(avErrorToString(ret)));
         return false;
