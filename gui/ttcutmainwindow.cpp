@@ -44,6 +44,7 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttmpeg2videoheader.h"
+#include "../avstream/ttavtypes.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -262,7 +263,11 @@ void TTCutMainWindow::onOpenVideoFile()
   QString fn = QFileDialog::getOpenFileName( this,
       tr("Open video file"),
       TTCut::lastDirPath,
-      "Video (*.m2v *.mpv)" );
+      tr("All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;"
+         "MPEG-2 Video (*.m2v *.mpv);;"
+         "H.264/AVC (*.264 *.h264);;"
+         "H.265/HEVC (*.265 *.h265 *.hevc);;"
+         "All Files (*)"));
 
   if (fn.isEmpty()) return;
 
@@ -281,7 +286,12 @@ void TTCutMainWindow::onOpenAudioFile()
 	QString fn = QFileDialog::getOpenFileName( this,
       tr("Open audio file"),
       TTCut::lastDirPath,
-      "Audio (*.mpa *.mp2 *.ac3)" );
+      tr("All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;"
+         "MPEG Audio (*.mpa *.mp2);;"
+         "AC3/Dolby Digital (*.ac3 *.eac3);;"
+         "AAC Audio (*.aac *.m4a);;"
+         "DTS Audio (*.dts);;"
+         "All Files (*)"));
 
   if (fn.isEmpty())
     return;
@@ -660,11 +670,26 @@ void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
   if (settings != 0)
       settings->writeSettings();
 
+  // Detect source video codec and set encoder codec to match
+  TTVideoStream* vStream = mpCurrentAVDataItem->videoStream();
+  TTAVTypes::AVStreamType streamType = vStream->streamType();
+
+  if (streamType == TTAVTypes::h264_video) {
+    TTCut::encoderCodec = 1;  // H.264
+  } else if (streamType == TTAVTypes::h265_video) {
+    TTCut::encoderCodec = 2;  // H.265
+  } else {
+    TTCut::encoderCodec = 0;  // MPEG-2
+  }
+
   // compose video cut name from video file name and set to global variable
-  TTCut::cutVideoName = QString("%1_%2.%3").
-      arg(QFileInfo(mpCurrentAVDataItem->videoStream()->fileName()).completeBaseName()).
-      arg("cut").
-      arg(QFileInfo(mpCurrentAVDataItem->videoStream()->fileName()).suffix());
+  // Use base name only, extension will be added by dialog based on codec/muxer
+  QString baseName = QFileInfo(vStream->fileName()).completeBaseName();
+  if (TTCut::cutAddSuffix) {
+    TTCut::cutVideoName = QString("%1_cut").arg(baseName);
+  } else {
+    TTCut::cutVideoName = baseName;
+  }
 
   // start dialog for cut options
   TTCutAVCutDlg* cutAVDlg = new TTCutAVCutDlg(this);
@@ -679,7 +704,27 @@ void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
   // dialog exit with start
   delete cutAVDlg;
 
+  // Connect to cutFinished signal for notification
+  qDebug() << "Connecting cutFinished signal to onCutFinished slot";
+  bool connected = connect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
+  qDebug() << "Connection result:" << connected;
+
   mpAVData->onDoCut(QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath(), cutData);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Cutting finished - notify user
+ */
+void TTCutMainWindow::onCutFinished()
+{
+  qDebug() << "TTCutMainWindow::onCutFinished() called!";
+  disconnect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
+
+  QString outputFile = QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath();
+  qDebug() << "Showing completion dialog for:" << outputFile;
+
+  QMessageBox::information(this, tr("Cutting Complete"),
+      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

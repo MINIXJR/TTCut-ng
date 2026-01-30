@@ -137,7 +137,7 @@ class TTAVData : public QObject
     void onMplexStep(const QString& msg, quint64 value);
 
   private slots:
-    void onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int order);
+    void onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int order, const QString& demuxedAudio);
     void onOpenAVStreamsAborted();
 
     void onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int order);
@@ -156,6 +156,7 @@ class TTAVData : public QObject
     void onThreadPoolExit();
 
     void onStatusReport(int state, const QString& msg, quint64 value);
+    void onMuxProgress(int percent, const QString& msg);
 
   signals:
     void threadPoolExit();
@@ -186,6 +187,7 @@ class TTAVData : public QObject
 
     void foundEqualFrame(int index);
     void cutPreviewFinished(TTCutList* cutList);
+    void cutFinished();
 
   private:
     TTAVItem*      createAVItem();
@@ -194,6 +196,10 @@ class TTAVData : public QObject
     QFileInfoList  getSubtitleNames(const QFileInfo& vFileInfo);
     QString        createAudioCutFileName(QString cutBaseFileName, QString audioFileName, int index);
     QString        createSubtitleCutFileName(QString cutBaseFileName, QString subtitleFileName, int index);
+    void           deleteElementaryStreams(const QString& videoFilePath,
+                                           const QStringList& audioFilePaths,
+                                           const QStringList& subtitleFilePaths = QStringList());
+    void           doH264Cut(QString tgtFileName, TTCutList* cutList);
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;

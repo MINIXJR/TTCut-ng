@@ -139,6 +139,9 @@ void TTCutAVCutDlg::setCommonData()
   leOutputFile->setText( TTCut::cutVideoName );
   leOutputPath->setText( TTCut::cutDirPath );
 
+  // add "_cut" suffix option
+  cbAddSuffix->setChecked(TTCut::cutAddSuffix);
+
   // cut options
   // write max bittrate tp first sequence
   cbMaxBitrate->setChecked(TTCut::cutWriteMaxBitrate);
@@ -157,16 +160,45 @@ void TTCutAVCutDlg::getCommonData()
   // cut output filename and output path
   TTCut::cutVideoName  = leOutputFile->text();
   TTCut::cutDirPath    = leOutputPath->text();
+  TTCut::cutAddSuffix  = cbAddSuffix->isChecked();
 
   if ( !QDir(TTCut::cutDirPath).exists() )
     TTCut::cutDirPath    = QDir::currentPath();
 
-  // Check for video file extension
+  // Check for video file extension based on codec and muxer selection
   QFileInfo cutFile(TTCut::cutVideoName);
-  QString ext = cutFile.suffix();
+  QString ext = cutFile.suffix().toLower();
 
-  if (ext.isEmpty() || ext != "m2v")
-    TTCut::cutVideoName += ".m2v";
+  // Determine appropriate extension based on output container and codec
+  // TTCut::outputContainer: 0=mplex, 1=mkvmerge, 2=ffmpeg
+  // TTCut::encoderCodec: 0=MPEG-2, 1=H.264, 2=H.265
+  QString expectedExt;
+
+  if (TTCut::outputContainer == 1) {
+    // MKV output - extension is .mkv, video will be .h264/.h265/.m2v
+    if (TTCut::encoderCodec == 1) {
+      expectedExt = "h264";
+    } else if (TTCut::encoderCodec == 2) {
+      expectedExt = "h265";
+    } else {
+      expectedExt = "m2v";
+    }
+  } else if (TTCut::outputContainer == 2) {
+    // MP4/TS output via ffmpeg - extension is based on codec
+    if (TTCut::encoderCodec == 1 || TTCut::encoderCodec == 2) {
+      expectedExt = "ts";  // TS container for H.264/H.265
+    } else {
+      expectedExt = "m2v";
+    }
+  } else {
+    // mplex (MPEG-2 only) - always .m2v
+    expectedExt = "m2v";
+  }
+
+  // Add extension if missing or different
+  if (ext.isEmpty() || (ext != expectedExt && ext != "m2v" && ext != "h264" && ext != "h265" && ext != "ts")) {
+    TTCut::cutVideoName += "." + expectedExt;
+  }
 
   // cut options
   // write max bittrate tp first sequence

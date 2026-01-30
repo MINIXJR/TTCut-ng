@@ -30,21 +30,24 @@
 #include "ttcutsettingsmuxer.h"
 
 #include "../common/ttcut.h"
+#include "../extern/ttmkvmergeprovider.h"
 
 #include <QFileDialog>
-  
+
 TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
 :QWidget(parent)
 {
   setupUi(this);
 
-  // enabled if we have a plugin for the muxer
-  cbMuxerProg->setEnabled(false);
-  cbMuxTarget->setEnabled(false);
-  pbConfigureMuxer->setEnabled(false);
-
+  // Initialize combo boxes
   initMuxProgList();
   initMuxTargetList();
+  initOutputContainerList();
+
+  // Enable muxer selection now that we have multiple options
+  cbMuxerProg->setEnabled(true);
+  cbMuxTarget->setEnabled(true);
+  pbConfigureMuxer->setEnabled(false);
 
   connect(rbCreateMuxScript, SIGNAL(clicked()),         SLOT(onCreateMuxScript()));
   connect(rbMuxStreams,      SIGNAL(clicked()),         SLOT(onCreateMuxStreams()));
@@ -52,6 +55,8 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   connect(btnOutputPath,     SIGNAL(clicked()),         SLOT(onOpenOutputPath()));
   connect(cbDeleteES,        SIGNAL(stateChanged(int)), SLOT(onStateDeleteES(int)));
   connect(cbPause,           SIGNAL(stateChanged(int)), SLOT(onStatePause(int)));
+  connect(cbMuxerProg,       SIGNAL(currentIndexChanged(int)), SLOT(onMuxerProgChanged(int)));
+  connect(cbMkvCreateChapters, SIGNAL(stateChanged(int)), SLOT(onMkvChaptersChanged(int)));
 }
 
 void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
@@ -60,8 +65,17 @@ void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
 
 void TTCutSettingsMuxer::initMuxProgList()
 {
-  cbMuxerProg->insertItem(0, "Mplex");
-  cbMuxerProg->setCurrentIndex(0);
+  cbMuxerProg->clear();
+  cbMuxerProg->insertItem(0, "Mplex (MPEG-2)");
+  cbMuxerProg->insertItem(1, "mkvmerge (MKV)");
+  cbMuxerProg->insertItem(2, "FFmpeg (MP4/TS)");
+
+  // Check availability and set default
+  if (TTMkvMergeProvider::isMkvMergeInstalled()) {
+    cbMuxerProg->setCurrentIndex(1);  // Default to mkvmerge if available
+  } else {
+    cbMuxerProg->setCurrentIndex(0);  // Fallback to mplex
+  }
 }
 
 void TTCutSettingsMuxer::initMuxTargetList()
@@ -96,8 +110,10 @@ void TTCutSettingsMuxer::setTabData()
       break;
   }
 
-  cbMuxerProg->setCurrentIndex(0);
+  // Set muxer program based on outputContainer setting
+  cbMuxerProg->setCurrentIndex(TTCut::outputContainer);
   cbMuxTarget->setCurrentIndex(TTCut::mpeg2Target);
+  updateMuxerVisibility();
 
   leOutputPath->setText(TTCut::muxOutputPath);
 
@@ -110,12 +126,21 @@ void TTCutSettingsMuxer::setTabData()
     cbPause->setCheckState(Qt::Checked);
   else
     cbPause->setCheckState(Qt::Unchecked);
+
+  // MKV chapter settings
+  cbMkvCreateChapters->setChecked(TTCut::mkvCreateChapters);
+  sbMkvChapterInterval->setValue(TTCut::mkvChapterInterval);
+  sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
 }
 
 void TTCutSettingsMuxer::getTabData()
 {
   TTCut::mpeg2Target   = cbMuxTarget->currentIndex();
   TTCut::muxOutputPath = leOutputPath->text();
+
+  // MKV chapter settings
+  TTCut::mkvCreateChapters  = cbMkvCreateChapters->isChecked();
+  TTCut::mkvChapterInterval = sbMkvChapterInterval->value();
 
   QFileInfo fInfo(TTCut::muxOutputPath);
 
@@ -173,4 +198,83 @@ void TTCutSettingsMuxer::onStatePause(int state)
     TTCut::muxPause = false;
   else
     TTCut::muxPause = true;
+}
+
+void TTCutSettingsMuxer::initOutputContainerList()
+{
+  // This function is for future use when we add a separate output container combo box
+  // For now, the muxer program selection determines the output format
+}
+
+void TTCutSettingsMuxer::updateMuxerVisibility()
+{
+  int muxerIndex = cbMuxerProg->currentIndex();
+
+  // MPEG-2 Target is only relevant when:
+  // 1. Using mplex (muxerIndex == 0)
+  // 2. Encoder codec is MPEG-2 (TTCut::encoderCodec == 0)
+  bool enableMpeg2Target = (muxerIndex == 0 && TTCut::encoderCodec == 0);
+  cbMuxTarget->setEnabled(enableMpeg2Target);
+
+  // MKV chapter settings only visible when using mkvmerge (index 1)
+  bool enableMkvChapters = (muxerIndex == 1);
+  gbMkvChapters->setVisible(enableMkvChapters);
+}
+
+void TTCutSettingsMuxer::onMuxerProgChanged(int index)
+{
+  TTCut::outputContainer = index;
+
+  // Save the muxer preference for the current codec
+  switch (TTCut::encoderCodec) {
+    case 0:  // MPEG-2
+      TTCut::mpeg2Muxer = index;
+      break;
+    case 1:  // H.264
+      TTCut::h264Muxer = index;
+      break;
+    case 2:  // H.265
+      TTCut::h265Muxer = index;
+      break;
+  }
+
+  updateMuxerVisibility();
+}
+
+void TTCutSettingsMuxer::onOutputContainerChanged(int index)
+{
+  TTCut::outputContainer = index;
+}
+
+void TTCutSettingsMuxer::onMkvChaptersChanged(int state)
+{
+  TTCut::mkvCreateChapters = (state == Qt::Checked);
+  sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
+}
+
+void TTCutSettingsMuxer::onEncoderCodecChanged(int codecIndex)
+{
+  // Get the preferred muxer for this codec
+  int preferredMuxer;
+  switch (codecIndex) {
+    case 0:  // MPEG-2
+      preferredMuxer = TTCut::mpeg2Muxer;
+      break;
+    case 1:  // H.264
+      preferredMuxer = TTCut::h264Muxer;
+      break;
+    case 2:  // H.265
+      preferredMuxer = TTCut::h265Muxer;
+      break;
+    default:
+      preferredMuxer = 1;  // Default to mkvmerge
+      break;
+  }
+
+  // Update the muxer selection to the preferred muxer
+  cbMuxerProg->setCurrentIndex(preferredMuxer);
+  TTCut::outputContainer = preferredMuxer;
+
+  // Update visibility (MPEG-2 Target only for mplex + MPEG-2)
+  updateMuxerVisibility();
 }

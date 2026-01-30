@@ -55,14 +55,16 @@ class TTOpenVideoTask : public TTThreadTask
 		void onUserAbort();
 
   signals:
-    void finished(TTAVItem*, TTVideoStream*, int);
+    void finished(TTAVItem*, TTVideoStream*, int, const QString& demuxedAudio);
 
 	private:
-    TTAVItem*      mpAVItem;        /**<AV Data item            */
-    int            mOrder;          /**<AV item order in list   */
-		QString        mFileName;       /**<Stream file name        */
-    TTVideoType*   mpVideoType;     /**<Stream video type       */
-		TTVideoStream* mpVideoStream;   /**<Stream object reference */
+    TTAVItem*      mpAVItem;          /**<AV Data item              */
+    int            mOrder;            /**<AV item order in list     */
+    QString        mFileName;         /**<Stream file name          */
+    QString        mOriginalFileName; /**<Original file before demux*/
+    QString        mDemuxedAudio;     /**<Demuxed audio file path   */
+    TTVideoType*   mpVideoType;       /**<Stream video type         */
+    TTVideoStream* mpVideoStream;     /**<Stream object reference   */
 };
 
 #endif

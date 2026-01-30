@@ -18,6 +18,12 @@ TARGET      = ttcut
 ICON        = ui/pixmaps/ttcut_logo_001.icns
 LIBS        = -lmpeg2 -lmpeg2convert
 
+# libav/ffmpeg libraries for H.264/H.265 support
+unix {
+  CONFIG += link_pkgconfig
+  PKGCONFIG += libavformat libavcodec libavutil libswscale
+}
+
 unix {
   DEFINES += UNIX
   DEFINES -= MACX
@@ -110,10 +116,16 @@ HEADERS     = common/ttcut.h\
               avstream/ttfilebuffer.h\ 
               avstream/ttheaderlist.h\ 
               avstream/ttmpeg2videoheader.h\
-              avstream/ttmpeg2videostream.h\   
+              avstream/ttmpeg2videostream.h\
+              avstream/tth264videoheader.h\
+              avstream/tth264videostream.h\
+              avstream/tth265videoheader.h\
+              avstream/tth265videostream.h\
               avstream/ttmpegaudioheader.h\
               avstream/ttmpegaudiostream.h\
               avstream/ttvideoheaderlist.h\
+              avstream/ttesinfo.h\
+              avstream/ttnaluparser.h\
               avstream/ttsrtsubtitlestream.h\
               avstream/ttsubtitleheaderlist.h\
               avstream/ttvideoindexlist.h\
@@ -124,6 +136,9 @@ HEADERS     = common/ttcut.h\
               extern/imuxprovider.h\
               extern/tttranscode.h\
               extern/ttmplexprovider.h\
+              extern/ttffmpegwrapper.h\
+              extern/ttessmartcut.h\
+              extern/ttmkvmergeprovider.h\
               gui/ttcutsettings.h\
               gui/ttcutsettingschapter.h\
               gui/ttcutsettingsmuxer.h\
@@ -185,10 +200,16 @@ SOURCES     = common/ttcut.cpp\
               avstream/ttfilebuffer.cpp\ 
               avstream/ttheaderlist.cpp\ 
               avstream/ttmpeg2videoheader.cpp\
-              avstream/ttmpeg2videostream.cpp\   
+              avstream/ttmpeg2videostream.cpp\
+              avstream/tth264videoheader.cpp\
+              avstream/tth264videostream.cpp\
+              avstream/tth265videoheader.cpp\
+              avstream/tth265videostream.cpp\
               avstream/ttmpegaudioheader.cpp\
               avstream/ttmpegaudiostream.cpp\
               avstream/ttvideoheaderlist.cpp\
+              avstream/ttesinfo.cpp\
+              avstream/ttnaluparser.cpp\
               avstream/ttsrtsubtitlestream.cpp\
               avstream/ttsubtitleheaderlist.cpp\
               avstream/ttvideoindexlist.cpp\
@@ -198,6 +219,9 @@ SOURCES     = common/ttcut.cpp\
               avilib/avilib.c\
               extern/tttranscode.cpp\
               extern/ttmplexprovider.cpp\
+              extern/ttffmpegwrapper.cpp\
+              extern/ttessmartcut.cpp\
+              extern/ttmkvmergeprovider.cpp\
               gui/ttcutsettings.cpp\
               gui/ttcutsettingschapter.cpp\
               gui/ttcutsettingsmuxer.cpp\

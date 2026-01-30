@@ -39,6 +39,7 @@
 
 #include <QList>
 #include <QDir>
+#include <QDebug>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTAVItem
@@ -244,24 +245,35 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 	if (audioCount() != avItem->audioCount())
 		throw new TTInvalidOperationException(tr("Video files to cut must have the same count of audio files!"));
 
-	TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
-	TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
+	// Stream type compatibility check
+	TTAVTypes::AVStreamType type1 = video1->streamType();
+	TTAVTypes::AVStreamType type2 = video2->streamType();
 
-	for (int i = 0; i < cutCount(); i++) {
-		(void)i; // Loop index used implicitly
-		TTSequenceHeader* seqIn1   = video2->getSequenceHeader(cutIn);
-		TTSequenceHeader* seqOut1  = video2->getSequenceHeader(cutOut);
+	if (type1 != type2)
+		throw new TTInvalidOperationException(tr("Video files to cut must have the same codec type!"));
 
+	// MPEG-2 specific checks using sequence headers
+	if (type1 == TTAVTypes::mpeg2_demuxed_video || type1 == TTAVTypes::mpeg2_mplexed_video) {
+		TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
+		TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
 
-	if (seqIn1->aspectRatio() != seqIn2->aspectRatio() || seqOut1->aspectRatio() != seqOut2->aspectRatio())
-		throw new TTInvalidOperationException(tr("Video files to cut must have the same aspect ratio!"));
+		for (int i = 0; i < cutCount(); i++) {
+			(void)i; // Loop index used implicitly
+			TTSequenceHeader* seqIn1   = video2->getSequenceHeader(cutIn);
+			TTSequenceHeader* seqOut1  = video2->getSequenceHeader(cutOut);
 
-	if (seqIn1->horizontalSize() != seqIn2->horizontalSize() || seqOut1->horizontalSize() != seqOut2->horizontalSize())
-		throw new TTInvalidOperationException(tr("Video files to cut must have the same horizontal size!"));
+			if (seqIn1->aspectRatio() != seqIn2->aspectRatio() || seqOut1->aspectRatio() != seqOut2->aspectRatio())
+				throw new TTInvalidOperationException(tr("Video files to cut must have the same aspect ratio!"));
 
-	if (seqIn1->verticalSize() != seqIn2->verticalSize() || seqOut1->verticalSize() != seqOut2->verticalSize())
-		throw new TTInvalidOperationException(tr("Video files to cut must have the same vertical size!"));
+			if (seqIn1->horizontalSize() != seqIn2->horizontalSize() || seqOut1->horizontalSize() != seqOut2->horizontalSize())
+				throw new TTInvalidOperationException(tr("Video files to cut must have the same horizontal size!"));
+
+			if (seqIn1->verticalSize() != seqIn2->verticalSize() || seqOut1->verticalSize() != seqOut2->verticalSize())
+				throw new TTInvalidOperationException(tr("Video files to cut must have the same vertical size!"));
+		}
 	}
+	// H.264/H.265 streams: basic checks are done via frameRate above
+	// More detailed checks (resolution, profile) could be added via SPS comparison if needed
 
 	for (int i = 0; i < audioCount(); i++) {
 		const TTAudioItem& audio1 = audioListItemAt(i);
@@ -347,6 +359,10 @@ TTAVList::~TTAVList()
  */
 void TTAVList::append(TTAVItem* item)
 {
+	if (item == nullptr) {
+		return;
+	}
+
 	item->mIsInList = true;
 	mpAVList.append(item);
 	emit itemAppended(*item);

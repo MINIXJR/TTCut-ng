@@ -30,6 +30,8 @@
 #include "ttcutoutframe.h"
 #include "../data/ttavlist.h"
 
+#include <QDebug>
+
 /*!
  * Constructor
  */
@@ -39,6 +41,7 @@ TTCutOutFrame::TTCutOutFrame(QWidget* parent)
   setupUi( this );
 
   currentAVItem       = 0;
+  videoStream         = 0;
   currentPosition     = -1;
   currentCutItemIndex = -1;
   isCutOut            = false;
@@ -53,7 +56,7 @@ TTCutOutFrame::TTCutOutFrame(QWidget* parent)
  */
 TTCutOutFrame::~TTCutOutFrame()
 {
-	if (mpeg2Stream != 0) delete mpeg2Stream;
+  // videoStream is owned by avItem, don't delete it
 }
 
 /*!
@@ -79,24 +82,30 @@ void TTCutOutFrame::controlEnabled( bool enabled )
  */
 void TTCutOutFrame::onAVDataChanged(TTAVItem* avItem)
 {
-	if (avItem == 0) {
-		mpegWindow->closeVideoStream();
+	qDebug() << "TTCutOutFrame::onAVDataChanged() called";
 
-		//TODO: cannot delete shared copy this way! if (mpeg2Stream != 0) delete mpeg2Stream;
-		mpeg2Stream = 0;
+	if (avItem == 0) {
+		qDebug() << "avItem is null, closing stream";
+		mpegWindow->closeVideoStream();
+		videoStream = 0;
 		return;
 	}
 
-	if (currentAVItem == avItem)
+	if (currentAVItem == avItem) {
+		qDebug() << "Same avItem, returning";
 		return;
+	}
 
-	isCutOut           = false;
-	currentAVItem      = avItem;
-	currentMpeg2Stream = (TTMpeg2VideoStream*)avItem->videoStream();
-	mpeg2Stream        = new TTMpeg2VideoStream(*avItem->videoStream()->fileInfo());
-	mpeg2Stream->makeSharedCopy((TTMpeg2VideoStream*)avItem->videoStream());
+	isCutOut      = false;
+	currentAVItem = avItem;
+	videoStream   = avItem->videoStream();
 
-	mpegWindow->openVideoStream(mpeg2Stream);
+	qDebug() << "TTCutOutFrame: videoStream =" << videoStream;
+	if (videoStream) {
+		qDebug() << "TTCutOutFrame: streamType =" << videoStream->streamType();
+	}
+
+	mpegWindow->openVideoStream(videoStream);
 	controlEnabled(isCutOut);
 }
 
@@ -117,7 +126,8 @@ void TTCutOutFrame::onCutOutChanged(const TTCutItem& cutItem)
  */
 int TTCutOutFrame::currentFramePos()
 {
-  return mpeg2Stream->currentIndex();
+  if (videoStream == 0) return 0;
+  return videoStream->currentIndex();
 }
 
 /*!
@@ -133,7 +143,9 @@ void TTCutOutFrame::closeVideoStream()
  */
 void TTCutOutFrame::onGotoCutOut(int pos)
 {
-  currentPosition = mpeg2Stream->moveToIndexPos(pos);
+  if (videoStream == 0) return;
+
+  currentPosition = videoStream->moveToIndexPos(pos);
   mpegWindow->showFrameAt( currentPosition );
 
   updateCurrentPosition();
@@ -142,11 +154,13 @@ void TTCutOutFrame::onGotoCutOut(int pos)
 //! Goto previous possible cut-out position
 void TTCutOutFrame::onPrevCutOutPos()
 {
+  if (videoStream == 0) return;
+
   int cutOutIndex;
 
   cutOutIndex = (!TTCut::encoderMode)
-		? mpeg2Stream->moveToPrevPIFrame()
-		: mpeg2Stream->moveToPrevFrame();
+		? videoStream->moveToPrevPIFrame()
+		: videoStream->moveToPrevFrame();
 
   if (currentCutItemIndex >= 0) {
   	TTCutItem cutItem = currentAVItem->cutListItemAt(currentCutItemIndex);
@@ -162,11 +176,13 @@ void TTCutOutFrame::onPrevCutOutPos()
  */
 void TTCutOutFrame::onNextCutOutPos()
 {
-   int cutOutIndex;
+  if (videoStream == 0) return;
+
+  int cutOutIndex;
 
   cutOutIndex = (!TTCut::encoderMode)
-		  ? mpeg2Stream->moveToNextPIFrame()
-		  : mpeg2Stream->moveToNextFrame();
+		  ? videoStream->moveToNextPIFrame()
+		  : videoStream->moveToNextFrame();
 
   if (currentCutItemIndex >= 0) {
 	  TTCutItem cutItem = currentAVItem->cutListItemAt(currentCutItemIndex);
@@ -182,7 +198,8 @@ void TTCutOutFrame::onNextCutOutPos()
  */
 void TTCutOutFrame::onSearchFrame()
 {
-	emit searchEqualFrame(currentAVItem, mpeg2Stream->currentIndex());
+  if (videoStream == 0) return;
+	emit searchEqualFrame(currentAVItem, videoStream->currentIndex());
 }
 
 /*
@@ -190,13 +207,15 @@ void TTCutOutFrame::onSearchFrame()
  */
 void TTCutOutFrame::updateCurrentPosition()
 {
+  if (videoStream == 0) return;
+
   QString szTemp;
   QString szTemp1, szTemp2;
-  int     frame_type = mpeg2Stream->currentFrameType();
+  int     frame_type = videoStream->currentFrameType();
 
-  szTemp1 = mpeg2Stream->currentFrameTime().toString("hh:mm:ss.zzz");
+  szTemp1 = videoStream->currentFrameTime().toString("hh:mm:ss.zzz");
 
-  szTemp2 = QString(" (%1)").arg(mpeg2Stream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(videoStream->currentIndex());
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";
@@ -208,4 +227,3 @@ void TTCutOutFrame::updateCurrentPosition()
   laCutOutFramePosition->update();
 	controlEnabled(isCutOut);
 }
-

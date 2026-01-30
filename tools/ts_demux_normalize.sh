@@ -1,0 +1,551 @@
+#!/bin/bash
+#
+# ts_demux_normalize.sh - Demux and normalize TS files for TTCut
+# Similar to ProjectX for MPEG-2, but for H.264/H.265 (AVC/HEVC)
+#
+# Supported video codecs: H.264 (AVC), H.265 (HEVC), MPEG-2
+# Supported audio codecs: MP2, AC3, AAC, MP3
+#
+# Usage: ts_demux_normalize.sh [-e] <input.ts> [output_dir]
+#
+#   -e  Elementary stream mode: output separate .264/.265 and audio files
+#       (default: output normalized MKV with video+audio)
+#   -p  Prepare mode: strip filler NALUs from H.264/H.265 streams
+#       (only works with -e, requires h264bitstream tools)
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+
+# Parse arguments
+ES_MODE=false
+PREPARE_MODE=false
+while getopts "eph" opt; do
+    case $opt in
+        e) ES_MODE=true ;;
+        p) PREPARE_MODE=true ;;
+        h)
+            echo "Usage: $0 [-e] [-p] <input.ts> [output_dir]"
+            echo ""
+            echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
+            echo "Similar to ProjectX for MPEG-2."
+            echo ""
+            echo "Options:"
+            echo "  -e  Elementary stream mode (for TTCut workflow)"
+            echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3 + info file"
+            echo "  -p  Prepare mode: strip filler NALUs (requires h264bitstream tools)"
+            echo "      Only works with -e mode. Typical savings: 5-10% for DVB H.264"
+            echo ""
+            echo "Default mode (without -e):"
+            echo "  Output: normalized MKV with video + first audio"
+            echo ""
+            echo "Examples:"
+            echo "  $0 input.ts                    # MKV output"
+            echo "  $0 -e input.ts output_dir/     # Elementary stream output"
+            echo "  $0 -ep input.ts output_dir/    # ES + strip filler NALUs"
+            exit 0
+            ;;
+        \?) error "Invalid option: -$OPTARG" ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# Check arguments
+if [ -z "$1" ]; then
+    echo "Usage: $0 [-e] <input.ts> [output_dir]"
+    echo "Use -h for help."
+    exit 1
+fi
+
+INPUT="$1"
+# Handle different extensions
+BASENAME=$(basename "$INPUT")
+BASENAME="${BASENAME%.*}"  # Remove any extension
+OUTDIR="${2:-$(dirname "$INPUT")}"
+
+# Check input file exists
+[ -f "$INPUT" ] || error "Input file not found: $INPUT"
+
+# Create output directory if needed
+mkdir -p "$OUTDIR"
+
+info "Analyzing: $INPUT"
+if $ES_MODE; then
+    if $PREPARE_MODE; then
+        info "Mode: Elementary Stream + Prepare (strip filler NALUs)"
+    else
+        info "Mode: Elementary Stream (for TTCut)"
+    fi
+else
+    if $PREPARE_MODE; then
+        warn "Prepare mode (-p) only works with Elementary Stream mode (-e)"
+        PREPARE_MODE=false
+    fi
+    info "Mode: Normalized MKV"
+fi
+echo ""
+
+# Get stream information with language tags
+VIDEO_STREAM=""
+AUDIO_STREAMS=()
+SUBTITLE_STREAMS=()
+VIDEO_CODEC=""
+VIDEO_WIDTH=""
+VIDEO_HEIGHT=""
+FRAME_RATE=""
+
+# Get video stream info
+VIDEO_INFO=$(ffprobe -v error -select_streams v:0 -show_entries stream=index,codec_name,width,height,r_frame_rate -of csv "$INPUT" 2>&1 | grep "^stream," | head -1)
+if [ -n "$VIDEO_INFO" ]; then
+    IFS=',' read -r _ idx codec_name width height frame_rate <<< "$VIDEO_INFO"
+    VIDEO_STREAM="$idx"
+    VIDEO_CODEC="$codec_name"
+    VIDEO_WIDTH="$width"
+    VIDEO_HEIGHT="$height"
+    FRAME_RATE="$frame_rate"
+    info "Video stream $idx: $codec_name ${width}x${height} @ ${frame_rate}"
+fi
+
+# Get audio streams with language (deduplicate by index, prefer entries with language)
+declare -A AUDIO_MAP
+while IFS=',' read -r _ idx codec_name lang; do
+    [ -z "$idx" ] && continue
+    # If we already have this index with a language, skip
+    if [ -n "${AUDIO_MAP[$idx]}" ]; then
+        # Only replace if current has no language and new one does
+        old_lang="${AUDIO_MAP[$idx]##*:}"
+        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
+            AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
+        fi
+    else
+        lang="${lang:-und}"
+        AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
+    fi
+done < <(ffprobe -v error -select_streams a -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+
+# Convert map to array, sorted by index
+for idx in $(echo "${!AUDIO_MAP[@]}" | tr ' ' '\n' | sort -n); do
+    AUDIO_STREAMS+=("${AUDIO_MAP[$idx]}")
+    IFS=':' read -r _ codec lang <<< "${AUDIO_MAP[$idx]}"
+    info "Audio stream $idx: $codec [$lang]"
+done
+
+# Get subtitle streams with language (deduplicate by index, prefer entries with language)
+declare -A SUB_MAP
+while IFS=',' read -r _ idx codec_name lang; do
+    [ -z "$idx" ] && continue
+    if [ -n "${SUB_MAP[$idx]}" ]; then
+        old_lang="${SUB_MAP[$idx]##*:}"
+        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
+            SUB_MAP[$idx]="$idx:$codec_name:$lang"
+        fi
+    else
+        lang="${lang:-und}"
+        SUB_MAP[$idx]="$idx:$codec_name:$lang"
+    fi
+done < <(ffprobe -v error -select_streams s -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+
+for idx in $(echo "${!SUB_MAP[@]}" | tr ' ' '\n' | sort -n); do
+    SUBTITLE_STREAMS+=("${SUB_MAP[$idx]}")
+    IFS=':' read -r _ codec lang <<< "${SUB_MAP[$idx]}"
+    info "Subtitle stream $idx: $codec [$lang]"
+done
+
+echo ""
+
+# Check we have video
+[ -n "$VIDEO_STREAM" ] || error "No video stream found"
+
+# Determine video extension based on codec
+case "$VIDEO_CODEC" in
+    h264)
+        VIDEO_EXT="264"
+        info "Video codec: H.264/AVC"
+        ;;
+    hevc|h265)
+        VIDEO_EXT="265"
+        info "Video codec: H.265/HEVC"
+        ;;
+    mpeg2video)
+        VIDEO_EXT="m2v"
+        info "Video codec: MPEG-2"
+        ;;
+    *)
+        VIDEO_EXT="$VIDEO_CODEC"
+        warn "Video codec $VIDEO_CODEC may not be fully supported"
+        ;;
+esac
+
+# Get original timestamps for info
+START_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+info "Original video start time: ${START_PTS}s"
+echo ""
+
+#############################################################################
+# ELEMENTARY STREAM MODE
+#############################################################################
+if $ES_MODE; then
+    step "Extracting Elementary Streams..."
+    echo ""
+
+    # 1. Extract video as elementary stream
+    OUTPUT_VIDEO="$OUTDIR/${BASENAME}_video.${VIDEO_EXT}"
+    info "Extracting video -> $OUTPUT_VIDEO"
+
+    # Use ffmpeg to extract raw elementary stream
+    # -bsf:v extracts raw NAL units for H.264/H.265
+    case "$VIDEO_CODEC" in
+        h264)
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$VIDEO_STREAM \
+                -c:v copy \
+                -bsf:v h264_mp4toannexb \
+                -f h264 \
+                "$OUTPUT_VIDEO" 2>&1 | grep -E "^(frame=|Output|Stream|size=)" | tail -3 || true
+            ;;
+        hevc|h265)
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$VIDEO_STREAM \
+                -c:v copy \
+                -bsf:v hevc_mp4toannexb \
+                -f hevc \
+                "$OUTPUT_VIDEO" 2>&1 | grep -E "^(frame=|Output|Stream|size=)" | tail -3 || true
+            ;;
+        mpeg2video)
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$VIDEO_STREAM \
+                -c:v copy \
+                -f mpeg2video \
+                "$OUTPUT_VIDEO" 2>&1 | grep -E "^(frame=|Output|Stream|size=)" | tail -3 || true
+            ;;
+        *)
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$VIDEO_STREAM \
+                -c:v copy \
+                "$OUTPUT_VIDEO" 2>&1 | grep -E "^(frame=|Output|Stream|size=)" | tail -3 || true
+            ;;
+    esac
+
+    VIDEO_SIZE=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
+    info "  Video size: $(numfmt --to=iec $VIDEO_SIZE)"
+    echo ""
+
+    # 1b. Strip filler NALUs if prepare mode is enabled
+    FILLER_STRIPPED=false
+    FILLER_SAVED=0
+    if $PREPARE_MODE && { [ "$VIDEO_CODEC" = "h264" ] || [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ]; }; then
+        # Find the appropriate analysis tool
+        STRIP_TOOL=""
+        if [ "$VIDEO_CODEC" = "h264" ]; then
+            for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
+                if [ -x "$path" ]; then
+                    STRIP_TOOL="$path"
+                    break
+                fi
+            done
+        else
+            for path in "/usr/local/src/h264bitstream/h265_analyze" "./h265_analyze" "h265_analyze"; do
+                if [ -x "$path" ]; then
+                    STRIP_TOOL="$path"
+                    break
+                fi
+            done
+        fi
+
+        if [ -n "$STRIP_TOOL" ]; then
+            step "Stripping filler NALUs from video stream..."
+
+            # Create temp file for stripped output
+            TEMP_STRIPPED="$OUTDIR/.${BASENAME}_stripped.${VIDEO_EXT}"
+
+            # Run with -f (strip filler) and -o (output file) and -Q (silent)
+            # Note: Tool returns exit code 1 if MMCO errors found, but still writes output
+            "$STRIP_TOOL" -f -Q -o "$TEMP_STRIPPED" "$OUTPUT_VIDEO" 2>/dev/null || true
+
+            # Check if output file was created and is smaller
+            if [ -f "$TEMP_STRIPPED" ]; then
+                STRIPPED_SIZE=$(stat -c%s "$TEMP_STRIPPED" 2>/dev/null || echo 0)
+
+                if [ "$STRIPPED_SIZE" -gt 0 ] && [ "$STRIPPED_SIZE" -lt "$VIDEO_SIZE" ]; then
+                    FILLER_SAVED=$((VIDEO_SIZE - STRIPPED_SIZE))
+                    FILLER_PCT=$(echo "scale=1; $FILLER_SAVED * 100 / $VIDEO_SIZE" | bc 2>/dev/null || echo "?")
+
+                    # Replace original with stripped version
+                    mv "$TEMP_STRIPPED" "$OUTPUT_VIDEO"
+                    FILLER_STRIPPED=true
+
+                    info "  Filler stripped: saved $(numfmt --to=iec $FILLER_SAVED) ($FILLER_PCT%)"
+                    info "  New video size: $(numfmt --to=iec $STRIPPED_SIZE)"
+                else
+                    info "  No filler NALUs found"
+                    rm -f "$TEMP_STRIPPED"
+                fi
+            else
+                warn "  Filler stripping failed - keeping original"
+            fi
+            echo ""
+        else
+            warn "h264bitstream tools not found - skipping filler stripping"
+            warn "Build tools in /usr/local/src/h264bitstream with: make -f Makefile.unix"
+            echo ""
+        fi
+    fi
+
+    # 2. Extract all audio tracks as separate elementary stream files
+    AUDIO_FILES=()
+    if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
+        info "Extracting audio tracks..."
+
+        for i in "${!AUDIO_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+
+            # Determine extension
+            case "$codec" in
+                mp2|mp3) EXT="mp2" ;;
+                ac3|eac3) EXT="ac3" ;;
+                aac) EXT="aac" ;;
+                *) EXT="$codec" ;;
+            esac
+
+            # Include language in filename
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}.${EXT}"
+
+            # If file already exists (same language, different stream), add index
+            if [ -f "$OUTPUT_AUDIO" ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}_${i}.${EXT}"
+            fi
+
+            info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
+
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$idx \
+                -c:a copy \
+                "$OUTPUT_AUDIO" 2>&1 | grep -E "^(Output|Stream|size=)" | tail -2 || true
+
+            AUDIO_FILES+=("$OUTPUT_AUDIO")
+        done
+        echo ""
+    fi
+
+    # 3. Try to extract subtitles
+    SUBTITLE_FILES=()
+    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+        info "Attempting subtitle extraction..."
+
+        for sub in "${SUBTITLE_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "$sub"
+
+            case "$codec" in
+                dvb_subtitle|dvbsub)
+                    warn "  DVB subtitle $idx [$lang] - bitmap format, needs OCR"
+                    ;;
+                subrip|srt|text)
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_sub_${lang}.srt"
+                    info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    SUBTITLE_FILES+=("$OUTPUT_SUB")
+                    ;;
+                *)
+                    warn "  Subtitle $idx [$lang]: $codec - not supported"
+                    ;;
+            esac
+        done
+        echo ""
+    fi
+
+    # 4. Create info file with metadata
+    OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
+    info "Creating info file: $OUTPUT_INFO"
+
+    cat > "$OUTPUT_INFO" << EOF
+# TTCut Elementary Stream Info File
+# Generated: $(date -Iseconds)
+# Source: $INPUT
+
+[video]
+file=${BASENAME}_video.${VIDEO_EXT}
+codec=$VIDEO_CODEC
+width=$VIDEO_WIDTH
+height=$VIDEO_HEIGHT
+frame_rate=$FRAME_RATE
+start_pts=$START_PTS
+filler_stripped=$FILLER_STRIPPED
+filler_saved_bytes=$FILLER_SAVED
+
+[audio]
+count=${#AUDIO_STREAMS[@]}
+EOF
+
+    for i in "${!AUDIO_STREAMS[@]}"; do
+        IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+        echo "audio_${i}_file=$(basename "${AUDIO_FILES[$i]}" 2>/dev/null || echo "")" >> "$OUTPUT_INFO"
+        echo "audio_${i}_codec=$codec" >> "$OUTPUT_INFO"
+        echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
+    done
+
+    cat >> "$OUTPUT_INFO" << EOF
+
+[subtitles]
+count=${#SUBTITLE_FILES[@]}
+EOF
+
+    for i in "${!SUBTITLE_FILES[@]}"; do
+        echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
+    done
+
+    echo ""
+
+    # 5. Run h264bitstream analysis if available and video is H.264
+    H264_ANALYZE=""
+    for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
+        if [ -x "$path" ]; then
+            H264_ANALYZE="$path"
+            break
+        fi
+    done
+
+    if [ -n "$H264_ANALYZE" ] && [ "$VIDEO_CODEC" = "h264" ]; then
+        step "Analyzing H.264 stream with h264bitstream..."
+        echo ""
+        "$H264_ANALYZE" -q "$OUTPUT_VIDEO" 2>&1 || true
+        echo ""
+    fi
+
+    # Summary
+    echo ""
+    info "=== Elementary Stream Demux Complete ==="
+    echo ""
+    echo "Output files:"
+    ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true
+    echo ""
+    info "Video for TTCut: $OUTPUT_VIDEO"
+    info "Info file: $OUTPUT_INFO"
+    if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
+        info "Audio files: ${#AUDIO_FILES[@]} track(s)"
+    fi
+
+#############################################################################
+# MKV MODE (default)
+#############################################################################
+else
+    # Original MKV mode
+    if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
+        IFS=':' read -r FIRST_AUDIO FIRST_CODEC FIRST_LANG <<< "${AUDIO_STREAMS[0]}"
+        OUTPUT_MKV="$OUTDIR/${BASENAME}_normalized.mkv"
+
+        step "Creating normalized MKV: $OUTPUT_MKV"
+        info "  Video: stream $VIDEO_STREAM"
+        info "  Audio: stream $FIRST_AUDIO [$FIRST_LANG]"
+
+        # Check if mkvmerge is available
+        if ! command -v mkvmerge &> /dev/null; then
+            error "mkvmerge not found. Please install mkvtoolnix package."
+        fi
+
+        # First extract video and audio separately with ffmpeg
+        TEMP_VIDEO="$OUTDIR/.temp_video_$$.mkv"
+        TEMP_AUDIO="$OUTDIR/.temp_audio_$$.mka"
+
+        info "  Extracting video stream..."
+        ffmpeg -y -i "$INPUT" \
+            -map 0:$VIDEO_STREAM \
+            -c copy \
+            "$TEMP_VIDEO" 2>&1 | grep -E "^(frame=|Output|Stream)" || true
+
+        info "  Extracting audio stream..."
+        ffmpeg -y -i "$INPUT" \
+            -map 0:$FIRST_AUDIO \
+            -c copy \
+            "$TEMP_AUDIO" 2>&1 | grep -E "^(frame=|Output|Stream)" || true
+
+        # Use mkvmerge to create the final MKV with bitstream timing fix
+        info "  Muxing with mkvmerge (--fix-bitstream-timing-information)..."
+        mkvmerge -o "$OUTPUT_MKV" \
+            --fix-bitstream-timing-information 0:1 \
+            "$TEMP_VIDEO" \
+            "$TEMP_AUDIO"
+
+        # Clean up temp files
+        rm -f "$TEMP_VIDEO" "$TEMP_AUDIO"
+
+        # Verify output
+        NEW_START=$(ffprobe -v error -show_entries stream=start_time -of csv "$OUTPUT_MKV" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        info "Normalized start time: ${NEW_START}s"
+        echo ""
+    fi
+
+    # Extract additional audio tracks
+    if [ ${#AUDIO_STREAMS[@]} -gt 1 ]; then
+        info "Extracting additional audio tracks..."
+
+        for i in "${!AUDIO_STREAMS[@]}"; do
+            [ $i -eq 0 ] && continue  # Skip first (already in MKV)
+
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+
+            case "$codec" in
+                mp2|mp3) EXT="mp2" ;;
+                ac3) EXT="ac3" ;;
+                aac) EXT="aac" ;;
+                *) EXT="$codec" ;;
+            esac
+
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}.${EXT}"
+            if [ -f "$OUTPUT_AUDIO" ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}_${idx}.${EXT}"
+            fi
+
+            info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
+
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$idx \
+                -c copy \
+                "$OUTPUT_AUDIO" 2>&1 | grep -E "^(Output|Stream)" || true
+        done
+        echo ""
+    fi
+
+    # Try to extract subtitles
+    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+        info "Attempting subtitle extraction..."
+
+        for sub in "${SUBTITLE_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "$sub"
+
+            case "$codec" in
+                dvb_subtitle|dvbsub)
+                    warn "DVB subtitle stream $idx [$lang] - bitmap format, needs OCR"
+                    ;;
+                subrip|srt|text)
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_sub_${lang}.srt"
+                    info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ;;
+                *)
+                    warn "Subtitle stream $idx [$lang]: $codec - not supported"
+                    ;;
+            esac
+        done
+        echo ""
+    fi
+
+    # Summary
+    echo ""
+    info "=== Demux Complete ==="
+    echo ""
+    echo "Output files:"
+    ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true
+    echo ""
+    info "Main file for TTCut: $OUTPUT_MKV"
+fi

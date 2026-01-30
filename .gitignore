@@ -26,3 +26,6 @@ ui_h
 ttcut.app
 testing
 core.*
+H264_SMART_CUT_TRACKING.md
+.qtc_clangd/
+.qtcreator/

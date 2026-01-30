@@ -395,6 +395,13 @@
             </property>
            </widget>
           </item>
+          <item row="2" column="0" colspan="3" >
+           <widget class="QCheckBox" name="cbAddSuffix" >
+            <property name="text" >
+             <string>Add "_cut" suffix to output filename</string>
+            </property>
+           </widget>
+          </item>
          </layout>
          <zorder>leOutputPath</zorder>
          <zorder>laOutputPath</zorder>

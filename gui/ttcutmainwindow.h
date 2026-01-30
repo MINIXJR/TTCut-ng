@@ -94,6 +94,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onCutPreviewFinished(TTCutList* cutList);
 
 		void onAudioVideoCut(bool cutAudioOnly, TTCutList* cutList);
+		void onCutFinished();
 
 		void onCutSelectionChanged(const TTCutItem&);
 		void onSetSelectedCutOut(const TTCutItem&);

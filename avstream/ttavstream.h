@@ -159,7 +159,7 @@ class TTVideoStream : public TTAVStream
   TTVideoIndexList* indexList();
 
   int     frameCount();
-  float   frameRate();
+  virtual float   frameRate();
   float   bitRate();
   QTime   streamLengthTime();
   int     currentFrameType();
