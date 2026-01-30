@@ -29,3 +29,10 @@ core.*
 H264_SMART_CUT_TRACKING.md
 .qtc_clangd/
 .qtcreator/
+
+# ignore compiled test tools
+tools/check_idr
+tools/test_es_smartcut
+tools/test_nalu_parser
+tools/test_prj_smartcut
+ttcut-strip-filler

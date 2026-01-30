@@ -131,16 +131,40 @@ QStringList TTCut::recentFileList;
 // encoder settings
 // --------------------------------------------------------------
 // Version
-QString TTCut::versionString = "TTCut - 0.40.0";
+QString TTCut::versionString = "TTCut - 0.50.0";
 
 // Options
 bool TTCut::encoderMode = false;
+int  TTCut::encoderCodec = 1;      // Default to H.264
+
+// Current working values (will be set from codec-specific values)
+int  TTCut::encoderPreset = 5;     // Default to 'medium'
+int  TTCut::encoderCrf = 23;       // Default CRF value
+int  TTCut::encoderProfile = 2;    // Default to 'high' for H.264
+
+// MPEG-2 specific defaults
+int  TTCut::mpeg2Preset = 5;       // medium
+int  TTCut::mpeg2Crf = 4;          // qscale for MPEG-2 (2-31, lower=better)
+int  TTCut::mpeg2Profile = 0;      // Main Profile
+int  TTCut::mpeg2Muxer = 0;        // mplex (TS/PS)
+
+// H.264 specific defaults
+int  TTCut::h264Preset = 5;        // medium
+int  TTCut::h264Crf = 23;          // CRF 23 (good quality)
+int  TTCut::h264Profile = 2;       // high profile
+int  TTCut::h264Muxer = 1;         // mkvmerge (MKV)
+
+// H.265 specific defaults
+int  TTCut::h265Preset = 5;        // medium
+int  TTCut::h265Crf = 28;          // CRF 28 (similar quality to H.264 CRF 23)
+int  TTCut::h265Profile = 0;       // main profile
+int  TTCut::h265Muxer = 1;         // mkvmerge (MKV)
 
 // --------------------------------------------------------------
 // muxer settings
 // --------------------------------------------------------------
 // Options
-int     TTCut::muxMode       = 1;
+int     TTCut::muxMode       = 0;
 int     TTCut::mpeg2Target   = 7;
 QString TTCut::muxProg       = "mplex";
 QString TTCut::muxProgPath   = "/usr/local/bin/";
@@ -148,6 +172,11 @@ QString TTCut::muxProgCmd    = "-f 8";
 QString TTCut::muxOutputPath = QDir::homePath();
 bool    TTCut::muxDeleteES   = false;
 bool    TTCut::muxPause      = true;
+int     TTCut::outputContainer = 1;  // Default to MKV for modern codecs
+
+// MKV chapter settings
+bool    TTCut::mkvCreateChapters  = true;   // Create chapters by default
+int     TTCut::mkvChapterInterval = 5;      // Every 5 minutes
 
 // --------------------------------------------------------------
 // chapter settings
@@ -171,6 +200,7 @@ bool TTCut::isWorking         = false;
 QString  TTCut::muxFileName        = "muxscript.sh";
 QString  TTCut::cutDirPath         = QDir::currentPath();
 QString  TTCut::cutVideoName       = "_cut.m2v";
+bool     TTCut::cutAddSuffix       = true;
 bool     TTCut::cutWriteMaxBitrate = false;
 bool     TTCut::cutWriteSeqEnd     = false;
 bool     TTCut::correctCutTimeCode = false;
