@@ -357,6 +357,13 @@ TTContainerType TTFFmpegWrapper::detectContainer() const
 
     QString formatName = QString::fromUtf8(mFormatCtx->iformat->name);
 
+    // IMPORTANT: Check elementary stream formats FIRST, before generic "mpeg"
+    // "mpegvideo" contains "mpeg" so must be checked before CONTAINER_PS
+    if (formatName.contains("mpegvideo") || formatName.contains("m2v") ||
+        formatName.contains("h264") || formatName.contains("hevc")) {
+        return CONTAINER_ELEMENTARY;
+    }
+
     // Check for common container formats
     if (formatName.contains("mpegts") || formatName.contains("ts")) {
         return CONTAINER_TS;
@@ -369,10 +376,6 @@ TTContainerType TTFFmpegWrapper::detectContainer() const
     }
     if (formatName.contains("mp4") || formatName.contains("mov") || formatName.contains("m4v")) {
         return CONTAINER_MP4;
-    }
-    if (formatName.contains("h264") || formatName.contains("hevc") ||
-        formatName.contains("mpegvideo") || formatName.contains("m2v")) {
-        return CONTAINER_ELEMENTARY;
     }
 
     return CONTAINER_UNKNOWN;
