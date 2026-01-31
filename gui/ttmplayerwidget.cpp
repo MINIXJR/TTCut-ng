@@ -5,10 +5,11 @@
 /* FILE     : ttmplayerwidget.cpp                                             */
 /*----------------------------------------------------------------------------*/
 /* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 05/03/2008 */
+/* MODIFIED: 2026 - Migrated from mplayer to mpv for Wayland support          */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
-// TTMPLAYERWIDGET
+// TTMPLAYERWIDGET (now using mpv)
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -32,14 +33,18 @@
 #include <QLayout>
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Constructor for MplayerWidget
+ * Constructor for MplayerWidget (now uses mpv)
  */
 TTMplayerWidget::TTMplayerWidget(QWidget *parent)
     : TTVideoPlayer(parent)
 {
   log = TTMessageLogger::getInstance();
+  mplayerProc = nullptr;
+  mIsPlaying = false;
 
-  mplayerProc = NULL;
+  // Ensure this widget gets a native window for embedding
+  setAttribute(Qt::WA_NativeWindow);
+  setAttribute(Qt::WA_DontCreateNativeAncestors);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -47,12 +52,16 @@ TTMplayerWidget::TTMplayerWidget(QWidget *parent)
  */
 TTMplayerWidget::~TTMplayerWidget()
 {
-  stopMplayer();
+  cleanUp();
 }
 
 void TTMplayerWidget::cleanUp()
 {
   stopMplayer();
+  if (mplayerProc != nullptr) {
+    delete mplayerProc;
+    mplayerProc = nullptr;
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -60,12 +69,20 @@ void TTMplayerWidget::cleanUp()
  */
 void TTMplayerWidget::play()
 {
-  mplayerProc = new QProcess();
+  // Stop any existing playback first
+  stopMplayer();
+
+  // Create process if needed
+  if (mplayerProc == nullptr) {
+    mplayerProc = new QProcess(this);
+    connectSignals();
+  }
+
   playMplayer(currentMovie);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Stop playin the movie
+ * Stop playing the movie
  */
 void TTMplayerWidget::stop()
 {
@@ -77,21 +94,22 @@ void TTMplayerWidget::stop()
  */
 void TTMplayerWidget::load(QString fileName)
 {
-  currentMovie = fileName;
-
+  // Stop any existing playback
   stopMplayer();
 
-  if (parentWidget() == NULL)
+  currentMovie = fileName;
+
+  if (parentWidget() == nullptr)
     resize(640, 480);
   else
     resize(parentWidget()->width()-1, parentWidget()->height()-1);
 
-   emit optimalSizeChanged();
+  emit optimalSizeChanged();
 }
 
 QSize TTMplayerWidget::sizeHint() const
 {
-  if (parentWidget() == NULL)
+  if (parentWidget() == nullptr)
     return QSize(640, 480);
 
   return QSize(parentWidget()->width()-1, parentWidget()->height()-1);
@@ -100,7 +118,6 @@ QSize TTMplayerWidget::sizeHint() const
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns a value indicating if the native movie controller controls are
  * visible.
- * Remark: For mplayer this method returns always false!
  */
 bool TTMplayerWidget::getControlsVisible() const
 {
@@ -109,7 +126,6 @@ bool TTMplayerWidget::getControlsVisible() const
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Set a value indicating if the native movie controller controls are visible.
- * Remark: For mplayer this value is ignored!
  */
 void TTMplayerWidget::setControlsVisible(bool visible)
 {
@@ -117,174 +133,148 @@ void TTMplayerWidget::setControlsVisible(bool visible)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * MPlayer interface
- *
- * start mplayer playing file <fileName>
+ * Connect signals for the QProcess
+ */
+void TTMplayerWidget::connectSignals()
+{
+  if (mplayerProc == nullptr) return;
+
+  connect(mplayerProc, SIGNAL(started()),
+          this, SLOT(mplayerStarted()));
+  connect(mplayerProc, SIGNAL(readyReadStandardOutput()),
+          this, SLOT(readFromStdout()));
+  connect(mplayerProc, SIGNAL(readyReadStandardError()),
+          this, SLOT(readFromStdout()));
+  connect(mplayerProc, SIGNAL(finished(int, QProcess::ExitStatus)),
+          this, SLOT(exitMplayer(int, QProcess::ExitStatus)));
+  connect(mplayerProc, SIGNAL(errorOccurred(QProcess::ProcessError)),
+          this, SLOT(errorMplayer(QProcess::ProcessError)));
+  connect(mplayerProc, SIGNAL(stateChanged(QProcess::ProcessState)),
+          this, SLOT(stateChangedMplayer(QProcess::ProcessState)));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * mpv interface - start mpv playing file <fileName>
  */
 bool TTMplayerWidget::playMplayer(QString videoFile)
 {
-  QString     str_cmd;
-  QStringList mplayer_cmd;
-
-  if (!ttAssigned(mplayerProc))
+  if (mplayerProc == nullptr)
     return false;
 
-  //FIXME:
-  //if (isPlaying)
-  //  return false;
-
-  // Setup interface with MPlayer
-  mplayer_cmd.clear();
-
-  // ----------------------------------------------------------------------
-  // slave-mode
-  // ----------------------------------------------------------------------
-  // Switches on slave mode, in which MPlayer works as a backend for other
-  // programs. Instead of intercepting keyboard events, MPlayer will read
-  // commands from stdin.
-  // NOTE: See -input cmdlist for a list of slave commands and
-  // DOCS/tech/slave.txt for their description.
-  // ----------------------------------------------------------------------
-
-  // Every argument must have it's own addArgument
-  mplayer_cmd << "-slave"
-              << "-identify"
-              << "-quiet"
-              << "-wid"
-              << QString::number((long)winId())
-              << "-geometry"
-              << QString("%1x%2+0+0").arg(movieSize.width()).arg(movieSize.height())
-              << videoFile;
-
-  log->infoMsg(__FILE__, __LINE__, QString("mplayer command: %1").arg(mplayer_cmd.join(" ")));
-
-  if (mplayerProc->state() == QProcess::Running)
-  {
-      log->errorMsg(__FILE__, __LINE__, "error starting mplayer!");
-      return false;
+  if (mplayerProc->state() != QProcess::NotRunning) {
+    log->errorMsg(__FILE__, __LINE__, "mpv process still running, cannot start new playback");
+    return false;
   }
 
-  // start the mplayer process
-  mplayerProc->start( "mplayer", mplayer_cmd );
+  // Build mpv command line
+  QStringList mpv_cmd;
 
-  // signal and slot connection for the mplayer process
-  // detect when mplayer has information ready for us
-  connect(mplayerProc, SIGNAL(started()),                           this, SLOT( mplayerStarted()));
-  connect(mplayerProc, SIGNAL(readyRead()),                         this, SLOT( readFromStdout()));
-  connect(mplayerProc, SIGNAL(finished(int, QProcess::ExitStatus)), this, SLOT( exitMplayer(int, QProcess::ExitStatus) ) );
-  connect(mplayerProc, SIGNAL(error(QProcess::ProcessError)),       this, SLOT( errorMplayer(QProcess::ProcessError) ) );
-  connect(mplayerProc, SIGNAL(stateChanged(QProcess::ProcessState)),this, SLOT( stateChangedMplayer(QProcess::ProcessState) ) );
+  // mpv options for embedded playback
+  // --wid for X11 embedding, --vo=x11 for compatibility
+  mpv_cmd << "--really-quiet"
+          << "--vo=x11"                           // Force X11 output for embedding
+          << QString("--wid=%1").arg(winId())     // Embed in our window
+          << "--no-osc"                           // Disable on-screen controller
+          << "--no-input-default-bindings"        // Disable keyboard shortcuts
+          << "--keep-open=no"                     // Exit when done
+          << "--force-window=yes"                 // Force window creation
+          << videoFile;
+
+  log->infoMsg(__FILE__, __LINE__, QString("mpv command: mpv %1").arg(mpv_cmd.join(" ")));
+
+  // Start the mpv process
+  mplayerProc->start("mpv", mpv_cmd);
 
   mIsPlaying = true;
-  //emit isPlayingEvent(isPlaying);
   return true;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * stop mplayer playing
+ * Stop mpv playing
  */
 bool TTMplayerWidget::stopMplayer()
 {
-  if (!ttAssigned(mplayerProc))
+  if (mplayerProc == nullptr)
     return false;
 
-  if (!isPlaying())
+  if (mplayerProc->state() == QProcess::NotRunning)
     return false;
 
-  // stop mplayer
-  mplayerProc->write( "quit\n" );
+  log->debugMsg(__FILE__, __LINE__, "Stopping mpv process...");
+
+  // Terminate gracefully first
+  mplayerProc->terminate();
+
+  // Wait for process to finish
+  if (!mplayerProc->waitForFinished(2000)) {
+    log->debugMsg(__FILE__, __LINE__, "mpv didn't terminate, killing...");
+    mplayerProc->kill();
+    mplayerProc->waitForFinished(1000);
+  }
+
   mIsPlaying = false;
-
-  //emit isPlayingEvent(isPlaying);
   return true;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Slot was called, when mplayer process was started
+ * Slot called when mpv process was started
  */
 void TTMplayerWidget::mplayerStarted()
 {
-  log->infoMsg(__FILE__, __LINE__, "mplayer process started");
+  log->infoMsg(__FILE__, __LINE__, "mpv process started");
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Read messages from mplayer process from stdout
+ * Read messages from mpv process stdout/stderr
  */
 void TTMplayerWidget::readFromStdout()
 {
-  char       temp_str[101];
-  int        i, i_pos;
-  QString    line;
-  QByteArray ba;
+  if (mplayerProc == nullptr) return;
+  if (mplayerProc->state() != QProcess::Running) return;
 
-  if(mplayerProc->state() == QProcess::Running)
-  {
-    ba = mplayerProc->readAll();
+  QByteArray output = mplayerProc->readAllStandardOutput();
+  QByteArray errors = mplayerProc->readAllStandardError();
 
-    i_pos = 0;
-
-    for ( i = 0; i < ba.size(); ++i) 
-    {
-      if ( ba.at(i) != '\n' && i_pos < 100)
-      {
-        temp_str[i_pos] = ba.at(i);
-        i_pos++;
-      }
-      else
-      {
-        temp_str[i_pos] = '\0';
-        line = temp_str;
-        log->infoMsg(__FILE__, __LINE__, QString("%1").arg(line));
-        i_pos = 0;
-      }
-    }
+  if (!output.isEmpty()) {
+    log->infoMsg(__FILE__, __LINE__, QString("mpv: %1").arg(QString(output).trimmed()));
   }
-  else
-  {
-    line = "mplayer finished... done(0)";
-    mIsPlaying = false;
-    emit playerFinished();
-
-    log->infoMsg(__FILE__, __LINE__, QString("%1").arg(line));
+  if (!errors.isEmpty()) {
+    log->infoMsg(__FILE__, __LINE__, QString("mpv err: %1").arg(QString(errors).trimmed()));
   }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * exit mplayer process
+ * Slot called when mpv process exits
  */
 void TTMplayerWidget::exitMplayer(int e_code, QProcess::ExitStatus e_status)
 {
-  log->debugMsg(__FILE__, __LINE__, QString("exit code %1 / exit status %2").arg(e_code).arg(e_status));
-
-  // delete the mplayer process
-  delete mplayerProc;
+  log->debugMsg(__FILE__, __LINE__, QString("mpv exit code %1 / status %2").arg(e_code).arg(e_status));
 
   mIsPlaying = false;
   emit playerFinished();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Error message to logfile
+ * Slot called on mpv process error
  */
-void TTMplayerWidget::errorMplayer( QProcess::ProcessError error )
+void TTMplayerWidget::errorMplayer(QProcess::ProcessError error)
 {
-  log->errorMsg(__FILE__, __LINE__, QString("error: %1").arg(error));
+  // Don't log error if we killed the process ourselves
+  if (error != QProcess::Crashed || mplayerProc->state() == QProcess::Running) {
+    log->errorMsg(__FILE__, __LINE__, QString("mpv error: %1").arg(error));
+  }
 
-  delete mplayerProc;
   mIsPlaying = false;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Mplayer process state changed
+ * Slot called when mpv process state changes
  */
-void TTMplayerWidget::stateChangedMplayer( QProcess::ProcessState newState )
+void TTMplayerWidget::stateChangedMplayer(QProcess::ProcessState newState)
 {
-  log->debugMsg(__FILE__, __LINE__, QString("state changed: %1").arg(newState));
+  log->debugMsg(__FILE__, __LINE__, QString("mpv state changed: %1").arg(newState));
 
-  if(newState == QProcess::NotRunning){
+  if (newState == QProcess::NotRunning) {
     mIsPlaying = false;
   }
 }
-
-
-

@@ -50,6 +50,7 @@
 #include "../data/ttcutlist.h"
 #include "../data/ttcutparameter.h"
 
+#include <QElapsedTimer>
 #include <math.h>
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -213,6 +214,8 @@ int TTMPEGAudioStream::createHeaderList( )
 {
   TTMpegAudioHeader* audio_header;
   TTMpegAudioHeader* prev_audio_header;
+  QElapsedTimer updateTime;
+  const int updateIntervalMs = 1000;
 
   header_list = new TTAudioHeaderList( 1000 );
 
@@ -220,6 +223,7 @@ int TTMPEGAudioStream::createHeaderList( )
 
   try
   {
+    updateTime.start();
     emit statusReport(StatusReportArgs::Start, "Create audio-header list", stream_buffer->size());
 
     while ( !stream_buffer->atEnd() )
@@ -255,7 +259,10 @@ int TTMPEGAudioStream::createHeaderList( )
       header_list->add( audio_header );
       stream_buffer->seekRelative( audio_header->frame_length-4 );
 
-      emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+      if (updateTime.elapsed() >= updateIntervalMs) {
+        emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+        updateTime.restart();
+      }
     }
 
     emit statusReport(StatusReportArgs::Finished, "Audio-header list created", stream_buffer->position());

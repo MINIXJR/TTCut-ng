@@ -109,12 +109,12 @@ int TTCut::stepQuickJump   =  25;
 int TTCut::stepMouseWheel  = 120;
 
 // Index files
-bool TTCut::createVideoIDD = false;
-bool TTCut::createAudioIDD = false;
+bool TTCut::createVideoIDD = true;
+bool TTCut::createAudioIDD = true;
 bool TTCut::createPrevIDD  = false;
 bool TTCut::createD2V      = false;
-bool TTCut::readVideoIDD   = false;
-bool TTCut::readAudioIDD   = false;
+bool TTCut::readVideoIDD   = true;
+bool TTCut::readAudioIDD   = true;
 bool TTCut::readPrevIDD    = false;
 
  // Logfile

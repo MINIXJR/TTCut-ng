@@ -44,6 +44,8 @@
 #include "ttac3audiostream.h"
 #include "ttaudioheaderlist.h"
 
+#include <QElapsedTimer>
+
 #include "../common/istatusreporter.h"
 #include "../common/ttexception.h"
 #include "../data/ttcutlist.h"
@@ -159,6 +161,8 @@ int TTAC3AudioStream::createHeaderList()
 {
   TTAC3AudioHeader* audio_header;
   TTAC3AudioHeader* prev_audio_header;
+  QElapsedTimer updateTime;
+  const int updateIntervalMs = 1000;
 
   header_list = new TTAudioHeaderList( 1000 );
 
@@ -166,6 +170,7 @@ int TTAC3AudioStream::createHeaderList()
 
   try
   {
+    updateTime.start();
     emit statusReport(StatusReportArgs::Start, "Create audio-header list", stream_buffer->size());
 
     while (!stream_buffer->atEnd())
@@ -194,7 +199,10 @@ int TTAC3AudioStream::createHeaderList()
 
       stream_buffer->seekRelative(audio_header->syncframe_words*2-8);
 
-      emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+      if (updateTime.elapsed() >= updateIntervalMs) {
+        emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+        updateTime.restart();
+      }
     }
     emit statusReport(StatusReportArgs::Finished, "Audio-header list created", stream_buffer->position());
   }
