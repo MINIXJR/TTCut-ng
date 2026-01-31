@@ -15,6 +15,8 @@
 - Make the current frame position clickable (enter current frame position)
 - More keyboard shortcuts
 - User warning when click "New Project" and video stream is loaded
+- Prepare long term processes for user cancellation (abort button)
+- Internationalisation (i18n) - translate UI to other languages
 
 ### Audio Format Support
 
@@ -58,6 +60,9 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 - Remove some unused settings and buttons without function
 - Find a solution for realtime playback of demuxed video stream (play-button)
+- Implement plugin interface for external tools (encoders, muxers, players)
+- Write a FAQ / user documentation
+- Find a logo for TTCut-ng
 
 ## Completed
 
@@ -67,4 +72,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Replace transcode with ffmpeg for MPEG-2 encoding
 - [x] Connect encoder UI settings to actual encoders
 - [x] MKV output via mkvmerge
+- [x] MKV chapter marks support
 - [x] A/V sync offset support for demuxed streams
+- [x] New GUI layout with TreeView widgets and multi-input-stream support
