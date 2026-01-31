@@ -36,23 +36,23 @@ echo ""
 BUILD_VERSION="${VERSION}+git${GIT_DATE}-${GIT_COMMIT_COUNT}-${GIT_HASH}"
 BUILD_DIR="${BUILD_BASE_DIR}/${PACKAGE_NAME}-${BUILD_VERSION}"
 
+# Package version always includes git info
+PACKAGE_VERSION="${BUILD_VERSION}-1~${DISTRO}"
+
 # Prompt for changelog description
-read -p "Enter changelog description (or press Enter to use existing): " CHANGELOG_MSG
+read -p "Enter changelog description (or press Enter for 'Git snapshot'): " CHANGELOG_MSG
 
-if [ -n "$CHANGELOG_MSG" ]; then
-    PACKAGE_VERSION="${BUILD_VERSION}-1~${DISTRO}"
-
-    echo "==> Creating changelog entry for version: $PACKAGE_VERSION"
-
-    # Update changelog
-    DEBFULLNAME="MINIXJR" DEBEMAIL="35893755+MINIXJR@users.noreply.github.com" \
-        dch --newversion "$PACKAGE_VERSION" --distribution "$DISTRO" \
-        "$CHANGELOG_MSG"
-else
-    # Use current version from changelog
-    PACKAGE_VERSION=$(head -1 debian/changelog | sed -n 's/.*(\([^)]*\)).*/\1/p')
-    echo "==> Using existing changelog version: $PACKAGE_VERSION"
+# Default message if empty
+if [ -z "$CHANGELOG_MSG" ]; then
+    CHANGELOG_MSG="Git snapshot ${GIT_HASH}"
 fi
+
+echo "==> Creating changelog entry for version: $PACKAGE_VERSION"
+
+# Update changelog with git version
+DEBFULLNAME="MINIXJR" DEBEMAIL="35893755+MINIXJR@users.noreply.github.com" \
+    dch --newversion "$PACKAGE_VERSION" --distribution "$DISTRO" \
+    "$CHANGELOG_MSG"
 
 # Clean build artifacts
 echo "==> Cleaning build artifacts..."
