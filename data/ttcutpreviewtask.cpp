@@ -180,13 +180,32 @@ void TTCutPreviewTask::operation()
           mpAVData->threadTaskPool()->start(cutSubtitleTask, true);
         }
 
+        // Get A/V sync offset from .info file
+        int avOffsetMs = 0;
+        TTVideoStream* vStream = tmpCutList->at(0).avDataItem()->videoStream();
+        QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
+        if (!infoFile.isEmpty()) {
+          TTESInfo esInfo(infoFile);
+          if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
+            avOffsetMs = esInfo.avOffsetMs();
+            qDebug() << "MPEG-2 preview: A/V sync offset from .info:" << avOffsetMs << "ms";
+          }
+        }
+
         // Mux MPEG-2 with mplex
         QString muxCommand;
         QString videoFile = createPreviewFileName(i + 1, videoExt);
         if (hasAudio) {
           QString audioFile = createPreviewFileName(i + 1, "mpa");
-          muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null").
-              arg(outputFile).arg(videoFile).arg(audioFile);
+          // mplex -O: offset of timestamps (video-audio) in ms
+          // av_offset_ms = audio - video, so we negate it for mplex
+          if (avOffsetMs != 0) {
+            muxCommand = QString("mplex -f 8 -O %1ms -o \"%2\" \"%3\" \"%4\" 2>/dev/null").
+                arg(-avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
+          } else {
+            muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null").
+                arg(outputFile).arg(videoFile).arg(audioFile);
+          }
         } else {
           muxCommand = QString("mv \"%1\" \"%2\" 2>/dev/null").
               arg(videoFile).arg(outputFile);
@@ -237,13 +256,20 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // Get file extension for output
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
-  // Get frame rate from .info file (vStream->frameRate() may be wrong for ES files)
+  // Get frame rate and A/V offset from .info file
+  int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(sourceFile);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-      frameRate = esInfo.frameRate();
-      qDebug() << "Preview: ES frame rate from .info:" << frameRate << "fps";
+    if (esInfo.isLoaded()) {
+      if (esInfo.frameRate() > 0) {
+        frameRate = esInfo.frameRate();
+        qDebug() << "Preview: ES frame rate from .info:" << frameRate << "fps";
+      }
+      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
+        avOffsetMs = esInfo.avOffsetMs();
+        qDebug() << "Preview: A/V sync offset from .info:" << avOffsetMs << "ms";
+      }
     }
   }
 
@@ -314,6 +340,11 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     // Set frame duration for correct timing
     int frameDurationNs = (int)(1000000000.0 / frameRate);
     mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+
+    // Apply A/V sync offset if present
+    if (avOffsetMs != 0) {
+      mkvProvider.setAudioSyncOffset(avOffsetMs);
+    }
 
     if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
       qDebug() << "Preview mux complete:" << outputFile;

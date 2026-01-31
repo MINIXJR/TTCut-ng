@@ -62,6 +62,10 @@ TTESInfo::TTESInfo()
     , mStartPts(0.0)
     , mFillerStripped(false)
     , mFillerSavedBytes(0)
+    , mHasTimingInfo(false)
+    , mFirstVideoPts(0.0)
+    , mFirstAudioPts(0.0)
+    , mAvOffsetMs(0)
 {
 }
 
@@ -190,6 +194,17 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
 
         if (!mMarkers.isEmpty()) {
             qDebug() << "  VDR Markers:" << mMarkers.size();
+        }
+    }
+    else if (section == "timing") {
+        // A/V sync offset information
+        mFirstVideoPts = values.value("first_video_pts", "0").toDouble();
+        mFirstAudioPts = values.value("first_audio_pts", "0").toDouble();
+        mAvOffsetMs = values.value("av_offset_ms", "0").toInt();
+        mHasTimingInfo = true;
+
+        if (mAvOffsetMs != 0) {
+            qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
         }
     }
 

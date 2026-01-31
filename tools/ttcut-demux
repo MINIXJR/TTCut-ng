@@ -75,6 +75,7 @@ if [ -z "$1" ]; then
 fi
 
 INPUT="$1"
+ORIGINAL_INPUT="$1"  # Save original path before any modifications
 # Handle different extensions
 BASENAME=$(basename "$INPUT")
 BASENAME="${BASENAME%.*}"  # Remove any extension
@@ -459,7 +460,32 @@ if $ES_MODE; then
         echo ""
     fi
 
-    # 4. Create info file with metadata
+    # 4. Calculate A/V sync offset
+    # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
+    # The repaired file has timestamps normalized to 0, so we need the original for offset
+    info "Calculating A/V sync offset..."
+
+    # Get first packet PTS from ORIGINAL file (before timestamp repair)
+    # Remove any trailing commas from CSV output
+    FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+    FIRST_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+
+    # Calculate offset: positive = audio starts before video, negative = video starts before audio
+    if [ -n "$FIRST_VIDEO_PTS" ] && [ -n "$FIRST_AUDIO_PTS" ]; then
+        # Use awk for more reliable floating point math
+        AV_OFFSET=$(awk "BEGIN {printf \"%.6f\", $FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS}")
+        AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS) * 1000}")
+        info "  First video PTS: ${FIRST_VIDEO_PTS}s"
+        info "  First audio PTS: ${FIRST_AUDIO_PTS}s"
+        info "  A/V offset: ${AV_OFFSET_MS}ms (audio - video)"
+    else
+        AV_OFFSET="0"
+        AV_OFFSET_MS="0"
+        warn "  Could not determine A/V offset"
+    fi
+    echo ""
+
+    # 5. Create info file with metadata
     OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
     info "Creating info file: $OUTPUT_INFO"
 
@@ -477,6 +503,14 @@ frame_rate=$FRAME_RATE
 start_pts=$START_PTS
 filler_stripped=$FILLER_STRIPPED
 filler_saved_bytes=$FILLER_SAVED
+
+[timing]
+# A/V sync offset in milliseconds
+# Positive = audio starts before video (delay audio)
+# Negative = video starts before audio (delay video)
+first_video_pts=$FIRST_VIDEO_PTS
+first_audio_pts=$FIRST_AUDIO_PTS
+av_offset_ms=$AV_OFFSET_MS
 
 [audio]
 count=${#AUDIO_STREAMS[@]}

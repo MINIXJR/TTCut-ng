@@ -107,6 +107,12 @@ public:
     QList<TTMarkerInfo> markers() const { return mMarkers; }
     bool hasMarkers() const { return !mMarkers.isEmpty(); }
 
+    // Timing info (A/V sync offset)
+    double firstVideoPts() const { return mFirstVideoPts; }
+    double firstAudioPts() const { return mFirstAudioPts; }
+    int avOffsetMs() const { return mAvOffsetMs; }
+    bool hasTimingInfo() const { return mHasTimingInfo; }
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -136,6 +142,12 @@ private:
 
     // VDR Markers
     QList<TTMarkerInfo> mMarkers;
+
+    // Timing info (A/V sync)
+    bool mHasTimingInfo;
+    double mFirstVideoPts;
+    double mFirstAudioPts;
+    int mAvOffsetMs;
 };
 
 #endif // TTESINFO_H

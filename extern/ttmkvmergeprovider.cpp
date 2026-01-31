@@ -50,6 +50,7 @@ static const QStringList sMkvMergePaths = {
 TTMkvMergeProvider::TTMkvMergeProvider()
     : QObject()
     , mProcess(nullptr)
+    , mAudioSyncOffsetMs(0)
 {
 }
 
@@ -160,6 +161,18 @@ void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
 }
 
 // -----------------------------------------------------------------------------
+// Set A/V sync offset for audio tracks (in milliseconds)
+// Positive offset = audio delayed, negative = audio earlier
+// -----------------------------------------------------------------------------
+void TTMkvMergeProvider::setAudioSyncOffset(int offsetMs)
+{
+    mAudioSyncOffsetMs = offsetMs;
+    if (offsetMs != 0) {
+        qDebug() << "TTMkvMergeProvider: A/V sync offset set to" << offsetMs << "ms";
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Main muxing function
 // -----------------------------------------------------------------------------
 bool TTMkvMergeProvider::mux(const QString& outputFile,
@@ -235,10 +248,21 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
     // Video file
     args << videoFile;
 
-    // Audio files
+    // Audio files with optional sync offset
+    // Track IDs in MKV: video=0, audio starts at 1
+    int audioTrackId = 1;
     for (const QString& audio : audioFiles) {
         if (QFile::exists(audio)) {
+            // Apply A/V sync offset if set
+            // av_offset_ms = audio_pts - video_pts
+            // Negative means audio starts before video, so we need to DELAY audio
+            // mkvmerge --sync: positive = delay track, negative = advance track
+            // Therefore we NEGATE the offset: -(-384) = +384 = delay audio by 384ms
+            if (mAudioSyncOffsetMs != 0) {
+                args << "--sync" << QString("%1:%2").arg(audioTrackId).arg(-mAudioSyncOffsetMs);
+            }
             args << audio;
+            audioTrackId++;
         }
     }
 

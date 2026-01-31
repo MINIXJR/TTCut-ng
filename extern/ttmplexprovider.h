@@ -54,6 +54,10 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     void writeMuxScript();
     void mplexPart(int index);
 
+    // A/V sync offset in milliseconds (from .info file)
+    // mplex uses --sync-offset (positive = video ahead of audio)
+    void setAudioSyncOffset(int offsetMs) { mAudioSyncOffsetMs = offsetMs; }
+
   private:
     QString     createOutputFilePath(const QString& videoFilePath);
     QStringList createMplexArguments(const QString& videoFilePath, const QStringList& audioFilePaths, bool escapeFileNames);
@@ -78,6 +82,7 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     QProcess*           proc;
     QHash<QString, int> verbose;
     QHash<QString, int> format;
+    int                 mAudioSyncOffsetMs;
 };
 
 #endif //TTMPLEXPROVIDER

@@ -66,6 +66,10 @@ public:
     void setLanguage(int trackId, const QString& lang);
     void setChapterFile(const QString& chapterFile);
 
+    // A/V sync offset in milliseconds (from .info file)
+    // Positive = audio starts later, negative = audio starts earlier
+    void setAudioSyncOffset(int offsetMs);
+
     // Check mkvmerge installation
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -87,6 +91,7 @@ private:
     QProcess* mProcess;
     QString mLastError;
     QString mChapterFile;
+    int mAudioSyncOffsetMs;
 
     struct TrackOption {
         QString name;

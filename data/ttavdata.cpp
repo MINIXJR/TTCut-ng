@@ -85,6 +85,7 @@ TTAVData::TTAVData()
 	mpAVList          = new TTAVList();
 	mpCutList         = new TTCutList();
 	mpMarkerList      = new TTMarkerList();
+  mAvSyncOffsetMs   = 0;
 
 	connect(mpThreadTaskPool, SIGNAL(init()), this, SLOT(onThreadPoolInit()));
   connect(mpThreadTaskPool, SIGNAL(exit()), this, SLOT(onThreadPoolExit()));
@@ -810,6 +811,17 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   }
 
   // For MPEG-2: use traditional cutting workflow
+  // Read A/V sync offset from .info file if available
+  mAvSyncOffsetMs = 0;
+  QString infoFile = TTESInfo::findInfoFile(firstStream->filePath());
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
+      mAvSyncOffsetMs = esInfo.avOffsetMs();
+      log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(mAvSyncOffsetMs));
+    }
+  }
+
   cutVideoTask = new TTCutVideoTask(this);
   cutVideoTask->init(tgtFileName, cutList);
 
@@ -879,13 +891,20 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   double frameRate = vStream->frameRate();
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
-  // Get frame rate from .info file (vStream->frameRate() may be wrong for ES files)
+  // Get frame rate and A/V offset from .info file
+  int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(sourceFile);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-      frameRate = esInfo.frameRate();
-      log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info: %1 fps").arg(frameRate));
+    if (esInfo.isLoaded()) {
+      if (esInfo.frameRate() > 0) {
+        frameRate = esInfo.frameRate();
+        log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info: %1 fps").arg(frameRate));
+      }
+      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
+        avOffsetMs = esInfo.avOffsetMs();
+        log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(avOffsetMs));
+      }
     }
   }
 
@@ -993,6 +1012,11 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // Calculate frame duration in nanoseconds (e.g., "0:20000000ns" for 50fps)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
     mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+
+    // Apply A/V sync offset if present
+    if (avOffsetMs != 0) {
+      mkvProvider.setAudioSyncOffset(avOffsetMs);
+    }
 
     bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
 
@@ -1107,6 +1131,12 @@ void TTAVData::onCutFinished()
         connect(mkvProvider, SIGNAL(progressChanged(int, const QString&)),
                 this,        SLOT(onMuxProgress(int, const QString&)));
 
+        // Apply A/V sync offset if present
+        if (mAvSyncOffsetMs != 0) {
+          mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
+          qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
+        }
+
         // Build MKV output filename
         QFileInfo videoInfo(muxItem.getVideoName());
         QString mkvOutput = QFileInfo(QDir(TTCut::cutDirPath),
@@ -1173,6 +1203,9 @@ void TTAVData::onCutFinished()
                                        videoInfo.completeBaseName() + ".mp4").absoluteFilePath();
 
         qDebug() << "Muxing to MP4:" << mp4Output;
+        if (mAvSyncOffsetMs != 0) {
+          qDebug() << "MP4 muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
+        }
 
         QStringList ffmpegArgs;
         ffmpegArgs << "-y";  // Overwrite
@@ -1180,9 +1213,17 @@ void TTAVData::onCutFinished()
         // Input video
         ffmpegArgs << "-i" << muxItem.getVideoName();
 
-        // Input audio files
+        // Input audio files with A/V sync offset
+        // FFmpeg -itsoffset applies to the NEXT input file
+        // av_offset_ms = audio - video
+        // Negative means audio starts before video, so we DELAY audio
+        // -itsoffset delays the input, so we use -(-offset) = +offset to delay audio
         QStringList audioNames = muxItem.getAudioNames();
         for (const QString& audio : audioNames) {
+          if (mAvSyncOffsetMs != 0) {
+            // Apply offset to audio input (negate because -itsoffset delays)
+            ffmpegArgs << "-itsoffset" << QString("%1ms").arg(-mAvSyncOffsetMs);
+          }
           ffmpegArgs << "-i" << audio;
         }
 
@@ -1243,6 +1284,11 @@ void TTAVData::onCutFinished()
     default:
       {
         TTMplexProvider* mplexProvider = new TTMplexProvider(mpMuxList);
+
+        // Apply A/V sync offset if present
+        if (mAvSyncOffsetMs != 0) {
+          mplexProvider->setAudioSyncOffset(mAvSyncOffsetMs);
+        }
 
         connect(mplexProvider, SIGNAL(statusReport(int, const QString&, quint64)),
                 this,          SLOT(onStatusReport(int, const QString&, quint64)));

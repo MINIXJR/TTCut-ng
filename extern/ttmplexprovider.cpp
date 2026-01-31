@@ -83,6 +83,7 @@ TTMplexProvider::TTMplexProvider(TTMuxListData* muxList) : IStatusReporter()
 {
   log       = TTMessageLogger::getInstance();
   mpMuxList = muxList;
+  mAudioSyncOffsetMs = 0;
 }
 
 //! Clean up used resources
@@ -195,8 +196,18 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
 {
   QStringList mplexArgs;
 
-  mplexArgs << "-f8"
-            << "-o"
+  mplexArgs << "-f8";
+
+  // Add A/V sync offset if set (--sync-offset num ms)
+  // mplex -O: offset of timestamps (video-audio) in ms
+  // Our av_offset_ms = audio - video, so we negate it for mplex
+  // Example: audio starts 384ms before video -> av_offset=-384 -> mplex needs +384
+  if (mAudioSyncOffsetMs != 0) {
+    mplexArgs << "-O" << QString("%1ms").arg(-mAudioSyncOffsetMs);
+    qDebug() << "TTMplexProvider: Using A/V sync offset" << -mAudioSyncOffsetMs << "ms";
+  }
+
+  mplexArgs << "-o"
             << (escapeFileNames
 									? toAscii(QString("\"%1\"").arg(createOutputFilePath(videoFilePath)))
 									: toAscii(QString("%1").arg(createOutputFilePath(videoFilePath))))

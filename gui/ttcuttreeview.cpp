@@ -32,6 +32,7 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
+#include "../avstream/ttesinfo.h"
 
 #include "ttcuttreeview.h"
 
@@ -141,7 +142,21 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
   treeItem->setText(1, item.cutInString());
   treeItem->setText(2, item.cutOutString());
   treeItem->setText(3, item.cutLengthString());
-  treeItem->setText(4, "0");
+
+  // Get A/V offset from .info file if available
+  QString offsetStr = "-";  // No .info file
+  if (item.avDataItem() != nullptr && item.avDataItem()->videoStream() != nullptr) {
+    QString videoPath = item.avDataItem()->videoStream()->filePath();
+    QString infoFile = TTESInfo::findInfoFile(videoPath);
+    if (!infoFile.isEmpty()) {
+      TTESInfo esInfo(infoFile);
+      if (esInfo.isLoaded() && esInfo.hasTimingInfo()) {
+        int offsetMs = esInfo.avOffsetMs();
+        offsetStr = QString("%1 ms").arg(offsetMs);
+      }
+    }
+  }
+  treeItem->setText(4, offsetStr);
 
   //emit refreshDisplay();
 }

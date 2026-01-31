@@ -223,6 +223,9 @@ class TTAVData : public QObject
     // Pending VDR markers to be converted to cut entries after video stream is loaded
     // Key: TTAVItem*, Value: List of (cutIn, cutOut) pairs
     QMap<TTAVItem*, QList<QPair<int, int>>> mpPendingVdrMarkers;
+
+    // A/V sync offset in milliseconds (from .info file, used during muxing)
+    int mAvSyncOffsetMs;
 };
 
 
