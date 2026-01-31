@@ -357,6 +357,7 @@ if $ES_MODE; then
 
     # 2. Extract all audio tracks as separate elementary stream files
     AUDIO_FILES=()
+    declare -A LANG_COUNT  # Track how many times each language appears
     if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
         info "Extracting audio tracks..."
 
@@ -372,12 +373,13 @@ if $ES_MODE; then
             esac
 
             # Include language in filename
+            # If same language+extension appears multiple times, add index
             OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
-
-            # If file already exists (same language, different stream), add index
-            if [ -f "$OUTPUT_AUDIO" ]; then
-                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${i}.${EXT}"
+            lang_ext_key="${lang}_${EXT}"
+            if [ "${LANG_COUNT[$lang_ext_key]:-0}" -gt 0 ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${LANG_COUNT[$lang_ext_key]}.${EXT}"
             fi
+            LANG_COUNT[$lang_ext_key]=$((${LANG_COUNT[$lang_ext_key]:-0} + 1))
 
             info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
 
@@ -557,6 +559,7 @@ else
     # Extract additional audio tracks
     if [ ${#AUDIO_STREAMS[@]} -gt 1 ]; then
         info "Extracting additional audio tracks..."
+        declare -A LANG_COUNT  # Track how many times each language appears
 
         for i in "${!AUDIO_STREAMS[@]}"; do
             [ $i -eq 0 ] && continue  # Skip first (already in MKV)
@@ -570,10 +573,13 @@ else
                 *) EXT="$codec" ;;
             esac
 
+            # If same language+extension appears multiple times, add index
             OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
-            if [ -f "$OUTPUT_AUDIO" ]; then
-                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${idx}.${EXT}"
+            lang_ext_key="${lang}_${EXT}"
+            if [ "${LANG_COUNT[$lang_ext_key]:-0}" -gt 0 ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${LANG_COUNT[$lang_ext_key]}.${EXT}"
             fi
+            LANG_COUNT[$lang_ext_key]=$((${LANG_COUNT[$lang_ext_key]:-0} + 1))
 
             info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
 
