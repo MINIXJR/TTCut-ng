@@ -230,6 +230,40 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 			emit nextFrame();
 		break;
 
+	// ---------------------------------------------------------------------------
+	// Vim-like navigation: j/k for frame, g/G for home/end
+	// ---------------------------------------------------------------------------
+	case Qt::Key_J:
+		// j = next frame (vim: down/forward)
+		emit nextFrame();
+		break;
+
+	case Qt::Key_K:
+		// k = previous frame (vim: up/backward)
+		emit prevFrame();
+		break;
+
+	case Qt::Key_G:
+		// G (shift+g) = end, g = home
+		if (e->modifiers() == Qt::ShiftModifier)
+			emit moveToEnd();
+		else
+			emit moveToHome();
+		break;
+
+	// ---------------------------------------------------------------------------
+	// Cut shortcuts: [ for cut-in, ] for cut-out
+	// ---------------------------------------------------------------------------
+	case Qt::Key_BracketLeft:
+		// [ = set cut-in
+		onSetCutIn();
+		break;
+
+	case Qt::Key_BracketRight:
+		// ] = set cut-out
+		onSetCutOut();
+		break;
+
 	default:
 		break;
 	}

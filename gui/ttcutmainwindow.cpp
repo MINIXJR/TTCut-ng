@@ -328,6 +328,15 @@ void TTCutMainWindow::onFileNew()
 {
   if (mpAVData->avCount() == 0) return;
 
+  // Warn user before closing current project
+  QMessageBox::StandardButton reply = QMessageBox::question(this,
+      tr("New Project"),
+      tr("Close current project and start a new one?\nUnsaved changes will be lost."),
+      QMessageBox::Yes | QMessageBox::No,
+      QMessageBox::No);
+
+  if (reply != QMessageBox::Yes) return;
+
   closeProject();
 }
 
@@ -513,6 +522,38 @@ void TTCutMainWindow::onReadAudioStream(QString fName)
 {
   QFileInfo fInfo(fName);
   mpAVData->appendAudioStream(mpCurrentAVDataItem, fInfo);
+
+  // Check if audio length differs significantly from video length
+  if (mpCurrentAVDataItem != 0 &&
+      mpCurrentAVDataItem->videoStream() != 0 &&
+      mpCurrentAVDataItem->audioCount() > 0)
+  {
+    TTVideoStream* video = mpCurrentAVDataItem->videoStream();
+    TTAudioStream* audio = mpCurrentAVDataItem->audioStreamAt(mpCurrentAVDataItem->audioCount() - 1);
+
+    if (audio != 0) {
+      QTime videoLen = video->streamLengthTime();
+      QTime audioLen = audio->streamLengthTime();
+
+      // Calculate difference in milliseconds
+      int videoMs = videoLen.hour() * 3600000 + videoLen.minute() * 60000 +
+                    videoLen.second() * 1000 + videoLen.msec();
+      int audioMs = audioLen.hour() * 3600000 + audioLen.minute() * 60000 +
+                    audioLen.second() * 1000 + audioLen.msec();
+      int diffMs = qAbs(videoMs - audioMs);
+
+      // Warn if difference is more than 1 second
+      if (diffMs > 1000) {
+        QString msg = tr("Audio and video length differ by %1 seconds.\n\n"
+                         "Video: %2\nAudio: %3\n\n"
+                         "This may cause A/V sync issues.")
+                      .arg(diffMs / 1000.0, 0, 'f', 1)
+                      .arg(videoLen.toString("hh:mm:ss.zzz"))
+                      .arg(audioLen.toString("hh:mm:ss.zzz"));
+        QMessageBox::warning(this, tr("Length Mismatch"), msg);
+      }
+    }
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

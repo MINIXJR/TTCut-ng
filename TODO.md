@@ -22,11 +22,8 @@
 
 ## Medium Priority
 
-- Show a warning if audio and video length are different
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)
-- More keyboard shortcuts (vim-like: j/k for frame, i/o for cut-in/out)
-- User warning when click "New Project" and video stream is loaded
 - Prepare long term processes for user cancellation (abort button)
 - Internationalisation (i18n) - translate UI to other languages
 - Undo/Redo for cut list operations
@@ -97,3 +94,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Batch muxing via mux script generation
 - [x] Preview: Next/Previous cut navigation buttons
 - [x] Current Frame: Play button with audio (via mpv)
+- [x] User warning when clicking "New Project"
+- [x] Keyboard shortcuts (j/k for frame, g/G for home/end, [ ] for cut-in/out)
+- [x] Warning if audio and video length differ
