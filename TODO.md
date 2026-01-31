@@ -1,14 +1,26 @@
 # TTCut-ng TODO / Feature Requests
 
-## Audio Format Support
+## High Priority
 
-### Feature Request: Add AAC, EAC3, and DTS audio support
+- **Replace ffmpeg CLI with libav for MPEG-2 encoding**
+  - Currently: MPEG-2 uses TTTranscodeProvider → spawns /usr/bin/ffmpeg
+  - Goal: Use libav directly for consistent architecture across all codecs
+  - Benefits: No external CLI dependency, better error handling, progress reporting
+  - See CLAUDE.md "Future Improvements" section for details
 
-**Status:** Open  
-**Priority:** Medium  
+## Medium Priority
+
+- Show a warning if audio and video length are different
+- Display the resulting stream lengths after cut
+- Make the current frame position clickable (enter current frame position)
+- More keyboard shortcuts
+- User warning when click "New Project" and video stream is loaded
+
+### Audio Format Support
+
+**Status:** Open
+**Priority:** Medium
 **Created:** 2026-01-31
-
-#### Summary
 
 TTCut currently only supports AC3 (Dolby Digital) and MPEG-2 Audio (MP2) formats. Modern DVB broadcasts and streaming sources often use other audio codecs.
 
@@ -41,3 +53,18 @@ Convert unsupported audio to AC3:
 ```bash
 ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 ```
+
+## Low Priority
+
+- Remove some unused settings and buttons without function
+- Find a solution for realtime playback of demuxed video stream (play-button)
+
+## Completed
+
+- [x] H.264/H.265 Smart Cut support (TTESSmartCut)
+- [x] SRT subtitle support
+- [x] Replace mplayer with mpv for preview
+- [x] Replace transcode with ffmpeg for MPEG-2 encoding
+- [x] Connect encoder UI settings to actual encoders
+- [x] MKV output via mkvmerge
+- [x] A/V sync offset support for demuxed streams
