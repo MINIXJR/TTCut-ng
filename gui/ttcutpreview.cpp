@@ -65,6 +65,8 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   connect(cbCutPreview, SIGNAL(currentIndexChanged(int)), SLOT(onCutSelectionChanged(int)));
   connect(pbPlay,       SIGNAL(clicked()),                SLOT(onPlayPreview()));
   connect(pbExit,       SIGNAL(clicked()),                SLOT(onExitPreview()));
+  connect(pbPrevCut,    SIGNAL(clicked()),                SLOT(onPrevCut()));
+  connect(pbNextCut,    SIGNAL(clicked()),                SLOT(onNextCut()));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -186,6 +188,10 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   videoPlayer->load(current_video_file);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon(":/pixmaps/pixmaps/play_18.xpm"));
+
+  // Update prev/next button states
+  pbPrevCut->setEnabled(iCut > 0);
+  pbNextCut->setEnabled(iCut < cbCutPreview->count() - 1);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -223,6 +229,28 @@ void TTCutPreview::onPlayerFinished()
 void TTCutPreview::onExitPreview()
 {
   close();
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Go to previous cut in the list
+ */
+void TTCutPreview::onPrevCut()
+{
+  int currentIndex = cbCutPreview->currentIndex();
+  if (currentIndex > 0) {
+    cbCutPreview->setCurrentIndex(currentIndex - 1);
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Go to next cut in the list
+ */
+void TTCutPreview::onNextCut()
+{
+  int currentIndex = cbCutPreview->currentIndex();
+  if (currentIndex < cbCutPreview->count() - 1) {
+    cbCutPreview->setCurrentIndex(currentIndex + 1);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

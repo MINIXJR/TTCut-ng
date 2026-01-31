@@ -76,6 +76,8 @@ protected slots:
 	void onCutSelectionChanged(int iCut);
 	void onPlayPreview();
 	void onExitPreview();
+	void onPrevCut();
+	void onNextCut();
 
 private:
   TTVideoPlayer* videoPlayer;

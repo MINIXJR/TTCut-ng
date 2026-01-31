@@ -2,9 +2,6 @@
 
 ## High Priority
 
-- **Preview: Next/Previous cut navigation buttons**
-  - Add "Next Cut" and "Previous Cut" buttons in the preview dialog
-  - Quickly navigate between cut points to verify transitions
 
 - **Quick Jump: Keyframe thumbnail browser**
   - New window showing keyframes as thumbnails in a grid (ca. 6x5 = 30 per page)
@@ -104,3 +101,4 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] A/V sync offset support for demuxed streams
 - [x] New GUI layout with TreeView widgets and multi-input-stream support
 - [x] Batch muxing via mux script generation
+- [x] Preview: Next/Previous cut navigation buttons

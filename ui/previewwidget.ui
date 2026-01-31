@@ -34,6 +34,20 @@
    <item row="1" column="0" >
     <layout class="QHBoxLayout" >
      <item>
+      <widget class="QPushButton" name="pbPrevCut" >
+       <property name="text" >
+        <string/>
+       </property>
+       <property name="icon" >
+        <iconset resource="previewwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/goto-prev.png</normaloff>:/pixmaps/pixmaps/goto-prev.png</iconset>
+       </property>
+       <property name="toolTip" >
+        <string>Previous cut</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QComboBox" name="cbCutPreview" >
        <property name="sizePolicy" >
         <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
@@ -52,6 +66,20 @@
          <width>220</width>
          <height>16777215</height>
         </size>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextCut" >
+       <property name="text" >
+        <string/>
+       </property>
+       <property name="icon" >
+        <iconset resource="previewwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/goto-nextb.png</normaloff>:/pixmaps/pixmaps/goto-nextb.png</iconset>
+       </property>
+       <property name="toolTip" >
+        <string>Next cut</string>
        </property>
       </widget>
      </item>
