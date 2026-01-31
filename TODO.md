@@ -8,15 +8,22 @@
   - Benefits: No external CLI dependency, better error handling, progress reporting
   - See CLAUDE.md "Future Improvements" section for details
 
+- **Automatic ad detection integration**
+  - Load markad/comskip markers and convert to cut points
+  - VDR marks are already loaded from .info file
+  - Add "Auto-Cut from Markers" button to apply all marker pairs as cuts
+
 ## Medium Priority
 
 - Show a warning if audio and video length are different
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)
-- More keyboard shortcuts
+- More keyboard shortcuts (vim-like: j/k for frame, i/o for cut-in/out)
 - User warning when click "New Project" and video stream is loaded
 - Prepare long term processes for user cancellation (abort button)
 - Internationalisation (i18n) - translate UI to other languages
+- Undo/Redo for cut list operations
+- Direct VDR .rec folder support (open recording without manual demux)
 
 ### Audio Format Support
 
@@ -56,6 +63,11 @@ Convert unsupported audio to AC3:
 ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 ```
 
+### DVB Subtitle Support
+
+- Support DVB-SUB (bitmap subtitles) and Teletext subtitles
+- Extract and convert to SRT or keep as PGS for MKV output
+
 ## Low Priority
 
 - Remove some unused settings and buttons without function
@@ -63,6 +75,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Implement plugin interface for external tools (encoders, muxers, players)
 - Write a FAQ / user documentation
 - Find a logo for TTCut-ng
+- GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
 ## Completed
 
@@ -75,3 +88,4 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] MKV chapter marks support
 - [x] A/V sync offset support for demuxed streams
 - [x] New GUI layout with TreeView widgets and multi-input-stream support
+- [x] Batch muxing via mux script generation
