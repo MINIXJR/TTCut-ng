@@ -92,6 +92,17 @@ void TTCutPreviewTask::cleanUp()
  */
 void TTCutPreviewTask::operation()
 {
+  // Clean up old preview files BEFORE creating new ones
+  // This prevents stale files from previous sessions being loaded
+  QDir tempDir(TTCut::tempDirPath);
+  QStringList filters;
+  filters << "preview*";
+  QFileInfoList oldPreviewFiles = tempDir.entryInfoList(filters, QDir::Files);
+  for (const QFileInfo& fi : oldPreviewFiles) {
+    QFile::remove(fi.absoluteFilePath());
+  }
+  qDebug() << "Cleaned up" << oldPreviewFiles.count() << "old preview files";
+
   mpPreviewCutList = createPreviewCutList(mpCutList);
 
 	int  iPos;

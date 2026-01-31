@@ -229,16 +229,14 @@ void TTCutPreview::onExitPreview()
  */
 void TTCutPreview::cleanUp()
 {
-  QString   rmCommand = "rm ";
-  QString   fileName  = "preview*";
-  QFileInfo fileInfo;
-
   videoPlayer->cleanUp();
 
-  // clean up preview* files in temp directory
-  fileInfo.setFile(QDir(TTCut::tempDirPath), fileName);
-  rmCommand += fileInfo.absoluteFilePath();
-  rmCommand += " 2>/dev/null";
-
-  //system(rmCommand.toAscii().data());
+  // Clean up all preview* files in temp directory
+  QDir tempDir(TTCut::tempDirPath);
+  QStringList filters;
+  filters << "preview*";
+  QFileInfoList previewFiles = tempDir.entryInfoList(filters, QDir::Files);
+  for (const QFileInfo& fi : previewFiles) {
+    QFile::remove(fi.absoluteFilePath());
+  }
 }
