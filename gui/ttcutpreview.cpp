@@ -232,24 +232,36 @@ void TTCutPreview::onExitPreview()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to previous cut in the list
+ * Go to previous cut in the list and play
  */
 void TTCutPreview::onPrevCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex > 0) {
     cbCutPreview->setCurrentIndex(currentIndex - 1);
+    // Auto-play after selection change
+    if (!videoPlayer->isPlaying()) {
+      videoPlayer->play();
+      pbPlay->setText(tr("Stop"));
+      pbPlay->setIcon(QIcon(":/pixmaps/pixmaps/stop_18.xpm"));
+    }
   }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to next cut in the list
+ * Go to next cut in the list and play
  */
 void TTCutPreview::onNextCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex < cbCutPreview->count() - 1) {
     cbCutPreview->setCurrentIndex(currentIndex + 1);
+    // Auto-play after selection change
+    if (!videoPlayer->isPlaying()) {
+      videoPlayer->play();
+      pbPlay->setText(tr("Stop"));
+      pbPlay->setIcon(QIcon(":/pixmaps/pixmaps/stop_18.xpm"));
+    }
   }
 }
 
