@@ -1,3 +1,18 @@
+ttcut (0.50.1-1~forky) forky; urgency=medium
+
+  * VDR markad integration: Auto-load commercial markers from .info files
+  * ttcut-demux: Added VDR marks file support for automatic ad detection
+  * ttcut-demux: Fixed audio filename counter logic
+  * Markers appear in both Cut tab (as cut pairs) and Marker tab (individual)
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 31 Jan 2026 15:15:00 +0100
+
+ttcut (0.50.0+git20260131-93-c211e15-1~forky) forky; urgency=medium
+
+  * v0.50.0 release
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 14:05:00 +0100
+
 ttcut (0.50.0-1~forky) forky; urgency=medium
 
   * Major release: H.264/H.265 Smart Cut support
