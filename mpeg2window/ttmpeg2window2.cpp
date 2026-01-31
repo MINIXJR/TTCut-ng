@@ -423,7 +423,12 @@ void TTMPEG2Window2::decodeAndShowSlice()
  */
 void TTMPEG2Window2::getFrameInfo()
 {
-	frameInfo   = mpeg2Decoder->getFrameInfo();
+	frameInfo = mpeg2Decoder->getFrameInfo();
+	if (frameInfo == 0) {
+		qDebug("getFrameInfo: frameInfo is NULL");
+		picBuffer = 0;
+		return;
+	}
 	picBuffer   = frameInfo->Y;
 	videoWidth  = frameInfo->width;
 	videoHeight = frameInfo->height;

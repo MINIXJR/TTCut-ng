@@ -1,3 +1,17 @@
+ttcut (0.50.1+git20260131-99-XXXXXXX-1~forky) forky; urgency=medium
+
+  * Fix MPEG-2 decoder crash when scrolling backwards near beginning of video
+  * Fixed out-of-bounds access in moveToFrameIndex() I-frame search
+  * Added NULL check for frameInfo in getFrameInfo()
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 16:00:00 +0100
+
+ttcut (0.50.1+git20260131-98-c5c3cc5-1~forky) forky; urgency=medium
+
+  * VDR markad integration and ttcut-demux improvements
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 15:21:38 +0100
+
 ttcut (0.50.1-1~forky) forky; urgency=medium
 
   * VDR markad integration: Auto-load commercial markers from .info files

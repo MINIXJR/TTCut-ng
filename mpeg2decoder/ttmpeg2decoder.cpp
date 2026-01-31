@@ -355,9 +355,15 @@ int TTMpeg2Decoder::moveToFrameIndex(int framePosition)
   desiredFramePos    = framePosition;
   desiredFrameType   = currentFrameIndex->getPictureCodingType();
 
-  while (currentFrameIndex->getPictureCodingType() != 1 && intraFramePosition >= 0) {
+  while (currentFrameIndex->getPictureCodingType() != 1 && intraFramePosition > 0) {
   	intraFramePosition--;
   	currentFrameIndex = videoIndexList->videoIndexAt(intraFramePosition);
+  }
+
+  // If no I-frame found, fall back to frame 0
+  if (intraFramePosition < 0) {
+    intraFramePosition = 0;
+    currentFrameIndex = videoIndexList->videoIndexAt(0);
   }
 
   // search intra frame before framePositions
