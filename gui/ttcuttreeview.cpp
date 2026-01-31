@@ -179,11 +179,12 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
 
   if (editItemIndex >= 0) {
     editItemIndex = -1;
-    treeItem->setBackground(0, Qt::white);
-    treeItem->setBackground(1, Qt::white);
-    treeItem->setBackground(2, Qt::white);
-    treeItem->setBackground(3, Qt::white);
-    treeItem->setBackground(4, Qt::white);
+    // Reset to default background (empty brush respects theme colors)
+    treeItem->setBackground(0, QBrush());
+    treeItem->setBackground(1, QBrush());
+    treeItem->setBackground(2, QBrush());
+    treeItem->setBackground(3, QBrush());
+    treeItem->setBackground(4, QBrush());
   }
 
   emit itemUpdated(cItem);
@@ -333,11 +334,13 @@ void TTCutTreeView::onEntryEdit()
   QTreeWidgetItem* curItem = videoCutList->currentItem();
   editItemIndex = videoCutList->indexOfTopLevelItem(curItem);
 
-  curItem->setBackground(0, Qt::lightGray);
-  curItem->setBackground(1, Qt::lightGray);
-  curItem->setBackground(2, Qt::lightGray);
-  curItem->setBackground(3, Qt::lightGray);
-  curItem->setBackground(4,Qt::lightGray);
+  // Use palette mid color for edit highlight (works with light and dark themes)
+  QBrush editBrush = palette().mid();
+  curItem->setBackground(0, editBrush);
+  curItem->setBackground(1, editBrush);
+  curItem->setBackground(2, editBrush);
+  curItem->setBackground(3, editBrush);
+  curItem->setBackground(4, editBrush);
 
   // deselect item
   curItem->setSelected(false);
