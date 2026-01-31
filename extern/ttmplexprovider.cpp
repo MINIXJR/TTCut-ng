@@ -277,8 +277,9 @@ void TTMplexProvider::onProcFinished(int, QProcess::ExitStatus exitStatus)
   if (exitStatus != QProcess::NormalExit) return;
   if (!TTCut::muxDeleteES)                return;
 
-  for (int i=0; i<mpMuxList->count(); i++)
-    deleteElementaryStreams(mpMuxList->videoFilePathAt(i), mpMuxList->audioFilePathsAt(i));
+  // Only delete ES files for the current mux item, not all items in the list
+  deleteElementaryStreams(mpMuxList->videoFilePathAt(mCurrentMuxIndex),
+                          mpMuxList->audioFilePathsAt(mCurrentMuxIndex));
 }
 
 //! This signal is emitted whenever the state changed
