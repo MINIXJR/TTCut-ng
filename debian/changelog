@@ -1,3 +1,16 @@
+ttcut (0.50.2-1~forky) forky; urgency=medium
+
+  * Current Frame: Play button with audio playback (embedded mpv)
+  * Preview dialog: Next/Previous cut navigation buttons (Vor/Zurück)
+  * A/V sync offset applied to all output formats (TS, MKV, MP4)
+  * User warning when clicking "New Project" with unsaved changes
+  * Keyboard shortcuts: j/k for frame, g/G for home/end, [ ] for cut-in/out
+  * Warning dialog if audio and video length differ
+  * Help menu: Keyboard shortcuts reference dialog
+  * Fixed duplicate ES file deletion in mplex provider
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 31 Jan 2026 19:30:00 +0100
+
 ttcut (0.50.1+git20260131-99-XXXXXXX-1~forky) forky; urgency=medium
 
   * Fix MPEG-2 decoder crash when scrolling backwards near beginning of video
