@@ -31,6 +31,7 @@
 #include "tth264videostream.h"
 #include "ttvideoheaderlist.h"
 #include "ttvideoindexlist.h"
+#include "ttesinfo.h"
 #include "../data/ttcutparameter.h"
 #include "../common/ttcut.h"
 #include "../common/istatusreporter.h"
@@ -175,15 +176,29 @@ int TTH264VideoStream::createHeaderList()
         mSPS->setFrameRate(streamInfo.frameRate);
     }
 
-    // Store frame rate and bit rate
+    // Store frame rate - prefer .info file over ffmpeg detection
     frame_rate = static_cast<float>(streamInfo.frameRate);
+
+    // Check for .info file with correct frame rate
+    QString infoFile = TTESInfo::findInfoFile(filePath());
+    if (!infoFile.isEmpty()) {
+        TTESInfo esInfo(infoFile);
+        if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+            frame_rate = static_cast<float>(esInfo.frameRate());
+            mSPS->setFrameRate(esInfo.frameRate());
+            mLog->infoMsg(__FILE__, __LINE__,
+                QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
+        }
+    }
+
+    // Store bit rate
     bit_rate = static_cast<float>(streamInfo.bitRate) / 1000.0f; // kbit/s
 
     mLog->infoMsg(__FILE__, __LINE__,
         QString("H.264 stream: %1x%2 @ %3 fps, Profile: %4, Level: %5")
             .arg(streamInfo.width)
             .arg(streamInfo.height)
-            .arg(streamInfo.frameRate, 0, 'f', 2)
+            .arg(frame_rate, 0, 'f', 2)
             .arg(mSPS->profileString())
             .arg(mSPS->levelString()));
 

@@ -9,6 +9,7 @@
 
 #include "ttessmartcut.h"
 #include "../avstream/ttesinfo.h"
+#include "../common/ttcut.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -753,16 +754,40 @@ bool TTESSmartCut::setupEncoder()
     // Thread count
     mEncoder->thread_count = 0;  // Auto
 
-    // Encoder-specific options
+    // Encoder-specific options from UI settings
     AVDictionary* opts = nullptr;
+
+    // Preset names (index 0-8)
+    static const char* presetNames[] = {
+        "ultrafast", "superfast", "veryfast", "faster", "fast",
+        "medium", "slow", "slower", "veryslow"
+    };
+    int presetIdx = qBound(0, TTCut::encoderPreset, 8);
+    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+
+    // CRF value from settings
+    av_dict_set(&opts, "crf", QString::number(TTCut::encoderCrf).toUtf8().constData(), 0);
+
     if (mParser.codecType() == NALU_CODEC_H264) {
-        av_dict_set(&opts, "preset", "fast", 0);
-        av_dict_set(&opts, "crf", "18", 0);
-        av_dict_set(&opts, "profile", "high", 0);
+        // H.264 profile names (index 0-5)
+        static const char* h264Profiles[] = {
+            "baseline", "main", "high", "high10", "high422", "high444"
+        };
+        int profileIdx = qBound(0, TTCut::encoderProfile, 5);
+        av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
     } else if (mParser.codecType() == NALU_CODEC_H265) {
-        av_dict_set(&opts, "preset", "fast", 0);
-        av_dict_set(&opts, "crf", "20", 0);
+        // H.265 profile names (index 0-4)
+        static const char* h265Profiles[] = {
+            "main", "main10", "main12", "main422-10", "main444-10"
+        };
+        int profileIdx = qBound(0, TTCut::encoderProfile, 4);
+        av_dict_set(&opts, "profile", h265Profiles[profileIdx], 0);
     }
+
+    qDebug() << "TTESSmartCut: Encoder settings from UI -"
+             << "preset:" << presetNames[presetIdx]
+             << "crf:" << TTCut::encoderCrf
+             << "profile:" << TTCut::encoderProfile;
 
     int ret = avcodec_open2(mEncoder, codec, &opts);
     av_dict_free(&opts);

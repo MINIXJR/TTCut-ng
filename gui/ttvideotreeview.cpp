@@ -33,12 +33,15 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/tth264videostream.h"
+#include "../avstream/tth265videostream.h"
 
 #include <QHeaderView>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMenu>
 #include <QAction>
+#include <QDebug>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Construct a new TTVideoFileList widget.
@@ -130,15 +133,64 @@ void TTVideoTreeView::onClearList()
 void TTVideoTreeView::onAppendItem(const TTAVItem& item)
 {
   QTreeWidgetItem* treeItem = new QTreeWidgetItem(videoListView);
-  TTVideoStream*   mpeg2    = item.videoStream();
+  TTVideoStream*   vStream  = item.videoStream();
 
-  treeItem->setText(0, (mpeg2 != 0) ? mpeg2->fileName() : "");
-  treeItem->setText(1, (mpeg2 != 0)
-				? QString("%1 (%2)").arg(mpeg2->streamLengthTime().toString("hh:mm:ss.zzz")).arg(mpeg2->frameCount())
-				: "");
-  treeItem->setText(2, (mpeg2 != 0)
-				? QString("%1").arg(mpeg2->frameRate())
-				: "");
+  if (vStream == nullptr) {
+    return;
+  }
+
+  // Column 0: Filename
+  treeItem->setText(0, vStream->fileName());
+
+  // Column 1: Length (time + frame count)
+  treeItem->setText(1, QString("%1 (%2)")
+      .arg(vStream->streamLengthTime().toString("hh:mm:ss.zzz"))
+      .arg(vStream->frameCount()));
+
+  // Column 4: Framerate
+  treeItem->setText(4, QString::number(vStream->frameRate(), 'f', 2));
+
+  // Column 5: Bitrate
+  treeItem->setText(5, QString("%1 kbit/s").arg(vStream->bitRate(), 0, 'f', 0));
+
+  // Get resolution and aspect ratio based on stream type
+  QString resolution;
+  QString aspectRatio;
+  QString vbvDelay;
+
+  // Check for MPEG-2
+  TTMpeg2VideoStream* mpeg2Stream = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  if (mpeg2Stream != nullptr) {
+    TTSequenceHeader* seqHeader = mpeg2Stream->currentSequenceHeader();
+    if (seqHeader != nullptr) {
+      resolution = QString("%1x%2").arg(seqHeader->horizontalSize()).arg(seqHeader->verticalSize());
+      aspectRatio = seqHeader->aspectRatioText();
+      vbvDelay = QString("%1 kB").arg(seqHeader->vbvBufferSize() * 2);
+    }
+  }
+
+  // Check for H.264
+  TTH264VideoStream* h264Stream = dynamic_cast<TTH264VideoStream*>(vStream);
+  if (h264Stream != nullptr && h264Stream->getSPS() != nullptr) {
+    resolution = QString("%1x%2").arg(h264Stream->getSPS()->width()).arg(h264Stream->getSPS()->height());
+    aspectRatio = "H.264";
+  }
+
+  // Check for H.265
+  TTH265VideoStream* h265Stream = dynamic_cast<TTH265VideoStream*>(vStream);
+  if (h265Stream != nullptr && h265Stream->getSPS() != nullptr) {
+    resolution = QString("%1x%2").arg(h265Stream->getSPS()->width()).arg(h265Stream->getSPS()->height());
+    aspectRatio = "H.265";
+  }
+
+  // Column 2: Resolution
+  treeItem->setText(2, resolution);
+
+  // Column 3: Ratio
+  treeItem->setText(3, aspectRatio);
+
+  // Column 6: VBVDelay (MPEG-2 only)
+  treeItem->setText(6, vbvDelay);
 }
 
 void TTVideoTreeView::onItemSelectionChanged()

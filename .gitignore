@@ -36,3 +36,10 @@ tools/test_es_smartcut
 tools/test_nalu_parser
 tools/test_prj_smartcut
 ttcut-strip-filler
+
+# ignore debian build artifacts
+debian/debhelper-build-stamp
+debian/files
+debian/ttcut
+debian/ttcut.substvars
+debian/.debhelper/

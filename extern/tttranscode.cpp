@@ -27,12 +27,15 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-//TODO: make an IEnocdeProvider as interface for other encode
+// TODO: Replace ffmpeg CLI with libav direct encoding (like TTESSmartCut)
+//       This would provide consistent architecture across all codecs and
+//       eliminate the external ffmpeg CLI dependency. See CLAUDE.md for details.
 //
 #include "tttranscode.h"
 #include "ttencodeparameter.h"
 
 #include "../avstream/ttaviwriter.h"
+#include "../common/ttcut.h"
 
 #include <QDebug>
 #include <QCoreApplication>
@@ -90,7 +93,7 @@ void TTTranscodeProvider::buildCommandLine()
                     << "-i"
                     << enc_par.aviFileInfo().absoluteFilePath()
                     << "-c:v" << "mpeg2video"  // MPEG-2 video codec
-                    << "-qscale:v" << "2"      // Quality-based encoding (2 = high quality)
+                    << "-qscale:v" << QString::number(TTCut::mpeg2Crf)  // Quality from UI settings (2-31)
                     << "-pix_fmt" << "yuv420p" // Standard pixel format
                     << "-g" << "15"            // GOP size (15 for PAL)
                     << "-bf" << "2"            // B-frames

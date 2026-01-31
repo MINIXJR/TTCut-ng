@@ -290,6 +290,8 @@ TTVideoStream::TTVideoStream( const QFileInfo &f_info )
   index_list           = 0;
   current_index        = 0;
   current_marker_index = 0;
+  frame_rate           = 0.0f;
+  bit_rate             = 0.0f;
 }
 
 TTVideoStream::~TTVideoStream()
@@ -326,26 +328,46 @@ int TTVideoStream::frameCount()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Return the frame rate from current sequence
+ * Return the frame rate from member variable (H.264/H.265) or sequence header (MPEG-2)
  */
 float TTVideoStream::frameRate()
 {
-	if (header_list->size() == 0)
-		throw new TTInvalidOperationException("invalid");
-  // the framerate is constant in one stream!
-  TTSequenceHeader* sequence = header_list->firstSequenceHeader();
+  // For H.264/H.265, use the member variable set during stream opening
+  if (frame_rate > 0) {
+    return frame_rate;
+  }
 
-  return sequence->frameRateValue();
+  // For MPEG-2, get from sequence header
+  if (header_list != nullptr && header_list->count() > 0) {
+    TTSequenceHeader* sequence = header_list->firstSequenceHeader();
+    if (sequence != nullptr) {
+      return sequence->frameRateValue();
+    }
+  }
+
+  return 25.0f; // Default fallback
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Return the bitrate from current sequence
+ * Return the bitrate from current sequence (MPEG-2) or member variable (H.264/H.265)
  */
 float TTVideoStream::bitRate()
 {
-  TTSequenceHeader* seq = getSequenceHeader(current_index);
+  // For H.264/H.265, use the member variable set during stream opening
+  // (bit_rate is 0 for MPEG-2 streams which use sequence header)
+  if (bit_rate > 0) {
+    return bit_rate;
+  }
 
-  return seq->bitRateKbit();
+  // For MPEG-2, get from sequence header - but only if we have one
+  if (header_list != nullptr && header_list->count() > 0) {
+    TTSequenceHeader* seq = header_list->firstSequenceHeader();
+    if (seq != nullptr) {
+      return seq->bitRateKbit();
+    }
+  }
+
+  return 0.0f;
 }
 
 //! Returns the stream length as QTime

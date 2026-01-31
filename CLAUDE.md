@@ -8,14 +8,20 @@ TTCut is a Qt5-based video editing application for MPEG-2, H.264, and H.265 stre
 
 **Supported Codecs:**
 - MPEG-2 (fully supported, original TTCut functionality)
-- H.264/AVC (smart cut via libav/ffmpeg)
-- H.265/HEVC (smart cut via libav/ffmpeg)
+- H.264/AVC (Smart Cut via TTESSmartCut)
+- H.265/HEVC (Smart Cut via TTESSmartCut)
 
-**Supported Containers:**
-- Elementary streams (.m2v, .h264, .h265)
-- MPEG Transport Stream (.ts, .m2ts)
-- Matroska (.mkv)
-- MP4/ISOBMFF (.mp4, .m4v)
+**Input Format:**
+- Elementary streams only (.m2v, .264, .h264, .265, .h265)
+- Separate audio files (.ac3, .mp2, .mp3, .aac)
+- Optional .info metadata file (for frame rate, etc.)
+
+**Output Format:**
+- MKV (via mkvmerge) with optional chapters
+
+**Preprocessing Workflow:**
+- MPEG-2: Use ProjectX to demux TS → ES files
+- H.264/H.265: Use `tools/ts_demux_normalize.sh -e` to demux TS → ES files
 
 **Key Constraint for MPEG-2**: Cuts without re-encoding are only possible at:
 - Cut-in: I-frames only
@@ -144,48 +150,43 @@ Key classes for subtitle handling:
 - **TTCutSubtitleTask** (data/ttcutsubtitletask.h): Task for cutting subtitle streams
 - **TTSubtitleTreeView** (gui/ttsubtitletreeview.h): UI widget for subtitle file list
 
-### H.264/H.265 Smart Cut Support (WIP)
+### H.264/H.265 Smart Cut Support
 
-Frame-accurate cutting for H.264/H.265 video streams using an avcut-style approach:
+Frame-accurate cutting for H.264/H.265 elementary streams using TTESSmartCut:
+
+**Workflow:**
+```
+DVB Recording (TS) → ts_demux_normalize.sh -e → ES files + .info → TTCut → MKV
+```
 
 **How it works:**
-1. Video is kept in container format (MKV, TS, MP4) - no demuxing to elementary streams
-2. GOP (Group of Pictures) analysis determines which GOPs to copy, encode, or drop
-3. GOPs fully inside kept segments are stream-copied (no quality loss)
-4. GOPs at cut boundaries are decoded and re-encoded (only ~50 frames per cut point)
-5. Audio is stream-copied with timestamp adjustment
+1. Pre-demux TS to elementary streams using `tools/ts_demux_normalize.sh -e`
+2. Native NAL unit parser analyzes GOP structure (TTNaluParser)
+3. GOPs fully inside kept segments are stream-copied (no quality loss, ~99.5%)
+4. GOPs at cut boundaries are decoded and re-encoded (~0.5% of frames)
+5. Audio is cut via libav stream-copy
+6. Final MKV is created with mkvmerge
 
-**Key implementation details (extern/ttffmpegwrapper.cpp):**
-- `smartCut()` method handles the cutting process
-- GOP modes: 0=drop, 1=full copy, 2=partial (needs encoding)
-- Encoder uses `max_b_frames=0` to avoid B-frame complexity in re-encoded sections
-- DTS is assigned sequentially via `lastVideoDts` counter
-- PTS is adjusted by subtracting `firstKeptPts` and `droppedVideoDuration`
+**Key implementation details (extern/ttessmartcut.cpp):**
+- TTNaluParser: Memory-mapped native H.264/H.265 NAL unit parser
+- TTESSmartCut: Frame-accurate Smart Cut engine
+- Encoder uses `bf=0` (no B-frames) for clean segment transitions
+- Encoder recreated between segments (libx264 lookahead limitation)
+- GOP detection recognizes both IDR frames and I-slices (Open GOPs)
+
+**Key classes:**
+- **TTNaluParser** (avstream/ttnaluparser.h): Native NAL unit parser with mmap I/O
+- **TTESSmartCut** (extern/ttessmartcut.h): Smart Cut engine for ES files
+- **TTESInfo** (avstream/ttesinfo.h): .info file parser for metadata
+- **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV muxing with chapters
+
+**Demux script (tools/ts_demux_normalize.sh -e):**
+- Demuxes TS to elementary streams (similar to ProjectX for MPEG-2)
+- Generates .info file with frame rate, resolution, audio tracks
+- Optional: Strip filler NALUs with `-p` flag (requires h264bitstream tools)
 
 **Known limitation:**
-A small stutter (~0.14 seconds / ~7 frames) may occur at middle cut points. This is caused by B-frame reordering discontinuities when transitioning from encoded sections to stream-copied sections. Various approaches were tried (DTS alignment, gap filling, ffmpeg genpts, mkvmerge fix-bitstream) but none fully resolved this issue.
-
-**IMPORTANT: See `H264_SMART_CUT_TRACKING.md` for detailed tracking of all tested approaches!**
-This file documents 20+ approaches that have been tested, including what worked, what failed, and why. ALWAYS read this file before attempting new solutions to avoid repeating failed experiments.
-
-**IMPORTANT - Lessons learned from experimentation (do NOT repeat these):**
-- **Re-encode as little as possible** - Encoding more frames (e.g., to 2nd keyframe instead of 1st) makes stutter WORSE, not better
-- **Do NOT try encoding larger sections** - This was tested and increases stutter at transitions
-- **Do NOT try MMCO fix (encoding extra GOP after encode sections)** - Tested 2026-01-25, makes stutter significantly WORSE
-- The best results come from encoding only the minimum required frames (from cut point to next keyframe)
-- Using `-bf 0` (no B-frames) in encoded sections slightly improves transitions
-- Various concat methods (FFmpeg concat demuxer, concat protocol, tsMuxeR) all have similar stutter issues
-
-**Timestamp normalization helps:**
-- DVB recordings have PTS starting at arbitrary times (e.g., 40409 seconds into multiplex)
-- Normalizing timestamps to start near 0 BEFORE cutting significantly improves middle cut point transitions
-- Normalize with: `ffmpeg -fflags +genpts -i input.ts -c copy -avoid_negative_ts make_zero output.ts`
-- This is similar to what ProjectX does for MPEG-2 (repair/normalize before cutting)
-- A helper script `tools/ts_demux_normalize.sh` is available for preprocessing H.264/H.265 TS files
-
-**Potential future improvements:**
-- Wrap ES files in container before Smart-Cut (enables seeking for stream-copy)
-- Investigate how other tools (LosslessCut, avidemux) handle this
+A small stutter (~0.14 seconds) may occur at middle cut points due to B-frame reordering discontinuities. This is inherent to the Smart Cut approach when transitioning from re-encoded to stream-copied sections.
 
 ### H.264/H.265 Stream Preparation Tools (Companion Project)
 
@@ -226,3 +227,26 @@ QT_QPA_PLATFORM=xcb ./ttcut 2>&1 | tee /path/to/logfile.log
 ```
 
 The executable name is `ttcut` (lowercase).
+
+## Future Improvements (TODO)
+
+### Unified libav Encoder for All Codecs
+
+**Current state:**
+- MPEG-2: Uses ffmpeg CLI via `TTTranscodeProvider` (spawns `/usr/bin/ffmpeg` as external process)
+- H.264/H.265: Uses libav directly via `TTESSmartCut` (linked libraries)
+
+**Proposed improvement:**
+Create a unified `TTLibavEncoder` class that uses libav directly for all codecs (MPEG-2, H.264, H.265).
+
+**Benefits:**
+- Consistent architecture across all codecs
+- No external ffmpeg CLI dependency (only libraries)
+- Better error handling (direct error codes vs. parsing stdout/stderr)
+- Better progress reporting (direct callbacks)
+- Slightly better performance (no process spawning overhead)
+
+**Implementation notes:**
+- MPEG-2 has different stream structure (Sequence Headers, Picture Headers) vs. H.264/H.265 (NAL units)
+- Could extend `TTESSmartCut` or create new generic encoder class
+- Low priority since current code works (MPEG-2 re-encoding is rare, only at B-frame cuts)

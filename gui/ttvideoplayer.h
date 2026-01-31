@@ -57,9 +57,9 @@ public:
     virtual void clearSubtitleFile()               {};
 
 signals:
-    virtual void optimalSizeChanged();
-    virtual void playerPlaying();
-    virtual void playerFinished();
+    void optimalSizeChanged();
+    void playerPlaying();
+    void playerFinished();
 
 protected:
     QString currentMovie;

@@ -2,17 +2,32 @@
 TODO list for project TTCut
 -------------------------------------------------------------------------------
 
-* Show a warning if audio and video length are different
+HIGH PRIORITY
+-------------
+* Replace ffmpeg CLI with libav for MPEG-2 encoding (like TTESSmartCut)
+  - Currently: MPEG-2 uses TTTranscodeProvider → spawns /usr/bin/ffmpeg
+  - Goal: Use libav directly for consistent architecture across all codecs
+  - Benefits: No external CLI dependency, better error handling, progress reporting
+  - See CLAUDE.md "Future Improvements" section for details
 
-* Remove some unused settings and buttons without function
-* Find a solution for realtime playback demuxed video stream (play-button)
-* Add option settings for transcode and mplex
-* Implement plugin interface for external tools (transcode, mplex, mplayer)
-* Write a FAQ
-  1) If mplayer don't work properly check your default -vo settings. 
-     TTCut assumes that you use -vo x11.
-     Also check that you have the right permissons to /dev/dsp
-* Make the current frame position clickable (enter current frame positon)
-* More keyboard short cuts
-* User warning when click "New Project" an video stream is loaded
+MEDIUM PRIORITY
+---------------
+* Show a warning if audio and video length are different
 * Display the resulting stream lengths after cut
+* Make the current frame position clickable (enter current frame position)
+* More keyboard shortcuts
+* User warning when click "New Project" and video stream is loaded
+
+LOW PRIORITY
+------------
+* Remove some unused settings and buttons without function
+* Find a solution for realtime playback of demuxed video stream (play-button)
+
+COMPLETED
+---------
+* [DONE] H.264/H.265 Smart Cut support (TTESSmartCut)
+* [DONE] SRT subtitle support
+* [DONE] Replace mplayer with mpv for preview
+* [DONE] Replace transcode with ffmpeg for MPEG-2 encoding
+* [DONE] Connect encoder UI settings to actual encoders
+* [DONE] MKV output via mkvmerge

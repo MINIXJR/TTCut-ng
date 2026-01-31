@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# ts_demux_normalize.sh - Demux and normalize TS files for TTCut
+# ttcut-demux - Demux and normalize TS files for TTCut
 # Similar to ProjectX for MPEG-2, but for H.264/H.265 (AVC/HEVC)
 #
 # Supported video codecs: H.264 (AVC), H.265 (HEVC), MPEG-2
 # Supported audio codecs: MP2, AC3, AAC, MP3
 #
-# Usage: ts_demux_normalize.sh [-e] <input.ts> [output_dir]
+# Usage: ttcut-demux [-e] <input.ts> [output_dir]
 #
 #   -e  Elementary stream mode: output separate .264/.265 and audio files
 #       (default: output normalized MKV with video+audio)
@@ -200,7 +200,7 @@ if $ES_MODE; then
     echo ""
 
     # 1. Extract video as elementary stream
-    OUTPUT_VIDEO="$OUTDIR/${BASENAME}_video.${VIDEO_EXT}"
+    OUTPUT_VIDEO="$OUTDIR/${BASENAME}.${VIDEO_EXT}"
     info "Extracting video -> $OUTPUT_VIDEO"
 
     # Use ffmpeg to extract raw elementary stream
@@ -319,11 +319,11 @@ if $ES_MODE; then
             esac
 
             # Include language in filename
-            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}.${EXT}"
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
 
             # If file already exists (same language, different stream), add index
             if [ -f "$OUTPUT_AUDIO" ]; then
-                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}_${i}.${EXT}"
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${i}.${EXT}"
             fi
 
             info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
@@ -351,7 +351,7 @@ if $ES_MODE; then
                     warn "  DVB subtitle $idx [$lang] - bitmap format, needs OCR"
                     ;;
                 subrip|srt|text)
-                    OUTPUT_SUB="$OUTDIR/${BASENAME}_sub_${lang}.srt"
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
                     ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
@@ -374,7 +374,7 @@ if $ES_MODE; then
 # Source: $INPUT
 
 [video]
-file=${BASENAME}_video.${VIDEO_EXT}
+file=${BASENAME}.${VIDEO_EXT}
 codec=$VIDEO_CODEC
 width=$VIDEO_WIDTH
 height=$VIDEO_HEIGHT
@@ -501,9 +501,9 @@ else
                 *) EXT="$codec" ;;
             esac
 
-            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}.${EXT}"
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
             if [ -f "$OUTPUT_AUDIO" ]; then
-                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_audio_${lang}_${idx}.${EXT}"
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${idx}.${EXT}"
             fi
 
             info "  Audio $idx [$lang] -> $OUTPUT_AUDIO"
@@ -528,7 +528,7 @@ else
                     warn "DVB subtitle stream $idx [$lang] - bitmap format, needs OCR"
                     ;;
                 subrip|srt|text)
-                    OUTPUT_SUB="$OUTDIR/${BASENAME}_sub_${lang}.srt"
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
                     ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     ;;

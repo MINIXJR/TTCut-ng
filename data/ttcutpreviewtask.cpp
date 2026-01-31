@@ -45,6 +45,8 @@
 #include "../data/ttcutsubtitletask.h"
 #include "../data/ttmuxlistdata.h"
 #include "../extern/ttmkvmergeprovider.h"
+#include "../extern/ttessmartcut.h"
+#include "../extern/ttffmpegwrapper.h"
 #include "../avstream/ttesinfo.h"
 
 #include <QCoreApplication>
@@ -200,8 +202,8 @@ void TTCutPreviewTask::operation()
 }
 
 /**
- * Create H.264/H.265 preview clip using ffmpeg
- * Since the native H.264 cutting is not implemented, we use ffmpeg to extract segments
+ * Create H.264/H.265 preview clip using Smart Cut (frame-accurate)
+ * Uses TTESSmartCut for elementary stream files
  */
 void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& outputFile)
 {
@@ -221,121 +223,97 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     audioFile = avItem->audioStreamAt(0)->filePath();
   }
 
-  // Check if ES file
+  // Get file extension for output
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
-  bool isES = (suffix == "264" || suffix == "h264" ||
-               suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-               suffix == "m2v" || suffix == "mpv");
 
-  // For ES files: get frame rate from .info file (vStream->frameRate() may be wrong)
-  if (isES) {
-    QString infoFile = TTESInfo::findInfoFile(sourceFile);
-    if (!infoFile.isEmpty()) {
-      TTESInfo esInfo(infoFile);
-      if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-        frameRate = esInfo.frameRate();
-        qDebug() << "Preview: ES frame rate from .info:" << frameRate << "fps";
-      }
+  // Get frame rate from .info file (vStream->frameRate() may be wrong for ES files)
+  QString infoFile = TTESInfo::findInfoFile(sourceFile);
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+      frameRate = esInfo.frameRate();
+      qDebug() << "Preview: ES frame rate from .info:" << frameRate << "fps";
     }
   }
 
   qDebug() << "H.264 preview: source=" << sourceFile << "fps=" << frameRate
-           << "isES=" << isES << "hasAudio=" << hasAudio;
+           << "hasAudio=" << hasAudio;
 
-  // Calculate time range from frame indices
-  // For multiple cuts, we need to handle each segment
-  double totalDuration = 0;
-  QStringList segmentFiles;
+  // Use TTESSmartCut for frame-accurate preview
+  qDebug() << "Preview: Using Smart Cut (frame-accurate)";
 
-  for (int i = 0; i < cutList->count(); i++) {
-    TTCutItem item = cutList->at(i);
-    int startFrame = item.cutInIndex();
-    int endFrame = item.cutOutIndex();
-
-    double startTime = startFrame / frameRate;
-    double duration = (endFrame - startFrame + 1) / frameRate;
-
-    QString segmentFile;
-    if (cutList->count() > 1) {
-      // Multiple segments - create temp files
-      segmentFile = QString("%1/preview_seg_%2.mkv").arg(TTCut::tempDirPath).arg(i);
-      segmentFiles << segmentFile;
-    } else {
-      // Single segment - write directly to output
-      segmentFile = outputFile;
+    // Build frame-based cut list
+    QList<QPair<int, int>> cutFrames;
+    for (int i = 0; i < cutList->count(); i++) {
+      TTCutItem item = cutList->at(i);
+      cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+      qDebug() << "  Preview segment" << i+1 << ": frames" << item.cutInIndex() << "->" << item.cutOutIndex();
     }
 
-    // Build ffmpeg command
-    QString ffmpegCmd;
-    if (isES) {
-      // ES files: need frame rate for correct timing
-      // For preview: re-encode video (fast ultrafast preset) to ensure correct playback
-      if (hasAudio && !audioFile.isEmpty()) {
-        // ES with audio: include audio file
-        ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -i \"%3\" -ss %4 -t %5 "
-                           "-map 0:v -map 1:a -c:v libx264 -preset ultrafast -crf 23 -c:a copy \"%6\" 2>&1")
-            .arg(frameRate, 0, 'f', 3)
-            .arg(sourceFile)
-            .arg(audioFile)
-            .arg(startTime, 0, 'f', 3)
-            .arg(duration, 0, 'f', 3)
-            .arg(segmentFile);
+    // Initialize Smart Cut engine
+    TTESSmartCut smartCut;
+    if (!smartCut.initialize(sourceFile, frameRate)) {
+      qDebug() << "Preview Smart Cut init failed:" << smartCut.lastError();
+      return;
+    }
+
+    // Create temporary video output
+    QString tempVideoFile = QString("%1/preview_video_temp.%2")
+        .arg(TTCut::tempDirPath)
+        .arg(suffix);
+
+    // Perform frame-accurate video cut
+    if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
+      qDebug() << "Preview Smart Cut failed:" << smartCut.lastError();
+      return;
+    }
+
+    qDebug() << "Preview Smart Cut complete:" << smartCut.framesReencoded() << "re-encoded,"
+             << smartCut.framesStreamCopied() << "stream-copied";
+
+    // Handle audio if present
+    QStringList cutAudioFiles;
+    if (hasAudio && !audioFile.isEmpty()) {
+      // Build time-based keep list for audio cutting
+      QList<QPair<double, double>> keepList;
+      for (int i = 0; i < cutList->count(); i++) {
+        TTCutItem item = cutList->at(i);
+        double cutInTime = item.cutInIndex() / frameRate;
+        double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+        keepList.append(qMakePair(cutInTime, cutOutTime));
+      }
+
+      // Cut audio using TTFFmpegWrapper
+      TTFFmpegWrapper ffmpeg;
+      QString cutAudioFile = QString("%1/preview_audio_temp.%2")
+          .arg(TTCut::tempDirPath)
+          .arg(QFileInfo(audioFile).suffix());
+
+      if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+        cutAudioFiles.append(cutAudioFile);
+        qDebug() << "Preview audio cut:" << cutAudioFile;
       } else {
-        // ES without audio
-        ffmpegCmd = QString("ffmpeg -y -r %1 -i \"%2\" -ss %3 -t %4 "
-                           "-c:v libx264 -preset ultrafast -crf 23 \"%5\" 2>&1")
-            .arg(frameRate, 0, 'f', 3)
-            .arg(sourceFile)
-            .arg(startTime, 0, 'f', 3)
-            .arg(duration, 0, 'f', 3)
-            .arg(segmentFile);
+        qDebug() << "Preview audio cut failed";
+      }
+    }
+
+    // Mux video and audio into MKV
+    TTMkvMergeProvider mkvProvider;
+
+    // Set frame duration for correct timing
+    int frameDurationNs = (int)(1000000000.0 / frameRate);
+    mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+
+    if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
+      qDebug() << "Preview mux complete:" << outputFile;
+      // Clean up temp files
+      QFile::remove(tempVideoFile);
+      for (const QString& f : cutAudioFiles) {
+        QFile::remove(f);
       }
     } else {
-      // Container files: -ss before -i for fast seeking with stream copy
-      ffmpegCmd = QString("ffmpeg -y -ss %1 -i \"%2\" -t %3 -c copy \"%4\" 2>&1")
-          .arg(startTime, 0, 'f', 3)
-          .arg(sourceFile)
-          .arg(duration, 0, 'f', 3)
-          .arg(segmentFile);
+      qDebug() << "Preview mux failed:" << mkvProvider.lastError();
     }
-
-    qDebug() << "H.264 preview extract:" << ffmpegCmd;
-    int ret = system(qPrintable(ffmpegCmd));
-    if (ret != 0) {
-      qDebug() << "ffmpeg segment extraction failed with code:" << ret;
-    }
-
-    totalDuration += duration;
-  }
-
-  // If multiple segments, concatenate them
-  if (cutList->count() > 1 && !segmentFiles.isEmpty()) {
-    // Create concat file list
-    QString concatFile = QString("%1/preview_concat.txt").arg(TTCut::tempDirPath);
-    QFile listFile(concatFile);
-    if (listFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      QTextStream out(&listFile);
-      for (const QString& seg : segmentFiles) {
-        out << "file '" << seg << "'\n";
-      }
-      listFile.close();
-
-      // Concatenate segments
-      QString concatCmd = QString("ffmpeg -y -f concat -safe 0 -i \"%1\" -c copy \"%2\" 2>&1")
-          .arg(concatFile).arg(outputFile);
-      qDebug() << "H.264 preview concat:" << concatCmd;
-      int ret = system(qPrintable(concatCmd));
-      if (ret != 0) {
-        qDebug() << "ffmpeg concat failed with code:" << ret;
-      }
-
-      // Clean up temp segment files
-      for (const QString& seg : segmentFiles) {
-        QFile::remove(seg);
-      }
-      QFile::remove(concatFile);
-    }
-  }
 }
 
 /**

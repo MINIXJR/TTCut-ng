@@ -31,6 +31,7 @@
 #include "tth265videostream.h"
 #include "ttvideoheaderlist.h"
 #include "ttvideoindexlist.h"
+#include "ttesinfo.h"
 #include "../data/ttcutparameter.h"
 #include "../common/ttexception.h"
 #include "../common/ttcut.h"
@@ -174,6 +175,22 @@ int TTH265VideoStream::createHeaderList()
         if (info.frameRate > 0) {
             mSPS->setFrameRate(info.frameRate);
         }
+
+        // Store frame rate - prefer .info file over ffmpeg detection
+        frame_rate = static_cast<float>(info.frameRate);
+        QString infoFile = TTESInfo::findInfoFile(filePath());
+        if (!infoFile.isEmpty()) {
+            TTESInfo esInfo(infoFile);
+            if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+                frame_rate = static_cast<float>(esInfo.frameRate());
+                mSPS->setFrameRate(esInfo.frameRate());
+                mLog->infoMsg(__FILE__, __LINE__,
+                    QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
+            }
+        }
+
+        // Store bit rate
+        bit_rate = static_cast<float>(info.bitRate) / 1000.0f; // kbit/s
 
         // Create VPS (minimal info)
         if (!mVPS) {

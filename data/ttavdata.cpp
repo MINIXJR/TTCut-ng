@@ -292,30 +292,20 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
 
   TTAVItem* avItem = doOpenVideoStream(videoFilePath);
 
-  // Check if this is a container file - if so, skip auto-loading audio/subtitles
-  // because they will be demuxed from the container instead
-  QFileInfo fileInfo(videoFilePath);
-  QString suffix = fileInfo.suffix().toLower();
-  bool isContainer = (suffix == "ts" || suffix == "m2ts" || suffix == "mkv" ||
-                      suffix == "mp4" || suffix == "m4v" || suffix == "mpg" ||
-                      suffix == "mpeg" || suffix == "vob");
+  // Auto-load audio files (ES workflow: separate audio files)
+  QFileInfoList audioInfoList = getAudioNames(QFileInfo(videoFilePath));
+  QListIterator<QFileInfo> audioInfo(audioInfoList);
 
-  if (!isContainer) {
-    // Only auto-load audio for elementary stream files
-    QFileInfoList audioInfoList = getAudioNames(QFileInfo(videoFilePath));
-    QListIterator<QFileInfo> audioInfo(audioInfoList);
+  while (audioInfo.hasNext()) {
+    doOpenAudioStream(avItem, audioInfo.next().absoluteFilePath());
+  }
 
-    while (audioInfo.hasNext()) {
-      doOpenAudioStream(avItem, audioInfo.next().absoluteFilePath());
-    }
+  // Auto-load subtitle files
+  QFileInfoList subtitleInfoList = getSubtitleNames(QFileInfo(videoFilePath));
+  QListIterator<QFileInfo> subtitleInfo(subtitleInfoList);
 
-    // Only auto-load subtitles for elementary stream files
-    QFileInfoList subtitleInfoList = getSubtitleNames(QFileInfo(videoFilePath));
-    QListIterator<QFileInfo> subtitleInfo(subtitleInfoList);
-
-    while (subtitleInfo.hasNext()) {
-      doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
-    }
+  while (subtitleInfo.hasNext()) {
+    doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
   }
 }
 
@@ -821,223 +811,31 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   }
 }
 
-//! Do H.264/H.265 cut using ffmpeg directly
-// Helper: Get stream start time offset using ffprobe
-static double getStreamStartTime(const QString& filePath)
-{
-  QString cmd = QString("ffprobe -v error -select_streams v:0 "
-                        "-show_entries stream=start_time -of csv=p=0 \"%1\" 2>/dev/null")
-      .arg(filePath);
-
-  FILE* pipe = popen(qPrintable(cmd), "r");
-  if (pipe) {
-    char buffer[128];
-    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-      QString line = QString(buffer).trimmed();
-      pclose(pipe);
-      if (!line.isEmpty() && line != "N/A") {
-        bool ok;
-        double startTime = line.toDouble(&ok);
-        if (ok) {
-          return startTime;
-        }
-      }
-    } else {
-      pclose(pipe);
-    }
-  }
-  return 0.0;
-}
-
-// Structure to hold keyframe timing info
-struct KeyframeInfo {
-  double pts;  // Presentation timestamp (display time)
-  double dts;  // Decode timestamp (stream position - use this for seeking with -ss before -i)
-
-  KeyframeInfo(double p = 0, double d = 0) : pts(p), dts(d) {}
-};
-
-// Helper: Find keyframe timestamps using ffprobe
-// Returns both PTS (for re-encoding timing) and DTS (for stream-copy seeking)
-static QList<KeyframeInfo> getKeyframeTimestamps(const QString& filePath, double startTime, double endTime)
-{
-  QList<KeyframeInfo> keyframes;
-
-  // Get stream start time offset (DVB recordings often have large offsets)
-  double streamStart = getStreamStartTime(filePath);
-
-  // Adjust times to account for stream offset
-  double absStartTime = streamStart + startTime;
-  double absEndTime = streamStart + endTime;
-
-  qDebug() << "Keyframe search: relative" << startTime << "-" << endTime
-           << "absolute" << absStartTime << "-" << absEndTime;
-
-  // Use ffprobe to get keyframe timestamps with both PTS and DTS
-  // PTS = presentation time (when frame is displayed)
-  // DTS = decode time (position in stream - needed for seeking with -ss before -i)
-  double margin = 2.0; // 2 second margin
-  QString cmd = QString("ffprobe -v error -select_streams v:0 -skip_frame nokey "
-                        "-read_intervals %1\\%%2 "
-                        "-show_entries frame=pts_time,pkt_dts_time,pict_type -of csv=p=0 \"%3\" 2>&1")
-      .arg(qMax(0.0, absStartTime - margin), 0, 'f', 3)
-      .arg(absEndTime + margin, 0, 'f', 3)
-      .arg(filePath);
-
-  qDebug() << "ffprobe command:" << cmd;
-
-  FILE* pipe = popen(qPrintable(cmd), "r");
-  if (pipe) {
-    char buffer[256];
-    int lineCount = 0;
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-      QString line = QString(buffer).trimmed();
-      lineCount++;
-      if (lineCount <= 5) {
-        qDebug() << "ffprobe output line:" << line;
-      }
-      if (!line.isEmpty()) {
-        // Output format: pts_time,pkt_dts_time,pict_type (e.g., "40529.358722,40529.798722,I")
-        QStringList parts = line.split(',');
-        if (parts.size() >= 2) {
-          bool okPts, okDts;
-          double pts = parts[0].toDouble(&okPts);
-          double dts = parts[1].toDouble(&okDts);
-          if (okPts && pts > 0) {
-            // Convert back to relative time (subtract stream start)
-            double relPts = pts - streamStart;
-            double relDts = okDts ? (dts - streamStart) : relPts; // Use PTS if DTS not available
-            keyframes.append(KeyframeInfo(relPts, relDts));
-          }
-        }
-      }
-    }
-    pclose(pipe);
-    qDebug() << "Total lines read:" << lineCount << "keyframes found:" << keyframes.size();
-  } else {
-    qDebug() << "Failed to open pipe for ffprobe";
-  }
-
-  // If no keyframes found with -show_frames, try alternative approach
-  if (keyframes.isEmpty()) {
-    qDebug() << "Trying alternative keyframe detection method...";
-
-    // Try without -read_intervals (read entire file, filter in code)
-    QString cmd2 = QString("ffprobe -v error -select_streams v:0 -skip_frame nokey "
-                          "-show_entries frame=pts_time,pkt_dts_time -of csv=p=0 \"%1\" 2>&1 | head -1000")
-        .arg(filePath);
-
-    qDebug() << "Alternative ffprobe command:" << cmd2;
-
-    FILE* pipe2 = popen(qPrintable(cmd2), "r");
-    if (pipe2) {
-      char buffer[256];
-      int lineCount = 0;
-      while (fgets(buffer, sizeof(buffer), pipe2) != nullptr) {
-        QString line = QString(buffer).trimmed();
-        lineCount++;
-        if (!line.isEmpty()) {
-          QStringList parts = line.split(',');
-          if (parts.size() >= 1) {
-            bool okPts, okDts;
-            double pts = parts[0].toDouble(&okPts);
-            double dts = (parts.size() >= 2) ? parts[1].toDouble(&okDts) : pts;
-            if (!okDts) dts = pts;
-            if (okPts && pts > 0) {
-              double relPts = pts - streamStart;
-              double relDts = dts - streamStart;
-              // Only include keyframes in our range (with margin)
-              if (relPts >= startTime - margin && relPts <= endTime + margin) {
-                keyframes.append(KeyframeInfo(relPts, relDts));
-                if (keyframes.size() <= 5) {
-                  qDebug() << "Found keyframe at PTS:" << relPts << "DTS:" << relDts;
-                }
-              }
-            }
-          }
-        }
-      }
-      pclose(pipe2);
-      qDebug() << "Alternative method - lines read:" << lineCount << "keyframes in range:" << keyframes.size();
-    }
-  }
-
-  // Sort by PTS
-  std::sort(keyframes.begin(), keyframes.end(), [](const KeyframeInfo& a, const KeyframeInfo& b) {
-    return a.pts < b.pts;
-  });
-  return keyframes;
-}
-
-// Helper: Find nearest keyframe at or before given time (returns index, -1 if not found)
-static int findKeyframeIndexBefore(const QList<KeyframeInfo>& keyframes, double time)
-{
-  int result = -1;
-  for (int i = 0; i < keyframes.size(); i++) {
-    if (keyframes[i].pts <= time + 0.001) { // Small tolerance for floating point
-      result = i;
-    } else {
-      break;
-    }
-  }
-  return result;
-}
-
-// Helper: Find nearest keyframe at or after given time (returns index, -1 if not found)
-static int findKeyframeIndexAfter(const QList<KeyframeInfo>& keyframes, double time)
-{
-  for (int i = 0; i < keyframes.size(); i++) {
-    if (keyframes[i].pts >= time - 0.001) { // Small tolerance for floating point
-      return i;
-    }
-  }
-  return -1;
-}
-
-// Legacy helpers for backwards compatibility (return PTS only)
-static double findKeyframeBefore(const QList<KeyframeInfo>& keyframes, double time)
-{
-  int idx = findKeyframeIndexBefore(keyframes, time);
-  return (idx >= 0) ? keyframes[idx].pts : -1;
-}
-
-static double findKeyframeAfter(const QList<KeyframeInfo>& keyframes, double time)
-{
-  int idx = findKeyframeIndexAfter(keyframes, time);
-  return (idx >= 0) ? keyframes[idx].pts : -1;
-}
-
+//! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
 void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 {
-  log->infoMsg(__FILE__, __LINE__, "Using avcut-style smart cut (direct writing, no global headers, GOP-based)");
+  log->infoMsg(__FILE__, __LINE__, "Using TTESSmartCut for frame-accurate cutting");
 
   // Get source file and frame rate from first cut item
   TTAVItem* avItem = cutList->at(0).avDataItem();
   TTVideoStream* vStream = avItem->videoStream();
   QString sourceFile = vStream->filePath();
   double frameRate = vStream->frameRate();
-
-  // Check if source is an elementary stream
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
-  bool isES = (suffix == "264" || suffix == "h264" ||
-               suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-               suffix == "m2v" || suffix == "mpv");
 
-  // For ES files: get frame rate from .info file (vStream->frameRate() may be wrong)
-  if (isES) {
-    QString infoFile = TTESInfo::findInfoFile(sourceFile);
-    if (!infoFile.isEmpty()) {
-      TTESInfo esInfo(infoFile);
-      if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-        frameRate = esInfo.frameRate();
-        log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info: %1 fps").arg(frameRate));
-      }
+  // Get frame rate from .info file (vStream->frameRate() may be wrong for ES files)
+  QString infoFile = TTESInfo::findInfoFile(sourceFile);
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+      frameRate = esInfo.frameRate();
+      log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info: %1 fps").arg(frameRate));
     }
   }
 
-  // Get audio file for ES workflow
+  // Get audio file (ES workflow: separate audio files)
   QString audioFile;
-  if (isES && avItem->audioCount() > 0) {
+  if (avItem->audioCount() > 0) {
     audioFile = avItem->audioStreamAt(0)->filePath();
     log->infoMsg(__FILE__, __LINE__, QString("Audio file: %1").arg(audioFile));
   }
@@ -1069,13 +867,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   }
 
   TTFFmpegWrapper ffmpeg;
-  bool success;
 
-  // For ES files: use TTESSmartCut for frame-accurate cutting
-  if (isES) {
-    log->infoMsg(__FILE__, __LINE__, "ES file detected - using TTESSmartCut (frame-accurate)");
-    log->infoMsg(__FILE__, __LINE__, QString("  Video: %1").arg(sourceFile));
-    log->infoMsg(__FILE__, __LINE__, QString("  Frame rate: %1 fps").arg(frameRate));
+  // Use TTESSmartCut for frame-accurate cutting
+  log->infoMsg(__FILE__, __LINE__, QString("  Video: %1").arg(sourceFile));
+  log->infoMsg(__FILE__, __LINE__, QString("  Frame rate: %1 fps").arg(frameRate));
 
     // Build frame-based cut list
     QList<QPair<int, int>> cutFrames;
@@ -1143,7 +938,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
     mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
 
-    success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
+    bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
 
     if (success) {
       log->infoMsg(__FILE__, __LINE__, QString("Muxing complete: %1").arg(finalOutput));
@@ -1154,26 +949,11 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       }
     } else {
       log->errorMsg(__FILE__, __LINE__, QString("Muxing failed: %1").arg(mkvProvider.lastError()));
-    }
-  } else {
-    // For container files: use smartCut (avcut-style processing)
-    if (!ffmpeg.openFile(sourceFile)) {
-      log->errorMsg(__FILE__, __LINE__, QString("Failed to open source file: %1").arg(ffmpeg.lastError()));
-      emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not open source"), 0);
+      emit statusReport(StatusReportArgs::Finished, tr("Muxing failed"), 0);
       return;
     }
 
-    log->infoMsg(__FILE__, __LINE__, QString("Starting smartCut: %1 segments to keep").arg(keepList.size()));
-    success = ffmpeg.smartCut(finalOutput, keepList);
-  }
-
-  if (!success) {
-    log->errorMsg(__FILE__, __LINE__, QString("smartCut failed: %1").arg(ffmpeg.lastError()));
-    emit statusReport(StatusReportArgs::Finished, tr("Cutting failed"), 0);
-    return;
-  }
-
-  log->infoMsg(__FILE__, __LINE__, "smartCut completed successfully");
+  log->infoMsg(__FILE__, __LINE__, "Cutting completed successfully");
 
   // Add chapters if enabled (MKV only)
   if (TTCut::mkvCreateChapters && TTCut::mkvChapterInterval > 0 &&

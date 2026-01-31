@@ -1,3 +1,15 @@
+ttcut (0.50.0-1~forky) forky; urgency=medium
+
+  * Major release: H.264/H.265 Smart Cut support
+  * Frame-accurate cutting for elementary streams (.264, .265)
+  * Re-encode only at cut points (~0.5% of frames)
+  * Stream-copy for remaining frames (lossless, ~99.5%)
+  * Multi-segment support with audio cutting
+  * MKV muxing via mkvmerge
+  * Native NAL unit parser with memory-mapped I/O
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 30 Jan 2026 20:07:21 +0100
+
 ttcut (0.40.0+git20260118-89-94575e0-1~forky) forky; urgency=medium
 
   * Doc update
