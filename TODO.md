@@ -2,6 +2,21 @@
 
 ## High Priority
 
+- **Preview: Next/Previous cut navigation buttons**
+  - Add "Next Cut" and "Previous Cut" buttons in the preview dialog
+  - Quickly navigate between cut points to verify transitions
+
+- **Quick Jump: Keyframe thumbnail browser**
+  - New window showing keyframes as thumbnails in a grid (ca. 6x5 = 30 per page)
+  - Paginated navigation, starting from current position
+  - Double-click thumbnail → close window and jump to that frame
+  - Existing "Quick Jump" button in main window should open this
+
+- **Current Frame: Play button with audio**
+  - Play button that starts video playback with audio in the Current Frame widget
+  - Uses currently selected audio track
+  - Plays from current frame position
+
 - **Replace ffmpeg CLI with libav for MPEG-2 encoding**
   - Currently: MPEG-2 uses TTTranscodeProvider → spawns /usr/bin/ffmpeg
   - Goal: Use libav directly for consistent architecture across all codecs
