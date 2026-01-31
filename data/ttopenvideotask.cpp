@@ -34,11 +34,9 @@
 #include "../data/ttavlist.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
-#include "../extern/ttffmpegwrapper.h"
 
 #include <QDir>
 #include <QDebug>
-#include <QProcess>
 #include <QStringList>
 
 /**
@@ -94,83 +92,20 @@ void TTOpenVideoTask::operation()
 
   QString videoFilePath = fInfo.absoluteFilePath();
 
-  // Check if this is a container format
-  TTFFmpegWrapper ffmpeg;
-  if (ffmpeg.openFile(videoFilePath)) {
-    TTContainerType containerType = ffmpeg.detectContainer();
-    TTVideoCodecType codecType = ffmpeg.detectVideoCodec();
+  // TTCut only works with elementary streams (.m2v, .h264, .h265, .ac3, .mpa)
+  // Container files must be demuxed first using ttcut-demux
+  QString suffix = fInfo.suffix().toLower();
+  QStringList containerExtensions = {"ts", "m2ts", "mts", "mkv", "mp4", "m4v", "mov", "avi", "mpg", "mpeg", "vob"};
 
-    qDebug() << "Container type:" << TTFFmpegWrapper::containerTypeToString(containerType);
-    qDebug() << "Codec type:" << TTFFmpegWrapper::codecTypeToString(codecType);
-
-    if (containerType != CONTAINER_ELEMENTARY && containerType != CONTAINER_UNKNOWN) {
-      // This is a container (TS, MKV, MP4, PS)
-
-      if (codecType == CODEC_MPEG2) {
-        // MPEG-2 in container: Demux to elementary stream
-        // because TTMpeg2VideoStream uses its own parser
-        qDebug() << "MPEG-2 in container, demuxing to elementary stream...";
-
-        QString demuxDir = TTCut::tempDirPath;
-        QString demuxedVideo;
-        QString demuxedAudio;
-
-        if (ffmpeg.demuxToElementary(demuxDir, &demuxedVideo, &demuxedAudio)) {
-          qDebug() << "Demuxed video:" << demuxedVideo;
-          qDebug() << "Demuxed audio:" << demuxedAudio;
-
-          if (!demuxedVideo.isEmpty()) {
-            videoFilePath = demuxedVideo;
-            fInfo = QFileInfo(videoFilePath);
-            mDemuxedAudio = demuxedAudio;
-          } else {
-            ffmpeg.closeFile();
-            throw new TTDataFormatException(__FILE__, __LINE__,
-                QString(tr("Failed to extract video stream from container: %1")).arg(mFileName));
-          }
-        } else {
-          ffmpeg.closeFile();
-          throw new TTDataFormatException(__FILE__, __LINE__,
-              QString(tr("Failed to demux container: %1 - %2")).arg(mFileName).arg(ffmpeg.lastError()));
-        }
-      } else {
-        // H.264/H.265 in container: Keep container, work directly with it
-        // because TTH264/H265VideoStream uses FFmpeg which handles containers
-        qDebug() << "H.264/H.265 in container, keeping container format...";
-
-        // Extract audio separately for later loading
-        QString demuxDir = TTCut::tempDirPath;
-        QString baseName = fInfo.completeBaseName();
-        QString audioOutput = demuxDir + "/" + baseName + ".ac3";
-
-        int audioStreamIdx = ffmpeg.findBestAudioStream();
-        if (audioStreamIdx >= 0) {
-          QStringList audioArgs;
-          audioArgs << "-y"
-                    << "-i" << videoFilePath
-                    << "-map" << QString("0:%1").arg(audioStreamIdx)
-                    << "-c:a" << "copy"
-                    << "-vn"
-                    << audioOutput;
-
-          qDebug() << "Extracting audio:" << audioArgs.join(" ");
-
-          QProcess procAudio;
-          procAudio.start("/usr/bin/ffmpeg", audioArgs);
-          if (procAudio.waitForStarted(5000) && procAudio.waitForFinished(300000)) {
-            if (procAudio.exitCode() == 0) {
-              mDemuxedAudio = audioOutput;
-              qDebug() << "Audio extracted to:" << mDemuxedAudio;
-            }
-          }
-        }
-        // videoFilePath stays as the original container file
-      }
-    }
-    ffmpeg.closeFile();
+  if (containerExtensions.contains(suffix)) {
+    throw new TTDataFormatException(__FILE__, __LINE__,
+        QString(tr("Container format detected: %1\n\n"
+                   "TTCut only works with elementary streams.\n"
+                   "Please demux first using: ttcut-demux %2"))
+            .arg(suffix.toUpper()).arg(fInfo.fileName()));
   }
 
-  // Now open the video stream (either ES or container)
+  // Open the video stream (elementary stream only)
   mpVideoType = new TTVideoType(videoFilePath);
 
   TTAVTypes::AVStreamType streamType = mpVideoType->avStreamType();

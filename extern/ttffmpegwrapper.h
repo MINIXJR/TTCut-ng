@@ -161,13 +161,9 @@ public:
     TTVideoCodecType detectVideoCodec() const;
     static QString codecTypeToString(TTVideoCodecType type);
 
-    // Detect container type
+    // Detect container type (used by Smart Cut)
     TTContainerType detectContainer() const;
     static QString containerTypeToString(TTContainerType type);
-    bool isContainerFormat() const;
-
-    // Demux container to elementary streams
-    bool demuxToElementary(const QString& outputDir, QString* videoFile = nullptr, QString* audioFile = nullptr);
 
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);
