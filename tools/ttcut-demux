@@ -50,10 +50,16 @@ while getopts "eph" opt; do
             echo "Default mode (without -e):"
             echo "  Output: normalized MKV with video + first audio"
             echo ""
+            echo "VDR Integration:"
+            echo "  If a 'marks' file exists in the input directory (from vdr-plugin-markad),"
+            echo "  the markers are automatically parsed and added to the .info file."
+            echo "  See: https://github.com/kfb77/vdr-plugin-markad"
+            echo ""
             echo "Examples:"
             echo "  $0 input.ts                    # MKV output"
             echo "  $0 -e input.ts output_dir/     # Elementary stream output"
             echo "  $0 -ep input.ts output_dir/    # ES + strip filler NALUs"
+            echo "  $0 -e /video/rec/00001.ts .    # VDR recording with marks"
             exit 0
             ;;
         \?) error "Invalid option: -$OPTARG" ;;
@@ -79,6 +85,53 @@ OUTDIR="${2:-$(dirname "$INPUT")}"
 
 # Create output directory if needed
 mkdir -p "$OUTDIR"
+
+# Check for VDR marks file (markad plugin)
+INPUT_DIR=$(dirname "$INPUT")
+MARKS_FILE=""
+VDR_MARKS=()
+
+if [ -f "$INPUT_DIR/marks" ]; then
+    MARKS_FILE="$INPUT_DIR/marks"
+elif [ -f "$INPUT_DIR/marks.vdr" ]; then
+    MARKS_FILE="$INPUT_DIR/marks.vdr"
+fi
+
+if [ -n "$MARKS_FILE" ]; then
+    info "Found VDR marks file: $MARKS_FILE"
+
+    # Parse marks file
+    # Format: H:MM:SS.FF [( FRAME) [*] start|stop method ...]
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+
+        # Extract timestamp (first field, format H:MM:SS.FF)
+        timestamp=$(echo "$line" | grep -oE '^[0-9]+:[0-9]{2}:[0-9]{2}\.[0-9]{2}')
+        [ -z "$timestamp" ] && continue
+
+        # Extract frame number if present
+        frame=$(echo "$line" | grep -oE '\( *[0-9]+\)' | grep -oE '[0-9]+' | head -1)
+
+        # Determine marker type (start = content starts, stop = content stops/ad starts)
+        marker_type="mark"
+        if echo "$line" | grep -qi "start"; then
+            marker_type="start"  # Content starts (ad ends)
+        elif echo "$line" | grep -qi "stop"; then
+            marker_type="stop"   # Content stops (ad starts)
+        fi
+
+        # Check if verified (has *)
+        verified=""
+        echo "$line" | grep -q '\*' && verified="*"
+
+        # Store marker: timestamp|frame|type|verified
+        VDR_MARKS+=("$timestamp|${frame:-0}|$marker_type|$verified")
+
+    done < "$MARKS_FILE"
+
+    info "  Found ${#VDR_MARKS[@]} markers"
+fi
 
 info "Analyzing: $INPUT"
 if $ES_MODE; then
@@ -403,6 +456,22 @@ EOF
     for i in "${!SUBTITLE_FILES[@]}"; do
         echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
     done
+
+    # Add VDR markers if found
+    if [ ${#VDR_MARKS[@]} -gt 0 ]; then
+        cat >> "$OUTPUT_INFO" << EOF
+
+[markers]
+# VDR markad markers (from: $MARKS_FILE)
+# Format: index=timestamp|frame|type|verified
+# type: start=content starts (ad ends), stop=content stops (ad starts), mark=unknown
+count=${#VDR_MARKS[@]}
+EOF
+        for i in "${!VDR_MARKS[@]}"; do
+            echo "marker_${i}=${VDR_MARKS[$i]}" >> "$OUTPUT_INFO"
+        done
+        info "  Added ${#VDR_MARKS[@]} VDR markers to info file"
+    fi
 
     echo ""
 
