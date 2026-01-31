@@ -159,6 +159,7 @@ TTCutMainWindow::TTCutMainWindow()
   connect(actionSaveCurrentFrame, SIGNAL(triggered()), SLOT(onActionSave()));
   connect(actionSettings,         SIGNAL(triggered()), SLOT(onActionSettings()));
   connect(actionAbout,            SIGNAL(triggered()), SLOT(onHelpAbout()));
+  connect(actionKeyboardShortcuts, SIGNAL(triggered()), SLOT(onHelpKeyboardShortcuts()));
 
   // recent files
   for (int i = 0; i < MaxRecentFiles; ++i) {
@@ -497,6 +498,53 @@ void TTCutMainWindow::onHelpAbout()
 {
   TTCutAboutDlg about(this);
   about.exec();
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Menu "Keyboard Shortcuts" action
+ */
+void TTCutMainWindow::onHelpKeyboardShortcuts()
+{
+  QString shortcuts = tr(
+    "<h3>Navigation</h3>"
+    "<table>"
+    "<tr><td><b>Left/Right</b></td><td>Previous/Next frame</td></tr>"
+    "<tr><td><b>j / k</b></td><td>Next / Previous frame (vim-style)</td></tr>"
+    "<tr><td><b>Ctrl+Left/Right</b></td><td>Jump %1 frames</td></tr>"
+    "<tr><td><b>Shift+Left/Right</b></td><td>Jump %2 frames</td></tr>"
+    "<tr><td><b>Alt+Left/Right</b></td><td>Jump %3 frames</td></tr>"
+    "<tr><td><b>Page Up/Down</b></td><td>Jump %4 frames</td></tr>"
+    "<tr><td><b>Home / g</b></td><td>Go to first frame</td></tr>"
+    "<tr><td><b>End / G</b></td><td>Go to last frame</td></tr>"
+    "</table>"
+    "<h3>Frame Types</h3>"
+    "<table>"
+    "<tr><td><b>I / Ctrl+I</b></td><td>Next / Previous I-frame</td></tr>"
+    "<tr><td><b>P / Ctrl+P</b></td><td>Next / Previous P-frame</td></tr>"
+    "<tr><td><b>B / Ctrl+B</b></td><td>Next / Previous B-frame</td></tr>"
+    "<tr><td><b>F / Ctrl+F</b></td><td>Next / Previous frame</td></tr>"
+    "</table>"
+    "<h3>Cutting</h3>"
+    "<table>"
+    "<tr><td><b>[</b></td><td>Set cut-in point</td></tr>"
+    "<tr><td><b>]</b></td><td>Set cut-out point</td></tr>"
+    "</table>"
+    "<h3>Mouse</h3>"
+    "<table>"
+    "<tr><td><b>Mouse wheel</b></td><td>Navigate frames</td></tr>"
+    "<tr><td><b>Ctrl+Wheel</b></td><td>Navigate faster</td></tr>"
+    "</table>"
+  ).arg(TTCut::stepPlusCtrl)
+   .arg(TTCut::stepPlusShift)
+   .arg(TTCut::stepPlusAlt)
+   .arg(TTCut::stepPgUpDown);
+
+  QMessageBox msgBox(this);
+  msgBox.setWindowTitle(tr("Keyboard Shortcuts"));
+  msgBox.setTextFormat(Qt::RichText);
+  msgBox.setText(shortcuts);
+  msgBox.setIcon(QMessageBox::Information);
+  msgBox.exec();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

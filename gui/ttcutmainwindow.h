@@ -79,6 +79,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onActionSettings();
 
 		void onHelpAbout();
+		void onHelpKeyboardShortcuts();
 
 		void onReadVideoStream(QString fName);
 		void onReadAudioStream(QString fName);
