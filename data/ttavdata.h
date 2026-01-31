@@ -34,6 +34,8 @@
 #include <QObject>
 #include <QList>
 #include <QListIterator>
+#include <QMap>
+#include <QPair>
 
 #include "ttcutlist.h"
 #include "ttmarkerlist.h"
@@ -217,6 +219,10 @@ class TTAVData : public QObject
     TTCutAudioTask*   cutAudioTask;
     TTCutSubtitleTask* cutSubtitleTask;
     TTCutProjectData* mpProjectData;
+
+    // Pending VDR markers to be converted to cut entries after video stream is loaded
+    // Key: TTAVItem*, Value: List of (cutIn, cutOut) pairs
+    QMap<TTAVItem*, QList<QPair<int, int>>> mpPendingVdrMarkers;
 };
 
 

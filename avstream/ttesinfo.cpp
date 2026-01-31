@@ -16,6 +16,41 @@
 #include <QRegularExpression>
 
 // ----------------------------------------------------------------------------
+// TTMarkerInfo implementation
+// ----------------------------------------------------------------------------
+int TTMarkerInfo::toMilliseconds() const
+{
+    // Parse timestamp format H:MM:SS.FF (where FF is frame number within second)
+    QRegularExpression re("(\\d+):(\\d+):(\\d+)\\.(\\d+)");
+    QRegularExpressionMatch match = re.match(timestamp);
+
+    if (match.hasMatch()) {
+        int hours = match.captured(1).toInt();
+        int minutes = match.captured(2).toInt();
+        int seconds = match.captured(3).toInt();
+        int frames = match.captured(4).toInt();
+
+        // Convert to milliseconds (assuming 25fps for frame portion)
+        int ms = (hours * 3600 + minutes * 60 + seconds) * 1000;
+        ms += (frames * 1000) / 25;  // Approximate frame to ms
+        return ms;
+    }
+    return 0;
+}
+
+int TTMarkerInfo::toFrame(double fps) const
+{
+    // If we already have a frame number, use it
+    if (frame > 0) {
+        return frame;
+    }
+
+    // Otherwise calculate from timestamp
+    if (fps <= 0) fps = 25.0;
+    return static_cast<int>(toMilliseconds() * fps / 1000.0);
+}
+
+// ----------------------------------------------------------------------------
 // Constructor
 // ----------------------------------------------------------------------------
 TTESInfo::TTESInfo()
@@ -132,7 +167,31 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             mAudioTracks.append(track);
         }
     }
-    // subtitles section - currently not used but could be extended
+    else if (section == "markers") {
+        int count = values.value("count", "0").toInt();
+        mMarkers.clear();
+
+        for (int i = 0; i < count; ++i) {
+            QString markerStr = values.value(QString("marker_%1").arg(i));
+            if (markerStr.isEmpty()) continue;
+
+            // Parse format: timestamp|frame|type|verified
+            // Example: 0:15:58.14|23964|mark|*
+            QStringList parts = markerStr.split('|');
+            if (parts.size() >= 3) {
+                TTMarkerInfo marker;
+                marker.timestamp = parts[0];
+                marker.frame = parts[1].toInt();
+                marker.type = parts[2];
+                marker.verified = (parts.size() > 3 && parts[3] == "*");
+                mMarkers.append(marker);
+            }
+        }
+
+        if (!mMarkers.isEmpty()) {
+            qDebug() << "  VDR Markers:" << mMarkers.size();
+        }
+    }
 
     return true;
 }
@@ -234,6 +293,17 @@ QStringList TTESInfo::audioFiles() const
         }
     }
     return files;
+}
+
+// ----------------------------------------------------------------------------
+// Get marker info by index
+// ----------------------------------------------------------------------------
+TTMarkerInfo TTESInfo::marker(int index) const
+{
+    if (index >= 0 && index < mMarkers.size()) {
+        return mMarkers[index];
+    }
+    return TTMarkerInfo();
 }
 
 // ----------------------------------------------------------------------------

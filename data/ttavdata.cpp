@@ -49,6 +49,7 @@
 #include "../extern/ttmplexprovider.h"
 #include "../extern/ttmkvmergeprovider.h"
 #include "../avstream/ttesinfo.h"
+#include "../avstream/ttesinfo.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../extern/ttessmartcut.h"
 
@@ -307,6 +308,34 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
   while (subtitleInfo.hasNext()) {
     doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
   }
+
+  // Load VDR markers from .info file (if available)
+  QString infoFile = TTESInfo::findInfoFile(videoFilePath);
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded() && esInfo.hasMarkers()) {
+      qDebug() << "Found VDR markers in info file:" << esInfo.markerCount();
+
+      // Convert VDR markers to cut entry pairs (start/stop → cutIn/cutOut)
+      QList<QPair<int, int>> cutPairs;
+      QList<TTMarkerInfo> markers = esInfo.markers();
+
+      for (int i = 0; i < markers.size() - 1; i += 2) {
+        // Pair markers: even index = start (content begins), odd index = stop (content ends)
+        int cutIn = markers[i].frame;
+        int cutOut = markers[i + 1].frame;
+
+        if (cutIn > 0 && cutOut > cutIn) {
+          cutPairs.append(qMakePair(cutIn, cutOut));
+          qDebug() << "  VDR cut pair:" << cutIn << "-" << cutOut;
+        }
+      }
+
+      if (!cutPairs.isEmpty()) {
+        mpPendingVdrMarkers[avItem] = cutPairs;
+      }
+    }
+  }
 }
 
 // *****************************************************************************
@@ -393,6 +422,29 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
   }
 
   mpAVList->append(avItem);
+
+  // Add pending VDR markers as cut entries (after video stream is set)
+  if (mpPendingVdrMarkers.contains(avItem)) {
+    QList<QPair<int, int>> cutPairs = mpPendingVdrMarkers.take(avItem);
+    int frameCount = vStream ? vStream->frameCount() : 0;
+
+    qDebug() << "Adding" << cutPairs.size() << "VDR cut entries, video has" << frameCount << "frames";
+
+    for (const auto& pair : cutPairs) {
+      int cutIn = pair.first;
+      int cutOut = pair.second;
+
+      // Validate frame numbers against video length
+      if (frameCount > 0 && cutOut >= frameCount) {
+        cutOut = frameCount - 1;
+      }
+
+      if (cutIn >= 0 && cutOut > cutIn) {
+        qDebug() << "  Adding VDR cut:" << cutIn << "-" << cutOut;
+        avItem->appendCutEntry(cutIn, cutOut);
+      }
+    }
+  }
 
   this->avDataReloaded();
   this->cutDataReloaded();
