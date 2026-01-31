@@ -48,8 +48,9 @@ TTTranscodeProvider::TTTranscodeProvider(TTEncodeParameter& enc_par )
 {
   log               = TTMessageLogger::getInstance();
   this->enc_par     = enc_par;
-  str_command       = "ffmpeg";
+  str_command       = "/usr/bin/ffmpeg";
   transcode_success = false;
+  proc              = NULL;
 
   buildCommandLine();
 }
@@ -66,9 +67,10 @@ TTTranscodeProvider::~TTTranscodeProvider()
  */
 void TTTranscodeProvider::buildCommandLine()
 {
-  // ffmpeg command for MPEG-2 DVD-compliant encoding
+  // ffmpeg command for MPEG-2 encoding
   // Input: AVI file with raw frames
   // Output: MPEG-2 elementary stream (.m2v)
+  // Using quality-based encoding to avoid buffer size issues
 
   // Convert aspect ratio code to ffmpeg aspect string
   // MPEG-2 aspect codes: 1=1:1, 2=4:3, 3=16:9, 4=2.21:1
@@ -79,9 +81,6 @@ void TTTranscodeProvider::buildCommandLine()
     default: str_aspect = "4:3";   break;
   }
 
-  QString str_bitrate = QString("%1k").arg((int)enc_par.videoBitrate());
-  QString str_maxrate = QString("%1k").arg((int)(enc_par.videoBitrate() * 1.5));
-
   // Output file needs .m2v extension for ffmpeg
   QString outputFile = enc_par.mpeg2FileInfo().absoluteFilePath() + ".m2v";
 
@@ -91,9 +90,8 @@ void TTTranscodeProvider::buildCommandLine()
                     << "-i"
                     << enc_par.aviFileInfo().absoluteFilePath()
                     << "-c:v" << "mpeg2video"  // MPEG-2 video codec
-                    << "-b:v" << str_bitrate   // Video bitrate
-                    << "-maxrate" << str_maxrate
-                    << "-bufsize" << "1835k"   // DVD VBV buffer size
+                    << "-qscale:v" << "2"      // Quality-based encoding (2 = high quality)
+                    << "-pix_fmt" << "yuv420p" // Standard pixel format
                     << "-g" << "15"            // GOP size (15 for PAL)
                     << "-bf" << "2"            // B-frames
                     << "-aspect" << str_aspect // Aspect ratio
@@ -101,6 +99,7 @@ void TTTranscodeProvider::buildCommandLine()
                     << outputFile;
 
   log->infoMsg(__FILE__, __LINE__, QString("ffmpeg %1").arg(strl_command_line.join(" ")));
+  qDebug() << "FFmpeg command:" << str_command << strl_command_line;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -121,8 +120,8 @@ void TTTranscodeProvider::writeAVIFile(TTVideoStream* vs, int start, int end)
  */
 bool TTTranscodeProvider::encodePart(TTVideoStream* vStream, int start, int end)
 {
-	emit statusReport(StatusReportArgs::ShowProcessForm, "encode part", 0);
-	qApp->processEvents();
+  emit statusReport(StatusReportArgs::ShowProcessForm, "encode part", 0);
+  qApp->processEvents();
 
   writeAVIFile(vStream, start, end);
 
@@ -134,29 +133,53 @@ bool TTTranscodeProvider::encodePart(TTVideoStream* vStream, int start, int end)
 
   connectSignals(proc);
 
+  qDebug() << "Starting ffmpeg:" << str_command << strl_command_line;
+
   // start the process; if successfully started() was emitted otherwise error()
   proc->start(str_command, strl_command_line);
 
+  // Wait for process to start with timeout
+  if (!proc->waitForStarted(5000)) {
+    log->errorMsg(__FILE__, __LINE__, "FFmpeg failed to start within 5 seconds");
+    qDebug() << "FFmpeg failed to start, error:" << proc->errorString();
+    emit statusReport(StatusReportArgs::HideProcessForm, "encode failed - process start timeout", 0);
+    delete proc;
+    proc = NULL;
+    return false;
+  }
+
+  qDebug() << "FFmpeg started successfully";
+
+  // Event loop with proper timeout handling
   int update = 10;
-  //proc->waitForFinished();
-  // just a very simple event loop ;-)
-   while (proc->state() == QProcess::Starting ||
-          proc->state() == QProcess::Running     )
-   {
-     update--;
-     if ( update == 0 )
-     {
-       qApp->processEvents();
-       update = 10;
-     }
-   }
+  while (proc->state() == QProcess::Starting ||
+         proc->state() == QProcess::Running)
+  {
+    update--;
+    if (update == 0)
+    {
+      qApp->processEvents();
+      update = 10;
+    }
+  }
+
+  // Wait for process to finish with timeout (60 seconds max for short segments)
+  if (proc->state() != QProcess::NotRunning) {
+    if (!proc->waitForFinished(60000)) {
+      log->errorMsg(__FILE__, __LINE__, "FFmpeg timed out after 60 seconds");
+      proc->kill();
+      transcode_success = false;
+    }
+  }
+
+  qDebug() << "FFmpeg finished with exit code:" << proc->exitCode()
+           << "success:" << transcode_success;
 
   emit statusReport(StatusReportArgs::HideProcessForm, "encode finished", 0);
   qApp->processEvents();
 
   delete proc;
   proc = NULL;
-
 
   return transcode_success;
 }
@@ -288,19 +311,15 @@ void TTTranscodeProvider::onProcKill( )
  */
 void TTTranscodeProvider::procOutput()
 {
+  if (proc == NULL) return;
+
   QByteArray ba = proc->readAll();
+  if (ba.isEmpty()) return;
+
   QTextStream out(&ba);
-int count = 0;
-  while (1) {//!out.atEnd()) {
+  while (!out.atEnd()) {
     QString line = out.readLine();
-    count++;
-    //log->infoMsg(__FILE__, __LINE__, QString("%1").arg(line));
-    //emit processOutput(line);
     emit statusReport(StatusReportArgs::AddProcessLine, line, 0);
     qApp->processEvents();
-    if (out.atEnd()) {
-    	//qDebug("out is at end! %d", count);
-    	return;
-    }
   }
 }

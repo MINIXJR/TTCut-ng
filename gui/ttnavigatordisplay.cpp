@@ -46,6 +46,18 @@ TTNavigatorDisplay::TTNavigatorDisplay(QWidget* parent)
 
   mAVDataItem      = 0;
   isControlEnabled = false;
+  minValue         = 0;
+  maxValue         = 1;
+  scaleFactor      = 1.0;
+
+  // Hide the child QFrame so it doesn't cover our paint area
+  navigatorDisplay->hide();
+
+  // Ensure widget has a visible height
+  setMinimumHeight(20);
+
+  // Allow transparent background for proper painting
+  setAttribute(Qt::WA_OpaquePaintEvent, false);
 }
 
 /*!
@@ -54,14 +66,21 @@ TTNavigatorDisplay::TTNavigatorDisplay(QWidget* parent)
 void TTNavigatorDisplay::controlEnabled(bool enabled)
 {
   isControlEnabled = enabled;
+  update();
 }
 
 /*!
  * resizeEvent
  */
-void TTNavigatorDisplay::resizeEvent(QResizeEvent*)
+void TTNavigatorDisplay::resizeEvent(QResizeEvent* event)
 {
-  scaleFactor = navigatorDisplay->geometry().width() / (double)(maxValue-minValue);
+  QFrame::resizeEvent(event);
+
+  if (maxValue > minValue) {
+    scaleFactor = width() / (double)(maxValue - minValue);
+  } else {
+    scaleFactor = 1.0;
+  }
 }
 
 /*!
@@ -80,13 +99,17 @@ void TTNavigatorDisplay::drawCutList()
 {
   int   cutIn;
   int   cutOut;
-  QRect clientRect = navigatorDisplay->geometry();
+  QRect clientRect = rect();
   int   startX = clientRect.x();
   int   startY = clientRect.y();
   int   height = clientRect.height();
-  int   width  = 0;
+  int   segmentWidth = 0;
 
-  scaleFactor = navigatorDisplay->geometry().width() / (double)(maxValue-minValue);
+  if (maxValue > minValue) {
+    scaleFactor = clientRect.width() / (double)(maxValue - minValue);
+  } else {
+    scaleFactor = 1.0;
+  }
 
   QPainter painter(this);
 
@@ -99,10 +122,10 @@ void TTNavigatorDisplay::drawCutList()
 
       cutIn    = item.cutInIndex();
       cutOut   = item.cutOutIndex();
-      startX   = clientRect.x() + (int)(cutIn*scaleFactor);
-      width    = (int)((cutOut-cutIn)*scaleFactor);
+      startX   = clientRect.x() + (int)(cutIn * scaleFactor);
+      segmentWidth = (int)((cutOut - cutIn) * scaleFactor);
 
-      painter.fillRect(startX, startY, width, height, QBrush(Qt::green));
+      painter.fillRect(startX, startY, segmentWidth, height, QBrush(Qt::green));
   }
 }
 
@@ -111,20 +134,22 @@ void TTNavigatorDisplay::drawCutList()
  */
 void TTNavigatorDisplay::onAVItemChanged(TTAVItem* avDataItem)
 {
-	if (avDataItem == 0) {
-		mAVDataItem      = 0;
-		minValue         = 0;
-		maxValue         = 0;
-		isControlEnabled = false;
-		return;
-	}
+  if (avDataItem == 0) {
+    mAVDataItem      = 0;
+    minValue         = 0;
+    maxValue         = 1;
+    isControlEnabled = false;
+    update();
+    return;
+  }
 
   minValue         = 0;
-  maxValue         = avDataItem->videoStream()->frameCount()-1;
+  maxValue         = avDataItem->videoStream()->frameCount() - 1;
+  if (maxValue < 1) maxValue = 1;
   mAVDataItem      = avDataItem;
   isControlEnabled = true;
 
-  repaint();
+  update();
 }
 
 
