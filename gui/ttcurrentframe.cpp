@@ -29,9 +29,11 @@
 
 #include "ttcurrentframe.h"
 #include "../data/ttavlist.h"
+#include "../avstream/ttavstream.h"
 
 #include <QDebug>
 #include <QWheelEvent>
+#include <QProcess>
 
 //! Default constructor
 TTCurrentFrame::TTCurrentFrame(QWidget* parent)
@@ -40,11 +42,15 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   setupUi( this );
 
   videoStream      = 0;
+  mAVItem          = 0;
+  mPlayerProc      = 0;
+  mPlayStartFrame  = 0;
   isControlEnabled = true;
 
-  connect(pbPrevFrame, SIGNAL(clicked()), this, SLOT(onPrevBFrame()));
-  connect(pbNextFrame, SIGNAL(clicked()), this, SLOT(onNextBFrame()));
-  connect(pbSetMarker, SIGNAL(clicked()), this, SLOT(onSetMarker()));
+  connect(pbPrevFrame,  SIGNAL(clicked()), this, SLOT(onPrevBFrame()));
+  connect(pbNextFrame,  SIGNAL(clicked()), this, SLOT(onNextBFrame()));
+  connect(pbSetMarker,  SIGNAL(clicked()), this, SLOT(onSetMarker()));
+  connect(pbPlayVideo,  SIGNAL(clicked()), this, SLOT(onPlayVideo()));
 }
 
 //! Needeb by Qt Designer
@@ -59,9 +65,7 @@ void TTCurrentFrame::controlEnabled( bool enabled )
   pbPrevFrame->setEnabled(enabled);
   pbNextFrame->setEnabled(enabled);
   pbSetMarker->setEnabled(enabled);
-
-  pbPlayVideo->setEnabled( false );//enabled );
-  pbPlayVideo->hide();
+  pbPlayVideo->setEnabled(enabled);
 }
 
 
@@ -71,10 +75,12 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 
 	if (avData == 0) {
 		qDebug() << "avData is null, closing stream";
+		mAVItem = 0;
 		mpegWindow->closeVideoStream();
 		return;
 	}
 
+	mAVItem = avData;
 	qDebug() << "Getting video stream from avData";
 	videoStream = avData->videoStream();
 
@@ -365,5 +371,71 @@ void TTCurrentFrame::saveCurrentFrame()
     mpegWindow->saveCurrentFrame( fileName, qPrintable(format) );
   }
   delete fileDlg;
+}
+
+//! Play video with audio from current position using mpv
+void TTCurrentFrame::onPlayVideo()
+{
+  if (videoStream == 0 || mAVItem == 0) return;
+
+  // Stop any existing playback
+  if (mPlayerProc != 0 && mPlayerProc->state() != QProcess::NotRunning) {
+    mPlayerProc->terminate();
+    mPlayerProc->waitForFinished(2000);
+
+    // Calculate new position based on elapsed time
+    qint64 elapsedMs = mPlayTimer.elapsed();
+    double frameRate = videoStream->frameRate();
+    int elapsedFrames = static_cast<int>((elapsedMs / 1000.0) * frameRate);
+    int newFrame = mPlayStartFrame + elapsedFrames;
+
+    // Clamp to valid range
+    if (newFrame >= static_cast<int>(videoStream->frameCount()))
+      newFrame = videoStream->frameCount() - 1;
+
+    // Navigate to the new position
+    onGotoFrame(newFrame);
+    return;
+  }
+
+  // Create process if needed
+  if (mPlayerProc == 0) {
+    mPlayerProc = new QProcess(this);
+  }
+
+  // Store start position and start timer
+  mPlayStartFrame = videoStream->currentIndex();
+  mPlayTimer.start();
+
+  // Build mpv command
+  QStringList args;
+
+  // Embed mpv into the mpegWindow widget
+  args << "--vo=x11"
+       << QString("--wid=%1").arg(mpegWindow->winId())
+       << "--no-osc"
+       << "--no-input-default-bindings"
+       << "--keep-open=no";
+
+  // Get current position in seconds
+  QTime frameTime = videoStream->currentFrameTime();
+  double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0 +
+                    frameTime.second() + frameTime.msec() / 1000.0;
+
+  args << QString("--start=%1").arg(startSec, 0, 'f', 3);
+
+  // Add audio file if available
+  if (mAVItem->audioCount() > 0) {
+    TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
+    if (audioStream != 0) {
+      args << QString("--audio-file=%1").arg(audioStream->filePath());
+    }
+  }
+
+  // Add video file
+  args << videoStream->filePath();
+
+  qDebug() << "Starting mpv:" << args;
+  mPlayerProc->start("mpv", args);
 }
 

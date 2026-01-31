@@ -35,6 +35,9 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavstream.h"
 
+#include <QProcess>
+#include <QElapsedTimer>
+
 class TTAVItem;
 class TTSubtitleStream;
 
@@ -57,6 +60,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 	public slots:
 		void onAVDataChanged(TTAVItem* avData);
+		void onPlayVideo();
 		void onPrevIFrame();
 		void onNextIFrame();
 		void onPrevPFrame();
@@ -87,6 +91,10 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 	private:
 		bool                isControlEnabled;
 		TTVideoStream*      videoStream;
+		TTAVItem*           mAVItem;
+		QProcess*           mPlayerProc;
+		int                 mPlayStartFrame;
+		QElapsedTimer       mPlayTimer;
 };
 
 #endif //TTCURRENTFRAME_H

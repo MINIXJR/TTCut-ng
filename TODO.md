@@ -9,11 +9,6 @@
   - Double-click thumbnail → close window and jump to that frame
   - Existing "Quick Jump" button in main window should open this
 
-- **Current Frame: Play button with audio**
-  - Play button that starts video playback with audio in the Current Frame widget
-  - Uses currently selected audio track
-  - Plays from current frame position
-
 - **Replace ffmpeg CLI with libav for MPEG-2 encoding**
   - Currently: MPEG-2 uses TTTranscodeProvider → spawns /usr/bin/ffmpeg
   - Goal: Use libav directly for consistent architecture across all codecs
@@ -83,7 +78,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 ## Low Priority
 
 - Remove some unused settings and buttons without function
-- Find a solution for realtime playback of demuxed video stream (play-button)
 - Implement plugin interface for external tools (encoders, muxers, players)
 - Write a FAQ / user documentation
 - Find a logo for TTCut-ng
@@ -102,3 +96,4 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] New GUI layout with TreeView widgets and multi-input-stream support
 - [x] Batch muxing via mux script generation
 - [x] Preview: Next/Previous cut navigation buttons
+- [x] Current Frame: Play button with audio (via mpv)
