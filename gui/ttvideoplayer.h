@@ -49,10 +49,12 @@ public:
     virtual void  setControlsVisible(bool visible)      { areControlsVisible = visible; };
     virtual bool  isPlaying()                     const { return mIsPlaying; }
 
-    virtual void cleanUp()     {};
-    virtual void load(QString) {};
-    virtual void play()        {};
-    virtual void stop()        {};
+    virtual void cleanUp()                         {};
+    virtual void load(QString)                     {};
+    virtual void play()                            {};
+    virtual void stop()                            {};
+    virtual void setSubtitleFile(QString)          {};
+    virtual void clearSubtitleFile()               {};
 
 signals:
     virtual void optimalSizeChanged();

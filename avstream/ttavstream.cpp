@@ -58,6 +58,7 @@
 #include "ttaudioheaderlist.h"
 #include "ttvideoheaderlist.h"
 #include "ttvideoindexlist.h"
+#include "ttsubtitleheaderlist.h"
 
 #include <math.h>
 #include <QCoreApplication>
@@ -534,5 +535,51 @@ int TTVideoStream::moveToPrevPIFrame()
   int index = (pos_i_frame >= pos_p_frame) ? pos_i_frame : pos_p_frame;
 
   return (index >= 0) ? current_index=index : current_index;
+}
+
+
+// /////////////////////////////////////////////////////////////////////////////
+// -----------------------------------------------------------------------------
+// TTSubtitleStream
+// -----------------------------------------------------------------------------
+// /////////////////////////////////////////////////////////////////////////////
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Construct TTSubtitleStream object with file info
+ */
+TTSubtitleStream::TTSubtitleStream(const QFileInfo &f_info)
+  : TTAVStream(f_info)
+{
+  header_list = nullptr;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Destructor
+ */
+TTSubtitleStream::~TTSubtitleStream()
+{
+  if (header_list != nullptr) {
+    delete header_list;
+    header_list = nullptr;
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Returns the subtitle header list
+ */
+TTSubtitleHeaderList* TTSubtitleStream::headerList()
+{
+  return header_list;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Returns the subtitle header at given index
+ */
+TTSubtitleHeader* TTSubtitleStream::headerAt(int index)
+{
+  if (header_list == nullptr)
+    return nullptr;
+
+  return header_list->subtitleHeaderAt(index);
 }
 

@@ -1,14 +1,14 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2008 / www.tritime.org                         */
+/* COPYRIGHT: Minei3oat (c) 2019 / github.com/Minei3oat                       */
 /*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2006                                                      */
-/* FILE     : ttcurrentframe.h                                                */
+/* PROJEKT  : TTCUT 2019                                                      */
+/* FILE     : ttsubtitletreeview.cpp                                          */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 02/19/2006 */
+/* AUTHOR  : Minei3oat                                       DATE: 12/30/2019 */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
-// TTCURRENTFRAME
+// TTSUBTITLEFILELIST
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -27,66 +27,57 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#ifndef TTCURRENTFRAME_H
-#define TTCURRENTFRAME_H
+#ifndef TTSUBTITLEFILELIST_H
+#define TTSUBTITLEFILELIST_H
 
-#include "ui_currentframewidget.h"
+#include "ui_subtitlefilelistwidget.h"
 
-#include "../common/ttcut.h"
-#include "../avstream//ttmpeg2videostream.h"
+#include "common/ttcut.h"
 
+class TTAVData;
 class TTAVItem;
-class TTSubtitleStream;
+class TTSubtitleItem;
 
-class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
+class QMenu;
+class QAction;
+
+class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
 {
-	Q_OBJECT
+  Q_OBJECT
 
-		public:
-		TTCurrentFrame(QWidget* parent = 0);
+  public:
+    TTSubtitleTreeView(QWidget* parent=0);
 
-		void setTitle(const QString & title);
-		void controlEnabled(bool enabled);
-		int currentFramePos();
-		void saveCurrentFrame();
-		void closeVideoStream();
-		void setSubtitleStream(TTSubtitleStream* subtitleStream);
-		void clearSubtitleStream();
+    void setTitle (const QString& title);
+    void setControlEnabled(bool enabled);
+    void clear();
 
-		void wheelEvent(QWheelEvent * e);
+  signals:
+    void openFile();
+    void removeItem(int index);
+    void swapItems(int oldIndex, int newIndex);
 
-	public slots:
-		void onAVDataChanged(TTAVItem* avData);
-		void onPrevIFrame();
-		void onNextIFrame();
-		void onPrevPFrame();
-		void onNextPFrame();
-		void onPrevBFrame();
-		void onNextBFrame();
-		void onSetMarker();
-		void onGotoMarker(int markerPos);
-		void onSetCutIn(int cutInPos);
-		void onSetCutOut(int cutOutPos);
-		void onGotoCutIn(int pos);
-		void onGotoCutOut(int pos);
-		void onGotoFrame(int pos);
-		void onGotoFrame(int pos, int fast);
-		void onMoveNumSteps(int);
-		void onMoveToHome();
-		void onMoveToEnd();
+  public slots:
+    void onAVDataChanged(const TTAVItem* avData);
+    void onItemUp();
+    void onItemDown();
+    void onRemoveItem();
+    void onItemRemoved(int index);
+    void onClearList();
+    void onContextMenuRequest(const QPoint& point);
+    void onAppendItem(const TTSubtitleItem& item);
+    void onSwapItems(int oldIndex, int newIndex);
+    void onReloadList(const TTAVItem* avData);
 
-	signals:
-		void newFramePosition(int);
-    void prevFrame();
-    void nextFrame();
-    void setMarker(int);
+  private:
+    void createActions();
 
-	private:
-		void updateCurrentPosition();
-
-	private:
-		bool                isControlEnabled;
-		TTMpeg2VideoStream* mpeg2Stream;
+  private:
+    const TTAVItem* mpAVItem;
+    QMenu*        contextMenu;
+    QAction*      itemUpAction;
+    QAction*      itemDownAction;
+    QAction*      itemDeleteAction;
+    QAction*      itemNewAction;
 };
-
-#endif //TTCURRENTFRAME_H
+#endif

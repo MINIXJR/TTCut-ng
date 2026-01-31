@@ -35,6 +35,8 @@
 #include <QImage>
 #include <QFileDialog>
 #include <QLabel>
+#include <QPainter>
+#include <QFont>
 
 #include "../common/ttcut.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
@@ -42,6 +44,10 @@
 #include "../avstream/ttvideoheaderlist.h"
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/ttsubtitleheaderlist.h"
+#include "../avstream/ttavheader.h"
+
+class TTSubtitleStream;
 
 class TTMPEG2Window2 : public QLabel
 {
@@ -66,19 +72,25 @@ class TTMPEG2Window2 : public QLabel
 
     void saveCurrentFrame(QString fName, const char* format);
 
+    void setSubtitleStream(TTSubtitleStream* subtitleStream);
+    void clearSubtitleStream();
+
   protected:
   	void getFrameInfo();
     void decodeAndShowSlice();
+    QString getSubtitleTextAtCurrentFrame();
+    void drawSubtitleOnImage(QImage& image, const QString& text);
 
   private:
-    TFrameInfo*      frameInfo;
-    quint8*          picBuffer;
-    int              videoWidth;
-    int              videoHeight;
-    int              currentIndex;
-    TTVideoStream*   mpVideoStream;
-    TTMessageLogger* log;
-    TTMpeg2Decoder*  mpeg2Decoder;
+    TFrameInfo*         frameInfo;
+    quint8*             picBuffer;
+    int                 videoWidth;
+    int                 videoHeight;
+    int                 currentIndex;
+    TTVideoStream*      mpVideoStream;
+    TTSubtitleStream*   mpSubtitleStream;
+    TTMessageLogger*    log;
+    TTMpeg2Decoder*     mpeg2Decoder;
 };
 
 #endif //TTMPEG2WINDOW_H

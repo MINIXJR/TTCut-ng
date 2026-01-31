@@ -50,6 +50,7 @@
 #include "ttmpegaudiostream.h"
 #include "ttmpegaudioheader.h"
 #include "ttmpeg2videostream.h"
+#include "ttsrtsubtitlestream.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttexception.h"
 
@@ -301,6 +302,59 @@ TTVideoStream* TTVideoType::createVideoStream()
 void TTVideoType::getVideoStreamType()
 {
   av_stream_type = mpeg2_demuxed_video;
+}
+
+
+// /////////////////////////////////////////////////////////////////////////////
+// -----------------------------------------------------------------------------
+// *** TTSubtitleType: Subtitle stream type
+// -----------------------------------------------------------------------------
+// /////////////////////////////////////////////////////////////////////////////
+
+// construct TTSubtitleType object
+// -----------------------------------------------------------------------------
+TTSubtitleType::TTSubtitleType( QString f_name )
+  : TTAVTypes( f_name )
+{
+  // if subtitle file exists get subtitle stream type
+  if ( av_stream_exists )
+  {
+    getSubtitleStreamType();
+  }
+}
+
+// destructor
+// -----------------------------------------------------------------------------
+TTSubtitleType::~TTSubtitleType()
+{
+}
+
+// create subtitle stream object according to subtitle stream type
+// -----------------------------------------------------------------------------
+TTSubtitleStream* TTSubtitleType::createSubtitleStream()
+{
+  switch ( av_stream_type )
+  {
+  case srt_subtitle:
+    return new TTSrtSubtitleStream( *av_stream_info );
+
+  default:
+    log->errorMsg(__FILE__, __LINE__, "Unsupported subtitle stream type!");
+    return nullptr;
+  }
+}
+
+// evaluate subtitle stream and estimate subtitle stream type
+// -----------------------------------------------------------------------------
+void TTSubtitleType::getSubtitleStreamType()
+{
+  QString suffix = av_stream_info->suffix().toLower();
+
+  if (suffix == "srt") {
+    av_stream_type = srt_subtitle;
+  } else {
+    av_stream_type = unknown;
+  }
 }
 
 

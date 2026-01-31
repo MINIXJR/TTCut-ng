@@ -88,6 +88,16 @@ void TTCurrentFrame::closeVideoStream()
   mpegWindow->closeVideoStream();
 }
 
+void TTCurrentFrame::setSubtitleStream(TTSubtitleStream* subtitleStream)
+{
+  mpegWindow->setSubtitleStream(subtitleStream);
+}
+
+void TTCurrentFrame::clearSubtitleStream()
+{
+  mpegWindow->clearSubtitleStream();
+}
+
 void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
 {
   if (!isControlEnabled)

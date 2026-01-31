@@ -49,9 +49,12 @@ TTMuxListDataItem::TTMuxListDataItem(const TTMuxListDataItem& item)
   this->videoFileName = item.videoFileName;
 
   this->audioFileNames.clear();
-
   for(int i=0; i<item.audioFileNames.count(); i++)
     this->audioFileNames.append(item.audioFileNames[i]);
+
+  this->subtitleFileNames.clear();
+  for(int i=0; i<item.subtitleFileNames.count(); i++)
+    this->subtitleFileNames.append(item.subtitleFileNames[i]);
 }
 
 const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& item)
@@ -61,9 +64,12 @@ const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& i
   this->videoFileName = item.videoFileName;
 
   this->audioFileNames.clear();
-
   for(int i=0; i<item.audioFileNames.count(); i++)
     this->audioFileNames.append(item.audioFileNames[i]);
+
+  this->subtitleFileNames.clear();
+  for(int i=0; i<item.subtitleFileNames.count(); i++)
+    this->subtitleFileNames.append(item.subtitleFileNames[i]);
 
   return *this;
 }
@@ -73,6 +79,13 @@ TTMuxListDataItem::TTMuxListDataItem(QString video, QStringList audio)
 {
   videoFileName  = video;
   audioFileNames = audio;
+}
+
+TTMuxListDataItem::TTMuxListDataItem(QString video, QStringList audio, QStringList subtitle)
+{
+  videoFileName     = video;
+  audioFileNames    = audio;
+  subtitleFileNames = subtitle;
 }
 
 QString TTMuxListDataItem::getVideoName()
@@ -93,6 +106,16 @@ QStringList TTMuxListDataItem::getAudioNames()
 void TTMuxListDataItem::appendAudioFile(QString audioFileName)
 {
   audioFileNames.append(audioFileName);
+}
+
+QStringList TTMuxListDataItem::getSubtitleNames()
+{
+  return subtitleFileNames;
+}
+
+void TTMuxListDataItem::appendSubtitleFile(QString subtitleFileName)
+{
+  subtitleFileNames.append(subtitleFileName);
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -146,6 +169,19 @@ int TTMuxListData::addItem(QString video, QStringList audio)
   return data.count()-1;
 }
 
+//! Add item to list with subtitles
+int TTMuxListData::addItem(QString video, QStringList audio, QStringList subtitle)
+{
+  TTMuxListDataItem item = createMuxListItem(video);
+
+  item.audioFileNames.clear();
+  item.audioFileNames = audio;
+  item.subtitleFileNames.clear();
+  item.subtitleFileNames = subtitle;
+
+  return data.count()-1;
+}
+
 //!
 TTMuxListDataItem TTMuxListData::createMuxListItem(QString videoFilePath)
 {
@@ -167,6 +203,11 @@ void TTMuxListData::appendAudioName(int index, QString audio)
   data[index].audioFileNames.append(audio);
 }
 
+void TTMuxListData::appendSubtitleName(int index, QString subtitle)
+{
+  data[index].subtitleFileNames.append(subtitle);
+}
+
 QString TTMuxListData::videoFilePathAt(int index)
 {
   return data[index].videoFileName;
@@ -176,6 +217,12 @@ QString TTMuxListData::videoFilePathAt(int index)
 QStringList TTMuxListData::audioFilePathsAt(int index)
 {
   return data[index].audioFileNames;
+}
+
+//! Returns the subtitle file-paths string list
+QStringList TTMuxListData::subtitleFilePathsAt(int index)
+{
+  return data[index].subtitleFileNames;
 }
 
 //! Returns the data item at position index
@@ -213,6 +260,10 @@ void TTMuxListData::print()
     QStringList audioNames = data[i].getAudioNames();
     for (int j=0; j < audioNames.size(); j++) {
       log->infoMsg(__FILE__, __LINE__, QString("audio-file: %1").arg(audioNames.at(j)));
+    }
+    QStringList subtitleNames = data[i].getSubtitleNames();
+    for (int j=0; j < subtitleNames.size(); j++) {
+      log->infoMsg(__FILE__, __LINE__, QString("subtitle-file: %1").arg(subtitleNames.at(j)));
     }
     log->infoMsg(__FILE__, __LINE__, "--------------------------------");
   }
