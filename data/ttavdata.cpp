@@ -423,7 +423,7 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   mpAVList->append(avItem);
 
-  // Add pending VDR markers as cut entries (after video stream is set)
+  // Add pending VDR markers as cut entries AND markers (after video stream is set)
   if (mpPendingVdrMarkers.contains(avItem)) {
     QList<QPair<int, int>> cutPairs = mpPendingVdrMarkers.take(avItem);
     int frameCount = vStream ? vStream->frameCount() : 0;
@@ -442,6 +442,10 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
       if (cutIn >= 0 && cutOut > cutIn) {
         qDebug() << "  Adding VDR cut:" << cutIn << "-" << cutOut;
         avItem->appendCutEntry(cutIn, cutOut);
+
+        // Also add individual markers for the Marker tab
+        avItem->appendMarker(cutIn);
+        avItem->appendMarker(cutOut);
       }
     }
   }
