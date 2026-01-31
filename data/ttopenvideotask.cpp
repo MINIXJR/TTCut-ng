@@ -92,7 +92,10 @@ void TTOpenVideoTask::operation()
 
   QString videoFilePath = fInfo.absoluteFilePath();
 
-  // TTCut only works with elementary streams (.m2v, .h264, .h265, .ac3, .mpa)
+  // TTCut only works with elementary streams:
+  //   Video: .m2v, .264/.h264, .265/.h265
+  //   Audio: .ac3, .mp2/.mpa
+  //   Subtitles: .srt
   // Container files must be demuxed first using ttcut-demux
   QString suffix = fInfo.suffix().toLower();
   QStringList containerExtensions = {"ts", "m2ts", "mts", "mkv", "mp4", "m4v", "mov", "avi", "mpg", "mpeg", "vob"};
@@ -101,7 +104,11 @@ void TTOpenVideoTask::operation()
     throw new TTDataFormatException(__FILE__, __LINE__,
         QString(tr("Container format detected: %1\n\n"
                    "TTCut only works with elementary streams.\n"
-                   "Please demux first using: ttcut-demux %2"))
+                   "Please demux first using: ttcut-demux %2\n\n"
+                   "Supported formats:\n"
+                   "  Video: .m2v, .264, .265\n"
+                   "  Audio: .ac3, .mp2\n"
+                   "  Subtitles: .srt"))
             .arg(suffix.toUpper()).arg(fInfo.fileName()));
   }
 
