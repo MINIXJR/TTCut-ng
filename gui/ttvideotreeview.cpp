@@ -164,12 +164,12 @@ void TTVideoTreeView::onItemUp()
   if (mAVData == 0 || videoListView->currentItem() == 0)
     return;
 
-    int index = videoListView->indexOfTopLevelItem(videoListView->currentItem());
+  int index = videoListView->indexOfTopLevelItem(videoListView->currentItem());
 
-    if (index <= 0)
-      return;
+  if (index <= 0)
+    return;
 
-    emit swapItems(index, index-1);
+  emit swapItems(index, index-1);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

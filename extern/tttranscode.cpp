@@ -114,7 +114,7 @@ bool TTTranscodeProvider::encodePart(TTVideoStream* vStream, int start, int end)
   proc = new QProcess();
 
   // read both channels: stderr and stdout
-  proc->setReadChannelMode(QProcess::MergedChannels);
+  proc->setProcessChannelMode(QProcess::MergedChannels);
 
   connectSignals(proc);
 

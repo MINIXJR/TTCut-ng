@@ -114,7 +114,7 @@ void TTMarkerTreeView::onAppendItem(const TTMarkerItem& item)
   treeItem->setText(0, item.fileName());
   treeItem->setText(1, item.markerPosString());
   treeItem->setText(2, item.markerTimeString());
-  treeItem->setText(3, item.ID());
+  treeItem->setText(3, item.ID().toString());
 }
 
 /*!
@@ -132,7 +132,7 @@ void TTMarkerTreeView::onUpdateItem(const TTMarkerItem& mItem, const TTMarkerIte
   treeItem->setText(0, uItem.fileName());
   treeItem->setText(1, uItem.markerPosString());
   treeItem->setText(2, uItem.markerTimeString());
-  treeItem->setText(3, uItem.ID());
+  treeItem->setText(3, uItem.ID().toString());
 
   emit itemUpdated(mItem);
   emit refreshDisplay();
@@ -244,7 +244,7 @@ QTreeWidgetItem* TTMarkerTreeView::findItem(const TTMarkerItem& markerItem)
 {
 	for (int i = 0; i < markerListView->topLevelItemCount(); i++) {
 		QTreeWidgetItem* item = markerListView->topLevelItem(i);
-		if (item->text(3) == QString("%1").arg(markerItem.ID()))
+		if (item->text(3) == markerItem.ID().toString())
 			return item;
 	}
 	return 0;

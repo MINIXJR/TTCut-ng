@@ -232,8 +232,10 @@ int TTMpeg2Decoder::decodeNextFrame()
             mpeg2_convert (mpeg2Decoder, mpeg2convert_rgb32, NULL);
             break;
         }
+        [[fallthrough]];
       case STATE_END:
         isStreamEnd = true;
+        [[fallthrough]];
       case STATE_SLICE:
       case STATE_INVALID_END:
         if ( mpeg2Info->display_fbuf )

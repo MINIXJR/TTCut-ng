@@ -31,7 +31,7 @@
 #define TTVIDEOPLAYER_H
 
 #include <QObject>
-#include <QtGui/QWidget>
+#include <QWidget>
 
 class TTVideoPlayer : public QWidget
 {

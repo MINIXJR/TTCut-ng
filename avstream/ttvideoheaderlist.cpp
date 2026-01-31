@@ -47,6 +47,8 @@
 
 #include "../common/ttexception.h"
 
+#include <algorithm>
+
 bool videoHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
 
 const char c_name[] = "TTVideoHeaderList";
@@ -257,7 +259,7 @@ int TTVideoHeaderList::headerIndex( TTVideoHeader* current )
  */
 void TTVideoHeaderList::sort()
 {
-  qSort( begin(), end(), videoHeaderListCompareItems );
+  std::sort( begin(), end(), videoHeaderListCompareItems );
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
