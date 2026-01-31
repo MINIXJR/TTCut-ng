@@ -86,6 +86,9 @@ OUTDIR="${2:-$(dirname "$INPUT")}"
 # Create output directory if needed
 mkdir -p "$OUTDIR"
 
+# Initialize cleanup flag for repaired temp file
+CLEANUP_REPAIRED=false
+
 # Check for VDR marks file (markad plugin)
 INPUT_DIR=$(dirname "$INPUT")
 MARKS_FILE=""
@@ -242,7 +245,44 @@ esac
 
 # Get original timestamps for info
 START_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
-info "Original video start time: ${START_PTS}s"
+AUDIO_START_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+info "Original video start time: ${START_PTS:-unknown}s"
+info "Original audio start time: ${AUDIO_START_PTS:-unknown}s"
+echo ""
+
+#############################################################################
+# TIMESTAMP REPAIR (normalize timestamps before demuxing)
+# This fixes A/V sync issues similar to ProjectX stream repair
+#############################################################################
+step "Repairing timestamps (normalizing to start at 0)..."
+
+REPAIRED_INPUT="$OUTDIR/.${BASENAME}_repaired.ts"
+
+# Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
+if ffmpeg -y -fflags +genpts+igndts -i "$INPUT" \
+    -c copy \
+    -avoid_negative_ts make_zero \
+    -map 0:v:0 -map 0:a? \
+    "$REPAIRED_INPUT" 2>&1 | grep -E "^(frame=|Output|size=)" | tail -1; then
+
+    # Verify repaired file
+    if [ -s "$REPAIRED_INPUT" ]; then
+        NEW_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        NEW_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        info "Repaired video start time: ${NEW_VIDEO_PTS:-0}s"
+        info "Repaired audio start time: ${NEW_AUDIO_PTS:-0}s"
+
+        # Use repaired file for demuxing
+        INPUT="$REPAIRED_INPUT"
+        CLEANUP_REPAIRED=true
+    else
+        warn "Timestamp repair failed, using original file"
+        CLEANUP_REPAIRED=false
+    fi
+else
+    warn "Timestamp repair failed, using original file"
+    CLEANUP_REPAIRED=false
+fi
 echo ""
 
 #############################################################################
@@ -623,4 +663,12 @@ else
     ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true
     echo ""
     info "Main file for TTCut: $OUTPUT_MKV"
+fi
+
+#############################################################################
+# CLEANUP
+#############################################################################
+# Remove temporary repaired file
+if [ "${CLEANUP_REPAIRED:-false}" = "true" ] && [ -f "$REPAIRED_INPUT" ]; then
+    rm -f "$REPAIRED_INPUT"
 fi
