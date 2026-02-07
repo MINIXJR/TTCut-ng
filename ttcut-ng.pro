@@ -1,0 +1,253 @@
+#/*----------------------------------------------------------------------------*/
+#/*  COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                              */
+#/*  Originally: TriTime (c) 2003-2010 / www.tritime.org                       */
+#/*----------------------------------------------------------------------------*/
+#/*  FILE:   QMake Projektfile for ttcut                                        */
+#/*-----------------------------------------------------------------------------*/
+#/*  ABOUT:                                                                     */
+#/*-----------------------------------------------------------------------------*/
+#/*  AUTHOR:    b. altendorf (ttcut@tritime.org)              DATE: 02/18/2006  */
+#/*-----------------------------------------------------------------------------*/
+#
+#
+PROJECT     = TTCut-ng
+CONFIG      += qt warn_on debug c++14
+QT          += core widgets gui xml network
+DEFINES     += _FILE_OFFSET_BITS=64
+DIST        = ttcut-ng
+TARGET      = ttcut-ng
+ICON        = ui/pixmaps/ttcut_logo_001.icns
+LIBS        = -lmpeg2 -lmpeg2convert
+
+# libav/ffmpeg libraries for H.264/H.265 support
+unix {
+  CONFIG += link_pkgconfig
+  PKGCONFIG += libavformat libavcodec libavutil libswscale
+}
+
+unix {
+  DEFINES += UNIX
+  DEFINES -= MACX
+}
+
+macx {
+  DEFINES += MACX
+  DEFINES -= UNIX
+}
+
+OBJECTS_DIR = obj
+MOC_DIR     = moc
+UI_DIR      = ui_h 
+RCC_DIR     = res
+TRANSLATIONS = trans/ttcut-ng_de_DE.ts \
+               trans/ttcut-ng_en_US.ts
+RESOURCES   = ui/ttcutvideoinfowidget.qrc\
+              ui/audiofilelistwidget.qrc\
+              ui/videofilelistwidget.qrc\
+              ui/subtitlefilelistwidget.qrc\
+              ui/cutoutframewidget.qrc\
+              ui/currentframewidget.qrc\
+              ui/ttcutframenavigationwidget.qrc \
+              ui/cutlistwidget.qrc\
+              ui/ttcutsettingscommon.qrc\
+              ui/ttcutsettingsmuxer.qrc\
+              ui/ttsettingsdialog.qrc\
+              ui/previewwidget.qrc\
+              ui/avcutdialog.qrc\
+              ui/processviewwidget.qrc\
+              ui/mainwindow.qrc
+FORMS       = ui/audiofilelistwidget.ui\
+              ui/videofilelistwidget.ui\
+              ui/subtitlefilelistwidget.ui\
+              ui/markerlistwidget.ui\
+              ui/cutoutframewidget.ui\
+              ui/currentframewidget.ui\
+              ui/navigatordisplaywidget.ui\
+              ui/streamnavigationwidget.ui\
+              ui/cutlistwidget.ui\
+              ui/ttcutsettingschapter.ui\
+              ui/ttcutsettingsmuxer.ui\
+              ui/ttcutsettingsencoder.ui\
+              ui/ttcutsettingsfiles.ui\
+              ui/ttcutsettingscommon.ui\
+              ui/ttsettingsdialog.ui\
+              ui/mplexparamdlg.ui\
+              ui/previewwidget.ui\
+              ui/processviewwidget.ui\
+              ui/avcutdialog.ui\
+              ui/aboutdlg.ui\
+#             ui/mainwindow.ui\
+              ui/ttcutmainwnd_new.ui\
+              ui/ttcutvideoinfowidget.ui\
+              ui/ttcutframenavigationwidget.ui\
+              ui/ttprogressform.ui\
+              ui/tttaskprogresswidget.ui
+HEADERS     = common/ttcut.h\
+              common/ttthreadtask.h\
+              common/ttthreadtaskpool.h\
+              common/ttmessagelogger.h\
+              common/ttmessagebox.h\
+              common/ttexception.h\
+              common/istatusreporter.h\
+              data/ttaudiolist.h\
+              data/ttsubtitlelist.h\
+              data/ttcutlist.h\
+              data/ttmarkerlist.h\
+              data/ttcutparameter.h\
+              data/ttmuxlistdata.h\
+              data/ttavdata.h\
+              data/ttavlist.h\
+              data/ttcutprojectdata.h\
+              data/ttopenvideotask.h\
+              data/ttopenaudiotask.h\
+              data/ttopensubtitletask.h\
+              data/ttcutvideotask.h\
+              data/ttcutaudiotask.h\
+              data/ttcutsubtitletask.h\
+              data/ttcutpreviewtask.h\
+              data/ttframesearchtask.h\
+#unused              data/ttthreadstatusargs.h\
+              avstream/ttcommon.h\
+              avstream/ttac3audioheader.h\
+              avstream/ttac3audiostream.h\
+              avstream/ttaudioheaderlist.h\
+              avstream/ttavheader.h\
+              avstream/ttavstream.h\
+              avstream/ttavtypes.h\
+              avstream/ttfilebuffer.h\ 
+              avstream/ttheaderlist.h\ 
+              avstream/ttmpeg2videoheader.h\
+              avstream/ttmpeg2videostream.h\
+              avstream/tth264videoheader.h\
+              avstream/tth264videostream.h\
+              avstream/tth265videoheader.h\
+              avstream/tth265videostream.h\
+              avstream/ttmpegaudioheader.h\
+              avstream/ttmpegaudiostream.h\
+              avstream/ttvideoheaderlist.h\
+              avstream/ttesinfo.h\
+              avstream/ttnaluparser.h\
+              avstream/ttsrtsubtitlestream.h\
+              avstream/ttsubtitleheaderlist.h\
+              avstream/ttvideoindexlist.h\
+              mpeg2decoder/ttmpeg2decoder.h\
+              mpeg2window/ttmpeg2window2.h\
+              extern/imuxprovider.h\
+              extern/tttranscode.h\
+              extern/ttmplexprovider.h\
+              extern/ttffmpegwrapper.h\
+              extern/ttessmartcut.h\
+              extern/ttmkvmergeprovider.h\
+              gui/ttcutsettings.h\
+              gui/ttcutsettingschapter.h\
+              gui/ttcutsettingsmuxer.h\
+              gui/ttcutsettingsencoder.h\
+              gui/ttcutsettingsfiles.h\
+              gui/ttcutsettingscommon.h\
+              gui/ttcutsettingsdlg.h\
+              gui/ttcutvideoinfo.h\
+              gui/ttaudiotreeview.h\
+              gui/ttvideotreeview.h\
+              gui/ttsubtitletreeview.h\
+              gui/ttmarkertreeview.h\
+              gui/ttcutoutframe.h\
+              gui/ttcurrentframe.h\
+              gui/ttcutframenavigation.h\
+              gui/ttnavigatordisplay.h \
+              gui/ttstreamnavigator.h \
+              gui/ttcuttreeview.h\
+              gui/ttprogressbar.h\
+              gui/ttprocessform.h\
+              gui/tttaskprogress.h\
+              gui/ttcutpreview.h\
+              gui/ttvideoplayer.h\
+              gui/ttmplayerwidget.h\
+              gui/ttcutaboutdlg.h\
+              gui/ttcutavcutdlg.h\
+              gui/ttcutmainwindow.h
+SOURCES     = common/ttcut.cpp\
+              common/ttthreadtask.cpp\
+              common/ttthreadtaskpool.cpp\  
+              common/ttmessagelogger.cpp\
+              common/ttmessagebox.cpp\
+              common/ttexception.cpp\
+              common/istatusreporter.cpp\
+              data/ttaudiolist.cpp\
+              data/ttsubtitlelist.cpp\
+              data/ttcutlist.cpp\
+              data/ttmarkerlist.cpp\
+              data/ttcutparameter.cpp\
+              data/ttmuxlistdata.cpp\
+              data/ttavdata.cpp\
+              data/ttavlist.cpp\
+              data/ttcutprojectdata.cpp\              
+              data/ttopenvideotask.cpp\
+              data/ttopenaudiotask.cpp\
+              data/ttopensubtitletask.cpp\
+              data/ttcutvideotask.cpp\
+              data/ttcutaudiotask.cpp\
+              data/ttcutsubtitletask.cpp\
+              data/ttcutpreviewtask.cpp\
+              data/ttframesearchtask.cpp\
+              avstream/ttcommon.cpp\
+              avstream/ttac3audioheader.cpp\
+              avstream/ttac3audiostream.cpp\
+              avstream/ttaudioheaderlist.cpp\
+              avstream/ttavheader.cpp\
+              avstream/ttavstream.cpp\
+              avstream/ttavtypes.cpp\
+              avstream/ttfilebuffer.cpp\ 
+              avstream/ttheaderlist.cpp\ 
+              avstream/ttmpeg2videoheader.cpp\
+              avstream/ttmpeg2videostream.cpp\
+              avstream/tth264videoheader.cpp\
+              avstream/tth264videostream.cpp\
+              avstream/tth265videoheader.cpp\
+              avstream/tth265videostream.cpp\
+              avstream/ttmpegaudioheader.cpp\
+              avstream/ttmpegaudiostream.cpp\
+              avstream/ttvideoheaderlist.cpp\
+              avstream/ttesinfo.cpp\
+              avstream/ttnaluparser.cpp\
+              avstream/ttsrtsubtitlestream.cpp\
+              avstream/ttsubtitleheaderlist.cpp\
+              avstream/ttvideoindexlist.cpp\
+              mpeg2decoder/ttmpeg2decoder.cpp\
+              mpeg2window/ttmpeg2window2.cpp\
+              extern/tttranscode.cpp\
+              extern/ttmplexprovider.cpp\
+              extern/ttffmpegwrapper.cpp\
+              extern/ttessmartcut.cpp\
+              extern/ttmkvmergeprovider.cpp\
+              gui/ttcutsettings.cpp\
+              gui/ttcutsettingschapter.cpp\
+              gui/ttcutsettingsmuxer.cpp\
+              gui/ttcutsettingsencoder.cpp\
+              gui/ttcutsettingsfiles.cpp\
+              gui/ttcutsettingscommon.cpp\
+              gui/ttcutsettingsdlg.cpp\
+              gui/ttcutvideoinfo.cpp\
+              gui/ttaudiotreeview.cpp\
+              gui/ttvideotreeview.cpp\
+              gui/ttsubtitletreeview.cpp\
+              gui/ttmarkertreeview.cpp\
+              gui/ttcutoutframe.cpp\
+              gui/ttcurrentframe.cpp\
+              gui/ttcutframenavigation.cpp\
+              gui/ttnavigatordisplay.cpp\
+              gui/ttstreamnavigator.cpp\
+              gui/ttcuttreeview.cpp\
+              gui/ttprogressbar.cpp\
+              gui/tttaskprogress.cpp\
+              gui/ttprocessform.cpp\
+              gui/ttcutpreview.cpp\
+              gui/ttvideoplayer.cpp\
+              gui/ttmplayerwidget.cpp\
+              gui/ttcutaboutdlg.cpp\
+              gui/ttcutavcutdlg.cpp\
+              gui/ttcutmainwindow.cpp\
+              gui/ttcutmain.cpp
+#
+# -------------------------------------------------------------------------------
+# TTCUT.PRO ENDE
+# -------------------------------------------------------------------------------

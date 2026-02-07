@@ -1,0 +1,147 @@
+ttcut (0.51.0+git20260201-132-5198771-1~forky) forky; urgency=medium
+
+  * Git snapshot 5198771
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 17:37:40 +0100
+
+ttcut (0.51.0-1~forky) forky; urgency=medium
+
+  * ttcut-demux: Add audio padding at end to match video duration (like ProjectX)
+    - Reduces A/V drift from 372ms to under 20ms
+    - Achieves ProjectX-quality A/V synchronization
+  * ttcut-demux: Add audio trim at start for A/V offset correction
+  * ttcut-demux: Add duration mismatch detection and reporting in .info file
+  * Preview widget: Fix button order (Zurück/Start/Vor)
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 01 Feb 2026 17:30:00 +0100
+
+ttcut (0.50.3+git20260201-131-b85d26a-1~forky) forky; urgency=medium
+
+  * Add lrelease to build process
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 14:56:19 +0100
+
+ttcut (0.50.3+git20260201-128-78411ff-1~forky) forky; urgency=medium
+
+  * Add video editing industry color scheme and theme-aware icons
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 14:34:51 +0100
+
+ttcut (0.50.3+git20260201-124-6da2568-1~forky) forky; urgency=medium
+
+  * Install translation files
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 11:57:45 +0100
+
+ttcut (0.50.3+git20260201-123-cd67fe5-1~forky) forky; urgency=medium
+
+  * Git snapshot cd67fe5
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 11:53:18 +0100
+
+ttcut (0.50.3-1~forky) forky; urgency=medium
+
+  * Fix MPEG-2 cutting for short segments without I-frames
+  * Increase transfer buffer from 64KB to 256KB for better performance
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 01 Feb 2026 11:49:00 +0100
+
+ttcut (0.50.2+git20260131-118-aca9642-1~forky) forky; urgency=medium
+
+  * Git snapshot aca9642
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 19:15:45 +0100
+
+ttcut (0.50.2-1~forky) forky; urgency=medium
+
+  * Current Frame: Play button with audio playback (embedded mpv)
+  * Preview dialog: Next/Previous cut navigation buttons (Vor/Zurück)
+  * A/V sync offset applied to all output formats (TS, MKV, MP4)
+  * User warning when clicking "New Project" with unsaved changes
+  * Keyboard shortcuts: j/k for frame, g/G for home/end, [ ] for cut-in/out
+  * Warning dialog if audio and video length differ
+  * Help menu: Keyboard shortcuts reference dialog
+  * Fixed duplicate ES file deletion in mplex provider
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 31 Jan 2026 19:30:00 +0100
+
+ttcut (0.50.1+git20260131-99-XXXXXXX-1~forky) forky; urgency=medium
+
+  * Fix MPEG-2 decoder crash when scrolling backwards near beginning of video
+  * Fixed out-of-bounds access in moveToFrameIndex() I-frame search
+  * Added NULL check for frameInfo in getFrameInfo()
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 16:00:00 +0100
+
+ttcut (0.50.1+git20260131-98-c5c3cc5-1~forky) forky; urgency=medium
+
+  * VDR markad integration and ttcut-demux improvements
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 15:21:38 +0100
+
+ttcut (0.50.1-1~forky) forky; urgency=medium
+
+  * VDR markad integration: Auto-load commercial markers from .info files
+  * ttcut-demux: Added VDR marks file support for automatic ad detection
+  * ttcut-demux: Fixed audio filename counter logic
+  * Markers appear in both Cut tab (as cut pairs) and Marker tab (individual)
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 31 Jan 2026 15:15:00 +0100
+
+ttcut (0.50.0+git20260131-93-c211e15-1~forky) forky; urgency=medium
+
+  * v0.50.0 release
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 31 Jan 2026 14:05:00 +0100
+
+ttcut (0.50.0-1~forky) forky; urgency=medium
+
+  * Major release: H.264/H.265 Smart Cut support
+  * Frame-accurate cutting for elementary streams (.264, .265)
+  * Re-encode only at cut points (~0.5% of frames)
+  * Stream-copy for remaining frames (lossless, ~99.5%)
+  * Multi-segment support with audio cutting
+  * MKV muxing via mkvmerge
+  * Native NAL unit parser with memory-mapped I/O
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Fri, 30 Jan 2026 20:07:21 +0100
+
+ttcut (0.40.0+git20260118-89-94575e0-1~forky) forky; urgency=medium
+
+  * Doc update
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 18 Jan 2026 15:38:38 +0100
+
+ttcut (0.40.0+git20260118-84-991b25d-1~forky) forky; urgency=medium
+
+  * feature-bugfixes-from-ttcut
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sun, 18 Jan 2026 14:57:48 +0100
+
+ttcut (0.30.0+git20260117-78-c74629c-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:50:15 +0100
+
+ttcut (0.30.0+git20260117.78.c74629c-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:48:34 +0100
+
+ttcut (0.30.0-1~forky) forky; urgency=medium
+
+  * Add SRT subtitle support with preview integration
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 18:43:00 +0100
+
+ttcut (0.30.0) unstable; urgency=medium
+
+  * Qt5 migration release
+  * Complete Qt5 migration from Qt4
+  * All compiler warnings fixed
+  * Replaced discontinued transcode with ffmpeg for frame-accurate cutting
+  * Wayland-compatible (uses QLabel for frame display)
+
+ -- MINIXJR <35893755+MINIXJR@users.noreply.github.com>  Sat, 17 Jan 2026 14:30:00 +0100

@@ -1,0 +1,32 @@
+Source: ttcut
+Section: video
+Priority: optional
+Maintainer: MINIXJR <35893755+MINIXJR@users.noreply.github.com>
+Build-Depends: debhelper (>= 11),
+               qt5-qmake,
+               qtbase5-dev,
+               libmpeg2-4-dev,
+               libavformat-dev,
+               libavcodec-dev,
+               libavutil-dev,
+               libswscale-dev
+Standards-Version: 4.5.0
+Homepage: https://github.com/MINIXJR/TTCut-ng
+
+Package: ttcut
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: ffmpeg, mjpegtools, mpv, mkvtoolnix
+Description: MPEG-2/H.264/H.265 video cutting tool
+ TTCut is a video cutting tool for MPEG-2, H.264, and H.265 streams that
+ avoids re-encoding the entire video. Only frames around cut points are
+ selectively re-encoded (Smart Cut).
+ .
+ It was designed primarily for removing commercials from DVB recordings.
+ Frame-accurate cutting is possible at any position.
+ .
+ Features:
+  - MPEG-2: Classic TTCut cutting with ffmpeg
+  - H.264/H.265: Smart Cut (~0.5% re-encode, ~99.5% stream-copy)
+  - SRT subtitle support with preview
+  - MKV output with chapter support

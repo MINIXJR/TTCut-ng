@@ -1,0 +1,795 @@
+<ui version="4.0" >
+ <class>TTCutFrameNavigationWidget</class>
+ <widget class="QWidget" name="TTCutFrameNavigationWidget" >
+  <property name="geometry" >
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>287</width>
+    <height>300</height>
+   </rect>
+  </property>
+  <property name="sizePolicy" >
+   <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
+    <horstretch>0</horstretch>
+    <verstretch>1</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize" >
+   <size>
+    <width>240</width>
+    <height>280</height>
+   </size>
+  </property>
+  <property name="sizeIncrement" >
+   <size>
+    <width>0</width>
+    <height>1</height>
+   </size>
+  </property>
+  <property name="windowTitle" >
+   <string>Form</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout" >
+   <property name="margin" >
+    <number>2</number>
+   </property>
+   <property name="spacing" >
+    <number>2</number>
+   </property>
+   <!-- Row 0: I-frame navigation + Set cut-in -->
+   <item row="0" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbPrevIFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to previous I-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&lt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/iframe_18.xpm</normaloff>:/pixmaps/pixmaps/iframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextIFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to next I-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&gt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/iframe_18.xpm</normaloff>:/pixmaps/pixmaps/iframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0" >
+        <size>
+         <width>10</width>
+         <height>17</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbSetCutIn" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>2</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>90</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>120</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>Set cut-in</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 1: P-frame navigation + Set cut-out -->
+   <item row="1" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_2" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbPrevPFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to previous P-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&lt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/pframe_18.xpm</normaloff>:/pixmaps/pixmaps/pframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextPFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to next P-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&gt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/pframe_18.xpm</normaloff>:/pixmaps/pixmaps/pframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0" >
+        <size>
+         <width>10</width>
+         <height>17</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbSetCutOut" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>2</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>90</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>120</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>Set cut-out</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 2: B-frame navigation -->
+   <item row="2" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_b" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbPrevBFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to previous B-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&lt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/bframe_18.xpm</normaloff>:/pixmaps/pixmaps/bframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextBFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to next B-Frame</string>
+       </property>
+       <property name="text" >
+        <string>&gt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/bframe_18.xpm</normaloff>:/pixmaps/pixmaps/bframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0" >
+        <size>
+         <width>183</width>
+         <height>17</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 3: F-frame (single frame) navigation -->
+   <item row="3" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_f" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbPrevFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to previous frame</string>
+       </property>
+       <property name="text" >
+        <string>&lt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/fframe_18.xpm</normaloff>:/pixmaps/pixmaps/fframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbNextFrame" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>45</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>45</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to next frame</string>
+       </property>
+       <property name="text" >
+        <string>&gt;</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/fframe_18.xpm</normaloff>:/pixmaps/pixmaps/fframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0" >
+        <size>
+         <width>183</width>
+         <height>17</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 4: Spacer -->
+   <item row="4" column="0" >
+    <spacer>
+     <property name="orientation" >
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType" >
+      <enum>QSizePolicy::Minimum</enum>
+     </property>
+     <property name="sizeHint" stdset="0" >
+      <size>
+       <width>20</width>
+       <height>4</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <!-- Row 5: Cut In goto -->
+   <item row="5" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_3" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbGotoCutIn" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>2</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>50</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>70</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to cut-in position</string>
+       </property>
+       <property name="text" >
+        <string>In</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/goto_18.xpm</normaloff>:/pixmaps/pixmaps/goto_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="laCutInPosition" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Minimum" hsizetype="MinimumExpanding" >
+         <horstretch>4</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>18</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 6: Cut Out goto -->
+   <item row="6" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_4" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbGotoCutOut" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>2</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>50</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>70</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to cut-out position</string>
+       </property>
+       <property name="text" >
+        <string>Out</string>
+       </property>
+       <property name="icon" >
+        <iconset resource="ttcutframenavigationwidget.qrc" >
+         <normaloff>:/pixmaps/pixmaps/goto_18.xpm</normaloff>:/pixmaps/pixmaps/goto_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="laCutOutPosition" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Minimum" hsizetype="MinimumExpanding" >
+         <horstretch>4</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>18</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="text" >
+        <string>...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 7: Spacer -->
+   <item row="7" column="0" >
+    <spacer>
+     <property name="orientation" >
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType" >
+      <enum>QSizePolicy::Minimum</enum>
+     </property>
+     <property name="sizeHint" stdset="0" >
+      <size>
+       <width>375</width>
+       <height>4</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <!-- Row 8: Add range to cut list -->
+   <item row="8" column="0" >
+    <widget class="QPushButton" name="pbAddCut" >
+     <property name="minimumSize" >
+      <size>
+       <width>52</width>
+       <height>28</height>
+      </size>
+     </property>
+     <property name="maximumSize" >
+      <size>
+       <width>600</width>
+       <height>32</height>
+      </size>
+     </property>
+     <property name="text" >
+      <string>Add range to cut list</string>
+     </property>
+     <property name="icon" >
+      <iconset resource="ttcutframenavigationwidget.qrc" >
+       <normaloff>:/pixmaps/pixmaps/add-file.png</normaloff>:/pixmaps/pixmaps/add-file.png</iconset>
+     </property>
+     <property name="iconSize" >
+      <size>
+       <width>18</width>
+       <height>18</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <!-- Row 9: Quick jump + Stream points -->
+   <item row="9" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_5" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbQuickJump" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>100</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Jump to a specific frame or time</string>
+       </property>
+       <property name="text" >
+        <string>Quick jump ...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbStreamPoints" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>100</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Show stream analysis points</string>
+       </property>
+       <property name="text" >
+        <string>Stream points ...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 10: Set marker + Go to marker -->
+   <item row="10" column="0" >
+    <layout class="QHBoxLayout" name="horizontalLayout_6" >
+     <property name="spacing" >
+      <number>4</number>
+     </property>
+     <item>
+      <widget class="QPushButton" name="pbSetMarker" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>100</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Set a marker at current position</string>
+       </property>
+       <property name="text" >
+        <string>Set marker</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pbGotoMarker" >
+       <property name="sizePolicy" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize" >
+        <size>
+         <width>100</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>300</width>
+         <height>32</height>
+        </size>
+       </property>
+       <property name="toolTip" >
+        <string>Go to marker position</string>
+       </property>
+       <property name="text" >
+        <string>Go to marker</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- Row 11: Marker position label -->
+   <item row="11" column="0" >
+    <widget class="QLabel" name="laMarkerPosition" >
+     <property name="sizePolicy" >
+      <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
+       <horstretch>1</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize" >
+      <size>
+       <width>160</width>
+       <height>18</height>
+      </size>
+     </property>
+     <property name="text" >
+      <string>[...]</string>
+     </property>
+    </widget>
+   </item>
+   <!-- Row 12: Vertical spacer to push all content to top -->
+   <item row="12" column="0" >
+    <spacer name="verticalSpacerBottom" >
+     <property name="orientation" >
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType" >
+      <enum>QSizePolicy::Expanding</enum>
+     </property>
+     <property name="sizeHint" stdset="0" >
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="ttcutframenavigationwidget.qrc" />
+ </resources>
+ <connections/>
+</ui>

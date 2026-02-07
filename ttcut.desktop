@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=TTCut-ng
+Comment=Frame-accurate video cutter for MPEG-2, H.264, H.265
+GenericName=Video Editor
+Exec=env QT_QPA_PLATFORM=xcb /usr/bin/ttcut-ng %f
+Icon=ttcut-ng
+Terminal=false
+Type=Application
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mpeg;video/x-mpeg;
+Keywords=video;cut;edit;mpeg;h264;h265;dvb;

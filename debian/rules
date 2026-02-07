@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	qmake ttcut.pro
+
+override_dh_auto_build:
+	# Compile translation files
+	lrelease trans/ttcut_de_DE.ts trans/ttcut_en_US.ts
+	$(MAKE)
+
+override_dh_auto_install:
+	install -D -m 0755 ttcut $(CURDIR)/debian/ttcut/usr/bin/ttcut
+	install -D -m 0755 tools/ttcut-demux $(CURDIR)/debian/ttcut/usr/bin/ttcut-demux
+	install -D -m 0644 ttcut.desktop $(CURDIR)/debian/ttcut/usr/share/applications/ttcut.desktop
+	install -D -m 0644 ui/pixmaps/ttcut_logo_001.png $(CURDIR)/debian/ttcut/usr/share/pixmaps/ttcut.png
+	# Install translation files
+	install -d $(CURDIR)/debian/ttcut/usr/share/ttcut/trans
+	install -D -m 0644 trans/*.qm $(CURDIR)/debian/ttcut/usr/share/ttcut/trans/
+
+override_dh_auto_clean:
+	$(MAKE) clean || true
+	rm -f Makefile

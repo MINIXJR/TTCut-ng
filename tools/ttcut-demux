@@ -1,0 +1,1054 @@
+#!/bin/bash
+#
+# ttcut-demux - Demux and normalize TS files for TTCut
+# Similar to ProjectX for MPEG-2, but for H.264/H.265 (AVC/HEVC)
+#
+# Supported video codecs: H.264 (AVC), H.265 (HEVC), MPEG-2
+# Supported audio codecs: MP2, AC3, AAC, MP3
+#
+# Multi-core optimization: Video and audio streams are extracted in parallel,
+# audio padding also runs in parallel for all tracks.
+#
+# Usage: ttcut-demux [-e] <input.ts> [output_dir]
+#
+#   -e  Elementary stream mode: output separate .264/.265 and audio files
+#       (default: output normalized MKV with video+audio)
+#   -p  Prepare mode: strip filler NALUs from H.264/H.265 streams
+#       (only works with -e, requires h264bitstream tools)
+#
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+
+# Parse arguments
+ES_MODE=false
+PREPARE_MODE=false
+while getopts "eph" opt; do
+    case $opt in
+        e) ES_MODE=true ;;
+        p) PREPARE_MODE=true ;;
+        h)
+            echo "Usage: $0 [-e] [-p] <input.ts> [output_dir]"
+            echo ""
+            echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
+            echo "Similar to ProjectX for MPEG-2."
+            echo ""
+            echo "Options:"
+            echo "  -e  Elementary stream mode (for TTCut workflow)"
+            echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3 + info file"
+            echo "  -p  Prepare mode: strip filler NALUs (requires h264bitstream tools)"
+            echo "      Only works with -e mode. Typical savings: 5-10% for DVB H.264"
+            echo ""
+            echo "Default mode (without -e):"
+            echo "  Output: normalized MKV with video + first audio"
+            echo ""
+            echo "VDR Integration:"
+            echo "  If a 'marks' file exists in the input directory (from vdr-plugin-markad),"
+            echo "  the markers are automatically parsed and added to the .info file."
+            echo "  See: https://github.com/kfb77/vdr-plugin-markad"
+            echo ""
+            echo "Examples:"
+            echo "  $0 input.ts                    # MKV output"
+            echo "  $0 -e input.ts output_dir/     # Elementary stream output"
+            echo "  $0 -ep input.ts output_dir/    # ES + strip filler NALUs"
+            echo "  $0 -e /video/rec/00001.ts .    # VDR recording with marks"
+            exit 0
+            ;;
+        \?) error "Invalid option: -$OPTARG" ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# Check arguments
+if [ -z "$1" ]; then
+    echo "Usage: $0 [-e] <input.ts> [output_dir]"
+    echo "Use -h for help."
+    exit 1
+fi
+
+INPUT="$1"
+ORIGINAL_INPUT="$1"  # Save original path before any modifications
+# Handle different extensions
+BASENAME=$(basename "$INPUT")
+BASENAME="${BASENAME%.*}"  # Remove any extension
+OUTDIR="${2:-$(dirname "$INPUT")}"
+
+# Check input file exists
+[ -f "$INPUT" ] || error "Input file not found: $INPUT"
+
+# Create output directory if needed
+mkdir -p "$OUTDIR"
+
+# Initialize cleanup flag for repaired temp file
+CLEANUP_REPAIRED=false
+
+# Check for VDR marks file (markad plugin)
+INPUT_DIR=$(dirname "$INPUT")
+MARKS_FILE=""
+VDR_MARKS=()
+
+if [ -f "$INPUT_DIR/marks" ]; then
+    MARKS_FILE="$INPUT_DIR/marks"
+elif [ -f "$INPUT_DIR/marks.vdr" ]; then
+    MARKS_FILE="$INPUT_DIR/marks.vdr"
+fi
+
+if [ -n "$MARKS_FILE" ]; then
+    info "Found VDR marks file: $MARKS_FILE"
+
+    # Parse marks file
+    # Format: H:MM:SS.FF [( FRAME) [*] start|stop method ...]
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+
+        # Extract timestamp (first field, format H:MM:SS.FF)
+        timestamp=$(echo "$line" | grep -oE '^[0-9]+:[0-9]{2}:[0-9]{2}\.[0-9]{2}')
+        [ -z "$timestamp" ] && continue
+
+        # Extract frame number if present
+        frame=$(echo "$line" | grep -oE '\( *[0-9]+\)' | grep -oE '[0-9]+' | head -1)
+
+        # Determine marker type (start = content starts, stop = content stops/ad starts)
+        marker_type="mark"
+        if echo "$line" | grep -qi "start"; then
+            marker_type="start"  # Content starts (ad ends)
+        elif echo "$line" | grep -qi "stop"; then
+            marker_type="stop"   # Content stops (ad starts)
+        fi
+
+        # Check if verified (has *)
+        verified=""
+        echo "$line" | grep -q '\*' && verified="*"
+
+        # Store marker: timestamp|frame|type|verified
+        VDR_MARKS+=("$timestamp|${frame:-0}|$marker_type|$verified")
+
+    done < "$MARKS_FILE"
+
+    info "  Found ${#VDR_MARKS[@]} markers"
+fi
+
+info "Analyzing: $INPUT"
+if $ES_MODE; then
+    if $PREPARE_MODE; then
+        info "Mode: Elementary Stream + Prepare (strip filler NALUs)"
+    else
+        info "Mode: Elementary Stream (for TTCut)"
+    fi
+else
+    if $PREPARE_MODE; then
+        warn "Prepare mode (-p) only works with Elementary Stream mode (-e)"
+        PREPARE_MODE=false
+    fi
+    info "Mode: Normalized MKV"
+fi
+echo ""
+
+# Get stream information with language tags
+VIDEO_STREAM=""
+AUDIO_STREAMS=()
+SUBTITLE_STREAMS=()
+VIDEO_CODEC=""
+VIDEO_WIDTH=""
+VIDEO_HEIGHT=""
+FRAME_RATE=""
+
+# Get video stream info
+VIDEO_INFO=$(ffprobe -v error -select_streams v:0 -show_entries stream=index,codec_name,width,height,r_frame_rate -of csv "$INPUT" 2>&1 | grep "^stream," | head -1)
+if [ -n "$VIDEO_INFO" ]; then
+    IFS=',' read -r _ idx codec_name width height frame_rate <<< "$VIDEO_INFO"
+    VIDEO_STREAM="$idx"
+    VIDEO_CODEC="$codec_name"
+    VIDEO_WIDTH="$width"
+    VIDEO_HEIGHT="$height"
+    FRAME_RATE="$frame_rate"
+    info "Video stream $idx: $codec_name ${width}x${height} @ ${frame_rate}"
+fi
+
+# Get audio streams with language (deduplicate by index, prefer entries with language)
+declare -A AUDIO_MAP
+while IFS=',' read -r _ idx codec_name lang; do
+    [ -z "$idx" ] && continue
+    # If we already have this index with a language, skip
+    if [ -n "${AUDIO_MAP[$idx]}" ]; then
+        # Only replace if current has no language and new one does
+        old_lang="${AUDIO_MAP[$idx]##*:}"
+        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
+            AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
+        fi
+    else
+        lang="${lang:-und}"
+        AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
+    fi
+done < <(ffprobe -v error -select_streams a -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+
+# Convert map to array, sorted by index
+for idx in $(echo "${!AUDIO_MAP[@]}" | tr ' ' '\n' | sort -n); do
+    AUDIO_STREAMS+=("${AUDIO_MAP[$idx]}")
+    IFS=':' read -r _ codec lang <<< "${AUDIO_MAP[$idx]}"
+    info "Audio stream $idx: $codec [$lang]"
+done
+
+# Get subtitle streams with language (deduplicate by index, prefer entries with language)
+declare -A SUB_MAP
+while IFS=',' read -r _ idx codec_name lang; do
+    [ -z "$idx" ] && continue
+    if [ -n "${SUB_MAP[$idx]}" ]; then
+        old_lang="${SUB_MAP[$idx]##*:}"
+        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
+            SUB_MAP[$idx]="$idx:$codec_name:$lang"
+        fi
+    else
+        lang="${lang:-und}"
+        SUB_MAP[$idx]="$idx:$codec_name:$lang"
+    fi
+done < <(ffprobe -v error -select_streams s -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+
+for idx in $(echo "${!SUB_MAP[@]}" | tr ' ' '\n' | sort -n); do
+    SUBTITLE_STREAMS+=("${SUB_MAP[$idx]}")
+    IFS=':' read -r _ codec lang <<< "${SUB_MAP[$idx]}"
+    info "Subtitle stream $idx: $codec [$lang]"
+done
+
+echo ""
+
+# Check we have video
+[ -n "$VIDEO_STREAM" ] || error "No video stream found"
+
+# Determine video extension based on codec
+case "$VIDEO_CODEC" in
+    h264)
+        VIDEO_EXT="264"
+        info "Video codec: H.264/AVC"
+        ;;
+    hevc|h265)
+        VIDEO_EXT="265"
+        info "Video codec: H.265/HEVC"
+        ;;
+    mpeg2video)
+        VIDEO_EXT="m2v"
+        info "Video codec: MPEG-2"
+        ;;
+    *)
+        VIDEO_EXT="$VIDEO_CODEC"
+        warn "Video codec $VIDEO_CODEC may not be fully supported"
+        ;;
+esac
+
+# Get original timestamps and duration for info (from container - fast!)
+START_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+AUDIO_START_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+
+# Get duration from container (MUCH faster than probing elementary stream later)
+CONTAINER_VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration \
+    -of default=noprint_wrappers=1:nokey=1 "$INPUT" 2>/dev/null | grep -E '^[0-9]' || echo "")
+if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
+    info "Container duration: ${CONTAINER_VIDEO_DURATION}s"
+fi
+
+info "Original video start time: ${START_PTS:-unknown}s"
+info "Original audio start time: ${AUDIO_START_PTS:-unknown}s"
+echo ""
+
+#############################################################################
+# TIMESTAMP REPAIR (normalize timestamps before demuxing)
+# This fixes A/V sync issues similar to ProjectX stream repair
+#############################################################################
+step "Repairing timestamps (normalizing to start at 0)..."
+
+REPAIRED_INPUT="$OUTDIR/.${BASENAME}_repaired.ts"
+
+# Calculate A/V offset BEFORE repair (from original file)
+ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
+ORIG_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
+AUDIO_TRIM_SEC="0"
+
+if [ -n "$ORIG_VIDEO_PTS" ] && [ -n "$ORIG_AUDIO_PTS" ]; then
+    # Calculate how much earlier audio starts compared to video
+    AUDIO_AHEAD=$(awk "BEGIN {printf \"%.6f\", $ORIG_VIDEO_PTS - $ORIG_AUDIO_PTS}")
+    AUDIO_AHEAD_MS=$(awk "BEGIN {printf \"%.0f\", ($ORIG_VIDEO_PTS - $ORIG_AUDIO_PTS) * 1000}")
+
+    if awk "BEGIN {exit !($AUDIO_AHEAD > 0.01)}"; then
+        info "Audio starts ${AUDIO_AHEAD_MS}ms before video - will trim audio"
+        AUDIO_TRIM_SEC="$AUDIO_AHEAD"
+    elif awk "BEGIN {exit !($AUDIO_AHEAD < -0.01)}"; then
+        warn "Video starts before audio by ${AUDIO_AHEAD_MS}ms - may need padding"
+        AUDIO_TRIM_SEC="0"
+    fi
+fi
+
+# Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
+if ffmpeg -y -fflags +genpts+igndts -i "$INPUT" \
+    -c copy \
+    -avoid_negative_ts make_zero \
+    -map 0:v:0 -map 0:a? \
+    "$REPAIRED_INPUT" 2>&1 | grep -E "^(frame=|Output|size=)" | tail -1; then
+
+    # Verify repaired file
+    if [ -s "$REPAIRED_INPUT" ]; then
+        NEW_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        NEW_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        info "Repaired video start time: ${NEW_VIDEO_PTS:-0}s"
+        info "Repaired audio start time: ${NEW_AUDIO_PTS:-0}s"
+
+        # Use repaired file for demuxing
+        INPUT="$REPAIRED_INPUT"
+        CLEANUP_REPAIRED=true
+    else
+        warn "Timestamp repair failed, using original file"
+        CLEANUP_REPAIRED=false
+    fi
+else
+    warn "Timestamp repair failed, using original file"
+    CLEANUP_REPAIRED=false
+fi
+echo ""
+
+#############################################################################
+# ELEMENTARY STREAM MODE
+#############################################################################
+if $ES_MODE; then
+    step "Extracting Elementary Streams..."
+
+    # Detect available CPU cores for parallel processing
+    NPROC=$(nproc 2>/dev/null || echo 4)
+    info "Using up to $NPROC parallel processes"
+    echo ""
+
+    # Note: Video is extracted as-is, audio padding happens after extraction
+    # This matches ProjectX's approach of adding audio frames at the end
+
+    # 1. Prepare video extraction parameters
+    OUTPUT_VIDEO="$OUTDIR/${BASENAME}.${VIDEO_EXT}"
+
+    # For MPEG-2: Find first I-frame time to skip initial B-frames (like ProjectX)
+    # This removes "überflüssige B-Frames" before the first GOP
+    VIDEO_START_TIME="0"
+    if [ "$VIDEO_CODEC" = "mpeg2video" ]; then
+        # Find the PTS of the first I-frame (picture type 1)
+        # Use -read_intervals to only analyze first 10 seconds (MUCH faster!)
+        FIRST_I_PTS=$(ffprobe -v error -select_streams v:0 \
+            -read_intervals "%+10" \
+            -show_entries frame=pts_time,pict_type \
+            -of csv=p=0 "$INPUT" 2>/dev/null | \
+            grep ",I$" | head -1 | cut -d',' -f1)
+
+        if [ -n "$FIRST_I_PTS" ] && [ "$FIRST_I_PTS" != "0" ]; then
+            # Check if first frame is NOT an I-frame (i.e., there are leading B-frames)
+            FIRST_FRAME_TYPE=$(ffprobe -v error -select_streams v:0 \
+                -read_intervals "%+1" \
+                -show_entries frame=pict_type \
+                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+
+            if [ "$FIRST_FRAME_TYPE" != "I" ]; then
+                # Count B-frames before first I-frame (only need first 2 seconds)
+                B_FRAME_COUNT=$(ffprobe -v error -select_streams v:0 \
+                    -read_intervals "%+2" \
+                    -show_entries frame=pts_time,pict_type \
+                    -of csv=p=0 "$INPUT" 2>/dev/null | \
+                    awk -F',' 'BEGIN{count=0} $2=="I"{exit} $2=="B"{count++} END{print count}')
+
+                VIDEO_START_TIME="$FIRST_I_PTS"
+                SKIPPED_MS=$(awk "BEGIN {printf \"%.0f\", $FIRST_I_PTS * 1000}")
+                info "  Skipping $B_FRAME_COUNT initial B-frame(s) (${SKIPPED_MS}ms) before first I-frame"
+            fi
+        fi
+    fi
+
+    # Adjust audio trim to account for skipped video B-frames
+    # If we skipped video by VIDEO_START_TIME, we need to also skip that much audio
+    if [ "$VIDEO_START_TIME" != "0" ]; then
+        AUDIO_TRIM_SEC=$(awk "BEGIN {printf \"%.6f\", $AUDIO_TRIM_SEC + $VIDEO_START_TIME}")
+        TOTAL_SKIP_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
+        info "  Total audio trim adjusted to ${TOTAL_SKIP_MS}ms (A/V offset + B-frame skip)"
+    fi
+
+    # 2. Prepare audio extraction parameters (before parallel extraction)
+    AUDIO_FILES=()
+    declare -A LANG_COUNT  # Track how many times each language appears
+    declare -a AUDIO_EXTRACT_CMDS=()  # Store extraction commands for parallel execution
+
+    if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
+        for i in "${!AUDIO_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+
+            # Determine extension
+            case "$codec" in
+                mp2|mp3) EXT="mp2" ;;
+                ac3|eac3) EXT="ac3" ;;
+                aac) EXT="aac" ;;
+                *) EXT="$codec" ;;
+            esac
+
+            # Include language in filename
+            # If same language+extension appears multiple times, add index
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
+            lang_ext_key="${lang}_${EXT}"
+            if [ "${LANG_COUNT[$lang_ext_key]:-0}" -gt 0 ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${LANG_COUNT[$lang_ext_key]}.${EXT}"
+            fi
+            LANG_COUNT[$lang_ext_key]=$((${LANG_COUNT[$lang_ext_key]:-0} + 1))
+
+            AUDIO_FILES+=("$OUTPUT_AUDIO")
+
+            # Build extraction command (will be run in parallel)
+            if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.001)}"; then
+                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -ss ${AUDIO_TRIM_SEC} -i \"$INPUT\" -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
+            else
+                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -i \"$INPUT\" -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
+            fi
+        done
+    fi
+
+    #############################################################################
+    # PARALLEL EXTRACTION: Video + All Audio Tracks simultaneously
+    #############################################################################
+    step "Extracting video + ${#AUDIO_STREAMS[@]} audio track(s) in parallel..."
+
+    # Create a temporary directory for extraction logs
+    EXTRACT_LOG_DIR="$OUTDIR/.extract_logs_$$"
+    mkdir -p "$EXTRACT_LOG_DIR"
+
+    # Start video extraction in background
+    info "  Video -> $OUTPUT_VIDEO"
+    (
+        case "$VIDEO_CODEC" in
+            h264)
+                ffmpeg -y -i "$INPUT" \
+                    -map 0:$VIDEO_STREAM \
+                    -c:v copy \
+                    -bsf:v h264_mp4toannexb \
+                    -f h264 \
+                    "$OUTPUT_VIDEO" 2>&1
+                ;;
+            hevc|h265)
+                ffmpeg -y -i "$INPUT" \
+                    -map 0:$VIDEO_STREAM \
+                    -c:v copy \
+                    -bsf:v hevc_mp4toannexb \
+                    -f hevc \
+                    "$OUTPUT_VIDEO" 2>&1
+                ;;
+            mpeg2video)
+                FFMPEG_OPTS=""
+                if [ "$VIDEO_START_TIME" != "0" ]; then
+                    FFMPEG_OPTS="-ss $VIDEO_START_TIME"
+                fi
+                ffmpeg -y $FFMPEG_OPTS -i "$INPUT" \
+                    -map 0:$VIDEO_STREAM \
+                    -c:v copy \
+                    -f mpeg2video \
+                    "$OUTPUT_VIDEO" 2>&1
+                ;;
+            *)
+                ffmpeg -y -i "$INPUT" \
+                    -map 0:$VIDEO_STREAM \
+                    -c:v copy \
+                    "$OUTPUT_VIDEO" 2>&1
+                ;;
+        esac
+    ) > "$EXTRACT_LOG_DIR/video.log" 2>&1 &
+    VIDEO_PID=$!
+
+    # Start all audio extractions in parallel
+    AUDIO_PIDS=()
+    for i in "${!AUDIO_EXTRACT_CMDS[@]}"; do
+        IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+        info "  Audio $idx [$lang] -> $(basename "${AUDIO_FILES[$i]}")"
+
+        # Run each audio extraction in background
+        eval "${AUDIO_EXTRACT_CMDS[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
+        AUDIO_PIDS+=($!)
+    done
+
+    # Wait for all extractions to complete
+    info "  Waiting for parallel extraction to complete..."
+
+    # Wait for video
+    wait $VIDEO_PID
+    VIDEO_EXIT=$?
+    if [ $VIDEO_EXIT -eq 0 ]; then
+        VIDEO_SIZE=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
+        info "  Video done: $(numfmt --to=iec $VIDEO_SIZE)"
+    else
+        warn "  Video extraction had issues (exit code: $VIDEO_EXIT)"
+        VIDEO_SIZE=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
+    fi
+
+    # Wait for all audio extractions
+    AUDIO_ERRORS=0
+    for i in "${!AUDIO_PIDS[@]}"; do
+        wait ${AUDIO_PIDS[$i]}
+        if [ $? -ne 0 ]; then
+            ((AUDIO_ERRORS++))
+        fi
+    done
+
+    if [ $AUDIO_ERRORS -gt 0 ]; then
+        warn "  $AUDIO_ERRORS audio extraction(s) had issues"
+    else
+        info "  All ${#AUDIO_FILES[@]} audio track(s) extracted"
+    fi
+
+    # Clean up log directory
+    rm -rf "$EXTRACT_LOG_DIR"
+    echo ""
+
+    # 1b. Strip filler NALUs if prepare mode is enabled
+    FILLER_STRIPPED=false
+    FILLER_SAVED=0
+    if $PREPARE_MODE && { [ "$VIDEO_CODEC" = "h264" ] || [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ]; }; then
+        # Find the appropriate analysis tool
+        STRIP_TOOL=""
+        if [ "$VIDEO_CODEC" = "h264" ]; then
+            for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
+                if [ -x "$path" ]; then
+                    STRIP_TOOL="$path"
+                    break
+                fi
+            done
+        else
+            for path in "/usr/local/src/h264bitstream/h265_analyze" "./h265_analyze" "h265_analyze"; do
+                if [ -x "$path" ]; then
+                    STRIP_TOOL="$path"
+                    break
+                fi
+            done
+        fi
+
+        if [ -n "$STRIP_TOOL" ]; then
+            step "Stripping filler NALUs from video stream..."
+
+            # Create temp file for stripped output
+            TEMP_STRIPPED="$OUTDIR/.${BASENAME}_stripped.${VIDEO_EXT}"
+
+            # Run with -f (strip filler) and -o (output file) and -Q (silent)
+            # Note: Tool returns exit code 1 if MMCO errors found, but still writes output
+            "$STRIP_TOOL" -f -Q -o "$TEMP_STRIPPED" "$OUTPUT_VIDEO" 2>/dev/null || true
+
+            # Check if output file was created and is smaller
+            if [ -f "$TEMP_STRIPPED" ]; then
+                STRIPPED_SIZE=$(stat -c%s "$TEMP_STRIPPED" 2>/dev/null || echo 0)
+
+                if [ "$STRIPPED_SIZE" -gt 0 ] && [ "$STRIPPED_SIZE" -lt "$VIDEO_SIZE" ]; then
+                    FILLER_SAVED=$((VIDEO_SIZE - STRIPPED_SIZE))
+                    FILLER_PCT=$(echo "scale=1; $FILLER_SAVED * 100 / $VIDEO_SIZE" | bc 2>/dev/null || echo "?")
+
+                    # Replace original with stripped version
+                    mv "$TEMP_STRIPPED" "$OUTPUT_VIDEO"
+                    FILLER_STRIPPED=true
+
+                    info "  Filler stripped: saved $(numfmt --to=iec $FILLER_SAVED) ($FILLER_PCT%)"
+                    info "  New video size: $(numfmt --to=iec $STRIPPED_SIZE)"
+                else
+                    info "  No filler NALUs found"
+                    rm -f "$TEMP_STRIPPED"
+                fi
+            else
+                warn "  Filler stripping failed - keeping original"
+            fi
+            echo ""
+        else
+            warn "h264bitstream tools not found - skipping filler stripping"
+            warn "Build tools in /usr/local/src/h264bitstream with: make -f Makefile.unix"
+            echo ""
+        fi
+    fi
+
+    # 2b. Check A/V duration mismatch (like ProjectX does)
+    # This detects progressive drift that occurs when audio and video have different durations
+    info "Checking A/V duration alignment..."
+
+    # Parse frame rate fraction (e.g., "25/1" or "30000/1001")
+    FRAME_RATE_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
+    FRAME_RATE_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
+    FRAME_RATE_DEN="${FRAME_RATE_DEN:-1}"  # Default to 1 if not fractional
+
+    # Get video duration - use container duration if available (FAST)
+    # Otherwise fall back to probing elementary stream (slow)
+    if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
+        # Use duration from original container (already obtained earlier - instant!)
+        VIDEO_DURATION="$CONTAINER_VIDEO_DURATION"
+    else
+        # Fallback: probe elementary stream (slower)
+        VIDEO_DURATION=$(ffprobe -v error \
+            -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \
+            "$OUTPUT_VIDEO" 2>/dev/null | grep -E '^[0-9]' || echo "")
+
+        if [ -z "$VIDEO_DURATION" ] || [ "$VIDEO_DURATION" = "N/A" ]; then
+            # Estimate from file size and bitrate (rough approximation)
+            VIDEO_SIZE_BYTES=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
+            # Assume ~5 Mbit/s for SD, ~15 Mbit/s for HD
+            if [ "$VIDEO_WIDTH" -gt 1280 ]; then
+                EST_BITRATE=15000000  # 15 Mbit/s for HD
+            else
+                EST_BITRATE=5000000   # 5 Mbit/s for SD
+            fi
+            VIDEO_DURATION=$(awk "BEGIN {printf \"%.3f\", $VIDEO_SIZE_BYTES * 8 / $EST_BITRATE}")
+            warn "  Duration estimated from file size (may be inaccurate)"
+        fi
+    fi
+
+    VIDEO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * 1000}")
+    # Calculate approximate frame count from duration (for info file)
+    VIDEO_FRAME_COUNT=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
+
+    # Check first audio file for duration comparison
+    AUDIO_DURATION_MS=0
+    AV_DRIFT_MS=0
+    AV_DRIFT_RATE=0
+    if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
+        FIRST_AUDIO="${AUDIO_FILES[0]}"
+        AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+        AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
+
+        # Calculate drift
+        AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
+
+        info "  Video: $VIDEO_FRAME_COUNT frames = ${VIDEO_DURATION_MS}ms"
+        info "  Audio: ${AUDIO_DURATION_MS}ms"
+        info "  Duration difference: ${AV_DRIFT_MS}ms"
+
+        # Calculate drift rate (ms per minute)
+        if [ "$VIDEO_DURATION_MS" -gt 0 ]; then
+            AV_DRIFT_RATE=$(awk "BEGIN {printf \"%.2f\", $AV_DRIFT_MS / ($VIDEO_DURATION_MS / 60000)}")
+            info "  Drift rate: ${AV_DRIFT_RATE}ms/min"
+        fi
+
+        # If video is longer than audio, pad audio with silence (like ProjectX does)
+        # This ensures A/V sync throughout the file
+        if [ "$AV_DRIFT_MS" -gt 20 ]; then
+            info "  Padding ${#AUDIO_FILES[@]} audio track(s) in parallel to match video duration..."
+
+            # Calculate target duration in seconds
+            TARGET_AUDIO_DUR=$(awk "BEGIN {printf \"%.6f\", $VIDEO_DURATION_MS / 1000}")
+
+            # Create temp directory for padding logs
+            PAD_LOG_DIR="$OUTDIR/.pad_logs_$$"
+            mkdir -p "$PAD_LOG_DIR"
+
+            # Start all audio padding in parallel
+            PAD_PIDS=()
+            for i in "${!AUDIO_FILES[@]}"; do
+                AUDIO_FILE="${AUDIO_FILES[$i]}"
+                AUDIO_EXT="${AUDIO_FILE##*.}"
+                TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
+
+                # Get audio codec for re-encoding
+                AUDIO_CODEC=$(ffprobe -v error -select_streams a:0 \
+                    -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \
+                    "$AUDIO_FILE" 2>/dev/null || echo "copy")
+
+                # Choose encoder based on codec
+                case "$AUDIO_CODEC" in
+                    mp2)
+                        ENCODER="-c:a mp2 -b:a 192k"
+                        ;;
+                    ac3)
+                        ENCODER="-c:a ac3 -b:a 384k"
+                        ;;
+                    aac)
+                        ENCODER="-c:a aac -b:a 192k"
+                        ;;
+                    *)
+                        ENCODER="-c:a copy"
+                        ;;
+                esac
+
+                # Run padding in background
+                (
+                    ffmpeg -y -i "$AUDIO_FILE" \
+                        -af "apad=whole_dur=${TARGET_AUDIO_DUR}" \
+                        -t "$TARGET_AUDIO_DUR" \
+                        $ENCODER \
+                        "$TEMP_PADDED" 2>&1
+                ) > "$PAD_LOG_DIR/pad_$i.log" 2>&1 &
+                PAD_PIDS+=($!)
+            done
+
+            # Wait for all padding to complete and process results
+            for i in "${!PAD_PIDS[@]}"; do
+                wait ${PAD_PIDS[$i]}
+                PAD_EXIT=$?
+
+                AUDIO_FILE="${AUDIO_FILES[$i]}"
+                AUDIO_EXT="${AUDIO_FILE##*.}"
+                TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
+
+                if [ $PAD_EXIT -eq 0 ] && [ -s "$TEMP_PADDED" ]; then
+                    # Get original duration for comparison
+                    ORIG_DUR=$(ffprobe -v error -show_entries format=duration \
+                        -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
+                    ORIG_DUR_MS=$(awk "BEGIN {printf \"%.0f\", $ORIG_DUR * 1000}")
+
+                    # Replace original with padded version
+                    mv "$TEMP_PADDED" "$AUDIO_FILE"
+
+                    # Calculate how much was added
+                    NEW_DURATION=$(ffprobe -v error -show_entries format=duration \
+                        -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
+                    NEW_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $NEW_DURATION * 1000}")
+                    ADDED_MS=$((NEW_DURATION_MS - ORIG_DUR_MS))
+
+                    info "    $(basename "$AUDIO_FILE"): +${ADDED_MS}ms padding"
+                else
+                    warn "    Failed to pad $(basename "$AUDIO_FILE")"
+                    rm -f "$TEMP_PADDED"
+                fi
+            done
+
+            # Clean up log directory
+            rm -rf "$PAD_LOG_DIR"
+
+            # Recalculate drift after padding
+            FIRST_AUDIO="${AUDIO_FILES[0]}"
+            AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
+                -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+            AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
+            AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
+            # Recalculate drift rate with corrected values
+            AV_DRIFT_RATE=$(awk "BEGIN {printf \"%.2f\", $AV_DRIFT_MS / ($VIDEO_DURATION_MS / 60000)}")
+
+            info "  After padding: Video=${VIDEO_DURATION_MS}ms, Audio=${AUDIO_DURATION_MS}ms, Drift=${AV_DRIFT_MS}ms"
+        elif [ "${AV_DRIFT_MS#-}" -gt 50 ]; then
+            # Negative drift (audio longer than video) - warn but don't fix
+            warn "  A/V duration mismatch detected!"
+            warn "  Audio is longer than video by ${AV_DRIFT_MS#-}ms"
+            warn "  This may cause issues at the end of playback."
+        else
+            info "  A/V sync is good (drift: ${AV_DRIFT_MS}ms)"
+        fi
+    fi
+    echo ""
+
+    # 3. Try to extract subtitles
+    SUBTITLE_FILES=()
+    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+        info "Attempting subtitle extraction..."
+
+        for sub in "${SUBTITLE_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "$sub"
+
+            case "$codec" in
+                dvb_subtitle|dvbsub)
+                    warn "  DVB subtitle $idx [$lang] - bitmap format, needs OCR"
+                    ;;
+                subrip|srt|text)
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
+                    info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    SUBTITLE_FILES+=("$OUTPUT_SUB")
+                    ;;
+                *)
+                    warn "  Subtitle $idx [$lang]: $codec - not supported"
+                    ;;
+            esac
+        done
+        echo ""
+    fi
+
+    # 4. Calculate A/V sync offset
+    # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
+    # The repaired file has timestamps normalized to 0, so we need the original for offset
+    info "Calculating A/V sync offset..."
+
+    # Get first packet PTS from ORIGINAL file (before timestamp repair)
+    # Remove any trailing commas from CSV output
+    FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+    FIRST_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+
+    # Calculate offset: positive = audio starts before video, negative = video starts before audio
+    if [ -n "$FIRST_VIDEO_PTS" ] && [ -n "$FIRST_AUDIO_PTS" ]; then
+        # Use awk for more reliable floating point math
+        AV_OFFSET=$(awk "BEGIN {printf \"%.6f\", $FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS}")
+        AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS) * 1000}")
+        info "  Original video PTS: ${FIRST_VIDEO_PTS}s"
+        info "  Original audio PTS: ${FIRST_AUDIO_PTS}s"
+        info "  Original A/V offset: ${AV_OFFSET_MS}ms"
+
+        # Report corrected offset if audio was trimmed
+        if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.01)}"; then
+            AUDIO_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
+            CORRECTED_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", $AV_OFFSET_MS + $AUDIO_TRIM_MS}")
+            info "  Audio trimmed: ${AUDIO_TRIM_MS}ms"
+            info "  Corrected A/V offset: ${CORRECTED_OFFSET_MS}ms"
+            AV_OFFSET_MS="$CORRECTED_OFFSET_MS"
+        fi
+    else
+        AV_OFFSET="0"
+        AV_OFFSET_MS="0"
+        warn "  Could not determine A/V offset"
+    fi
+    echo ""
+
+    # 5. Create info file with metadata
+    OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
+    info "Creating info file: $OUTPUT_INFO"
+
+    # Calculate trimmed ms for info file
+    AUDIO_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
+
+    cat > "$OUTPUT_INFO" << EOF
+# TTCut Elementary Stream Info File
+# Generated: $(date -Iseconds)
+# Source: $INPUT
+
+[video]
+file=${BASENAME}.${VIDEO_EXT}
+codec=$VIDEO_CODEC
+width=$VIDEO_WIDTH
+height=$VIDEO_HEIGHT
+frame_rate=$FRAME_RATE
+start_pts=$START_PTS
+filler_stripped=$FILLER_STRIPPED
+filler_saved_bytes=$FILLER_SAVED
+
+[timing]
+# A/V sync offset in milliseconds (after correction)
+# Positive = audio starts before video (delay audio)
+# Negative = video starts before audio (delay video)
+first_video_pts=$FIRST_VIDEO_PTS
+first_audio_pts=$FIRST_AUDIO_PTS
+audio_trimmed_ms=$AUDIO_TRIM_MS
+# Duration mismatch: positive = video longer than audio (progressive desync)
+# Values over 50ms may cause noticeable A/V drift
+video_duration_ms=$VIDEO_DURATION_MS
+audio_duration_ms=$AUDIO_DURATION_MS
+duration_drift_ms=$AV_DRIFT_MS
+drift_rate_ms_per_min=$AV_DRIFT_RATE
+av_offset_ms=$AV_OFFSET_MS
+
+[audio]
+count=${#AUDIO_STREAMS[@]}
+EOF
+
+    for i in "${!AUDIO_STREAMS[@]}"; do
+        IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+        echo "audio_${i}_file=$(basename "${AUDIO_FILES[$i]}" 2>/dev/null || echo "")" >> "$OUTPUT_INFO"
+        echo "audio_${i}_codec=$codec" >> "$OUTPUT_INFO"
+        echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
+    done
+
+    cat >> "$OUTPUT_INFO" << EOF
+
+[subtitles]
+count=${#SUBTITLE_FILES[@]}
+EOF
+
+    for i in "${!SUBTITLE_FILES[@]}"; do
+        echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
+    done
+
+    # Add VDR markers if found
+    if [ ${#VDR_MARKS[@]} -gt 0 ]; then
+        cat >> "$OUTPUT_INFO" << EOF
+
+[markers]
+# VDR markad markers (from: $MARKS_FILE)
+# Format: index=timestamp|frame|type|verified
+# type: start=content starts (ad ends), stop=content stops (ad starts), mark=unknown
+count=${#VDR_MARKS[@]}
+EOF
+        for i in "${!VDR_MARKS[@]}"; do
+            echo "marker_${i}=${VDR_MARKS[$i]}" >> "$OUTPUT_INFO"
+        done
+        info "  Added ${#VDR_MARKS[@]} VDR markers to info file"
+    fi
+
+    echo ""
+
+    # 5. Run h264bitstream analysis if available and video is H.264
+    H264_ANALYZE=""
+    for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
+        if [ -x "$path" ]; then
+            H264_ANALYZE="$path"
+            break
+        fi
+    done
+
+    if [ -n "$H264_ANALYZE" ] && [ "$VIDEO_CODEC" = "h264" ]; then
+        step "Analyzing H.264 stream with h264bitstream..."
+        echo ""
+        "$H264_ANALYZE" -q "$OUTPUT_VIDEO" 2>&1 || true
+        echo ""
+    fi
+
+    # Summary
+    echo ""
+    info "=== Elementary Stream Demux Complete ==="
+    echo ""
+    echo "Output files:"
+    ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true
+    echo ""
+    info "Video for TTCut: $OUTPUT_VIDEO"
+    info "Info file: $OUTPUT_INFO"
+    if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
+        info "Audio files: ${#AUDIO_FILES[@]} track(s)"
+    fi
+
+#############################################################################
+# MKV MODE (default)
+#############################################################################
+else
+    # Detect available CPU cores for parallel processing
+    NPROC=$(nproc 2>/dev/null || echo 4)
+    info "Using up to $NPROC parallel processes"
+
+    # Original MKV mode
+    if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
+        IFS=':' read -r FIRST_AUDIO FIRST_CODEC FIRST_LANG <<< "${AUDIO_STREAMS[0]}"
+        OUTPUT_MKV="$OUTDIR/${BASENAME}_normalized.mkv"
+
+        step "Creating normalized MKV: $OUTPUT_MKV"
+        info "  Video: stream $VIDEO_STREAM"
+        info "  Audio: stream $FIRST_AUDIO [$FIRST_LANG]"
+
+        # Check if mkvmerge is available
+        if ! command -v mkvmerge &> /dev/null; then
+            error "mkvmerge not found. Please install mkvtoolnix package."
+        fi
+
+        # First extract video and audio separately with ffmpeg IN PARALLEL
+        TEMP_VIDEO="$OUTDIR/.temp_video_$$.mkv"
+        TEMP_AUDIO="$OUTDIR/.temp_audio_$$.mka"
+
+        step "Extracting video and audio streams in parallel..."
+
+        # Start video extraction in background
+        ffmpeg -y -i "$INPUT" \
+            -map 0:$VIDEO_STREAM \
+            -c copy \
+            "$TEMP_VIDEO" 2>/dev/null &
+        VIDEO_PID=$!
+
+        # Start audio extraction in background
+        ffmpeg -y -i "$INPUT" \
+            -map 0:$FIRST_AUDIO \
+            -c copy \
+            "$TEMP_AUDIO" 2>/dev/null &
+        AUDIO_PID=$!
+
+        # Wait for both to complete
+        wait $VIDEO_PID
+        info "  Video extraction complete"
+        wait $AUDIO_PID
+        info "  Audio extraction complete"
+
+        # Use mkvmerge to create the final MKV with bitstream timing fix
+        info "  Muxing with mkvmerge (--fix-bitstream-timing-information)..."
+        mkvmerge -o "$OUTPUT_MKV" \
+            --fix-bitstream-timing-information 0:1 \
+            "$TEMP_VIDEO" \
+            "$TEMP_AUDIO"
+
+        # Clean up temp files
+        rm -f "$TEMP_VIDEO" "$TEMP_AUDIO"
+
+        # Verify output
+        NEW_START=$(ffprobe -v error -show_entries stream=start_time -of csv "$OUTPUT_MKV" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        info "Normalized start time: ${NEW_START}s"
+        echo ""
+    fi
+
+    # Extract additional audio tracks IN PARALLEL
+    if [ ${#AUDIO_STREAMS[@]} -gt 1 ]; then
+        step "Extracting ${#AUDIO_STREAMS[@]} additional audio track(s) in parallel..."
+        declare -A LANG_COUNT  # Track how many times each language appears
+
+        # Build list of extraction commands and output files
+        EXTRA_AUDIO_FILES=()
+        EXTRA_AUDIO_PIDS=()
+
+        for i in "${!AUDIO_STREAMS[@]}"; do
+            [ $i -eq 0 ] && continue  # Skip first (already in MKV)
+
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+
+            case "$codec" in
+                mp2|mp3) EXT="mp2" ;;
+                ac3) EXT="ac3" ;;
+                aac) EXT="aac" ;;
+                *) EXT="$codec" ;;
+            esac
+
+            # If same language+extension appears multiple times, add index
+            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
+            lang_ext_key="${lang}_${EXT}"
+            if [ "${LANG_COUNT[$lang_ext_key]:-0}" -gt 0 ]; then
+                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${LANG_COUNT[$lang_ext_key]}.${EXT}"
+            fi
+            LANG_COUNT[$lang_ext_key]=$((${LANG_COUNT[$lang_ext_key]:-0} + 1))
+
+            info "  Audio $idx [$lang] -> $(basename "$OUTPUT_AUDIO")"
+            EXTRA_AUDIO_FILES+=("$OUTPUT_AUDIO")
+
+            # Start extraction in background
+            ffmpeg -y -i "$INPUT" \
+                -map 0:$idx \
+                -c copy \
+                "$OUTPUT_AUDIO" 2>/dev/null &
+            EXTRA_AUDIO_PIDS+=($!)
+        done
+
+        # Wait for all extractions to complete
+        for pid in "${EXTRA_AUDIO_PIDS[@]}"; do
+            wait $pid
+        done
+        info "  All additional audio tracks extracted"
+        echo ""
+    fi
+
+    # Try to extract subtitles
+    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+        info "Attempting subtitle extraction..."
+
+        for sub in "${SUBTITLE_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "$sub"
+
+            case "$codec" in
+                dvb_subtitle|dvbsub)
+                    warn "DVB subtitle stream $idx [$lang] - bitmap format, needs OCR"
+                    ;;
+                subrip|srt|text)
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
+                    info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ;;
+                *)
+                    warn "Subtitle stream $idx [$lang]: $codec - not supported"
+                    ;;
+            esac
+        done
+        echo ""
+    fi
+
+    # Summary
+    echo ""
+    info "=== Demux Complete ==="
+    echo ""
+    echo "Output files:"
+    ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true
+    echo ""
+    info "Main file for TTCut: $OUTPUT_MKV"
+fi
+
+#############################################################################
+# CLEANUP
+#############################################################################
+# Remove temporary repaired file
+if [ "${CLEANUP_REPAIRED:-false}" = "true" ] && [ -f "$REPAIRED_INPUT" ]; then
+    rm -f "$REPAIRED_INPUT"
+fi

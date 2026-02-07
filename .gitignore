@@ -1,0 +1,45 @@
+
+# ignore some special files
+Make*
+ttcut
+logfile.log
+
+# ignore media files (input/output)
+*.m2v
+*.ac3
+*.mp2
+*.mpg
+*.mpeg
+*.vob
+*.srt
+
+# ignore pattern for common files to ignore
+*.o
+*.tmp
+*~
+
+# ignore some special directories
+res
+obj
+moc
+ui_h
+ttcut.app
+testing
+core.*
+H264_SMART_CUT_TRACKING.md
+.qtc_clangd/
+.qtcreator/
+
+# ignore compiled test tools
+tools/check_idr
+tools/test_es_smartcut
+tools/test_nalu_parser
+tools/test_prj_smartcut
+ttcut-strip-filler
+
+# ignore debian build artifacts
+debian/debhelper-build-stamp
+debian/files
+debian/ttcut
+debian/ttcut.substvars
+debian/.debhelper/
