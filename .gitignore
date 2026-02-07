@@ -1,10 +1,35 @@
+# Build artifacts
+Makefile
+ttcut-ng
+*.o
+*.tmp
+*~
 
-# ignore some special files
-Make*
-ttcut
+# qmake generated
+.qmake.stash
+.dep.inc
+
+# Build output directories
+obj/
+moc/
+ui_h/
+res/
+
+# macOS app bundle
+ttcut-ng.app/
+
+# IDE files
+.qtc_clangd/
+.qtcreator/
+nbproject/private/
+
+# Compiled translations
+trans/*.qm
+
+# Log files
 logfile.log
 
-# ignore media files (input/output)
+# Media files (input/output)
 *.m2v
 *.ac3
 *.mp2
@@ -13,33 +38,22 @@ logfile.log
 *.vob
 *.srt
 
-# ignore pattern for common files to ignore
-*.o
-*.tmp
-*~
-
-# ignore some special directories
-res
-obj
-moc
-ui_h
-ttcut.app
-testing
+# Core dumps
 core.*
-H264_SMART_CUT_TRACKING.md
-.qtc_clangd/
-.qtcreator/
 
-# ignore compiled test tools
+# Compiled test tools
 tools/check_idr
 tools/test_es_smartcut
 tools/test_nalu_parser
 tools/test_prj_smartcut
 ttcut-strip-filler
 
-# ignore debian build artifacts
+# Debian build artifacts
 debian/debhelper-build-stamp
 debian/files
-debian/ttcut
-debian/ttcut.substvars
+debian/ttcut-ng/
+debian/ttcut-ng.substvars
 debian/.debhelper/
+
+# Testing
+testing/
