@@ -72,9 +72,9 @@ int main( int argc, char **argv )
 
     QTranslator appTranslator;
     QString transFile = "ttcut-ng_" + QLocale::system().name();
-    // Try installed location first, then local trans directory
-    if (!appTranslator.load(transFile, "/usr/share/ttcut-ng/trans") &&
-        !appTranslator.load(transFile, "trans")) {
+    // Try local trans directory first, then installed location
+    if (!appTranslator.load(transFile, "trans") &&
+        !appTranslator.load(transFile, "/usr/share/ttcut-ng/trans")) {
       TTMessageLogger* log = TTMessageLogger::getInstance();
       log->warningMsg(__FILE__, __LINE__,
                     QString("Translation file %1 for locale %2 could not be found!").
