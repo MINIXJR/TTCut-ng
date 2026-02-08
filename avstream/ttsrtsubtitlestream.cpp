@@ -46,9 +46,9 @@
 #include "ttsrtsubtitlestream.h"
 #include "ttsubtitleheaderlist.h"
 
-#include "common/istatusreporter.h"
-#include "common/ttexception.h"
-#include "data/ttcutparameter.h"
+#include "../common/istatusreporter.h"
+#include "../common/ttexception.h"
+#include "../data/ttcutparameter.h"
 
 #include <QCoreApplication>
 

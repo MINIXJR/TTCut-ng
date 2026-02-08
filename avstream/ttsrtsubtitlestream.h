@@ -47,7 +47,7 @@
 #define TTSRTSUBTITLESTREAM_H
 
 #include "ttavstream.h"
-#include "common/ttmessagelogger.h"
+#include "../common/ttmessagelogger.h"
 
 class TTSrtSubtitleStream : public TTSubtitleStream
 {

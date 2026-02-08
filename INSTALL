@@ -1,71 +1,77 @@
 -------------------------------------------------------------------------------
-TTCut - Installation
+TTCut-ng - Installation
 -------------------------------------------------------------------------------
 
-Eine kurze Anleitung um TTCut unter LINUX zu uebersetzen.
+Anleitung zum Bauen von TTCut-ng unter Linux.
 
 
-1. Benoetigte Bibliotheken (dev- und runtime-Packete)
------------------------------------------------------
+1. Benoetigte Bibliotheken (dev- und runtime-Pakete)
+----------------------------------------------------
 
-Trolltech's Qt-Bibliothek (4.1 und OpenGL Unterstuetzung) 
-libmpeg-dec               (>= 0.4.0)                      
+Qt 5               (Core, Widgets, Gui, Network, Xml)
+libmpeg2            (>= 0.5.1)
+libavformat         (ffmpeg/libav)
+libavcodec          (ffmpeg/libav)
+libavutil           (ffmpeg/libav)
+libswscale          (ffmpeg/libav)
+
+Debian/Ubuntu:
+  apt install qtbase5-dev libmpeg2-4-dev libavformat-dev libavcodec-dev \
+              libavutil-dev libswscale-dev
 
 
 2. Benoetigte Hilfsprogramme
 ----------------------------
 
-mplayer       fuer die Schnitt-Vorschau
-mplex         fuer die Schnitt-Vorschau
-transcode     fuer frame-genauen Schnitt
-ffmpeg        fuer frame-genauen Schnitt
+ffmpeg        fuer frame-genauen Schnitt (MPEG-2)
+mpv           fuer die Schnitt-Vorschau
+mkvmerge      fuer MKV-Ausgabe mit Kapitelmarken (optional)
+mplex         fuer MPEG-Multiplexing (optional)
 
-3. Uebersetzung
+Debian/Ubuntu:
+  apt install ffmpeg mpv mkvtoolnix mjpegtools
+
+
+3. Uebersetzen
+--------------
+
+  qmake ttcut-ng.pro
+  make -j$(nproc)
+
+Das erzeugt die ausfuehrbare Datei "ttcut-ng" im Projektverzeichnis.
+
+
+4. Debian-Paket bauen
+---------------------
+
+  dpkg-buildpackage -b -uc -us -j$(nproc)
+
+Oder mit dem mitgelieferten Skript:
+
+  ./build-package.sh
+
+
+5. Installation
 ---------------
 
-Mit qmake aus der Projektdatei "ttcut.pro" mit
+TTCut-ng entweder im lokalen Verzeichnis ausfuehren:
 
->$ qmake ttcut.pro -o Makefile.ttcut
+  ./ttcut-ng
 
-das makefile fuer TTCut erstellen.
+Oder das Debian-Paket installieren:
 
-
-Anschliessend mit 
-
->$ make -f Makefile.ttcut
-
-TTCut uebersetzen.
+  sudo dpkg -i ../ttcut-ng_*.deb
 
 
-Das sollte alles sein.
+6. Wayland
+----------
 
-Eventuell habe ich vergessen in der Datei "ttcut.pro" unter CONFIG
-debug gegen release zu tauschen. Das ist nicht weiter tragisch.
-Die Quellen werden dann mit der Option -g (Debug) uebersetz. Jedoch
-erreicht TTCut mit der Standard-Optimierung -O2 des g++ eine etwas hoehere
-Geschwindigkeit beim Analysieren des Videos.
+TTCut-ng benoetigt das XCB-Backend auf Wayland-Systemen:
 
-3. Installation
----------------
+  QT_QPA_PLATFORM=xcb ./ttcut-ng
 
-TTCut entweder im lokalen Verzeichnis ausfuehren oder z.B nach
-/usr/local/bin kopieren.
 
-4. Bedienung
-------------
-
-http://ttcut.tritime.org
-
-4. Probleme
+7. Probleme
 -----------
 
-Sollte etwas nicht funktionieren bitte kurze Problembeschreibung an
-
-ttcut@tritime.org oder b.altendorf@tritime.de
-
-5. Update
----------
-
-Letzte Release:       https://developer.berlios.de/projects/ttcut/
-
-Aktuelle Entwicklung: svn checkout svn://svn.berlios.de/trunk/trunk 
+https://github.com/MINIXJR/TTCut-ng/issues

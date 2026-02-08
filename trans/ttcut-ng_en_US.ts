@@ -472,137 +472,137 @@ p, li { white-space: pre-wrap; }
 <context>
     <name>TTCutMainWindowForm</name>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="19"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="19"/>
         <source>MainWindow</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="54"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="54"/>
         <source>Cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="236"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="236"/>
         <source>Cut-Points</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="259"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="259"/>
         <source>Marker</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="309"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="309"/>
         <source>Navigation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="344"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="344"/>
         <source>Files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="365"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="365"/>
         <source>Video Files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="389"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="389"/>
         <source>Audio Files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="421"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="421"/>
         <source>Help</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="427"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="427"/>
         <source>Action</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="436"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="436"/>
         <source>File</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="445"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="445"/>
         <source>Recent Projects</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="481"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="481"/>
         <source>New Project</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="493"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="493"/>
         <source>Open Project...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="496"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="496"/>
         <source>Open Project</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="499"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="499"/>
         <source>Open Project file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="511"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="511"/>
         <source>Save Project</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="514"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="514"/>
         <source>Save Project file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="523"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="523"/>
         <source>Save Project as...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="526"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="526"/>
         <source>Save Project as</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="529"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="529"/>
         <source>Save Project under new file name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="538"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="538"/>
         <source>Exit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="547"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="547"/>
         <source>Save current frame...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="556"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="556"/>
         <source>Settings...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="564"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="564"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="579"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="579"/>
         <source>Open Video...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="594"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="594"/>
         <source>Open Audio...</source>
         <translation type="unfinished"></translation>
     </message>

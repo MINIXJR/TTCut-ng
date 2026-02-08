@@ -43,11 +43,12 @@ logfile.log
 # Core dumps
 core.*
 
-# Compiled test tools
+# Compiled test tools and binaries
 tools/check_idr
 tools/test_es_smartcut
 tools/test_nalu_parser
 tools/test_prj_smartcut
+tools/ttcut-ac3fix
 ttcut-strip-filler
 
 # Debian build artifacts

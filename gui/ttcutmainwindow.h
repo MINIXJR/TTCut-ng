@@ -30,8 +30,7 @@
 #ifndef TTCUTMAINWINDOW_H
 #define TTCUTMAINWINDOW_H
 
-//#include "ui_mainwindow.h"
-#include "ui_ttcutmainwnd_new.h"
+#include "ui_ttcutmainwindow.h"
 
 #include <QMutexLocker>
 

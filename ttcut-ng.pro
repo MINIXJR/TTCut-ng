@@ -76,8 +76,7 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/processviewwidget.ui\
               ui/avcutdialog.ui\
               ui/aboutdlg.ui\
-#             ui/mainwindow.ui\
-              ui/ttcutmainwnd_new.ui\
+              ui/ttcutmainwindow.ui\
               ui/ttcutvideoinfowidget.ui\
               ui/ttcutframenavigationwidget.ui\
               ui/ttprogressform.ui\
@@ -106,7 +105,6 @@ HEADERS     = common/ttcut.h\
               data/ttcutsubtitletask.h\
               data/ttcutpreviewtask.h\
               data/ttframesearchtask.h\
-#unused              data/ttthreadstatusargs.h\
               avstream/ttcommon.h\
               avstream/ttac3audioheader.h\
               avstream/ttac3audiostream.h\
@@ -133,6 +131,7 @@ HEADERS     = common/ttcut.h\
               mpeg2decoder/ttmpeg2decoder.h\
               mpeg2window/ttmpeg2window2.h\
               extern/imuxprovider.h\
+              extern/ttencodeparameter.h\
               extern/tttranscode.h\
               extern/ttmplexprovider.h\
               extern/ttffmpegwrapper.h\

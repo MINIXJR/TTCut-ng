@@ -925,161 +925,161 @@ Ausgabedatei:
 <context>
     <name>TTCutMainWindowForm</name>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="20"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="20"/>
         <source>MainWindow</source>
         <translation>TTCut-ng</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="325"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="325"/>
         <source>Marker</source>
         <translation>Marker</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="202"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="202"/>
         <source>Navigation</source>
         <translation>Navigation</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="55"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="55"/>
         <source>Videofile</source>
         <translation>Videodatei</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="146"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="146"/>
         <source>Cut-Out Frame</source>
         <translation>Cut-Out-Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="177"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="177"/>
         <source>Current Frame</source>
         <translation>Aktueller Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="302"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="302"/>
         <source>Cut List</source>
         <translation>Schnittliste</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="347"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="347"/>
         <source>Audiofiles</source>
         <translation>Audiodateien</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="370"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="370"/>
         <source>Subtitles</source>
         <translation>Untertitel</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="406"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="406"/>
         <source>Help</source>
         <translation>Hilfe</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="414"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="414"/>
         <source>Action</source>
         <translation>Aktion</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="423"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="423"/>
         <source>File</source>
         <translation>Datei</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="427"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="427"/>
         <source>Recent Projects</source>
         <translation>Zuletzt verwendet</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="454"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="457"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="460"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="454"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="457"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="460"/>
         <source>New Project</source>
         <translation>Neues Projekt</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="472"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="472"/>
         <source>Open Project...</source>
         <translation>Projekt öffnen...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="475"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="475"/>
         <source>Open Project</source>
         <translation>Projekt öffnen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="478"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="478"/>
         <source>Open Project file</source>
         <translation>Projektdatei öffnen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="487"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="490"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="487"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="490"/>
         <source>Save Project</source>
         <translation>Projekt speichern</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="493"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="493"/>
         <source>Save Project file</source>
         <translation>Projekt speichern unter</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="502"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="502"/>
         <source>Save Project as...</source>
         <translation>Projekt speichern unter...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="505"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="505"/>
         <source>Save Project as</source>
         <translation>Projekt speichern unter</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="508"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="508"/>
         <source>Save Project under new file name</source>
         <translation>Projektdatei unter einem anderen Namen speichern</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="517"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="517"/>
         <source>Exit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="526"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="526"/>
         <source>Save current frame...</source>
         <translation>Aktuelles Bild speichern...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="535"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="535"/>
         <source>Settings...</source>
         <translation>Einstellungen...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="543"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="543"/>
         <source>About</source>
         <translation>Über</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="548"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="548"/>
         <source>Keyboard Shortcuts...</source>
         <translation>Tastenkürzel...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="557"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="560"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="563"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="557"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="560"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="563"/>
         <source>Open Video...</source>
         <translation>Video öffnen...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="572"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="575"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="578"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="572"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="575"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="578"/>
         <source>Open Audio...</source>
         <translation>Audio öffnen...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="587"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="590"/>
-        <location filename="../ui/ttcutmainwnd_new.ui" line="593"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="587"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="590"/>
+        <location filename="../ui/ttcutmainwindow.ui" line="593"/>
         <source>Open Subtitle...</source>
         <translation>Untertitel öffnen...</translation>
     </message>

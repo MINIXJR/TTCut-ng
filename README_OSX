@@ -1,8 +1,0 @@
-Readme for running TTCut under OS X (10.4 and above)
-
-NOTE: Since version 0.30.0 OSX compatibility has not been tested.
-      Pull requests are welcome.
-
-qmake -spec macx-g++ ttcut.pro
-
-You need the mpeg plugin for Quicktime to preview the cuts.

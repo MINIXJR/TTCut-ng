@@ -70,15 +70,15 @@ TTAVStream
 
 ### Module Organization
 
-- **avstream/**: Core stream handling - MPEG-2/H.264/H.265 video parsing, audio parsing, header lists, file buffers, index lists, AVI writing
+- **avstream/**: Core stream handling - MPEG-2/H.264/H.265 video parsing, audio parsing, header lists, file buffers, index lists
 - **gui/**: Qt widgets and main window (TTCutMainWindow is the main entry point)
 - **common/**: Global settings (TTCut singleton), message logging, exception handling
 - **data/**: Data structures for audio lists, cut lists, muxer lists, cut parameters
 - **mpeg2decoder/**: MPEG-2 decoding using libmpeg2
-- **mpeg2window/**: OpenGL-based MPEG-2 frame display (also used for H.264/H.265 via libav)
+- **mpeg2window/**: QImage/QPixmap-based frame display (also used for H.264/H.265 via libav)
 - **extern/**: External tool integration (ffmpeg/libav for H.264/H.265 smart cut, mplex for multiplexing, mkvmerge for MKV output)
 - **ui/**: Qt Designer .ui files and resource files (.qrc)
-- **avilib/**: AVI file writing library (C code)
+- **tools/**: Standalone tools (ttcut-demux, ttcut-ac3fix) and test programs
 
 ### Key Classes
 
@@ -107,17 +107,16 @@ TTAVStream
 
 ## Qt/C++ Conventions
 
-- The project uses Qt 5 (QtCore, QtWidgets, QtGui, QtOpenGL)
+- The project uses Qt 5 (QtCore, QtWidgets, QtGui, QtNetwork, QtXml)
 - Moc files go to moc/, UI headers to ui_h/, objects to obj/, resources to res/
 - Class names use TT prefix (e.g., TTCutMainWindow, TTMpeg2VideoStream)
 - Qt signals/slots mechanism is used extensively for GUI communication
 
 ## Dependencies
 
-- Qt5 (Core, Widgets, Gui, OpenGL)
+- Qt5 (Core, Widgets, Gui, Network, Xml)
 - libmpeg2 and libmpeg2convert (MPEG-2 decoding)
 - libavformat, libavcodec, libavutil, libswscale (H.264/H.265 handling via ffmpeg libraries)
-- OpenGL and GLU (frame display)
 - ffmpeg CLI (required for frame-accurate cutting at any position)
 - mplex (optional, for multiplexing)
 - mkvmerge (optional, for MKV output with chapters)
@@ -131,7 +130,7 @@ Current version: **0.52.0**
 ### Compatibility Fixes
 - Fixed header guard typo in extern/tttranscode.h (TTTRASNCODE_H → TTTRANSCODE_H)
 - Fixed deprecated Qt5 QFlags constructor usage in gui/ttprogressbar.h (using `{}` instead of `0`)
-- Migrated from deprecated QGLWidget to modern QOpenGLWidget for full Wayland compatibility
+- Migrated from deprecated QGLWidget to QImage/QPixmap-based rendering for full Wayland compatibility
 - Replaced discontinued transcode with ffmpeg for frame-accurate cutting
 - Migrated from mplayer to mpv for preview playback
 - Interlace detection for MPEG-2 re-encoding
@@ -228,7 +227,7 @@ The project builds cleanly with Qt 5.15 on modern Linux systems and has full Way
 
 ## Running on Wayland
 
-TTCut-ng requires XCB platform on Wayland systems due to OpenGL compatibility issues.
+TTCut-ng requires XCB platform on Wayland systems.
 
 **Running TTCut-ng:**
 
