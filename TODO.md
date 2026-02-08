@@ -98,6 +98,10 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **Rename TTMPEG2Window2 → TTVideoFrameWidget**
+  - Class name and files (`mpeg2window/ttmpeg2window2.*`) are misleading — the widget handles MPEG-2, H.264, and H.265
+  - Rename class, files, and directory (e.g., `videoframe/ttvideoframewidget.*`)
+  - Update all includes, .pro file, .ui references, and moc references
 - Remove some unused settings and buttons without function
 - Implement plugin interface for external tools (encoders, muxers, players)
 - Write a FAQ / user documentation
