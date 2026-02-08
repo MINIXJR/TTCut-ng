@@ -39,6 +39,9 @@
 #include <QDir>
 #include <QCoreApplication>
 #include <QString>
+#include <QStringList>
+#include <QMap>
+#include <QLocale>
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
@@ -235,4 +238,40 @@ const char* toAscii(const QString& string)
 	//qDebug(qPrintable(QString("result is %1").arg(result)));
 
 	return result;
+}
+
+// ISO 639-2/B language codes typically used in DVB broadcasts
+QStringList TTCut::languageCodes()
+{
+  return QStringList()
+    << "und" << "deu" << "eng" << "fra" << "ita" << "spa" << "por"
+    << "dut" << "pol" << "cze" << "hun" << "dan" << "swe" << "fin"
+    << "nor" << "rus" << "tur" << "gre" << "hrv" << "slo" << "rum"
+    << "bul" << "srp" << "slv" << "jpn" << "chi" << "kor" << "ara";
+}
+
+QStringList TTCut::languageNames()
+{
+  return QStringList()
+    << "Undetermined" << "Deutsch" << "English" << "Français" << "Italiano"
+    << "Español" << "Português" << "Nederlands" << "Polski" << "Čeština"
+    << "Magyar" << "Dansk" << "Svenska" << "Suomi" << "Norsk" << "Русский"
+    << "Türkçe" << "Ελληνικά" << "Hrvatski" << "Slovenčina" << "Română"
+    << "Български" << "Srpski" << "Slovenščina" << "日本語" << "中文"
+    << "한국어" << "العربية";
+}
+
+QString TTCut::iso639_1to2(const QString& code2)
+{
+  static QMap<QString, QString> map;
+  if (map.isEmpty()) {
+    map["un"] = "und"; map["de"] = "deu"; map["en"] = "eng"; map["fr"] = "fra";
+    map["it"] = "ita"; map["es"] = "spa"; map["pt"] = "por"; map["nl"] = "dut";
+    map["pl"] = "pol"; map["cs"] = "cze"; map["hu"] = "hun"; map["da"] = "dan";
+    map["sv"] = "swe"; map["fi"] = "fin"; map["no"] = "nor"; map["ru"] = "rus";
+    map["tr"] = "tur"; map["el"] = "gre"; map["hr"] = "hrv"; map["sk"] = "slo";
+    map["ro"] = "rum"; map["bg"] = "bul"; map["sr"] = "srp"; map["sl"] = "slv";
+    map["ja"] = "jpn"; map["zh"] = "chi"; map["ko"] = "kor"; map["ar"] = "ara";
+  }
+  return map.value(code2, "und");
 }

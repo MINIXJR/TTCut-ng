@@ -41,6 +41,7 @@ class TTSubtitleItem;
 
 class QMenu;
 class QAction;
+class QComboBox;
 
 class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
 {
@@ -57,6 +58,7 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
     void openFile();
     void removeItem(int index);
     void swapItems(int oldIndex, int newIndex);
+    void languageChanged(int index, const QString& language);
 
   public slots:
     void onAVDataChanged(const TTAVItem* avData);
@@ -72,6 +74,7 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
 
   private:
     void createActions();
+    QComboBox* createLanguageCombo(const QString& currentLang);
 
   private:
     const TTAVItem* mpAVItem;

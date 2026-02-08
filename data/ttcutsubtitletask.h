@@ -46,7 +46,8 @@ class TTCutSubtitleTask : public TTThreadTask
 
   public:
     TTCutSubtitleTask();
-    void init(QString tgtFilePath, TTCutList* cutList, int srcSubtitleIndex, TTMuxListDataItem* muxListItem);
+    void init(QString tgtFilePath, TTCutList* cutList, int srcSubtitleIndex, TTMuxListDataItem* muxListItem,
+              const QString& language = QString());
 
   protected:
     void cleanUp();
@@ -66,6 +67,7 @@ class TTCutSubtitleTask : public TTThreadTask
     TTCutParameter*    mpCutParams;
     TTSubtitleStream*  mpCutStream;
     TTMuxListDataItem* mMuxListItem;
+    QString            mLanguage;
 };
 
 #endif

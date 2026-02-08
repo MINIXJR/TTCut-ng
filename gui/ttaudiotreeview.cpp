@@ -37,6 +37,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHeaderView>
@@ -62,6 +63,7 @@ TTAudioTreeView::TTAudioTreeView(QWidget* parent)
   header->resizeSection(4, 100);
   header->resizeSection(5, 100);
   header->resizeSection(6,  60);
+  header->resizeSection(7, 100);
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
   QStyle* style = QApplication::style();
@@ -99,6 +101,7 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
 	if (mpAVItem != 0) {
 	disconnect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
   disconnect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
+  disconnect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
 
   disconnect(mpAVItem, SIGNAL(audioItemAppended(const TTAudioItem&)), this, SLOT(onAppendItem(const TTAudioItem&)));
   disconnect(mpAVItem, SIGNAL(audioItemRemoved(int)),                 this, SLOT(onItemRemoved(int)));
@@ -113,6 +116,7 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
 
   connect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
   connect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
+  connect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
 
   onReloadList(mpAVItem);
 }
@@ -156,17 +160,20 @@ void TTAudioTreeView::onAppendItem(const TTAudioItem& item)
   treeItem->setText(4, item.getSamplerate());
   treeItem->setText(5, item.getMode());
   treeItem->setText(6, item.getDelay());
+
+  QComboBox* combo = createLanguageCombo(item.getLanguage());
+  audioListView->setItemWidget(treeItem, 7, combo);
 }
 
 /* //////////////////////////////////////////////////////////////////////////////
  * Swap two items in list
  */
-void TTAudioTreeView::onSwapItems(int oldIndex, int newIndex)
+void TTAudioTreeView::onSwapItems(int, int)
 {
-    QTreeWidgetItem* listItem = audioListView->takeTopLevelItem(oldIndex);
-
-    audioListView->insertTopLevelItem(newIndex, listItem);
-    audioListView->setCurrentItem(listItem);
+    // Rebuild entire list because QComboBox widgets are destroyed on takeTopLevelItem
+    if (mpAVItem != 0) {
+      onReloadList(mpAVItem);
+    }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -272,5 +279,32 @@ void TTAudioTreeView::createActions()
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected audiofile one position downward"));
   connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+}
+
+QComboBox* TTAudioTreeView::createLanguageCombo(const QString& currentLang)
+{
+  QComboBox* combo = new QComboBox();
+  QStringList codes = TTCut::languageCodes();
+  QStringList names = TTCut::languageNames();
+  int selectIdx = 0;
+
+  for (int i = 0; i < codes.size(); i++) {
+    combo->addItem(QString("%1 (%2)").arg(codes[i]).arg(names[i]), codes[i]);
+    if (codes[i] == currentLang) selectIdx = i;
+  }
+  combo->setCurrentIndex(selectIdx);
+
+  connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, combo](int idx) {
+    // Find which row this combo belongs to
+    for (int row = 0; row < audioListView->topLevelItemCount(); row++) {
+      QTreeWidgetItem* item = audioListView->topLevelItem(row);
+      if (audioListView->itemWidget(item, 7) == combo) {
+        emit languageChanged(row, combo->itemData(idx).toString());
+        break;
+      }
+    }
+  });
+
+  return combo;
 }
 

@@ -61,6 +61,8 @@ class TTAudioItem
     QString        getBitrate() const;
     QString        getSamplerate() const;
     QString        getDelay() const;
+    QString        getLanguage() const;
+    void           setLanguage(const QString& lang);
     TTAVItem*  avDataItem() const {return mpAVDataItem;}
 
     const TTAudioItem& operator=(const TTAudioItem& item);
@@ -76,6 +78,7 @@ class TTAudioItem
     int            mOrder;
     QString        audioLength;
     QString        audioDelay;
+    QString        mLanguage;  // ISO 639-2/B (deu, eng, fra, ...)
 };
 
 /* /////////////////////////////////////////////////////////////////////////////

@@ -86,7 +86,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->audioCount(); i++) {
     TTAudioItem aItem   = vItem->audioListItemAt(i);
     TTAudioStream*      aStream = aItem.getAudioStream();
-    writeAudioSection(video, aStream->filePath(), aItem.order());
+    writeAudioSection(video, aStream->filePath(), aItem.order(), aItem.getLanguage());
   }
 
   for (int i = 0; i < vItem->cutCount(); i++) {
@@ -102,7 +102,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->subtitleCount(); i++) {
     TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
-    writeSubtitleSection(video, sStream->filePath(), sItem.order());
+    writeSubtitleSection(video, sStream->filePath(), sItem.order(), sItem.getLanguage());
   }
 }
 
@@ -176,9 +176,18 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   int     order = audioNodesList.at(0).toElement().text().toInt();
   QString name  = audioNodesList.at(1).toElement().text();
 
+  // Read optional Language element (added in TTCut-ng 0.52+)
+  QString lang;
+  if (audioNodesList.size() > 2 && audioNodesList.at(2).nodeName() == "Language") {
+    lang = audioNodesList.at(2).toElement().text();
+  }
+
   QFileInfo fInfo(name);
   qDebug("TTCutProjectData::parseAudioSection -> before doOpenAudioStream...");
   avData->doOpenAudioStream(avItem, name, order);
+  if (!lang.isEmpty()) {
+    avData->setPendingAudioLanguage(avItem, order, lang);
+  }
   qDebug("after doOpenAudioStream...");
 }
 
@@ -228,7 +237,7 @@ QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int ord
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QString& filePath, int order)
+QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language)
 {
   QDomElement audio = xmlDocument->createElement("Audio");
   parent.appendChild(audio);
@@ -240,6 +249,12 @@ QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QStri
   QDomElement name = xmlDocument->createElement("Name");
   audio.appendChild(name);
   name.appendChild(xmlDocument->createTextNode(filePath));
+
+  if (!language.isEmpty()) {
+    QDomElement lang = xmlDocument->createElement("Language");
+    audio.appendChild(lang);
+    lang.appendChild(xmlDocument->createTextNode(language));
+  }
 
   return audio;
 }
@@ -293,7 +308,7 @@ QDomElement TTCutProjectData::writeMarkerSection(QDomElement& parent, int marker
 /* /////////////////////////////////////////////////////////////////////////////
  * Write subtitle section to XML
  */
-QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order)
+QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language)
 {
   QDomElement subtitle = xmlDocument->createElement("Subtitle");
   parent.appendChild(subtitle);
@@ -306,6 +321,12 @@ QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QS
   subtitle.appendChild(name);
   name.appendChild(xmlDocument->createTextNode(filePath));
 
+  if (!language.isEmpty()) {
+    QDomElement lang = xmlDocument->createElement("Language");
+    subtitle.appendChild(lang);
+    lang.appendChild(xmlDocument->createTextNode(language));
+  }
+
   return subtitle;
 }
 
@@ -317,8 +338,17 @@ void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAV
   int     order = subtitleNodesList.at(0).toElement().text().toInt();
   QString name  = subtitleNodesList.at(1).toElement().text();
 
+  // Read optional Language element (added in TTCut-ng 0.52+)
+  QString lang;
+  if (subtitleNodesList.size() > 2 && subtitleNodesList.at(2).nodeName() == "Language") {
+    lang = subtitleNodesList.at(2).toElement().text();
+  }
+
   qDebug("TTCutProjectData::parseSubtitleSection -> before doOpenSubtitleStream...");
   avData->doOpenSubtitleStream(avItem, name, order);
+  if (!lang.isEmpty()) {
+    avData->setPendingSubtitleLanguage(avItem, order, lang);
+  }
   qDebug("after doOpenSubtitleStream...");
 }
 

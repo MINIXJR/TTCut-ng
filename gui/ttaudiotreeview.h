@@ -41,6 +41,7 @@ class TTAudioItem;
 
 class QMenu;
 class QAction;
+class QComboBox;
 
 class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
 {
@@ -57,6 +58,7 @@ class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
     void openFile();
     void removeItem(int index);
     void swapItems(int oldIndex, int newIndex);
+    void languageChanged(int index, const QString& language);
 
   public slots:
     void onAVDataChanged(const TTAVItem* avData);
@@ -72,6 +74,7 @@ class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
 
   private:
     void createActions();
+    QComboBox* createLanguageCombo(const QString& currentLang);
 
   private:
   	const TTAVItem* mpAVItem;

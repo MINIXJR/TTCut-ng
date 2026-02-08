@@ -104,6 +104,9 @@ class TTAVData : public QObject
     TTAVItem* doOpenVideoStream(const QString& filePath, int order=-1);
     void      doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int order=-1);
     void      doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, int order=-1);
+
+    void      setPendingAudioLanguage(TTAVItem* avItem, int order, const QString& lang);
+    void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      doCutPreview(TTCutList* cutList);
 
     int       totalProcess() const;
@@ -229,6 +232,10 @@ class TTAVData : public QObject
 
     // A/V sync offset in milliseconds (from .info file, used during muxing)
     int mAvSyncOffsetMs;
+
+    // Pending language overrides from project file (applied after async stream open)
+    QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
+    QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;
 };
 
 

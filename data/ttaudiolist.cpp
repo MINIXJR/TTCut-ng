@@ -30,12 +30,15 @@
 #include "ttaudiolist.h"
 #include "ttavlist.h"
 #include "../avstream/ttavheader.h"
+#include "../common/ttcut.h"
 #include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
 #include <algorithm>
 
 #include <QFileInfo>
+#include <QLocale>
+#include <QRegularExpression>
 #include <QString>
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -51,6 +54,7 @@ TTAudioItem::TTAudioItem(TTAVItem* avDataItem, TTAudioStream* aStream)
   mpAVDataItem  = avDataItem;
   audioStream   = aStream;
   mOrder        = -1;
+  mLanguage     = "und";
 
   setItemData();
 }
@@ -66,6 +70,7 @@ TTAudioItem::TTAudioItem(const TTAudioItem& item)
   audioStream  = item.audioStream;
   audioLength  = item.audioLength;
   audioDelay   = item.audioDelay;
+  mLanguage    = item.mLanguage;
 }
 
 /*!
@@ -79,6 +84,16 @@ void TTAudioItem::setItemData()
 
   // FIXME: use real delay value for audio delay
   audioDelay  = "0";
+
+  // Extract language from filename: Show_deu.ac3, Show_deu_1.ac3
+  QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
+  QRegularExpressionMatch match = langRe.match(QFileInfo(audioStream->fileName()).completeBaseName());
+  if (match.hasMatch()) {
+    mLanguage = match.captured(1);
+  } else {
+    // Fallback: system locale → ISO 639-2
+    mLanguage = TTCut::iso639_1to2(QLocale::system().name().left(2));
+  }
 }
 
 /*!
@@ -94,6 +109,7 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
   audioStream  = item.audioStream;
   audioLength  = item.audioLength;
   audioDelay   = item.audioDelay;
+  mLanguage    = item.mLanguage;
 
   return *this;
 }
@@ -188,6 +204,16 @@ QString TTAudioItem::getSamplerate() const
 QString TTAudioItem::getDelay() const
 {
   return audioDelay;
+}
+
+QString TTAudioItem::getLanguage() const
+{
+  return mLanguage;
+}
+
+void TTAudioItem::setLanguage(const QString& lang)
+{
+  mLanguage = lang;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

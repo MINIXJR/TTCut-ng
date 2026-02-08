@@ -126,6 +126,11 @@
         <source>Delay</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../ui/audiofilelistwidget.ui" line="274"/>
+        <source>Language</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>TTAudioTreeView</name>

@@ -58,6 +58,8 @@ class TTSubtitleItem
     QString           getFileName() const;
     QString           getLength() const;
     QString           getDelay() const;
+    QString           getLanguage() const;
+    void              setLanguage(const QString& lang);
     TTAVItem*         avDataItem() const {return mpAVDataItem;}
 
     const TTSubtitleItem& operator= (const TTSubtitleItem& item);
@@ -73,6 +75,7 @@ class TTSubtitleItem
     int               mOrder;
     QString           subtitleLength;
     QString           subtitleDelay;
+    QString           mLanguage;  // ISO 639-2/B (deu, eng, fra, ...)
 };
 
 /* /////////////////////////////////////////////////////////////////////////////

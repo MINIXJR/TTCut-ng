@@ -66,6 +66,10 @@ public:
     void setLanguage(int trackId, const QString& lang);
     void setChapterFile(const QString& chapterFile);
 
+    // Language tags for audio/subtitle tracks (ISO 639-2/B)
+    void setAudioLanguages(const QStringList& languages);
+    void setSubtitleLanguages(const QStringList& languages);
+
     // A/V sync offset in milliseconds (from .info file)
     // Positive = audio starts later, negative = audio starts earlier
     void setAudioSyncOffset(int offsetMs);
@@ -92,6 +96,8 @@ private:
     QString mLastError;
     QString mChapterFile;
     int mAudioSyncOffsetMs;
+    QStringList mAudioLanguages;
+    QStringList mSubtitleLanguages;
 
     struct TrackOption {
         QString name;

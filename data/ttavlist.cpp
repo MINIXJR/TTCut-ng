@@ -144,6 +144,14 @@ void TTAVItem::onSwapAudioItems(int oldIndex, int newIndex)
 	mpAudioList->swap(oldIndex, newIndex);
 }
 
+void TTAVItem::onAudioLanguageChanged(int index, const QString& language)
+{
+  TTAudioItem item = mpAudioList->at(index);
+  TTAudioItem updated(item);
+  updated.setLanguage(language);
+  mpAudioList->update(item, updated);
+}
+
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
@@ -187,6 +195,14 @@ void TTAVItem::onRemoveSubtitleItem(int index)
 void TTAVItem::onSwapSubtitleItems(int oldIndex, int newIndex)
 {
 	mpSubtitleList->swap(oldIndex, newIndex);
+}
+
+void TTAVItem::onSubtitleLanguageChanged(int index, const QString& language)
+{
+  TTSubtitleItem item = mpSubtitleList->at(index);
+  TTSubtitleItem updated(item);
+  updated.setLanguage(language);
+  mpSubtitleList->update(item, updated);
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////

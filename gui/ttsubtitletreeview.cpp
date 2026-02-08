@@ -37,6 +37,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHeaderView>
@@ -58,6 +59,7 @@ TTSubtitleTreeView::TTSubtitleTreeView(QWidget* parent)
   header->resizeSection(0, 320);
   header->resizeSection(1, 220);
   header->resizeSection(2, 140);
+  header->resizeSection(3, 100);
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
   QStyle* style = QApplication::style();
@@ -95,6 +97,7 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
   if (mpAVItem != 0) {
     disconnect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveSubtitleItem(int)));
     disconnect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapSubtitleItems(int, int)));
+    disconnect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onSubtitleLanguageChanged(int, const QString&)));
 
     disconnect(mpAVItem, SIGNAL(subtitleItemAppended(const TTSubtitleItem&)), this, SLOT(onAppendItem(const TTSubtitleItem&)));
     disconnect(mpAVItem, SIGNAL(subtitleItemRemoved(int)),                    this, SLOT(onItemRemoved(int)));
@@ -109,6 +112,7 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
 
   connect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveSubtitleItem(int)));
   connect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapSubtitleItems(int, int)));
+  connect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onSubtitleLanguageChanged(int, const QString&)));
 
   onReloadList(mpAVItem);
 }
@@ -148,17 +152,20 @@ void TTSubtitleTreeView::onAppendItem(const TTSubtitleItem& item)
   treeItem->setText(0, item.getFileName());
   treeItem->setText(1, item.getLength());
   treeItem->setText(2, item.getDelay());
+
+  QComboBox* combo = createLanguageCombo(item.getLanguage());
+  subtitleListView->setItemWidget(treeItem, 3, combo);
 }
 
 /* //////////////////////////////////////////////////////////////////////////////
  * Swap two items in list
  */
-void TTSubtitleTreeView::onSwapItems(int oldIndex, int newIndex)
+void TTSubtitleTreeView::onSwapItems(int, int)
 {
-  QTreeWidgetItem* listItem = subtitleListView->takeTopLevelItem(oldIndex);
-
-  subtitleListView->insertTopLevelItem(newIndex, listItem);
-  subtitleListView->setCurrentItem(listItem);
+  // Rebuild entire list because QComboBox widgets are destroyed on takeTopLevelItem
+  if (mpAVItem != 0) {
+    onReloadList(mpAVItem);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -264,5 +271,31 @@ void TTSubtitleTreeView::createActions()
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected subtitlefile one position downward"));
   connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+}
+
+QComboBox* TTSubtitleTreeView::createLanguageCombo(const QString& currentLang)
+{
+  QComboBox* combo = new QComboBox();
+  QStringList codes = TTCut::languageCodes();
+  QStringList names = TTCut::languageNames();
+  int selectIdx = 0;
+
+  for (int i = 0; i < codes.size(); i++) {
+    combo->addItem(QString("%1 (%2)").arg(codes[i]).arg(names[i]), codes[i]);
+    if (codes[i] == currentLang) selectIdx = i;
+  }
+  combo->setCurrentIndex(selectIdx);
+
+  connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, combo](int idx) {
+    for (int row = 0; row < subtitleListView->topLevelItemCount(); row++) {
+      QTreeWidgetItem* item = subtitleListView->topLevelItem(row);
+      if (subtitleListView->itemWidget(item, 3) == combo) {
+        emit languageChanged(row, combo->itemData(idx).toString());
+        break;
+      }
+    }
+  });
+
+  return combo;
 }
 

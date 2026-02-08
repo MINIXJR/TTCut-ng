@@ -52,16 +52,20 @@ class TTMuxListDataItem
     QString     getVideoName();
     void        setVideoName(QString videoFilePath);
     QStringList getAudioNames();
-    void        appendAudioFile(QString audioFilePath);
+    void        appendAudioFile(QString audioFilePath, const QString& language = QString());
     QStringList getSubtitleNames();
-    void        appendSubtitleFile(QString subtitleFilePath);
+    void        appendSubtitleFile(QString subtitleFilePath, const QString& language = QString());
+    QStringList getAudioLanguages();
+    QStringList getSubtitleLanguages();
 
     const TTMuxListDataItem& operator=(const TTMuxListDataItem& item);
 
   private:
     QString     videoFileName;
     QStringList audioFileNames;
+    QStringList audioLanguageList;
     QStringList subtitleFileNames;
+    QStringList subtitleLanguageList;
 };
 
 

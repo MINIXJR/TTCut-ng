@@ -32,10 +32,13 @@
 #include "ttavlist.h"
 #include "../avstream/ttavheader.h"
 #include "../avstream/ttsubtitleheaderlist.h"
+#include "../common/ttcut.h"
 #include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
 #include <QFileInfo>
+#include <QLocale>
+#include <QRegularExpression>
 #include <QString>
 #include <algorithm>
 
@@ -52,6 +55,7 @@ TTSubtitleItem::TTSubtitleItem(TTAVItem* avDataItem, TTSubtitleStream* sStream)
   mpAVDataItem   = avDataItem;
   subtitleStream = sStream;
   mOrder         = -1;
+  mLanguage      = "und";
 
   setItemData();
 }
@@ -67,6 +71,7 @@ TTSubtitleItem::TTSubtitleItem(const TTSubtitleItem& item)
   subtitleStream  = item.subtitleStream;
   subtitleLength  = item.subtitleLength;
   subtitleDelay   = item.subtitleDelay;
+  mLanguage       = item.mLanguage;
 }
 
 /*!
@@ -80,6 +85,15 @@ void TTSubtitleItem::setItemData()
 
   // FIXME: use real delay value for subtitle delay
   subtitleDelay  = "0";
+
+  // Extract language from filename: Show_deu.srt, Show_deu_1.srt
+  QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
+  QRegularExpressionMatch match = langRe.match(QFileInfo(subtitleStream->fileName()).completeBaseName());
+  if (match.hasMatch()) {
+    mLanguage = match.captured(1);
+  } else {
+    mLanguage = TTCut::iso639_1to2(QLocale::system().name().left(2));
+  }
 }
 
 /*!
@@ -95,6 +109,7 @@ const TTSubtitleItem& TTSubtitleItem::operator=(const TTSubtitleItem& item)
   subtitleStream  = item.subtitleStream;
   subtitleLength  = item.subtitleLength;
   subtitleDelay   = item.subtitleDelay;
+  mLanguage       = item.mLanguage;
 
   return *this;
 }
@@ -157,6 +172,16 @@ QString TTSubtitleItem::getLength() const
 QString TTSubtitleItem::getDelay() const
 {
   return subtitleDelay;
+}
+
+QString TTSubtitleItem::getLanguage() const
+{
+  return mLanguage;
+}
+
+void TTSubtitleItem::setLanguage(const QString& lang)
+{
+  mLanguage = lang;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

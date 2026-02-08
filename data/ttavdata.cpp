@@ -480,6 +480,16 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
   if (aStream == 0) return;
 
   avItem->appendAudioEntry(aStream, order);
+
+  // Apply saved language from project file if available
+  auto key = qMakePair(avItem, order);
+  if (mPendingAudioLanguages.contains(key)) {
+    QString lang = mPendingAudioLanguages.take(key);
+    int idx = avItem->audioCount() - 1;
+    if (idx >= 0) {
+      avItem->onAudioLanguageChanged(idx, lang);
+    }
+  }
 }
 
 /*!
@@ -499,6 +509,16 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
   if (sStream == 0) return;
 
   avItem->appendSubtitleEntry(sStream, order);
+
+  // Apply saved language from project file if available
+  auto key = qMakePair(avItem, order);
+  if (mPendingSubtitleLanguages.contains(key)) {
+    QString lang = mPendingSubtitleLanguages.take(key);
+    int idx = avItem->subtitleCount() - 1;
+    if (idx >= 0) {
+      avItem->onSubtitleLanguageChanged(idx, lang);
+    }
+  }
 }
 
 /*!
@@ -728,6 +748,19 @@ void TTAVData::onReadProjectFileAborted()
 }
 
 // /////////////////////////////////////////////////////////////////////////////
+// Pending language overrides (from project file, applied after async stream open)
+
+void TTAVData::setPendingAudioLanguage(TTAVItem* avItem, int order, const QString& lang)
+{
+  mPendingAudioLanguages.insert(qMakePair(avItem, order), lang);
+}
+
+void TTAVData::setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang)
+{
+  mPendingSubtitleLanguages.insert(qMakePair(avItem, order), lang);
+}
+
+// /////////////////////////////////////////////////////////////////////////////
 // Cut preview
 /**
  * Create the cut preview clips
@@ -851,7 +884,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     }
 
     cutAudioTask = new TTCutAudioTask();
-    cutAudioTask->init(tgtAudioFilePath, cutList, i, cutVideoTask->muxListItem());
+    TTAudioItem audioItem = cutList->at(0).avDataItem()->audioListItemAt(i);
+    cutAudioTask->init(tgtAudioFilePath, cutList, i, cutVideoTask->muxListItem(), audioItem.getLanguage());
 
     mpThreadTaskPool->start(cutAudioTask);
   }
@@ -874,7 +908,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     }
 
     cutSubtitleTask = new TTCutSubtitleTask();
-    cutSubtitleTask->init(tgtSubtitleFilePath, cutList, i, cutVideoTask->muxListItem());
+    TTSubtitleItem subtitleItem = cutList->at(0).avDataItem()->subtitleListItemAt(i);
+    cutSubtitleTask->init(tgtSubtitleFilePath, cutList, i, cutVideoTask->muxListItem(), subtitleItem.getLanguage());
 
     mpThreadTaskPool->start(cutSubtitleTask);
   }
@@ -1006,6 +1041,12 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       }
     }
 
+    // Collect audio languages from data model
+    QStringList cutAudioLanguages;
+    for (int i = 0; i < avItem->audioCount(); i++) {
+      cutAudioLanguages.append(avItem->audioListItemAt(i).getLanguage());
+    }
+
     // Mux video and audio into final MKV
     emit statusReport(StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
     TTMkvMergeProvider mkvProvider;
@@ -1018,6 +1059,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (avOffsetMs != 0) {
       mkvProvider.setAudioSyncOffset(avOffsetMs);
     }
+
+    mkvProvider.setAudioLanguages(cutAudioLanguages);
 
     bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
 
@@ -1137,6 +1180,10 @@ void TTAVData::onCutFinished()
           mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
           qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
         }
+
+        // Pass explicit language tags from data model
+        mkvProvider->setAudioLanguages(muxItem.getAudioLanguages());
+        mkvProvider->setSubtitleLanguages(muxItem.getSubtitleLanguages());
 
         // Build MKV output filename
         QFileInfo videoInfo(muxItem.getVideoName());

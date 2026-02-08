@@ -37,6 +37,43 @@
 #include <QTextStream>
 #include <QDir>
 
+// Decode VDR's Windows-1252 hex encoding (#XX) in filenames
+static QChar win1252ToUnicode(unsigned char byte)
+{
+    // 0x80-0x9F: Windows-1252 has printable chars where Latin-1 has control codes
+    static const ushort map[32] = {
+        0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,  // 80-87
+        0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,  // 88-8F
+        0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,  // 90-97
+        0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178   // 98-9F
+    };
+    if (byte >= 0x80 && byte <= 0x9F)
+        return QChar(map[byte - 0x80]);
+    return QChar(byte);  // Latin-1 == Unicode for all other byte values
+}
+
+// Decode VDR filename: #XX → character (Windows-1252), _ → space
+static QString decodeVdrName(const QString& name)
+{
+    QString result;
+    result.reserve(name.size());
+
+    for (int i = 0; i < name.size(); ++i) {
+        if (name[i] == QChar('#') && i + 2 < name.size()) {
+            bool ok;
+            uint val = name.mid(i + 1, 2).toUInt(&ok, 16);
+            if (ok && val >= 0x20) {
+                result += win1252ToUnicode(static_cast<unsigned char>(val));
+                i += 2;
+                continue;
+            }
+        }
+        result += (name[i] == QChar('_')) ? QChar(' ') : name[i];
+    }
+
+    return result;
+}
+
 // Standard mkvmerge paths to check
 static const QStringList sMkvMergePaths = {
     "/usr/bin/mkvmerge",
@@ -161,6 +198,22 @@ void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
 }
 
 // -----------------------------------------------------------------------------
+// Set audio language tags (ISO 639-2/B)
+// -----------------------------------------------------------------------------
+void TTMkvMergeProvider::setAudioLanguages(const QStringList& languages)
+{
+    mAudioLanguages = languages;
+}
+
+// -----------------------------------------------------------------------------
+// Set subtitle language tags (ISO 639-2/B)
+// -----------------------------------------------------------------------------
+void TTMkvMergeProvider::setSubtitleLanguages(const QStringList& languages)
+{
+    mSubtitleLanguages = languages;
+}
+
+// -----------------------------------------------------------------------------
 // Set A/V sync offset for audio tracks (in milliseconds)
 // Positive offset = audio delayed, negative = audio earlier
 // -----------------------------------------------------------------------------
@@ -245,19 +298,37 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
     // Output file
     args << "-o" << outputFile;
 
+    // Title from video filename (decode VDR #XX encoding, _ → space)
+    QString title = decodeVdrName(QFileInfo(videoFile).completeBaseName());
+    if (!title.isEmpty()) {
+        args << "--title" << title;
+    }
+
     // Video file
     args << videoFile;
 
-    // Audio files with optional sync offset
-    // Track IDs in MKV: video=0, audio starts at 1
+    // Audio files with optional sync offset and language
+    // Language from explicit list takes priority, filename regex as fallback
+    QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
     int audioTrackId = 1;
-    for (const QString& audio : audioFiles) {
+    for (int i = 0; i < audioFiles.size(); i++) {
+        const QString& audio = audioFiles[i];
         if (QFile::exists(audio)) {
+            // Prefer explicit language from data model
+            QString lang;
+            if (i < mAudioLanguages.size() && !mAudioLanguages[i].isEmpty()) {
+                lang = mAudioLanguages[i];
+            } else {
+                // Fallback: extract from filename (e.g., "Show_deu.ac3" → "deu")
+                QRegularExpressionMatch langMatch = langRe.match(QFileInfo(audio).completeBaseName());
+                if (langMatch.hasMatch()) {
+                    lang = langMatch.captured(1);
+                }
+            }
+            if (!lang.isEmpty()) {
+                args << "--language" << QString("0:%1").arg(lang);
+            }
             // Apply A/V sync offset if set
-            // av_offset_ms = audio_pts - video_pts
-            // Negative means audio starts before video, so we need to DELAY audio
-            // mkvmerge --sync: positive = delay track, negative = advance track
-            // Therefore we NEGATE the offset: -(-384) = +384 = delay audio by 384ms
             if (mAudioSyncOffsetMs != 0) {
                 args << "--sync" << QString("%1:%2").arg(audioTrackId).arg(-mAudioSyncOffsetMs);
             }
@@ -266,9 +337,22 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
         }
     }
 
-    // Subtitle files
-    for (const QString& sub : subtitleFiles) {
+    // Subtitle files with language
+    for (int i = 0; i < subtitleFiles.size(); i++) {
+        const QString& sub = subtitleFiles[i];
         if (QFile::exists(sub)) {
+            QString lang;
+            if (i < mSubtitleLanguages.size() && !mSubtitleLanguages[i].isEmpty()) {
+                lang = mSubtitleLanguages[i];
+            } else {
+                QRegularExpressionMatch langMatch = langRe.match(QFileInfo(sub).completeBaseName());
+                if (langMatch.hasMatch()) {
+                    lang = langMatch.captured(1);
+                }
+            }
+            if (!lang.isEmpty()) {
+                args << "--language" << QString("0:%1").arg(lang);
+            }
             args << sub;
         }
     }

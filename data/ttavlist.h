@@ -103,8 +103,10 @@ class TTAVItem : public QObject
   public slots:
     void onRemoveAudioItem(int index);
     void onSwapAudioItems(int oldIndex, int newIndex);
+    void onAudioLanguageChanged(int index, const QString& language);
     void onRemoveSubtitleItem(int index);
     void onSwapSubtitleItems(int oldIndex, int newIndex);
+    void onSubtitleLanguageChanged(int index, const QString& language);
 
   signals:
 		void updated(TTAVItem* avItem);

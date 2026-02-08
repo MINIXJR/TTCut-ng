@@ -49,12 +49,20 @@ TTMuxListDataItem::TTMuxListDataItem(const TTMuxListDataItem& item)
   this->videoFileName = item.videoFileName;
 
   this->audioFileNames.clear();
-  for(int i=0; i<item.audioFileNames.count(); i++)
+  this->audioLanguageList.clear();
+  for(int i=0; i<item.audioFileNames.count(); i++) {
     this->audioFileNames.append(item.audioFileNames[i]);
+    if (i < item.audioLanguageList.count())
+      this->audioLanguageList.append(item.audioLanguageList[i]);
+  }
 
   this->subtitleFileNames.clear();
-  for(int i=0; i<item.subtitleFileNames.count(); i++)
+  this->subtitleLanguageList.clear();
+  for(int i=0; i<item.subtitleFileNames.count(); i++) {
     this->subtitleFileNames.append(item.subtitleFileNames[i]);
+    if (i < item.subtitleLanguageList.count())
+      this->subtitleLanguageList.append(item.subtitleLanguageList[i]);
+  }
 }
 
 const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& item)
@@ -64,12 +72,20 @@ const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& i
   this->videoFileName = item.videoFileName;
 
   this->audioFileNames.clear();
-  for(int i=0; i<item.audioFileNames.count(); i++)
+  this->audioLanguageList.clear();
+  for(int i=0; i<item.audioFileNames.count(); i++) {
     this->audioFileNames.append(item.audioFileNames[i]);
+    if (i < item.audioLanguageList.count())
+      this->audioLanguageList.append(item.audioLanguageList[i]);
+  }
 
   this->subtitleFileNames.clear();
-  for(int i=0; i<item.subtitleFileNames.count(); i++)
+  this->subtitleLanguageList.clear();
+  for(int i=0; i<item.subtitleFileNames.count(); i++) {
     this->subtitleFileNames.append(item.subtitleFileNames[i]);
+    if (i < item.subtitleLanguageList.count())
+      this->subtitleLanguageList.append(item.subtitleLanguageList[i]);
+  }
 
   return *this;
 }
@@ -103,9 +119,10 @@ QStringList TTMuxListDataItem::getAudioNames()
   return audioFileNames;
 }
 
-void TTMuxListDataItem::appendAudioFile(QString audioFileName)
+void TTMuxListDataItem::appendAudioFile(QString audioFileName, const QString& language)
 {
   audioFileNames.append(audioFileName);
+  audioLanguageList.append(language);
 }
 
 QStringList TTMuxListDataItem::getSubtitleNames()
@@ -113,9 +130,20 @@ QStringList TTMuxListDataItem::getSubtitleNames()
   return subtitleFileNames;
 }
 
-void TTMuxListDataItem::appendSubtitleFile(QString subtitleFileName)
+void TTMuxListDataItem::appendSubtitleFile(QString subtitleFileName, const QString& language)
 {
   subtitleFileNames.append(subtitleFileName);
+  subtitleLanguageList.append(language);
+}
+
+QStringList TTMuxListDataItem::getAudioLanguages()
+{
+  return audioLanguageList;
+}
+
+QStringList TTMuxListDataItem::getSubtitleLanguages()
+{
+  return subtitleLanguageList;
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////

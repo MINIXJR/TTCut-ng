@@ -739,12 +739,29 @@ if $ES_MODE; then
     if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
         info "Attempting subtitle extraction..."
 
+        # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
+        sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        sub_midpoint=$(awk "BEGIN {printf \"%.0f\", ${sub_duration:-0} / 2}")
+        [ "$sub_midpoint" -lt 60 ] 2>/dev/null && sub_midpoint=0
+
         for sub in "${SUBTITLE_STREAMS[@]}"; do
             IFS=':' read -r idx codec lang <<< "$sub"
 
+            # Quick check: does the stream contain data? (sample 120s from mid-point)
+            sub_packets=$(timeout 30 ffprobe -v error -read_intervals "${sub_midpoint}%+120" \
+                -select_streams 0:$idx -show_entries packet=size \
+                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+            if [ -z "$sub_packets" ]; then
+                info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
+                continue
+            fi
+
             case "$codec" in
                 dvb_subtitle|dvbsub)
-                    warn "  DVB subtitle $idx [$lang] - bitmap format, needs OCR"
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
+                    info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
@@ -1015,12 +1032,29 @@ else
     if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
         info "Attempting subtitle extraction..."
 
+        # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
+        sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        sub_midpoint=$(awk "BEGIN {printf \"%.0f\", ${sub_duration:-0} / 2}")
+        [ "$sub_midpoint" -lt 60 ] 2>/dev/null && sub_midpoint=0
+
         for sub in "${SUBTITLE_STREAMS[@]}"; do
             IFS=':' read -r idx codec lang <<< "$sub"
 
+            # Quick check: does the stream contain data? (sample 120s from mid-point)
+            sub_packets=$(timeout 30 ffprobe -v error -read_intervals "${sub_midpoint}%+120" \
+                -select_streams 0:$idx -show_entries packet=size \
+                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+            if [ -z "$sub_packets" ]; then
+                info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
+                continue
+            fi
+
             case "$codec" in
                 dvb_subtitle|dvbsub)
-                    warn "DVB subtitle stream $idx [$lang] - bitmap format, needs OCR"
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
+                    info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
+                    ffmpeg -y -i "$INPUT" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    [ -s "$OUTPUT_SUB" ] || rm -f "$OUTPUT_SUB"
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"

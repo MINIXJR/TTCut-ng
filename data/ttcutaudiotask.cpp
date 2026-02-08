@@ -50,13 +50,15 @@ TTCutAudioTask::TTCutAudioTask() :
 /**
  * Init cut audio task
  */
-void TTCutAudioTask::init(QString tgtFilePath, TTCutList* cutList, int srcAudioIndex, TTMuxListDataItem* muxListItem)
+void TTCutAudioTask::init(QString tgtFilePath, TTCutList* cutList, int srcAudioIndex, TTMuxListDataItem* muxListItem,
+                          const QString& language)
 {
   mTgtFilePath   = tgtFilePath;
   mpCutList      = cutList;
   mpCutStream    = 0;
   mSrcAudioIndex = srcAudioIndex;
   mMuxListItem   = muxListItem;
+  mLanguage      = language;
 }
 
 //! Operation abort request
@@ -117,7 +119,7 @@ void TTCutAudioTask::operation()
                this,        SLOT(onStatusReport(int, const QString&, quint64)));
   }
 
-  mMuxListItem->appendAudioFile(mTgtFilePath);
+  mMuxListItem->appendAudioFile(mTgtFilePath, mLanguage);
   mpTgtStream->close();
   emit finished(mpCutStream->filePath());
 }

@@ -50,13 +50,15 @@ TTCutSubtitleTask::TTCutSubtitleTask() :
 /**
  * Init cut subtitle task
  */
-void TTCutSubtitleTask::init(QString tgtFilePath, TTCutList* cutList, int srcSubtitleIndex, TTMuxListDataItem* muxListItem)
+void TTCutSubtitleTask::init(QString tgtFilePath, TTCutList* cutList, int srcSubtitleIndex, TTMuxListDataItem* muxListItem,
+                             const QString& language)
 {
   mTgtFilePath      = tgtFilePath;
   mpCutList         = cutList;
   mpCutStream       = 0;
   mSrcSubtitleIndex = srcSubtitleIndex;
   mMuxListItem      = muxListItem;
+  mLanguage         = language;
 }
 
 //! Operation abort request
@@ -114,7 +116,7 @@ void TTCutSubtitleTask::operation()
                this,        SLOT(onStatusReport(int, const QString&, quint64)));
   }
 
-  mMuxListItem->appendSubtitleFile(mTgtFilePath);
+  mMuxListItem->appendSubtitleFile(mTgtFilePath, mLanguage);
   mpTgtStream->close();
   emit finished(mpCutStream->filePath());
 }

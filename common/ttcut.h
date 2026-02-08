@@ -41,6 +41,7 @@
 class QPixmap;
 class QString;
 class QWidget;
+class QStringList;
 
 extern "C" const char* toAscii(const QString& string);
 
@@ -218,6 +219,13 @@ class TTCut
    // --------------------------------------------------------------
    static float        frameRate;
    static QWidget*     mainWindow;
+
+   // --------------------------------------------------------------
+   // ISO 639 language support
+   // --------------------------------------------------------------
+   static QStringList languageCodes();    // {"und","deu","eng","fra",...}
+   static QStringList languageNames();    // {"Undetermined","Deutsch","English",...}
+   static QString iso639_1to2(const QString& code2);  // "de" → "deu"
 };
 
 
