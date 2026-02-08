@@ -417,6 +417,9 @@ void TTCurrentFrame::onPlayVideo()
       mMpvSocketPath.clear();
     }
 
+    // Invalidate display cache so frame is re-decoded after mpv overlay
+    mpegWindow->invalidateDisplay();
+
     // Calculate new frame position
     int newFrame;
     double frameRate = videoStream->frameRate();

@@ -192,6 +192,14 @@ void TTMPEG2Window2::drawSubtitleOnImage(QImage& image, const QString& text)
   painter.end();
 }
 
+/*!
+ * Invalidate the display cache so the next moveToVideoFrame() forces a re-decode
+ */
+void TTMPEG2Window2::invalidateDisplay()
+{
+  currentIndex = -1;
+}
+
 void TTMPEG2Window2::showFrameAt(int index)
 {
   moveToVideoFrame(index);
@@ -355,8 +363,10 @@ void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
     if (mpFFmpegWrapper == 0) return;
 
     mCurrentFrame = mpFFmpegWrapper->decodeFrame(iFramePos);
-    currentIndex = iFramePos;
-    showVideoFrame();
+    if (!mCurrentFrame.isNull()) {
+      currentIndex = iFramePos;
+      showVideoFrame();
+    }
     return;
   }
 

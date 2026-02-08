@@ -856,20 +856,37 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
 // ----------------------------------------------------------------------------
 QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
+    // Find the keyframe we'll seek to
+    int keyframeIndex = frameIndex;
+    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+        keyframeIndex--;
+    }
+    qDebug() << "decodeFrame: target=" << frameIndex
+             << "keyframe=" << keyframeIndex
+             << "frames_to_decode=" << (frameIndex - keyframeIndex + 1);
+
     if (!seekToFrame(frameIndex)) {
+        qDebug() << "decodeFrame: seekToFrame failed for frame" << frameIndex;
         return QImage();
     }
 
     // Decode frames until we reach the target frame
+    int decoded = 0;
     while (mCurrentFrameIndex < frameIndex) {
         QImage img = decodeCurrentFrame();
         if (img.isNull()) {
+            qDebug() << "decodeFrame: decodeCurrentFrame returned null at step"
+                     << decoded << "(current=" << mCurrentFrameIndex
+                     << "target=" << frameIndex << ")";
             return QImage();
         }
         mCurrentFrameIndex++;
+        decoded++;
     }
 
-    return decodeCurrentFrame();
+    QImage result = decodeCurrentFrame();
+    qDebug() << "decodeFrame: done, decoded" << (decoded + 1) << "frames, result isNull=" << result.isNull();
+    return result;
 }
 
 // ----------------------------------------------------------------------------

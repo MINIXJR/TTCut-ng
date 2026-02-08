@@ -78,6 +78,8 @@ class TTMPEG2Window2 : public QLabel
 
     void saveCurrentFrame(QString fName, const char* format);
 
+    void invalidateDisplay();
+
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();
 
