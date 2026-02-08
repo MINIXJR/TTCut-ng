@@ -1,4 +1,4 @@
-Source: ttcut
+Source: ttcut-ng
 Section: video
 Priority: optional
 Maintainer: MINIXJR <35893755+MINIXJR@users.noreply.github.com>
@@ -13,12 +13,14 @@ Build-Depends: debhelper (>= 11),
 Standards-Version: 4.5.0
 Homepage: https://github.com/MINIXJR/TTCut-ng
 
-Package: ttcut
+Package: ttcut-ng
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: ffmpeg, mjpegtools, mpv, mkvtoolnix
-Description: MPEG-2/H.264/H.265 video cutting tool
- TTCut is a video cutting tool for MPEG-2, H.264, and H.265 streams that
+Conflicts: ttcut
+Replaces: ttcut
+Description: MPEG-2/H.264/H.265 frame-accurate video cutter
+ TTCut-ng is a video cutting tool for MPEG-2, H.264, and H.265 streams that
  avoids re-encoding the entire video. Only frames around cut points are
  selectively re-encoded (Smart Cut).
  .

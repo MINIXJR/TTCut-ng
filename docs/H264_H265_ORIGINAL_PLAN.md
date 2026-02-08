@@ -83,7 +83,7 @@ Diese sind bereits für avcut/ffmpeg auf dem System vorhanden.
 
 **1.1 Build-System erweitern**
 ```pro
-# ttcut.pro ergänzen
+# ttcut-ng.pro ergänzen
 unix {
     CONFIG += link_pkgconfig
     PKGCONFIG += libavformat libavcodec libavutil

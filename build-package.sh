@@ -2,7 +2,7 @@
 # TTCut-ng Debian package build script
 set -e
 
-PACKAGE_NAME="ttcut"
+PACKAGE_NAME="ttcut-ng"
 SOURCE_DIR="/usr/local/src/TTCut-ng"
 BUILD_BASE_DIR="/usr/local/src"
 DISTRO=$(lsb_release -cs)
@@ -10,7 +10,7 @@ DISTRO=$(lsb_release -cs)
 cd "$SOURCE_DIR"
 
 # Get version from source code
-VERSION=$(grep -oP 'versionString = "TTCut - \K[0-9.]+' common/ttcut.cpp)
+VERSION=$(grep -oP 'versionString = "TTCut-ng - \K[0-9.]+' common/ttcut.cpp)
 
 if [ -z "$VERSION" ]; then
     echo "ERROR: Could not determine version from common/ttcut.cpp"
@@ -23,7 +23,7 @@ GIT_HASH=$(git rev-parse --short HEAD)
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 GIT_COMMIT_COUNT=$(git rev-list --count HEAD)
 
-echo "==> Building TTCut Debian package"
+echo "==> Building TTCut-ng Debian package"
 echo "==> Version: ${VERSION}"
 echo "==> Git date: ${GIT_DATE}"
 echo "==> Git commit: ${GIT_HASH}"
@@ -57,14 +57,14 @@ DEBFULLNAME="MINIXJR" DEBEMAIL="35893755+MINIXJR@users.noreply.github.com" \
 # Clean build artifacts
 echo "==> Cleaning build artifacts..."
 make clean 2>/dev/null || true
-rm -f ttcut *.o moc/*.cpp ui_h/*.h res/*.cpp obj/*.o
+rm -f ttcut-ng *.o moc/*.cpp ui_h/*.h res/*.cpp obj/*.o
 
 # Remove old build directory
 [ -d "$BUILD_DIR" ] && rm -rf "$BUILD_DIR"
 
 # Copy source to build directory
 echo "==> Copying source to build directory..."
-rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut' \
+rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
          --exclude='moc/' --exclude='obj/' --exclude='ui_h/' --exclude='res/' \
          --exclude='Makefile' --exclude='*.pro.user' \
          "$SOURCE_DIR/" "$BUILD_DIR/"

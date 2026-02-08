@@ -27,10 +27,10 @@ echo "Input:  $INPUT"
 echo "Output: $OUTPUT"
 echo ""
 
-# Check if TTCut binary exists
-TTCUT="$(dirname "$0")/../ttcut"
+# Check if TTCut-ng binary exists
+TTCUT="$(dirname "$0")/../ttcut-ng"
 if [ ! -x "$TTCUT" ]; then
-    echo "Error: TTCut binary not found at $TTCUT"
+    echo "Error: TTCut-ng binary not found at $TTCUT"
     exit 1
 fi
 

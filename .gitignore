@@ -1,6 +1,8 @@
 # Build artifacts
 Makefile
+Makefile.*
 ttcut-ng
+ttcut
 *.o
 *.tmp
 *~
