@@ -6,17 +6,17 @@
     <message>
         <location filename="../ui/processviewwidget.ui" line="31"/>
         <source>TTCut - Process output</source>
-        <translation type="unfinished">TTCut - Pozessausgabe</translation>
+        <translation>TTCut-ng - Prozessausgabe</translation>
     </message>
     <message>
         <location filename="../ui/processviewwidget.ui" line="43"/>
         <source>Process output</source>
-        <translation type="unfinished">Prozessausgabe</translation>
+        <translation>Prozessausgabe</translation>
     </message>
     <message>
         <location filename="../ui/processviewwidget.ui" line="101"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
 </context>
 <context>
@@ -97,47 +97,47 @@
     <message>
         <location filename="../data/ttavlist.cpp" line="243"/>
         <source>Video files to cut must have the same framerate!</source>
-        <translation type="unfinished">Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche Länge besitzen!</translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche Framerate aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="246"/>
         <source>Video files to cut must have the same count of audio files!</source>
-        <translation type="unfinished">Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche Anzahl Audiodateien aufweisen!</translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche Anzahl Audiodateien aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="253"/>
         <source>Video files to cut must have the same codec type!</source>
-        <translation type="unfinished"></translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen den gleichen Codec-Typ aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="266"/>
         <source>Video files to cut must have the same aspect ratio!</source>
-        <translation type="unfinished">Videodateien, die zusammen geschnitten werden sollen, müssen das gleiche Seitenverhältnis aufweisen!</translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen das gleiche Seitenverhältnis aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="269"/>
         <source>Video files to cut must have the same horizontal size!</source>
-        <translation type="unfinished"></translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche horizontale Auflösung aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="272"/>
         <source>Video files to cut must have the same vertical size!</source>
-        <translation type="unfinished"></translation>
+        <translation>Videodateien, die zusammen geschnitten werden sollen, müssen die gleiche vertikale Auflösung aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="283"/>
         <source>Audio files to cut must have the same bitrate!</source>
-        <translation type="unfinished"></translation>
+        <translation>Audiodateien, die zusammen geschnitten werden sollen, müssen die gleiche Bitrate aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="286"/>
         <source>Audio files to cut must have the same samplerate!</source>
-        <translation type="unfinished"></translation>
+        <translation>Audiodateien, die zusammen geschnitten werden sollen, müssen die gleiche Abtastrate aufweisen!</translation>
     </message>
     <message>
         <location filename="../data/ttavlist.cpp" line="289"/>
         <source>Audio files to cut must have the same version!</source>
-        <translation type="unfinished"></translation>
+        <translation>Audiodateien, die zusammen geschnitten werden sollen, müssen die gleiche Version aufweisen!</translation>
     </message>
 </context>
 <context>
@@ -163,7 +163,7 @@
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="61"/>
         <source>Open audio file</source>
-        <translation type="unfinished">Audio öffnen</translation>
+        <translation>Audio öffnen</translation>
     </message>
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="99"/>
@@ -183,12 +183,12 @@
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="239"/>
         <source>Filename</source>
-        <translation type="unfinished">Dateiname</translation>
+        <translation>Dateiname</translation>
     </message>
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="244"/>
         <source>Length</source>
-        <translation type="unfinished">Länge</translation>
+        <translation>Länge</translation>
     </message>
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="249"/>
@@ -231,32 +231,32 @@
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="260"/>
         <source>Move &amp;up</source>
-        <translation type="unfinished">Nach &amp;oben</translation>
+        <translation>Nach &amp;oben</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="262"/>
         <source>Move selected audiofile one position upward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="265"/>
         <source>&amp;Delete</source>
-        <translation type="unfinished">&amp;Entfernen</translation>
+        <translation>&amp;Entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="267"/>
         <source>Remove selected audiofile from list</source>
-        <translation type="unfinished">Entfernt den ausgewählten Eintrag aus der Liste</translation>
+        <translation>Entfernt den ausgewählten Eintrag aus der Liste</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="270"/>
         <source>Move d&amp;own</source>
-        <translation type="unfinished">Nach &amp;unten</translation>
+        <translation>Nach &amp;unten</translation>
     </message>
     <message>
         <location filename="../gui/ttaudiotreeview.cpp" line="272"/>
         <source>Move selected audiofile one position downward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
     </message>
 </context>
 <context>
@@ -282,7 +282,7 @@
     <message>
         <location filename="../ui/avcutdialog.ui" line="13"/>
         <source>TTCut - Video Cut Options</source>
-        <translation>TTCut - Schnitt-Optionen</translation>
+        <translation>TTCut-ng - Schnitt-Optionen</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="46"/>
@@ -292,12 +292,12 @@
     <message>
         <location filename="../ui/avcutdialog.ui" line="53"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="69"/>
         <source>Common</source>
-        <translation type="unfinished">Allgemein</translation>
+        <translation>Allgemein</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="91"/>
@@ -377,7 +377,7 @@
     <message>
         <location filename="../ui/avcutdialog.ui" line="417"/>
         <source>Encoding</source>
-        <translation type="unfinished">Enkodieren</translation>
+        <translation>Encodieren</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="433"/>
@@ -389,12 +389,12 @@
     <message>
         <location filename="../ui/avcutdialog.ui" line="444"/>
         <source>Muxing</source>
-        <translation type="unfinished">Multiplexen</translation>
+        <translation>Multiplexen</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="471"/>
         <source>Chapters</source>
-        <translation type="unfinished">Kapitel</translation>
+        <translation>Kapitel</translation>
     </message>
 </context>
 <context>
@@ -422,7 +422,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../ui/aboutdlg.ui" line="515"/>
         <source>OK</source>
-        <translation type="unfinished">Ok</translation>
+        <translation>Ok</translation>
     </message>
     <message>
         <location filename="../ui/aboutdlg.ui" line="543"/>
@@ -457,7 +457,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../data/ttcutaudiotask.cpp" line="81"/>
         <source>No target file path given for audio cut!</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Zielpfad für den Audioschnitt angegeben!</translation>
     </message>
 </context>
 <context>
@@ -505,12 +505,12 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../gui/ttcutframenavigation.cpp" line="433"/>
         <source>Add range to cut list</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereich zur Schnittliste hinzufügen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutframenavigation.cpp" line="483"/>
         <source>Update range in cut list</source>
-        <translation type="unfinished"></translation>
+        <translation>Bereich in der Schnittliste aktualisieren</translation>
     </message>
 </context>
 <context>
@@ -523,7 +523,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="67"/>
         <source>Go to previous I-Frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Zum vorherigen I-Frame springen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="70"/>
@@ -600,7 +600,7 @@ p, li { white-space: pre-wrap; }
         <location filename="../ui/ttcutframenavigationwidget.ui" line="506"/>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="571"/>
         <source>...</source>
-        <translation type="unfinished">...</translation>
+        <translation>...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="539"/>
@@ -708,7 +708,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../ui/cutlistwidget.ui" line="266"/>
         <source>Length</source>
-        <translation type="unfinished">Länge</translation>
+        <translation>Länge</translation>
     </message>
     <message>
         <location filename="../ui/cutlistwidget.ui" line="271"/>
@@ -741,7 +741,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="282"/>
         <source>Open video file</source>
-        <translation type="unfinished">Video öffnen</translation>
+        <translation>Video öffnen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="284"/>
@@ -751,7 +751,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="305"/>
         <source>Open audio file</source>
-        <translation type="unfinished">Audio öffnen</translation>
+        <translation>Audio öffnen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="307"/>
@@ -761,48 +761,49 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="330"/>
         <source>Open subtitle file</source>
-        <translation type="unfinished"></translation>
+        <translation>Untertiteldatei öffnen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="351"/>
         <source>New Project</source>
-        <translation type="unfinished">Neues Projekt</translation>
+        <translation>Neues Projekt</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="352"/>
         <source>Close current project and start a new one?
 Unsaved changes will be lost.</source>
-        <translation type="unfinished"></translation>
+        <translation>Aktuelles Projekt schließen und ein neues beginnen?
+Nicht gespeicherte Änderungen gehen verloren.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="367"/>
         <source>Open project-file</source>
-        <translation type="unfinished">Projekt öffnen</translation>
+        <translation>Projekt öffnen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="390"/>
         <source>Save project-file</source>
-        <translation type="unfinished">Projekt speichern</translation>
+        <translation>Projekt speichern</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="409"/>
         <source>error save project file: %1</source>
-        <translation type="unfinished">Fehler beim Speichern der Projektdatei %1</translation>
+        <translation>Fehler beim Speichern der Projektdatei %1</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="428"/>
         <source>Save project-file as</source>
-        <translation type="unfinished">Projekt speichern unter</translation>
+        <translation>Projekt speichern unter</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="525"/>
         <source>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Previous/Next frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (vim-style)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %1 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %2 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %3 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Page Up/Down&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %4 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Home / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to first frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;End / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to last frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame Types&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous P-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous B-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Cutting&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-in point&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-out point&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Mouse&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mouse wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate faster&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Umschalt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Strg+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Strg+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Strg+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger B-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Strg+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="560"/>
         <source>Keyboard Shortcuts</source>
-        <translation type="unfinished"></translation>
+        <translation>Tastenkürzel</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="612"/>
@@ -812,82 +813,97 @@ Video: %2
 Audio: %3
 
 This may cause A/V sync issues.</source>
-        <translation type="unfinished"></translation>
+        <translation>Audio- und Videolänge unterscheiden sich um %1 Sekunden.
+
+Video: %2
+Audio: %3
+
+Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="618"/>
         <source>Length Mismatch</source>
-        <translation type="unfinished"></translation>
+        <translation>Längenunterschied</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="699"/>
         <source>Stream Points</source>
-        <translation type="unfinished"></translation>
+        <translation>Stream-Punkte</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="700"/>
         <source>No video stream loaded.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Videostream geladen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="710"/>
         <source>Video File: %1
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Videodatei: %1
+
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="711"/>
         <source>Total Frames: %1
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Gesamtanzahl Frames: %1
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="712"/>
         <source>Frame Rate: %1 fps
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Bildrate: %1 fps
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="714"/>
         <source>Resolution: %1 x %2
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Auflösung: %1 x %2
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="715"/>
         <source>Aspect Ratio: %1
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Seitenverhältnis: %1
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="717"/>
         <source>Bitrate: %1 kbit/s
 
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Bitrate: %1 kbit/s
+
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="718"/>
         <source>Current Position: %1
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Aktuelle Position: %1
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="719"/>
         <source>Current Time: %1
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Aktuelle Zeit: %1
+</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="721"/>
         <source>Stream Information</source>
-        <translation type="unfinished"></translation>
+        <translation>Stream-Informationen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="832"/>
         <source>Cutting Complete</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="833"/>
@@ -895,7 +911,10 @@ This may cause A/V sync issues.</source>
 
 Output file:
 %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Der Videoschnitt wurde erfolgreich abgeschlossen.
+
+Ausgabedatei:
+%1</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1021"/>
@@ -908,145 +927,125 @@ Output file:
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="20"/>
         <source>MainWindow</source>
-        <translation type="unfinished">TTCut</translation>
-    </message>
-    <message>
-        <source>Cut</source>
-        <translation type="obsolete">Schneiden</translation>
-    </message>
-    <message>
-        <source>Cut-Points</source>
-        <translation type="obsolete">Schnittpunkte</translation>
+        <translation>TTCut-ng</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="325"/>
         <source>Marker</source>
-        <translation type="unfinished">Marker</translation>
+        <translation>Marker</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="202"/>
         <source>Navigation</source>
-        <translation type="unfinished">Navigation</translation>
-    </message>
-    <message>
-        <source>Files</source>
-        <translation type="obsolete">Dateien</translation>
-    </message>
-    <message>
-        <source>Video Files</source>
-        <translation type="obsolete">Videodateien</translation>
-    </message>
-    <message>
-        <source>Audio Files</source>
-        <translation type="obsolete">Audiodateien</translation>
+        <translation>Navigation</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="55"/>
         <source>Videofile</source>
-        <translation type="unfinished"></translation>
+        <translation>Videodatei</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="146"/>
         <source>Cut-Out Frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Cut-Out-Frame</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="177"/>
         <source>Current Frame</source>
-        <translation type="unfinished"></translation>
+        <translation>Aktueller Frame</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="302"/>
         <source>Cut List</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnittliste</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="347"/>
         <source>Audiofiles</source>
-        <translation type="unfinished"></translation>
+        <translation>Audiodateien</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="370"/>
         <source>Subtitles</source>
-        <translation type="unfinished"></translation>
+        <translation>Untertitel</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="406"/>
         <source>Help</source>
-        <translation type="unfinished">Hilfe</translation>
+        <translation>Hilfe</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="414"/>
         <source>Action</source>
-        <translation type="unfinished">Aktion</translation>
+        <translation>Aktion</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="423"/>
         <source>File</source>
-        <translation type="unfinished">Datei</translation>
+        <translation>Datei</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="427"/>
         <source>Recent Projects</source>
-        <translation type="unfinished">Zuletzt verwendet</translation>
+        <translation>Zuletzt verwendet</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="454"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="457"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="460"/>
         <source>New Project</source>
-        <translation type="unfinished">Neues Projekt</translation>
+        <translation>Neues Projekt</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="472"/>
         <source>Open Project...</source>
-        <translation type="unfinished">Projekt öffnen...</translation>
+        <translation>Projekt öffnen...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="475"/>
         <source>Open Project</source>
-        <translation type="unfinished">Projekt öffnen</translation>
+        <translation>Projekt öffnen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="478"/>
         <source>Open Project file</source>
-        <translation type="unfinished">Projektdatei öffnen</translation>
+        <translation>Projektdatei öffnen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="487"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="490"/>
         <source>Save Project</source>
-        <translation type="unfinished">Projekt speichern</translation>
+        <translation>Projekt speichern</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="493"/>
         <source>Save Project file</source>
-        <translation type="unfinished">Projekt speichern unter</translation>
+        <translation>Projekt speichern unter</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="502"/>
         <source>Save Project as...</source>
-        <translation type="unfinished">Projekt speichern unter...</translation>
+        <translation>Projekt speichern unter...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="505"/>
         <source>Save Project as</source>
-        <translation type="unfinished">Projekt speichern unter</translation>
+        <translation>Projekt speichern unter</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="508"/>
         <source>Save Project under new file name</source>
-        <translation type="unfinished">Projektdatei unter einem anderem Namen speichern</translation>
+        <translation>Projektdatei unter einem anderen Namen speichern</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="517"/>
         <source>Exit</source>
-        <translation type="unfinished">Beenden</translation>
+        <translation>Beenden</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="526"/>
         <source>Save current frame...</source>
-        <translation type="unfinished">Aktuelles Bild speichern...</translation>
+        <translation>Aktuelles Bild speichern...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="535"/>
@@ -1068,14 +1067,14 @@ Output file:
         <location filename="../ui/ttcutmainwnd_new.ui" line="560"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="563"/>
         <source>Open Video...</source>
-        <translation type="unfinished">Video öffnen...</translation>
+        <translation>Video öffnen...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="572"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="575"/>
         <location filename="../ui/ttcutmainwnd_new.ui" line="578"/>
         <source>Open Audio...</source>
-        <translation type="unfinished">Audio öffnen...</translation>
+        <translation>Audio öffnen...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutmainwnd_new.ui" line="587"/>
@@ -1105,7 +1104,7 @@ Output file:
     <message>
         <location filename="../ui/cutoutframewidget.ui" line="207"/>
         <source>Search</source>
-        <translation type="unfinished">Suche</translation>
+        <translation>Suche</translation>
     </message>
 </context>
 <context>
@@ -1115,14 +1114,14 @@ Output file:
         <location filename="../gui/ttcutpreview.cpp" line="213"/>
         <location filename="../gui/ttcutpreview.cpp" line="231"/>
         <source>Play</source>
-        <translation type="unfinished">Start</translation>
+        <translation>Start</translation>
     </message>
     <message>
         <location filename="../gui/ttcutpreview.cpp" line="218"/>
         <location filename="../gui/ttcutpreview.cpp" line="254"/>
         <location filename="../gui/ttcutpreview.cpp" line="271"/>
         <source>Stop</source>
-        <translation type="unfinished">Stop</translation>
+        <translation>Stop</translation>
     </message>
 </context>
 <context>
@@ -1148,7 +1147,7 @@ Output file:
     <message>
         <location filename="../ui/ttcutsettingschapter.ui" line="25"/>
         <source>Write spumux (XML) chapter-list</source>
-        <translation type="unfinished"></translation>
+        <translation>Spumux (XML) Kapitelliste schreiben</translation>
     </message>
 </context>
 <context>
@@ -1156,27 +1155,27 @@ Output file:
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="13"/>
         <source>Common</source>
-        <translation type="unfinished">Allgemein</translation>
+        <translation>Allgemein</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="37"/>
         <source>Files / Directories</source>
-        <translation type="unfinished">Dateien / Verzeichnisse</translation>
+        <translation>Dateien / Verzeichnisse</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="83"/>
         <source>Temp directory</source>
-        <translation type="unfinished">Temporäres Verzeichnis</translation>
+        <translation>Temporäres Verzeichnis</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="128"/>
         <source>Navigation</source>
-        <translation type="unfinished">Navigation</translation>
+        <translation>Navigation</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="152"/>
         <source>Use quick seek (slider positioned only on I-Frames)</source>
-        <translation type="unfinished">Schnellpositionierung</translation>
+        <translation>Schnellpositionierung</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="289"/>
@@ -1304,7 +1303,7 @@ Output file:
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="118"/>
         <source>Quality (qscale):</source>
-        <translation type="unfinished"></translation>
+        <translation>Qualität (qscale):</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="123"/>
@@ -1355,57 +1354,57 @@ Output file:
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="58"/>
         <source>Create video index file</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Indexdatei erstellen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="65"/>
         <source>Read video index file</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Indexdatei lesen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="72"/>
         <source>Create audio index file</source>
-        <translation type="unfinished"></translation>
+        <translation>Audio-Indexdatei erstellen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="79"/>
         <source>Read audio index file</source>
-        <translation type="unfinished"></translation>
+        <translation>Audio-Indexdatei lesen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="86"/>
         <source>Create cut video index file</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnitt-Video-Indexdatei erstellen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="109"/>
         <source>Logfile</source>
-        <translation type="unfinished"></translation>
+        <translation>Logdatei</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="133"/>
         <source>Logfile Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Logdatei-Optionen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="157"/>
         <source>Video index information</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Index-Informationen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="164"/>
         <source>Extended messages and informations</source>
-        <translation type="unfinished"></translation>
+        <translation>Erweiterte Meldungen und Informationen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="171"/>
         <source>Write to console</source>
-        <translation type="unfinished"></translation>
+        <translation>In Konsole ausgeben</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsfiles.ui" line="181"/>
         <source>Create logfile</source>
-        <translation type="unfinished"></translation>
+        <translation>Logdatei erstellen</translation>
     </message>
 </context>
 <context>
@@ -1413,7 +1412,7 @@ Output file:
     <message>
         <location filename="../gui/ttcutsettingsmuxer.cpp" line="175"/>
         <source>Select directory for mplex result</source>
-        <translation type="unfinished"></translation>
+        <translation>Verzeichnis für mplex-Ausgabe wählen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="13"/>
@@ -1423,22 +1422,22 @@ Output file:
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="35"/>
         <source>Muxer Settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Muxer-Einstellungen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="89"/>
         <source>Output path</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgabepfad</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="130"/>
         <source>configure...</source>
-        <translation type="unfinished"></translation>
+        <translation>Konfigurieren...</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="137"/>
         <source>Used muxer</source>
-        <translation type="unfinished"></translation>
+        <translation>Verwendeter Muxer</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="144"/>
@@ -1448,47 +1447,47 @@ Output file:
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="154"/>
         <source>Multiplex Options</source>
-        <translation type="unfinished"></translation>
+        <translation>Multiplex-Optionen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="160"/>
         <source>Create mux script for batch muxing</source>
-        <translation type="unfinished"></translation>
+        <translation>Mux-Skript für Stapelverarbeitung erstellen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="167"/>
         <source>Finally mux result streams</source>
-        <translation type="unfinished"></translation>
+        <translation>Ergebnis-Streams abschließend muxen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="177"/>
         <source>MKV Chapter Settings</source>
-        <translation type="unfinished"></translation>
+        <translation>MKV-Kapitel-Einstellungen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="183"/>
         <source>Create chapters every</source>
-        <translation type="unfinished"></translation>
+        <translation>Kapitel erstellen alle</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="202"/>
         <source> minutes</source>
-        <translation type="unfinished"></translation>
+        <translation> Minuten</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="225"/>
         <source>Action after multiplexing</source>
-        <translation type="unfinished"></translation>
+        <translation>Aktion nach dem Multiplexen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="231"/>
         <source>Delete elemtary streams</source>
-        <translation type="unfinished"></translation>
+        <translation>Elementary Streams löschen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="238"/>
         <source>Pause</source>
-        <translation type="unfinished"></translation>
+        <translation>Pause</translation>
     </message>
 </context>
 <context>
@@ -1496,7 +1495,7 @@ Output file:
     <message>
         <location filename="../data/ttcutsubtitletask.cpp" line="81"/>
         <source>No target file path given for subtitle cut!</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Zielpfad für den Untertitelschnitt angegeben!</translation>
     </message>
 </context>
 <context>
@@ -1504,7 +1503,7 @@ Output file:
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="194"/>
         <source>No cut stream specified!</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Schnitt-Stream angegeben!</translation>
     </message>
 </context>
 <context>
@@ -1512,102 +1511,102 @@ Output file:
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="565"/>
         <source>Move &amp;up</source>
-        <translation type="unfinished">Nach &amp;oben</translation>
+        <translation>Nach &amp;oben</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="567"/>
         <source>Move selected cut one position upward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="570"/>
         <source>&amp;Delete</source>
-        <translation type="unfinished">&amp;Entfernen</translation>
+        <translation>&amp;Entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="572"/>
         <source>Remove selected cut from list</source>
-        <translation type="unfinished">Entfernt den ausgewählten Eintrag aus der Liste</translation>
+        <translation>Entfernt den ausgewählten Eintrag aus der Liste</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="575"/>
         <source>Duplicate Cut</source>
-        <translation type="unfinished">Schnitt duplizieren</translation>
+        <translation>Schnitt duplizieren</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="577"/>
         <source>Duplicate the selected cut</source>
-        <translation type="unfinished">Dupliziert den ausgwählten Schnittpunkt</translation>
+        <translation>Dupliziert den ausgewählten Schnittpunkt</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="580"/>
         <source>Move d&amp;own</source>
-        <translation type="unfinished">Nach &amp;unten</translation>
+        <translation>Nach &amp;unten</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="582"/>
         <source>Move selected cut one position downward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="585"/>
         <source>Edit &amp;cut</source>
-        <translation type="unfinished">Schnitt &amp;bearbeiten</translation>
+        <translation>Schnitt &amp;bearbeiten</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="587"/>
         <source>Edit selected cut</source>
-        <translation type="unfinished">Öffnet den ausgewählten Schnitt zum Bearbeiten</translation>
+        <translation>Öffnet den ausgewählten Schnitt zum Bearbeiten</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="590"/>
         <source>Preview cut</source>
-        <translation type="unfinished">Vorschau</translation>
+        <translation>Vorschau</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="592"/>
         <source>Preview selected cut</source>
-        <translation type="unfinished">Vorschau des ausgewählten Schnittpunktes</translation>
+        <translation>Vorschau des ausgewählten Schnittpunktes</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="595"/>
         <source>Cut selected entries</source>
-        <translation type="unfinished">Auswahl schneiden</translation>
+        <translation>Auswahl schneiden</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="597"/>
         <source>Cut the selected entries</source>
-        <translation type="unfinished">Schneidet nur die ausgwählten Einträge</translation>
+        <translation>Schneidet nur die ausgewählten Einträge</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="600"/>
         <source>Goto Cut-In</source>
-        <translation type="unfinished">Gehe zu Cut-In</translation>
+        <translation>Gehe zu Cut-In</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="602"/>
         <source>Goto selected cut-in position</source>
-        <translation type="unfinished">Zeigt die Cut-In Position des ausgewählten Eintrags an</translation>
+        <translation>Zeigt die Cut-In Position des ausgewählten Eintrags an</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="605"/>
         <source>Goto Cut-Out</source>
-        <translation type="unfinished">Gehe zu Cut-Out</translation>
+        <translation>Gehe zu Cut-Out</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="607"/>
         <source>Goto selected cut-out position</source>
-        <translation type="unfinished">Zeigt die Cut-Out Position des ausgewählten Eintrags an</translation>
+        <translation>Zeigt die Cut-Out Position des ausgewählten Eintrags an</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="610"/>
         <source>Set Cut-Out</source>
-        <translation type="unfinished">Zeige Cut-Out</translation>
+        <translation>Zeige Cut-Out</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="612"/>
         <source>Show selected cut-out frame in cut-out window</source>
-        <translation type="unfinished">Zeigt den Cut-Out Frame des ausgewählten Eintrags im Cut-Out Fenster an</translation>
+        <translation>Zeigt den Cut-Out Frame des ausgewählten Eintrags im Cut-Out Fenster an</translation>
     </message>
 </context>
 <context>
@@ -1618,28 +1617,12 @@ Output file:
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Filename</source>
-        <translation type="obsolete">Dateiname</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutvideoinfowidget.ui" line="144"/>
         <location filename="../ui/ttcutvideoinfowidget.ui" line="169"/>
         <location filename="../ui/ttcutvideoinfowidget.ui" line="194"/>
         <location filename="../ui/ttcutvideoinfowidget.ui" line="219"/>
         <source>---</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Length</source>
-        <translation type="obsolete">Länge</translation>
-    </message>
-    <message>
-        <source>Resolution</source>
-        <translation type="obsolete">Auflösung</translation>
-    </message>
-    <message>
-        <source>Ratio</source>
-        <translation type="obsolete">Seitenverhältnis</translation>
     </message>
     <message>
         <location filename="../ui/ttcutvideoinfowidget.ui" line="226"/>
@@ -1652,22 +1635,22 @@ Output file:
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="97"/>
         <source>No target file path given for video cut!</source>
-        <translation type="unfinished"></translation>
+        <translation>Kein Zielpfad für den Videoschnitt angegeben!</translation>
     </message>
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="105"/>
         <source>Cut 1 from %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnitt 1 von %1</translation>
     </message>
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="110"/>
         <source>Operation aborted!</source>
-        <translation type="unfinished"></translation>
+        <translation>Vorgang abgebrochen!</translation>
     </message>
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="135"/>
         <source>Cut %1 from %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnitt %1 von %2</translation>
     </message>
 </context>
 <context>
@@ -1723,7 +1706,7 @@ Output file:
     <message>
         <location filename="../avstream/ttmpegaudiostream.cpp" line="234"/>
         <source>Index list creation aborted!</source>
-        <translation type="unfinished">Indexerstellung abgebrochen!</translation>
+        <translation>Indexerstellung abgebrochen!</translation>
     </message>
 </context>
 <context>
@@ -1736,22 +1719,22 @@ Output file:
     <message>
         <location filename="../ui/markerlistwidget.ui" line="68"/>
         <source>Filname</source>
-        <translation type="unfinished">Dateiname</translation>
+        <translation>Dateiname</translation>
     </message>
     <message>
         <location filename="../ui/markerlistwidget.ui" line="73"/>
         <source>Frame</source>
-        <translation type="unfinished">Frame</translation>
+        <translation>Frame</translation>
     </message>
     <message>
         <location filename="../ui/markerlistwidget.ui" line="78"/>
         <source>Time</source>
-        <translation type="unfinished">Zeit</translation>
+        <translation>Zeit</translation>
     </message>
     <message>
         <location filename="../ui/markerlistwidget.ui" line="83"/>
         <source>UUID</source>
-        <translation type="unfinished">UUID</translation>
+        <translation>UUID</translation>
     </message>
 </context>
 <context>
@@ -1759,44 +1742,32 @@ Output file:
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="270"/>
         <source>Move &amp;up</source>
-        <translation type="unfinished">Nach &amp;oben</translation>
+        <translation>Nach &amp;oben</translation>
     </message>
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="272"/>
         <source>Move selected marker one position upward</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählten Marker eine Position nach oben verschieben</translation>
     </message>
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="277"/>
         <source>Remove selected marker from list</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählten Marker aus der Liste entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="282"/>
         <source>Move selected marker one position downward</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Move selected audiofile one position upward</source>
-        <translation type="obsolete">Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
+        <translation>Ausgewählten Marker eine Position nach unten verschieben</translation>
     </message>
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="275"/>
         <source>&amp;Delete</source>
-        <translation type="unfinished">&amp;Entfernen</translation>
-    </message>
-    <message>
-        <source>Remove selected audiofile from list</source>
-        <translation type="obsolete">Entfernt den ausgewählten Eintrag aus der Liste</translation>
+        <translation>&amp;Entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttmarkertreeview.cpp" line="280"/>
         <source>Move d&amp;own</source>
-        <translation type="unfinished">Nach &amp;unten</translation>
-    </message>
-    <message>
-        <source>Move selected audiofile one position downward</source>
-        <translation type="obsolete">Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
+        <translation>Nach &amp;unten</translation>
     </message>
 </context>
 <context>
@@ -1809,7 +1780,7 @@ Output file:
     <message>
         <location filename="../avstream/ttmpeg2videostream.cpp" line="162"/>
         <source>Index list creation aborted!</source>
-        <translation type="unfinished">Indexerstellung abgebrochen!</translation>
+        <translation>Indexerstellung abgebrochen!</translation>
     </message>
     <message>
         <location filename="../avstream/ttmpeg2videostream.cpp" line="240"/>
@@ -1924,12 +1895,12 @@ Output file:
     <message>
         <location filename="../ui/mplexparamdlg.ui" line="19"/>
         <source>Mplex-Params</source>
-        <translation type="unfinished"></translation>
+        <translation>Mplex-Parameter</translation>
     </message>
     <message>
         <location filename="../ui/mplexparamdlg.ui" line="43"/>
         <source>Mplex params</source>
-        <translation type="unfinished"></translation>
+        <translation>Mplex-Parameter</translation>
     </message>
     <message>
         <location filename="../ui/mplexparamdlg.ui" line="101"/>
@@ -1994,12 +1965,12 @@ Output file:
     <message>
         <location filename="../ui/mplexparamdlg.ui" line="369"/>
         <source>OK</source>
-        <translation type="unfinished">Ok</translation>
+        <translation>Ok</translation>
     </message>
     <message>
         <location filename="../ui/mplexparamdlg.ui" line="376"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
 </context>
 <context>
@@ -2007,12 +1978,12 @@ Output file:
     <message>
         <location filename="../data/ttopenaudiotask.cpp" line="89"/>
         <source>Unsupported audio type or file not found %1!</source>
-        <translation type="unfinished">Nicht unterstützter Audiotype oder Datei nicht gefunden %1!</translation>
+        <translation>Nicht unterstützter Audiotyp oder Datei nicht gefunden %1!</translation>
     </message>
     <message>
         <location filename="../data/ttopenaudiotask.cpp" line="94"/>
         <source>Unsupported audio type %1!</source>
-        <translation type="unfinished">Nicht unterstützter Audiotype %1!</translation>
+        <translation>Nicht unterstützter Audiotyp %1!</translation>
     </message>
 </context>
 <context>
@@ -2020,12 +1991,12 @@ Output file:
     <message>
         <location filename="../data/ttopensubtitletask.cpp" line="90"/>
         <source>Unsupported subtitle type or file not found %1!</source>
-        <translation type="unfinished"></translation>
+        <translation>Nicht unterstützter Untertiteltyp oder Datei nicht gefunden %1!</translation>
     </message>
     <message>
         <location filename="../data/ttopensubtitletask.cpp" line="94"/>
         <source>Unsupported subtitle type %1!</source>
-        <translation type="unfinished"></translation>
+        <translation>Nicht unterstützter Untertiteltyp %1!</translation>
     </message>
 </context>
 <context>
@@ -2033,7 +2004,7 @@ Output file:
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="91"/>
         <source>file %1 does not exists!</source>
-        <translation type="unfinished">Datei %1 konnte nicht gefunden werden!</translation>
+        <translation>Datei %1 konnte nicht gefunden werden!</translation>
     </message>
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="105"/>
@@ -2046,27 +2017,35 @@ Supported formats:
   Video: .m2v, .264, .265
   Audio: .ac3, .mp2
   Subtitles: .srt</source>
-        <translation type="unfinished"></translation>
+        <translation>Container-Format erkannt: %1
+
+TTCut-ng arbeitet nur mit Elementary Streams.
+Bitte zuerst demuxen mit: ttcut-demux %2
+
+Unterstützte Formate:
+  Video: .m2v, .264, .265
+  Audio: .ac3, .mp2
+  Untertitel: .srt</translation>
     </message>
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="127"/>
         <source>unsupported video type %1</source>
-        <translation type="unfinished">Nicht unterstütztes Videoformat %1</translation>
+        <translation>Nicht unterstütztes Videoformat %1</translation>
     </message>
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="135"/>
         <source>failed to create video stream for %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Videostream für %1 konnte nicht erstellt werden</translation>
     </message>
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="146"/>
         <source>Failed to parse video stream headers: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Stream-Header konnten nicht geparst werden: %1</translation>
     </message>
     <message>
         <location filename="../data/ttopenvideotask.cpp" line="152"/>
         <source>Failed to create video index: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Index konnte nicht erstellt werden: %1</translation>
     </message>
 </context>
 <context>
@@ -2074,45 +2053,37 @@ Supported formats:
     <message>
         <location filename="../ui/previewwidget.ui" line="31"/>
         <source>TTCut - Preview</source>
-        <translation type="unfinished">TTCut - Vorschau</translation>
+        <translation>TTCut-ng - Vorschau</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="61"/>
         <source>Vor</source>
-        <translation type="unfinished"></translation>
+        <translation>Vor</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="64"/>
         <source>Next cut (and play)</source>
-        <translation type="unfinished"></translation>
+        <translation>Nächster Schnitt (und abspielen)</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="71"/>
         <source>Start</source>
-        <translation type="unfinished"></translation>
+        <translation>Start</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="82"/>
         <source>Zurück</source>
-        <translation type="unfinished"></translation>
+        <translation>Zurück</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="85"/>
         <source>Previous cut (and play)</source>
-        <translation type="unfinished"></translation>
+        <translation>Vorheriger Schnitt (und abspielen)</translation>
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="105"/>
         <source>Beenden</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play</source>
-        <translation type="obsolete">Start</translation>
-    </message>
-    <message>
-        <source>Exit</source>
-        <translation type="obsolete">Beenden</translation>
+        <translation>Beenden</translation>
     </message>
 </context>
 <context>
@@ -2120,12 +2091,12 @@ Supported formats:
     <message>
         <location filename="../gui/ttprocessform.cpp" line="84"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <location filename="../gui/ttprocessform.cpp" line="94"/>
         <source>Ok</source>
-        <translation type="unfinished">Ok</translation>
+        <translation>Ok</translation>
     </message>
 </context>
 <context>
@@ -2133,17 +2104,17 @@ Supported formats:
     <message>
         <location filename="../ui/ttprogressform.ui" line="25"/>
         <source>Progress Info</source>
-        <translation type="unfinished">Prozess Information</translation>
+        <translation>Prozess Information</translation>
     </message>
     <message>
         <location filename="../ui/ttprogressform.ui" line="76"/>
         <source>...</source>
-        <translation type="unfinished">...</translation>
+        <translation>...</translation>
     </message>
     <message>
         <location filename="../ui/ttprogressform.ui" line="89"/>
         <source>Time elapsed</source>
-        <translation type="unfinished">Verstrichene Zeit</translation>
+        <translation>Verstrichene Zeit</translation>
     </message>
     <message>
         <location filename="../ui/ttprogressform.ui" line="102"/>
@@ -2153,7 +2124,7 @@ Supported formats:
     <message>
         <location filename="../ui/ttprogressform.ui" line="128"/>
         <source>Complete</source>
-        <translation type="unfinished">Fertig</translation>
+        <translation>Fertig</translation>
     </message>
     <message>
         <location filename="../ui/ttprogressform.ui" line="141"/>
@@ -2163,12 +2134,12 @@ Supported formats:
     <message>
         <location filename="../ui/ttprogressform.ui" line="164"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <location filename="../ui/ttprogressform.ui" line="190"/>
         <source>Show details</source>
-        <translation type="unfinished">Details anzeigen</translation>
+        <translation>Details anzeigen</translation>
     </message>
 </context>
 <context>
@@ -2176,12 +2147,12 @@ Supported formats:
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="14"/>
         <source>TTCut - Settings</source>
-        <translation type="unfinished">TTCut - Einstellungen</translation>
+        <translation>TTCut-ng - Einstellungen</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="31"/>
         <source>Common</source>
-        <translation type="unfinished">Allgemein</translation>
+        <translation>Allgemein</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="40"/>
@@ -2195,32 +2166,32 @@ Supported formats:
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="52"/>
         <source>Files</source>
-        <translation type="unfinished">Dateien</translation>
+        <translation>Dateien</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="73"/>
         <source>Encoding</source>
-        <translation type="unfinished">Enkodieren</translation>
+        <translation>Encodieren</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="94"/>
         <source>Muxing</source>
-        <translation type="unfinished">Multiplexen</translation>
+        <translation>Multiplexen</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="115"/>
         <source>Chapters</source>
-        <translation type="unfinished">Kapitel</translation>
+        <translation>Kapitel</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="150"/>
         <source>OK</source>
-        <translation type="unfinished">Ok</translation>
+        <translation>Ok</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="157"/>
         <source>Cancel</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
 </context>
 <context>
@@ -2241,37 +2212,37 @@ Supported formats:
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="62"/>
         <source>Open subtitle file</source>
-        <translation type="unfinished"></translation>
+        <translation>Untertiteldatei öffnen</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="100"/>
         <source>Move entry up</source>
-        <translation type="unfinished"></translation>
+        <translation>Eintrag nach oben</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="138"/>
         <source>Delete subtitle file</source>
-        <translation type="unfinished"></translation>
+        <translation>Untertiteldatei entfernen</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="176"/>
         <source>Move entry down</source>
-        <translation type="unfinished"></translation>
+        <translation>Eintrag nach unten</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="240"/>
         <source>Filename</source>
-        <translation type="unfinished">Dateiname</translation>
+        <translation>Dateiname</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="245"/>
         <source>Length</source>
-        <translation type="unfinished">Länge</translation>
+        <translation>Länge</translation>
     </message>
     <message>
         <location filename="../ui/subtitlefilelistwidget.ui" line="250"/>
         <source>Delay</source>
-        <translation type="unfinished"></translation>
+        <translation>Verzögerung</translation>
     </message>
 </context>
 <context>
@@ -2279,42 +2250,42 @@ Supported formats:
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="247"/>
         <source>&amp;Insert subtitlefile</source>
-        <translation type="unfinished"></translation>
+        <translation>Untertiteldatei &amp;einfügen</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="249"/>
         <source>Open a new subtitlefile and insert to list</source>
-        <translation type="unfinished"></translation>
+        <translation>Neue Untertiteldatei öffnen und zur Liste hinzufügen</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="252"/>
         <source>Move &amp;up</source>
-        <translation type="unfinished">Nach &amp;oben</translation>
+        <translation>Nach &amp;oben</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="254"/>
         <source>Move selected subtitlefile one position upward</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählte Untertiteldatei eine Position nach oben verschieben</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="257"/>
         <source>&amp;Delete</source>
-        <translation type="unfinished">&amp;Entfernen</translation>
+        <translation>&amp;Entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="259"/>
         <source>Remove selected subtitlefile from list</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählte Untertiteldatei aus der Liste entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="262"/>
         <source>Move d&amp;own</source>
-        <translation type="unfinished">Nach &amp;unten</translation>
+        <translation>Nach &amp;unten</translation>
     </message>
     <message>
         <location filename="../gui/ttsubtitletreeview.cpp" line="264"/>
         <source>Move selected subtitlefile one position downward</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgewählte Untertiteldatei eine Position nach unten verschieben</translation>
     </message>
 </context>
 <context>
@@ -2322,7 +2293,7 @@ Supported formats:
     <message>
         <location filename="../gui/tttaskprogress.cpp" line="65"/>
         <source>completed</source>
-        <translation type="unfinished">Fertig</translation>
+        <translation>Fertig</translation>
     </message>
 </context>
 <context>
@@ -2335,12 +2306,12 @@ Supported formats:
     <message>
         <location filename="../ui/tttaskprogresswidget.ui" line="58"/>
         <source>Percent</source>
-        <translation type="unfinished">Forschritt</translation>
+        <translation>Fortschritt</translation>
     </message>
     <message>
         <location filename="../ui/tttaskprogresswidget.ui" line="83"/>
         <source>Action</source>
-        <translation type="unfinished">Aktion</translation>
+        <translation>Aktion</translation>
     </message>
 </context>
 <context>
@@ -2399,53 +2370,49 @@ Supported formats:
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Filname</source>
-        <translation type="obsolete">Dateiname</translation>
-    </message>
-    <message>
         <location filename="../ui/videofilelistwidget.ui" line="61"/>
         <source>Open video file</source>
-        <translation type="unfinished">Video öffnen</translation>
+        <translation>Video öffnen</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="99"/>
         <source>Move entry up</source>
-        <translation type="unfinished"></translation>
+        <translation>Eintrag nach oben</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="137"/>
         <source>Delete video file</source>
-        <translation type="unfinished"></translation>
+        <translation>Videodatei entfernen</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="175"/>
         <source>Move entry down</source>
-        <translation type="unfinished"></translation>
+        <translation>Eintrag nach unten</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="239"/>
         <source>Filename</source>
-        <translation type="unfinished">Dateiname</translation>
+        <translation>Dateiname</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="244"/>
         <source>Length</source>
-        <translation type="unfinished">Länge</translation>
+        <translation>Länge</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="249"/>
         <source>Resolution</source>
-        <translation type="unfinished">Auflösung</translation>
+        <translation>Auflösung</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="254"/>
         <source>Ratio</source>
-        <translation type="unfinished">Seitenverhältnis</translation>
+        <translation>Seitenverhältnis</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="259"/>
         <source>Framerate</source>
-        <translation type="unfinished">Framerate</translation>
+        <translation>Framerate</translation>
     </message>
     <message>
         <location filename="../ui/videofilelistwidget.ui" line="264"/>
@@ -2463,42 +2430,42 @@ Supported formats:
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="323"/>
         <source>&amp;Insert videofile</source>
-        <translation type="unfinished">&amp;Videodatei einfügen</translation>
+        <translation>&amp;Videodatei einfügen</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="325"/>
         <source>Open a new videofile and insert to list</source>
-        <translation type="unfinished">Öffnet eine neue Videodatei und fügt diese der Liste hinzu</translation>
+        <translation>Öffnet eine neue Videodatei und fügt diese der Liste hinzu</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="328"/>
         <source>Move &amp;up</source>
-        <translation type="unfinished">Nach &amp;oben</translation>
+        <translation>Nach &amp;oben</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="330"/>
         <source>Move selected file one position upward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="333"/>
         <source>&amp;Delete</source>
-        <translation type="unfinished">&amp;Entfernen</translation>
+        <translation>&amp;Entfernen</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="335"/>
         <source>Remove selected file from list</source>
-        <translation type="unfinished">Entfernt den ausgewählten Eintrag aus der Liste</translation>
+        <translation>Entfernt den ausgewählten Eintrag aus der Liste</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="338"/>
         <source>Move d&amp;own</source>
-        <translation type="unfinished">Nach &amp;unten</translation>
+        <translation>Nach &amp;unten</translation>
     </message>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="340"/>
         <source>Move selected file one position downward</source>
-        <translation type="unfinished">Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
+        <translation>Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
     </message>
 </context>
 </TS>
