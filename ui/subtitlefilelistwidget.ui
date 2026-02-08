@@ -250,6 +250,16 @@
        <string>Delay</string>
       </property>
      </column>
+     <column>
+      <property name="text">
+       <string>Language</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string notr="true"/>
+      </property>
+     </column>
     </widget>
    </item>
   </layout>
