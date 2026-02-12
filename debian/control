@@ -16,7 +16,7 @@ Homepage: https://github.com/MINIXJR/TTCut-ng
 Package: ttcut-ng
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: ffmpeg, mjpegtools, mpv, mkvtoolnix
+Recommends: ffmpeg, mjpegtools, mpv, mkvtoolnix, python3-numpy
 Conflicts: ttcut
 Replaces: ttcut
 Description: MPEG-2/H.264/H.265 frame-accurate video cutter

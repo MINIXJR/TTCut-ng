@@ -2,6 +2,33 @@
 
 ## High Priority
 
+- **Smart Cut Quality Test Suite**
+  - Automated test to verify cut quality by comparing input and output material
+  - Must run after each Smart Cut change to catch regressions
+  - **Test dimensions:**
+    1. **Stream metadata**: FPS, GOP count, frame count, codec params (input vs output)
+    2. **Frame timing**: PTS consistency check (expected interval vs actual, flag anomalies)
+    3. **Visual comparison**: Extract frames at specific positions (cut boundaries, mid-segment,
+       segment transitions) from both input and output, compare with PSNR/SSIM
+       - Use `ffmpeg -ss X -i file -frames:v 1 -f image2 frame.png` for extraction
+       - Compare corresponding frames: `ffmpeg -i ref.png -i cut.png -lavfi ssim -f null -`
+       - Flag if SSIM < 0.95 (re-encoded sections) or < 0.99 (stream-copied sections)
+    4. **Audio sync measurement**: Use [syncstart](https://github.com/rpuntaie/syncstart) to
+       measure A/V offset between original and cut material via cross-correlation
+       - Extract matching segments from original (by time) and from cut output
+       - `syncstart original_segment.mkv cut_segment.mkv` → reports offset in seconds
+       - Also compare audio waveforms at cut boundaries for glitches/gaps
+       - `ffmpeg -i file -af astats=metadata=1:reset=1 -f null -` for audio level analysis
+    5. **Duration check**: Total video duration vs total audio duration (must match within 50ms)
+    6. **Cut-point integrity**: Verify first/last frame of each segment matches expected content
+  - **Reference workflow:**
+    1. Mux original ES + audio with mkvmerge (same params as cutting) → reference.mkv
+    2. Run Smart Cut → cut.mkv
+    3. Compare both at equivalent time positions
+  - **Output:** Machine-readable report (pass/fail per test, values, expected ranges)
+  - **Tool:** Standalone Python script `tools/ttcut-quality-check.py`
+  - **Dependencies:** ffmpeg, ffprobe, python3, syncstart (pip install syncstart)
+
 - **H.264/H.265 A/V Sync improvements in ttcut-demux**
   - Initial B-frame detection before first IDR frame (like MPEG-2)
   - Open GOP handling (B-frames referencing previous GOPs)
