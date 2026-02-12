@@ -123,7 +123,7 @@ TTAVStream
 
 ## Version
 
-Current version: **0.52.0**
+Current version: **0.53.0**
 
 ## Recent Fixes and Features
 
