@@ -271,7 +271,16 @@ step "Repairing timestamps (normalizing to start at 0)..."
 REPAIRED_INPUT="$OUTDIR/.${BASENAME}_repaired.ts"
 
 # Calculate A/V offset BEFORE repair (from original file)
-ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
+# For H.264/H.265: use minimum PTS from first 2 seconds (= first display frame PTS)
+# because leading B-frames have lower PTS than the I-frame which comes first in decode order.
+# For MPEG-2: use first packet PTS (I-frame); B-frame skipping is handled separately below.
+if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
+    ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
+        -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | \
+        tr -d ',' | sort -n | head -1)
+else
+    ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
+fi
 ORIG_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
 AUDIO_TRIM_SEC="0"
 
@@ -404,8 +413,15 @@ if $ES_MODE; then
             AUDIO_FILES+=("$OUTPUT_AUDIO")
 
             # Build extraction command (will be run in parallel)
+            # Use ORIGINAL_INPUT for audio trimming (not the repaired TS).
+            # The repaired TS has shifted timestamps (audio may start at >1s),
+            # so relative -ss on it fails silently (seeks before audio start).
+            # CRITICAL: -ss MUST be AFTER -i for TS files with -c:a copy!
+            # -ss before -i does a byte-level input seek which has no effect
+            # on MPEG-TS audio extraction (produces identical output).
+            # -ss after -i discards packets before the seek point, which works.
             if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.001)}"; then
-                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -ss ${AUDIO_TRIM_SEC} -i \"$INPUT\" -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
+                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -i \"$ORIGINAL_INPUT\" -ss ${AUDIO_TRIM_SEC} -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
             else
                 AUDIO_EXTRACT_CMDS+=("ffmpeg -y -i \"$INPUT\" -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
             fi
@@ -782,9 +798,16 @@ if $ES_MODE; then
     # The repaired file has timestamps normalized to 0, so we need the original for offset
     info "Calculating A/V sync offset..."
 
-    # Get first packet PTS from ORIGINAL file (before timestamp repair)
-    # Remove any trailing commas from CSV output
-    FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+    # Get first display PTS from ORIGINAL file (before timestamp repair)
+    # For H.264/H.265: use minimum PTS (first display frame, a B-frame)
+    # For MPEG-2: use first packet PTS (I-frame)
+    if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
+        FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
+            -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | \
+            tr -d ',' | sort -n | head -1)
+    else
+        FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+    fi
     FIRST_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
 
     # Calculate offset: positive = audio starts before video, negative = video starts before audio
