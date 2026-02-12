@@ -103,6 +103,9 @@ public:
     // Analyze cut points without performing cut
     QList<TTCutSegmentInfo> analyzeCutPoints(const QList<QPair<int, int>>& cutFrames);
 
+    // B-frame reorder delay (frames)
+    int reorderDelay() const;
+
     // Statistics from last cut
     int framesStreamCopied() const { return mFramesStreamCopied; }
     int framesReencoded() const { return mFramesReencoded; }
@@ -132,6 +135,9 @@ private:
     int mDecodedWidth;
     int mDecodedHeight;
     int mDecodedPixFmt;  // AVPixelFormat
+
+    // B-frame reorder delay (measured from decoder)
+    int mReorderDelay;
 
     // Statistics
     int mFramesStreamCopied;

@@ -74,6 +74,10 @@ public:
     // Positive = audio starts later, negative = audio starts earlier
     void setAudioSyncOffset(int offsetMs);
 
+    // Video sync offset in milliseconds (for B-frame reordering compensation)
+    // Shifts video track timestamps to start at 0
+    void setVideoSyncOffset(int offsetMs);
+
     // Check mkvmerge installation
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -96,6 +100,7 @@ private:
     QString mLastError;
     QString mChapterFile;
     int mAudioSyncOffsetMs;
+    int mVideoSyncOffsetMs;
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
 

@@ -88,6 +88,7 @@ TTMkvMergeProvider::TTMkvMergeProvider()
     : QObject()
     , mProcess(nullptr)
     , mAudioSyncOffsetMs(0)
+    , mVideoSyncOffsetMs(0)
 {
 }
 
@@ -165,12 +166,11 @@ QString TTMkvMergeProvider::mkvMergePath()
 // -----------------------------------------------------------------------------
 // Set default duration for a track type
 // -----------------------------------------------------------------------------
-void TTMkvMergeProvider::setDefaultDuration(const QString& trackType, const QString& duration)
+void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QString& duration)
 {
-    Q_UNUSED(trackType);
-    Q_UNUSED(duration);
-    // This would set --default-duration for specific track types
-    // e.g., "video" -> "--default-duration 0:25fps"
+    int id = trackId.toInt();
+    mTrackOptions[id].defaultDuration = duration;
+    qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
 }
 
 // -----------------------------------------------------------------------------
@@ -221,7 +221,15 @@ void TTMkvMergeProvider::setAudioSyncOffset(int offsetMs)
 {
     mAudioSyncOffsetMs = offsetMs;
     if (offsetMs != 0) {
-        qDebug() << "TTMkvMergeProvider: A/V sync offset set to" << offsetMs << "ms";
+        qDebug() << "TTMkvMergeProvider: audio sync offset set to" << offsetMs << "ms";
+    }
+}
+
+void TTMkvMergeProvider::setVideoSyncOffset(int offsetMs)
+{
+    mVideoSyncOffsetMs = offsetMs;
+    if (offsetMs != 0) {
+        qDebug() << "TTMkvMergeProvider: video sync offset set to" << offsetMs << "ms";
     }
 }
 
@@ -304,7 +312,13 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
         args << "--title" << title;
     }
 
-    // Video file
+    // Video file with optional default duration and sync offset
+    if (mTrackOptions.contains(0) && !mTrackOptions[0].defaultDuration.isEmpty()) {
+        args << "--default-duration" << QString("0:%1").arg(mTrackOptions[0].defaultDuration);
+    }
+    if (mVideoSyncOffsetMs != 0) {
+        args << "--sync" << QString("0:%1").arg(mVideoSyncOffsetMs);
+    }
     args << videoFile;
 
     // Audio files with optional sync offset and language
@@ -328,9 +342,9 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
             if (!lang.isEmpty()) {
                 args << "--language" << QString("0:%1").arg(lang);
             }
-            // Apply A/V sync offset if set
+            // Apply A/V sync offset if set (track 0 = first track within this file)
             if (mAudioSyncOffsetMs != 0) {
-                args << "--sync" << QString("%1:%2").arg(audioTrackId).arg(-mAudioSyncOffsetMs);
+                args << "--sync" << QString("0:%1").arg(-mAudioSyncOffsetMs);
             }
             args << audio;
             audioTrackId++;

@@ -910,6 +910,43 @@ int TTNaluParser::getGopEndAU(int gopIndex) const
 }
 
 // ----------------------------------------------------------------------------
+// Compute B-frame reorder delay from first GOP structure
+// Returns the number of B-frames between reference frames in decode order.
+// This equals the decoder's reorder delay for display-order output.
+// ----------------------------------------------------------------------------
+int TTNaluParser::computeReorderDelay() const
+{
+    if (mGops.isEmpty() || mAccessUnits.size() < 3) return 0;
+
+    // Use the first GOP: count B-frames and reference frames (excluding keyframe)
+    const TTGopInfo& gop = mGops[0];
+    int bFrames = 0;
+    int refFrames = 0;
+
+    for (int i = gop.startAU + 1; i <= gop.endAU && i < mAccessUnits.size(); i++) {
+        const TTAccessUnit& au = mAccessUnits[i];
+        bool isB = false;
+        if (mCodecType == NALU_CODEC_H265) {
+            isB = (au.sliceType == H265::SLICE_B);
+        } else {
+            isB = (au.sliceType == H264::SLICE_B ||
+                   au.sliceType == H264::SLICE_B_ALL);
+        }
+
+        if (isB) {
+            bFrames++;
+        } else {
+            refFrames++;
+        }
+    }
+
+    int delay = (refFrames > 0) ? (bFrames / refFrames) : bFrames;
+    qDebug() << "TTNaluParser: GOP[0] has" << bFrames << "B-frames,"
+             << refFrames << "ref-frames -> reorder delay:" << delay;
+    return delay;
+}
+
+// ----------------------------------------------------------------------------
 // Format NAL type as string
 // ----------------------------------------------------------------------------
 QString TTNaluParser::formatNalType(uint8_t type) const

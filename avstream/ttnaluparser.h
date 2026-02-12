@@ -246,6 +246,9 @@ public:
     int getGopStartAU(int gopIndex) const;
     int getGopEndAU(int gopIndex) const;
 
+    // B-frame reorder delay (number of B-frames between reference frames)
+    int computeReorderDelay() const;
+
     // Utility
     QString formatNalType(uint8_t type) const;
     static bool isKeyframeType(uint8_t type, TTNaluCodecType codec);

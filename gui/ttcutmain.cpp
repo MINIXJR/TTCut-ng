@@ -116,11 +116,15 @@ int main( int argc, char **argv )
       }
     }
 
-    // Open video file from command line after event loop starts
+    // Open file from command line after event loop starts
     if (!videoFile.isEmpty()) {
-      qDebug() << "Opening video file from command line:" << videoFile;
+      qDebug() << "Opening file from command line:" << videoFile;
       QTimer::singleShot(100, [mainWnd, videoFile]() {
-        mainWnd->onReadVideoStream(videoFile);
+        if (videoFile.endsWith(".prj", Qt::CaseInsensitive)) {
+          mainWnd->openProjectFile(videoFile);
+        } else {
+          mainWnd->onReadVideoStream(videoFile);
+        }
       });
     }
 

@@ -35,6 +35,7 @@
 #include <QString>
 #include <QFileInfo>
 #include <QList>
+#include <QMap>
 #include <QObject>
 #include <QImage>
 
@@ -189,8 +190,13 @@ public:
     bool seekToFrame(int frameIndex);
     QImage decodeFrame(int frameIndex);
     QImage decodeCurrentFrame();
+    bool skipCurrentFrame();
     int videoWidth() const;
     int videoHeight() const;
+
+    // Frame cache management
+    void setFrameCacheSize(int maxFrames);
+    void clearFrameCache();
 
     // Segment extraction (for cutting)
     bool extractSegment(const QString& outputFile, int startFrame, int endFrame, bool reencode = false);
@@ -260,10 +266,16 @@ private:
     int mVideoStreamIndex;
     int mAudioStreamIndex;
     int mCurrentFrameIndex;
+    int mDecoderFrameIndex;     // Actual decoder position (last decoded frame)
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;
     QList<TTGOPInfo> mGOPIndex;
+
+    // LRU frame cache
+    QMap<int, QImage> mFrameCache;
+    QList<int> mFrameCacheLRU;  // Most recently used at back
+    int mFrameCacheMaxSize;
 
     // Error handling
     QString mLastError;

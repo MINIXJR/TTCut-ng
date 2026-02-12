@@ -120,6 +120,31 @@ void TTCutPreviewTask::operation()
 	// MPEG-2: use traditional cutting workflow with .m2v and mplex to .mpg
 	QString outputExt = isH264H265 ? "mkv" : "mpg";
 
+	// For H.264/H.265: create shared Smart Cut instance (parses ES file once)
+	TTESSmartCut* sharedSmartCut = nullptr;
+	if (isH264H265) {
+		TTVideoStream* vStream = mpCutList->at(0).avDataItem()->videoStream();
+		double frameRate = vStream->frameRate();
+
+		// Get frame rate from .info file if available
+		QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
+		if (!infoFile.isEmpty()) {
+			TTESInfo esInfo(infoFile);
+			if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+				frameRate = esInfo.frameRate();
+			}
+		}
+
+		sharedSmartCut = new TTESSmartCut();
+		if (!sharedSmartCut->initialize(vStream->filePath(), frameRate)) {
+			qDebug() << "Preview: Shared Smart Cut init failed:" << sharedSmartCut->lastError();
+			delete sharedSmartCut;
+			sharedSmartCut = nullptr;
+		} else {
+			qDebug() << "Preview: Shared Smart Cut initialized (ES parsed once for all clips)";
+		}
+	}
+
 	onStatusReport(this, StatusReportArgs::Start, tr("create cut preview clips"), numPreview);
 
   for (int i = 0; i < numPreview; i++) {
@@ -159,7 +184,7 @@ void TTCutPreviewTask::operation()
     if (isH264H265) {
       // For H.264/H.265: use ffmpeg directly to extract preview clips
       // The TTCutVideoTask cutting is not yet implemented for H.264/H.265
-      createH264PreviewClip(tmpCutList, outputFile);
+      createH264PreviewClip(tmpCutList, outputFile, sharedSmartCut);
       hasAudio = (tmpCutList->at(0).avDataItem()->audioCount() > 0);
     } else {
       // For MPEG-2: use traditional cutting workflow
@@ -228,6 +253,8 @@ void TTCutPreviewTask::operation()
     delete tmpCutList;
   }
 
+  delete sharedSmartCut;
+
   onStatusReport(this, StatusReportArgs::Finished, tr("preview cuts done"), 0);
   emit finished(mpPreviewCutList);
 }
@@ -236,7 +263,8 @@ void TTCutPreviewTask::operation()
  * Create H.264/H.265 preview clip using Smart Cut (frame-accurate)
  * Uses TTESSmartCut for elementary stream files
  */
-void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& outputFile)
+void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& outputFile,
+                                              TTESSmartCut* sharedSmartCut)
 {
   if (cutList->count() == 0) return;
 
@@ -277,86 +305,89 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   qDebug() << "H.264 preview: source=" << sourceFile << "fps=" << frameRate
            << "hasAudio=" << hasAudio;
 
-  // Use TTESSmartCut for frame-accurate preview
+  // Build frame-based cut list
+  QList<QPair<int, int>> cutFrames;
+  for (int i = 0; i < cutList->count(); i++) {
+    TTCutItem item = cutList->at(i);
+    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+    qDebug() << "  Preview segment" << i+1 << ": frames" << item.cutInIndex() << "->" << item.cutOutIndex();
+  }
+
+  // --- Video Smart Cut (use shared instance or create local) ---
   qDebug() << "Preview: Using Smart Cut (frame-accurate)";
 
-    // Build frame-based cut list
-    QList<QPair<int, int>> cutFrames;
+  TTESSmartCut localSmartCut;
+  TTESSmartCut* smartCut = sharedSmartCut;
+  if (!smartCut) {
+    if (!localSmartCut.initialize(sourceFile, frameRate)) {
+      qDebug() << "Preview Smart Cut init failed:" << localSmartCut.lastError();
+      return;
+    }
+    smartCut = &localSmartCut;
+  }
+
+  // Create temporary video output
+  QString tempVideoFile = QString("%1/preview_video_temp.%2")
+      .arg(TTCut::tempDirPath)
+      .arg(suffix);
+
+  // Perform frame-accurate video cut
+  if (!smartCut->smartCutFrames(tempVideoFile, cutFrames)) {
+    qDebug() << "Preview Smart Cut failed:" << smartCut->lastError();
+    return;
+  }
+
+  qDebug() << "Preview Smart Cut complete:" << smartCut->framesReencoded() << "re-encoded,"
+           << smartCut->framesStreamCopied() << "stream-copied";
+
+  // --- Cut audio (same approach as final cut in doH264Cut) ---
+  int frameDurationNs = (int)(1000000000.0 / frameRate);
+  QStringList cutAudioFiles;
+  if (hasAudio && !audioFile.isEmpty()) {
+    // Note: B-frame reorder delay correction was removed.
+    // With correctly trimmed audio (ttcut-demux aligns audio start to first display frame),
+    // the keepList times frame/fps already match the audio ES positions exactly.
+
+    QList<QPair<double, double>> keepList;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
-      qDebug() << "  Preview segment" << i+1 << ": frames" << item.cutInIndex() << "->" << item.cutOutIndex();
+      double cutInTime = item.cutInIndex() / frameRate;
+      double cutOutTime = item.cutOutIndex() / frameRate;
+      keepList.append(qMakePair(cutInTime, cutOutTime));
     }
 
-    // Initialize Smart Cut engine
-    TTESSmartCut smartCut;
-    if (!smartCut.initialize(sourceFile, frameRate)) {
-      qDebug() << "Preview Smart Cut init failed:" << smartCut.lastError();
-      return;
-    }
-
-    // Create temporary video output
-    QString tempVideoFile = QString("%1/preview_video_temp.%2")
+    QString cutAudioFile = QString("%1/preview_audio_temp.%2")
         .arg(TTCut::tempDirPath)
-        .arg(suffix);
+        .arg(QFileInfo(audioFile).suffix());
 
-    // Perform frame-accurate video cut
-    if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
-      qDebug() << "Preview Smart Cut failed:" << smartCut.lastError();
-      return;
-    }
-
-    qDebug() << "Preview Smart Cut complete:" << smartCut.framesReencoded() << "re-encoded,"
-             << smartCut.framesStreamCopied() << "stream-copied";
-
-    // Handle audio if present
-    QStringList cutAudioFiles;
-    if (hasAudio && !audioFile.isEmpty()) {
-      // Build time-based keep list for audio cutting
-      QList<QPair<double, double>> keepList;
-      for (int i = 0; i < cutList->count(); i++) {
-        TTCutItem item = cutList->at(i);
-        double cutInTime = item.cutInIndex() / frameRate;
-        double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-        keepList.append(qMakePair(cutInTime, cutOutTime));
-      }
-
-      // Cut audio using TTFFmpegWrapper
-      TTFFmpegWrapper ffmpeg;
-      QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-          .arg(TTCut::tempDirPath)
-          .arg(QFileInfo(audioFile).suffix());
-
-      if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
-        cutAudioFiles.append(cutAudioFile);
-        qDebug() << "Preview audio cut:" << cutAudioFile;
-      } else {
-        qDebug() << "Preview audio cut failed";
-      }
-    }
-
-    // Mux video and audio into MKV
-    TTMkvMergeProvider mkvProvider;
-
-    // Set frame duration for correct timing
-    int frameDurationNs = (int)(1000000000.0 / frameRate);
-    mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-
-    // Apply A/V sync offset if present
-    if (avOffsetMs != 0) {
-      mkvProvider.setAudioSyncOffset(avOffsetMs);
-    }
-
-    if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
-      qDebug() << "Preview mux complete:" << outputFile;
-      // Clean up temp files
-      QFile::remove(tempVideoFile);
-      for (const QString& f : cutAudioFiles) {
-        QFile::remove(f);
-      }
+    TTFFmpegWrapper ffmpeg;
+    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+      cutAudioFiles.append(cutAudioFile);
+      qDebug() << "Preview audio cut complete:" << cutAudioFile;
     } else {
-      qDebug() << "Preview mux failed:" << mkvProvider.lastError();
+      qDebug() << "Preview audio cut failed";
     }
+  }
+
+  // --- Mux video + audio into MKV (same as final cut) ---
+  TTMkvMergeProvider mkvProvider;
+  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+
+  if (avOffsetMs != 0) {
+    mkvProvider.setAudioSyncOffset(avOffsetMs);
+  }
+
+  if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
+    qDebug() << "Preview mux complete:" << outputFile;
+  } else {
+    qDebug() << "Preview mux failed:" << mkvProvider.lastError();
+  }
+
+  // Clean up temp files
+  QFile::remove(tempVideoFile);
+  for (const QString& f : cutAudioFiles) {
+    QFile::remove(f);
+  }
 }
 
 /**

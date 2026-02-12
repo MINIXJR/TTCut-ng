@@ -66,6 +66,8 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mVideoStreamIndex(-1)
     , mAudioStreamIndex(-1)
     , mCurrentFrameIndex(-1)
+    , mDecoderFrameIndex(-1)
+    , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
 }
@@ -172,6 +174,8 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
             mVideoCodecCtx = avcodec_alloc_context3(codec);
             if (mVideoCodecCtx) {
                 avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
+                mVideoCodecCtx->thread_count = 0;  // auto-detect (use all cores)
+                mVideoCodecCtx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
                 ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
                 if (ret < 0) {
                     qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
@@ -226,6 +230,8 @@ void TTFFmpegWrapper::closeFile()
     mVideoStreamIndex = -1;
     mAudioStreamIndex = -1;
     mCurrentFrameIndex = -1;
+    mDecoderFrameIndex = -1;
+    clearFrameCache();
 }
 
 // ----------------------------------------------------------------------------
@@ -848,6 +854,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     }
 
     mCurrentFrameIndex = keyframeIndex;
+    mDecoderFrameIndex = keyframeIndex;
     return true;
 }
 
@@ -856,36 +863,69 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
 // ----------------------------------------------------------------------------
 QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
-    // Find the keyframe we'll seek to
-    int keyframeIndex = frameIndex;
-    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
-        keyframeIndex--;
-    }
-    qDebug() << "decodeFrame: target=" << frameIndex
-             << "keyframe=" << keyframeIndex
-             << "frames_to_decode=" << (frameIndex - keyframeIndex + 1);
-
-    if (!seekToFrame(frameIndex)) {
-        qDebug() << "decodeFrame: seekToFrame failed for frame" << frameIndex;
-        return QImage();
+    // Check LRU cache first
+    if (mFrameCache.contains(frameIndex)) {
+        // Move to back of LRU list (most recently used)
+        mFrameCacheLRU.removeOne(frameIndex);
+        mFrameCacheLRU.append(frameIndex);
+        return mFrameCache[frameIndex];
     }
 
-    // Decode frames until we reach the target frame
-    int decoded = 0;
-    while (mCurrentFrameIndex < frameIndex) {
-        QImage img = decodeCurrentFrame();
-        if (img.isNull()) {
-            qDebug() << "decodeFrame: decodeCurrentFrame returned null at step"
-                     << decoded << "(current=" << mCurrentFrameIndex
-                     << "target=" << frameIndex << ")";
+    // Check if decoder is already positioned just before target frame
+    // (sequential navigation: j/k stepping one frame at a time)
+    bool needSeek = true;
+    if (mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex) {
+        // Find keyframe for target
+        int keyframeIndex = frameIndex;
+        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+            keyframeIndex--;
+        }
+        // If decoder is at or past the keyframe, we can continue without seeking
+        if (mDecoderFrameIndex >= keyframeIndex) {
+            needSeek = false;
+        }
+    }
+
+    if (needSeek) {
+        int keyframeIndex = frameIndex;
+        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+            keyframeIndex--;
+        }
+        qDebug() << "decodeFrame: seek target=" << frameIndex
+                 << "keyframe=" << keyframeIndex
+                 << "frames_to_decode=" << (frameIndex - keyframeIndex + 1);
+
+        if (!seekToFrame(frameIndex)) {
+            qDebug() << "decodeFrame: seekToFrame failed for frame" << frameIndex;
             return QImage();
         }
-        mCurrentFrameIndex++;
-        decoded++;
+        mDecoderFrameIndex = mCurrentFrameIndex;
     }
 
+    // Skip intermediate frames (decode without RGB conversion)
+    while (mDecoderFrameIndex < frameIndex) {
+        if (!skipCurrentFrame()) {
+            qDebug() << "decodeFrame: skipCurrentFrame failed at" << mDecoderFrameIndex
+                     << "(target=" << frameIndex << ")";
+            return QImage();
+        }
+        mDecoderFrameIndex++;
+    }
+
+    // Decode final target frame with full RGB conversion
     QImage result = decodeCurrentFrame();
-    qDebug() << "decodeFrame: done, decoded" << (decoded + 1) << "frames, result isNull=" << result.isNull();
+    if (!result.isNull()) {
+        mDecoderFrameIndex = frameIndex;
+        mCurrentFrameIndex = frameIndex;
+
+        // Store in LRU cache
+        mFrameCache[frameIndex] = result;
+        mFrameCacheLRU.append(frameIndex);
+        while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
+            int evict = mFrameCacheLRU.takeFirst();
+            mFrameCache.remove(evict);
+        }
+    }
     return result;
 }
 
@@ -976,6 +1016,66 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
 
     av_packet_free(&packet);
     return result;
+}
+
+// ----------------------------------------------------------------------------
+// Skip current frame (decode for reference chain but skip RGB conversion)
+// Used by decodeFrame() to efficiently skip intermediate frames
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::skipCurrentFrame()
+{
+    if (!mFormatCtx || !mVideoCodecCtx) return false;
+
+    if (!mDecodedFrame) {
+        mDecodedFrame = av_frame_alloc();
+        if (!mDecodedFrame) return false;
+    }
+
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
+
+    bool decoded = false;
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == mVideoStreamIndex) {
+            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
+            if (ret < 0) {
+                av_packet_unref(packet);
+                continue;
+            }
+            ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+            if (ret == 0) {
+                // Frame decoded (reference chain updated) — no RGB conversion
+                decoded = true;
+                av_packet_unref(packet);
+                break;
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    av_packet_free(&packet);
+    return decoded;
+}
+
+// ----------------------------------------------------------------------------
+// Set frame cache size
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::setFrameCacheSize(int maxFrames)
+{
+    mFrameCacheMaxSize = qMax(0, maxFrames);
+    while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
+        int evict = mFrameCacheLRU.takeFirst();
+        mFrameCache.remove(evict);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Clear frame cache
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::clearFrameCache()
+{
+    mFrameCache.clear();
+    mFrameCacheLRU.clear();
 }
 
 // ----------------------------------------------------------------------------
@@ -2053,127 +2153,81 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutAudioStream: Time-based audio cutting";
+    qDebug() << "cutAudioStream: Sample-precise audio cutting via atrim filter";
     qDebug() << "  Input:" << inputFile;
     qDebug() << "  Output:" << outputFile;
     qDebug() << "  Segments:" << cutList.size();
 
-    // For single segment, use direct cut
+    // Detect audio codec from file extension for re-encoding
+    QString suffix = QFileInfo(inputFile).suffix().toLower();
+    QString audioCodec;
+    QStringList codecArgs;
+    if (suffix == "ac3") {
+        audioCodec = "ac3";
+        codecArgs << "-c:a" << "ac3" << "-b:a" << "384k";
+    } else if (suffix == "mp3") {
+        audioCodec = "libmp3lame";
+        codecArgs << "-c:a" << "libmp3lame" << "-b:a" << "256k";
+    } else if (suffix == "aac") {
+        audioCodec = "aac";
+        codecArgs << "-c:a" << "aac" << "-b:a" << "256k";
+    } else {
+        // mp2 and fallback
+        audioCodec = "mp2";
+        codecArgs << "-c:a" << "mp2" << "-b:a" << "384k";
+    }
+
+    // Build atrim filter graph for sample-precise cutting
+    // Each segment: atrim=start:end, reset timestamps
+    // Then concatenate all segments
+    QString filterGraph;
     if (cutList.size() == 1) {
-        double startTime = cutList[0].first;
-        double duration = cutList[0].second - cutList[0].first;
-
-        QStringList args;
-        args << "-y"
-             << "-ss" << QString::number(startTime, 'f', 6)
-             << "-i" << inputFile
-             << "-t" << QString::number(duration, 'f', 6)
-             << "-c:a" << "copy"
-             << outputFile;
-
-        qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
-
-        QProcess proc;
-        proc.start("/usr/bin/ffmpeg", args);
-
-        if (!proc.waitForStarted(5000)) {
-            setError("FFmpeg failed to start");
-            return false;
+        filterGraph = QString("[0:a]atrim=%1:%2,asetpts=PTS-STARTPTS[out]")
+            .arg(cutList[0].first, 0, 'f', 6)
+            .arg(cutList[0].second, 0, 'f', 6);
+    } else {
+        QStringList filterParts;
+        QStringList streamLabels;
+        for (int i = 0; i < cutList.size(); ++i) {
+            QString label = QString("a%1").arg(i);
+            filterParts << QString("[0:a]atrim=%1:%2,asetpts=PTS-STARTPTS[%3]")
+                .arg(cutList[i].first, 0, 'f', 6)
+                .arg(cutList[i].second, 0, 'f', 6)
+                .arg(label);
+            streamLabels << QString("[%1]").arg(label);
+            qDebug() << "  Segment" << i << ":" << cutList[i].first << "->" << cutList[i].second;
         }
-
-        if (!proc.waitForFinished(300000)) {
-            setError("FFmpeg timed out");
-            proc.kill();
-            return false;
-        }
-
-        if (proc.exitCode() != 0) {
-            setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
-            return false;
-        }
-
-        return true;
+        filterGraph = filterParts.join(";") + ";" +
+            streamLabels.join("") +
+            QString("concat=n=%1:v=0:a=1[out]").arg(cutList.size());
     }
 
-    // For multiple segments, cut each and concatenate
-    QFileInfo outInfo(outputFile);
-    QString tempDir = outInfo.absolutePath();
-    QStringList segmentFiles;
+    QStringList args;
+    args << "-y"
+         << "-i" << inputFile
+         << "-filter_complex" << filterGraph
+         << "-map" << "[out]";
+    args << codecArgs;
+    args << outputFile;
 
-    for (int i = 0; i < cutList.size(); ++i) {
-        double startTime = cutList[i].first;
-        double duration = cutList[i].second - cutList[i].first;
+    qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
 
-        QString segmentFile = QString("%1/.audio_seg_%2.%3")
-            .arg(tempDir).arg(i).arg(outInfo.suffix());
+    QProcess proc;
+    proc.start("/usr/bin/ffmpeg", args);
 
-        QStringList args;
-        args << "-y"
-             << "-ss" << QString::number(startTime, 'f', 6)
-             << "-i" << inputFile
-             << "-t" << QString::number(duration, 'f', 6)
-             << "-c:a" << "copy"
-             << segmentFile;
-
-        qDebug() << "  Segment" << i << ":" << startTime << "->" << (startTime + duration);
-
-        QProcess proc;
-        proc.start("/usr/bin/ffmpeg", args);
-
-        if (!proc.waitForStarted(5000) || !proc.waitForFinished(300000)) {
-            for (const QString& f : segmentFiles) QFile::remove(f);
-            setError("FFmpeg failed for segment");
-            return false;
-        }
-
-        if (proc.exitCode() != 0) {
-            for (const QString& f : segmentFiles) QFile::remove(f);
-            setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
-            return false;
-        }
-
-        segmentFiles.append(segmentFile);
-    }
-
-    // Create concat list file
-    QString concatList = tempDir + "/.concat_audio.txt";
-    QFile listFile(concatList);
-    if (!listFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        for (const QString& f : segmentFiles) QFile::remove(f);
-        setError("Cannot create concat list");
+    if (!proc.waitForStarted(5000)) {
+        setError("FFmpeg failed to start");
         return false;
     }
 
-    QTextStream out(&listFile);
-    for (const QString& seg : segmentFiles) {
-        out << "file '" << seg << "'\n";
-    }
-    listFile.close();
-
-    // Concatenate segments
-    QStringList concatArgs;
-    concatArgs << "-y" << "-f" << "concat" << "-safe" << "0"
-               << "-i" << concatList
-               << "-c:a" << "copy"
-               << outputFile;
-
-    qDebug() << "  Concatenating" << segmentFiles.size() << "segments";
-
-    QProcess concatProc;
-    concatProc.start("/usr/bin/ffmpeg", concatArgs);
-
-    if (!concatProc.waitForStarted(5000) || !concatProc.waitForFinished(300000)) {
-        setError("FFmpeg concat failed");
+    if (!proc.waitForFinished(300000)) {
+        setError("FFmpeg timed out");
+        proc.kill();
+        return false;
     }
 
-    // Cleanup temp files
-    QFile::remove(concatList);
-    for (const QString& f : segmentFiles) {
-        QFile::remove(f);
-    }
-
-    if (concatProc.exitCode() != 0) {
-        setError(QString("FFmpeg concat failed: %1").arg(QString::fromUtf8(concatProc.readAllStandardError())));
+    if (proc.exitCode() != 0) {
+        setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
         return false;
     }
 

@@ -21,6 +21,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 
@@ -36,6 +37,7 @@ TTESSmartCut::TTESSmartCut()
     , mDecodedWidth(0)
     , mDecodedHeight(0)
     , mDecodedPixFmt(AV_PIX_FMT_NONE)
+    , mReorderDelay(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
     , mBytesWritten(0)
@@ -116,6 +118,7 @@ void TTESSmartCut::cleanup()
     mDecodedWidth = 0;
     mDecodedHeight = 0;
     mDecodedPixFmt = AV_PIX_FMT_NONE;
+    mReorderDelay = 0;
     mFramesStreamCopied = 0;
     mFramesReencoded = 0;
     mBytesWritten = 0;
@@ -143,6 +146,14 @@ int TTESSmartCut::frameCount() const
 int TTESSmartCut::gopCount() const
 {
     return mParser.gopCount();
+}
+
+// ----------------------------------------------------------------------------
+// Get B-frame reorder delay (measured from decoder after first reencode)
+// ----------------------------------------------------------------------------
+int TTESSmartCut::reorderDelay() const
+{
+    return mReorderDelay;
 }
 
 // ----------------------------------------------------------------------------
@@ -251,6 +262,23 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         if (!processSegment(outFile, seg)) {
             outFile.close();
             return false;
+        }
+
+        // Write EOS NAL between segments to force decoder DPB flush
+        // This prevents reference frames from the previous segment bleeding
+        // into the next segment's display at the transition point
+        if (i < segments.size() - 1) {
+            QByteArray eosNal;
+            if (mParser.codecType() == NALU_CODEC_H265) {
+                // H.265 EOS_NUT (type 36): start code + 2-byte NAL header
+                // byte1 = (36 << 1) = 0x48, byte2 = 0x01 (temporal_id_plus1=1)
+                eosNal = QByteArray::fromHex("000000014801");
+            } else {
+                // H.264 end_of_seq (type 10): start code + 1-byte NAL header
+                eosNal = QByteArray::fromHex("000000010A");
+            }
+            outFile.write(eosNal);
+            qDebug() << "    Wrote EOS NAL between segments" << i << "and" << i + 1;
         }
 
         framesProcessed += (seg.endFrame - seg.startFrame + 1);
@@ -456,66 +484,168 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame)
         // encoderInitialized will be false, triggering setupEncoder() below
     }
 
-    // Decode frames from keyframe to endFrame
-    // Store frames we need to re-encode
-    QList<AVFrame*> framesToEncode;
+    // Decode ALL frames from keyframe to endFrame using correct FFmpeg API pattern.
+    // The decoder outputs frames in DISPLAY ORDER (reordered by PTS),
+    // but we feed AUs in DECODE ORDER (file order). With B-frames these differ.
+    // We collect ALL decoded frames first, then select by display position.
+    //
+    // Important: avcodec_receive_frame() can return multiple frames per send_packet,
+    // and decodeFrame() only retrieves one. So we call avcodec_receive_frame() in a
+    // loop after each send_packet to drain all available output.
+    QList<AVFrame*> allDecodedFrames;
     bool encoderInitialized = (mEncoder != nullptr);
 
-    for (int i = decodeStart; i <= endFrame; ++i) {
-        // Read NAL data
+    // Helper lambda: drain all available frames from decoder
+    auto drainDecoder = [&]() {
+        while (true) {
+            AVFrame* frame = av_frame_alloc();
+            int ret = avcodec_receive_frame(mDecoder, frame);
+            if (ret < 0) {
+                av_frame_free(&frame);
+                break;  // EAGAIN (need more input) or EOF
+            }
+
+            // Initialize encoder after first successful decode
+            if (!encoderInitialized) {
+                qDebug() << "      First decoded frame: " << frame->width << "x" << frame->height
+                         << " pix_fmt=" << frame->format;
+
+                mDecodedWidth = frame->width;
+                mDecodedHeight = frame->height;
+                mDecodedPixFmt = static_cast<AVPixelFormat>(frame->format);
+
+                // Read decoder's reorder delay (has_b_frames) after first decode
+                if (mReorderDelay == 0 && mDecoder->has_b_frames > 0) {
+                    mReorderDelay = mDecoder->has_b_frames;
+                    qDebug() << "      Decoder has_b_frames:" << mReorderDelay;
+                }
+
+                if (!setupEncoder()) {
+                    av_frame_free(&frame);
+                    for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
+                    allDecodedFrames.clear();
+                    return false;
+                }
+                encoderInitialized = true;
+            }
+
+            allDecodedFrames.append(frame);
+        }
+        return true;
+    };
+
+    // Extend decode range beyond endFrame to include forward reference frames.
+    // B-frames near endFrame need a P-frame beyond endFrame as reference.
+    // Decode up to the next keyframe (exclusive) so the decoder has all references.
+    // Extend decode range well beyond endFrame. The HEVC decoder with frame-threading
+    // has an internal delay of ~7 frames that persists even through flush. By feeding
+    // extra AUs beyond endFrame, our target frames (startFrame..endFrame) are safely
+    // within the output range instead of stuck in the decoder's trailing buffer.
+    // We also need the next keyframe as forward reference for B-frames near endFrame.
+    int decodeEnd = qMin(endFrame + 20, frameCount() - 1);
+
+    qDebug() << "      Decode range:" << decodeStart << "->" << decodeEnd
+             << "(endFrame=" << endFrame << ", extra=" << (decodeEnd - endFrame) << ")";
+
+    // Feed all AUs from keyframe through extended range
+    for (int i = decodeStart; i <= decodeEnd; ++i) {
         QByteArray auData = mParser.readAccessUnitData(i);
         if (auData.isEmpty()) {
             setError(QString("Failed to read frame %1 for decoding").arg(i));
-            // Free allocated frames
-            for (AVFrame* f : framesToEncode) av_frame_free(&f);
+            for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
             return false;
         }
 
-        // Decode frame
+        // Send packet to decoder, retry on EAGAIN
+        AVPacket* packet = av_packet_alloc();
+        packet->data = reinterpret_cast<uint8_t*>(const_cast<char*>(auData.constData()));
+        packet->size = auData.size();
+
+        while (true) {
+            int ret = avcodec_send_packet(mDecoder, packet);
+            if (ret == 0) break;  // accepted
+            if (ret == AVERROR(EAGAIN)) {
+                // Decoder input full, drain output first then retry
+                if (!drainDecoder()) { av_packet_free(&packet); return false; }
+                continue;
+            }
+            // Other error, skip this AU
+            char errbuf[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errbuf, sizeof(errbuf));
+            qDebug() << "      send_packet error at frame" << i << ":" << errbuf;
+            break;
+        }
+        av_packet_free(&packet);
+
+        // Drain all available output frames
+        if (!drainDecoder()) return false;
+    }
+
+    int beforeFlush = allDecodedFrames.size();
+
+    // Enter drain mode: send NULL once, then drain remaining buffered frames
+    int flushRet = avcodec_send_packet(mDecoder, nullptr);
+    qDebug() << "      Flush: send_packet(nullptr) returned" << flushRet
+             << "(0=ok, AVERROR_EOF=" << AVERROR_EOF << ")";
+
+    // Drain loop for flush - call receive_frame until EOF
+    int flushCount = 0;
+    while (true) {
         AVFrame* frame = av_frame_alloc();
-        if (!decodeFrame(auData, frame)) {
+        int ret = avcodec_receive_frame(mDecoder, frame);
+        if (ret < 0) {
+            char errbuf[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errbuf, sizeof(errbuf));
+            if (flushCount == 0) {
+                qDebug() << "      Flush: first receive_frame returned" << ret << ":" << errbuf;
+            }
             av_frame_free(&frame);
-            // Decoding might fail for first few frames before reference is ready
-            // Just skip and continue
-            continue;
+            break;
         }
 
-        // Initialize encoder after first successful decode
-        // This ensures we have the actual video dimensions and pixel format
+        // Initialize encoder if needed (for edge case where all frames come from flush)
         if (!encoderInitialized) {
-            qDebug() << "      First decoded frame: " << frame->width << "x" << frame->height
+            qDebug() << "      First decoded frame (from flush): " << frame->width << "x" << frame->height
                      << " pix_fmt=" << frame->format;
-
-            // Store actual values from decoded frame for encoder setup
             mDecodedWidth = frame->width;
             mDecodedHeight = frame->height;
             mDecodedPixFmt = static_cast<AVPixelFormat>(frame->format);
-
             if (!setupEncoder()) {
                 av_frame_free(&frame);
-                for (AVFrame* f : framesToEncode) av_frame_free(&f);
+                for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
                 return false;
             }
             encoderInitialized = true;
         }
 
-        // Keep frames that need to be re-encoded
-        if (i >= startFrame) {
-            framesToEncode.append(frame);
+        allDecodedFrames.append(frame);
+        flushCount++;
+    }
+
+    qDebug() << "      Flush produced" << flushCount << "additional frames"
+             << "(total:" << allDecodedFrames.size() << "from" << beforeFlush << "before flush)";
+
+    int totalDecoded = allDecodedFrames.size();
+    int totalInput = decodeEnd - decodeStart + 1;
+
+    // Decoder output is in display order. We decoded from decodeStart..decodeEnd,
+    // so the first (startFrame - decodeStart) output frames are before our cut range.
+    int framesToSkip = startFrame - decodeStart;
+    int expectedFrames = endFrame - startFrame + 1;
+    QList<AVFrame*> framesToEncode;
+
+    for (int i = 0; i < allDecodedFrames.size(); ++i) {
+        if (i >= framesToSkip && framesToEncode.size() < expectedFrames) {
+            framesToEncode.append(allDecodedFrames[i]);
         } else {
-            av_frame_free(&frame);
+            av_frame_free(&allDecodedFrames[i]);
         }
     }
+    allDecodedFrames.clear();
 
-    // Flush decoder to get remaining frames
-    AVFrame* flushFrame = av_frame_alloc();
-    while (decodeFrame(QByteArray(), flushFrame)) {
-        framesToEncode.append(flushFrame);
-        flushFrame = av_frame_alloc();
-    }
-    av_frame_free(&flushFrame);
-
-    qDebug() << "      Decoded" << framesToEncode.size() << "frames to re-encode";
+    qDebug() << "      Decoded" << totalDecoded << "frames from" << totalInput << "input AUs,"
+             << "skipped" << framesToSkip << "leading frames,"
+             << "keeping" << framesToEncode.size() << "(expected" << expectedFrames << ")";
 
     // Re-encode frames
     // Note: x264/x265 encoders buffer frames and may not return output immediately
@@ -784,6 +914,17 @@ bool TTESSmartCut::setupEncoder()
         static const char* h264Profiles[] = {
             "baseline", "main", "high", "high10", "high422", "high444"
         };
+
+        // Auto-detect bit depth from pixel format and override profile if needed
+        const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(mEncoder->pix_fmt);
+        if (desc) {
+            int bitDepth = desc->comp[0].depth;
+            if (bitDepth >= 10 && profileIdx < 3) {
+                profileIdx = 3;  // high10
+                qDebug() << "TTESSmartCut: Auto-selected high10 profile for" << bitDepth << "bit source";
+            }
+        }
+
         av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
     } else {
         // H.265
@@ -794,6 +935,20 @@ bool TTESSmartCut::setupEncoder()
         static const char* h265Profiles[] = {
             "main", "main10", "main12", "main422-10", "main444-10"
         };
+
+        // Auto-detect bit depth from pixel format and override profile if needed
+        const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(mEncoder->pix_fmt);
+        if (desc) {
+            int bitDepth = desc->comp[0].depth;
+            if (bitDepth >= 12 && profileIdx < 2) {
+                profileIdx = 2;  // main12
+                qDebug() << "TTESSmartCut: Auto-selected main12 profile for" << bitDepth << "bit source";
+            } else if (bitDepth >= 10 && profileIdx < 1) {
+                profileIdx = 1;  // main10
+                qDebug() << "TTESSmartCut: Auto-selected main10 profile for" << bitDepth << "bit source";
+            }
+        }
+
         av_dict_set(&opts, "profile", h265Profiles[profileIdx], 0);
     }
 

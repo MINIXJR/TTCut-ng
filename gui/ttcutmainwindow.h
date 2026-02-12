@@ -113,10 +113,12 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		signals:
 
-		private:
+		public:
+		void openProjectFile(QString fName);
+
+	private:
 		void closeProject();
 		void navigationEnabled(bool enabled);
-		void openProjectFile(QString fName);
 		void updateRecentFileActions();
 		void insertRecentFile(const QString& fName);
 

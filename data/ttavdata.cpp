@@ -1019,6 +1019,11 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     log->infoMsg(__FILE__, __LINE__, QString("Smart Cut complete: %1 frames re-encoded, %2 frames stream-copied")
         .arg(smartCut.framesReencoded()).arg(smartCut.framesStreamCopied()));
 
+    // Note: B-frame reorder delay correction was removed.
+    // With correctly trimmed audio (ttcut-demux aligns audio start to first display frame),
+    // the keepList times frame/fps already match the audio ES positions exactly.
+    // The previous +has_b_frames/fps correction caused ~100ms audio delay.
+
     // Cut audio tracks
     QStringList cutAudioFiles;
     for (int i = 0; i < avItem->audioCount(); i++) {
