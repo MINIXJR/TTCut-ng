@@ -392,7 +392,9 @@ if $ES_MODE; then
     # 2. Prepare audio extraction parameters (before parallel extraction)
     AUDIO_FILES=()
     declare -A LANG_COUNT  # Track how many times each language appears
-    declare -a AUDIO_EXTRACT_CMDS=()  # Store extraction commands for parallel execution
+    declare -a AUDIO_EXTRACT_INPUTS=()  # Input file for each audio extraction
+    declare -a AUDIO_EXTRACT_SS=()      # -ss value (empty = no trim)
+    declare -a AUDIO_EXTRACT_MAPS=()    # Stream map index
 
     if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
         for i in "${!AUDIO_STREAMS[@]}"; do
@@ -426,10 +428,13 @@ if $ES_MODE; then
             # on MPEG-TS audio extraction (produces identical output).
             # -ss after -i discards packets before the seek point, which works.
             if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.001)}"; then
-                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -i \"$ORIGINAL_INPUT\" -ss ${AUDIO_TRIM_SEC} -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
+                AUDIO_EXTRACT_INPUTS+=("$ORIGINAL_INPUT")
+                AUDIO_EXTRACT_SS+=("$AUDIO_TRIM_SEC")
             else
-                AUDIO_EXTRACT_CMDS+=("ffmpeg -y -i \"$INPUT\" -map 0:$idx -c:a copy \"$OUTPUT_AUDIO\" 2>/dev/null")
+                AUDIO_EXTRACT_INPUTS+=("$INPUT")
+                AUDIO_EXTRACT_SS+=("")
             fi
+            AUDIO_EXTRACT_MAPS+=("$idx")
         done
     fi
 
@@ -485,12 +490,20 @@ if $ES_MODE; then
 
     # Start all audio extractions in parallel
     AUDIO_PIDS=()
-    for i in "${!AUDIO_EXTRACT_CMDS[@]}"; do
+    for i in "${!AUDIO_EXTRACT_INPUTS[@]}"; do
         IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
         info "  Audio $idx [$lang] -> $(basename "${AUDIO_FILES[$i]}")"
 
-        # Run each audio extraction in background
-        eval "${AUDIO_EXTRACT_CMDS[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
+        # Run each audio extraction in background (direct invocation, no eval)
+        if [ -n "${AUDIO_EXTRACT_SS[$i]}" ]; then
+            ffmpeg -y -i "${AUDIO_EXTRACT_INPUTS[$i]}" -ss "${AUDIO_EXTRACT_SS[$i]}" \
+                -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
+                "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
+        else
+            ffmpeg -y -i "${AUDIO_EXTRACT_INPUTS[$i]}" \
+                -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
+                "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
+        fi
         AUDIO_PIDS+=($!)
     done
 

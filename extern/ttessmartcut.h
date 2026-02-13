@@ -139,6 +139,9 @@ private:
     // B-frame reorder delay (measured from decoder)
     int mReorderDelay;
 
+    // Encoder PTS counter (reset per segment in setupEncoder)
+    int64_t mEncoderPts;
+
     // Statistics
     int mFramesStreamCopied;
     int mFramesReencoded;

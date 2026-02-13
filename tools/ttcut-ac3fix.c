@@ -214,6 +214,12 @@ static int process_ac3_file(const ac3fix_options_t *opts)
     long file_size = ftell(in_fp);
     fseek(in_fp, 0, SEEK_SET);
 
+    if (file_size <= 0) {
+        fprintf(stderr, "Error: Input file is empty or unreadable\n");
+        ret = 1;
+        goto cleanup;
+    }
+
     /* Allocate read buffer (64KB) */
     buffer_size = 65536;
     buffer = malloc(buffer_size);
@@ -329,7 +335,11 @@ static int process_ac3_file(const ac3fix_options_t *opts)
 
             /* Write frame to output */
             if (out_fp) {
-                fwrite(frame_buffer, 1, info.frame_size, out_fp);
+                if (fwrite(frame_buffer, 1, info.frame_size, out_fp) != info.frame_size) {
+                    fprintf(stderr, "\nError: Write failed at frame %lu\n", stats.total_frames);
+                    ret = 1;
+                    goto cleanup;
+                }
             }
 
             processed += info.frame_size;
@@ -368,10 +378,12 @@ static int process_ac3_file(const ac3fix_options_t *opts)
     printf("-----------\n");
     printf("Duration:            %s\n", duration_buf);
     printf("Total frames:        %lu\n", stats.total_frames);
-    printf("5.1 surround frames: %lu (%.1f%%)\n", stats.surround_frames,
-           100.0 * stats.surround_frames / stats.total_frames);
-    printf("Stereo frames:       %lu (%.1f%%)\n", stats.stereo_frames,
-           100.0 * stats.stereo_frames / stats.total_frames);
+    if (stats.total_frames > 0) {
+        printf("5.1 surround frames: %lu (%.1f%%)\n", stats.surround_frames,
+               100.0 * stats.surround_frames / stats.total_frames);
+        printf("Stereo frames:       %lu (%.1f%%)\n", stats.stereo_frames,
+               100.0 * stats.stereo_frames / stats.total_frames);
+    }
     if (stats.other_frames > 0)
         printf("Other frames:        %lu\n", stats.other_frames);
     printf("Format changes:      %lu\n", stats.format_changes);
@@ -459,7 +471,15 @@ int main(int argc, char **argv)
                 opts.show_segments = true;
             } else if (strcmp(argv[i], "-b") == 0 || strcmp(argv[i], "--bitrate") == 0) {
                 if (i + 1 < argc) {
-                    opts.min_bitrate = atoi(argv[++i]);
+                    int val = atoi(argv[++i]);
+                    if (val < 32 || val > 640) {
+                        fprintf(stderr, "Error: Invalid bitrate '%s' (valid: 32-640 kbps)\n", argv[i]);
+                        return 1;
+                    }
+                    opts.min_bitrate = (uint16_t)val;
+                } else {
+                    fprintf(stderr, "Error: -b requires an argument\n");
+                    return 1;
                 }
             } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
                 print_usage(argv[0]);

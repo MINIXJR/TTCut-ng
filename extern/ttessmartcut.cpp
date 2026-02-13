@@ -38,6 +38,7 @@ TTESSmartCut::TTESSmartCut()
     , mDecodedHeight(0)
     , mDecodedPixFmt(AV_PIX_FMT_NONE)
     , mReorderDelay(0)
+    , mEncoderPts(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
     , mBytesWritten(0)
@@ -119,6 +120,7 @@ void TTESSmartCut::cleanup()
     mDecodedHeight = 0;
     mDecodedPixFmt = AV_PIX_FMT_NONE;
     mReorderDelay = 0;
+    mEncoderPts = 0;
     mFramesStreamCopied = 0;
     mFramesReencoded = 0;
     mBytesWritten = 0;
@@ -558,8 +560,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame)
 
         // Send packet to decoder, retry on EAGAIN
         AVPacket* packet = av_packet_alloc();
-        packet->data = reinterpret_cast<uint8_t*>(const_cast<char*>(auData.constData()));
-        packet->size = auData.size();
+        av_new_packet(packet, auData.size());
+        memcpy(packet->data, auData.constData(), auData.size());
 
         while (true) {
             int ret = avcodec_send_packet(mDecoder, packet);
@@ -816,6 +818,7 @@ bool TTESSmartCut::setupDecoder()
 bool TTESSmartCut::setupEncoder()
 {
     freeEncoder();
+    mEncoderPts = 0;
 
     const char* encoderName;
     if (mParser.codecType() == NALU_CODEC_H264) {
@@ -1013,8 +1016,8 @@ bool TTESSmartCut::decodeFrame(const QByteArray& nalData, AVFrame* frame)
     AVPacket* packet = av_packet_alloc();
 
     if (!nalData.isEmpty()) {
-        packet->data = reinterpret_cast<uint8_t*>(const_cast<char*>(nalData.constData()));
-        packet->size = nalData.size();
+        av_new_packet(packet, nalData.size());
+        memcpy(packet->data, nalData.constData(), nalData.size());
 
         int ret = avcodec_send_packet(mDecoder, packet);
         if (ret < 0 && ret != AVERROR(EAGAIN)) {
@@ -1059,9 +1062,8 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
             // Try to convert or just log warning and continue
         }
 
-        // Set PTS
-        static int64_t pts = 0;
-        frame->pts = pts++;
+        // Set PTS (member variable, reset in cleanup/setupEncoder)
+        frame->pts = mEncoderPts++;
 
         // Force keyframe if requested
         if (forceKeyframe) {

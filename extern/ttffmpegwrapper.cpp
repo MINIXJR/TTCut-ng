@@ -2808,8 +2808,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
     QList<AVFrame*> gopFrames;
 
     // Timing state
-    int64_t videoDtsOffset = 0;
-    int64_t audioDtsOffset = 0;
     int64_t lastVideoDts = 0;
     int64_t lastAudioDts = 0;
     int64_t droppedVideoDuration = 0;
@@ -2927,7 +2925,6 @@ bool TTFFmpegWrapper::smartCut(const QString& outputFile,
         packetsRead++;
 
         if (packet->stream_index == mVideoStreamIndex) {
-            double packetPts = packet->pts * av_q2d(inVideoStream->time_base) - streamStartTime;
             bool isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
 
             // If this is a keyframe and we have buffered packets, process the GOP
