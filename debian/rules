@@ -11,10 +11,13 @@ override_dh_auto_build:
 	# Compile translation files
 	lrelease trans/ttcut-ng_de_DE.ts trans/ttcut-ng_en_US.ts
 	$(MAKE)
+	# Compile AC3 header repair tool
+	gcc -O2 -Wall -o tools/ttcut-ac3fix tools/ttcut-ac3fix.c
 
 override_dh_auto_install:
 	install -D -m 0755 ttcut-ng $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ng
 	install -D -m 0755 tools/ttcut-demux $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-demux
+	install -D -m 0755 tools/ttcut-ac3fix $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ac3fix
 	install -D -m 0755 tools/ttcut-quality-check.py $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-quality-check
 	install -D -m 0644 ttcut.desktop $(CURDIR)/debian/ttcut-ng/usr/share/applications/ttcut-ng.desktop
 	install -D -m 0644 ui/pixmaps/ttcut_logo_001.png $(CURDIR)/debian/ttcut-ng/usr/share/pixmaps/ttcut-ng.png

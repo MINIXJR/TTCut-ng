@@ -9,7 +9,7 @@
 # Multi-core optimization: Video and audio streams are extracted in parallel,
 # audio padding also runs in parallel for all tracks.
 #
-# Usage: ttcut-demux [-e] <input.ts> [output_dir]
+# Usage: ttcut-demux [-e] [-A] <input.ts> [output_dir]
 #
 #   -e  Elementary stream mode: output separate .264/.265 and audio files
 #       (default: output normalized MKV with video+audio)
@@ -34,12 +34,14 @@ step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 # Parse arguments
 ES_MODE=false
 PREPARE_MODE=false
-while getopts "eph" opt; do
+AC3FIX=true
+while getopts "ephA" opt; do
     case $opt in
         e) ES_MODE=true ;;
         p) PREPARE_MODE=true ;;
+        A) AC3FIX=false ;;
         h)
-            echo "Usage: $0 [-e] [-p] <input.ts> [output_dir]"
+            echo "Usage: $0 [-e] [-p] [-A] <input.ts> [output_dir]"
             echo ""
             echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
             echo "Similar to ProjectX for MPEG-2."
@@ -49,6 +51,8 @@ while getopts "eph" opt; do
             echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3 + info file"
             echo "  -p  Prepare mode: strip filler NALUs (requires h264bitstream tools)"
             echo "      Only works with -e mode. Typical savings: 5-10% for DVB H.264"
+            echo "  -A  Disable AC3 header repair (enabled by default)"
+            echo "      Fixes corrupt acmod field in DVB AC3 streams (stereo->5.1)"
             echo ""
             echo "Default mode (without -e):"
             echo "  Output: normalized MKV with video + first audio"
@@ -63,6 +67,7 @@ while getopts "eph" opt; do
             echo "  $0 -e input.ts output_dir/     # Elementary stream output"
             echo "  $0 -ep input.ts output_dir/    # ES + strip filler NALUs"
             echo "  $0 -e /video/rec/00001.ts .    # VDR recording with marks"
+            echo "  $0 -eA input.ts output_dir/    # ES without AC3 header repair"
             exit 0
             ;;
         \?) error "Invalid option: -$OPTARG" ;;
@@ -72,7 +77,7 @@ shift $((OPTIND-1))
 
 # Check arguments
 if [ -z "$1" ]; then
-    echo "Usage: $0 [-e] <input.ts> [output_dir]"
+    echo "Usage: $0 [-e] [-A] <input.ts> [output_dir]"
     echo "Use -h for help."
     exit 1
 fi
@@ -522,6 +527,59 @@ if $ES_MODE; then
     rm -rf "$EXTRACT_LOG_DIR"
     echo ""
 
+    #########################################################################
+    # AC3 HEADER REPAIR
+    # Fix corrupt acmod field in DVB AC3 streams (stereo header + 384kbps)
+    #########################################################################
+    declare -A AC3_FIX_RESULTS  # Track fix results per audio file index
+    if $AC3FIX && [ ${#AUDIO_FILES[@]} -gt 0 ]; then
+        HAS_AC3=false
+        for af in "${AUDIO_FILES[@]}"; do
+            [[ "$af" == *.ac3 ]] && HAS_AC3=true && break
+        done
+
+        if $HAS_AC3; then
+            if command -v ttcut-ac3fix &>/dev/null; then
+                step "Checking AC3 headers..."
+
+                for i in "${!AUDIO_FILES[@]}"; do
+                    AUDIO_FILE="${AUDIO_FILES[$i]}"
+                    [[ "$AUDIO_FILE" != *.ac3 ]] && continue
+
+                    # Analyze: run in analyze mode, capture output
+                    ANALYZE_OUT=$(ttcut-ac3fix -a "$AUDIO_FILE" 2>&1)
+
+                    # Extract inconsistent frame count from output
+                    INCONSISTENT=$(echo "$ANALYZE_OUT" | grep -oP 'Inconsistent frames:\s+\K[0-9]+' || echo "0")
+
+                    if [ "$INCONSISTENT" -gt 0 ]; then
+                        # Fix: write to temp file, then replace
+                        TEMP_FIXED="${AUDIO_FILE}.fixed"
+                        if ttcut-ac3fix -F -f "$AUDIO_FILE" "$TEMP_FIXED" 2>&1 | tail -1; then
+                            if [ -s "$TEMP_FIXED" ]; then
+                                mv "$TEMP_FIXED" "$AUDIO_FILE"
+                                info "  $(basename "$AUDIO_FILE"): $INCONSISTENT frames fixed"
+                                AC3_FIX_RESULTS[$i]="$INCONSISTENT"
+                            else
+                                warn "  $(basename "$AUDIO_FILE"): fix produced empty file"
+                                rm -f "$TEMP_FIXED"
+                            fi
+                        else
+                            warn "  $(basename "$AUDIO_FILE"): fix failed"
+                            rm -f "$TEMP_FIXED"
+                        fi
+                    else
+                        info "  $(basename "$AUDIO_FILE"): headers OK"
+                    fi
+                done
+                echo ""
+            else
+                warn "ttcut-ac3fix not found in PATH, skipping AC3 header repair"
+                echo ""
+            fi
+        fi
+    fi
+
     # 1b. Strip filler NALUs if prepare mode is enabled
     FILLER_STRIPPED=false
     FILLER_SAVED=0
@@ -880,6 +938,10 @@ EOF
         echo "audio_${i}_file=$(basename "${AUDIO_FILES[$i]}" 2>/dev/null || echo "")" >> "$OUTPUT_INFO"
         echo "audio_${i}_codec=$codec" >> "$OUTPUT_INFO"
         echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
+        if [ -n "${AC3_FIX_RESULTS[$i]:-}" ]; then
+            echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
+            echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
+        fi
     done
 
     cat >> "$OUTPUT_INFO" << EOF
