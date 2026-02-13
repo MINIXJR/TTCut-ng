@@ -9,11 +9,11 @@ DISTRO=$(lsb_release -cs)
 
 cd "$SOURCE_DIR"
 
-# Get version from source code
-VERSION=$(grep -oP 'versionString = "TTCut-ng - \K[0-9.]+' common/ttcut.cpp)
+# Get version from .pro file (single source of truth)
+VERSION=$(grep -oP '^VERSION\s*=\s*\K[0-9.]+' ttcut-ng.pro)
 
 if [ -z "$VERSION" ]; then
-    echo "ERROR: Could not determine version from common/ttcut.cpp"
+    echo "ERROR: Could not determine version from ttcut-ng.pro"
     exit 1
 fi
 

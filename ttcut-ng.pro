@@ -11,9 +11,11 @@
 #
 #
 PROJECT     = TTCut-ng
+VERSION     = 0.54.0
 CONFIG      += qt warn_on debug c++14
 QT          += core widgets gui xml network
 DEFINES     += _FILE_OFFSET_BITS=64
+DEFINES     += APP_VERSION=\\\"$$VERSION\\\"
 DIST        = ttcut-ng
 TARGET      = ttcut-ng
 ICON        = ui/pixmaps/ttcut_logo_001.icns

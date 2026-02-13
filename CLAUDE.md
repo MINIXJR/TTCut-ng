@@ -123,7 +123,7 @@ TTAVStream
 
 ## Version
 
-Current version: **0.53.0**
+Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 
 ## Recent Fixes and Features
 
