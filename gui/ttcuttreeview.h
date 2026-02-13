@@ -78,7 +78,7 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void removeItem(const TTCutItem& item);
     void itemOrderChanged(int oldIndex, int newIndex);
     void itemUpdated(const TTCutItem& item);
-    void selectionChanged(const TTCutItem& item);
+    void selectionChanged(const TTCutItem& item, int column);
     void entryEdit(const TTCutItem& item);
     void cutOutUpdated(const TTCutItem& item);
     void setCutOut(const TTCutItem& item);

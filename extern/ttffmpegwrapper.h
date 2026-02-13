@@ -267,6 +267,7 @@ private:
     int mAudioStreamIndex;
     int mCurrentFrameIndex;
     int mDecoderFrameIndex;     // Actual decoder position (last decoded frame)
+    bool mDecoderDrained;       // True if decoder was flushed for EOF drain
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;

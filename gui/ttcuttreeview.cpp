@@ -37,6 +37,7 @@
 #include "ttcuttreeview.h"
 
 #include <QApplication>
+#include <QDebug>
 #include <QHeaderView>
 #include <QMenu>
 #include <QMessageBox>
@@ -102,6 +103,7 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   connect(pbCutAudio,      SIGNAL(clicked()),                                 SLOT(onAudioCut()));
   connect(videoCutList,    SIGNAL(doubleClicked(const QModelIndex)),          SLOT(onSetCutOut()));
   connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
+  connect(videoCutList,    SIGNAL(itemClicked(QTreeWidgetItem*, int)),        SLOT(onEntrySelected(QTreeWidgetItem*, int)));
   connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
 }
 
@@ -340,14 +342,14 @@ void TTCutTreeView::onEntryDuplicate()
 /*!
  * onEntrySelected
  */
-void TTCutTreeView::onEntrySelected(QTreeWidgetItem*, int)
+void TTCutTreeView::onEntrySelected(QTreeWidgetItem*, int column)
 {
   if (mAVData == 0 || videoCutList->currentItem() == 0) return;
 
   int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
   TTCutItem cutItem = mAVData->cutItemAt(index);
 
-  emit selectionChanged(cutItem);
+  emit selectionChanged(cutItem, column);
 }
 
 /*!
@@ -356,12 +358,14 @@ void TTCutTreeView::onEntrySelected(QTreeWidgetItem*, int)
 void TTCutTreeView::onItemSelectionChanged()
 {
 	if (!allowSelectionChanged) return;
+  // Skip if triggered by mouse click — onEntrySelected handles that with correct column
+  if (QApplication::mouseButtons() != Qt::NoButton) return;
   if (mAVData == 0 || videoCutList->currentItem() == 0)  return;
 
   int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
   TTCutItem cutItem = mAVData->cutItemAt(index);
 
-  emit selectionChanged(cutItem);
+  emit selectionChanged(cutItem, 0);
 }
 
 /*!

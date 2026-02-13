@@ -96,7 +96,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onAudioVideoCut(bool cutAudioOnly, TTCutList* cutList);
 		void onCutFinished();
 
-		void onCutSelectionChanged(const TTCutItem&);
+		void onCutSelectionChanged(const TTCutItem&, int column);
 		void onSetSelectedCutOut(const TTCutItem&);
 		void onSetCutOut(int index);
 		void onStreamPoints();

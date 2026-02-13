@@ -240,7 +240,7 @@ TTCutMainWindow::TTCutMainWindow()
 
   // Connect signals from cut list widget
   // --------------------------------------------------------------------------
-  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&)),            SLOT(onCutSelectionChanged(const TTCutItem&)));
+  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)),       SLOT(onCutSelectionChanged(const TTCutItem&, int)));
   connect(cutList, SIGNAL(entryEdit(const TTCutItem&)),  navigation,      SLOT(onEditCut(const TTCutItem&)));
   connect(cutList, SIGNAL(gotoCutIn(int)),               currentFrame,    SLOT(onGotoFrame(int)));
   connect(cutList, SIGNAL(gotoCutOut(int)),              currentFrame,    SLOT(onGotoFrame(int)));
@@ -725,7 +725,7 @@ void TTCutMainWindow::onStreamPoints()
  * Signals from the cut list widget
  */
 
-void TTCutMainWindow::onCutSelectionChanged(const TTCutItem& cutItem)
+void TTCutMainWindow::onCutSelectionChanged(const TTCutItem& cutItem, int column)
 {
 	mpAVData->onChangeCurrentAVItem(cutItem.avDataItem());
 
@@ -736,7 +736,12 @@ void TTCutMainWindow::onCutSelectionChanged(const TTCutItem& cutItem)
 	 cutOutFrame->onCutOutChanged(mpAVData->cutItemAt(index-1));
  }
 
- currentFrame->onGotoCutIn(cutItem.cutIn());
+ // Column 2 = Cut-Out column → navigate to cut-out position
+ if (column == 2) {
+   currentFrame->onGotoCutOut(cutItem.cutOut());
+ } else {
+   currentFrame->onGotoCutIn(cutItem.cutIn());
+ }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -842,7 +847,7 @@ void TTCutMainWindow::onCutFinished()
  */
 void TTCutMainWindow::closeProject()
 {
-	disconnect(cutList, SIGNAL(selectionChanged(const TTCutItem&)), this, SLOT(onCutSelectionChanged(const TTCutItem&)));
+	disconnect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
   disconnect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
 
   videoFileInfo->onAVDataChanged(mpAVData, 0);
@@ -858,7 +863,7 @@ void TTCutMainWindow::closeProject()
 
   mpAVData->clear();
 
-  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&)), this, SLOT(onCutSelectionChanged(const TTCutItem&)));
+  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
   connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
 }
 

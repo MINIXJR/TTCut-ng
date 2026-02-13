@@ -67,6 +67,7 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mAudioStreamIndex(-1)
     , mCurrentFrameIndex(-1)
     , mDecoderFrameIndex(-1)
+    , mDecoderDrained(false)
     , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
@@ -174,8 +175,8 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
             mVideoCodecCtx = avcodec_alloc_context3(codec);
             if (mVideoCodecCtx) {
                 avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
-                mVideoCodecCtx->thread_count = 0;  // auto-detect (use all cores)
-                mVideoCodecCtx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+                mVideoCodecCtx->thread_count = 1;
+                mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
                 ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
                 if (ret < 0) {
                     qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
@@ -231,6 +232,7 @@ void TTFFmpegWrapper::closeFile()
     mAudioStreamIndex = -1;
     mCurrentFrameIndex = -1;
     mDecoderFrameIndex = -1;
+    mDecoderDrained = false;
     clearFrameCache();
 }
 
@@ -805,7 +807,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
                  suffix == "265" || suffix == "h265" || suffix == "hevc" ||
                  suffix == "m2v" || suffix == "mpv");
 
-    int ret;
+    int64_t ret;
     if (isES && mFormatCtx->pb) {
         // For ES files, use byte-based seeking
         int64_t byteOffset = mFrameIndex[keyframeIndex].fileOffset;
@@ -852,6 +854,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     if (mVideoCodecCtx) {
         avcodec_flush_buffers(mVideoCodecCtx);
     }
+    mDecoderDrained = false;
 
     mCurrentFrameIndex = keyframeIndex;
     mDecoderFrameIndex = keyframeIndex;
@@ -874,7 +877,10 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     // Check if decoder is already positioned just before target frame
     // (sequential navigation: j/k stepping one frame at a time)
     bool needSeek = true;
-    if (mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex) {
+    if (mDecoderDrained) {
+        // Decoder was flushed for EOF drain — must seek to reset state
+        needSeek = true;
+    } else if (mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex) {
         // Find keyframe for target
         int keyframeIndex = frameIndex;
         while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
@@ -1014,6 +1020,25 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
         av_packet_unref(packet);
     }
 
+    // EOF drain: flush decoder pipeline to retrieve buffered frames
+    if (result.isNull()) {
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
+        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+            // Convert to RGB
+            sws_scale(mSwsCtx,
+                mDecodedFrame->data, mDecodedFrame->linesize,
+                0, mVideoCodecCtx->height,
+                mRgbFrame->data, mRgbFrame->linesize);
+
+            result = QImage(mRgbFrame->data[0],
+                mVideoCodecCtx->width, mVideoCodecCtx->height,
+                mRgbFrame->linesize[0],
+                QImage::Format_RGB888).copy();
+
+            mDecoderDrained = true;
+        }
+    }
+
     av_packet_free(&packet);
     return result;
 }
@@ -1051,6 +1076,15 @@ bool TTFFmpegWrapper::skipCurrentFrame()
             }
         }
         av_packet_unref(packet);
+    }
+
+    // EOF drain: flush decoder pipeline to retrieve buffered frames
+    if (!decoded) {
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
+        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+            decoded = true;
+            mDecoderDrained = true;
+        }
     }
 
     av_packet_free(&packet);
