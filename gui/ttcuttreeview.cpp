@@ -101,7 +101,6 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   connect(pbCutAudioVideo, SIGNAL(clicked()),                                 SLOT(onAVCut()));
   connect(pbCutSelected,   SIGNAL(clicked()),                                 SLOT(onAVSelCut()));
   connect(pbCutAudio,      SIGNAL(clicked()),                                 SLOT(onAudioCut()));
-  connect(videoCutList,    SIGNAL(doubleClicked(const QModelIndex)),          SLOT(onSetCutOut()));
   connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
   connect(videoCutList,    SIGNAL(itemClicked(QTreeWidgetItem*, int)),        SLOT(onEntrySelected(QTreeWidgetItem*, int)));
   connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));

@@ -727,21 +727,11 @@ void TTCutMainWindow::onStreamPoints()
 
 void TTCutMainWindow::onCutSelectionChanged(const TTCutItem& cutItem, int column)
 {
+	(void)column;
 	mpAVData->onChangeCurrentAVItem(cutItem.avDataItem());
 
- if (mpAVData->cutIndexOf(cutItem) == 0) {
-	 cutOutFrame->onCutOutChanged(cutItem);
- } else {
-	 int index = mpAVData->cutIndexOf(cutItem);
-	 cutOutFrame->onCutOutChanged(mpAVData->cutItemAt(index-1));
- }
-
- // Column 2 = Cut-Out column → navigate to cut-out position
- if (column == 2) {
-   currentFrame->onGotoCutOut(cutItem.cutOut());
- } else {
-   currentFrame->onGotoCutIn(cutItem.cutIn());
- }
+	cutOutFrame->onCutOutChanged(cutItem);
+	currentFrame->onCutInChanged(cutItem);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

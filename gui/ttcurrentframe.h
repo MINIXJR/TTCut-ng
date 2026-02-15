@@ -41,6 +41,7 @@
 #include <QLocalSocket>
 
 class TTAVItem;
+class TTCutItem;
 class TTSubtitleStream;
 
 class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
@@ -62,6 +63,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 	public slots:
 		void onAVDataChanged(TTAVItem* avData);
+		void onCutInChanged(const TTCutItem& cutItem);
 		void onPlayVideo();
 		void onPrevIFrame();
 		void onNextIFrame();
@@ -94,9 +96,15 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		double getMpvPlaybackPosition();  // Query mpv's current position via IPC
 
 	private:
+		void                clearCutContext();
+
+	private:
 		bool                isControlEnabled;
 		TTVideoStream*      videoStream;
 		TTAVItem*           mAVItem;
+		TTAVItem*           currentCutAVItem;
+		int                 currentCutItemIndex;
+		int                 currentCutPosition;
 		QProcess*           mPlayerProc;
 		int                 mPlayStartFrame;
 		QElapsedTimer       mPlayTimer;
