@@ -653,16 +653,13 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
 {
   if (mpAVData->avCount() == 0) return;
 
-  if(sliderUpdateFrame) {
-    if( TTCut::fastSlider )
-      currentFrame->onGotoFrame( sPos, 1 );
-    else
-      currentFrame->onGotoFrame( sPos, 0 );
+  if( TTCut::fastSlider )
+    currentFrame->onGotoFrame( sPos, 1 );
+  else
+    currentFrame->onGotoFrame( sPos, 0 );
 
-    videoFileInfo->refreshInfo(mpCurrentAVDataItem);
-    navigation->checkCutPosition(mpCurrentAVDataItem);
-  }
-  sliderUpdateFrame = true;
+  videoFileInfo->refreshInfo(mpCurrentAVDataItem);
+  navigation->checkCutPosition(mpCurrentAVDataItem);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -674,8 +671,9 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
  */
 void TTCutMainWindow::onNewFramePos(int newPos)
 {
-  sliderUpdateFrame = false;
+  streamNavigator->slider()->blockSignals(true);
   streamNavigator->slider()->setValue( newPos );
+  streamNavigator->slider()->blockSignals(false);
   videoFileInfo->refreshInfo(mpCurrentAVDataItem);
   navigation->checkCutPosition(mpCurrentAVDataItem);
 }

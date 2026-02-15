@@ -234,44 +234,18 @@ void TTCurrentFrame::onNextPFrame()
   updateCurrentPosition();
 }
 
-//! Navigate to previous frame (or previous P/I-Frame when editing cut-in)
+//! Navigate to previous frame
 void TTCurrentFrame::onPrevBFrame()
 {
-  int newFramePos;
-
-  if (currentCutItemIndex >= 0) {
-    videoStream->moveToIndexPos(currentCutPosition);
-    newFramePos = (!TTCut::encoderMode)
-        ? videoStream->moveToPrevPIFrame()
-        : videoStream->moveToPrevFrame();
-    currentCutPosition = newFramePos;
-    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
-    currentCutAVItem->updateCutEntry(cutItem, newFramePos, cutItem.cutOut());
-  } else {
-    newFramePos = videoStream->moveToPrevFrame();
-  }
-
+  int newFramePos = videoStream->moveToPrevFrame();
   mpegWindow->showFrameAt( newFramePos );
   updateCurrentPosition();
 }
 
-//! Navigate to next frame (or next P/I-Frame when editing cut-in)
+//! Navigate to next frame
 void TTCurrentFrame::onNextBFrame()
 {
-  int newFramePos;
-
-  if (currentCutItemIndex >= 0) {
-    videoStream->moveToIndexPos(currentCutPosition);
-    newFramePos = (!TTCut::encoderMode)
-        ? videoStream->moveToNextPIFrame()
-        : videoStream->moveToNextFrame();
-    currentCutPosition = newFramePos;
-    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
-    currentCutAVItem->updateCutEntry(cutItem, newFramePos, cutItem.cutOut());
-  } else {
-    newFramePos = videoStream->moveToNextFrame();
-  }
-
+  int newFramePos = videoStream->moveToNextFrame();
   mpegWindow->showFrameAt( newFramePos );
   updateCurrentPosition();
 }
