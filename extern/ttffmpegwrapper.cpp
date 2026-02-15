@@ -31,6 +31,7 @@
 #include "ttffmpegwrapper.h"
 #include "ttessmartcut.h"
 #include "../avstream/ttesinfo.h"
+#include "../avstream/ttnaluparser.h"
 #include "../common/ttcut.h"
 
 #include <QDebug>
@@ -478,9 +479,20 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
                     currentGOP++;
                 }
             } else {
-                // Without full decoding, we can't distinguish P from B
-                // This is a simplification - for accurate detection we'd need to decode
-                frameInfo.frameType = AV_PICTURE_TYPE_P;
+                // For HEVC: parse slice_type from packet data for B-frame detection
+                AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
+                if (codecId == AV_CODEC_ID_HEVC) {
+                    int sliceType = TTNaluParser::parseH265SliceTypeFromPacket(
+                        packet->data, packet->size);
+                    if (sliceType == H265::SLICE_B)
+                        frameInfo.frameType = AV_PICTURE_TYPE_B;
+                    else if (sliceType == H265::SLICE_I)
+                        frameInfo.frameType = AV_PICTURE_TYPE_I;
+                    else
+                        frameInfo.frameType = AV_PICTURE_TYPE_P;
+                } else {
+                    frameInfo.frameType = AV_PICTURE_TYPE_P;
+                }
             }
 
             frameInfo.gopIndex = currentGOP;
@@ -746,16 +758,21 @@ QString TTFFmpegWrapper::avErrorToString(int errnum)
 // ----------------------------------------------------------------------------
 int TTFFmpegWrapper::getFrameType(AVPacket* packet, AVCodecContext* codecCtx)
 {
-    Q_UNUSED(codecCtx);
-
     // Simple check: keyframe flag
     if (packet->flags & AV_PKT_FLAG_KEY) {
         return AV_PICTURE_TYPE_I;
     }
 
-    // For more accurate detection, we would need to decode the frame
-    // and check frame->pict_type
-    // This is a simplification for initial implementation
+    // For HEVC: parse slice_type from packet data for B-frame detection
+    if (codecCtx && codecCtx->codec_id == AV_CODEC_ID_HEVC) {
+        int sliceType = TTNaluParser::parseH265SliceTypeFromPacket(
+            packet->data, packet->size);
+        if (sliceType == H265::SLICE_B)
+            return AV_PICTURE_TYPE_B;
+        else if (sliceType == H265::SLICE_I)
+            return AV_PICTURE_TYPE_I;
+    }
+
     return AV_PICTURE_TYPE_P;
 }
 
