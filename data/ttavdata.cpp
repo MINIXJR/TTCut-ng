@@ -312,30 +312,55 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
     doOpenSubtitleStream(avItem, subtitleInfo.next().absoluteFilePath());
   }
 
-  // Load VDR markers from .info file (if available)
+  // Load metadata from .info file (if available)
   QString infoFile = TTESInfo::findInfoFile(videoFilePath);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded() && esInfo.hasMarkers()) {
-      qDebug() << "Found VDR markers in info file:" << esInfo.markerCount();
+    if (esInfo.isLoaded()) {
 
-      // Convert VDR markers to cut entry pairs (start/stop → cutIn/cutOut)
-      QList<QPair<int, int>> cutPairs;
-      QList<TTMarkerInfo> markers = esInfo.markers();
+      // Load audio languages from .info and match to loaded audio files
+      if (esInfo.audioTrackCount() > 0 && !audioInfoList.isEmpty()) {
+        // Build basename→language map from .info
+        QMap<QString, QString> infoLangMap;
+        for (int i = 0; i < esInfo.audioTrackCount(); ++i) {
+          TTAudioTrackInfo trackInfo = esInfo.audioTrack(i);
+          if (!trackInfo.file.isEmpty() && !trackInfo.language.isEmpty()) {
+            infoLangMap[QFileInfo(trackInfo.file).fileName()] = trackInfo.language;
+          }
+        }
 
-      for (int i = 0; i < markers.size() - 1; i += 2) {
-        // Pair markers: even index = start (content begins), odd index = stop (content ends)
-        int cutIn = markers[i].frame;
-        int cutOut = markers[i + 1].frame;
-
-        if (cutIn > 0 && cutOut > cutIn) {
-          cutPairs.append(qMakePair(cutIn, cutOut));
-          qDebug() << "  VDR cut pair:" << cutIn << "-" << cutOut;
+        // Match loaded audio files by basename
+        int audioOrder = 0;
+        for (const QFileInfo& af : audioInfoList) {
+          QString lang = infoLangMap.value(af.fileName());
+          if (!lang.isEmpty()) {
+            setPendingAudioLanguage(avItem, audioOrder, lang);
+            qDebug() << "  Audio language from .info:" << af.fileName() << "=" << lang;
+          }
+          ++audioOrder;
         }
       }
 
-      if (!cutPairs.isEmpty()) {
-        mpPendingVdrMarkers[avItem] = cutPairs;
+      // Load VDR markers
+      if (esInfo.hasMarkers()) {
+        qDebug() << "Found VDR markers in info file:" << esInfo.markerCount();
+
+        QList<QPair<int, int>> cutPairs;
+        QList<TTMarkerInfo> markers = esInfo.markers();
+
+        for (int i = 0; i < markers.size() - 1; i += 2) {
+          int cutIn = markers[i].frame;
+          int cutOut = markers[i + 1].frame;
+
+          if (cutIn > 0 && cutOut > cutIn) {
+            cutPairs.append(qMakePair(cutIn, cutOut));
+            qDebug() << "  VDR cut pair:" << cutIn << "-" << cutOut;
+          }
+        }
+
+        if (!cutPairs.isEmpty()) {
+          mpPendingVdrMarkers[avItem] = cutPairs;
+        }
       }
     }
   }
@@ -645,7 +670,8 @@ QFileInfoList TTAVData::getAudioNames(const QFileInfo& vFileInfo)
 	QStringList audioFilters;
 	audioFilters << vFileInfo.completeBaseName() + "*" + ".mpa"
 			<< vFileInfo.completeBaseName() + "*" + ".mp2"
-			<< vFileInfo.completeBaseName() + "*" + ".ac3";
+			<< vFileInfo.completeBaseName() + "*" + ".ac3"
+			<< vFileInfo.completeBaseName() + "*" + ".aac";
 
 	audioDir.setNameFilters(audioFilters);
 	audioDir.setFilter(QDir::Files);

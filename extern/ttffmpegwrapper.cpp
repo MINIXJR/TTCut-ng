@@ -31,6 +31,7 @@
 #include "ttffmpegwrapper.h"
 #include "ttessmartcut.h"
 #include "../avstream/ttesinfo.h"
+#include "../common/ttcut.h"
 
 #include <QDebug>
 #include <QTime>
@@ -2187,86 +2188,165 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutAudioStream: Sample-precise audio cutting via atrim filter";
+    qDebug() << "cutAudioStream: Lossless stream-copy audio cutting";
     qDebug() << "  Input:" << inputFile;
     qDebug() << "  Output:" << outputFile;
     qDebug() << "  Segments:" << cutList.size();
 
-    // Detect audio codec from file extension for re-encoding
-    QString suffix = QFileInfo(inputFile).suffix().toLower();
-    QString audioCodec;
-    QStringList codecArgs;
-    if (suffix == "ac3") {
-        audioCodec = "ac3";
-        codecArgs << "-c:a" << "ac3" << "-b:a" << "384k";
-    } else if (suffix == "mp3") {
-        audioCodec = "libmp3lame";
-        codecArgs << "-c:a" << "libmp3lame" << "-b:a" << "256k";
-    } else if (suffix == "aac") {
-        audioCodec = "aac";
-        codecArgs << "-c:a" << "aac" << "-b:a" << "256k";
-    } else {
-        // mp2 and fallback
-        audioCodec = "mp2";
-        codecArgs << "-c:a" << "mp2" << "-b:a" << "384k";
-    }
+    bool success = false;
 
-    // Build atrim filter graph for sample-precise cutting
-    // Each segment: atrim=start:end, reset timestamps
-    // Then concatenate all segments
-    QString filterGraph;
     if (cutList.size() == 1) {
-        filterGraph = QString("[0:a]atrim=%1:%2,asetpts=PTS-STARTPTS[out]")
-            .arg(cutList[0].first, 0, 'f', 6)
-            .arg(cutList[0].second, 0, 'f', 6);
-    } else {
-        QStringList filterParts;
-        QStringList streamLabels;
-        for (int i = 0; i < cutList.size(); ++i) {
-            QString label = QString("a%1").arg(i);
-            filterParts << QString("[0:a]atrim=%1:%2,asetpts=PTS-STARTPTS[%3]")
-                .arg(cutList[i].first, 0, 'f', 6)
-                .arg(cutList[i].second, 0, 'f', 6)
-                .arg(label);
-            streamLabels << QString("[%1]").arg(label);
-            qDebug() << "  Segment" << i << ":" << cutList[i].first << "->" << cutList[i].second;
+        // Single segment: direct stream-copy with -ss/-to
+        QStringList args;
+        args << "-y"
+             << "-i" << inputFile
+             << "-ss" << QString::number(cutList[0].first, 'f', 6)
+             << "-to" << QString::number(cutList[0].second, 'f', 6)
+             << "-c:a" << "copy"
+             << outputFile;
+
+        qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
+
+        QProcess proc;
+        proc.start("/usr/bin/ffmpeg", args);
+
+        if (!proc.waitForStarted(5000)) {
+            setError("FFmpeg failed to start");
+            return false;
         }
-        filterGraph = filterParts.join(";") + ";" +
-            streamLabels.join("") +
-            QString("concat=n=%1:v=0:a=1[out]").arg(cutList.size());
+
+        if (!proc.waitForFinished(300000)) {
+            setError("FFmpeg timed out");
+            proc.kill();
+            return false;
+        }
+
+        QString stderr = QString::fromUtf8(proc.readAllStandardError());
+        if (!stderr.isEmpty()) qDebug() << "  FFmpeg stderr:" << stderr;
+
+        if (proc.exitCode() != 0) {
+            setError(QString("FFmpeg failed: %1").arg(stderr));
+            return false;
+        }
+        success = true;
+
+    } else {
+        // Multiple segments: cut each to temp file, then concat
+        QString tempDir = TTCut::tempDirPath;
+        QStringList tempFiles;
+        QString concatListFile = tempDir + "/audio_concat_list.txt";
+
+        QFile concatFile(concatListFile);
+        if (!concatFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            setError(QString("Cannot create concat list: %1").arg(concatListFile));
+            return false;
+        }
+
+        QTextStream concatStream(&concatFile);
+
+        for (int i = 0; i < cutList.size(); ++i) {
+            QString tempFile = QString("%1/audio_seg_%2.%3")
+                .arg(tempDir)
+                .arg(i)
+                .arg(QFileInfo(inputFile).suffix());
+            tempFiles << tempFile;
+
+            qDebug() << "  Segment" << i << ":" << cutList[i].first << "->" << cutList[i].second;
+
+            QStringList args;
+            args << "-y"
+                 << "-i" << inputFile
+                 << "-ss" << QString::number(cutList[i].first, 'f', 6)
+                 << "-to" << QString::number(cutList[i].second, 'f', 6)
+                 << "-c:a" << "copy"
+                 << tempFile;
+
+            QProcess proc;
+            proc.start("/usr/bin/ffmpeg", args);
+
+            if (!proc.waitForStarted(5000)) {
+                setError(QString("FFmpeg failed to start for segment %1").arg(i));
+                goto cleanup;
+            }
+
+            if (!proc.waitForFinished(300000)) {
+                setError(QString("FFmpeg timed out for segment %1").arg(i));
+                proc.kill();
+                goto cleanup;
+            }
+
+            QString stderr = QString::fromUtf8(proc.readAllStandardError());
+            if (!stderr.isEmpty()) qDebug() << "  Segment" << i << "stderr:" << stderr;
+
+            if (proc.exitCode() != 0) {
+                setError(QString("FFmpeg failed for segment %1: %2").arg(i).arg(stderr));
+                goto cleanup;
+            }
+
+            // Check output size
+            QFileInfo segInfo(tempFile);
+            if (!segInfo.exists() || segInfo.size() == 0) {
+                setError(QString("Segment %1 produced 0-byte output").arg(i));
+                goto cleanup;
+            }
+
+            concatStream << "file '" << tempFile << "'\n";
+        }
+        concatFile.close();
+
+        // Concat all segments
+        {
+            QStringList args;
+            args << "-y"
+                 << "-f" << "concat"
+                 << "-safe" << "0"
+                 << "-i" << concatListFile
+                 << "-c:a" << "copy"
+                 << outputFile;
+
+            qDebug() << "  Concat command: ffmpeg" << args.join(" ");
+
+            QProcess proc;
+            proc.start("/usr/bin/ffmpeg", args);
+
+            if (!proc.waitForStarted(5000)) {
+                setError("FFmpeg concat failed to start");
+                goto cleanup;
+            }
+
+            if (!proc.waitForFinished(300000)) {
+                setError("FFmpeg concat timed out");
+                proc.kill();
+                goto cleanup;
+            }
+
+            QString stderr = QString::fromUtf8(proc.readAllStandardError());
+            if (!stderr.isEmpty()) qDebug() << "  Concat stderr:" << stderr;
+
+            if (proc.exitCode() != 0) {
+                setError(QString("FFmpeg concat failed: %1").arg(stderr));
+                goto cleanup;
+            }
+        }
+        success = true;
+
+cleanup:
+        // Remove temp files
+        for (const QString& tf : tempFiles) {
+            QFile::remove(tf);
+        }
+        QFile::remove(concatListFile);
     }
 
-    QStringList args;
-    args << "-y"
-         << "-i" << inputFile
-         << "-filter_complex" << filterGraph
-         << "-map" << "[out]";
-    args << codecArgs;
-    args << outputFile;
-
-    qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
-
-    QProcess proc;
-    proc.start("/usr/bin/ffmpeg", args);
-
-    if (!proc.waitForStarted(5000)) {
-        setError("FFmpeg failed to start");
+    // Verify output
+    QFileInfo outInfo(outputFile);
+    if (!outInfo.exists() || outInfo.size() == 0) {
+        setError(QString("Audio cut produced 0-byte output: %1").arg(outputFile));
         return false;
     }
 
-    if (!proc.waitForFinished(300000)) {
-        setError("FFmpeg timed out");
-        proc.kill();
-        return false;
-    }
-
-    if (proc.exitCode() != 0) {
-        setError(QString("FFmpeg failed: %1").arg(QString::fromUtf8(proc.readAllStandardError())));
-        return false;
-    }
-
-    qDebug() << "cutAudioStream: Complete";
-    return true;
+    qDebug() << "cutAudioStream: Complete, output size:" << outInfo.size() << "bytes";
+    return success;
 }
 
 // ----------------------------------------------------------------------------

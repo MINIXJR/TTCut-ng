@@ -566,6 +566,12 @@ if $ES_MODE; then
                     INCONSISTENT=$(echo "$ANALYZE_OUT" | grep -oP 'Inconsistent frames:\s+\K[0-9]+' || echo "0")
 
                     if [ "$INCONSISTENT" -gt 0 ]; then
+                        # Decode test: if AC3 decodes fine, skip fix (prevents corrupting valid stereo AC3)
+                        if ffmpeg -v error -i "$AUDIO_FILE" -t 2 -f null - 2>/dev/null; then
+                            info "  $(basename "$AUDIO_FILE"): $INCONSISTENT inconsistent headers but decode OK — skipping fix"
+                            continue
+                        fi
+
                         # Fix: write to temp file, then replace
                         TEMP_FIXED="${AUDIO_FILE}.fixed"
                         if ttcut-ac3fix -F -f "$AUDIO_FILE" "$TEMP_FIXED" 2>&1 | tail -1; then

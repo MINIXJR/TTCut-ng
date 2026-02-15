@@ -247,7 +247,8 @@ QStringList TTCut::languageCodes()
     << "und" << "deu" << "eng" << "fra" << "ita" << "spa" << "por"
     << "dut" << "pol" << "cze" << "hun" << "dan" << "swe" << "fin"
     << "nor" << "rus" << "tur" << "gre" << "hrv" << "slo" << "rum"
-    << "bul" << "srp" << "slv" << "jpn" << "chi" << "kor" << "ara";
+    << "bul" << "srp" << "slv" << "jpn" << "chi" << "kor" << "ara"
+    << "qks" << "mis";
 }
 
 QStringList TTCut::languageNames()
@@ -258,7 +259,8 @@ QStringList TTCut::languageNames()
     << "Magyar" << "Dansk" << "Svenska" << "Suomi" << "Norsk" << "Русский"
     << "Türkçe" << "Ελληνικά" << "Hrvatski" << "Slovenčina" << "Română"
     << "Български" << "Srpski" << "Slovenščina" << "日本語" << "中文"
-    << "한국어" << "العربية";
+    << "한국어" << "العربية"
+    << "Klare Sprache" << "Hörfilm";
 }
 
 QString TTCut::iso639_1to2(const QString& code2)
