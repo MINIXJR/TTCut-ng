@@ -172,13 +172,18 @@ void TTThreadTaskPool::onThreadTaskFinished(TTThreadTask* task)
   disconnect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
     this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
 
+  mTaskQueue.removeAll(task);
 
-  //qDebug() << "finished " << task->taskName() << " UUID " << task->taskID() << "% " << overallPercentage();
-  qDebug() << "finished " << task->taskName() << " with UUID " << task->taskID() << " active threads " << runningTaskCount() << " queue count " << mTaskQueue.count();
+  qDebug() << "finished " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
 
-  if (runningTaskCount() == 0)
+  if (mTaskQueue.isEmpty())
   {
-    cleanUpQueue();
+    mOverallTotalSteps  = 0;
+    mOverallStepCount   = 0;
+    mEstimateTaskCount  = 1;
+    mCompleted          = 0.0;
+    mTotalMap.clear();
+    mProgressMap.clear();
     emit exit();
   }
 }
@@ -202,9 +207,17 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
 
   mTaskQueue.removeAll(task);
 
-  if (mTaskQueue.count() == 0)
+  qDebug() << "aborted " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
+
+  if (mTaskQueue.isEmpty())
   {
     qDebug() << "Last thread task aborted -> exit the thread queue!";
+    mOverallTotalSteps  = 0;
+    mOverallStepCount   = 0;
+    mEstimateTaskCount  = 1;
+    mCompleted          = 0.0;
+    mTotalMap.clear();
+    mProgressMap.clear();
     emit aborted();
     emit exit();
   }

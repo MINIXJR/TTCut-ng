@@ -4,7 +4,7 @@
 # Similar to ProjectX for MPEG-2, but for H.264/H.265 (AVC/HEVC)
 #
 # Supported video codecs: H.264 (AVC), H.265 (HEVC), MPEG-2
-# Supported audio codecs: MP2, AC3, AAC, MP3
+# Supported audio codecs: MP2, AC3, EAC3 (DD+), AAC, MP3
 #
 # Multi-core optimization: Video and audio streams are extracted in parallel,
 # audio padding also runs in parallel for all tracks.
@@ -48,7 +48,7 @@ while getopts "ephA" opt; do
             echo ""
             echo "Options:"
             echo "  -e  Elementary stream mode (for TTCut workflow)"
-            echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3 + info file"
+            echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3/.eac3 + info file"
             echo "  -p  Prepare mode: strip filler NALUs (requires h264bitstream tools)"
             echo "      Only works with -e mode. Typical savings: 5-10% for DVB H.264"
             echo "  -A  Disable AC3 header repair (enabled by default)"
@@ -403,7 +403,8 @@ if $ES_MODE; then
             # Determine extension
             case "$codec" in
                 mp2|mp3) EXT="mp2" ;;
-                ac3|eac3) EXT="ac3" ;;
+                ac3) EXT="ac3" ;;
+                eac3) EXT="eac3" ;;
                 aac) EXT="aac" ;;
                 *) EXT="$codec" ;;
             esac
@@ -1101,6 +1102,7 @@ else
             case "$codec" in
                 mp2|mp3) EXT="mp2" ;;
                 ac3) EXT="ac3" ;;
+                eac3) EXT="eac3" ;;
                 aac) EXT="aac" ;;
                 *) EXT="$codec" ;;
             esac

@@ -192,14 +192,12 @@ void TTThreadTask::run()
      //qDebug() << "run task " << taskName() << " with uuid " << taskID();
     mIsRunning = true;
     emit started(this);
-    qApp->processEvents();
 
     operation();
 
     mIsRunning = false;
     //qDebug() << "emit finished for task " << taskName() << " with UUID " << taskID();
     emit finished(this);
-    qApp->processEvents();
     cleanUp();
   }
   catch(TTAbortException* ex)
@@ -207,7 +205,6 @@ void TTThreadTask::run()
     qDebug() << taskName() << " with UUID " << taskID() << " catched TTAbortException";
     mIsRunning = false;
     emit aborted(this);
-    qApp->processEvents();
     cleanUp();
 
     if (mIsSynchron) {
@@ -220,7 +217,6 @@ void TTThreadTask::run()
     qDebug() << taskName() << "with UUID " << taskID() << " catched TTException";
     mIsRunning = false;
     emit aborted(this);
-    qApp->processEvents();
     cleanUp();
   }
 }

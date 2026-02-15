@@ -102,19 +102,24 @@ Audio detection is in `avstream/ttavtypes.cpp` (lines 180-260), which only check
 - AC3: Sync word `0x0B77`
 - MPEG Audio: Sync word `0xFFE0`
 
+**E-AC3 (Dolby Digital Plus) status:** `ttcut-demux` correctly demuxes E-AC3 streams with `.eac3` extension. The AC3 header parser (`TTAC3AudioStream`) detects E-AC3 (bsid > 10) and skips it with a warning. A native E-AC3 header parser is needed for frame-accurate cutting within TTCut-ng.
+
 #### Required Changes
 
 For each new format:
 1. Add sync word detection in `TTAudioType::getAudioStreamType()`
-2. Create new stream class (e.g., `TTAacAudioStream`)
-3. Create header class (e.g., `TTAacAudioHeader`)
+2. Create new stream class (e.g., `TTEAC3AudioStream`, `TTAacAudioStream`)
+3. Create header class (e.g., `TTEAC3AudioHeader`, `TTAacAudioHeader`)
 4. Add to `TTAVTypes` enum
 5. Update file dialogs in `ttcutmainwindow.cpp`
+
+**E-AC3 specifics:** Same sync word as AC3 (`0x0B77`) but `bsid >= 11`. Frame size is encoded as 11-bit `frmsiz` field (not via lookup table). The existing `AC3FrameLength` table does not apply.
 
 #### Workaround
 
 Convert unsupported audio to AC3:
 ```bash
+ffmpeg -i input.eac3 -c:a ac3 -b:a 384k output.ac3
 ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 ```
 
@@ -156,3 +161,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] ttcut-demux: Audio padding at end (like ProjectX) - reduces drift from 372ms to 8ms
 - [x] ttcut-demux: Duration mismatch detection and reporting in .info file
 - [x] Preview widget: Corrected button order (Zurück/Start/Vor)
+- [x] Fix thread-pool completion race condition (processEvents from worker threads → deadlock)
+- [x] Fix AC3 parser infinite loop on E-AC3 streams (bsid > 10 detection + zero frame length guard)
+- [x] ttcut-demux: E-AC3 streams get `.eac3` extension (was incorrectly mapped to `.ac3`)

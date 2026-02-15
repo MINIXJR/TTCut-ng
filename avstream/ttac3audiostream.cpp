@@ -187,6 +187,21 @@ int TTAC3AudioStream::createHeaderList()
 
       readAudioHeader( audio_header );
 
+      // E-AC3 (DD+) uses same 0x0B77 sync but different frame size encoding.
+      // bsid > 10 indicates E-AC3 which this parser cannot handle.
+      if (audio_header->bsid > 10) {
+        log->warningMsg(__FILE__, __LINE__,
+            QString("E-AC3 stream detected (bsid=%1) - not supported, skipping").arg(audio_header->bsid));
+        delete audio_header;
+        break;
+      }
+
+      // Guard against zero/invalid frame length (fscod=3 reserved, corrupt data)
+      if (audio_header->syncframe_words <= 0) {
+        delete audio_header;
+        continue;
+      }
+
       if ( header_list->count() == 0 )
         audio_header->abs_frame_time = 0.0;
       else
