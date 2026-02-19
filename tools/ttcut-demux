@@ -936,8 +936,9 @@ filler_saved_bytes=$FILLER_SAVED
 
 [timing]
 # A/V sync offset in milliseconds (after correction)
-# Positive = audio starts before video (delay audio)
-# Negative = video starts before audio (delay video)
+# av_offset_ms = audio_pts - video_pts
+# Positive = audio starts AFTER video (audio is too early in ES, delay it)
+# Negative = audio starts BEFORE video (audio is too late in ES, advance it)
 first_video_pts=$FIRST_VIDEO_PTS
 first_audio_pts=$FIRST_AUDIO_PTS
 audio_trimmed_ms=$AUDIO_TRIM_MS

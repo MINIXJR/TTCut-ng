@@ -1293,15 +1293,12 @@ void TTAVData::onCutFinished()
         ffmpegArgs << "-i" << muxItem.getVideoName();
 
         // Input audio files with A/V sync offset
-        // FFmpeg -itsoffset applies to the NEXT input file
-        // av_offset_ms = audio - video
-        // Negative means audio starts before video, so we DELAY audio
-        // -itsoffset delays the input, so we use -(-offset) = +offset to delay audio
+        // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
+        // Positive -itsoffset delays audio input → correct for audio that is too early
         QStringList audioNames = muxItem.getAudioNames();
         for (const QString& audio : audioNames) {
           if (mAvSyncOffsetMs != 0) {
-            // Apply offset to audio input (negate because -itsoffset delays)
-            ffmpegArgs << "-itsoffset" << QString("%1ms").arg(-mAvSyncOffsetMs);
+            ffmpegArgs << "-itsoffset" << QString("%1ms").arg(mAvSyncOffsetMs);
           }
           ffmpegArgs << "-i" << audio;
         }

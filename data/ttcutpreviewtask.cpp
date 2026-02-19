@@ -224,10 +224,10 @@ void TTCutPreviewTask::operation()
         if (hasAudio) {
           QString audioFile = createPreviewFileName(i + 1, "mpa");
           // mplex -O: offset of timestamps (video-audio) in ms
-          // av_offset_ms = audio - video, so we negate it for mplex
+          // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
           if (avOffsetMs != 0) {
             muxCommand = QString("mplex -f 8 -O %1ms -o \"%2\" \"%3\" \"%4\" 2>/dev/null").
-                arg(-avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
+                arg(avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
           } else {
             muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null").
                 arg(outputFile).arg(videoFile).arg(audioFile);

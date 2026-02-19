@@ -343,8 +343,10 @@ QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
                 args << "--language" << QString("0:%1").arg(lang);
             }
             // Apply A/V sync offset if set (track 0 = first track within this file)
+            // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
+            // Positive --sync value delays audio → correct for audio that is too early
             if (mAudioSyncOffsetMs != 0) {
-                args << "--sync" << QString("0:%1").arg(-mAudioSyncOffsetMs);
+                args << "--sync" << QString("0:%1").arg(mAudioSyncOffsetMs);
             }
             args << audio;
             audioTrackId++;

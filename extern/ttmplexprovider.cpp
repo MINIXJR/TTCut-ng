@@ -201,11 +201,11 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
 
   // Add A/V sync offset if set (--sync-offset num ms)
   // mplex -O: offset of timestamps (video-audio) in ms
-  // Our av_offset_ms = audio - video, so we negate it for mplex
-  // Example: audio starts 384ms before video -> av_offset=-384 -> mplex needs +384
+  // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
+  // Positive -O value delays audio → correct for audio that is too early
   if (mAudioSyncOffsetMs != 0) {
-    mplexArgs << "-O" << QString("%1ms").arg(-mAudioSyncOffsetMs);
-    qDebug() << "TTMplexProvider: Using A/V sync offset" << -mAudioSyncOffsetMs << "ms";
+    mplexArgs << "-O" << QString("%1ms").arg(mAudioSyncOffsetMs);
+    qDebug() << "TTMplexProvider: Using A/V sync offset" << mAudioSyncOffsetMs << "ms";
   }
 
   mplexArgs << "-o"
