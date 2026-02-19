@@ -275,6 +275,7 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
 {
   qDebug() << "TTMPEG2Window2::openVideoStream() called";
   mpVideoStream = vStream;
+  currentIndex = -1;
 
   // Check stream type
   TTAVTypes::AVStreamType streamType = vStream->streamType();

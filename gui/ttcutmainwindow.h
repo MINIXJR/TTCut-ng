@@ -129,8 +129,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		TTCutSettings*   settings;
 		
     TTMessageLogger* log;
-		
-    bool             sliderUpdateFrame;
 
 		// recent files menu
 		enum
