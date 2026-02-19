@@ -254,6 +254,14 @@ public:
     static bool isKeyframeType(uint8_t type, TTNaluCodecType codec);
     static bool isSliceType(uint8_t type, TTNaluCodecType codec);
 
+    // Parse H.264 slice_type from raw packet data (e.g. AVPacket->data).
+    // Returns H264::SLICE_P (0), H264::SLICE_B (1), H264::SLICE_I (2), or -1 on error.
+    static int parseH264SliceTypeFromPacket(const uint8_t* data, int size);
+
+    // Parse HEVC slice_type from raw packet data (e.g. AVPacket->data).
+    // Returns H265::SLICE_B (0), H265::SLICE_P (1), H265::SLICE_I (2), or -1 on error.
+    static int parseH265SliceTypeFromPacket(const uint8_t* data, int size);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

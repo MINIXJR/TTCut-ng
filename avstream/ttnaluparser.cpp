@@ -547,18 +547,33 @@ bool TTNaluParser::parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal)
     // slice_pic_parameter_set_id (ue(v))
     nal.ppsId = static_cast<int>(readExpGolombUE(bytes, bitPos));
 
-    // slice_type would require knowing dependent_slice_segments_enabled_flag from PPS
-    // For simplicity, we determine slice type from NAL type:
-    if (nal.isKeyframe) {
-        nal.sliceType = H265::SLICE_I;
-    } else if (nal.type == H265::NAL_TRAIL_N || nal.type == H265::NAL_TSA_N ||
-               nal.type == H265::NAL_STSA_N || nal.type == H265::NAL_RADL_N ||
-               nal.type == H265::NAL_RASL_N) {
-        // Non-reference pictures are typically B
-        nal.sliceType = H265::SLICE_B;
+    // For first slice in picture, we can read slice_type directly from the bitstream.
+    // For dependent slices (firstSliceFlag == 0), we'd need PPS data we don't have,
+    // so fall back to NAL-type heuristic.
+    if (firstSliceFlag == 1) {
+        // HEVC spec: slice_type is ue(v) right after slice_pic_parameter_set_id
+        // (assuming num_extra_slice_header_bits == 0, which is standard for DVB)
+        uint32_t sliceType = readExpGolombUE(bytes, bitPos);
+        if (sliceType <= 2) {
+            nal.sliceType = static_cast<int>(sliceType);
+        } else {
+            // Invalid value — fall back to heuristic
+            if (nal.isKeyframe)
+                nal.sliceType = H265::SLICE_I;
+            else
+                nal.sliceType = H265::SLICE_P;
+        }
     } else {
-        // Reference pictures could be P or B
-        nal.sliceType = H265::SLICE_P;
+        // Dependent slice — heuristic based on NAL type
+        if (nal.isKeyframe) {
+            nal.sliceType = H265::SLICE_I;
+        } else if (nal.type == H265::NAL_TRAIL_N || nal.type == H265::NAL_TSA_N ||
+                   nal.type == H265::NAL_STSA_N || nal.type == H265::NAL_RADL_N ||
+                   nal.type == H265::NAL_RASL_N) {
+            nal.sliceType = H265::SLICE_B;
+        } else {
+            nal.sliceType = H265::SLICE_P;
+        }
     }
 
     return true;
@@ -1068,4 +1083,179 @@ uint32_t TTNaluParser::readBits(const uint8_t* data, int& bitPos, int numBits)
     }
 
     return value;
+}
+
+// ----------------------------------------------------------------------------
+// Parse H.264 slice_type from raw packet data (e.g. AVPacket->data)
+// Scans for first VCL NAL unit (type 1 or 5), parses slice header to extract
+// slice_type. H.264 slice header: 1-byte NAL header, first_mb_in_slice (ue),
+// slice_type (ue). Values 0-4 map to P/B/I/SP/SI, values 5-9 are same +5.
+// Returns: H264::SLICE_P (0), H264::SLICE_B (1), H264::SLICE_I (2), or -1
+// ----------------------------------------------------------------------------
+int TTNaluParser::parseH264SliceTypeFromPacket(const uint8_t* data, int size)
+{
+    if (!data || size < 4) return -1;
+
+    // Scan for Annex-B start code
+    int pos = 0;
+    int nalStart = -1;
+
+    while (pos < size - 3) {
+        if (data[pos] == 0 && data[pos+1] == 0) {
+            if (data[pos+2] == 1) {
+                nalStart = pos + 3;
+            } else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) {
+                nalStart = pos + 4;
+            }
+
+            if (nalStart >= 0 && nalStart < size) {
+                // H.264 NAL header: 1 byte (forbidden_zero_bit, nal_ref_idc, nal_unit_type)
+                uint8_t nalType = data[nalStart] & 0x1F;
+
+                // VCL NAL types: 1 (non-IDR slice), 5 (IDR slice)
+                if (nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE) {
+                    int bitPos = 8;  // Skip 1-byte NAL header
+                    const uint8_t* nalData = data + nalStart;
+                    int nalDataSize = size - nalStart;
+
+                    if (nalDataSize < 3) return -1;
+
+                    // first_mb_in_slice (ue(v)) — skip
+                    readExpGolombUE(nalData, bitPos);
+
+                    // slice_type (ue(v))
+                    if (bitPos / 8 + 1 >= nalDataSize) return -1;
+                    uint32_t sliceType = readExpGolombUE(nalData, bitPos);
+
+                    // Normalize: values 5-9 are same as 0-4
+                    if (sliceType >= 5 && sliceType <= 9)
+                        sliceType -= 5;
+
+                    if (sliceType <= 4)
+                        return static_cast<int>(sliceType);
+                    return -1;
+                }
+            }
+            nalStart = -1;
+        }
+        pos++;
+    }
+
+    // No start code found — try raw NAL data
+    if (size >= 3) {
+        uint8_t nalType = data[0] & 0x1F;
+        if (nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE) {
+            int bitPos = 8;
+            readExpGolombUE(data, bitPos);  // first_mb_in_slice
+            if (bitPos / 8 + 1 >= size) return -1;
+            uint32_t sliceType = readExpGolombUE(data, bitPos);
+            if (sliceType >= 5 && sliceType <= 9)
+                sliceType -= 5;
+            if (sliceType <= 4)
+                return static_cast<int>(sliceType);
+        }
+    }
+
+    return -1;
+}
+
+// ----------------------------------------------------------------------------
+// Parse HEVC slice_type from raw packet data (e.g. AVPacket->data)
+// Scans for first VCL NAL unit (type 0-31), parses slice header to extract
+// slice_type. Works with both Annex-B (start codes) and raw NAL packets.
+// Returns: H265::SLICE_B (0), H265::SLICE_P (1), H265::SLICE_I (2), or -1
+// ----------------------------------------------------------------------------
+int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
+{
+    if (!data || size < 6) return -1;
+
+    // Scan for Annex-B start code (00 00 01 or 00 00 00 01)
+    int pos = 0;
+    int nalStart = -1;
+
+    while (pos < size - 5) {
+        if (data[pos] == 0 && data[pos+1] == 0) {
+            if (data[pos+2] == 1) {
+                nalStart = pos + 3;
+            } else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) {
+                nalStart = pos + 4;
+            }
+
+            if (nalStart >= 0 && nalStart + 2 < size) {
+                // Parse 2-byte HEVC NAL header
+                uint8_t nalType = (data[nalStart] >> 1) & 0x3F;
+
+                // VCL NAL types are 0-31
+                if (nalType <= 31) {
+                    // Found first VCL NAL — parse slice header
+                    const uint8_t* nalData = data + nalStart;
+                    int nalDataSize = size - nalStart;
+
+                    // Need at least a few bytes for slice header
+                    if (nalDataSize < 4) return -1;
+
+                    int bitPos = 16;  // Skip 2-byte NAL header
+
+                    // first_slice_segment_in_pic_flag (1 bit)
+                    uint32_t firstSliceFlag = readBits(nalData, bitPos, 1);
+
+                    // For BLA/IDR/CRA: no_output_of_prior_pics_flag (1 bit)
+                    if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
+                        readBits(nalData, bitPos, 1);
+                    }
+
+                    if (firstSliceFlag != 1) {
+                        // Dependent slice — need PPS info we don't have
+                        // Fall back to NAL-type heuristic
+                        if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT)
+                            return H265::SLICE_I;
+                        return -1;
+                    }
+
+                    // slice_pic_parameter_set_id (ue(v))
+                    readExpGolombUE(nalData, bitPos);
+
+                    // slice_type (ue(v))
+                    // Guard: make sure we have enough data
+                    if (bitPos / 8 + 2 >= nalDataSize) return -1;
+
+                    uint32_t sliceType = readExpGolombUE(nalData, bitPos);
+                    if (sliceType <= 2) {
+                        return static_cast<int>(sliceType);
+                    }
+                    return -1;  // Invalid slice_type
+                }
+            }
+            // Reset and continue scanning
+            nalStart = -1;
+        }
+        pos++;
+    }
+
+    // No start code found — try interpreting as raw NAL data (no Annex-B framing)
+    if (size >= 4) {
+        uint8_t nalType = (data[0] >> 1) & 0x3F;
+        if (nalType <= 31) {
+            int bitPos = 16;  // Skip 2-byte NAL header
+
+            uint32_t firstSliceFlag = readBits(data, bitPos, 1);
+
+            if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
+                readBits(data, bitPos, 1);
+            }
+
+            if (firstSliceFlag != 1) return -1;
+
+            readExpGolombUE(data, bitPos);  // pps_id
+
+            if (bitPos / 8 + 2 >= size) return -1;
+
+            uint32_t sliceType = readExpGolombUE(data, bitPos);
+            if (sliceType <= 2) {
+                return static_cast<int>(sliceType);
+            }
+        }
+    }
+
+    return -1;
 }
