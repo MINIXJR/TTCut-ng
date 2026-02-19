@@ -65,6 +65,20 @@
   - User can then convert selected markers to cut points
   - Could use ffmpeg's blackdetect/silencedetect filters or native implementation
 
+- **CLI Interface for batch Smart Cut (headless mode)**
+  - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
+  - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux
+  - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
+  - Features:
+    - Load cut points from `.prj` file or command-line `--cuts` parameter
+    - Read `.info` file for frame rate, A/V offset, audio languages
+    - Apply A/V sync offset during muxing (mkvmerge `--sync`)
+    - Chapter marks at cut boundaries
+    - Progress output for scripting (percentage, ETA)
+    - Return codes for success/failure
+  - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
+  - Build separately via dedicated `.pro` file or as part of main build
+
 ## Medium Priority
 
 - **Manual audio delay/offset per track**
