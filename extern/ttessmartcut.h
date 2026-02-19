@@ -135,6 +135,8 @@ private:
     int mDecodedWidth;
     int mDecodedHeight;
     int mDecodedPixFmt;  // AVPixelFormat
+    bool mInterlaced;    // true if source is interlaced (MBAFF/PAFF)
+    bool mTopFieldFirst; // true if TFF, false if BFF
 
     // B-frame reorder delay (measured from decoder)
     int mReorderDelay;
@@ -163,10 +165,14 @@ private:
     bool processSegment(QFile& outFile, const TTCutSegmentInfo& segment);
 
     // Stream-copy NAL units (no re-encoding)
-    bool streamCopyFrames(QFile& outFile, int startFrame, int endFrame);
+    // patchReorderFrames > 0: patch inline H.264 SPS NALs with max_num_reorder_frames
+    bool streamCopyFrames(QFile& outFile, int startFrame, int endFrame,
+                          int patchReorderFrames = 0);
 
     // Re-encode frames (for partial GOPs)
-    bool reencodeFrames(QFile& outFile, int startFrame, int endFrame);
+    // streamCopyStartFrame: AU index where stream-copy begins after re-encode (-1 if none)
+    bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
+                        int streamCopyStartFrame);
 
     // Helper: decode frame from NAL data
     bool decodeFrame(const QByteArray& nalData, AVFrame* frame);
@@ -181,7 +187,9 @@ private:
     QByteArray filterEncoderOutput(const QByteArray& data);
 
     // Helper: write parameter sets (SPS/PPS/VPS)
-    bool writeParameterSets(QFile& outFile);
+    // patchReorderFrames > 0: patch H.264 SPS to add bitstream_restriction
+    // with max_num_reorder_frames = patchReorderFrames
+    bool writeParameterSets(QFile& outFile, int patchReorderFrames = 0);
 
     // Time/frame conversion
     int timeToFrame(double timeSeconds) const;

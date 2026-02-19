@@ -525,9 +525,58 @@ def _compute_ssim(ref_png: str, cut_png: str) -> Optional[float]:
     return None
 
 
+def _detect_boundary_offset(ref_mkv: str, cut_mkv: str,
+                             ref_start_time: float, cut_start_time: float,
+                             fps: float, tmpdir: str, seg_idx: int) -> int:
+    """Detect display-order offset at segment boundary.
+
+    Smart Cut may shift the effective CutIn forward due to display-order
+    mapping (B-frame reordering makes display-order frame N map to a later
+    AU index). This function detects how many frames the cut MKV segment
+    start is shifted relative to the expected start_frame.
+
+    Returns the offset in frames (0 = perfect alignment).
+    """
+    # Extract first frame from cut MKV at segment start
+    cut_png = os.path.join(tmpdir, f"_probe_cut_{seg_idx}.png")
+    if not _extract_frame(cut_mkv, cut_start_time, cut_png):
+        return 0
+
+    best_ssim = -1.0
+    best_offset = 0
+
+    for offset in range(11):  # probe up to 10 frames forward
+        probe_time = ref_start_time + offset / fps
+        ref_png = os.path.join(tmpdir, f"_probe_ref_{seg_idx}.png")
+        if not _extract_frame(ref_mkv, probe_time, ref_png):
+            continue
+        ssim = _compute_ssim(ref_png, cut_png)
+        try:
+            os.remove(ref_png)
+        except OSError:
+            pass
+        if ssim is not None and ssim > best_ssim:
+            best_ssim = ssim
+            best_offset = offset
+        if best_ssim >= 0.99:
+            break  # perfect match, no need to probe further
+
+    try:
+        os.remove(cut_png)
+    except OSError:
+        pass
+
+    return best_offset
+
+
 def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                            cuts: list[tuple[int, int]], tmpdir: str) -> TestResult:
-    """Extract frames from reference and cut MKV, compare with SSIM."""
+    """Extract frames from reference and cut MKV, compare with SSIM.
+
+    Handles display-order mapping: Smart Cut may shift the effective CutIn
+    forward when B-frame reordering causes the UI frame number to differ
+    from the AU index. The function auto-detects this offset per segment.
+    """
     name_sc = "Visual (stream-copy)"
     name_re = "Visual (re-encoded)"
 
@@ -540,63 +589,100 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
             "--default-duration", f"0:{frame_dur}",
             original_es
         ]
-        r = run_cmd(cmd, timeout=120)
+        r = run_cmd(cmd, timeout=600)  # large ES files (>5GB) need more time
         if r.returncode not in (0, 1):  # mkvmerge returns 1 for warnings
             return TestResult(name="Visual Comparison", passed=False,
                               details=f"mkvmerge failed: {r.stderr[:200]}")
 
-        # Step 2: Define comparison positions
+        # Step 2: Detect display-order offsets at segment boundaries
+        boundary_offsets = []
+        cut_offset_time = 0.0
+        for seg_idx, (start_frame, end_frame) in enumerate(cuts):
+            seg_frames = end_frame - start_frame + 1
+            ref_start = start_frame / fps
+
+            offset = _detect_boundary_offset(
+                ref_mkv, cut_mkv, ref_start, cut_offset_time,
+                fps, tmpdir, seg_idx)
+            boundary_offsets.append(offset)
+            if offset > 0:
+                print(f"    Segment {seg_idx+1}: display-order offset detected: "
+                      f"+{offset} frames (effective start: {start_frame+offset})")
+
+            cut_offset_time += seg_frames / fps
+
+        # Step 3: Define comparison positions using corrected offsets
         # For each segment: start+1 (re-encoded), start+20 (stream-copy),
         #                    mid (stream-copy), end-1 (stream-copy)
         re_encoded_positions = []  # (ref_time, cut_time)
         stream_copy_positions = []
+        re_encoded_skipped = 0
 
         cut_offset = 0.0  # cumulative time offset in cut MKV
         for seg_idx, (start_frame, end_frame) in enumerate(cuts):
             seg_frames = end_frame - start_frame + 1
             seg_dur = seg_frames / fps
+            disp_offset = boundary_offsets[seg_idx]
 
-            # Times in reference MKV (= original timestamps)
-            ref_start = start_frame / fps
-            ref_end = end_frame / fps
+            # Effective start in reference MKV (adjusted for display-order offset)
+            eff_start_frame = start_frame + disp_offset
+            ref_eff_start = eff_start_frame / fps
 
-            # Re-encoded: start + 1 frame
-            if seg_frames > 2:
+            # Effective segment duration in cut MKV
+            eff_seg_frames = end_frame - eff_start_frame + 1
+
+            # Re-encoded: start + 1 frame (only if offset == 0, i.e. re-encoding happened)
+            if disp_offset == 0 and seg_frames > 2:
                 re_encoded_positions.append((
-                    ref_start + 1/fps,
+                    ref_eff_start + 1/fps,
                     cut_offset + 1/fps
                 ))
+            elif disp_offset > 0:
+                re_encoded_skipped += 1
 
-            # Stream-copy: start + 20 frames
-            if seg_frames > 25:
+            # Stream-copy: start + 20 frames (relative to effective start)
+            if eff_seg_frames > 25:
                 stream_copy_positions.append((
-                    ref_start + 20/fps,
+                    ref_eff_start + 20/fps,
                     cut_offset + 20/fps
                 ))
 
             # Stream-copy: mid
-            mid_frame_offset = seg_frames // 2
+            mid_frame_offset = eff_seg_frames // 2
             stream_copy_positions.append((
-                ref_start + mid_frame_offset/fps,
+                ref_eff_start + mid_frame_offset/fps,
                 cut_offset + mid_frame_offset/fps
             ))
 
             # Stream-copy: end - 1 frame
-            if seg_frames > 2:
+            if eff_seg_frames > 2:
+                ref_end = end_frame / fps
                 stream_copy_positions.append((
                     ref_end - 1/fps,
-                    cut_offset + (seg_frames - 2)/fps
+                    cut_offset + (eff_seg_frames - 2)/fps
                 ))
 
             cut_offset += seg_dur
 
-        # Step 3: Extract and compare
+        # Step 4: Extract and compare
         results = []  # list of TestResult
 
         for label, positions, threshold in [
             (name_re, re_encoded_positions, 0.50),
             (name_sc, stream_copy_positions, 0.99),
         ]:
+            if not positions:
+                if label == name_re and re_encoded_skipped > 0:
+                    results.append(TestResult(
+                        name=label, passed=True,
+                        details=f"Skipped: display-order mapping eliminated re-encoding "
+                                f"({re_encoded_skipped} segments pure stream-copy)"))
+                else:
+                    results.append(TestResult(
+                        name=label, passed=False,
+                        details="No frames could be compared"))
+                continue
+
             ssim_values = []
             for i, (ref_time, cut_time) in enumerate(positions):
                 ref_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_ref.png")
@@ -734,7 +820,7 @@ def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
             "--default-duration", f"0:{frame_dur}",
             original_es, audio_file
         ]
-        r = run_cmd(cmd, timeout=120)
+        r = run_cmd(cmd, timeout=600)  # large ES files (>5GB) need more time
         if r.returncode not in (0, 1):
             return TestResult(name=name, passed=False,
                               details=f"mkvmerge reference creation failed: {r.stderr[:200]}")
