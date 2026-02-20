@@ -994,7 +994,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     int endFrame = item.cutOutIndex();
 
     double cutInTime = startFrame / frameRate;
-    double cutOutTime = endFrame / frameRate;  // No +1, cutOut is the last frame to include
+    double cutOutTime = (endFrame + 1) / frameRate;  // +1 because endFrame is inclusive (last frame to keep)
 
     log->infoMsg(__FILE__, __LINE__, QString("Cut %1: frames %2-%3, time %4-%5")
         .arg(i+1).arg(startFrame).arg(endFrame)

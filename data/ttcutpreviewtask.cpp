@@ -352,7 +352,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
       double cutInTime = item.cutInIndex() / frameRate;
-      double cutOutTime = item.cutOutIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
       keepList.append(qMakePair(cutInTime, cutOutTime));
     }
 
