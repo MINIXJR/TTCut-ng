@@ -1032,12 +1032,13 @@ def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
             # jumps >30dB from BOTH neighbors = impulse noise / click).
             max_jump = 0.0
             has_click = False
+            silence_floor = -80.0  # dBFS — below this, fluctuations are inaudible quantization noise
             for c in range(1, len(db_levels) - 1):
                 jump_prev = abs(db_levels[c] - db_levels[c-1])
                 jump_next = abs(db_levels[c] - db_levels[c+1])
                 max_jump = max(max_jump, jump_prev)
-                # A click: spike from both sides (not a step change)
-                if jump_prev > 30.0 and jump_next > 30.0:
+                # A click: spike from both sides (not a step change), above silence floor
+                if jump_prev > 30.0 and jump_next > 30.0 and db_levels[c] > silence_floor:
                     has_click = True
 
             if has_click:
