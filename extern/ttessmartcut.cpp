@@ -265,15 +265,18 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         if (i < segments.size() - 1) {
             QByteArray eosNal;
             if (mParser.codecType() == NALU_CODEC_H265) {
-                // H.265 EOS_NUT (type 36): start code + 2-byte NAL header
-                // byte1 = (36 << 1) = 0x48, byte2 = 0x01 (temporal_id_plus1=1)
-                eosNal = QByteArray::fromHex("000000014801");
+                // H.265 EOB_NUT (type 37): end_of_bitstream - strongest decoder reset
+                // byte1 = (37 << 1) = 0x4A, byte2 = 0x01 (temporal_id_plus1=1)
+                eosNal = QByteArray::fromHex("000000014A01");
             } else {
-                // H.264 end_of_seq (type 10): start code + 1-byte NAL header
-                eosNal = QByteArray::fromHex("000000010A");
+                // H.264 end_of_stream (type 11): strongest decoder reset
+                eosNal = QByteArray::fromHex("000000010B");
             }
             outFile.write(eosNal);
             qDebug() << "    Wrote EOS NAL between segments" << i << "and" << i + 1;
+
+            // Write parameter sets after EOS so decoder can initialize for next segment
+            writeParameterSets(outFile, 0);
         }
 
         framesProcessed += (seg.endFrame - seg.startFrame + 1);
@@ -314,9 +317,18 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
         seg.cutInGOP = mParser.findGopForAU(seg.startFrame);
         seg.cutOutGOP = mParser.findGopForAU(seg.endFrame);
 
-        // Check if cut-in is at keyframe
+        // Check if cut-in is at keyframe AND is a true IDR
         int keyframeBefore = mParser.findKeyframeBefore(seg.startFrame);
-        seg.needsReencodeAtStart = (keyframeBefore != seg.startFrame);
+        bool isAtKeyframe = (keyframeBefore == seg.startFrame);
+        bool isAtIDR = isAtKeyframe && mParser.accessUnitAt(seg.startFrame).isIDR;
+
+        // Non-IDR I-frames don't flush decoder DPB → must re-encode to produce IDR
+        seg.needsReencodeAtStart = !isAtKeyframe || !isAtIDR;
+
+        if (isAtKeyframe && !isAtIDR) {
+            qDebug() << "    Cut-in at non-IDR I-frame" << seg.startFrame
+                     << "- re-encode needed for IDR boundary";
+        }
 
         // Check if cut-out is at B-frame (optional re-encode)
         TTAccessUnit au = mParser.accessUnitAt(seg.endFrame);
@@ -372,6 +384,49 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
 }
 
 // ----------------------------------------------------------------------------
+// Check if SPS changes at a cut boundary (aspect ratio / resolution change)
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut) const
+{
+    if (!mIsInitialized) return false;
+    if (mParser.spsCount() <= 1) return false;  // Only 1 SPS in entire stream, no changes
+
+    // Find the two frames to compare:
+    // CutOut: compare cutOut frame vs cutOut+1 (first frame outside segment)
+    // CutIn: compare cutIn frame vs cutIn-1 (last frame before segment)
+    int frameA = frameIndex;
+    int frameB = isCutOut ? frameIndex + 1 : frameIndex - 1;
+
+    if (frameB < 0 || frameB >= mParser.accessUnitCount()) return false;
+
+    // Find which SPS NAL is closest before each frame
+    const auto& nalUnits = mParser.nalUnits();
+    const auto& auA = mParser.accessUnitAt(frameA);
+    const auto& auB = mParser.accessUnitAt(frameB);
+
+    // Search backward from each AU's first NAL for the most recent SPS
+    auto findActiveSPS = [&](const TTAccessUnit& au) -> int {
+        int firstNal = au.nalIndices.isEmpty() ? 0 : au.nalIndices.first();
+        for (int i = firstNal; i >= 0; i--) {
+            if (nalUnits[i].isSPS) return i;
+        }
+        return -1;
+    };
+
+    int spsA = findActiveSPS(auA);
+    int spsB = findActiveSPS(auB);
+
+    if (spsA < 0 || spsB < 0) return false;
+    if (spsA == spsB) return false;  // Same SPS NAL, no change
+
+    // Different SPS NALs — compare raw data
+    QByteArray dataA = const_cast<TTNaluParser&>(mParser).readNalData(spsA);
+    QByteArray dataB = const_cast<TTNaluParser&>(mParser).readNalData(spsB);
+
+    return dataA != dataB;
+}
+
+// ----------------------------------------------------------------------------
 // Process a single segment - Smart Cut using pure libav
 // Strategy: Both re-encoded and stream-copied sections are self-contained
 // Each section starts with its own SPS/PPS + IDR, allowing clean decoder reset
@@ -422,9 +477,10 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         qDebug() << "    Inserted H.265 EOS NAL (type 37) for DPB flush";
     }
 
-    // 3. Stream-copy section starting from keyframe
-    // SPS NALs within the stream-copied data are patched inline to signal
-    // max_num_reorder_frames=4, preventing backward timestamps at the transition.
+    // 3. Write parameter sets so decoder can initialize new sequence after EOS
+    writeParameterSets(outFile, 0);
+
+    // 4. Stream-copy section starting from keyframe
     if (!streamCopyFrames(outFile, segment.streamCopyStartFrame, segment.streamCopyEndFrame, 0)) {
         return false;
     }
