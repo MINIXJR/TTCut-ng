@@ -34,6 +34,7 @@
 
 #include "../common/ttcut.h"
 
+#include <QSpinBox>
 
 class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
 {
@@ -48,6 +49,9 @@ class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
 
     public slots:
       void onOpenDir();
+
+  private:
+    QSpinBox* sbBurstThreshold;
 };
 
 #endif

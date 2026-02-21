@@ -164,6 +164,9 @@ int  TTCut::h265Crf = 20;          // CRF 20 (high quality for cut points)
 int  TTCut::h265Profile = 0;       // main profile
 int  TTCut::h265Muxer = 1;         // mkvmerge (MKV)
 
+// --- audio boundary detection ---
+int TTCut::burstThresholdDb = -30;
+
 // --------------------------------------------------------------
 // muxer settings
 // --------------------------------------------------------------

@@ -33,11 +33,25 @@
 
 #include <QFileDialog>
 #include <QDir>
-  
+#include <QGridLayout>
+#include <QLabel>
+
 TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
 :QWidget(parent)
 {
   setupUi(this);
+
+  // Audio burst threshold spinbox (programmatically added)
+  sbBurstThreshold = new QSpinBox(this);
+  sbBurstThreshold->setRange(-60, 0);
+  sbBurstThreshold->setSuffix(" dB");
+  QLabel* lblBurst = new QLabel(tr("Audio-Burst Threshold (dB, 0=off)"), this);
+  QGridLayout* gl = qobject_cast<QGridLayout*>(layout());
+  if (gl) {
+    int row = gl->rowCount();
+    gl->addWidget(lblBurst, row, 0);
+    gl->addWidget(sbBurstThreshold, row, 1);
+  }
 
   connect(btnDirOpen, SIGNAL(clicked()), SLOT(onOpenDir()));
 }
@@ -89,6 +103,9 @@ void TTCutSettingsCommon::setTabData()
   // Options, directories
   cbQuickSearch->setChecked(TTCut::fastSlider);
   leTempDirectory->setText( TTCut::tempDirPath );
+
+  // Audio burst detection
+  sbBurstThreshold->setValue(TTCut::burstThresholdDb);
 }
 
 // get the tab data and fill the global parameter
@@ -116,6 +133,9 @@ void TTCutSettingsCommon::getTabData()
 
   if ( !QDir(TTCut::tempDirPath).exists() )
     TTCut::tempDirPath = QDir::tempPath();
+
+  // Audio burst detection
+  TTCut::burstThresholdDb = sbBurstThreshold->value();
 }
 
 
