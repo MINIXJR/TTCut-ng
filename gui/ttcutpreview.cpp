@@ -39,8 +39,12 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
+#include <QHBoxLayout>
 #include <QIcon>
+#include <QMessageBox>
 #include <QStyle>
+
+#include "../extern/ttffmpegwrapper.h"
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutPreview constructor
@@ -77,6 +81,31 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   connect(pbExit,       SIGNAL(clicked()),                SLOT(onExitPreview()));
   connect(pbPrevCut,    SIGNAL(clicked()),                SLOT(onPrevCut()));
   connect(pbNextCut,    SIGNAL(clicked()),                SLOT(onNextCut()));
+
+  // Burst warning widgets
+  lblBurstWarning = new QLabel(this);
+  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
+  lblBurstWarning->hide();
+
+  pbBurstShift = new QPushButton(tr("Shift -1 Frame"), this);
+  pbBurstShift->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowLeft));
+  pbBurstShift->hide();
+  connect(pbBurstShift, SIGNAL(clicked()), this, SLOT(onBurstShift()));
+
+  // Insert burst warning row into grid layout (row 2, below controls)
+  QHBoxLayout* burstLayout = new QHBoxLayout();
+  burstLayout->addWidget(lblBurstWarning);
+  burstLayout->addWidget(pbBurstShift);
+  burstLayout->addStretch();
+
+  QGridLayout* grid = qobject_cast<QGridLayout*>(layout());
+  if (grid) {
+    grid->addLayout(burstLayout, 2, 0);
+  }
+
+  mpCutList = nullptr;
+  mBurstSegmentIdx = -1;
+  mBurstIsCutOut = false;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -112,6 +141,8 @@ void TTCutPreview::closeEvent(QCloseEvent* event)
  */
 void TTCutPreview::initPreview(TTCutList* cutList)
 {
+  mpCutList = cutList;
+
   int       iPos;
   QString   preview_video_name;
   QFileInfo preview_video_info;
@@ -202,6 +233,8 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   // Update prev/next button states
   pbPrevCut->setEnabled(iCut > 0);
   pbNextCut->setEnabled(iCut < cbCutPreview->count() - 1);
+
+  checkBurstForCurrentCut(iCut);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -273,6 +306,97 @@ void TTCutPreview::onNextCut()
       pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
     }
   }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Check for audio burst at the currently selected cut transition
+ */
+void TTCutPreview::checkBurstForCurrentCut(int iCut)
+{
+  lblBurstWarning->hide();
+  pbBurstShift->hide();
+  pbBurstShift->setText(tr("Shift -1 Frame"));
+  mBurstSegmentIdx = -1;
+
+  if (!mpCutList || mpCutList->count() < 2) return;
+
+  int numPreview = mpCutList->count() / 2 + 1;
+
+  // Only middle items (transitions) have bursts to check
+  if (iCut <= 0 || iCut >= numPreview - 1) return;
+
+  // iPos = index of the CutOut entry in the cut list for this transition
+  int iPos = (iCut - 1) * 2 + 1;
+  if (iPos >= mpCutList->count()) return;
+
+  TTCutItem cutOutItem = mpCutList->at(iPos);
+  if (!cutOutItem.avDataItem() || cutOutItem.avDataItem()->audioCount() == 0) return;
+
+  double frameRate = cutOutItem.avDataItem()->videoStream()->frameRate();
+  QString audioFile = cutOutItem.avDataItem()->audioStreamAt(0)->filePath();
+  int threshold = TTCut::burstThresholdDb;
+
+  // Check CutOut of left segment
+  double cutOutTime = (cutOutItem.cutOutIndex() + 1) / frameRate;
+  double outBurstDb = 0, outContextDb = 0;
+  bool hasCutOutBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, outBurstDb, outContextDb);
+  if (hasCutOutBurst && threshold != 0 && outBurstDb < threshold) hasCutOutBurst = false;
+
+  if (hasCutOutBurst) {
+    lblBurstWarning->setText(QString::fromUtf8("\xe2\x9a\xa0 Audio-Burst am Ende von Schnitt %1 (%2 dB)")
+        .arg(iCut).arg(outBurstDb, 0, 'f', 1));
+    lblBurstWarning->show();
+    pbBurstShift->show();
+    mBurstSegmentIdx = iPos;
+    mBurstIsCutOut = true;
+    return;  // Show only one burst per transition (CutOut takes priority)
+  }
+
+  // Check CutIn of right segment
+  if (iPos + 1 < mpCutList->count()) {
+    TTCutItem cutInItem = mpCutList->at(iPos + 1);
+    double cutInTime = cutInItem.cutInIndex() / frameRate;
+    double inBurstDb = 0, inContextDb = 0;
+    bool hasCutInBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false, inBurstDb, inContextDb);
+    if (hasCutInBurst && threshold != 0 && inBurstDb < threshold) hasCutInBurst = false;
+
+    if (hasCutInBurst) {
+      lblBurstWarning->setText(QString::fromUtf8("\xe2\x9a\xa0 Audio-Burst am Anfang von Schnitt %1 (%2 dB)")
+          .arg(iCut + 1).arg(inBurstDb, 0, 'f', 1));
+      lblBurstWarning->show();
+      pbBurstShift->setText(tr("Shift +1 Frame"));
+      pbBurstShift->show();
+      mBurstSegmentIdx = iPos + 1;
+      mBurstIsCutOut = false;
+    }
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Shift the cut point by one frame to avoid the audio burst
+ */
+void TTCutPreview::onBurstShift()
+{
+  if (mBurstSegmentIdx < 0 || !mpCutList) return;
+  if (mBurstSegmentIdx >= mpCutList->count()) return;
+
+  TTCutItem currentItem = mpCutList->at(mBurstSegmentIdx);
+  TTCutItem updatedItem(currentItem);
+
+  if (mBurstIsCutOut) {
+    updatedItem.update(currentItem.cutInIndex(), currentItem.cutOutIndex() - 1);
+  } else {
+    updatedItem.update(currentItem.cutInIndex() + 1, currentItem.cutOutIndex());
+  }
+
+  mpCutList->update(currentItem, updatedItem);
+
+  QMessageBox::information(this, tr("Cut Shifted"),
+      tr("Schnittpunkt wurde verschoben.\n"
+         "Bitte Vorschau schliessen und neu starten\n"
+         "um das Ergebnis zu pruefen."));
+
+  close();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

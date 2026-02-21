@@ -37,6 +37,7 @@
 #include <QProcess>
 #include <QResizeEvent>
 #include <QCloseEvent>
+#include <QLabel>
 
 #include "../common/ttcut.h"
 #include "../data/ttcutlist.h"
@@ -79,6 +80,7 @@ protected slots:
 	void onExitPreview();
 	void onPrevCut();
 	void onNextCut();
+	void onBurstShift();
 
 private:
   TTVideoPlayer* videoPlayer;
@@ -86,6 +88,15 @@ private:
 	int            previewHeight;
 	QString        current_video_file;
 	QString        current_audio_file;
+
+    // Burst warning
+    QLabel*      lblBurstWarning;
+    QPushButton* pbBurstShift;
+    TTCutList*   mpCutList;
+    int          mBurstSegmentIdx;
+    bool         mBurstIsCutOut;
+
+    void checkBurstForCurrentCut(int iCut);
 };
 
 #endif // TTCUTPREVIEW_H
