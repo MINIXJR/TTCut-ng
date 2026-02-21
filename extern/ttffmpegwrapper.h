@@ -198,42 +198,7 @@ public:
     void setFrameCacheSize(int maxFrames);
     void clearFrameCache();
 
-    // Segment extraction (for cutting)
-    bool extractSegment(const QString& outputFile, int startFrame, int endFrame, bool reencode = false);
-    bool concatenateSegments(const QString& outputFile, const QStringList& segmentFiles);
-
-    // Smart cut using avcut approach (direct writing, no global headers, GOP-based)
-    // cutList contains pairs of (startTime, endTime) in seconds - segments to KEEP
-    bool smartCut(const QString& outputFile, const QList<QPair<double, double>>& cutList);
-
-    // Elementary stream support
-    // Wrap ES in MKV container with proper timestamps (using mkvmerge CLI)
-    QString wrapElementaryStream(const QString& esFile, double frameRate = -1);
-
-    // Wrap ES in MKV using libav directly (no external tools)
-    // This gives full control over timestamps and avoids CLI tool quirks
-    QString wrapElementaryStreamLibav(const QString& esFile, double frameRate = -1);
-
-    // Smart Cut for ES - re-encodes only partial GOPs at cut-in, stream-copies rest
-    // Allows frame-accurate cutting with minimal re-encoding
-    bool smartCutElementaryStream(const QString& inputFile, const QString& audioFile,
-                                   const QString& outputFile,
-                                   const QList<QPair<double, double>>& cutList,
-                                   double frameRate);
-
-    // Smart Cut for ES V2 - using native NAL parser (no external CLI tools)
-    // This is the preferred method for ES Smart Cut
-    bool smartCutElementaryStreamV2(const QString& inputFile, const QString& audioFile,
-                                     const QString& outputFile,
-                                     const QList<QPair<double, double>>& cutList,
-                                     double frameRate);
-
-    // Byte-level ES cutting (legacy - starts at keyframes only)
-    // Returns cut ES file - caller must mux to container if needed
-    bool cutElementaryStream(const QString& inputFile, const QString& outputFile,
-                             const QList<QPair<double, double>>& cutList);
-
-    // Audio ES cutting - time-based with FFmpeg (ms-accurate)
+    // Audio ES cutting - time-based stream-copy (ms-accurate)
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList);
 
@@ -245,13 +210,6 @@ public:
     // SRT subtitle cutting - text-based time filtering
     bool cutSrtSubtitle(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList);
-
-    // Complete ES cutting workflow: video + audio + srt + mux
-    // Takes video ES + audio ES files, cuts both, muxes to final output
-    bool cutAndMuxElementaryStreams(const QString& videoES, const QString& audioES,
-                                    const QString& outputFile,
-                                    const QList<QPair<double, double>>& cutList,
-                                    double frameRate = -1);
 
     // Error handling
     QString lastError() const { return mLastError; }
