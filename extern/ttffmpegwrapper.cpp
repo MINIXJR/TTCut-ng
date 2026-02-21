@@ -3339,3 +3339,79 @@ bool TTFFmpegWrapper::concatenateSegments(const QString& outputFile,
 
     return true;
 }
+
+// ----------------------------------------------------------------------------
+// Detect audio burst near a cut boundary
+// Analyzes ~200ms of audio around a boundary via ffmpeg's astats filter.
+// Returns true if a sudden loudness burst (>20dB above median) is detected,
+// indicating commercial audio leaking into the movie cut.
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundaryTime,
+                                        bool isCutOut, double& burstRmsDb, double& contextRmsDb)
+{
+    // Analyze 200ms window around boundary
+    // For CutOut: check last 200ms before boundary
+    // For CutIn: check first 200ms after boundary
+    double windowStart, windowEnd;
+    if (isCutOut) {
+        windowStart = qMax(0.0, boundaryTime - 0.200);
+        windowEnd   = boundaryTime + 0.032;  // +1 audio frame to catch leak
+    } else {
+        windowStart = qMax(0.0, boundaryTime - 0.032);
+        windowEnd   = boundaryTime + 0.200;
+    }
+
+    QStringList args;
+    args << "-v" << "error"
+         << "-i" << audioFile
+         << "-ss" << QString::number(windowStart, 'f', 6)
+         << "-to" << QString::number(windowEnd, 'f', 6)
+         << "-af" << "astats=metadata=1:reset=1536"
+         << "-f" << "null" << "-";
+
+    QProcess proc;
+    proc.start("/usr/bin/ffmpeg", args);
+    if (!proc.waitForStarted(5000) || !proc.waitForFinished(10000)) {
+        qDebug() << "detectAudioBurst: ffmpeg failed for" << audioFile;
+        return false;
+    }
+
+    QString output = QString::fromUtf8(proc.readAllStandardError());
+
+    // Parse RMS levels from astats output
+    // Format: [Parsed_astats_0 ...] RMS level dB: -XX.XX
+    QRegularExpression rmsRegex("RMS level dB:\\s*(-?[\\d.]+|inf|-inf)");
+    QList<double> rmsValues;
+    auto it = rmsRegex.globalMatch(output);
+    while (it.hasNext()) {
+        auto match = it.next();
+        QString val = match.captured(1);
+        if (val == "-inf" || val == "inf") continue;
+        rmsValues.append(val.toDouble());
+    }
+
+    if (rmsValues.size() < 3) return false;
+
+    // Calculate median RMS (excluding the boundary chunk)
+    QList<double> sorted = rmsValues;
+    std::sort(sorted.begin(), sorted.end());
+    double median = sorted[sorted.size() / 2];
+
+    // Check for burst: boundary chunks >20dB above median and above -40dB absolute
+    // For CutOut: check last 2 chunks; for CutIn: check first 2 chunks
+    int checkStart = isCutOut ? qMax(0, rmsValues.size() - 2) : 0;
+    int checkEnd   = isCutOut ? rmsValues.size() : qMin(2, rmsValues.size());
+
+    for (int i = checkStart; i < checkEnd; i++) {
+        if (rmsValues[i] - median > 20.0 && rmsValues[i] > -40.0) {
+            burstRmsDb = rmsValues[i];
+            contextRmsDb = median;
+            qDebug() << "detectAudioBurst: BURST at" << boundaryTime
+                     << (isCutOut ? "CutOut" : "CutIn")
+                     << "burst=" << burstRmsDb << "dB, context=" << contextRmsDb << "dB";
+            return true;
+        }
+    }
+
+    return false;
+}
