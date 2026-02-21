@@ -39,7 +39,7 @@
 
 #include <QDebug>
 #include <QTime>
-#include <QProcess>
+
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
@@ -1152,8 +1152,8 @@ void TTFFmpegWrapper::clearFrameCache()
 }
 
 // ----------------------------------------------------------------------------
-// Cut audio elementary stream using FFmpeg
-// Audio is cut time-based (ms-accurate) using ffmpeg concat demuxer
+// Cut audio elementary stream using libav stream-copy (no external process)
+// All segments are handled in a single pass with PTS offset management.
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                                       const QString& outputFile,
@@ -1169,155 +1169,167 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutAudioStream: Lossless stream-copy audio cutting";
+    qDebug() << "cutAudioStream: libav stream-copy";
     qDebug() << "  Input:" << inputFile;
     qDebug() << "  Output:" << outputFile;
     qDebug() << "  Segments:" << cutList.size();
 
-    bool success = false;
-
-    if (cutList.size() == 1) {
-        // Single segment: direct stream-copy with -ss/-to
-        QStringList args;
-        args << "-y"
-             << "-i" << inputFile
-             << "-ss" << QString::number(cutList[0].first, 'f', 6)
-             << "-to" << QString::number(cutList[0].second, 'f', 6)
-             << "-c:a" << "copy"
-             << outputFile;
-
-        qDebug() << "  FFmpeg command: ffmpeg" << args.join(" ");
-
-        QProcess proc;
-        proc.start("/usr/bin/ffmpeg", args);
-
-        if (!proc.waitForStarted(5000)) {
-            setError("FFmpeg failed to start");
-            return false;
-        }
-
-        if (!proc.waitForFinished(300000)) {
-            setError("FFmpeg timed out");
-            proc.kill();
-            return false;
-        }
-
-        QString stderr = QString::fromUtf8(proc.readAllStandardError());
-        if (!stderr.isEmpty()) qDebug() << "  FFmpeg stderr:" << stderr;
-
-        if (proc.exitCode() != 0) {
-            setError(QString("FFmpeg failed: %1").arg(stderr));
-            return false;
-        }
-        success = true;
-
-    } else {
-        // Multiple segments: cut each to temp file, then concat
-        QString tempDir = TTCut::tempDirPath;
-        QStringList tempFiles;
-        QString concatListFile = tempDir + "/audio_concat_list.txt";
-
-        QFile concatFile(concatListFile);
-        if (!concatFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            setError(QString("Cannot create concat list: %1").arg(concatListFile));
-            return false;
-        }
-
-        QTextStream concatStream(&concatFile);
-
-        for (int i = 0; i < cutList.size(); ++i) {
-            QString tempFile = QString("%1/audio_seg_%2.%3")
-                .arg(tempDir)
-                .arg(i)
-                .arg(QFileInfo(inputFile).suffix());
-            tempFiles << tempFile;
-
-            qDebug() << "  Segment" << i << ":" << cutList[i].first << "->" << cutList[i].second;
-
-            QStringList args;
-            args << "-y"
-                 << "-i" << inputFile
-                 << "-ss" << QString::number(cutList[i].first, 'f', 6)
-                 << "-to" << QString::number(cutList[i].second, 'f', 6)
-                 << "-c:a" << "copy"
-                 << tempFile;
-
-            QProcess proc;
-            proc.start("/usr/bin/ffmpeg", args);
-
-            if (!proc.waitForStarted(5000)) {
-                setError(QString("FFmpeg failed to start for segment %1").arg(i));
-                goto cleanup;
-            }
-
-            if (!proc.waitForFinished(300000)) {
-                setError(QString("FFmpeg timed out for segment %1").arg(i));
-                proc.kill();
-                goto cleanup;
-            }
-
-            QString stderr = QString::fromUtf8(proc.readAllStandardError());
-            if (!stderr.isEmpty()) qDebug() << "  Segment" << i << "stderr:" << stderr;
-
-            if (proc.exitCode() != 0) {
-                setError(QString("FFmpeg failed for segment %1: %2").arg(i).arg(stderr));
-                goto cleanup;
-            }
-
-            // Check output size
-            QFileInfo segInfo(tempFile);
-            if (!segInfo.exists() || segInfo.size() == 0) {
-                setError(QString("Segment %1 produced 0-byte output").arg(i));
-                goto cleanup;
-            }
-
-            concatStream << "file '" << tempFile << "'\n";
-        }
-        concatFile.close();
-
-        // Concat all segments
-        {
-            QStringList args;
-            args << "-y"
-                 << "-f" << "concat"
-                 << "-safe" << "0"
-                 << "-i" << concatListFile
-                 << "-c:a" << "copy"
-                 << outputFile;
-
-            qDebug() << "  Concat command: ffmpeg" << args.join(" ");
-
-            QProcess proc;
-            proc.start("/usr/bin/ffmpeg", args);
-
-            if (!proc.waitForStarted(5000)) {
-                setError("FFmpeg concat failed to start");
-                goto cleanup;
-            }
-
-            if (!proc.waitForFinished(300000)) {
-                setError("FFmpeg concat timed out");
-                proc.kill();
-                goto cleanup;
-            }
-
-            QString stderr = QString::fromUtf8(proc.readAllStandardError());
-            if (!stderr.isEmpty()) qDebug() << "  Concat stderr:" << stderr;
-
-            if (proc.exitCode() != 0) {
-                setError(QString("FFmpeg concat failed: %1").arg(stderr));
-                goto cleanup;
-            }
-        }
-        success = true;
-
-cleanup:
-        // Remove temp files
-        for (const QString& tf : tempFiles) {
-            QFile::remove(tf);
-        }
-        QFile::remove(concatListFile);
+    // Open input
+    AVFormatContext* inFmtCtx = nullptr;
+    int ret = avformat_open_input(&inFmtCtx, inputFile.toUtf8().constData(),
+                                   nullptr, nullptr);
+    if (ret < 0) {
+        setError(QString("Cannot open audio input: %1").arg(avErrorToString(ret)));
+        return false;
     }
+
+    ret = avformat_find_stream_info(inFmtCtx, nullptr);
+    if (ret < 0) {
+        avformat_close_input(&inFmtCtx);
+        setError("Cannot find audio stream info");
+        return false;
+    }
+
+    int audioIdx = av_find_best_stream(inFmtCtx, AVMEDIA_TYPE_AUDIO,
+                                        -1, -1, nullptr, 0);
+    if (audioIdx < 0) {
+        avformat_close_input(&inFmtCtx);
+        setError("No audio stream found in input");
+        return false;
+    }
+
+    AVStream* inStream = inFmtCtx->streams[audioIdx];
+
+    // Open output — format auto-detected from file extension (.ac3, .mp2, etc.)
+    AVFormatContext* outFmtCtx = nullptr;
+    ret = avformat_alloc_output_context2(&outFmtCtx, nullptr, nullptr,
+                                          outputFile.toUtf8().constData());
+    if (ret < 0 || !outFmtCtx) {
+        avformat_close_input(&inFmtCtx);
+        setError("Cannot create audio output context");
+        return false;
+    }
+
+    AVStream* outStream = avformat_new_stream(outFmtCtx, nullptr);
+    if (!outStream) {
+        avformat_close_input(&inFmtCtx);
+        avformat_free_context(outFmtCtx);
+        setError("Cannot create output audio stream");
+        return false;
+    }
+    avcodec_parameters_copy(outStream->codecpar, inStream->codecpar);
+    outStream->time_base = inStream->time_base;
+
+    if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&outFmtCtx->pb, outputFile.toUtf8().constData(),
+                         AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            avformat_close_input(&inFmtCtx);
+            avformat_free_context(outFmtCtx);
+            setError(QString("Cannot open output file: %1").arg(avErrorToString(ret)));
+            return false;
+        }
+    }
+
+    ret = avformat_write_header(outFmtCtx, nullptr);
+    if (ret < 0) {
+        avformat_close_input(&inFmtCtx);
+        avio_closep(&outFmtCtx->pb);
+        avformat_free_context(outFmtCtx);
+        setError("Cannot write audio output header");
+        return false;
+    }
+
+    // Audio frame duration in stream time_base units
+    int64_t frameDuration = 0;
+    if (inStream->codecpar->frame_size > 0 && inStream->codecpar->sample_rate > 0) {
+        frameDuration = av_rescale_q(inStream->codecpar->frame_size,
+            AVRational{1, inStream->codecpar->sample_rate}, inStream->time_base);
+    }
+    if (frameDuration <= 0) {
+        frameDuration = av_rescale_q(1, AVRational{32, 1000}, inStream->time_base);
+    }
+
+    AVPacket* pkt = av_packet_alloc();
+    if (!pkt) {
+        avformat_close_input(&inFmtCtx);
+        avio_closep(&outFmtCtx->pb);
+        avformat_free_context(outFmtCtx);
+        setError("Cannot allocate packet");
+        return false;
+    }
+
+    // Process all segments in a single pass with PTS offset management
+    int64_t ptsOffset = 0;
+    int64_t nextOutputPts = 0;
+
+    for (int segIdx = 0; segIdx < cutList.size(); ++segIdx) {
+        double startTime = cutList[segIdx].first;
+        double endTime = cutList[segIdx].second;
+
+        qDebug() << "  Segment" << segIdx << ":" << startTime << "->" << endTime;
+
+        // Seek to just before start time using audio stream timebase
+        int64_t seekTs = static_cast<int64_t>(startTime / av_q2d(inStream->time_base));
+        av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+
+        bool segmentStarted = false;
+        while (av_read_frame(inFmtCtx, pkt) >= 0) {
+            if (pkt->stream_index != audioIdx) {
+                av_packet_unref(pkt);
+                continue;
+            }
+
+            if (pkt->pts == AV_NOPTS_VALUE) {
+                av_packet_unref(pkt);
+                continue;
+            }
+
+            double pktTime = pkt->pts * av_q2d(inStream->time_base);
+
+            // Skip packets before start time (1ms tolerance for frame alignment)
+            if (pktTime < startTime - 0.001) {
+                av_packet_unref(pkt);
+                continue;
+            }
+
+            // Stop at end time
+            if (pktTime >= endTime) {
+                av_packet_unref(pkt);
+                break;
+            }
+
+            // Set PTS offset on first packet of each segment
+            if (!segmentStarted) {
+                ptsOffset = nextOutputPts - pkt->pts;
+                segmentStarted = true;
+            }
+
+            // Shift PTS/DTS for continuous output timeline
+            pkt->pts += ptsOffset;
+            pkt->dts = pkt->pts;
+            pkt->stream_index = 0;
+            pkt->pos = -1;
+
+            ret = av_write_frame(outFmtCtx, pkt);
+            if (ret < 0) {
+                qDebug() << "  Warning: av_write_frame failed at" << pktTime;
+            } else {
+                nextOutputPts = pkt->pts + frameDuration;
+            }
+
+            av_packet_unref(pkt);
+        }
+    }
+
+    av_packet_free(&pkt);
+    av_write_trailer(outFmtCtx);
+
+    // Cleanup
+    avformat_close_input(&inFmtCtx);
+    if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE))
+        avio_closep(&outFmtCtx->pb);
+    avformat_free_context(outFmtCtx);
 
     // Verify output
     QFileInfo outInfo(outputFile);
@@ -1327,7 +1339,7 @@ cleanup:
     }
 
     qDebug() << "cutAudioStream: Complete, output size:" << outInfo.size() << "bytes";
-    return success;
+    return true;
 }
 
 // ----------------------------------------------------------------------------
