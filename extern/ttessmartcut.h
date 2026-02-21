@@ -104,7 +104,7 @@ public:
     QList<TTCutSegmentInfo> analyzeCutPoints(const QList<QPair<int, int>>& cutFrames);
 
     // Check if SPS changes between frame and frame+1 (or frame-1 for cutIn)
-    bool hasSPSChangeAtBoundary(int frameIndex, bool isCutOut) const;
+    bool hasSPSChangeAtBoundary(int frameIndex, bool isCutOut);
 
     // B-frame reorder delay (frames)
     int reorderDelay() const;

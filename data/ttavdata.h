@@ -46,18 +46,18 @@
 
 // Pre-flight boundary check result
 struct BoundaryIssue {
-    int segmentIndex;        // Which segment (0-based)
-    bool isCutOut;           // true=CutOut, false=CutIn
-    int frameIndex;          // Current frame index
-    double boundaryTime;     // Time in seconds
+    int segmentIndex = 0;        // Which segment (0-based)
+    bool isCutOut = false;       // true=CutOut, false=CutIn
+    int frameIndex = 0;          // Current frame index
+    double boundaryTime = 0.0;   // Time in seconds
 
     // Audio burst
-    bool hasAudioBurst;
-    double burstRmsDb;       // RMS of burst chunk (dB)
-    double contextRmsDb;     // Median RMS of surrounding chunks (dB)
+    bool hasAudioBurst = false;
+    double burstRmsDb = 0.0;     // RMS of burst chunk (dB)
+    double contextRmsDb = 0.0;   // Median RMS of surrounding chunks (dB)
 
     // SPS change (H.264/H.265 only)
-    bool hasSPSChange;
+    bool hasSPSChange = false;
 };
 
 class TTThreadTaskPool;

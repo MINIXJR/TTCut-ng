@@ -3355,18 +3355,18 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
     double windowStart, windowEnd;
     if (isCutOut) {
         windowStart = qMax(0.0, boundaryTime - 0.200);
-        windowEnd   = boundaryTime + 0.032;  // +1 audio frame to catch leak
+        windowEnd   = boundaryTime + 0.048;  // +1 audio frame (conservative: max AC3@32kHz=48ms)
     } else {
-        windowStart = qMax(0.0, boundaryTime - 0.032);
+        windowStart = qMax(0.0, boundaryTime - 0.048);  // -1 audio frame (conservative: max AC3@32kHz=48ms)
         windowEnd   = boundaryTime + 0.200;
     }
 
     QStringList args;
-    args << "-v" << "error"
+    args << "-v" << "info"
          << "-i" << audioFile
          << "-ss" << QString::number(windowStart, 'f', 6)
          << "-to" << QString::number(windowEnd, 'f', 6)
-         << "-af" << "astats=metadata=1:reset=1536"
+         << "-af" << "astats=metadata=1:reset=1536,ametadata=print:key=lavfi.astats.Overall.RMS_level"
          << "-f" << "null" << "-";
 
     QProcess proc;
@@ -3380,7 +3380,7 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
 
     // Parse RMS levels from astats output
     // Format: [Parsed_astats_0 ...] RMS level dB: -XX.XX
-    QRegularExpression rmsRegex("RMS level dB:\\s*(-?[\\d.]+|inf|-inf)");
+    QRegularExpression rmsRegex("lavfi\\.astats\\.Overall\\.RMS_level=(-?[\\d.]+|inf|-inf)");
     QList<double> rmsValues;
     auto it = rmsRegex.globalMatch(output);
     while (it.hasNext()) {

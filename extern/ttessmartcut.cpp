@@ -386,7 +386,7 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
 // ----------------------------------------------------------------------------
 // Check if SPS changes at a cut boundary (aspect ratio / resolution change)
 // ----------------------------------------------------------------------------
-bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut) const
+bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut)
 {
     if (!mIsInitialized) return false;
     if (mParser.spsCount() <= 1) return false;  // Only 1 SPS in entire stream, no changes
@@ -420,8 +420,8 @@ bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut) const
     if (spsA == spsB) return false;  // Same SPS NAL, no change
 
     // Different SPS NALs — compare raw data
-    QByteArray dataA = const_cast<TTNaluParser&>(mParser).readNalData(spsA);
-    QByteArray dataB = const_cast<TTNaluParser&>(mParser).readNalData(spsB);
+    QByteArray dataA = mParser.readNalData(spsA);
+    QByteArray dataB = mParser.readNalData(spsB);
 
     return dataA != dataB;
 }
