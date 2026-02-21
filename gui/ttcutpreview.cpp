@@ -82,7 +82,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   connect(pbPrevCut,    SIGNAL(clicked()),                SLOT(onPrevCut()));
   connect(pbNextCut,    SIGNAL(clicked()),                SLOT(onNextCut()));
 
-  // Burst warning widgets
+  // Burst warning widgets — inserted into existing controls layout
   lblBurstWarning = new QLabel(this);
   lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   lblBurstWarning->hide();
@@ -92,15 +92,16 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   pbBurstShift->hide();
   connect(pbBurstShift, SIGNAL(clicked()), this, SLOT(onBurstShift()));
 
-  // Insert burst warning row into grid layout (row 2, below controls)
-  QHBoxLayout* burstLayout = new QHBoxLayout();
-  burstLayout->addWidget(lblBurstWarning);
-  burstLayout->addWidget(pbBurstShift);
-  burstLayout->addStretch();
-
+  // Find the controls HBoxLayout (row 1 in the grid) and insert burst widgets
+  // after the combobox (index 0) and before the prev button (index 1)
   QGridLayout* grid = qobject_cast<QGridLayout*>(layout());
   if (grid) {
-    grid->addLayout(burstLayout, 2, 0);
+    QLayoutItem* controlsItem = grid->itemAtPosition(1, 0);
+    QHBoxLayout* controlsLayout = controlsItem ? qobject_cast<QHBoxLayout*>(controlsItem->layout()) : nullptr;
+    if (controlsLayout) {
+      controlsLayout->insertWidget(1, lblBurstWarning);
+      controlsLayout->insertWidget(2, pbBurstShift);
+    }
   }
 
   mpCutList = nullptr;
@@ -391,12 +392,9 @@ void TTCutPreview::onBurstShift()
 
   mpCutList->update(currentItem, updatedItem);
 
-  QMessageBox::information(this, tr("Cut Shifted"),
-      tr("Schnittpunkt wurde verschoben.\n"
-         "Bitte Vorschau schliessen und neu starten\n"
-         "um das Ergebnis zu pruefen."));
-
-  close();
+  // Re-check burst for current cut — warning disappears if resolved
+  int iCut = cbCutPreview->currentIndex();
+  checkBurstForCurrentCut(iCut);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
