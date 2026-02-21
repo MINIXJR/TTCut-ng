@@ -34,6 +34,9 @@
 #include "../avstream/ttnaluparser.h"
 #include "../common/ttcut.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <QDebug>
 #include <QTime>
 #include <QProcess>
@@ -3341,58 +3344,218 @@ bool TTFFmpegWrapper::concatenateSegments(const QString& outputFile,
 }
 
 // ----------------------------------------------------------------------------
-// Detect audio burst near a cut boundary
-// Analyzes ~200ms of audio around a boundary via ffmpeg's astats filter.
-// Returns true if a sudden loudness burst (>20dB above median) is detected,
-// indicating commercial audio leaking into the movie cut.
+// Detect audio burst near a cut boundary using libav (no external process).
+// Decodes ~200ms of audio around a boundary, calculates per-frame RMS,
+// and checks if boundary frames are significantly louder than context.
+// Returns true if a sudden loudness burst (>20dB above median) is detected.
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundaryTime,
                                         bool isCutOut, double& burstRmsDb, double& contextRmsDb)
 {
-    // Analyze 200ms window around boundary
-    // For CutOut: check last 200ms before boundary
-    // For CutIn: check first 200ms after boundary
+    // Analyze window around boundary
+    // CutOut: 200ms before + 48ms after (catch commercial audio leaking in)
+    // CutIn: 48ms before + 200ms after
     double windowStart, windowEnd;
     if (isCutOut) {
         windowStart = qMax(0.0, boundaryTime - 0.200);
-        windowEnd   = boundaryTime + 0.048;  // +1 audio frame (conservative: max AC3@32kHz=48ms)
+        windowEnd   = boundaryTime + 0.048;
     } else {
-        windowStart = qMax(0.0, boundaryTime - 0.048);  // -1 audio frame (conservative: max AC3@32kHz=48ms)
+        windowStart = qMax(0.0, boundaryTime - 0.048);
         windowEnd   = boundaryTime + 0.200;
     }
 
-    QStringList args;
-    args << "-v" << "info"
-         << "-i" << audioFile
-         << "-ss" << QString::number(windowStart, 'f', 6)
-         << "-to" << QString::number(windowEnd, 'f', 6)
-         << "-af" << "astats=metadata=1:reset=1536,ametadata=print:key=lavfi.astats.Overall.RMS_level"
-         << "-f" << "null" << "-";
-
-    QProcess proc;
-    proc.start("/usr/bin/ffmpeg", args);
-    if (!proc.waitForStarted(5000) || !proc.waitForFinished(10000)) {
-        qDebug() << "detectAudioBurst: ffmpeg failed for" << audioFile;
+    // Open audio file
+    AVFormatContext* fmtCtx = nullptr;
+    int ret = avformat_open_input(&fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
+    if (ret < 0) {
+        qDebug() << "detectAudioBurst: cannot open" << audioFile;
         return false;
     }
 
-    QString output = QString::fromUtf8(proc.readAllStandardError());
-
-    // Parse RMS levels from astats output
-    // Format: [Parsed_astats_0 ...] RMS level dB: -XX.XX
-    QRegularExpression rmsRegex("lavfi\\.astats\\.Overall\\.RMS_level=(-?[\\d.]+|inf|-inf)");
-    QList<double> rmsValues;
-    auto it = rmsRegex.globalMatch(output);
-    while (it.hasNext()) {
-        auto match = it.next();
-        QString val = match.captured(1);
-        if (val == "-inf" || val == "inf") continue;
-        rmsValues.append(val.toDouble());
+    ret = avformat_find_stream_info(fmtCtx, nullptr);
+    if (ret < 0) {
+        avformat_close_input(&fmtCtx);
+        return false;
     }
 
-    if (rmsValues.size() < 3) return false;
+    // Find audio stream
+    int audioIdx = -1;
+    for (unsigned i = 0; i < fmtCtx->nb_streams; i++) {
+        if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audioIdx = i;
+            break;
+        }
+    }
+    if (audioIdx < 0) {
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
 
-    // Calculate median RMS (excluding the boundary chunk)
+    AVStream* stream = fmtCtx->streams[audioIdx];
+
+    // Open decoder
+    const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+    if (!codec) {
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
+
+    AVCodecContext* decCtx = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(decCtx, stream->codecpar);
+    ret = avcodec_open2(decCtx, codec, nullptr);
+    if (ret < 0) {
+        avcodec_free_context(&decCtx);
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
+
+    int sampleRate = decCtx->sample_rate;
+    int channels   = decCtx->ch_layout.nb_channels;
+    if (sampleRate <= 0 || channels <= 0) {
+        avcodec_free_context(&decCtx);
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
+
+    // Seek to window start using stream timebase for precision
+    int64_t seekTs = (int64_t)(windowStart / av_q2d(stream->time_base));
+    ret = av_seek_frame(fmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+    if (ret < 0) {
+        // Fallback: seek from beginning
+        av_seek_frame(fmtCtx, audioIdx, 0, AVSEEK_FLAG_BACKWARD);
+    }
+    avcodec_flush_buffers(decCtx);
+
+    // Audio frame duration for tolerance (one frame)
+    double frameDuration = (double)decCtx->frame_size / sampleRate;
+    if (frameDuration <= 0) frameDuration = 0.032;  // AC3 default
+
+    // Decode audio and collect per-frame RMS values
+    AVPacket* packet = av_packet_alloc();
+    AVFrame*  frame  = av_frame_alloc();
+    QList<double> rmsValues;
+    QList<double> rmsTimestamps;  // for debug
+
+    while (av_read_frame(fmtCtx, packet) >= 0) {
+        if (packet->stream_index != audioIdx) {
+            av_packet_unref(packet);
+            continue;
+        }
+
+        // Check if we're past the window
+        double pktTime = packet->pts * av_q2d(stream->time_base);
+        if (pktTime > windowEnd + frameDuration) {
+            av_packet_unref(packet);
+            break;
+        }
+
+        ret = avcodec_send_packet(decCtx, packet);
+        av_packet_unref(packet);
+        if (ret < 0) continue;
+
+        while (avcodec_receive_frame(decCtx, frame) == 0) {
+            // Check frame timestamp
+            double frameTime = frame->pts * av_q2d(stream->time_base);
+            if (frameTime < windowStart - frameDuration) {
+                av_frame_unref(frame);
+                continue;
+            }
+            if (frameTime > windowEnd + frameDuration) {
+                av_frame_unref(frame);
+                goto done_reading;
+            }
+
+            // Calculate RMS from decoded samples
+            double sumSq = 0.0;
+            int totalSamples = frame->nb_samples * channels;
+
+            if (totalSamples > 0) {
+                // Handle different sample formats
+                switch (decCtx->sample_fmt) {
+                case AV_SAMPLE_FMT_FLT:
+                case AV_SAMPLE_FMT_FLTP: {
+                    for (int ch = 0; ch < channels; ch++) {
+                        const float* data = (const float*)frame->data[
+                            decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP ? ch : 0];
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 1 : channels;
+                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 0 : ch;
+                        for (int s = 0; s < frame->nb_samples; s++) {
+                            double v = data[s * stride + offset];
+                            sumSq += v * v;
+                        }
+                    }
+                    break;
+                }
+                case AV_SAMPLE_FMT_S16:
+                case AV_SAMPLE_FMT_S16P: {
+                    const double scale = 1.0 / 32768.0;
+                    for (int ch = 0; ch < channels; ch++) {
+                        const int16_t* data = (const int16_t*)frame->data[
+                            decCtx->sample_fmt == AV_SAMPLE_FMT_S16P ? ch : 0];
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 1 : channels;
+                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 0 : ch;
+                        for (int s = 0; s < frame->nb_samples; s++) {
+                            double v = data[s * stride + offset] * scale;
+                            sumSq += v * v;
+                        }
+                    }
+                    break;
+                }
+                case AV_SAMPLE_FMT_S32:
+                case AV_SAMPLE_FMT_S32P: {
+                    const double scale = 1.0 / 2147483648.0;
+                    for (int ch = 0; ch < channels; ch++) {
+                        const int32_t* data = (const int32_t*)frame->data[
+                            decCtx->sample_fmt == AV_SAMPLE_FMT_S32P ? ch : 0];
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 1 : channels;
+                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 0 : ch;
+                        for (int s = 0; s < frame->nb_samples; s++) {
+                            double v = data[s * stride + offset] * scale;
+                            sumSq += v * v;
+                        }
+                    }
+                    break;
+                }
+                default:
+                    // Unsupported format — skip
+                    av_frame_unref(frame);
+                    continue;
+                }
+
+                double rms = sqrt(sumSq / totalSamples);
+                double rmsDb = (rms > 0.0) ? 20.0 * log10(rms) : -120.0;
+                rmsValues.append(rmsDb);
+                rmsTimestamps.append(frameTime);
+            }
+            av_frame_unref(frame);
+        }
+    }
+
+done_reading:
+    av_frame_free(&frame);
+    av_packet_free(&packet);
+    avcodec_free_context(&decCtx);
+    avformat_close_input(&fmtCtx);
+
+    // Debug: show actual time range and per-frame RMS
+    if (!rmsValues.isEmpty()) {
+        QString dbgFrames;
+        for (int i = 0; i < rmsValues.size(); i++) {
+            dbgFrames += QString("%1s:%2 ").arg(rmsTimestamps[i], 0, 'f', 3).arg(rmsValues[i], 0, 'f', 1);
+        }
+        qDebug() << "detectAudioBurst:" << boundaryTime
+                 << (isCutOut ? "CutOut" : "CutIn")
+                 << "window=" << windowStart << "-" << windowEnd
+                 << "frames:" << dbgFrames;
+    }
+
+    if (rmsValues.size() < 3) {
+        qDebug() << "detectAudioBurst: only" << rmsValues.size()
+                 << "chunks at" << boundaryTime << "(need >=3)";
+        return false;
+    }
+
+    // Calculate median RMS
     QList<double> sorted = rmsValues;
     std::sort(sorted.begin(), sorted.end());
     double median = sorted[sorted.size() / 2];
@@ -3408,10 +3571,14 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
             contextRmsDb = median;
             qDebug() << "detectAudioBurst: BURST at" << boundaryTime
                      << (isCutOut ? "CutOut" : "CutIn")
-                     << "burst=" << burstRmsDb << "dB, context=" << contextRmsDb << "dB";
+                     << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
+                     << "(" << rmsValues.size() << "chunks)";
             return true;
         }
     }
 
+    qDebug() << "detectAudioBurst: OK at" << boundaryTime
+             << (isCutOut ? "CutOut" : "CutIn")
+             << "median=" << median << "dB (" << rmsValues.size() << "chunks)";
     return false;
 }

@@ -32,6 +32,7 @@
 #include <cstdio>
 
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 
 #include "ttaudiolist.h"
@@ -1005,43 +1006,34 @@ QList<BoundaryIssue> TTAVData::checkAudioBoundaries(const QString& audioFile,
     QList<BoundaryIssue> issues;
     if (audioFile.isEmpty()) return issues;
 
-    log->infoMsg(__FILE__, __LINE__, QString("Checking %1 boundaries for audio bursts...").arg(keepList.size() * 2 - 2));
+    int numBoundaries = keepList.size() * 2 - 2;
+    log->infoMsg(__FILE__, __LINE__, QString("Checking %1 boundaries for audio bursts...").arg(numBoundaries));
 
     for (int i = 0; i < keepList.size(); i++) {
-        // Check CutIn (start of segment) — skip first segment (start of recording)
+        // CutIn — skip first segment (start of recording)
         if (i > 0) {
-            double cutInTime = keepList[i].first;
-            int cutInFrame = qRound(cutInTime * frameRate);
-
             BoundaryIssue issue;
             issue.segmentIndex = i;
             issue.isCutOut = false;
-            issue.frameIndex = cutInFrame;
-            issue.boundaryTime = cutInTime;
-            issue.hasAudioBurst = false;
-            issue.hasSPSChange = false;
+            issue.frameIndex = qRound(keepList[i].first * frameRate);
+            issue.boundaryTime = keepList[i].first;
 
-            if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false,
+            if (TTFFmpegWrapper::detectAudioBurst(audioFile, issue.boundaryTime, false,
                                                    issue.burstRmsDb, issue.contextRmsDb)) {
                 issue.hasAudioBurst = true;
                 issues.append(issue);
             }
         }
 
-        // Check CutOut (end of segment) — skip last segment (end of recording)
+        // CutOut — skip last segment (end of recording)
         if (i < keepList.size() - 1) {
-            double cutOutTime = keepList[i].second;
-            int cutOutFrame = qRound(cutOutTime * frameRate) - 1;  // -1 because +1 was added for inclusive end
-
             BoundaryIssue issue;
             issue.segmentIndex = i;
             issue.isCutOut = true;
-            issue.frameIndex = cutOutFrame;
-            issue.boundaryTime = cutOutTime;
-            issue.hasAudioBurst = false;
-            issue.hasSPSChange = false;
+            issue.frameIndex = qRound(keepList[i].second * frameRate) - 1;
+            issue.boundaryTime = keepList[i].second;
 
-            if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true,
+            if (TTFFmpegWrapper::detectAudioBurst(audioFile, issue.boundaryTime, true,
                                                    issue.burstRmsDb, issue.contextRmsDb)) {
                 issue.hasAudioBurst = true;
                 issues.append(issue);
