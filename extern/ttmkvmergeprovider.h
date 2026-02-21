@@ -9,8 +9,7 @@
 
 // ----------------------------------------------------------------------------
 // TTMKVMERGEPROVIDER
-// Provider class for mkvmerge (mkvtoolnix) integration
-// Used for MKV container output
+// MKV muxer using libav matroska output format
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -34,13 +33,12 @@
 
 #include <QString>
 #include <QStringList>
-#include <QProcess>
 #include <QObject>
 #include <QMap>
 
 // -----------------------------------------------------------------------------
 // TTMkvMergeProvider
-// Wraps mkvmerge for MKV container creation
+// MKV container output using libav matroska muxer (no external binary needed)
 // -----------------------------------------------------------------------------
 class TTMkvMergeProvider : public QObject
 {
@@ -56,7 +54,7 @@ public:
              const QStringList& audioFiles,
              const QStringList& subtitleFiles = QStringList());
 
-    // Availability check
+    // Always available (libav is linked at build time)
     bool isAvailable() const;
     QString lastError() const { return mLastError; }
 
@@ -71,14 +69,10 @@ public:
     void setSubtitleLanguages(const QStringList& languages);
 
     // A/V sync offset in milliseconds (from .info file)
-    // Positive = audio starts later, negative = audio starts earlier
     void setAudioSyncOffset(int offsetMs);
-
-    // Video sync offset in milliseconds (for B-frame reordering compensation)
-    // Shifts video track timestamps to start at 0
     void setVideoSyncOffset(int offsetMs);
 
-    // Check mkvmerge installation
+    // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
     static QString mkvMergePath();
@@ -89,14 +83,8 @@ public:
 
 signals:
     void progressChanged(int percent, const QString& message);
-    void processOutput(const QString& output);
-
-private slots:
-    void onReadyReadStandardOutput();
-    void onReadyReadStandardError();
 
 private:
-    QProcess* mProcess;
     QString mLastError;
     QString mChapterFile;
     int mAudioSyncOffsetMs;
@@ -112,10 +100,6 @@ private:
     QMap<int, TrackOption> mTrackOptions;
 
     void setError(const QString& error);
-    QStringList buildCommandLine(const QString& outputFile,
-                                  const QString& videoFile,
-                                  const QStringList& audioFiles,
-                                  const QStringList& subtitleFiles);
 };
 
 #endif // TTMKVMERGEPROVIDER_H

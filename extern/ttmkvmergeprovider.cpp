@@ -9,7 +9,7 @@
 
 // ----------------------------------------------------------------------------
 // TTMKVMERGEPROVIDER
-// Provider class for mkvmerge (mkvtoolnix) implementation
+// MKV muxer using libav matroska output format
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -37,10 +37,27 @@
 #include <QTextStream>
 #include <QDir>
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/avutil.h>
+}
+
+// ----------------------------------------------------------------------------
+// Helper: libav error code to QString
+// ----------------------------------------------------------------------------
+static QString avErrStr(int errnum)
+{
+    char buf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(errnum, buf, sizeof(buf));
+    return QString::fromUtf8(buf);
+}
+
+// ----------------------------------------------------------------------------
 // Decode VDR's Windows-1252 hex encoding (#XX) in filenames
+// ----------------------------------------------------------------------------
 static QChar win1252ToUnicode(unsigned char byte)
 {
-    // 0x80-0x9F: Windows-1252 has printable chars where Latin-1 has control codes
     static const ushort map[32] = {
         0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,  // 80-87
         0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,  // 88-8F
@@ -49,10 +66,9 @@ static QChar win1252ToUnicode(unsigned char byte)
     };
     if (byte >= 0x80 && byte <= 0x9F)
         return QChar(map[byte - 0x80]);
-    return QChar(byte);  // Latin-1 == Unicode for all other byte values
+    return QChar(byte);
 }
 
-// Decode VDR filename: #XX → character (Windows-1252), _ → space
 static QString decodeVdrName(const QString& name)
 {
     QString result;
@@ -74,19 +90,125 @@ static QString decodeVdrName(const QString& name)
     return result;
 }
 
-// Standard mkvmerge paths to check
-static const QStringList sMkvMergePaths = {
-    "/usr/bin/mkvmerge",
-    "/usr/local/bin/mkvmerge",
-    "/opt/mkvtoolnix/mkvmerge"
+// ----------------------------------------------------------------------------
+// Check if file is a raw elementary stream (needs special demuxer handling)
+// ----------------------------------------------------------------------------
+static bool isElementaryStream(const QString& filePath)
+{
+    QString suffix = QFileInfo(filePath).suffix().toLower();
+    return (suffix == "264" || suffix == "h264" ||
+            suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+            suffix == "m2v" || suffix == "mpv");
+}
+
+// ----------------------------------------------------------------------------
+// Open input file with appropriate format detection
+// For ES files, forces the correct demuxer format
+// ----------------------------------------------------------------------------
+static AVFormatContext* openInput(const QString& filePath, int& ret)
+{
+    AVFormatContext* fmtCtx = nullptr;
+    AVDictionary* opts = nullptr;
+    const AVInputFormat* inputFmt = nullptr;
+
+    if (isElementaryStream(filePath)) {
+        QString suffix = QFileInfo(filePath).suffix().toLower();
+        av_dict_set(&opts, "probesize", "50000000", 0);
+        av_dict_set(&opts, "analyzeduration", "10000000", 0);
+
+        if (suffix == "264" || suffix == "h264")
+            inputFmt = av_find_input_format("h264");
+        else if (suffix == "265" || suffix == "h265" || suffix == "hevc")
+            inputFmt = av_find_input_format("hevc");
+        else if (suffix == "m2v" || suffix == "mpv")
+            inputFmt = av_find_input_format("mpegvideo");
+    }
+
+    ret = avformat_open_input(&fmtCtx, filePath.toUtf8().constData(), inputFmt, &opts);
+    av_dict_free(&opts);
+
+    if (ret < 0)
+        return nullptr;
+
+    ret = avformat_find_stream_info(fmtCtx, nullptr);
+    if (ret < 0) {
+        avformat_close_input(&fmtCtx);
+        return nullptr;
+    }
+
+    return fmtCtx;
+}
+
+// ----------------------------------------------------------------------------
+// Check if format is a container (MKV, MP4, TS) vs raw ES
+// Used to distinguish container remux from ES mux mode
+// ----------------------------------------------------------------------------
+static bool isContainerFormat(const AVFormatContext* fmtCtx)
+{
+    if (!fmtCtx || !fmtCtx->iformat)
+        return false;
+
+    QString fmtName = QString::fromUtf8(fmtCtx->iformat->name);
+    return fmtName.contains("matroska") || fmtName.contains("webm") ||
+           fmtName.contains("mp4") || fmtName.contains("mov") ||
+           fmtName.contains("mpegts") || fmtName.contains("avi");
+}
+
+// ----------------------------------------------------------------------------
+// MuxInput: one input stream for the interleaved mux loop
+// ----------------------------------------------------------------------------
+struct MuxInput {
+    AVFormatContext* fmtCtx;
+    int srcIdx;         // Stream index in source file
+    int outIdx;         // Stream index in output file
+    AVPacket* pkt;
+    bool eof;
+    int64_t syncMs;     // Sync offset in milliseconds
+    bool assignPts;     // True = assign PTS from frameCount (raw ES video)
+    int64_t frameDur;   // Frame duration in output time_base units
+    int64_t frameCount; // Frame counter for PTS assignment
+    bool ownsCtx;       // True = this MuxInput owns the AVFormatContext (for cleanup)
+
+    MuxInput()
+        : fmtCtx(nullptr), srcIdx(-1), outIdx(-1), pkt(nullptr), eof(false)
+        , syncMs(0), assignPts(false), frameDur(0), frameCount(0)
+        , ownsCtx(false) {}
 };
+
+// Read next packet matching srcIdx from this input
+static bool readNextPacket(MuxInput& in)
+{
+    while (av_read_frame(in.fmtCtx, in.pkt) >= 0) {
+        if (in.pkt->stream_index == in.srcIdx)
+            return true;
+        av_packet_unref(in.pkt);
+    }
+    in.eof = true;
+    return false;
+}
+
+// Get normalized PTS in AV_TIME_BASE for comparison across inputs
+static int64_t getNormalizedPts(const MuxInput& in, const AVFormatContext* outCtx)
+{
+    int64_t pts;
+    if (in.assignPts) {
+        // PTS from frame count in output time_base → rescale to AV_TIME_BASE
+        pts = av_rescale_q(in.frameCount * in.frameDur,
+            outCtx->streams[in.outIdx]->time_base, AV_TIME_BASE_Q);
+    } else if (in.pkt->pts != AV_NOPTS_VALUE) {
+        pts = av_rescale_q(in.pkt->pts,
+            in.fmtCtx->streams[in.srcIdx]->time_base, AV_TIME_BASE_Q);
+    } else {
+        pts = 0;
+    }
+    return pts + in.syncMs * 1000;  // ms → µs (AV_TIME_BASE = µs)
+}
 
 // -----------------------------------------------------------------------------
 // Constructor
 // -----------------------------------------------------------------------------
 TTMkvMergeProvider::TTMkvMergeProvider()
     : QObject()
-    , mProcess(nullptr)
     , mAudioSyncOffsetMs(0)
     , mVideoSyncOffsetMs(0)
 {
@@ -97,74 +219,33 @@ TTMkvMergeProvider::TTMkvMergeProvider()
 // -----------------------------------------------------------------------------
 TTMkvMergeProvider::~TTMkvMergeProvider()
 {
-    if (mProcess) {
-        if (mProcess->state() != QProcess::NotRunning) {
-            mProcess->kill();
-            mProcess->waitForFinished(3000);
-        }
-        delete mProcess;
-    }
 }
 
 // -----------------------------------------------------------------------------
-// Check if mkvmerge is available
+// Always available (libav is linked at build time)
 // -----------------------------------------------------------------------------
 bool TTMkvMergeProvider::isAvailable() const
 {
-    return isMkvMergeInstalled();
+    return true;
 }
 
-// -----------------------------------------------------------------------------
-// Check if mkvmerge is installed
-// -----------------------------------------------------------------------------
 bool TTMkvMergeProvider::isMkvMergeInstalled()
 {
-    return QFile::exists(mkvMergePath());
+    return true;  // libav matroska muxer is always available
 }
 
-// -----------------------------------------------------------------------------
-// Get mkvmerge version
-// -----------------------------------------------------------------------------
 QString TTMkvMergeProvider::mkvMergeVersion()
 {
-    QString path = mkvMergePath();
-    if (path.isEmpty()) {
-        return QString();
-    }
-
-    QProcess proc;
-    proc.start(path, QStringList() << "--version");
-
-    if (!proc.waitForStarted(3000) || !proc.waitForFinished(5000)) {
-        return QString();
-    }
-
-    QString output = QString::fromUtf8(proc.readAllStandardOutput());
-    // Parse version from output like "mkvmerge v64.0.0 ('Willows') 64-bit"
-    QRegularExpression re("mkvmerge v([\\d\\.]+)");
-    QRegularExpressionMatch match = re.match(output);
-    if (match.hasMatch()) {
-        return match.captured(1);
-    }
-
-    return output.trimmed();
+    return QString("libav (built-in)");
 }
 
-// -----------------------------------------------------------------------------
-// Get mkvmerge path
-// -----------------------------------------------------------------------------
 QString TTMkvMergeProvider::mkvMergePath()
 {
-    for (const QString& path : sMkvMergePaths) {
-        if (QFile::exists(path)) {
-            return path;
-        }
-    }
     return QString();
 }
 
 // -----------------------------------------------------------------------------
-// Set default duration for a track type
+// Option setters (same API as before)
 // -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QString& duration)
 {
@@ -173,248 +254,422 @@ void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QStrin
     qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
 }
 
-// -----------------------------------------------------------------------------
-// Set track name
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setTrackName(int trackId, const QString& name)
 {
     mTrackOptions[trackId].name = name;
 }
 
-// -----------------------------------------------------------------------------
-// Set track language
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setLanguage(int trackId, const QString& lang)
 {
     mTrackOptions[trackId].language = lang;
 }
 
-// -----------------------------------------------------------------------------
-// Set chapter file
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
 {
     mChapterFile = chapterFile;
 }
 
-// -----------------------------------------------------------------------------
-// Set audio language tags (ISO 639-2/B)
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setAudioLanguages(const QStringList& languages)
 {
     mAudioLanguages = languages;
 }
 
-// -----------------------------------------------------------------------------
-// Set subtitle language tags (ISO 639-2/B)
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setSubtitleLanguages(const QStringList& languages)
 {
     mSubtitleLanguages = languages;
 }
 
-// -----------------------------------------------------------------------------
-// Set A/V sync offset for audio tracks (in milliseconds)
-// Positive offset = audio delayed, negative = audio earlier
-// -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setAudioSyncOffset(int offsetMs)
 {
     mAudioSyncOffsetMs = offsetMs;
-    if (offsetMs != 0) {
-        qDebug() << "TTMkvMergeProvider: audio sync offset set to" << offsetMs << "ms";
-    }
+    if (offsetMs != 0)
+        qDebug() << "TTMkvMergeProvider: audio sync offset" << offsetMs << "ms";
 }
 
 void TTMkvMergeProvider::setVideoSyncOffset(int offsetMs)
 {
     mVideoSyncOffsetMs = offsetMs;
-    if (offsetMs != 0) {
-        qDebug() << "TTMkvMergeProvider: video sync offset set to" << offsetMs << "ms";
+    if (offsetMs != 0)
+        qDebug() << "TTMkvMergeProvider: video sync offset" << offsetMs << "ms";
+}
+
+// -----------------------------------------------------------------------------
+// Parse OGM chapter file and add chapters to output context
+// -----------------------------------------------------------------------------
+static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterFile)
+{
+    QFile cf(chapterFile);
+    if (!cf.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    QRegularExpression chapterRe("CHAPTER(\\d+)=(\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})");
+    QRegularExpression nameRe("CHAPTER(\\d+)NAME=(.+)");
+    QTextStream in(&cf);
+    QList<QPair<int64_t, QString>> chapters;
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        QRegularExpressionMatch tm = chapterRe.match(line);
+        if (tm.hasMatch()) {
+            int64_t ms = tm.captured(2).toInt() * 3600000LL
+                       + tm.captured(3).toInt() * 60000LL
+                       + tm.captured(4).toInt() * 1000LL
+                       + tm.captured(5).toInt();
+            chapters.append({ms, QString()});
+        }
+        QRegularExpressionMatch nm = nameRe.match(line);
+        if (nm.hasMatch() && !chapters.isEmpty()) {
+            chapters.last().second = nm.captured(2).trimmed();
+        }
     }
+
+    if (chapters.isEmpty())
+        return;
+
+    outCtx->nb_chapters = chapters.size();
+    outCtx->chapters = (AVChapter**)av_malloc(chapters.size() * sizeof(AVChapter*));
+    for (int i = 0; i < chapters.size(); i++) {
+        AVChapter* ch = (AVChapter*)av_mallocz(sizeof(AVChapter));
+        ch->id = i;
+        ch->time_base = {1, 1000};
+        ch->start = chapters[i].first;
+        ch->end = (i + 1 < chapters.size()) ? chapters[i + 1].first - 1 : INT64_MAX;
+        if (!chapters[i].second.isEmpty()) {
+            av_dict_set(&ch->metadata, "title",
+                         chapters[i].second.toUtf8().constData(), 0);
+        }
+        outCtx->chapters[i] = ch;
+    }
+
+    qDebug() << "Added" << chapters.size() << "chapters from" << chapterFile;
 }
 
 // -----------------------------------------------------------------------------
 // Main muxing function
+// Two modes:
+//   1. Container remux: MKV input → copy all streams, add chapters
+//   2. ES mux: video ES + separate audio/subtitle → interleaved MKV
 // -----------------------------------------------------------------------------
 bool TTMkvMergeProvider::mux(const QString& outputFile,
                               const QString& videoFile,
                               const QStringList& audioFiles,
                               const QStringList& subtitleFiles)
 {
-    if (!isAvailable()) {
-        setError("mkvmerge is not installed");
-        return false;
-    }
-
     if (videoFile.isEmpty() || !QFile::exists(videoFile)) {
         setError(QString("Video file not found: %1").arg(videoFile));
         return false;
     }
 
-    QStringList args = buildCommandLine(outputFile, videoFile, audioFiles, subtitleFiles);
+    qDebug() << "TTMkvMergeProvider::mux (libav matroska)";
+    qDebug() << "  Output:" << outputFile;
+    qDebug() << "  Video:" << videoFile;
 
-    qDebug() << "mkvmerge command:" << args.join(" ");
-
-    mProcess = new QProcess(this);
-    connect(mProcess, &QProcess::readyReadStandardOutput, this, &TTMkvMergeProvider::onReadyReadStandardOutput);
-    connect(mProcess, &QProcess::readyReadStandardError, this, &TTMkvMergeProvider::onReadyReadStandardError);
-
-    mProcess->start(mkvMergePath(), args);
-
-    if (!mProcess->waitForStarted(5000)) {
-        setError("mkvmerge failed to start");
-        delete mProcess;
-        mProcess = nullptr;
+    // Open video/main input
+    int ret = 0;
+    AVFormatContext* videoInCtx = openInput(videoFile, ret);
+    if (!videoInCtx) {
+        setError(QString("Cannot open video: %1 (%2)")
+                     .arg(videoFile, avErrStr(ret)));
         return false;
     }
 
-    // Wait for completion (with generous timeout for large files)
-    if (!mProcess->waitForFinished(600000)) {  // 10 minutes
-        setError("mkvmerge timed out");
-        mProcess->kill();
-        delete mProcess;
-        mProcess = nullptr;
+    bool containerRemux = isContainerFormat(videoInCtx) &&
+                          audioFiles.isEmpty() && subtitleFiles.isEmpty();
+
+    // Create matroska output context
+    AVFormatContext* outCtx = nullptr;
+    ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
+                                          outputFile.toUtf8().constData());
+    if (ret < 0 || !outCtx) {
+        avformat_close_input(&videoInCtx);
+        setError("Cannot create matroska output context");
         return false;
     }
 
-    int exitCode = mProcess->exitCode();
-    delete mProcess;
-    mProcess = nullptr;
-
-    if (exitCode != 0 && exitCode != 1) {  // mkvmerge returns 1 for warnings
-        // Error was already set in stderr handler
-        if (mLastError.isEmpty()) {
-            setError(QString("mkvmerge failed with exit code %1").arg(exitCode));
-        }
-        return false;
-    }
-
-    qDebug() << "mkvmerge completed successfully:" << outputFile;
-    return true;
-}
-
-// -----------------------------------------------------------------------------
-// Build command line arguments
-// -----------------------------------------------------------------------------
-QStringList TTMkvMergeProvider::buildCommandLine(const QString& outputFile,
-                                                   const QString& videoFile,
-                                                   const QStringList& audioFiles,
-                                                   const QStringList& subtitleFiles)
-{
-    QStringList args;
-
-    // Output file
-    args << "-o" << outputFile;
-
-    // Title from video filename (decode VDR #XX encoding, _ → space)
+    // Set title metadata from video filename
     QString title = decodeVdrName(QFileInfo(videoFile).completeBaseName());
     if (!title.isEmpty()) {
-        args << "--title" << title;
+        av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
     }
 
-    // Video file with optional default duration and sync offset
-    if (mTrackOptions.contains(0) && !mTrackOptions[0].defaultDuration.isEmpty()) {
-        args << "--default-duration" << QString("0:%1").arg(mTrackOptions[0].defaultDuration);
-    }
-    if (mVideoSyncOffsetMs != 0) {
-        args << "--sync" << QString("0:%1").arg(mVideoSyncOffsetMs);
-    }
-    args << videoFile;
+    // Build list of MuxInputs and output streams
+    QList<MuxInput> inputs;
+    bool success = false;
 
-    // Audio files with optional sync offset and language
-    // Language from explicit list takes priority, filename regex as fallback
-    QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
-    int audioTrackId = 1;
-    for (int i = 0; i < audioFiles.size(); i++) {
-        const QString& audio = audioFiles[i];
-        if (QFile::exists(audio)) {
-            // Prefer explicit language from data model
+    if (containerRemux) {
+        // --- Container remux mode ---
+        // Copy all streams from input container (video + audio + subs)
+        qDebug() << "  Mode: container remux (" << videoInCtx->nb_streams << "streams)";
+
+        for (unsigned i = 0; i < videoInCtx->nb_streams; i++) {
+            AVStream* outStream = avformat_new_stream(outCtx, nullptr);
+            if (!outStream) continue;
+
+            avcodec_parameters_copy(outStream->codecpar,
+                                     videoInCtx->streams[i]->codecpar);
+            outStream->time_base = videoInCtx->streams[i]->time_base;
+            av_dict_copy(&outStream->metadata,
+                          videoInCtx->streams[i]->metadata, 0);
+        }
+
+        // Single MuxInput that reads ALL streams (srcIdx = -1 means accept all)
+        // Handled separately below since all streams share one AVFormatContext
+
+    } else {
+        // --- ES mux mode ---
+        // Video + separate audio + subtitle files, interleaved
+        qDebug() << "  Mode: ES mux";
+
+        // Video stream
+        int videoIdx = av_find_best_stream(videoInCtx, AVMEDIA_TYPE_VIDEO,
+                                            -1, -1, nullptr, 0);
+        if (videoIdx < 0) {
+            avformat_close_input(&videoInCtx);
+            avformat_free_context(outCtx);
+            setError("No video stream in input");
+            return false;
+        }
+
+        AVStream* videoOut = avformat_new_stream(outCtx, nullptr);
+        avcodec_parameters_copy(videoOut->codecpar,
+                                 videoInCtx->streams[videoIdx]->codecpar);
+        videoOut->time_base = videoInCtx->streams[videoIdx]->time_base;
+
+        MuxInput vin;
+        vin.fmtCtx = videoInCtx;
+        vin.srcIdx = videoIdx;
+        vin.outIdx = 0;
+        vin.syncMs = mVideoSyncOffsetMs;
+        vin.ownsCtx = false;  // We'll close videoInCtx at the end
+        vin.pkt = av_packet_alloc();
+
+        // Frame duration from setDefaultDuration (e.g. "40000000ns" for 25fps)
+        if (mTrackOptions.contains(0) && !mTrackOptions[0].defaultDuration.isEmpty()) {
+            QString dur = mTrackOptions[0].defaultDuration;
+            if (dur.endsWith("ns")) {
+                int64_t ns = dur.left(dur.length() - 2).toLongLong();
+                if (ns > 0) {
+                    vin.assignPts = true;
+                    vin.frameDur = av_rescale_q(ns,
+                        AVRational{1, 1000000000}, videoOut->time_base);
+                    videoOut->r_frame_rate = av_make_q(1000000000, (int)ns);
+                    videoOut->avg_frame_rate = videoOut->r_frame_rate;
+                    qDebug() << "  Video: frame duration" << ns << "ns ="
+                             << vin.frameDur << "tb-units (time_base"
+                             << videoOut->time_base.num << "/" << videoOut->time_base.den << ")";
+                }
+            }
+        }
+
+        inputs.append(vin);
+
+        // Audio streams
+        QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
+        int outStreamIdx = 1;
+
+        for (int i = 0; i < audioFiles.size(); i++) {
+            if (!QFile::exists(audioFiles[i])) continue;
+
+            AVFormatContext* audioCtx = openInput(audioFiles[i], ret);
+            if (!audioCtx) continue;
+
+            int audioIdx = av_find_best_stream(audioCtx, AVMEDIA_TYPE_AUDIO,
+                                                -1, -1, nullptr, 0);
+            if (audioIdx < 0) {
+                avformat_close_input(&audioCtx);
+                continue;
+            }
+
+            AVStream* audioOut = avformat_new_stream(outCtx, nullptr);
+            avcodec_parameters_copy(audioOut->codecpar,
+                                     audioCtx->streams[audioIdx]->codecpar);
+            audioOut->time_base = audioCtx->streams[audioIdx]->time_base;
+
+            // Language metadata
             QString lang;
             if (i < mAudioLanguages.size() && !mAudioLanguages[i].isEmpty()) {
                 lang = mAudioLanguages[i];
             } else {
-                // Fallback: extract from filename (e.g., "Show_deu.ac3" → "deu")
-                QRegularExpressionMatch langMatch = langRe.match(QFileInfo(audio).completeBaseName());
-                if (langMatch.hasMatch()) {
-                    lang = langMatch.captured(1);
-                }
+                QRegularExpressionMatch m = langRe.match(
+                    QFileInfo(audioFiles[i]).completeBaseName());
+                if (m.hasMatch()) lang = m.captured(1);
             }
             if (!lang.isEmpty()) {
-                args << "--language" << QString("0:%1").arg(lang);
+                av_dict_set(&audioOut->metadata, "language",
+                             lang.toUtf8().constData(), 0);
             }
-            // Apply A/V sync offset if set (track 0 = first track within this file)
-            // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
-            // Positive --sync value delays audio → correct for audio that is too early
-            if (mAudioSyncOffsetMs != 0) {
-                args << "--sync" << QString("0:%1").arg(mAudioSyncOffsetMs);
-            }
-            args << audio;
-            audioTrackId++;
-        }
-    }
 
-    // Subtitle files with language
-    for (int i = 0; i < subtitleFiles.size(); i++) {
-        const QString& sub = subtitleFiles[i];
-        if (QFile::exists(sub)) {
+            MuxInput ain;
+            ain.fmtCtx = audioCtx;
+            ain.srcIdx = audioIdx;
+            ain.outIdx = outStreamIdx++;
+            ain.syncMs = mAudioSyncOffsetMs;
+            ain.ownsCtx = true;
+            ain.pkt = av_packet_alloc();
+            inputs.append(ain);
+
+            qDebug() << "  Audio" << i << ":" << audioFiles[i]
+                     << "lang=" << lang << "outIdx=" << ain.outIdx;
+        }
+
+        // Subtitle streams
+        for (int i = 0; i < subtitleFiles.size(); i++) {
+            if (!QFile::exists(subtitleFiles[i])) continue;
+
+            AVFormatContext* subCtx = openInput(subtitleFiles[i], ret);
+            if (!subCtx) continue;
+
+            int subIdx = av_find_best_stream(subCtx, AVMEDIA_TYPE_SUBTITLE,
+                                              -1, -1, nullptr, 0);
+            if (subIdx < 0) {
+                avformat_close_input(&subCtx);
+                continue;
+            }
+
+            AVStream* subOut = avformat_new_stream(outCtx, nullptr);
+            avcodec_parameters_copy(subOut->codecpar,
+                                     subCtx->streams[subIdx]->codecpar);
+            subOut->time_base = subCtx->streams[subIdx]->time_base;
+
             QString lang;
             if (i < mSubtitleLanguages.size() && !mSubtitleLanguages[i].isEmpty()) {
                 lang = mSubtitleLanguages[i];
-            } else {
-                QRegularExpressionMatch langMatch = langRe.match(QFileInfo(sub).completeBaseName());
-                if (langMatch.hasMatch()) {
-                    lang = langMatch.captured(1);
-                }
             }
             if (!lang.isEmpty()) {
-                args << "--language" << QString("0:%1").arg(lang);
+                av_dict_set(&subOut->metadata, "language",
+                             lang.toUtf8().constData(), 0);
             }
-            args << sub;
+
+            MuxInput sin;
+            sin.fmtCtx = subCtx;
+            sin.srcIdx = subIdx;
+            sin.outIdx = outStreamIdx++;
+            sin.ownsCtx = true;
+            sin.pkt = av_packet_alloc();
+            inputs.append(sin);
+
+            qDebug() << "  Subtitle" << i << ":" << subtitleFiles[i];
         }
     }
 
-    // Chapter file if set
+    // Add chapters if chapter file is set
     if (!mChapterFile.isEmpty() && QFile::exists(mChapterFile)) {
-        args << "--chapters" << mChapterFile;
+        addChaptersFromFile(outCtx, mChapterFile);
     }
 
-    return args;
-}
-
-// -----------------------------------------------------------------------------
-// Handle stdout from mkvmerge
-// -----------------------------------------------------------------------------
-void TTMkvMergeProvider::onReadyReadStandardOutput()
-{
-    if (!mProcess) return;
-
-    QString output = QString::fromUtf8(mProcess->readAllStandardOutput());
-    emit processOutput(output);
-
-    // Parse progress from output (mkvmerge outputs "Progress: XX%")
-    QRegularExpression re("Progress:\\s*(\\d+)%");
-    QRegularExpressionMatch match = re.match(output);
-    if (match.hasMatch()) {
-        int percent = match.captured(1).toInt();
-        emit progressChanged(percent, QString("Muxing: %1%").arg(percent));
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Handle stderr from mkvmerge
-// -----------------------------------------------------------------------------
-void TTMkvMergeProvider::onReadyReadStandardError()
-{
-    if (!mProcess) return;
-
-    QString error = QString::fromUtf8(mProcess->readAllStandardError());
-    if (!error.trimmed().isEmpty()) {
-        qDebug() << "mkvmerge stderr:" << error;
-        // Only set as error if it's actually an error message
-        if (error.contains("Error:", Qt::CaseInsensitive)) {
-            setError(error.trimmed());
+    // Open output file
+    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&outCtx->pb, outputFile.toUtf8().constData(),
+                         AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            setError(QString("Cannot open output: %1").arg(avErrStr(ret)));
+            goto cleanup;
         }
     }
+
+    ret = avformat_write_header(outCtx, nullptr);
+    if (ret < 0) {
+        setError(QString("Cannot write header: %1").arg(avErrStr(ret)));
+        goto cleanup;
+    }
+
+    // ---- Write packets ----
+
+    if (containerRemux) {
+        // Container remux: simple loop, copy all packets
+        AVPacket* pkt = av_packet_alloc();
+        while (av_read_frame(videoInCtx, pkt) >= 0) {
+            unsigned srcIdx = pkt->stream_index;
+            if (srcIdx >= outCtx->nb_streams) {
+                av_packet_unref(pkt);
+                continue;
+            }
+            av_packet_rescale_ts(pkt,
+                videoInCtx->streams[srcIdx]->time_base,
+                outCtx->streams[srcIdx]->time_base);
+            pkt->pos = -1;
+            av_interleaved_write_frame(outCtx, pkt);
+        }
+        av_packet_free(&pkt);
+
+    } else {
+        // ES mux: interleaved multi-input loop
+
+        // Read first packet from each input
+        for (int i = 0; i < inputs.size(); i++) {
+            readNextPacket(inputs[i]);
+        }
+
+        // Write packets in PTS order
+        while (true) {
+            int bestIdx = -1;
+            int64_t bestPts = INT64_MAX;
+
+            for (int i = 0; i < inputs.size(); i++) {
+                if (inputs[i].eof) continue;
+                int64_t npts = getNormalizedPts(inputs[i], outCtx);
+                if (npts < bestPts) {
+                    bestPts = npts;
+                    bestIdx = i;
+                }
+            }
+
+            if (bestIdx < 0) break;  // All inputs exhausted
+
+            MuxInput& in = inputs[bestIdx];
+
+            // Assign or rescale PTS
+            if (in.assignPts) {
+                in.pkt->pts = in.frameCount * in.frameDur;
+                in.pkt->dts = in.pkt->pts;
+                in.frameCount++;
+            } else {
+                av_packet_rescale_ts(in.pkt,
+                    in.fmtCtx->streams[in.srcIdx]->time_base,
+                    outCtx->streams[in.outIdx]->time_base);
+            }
+
+            // Apply sync offset
+            if (in.syncMs != 0) {
+                int64_t off = av_rescale_q(in.syncMs,
+                    AVRational{1, 1000},
+                    outCtx->streams[in.outIdx]->time_base);
+                in.pkt->pts += off;
+                in.pkt->dts += off;
+            }
+
+            in.pkt->stream_index = in.outIdx;
+            in.pkt->pos = -1;
+
+            av_interleaved_write_frame(outCtx, in.pkt);
+            // av_interleaved_write_frame takes ownership and unrefs the packet
+
+            readNextPacket(in);
+        }
+    }
+
+    av_write_trailer(outCtx);
+    success = true;
+
+    qDebug() << "TTMkvMergeProvider::mux complete:" << outputFile;
+
+cleanup:
+    // Close all input contexts
+    avformat_close_input(&videoInCtx);
+    for (auto& in : inputs) {
+        if (in.pkt) av_packet_free(&in.pkt);
+        if (in.ownsCtx && in.fmtCtx)
+            avformat_close_input(&in.fmtCtx);
+    }
+
+    // Close output
+    if (outCtx) {
+        if (!(outCtx->oformat->flags & AVFMT_NOFILE))
+            avio_closep(&outCtx->pb);
+        avformat_free_context(outCtx);
+    }
+
+    return success;
 }
 
 // -----------------------------------------------------------------------------
@@ -427,9 +682,8 @@ void TTMkvMergeProvider::setError(const QString& error)
 }
 
 // -----------------------------------------------------------------------------
-// Generate chapter file for MKV
-// Creates a simple chapter file in OGM/Matroska format
-// Returns the path to the generated chapter file, or empty string on failure
+// Generate chapter file for MKV (OGM/Matroska format)
+// Returns the path to the generated file, or empty string on failure
 // -----------------------------------------------------------------------------
 QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalMinutes,
                                                   const QString& outputDir)
@@ -440,8 +694,6 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
     }
 
     qint64 intervalMs = static_cast<qint64>(intervalMinutes) * 60 * 1000;
-
-    // Generate chapter file path
     QString chapterFilePath = QDir(outputDir).filePath("chapters.txt");
 
     QFile chapterFile(chapterFilePath);
@@ -456,15 +708,11 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
     qint64 currentTime = 0;
 
     while (currentTime < durationMs) {
-        // Convert milliseconds to HH:MM:SS.mmm format
         int hours = currentTime / (1000 * 60 * 60);
         int minutes = (currentTime / (1000 * 60)) % 60;
         int seconds = (currentTime / 1000) % 60;
         int millis = currentTime % 1000;
 
-        // Write chapter entry in simple chapter format
-        // CHAPTER01=00:00:00.000
-        // CHAPTER01NAME=Chapter 1
         out << QString("CHAPTER%1=%2:%3:%4.%5\n")
                .arg(chapterNum, 2, 10, QChar('0'))
                .arg(hours, 2, 10, QChar('0'))
@@ -480,6 +728,7 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
 
     chapterFile.close();
 
-    qDebug() << "Generated chapter file with" << (chapterNum - 1) << "chapters:" << chapterFilePath;
+    qDebug() << "Generated chapter file with" << (chapterNum - 1) << "chapters:"
+             << chapterFilePath;
     return chapterFilePath;
 }
