@@ -237,6 +237,11 @@ public:
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList);
 
+    // Detect audio burst near a boundary (returns true if burst found)
+    // Sets burstRmsDb and contextRmsDb if burst detected
+    static bool detectAudioBurst(const QString& audioFile, double boundaryTime,
+                                  bool isCutOut, double& burstRmsDb, double& contextRmsDb);
+
     // SRT subtitle cutting - text-based time filtering
     bool cutSrtSubtitle(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList);

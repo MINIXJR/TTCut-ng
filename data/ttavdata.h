@@ -42,6 +42,24 @@
 #include "ttmarkerlist.h"
 #include "ttavlist.h"
 
+#include <QMessageBox>
+
+// Pre-flight boundary check result
+struct BoundaryIssue {
+    int segmentIndex;        // Which segment (0-based)
+    bool isCutOut;           // true=CutOut, false=CutIn
+    int frameIndex;          // Current frame index
+    double boundaryTime;     // Time in seconds
+
+    // Audio burst
+    bool hasAudioBurst;
+    double burstRmsDb;       // RMS of burst chunk (dB)
+    double contextRmsDb;     // Median RMS of surrounding chunks (dB)
+
+    // SPS change (H.264/H.265 only)
+    bool hasSPSChange;
+};
+
 class TTThreadTaskPool;
 class TTThreadTask;
 class TTMessageLogger;
@@ -207,6 +225,11 @@ class TTAVData : public QObject
                                            const QStringList& audioFilePaths,
                                            const QStringList& subtitleFilePaths = QStringList());
     void           doH264Cut(QString tgtFileName, TTCutList* cutList);
+    QList<BoundaryIssue> checkAudioBoundaries(const QString& audioFile,
+                                               const QList<QPair<double, double>>& keepList,
+                                               double frameRate);
+    int showBoundaryDialog(QList<BoundaryIssue>& issues, TTCutList* cutList,
+                           double frameRate);
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;
