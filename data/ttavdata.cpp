@@ -797,6 +797,32 @@ void TTAVData::doCutPreview(TTCutList* cutList)
   if (cutPreviewTask != 0) delete cutPreviewTask;
   cutPreviewTask = new TTCutPreviewTask(this, cutList);
 
+  // Pre-flight boundary check: detect audio bursts
+  if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
+    TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
+    double frameRate = vStream->frameRate();
+    QString audioFile = cutList->at(0).avDataItem()->audioStreamAt(0)->filePath();
+
+    QList<QPair<double, double>> keepList;
+    for (int i = 0; i < cutList->count(); i++) {
+      TTCutItem item = cutList->at(i);
+      double cutInTime = item.cutInIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      keepList.append(qMakePair(cutInTime, cutOutTime));
+    }
+
+    QList<BoundaryIssue> issues = checkAudioBoundaries(audioFile, keepList, frameRate);
+
+    if (!issues.isEmpty()) {
+      int result = showBoundaryDialog(issues, cutList, frameRate);
+      if (result == QMessageBox::RejectRole) {
+        delete cutPreviewTask;
+        cutPreviewTask = 0;
+        return;
+      }
+    }
+  }
+
   connect(cutPreviewTask,   SIGNAL(finished(TTCutList*)),
           this,             SLOT(onCutPreviewFinished(TTCutList*)));
   connect(mpThreadTaskPool, SIGNAL(aborted()),
@@ -864,6 +890,31 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   TTVideoStream* firstStream = cutList->at(0).avDataItem()->videoStream();
   TTAVTypes::AVStreamType streamType = firstStream->streamType();
   bool isH264H265 = (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video);
+
+  // Pre-flight boundary check: detect audio bursts at cut boundaries
+  if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
+    double frameRate = firstStream->frameRate();
+    QString audioFile = cutList->at(0).avDataItem()->audioStreamAt(0)->filePath();
+
+    // Build keepList for boundary analysis
+    QList<QPair<double, double>> keepList;
+    for (int i = 0; i < cutList->count(); i++) {
+      TTCutItem item = cutList->at(i);
+      double cutInTime = item.cutInIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      keepList.append(qMakePair(cutInTime, cutOutTime));
+    }
+
+    QList<BoundaryIssue> issues = checkAudioBoundaries(audioFile, keepList, frameRate);
+
+    if (!issues.isEmpty()) {
+      int result = showBoundaryDialog(issues, cutList, frameRate);
+      if (result == QMessageBox::RejectRole) {
+        emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
+        return;
+      }
+    }
+  }
 
   if (isH264H265) {
     // For H.264/H.265: use ffmpeg directly since native cutting is not implemented
@@ -1169,6 +1220,26 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut init failed: %1").arg(smartCut.lastError()));
       emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not initialize"), 0);
       return;
+    }
+
+    // SPS boundary check (H.264/H.265 only)
+    for (int i = 0; i < cutFrames.size(); i++) {
+      // Check CutOut (skip last segment)
+      if (i < cutFrames.size() - 1) {
+        if (smartCut.hasSPSChangeAtBoundary(cutFrames[i].second, true)) {
+          log->warningMsg(__FILE__, __LINE__,
+              QString("SPS change at CutOut segment %1 (frame %2) - possible aspect ratio change")
+              .arg(i + 1).arg(cutFrames[i].second));
+        }
+      }
+      // Check CutIn (skip first segment)
+      if (i > 0) {
+        if (smartCut.hasSPSChangeAtBoundary(cutFrames[i].first, false)) {
+          log->warningMsg(__FILE__, __LINE__,
+              QString("SPS change at CutIn segment %1 (frame %2) - possible aspect ratio change")
+              .arg(i + 1).arg(cutFrames[i].first));
+        }
+      }
     }
 
     // Create temporary video output
