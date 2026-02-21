@@ -798,32 +798,6 @@ void TTAVData::doCutPreview(TTCutList* cutList)
   if (cutPreviewTask != 0) delete cutPreviewTask;
   cutPreviewTask = new TTCutPreviewTask(this, cutList);
 
-  // Pre-flight boundary check: detect audio bursts
-  if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
-    TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
-    double frameRate = vStream->frameRate();
-    QString audioFile = cutList->at(0).avDataItem()->audioStreamAt(0)->filePath();
-
-    QList<QPair<double, double>> keepList;
-    for (int i = 0; i < cutList->count(); i++) {
-      TTCutItem item = cutList->at(i);
-      double cutInTime = item.cutInIndex() / frameRate;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-      keepList.append(qMakePair(cutInTime, cutOutTime));
-    }
-
-    QList<BoundaryIssue> issues = checkAudioBoundaries(audioFile, keepList, frameRate);
-
-    if (!issues.isEmpty()) {
-      int result = showBoundaryDialog(issues, cutList, frameRate);
-      if (result == QMessageBox::RejectRole) {
-        delete cutPreviewTask;
-        cutPreviewTask = 0;
-        return;
-      }
-    }
-  }
-
   connect(cutPreviewTask,   SIGNAL(finished(TTCutList*)),
           this,             SLOT(onCutPreviewFinished(TTCutList*)));
   connect(mpThreadTaskPool, SIGNAL(aborted()),
@@ -892,25 +866,34 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   TTAVTypes::AVStreamType streamType = firstStream->streamType();
   bool isH264H265 = (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video);
 
-  // Pre-flight boundary check: detect audio bursts at cut boundaries
+  // Check for unresolved audio bursts
   if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
     double frameRate = firstStream->frameRate();
     QString audioFile = cutList->at(0).avDataItem()->audioStreamAt(0)->filePath();
+    int threshold = TTCut::burstThresholdDb;
 
-    // Build keepList for boundary analysis
-    QList<QPair<double, double>> keepList;
+    QStringList burstWarnings;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      double cutInTime = item.cutInIndex() / frameRate;
       double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-      keepList.append(qMakePair(cutInTime, cutOutTime));
+      double burstDb = 0, contextDb = 0;
+
+      if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, burstDb, contextDb)) {
+        if (threshold == 0 || burstDb >= threshold) {
+          burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
+                           .arg(i + 1).arg(burstDb, 0, 'f', 1);
+        }
+      }
     }
 
-    QList<BoundaryIssue> issues = checkAudioBoundaries(audioFile, keepList, frameRate);
+    if (!burstWarnings.isEmpty()) {
+      QString msg = tr("Folgende Schnitte haben erkannte Audio-Bursts:\n\n")
+                  + burstWarnings.join("\n")
+                  + tr("\n\nVorschau nutzen um zu prüfen ob Shift nötig ist.");
 
-    if (!issues.isEmpty()) {
-      int result = showBoundaryDialog(issues, cutList, frameRate);
-      if (result == QMessageBox::RejectRole) {
+      int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio-Burst Warning"),
+                    msg, tr("Trotzdem schneiden"), tr("Abbrechen"));
+      if (ret == 1) {
         emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
         return;
       }
