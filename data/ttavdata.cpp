@@ -32,6 +32,7 @@
 #include <cstdio>
 
 #include <QMessageBox>
+#include <QPushButton>
 
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
@@ -939,6 +940,146 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
 
     mpThreadTaskPool->start(cutSubtitleTask);
   }
+}
+
+/*!
+ * checkAudioBoundaries
+ * Pre-flight check: detect audio bursts at cut boundaries.
+ * Checks each inner boundary (skips start of first segment and end of last segment).
+ */
+QList<BoundaryIssue> TTAVData::checkAudioBoundaries(const QString& audioFile,
+                                                     const QList<QPair<double, double>>& keepList,
+                                                     double frameRate)
+{
+    QList<BoundaryIssue> issues;
+    if (audioFile.isEmpty()) return issues;
+
+    log->infoMsg(__FILE__, __LINE__, QString("Checking %1 boundaries for audio bursts...").arg(keepList.size() * 2 - 2));
+
+    for (int i = 0; i < keepList.size(); i++) {
+        // Check CutIn (start of segment) — skip first segment (start of recording)
+        if (i > 0) {
+            double cutInTime = keepList[i].first;
+            int cutInFrame = qRound(cutInTime * frameRate);
+
+            BoundaryIssue issue;
+            issue.segmentIndex = i;
+            issue.isCutOut = false;
+            issue.frameIndex = cutInFrame;
+            issue.boundaryTime = cutInTime;
+            issue.hasAudioBurst = false;
+            issue.hasSPSChange = false;
+
+            if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false,
+                                                   issue.burstRmsDb, issue.contextRmsDb)) {
+                issue.hasAudioBurst = true;
+                issues.append(issue);
+            }
+        }
+
+        // Check CutOut (end of segment) — skip last segment (end of recording)
+        if (i < keepList.size() - 1) {
+            double cutOutTime = keepList[i].second;
+            int cutOutFrame = qRound(cutOutTime * frameRate) - 1;  // -1 because +1 was added for inclusive end
+
+            BoundaryIssue issue;
+            issue.segmentIndex = i;
+            issue.isCutOut = true;
+            issue.frameIndex = cutOutFrame;
+            issue.boundaryTime = cutOutTime;
+            issue.hasAudioBurst = false;
+            issue.hasSPSChange = false;
+
+            if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true,
+                                                   issue.burstRmsDb, issue.contextRmsDb)) {
+                issue.hasAudioBurst = true;
+                issues.append(issue);
+            }
+        }
+    }
+
+    log->infoMsg(__FILE__, __LINE__, QString("Boundary check complete: %1 issues found").arg(issues.size()));
+    return issues;
+}
+
+/*!
+ * showBoundaryDialog
+ * Display detected boundary issues to the user.
+ * Returns QMessageBox::AcceptRole if user accepts or no issues,
+ * QMessageBox::RejectRole if user cancels.
+ * If user clicks "Shift 1 Frame", adjusts cut points via TTCutList::update().
+ */
+int TTAVData::showBoundaryDialog(QList<BoundaryIssue>& issues, TTCutList* cutList,
+                                  double frameRate)
+{
+    Q_UNUSED(frameRate);
+
+    if (issues.isEmpty()) return QMessageBox::AcceptRole;
+
+    QString msg = tr("Possible issues detected at cut boundaries:\n\n");
+
+    for (const auto& issue : issues) {
+        QString pos = issue.isCutOut ? tr("End") : tr("Start");
+        msg += tr("Segment %1 %2 (Frame %3, %4s):\n")
+            .arg(issue.segmentIndex + 1)
+            .arg(pos)
+            .arg(issue.frameIndex)
+            .arg(issue.boundaryTime, 0, 'f', 1);
+
+        if (issue.hasAudioBurst) {
+            msg += tr("  Audio burst: %1 dB (context: %2 dB)\n")
+                .arg(issue.burstRmsDb, 0, 'f', 1)
+                .arg(issue.contextRmsDb, 0, 'f', 1);
+        }
+        if (issue.hasSPSChange) {
+            msg += tr("  SPS change detected (possible aspect ratio change)\n");
+        }
+        msg += "\n";
+    }
+
+    QMessageBox box;
+    box.setWindowTitle(tr("Boundary Check"));
+    box.setText(msg);
+    box.setIcon(QMessageBox::Warning);
+    QPushButton* shiftBtn  = box.addButton(tr("Shift 1 Frame"),  QMessageBox::ActionRole);
+    QPushButton* acceptBtn = box.addButton(tr("Accept"),         QMessageBox::AcceptRole);
+    QPushButton* cancelBtn = box.addButton(tr("Cancel"),         QMessageBox::RejectRole);
+    box.setDefaultButton(acceptBtn);
+    box.exec();
+
+    QAbstractButton* clicked = box.clickedButton();
+
+    if (clicked == static_cast<QAbstractButton*>(cancelBtn)) {
+        return QMessageBox::RejectRole;
+    }
+
+    if (clicked == static_cast<QAbstractButton*>(shiftBtn)) {
+        // Adjust cut points using TTCutList::update()
+        for (const auto& issue : issues) {
+            if (issue.segmentIndex >= cutList->count()) continue;
+
+            const TTCutItem& currentItem = cutList->at(issue.segmentIndex);
+            TTCutItem updatedItem(currentItem);  // copy preserves UUID for indexOf match
+
+            if (issue.isCutOut) {
+                int newCutOut = currentItem.cutOutIndex() - 1;
+                updatedItem.update(currentItem.cutInIndex(), newCutOut);
+                cutList->update(currentItem, updatedItem);
+                log->infoMsg(__FILE__, __LINE__,
+                    QString("Boundary check: shifted CutOut segment %1: %2 -> %3")
+                    .arg(issue.segmentIndex + 1).arg(currentItem.cutOutIndex()).arg(newCutOut));
+            } else {
+                int newCutIn = currentItem.cutInIndex() + 1;
+                updatedItem.update(newCutIn, currentItem.cutOutIndex());
+                cutList->update(currentItem, updatedItem);
+                log->infoMsg(__FILE__, __LINE__,
+                    QString("Boundary check: shifted CutIn segment %1: %2 -> %3")
+                    .arg(issue.segmentIndex + 1).arg(currentItem.cutInIndex()).arg(newCutIn));
+            }
+        }
+    }
+
+    return QMessageBox::AcceptRole;
 }
 
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
