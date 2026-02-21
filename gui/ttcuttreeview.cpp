@@ -33,6 +33,7 @@
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttesinfo.h"
+#include "../extern/ttffmpegwrapper.h"
 
 #include "ttcuttreeview.h"
 
@@ -61,6 +62,8 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   header->resizeSection(2, 140);
   header->resizeSection(3, 150);
   header->resizeSection(4,  80);
+  videoCutList->headerItem()->setText(5, "");
+  videoCutList->setColumnWidth(5, 30);
 
   allowSelectionChanged = true;
   editItemIndex = -1;
@@ -185,6 +188,8 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
   }
   treeItem->setText(4, offsetStr);
 
+  updateBurstIcon(treeItem, item);
+
   //emit refreshDisplay();
 }
 
@@ -219,6 +224,8 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
   treeItem->setText(2, uitem.cutOutString());
   treeItem->setText(3, uitem.cutLengthString());
 
+  updateBurstIcon(treeItem, uitem);
+
   if (editItemIndex >= 0) {
     editItemIndex = -1;
     // Reset to default background (empty brush respects theme colors)
@@ -227,6 +234,7 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
     treeItem->setBackground(2, QBrush());
     treeItem->setBackground(3, QBrush());
     treeItem->setBackground(4, QBrush());
+    treeItem->setBackground(5, QBrush());
   }
 
   emit itemUpdated(cItem);
@@ -385,6 +393,7 @@ void TTCutTreeView::onEntryEdit()
   curItem->setBackground(2, editBrush);
   curItem->setBackground(3, editBrush);
   curItem->setBackground(4, editBrush);
+  curItem->setBackground(5, editBrush);
 
   // deselect item
   curItem->setSelected(false);
@@ -556,6 +565,54 @@ void TTCutTreeView::onContextMenuRequest( const QPoint& point)
   }
 
   contextMenu.exec(videoCutList->mapToGlobal(point));
+}
+
+/*!
+ * updateBurstIcon
+ * Detect audio burst near cut boundaries and show warning icon
+ */
+void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item)
+{
+    if (!item.avDataItem() || item.avDataItem()->audioCount() == 0) {
+        treeItem->setIcon(5, QIcon());
+        treeItem->setToolTip(5, "");
+        return;
+    }
+
+    TTVideoStream* vStream = item.avDataItem()->videoStream();
+    if (!vStream) return;
+    double frameRate = vStream->frameRate();
+    QString audioFile = item.avDataItem()->audioStreamAt(0)->filePath();
+    int threshold = TTCut::burstThresholdDb;
+
+    // Check cut-out boundary
+    double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+    double outBurstDb = 0, outContextDb = 0;
+    bool hasCutOutBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, outBurstDb, outContextDb);
+    if (hasCutOutBurst && threshold != 0 && outBurstDb < threshold)
+        hasCutOutBurst = false;
+
+    // Check cut-in boundary
+    double cutInTime = item.cutInIndex() / frameRate;
+    double inBurstDb = 0, inContextDb = 0;
+    bool hasCutInBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false, inBurstDb, inContextDb);
+    if (hasCutInBurst && threshold != 0 && inBurstDb < threshold)
+        hasCutInBurst = false;
+
+    if (hasCutOutBurst || hasCutInBurst) {
+        treeItem->setIcon(5, style()->standardIcon(QStyle::SP_MessageBoxWarning));
+        QString tip;
+        if (hasCutOutBurst)
+            tip += QString("Audio-Burst am Ende: %1 dB (Context: %2 dB)").arg(outBurstDb, 0, 'f', 1).arg(outContextDb, 0, 'f', 1);
+        if (hasCutInBurst) {
+            if (!tip.isEmpty()) tip += "\n";
+            tip += QString("Audio-Burst am Anfang: %1 dB (Context: %2 dB)").arg(inBurstDb, 0, 'f', 1).arg(inContextDb, 0, 'f', 1);
+        }
+        treeItem->setToolTip(5, tip);
+    } else {
+        treeItem->setIcon(5, QIcon());
+        treeItem->setToolTip(5, "");
+    }
 }
 
 /*!

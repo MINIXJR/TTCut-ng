@@ -92,6 +92,7 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
   	QTreeWidgetItem* findItem(const TTCutItem& cutItem);
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
     void createActions();
+    void updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
 
   private:
     TTAVData*        mAVData;
