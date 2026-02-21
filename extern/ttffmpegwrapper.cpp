@@ -3434,7 +3434,6 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
     AVPacket* packet = av_packet_alloc();
     AVFrame*  frame  = av_frame_alloc();
     QList<double> rmsValues;
-    QList<double> rmsTimestamps;  // for debug
 
     while (av_read_frame(fmtCtx, packet) >= 0) {
         if (packet->stream_index != audioIdx) {
@@ -3525,7 +3524,6 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
                 double rms = sqrt(sumSq / totalSamples);
                 double rmsDb = (rms > 0.0) ? 20.0 * log10(rms) : -120.0;
                 rmsValues.append(rmsDb);
-                rmsTimestamps.append(frameTime);
             }
             av_frame_unref(frame);
         }
@@ -3536,18 +3534,6 @@ done_reading:
     av_packet_free(&packet);
     avcodec_free_context(&decCtx);
     avformat_close_input(&fmtCtx);
-
-    // Debug: show actual time range and per-frame RMS
-    if (!rmsValues.isEmpty()) {
-        QString dbgFrames;
-        for (int i = 0; i < rmsValues.size(); i++) {
-            dbgFrames += QString("%1s:%2 ").arg(rmsTimestamps[i], 0, 'f', 3).arg(rmsValues[i], 0, 'f', 1);
-        }
-        qDebug() << "detectAudioBurst:" << boundaryTime
-                 << (isCutOut ? "CutOut" : "CutIn")
-                 << "window=" << windowStart << "-" << windowEnd
-                 << "frames:" << dbgFrames;
-    }
 
     if (rmsValues.size() < 3) {
         qDebug() << "detectAudioBurst: only" << rmsValues.size()
