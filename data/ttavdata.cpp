@@ -1012,7 +1012,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     log->infoMsg(__FILE__, __LINE__, QString("Audio file: %1").arg(audioFile));
   }
 
-  emit statusReport(StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
+  emit statusReport(0, StatusReportArgs::Init, tr("Initializing H.264/H.265 cut..."), 0);
+  qApp->processEvents();
+  emit statusReport(0, StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
+  qApp->processEvents();
 
   QString finalOutput = tgtFileName;
   if (!finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
@@ -1056,12 +1059,13 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // Initialize Smart Cut engine
     TTESSmartCut smartCut;
     connect(&smartCut, &TTESSmartCut::progressChanged, this, [this](int percent, const QString& msg) {
-      emit statusReport(StatusReportArgs::Step, msg, percent);
+      emit statusReport(0, StatusReportArgs::Step, msg, percent);
+      qApp->processEvents();
     });
 
     if (!smartCut.initialize(sourceFile, frameRate)) {
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut init failed: %1").arg(smartCut.lastError()));
-      emit statusReport(StatusReportArgs::Finished, tr("Cutting failed - could not initialize"), 0);
+      emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed - could not initialize"), 0);
       return;
     }
 
@@ -1090,10 +1094,11 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
         QFileInfo(sourceFile).completeBaseName() + "_cut." + QFileInfo(sourceFile).suffix()).absoluteFilePath();
 
     // Perform frame-accurate video cut
-    emit statusReport(StatusReportArgs::Step, tr("Cutting video (Smart Cut)..."), 0);
+    emit statusReport(0, StatusReportArgs::Step, tr("Cutting video (Smart Cut)..."), 0);
+    qApp->processEvents();
     if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut failed: %1").arg(smartCut.lastError()));
-      emit statusReport(StatusReportArgs::Finished, tr("Cutting failed"), 0);
+      emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed"), 0);
       return;
     }
 
@@ -1111,7 +1116,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       TTAudioStream* audioStream = avItem->audioStreamAt(i);
       QString srcAudioFile = audioStream->filePath();
 
-      emit statusReport(StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
+      emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
+      qApp->processEvents();
 
       // Calculate audio cut times from video frame rate
       QString audioExt = QFileInfo(srcAudioFile).suffix();
@@ -1134,8 +1140,17 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     }
 
     // Mux video and audio into final MKV
-    emit statusReport(StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
+    log->infoMsg(__FILE__, __LINE__, QString("tempVideoFile: %1 (%2 bytes)")
+        .arg(tempVideoFile).arg(QFileInfo(tempVideoFile).size()));
+    for (int i = 0; i < cutAudioFiles.size(); i++) {
+      log->infoMsg(__FILE__, __LINE__, QString("cutAudioFile[%1]: %2 (%3 bytes)")
+          .arg(i).arg(cutAudioFiles[i]).arg(QFileInfo(cutAudioFiles[i]).size()));
+    }
+    emit statusReport(0, StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
+    qApp->processEvents();
     TTMkvMergeProvider mkvProvider;
+    connect(&mkvProvider, SIGNAL(progressChanged(int, const QString&)),
+            this,        SLOT(onMuxProgress(int, const QString&)));
 
     // Calculate frame duration in nanoseconds (e.g., "0:20000000ns" for 50fps)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
@@ -1148,6 +1163,32 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
     mkvProvider.setAudioLanguages(cutAudioLanguages);
 
+    // Add chapters in first mux pass (no second container remux needed)
+    QString chapterFile;
+    if (TTCut::mkvCreateChapters && TTCut::mkvChapterInterval > 0 &&
+        finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
+
+      qint64 totalDurationMs = 0;
+      for (int i = 0; i < cutList->count(); i++) {
+        QTime cutLength = cutList->at(i).cutLengthTime();
+        totalDurationMs += cutLength.hour() * 3600000 +
+                           cutLength.minute() * 60000 +
+                           cutLength.second() * 1000 +
+                           cutLength.msec();
+      }
+
+      log->infoMsg(__FILE__, __LINE__, QString("Total cut duration: %1 ms").arg(totalDurationMs));
+
+      if (totalDurationMs > 0) {
+        mkvProvider.setTotalDurationMs(totalDurationMs);
+        chapterFile = TTMkvMergeProvider::generateChapterFile(
+            totalDurationMs, TTCut::mkvChapterInterval, TTCut::cutDirPath);
+        if (!chapterFile.isEmpty()) {
+          mkvProvider.setChapterFile(chapterFile);
+        }
+      }
+    }
+
     bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
 
     if (success) {
@@ -1159,61 +1200,15 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       }
     } else {
       log->errorMsg(__FILE__, __LINE__, QString("Muxing failed: %1").arg(mkvProvider.lastError()));
-      emit statusReport(StatusReportArgs::Finished, tr("Muxing failed"), 0);
+      emit statusReport(0, StatusReportArgs::Exit, tr("Muxing failed"), 0);
+      if (!chapterFile.isEmpty()) QFile::remove(chapterFile);
       return;
     }
 
-  log->infoMsg(__FILE__, __LINE__, "Cutting completed successfully");
+    // Clean up chapter file
+    if (!chapterFile.isEmpty()) QFile::remove(chapterFile);
 
-  // Add chapters if enabled (MKV only)
-  if (TTCut::mkvCreateChapters && TTCut::mkvChapterInterval > 0 &&
-      finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
-
-    // Calculate total duration from cut list
-    qint64 totalDurationMs = 0;
-    for (int i = 0; i < cutList->count(); i++) {
-      QTime cutLength = cutList->at(i).cutLengthTime();
-      totalDurationMs += cutLength.hour() * 3600000 +
-                         cutLength.minute() * 60000 +
-                         cutLength.second() * 1000 +
-                         cutLength.msec();
-    }
-
-    log->infoMsg(__FILE__, __LINE__, QString("Total cut duration: %1 ms").arg(totalDurationMs));
-
-    if (totalDurationMs > 0) {
-      QString chapterFile = TTMkvMergeProvider::generateChapterFile(
-          totalDurationMs, TTCut::mkvChapterInterval, TTCut::cutDirPath);
-
-      if (!chapterFile.isEmpty()) {
-        // Use mkvmerge to add chapters to the existing MKV file
-        QString tempOutput = finalOutput + ".tmp.mkv";
-
-        emit statusReport(StatusReportArgs::Step, tr("Adding chapters..."), cutList->count());
-
-        TTMkvMergeProvider mkvProvider;
-        mkvProvider.setChapterFile(chapterFile);
-
-        // Mux existing file with chapters
-        bool muxSuccess = mkvProvider.mux(tempOutput, finalOutput, QStringList(), QStringList());
-
-        if (muxSuccess) {
-          // Replace original with version containing chapters
-          QFile::remove(finalOutput);
-          QFile::rename(tempOutput, finalOutput);
-          log->infoMsg(__FILE__, __LINE__, "Chapters added successfully");
-        } else {
-          log->errorMsg(__FILE__, __LINE__, QString("Failed to add chapters: %1").arg(mkvProvider.lastError()));
-          QFile::remove(tempOutput);
-        }
-
-        // Clean up chapter file
-        QFile::remove(chapterFile);
-      }
-    }
-  }
-
-  emit statusReport(StatusReportArgs::Finished, tr("H.264/H.265 cutting complete"), 0);
+  emit statusReport(0, StatusReportArgs::Exit, tr("H.264/H.265 cutting complete"), 0);
 
   // Create a mux list item for the finished signal
   TTMuxListDataItem muxItem;
@@ -1292,6 +1287,7 @@ void TTAVData::onCutFinished()
           qDebug() << "Total cut duration:" << totalDurationMs << "ms";
 
           if (totalDurationMs > 0) {
+            mkvProvider->setTotalDurationMs(totalDurationMs);
             chapterFile = TTMkvMergeProvider::generateChapterFile(
                 totalDurationMs, TTCut::mkvChapterInterval, TTCut::cutDirPath);
             if (!chapterFile.isEmpty()) {

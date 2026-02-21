@@ -211,7 +211,13 @@ TTMkvMergeProvider::TTMkvMergeProvider()
     : QObject()
     , mAudioSyncOffsetMs(0)
     , mVideoSyncOffsetMs(0)
+    , mTotalDurationMs(0)
 {
+}
+
+void TTMkvMergeProvider::setTotalDurationMs(qint64 durationMs)
+{
+    mTotalDurationMs = durationMs;
 }
 
 // -----------------------------------------------------------------------------
@@ -296,7 +302,7 @@ void TTMkvMergeProvider::setVideoSyncOffset(int offsetMs)
 // -----------------------------------------------------------------------------
 // Parse OGM chapter file and add chapters to output context
 // -----------------------------------------------------------------------------
-static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterFile)
+static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterFile, int64_t totalDurationMs)
 {
     QFile cf(chapterFile);
     if (!cf.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -333,7 +339,8 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
         ch->id = i;
         ch->time_base = {1, 1000};
         ch->start = chapters[i].first;
-        ch->end = (i + 1 < chapters.size()) ? chapters[i + 1].first - 1 : INT64_MAX;
+        ch->end = (i + 1 < chapters.size()) ? chapters[i + 1].first - 1
+                 : (totalDurationMs > 0 ? totalDurationMs : ch->start + 300000);
         if (!chapters[i].second.isEmpty()) {
             av_dict_set(&ch->metadata, "title",
                          chapters[i].second.toUtf8().constData(), 0);
@@ -362,7 +369,12 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
     qDebug() << "TTMkvMergeProvider::mux (libav matroska)";
     qDebug() << "  Output:" << outputFile;
-    qDebug() << "  Video:" << videoFile;
+    qDebug() << "  Video:" << videoFile
+             << "size:" << QFileInfo(videoFile).size() << "bytes";
+    for (int i = 0; i < audioFiles.size(); i++) {
+        qDebug() << "  Audio" << i << ":" << audioFiles[i]
+                 << "size:" << QFileInfo(audioFiles[i]).size() << "bytes";
+    }
 
     // Open video/main input
     int ret = 0;
@@ -386,8 +398,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         return false;
     }
 
-    // Set title metadata from video filename
-    QString title = decodeVdrName(QFileInfo(videoFile).completeBaseName());
+    // Set title metadata from output filename, stripping "_cut" suffix
+    QString baseName = QFileInfo(outputFile).completeBaseName();
+    if (baseName.endsWith("_cut")) baseName.chop(4);
+    QString title = decodeVdrName(baseName);
     if (!title.isEmpty()) {
         av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
     }
@@ -395,6 +409,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     // Build list of MuxInputs and output streams
     QList<MuxInput> inputs;
     bool success = false;
+    int64_t videoDurationNs = 0;
 
     if (containerRemux) {
         // --- Container remux mode ---
@@ -444,19 +459,16 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         vin.pkt = av_packet_alloc();
 
         // Frame duration from setDefaultDuration (e.g. "40000000ns" for 25fps)
+        // NOTE: frameDur is recalculated AFTER avformat_write_header() because
+        // the matroska muxer changes time_base during header write (e.g. to 1/1000)
         if (mTrackOptions.contains(0) && !mTrackOptions[0].defaultDuration.isEmpty()) {
             QString dur = mTrackOptions[0].defaultDuration;
             if (dur.endsWith("ns")) {
-                int64_t ns = dur.left(dur.length() - 2).toLongLong();
-                if (ns > 0) {
+                videoDurationNs = dur.left(dur.length() - 2).toLongLong();
+                if (videoDurationNs > 0) {
                     vin.assignPts = true;
-                    vin.frameDur = av_rescale_q(ns,
-                        AVRational{1, 1000000000}, videoOut->time_base);
-                    videoOut->r_frame_rate = av_make_q(1000000000, (int)ns);
+                    videoOut->r_frame_rate = av_make_q(1000000000, (int)videoDurationNs);
                     videoOut->avg_frame_rate = videoOut->r_frame_rate;
-                    qDebug() << "  Video: frame duration" << ns << "ns ="
-                             << vin.frameDur << "tb-units (time_base"
-                             << videoOut->time_base.num << "/" << videoOut->time_base.den << ")";
                 }
             }
         }
@@ -554,7 +566,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
     // Add chapters if chapter file is set
     if (!mChapterFile.isEmpty() && QFile::exists(mChapterFile)) {
-        addChaptersFromFile(outCtx, mChapterFile);
+        addChaptersFromFile(outCtx, mChapterFile, mTotalDurationMs);
     }
 
     // Open output file
@@ -573,11 +585,26 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         goto cleanup;
     }
 
+    // ---- Recalculate frameDur after write_header (muxer may change time_base) ----
+    if (!containerRemux && videoDurationNs > 0 && !inputs.isEmpty() && inputs[0].assignPts) {
+        MuxInput& vin = inputs[0];
+        AVStream* videoOut = outCtx->streams[vin.outIdx];
+        vin.frameDur = av_rescale_q(videoDurationNs,
+            AVRational{1, 1000000000}, videoOut->time_base);
+        qDebug() << "  Video: frame duration" << videoDurationNs << "ns ="
+                 << vin.frameDur << "tb-units (time_base"
+                 << videoOut->time_base.num << "/" << videoOut->time_base.den
+                 << "after write_header)";
+    }
+
     // ---- Write packets ----
 
     if (containerRemux) {
         // Container remux: simple loop, copy all packets
         AVPacket* pkt = av_packet_alloc();
+        int64_t totalSize = avio_size(videoInCtx->pb);
+        int lastPercent = -1;
+
         while (av_read_frame(videoInCtx, pkt) >= 0) {
             unsigned srcIdx = pkt->stream_index;
             if (srcIdx >= outCtx->nb_streams) {
@@ -589,15 +616,33 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 outCtx->streams[srcIdx]->time_base);
             pkt->pos = -1;
             av_interleaved_write_frame(outCtx, pkt);
+
+            if (totalSize > 0) {
+                int percent = (int)(avio_tell(videoInCtx->pb) * 100 / totalSize);
+                if (percent != lastPercent) {
+                    lastPercent = percent;
+                    emit progressChanged(percent, tr("Muxing..."));
+                }
+            }
         }
         av_packet_free(&pkt);
 
     } else {
         // ES mux: interleaved multi-input loop
+        int64_t totalVideoSize = avio_size(videoInCtx->pb);
+        int lastPercent = -1;
+        int64_t totalPacketsWritten = 0;
+
+        qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
+                 << "inputs=" << inputs.size();
 
         // Read first packet from each input
         for (int i = 0; i < inputs.size(); i++) {
-            readNextPacket(inputs[i]);
+            bool got = readNextPacket(inputs[i]);
+            qDebug() << "    Input" << i << ": first read ="
+                     << (got ? "OK" : "EOF")
+                     << "srcIdx=" << inputs[i].srcIdx
+                     << "assignPts=" << inputs[i].assignPts;
         }
 
         // Write packets in PTS order
@@ -643,15 +688,27 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
             av_interleaved_write_frame(outCtx, in.pkt);
             // av_interleaved_write_frame takes ownership and unrefs the packet
+            totalPacketsWritten++;
+
+            if (totalVideoSize > 0) {
+                int percent = (int)(avio_tell(videoInCtx->pb) * 100 / totalVideoSize);
+                if (percent != lastPercent) {
+                    lastPercent = percent;
+                    emit progressChanged(percent, tr("Muxing..."));
+                }
+            }
 
             readNextPacket(in);
         }
+
+        qDebug() << "  ES mux: total packets written:" << totalPacketsWritten;
     }
 
     av_write_trailer(outCtx);
     success = true;
 
-    qDebug() << "TTMkvMergeProvider::mux complete:" << outputFile;
+    qDebug() << "TTMkvMergeProvider::mux complete:" << outputFile
+             << "output size:" << QFileInfo(outputFile).size() << "bytes";
 
 cleanup:
     // Close all input contexts

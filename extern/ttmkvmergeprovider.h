@@ -72,6 +72,9 @@ public:
     void setAudioSyncOffset(int offsetMs);
     void setVideoSyncOffset(int offsetMs);
 
+    // Total duration for chapter end calculation (avoids INT64_MAX overflow)
+    void setTotalDurationMs(qint64 durationMs);
+
     // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -89,6 +92,7 @@ private:
     QString mChapterFile;
     int mAudioSyncOffsetMs;
     int mVideoSyncOffsetMs;
+    qint64 mTotalDurationMs;
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
 
