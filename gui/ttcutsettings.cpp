@@ -72,8 +72,9 @@ void TTCutSettings::readSettings()
   // Common options
   // ---------------------------------------------------------------------------
   beginGroup( "/Common" );
-  TTCut::tempDirPath = value( "TempDirPath/", TTCut::tempDirPath ).toString();
-  TTCut::lastDirPath = value( "LastDirPath/", TTCut::lastDirPath ).toString();
+  TTCut::tempDirPath      = value( "TempDirPath/", TTCut::tempDirPath ).toString();
+  TTCut::lastDirPath      = value( "LastDirPath/", TTCut::lastDirPath ).toString();
+  TTCut::burstThresholdDb = value( "BurstThresholdDb/", TTCut::burstThresholdDb ).toInt();
   endGroup();
 
   // Preview
@@ -232,8 +233,9 @@ void TTCutSettings::writeSettings()
   // Common options
   // ---------------------------------------------------------------------------
   beginGroup( "/Common" );
-  setValue( "TempDirPath/" , TTCut::tempDirPath );
-  setValue( "LastDirPath/" , TTCut::lastDirPath );
+  setValue( "TempDirPath/" ,      TTCut::tempDirPath );
+  setValue( "LastDirPath/" ,      TTCut::lastDirPath );
+  setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
   endGroup();
 
   // Preview
