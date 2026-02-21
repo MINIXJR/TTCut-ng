@@ -18,7 +18,6 @@ DEFINES     += _FILE_OFFSET_BITS=64
 DEFINES     += APP_VERSION=\\\"$$VERSION\\\"
 DIST        = ttcut-ng
 TARGET      = ttcut-ng
-ICON        = ui/pixmaps/ttcut_logo_001.icns
 LIBS        = -lmpeg2 -lmpeg2convert
 
 # libav/ffmpeg libraries for H.264/H.265 support
@@ -29,12 +28,6 @@ unix {
 
 unix {
   DEFINES += UNIX
-  DEFINES -= MACX
-}
-
-macx {
-  DEFINES += MACX
-  DEFINES -= UNIX
 }
 
 OBJECTS_DIR = obj

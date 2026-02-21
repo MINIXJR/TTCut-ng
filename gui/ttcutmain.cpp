@@ -36,10 +36,6 @@
 #include <QFileInfo>
 #include <QTimer>
 
-#ifdef MACX
-#include <QMacStyle>
-#endif
-
 // class declaration for the main window class
 #include "ttcutmainwindow.h"
 
@@ -86,12 +82,6 @@ int main( int argc, char **argv )
 
     // Application main widget
     TTCutMainWindow* mainWnd = new TTCutMainWindow();
-
-    //QPlastiqueStyle* style = new QPlastiqueStyle();
-#ifdef MACX
-    QMacStyle* style = new QMacStyle();
-    a.setStyle(style);
-#endif
 
     // Caption text in applications title bar
     mainWnd->setWindowTitle( TTCut::versionString );
