@@ -22,7 +22,7 @@
     5. **Duration check**: Total video duration vs total audio duration (must match within 50ms)
     6. **Cut-point integrity**: Verify first/last frame of each segment matches expected content
   - **Reference workflow:**
-    1. Mux original ES + audio with mkvmerge (same params as cutting) → reference.mkv
+    1. Mux original ES + audio with libav matroska muxer (same params as cutting) → reference.mkv
     2. Run Smart Cut → cut.mkv
     3. Compare both at equivalent time positions
   - **Output:** Machine-readable report (pass/fail per test, values, expected ranges)
@@ -72,7 +72,7 @@
   - Features:
     - Load cut points from `.prj` file or command-line `--cuts` parameter
     - Read `.info` file for frame rate, A/V offset, audio languages
-    - Apply A/V sync offset during muxing (mkvmerge `--sync`)
+    - Apply A/V sync offset during muxing
     - Chapter marks at cut boundaries
     - Progress output for scripting (percentage, ETA)
     - Return codes for success/failure
@@ -85,7 +85,7 @@
   - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list
   - The "Delay" column already exists but is currently unused (always shows "0")
   - Use case: Manual A/V sync correction when automatic detection is wrong or unavailable
-  - Apply delay during muxing (mplex -O, mkvmerge --sync)
+  - Apply delay during muxing (mplex -O, libav matroska muxer sync offset)
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)
@@ -161,7 +161,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Replace mplayer with mpv for preview
 - [x] Replace transcode with ffmpeg for MPEG-2 encoding
 - [x] Connect encoder UI settings to actual encoders
-- [x] MKV output via mkvmerge
+- [x] MKV output via libav matroska muxer (originally mkvmerge, migrated to libav in v0.60.0)
 - [x] MKV chapter marks support
 - [x] A/V sync offset support for demuxed streams
 - [x] New GUI layout with TreeView widgets and multi-input-stream support
@@ -178,3 +178,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Fix thread-pool completion race condition (processEvents from worker threads → deadlock)
 - [x] Fix AC3 parser infinite loop on E-AC3 streams (bsid > 10 detection + zero frame length guard)
 - [x] ttcut-demux: E-AC3 streams get `.eac3` extension (was incorrectly mapped to `.ac3`)
+- [x] Replace mkvmerge CLI with libav matroska muxer (v0.60.0)
+- [x] Replace ffmpeg CLI audio cutting with libav stream-copy (v0.60.0)
+- [x] Remove macOS support code (v0.60.0)
+- [x] Remove 1,882 lines dead code from ttffmpegwrapper.cpp (v0.60.0)

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 streams. It allows frame-accurate cutting without re-encoding the entire stream - only the frames around cut points are re-encoded. The primary use case is removing advertisements from DVB recordings.
+TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 streams (Linux only). It allows frame-accurate cutting without re-encoding the entire stream - only the frames around cut points are re-encoded. The primary use case is removing advertisements from DVB recordings.
 
 **Supported Codecs:**
 - MPEG-2 (fully supported, original TTCut functionality)
@@ -17,7 +17,7 @@ TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 s
 - Optional .info metadata file (for frame rate, etc.)
 
 **Output Format:**
-- MKV (via mkvmerge) with optional chapters
+- MKV (via libav matroska muxer) with optional chapters
 
 **Preprocessing Workflow:**
 - MPEG-2: Use ProjectX to demux TS → ES files
@@ -76,7 +76,7 @@ TTAVStream
 - **data/**: Data structures for audio lists, cut lists, muxer lists, cut parameters
 - **mpeg2decoder/**: MPEG-2 decoding using libmpeg2
 - **mpeg2window/**: QImage/QPixmap-based frame display (also used for H.264/H.265 via libav)
-- **extern/**: External tool integration (ffmpeg/libav for H.264/H.265 smart cut, mplex for multiplexing, mkvmerge for MKV output)
+- **extern/**: External tool integration (libav for H.264/H.265 smart cut, audio cutting, MKV muxing; mplex for MPEG-2 multiplexing)
 - **ui/**: Qt Designer .ui files and resource files (.qrc)
 - **tools/**: Standalone tools (ttcut-demux, ttcut-ac3fix) and test programs
 
@@ -90,7 +90,7 @@ TTAVStream
 - **TTCut** (common/ttcut.h): Singleton holding global settings and application state
 - **TTTranscodeProvider** (extern/tttranscode.h): Wraps ffmpeg CLI for re-encoding frames around cut points (MPEG-2)
 - **TTMplexProvider** (extern/ttmplexprovider.h): Multiplexes video/audio after cutting
-- **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV output via mkvmerge, chapter support
+- **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV output via libav matroska muxer, chapter support
 
 ### Important Workflows
 
@@ -116,10 +116,9 @@ TTAVStream
 
 - Qt5 (Core, Widgets, Gui, Network, Xml)
 - libmpeg2 and libmpeg2convert (MPEG-2 decoding)
-- libavformat, libavcodec, libavutil, libswscale (H.264/H.265 handling via ffmpeg libraries)
-- ffmpeg CLI (required for frame-accurate cutting at any position)
-- mplex (optional, for multiplexing)
-- mkvmerge (optional, for MKV output with chapters)
+- libavformat, libavcodec, libavutil, libswscale (H.264/H.265 smart cut, audio cutting, MKV muxing)
+- ffmpeg CLI (required for MPEG-2 frame-accurate cutting)
+- mplex (optional, for MPEG-2 multiplexing)
 
 ## Version
 
@@ -175,7 +174,7 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 3. GOPs fully inside kept segments are stream-copied (no quality loss, ~99.5%)
 4. GOPs at cut boundaries are decoded and re-encoded (~0.5% of frames)
 5. Audio is cut via libav stream-copy
-6. Final MKV is created with mkvmerge
+6. Final MKV is created with libav matroska muxer
 
 **Key implementation details (extern/ttessmartcut.cpp):**
 - TTNaluParser: Memory-mapped native H.264/H.265 NAL unit parser
@@ -188,7 +187,7 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 - **TTNaluParser** (avstream/ttnaluparser.h): Native NAL unit parser with mmap I/O
 - **TTESSmartCut** (extern/ttessmartcut.h): Smart Cut engine for ES files
 - **TTESInfo** (avstream/ttesinfo.h): .info file parser for metadata
-- **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV muxing with chapters
+- **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV muxing via libav with chapters
 
 ### ttcut-demux (tools/ttcut-demux)
 
@@ -206,7 +205,7 @@ Demux-Tool für H.264/H.265 TS-Dateien (Nachfolger von ts_demux_normalize.sh):
 
 1. **Cut point stutter** (needs verification): A small stutter (~0.14 seconds) may occur at middle cut points due to B-frame reordering discontinuities. This is inherent to the Smart Cut approach when transitioning from re-encoded to stream-copied sections.
 
-2. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with mkvmerge). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
+2. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
 
 ### H.264/H.265 Stream Preparation Tools (Companion Project)
 
@@ -223,7 +222,7 @@ Analysis and preparation tools in the h264bitstream fork:
 - MMCO/RPLR reference errors from mid-GOP recording starts are common but tolerable
 - H.265/HEVC recordings have minimal filler (~0.1%)
 
-The project builds cleanly with Qt 5.15 on modern Linux systems and has full Wayland support.
+The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
 ## Running on Wayland
 
