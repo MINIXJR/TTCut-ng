@@ -34,6 +34,7 @@
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttesinfo.h"
+#include "../extern/ttmkvmergeprovider.h"
 #include "../common/ttcut.h"
 
 #include <QApplication>
@@ -659,14 +660,8 @@ QString TTCurrentFrame::createTempMkvForPlayback()
   // Remove old temp file if exists
   QFile::remove(tempMkv);
 
-  // Build mkvmerge command
-  QStringList mkvArgs;
-  mkvArgs << "-o" << tempMkv;
-
-  // Get frame rate
+  // Get frame rate and A/V offset from .info file
   double frameRate = videoStream->frameRate();
-
-  // Check for frame rate and A/V offset in .info file
   int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(videoStream->filePath());
   if (!infoFile.isEmpty()) {
@@ -682,38 +677,27 @@ QString TTCurrentFrame::createTempMkvForPlayback()
     }
   }
 
-  // Set frame duration for correct timing
+  // Set up MKV muxer
   int frameDurationNs = static_cast<int>(1000000000.0 / frameRate);
-  mkvArgs << "--default-duration" << QString("0:%1ns").arg(frameDurationNs);
+  TTMkvMergeProvider mkvProvider;
+  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  if (avOffsetMs != 0) {
+    mkvProvider.setAudioSyncOffset(avOffsetMs);
+  }
 
-  // Add video file
-  mkvArgs << videoStream->filePath();
-
-  // Add audio file if available, with sync offset
+  // Collect audio file(s)
+  QStringList audioFiles;
   if (mAVItem->audioCount() > 0) {
     TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
     if (audioStream != 0) {
-      if (avOffsetMs != 0) {
-        // Apply A/V sync offset: positive offset delays audio
-        mkvArgs << "--sync" << QString("0:%1").arg(avOffsetMs);
-      }
-      mkvArgs << audioStream->filePath();
+      audioFiles << audioStream->filePath();
     }
   }
 
-  qDebug() << "Creating temp MKV:" << mkvArgs;
+  qDebug() << "Creating temp MKV via libav:" << videoStream->filePath();
 
-  // Run mkvmerge synchronously
-  QProcess mkvProc;
-  mkvProc.start("mkvmerge", mkvArgs);
-  if (!mkvProc.waitForFinished(60000)) {  // 60 second timeout
-    qDebug() << "mkvmerge timeout or error";
-    return QString();
-  }
-
-  if (mkvProc.exitCode() != 0 && mkvProc.exitCode() != 1) {
-    // mkvmerge returns 1 for warnings, 0 for success
-    qDebug() << "mkvmerge failed:" << mkvProc.readAllStandardError();
+  if (!mkvProvider.mux(tempMkv, videoStream->filePath(), audioFiles)) {
+    qDebug() << "Temp MKV creation failed:" << mkvProvider.lastError();
     return QString();
   }
 
