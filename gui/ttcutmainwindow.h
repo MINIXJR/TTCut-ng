@@ -127,6 +127,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		TTAVItem*        mpCurrentAVDataItem;
 		TTProgressBar*   progressBar;
 		TTCutSettings*   settings;
+		TTCutList*       mpPreviewOriginalCutList;
 		
     TTMessageLogger* log;
 

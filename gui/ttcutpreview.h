@@ -64,7 +64,7 @@ public:
 	~TTCutPreview();
 
 	void resizeEvent(QResizeEvent* event);
-	void initPreview(TTCutList* cutList);
+	void initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData = nullptr);
 	void createPreview();
 
 protected:
@@ -93,10 +93,13 @@ private:
     QLabel*      lblBurstWarning;
     QPushButton* pbBurstShift;
     TTCutList*   mpCutList;
+    TTCutList*   mpOriginalCutList;
+    TTAVData*    mpAVData;
     int          mBurstSegmentIdx;
     bool         mBurstIsCutOut;
 
     void checkBurstForCurrentCut(int iCut);
+    void regeneratePreviewClip(int iCut);
 };
 
 #endif // TTCUTPREVIEW_H

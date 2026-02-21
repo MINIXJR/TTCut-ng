@@ -147,6 +147,7 @@ TTCutMainWindow::TTCutMainWindow()
 
   //AV stream controller instance
   mpAVData = new TTAVData();
+  mpPreviewOriginalCutList = nullptr;
 
   videoFileList->setAVData(mpAVData);
   cutList->setAVData(mpAVData);
@@ -740,6 +741,8 @@ void TTCutMainWindow::onCutPreview(TTCutList* cutList)
   if (cutList == 0 || cutList->count() == 0)
     return;
 
+  mpPreviewOriginalCutList = cutList;
+
   connect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)), this, SLOT(onCutPreviewFinished(TTCutList*)));
   mpAVData->doCutPreview(cutList);
 }
@@ -751,8 +754,10 @@ void TTCutMainWindow::onCutPreviewFinished(TTCutList* cutList)
 {
   TTCutPreview* cutPreview = new TTCutPreview(this);
 
-  cutPreview->initPreview(cutList);
+  cutPreview->initPreview(cutList, mpPreviewOriginalCutList, mpAVData);
   cutPreview->exec();
+
+  delete cutPreview;
 
   disconnect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)), this, SLOT(onCutPreviewFinished(TTCutList*)));
 }

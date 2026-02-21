@@ -42,9 +42,13 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QStyle>
 
 #include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttessmartcut.h"
+#include "../extern/ttmkvmergeprovider.h"
+#include "../avstream/ttesinfo.h"
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutPreview constructor
@@ -93,18 +97,22 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   connect(pbBurstShift, SIGNAL(clicked()), this, SLOT(onBurstShift()));
 
   // Find the controls HBoxLayout (row 1 in the grid) and insert burst widgets
-  // after the combobox (index 0) and before the prev button (index 1)
+  // after pbNextCut (index 3) and before the spacer/pbExit
   QGridLayout* grid = qobject_cast<QGridLayout*>(layout());
   if (grid) {
     QLayoutItem* controlsItem = grid->itemAtPosition(1, 0);
     QHBoxLayout* controlsLayout = controlsItem ? qobject_cast<QHBoxLayout*>(controlsItem->layout()) : nullptr;
     if (controlsLayout) {
-      controlsLayout->insertWidget(1, lblBurstWarning);
-      controlsLayout->insertWidget(2, pbBurstShift);
+      // Original order: cbCutPreview(0), pbPrevCut(1), pbPlay(2), pbNextCut(3), spacer(4), pbExit(5)
+      // Insert after pbNextCut → positions 4 and 5, pushing spacer and pbExit right
+      controlsLayout->insertWidget(4, lblBurstWarning);
+      controlsLayout->insertWidget(5, pbBurstShift);
     }
   }
 
   mpCutList = nullptr;
+  mpOriginalCutList = nullptr;
+  mpAVData = nullptr;
   mBurstSegmentIdx = -1;
   mBurstIsCutOut = false;
 }
@@ -140,22 +148,24 @@ void TTCutPreview::closeEvent(QCloseEvent* event)
 /* /////////////////////////////////////////////////////////////////////////////
  * Initialize preview parameter
  */
-void TTCutPreview::initPreview(TTCutList* cutList)
+void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData)
 {
-  mpCutList = cutList;
+  mpCutList = previewCutList;
+  mpOriginalCutList = originalCutList;
+  mpAVData = avData;
 
   int       iPos;
   QString   preview_video_name;
   QFileInfo preview_video_info;
   QString   selectionString;
 
-  int numPreview = cutList->count()/2+1;
+  int numPreview = previewCutList->count()/2+1;
 
   // Create video and audio preview clips
   for (int i = 0; i < numPreview; i++ ) {
     // first cut-in
     if (i == 0) {
-      TTCutItem item = cutList->at(i);
+      TTCutItem item = previewCutList->at(i);
       selectionString = QString("Start: %1").arg(item.cutInTime().toString("hh:mm:ss"));
       cbCutPreview->addItem( selectionString );
     }
@@ -164,8 +174,8 @@ void TTCutPreview::initPreview(TTCutList* cutList)
     if (numPreview > 1 && i > 0 && i < numPreview-1) {
       iPos = (i-1)*2+1;
 
-      TTCutItem item1 = cutList->at(iPos);
-      TTCutItem item2 = cutList->at(iPos+1);
+      TTCutItem item1 = previewCutList->at(iPos);
+      TTCutItem item2 = previewCutList->at(iPos+1);
       selectionString = QString("Cut %1-%2: %3 - %4")
             .arg(i).arg(i+1)
             .arg(item1.cutInTime().toString("hh:mm:ss"))
@@ -177,7 +187,7 @@ void TTCutPreview::initPreview(TTCutList* cutList)
     if (i == numPreview-1) {
       iPos = (i-1)*2+1;
 
-      TTCutItem item = cutList->at(iPos);
+      TTCutItem item = previewCutList->at(iPos);
       selectionString = QString("End: %1").arg(item.cutOutTime().toString("hh:mm:ss"));
       cbCutPreview->addItem( selectionString );
     }
@@ -378,23 +388,242 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
  */
 void TTCutPreview::onBurstShift()
 {
-  if (mBurstSegmentIdx < 0 || !mpCutList) return;
+  if (mBurstSegmentIdx < 0 || !mpCutList || !mpOriginalCutList) return;
   if (mBurstSegmentIdx >= mpCutList->count()) return;
 
-  TTCutItem currentItem = mpCutList->at(mBurstSegmentIdx);
-  TTCutItem updatedItem(currentItem);
+  // Map preview index to original cut list index
+  int originalIdx = mBurstSegmentIdx / 2;
+  if (originalIdx >= mpOriginalCutList->count()) return;
 
+  TTCutItem copyItem = mpOriginalCutList->at(originalIdx);
+
+  int oldIdx, newIdx;
   if (mBurstIsCutOut) {
-    updatedItem.update(currentItem.cutInIndex(), currentItem.cutOutIndex() - 1);
+    oldIdx = copyItem.cutOutIndex();
+    newIdx = oldIdx - 1;
   } else {
-    updatedItem.update(currentItem.cutInIndex() + 1, currentItem.cutOutIndex());
+    oldIdx = copyItem.cutInIndex();
+    newIdx = oldIdx + 1;
   }
 
-  mpCutList->update(currentItem, updatedItem);
+  // Update the REAL model data via TTAVItem::updateCutEntry
+  // The copy's avDataItem() points to the real TTAVItem in the model
+  TTAVItem* avItem = copyItem.avDataItem();
+  if (mpAVData && avItem) {
+    // Find the real cut item in the model by matching position
+    for (int i = 0; i < mpAVData->cutCount(); i++) {
+      TTCutItem realItem = mpAVData->cutItemAt(i);
+      if (realItem.cutInIndex() == copyItem.cutInIndex() &&
+          realItem.cutOutIndex() == copyItem.cutOutIndex() &&
+          realItem.avDataItem() == avItem) {
+        if (mBurstIsCutOut) {
+          avItem->updateCutEntry(realItem, realItem.cutInIndex(), newIdx);
+        } else {
+          avItem->updateCutEntry(realItem, newIdx, realItem.cutOutIndex());
+        }
+        qDebug() << "Burst shift: Updated REAL model cut" << i
+                 << (mBurstIsCutOut ? "CutOut" : "CutIn")
+                 << "Frame" << oldIdx << "->" << newIdx;
+        break;
+      }
+    }
+  }
 
-  // Re-check burst for current cut — warning disappears if resolved
+  // Update the copy in our original cut list
+  TTCutItem updatedCopy(copyItem);
+  if (mBurstIsCutOut) {
+    updatedCopy.update(copyItem.cutInIndex(), newIdx);
+  } else {
+    updatedCopy.update(newIdx, copyItem.cutOutIndex());
+  }
+  mpOriginalCutList->update(copyItem, updatedCopy);
+
+  // Also update preview cut list entry so burst re-check uses new values
+  TTCutItem previewItem = mpCutList->at(mBurstSegmentIdx);
+  TTCutItem updatedPreview(previewItem);
+  if (mBurstIsCutOut) {
+    updatedPreview.update(previewItem.cutInIndex(), newIdx);
+  } else {
+    updatedPreview.update(newIdx, previewItem.cutOutIndex());
+  }
+  mpCutList->update(previewItem, updatedPreview);
+
+  qDebug() << "Burst shift:" << (mBurstIsCutOut ? "CutOut" : "CutIn")
+           << "Frame" << oldIdx << "->" << newIdx
+           << "(original cut" << originalIdx << ")";
+
+  // Show feedback
+  QString label = mBurstIsCutOut ? "CutOut neu" : "CutIn neu";
+  lblBurstWarning->setStyleSheet("QLabel { color: #228B22; font-weight: bold; }");
+  lblBurstWarning->setText(QString::fromUtf8("\xe2\x9c\x93 %1 (Frame %2 \xe2\x86\x92 %3)")
+      .arg(label).arg(oldIdx).arg(newIdx));
+  pbBurstShift->hide();
+
+  // Regenerate the current preview clip
   int iCut = cbCutPreview->currentIndex();
+  regeneratePreviewClip(iCut);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Regenerate a single preview clip after burst shift
+ */
+void TTCutPreview::regeneratePreviewClip(int iCut)
+{
+  if (!mpCutList || mpCutList->count() < 2) return;
+
+  int numPreview = mpCutList->count() / 2 + 1;
+  if (iCut < 0 || iCut >= numPreview) return;
+
+  // Stop player if running
+  if (videoPlayer->isPlaying()) {
+    videoPlayer->stop();
+  }
+
+  // Show progress dialog — repaint() forces synchronous painting before blocking work
+  QProgressDialog progress(tr("Vorschau wird neu generiert..."), QString(), 0, 0, this);
+  progress.setWindowModality(Qt::WindowModal);
+  progress.setMinimumDuration(0);
+  progress.show();
+  progress.repaint();
+  QApplication::processEvents();
+
+  // Build temporary cut list for this clip (same logic as TTCutPreviewTask::operation)
+  TTCutList tmpCutList;
+  int iPos;
+
+  if (iCut == 0) {
+    // First cut-in
+    TTCutItem item = mpCutList->at(0);
+    tmpCutList.append(item.avDataItem(), item.cutInIndex(), item.cutOutIndex());
+  } else if (iCut == numPreview - 1) {
+    // Last cut-out
+    iPos = (iCut - 1) * 2 + 1;
+    TTCutItem item = mpCutList->at(iPos);
+    tmpCutList.append(item.avDataItem(), item.cutInIndex(), item.cutOutIndex());
+  } else {
+    // Middle transition: cutOut of seg X + cutIn of seg X+1
+    iPos = (iCut - 1) * 2 + 1;
+    TTCutItem item1 = mpCutList->at(iPos);
+    TTCutItem item2 = mpCutList->at(iPos + 1);
+    tmpCutList.append(item1.avDataItem(), item1.cutInIndex(), item1.cutOutIndex());
+    tmpCutList.append(item2.avDataItem(), item2.cutInIndex(), item2.cutOutIndex());
+  }
+
+  if (tmpCutList.count() == 0) return;
+
+  // Get source info
+  TTCutItem firstItem = tmpCutList.at(0);
+  TTAVItem* avItem = firstItem.avDataItem();
+  TTVideoStream* vStream = avItem->videoStream();
+  QString sourceFile = vStream->filePath();
+  double frameRate = vStream->frameRate();
+  QString suffix = QFileInfo(sourceFile).suffix().toLower();
+
+  // Get frame rate and A/V offset from .info file
+  int avOffsetMs = 0;
+  QString infoFile = TTESInfo::findInfoFile(sourceFile);
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded()) {
+      if (esInfo.frameRate() > 0)
+        frameRate = esInfo.frameRate();
+      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
+        avOffsetMs = esInfo.avOffsetMs();
+    }
+  }
+
+  progress.setLabelText(tr("Video Smart Cut..."));
+  QApplication::processEvents();
+
+  // --- Smart Cut video ---
+  TTESSmartCut smartCut;
+  if (!smartCut.initialize(sourceFile, frameRate)) {
+    qDebug() << "Regenerate: Smart Cut init failed:" << smartCut.lastError();
+    return;
+  }
+
+  QList<QPair<int, int>> cutFrames;
+  for (int i = 0; i < tmpCutList.count(); i++) {
+    TTCutItem item = tmpCutList.at(i);
+    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+  }
+
+  QString tempVideoFile = QString("%1/preview_video_temp.%2")
+      .arg(TTCut::tempDirPath).arg(suffix);
+
+  if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
+    qDebug() << "Regenerate: Smart Cut failed:" << smartCut.lastError();
+    return;
+  }
+
+  progress.setLabelText(tr("Audio schneiden..."));
+  QApplication::processEvents();
+
+  // --- Cut audio ---
+  bool hasAudio = (avItem->audioCount() > 0);
+  QString audioFile;
+  QStringList cutAudioFiles;
+
+  if (hasAudio) {
+    audioFile = avItem->audioStreamAt(0)->filePath();
+    QList<QPair<double, double>> keepList;
+    for (int i = 0; i < tmpCutList.count(); i++) {
+      TTCutItem item = tmpCutList.at(i);
+      double cutInTime = item.cutInIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      keepList.append(qMakePair(cutInTime, cutOutTime));
+    }
+
+    QString cutAudioFile = QString("%1/preview_audio_temp.%2")
+        .arg(TTCut::tempDirPath)
+        .arg(QFileInfo(audioFile).suffix());
+
+    TTFFmpegWrapper ffmpeg;
+    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+      cutAudioFiles.append(cutAudioFile);
+    }
+  }
+
+  progress.setLabelText(tr("MKV erstellen..."));
+  QApplication::processEvents();
+
+  // --- Mux to MKV ---
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+  int frameDurationNs = (int)(1000000000.0 / frameRate);
+
+  TTMkvMergeProvider mkvProvider;
+  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  if (avOffsetMs != 0) {
+    mkvProvider.setAudioSyncOffset(avOffsetMs);
+  }
+  mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList());
+
+  // Clean up temp files
+  QFile::remove(tempVideoFile);
+  for (const QString& f : cutAudioFiles) {
+    QFile::remove(f);
+  }
+
+  qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
+
+  // Reload clip in player
+  current_video_file = outputFile;
+  videoPlayer->load(current_video_file);
+  pbPlay->setText(tr("Play"));
+  pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
+      QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+
+  // Re-check burst for the current cut
+  // Reset label style back to warning color for next check
+  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   checkBurstForCurrentCut(iCut);
+
+  // If no burst detected after shift, show success
+  if (!lblBurstWarning->isVisible()) {
+    lblBurstWarning->setStyleSheet("QLabel { color: #228B22; font-weight: bold; }");
+    lblBurstWarning->setText(QString::fromUtf8("\xe2\x9c\x93 Burst behoben"));
+    lblBurstWarning->show();
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

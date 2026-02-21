@@ -62,8 +62,8 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   header->resizeSection(2, 140);
   header->resizeSection(3, 150);
   header->resizeSection(4,  80);
-  videoCutList->headerItem()->setText(5, "");
-  videoCutList->setColumnWidth(5, 30);
+  videoCutList->headerItem()->setText(5, "Burst");
+  videoCutList->setColumnWidth(5, 120);
 
   allowSelectionChanged = true;
   editItemIndex = -1;
@@ -246,11 +246,13 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
  */
 QTreeWidgetItem* TTCutTreeView::findItem(const TTCutItem& cutItem)
 {
-	for (int i = 0; i < videoCutList->topLevelItemCount(); i++) {
-		QTreeWidgetItem* item = videoCutList->topLevelItem(i);
-		if (item->text(4) == cutItem.ID().toString())
-			return item;
-	}
+	if (!mAVData) return 0;
+
+	// Match by model index via UUID (column 4 contains A/V offset, not UUID)
+	int modelIdx = mAVData->cutIndexOf(cutItem);
+	if (modelIdx >= 0 && modelIdx < videoCutList->topLevelItemCount())
+		return videoCutList->topLevelItem(modelIdx);
+
 	return 0;
 }
 
@@ -601,6 +603,15 @@ void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
 
     if (hasCutOutBurst || hasCutInBurst) {
         treeItem->setIcon(5, style()->standardIcon(QStyle::SP_MessageBoxWarning));
+        QString shortText;
+        if (hasCutOutBurst && hasCutInBurst)
+            shortText = "Anfang + Ende";
+        else if (hasCutOutBurst)
+            shortText = "am Ende";
+        else
+            shortText = "am Anfang";
+        treeItem->setText(5, shortText);
+
         QString tip;
         if (hasCutOutBurst)
             tip += QString("Audio-Burst am Ende: %1 dB (Context: %2 dB)").arg(outBurstDb, 0, 'f', 1).arg(outContextDb, 0, 'f', 1);
@@ -611,6 +622,7 @@ void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
         treeItem->setToolTip(5, tip);
     } else {
         treeItem->setIcon(5, QIcon());
+        treeItem->setText(5, "");
         treeItem->setToolTip(5, "");
     }
 }
