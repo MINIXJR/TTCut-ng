@@ -49,6 +49,7 @@ class TTCutSettingsEncoder : public QWidget, Ui::TTCutSettingsEncoder
   private:
     void initCodecList();
     void initPresetList();
+    void initPreviewPresetList();
     void updateProfileList();
     void updateQualityUI(int codec);
     void saveCurrentCodecSettings();

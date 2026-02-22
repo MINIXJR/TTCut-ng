@@ -40,6 +40,7 @@ TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
   // Initialize combo boxes
   initCodecList();
   initPresetList();
+  initPreviewPresetList();
   updateProfileList();
 
   // Connect signals
@@ -71,6 +72,20 @@ void TTCutSettingsEncoder::initPresetList()
   cbPreset->insertItem(6, "slow");
   cbPreset->insertItem(7, "slower");
   cbPreset->insertItem(8, "veryslow");
+}
+
+void TTCutSettingsEncoder::initPreviewPresetList()
+{
+  cbPreviewPreset->clear();
+  cbPreviewPreset->insertItem(0, "ultrafast");
+  cbPreviewPreset->insertItem(1, "superfast");
+  cbPreviewPreset->insertItem(2, "veryfast");
+  cbPreviewPreset->insertItem(3, "faster");
+  cbPreviewPreset->insertItem(4, "fast");
+  cbPreviewPreset->insertItem(5, "medium");
+  cbPreviewPreset->insertItem(6, "slow");
+  cbPreviewPreset->insertItem(7, "slower");
+  cbPreviewPreset->insertItem(8, "veryslow");
 }
 
 void TTCutSettingsEncoder::updateProfileList()
@@ -167,6 +182,9 @@ void TTCutSettingsEncoder::setTabData()
   updateProfileList();
   cbProfile->setCurrentIndex(TTCut::encoderProfile);
 
+  // Preview preset
+  cbPreviewPreset->setCurrentIndex(TTCut::previewPreset);
+
   // Enable/disable codec settings based on encoder mode
   gbCodecSettings->setEnabled(TTCut::encoderMode);
 }
@@ -178,6 +196,9 @@ void TTCutSettingsEncoder::getTabData()
 
   // Save current UI values to the current codec's settings
   saveCurrentCodecSettings();
+
+  // Preview preset
+  TTCut::previewPreset = cbPreviewPreset->currentIndex();
 }
 
 void TTCutSettingsEncoder::saveCurrentCodecSettings()

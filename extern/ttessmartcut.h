@@ -78,6 +78,9 @@ public:
     TTESSmartCut();
     ~TTESSmartCut();
 
+    // Override encoder preset (0-8, -1 = use TTCut settings)
+    void setPresetOverride(int presetIndex) { mPresetOverride = presetIndex; }
+
     // Initialize with ES file
     bool initialize(const QString& esFile, double frameRate = -1);
     void cleanup();
@@ -123,6 +126,7 @@ signals:
 private:
     // State
     bool mIsInitialized;
+    int mPresetOverride;     // -1 = use TTCut settings, 0-8 = override preset
     QString mInputFile;
     double mFrameRate;
 

@@ -164,6 +164,9 @@ class TTCut
    static int     h265Profile;        // Profile for H.265 (0=main)
    static int     h265Muxer;          // Preferred muxer (1=mkvmerge)
 
+   // Preview settings
+   static int     previewPreset;       // Encoder preset for preview (0=ultrafast, default)
+
    // --- audio boundary detection ---
    static int burstThresholdDb;      // dB RMS threshold for burst detection (-30 default, 0=disabled)
 

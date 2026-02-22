@@ -31,6 +31,7 @@ extern "C" {
 TTESSmartCut::TTESSmartCut()
     : QObject()
     , mIsInitialized(false)
+    , mPresetOverride(-1)
     , mFrameRate(25.0)
     , mDecoder(nullptr)
     , mEncoder(nullptr)
@@ -1155,7 +1156,8 @@ bool TTESSmartCut::setupEncoder()
 
     if (mParser.codecType() == NALU_CODEC_H264) {
         crf        = TTCut::h264Crf;
-        presetIdx  = qBound(0, TTCut::h264Preset, 8);
+        presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
+                                            : qBound(0, TTCut::h264Preset, 8);
         profileIdx = qBound(0, TTCut::h264Profile, 5);
 
         static const char* h264Profiles[] = {
@@ -1176,7 +1178,8 @@ bool TTESSmartCut::setupEncoder()
     } else {
         // H.265
         crf        = TTCut::h265Crf;
-        presetIdx  = qBound(0, TTCut::h265Preset, 8);
+        presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
+                                            : qBound(0, TTCut::h265Preset, 8);
         profileIdx = qBound(0, TTCut::h265Profile, 4);
 
         static const char* h265Profiles[] = {

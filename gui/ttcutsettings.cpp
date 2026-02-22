@@ -137,6 +137,9 @@ void TTCutSettings::readSettings()
   TTCut::h265Profile    = value( "H265Profile/",    TTCut::h265Profile ).toInt();
   TTCut::h265Muxer      = value( "H265Muxer/",      TTCut::h265Muxer ).toInt();
 
+  // Preview settings
+  TTCut::previewPreset  = value( "PreviewPreset/",  TTCut::previewPreset ).toInt();
+
   // Load current working values from selected codec
   switch (TTCut::encoderCodec) {
     case 0:  // MPEG-2
@@ -297,6 +300,9 @@ void TTCutSettings::writeSettings()
   setValue( "H265Crf/",        TTCut::h265Crf );
   setValue( "H265Profile/",    TTCut::h265Profile );
   setValue( "H265Muxer/",      TTCut::h265Muxer );
+
+  // Preview settings
+  setValue( "PreviewPreset/",  TTCut::previewPreset );
   endGroup();
 
   // Muxer settings
