@@ -78,6 +78,7 @@ public:
     TTH265AccessUnit* frameAt(int index);
     int findRAPBefore(int frameIndex);  // Random Access Point (IDR/CRA/BLA)
     int findRAPAfter(int frameIndex);
+    int findIDRBefore(int frameIndex) override;
 
     // GOP information
     int gopCount() const;

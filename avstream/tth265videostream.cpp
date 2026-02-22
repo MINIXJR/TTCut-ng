@@ -465,6 +465,20 @@ int TTH265VideoStream::findRAPAfter(int frameIndex)
 }
 
 // -----------------------------------------------------------------------------
+// Find true IDR frame at or before frame index (NAL types 19, 20)
+// Unlike findRAPBefore(), this excludes CRA/BLA which don't flush the DPB
+// -----------------------------------------------------------------------------
+int TTH265VideoStream::findIDRBefore(int frameIndex)
+{
+    for (int i = frameIndex; i >= 0; i--) {
+        if (mAccessUnits[i]->isIDR()) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// -----------------------------------------------------------------------------
 // Get GOP count
 // -----------------------------------------------------------------------------
 int TTH265VideoStream::gopCount() const

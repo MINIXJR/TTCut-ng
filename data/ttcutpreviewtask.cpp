@@ -448,11 +448,10 @@ TTCutList* TTCutPreviewTask::createPreviewCutList(TTCutList* cutList)
 		endIndex   = cutItem.cutOutIndex();
 		startIndex = (endIndex - previewFrames >= 0) ? endIndex - previewFrames	: 0;
 
-		// cut should start at an I-frame
-		frameType = pVideoStream->frameType(startIndex);
-		while (frameType != 1 && startIndex > 0) {
-			startIndex--;
-			frameType = pVideoStream->frameType(startIndex);
+		// Prefer IDR frame for stutter-free preview (non-IDR I-frames cause decoder stall)
+		int idrPos = pVideoStream->findIDRBefore(startIndex);
+		if (idrPos >= 0) {
+			startIndex = idrPos;
 		}
 		previewCutList->append(cutItem.avDataItem(), startIndex, endIndex);
 	}

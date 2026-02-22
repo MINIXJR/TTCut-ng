@@ -429,6 +429,15 @@ int TTVideoStream::frameType( int i_pos )
   return index_list->pictureCodingType( i_pos );
 }
 
+int TTVideoStream::findIDRBefore(int frameIndex)
+{
+  // Default: search backward for any I-frame (MPEG-2 behavior)
+  for (int i = frameIndex; i >= 0; i--) {
+    if (frameType(i) == 1) return i;
+  }
+  return -1;
+}
+
 QTime TTVideoStream::frameTime( int i_pos )
 {
   return ttFramesToTime( i_pos, frameRate() );

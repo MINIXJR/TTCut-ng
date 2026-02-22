@@ -76,7 +76,7 @@ public:
 
     // Access to frame info
     TTH264AccessUnit* frameAt(int index);
-    int findIDRBefore(int frameIndex);
+    int findIDRBefore(int frameIndex) override;
     int findIDRAfter(int frameIndex);
 
     // GOP information

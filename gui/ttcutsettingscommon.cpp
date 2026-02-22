@@ -53,6 +53,16 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
     gl->addWidget(sbBurstThreshold, row, 1);
   }
 
+  // Preview I-frame hint
+  QLabel* lblPreviewHint = new QLabel(
+      tr("Die Vorschau beginnt für jeden Schnitt bei einem I-Frame."), this);
+  lblPreviewHint->setStyleSheet("QLabel { color: #666; font-style: italic; }");
+  lblPreviewHint->setWordWrap(true);
+  if (gl) {
+    int row2 = gl->rowCount();
+    gl->addWidget(lblPreviewHint, row2, 0, 1, 3);
+  }
+
   connect(btnDirOpen, SIGNAL(clicked()), SLOT(onOpenDir()));
 }
 

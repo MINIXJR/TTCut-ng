@@ -189,6 +189,11 @@ class TTVideoStream : public TTAVStream
   int moveToNextPIFrame();
   int moveToPrevPIFrame();
 
+  // Find nearest IDR-safe keyframe at or before frameIndex
+  // MPEG-2: returns nearest I-frame (all are keyframes)
+  // H.264/H.265: overridden to find true IDR frames
+  virtual int findIDRBefore(int frameIndex);
+
 protected:
   // List-objects
   TTVideoHeaderList* header_list;
