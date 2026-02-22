@@ -182,3 +182,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Replace ffmpeg CLI audio cutting with libav stream-copy (v0.60.0)
 - [x] Remove macOS support code (v0.60.0)
 - [x] Remove 1,882 lines dead code from ttffmpegwrapper.cpp (v0.60.0)
+
+## Known Limitations
+
+- **Multi-frame audio burst at cut boundaries**: DVB advertising audio can bleed 2-3+ audio frames before the video transition. The current burst detection checks only the last 2 audio frames at the CutOut boundary and offers single-frame shift (-1). For multi-frame bursts, the user must shift multiple times. Additionally, isolated burst frames can appear in the silence region between segments (mid-transition), which are not detected by the edge-based algorithm.
+
+- **Preview stutter at ~1-2s**: Preview clips may show a brief freeze (~100-200ms) at the re-encode/stream-copy boundary. This occurs when the preview clip start position lands on a non-IDR I-frame, forcing Smart Cut to re-encode the first GOP. The final cut is not affected since CutIn positions are always IDR keyframes.
+
+- **Cut point stutter (~0.14s)**: A small stutter may occur at middle cut points due to B-frame reordering discontinuities between re-encoded and stream-copied sections. This is inherent to the Smart Cut approach.
