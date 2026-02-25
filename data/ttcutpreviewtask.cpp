@@ -405,8 +405,9 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
   qDebug() << "Preview clip total time:" << clipTimer.elapsed() << "ms";
 
-  // Clean up temp files
-  QFile::remove(tempVideoFile);
+  // Clean up temp files (KEEP video for debugging)
+  qDebug() << "DEBUG: Keeping temp video file:" << tempVideoFile;
+  //QFile::remove(tempVideoFile);
   for (const QString& f : cutAudioFiles) {
     QFile::remove(f);
   }

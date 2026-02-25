@@ -211,7 +211,7 @@ bool TTNaluParser::parseFile()
             mNalUnits.append(nal);
             nalCount++;
 
-            // Track parameter sets
+            // Track parameter sets (deduplicated after parse loop when sizes are set)
             if (nal.isSPS) mSPSList.append(nalCount - 1);
             if (nal.isPPS) mPPSList.append(nalCount - 1);
             if (nal.isVPS) mVPSList.append(nalCount - 1);
@@ -233,9 +233,16 @@ bool TTNaluParser::parseFile()
     }
 
     qDebug() << "  NAL units found:" << nalCount;
-    qDebug() << "  SPS:" << mSPSList.size() << ", PPS:" << mPPSList.size();
+    qDebug() << "  SPS:" << mSPSList.size() << ", PPS:" << mPPSList.size() << "(before dedup)";
+
+    // Deduplicate parameter sets (now that all NAL sizes are set)
+    deduplicateList(mSPSList);
+    deduplicateList(mPPSList);
+    deduplicateList(mVPSList);
+
+    qDebug() << "  SPS:" << mSPSList.size() << "(unique), PPS:" << mPPSList.size() << "(unique)";
     if (mCodecType == NALU_CODEC_H265) {
-        qDebug() << "  VPS:" << mVPSList.size();
+        qDebug() << "  VPS:" << mVPSList.size() << "(unique)";
     }
 
     // Build access units (group NALs into frames)
@@ -769,6 +776,38 @@ QByteArray TTNaluParser::readNalDataWithStartCode(int index)
 }
 
 // ----------------------------------------------------------------------------
+// Remove duplicate entries from a parameter set list (SPS/PPS/VPS).
+// DVB streams repeat SPS/PPS before every I-slice, producing thousands of
+// identical parameter sets. Without deduplication, writeParameterSets()
+// writes all of them (e.g. 5705 SPS + 17115 PPS = 639KB for a 93-min file).
+// Must be called after parsing is complete (all NAL sizes are set).
+// ----------------------------------------------------------------------------
+void TTNaluParser::deduplicateList(QList<int>& list)
+{
+    QList<int> unique;
+    QList<QByteArray> seen;
+
+    for (int nalIdx : list) {
+        QByteArray data = readNalDataWithStartCode(nalIdx);
+        if (data.isEmpty())
+            continue;
+
+        bool isDuplicate = false;
+        for (const QByteArray& s : seen) {
+            if (s == data) {
+                isDuplicate = true;
+                break;
+            }
+        }
+        if (!isDuplicate) {
+            unique.append(nalIdx);
+            seen.append(data);
+        }
+    }
+    list = unique;
+}
+
+// ----------------------------------------------------------------------------
 // Get Access Unit at index
 // ----------------------------------------------------------------------------
 TTAccessUnit TTNaluParser::accessUnitAt(int index) const
@@ -933,32 +972,39 @@ int TTNaluParser::computeReorderDelay() const
 {
     if (mGops.isEmpty() || mAccessUnits.size() < 3) return 0;
 
-    // Use the first GOP: count B-frames and reference frames (excluding keyframe)
-    const TTGopInfo& gop = mGops[0];
-    int bFrames = 0;
-    int refFrames = 0;
+    // Scan up to 20 GOPs to find the max consecutive B-frames.
+    // GOP[0] may be a degenerate recording-start fragment without B-frames,
+    // so we check multiple GOPs and take the maximum.
+    int maxConsecutiveB = 0;
+    int gopsChecked = qMin(mGops.size(), 20);
 
-    for (int i = gop.startAU + 1; i <= gop.endAU && i < mAccessUnits.size(); i++) {
-        const TTAccessUnit& au = mAccessUnits[i];
-        bool isB = false;
-        if (mCodecType == NALU_CODEC_H265) {
-            isB = (au.sliceType == H265::SLICE_B);
-        } else {
-            isB = (au.sliceType == H264::SLICE_B ||
-                   au.sliceType == H264::SLICE_B_ALL);
-        }
+    for (int g = 0; g < gopsChecked; g++) {
+        const TTGopInfo& gop = mGops[g];
+        int consecutiveB = 0;
 
-        if (isB) {
-            bFrames++;
-        } else {
-            refFrames++;
+        for (int i = gop.startAU; i <= gop.endAU && i < mAccessUnits.size(); i++) {
+            const TTAccessUnit& au = mAccessUnits[i];
+            bool isB = false;
+            if (mCodecType == NALU_CODEC_H265) {
+                isB = (au.sliceType == H265::SLICE_B);
+            } else {
+                isB = (au.sliceType == H264::SLICE_B ||
+                       au.sliceType == H264::SLICE_B_ALL);
+            }
+
+            if (isB) {
+                consecutiveB++;
+                if (consecutiveB > maxConsecutiveB)
+                    maxConsecutiveB = consecutiveB;
+            } else {
+                consecutiveB = 0;
+            }
         }
     }
 
-    int delay = (refFrames > 0) ? (bFrames / refFrames) : bFrames;
-    qDebug() << "TTNaluParser: GOP[0] has" << bFrames << "B-frames,"
-             << refFrames << "ref-frames -> reorder delay:" << delay;
-    return delay;
+    qDebug() << "TTNaluParser: max consecutive B-frames in first" << gopsChecked
+             << "GOPs:" << maxConsecutiveB << "-> reorder delay:" << maxConsecutiveB;
+    return maxConsecutiveB;
 }
 
 // ----------------------------------------------------------------------------

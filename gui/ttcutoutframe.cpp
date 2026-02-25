@@ -162,6 +162,12 @@ void TTCutOutFrame::onPrevCutOutPos()
 		: videoStream->moveToPrevFrame();
 
   currentPosition = newFramePos;
+
+  if (currentCutItemIndex >= 0 && currentAVItem) {
+    TTCutItem cutItem = currentAVItem->cutListItemAt(currentCutItemIndex);
+    currentAVItem->updateCutEntry(cutItem, cutItem.cutInIndex(), newFramePos);
+  }
+
   mpegWindow->showFrameAt(newFramePos);
   updateCurrentPosition();
 }
@@ -180,6 +186,12 @@ void TTCutOutFrame::onNextCutOutPos()
 		  : videoStream->moveToNextFrame();
 
   currentPosition = newFramePos;
+
+  if (currentCutItemIndex >= 0 && currentAVItem) {
+    TTCutItem cutItem = currentAVItem->cutListItemAt(currentCutItemIndex);
+    currentAVItem->updateCutEntry(cutItem, cutItem.cutInIndex(), newFramePos);
+  }
+
   mpegWindow->showFrameAt(newFramePos);
   updateCurrentPosition();
 }

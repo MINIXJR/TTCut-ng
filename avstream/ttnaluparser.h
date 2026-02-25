@@ -307,6 +307,9 @@ private:
     bool parseH265NalUnit(const QByteArray& data, TTNalUnit& nal);
     bool parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal);
 
+    // Parameter set deduplication (only store unique SPS/PPS/VPS by content)
+    void deduplicateList(QList<int>& list);
+
     // Exp-Golomb decoding (for slice header parsing)
     static uint32_t readExpGolombUE(const uint8_t* data, int& bitPos);
     static int32_t readExpGolombSE(const uint8_t* data, int& bitPos);

@@ -667,6 +667,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             if (in.assignPts) {
                 in.pkt->pts = in.frameCount * in.frameDur;
                 in.pkt->dts = in.pkt->pts;
+                in.pkt->duration = in.frameDur;
                 in.frameCount++;
             } else {
                 av_packet_rescale_ts(in.pkt,

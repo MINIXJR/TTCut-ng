@@ -148,6 +148,9 @@ private:
     // B-frame reorder delay (measured from decoder)
     int mReorderDelay;
 
+    // H.264 frame_num field width in bits (log2_max_frame_num_minus4 + 4)
+    int mLog2MaxFrameNum;
+
     // Encoder PTS counter (reset per segment in setupEncoder)
     int64_t mEncoderPts;
 
@@ -169,17 +172,21 @@ private:
     void freeEncoder();
 
     // Process a single segment
-    bool processSegment(QFile& outFile, const TTCutSegmentInfo& segment);
+    // frameNumDelta: H.264 frame_num offset for inter-segment continuity
+    bool processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
+                        int frameNumDelta = 0);
 
     // Stream-copy NAL units (no re-encoding)
     // patchReorderFrames > 0: patch inline H.264 SPS NALs with max_num_reorder_frames
+    // frameNumDelta != 0: patch H.264 slice frame_num for inter-segment continuity
     bool streamCopyFrames(QFile& outFile, int startFrame, int endFrame,
-                          int patchReorderFrames = 0);
+                          int patchReorderFrames = 0, int frameNumDelta = 0);
 
     // Re-encode frames (for partial GOPs)
     // streamCopyStartFrame: AU index where stream-copy begins after re-encode (-1 if none)
+    // needsIDR: if true, always re-encode at least 1 frame to produce an IDR
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
-                        int streamCopyStartFrame);
+                        int streamCopyStartFrame, bool needsIDR = false);
 
     // Helper: decode frame from NAL data
     bool decodeFrame(const QByteArray& nalData, AVFrame* frame);
