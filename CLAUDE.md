@@ -27,7 +27,7 @@ TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 s
 - Cut-in: I-frames only
 - Cut-out: P-frames or I-frames
 
-**Key Constraint for H.264/H.265**: Smart cut re-encodes partial GOPs at cut points. There is a **known limitation**: a small stutter (~0.14 seconds) may occur at middle cut points due to B-frame reordering discontinuities between encoded and stream-copied sections.
+**Key Constraint for H.264/H.265**: Smart cut re-encodes partial GOPs at cut points. For streams without IDR frames (only Non-IDR I-slices), Smart Cut forces IDR generation via `forced-idr=1` to ensure clean decoder resets at segment boundaries.
 
 ## Build System
 
@@ -179,9 +179,11 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 **Key implementation details (extern/ttessmartcut.cpp):**
 - TTNaluParser: Memory-mapped native H.264/H.265 NAL unit parser
 - TTESSmartCut: Frame-accurate Smart Cut engine
-- Encoder uses `bf=0` (no B-frames) for clean segment transitions
+- Encoder uses `bf=0` (no B-frames) and `forced-idr=1` for clean segment transitions
 - Encoder recreated between segments (libx264 lookahead limitation)
 - GOP detection recognizes both IDR frames and I-slices (Open GOPs)
+- Non-IDR I-frame streams: `needsIDR` forces re-encode even when B-frame reorder delay would skip it
+- SPS inline patching with `max_num_reorder_frames` for correct decoder buffering
 
 **Key classes:**
 - **TTNaluParser** (avstream/ttnaluparser.h): Native NAL unit parser with mmap I/O
@@ -203,9 +205,7 @@ Demux-Tool für H.264/H.265 TS-Dateien (Nachfolger von ts_demux_normalize.sh):
 
 **Known limitations:**
 
-1. **Cut point stutter** (needs verification): A small stutter (~0.14 seconds) may occur at middle cut points due to B-frame reordering discontinuities. This is inherent to the Smart Cut approach when transitioning from re-encoded to stream-copied sections.
-
-2. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
+1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
 
 ### H.264/H.265 Stream Preparation Tools (Companion Project)
 
