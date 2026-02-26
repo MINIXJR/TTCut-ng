@@ -169,7 +169,7 @@ void TTCutOutFrame::onPrevCutOutPos()
   }
 
   mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 /*!
@@ -193,7 +193,7 @@ void TTCutOutFrame::onNextCutOutPos()
   }
 
   mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 /*!
@@ -211,17 +211,18 @@ void TTCutOutFrame::onSearchFrame()
 /*
  * updateCurrentPosition
  */
-void TTCutOutFrame::updateCurrentPosition()
+void TTCutOutFrame::updateCurrentPosition(int pos)
 {
   if (videoStream == 0) return;
 
   QString szTemp;
   QString szTemp1, szTemp2;
-  int     frame_type = videoStream->currentFrameType();
+  int actualPos   = (pos >= 0) ? pos : videoStream->currentIndex();
+  int frame_type  = videoStream->frameType(actualPos);
 
-  szTemp1 = videoStream->currentFrameTime().toString("hh:mm:ss.zzz");
+  szTemp1 = videoStream->frameTime(actualPos).toString("hh:mm:ss.zzz");
 
-  szTemp2 = QString(" (%1)").arg(videoStream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(actualPos);
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";

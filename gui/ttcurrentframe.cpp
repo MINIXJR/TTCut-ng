@@ -258,7 +258,7 @@ void TTCurrentFrame::onPrevBFrame()
   }
 
   mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate cut-in to next P/I-frame (or next frame in encoder mode)
@@ -280,7 +280,7 @@ void TTCurrentFrame::onNextBFrame()
   }
 
   mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate to marker position
@@ -371,15 +371,16 @@ void TTCurrentFrame::onMoveToEnd()
   onGotoFrame(videoStream->frameCount(), 0);
 }
 
-void TTCurrentFrame::updateCurrentPosition()
+void TTCurrentFrame::updateCurrentPosition(int pos)
 {
   QString szTemp;
   QString szTemp1, szTemp2;
-  int     frame_type = videoStream->currentFrameType();
+  int actualPos   = (pos >= 0) ? pos : videoStream->currentIndex();
+  int frame_type  = videoStream->frameType(actualPos);
 
-  szTemp1 = videoStream->currentFrameTime().toString("hh:mm:ss.zzz");
+  szTemp1 = videoStream->frameTime(actualPos).toString("hh:mm:ss.zzz");
 
-  szTemp2 = QString(" (%1)").arg(videoStream->currentIndex());
+  szTemp2 = QString(" (%1)").arg(actualPos);
 
   if ( frame_type == 1 ) szTemp2 += " [I]";
   if ( frame_type == 2 ) szTemp2 += " [P]";
@@ -390,7 +391,7 @@ void TTCurrentFrame::updateCurrentPosition()
 
   laCurrentPosition->update();
 
-  emit newFramePosition( videoStream->currentIndex() );
+  emit newFramePosition( actualPos );
 }
 
 void TTCurrentFrame::saveCurrentFrame()

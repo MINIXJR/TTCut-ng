@@ -62,7 +62,7 @@ class TTCutOutFrame: public QWidget, Ui::TTCutOutFrameWidget
 	  void searchEqualFrame(TTAVItem* avItem, int startIndex);
 
 	private:
-		void updateCurrentPosition();
+		void updateCurrentPosition(int pos = -1);
 
 	private:
 		TTAVItem*           currentAVItem;

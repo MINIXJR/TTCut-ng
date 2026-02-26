@@ -90,7 +90,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
     void setMarker(int);
 
 	private:
-		void updateCurrentPosition();
+		void updateCurrentPosition(int pos = -1);
 		QString createTempMkvForPlayback();
 		void cleanupTempPlaybackFile();
 		double getMpvPlaybackPosition();  // Query mpv's current position via IPC
