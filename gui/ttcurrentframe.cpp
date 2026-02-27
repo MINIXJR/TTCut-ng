@@ -200,7 +200,7 @@ void TTCurrentFrame::onPrevIFrame()
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate to next I-Frame
@@ -212,7 +212,7 @@ void TTCurrentFrame::onNextIFrame()
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate to previous P-Frame
@@ -224,7 +224,7 @@ void TTCurrentFrame::onPrevPFrame()
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate to next P-Frame
@@ -236,7 +236,7 @@ void TTCurrentFrame::onNextPFrame()
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Navigate cut-in to previous P/I-frame (or previous frame in encoder mode)
@@ -292,7 +292,7 @@ void TTCurrentFrame::onGotoMarker(int markerPos)
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 void TTCurrentFrame::onSetMarker()
@@ -320,7 +320,7 @@ void TTCurrentFrame::onGotoCutIn(int pos)
   newFramePos = videoStream->moveToIndexPos(pos);
   mpegWindow->showFrameAt( newFramePos );
 
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 //! Goto cut out position
@@ -332,7 +332,7 @@ void TTCurrentFrame::onGotoCutOut(int pos)
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 void TTCurrentFrame::onGotoFrame(int pos)
@@ -352,7 +352,7 @@ void TTCurrentFrame::onGotoFrame(int pos, int fast)
   mpegWindow->showFrameAt( newFramePos );
 
   currentCutPosition = newFramePos;
-  updateCurrentPosition();
+  updateCurrentPosition(newFramePos);
 }
 
 void TTCurrentFrame::onMoveNumSteps(int steps)

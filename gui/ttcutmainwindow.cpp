@@ -676,7 +676,7 @@ void TTCutMainWindow::onNewFramePos(int newPos)
   streamNavigator->slider()->setValue( newPos );
   streamNavigator->slider()->blockSignals(false);
   videoFileInfo->refreshInfo(mpCurrentAVDataItem);
-  navigation->checkCutPosition(mpCurrentAVDataItem);
+  navigation->checkCutPosition(mpCurrentAVDataItem, newPos);
 }
 
 void TTCutMainWindow::onSetSelectedCutOut(const TTCutItem& cutItem)

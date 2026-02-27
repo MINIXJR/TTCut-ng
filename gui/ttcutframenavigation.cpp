@@ -157,16 +157,15 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbGotoMarker->setEnabled(enabled);
 }
 
-void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData)
+void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData, int pos)
 {
 	TTVideoStream* vs = avData->videoStream();
-	currentPosition = vs->currentIndex();
-	//currentTime = vs->currentFrameTime().toString("hh:mm:ss.zzz");
-	currentTime = vs->currentFrameTime().toString("hh:mm:ss");
-	currentFrameType = vs->currentFrameType();
+	currentPosition  = (pos >= 0) ? pos : vs->currentIndex();
+	currentTime      = vs->frameTime(currentPosition).toString("hh:mm:ss");
+	currentFrameType = vs->frameType(currentPosition);
 
-	pbSetCutIn->setEnabled(vs->isCutInPoint(-1));
-	pbSetCutOut->setEnabled(vs->isCutOutPoint(-1));
+	pbSetCutIn->setEnabled(vs->isCutInPoint(currentPosition));
+	pbSetCutOut->setEnabled(vs->isCutOutPoint(currentPosition));
 }
 
 void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)

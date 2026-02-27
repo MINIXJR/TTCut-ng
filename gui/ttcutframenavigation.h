@@ -48,7 +48,7 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     //void setTitle ( const QString & title );
 
     void controlEnabled( bool enabled );
-    void checkCutPosition(TTAVItem* avData);
+    void checkCutPosition(TTAVItem* avData, int pos = -1);
     void keyPressEvent(QKeyEvent* e);
 
   public slots:
