@@ -84,7 +84,7 @@ Container (TS/MKV/MP4)
         ▼
 ┌───────────────────────────────────────────────┐
 │  4. MUX                                       │
-│     - mkvmerge / ffmpeg                       │
+│     - libav matroska muxer (MKV)              │
 │     - Video + Audio + Subtitles               │
 │     - Chapter-Marker                          │
 └───────────────────────────────────────────────┘

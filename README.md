@@ -16,7 +16,7 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 - **MPEG-2** — direktes Stream-Copy, Re-Encoding nur an Schnittpunkten (via ffmpeg)
 - **H.264/H.265** — Smart Cut (~99,5% Stream-Copy, ~0,5% Re-Encode)
 - **SRT-Untertitel** — automatisches Laden, Vorschau-Overlay, Schnitt zusammen mit dem Video
-- **MKV-Ausgabe** mit Kapitelmarken (via mkvmerge)
+- **MKV-Ausgabe** mit Kapitelmarken (via libav matroska muxer)
 - **ttcut-demux** — Multi-Core TS-Demuxer mit A/V-Sync-Korrektur, Audio-Padding und VDR-Marks-Unterstützung
 - Tastaturkürzel für Frame-Navigation und Schnittpunkt-Auswahl (`?` für Hilfe)
 
@@ -31,7 +31,7 @@ anderen Bibliotheken bereitstellt.
 ```bash
 sudo apt install qt5-qmake qtbase5-dev libmpeg2-4-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
-  ffmpeg mpv mkvtoolnix mjpegtools
+  ffmpeg mpv mjpegtools
 ```
 
 ### Build

@@ -119,6 +119,7 @@ TTAVStream
 - libavformat, libavcodec, libavutil, libswscale (H.264/H.265 smart cut, audio cutting, MKV muxing)
 - ffmpeg CLI (required for MPEG-2 frame-accurate cutting)
 - mplex (optional, for MPEG-2 multiplexing)
+- Note: mkvmerge/mkvtoolnix is no longer required (replaced by libav matroska muxer in v0.60.0)
 
 ## Version
 
@@ -182,7 +183,10 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 - Encoder uses `bf=0` (no B-frames) and `forced-idr=1` for clean segment transitions
 - Encoder recreated between segments (libx264 lookahead limitation)
 - GOP detection recognizes both IDR frames and I-slices (Open GOPs)
-- Non-IDR I-frame streams: `needsIDR` forces re-encode even when B-frame reorder delay would skip it
+- Non-IDR I-frame streams: `analyzeCutPoints()` forces re-encode to produce IDR at segment boundaries
+- B-frame reorder boundary crossing: Case A/B differentiation via `adjustedStreamCopyStart` output parameter
+- EOS NAL always written before stream-copy to flush decoder DPB
+- Decoder: `thread_count=1` (single-threaded to prevent PTS misassignment)
 - SPS inline patching with `max_num_reorder_frames` for correct decoder buffering
 
 **Key classes:**
@@ -223,6 +227,13 @@ Analysis and preparation tools in the h264bitstream fork:
 - H.265/HEVC recordings have minimal filler (~0.1%)
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
+
+### Navigation and Smart Cut Fixes (v0.61.1–v0.61.4)
+
+- **v0.61.1**: Fix frame position sync between slider and navigation buttons
+- **v0.61.2**: Fix shared videoStream position corruption — explicit position parameter passed through all navigation methods and `checkCutPosition()`
+- **v0.61.3**: Separate navigation from auto-save in CurrentFrame widget — B/I/P buttons only navigate, Set Cut-In/Out buttons explicitly save
+- **v0.61.4**: Fix Smart Cut segment boundary stutter for B-frame reorder crossing — Case A (extend re-encode to next keyframe) vs Case B (skip extension to avoid POC domain mismatch). Replaces `needsIDR` with `adjustedStreamCopyStart` output parameter. EOS NAL always written before stream-copy.
 
 ## Running on Wayland
 

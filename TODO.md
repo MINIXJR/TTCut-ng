@@ -199,7 +199,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Remove 1,882 lines dead code from ttffmpegwrapper.cpp (v0.60.0)
 - [x] Audio boundary burst detection with shift-button in preview (v0.59.0)
 - [x] Audio quality fixes: click false positive, off-by-one duration, bitrate autodetect (v0.58.0)
-- [x] Fix H.264 Smart Cut inter-segment stutter via forced-idr + needsIDR (v0.61.0)
+- [x] Fix H.264 Smart Cut inter-segment stutter via forced-idr (v0.61.0)
 - [x] Fix preview stutter by preferring IDR keyframes for preview clip start (v0.61.0)
 - [x] Restore CutIn/CutOut editing and burst detection in navigation buttons (v0.61.0)
 - [x] Fix frame position sync between slider and navigation buttons (v0.61.1)

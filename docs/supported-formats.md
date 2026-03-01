@@ -39,7 +39,7 @@ MPEG-2 is the traditional format for DVB recordings and DVD content. TTCut-ng ha
 | Cut at any frame | Yes | Requires ffmpeg re-encode |
 | Quality setting | qscale 2-31 | Lower = better quality |
 | Interlace detection | Yes | Auto-detected, passed to encoder |
-| Output muxer | mplex (TS/PS) or mkvmerge (MKV) | |
+| Output muxer | mplex (TS/PS) or libav matroska muxer (MKV) | |
 
 **Cut Point Restrictions (without re-encoding):**
 - Cut-in: I-frames only
@@ -57,13 +57,14 @@ With the encoder enabled (default), cutting at any frame position is possible by
 | Quality setting | CRF 0-51 | Default 18 (visually lossless) |
 | Presets | ultrafast to veryslow | Speed/quality tradeoff |
 | Profiles | Baseline, Main, High | High recommended |
-| Output muxer | mkvmerge (MKV) | With optional chapters |
+| Output muxer | libav matroska muxer (MKV) | With optional chapters |
 | Video playback | Yes | Via mpv (temporary MKV created) |
 
 **Smart Cut Details:**
 - ~99.5% of frames are stream-copied (no quality loss)
 - ~0.5% of frames at cut boundaries are re-encoded
-- Encoder uses `bf=0` (no B-frames) for clean segment transitions
+- Encoder uses `bf=0` (no B-frames) and `forced-idr=1` for clean segment transitions
+- EOS NAL written at each re-encode→stream-copy transition to flush decoder DPB
 
 ### H.265/HEVC
 
@@ -75,10 +76,10 @@ With the encoder enabled (default), cutting at any frame position is possible by
 | Quality setting | CRF 0-51 | Default 20 (similar to H.264 CRF 18) |
 | Presets | ultrafast to veryslow | Speed/quality tradeoff |
 | Profiles | Main, Main10 | Main recommended |
-| Output muxer | mkvmerge (MKV) | With optional chapters |
+| Output muxer | libav matroska muxer (MKV) | With optional chapters |
 | Video playback | Yes | Via mpv (temporary MKV created) |
 
-**Known limitation:** A small stutter (~0.14 seconds) may occur at middle cut points due to B-frame reordering discontinuities between re-encoded and stream-copied sections.
+**Known limitation:** When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of up to reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
 
 ---
 
@@ -86,7 +87,7 @@ With the encoder enabled (default), cutting at any frame position is possible by
 
 | Container | Tool | Video Codecs | Chapters | Notes |
 |-----------|------|--------------|----------|-------|
-| **Matroska (MKV)** | mkvmerge | All | Yes | Recommended, auto-generated chapters |
+| **Matroska (MKV)** | libav matroska muxer | All | Yes | Recommended, auto-generated chapters |
 | **MPEG TS/PS** | mplex | MPEG-2 | No | Traditional DVB output |
 | **Elementary** | Direct copy | All | N/A | Raw stream, no container |
 
@@ -165,7 +166,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 |------|---------|---------|
 | **ffmpeg** | MPEG-2 frame-accurate cutting | `ffmpeg` |
 | **mplex** | MPEG multiplexing | `mjpegtools` |
-| **mkvmerge** | MKV container creation, chapters | `mkvtoolnix` |
 | **mpv** | Video preview playback | `mpv` |
 
 ---
@@ -191,6 +191,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Version Information
 
-This documentation applies to TTCut-ng version 0.51.0.
+This documentation applies to TTCut-ng version 0.61.4.
 
-Last updated: February 2026
+Last updated: March 2026

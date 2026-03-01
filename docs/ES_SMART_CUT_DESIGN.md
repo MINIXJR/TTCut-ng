@@ -1,6 +1,6 @@
 # ES Smart Cut - Architektur-Design
 
-> **Status: IMPLEMENTIERT** (seit v0.50.0, verfeinert in v0.51.0)
+> **Status: IMPLEMENTIERT** (seit v0.50.0, verfeinert bis v0.61.4)
 > Die hier beschriebene Architektur ist vollständig umgesetzt in
 > `avstream/ttnaluparser.h/.cpp` und `extern/ttessmartcut.h/.cpp`.
 
@@ -210,9 +210,10 @@ bool smartCutElementaryStreamV2(const QString& inputFile,
      Global Header. GOP-Erkennung unterstützt sowohl IDR als auch I-Slices (Open GOPs).
 
 3. **B-Frame Referenzen:**
-   - **Gelöst:** Re-encode verwendet `bf=0` (keine B-Frames) für saubere
-     Übergänge. Ein kleiner Stutter (~0.14s) an mittleren Schnittpunkten
-     ist eine bekannte und akzeptierte Limitierung.
+   - **Gelöst:** Re-encode verwendet `bf=0` (keine B-Frames) und `forced-idr=1`
+     für saubere Übergänge. EOS NAL wird vor jeder Stream-Copy-Transition
+     geschrieben (DPB-Flush). B-Frame Reorder Boundary Crossing wird durch
+     Case A/B Differenzierung behandelt (v0.61.4).
 
 4. **Audio Sync:**
    - **Gelöst:** Audio wird via libav stream-copy geschnitten.
@@ -263,4 +264,6 @@ bool smartCutElementaryStreamV2(const QString& inputFile,
 | 5 | GUI-Integration | Fertig |
 | 6 | MKV-Muxing mit Chapters | Fertig |
 
-Alle Phasen sind seit Version 0.50.0 implementiert und getestet.
+Alle Phasen sind seit Version 0.50.0 implementiert. Segment-Boundary-Fixes
+in v0.58.0 (Non-IDR I-Frame), v0.61.0 (forced-idr, SPS-Patching) und
+v0.61.4 (Case A/B Differenzierung bei B-Frame Reorder Boundary Crossing).
