@@ -70,8 +70,8 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
   pbPlayVideo->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
 
-  connect(pbPrevFrame,  SIGNAL(clicked()), this, SLOT(onPrevBFrame()));
-  connect(pbNextFrame,  SIGNAL(clicked()), this, SLOT(onNextBFrame()));
+  connect(pbPrevFrame,  SIGNAL(clicked()), this, SLOT(onWidgetPrevFrame()));
+  connect(pbNextFrame,  SIGNAL(clicked()), this, SLOT(onWidgetNextFrame()));
   connect(pbSetMarker,  SIGNAL(clicked()), this, SLOT(onSetMarker()));
   connect(pbPlayVideo,  SIGNAL(clicked()), this, SLOT(onPlayVideo()));
 }
@@ -239,7 +239,7 @@ void TTCurrentFrame::onNextPFrame()
   updateCurrentPosition(newFramePos);
 }
 
-//! Navigate cut-in to previous P/I-frame (or previous frame in encoder mode)
+//! Navigate to previous P/I-frame (or previous frame in encoder mode)
 void TTCurrentFrame::onPrevBFrame()
 {
   if (videoStream == 0) return;
@@ -252,16 +252,11 @@ void TTCurrentFrame::onPrevBFrame()
 
   currentCutPosition = newFramePos;
 
-  if (currentCutItemIndex >= 0 && currentCutAVItem) {
-    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
-    currentCutAVItem->updateCutEntry(cutItem, newFramePos, cutItem.cutOut());
-  }
-
   mpegWindow->showFrameAt(newFramePos);
   updateCurrentPosition(newFramePos);
 }
 
-//! Navigate cut-in to next P/I-frame (or next frame in encoder mode)
+//! Navigate to next P/I-frame (or next frame in encoder mode)
 void TTCurrentFrame::onNextBFrame()
 {
   if (videoStream == 0) return;
@@ -274,13 +269,30 @@ void TTCurrentFrame::onNextBFrame()
 
   currentCutPosition = newFramePos;
 
-  if (currentCutItemIndex >= 0 && currentCutAVItem) {
-    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
-    currentCutAVItem->updateCutEntry(cutItem, newFramePos, cutItem.cutOut());
-  }
-
   mpegWindow->showFrameAt(newFramePos);
   updateCurrentPosition(newFramePos);
+}
+
+//! Widget button: navigate to previous frame + auto-save CutIn if cut selected
+void TTCurrentFrame::onWidgetPrevFrame()
+{
+  onPrevBFrame();
+
+  if (currentCutItemIndex >= 0 && currentCutAVItem) {
+    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
+    currentCutAVItem->updateCutEntry(cutItem, currentCutPosition, cutItem.cutOut());
+  }
+}
+
+//! Widget button: navigate to next frame + auto-save CutIn if cut selected
+void TTCurrentFrame::onWidgetNextFrame()
+{
+  onNextBFrame();
+
+  if (currentCutItemIndex >= 0 && currentCutAVItem) {
+    TTCutItem cutItem = currentCutAVItem->cutListItemAt(currentCutItemIndex);
+    currentCutAVItem->updateCutEntry(cutItem, currentCutPosition, cutItem.cutOut());
+  }
 }
 
 //! Navigate to marker position
