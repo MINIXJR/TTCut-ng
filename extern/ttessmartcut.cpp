@@ -541,34 +541,40 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
              << "then stream-copy" << segment.streamCopyStartFrame << "->" << segment.streamCopyEndFrame;
 
     // 1. Re-encode section (x264/x265 includes SPS/PPS automatically)
-    //    needsIDR=true ensures at least 1 frame is re-encoded even when
-    //    B-frame reorder delay shifts the display-order CutIn past the
-    //    stream-copy boundary. Without this, the re-encode would be skipped
-    //    and no IDR would be produced, causing frame interleaving at the
-    //    segment transition.
+    //    When B-frame reorder delay shifts the display-order CutIn past the
+    //    stream-copy boundary, re-encode is extended to the next keyframe.
+    //    adjustedStart receives the new stream-copy start if this happens.
+    int adjustedStart = -1;
     if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                        segment.streamCopyStartFrame, true)) {
+                        segment.streamCopyStartFrame, &adjustedStart)) {
         return false;
     }
 
+    // Use adjusted stream-copy start if re-encode was extended past original boundary
+    int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
+    int scEnd = segment.streamCopyEndFrame;
+
+    // Check if stream-copy range is still valid after adjustment
+    if (scStart > scEnd) {
+        qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+        return true;
+    }
+
     // 2. Transition from re-encoded to stream-copied section
-    // H.264/H.265 spec: EOS NAL must be followed by IDR.
-    // Only write EOS when stream-copy starts with a true IDR frame.
-    // For Non-IDR I-frames, use mid-stream SPS/PPS update instead.
-    TTAccessUnit scStartAU = mParser.accessUnitAt(segment.streamCopyStartFrame);
-    if (scStartAU.isIDR) {
-        if (mParser.codecType() == NALU_CODEC_H264) {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
-            outFile.write(eosNal, sizeof(eosNal));
-            qDebug() << "    Inserted H.264 EOS NAL (type 11) - stream-copy starts at IDR";
-        } else if (mParser.codecType() == NALU_CODEC_H265) {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x4A, 0x01};
-            outFile.write(eosNal, sizeof(eosNal));
-            qDebug() << "    Inserted H.265 EOS NAL (type 37) - stream-copy starts at IDR";
-        }
-    } else {
-        qDebug() << "    Stream-copy at Non-IDR I-frame" << segment.streamCopyStartFrame
-                 << "- skipping EOS (would violate spec without IDR)";
+    // Always write EOS NAL to flush decoder DPB, preventing co-located reference
+    // mismatches when stream-copied B-frames use temporal_direct prediction.
+    // Without DPB flush, stale re-encoded frames (different POC domain) remain
+    // in the DPB, corrupting co-located MB lookup for B-frames.
+    // Note: Between segments, EOS is also always written (smartCutFrames) and
+    // works correctly with Non-IDR I-frames on all major decoders.
+    if (mParser.codecType() == NALU_CODEC_H264) {
+        static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
+        outFile.write(eosNal, sizeof(eosNal));
+        qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB before stream-copy at" << scStart;
+    } else if (mParser.codecType() == NALU_CODEC_H265) {
+        static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x4A, 0x01};
+        outFile.write(eosNal, sizeof(eosNal));
+        qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB before stream-copy at" << scStart;
     }
 
     // 3. Write source parameter sets for decoder transition
@@ -580,8 +586,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     // (x264 encoder produces its own frame_num sequence)
     // Patch inline SPS NALs with max_num_reorder_frames so the decoder doesn't
     // reset and dynamically grow its reorder buffer at each SPS NAL
-    if (!streamCopyFrames(outFile, segment.streamCopyStartFrame,
-                          segment.streamCopyEndFrame, mReorderDelay, frameNumDelta)) {
+    if (!streamCopyFrames(outFile, scStart,
+                          scEnd, mReorderDelay, frameNumDelta)) {
         return false;
     }
 
@@ -967,9 +973,12 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 // Re-encode frames (for partial GOPs)
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
-                                  int streamCopyStartFrame, bool needsIDR)
+                                  int streamCopyStartFrame, int* adjustedStreamCopyStart)
 {
     qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
+
+    if (adjustedStreamCopyStart)
+        *adjustedStreamCopyStart = -1;  // -1 = no adjustment needed
 
     // Find the keyframe we need to decode from.
     // H.264/H.265 decoders with frame-threading have an initialization delay:
@@ -1092,6 +1101,22 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // within the output range instead of stuck in the decoder's trailing buffer.
     // We also need the next keyframe as forward reference for B-frames near endFrame.
     int decodeEnd = qMin(endFrame + 20, frameCount() - 1);
+
+    // Pre-extend decode range to cover the next keyframe after streamCopyStartFrame.
+    // When B-frame reorder delay shifts the display-order CutIn past the stream-copy
+    // boundary, we need to re-encode up to the next keyframe. Decoding these frames
+    // upfront avoids having to reset the decoder from EOF state later.
+    if (streamCopyStartFrame >= 0) {
+        int potentialNextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
+        if (potentialNextKF > 0) {
+            int potentialExtEnd = qMin(potentialNextKF + 20, frameCount() - 1);
+            if (potentialExtEnd > decodeEnd) {
+                qDebug() << "      Pre-extending decode range to cover potential next keyframe"
+                         << potentialNextKF << "(decode end:" << potentialExtEnd << ")";
+                decodeEnd = potentialExtEnd;
+            }
+        }
+    }
 
     qDebug() << "      Decode range:" << decodeStart << "->" << decodeEnd
              << "(endFrame=" << endFrame << ", extra=" << (decodeEnd - endFrame) << ")";
@@ -1223,24 +1248,37 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
     // Check if display-order mapping moved CutIn past the stream-copy boundary.
     // This happens when the B-frame reorder delay shifts the real content to AUs
-    // at or after the stream-copy keyframe — no re-encoding needed.
+    // at or after the stream-copy keyframe.
     if (realStartAU >= streamCopyLimit) {
-        if (needsIDR) {
-            // Even though display-order says no frames need re-encoding, we must
-            // produce at least 1 IDR frame to flush the decoder's delayed_pic[]
-            // reorder buffer at segment boundaries. Extend the re-encode range
-            // to include realStartAU so we encode at least 1 frame.
-            qDebug() << "      Display-order CutIn AU" << realStartAU
-                     << ">= stream-copy start" << streamCopyLimit
-                     << "but IDR needed -> extending re-encode to AU" << realStartAU;
-            streamCopyLimit = realStartAU + 1;
+        if (realStartAU == streamCopyLimit) {
+            // Case A: CutIn exactly at stream-copy boundary.
+            // Full GOP of pre-CutIn content would leak into output.
+            // Fix: extend re-encode to next keyframe, stream-copy from there.
+            int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
+            if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
+                nextKF = frameCount();
+            }
+            streamCopyLimit = nextKF;
+
+            qDebug() << "      Case A: CutIn AU" << realStartAU
+                     << "== stream-copy start" << streamCopyStartFrame
+                     << "-> extending re-encode to next keyframe" << nextKF;
+
+            if (adjustedStreamCopyStart) {
+                *adjustedStreamCopyStart = nextKF;
+            }
         } else {
-            qDebug() << "      Display-order CutIn AU" << realStartAU
-                     << ">= stream-copy start" << streamCopyLimit
-                     << "-> no frames to re-encode (pure stream-copy)";
-            for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
-            allDecodedFrames.clear();
-            return true;
+            // Case B: CutIn a few frames past stream-copy boundary.
+            // Small leak (≤ reorder_delay frames) is acceptable.
+            // Do NOT extend re-encode: the re-encode→stream-copy transition
+            // creates a POC domain change (encoder vs source) that causes
+            // "co located POCs unavailable" when stream-copied B-frames use
+            // temporal_direct prediction. EOS flushes DPB but cannot reset
+            // POC state — only IDR can do that.
+            qDebug() << "      Case B: CutIn AU" << realStartAU
+                     << "is" << (realStartAU - streamCopyLimit)
+                     << "frames past stream-copy start" << streamCopyStartFrame
+                     << "- skipping re-encode to avoid POC mismatch";
         }
     }
 

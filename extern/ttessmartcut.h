@@ -184,9 +184,10 @@ private:
 
     // Re-encode frames (for partial GOPs)
     // streamCopyStartFrame: AU index where stream-copy begins after re-encode (-1 if none)
-    // needsIDR: if true, always re-encode at least 1 frame to produce an IDR
+    // adjustedStreamCopyStart: output — if re-encode consumed frames past streamCopyStartFrame,
+    //   this is set to the new stream-copy start (next keyframe). -1 if unchanged.
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
-                        int streamCopyStartFrame, bool needsIDR = false);
+                        int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr);
 
     // Helper: decode frame from NAL data
     bool decodeFrame(const QByteArray& nalData, AVFrame* frame);
