@@ -79,6 +79,21 @@
   - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
   - Build separately via dedicated `.pro` file or as part of main build
 
+- **Navigation Widget: B-Frame Buttons sind redundant mit P-Frame Buttons**
+  - B▶/B◀ und P▶/P◀ im Navigation-Widget haben identisches Verhalten
+  - Brainstorming nötig: Sollen B-Buttons entfernt oder mit anderer Funktion belegt werden?
+  - Auch F▶/F◀ im Navigation-Widget vs. CurrentFrame-Widget klären
+  - Kontext: v0.61.3 hat Navigation von Auto-Save getrennt
+
+- **Smart Cut Performance: mmap statt QFile für Stream-Copy**
+  - `readAccessUnitData()` nutzt `QFile::seek()`+`read()` — 140k einzelne Syscalls bei Langfilm
+  - Aktuell: ~130s für 6 GB / 140k Frames (~46 MB/s)
+  - Mögliche Optimierungen:
+    1. Bulk-Copy: Wenn kein Patching nötig, ganze Byte-Ranges statt einzelne Frames kopieren
+    2. mmap: `TTNaluParser` nutzt bereits mmap zum Parsen, `readAccessUnitData()` aber nicht
+    3. Größere I/O-Blöcke: Benachbarte Frames zu einem `read()` zusammenfassen
+  - GPU bringt nichts (nur 58 von 140k Frames encoded, Rest ist I/O)
+
 ## Medium Priority
 
 - **Manual audio delay/offset per track**
@@ -187,9 +202,13 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Fix H.264 Smart Cut inter-segment stutter via forced-idr + needsIDR (v0.61.0)
 - [x] Fix preview stutter by preferring IDR keyframes for preview clip start (v0.61.0)
 - [x] Restore CutIn/CutOut editing and burst detection in navigation buttons (v0.61.0)
+- [x] Fix frame position sync between slider and navigation buttons (v0.61.1)
+- [x] Fix shared videoStream position corruption in navigation and cut points (v0.61.2)
+- [x] Separate navigation from auto-save in CurrentFrame widget (v0.61.3)
+- [x] Fix Smart Cut segment boundary stutter for B-frame reorder crossing — Case A/B (v0.61.4)
 
 ## Known Limitations
 
 - **Multi-frame audio burst at cut boundaries**: DVB advertising audio can bleed 2-3+ audio frames before the video transition. The current burst detection checks only the last 2 audio frames at the CutOut boundary and offers single-frame shift (-1). For multi-frame bursts, the user must shift multiple times. Additionally, isolated burst frames can appear in the silence region between segments (mid-transition), which are not detected by the edge-based algorithm.
 
-- **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected).
+- **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected). When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of ≤ reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
