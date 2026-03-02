@@ -2,8 +2,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](COPYING)
 [![Version](https://img.shields.io/github/v/tag/MINIXJR/TTCut-ng?label=version&color=green)](https://github.com/MINIXJR/TTCut-ng/tags)
-[![Status](https://img.shields.io/badge/status-beta-yellow.svg)]()
 [![Vibe Coded with Claude](https://img.shields.io/badge/Vibe_Coded_with-Claude-D97757?logo=claude&logoColor=fff)](https://claude.ai/code)
+[![Status](https://img.shields.io/badge/status-beta-yellow.svg)]()
 
 Framegenauer Videoschnitt für MPEG-2, H.264 und H.265 Elementary Streams.
 Primär entwickelt zum Schneiden von [VDR](https://www.tvdr.de/)-Aufnahmen (Video Disk Recorder)
