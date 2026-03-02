@@ -23,15 +23,18 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 ## Installation
 
 Entwickelt und getestet auf [Siduction](https://siduction.org/), einer Distribution
-basierend auf Debian unstable (sid), die aktuelle Versionen von Qt, ffmpeg und
-anderen Bibliotheken bereitstellt.
+basierend auf Debian unstable (sid), die aktuelle Versionen von Qt und libav
+bereitstellt.
 
 ### Abhängigkeiten (Debian/Ubuntu)
 
 ```bash
+# Build + erforderliche Laufzeit-Bibliotheken
 sudo apt install qt5-qmake qtbase5-dev libmpeg2-4-dev \
-  libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
-  ffmpeg mpv mjpegtools
+  libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+
+# Optional: Video-Vorschau (empfohlen), MP4-Output, MPEG-2 Multiplexing
+sudo apt install mpv ffmpeg mjpegtools
 ```
 
 ### Build
@@ -59,6 +62,10 @@ qmake ttcut-ng.pro && make -j$(nproc)
 
 > **Hinweis:** Unter Wayland benötigt TTCut-ng das XCB-Backend:
 > `QT_QPA_PLATFORM=xcb ./ttcut-ng`
+
+## Dokumentation
+
+Ausführliche Dokumentation im [Wiki](https://github.com/MINIXJR/TTCut-ng/wiki).
 
 ## Mitwirken
 
