@@ -28,7 +28,7 @@ Description: MPEG-2/H.264/H.265 frame-accurate video cutter
  Frame-accurate cutting is possible at any position.
  .
  Features:
-  - MPEG-2: Classic TTCut cutting with ffmpeg
+  - MPEG-2: Classic TTCut cutting with libav
   - H.264/H.265: Smart Cut (~0.5% re-encode, ~99.5% stream-copy)
   - SRT subtitle support with preview
   - MKV output with chapter support
