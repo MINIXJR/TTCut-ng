@@ -3,8 +3,8 @@
 set -e
 
 PACKAGE_NAME="ttcut-ng"
-SOURCE_DIR="/usr/local/src/TTCut-ng"
-BUILD_BASE_DIR="/usr/local/src"
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_BASE_DIR="$(dirname "$SOURCE_DIR")"
 DISTRO=$(lsb_release -cs)
 
 cd "$SOURCE_DIR"

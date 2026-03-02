@@ -18,7 +18,7 @@ TTCut-ng works exclusively with **elementary streams** (demuxed A/V files). Cont
 
 | Codec | Extensions | Decoder | Smart Cut |
 |-------|-----------|---------|-----------|
-| **MPEG-2** | .m2v | libmpeg2 (native) | Re-encode at cut boundaries (ffmpeg) |
+| **MPEG-2** | .m2v | libmpeg2 (native) | Re-encode at cut boundaries (libav) |
 | **H.264/AVC** | .h264, .264 | FFmpeg/libav | TTESSmartCut (native libav) |
 | **H.265/HEVC** | .h265, .265, .hevc | FFmpeg/libav | TTESSmartCut (native libav) |
 
@@ -36,7 +36,7 @@ MPEG-2 is the traditional format for DVB recordings and DVD content. TTCut-ng ha
 | I/P/B frame navigation | Yes | Full frame type support |
 | Cut at I-frame (in) | Yes | No re-encoding needed |
 | Cut at P-frame (out) | Yes | No re-encoding needed |
-| Cut at any frame | Yes | Requires ffmpeg re-encode |
+| Cut at any frame | Yes | Requires libav re-encode |
 | Quality setting | qscale 2-31 | Lower = better quality |
 | Interlace detection | Yes | Auto-detected, passed to encoder |
 | Output muxer | mplex (TS/PS) or libav matroska muxer (MKV) | |
@@ -164,7 +164,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 | Tool | Purpose | Package |
 |------|---------|---------|
-| **ffmpeg** | MPEG-2 frame-accurate cutting | `ffmpeg` |
+| **ffmpeg** | MP4 output container (stream-copy) | `ffmpeg` |
 | **mplex** | MPEG multiplexing | `mjpegtools` |
 | **mpv** | Video preview playback | `mpv` |
 

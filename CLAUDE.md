@@ -88,7 +88,7 @@ TTAVStream
 - **TTH265VideoStream** (avstream/tth265videostream.h): H.265/HEVC video stream class
 - **TTFFmpegWrapper** (extern/ttffmpegwrapper.h): Libav/ffmpeg wrapper for H.264/H.265 smart cut, frame decoding, and container handling
 - **TTCut** (common/ttcut.h): Singleton holding global settings and application state
-- **TTTranscodeProvider** (extern/tttranscode.h): Wraps ffmpeg CLI for re-encoding frames around cut points (MPEG-2)
+- **TTTranscodeProvider** (extern/tttranscode.h): MPEG-2 re-encoding at cut points via libavcodec API
 - **TTMplexProvider** (extern/ttmplexprovider.h): Multiplexes video/audio after cutting
 - **TTMkvMergeProvider** (extern/ttmkvmergeprovider.h): MKV output via libav matroska muxer, chapter support
 
@@ -117,7 +117,7 @@ TTAVStream
 - Qt5 (Core, Widgets, Gui, Network, Xml)
 - libmpeg2 and libmpeg2convert (MPEG-2 decoding)
 - libavformat, libavcodec, libavutil, libswscale (H.264/H.265 smart cut, audio cutting, MKV muxing)
-- ffmpeg CLI (required for MPEG-2 frame-accurate cutting)
+- ffmpeg CLI (optional, for MP4 output container muxing)
 - mplex (optional, for MPEG-2 multiplexing)
 - Note: mkvmerge/mkvtoolnix is no longer required (replaced by libav matroska muxer in v0.60.0)
 
@@ -131,7 +131,7 @@ Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 - Fixed header guard typo in extern/tttranscode.h (TTTRASNCODE_H → TTTRANSCODE_H)
 - Fixed deprecated Qt5 QFlags constructor usage in gui/ttprogressbar.h (using `{}` instead of `0`)
 - Migrated from deprecated QGLWidget to QImage/QPixmap-based rendering for full Wayland compatibility
-- Replaced discontinued transcode with ffmpeg for frame-accurate cutting
+- Replaced discontinued transcode with libavcodec API for MPEG-2 frame-accurate cutting
 - Migrated from mplayer to mpv for preview playback
 - Interlace detection for MPEG-2 re-encoding
 - Fixed MPEG-2 cutting for short segments without I-frames
@@ -197,7 +197,7 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 
 ### ttcut-demux (tools/ttcut-demux)
 
-Demux-Tool für H.264/H.265 TS-Dateien (Nachfolger von ts_demux_normalize.sh):
+Demux-Tool für H.264/H.265 TS-Dateien:
 - Demuxes TS to elementary streams (similar to ProjectX for MPEG-2)
 - Multi-core optimized (parallel audio/video demuxing)
 - Generates .info file with frame rate, resolution, audio tracks
@@ -205,26 +205,11 @@ Demux-Tool für H.264/H.265 TS-Dateien (Nachfolger von ts_demux_normalize.sh):
 - Audio padding at end (ProjectX-style) — reduces drift from 372ms to 8ms
 - Duration mismatch detection and reporting in .info file
 - VDR marks support (loads .marks file)
-- Optional: Strip filler NALUs with `-p` flag (requires h264bitstream tools)
+- Automatic filler NALU stripping for H.264/H.265 (via ffmpeg `filter_units` bitstream filter)
 
 **Known limitations:**
 
 1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
-
-### H.264/H.265 Stream Preparation Tools (Companion Project)
-
-Analysis and preparation tools in the h264bitstream fork:
-**Repository:** https://github.com/MINIXJR/h264bitstream (branch: `feature-fix-mmco-rplr-writing`)
-
-**Available tools:**
-- `h264_dpb_analyze` - H.264 bitstream analyzer (MMCO/RPLR errors, filler NALUs)
-- `h265_analyze` - H.265/HEVC bitstream analyzer (filler NALUs, stream structure)
-- `tools/h264_prepare.sh` - Workflow script for stream preparation
-
-**Key findings:**
-- DVB H.264 recordings typically contain 8% filler NALUs (can be safely removed)
-- MMCO/RPLR reference errors from mid-GOP recording starts are common but tolerable
-- H.265/HEVC recordings have minimal filler (~0.1%)
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 

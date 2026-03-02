@@ -13,8 +13,6 @@
 #
 #   -e  Elementary stream mode: output separate .264/.265 and audio files
 #       (default: output normalized MKV with video+audio)
-#   -p  Prepare mode: strip filler NALUs from H.264/H.265 streams
-#       (only works with -e, requires h264bitstream tools)
 #
 
 set -e
@@ -33,15 +31,13 @@ step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 # Parse arguments
 ES_MODE=false
-PREPARE_MODE=false
 AC3FIX=true
-while getopts "ephA" opt; do
+while getopts "ehA" opt; do
     case $opt in
         e) ES_MODE=true ;;
-        p) PREPARE_MODE=true ;;
         A) AC3FIX=false ;;
         h)
-            echo "Usage: $0 [-e] [-p] [-A] <input.ts> [output_dir]"
+            echo "Usage: $0 [-e] [-A] <input.ts> [output_dir]"
             echo ""
             echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
             echo "Similar to ProjectX for MPEG-2."
@@ -49,8 +45,7 @@ while getopts "ephA" opt; do
             echo "Options:"
             echo "  -e  Elementary stream mode (for TTCut workflow)"
             echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3/.eac3 + info file"
-            echo "  -p  Prepare mode: strip filler NALUs (requires h264bitstream tools)"
-            echo "      Only works with -e mode. Typical savings: 5-10% for DVB H.264"
+            echo "      Filler NALUs are automatically stripped for H.264/H.265"
             echo "  -A  Disable AC3 header repair (enabled by default)"
             echo "      Fixes corrupt acmod field in DVB AC3 streams (stereo->5.1)"
             echo ""
@@ -65,7 +60,6 @@ while getopts "ephA" opt; do
             echo "Examples:"
             echo "  $0 input.ts                    # MKV output"
             echo "  $0 -e input.ts output_dir/     # Elementary stream output"
-            echo "  $0 -ep input.ts output_dir/    # ES + strip filler NALUs"
             echo "  $0 -e /video/rec/00001.ts .    # VDR recording with marks"
             echo "  $0 -eA input.ts output_dir/    # ES without AC3 header repair"
             exit 0
@@ -147,16 +141,8 @@ fi
 
 info "Analyzing: $INPUT"
 if $ES_MODE; then
-    if $PREPARE_MODE; then
-        info "Mode: Elementary Stream + Prepare (strip filler NALUs)"
-    else
-        info "Mode: Elementary Stream (for TTCut)"
-    fi
+    info "Mode: Elementary Stream (for TTCut)"
 else
-    if $PREPARE_MODE; then
-        warn "Prepare mode (-p) only works with Elementary Stream mode (-e)"
-        PREPARE_MODE=false
-    fi
     info "Mode: Normalized MKV"
 fi
 echo ""
@@ -456,7 +442,7 @@ if $ES_MODE; then
                 ffmpeg -y -i "$INPUT" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
-                    -bsf:v h264_mp4toannexb \
+                    -bsf:v h264_mp4toannexb,filter_units=remove_types=12 \
                     -f h264 \
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
@@ -464,7 +450,7 @@ if $ES_MODE; then
                 ffmpeg -y -i "$INPUT" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
-                    -bsf:v hevc_mp4toannexb \
+                    -bsf:v hevc_mp4toannexb,filter_units=remove_types=38 \
                     -f hevc \
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
@@ -600,65 +586,12 @@ if $ES_MODE; then
         fi
     fi
 
-    # 1b. Strip filler NALUs if prepare mode is enabled
-    FILLER_STRIPPED=false
-    FILLER_SAVED=0
-    if $PREPARE_MODE && { [ "$VIDEO_CODEC" = "h264" ] || [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ]; }; then
-        # Find the appropriate analysis tool
-        STRIP_TOOL=""
-        if [ "$VIDEO_CODEC" = "h264" ]; then
-            for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
-                if [ -x "$path" ]; then
-                    STRIP_TOOL="$path"
-                    break
-                fi
-            done
-        else
-            for path in "/usr/local/src/h264bitstream/h265_analyze" "./h265_analyze" "h265_analyze"; do
-                if [ -x "$path" ]; then
-                    STRIP_TOOL="$path"
-                    break
-                fi
-            done
-        fi
-
-        if [ -n "$STRIP_TOOL" ]; then
-            step "Stripping filler NALUs from video stream..."
-
-            # Create temp file for stripped output
-            TEMP_STRIPPED="$OUTDIR/.${BASENAME}_stripped.${VIDEO_EXT}"
-
-            # Run with -f (strip filler) and -o (output file) and -Q (silent)
-            # Note: Tool returns exit code 1 if MMCO errors found, but still writes output
-            "$STRIP_TOOL" -f -Q -o "$TEMP_STRIPPED" "$OUTPUT_VIDEO" 2>/dev/null || true
-
-            # Check if output file was created and is smaller
-            if [ -f "$TEMP_STRIPPED" ]; then
-                STRIPPED_SIZE=$(stat -c%s "$TEMP_STRIPPED" 2>/dev/null || echo 0)
-
-                if [ "$STRIPPED_SIZE" -gt 0 ] && [ "$STRIPPED_SIZE" -lt "$VIDEO_SIZE" ]; then
-                    FILLER_SAVED=$((VIDEO_SIZE - STRIPPED_SIZE))
-                    FILLER_PCT=$(echo "scale=1; $FILLER_SAVED * 100 / $VIDEO_SIZE" | bc 2>/dev/null || echo "?")
-
-                    # Replace original with stripped version
-                    mv "$TEMP_STRIPPED" "$OUTPUT_VIDEO"
-                    FILLER_STRIPPED=true
-
-                    info "  Filler stripped: saved $(numfmt --to=iec $FILLER_SAVED) ($FILLER_PCT%)"
-                    info "  New video size: $(numfmt --to=iec $STRIPPED_SIZE)"
-                else
-                    info "  No filler NALUs found"
-                    rm -f "$TEMP_STRIPPED"
-                fi
-            else
-                warn "  Filler stripping failed - keeping original"
-            fi
-            echo ""
-        else
-            warn "h264bitstream tools not found - skipping filler stripping"
-            warn "Build tools in /usr/local/src/h264bitstream with: make -f Makefile.unix"
-            echo ""
-        fi
+    # Filler NALUs are stripped automatically during extraction via ffmpeg
+    # bitstream filter (filter_units=remove_types=12 for H.264, =38 for HEVC)
+    if [ "$VIDEO_CODEC" = "h264" ] || [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ]; then
+        FILLER_STRIPPED=true
+    else
+        FILLER_STRIPPED=false
     fi
 
     # 2b. Check A/V duration mismatch (like ProjectX does)
@@ -941,7 +874,6 @@ height=$VIDEO_HEIGHT
 frame_rate=$FRAME_RATE
 start_pts=$START_PTS
 filler_stripped=$FILLER_STRIPPED
-filler_saved_bytes=$FILLER_SAVED
 
 [timing]
 # A/V sync offset in milliseconds (after correction)
@@ -1001,22 +933,6 @@ EOF
     fi
 
     echo ""
-
-    # 5. Run h264bitstream analysis if available and video is H.264
-    H264_ANALYZE=""
-    for path in "/usr/local/src/h264bitstream/h264_dpb_analyze" "./h264_dpb_analyze" "h264_dpb_analyze"; do
-        if [ -x "$path" ]; then
-            H264_ANALYZE="$path"
-            break
-        fi
-    done
-
-    if [ -n "$H264_ANALYZE" ] && [ "$VIDEO_CODEC" = "h264" ]; then
-        step "Analyzing H.264 stream with h264bitstream..."
-        echo ""
-        "$H264_ANALYZE" -q "$OUTPUT_VIDEO" 2>&1 || true
-        echo ""
-    fi
 
     # Summary
     echo ""

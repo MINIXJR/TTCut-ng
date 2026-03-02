@@ -13,7 +13,7 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 
 ## Funktionen
 
-- **MPEG-2** — direktes Stream-Copy, Re-Encoding nur an Schnittpunkten (via ffmpeg)
+- **MPEG-2** — direktes Stream-Copy, Re-Encoding nur an Schnittpunkten (via libav)
 - **H.264/H.265** — Smart Cut (~99,5% Stream-Copy, ~0,5% Re-Encode)
 - **SRT-Untertitel** — automatisches Laden, Vorschau-Overlay, Schnitt zusammen mit dem Video
 - **MKV-Ausgabe** mit Kapitelmarken (via libav matroska muxer)
