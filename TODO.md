@@ -2,6 +2,18 @@
 
 ## High Priority
 
+- **Security Audit Findings beheben** (siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md))
+  - **CRITICAL:** `readBits()` / `readExpGolombUE()` ohne Bounds-Check (ttnaluparser.cpp, ttessmartcut.cpp)
+  - **HIGH:** AC3 `frmsizecod >= 38` Array-OOB (ttac3audiostream.cpp)
+  - **HIGH:** `delete` statt `delete[]` (ttframesearchtask.cpp)
+  - **HIGH:** MPEG Audio `frame_length` Integer-Underflow (ttmpegaudiostream.cpp)
+  - **HIGH:** `seekBackward()` Underflow (ttfilebuffer.cpp)
+  - **HIGH:** Picture Extension Endlosschleife (ttmpeg2videoheader.cpp)
+  - **MEDIUM:** `vsprintf` -> `vsnprintf`, Format-String Fix (ttmessagelogger.cpp)
+  - **MEDIUM:** `system()` durch Qt-Operationen ersetzen (ttmpeg2videostream.cpp, ttcutpreviewtask.cpp)
+  - **MEDIUM:** SRT NULL-Deref + unbegrenzte Text-Akkumulation (ttsrtsubtitlestream.cpp)
+  - 25 Findings gesamt (2 Critical, 6 High, 11 Medium, 6 Low)
+
 - **Smart Cut Quality Test Suite**
   - Automated test to verify cut quality by comparing input and output material
   - Must run after each Smart Cut change to catch regressions

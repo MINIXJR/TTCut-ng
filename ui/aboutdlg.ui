@@ -562,7 +562,7 @@ p, li { white-space: pre-wrap; }
        <number>6</number>
       </property>
       <item row="0" column="0" >
-       <widget class="QTextEdit" name="textEdit" >
+       <widget class="QTextBrowser" name="textEdit" >
         <property name="enabled" >
          <bool>true</bool>
         </property>
@@ -960,6 +960,9 @@ p, li { white-space: pre-wrap; }
         <property name="readOnly" >
          <bool>true</bool>
         </property>
+        <property name="openExternalLinks" >
+         <bool>true</bool>
+        </property>
         <property name="html" >
          <string>&lt;html>&lt;head>&lt;meta name="qrichtext" content="1" />&lt;style type="text/css">
 p, li { white-space: pre-wrap; }
@@ -968,7 +971,8 @@ p, li { white-space: pre-wrap; }
 &lt;p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-weight:600;">&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Copyright (C) 2024-2026 MINIXJR&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Originally based on TTCut by B. Altendorf (2005-2008)&lt;/p>
-&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">https://github.com/MINIXJR/TTCut-ng&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;a href="https://github.com/MINIXJR/TTCut-ng">https://github.com/MINIXJR/TTCut-ng&lt;/a>&lt;/p>
+&lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;a href="https://github.com/MINIXJR/TTCut-ng/wiki">Documentation / Wiki&lt;/a>&lt;/p>
 &lt;p style="-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">&lt;span style=" font-style:italic;">Used libraries and tools:&lt;/span>&lt;/p>
 &lt;p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">- libmpeg2: MPEG-2 video stream decoder&lt;/p>
