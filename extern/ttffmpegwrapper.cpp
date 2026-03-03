@@ -905,6 +905,18 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
 // ----------------------------------------------------------------------------
 QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
+    // Bounds check — TTNaluParser and FFmpeg demuxer may count different frames
+    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+        qDebug() << "decodeFrame: index" << frameIndex
+                 << "out of range (0 -" << mFrameIndex.size()-1 << ")";
+        if (frameIndex >= mFrameIndex.size() && mFrameIndex.size() > 0) {
+            frameIndex = mFrameIndex.size() - 1;
+            qDebug() << "decodeFrame: clamped to last valid frame" << frameIndex;
+        } else {
+            return QImage();
+        }
+    }
+
     // Check LRU cache first
     if (mFrameCache.contains(frameIndex)) {
         // Move to back of LRU list (most recently used)
@@ -938,7 +950,8 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         }
         qDebug() << "decodeFrame: seek target=" << frameIndex
                  << "keyframe=" << keyframeIndex
-                 << "frames_to_decode=" << (frameIndex - keyframeIndex + 1);
+                 << "frames_to_decode=" << (frameIndex - keyframeIndex + 1)
+                 << "total_frames=" << mFrameIndex.size();
 
         if (!seekToFrame(frameIndex)) {
             qDebug() << "decodeFrame: seekToFrame failed for frame" << frameIndex;
@@ -950,15 +963,54 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     // Skip intermediate frames (decode without RGB conversion)
     while (mDecoderFrameIndex < frameIndex) {
         if (!skipCurrentFrame()) {
-            qDebug() << "decodeFrame: skipCurrentFrame failed at" << mDecoderFrameIndex
-                     << "(target=" << frameIndex << ")";
-            return QImage();
+            // EOF drain exhausted during skip — break and try decodeCurrentFrame,
+            // since the decoder may still have the target frame buffered
+            qDebug() << "decodeFrame: skip failed at" << mDecoderFrameIndex
+                     << "(target=" << frameIndex << ") drained=" << mDecoderDrained
+                     << "— trying decodeCurrentFrame directly";
+            break;
         }
         mDecoderFrameIndex++;
     }
 
     // Decode final target frame with full RGB conversion
     QImage result = decodeCurrentFrame();
+
+    // Fallback: re-seek and retry if first attempt failed
+    if (result.isNull()) {
+        qDebug() << "decodeFrame: first decode attempt failed for frame" << frameIndex
+                 << "— retrying with fresh seek";
+
+        int keyframeIndex = frameIndex;
+        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+            keyframeIndex--;
+        }
+
+        if (seekToFrame(frameIndex)) {
+            mDecoderFrameIndex = mCurrentFrameIndex;
+
+            // Skip to target again
+            while (mDecoderFrameIndex < frameIndex) {
+                if (!skipCurrentFrame()) break;
+                mDecoderFrameIndex++;
+            }
+
+            result = decodeCurrentFrame();
+        }
+    }
+
+    // Fallback: try one frame earlier if target frame cannot be decoded
+    if (result.isNull() && frameIndex > 0) {
+        qDebug() << "decodeFrame: retry failed — trying frame" << (frameIndex - 1);
+        // Recursive call with frameIndex-1 (will seek fresh)
+        mDecoderDrained = true;  // Force seek in recursive call
+        result = decodeFrame(frameIndex - 1);
+        if (!result.isNull()) {
+            // Return the nearby frame but don't cache it under the wrong index
+            return result;
+        }
+    }
+
     if (!result.isNull()) {
         mDecoderFrameIndex = frameIndex;
         mCurrentFrameIndex = frameIndex;
@@ -970,6 +1022,9 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
             int evict = mFrameCacheLRU.takeFirst();
             mFrameCache.remove(evict);
         }
+    } else {
+        qDebug() << "decodeFrame: FAILED to decode frame" << frameIndex
+                 << "and fallback (total_frames=" << mFrameIndex.size() << ")";
     }
     return result;
 }
@@ -1061,8 +1116,9 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
 
     // EOF drain: flush decoder pipeline to retrieve buffered frames
     if (result.isNull()) {
-        avcodec_send_packet(mVideoCodecCtx, nullptr);
-        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+        int ret = avcodec_send_packet(mVideoCodecCtx, nullptr);
+        int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+        if (recvRet == 0) {
             // Convert to RGB
             sws_scale(mSwsCtx,
                 mDecodedFrame->data, mDecodedFrame->linesize,
@@ -1075,6 +1131,9 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
                 QImage::Format_RGB888).copy();
 
             mDecoderDrained = true;
+        } else {
+            qDebug() << "decodeCurrentFrame: EOF drain failed"
+                     << "send_packet=" << ret << "receive_frame=" << recvRet;
         }
     }
 
@@ -1119,10 +1178,14 @@ bool TTFFmpegWrapper::skipCurrentFrame()
 
     // EOF drain: flush decoder pipeline to retrieve buffered frames
     if (!decoded) {
-        avcodec_send_packet(mVideoCodecCtx, nullptr);
-        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+        int ret = avcodec_send_packet(mVideoCodecCtx, nullptr);
+        int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+        if (recvRet == 0) {
             decoded = true;
             mDecoderDrained = true;
+        } else {
+            qDebug() << "skipCurrentFrame: EOF drain exhausted"
+                     << "send_packet=" << ret << "receive_frame=" << recvRet;
         }
     }
 

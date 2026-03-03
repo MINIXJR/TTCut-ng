@@ -306,7 +306,8 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
       log->errorMsg(__FILE__, __LINE__,
           QString("Failed to build frame index: %1").arg(mpFFmpegWrapper->lastError()));
     }
-    qDebug() << "Frame index built:" << mpFFmpegWrapper->frameCount() << "frames";
+    qDebug() << "Frame index built:" << mpFFmpegWrapper->frameCount() << "frames"
+             << "(videoStream:" << vStream->frameCount() << "headers)";
 
     qDebug() << "Opened H.264/H.265 stream with FFmpeg decoder";
   } else {
