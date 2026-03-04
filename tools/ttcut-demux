@@ -297,11 +297,22 @@ esac
 START_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
 AUDIO_START_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
 
-# Get duration from container (MUCH faster than probing elementary stream later)
-CONTAINER_VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration \
-    -of default=noprint_wrappers=1:nokey=1 "$INPUT" 2>/dev/null | grep -E '^[0-9]' || echo "")
-if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
-    info "Container duration: ${CONTAINER_VIDEO_DURATION}s"
+# Get duration — for VDR multi-file, sum individual segment durations
+# (ffprobe with concat protocol only reports first segment's duration)
+if [ "$VDR_MULTIFILE" = true ]; then
+    CONTAINER_VIDEO_DURATION="0"
+    for seg in "${VDR_SEGMENTS[@]}"; do
+        seg_dur=$(ffprobe -v error -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 "$seg" 2>/dev/null | grep -E '^[0-9]' || echo "0")
+        CONTAINER_VIDEO_DURATION=$(awk "BEGIN {printf \"%.6f\", $CONTAINER_VIDEO_DURATION + $seg_dur}")
+    done
+    info "Total duration across ${#VDR_SEGMENTS[@]} segments: ${CONTAINER_VIDEO_DURATION}s"
+else
+    CONTAINER_VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration \
+        -of default=noprint_wrappers=1:nokey=1 "$INPUT" 2>/dev/null | grep -E '^[0-9]' || echo "")
+    if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
+        info "Container duration: ${CONTAINER_VIDEO_DURATION}s"
+    fi
 fi
 
 info "Original video start time: ${START_PTS:-unknown}s"
@@ -831,7 +842,12 @@ if $ES_MODE; then
         info "Attempting subtitle extraction..."
 
         # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
-        sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        if [ "$VDR_MULTIFILE" = true ] && [ "$CLEANUP_REPAIRED" != true ]; then
+            # Use pre-calculated total duration
+            sub_duration="$CONTAINER_VIDEO_DURATION"
+        else
+            sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        fi
         sub_midpoint=$(awk "BEGIN {printf \"%.0f\", ${sub_duration:-0} / 2}")
         [ "$sub_midpoint" -lt 60 ] 2>/dev/null && sub_midpoint=0
 
@@ -1120,7 +1136,12 @@ else
         info "Attempting subtitle extraction..."
 
         # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
-        sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        if [ "$VDR_MULTIFILE" = true ] && [ "$CLEANUP_REPAIRED" != true ]; then
+            # Use pre-calculated total duration
+            sub_duration="$CONTAINER_VIDEO_DURATION"
+        else
+            sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+        fi
         sub_midpoint=$(awk "BEGIN {printf \"%.0f\", ${sub_duration:-0} / 2}")
         [ "$sub_midpoint" -lt 60 ] 2>/dev/null && sub_midpoint=0
 
