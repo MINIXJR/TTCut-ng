@@ -9,7 +9,7 @@
 # Multi-core optimization: Video and audio streams are extracted in parallel,
 # audio padding also runs in parallel for all tracks.
 #
-# Usage: ttcut-demux [-e] [-A] <input.ts> [output_dir]
+# Usage: ttcut-demux [-e] [-A] [-n name] <input.ts> [output_dir]
 #
 #   -e  Elementary stream mode: output separate .264/.265 and audio files
 #       (default: output normalized MKV with video+audio)
@@ -32,12 +32,14 @@ step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 # Parse arguments
 ES_MODE=false
 AC3FIX=true
-while getopts "ehA" opt; do
+OUTPUT_NAME=""
+while getopts "ehAn:" opt; do
     case $opt in
         e) ES_MODE=true ;;
         A) AC3FIX=false ;;
+        n) OUTPUT_NAME="$OPTARG" ;;
         h)
-            echo "Usage: $0 [-e] [-A] <input.ts> [output_dir]"
+            echo "Usage: $0 [-e] [-A] [-n name] <input.ts> [output_dir]"
             echo ""
             echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
             echo "Similar to ProjectX for MPEG-2."
@@ -48,6 +50,8 @@ while getopts "ehA" opt; do
             echo "      Filler NALUs are automatically stripped for H.264/H.265"
             echo "  -A  Disable AC3 header repair (enabled by default)"
             echo "      Fixes corrupt acmod field in DVB AC3 streams (stereo->5.1)"
+            echo "  -n  Set output basename (default: input filename)"
+            echo "      Example: -n 'Tatort' → Tatort.264, Tatort_deu.ac3, Tatort.info"
             echo ""
             echo "Default mode (without -e):"
             echo "  Output: normalized MKV with video + first audio"
@@ -58,10 +62,11 @@ while getopts "ehA" opt; do
             echo "  See: https://github.com/kfb77/vdr-plugin-markad"
             echo ""
             echo "Examples:"
-            echo "  $0 input.ts                    # MKV output"
-            echo "  $0 -e input.ts output_dir/     # Elementary stream output"
-            echo "  $0 -e /video/rec/00001.ts .    # VDR recording with marks"
-            echo "  $0 -eA input.ts output_dir/    # ES without AC3 header repair"
+            echo "  $0 input.ts                          # MKV output"
+            echo "  $0 -e input.ts output_dir/           # Elementary stream output"
+            echo "  $0 -e /video/rec/00001.ts .          # VDR recording (auto-concat splits)"
+            echo "  $0 -e -n Tatort /video/rec/00001.ts  # VDR recording with custom name"
+            echo "  $0 -eA input.ts output_dir/          # ES without AC3 header repair"
             exit 0
             ;;
         \?) error "Invalid option: -$OPTARG" ;;
@@ -71,7 +76,7 @@ shift $((OPTIND-1))
 
 # Check arguments
 if [ -z "$1" ]; then
-    echo "Usage: $0 [-e] [-A] <input.ts> [output_dir]"
+    echo "Usage: $0 [-e] [-A] [-n name] <input.ts> [output_dir]"
     echo "Use -h for help."
     exit 1
 fi
@@ -86,6 +91,57 @@ OUTDIR="${2:-$(dirname "$INPUT")}"
 # Check input file exists
 [ -f "$INPUT" ] || error "Input file not found: $INPUT"
 
+INPUT_DIR=$(dirname "$INPUT")
+
+#############################################################################
+# VDR MULTI-FILE DETECTION
+# VDR splits recordings into 2GB segments: 00001.ts, 00002.ts, ...
+# Automatically detect siblings and use ffmpeg concat protocol.
+#############################################################################
+VDR_MULTIFILE=false
+VDR_SEGMENTS=()
+INPUT_FILENAME=$(basename "$INPUT")
+
+if [[ "$INPUT_FILENAME" =~ ^[0-9]{5}\.ts$ ]]; then
+    # VDR >= 1.7.x format: 00001.ts, 00002.ts, ...
+    VDR_PATTERN="[0-9][0-9][0-9][0-9][0-9].ts"
+elif [[ "$INPUT_FILENAME" =~ ^[0-9]{3}\.vdr$ ]]; then
+    # VDR < 1.7.x format: 001.vdr, 002.vdr, ...
+    VDR_PATTERN="[0-9][0-9][0-9].vdr"
+else
+    VDR_PATTERN=""
+fi
+
+if [ -n "$VDR_PATTERN" ]; then
+    while IFS= read -r -d '' seg; do
+        VDR_SEGMENTS+=("$seg")
+    done < <(find "$INPUT_DIR" -maxdepth 1 -name "$VDR_PATTERN" -print0 2>/dev/null | sort -z)
+
+    if [ ${#VDR_SEGMENTS[@]} -gt 1 ]; then
+        VDR_MULTIFILE=true
+        # Build concat protocol string
+        CONCAT_STR=""
+        TOTAL_SIZE=0
+        for seg in "${VDR_SEGMENTS[@]}"; do
+            [ -n "$CONCAT_STR" ] && CONCAT_STR="${CONCAT_STR}|"
+            CONCAT_STR="${CONCAT_STR}${seg}"
+            seg_size=$(stat -c%s "$seg" 2>/dev/null || echo 0)
+            TOTAL_SIZE=$((TOTAL_SIZE + seg_size))
+        done
+        INPUT="concat:${CONCAT_STR}"
+        TOTAL_SIZE_GB=$(awk "BEGIN {printf \"%.1f\", $TOTAL_SIZE / 1073741824}")
+        info "VDR multi-file recording detected: ${#VDR_SEGMENTS[@]} segments (${TOTAL_SIZE_GB} GB total)"
+        for seg in "${VDR_SEGMENTS[@]}"; do
+            info "  $(basename "$seg") ($(du -h "$seg" | cut -f1))"
+        done
+    fi
+fi
+
+# If -n was provided, override BASENAME
+if [ -n "$OUTPUT_NAME" ]; then
+    BASENAME="$OUTPUT_NAME"
+fi
+
 # Create output directory if needed
 mkdir -p "$OUTDIR"
 
@@ -93,7 +149,6 @@ mkdir -p "$OUTDIR"
 CLEANUP_REPAIRED=false
 
 # Check for VDR marks file (markad plugin)
-INPUT_DIR=$(dirname "$INPUT")
 MARKS_FILE=""
 VDR_MARKS=()
 
