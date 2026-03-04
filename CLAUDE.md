@@ -207,6 +207,14 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 - VDR marks support (loads .marks file)
 - Automatic filler NALU stripping for H.264/H.265 (via ffmpeg `filter_units` bitstream filter)
 
+**VDR Multi-File Support:**
+- VDR splits recordings into 2GB segments: 00001.ts, 00002.ts, ...
+- ttcut-demux auto-detects siblings when given the first segment
+- Uses ffmpeg concat protocol (no temporary concat file needed)
+- `-n NAME` parameter sets output basename (replaces file renaming workflow)
+- Duration calculation sums individual segment durations (ffprobe concat protocol bug workaround)
+- See `tools/vdr-demux-example.sh` for a complete VDR demux workflow example
+
 **Known limitations:**
 
 1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
