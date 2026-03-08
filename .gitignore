@@ -24,6 +24,7 @@ ttcut-ng.app/
 .qtc_clangd/
 .qtcreator/
 nbproject/private/
+compile_commands.json
 
 # Compiled translations
 trans/*.qm

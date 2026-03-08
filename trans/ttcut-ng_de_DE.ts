@@ -1313,36 +1313,36 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="123"/>
-        <source>MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6</source>
-        <translation type="unfinished"></translation>
+        <source>MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6, default: 2</source>
+        <translation>MPEG-2 Qualität: 2-31 (niedriger = bessere Qualität, größere Datei). Typisch: 2-6, Standard: 2</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="124"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="125"/>
-        <source>MPEG-2 qscale: 2 = best quality, 31 = worst quality</source>
-        <translation type="unfinished"></translation>
+        <source>MPEG-2 qscale: 2 = best quality (default), 31 = worst quality</source>
+        <translation>MPEG-2 qscale: 2 = beste Qualität (Standard), 31 = schlechteste Qualität</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="134"/>
-        <source>H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 23</source>
-        <translation type="unfinished"></translation>
+        <source>H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 18</source>
+        <translation>H.264 CRF: 0-51 (niedriger = bessere Qualität, größere Datei). Typisch: 18-28, Standard: 18</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="135"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="136"/>
-        <source>H.264 CRF: 0 = lossless, 23 = default, 51 = worst quality</source>
-        <translation type="unfinished"></translation>
+        <source>H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality</source>
+        <translation>H.264 CRF: 0 = verlustfrei, 18 = Standard (visuell verlustfrei), 51 = schlechteste Qualität</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="145"/>
-        <source>H.265 CRF: 0-51 (lower = better quality). Typical: 24-34, default: 28 (≈ H.264 CRF 23)</source>
-        <translation type="unfinished"></translation>
+        <source>H.265 CRF: 0-51 (lower = better quality). Typical: 20-34, default: 20</source>
+        <translation>H.265 CRF: 0-51 (niedriger = bessere Qualität). Typisch: 20-34, Standard: 20</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="146"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="147"/>
-        <source>H.265 CRF: 0 = lossless, 28 = default (similar to H.264 CRF 23), 51 = worst</source>
-        <translation type="unfinished"></translation>
+        <source>H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality</source>
+        <translation>H.265 CRF: 0 = verlustfrei, 20 = Standard (visuell verlustfrei), 51 = schlechteste Qualität</translation>
     </message>
 </context>
 <context>

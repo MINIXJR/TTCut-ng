@@ -135,9 +135,9 @@ void TTCutSettingsEncoder::updateQualityUI(int codec)
       slCrf->setMaximum(31);
       sbCrf->setMinimum(2);
       sbCrf->setMaximum(31);
-      lblCrfInfo->setText(tr("MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6"));
-      slCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality, 31 = worst quality"));
-      sbCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality, 31 = worst quality"));
+      lblCrfInfo->setText(tr("MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6, default: 2"));
+      slCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality (default), 31 = worst quality"));
+      sbCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality (default), 31 = worst quality"));
       break;
 
     case 1:  // H.264 uses CRF (0-51, lower = better)
@@ -146,9 +146,9 @@ void TTCutSettingsEncoder::updateQualityUI(int codec)
       slCrf->setMaximum(51);
       sbCrf->setMinimum(0);
       sbCrf->setMaximum(51);
-      lblCrfInfo->setText(tr("H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 23"));
-      slCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 23 = default, 51 = worst quality"));
-      sbCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 23 = default, 51 = worst quality"));
+      lblCrfInfo->setText(tr("H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 18"));
+      slCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality"));
+      sbCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality"));
       break;
 
     case 2:  // H.265 uses CRF (0-51, lower = better, but values ~6 higher than H.264)
@@ -157,9 +157,9 @@ void TTCutSettingsEncoder::updateQualityUI(int codec)
       slCrf->setMaximum(51);
       sbCrf->setMinimum(0);
       sbCrf->setMaximum(51);
-      lblCrfInfo->setText(tr("H.265 CRF: 0-51 (lower = better quality). Typical: 24-34, default: 28 (≈ H.264 CRF 23)"));
-      slCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 28 = default (similar to H.264 CRF 23), 51 = worst"));
-      sbCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 28 = default (similar to H.264 CRF 23), 51 = worst"));
+      lblCrfInfo->setText(tr("H.265 CRF: 0-51 (lower = better quality). Typical: 20-34, default: 20"));
+      slCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality"));
+      sbCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality"));
       break;
   }
 

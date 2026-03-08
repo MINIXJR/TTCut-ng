@@ -154,13 +154,13 @@ class TTCut
 
    // H.264 specific settings
    static int     h264Preset;         // Preset for H.264
-   static int     h264Crf;            // CRF for H.264 (default 23)
+   static int     h264Crf;            // CRF for H.264 (default 18)
    static int     h264Profile;        // Profile for H.264 (2=high)
    static int     h264Muxer;          // Preferred muxer (1=mkvmerge)
 
    // H.265 specific settings
    static int     h265Preset;         // Preset for H.265
-   static int     h265Crf;            // CRF for H.265 (default 28)
+   static int     h265Crf;            // CRF for H.265 (default 20)
    static int     h265Profile;        // Profile for H.265 (0=main)
    static int     h265Muxer;          // Preferred muxer (1=mkvmerge)
 
