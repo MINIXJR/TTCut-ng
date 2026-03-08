@@ -221,12 +221,13 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
-### Navigation and Smart Cut Fixes (v0.61.1–v0.61.4)
+### Navigation and Smart Cut Fixes (v0.61.1–v0.61.5)
 
 - **v0.61.1**: Fix frame position sync between slider and navigation buttons
 - **v0.61.2**: Fix shared videoStream position corruption — explicit position parameter passed through all navigation methods and `checkCutPosition()`
 - **v0.61.3**: Separate navigation from auto-save in CurrentFrame widget — B/I/P buttons only navigate, Set Cut-In/Out buttons explicitly save
-- **v0.61.4**: Fix Smart Cut segment boundary stutter for B-frame reorder crossing — Case A (extend re-encode to next keyframe) vs Case B (skip extension to avoid POC domain mismatch). Replaces `needsIDR` with `adjustedStreamCopyStart` output parameter. EOS NAL always written before stream-copy.
+- **v0.61.4**: Fix Smart Cut segment boundary stutter for B-frame reorder crossing. Replaces `needsIDR` with `adjustedStreamCopyStart` output parameter. EOS NAL always written before stream-copy.
+- **v0.61.5**: Fix H.264 POC domain mismatch at re-encode/stream-copy boundaries — x264 encoder SPS (MaxPocLsb=16) vs source SPS (MaxPocLsb=64) caused PicOrderCntMsb wrap and frame drops. Fix patches poc_lsb in last encoder slice. Case A/B unified (both extend re-encode to next keyframe). Encoder SPS parsed from inline NAL in first packet (`findH264SpsInPacket()` helper).
 
 ## Running on Wayland
 

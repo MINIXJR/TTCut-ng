@@ -2,14 +2,23 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.61.5 (2026-03-08)
+
+**H.264 POC Domain Mismatch Fix**
+
+- Fix: POC-Domain-Mismatch am Re-Encode/Stream-Copy Uebergang wenn Encoder-SPS (MaxPocLsb=16)
+  und Source-SPS (MaxPocLsb=64) unterschiedliche Parameter haben
+- Patch: poc_lsb im letzten Encoder-Slice wird korrigiert um PicOrderCntMsb-Wrap zu verhindern
+- Case A/B vereinheitlicht: beide erweitern Re-Encode zum naechsten Keyframe
+- Encoder-SPS wird aus Inline-NAL im ersten Encoder-Paket geparst (x264 ohne GLOBAL_HEADER)
+- `findH264SpsInPacket()` Helper eliminiert Code-Duplikation
+- Post-Patch-Validation mit Brute-Force-Fallback falls Modulo-Clamping Wrap re-introduziert
+
 ## v0.61.4 (2026-03-01)
 
 **Smart Cut B-Frame Reorder Boundary Fix**
 
-- Fix: Case A/B Differenzierung in `reencodeFrames()` wenn B-Frame Reorder Delay CutIn
-  ueber Stream-Copy-Grenze verschiebt
-- Case A: Re-Encode wird zum naechsten Keyframe erweitert
-- Case B: Re-Encode-Extension wird uebersprungen (POC-Domain-Mismatch vermeiden)
+- Fix: B-Frame Reorder Delay verschiebt CutIn ueber Stream-Copy-Grenze
 - `needsIDR` Parameter durch `adjustedStreamCopyStart` Output-Parameter ersetzt
 - EOS NAL wird immer vor Stream-Copy geschrieben (DPB-Flush)
 - Pre-Extension der Decode-Range vor dem Decode-Loop
