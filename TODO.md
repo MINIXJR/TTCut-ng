@@ -41,12 +41,6 @@
   - **Tool:** Standalone Python script `tools/ttcut-quality-check.py`
   - **Dependencies:** ffmpeg, ffprobe, python3, syncstart (pip install syncstart)
 
-- **H.264/H.265 A/V Sync improvements in ttcut-demux**
-  - Initial B-frame detection before first IDR frame (like MPEG-2)
-  - Open GOP handling (B-frames referencing previous GOPs)
-  - PTS/DTS offset correction for complex reordering
-  - Test with DVB H.264/H.265 recordings with markad markers
-  - Verify audio padding works correctly for all codecs
 
 - **Quick Jump: Keyframe thumbnail browser**
   - New window showing keyframes as thumbnails in a grid (ca. 6x5 = 30 per page)
@@ -54,17 +48,7 @@
   - Double-click thumbnail → close window and jump to that frame
   - Existing "Quick Jump" button in main window should open this
 
-- **Replace ffmpeg CLI with libav for MPEG-2 encoding**
-  - Currently: MPEG-2 uses TTTranscodeProvider → spawns /usr/bin/ffmpeg
-  - Goal: Use libav directly for consistent architecture across all codecs
-  - Benefits: No external CLI dependency, better error handling, progress reporting
-  - Could extend TTESSmartCut or create new generic encoder class
-  - Low priority since current MPEG-2 re-encoding is rare (only at B-frame cuts)
 
-- **Automatic ad detection integration**
-  - Load markad/comskip markers and convert to cut points
-  - VDR marks are already loaded from .info file
-  - Add "Auto-Cut from Markers" button to apply all marker pairs as cuts
 
 - **Built-in stream point detection ("Stream Points" button)**
   - TTCut analyzes the stream and creates markers automatically
@@ -77,25 +61,19 @@
   - User can then convert selected markers to cut points
   - Could use ffmpeg's blackdetect/silencedetect filters or native implementation
 
-- **CLI Interface for batch Smart Cut (headless mode)**
-  - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
-  - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux
-  - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
-  - Features:
-    - Load cut points from `.prj` file or command-line `--cuts` parameter
-    - Read `.info` file for frame rate, A/V offset, audio languages
-    - Apply A/V sync offset during muxing
-    - Chapter marks at cut boundaries
-    - Progress output for scripting (percentage, ETA)
-    - Return codes for success/failure
-  - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
-  - Build separately via dedicated `.pro` file or as part of main build
 
-- **Navigation Widget: B-Frame Buttons sind redundant mit P-Frame Buttons**
-  - B▶/B◀ und P▶/P◀ im Navigation-Widget haben identisches Verhalten
-  - Brainstorming nötig: Sollen B-Buttons entfernt oder mit anderer Funktion belegt werden?
-  - Auch F▶/F◀ im Navigation-Widget vs. CurrentFrame-Widget klären
-  - Kontext: v0.61.3 hat Navigation von Auto-Save getrennt
+
+- **Logo für TTCut-ng**
+  - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
+  - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
+
+- **HEVC CRA-only Stream: Smart Cut Verifikation**
+  - Testfall: `Ausdrucksstarke_Designermode.265` (HEVC 4K 3840x2160, 50fps, CRA-only, has_b_frames=5)
+  - CRA (Clean Random Access, NAL Typ 21) wird korrekt NICHT als IDR markiert → `analyzeCutPoints()` triggert Re-Encode
+  - RASL-Bilder (ähnlich Open-GOP B-Frames) könnten DPB-Probleme verursachen wie bei H.264 Non-IDR
+  - Verifizieren: Smart Cut ausführen → MKV erzeugen → mpv abspielen → keine Stutter/Artefakte an Segmentgrenzen
+  - `ffprobe -v debug`: Keine "backward timestamps" oder "co located POCs" Meldungen
+  - Code-Pfad: `ttnaluparser.cpp:495` (CRA nicht isIDR) → `ttessmartcut.cpp:407` (Re-Encode Trigger)
 
 - **Smart Cut Performance: mmap statt QFile für Stream-Copy**
   - `readAccessUnitData()` nutzt `QFile::seek()`+`read()` — 140k einzelne Syscalls bei Langfilm
@@ -107,6 +85,17 @@
   - GPU bringt nichts (nur 58 von 140k Frames encoded, Rest ist I/O)
 
 ## Medium Priority
+
+- **CLI Interface for batch Smart Cut (headless mode)**
+  - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
+  - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux
+  - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
+  - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
+
+- **Navigation Widget: B-Frame Buttons sind redundant mit P-Frame Buttons**
+  - B▶/B◀ und P▶/P◀ im Navigation-Widget haben identisches Verhalten
+  - Brainstorming nötig: Sollen B-Buttons entfernt oder mit anderer Funktion belegt werden?
+  - Auch F▶/F◀ im Navigation-Widget vs. CurrentFrame-Widget klären
 
 - **Manual audio delay/offset per track**
   - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list
@@ -171,14 +160,15 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
+  - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen
+  - Für manuelle Marker-Listen: Button der Marker-Paare in Cut-Einträge konvertiert
 - **Rename TTMPEG2Window2 → TTVideoFrameWidget**
   - Class name and files (`mpeg2window/ttmpeg2window2.*`) are misleading — the widget handles MPEG-2, H.264, and H.265
   - Rename class, files, and directory (e.g., `videoframe/ttvideoframewidget.*`)
   - Update all includes, .pro file, .ui references, and moc references
 - Remove some unused settings and buttons without function
 - Implement plugin interface for external tools (encoders, muxers, players)
-- Write a FAQ / user documentation
-- Find a logo for TTCut-ng
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
 ## Completed
@@ -218,6 +208,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Fix shared videoStream position corruption in navigation and cut points (v0.61.2)
 - [x] Separate navigation from auto-save in CurrentFrame widget (v0.61.3)
 - [x] Fix Smart Cut segment boundary stutter for B-frame reorder crossing — Case A/B (v0.61.4)
+- [x] Fix CutOut frame display for last cut entry — H.264 EOF drain (v0.61.4)
+- [x] VDR multi-file support in ttcut-demux — auto-detect, concat protocol, `-n` parameter
+- [x] VDR demux example script (`tools/vdr-demux-example.sh`)
+- [x] Replace transcode CLI with libavcodec API for MPEG-2 encoding (TTTranscodeProvider)
+- [x] H.264/H.265 A/V Sync in ttcut-demux: audio trim, padding, duration mismatch, bitrate autodetect, VDR multi-file
 
 ## Known Limitations
 

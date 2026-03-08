@@ -151,6 +151,17 @@ private:
     // H.264 frame_num field width in bits (log2_max_frame_num_minus4 + 4)
     int mLog2MaxFrameNum;
 
+    // Source SPS: POC-related fields for poc_lsb domain mismatch fix
+    int mLog2MaxPocLsb;       // log2_max_pic_order_cnt_lsb (0 if poc_type != 0)
+    int mPocType;             // pic_order_cnt_type (0, 1, or 2; -1 if unknown)
+    bool mFrameMbsOnly;       // frame_mbs_only_flag
+
+    // Encoder SPS: parsed from encoder extradata for poc_lsb patching
+    int mEncoderLog2MaxFrameNum;
+    int mEncoderLog2MaxPocLsb;
+    int mEncoderPocType;
+    bool mEncoderFrameMbsOnly;
+
     // Encoder PTS counter (reset per segment in setupEncoder)
     int64_t mEncoderPts;
 

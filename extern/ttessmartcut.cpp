@@ -26,8 +26,17 @@ extern "C" {
 }
 
 // Forward declarations for static helpers used by member functions
-static int parseLog2MaxFrameNumMinus4(const QByteArray& spsNal);
+struct H264SpsInfo {
+    int log2MaxFrameNumMinus4;   // -1 on error
+    int pocType;                 // pic_order_cnt_type (0, 1, or 2)
+    int log2MaxPocLsbMinus4;     // only valid if pocType == 0, -1 otherwise
+    bool frameMbsOnly;           // frame_mbs_only_flag
+};
+static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal);
 static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth);
+static int readPocLsbFromAU(const QByteArray& auData, int frameNumBitWidth,
+                             int pocLsbBitWidth, bool frameMbsOnly);
+static bool findH264SpsInPacket(const QByteArray& packetData, H264SpsInfo& spsInfo);
 
 // ----------------------------------------------------------------------------
 // Constructor
@@ -46,6 +55,13 @@ TTESSmartCut::TTESSmartCut()
     , mTopFieldFirst(true)
     , mReorderDelay(0)
     , mLog2MaxFrameNum(0)
+    , mLog2MaxPocLsb(0)
+    , mPocType(-1)
+    , mFrameMbsOnly(true)
+    , mEncoderLog2MaxFrameNum(0)
+    , mEncoderLog2MaxPocLsb(0)
+    , mEncoderPocType(-1)
+    , mEncoderFrameMbsOnly(true)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
@@ -104,16 +120,20 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
         return false;
     }
 
-    // Parse H.264 frame_num field width for inter-segment patching
+    // Parse H.264 SPS for frame_num patching and POC domain mismatch fix
     if (mParser.codecType() == NALU_CODEC_H264 && mParser.spsCount() > 0) {
         QByteArray sps = mParser.getSPS(0);
-        int log2minus4 = parseLog2MaxFrameNumMinus4(sps);
-        if (log2minus4 >= 0) {
-            mLog2MaxFrameNum = log2minus4 + 4;
-            qDebug() << "TTESSmartCut: log2_max_frame_num =" << mLog2MaxFrameNum
-                     << "(MaxFrameNum =" << (1 << mLog2MaxFrameNum) << ")";
+        H264SpsInfo spsInfo = parseH264SpsInfo(sps);
+        if (spsInfo.log2MaxFrameNumMinus4 >= 0) {
+            mLog2MaxFrameNum = spsInfo.log2MaxFrameNumMinus4 + 4;
+            mPocType = spsInfo.pocType;
+            mLog2MaxPocLsb = (spsInfo.pocType == 0) ? spsInfo.log2MaxPocLsbMinus4 + 4 : 0;
+            mFrameMbsOnly = spsInfo.frameMbsOnly;
+            qDebug() << "TTESSmartCut: Source SPS - log2_max_frame_num=" << mLog2MaxFrameNum
+                     << "poc_type=" << mPocType << "log2_max_poc_lsb=" << mLog2MaxPocLsb
+                     << "frame_mbs_only=" << mFrameMbsOnly;
         } else {
-            qDebug() << "TTESSmartCut: WARNING - could not parse log2_max_frame_num from SPS";
+            qDebug() << "TTESSmartCut: WARNING - could not parse SPS";
         }
     }
 
@@ -142,6 +162,13 @@ void TTESSmartCut::cleanup()
     mDecodedPixFmt = AV_PIX_FMT_NONE;
     mReorderDelay = 0;
     mLog2MaxFrameNum = 0;
+    mLog2MaxPocLsb = 0;
+    mPocType = -1;
+    mFrameMbsOnly = true;
+    mEncoderLog2MaxFrameNum = 0;
+    mEncoderLog2MaxPocLsb = 0;
+    mEncoderPocType = -1;
+    mEncoderFrameMbsOnly = true;
     mEncoderPts = 0;
     mFramesStreamCopied = 0;
     mFramesReencoded = 0;
@@ -675,14 +702,18 @@ static QByteArray addEmulationPrevention(const QByteArray& rbsp);
 static uint32_t spsReadBits(const uint8_t* data, int& bitPos, int numBits);
 static void spsWriteBits(uint8_t* data, int& bitPos, uint32_t value, int numBits);
 static uint32_t spsReadUE(const uint8_t* data, int& bitPos);
+static int32_t spsReadSE(const uint8_t* data, int& bitPos);
 static void skipScalingList(const uint8_t* data, int& bitPos, int sizeOfScalingList);
 
 // ----------------------------------------------------------------------------
-// Parse log2_max_frame_num_minus4 from raw H.264 SPS NAL data.
-// Returns -1 on error.
+// Parse H.264 SPS fields needed for frame_num patching and POC domain fix.
+// Input: raw SPS NAL data WITH start code prefix.
+// Returns struct with parsed values; log2MaxFrameNumMinus4 = -1 on error.
 // ----------------------------------------------------------------------------
-static int parseLog2MaxFrameNumMinus4(const QByteArray& spsNal)
+static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
 {
+    H264SpsInfo info = { -1, -1, -1, true };
+
     // Find and strip start code
     int startCodeLen = 0;
     const uint8_t* p = reinterpret_cast<const uint8_t*>(spsNal.constData());
@@ -691,11 +722,11 @@ static int parseLog2MaxFrameNumMinus4(const QByteArray& spsNal)
     else if (spsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
         startCodeLen = 3;
     else
-        return -1;
+        return info;
 
     QByteArray nalBody = spsNal.mid(startCodeLen);
     if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 7)
-        return -1;
+        return info;
 
     QByteArray rbsp = removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
@@ -730,7 +761,28 @@ static int parseLog2MaxFrameNumMinus4(const QByteArray& spsNal)
         }
     }
 
-    return static_cast<int>(spsReadUE(data, bitPos));
+    info.log2MaxFrameNumMinus4 = static_cast<int>(spsReadUE(data, bitPos));
+
+    info.pocType = static_cast<int>(spsReadUE(data, bitPos));
+    if (info.pocType == 0) {
+        info.log2MaxPocLsbMinus4 = static_cast<int>(spsReadUE(data, bitPos));
+    } else if (info.pocType == 1) {
+        spsReadBits(data, bitPos, 1);  // delta_pic_order_always_zero_flag
+        spsReadSE(data, bitPos);       // offset_for_non_ref_pic
+        spsReadSE(data, bitPos);       // offset_for_top_to_bottom_field
+        uint32_t num_ref = spsReadUE(data, bitPos);
+        for (uint32_t i = 0; i < num_ref; i++)
+            spsReadSE(data, bitPos);   // offset_for_ref_frame
+    }
+
+    spsReadUE(data, bitPos);  // max_num_ref_frames
+    spsReadBits(data, bitPos, 1);  // gaps_in_frame_num_allowed_flag
+    spsReadUE(data, bitPos);  // pic_width_in_mbs_minus1
+    spsReadUE(data, bitPos);  // pic_height_in_map_units_minus1
+
+    info.frameMbsOnly = (spsReadBits(data, bitPos, 1) != 0);
+
+    return info;
 }
 
 // ----------------------------------------------------------------------------
@@ -774,6 +826,252 @@ static void writeFrameNumInSlice(uint8_t* nalData, int nalSize, int frameNumBitW
 
     // Overwrite frame_num at current position
     spsWriteBits(nalData, bitPos, newFrameNum, frameNumBitWidth);
+}
+
+// ----------------------------------------------------------------------------
+// Locate poc_lsb bit position in a raw H.264 slice NAL (RBSP, after EP3 removal).
+// Returns bit position of poc_lsb field, or -1 if not applicable.
+// Only valid for poc_type == 0 slices.
+// ----------------------------------------------------------------------------
+static int locatePocLsbInSlice(const uint8_t* rbspData, int rbspSize,
+                                int frameNumBitWidth, bool frameMbsOnly)
+{
+    if (rbspSize < 3 || frameNumBitWidth <= 0) return -1;
+
+    uint8_t nalType = rbspData[0] & 0x1F;
+    if (nalType != 1 && nalType != 5) return -1;
+
+    int bitPos = 8;  // skip NAL header byte
+    spsReadUE(rbspData, bitPos);   // first_mb_in_slice
+    spsReadUE(rbspData, bitPos);   // slice_type
+    spsReadUE(rbspData, bitPos);   // pic_parameter_set_id
+    spsReadBits(rbspData, bitPos, frameNumBitWidth);  // frame_num
+
+    if (!frameMbsOnly) {
+        uint32_t fieldPicFlag = spsReadBits(rbspData, bitPos, 1);
+        if (fieldPicFlag)
+            spsReadBits(rbspData, bitPos, 1);  // bottom_field_flag
+    }
+
+    if (nalType == 5) {
+        spsReadUE(rbspData, bitPos);  // idr_pic_id
+    }
+
+    // bitPos now points to pic_order_cnt_lsb
+    return bitPos;
+}
+
+// ----------------------------------------------------------------------------
+// Read poc_lsb from a raw H.264 slice NAL (RBSP).
+// Returns poc_lsb value, or -1 on error.
+// ----------------------------------------------------------------------------
+static int readPocLsbFromSlice(const uint8_t* rbspData, int rbspSize,
+                                int frameNumBitWidth, int pocLsbBitWidth,
+                                bool frameMbsOnly)
+{
+    if (pocLsbBitWidth <= 0) return -1;
+    int bitPos = locatePocLsbInSlice(rbspData, rbspSize, frameNumBitWidth, frameMbsOnly);
+    if (bitPos < 0) return -1;
+    return static_cast<int>(spsReadBits(rbspData, bitPos, pocLsbBitWidth));
+}
+
+// ----------------------------------------------------------------------------
+// Write poc_lsb in a raw H.264 slice NAL (RBSP, in-place).
+// Fixed-width field — no bit shifting, CABAC data stays intact.
+// ----------------------------------------------------------------------------
+static void writePocLsbInSlice(uint8_t* rbspData, int rbspSize,
+                                int frameNumBitWidth, int pocLsbBitWidth,
+                                bool frameMbsOnly, uint32_t newPocLsb)
+{
+    if (pocLsbBitWidth <= 0) return;
+    int bitPos = locatePocLsbInSlice(rbspData, rbspSize, frameNumBitWidth, frameMbsOnly);
+    if (bitPos < 0) return;
+    spsWriteBits(rbspData, bitPos, newPocLsb, pocLsbBitWidth);
+}
+
+// ----------------------------------------------------------------------------
+// Read poc_lsb from the first slice NAL of an access unit.
+// Handles start codes and emulation prevention.
+// Returns poc_lsb value, or -1 if not applicable.
+// ----------------------------------------------------------------------------
+static int readPocLsbFromAU(const QByteArray& auData, int frameNumBitWidth,
+                             int pocLsbBitWidth, bool frameMbsOnly)
+{
+    if (pocLsbBitWidth <= 0 || frameNumBitWidth <= 0 || auData.isEmpty())
+        return -1;
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
+
+    // Find first slice NAL (type 1 or 5)
+    int pos = 0;
+    while (pos < auData.size()) {
+        int scStart = -1;
+        for (int i = pos; i + 3 < auData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < auData.size() && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; break;
+                }
+            }
+        }
+        if (scStart < 0) break;
+
+        int scLen = (data[scStart+2] == 0) ? 4 : 3;
+        int nalStart = scStart + scLen;
+        if (nalStart >= auData.size()) break;
+
+        uint8_t nalType = data[nalStart] & 0x1F;
+        if (nalType == 1 || nalType == 5) {
+            int nalEnd = auData.size();
+            for (int i = nalStart + 1; i + 2 < auData.size(); i++) {
+                if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
+                    nalEnd = i; break;
+                }
+            }
+            QByteArray nalBody = auData.mid(nalStart, nalEnd - nalStart);
+            QByteArray rbsp = removeEmulationPrevention(nalBody);
+            return readPocLsbFromSlice(
+                reinterpret_cast<const uint8_t*>(rbsp.constData()),
+                rbsp.size(), frameNumBitWidth, pocLsbBitWidth, frameMbsOnly);
+        }
+
+        pos = nalStart + 1;
+    }
+    return -1;
+}
+
+// ----------------------------------------------------------------------------
+// Patch poc_lsb in the last slice NAL of a packet (raw encoder output).
+// The last slice's poc_lsb becomes prevPicOrderCntLsb for the next picture.
+// Handles start codes and emulation prevention correctly.
+// Returns patched data, or original if no slice found or patch not needed.
+// ----------------------------------------------------------------------------
+static QByteArray patchPocLsbInPacket(const QByteArray& packetData,
+                                       int frameNumBitWidth, int pocLsbBitWidth,
+                                       bool frameMbsOnly, uint32_t newPocLsb)
+{
+    if (pocLsbBitWidth <= 0 || frameNumBitWidth <= 0 || packetData.isEmpty())
+        return packetData;
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(packetData.constData());
+
+    // Find the LAST slice NAL in the packet (skip SPS/PPS/SEI)
+    int lastSliceScStart = -1;
+    int lastSliceScLen = 0;
+    int lastSliceNalStart = -1;
+    int pos = 0;
+
+    while (pos < packetData.size()) {
+        int scStart = -1;
+        int scLen = 0;
+        for (int i = pos; i + 2 < packetData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < packetData.size() && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; scLen = 4; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; scLen = 3; break;
+                }
+            }
+        }
+        if (scStart < 0) break;
+
+        int nalStart = scStart + scLen;
+        if (nalStart >= packetData.size()) break;
+
+        uint8_t nalType = data[nalStart] & 0x1F;
+        if (nalType == 1 || nalType == 5) {
+            lastSliceScStart = scStart;
+            lastSliceScLen = scLen;
+            lastSliceNalStart = nalStart;
+        }
+        pos = nalStart + 1;
+    }
+
+    if (lastSliceNalStart < 0)
+        return packetData;  // no slice NAL found
+
+    // Find end of this slice NAL
+    int nalEnd = packetData.size();
+    for (int i = lastSliceNalStart + 1; i + 2 < packetData.size(); i++) {
+        if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
+            nalEnd = i; break;
+        }
+    }
+
+    // Extract NAL body, remove EP3, patch poc_lsb, re-add EP3
+    QByteArray nalBody = packetData.mid(lastSliceNalStart, nalEnd - lastSliceNalStart);
+    QByteArray rbsp = removeEmulationPrevention(nalBody);
+
+    // Verify we can read poc_lsb before patching
+    int oldPocLsb = readPocLsbFromSlice(
+        reinterpret_cast<const uint8_t*>(rbsp.constData()), rbsp.size(),
+        frameNumBitWidth, pocLsbBitWidth, frameMbsOnly);
+    if (oldPocLsb < 0)
+        return packetData;
+
+    // Patch poc_lsb in RBSP
+    writePocLsbInSlice(reinterpret_cast<uint8_t*>(rbsp.data()), rbsp.size(),
+                        frameNumBitWidth, pocLsbBitWidth, frameMbsOnly, newPocLsb);
+
+    // Re-add emulation prevention
+    QByteArray patchedNalBody = addEmulationPrevention(rbsp);
+
+    // Rebuild packet: data before slice NAL + start code + patched NAL + data after
+    QByteArray result;
+    result.reserve(packetData.size() + 8);
+    result.append(packetData.constData(), lastSliceScStart);
+    result.append(packetData.constData() + lastSliceScStart, lastSliceScLen);
+    result.append(patchedNalBody);
+    if (nalEnd < packetData.size())
+        result.append(packetData.mid(nalEnd));
+
+    qDebug() << "      POC fix: patched encoder slice poc_lsb" << oldPocLsb
+             << "->" << newPocLsb;
+
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Find and parse the first SPS NAL (type 7) in an Annex B H.264 packet.
+// Used to extract encoder SPS parameters from inline SPS/PPS in first output.
+// Returns true if SPS was found and parsed successfully.
+// ----------------------------------------------------------------------------
+static bool findH264SpsInPacket(const QByteArray& packetData, H264SpsInfo& spsInfo)
+{
+    const uint8_t* d = reinterpret_cast<const uint8_t*>(packetData.constData());
+    int sz = packetData.size();
+
+    for (int pos = 0; pos < sz - 4; ) {
+        int scLen = 0;
+        if (d[pos] == 0 && d[pos+1] == 0 && d[pos+2] == 0 && d[pos+3] == 1)
+            scLen = 4;
+        else if (d[pos] == 0 && d[pos+1] == 0 && d[pos+2] == 1)
+            scLen = 3;
+        if (scLen == 0) { pos++; continue; }
+
+        int nalStart = pos;
+        int nalType = d[pos + scLen] & 0x1F;
+
+        int nalEnd = sz;
+        for (int j = pos + scLen + 1; j < sz - 2; j++) {
+            if (d[j] == 0 && d[j+1] == 0 &&
+                (d[j+2] == 1 || (j + 3 < sz && d[j+2] == 0 && d[j+3] == 1))) {
+                nalEnd = j;
+                break;
+            }
+        }
+
+        if (nalType == 7) {
+            QByteArray spsNal = packetData.mid(nalStart, nalEnd - nalStart);
+            spsInfo = parseH264SpsInfo(spsNal);
+            return (spsInfo.log2MaxFrameNumMinus4 >= 0);
+        }
+        pos = nalEnd;
+    }
+    return false;
 }
 
 // ----------------------------------------------------------------------------
@@ -1075,6 +1373,9 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                     return false;
                 }
                 encoderInitialized = true;
+
+                // Encoder SPS is parsed later, after first avcodec_receive_packet()
+                // (x264 doesn't populate extradata until first packet is produced)
             }
 
             allDecodedFrames.append(frame);
@@ -1250,35 +1551,22 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // This happens when the B-frame reorder delay shifts the real content to AUs
     // at or after the stream-copy keyframe.
     if (realStartAU >= streamCopyLimit) {
-        if (realStartAU == streamCopyLimit) {
-            // Case A: CutIn exactly at stream-copy boundary.
-            // Full GOP of pre-CutIn content would leak into output.
-            // Fix: extend re-encode to next keyframe, stream-copy from there.
-            int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
-            if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
-                nextKF = frameCount();
-            }
-            streamCopyLimit = nextKF;
+        // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
+        // Extend re-encode to next keyframe so encoder produces IDR for clean
+        // DPB reset. Any POC domain mismatch at the transition is handled by
+        // poc_lsb patching below.
+        int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
+        if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
+            nextKF = frameCount();
+        }
+        streamCopyLimit = nextKF;
 
-            qDebug() << "      Case A: CutIn AU" << realStartAU
-                     << "== stream-copy start" << streamCopyStartFrame
-                     << "-> extending re-encode to next keyframe" << nextKF;
+        qDebug() << "      CutIn AU" << realStartAU
+                 << ">= stream-copy start" << streamCopyStartFrame
+                 << "-> extending re-encode to next keyframe" << nextKF;
 
-            if (adjustedStreamCopyStart) {
-                *adjustedStreamCopyStart = nextKF;
-            }
-        } else {
-            // Case B: CutIn a few frames past stream-copy boundary.
-            // Small leak (≤ reorder_delay frames) is acceptable.
-            // Do NOT extend re-encode: the re-encode→stream-copy transition
-            // creates a POC domain change (encoder vs source) that causes
-            // "co located POCs unavailable" when stream-copied B-frames use
-            // temporal_direct prediction. EOS flushes DPB but cannot reset
-            // POC state — only IDR can do that.
-            qDebug() << "      Case B: CutIn AU" << realStartAU
-                     << "is" << (realStartAU - streamCopyLimit)
-                     << "frames past stream-copy start" << streamCopyStartFrame
-                     << "- skipping re-encode to avoid POC mismatch";
+        if (adjustedStreamCopyStart) {
+            *adjustedStreamCopyStart = nextKF;
         }
     }
 
@@ -1297,15 +1585,36 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
              << "(AU range" << startFrame << "-" << (streamCopyLimit - 1) << ")";
 
     // Re-encode frames
-    // Note: x264/x265 encoders buffer frames and may not return output immediately
-    // We need to send all frames first, then flush to get all encoded output
+    // Buffer the last encoder packet so we can patch poc_lsb before writing it,
+    // preventing POC domain mismatch at the re-encode→stream-copy transition.
     bool firstFrame = true;
+    bool encoderSpsParsed = false;
     int framesSent = 0;
     int packetsReceived = 0;
+    QByteArray pendingPacket;  // buffered last encoder packet
+
+    // Helper: apply SPS reorder patch and buffer (write previous pending)
+    auto writeEncoderPacket = [&](const QByteArray& rawData) -> bool {
+        QByteArray encodedData = rawData;
+        if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
+            QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay);
+            if (patched != encodedData)
+                encodedData = patched;
+        }
+
+        // Write previously buffered packet, buffer current one
+        if (!pendingPacket.isEmpty()) {
+            if (outFile.write(pendingPacket) != pendingPacket.size()) {
+                setError("Failed to write encoded data");
+                return false;
+            }
+        }
+        pendingPacket = encodedData;
+        packetsReceived++;
+        return true;
+    };
 
     for (AVFrame* frame : framesToEncode) {
-        // Force first frame to I-frame (keyframe) so the re-encoded section
-        // starts with a clean random access point.
         if (firstFrame) {
             frame->pict_type = AV_PICTURE_TYPE_I;
 #if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 0, 0)
@@ -1316,10 +1625,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             frame->pict_type = AV_PICTURE_TYPE_NONE;
         }
 
-        // Set PTS
         frame->pts = framesSent;
 
-        // Send frame to encoder
         int ret = avcodec_send_frame(mEncoder, frame);
         if (ret < 0 && ret != AVERROR(EAGAIN)) {
             char errbuf[AV_ERROR_MAX_STRING_SIZE];
@@ -1331,13 +1638,11 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         }
         framesSent++;
 
-        // Try to receive any available packets
         AVPacket* packet = av_packet_alloc();
         while (true) {
             ret = avcodec_receive_packet(mEncoder, packet);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                 break;
-            }
             if (ret < 0) {
                 char errbuf[AV_ERROR_MAX_STRING_SIZE];
                 av_strerror(ret, errbuf, sizeof(errbuf));
@@ -1346,70 +1651,148 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                 for (AVFrame* f : framesToEncode) av_frame_free(&f);
                 return false;
             }
+            QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
 
-            // Write encoded data including SPS/PPS
-            // Patch encoder SPS to signal correct max_num_reorder_frames
-            // so the decoder initializes its reorder buffer for source B-frames
-            QByteArray encodedData(reinterpret_cast<char*>(packet->data), packet->size);
-            if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
-                qDebug() << "      Patching encoder packet" << packetsReceived
-                         << "(" << encodedData.size() << "bytes) with mReorderDelay=" << mReorderDelay;
-                QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay);
-                if (patched != encodedData) {
-                    qDebug() << "      -> SPS patched! Original" << encodedData.size()
-                             << "bytes, patched" << patched.size() << "bytes";
-                    encodedData = patched;
-                } else {
-                    qDebug() << "      -> No SPS found in this packet";
+            // Parse encoder SPS from first packet's inline SPS NAL
+            // (without GLOBAL_HEADER, x264 puts SPS/PPS inline, not in extradata)
+            if (!encoderSpsParsed && mParser.codecType() == NALU_CODEC_H264) {
+                H264SpsInfo encSps;
+                if (findH264SpsInPacket(rawData, encSps)) {
+                    mEncoderLog2MaxFrameNum = encSps.log2MaxFrameNumMinus4 + 4;
+                    mEncoderLog2MaxPocLsb = (encSps.pocType == 0)
+                        ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
+                    mEncoderPocType = encSps.pocType;
+                    mEncoderFrameMbsOnly = encSps.frameMbsOnly;
+                    qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
+                             << "log2_poc=" << mEncoderLog2MaxPocLsb
+                             << "poc_type=" << mEncoderPocType;
+                    encoderSpsParsed = true;
                 }
-            } else {
-                qDebug() << "      Skipping SPS patch: mReorderDelay=" << mReorderDelay
-                         << "codec=" << mParser.codecType();
             }
-            if (outFile.write(encodedData) != encodedData.size()) {
-                setError("Failed to write encoded data");
+
+            if (!writeEncoderPacket(rawData)) {
                 av_packet_free(&packet);
                 for (AVFrame* f : framesToEncode) av_frame_free(&f);
                 return false;
             }
-            packetsReceived++;
             av_packet_unref(packet);
         }
         av_packet_free(&packet);
-
         av_frame_free(&frame);
     }
     framesToEncode.clear();
 
-    // Flush encoder - send null frame to signal end
+    // Flush encoder
     avcodec_send_frame(mEncoder, nullptr);
-
-    // Receive all remaining packets
     AVPacket* packet = av_packet_alloc();
     while (true) {
         int ret = avcodec_receive_packet(mEncoder, packet);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
-        }
         if (ret < 0) {
             char errbuf[AV_ERROR_MAX_STRING_SIZE];
             av_strerror(ret, errbuf, sizeof(errbuf));
             qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << errbuf;
             break;
         }
+        QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
 
-        QByteArray encodedData(reinterpret_cast<char*>(packet->data), packet->size);
-        if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264)
-            encodedData = patchSpsNalsInAccessUnit(encodedData, mReorderDelay);
-        if (outFile.write(encodedData) != encodedData.size()) {
-            setError("Failed to write encoded data (flush)");
+        // Parse encoder SPS from first packet's inline SPS NAL (flush path)
+        if (!encoderSpsParsed && mParser.codecType() == NALU_CODEC_H264) {
+            H264SpsInfo encSps;
+            if (findH264SpsInPacket(rawData, encSps)) {
+                mEncoderLog2MaxFrameNum = encSps.log2MaxFrameNumMinus4 + 4;
+                mEncoderLog2MaxPocLsb = (encSps.pocType == 0)
+                    ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
+                mEncoderPocType = encSps.pocType;
+                mEncoderFrameMbsOnly = encSps.frameMbsOnly;
+                qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
+                         << "log2_poc=" << mEncoderLog2MaxPocLsb
+                         << "poc_type=" << mEncoderPocType;
+                encoderSpsParsed = true;
+            }
+        }
+
+        if (!writeEncoderPacket(rawData)) {
             av_packet_free(&packet);
             return false;
         }
-        packetsReceived++;
         av_packet_unref(packet);
     }
     av_packet_free(&packet);
+
+    // POC domain mismatch fix: patch poc_lsb in the last encoder packet
+    // to prevent PicOrderCntMsb wrap at re-encode→stream-copy transition.
+    // Only needed for H.264 with poc_type=0 when stream-copy follows.
+    int actualScStart = (adjustedStreamCopyStart && *adjustedStreamCopyStart >= 0)
+        ? *adjustedStreamCopyStart : streamCopyStartFrame;
+    if (!pendingPacket.isEmpty() && mEncoderPocType == 0 &&
+        mEncoderLog2MaxPocLsb > 0 && mLog2MaxPocLsb > 0 &&
+        actualScStart >= 0 && mParser.codecType() == NALU_CODEC_H264) {
+
+        // Read source's first stream-copy frame poc_lsb
+        QByteArray srcAU = mParser.readAccessUnitData(actualScStart);
+        int srcPocLsb = readPocLsbFromAU(srcAU, mLog2MaxFrameNum,
+                                          mLog2MaxPocLsb, mFrameMbsOnly);
+
+        // Read encoder's last slice poc_lsb
+        int encPocLsb = readPocLsbFromAU(pendingPacket, mEncoderLog2MaxFrameNum,
+                                          mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly);
+
+        if (srcPocLsb >= 0 && encPocLsb >= 0) {
+            int srcMaxPocLsb = 1 << mLog2MaxPocLsb;
+            int diff = qAbs(srcPocLsb - encPocLsb);
+            if (diff > srcMaxPocLsb / 2) {
+                // Compute safe poc_lsb: target value that avoids wrap
+                // newPocLsb = srcPocLsb - srcMaxPocLsb/2, clamped to encoder range
+                int encMaxPocLsb = 1 << mEncoderLog2MaxPocLsb;
+                int target = srcPocLsb - srcMaxPocLsb / 2;
+                if (target < 0) target += srcMaxPocLsb;
+                int newPocLsb = target % encMaxPocLsb;
+
+                // Post-patch validation: verify newPocLsb actually prevents wrap
+                int newDiff = qAbs(srcPocLsb - newPocLsb);
+                if (newDiff > srcMaxPocLsb / 2) {
+                    // Modulo clamping re-introduced wrap — search for safe value
+                    // Try values in [0, encMaxPocLsb) closest to srcPocLsb
+                    int bestPocLsb = newPocLsb;
+                    int bestDiff = newDiff;
+                    for (int v = 0; v < encMaxPocLsb; ++v) {
+                        int d = qAbs(srcPocLsb - v);
+                        if (d <= srcMaxPocLsb / 2 && d < bestDiff) {
+                            bestPocLsb = v;
+                            bestDiff = d;
+                        }
+                    }
+                    if (bestDiff <= srcMaxPocLsb / 2) {
+                        newPocLsb = bestPocLsb;
+                        qDebug() << "      POC domain fix: modulo re-wrap detected,"
+                                 << "using search result" << newPocLsb;
+                    } else {
+                        qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
+                                   << "found in encoder range [0," << encMaxPocLsb << ")";
+                    }
+                }
+
+                qDebug() << "      POC domain fix: encoder poc_lsb=" << encPocLsb
+                         << "source poc_lsb=" << srcPocLsb
+                         << "diff=" << diff << "> MaxPocLsb/2=" << srcMaxPocLsb / 2
+                         << "-> patching to" << newPocLsb;
+
+                pendingPacket = patchPocLsbInPacket(pendingPacket,
+                    mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb,
+                    mEncoderFrameMbsOnly, static_cast<uint32_t>(newPocLsb));
+            }
+        }
+    }
+
+    // Write the (possibly patched) last encoder packet
+    if (!pendingPacket.isEmpty()) {
+        if (outFile.write(pendingPacket) != pendingPacket.size()) {
+            setError("Failed to write last encoded packet");
+            return false;
+        }
+    }
 
     qDebug() << "      Encoding complete: sent" << framesSent << "frames, received" << packetsReceived << "packets";
     mFramesReencoded += packetsReceived;
