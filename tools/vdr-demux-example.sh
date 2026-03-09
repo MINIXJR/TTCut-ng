@@ -103,7 +103,7 @@ fi
 CHECKLIST_ARGS=()
 for dir in "${REC_DIRS[@]}"; do
     rel_path="${dir#$IN_PFAD/}"
-    show_name="${rel_path%%/*}"
+    show_name="$(basename "$(dirname "$dir")")"
     rec_name="${rel_path#*/}"
     rec_date=$(echo "$rec_name" | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})\.([0-9]{2})\.([0-9]{2})\..*/\1 \2:\3/')
     CHECKLIST_ARGS+=("$dir" "${show_name} — ${rec_date}" "on")
@@ -178,9 +178,9 @@ progress_update "$CURRENT_STEP" "Demuxe ${#TS_FILES[@]} Aufnahme(n)..."
 # Verarbeite gesammelte Dateien
 for ts_datei in "${TS_FILES[@]}"; do
     rec_dir=$(dirname "$ts_datei")
-    # VDR directory structure: .../ShowName/Date.Time.rec/00001.ts
-    rel_path="${rec_dir#$IN_PFAD/}"
-    show_name="${rel_path%%/*}"
+    # VDR directory structure: .../Series/Episode/Date.Time.rec/00001.ts
+    # Use the directory directly above .rec as the show/episode name
+    show_name="$(basename "$(dirname "$rec_dir")")"
 
     info "Demuxe: $show_name ($(basename "$ts_datei"))"
     progress_update "$CURRENT_STEP" "Demuxe: $show_name\n(${DEMUX_COUNT}/${#TS_FILES[@]})"
