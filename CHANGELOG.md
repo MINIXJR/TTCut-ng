@@ -2,6 +2,17 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.61.6 (2026-03-09)
+
+**Audio Drift Fix bei B-Frame Reorder**
+
+- Fix: Akkumulierender A/V-Drift (bis 448ms bei 4 Segmenten) bei H.264 Streams mit B-Frames
+- Root Cause: B-Frame Display-Order-Mapping verschiebt CutIn-AU nach vorn, Video hat weniger
+  Frames als die Audio-Schnittbereiche vorgeben
+- Smart Cut meldet jetzt tatsaechliche Start-AUs pro Segment via `actualOutputFrameRanges()`
+- Audio keepList-Startzeiten werden nach Video-Smart-Cut an tatsaechliche Video-Ausgabe angepasst
+- Restdrift: 32ms (= 1 AC3 Frame, physikalisches Minimum bei Audio-Stream-Copy)
+
 ## v0.61.5 (2026-03-08)
 
 **H.264 POC Domain Mismatch Fix**

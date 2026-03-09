@@ -265,6 +265,7 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mFramesStreamCopied = 0;
     mFramesReencoded = 0;
     mBytesWritten = 0;
+    mActualOutputRanges.clear();
 
     // Analyze cut points
     QList<TTCutSegmentInfo> segments = analyzeCutPoints(cutFrames);
@@ -328,10 +329,15 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         qDebug() << "    Stream-copy:" << seg.streamCopyStartFrame
                  << "->" << seg.streamCopyEndFrame;
 
-        if (!processSegment(outFile, seg, cumulativeFrameNumDelta)) {
+        int segActualStart = -1;
+        if (!processSegment(outFile, seg, cumulativeFrameNumDelta, &segActualStart)) {
             outFile.close();
             return false;
         }
+
+        // Record actual output range (start may differ due to B-frame reorder)
+        int actualStart = (segActualStart >= 0) ? segActualStart : seg.startFrame;
+        mActualOutputRanges.append(qMakePair(actualStart, seg.endFrame));
 
         // Between segments: write EOS NAL + SPS/PPS, compute frame_num delta
         if (i < segments.size() - 1) {
@@ -548,8 +554,11 @@ bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut)
 // Each section starts with its own SPS/PPS + IDR, allowing clean decoder reset
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
-                                   int frameNumDelta)
+                                   int frameNumDelta, int* actualStartAU)
 {
+    if (actualStartAU)
+        *actualStartAU = -1;  // -1 = no adjustment
+
     // If only stream-copy (no re-encoding), write directly
     if (segment.reencodeStartFrame < 0) {
         qDebug() << "    Pure stream-copy segment";
@@ -560,7 +569,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     // If only re-encoding (no stream-copy), write directly
     if (segment.streamCopyStartFrame < 0) {
         qDebug() << "    Pure re-encode segment";
-        return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame, -1);
+        return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
+                              -1, nullptr, actualStartAU);
     }
 
     // Mixed segment: Re-encode partial GOP + stream-copy from keyframe
@@ -573,7 +583,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     //    adjustedStart receives the new stream-copy start if this happens.
     int adjustedStart = -1;
     if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                        segment.streamCopyStartFrame, &adjustedStart)) {
+                        segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
         return false;
     }
 
@@ -1271,12 +1281,15 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 // Re-encode frames (for partial GOPs)
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
-                                  int streamCopyStartFrame, int* adjustedStreamCopyStart)
+                                  int streamCopyStartFrame, int* adjustedStreamCopyStart,
+                                  int* actualStartAU)
 {
     qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
 
     if (adjustedStreamCopyStart)
         *adjustedStreamCopyStart = -1;  // -1 = no adjustment needed
+    if (actualStartAU)
+        *actualStartAU = -1;  // -1 = no adjustment (realStartAU == startFrame)
 
     // Find the keyframe we need to decode from.
     // H.264/H.265 decoders with frame-threading have an initialization delay:
@@ -1568,6 +1581,13 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         if (adjustedStreamCopyStart) {
             *adjustedStreamCopyStart = nextKF;
         }
+    }
+
+    // Report actual start AU if it differs from requested (B-frame reorder shift)
+    if (actualStartAU && realStartAU != startFrame) {
+        *actualStartAU = realStartAU;
+        qDebug() << "      Actual start AU:" << realStartAU
+                 << "(requested:" << startFrame << ", shift:" << (realStartAU - startFrame) << "frames)";
     }
 
     // Select frames by corrected AU index range [realStartAU, streamCopyLimit)

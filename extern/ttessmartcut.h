@@ -117,6 +117,11 @@ public:
     int framesReencoded() const { return mFramesReencoded; }
     int64_t bytesWritten() const { return mBytesWritten; }
 
+    // Actual output frame ranges from last smartCutFrames() call.
+    // B-frame reorder delay may shift segment start AUs forward,
+    // so actual start frames can differ from the requested cut-in frames.
+    QList<QPair<int, int>> actualOutputFrameRanges() const { return mActualOutputRanges; }
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -170,6 +175,9 @@ private:
     int mFramesReencoded;
     int64_t mBytesWritten;
 
+    // Actual output frame ranges (start AU may differ from requested due to B-frame reorder)
+    QList<QPair<int, int>> mActualOutputRanges;
+
     // Error handling
     QString mLastError;
     void setError(const QString& error);
@@ -184,8 +192,9 @@ private:
 
     // Process a single segment
     // frameNumDelta: H.264 frame_num offset for inter-segment continuity
+    // actualStartAU: output — actual first AU written (may differ from segment.startFrame)
     bool processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
-                        int frameNumDelta = 0);
+                        int frameNumDelta = 0, int* actualStartAU = nullptr);
 
     // Stream-copy NAL units (no re-encoding)
     // patchReorderFrames > 0: patch inline H.264 SPS NALs with max_num_reorder_frames
@@ -197,8 +206,11 @@ private:
     // streamCopyStartFrame: AU index where stream-copy begins after re-encode (-1 if none)
     // adjustedStreamCopyStart: output — if re-encode consumed frames past streamCopyStartFrame,
     //   this is set to the new stream-copy start (next keyframe). -1 if unchanged.
+    // actualStartAU: output — the actual first AU that was encoded (may differ from startFrame
+    //   due to B-frame display-order mapping). -1 if unchanged.
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
-                        int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr);
+                        int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr,
+                        int* actualStartAU = nullptr);
 
     // Helper: decode frame from NAL data
     bool decodeFrame(const QByteArray& nalData, AVFrame* frame);
