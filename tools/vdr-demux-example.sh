@@ -35,12 +35,20 @@ TTCUT_DEMUX="ttcut-demux"
 [ -x "$(command -v "$TTCUT_DEMUX")" ] || TTCUT_DEMUX="/usr/local/src/TTCut-ng/tools/ttcut-demux"
 [ -x "$(command -v "$TTCUT")" ] || TTCUT="/usr/local/src/TTCut-ng/ttcut-ng"
 
-# Farben
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Farben (deaktiviert wenn stdout kein Terminal ist)
+if [ -t 1 ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
 
 info()  { printf '%b\n' "${GREEN}[INFO]${NC} $1"; }
 warn()  { printf '%b\n' "${YELLOW}[WARN]${NC} $1"; }
@@ -113,7 +121,7 @@ done
 SELECTED_DIRS=()
 if command -v kdialog &>/dev/null; then
     SELECTED=$(kdialog --checklist \
-        "Quellverzeichnis: $IN_PFAD\nZielverzeichnis: $OUT_PFAD\n\nAufnahmen auswählen (abgewählte werden übersprungen):" \
+        "Quellverzeichnis: $IN_PFAD"$'\n'"Zielverzeichnis: $OUT_PFAD"$'\n\n'"Aufnahmen auswählen (abgewählte werden übersprungen):" \
         "${CHECKLIST_ARGS[@]}" \
         --title "VDR Demux — ${#REC_DIRS[@]} Aufnahme(n)" 2>/dev/null) || exit 0
     eval "SELECTED_DIRS=($SELECTED)"
@@ -183,7 +191,7 @@ for ts_datei in "${TS_FILES[@]}"; do
     show_name="$(basename "$(dirname "$rec_dir")")"
 
     info "Demuxe: $show_name ($(basename "$ts_datei"))"
-    progress_update "$CURRENT_STEP" "Demuxe: $show_name\n(${DEMUX_COUNT}/${#TS_FILES[@]})"
+    progress_update "$CURRENT_STEP" "Demuxe: $show_name"$'\n'"(${DEMUX_COUNT}/${#TS_FILES[@]})"
 
     LOG_FILE="$OUT_PFAD/${show_name}.log"
 
