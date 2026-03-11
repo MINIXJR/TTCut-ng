@@ -423,6 +423,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             avcodec_parameters_copy(outStream->codecpar,
                                      videoInCtx->streams[i]->codecpar);
             outStream->time_base = videoInCtx->streams[i]->time_base;
+            outStream->sample_aspect_ratio = videoInCtx->streams[i]->sample_aspect_ratio;
             av_dict_copy(&outStream->metadata,
                           videoInCtx->streams[i]->metadata, 0);
         }
@@ -449,6 +450,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         avcodec_parameters_copy(videoOut->codecpar,
                                  videoInCtx->streams[videoIdx]->codecpar);
         videoOut->time_base = videoInCtx->streams[videoIdx]->time_base;
+
+        // Copy SAR to stream level (matroska muxer uses stream SAR, not codecpar SAR)
+        if (videoOut->codecpar->sample_aspect_ratio.num > 0)
+            videoOut->sample_aspect_ratio = videoOut->codecpar->sample_aspect_ratio;
 
         MuxInput vin;
         vin.fmtCtx = videoInCtx;

@@ -221,7 +221,7 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
-### Navigation and Smart Cut Fixes (v0.61.1–v0.61.6)
+### Navigation and Smart Cut Fixes (v0.61.1–v0.61.7)
 
 - **v0.61.1**: Fix frame position sync between slider and navigation buttons
 - **v0.61.2**: Fix shared videoStream position corruption — explicit position parameter passed through all navigation methods and `checkCutPosition()`
@@ -229,6 +229,7 @@ The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland supp
 - **v0.61.4**: Fix Smart Cut segment boundary stutter for B-frame reorder crossing. Replaces `needsIDR` with `adjustedStreamCopyStart` output parameter. EOS NAL always written before stream-copy.
 - **v0.61.5**: Fix H.264 POC domain mismatch at re-encode/stream-copy boundaries — x264 encoder SPS (MaxPocLsb=16) vs source SPS (MaxPocLsb=64) caused PicOrderCntMsb wrap and frame drops. Fix patches poc_lsb in last encoder slice. Case A/B unified (both extend re-encode to next keyframe). Encoder SPS parsed from inline NAL in first packet (`findH264SpsInPacket()` helper).
 - **v0.61.6**: Fix cumulative A/V audio drift (up to 448ms with 4 segments) in H.264 B-frame streams. B-frame display-order mapping shifts CutIn AU forward, causing video to output fewer frames than audio cut ranges specify. Smart Cut now reports actual start AUs via `actualOutputFrameRanges()`, audio keepList adjusted accordingly. Residual drift: 32ms (1 AC3 frame = physical minimum for stream-copy).
+- **v0.61.7**: Fix MPEG-2 MKV muxing — missing `setDefaultDuration()` caused video-less output; missing stream-level SAR caused wrong aspect ratio (16:9 displayed as 4:3). Settings path migrated from `~/.config/TriTime/` to `~/.config/TTCut-ng/`.
 
 ## Running on Wayland
 

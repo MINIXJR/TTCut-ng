@@ -2,6 +2,18 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.61.7 (2026-03-11)
+
+**MPEG-2 MKV Muxing Fix + Settings Migration**
+
+- Fix: MPEG-2 finaler Schnitt erzeugte MKV ohne Video (nur Audio)
+  - Root Cause: `setDefaultDuration()` fehlte im MPEG-2 MKV-Mux-Pfad (`onCutFinished`)
+  - Matroska-Muxer verwarf alle Video-Packets wegen fehlender Timestamps
+- Fix: MPEG-2 MKV hatte falsches Seitenverhältnis (16:9 als 4:3 dargestellt)
+  - Root Cause: Matroska-Muxer nutzt `stream->sample_aspect_ratio`, nicht `codecpar->sample_aspect_ratio`
+  - SAR wird jetzt auf Stream-Level kopiert (ES-Mux und Container-Remux Pfade)
+- Settings-Pfad von `~/.config/TriTime/TTCut.conf` nach `~/.config/TTCut-ng/TTCut-ng.conf` migriert
+
 ## v0.61.6 (2026-03-09)
 
 **Audio Drift Fix bei B-Frame Reorder**

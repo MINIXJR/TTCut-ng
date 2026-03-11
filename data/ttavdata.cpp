@@ -1270,6 +1270,12 @@ void TTAVData::onCutFinished()
         connect(mkvProvider, SIGNAL(progressChanged(int, const QString&)),
                 this,        SLOT(onMuxProgress(int, const QString&)));
 
+        // Set frame duration for raw ES video (required for PTS assignment)
+        TTVideoStream* videoStream = mpCutList->at(0).avDataItem()->videoStream();
+        double frameRate = videoStream->frameRate();
+        int frameDurationNs = (int)(1000000000.0 / frameRate);
+        mkvProvider->setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {
           mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
