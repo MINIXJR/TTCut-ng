@@ -244,8 +244,6 @@ void TTCurrentFrame::onPrevBFrame()
 {
   if (videoStream == 0) return;
 
-  videoStream->moveToIndexPos(currentCutPosition);
-
   int newFramePos = (!TTCut::encoderMode)
       ? videoStream->moveToPrevPIFrame()
       : videoStream->moveToPrevFrame();
@@ -261,8 +259,6 @@ void TTCurrentFrame::onNextBFrame()
 {
   if (videoStream == 0) return;
 
-  videoStream->moveToIndexPos(currentCutPosition);
-
   int newFramePos = (!TTCut::encoderMode)
       ? videoStream->moveToNextPIFrame()
       : videoStream->moveToNextFrame();
@@ -276,6 +272,9 @@ void TTCurrentFrame::onNextBFrame()
 //! Widget button: navigate to previous frame + auto-save CutIn if cut selected
 void TTCurrentFrame::onWidgetPrevFrame()
 {
+  if (videoStream != 0)
+    videoStream->moveToIndexPos(currentCutPosition);
+
   onPrevBFrame();
 
   if (currentCutItemIndex >= 0 && currentCutAVItem) {
@@ -287,6 +286,9 @@ void TTCurrentFrame::onWidgetPrevFrame()
 //! Widget button: navigate to next frame + auto-save CutIn if cut selected
 void TTCurrentFrame::onWidgetNextFrame()
 {
+  if (videoStream != 0)
+    videoStream->moveToIndexPos(currentCutPosition);
+
   onNextBFrame();
 
   if (currentCutItemIndex >= 0 && currentCutAVItem) {

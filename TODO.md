@@ -97,6 +97,19 @@
   - Brainstorming nötig: Sollen B-Buttons entfernt oder mit anderer Funktion belegt werden?
   - Auch F▶/F◀ im Navigation-Widget vs. CurrentFrame-Widget klären
 
+- **Projektdatei (.prj): Fehlende Einstellungen speichern**
+  - Aktuell werden nicht alle relevanten Einstellungen in die .prj Datei geschrieben
+  - Fehlend u.a.: Ausgabepfad inkl. Dateiname, Encoder-Einstellungen
+  - Brainstorming nötig: Bestandsaufnahme was gespeichert wird vs. was fehlt
+  - Rückwärtskompatibilität beachten (alte .prj Dateien müssen weiterhin ladbar sein)
+
+- **Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**
+  - `onFileNew()` warnt immer vor Datenverlust, auch wenn gerade gespeichert wurde
+  - Benötigt `mProjectModified`-Flag in TTCutMainWindow oder TTAVData
+  - Flag setzen bei: Cut/Audio/Video/Subtitle hinzufügen/entfernen/ändern
+  - Flag zurücksetzen bei: Save, Load, New (nach Bestätigung)
+  - Optional: Auch für `onFileExit()` und Fenster-Schließen nutzen
+
 - **Manual audio delay/offset per track**
   - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list
   - The "Delay" column already exists but is currently unused (always shows "0")
