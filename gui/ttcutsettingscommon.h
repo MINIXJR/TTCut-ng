@@ -52,6 +52,7 @@ class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
 
   private:
     QSpinBox* sbBurstThreshold;
+    QSpinBox* sbQuickJumpInterval;
 };
 
 #endif

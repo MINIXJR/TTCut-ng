@@ -65,7 +65,6 @@ void TTCutSettings::readSettings()
   TTCut::stepArrowKeys   = value( "StepArrowKeys/",TTCut::stepArrowKeys ).toInt();
   TTCut::stepPlusAlt     = value( "StepPlusAlt/", TTCut::stepPlusAlt ).toInt();
   TTCut::stepPlusCtrl    = value( "StepPlusCtrl/", TTCut::stepPlusCtrl ).toInt();
-  TTCut::stepQuickJump   = value( "StepQuickJump/", TTCut::stepQuickJump ).toInt();
   TTCut::stepMouseWheel  = value( "StepMouseWheel/", TTCut::stepMouseWheel ).toInt();
   endGroup();
 
@@ -75,6 +74,7 @@ void TTCutSettings::readSettings()
   TTCut::tempDirPath      = value( "TempDirPath/", TTCut::tempDirPath ).toString();
   TTCut::lastDirPath      = value( "LastDirPath/", TTCut::lastDirPath ).toString();
   TTCut::burstThresholdDb = value( "BurstThresholdDb/", TTCut::burstThresholdDb ).toInt();
+  TTCut::quickJumpIntervalSec = value( "QuickJumpInterval/", TTCut::quickJumpIntervalSec ).toInt();
   endGroup();
 
   // Preview
@@ -229,7 +229,6 @@ void TTCutSettings::writeSettings()
   setValue( "StepArrowKeys/",   TTCut::stepArrowKeys );
   setValue( "StepPlusAlt/",     TTCut::stepPlusAlt );
   setValue( "StepPlusCtrl/",    TTCut::stepPlusCtrl );
-  setValue( "StepQuickJump/",   TTCut::stepQuickJump );
   setValue( "StepMouseWheel/",  TTCut::stepMouseWheel );
   endGroup();
 
@@ -239,6 +238,7 @@ void TTCutSettings::writeSettings()
   setValue( "TempDirPath/" ,      TTCut::tempDirPath );
   setValue( "LastDirPath/" ,      TTCut::lastDirPath );
   setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
+  setValue( "QuickJumpInterval/", TTCut::quickJumpIntervalSec );
   endGroup();
 
   // Preview

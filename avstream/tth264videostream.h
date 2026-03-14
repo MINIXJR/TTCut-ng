@@ -101,6 +101,9 @@ protected:
     // Encode segment (at cut boundaries)
     void encodeSegment(int startFrame, int endFrame, TTCutParameter* cp);
 
+public:
+    const QList<TTFrameInfo>& ffmpegFrameIndex() const { return mFFmpeg->frameIndex(); }
+
 private:
     TTFFmpegWrapper* mFFmpeg;
     TTH264SPS* mSPS;

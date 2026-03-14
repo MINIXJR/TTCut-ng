@@ -125,7 +125,7 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	connect(pbGotoCutIn, SIGNAL(clicked()), SLOT(onGotoCutIn()));
 	connect(pbGotoCutOut, SIGNAL(clicked()), SLOT(onGotoCutOut()));
 	connect(pbAddCut, SIGNAL(clicked()), SLOT(onAddCutRange()));
-	connect(pbQuickJump, SIGNAL(clicked()), SLOT(onQuickJump()));
+	connect(pbQuickJump, SIGNAL(clicked()), SIGNAL(openQuickJump()));
 	connect(pbStreamPoints, SIGNAL(clicked()), SLOT(onStreamPoints()));
 	connect(pbSetMarker, SIGNAL(clicked()), SLOT(onSetMarker()));
 	connect(pbGotoMarker, SIGNAL(clicked()), SLOT(onGotoMarker()));
@@ -492,11 +492,6 @@ void TTCutFrameNavigation::onPrevFrame()
 void TTCutFrameNavigation::onNextFrame()
 {
 	emit nextFrame();
-}
-
-void TTCutFrameNavigation::onQuickJump()
-{
-	emit moveNumSteps(TTCut::stepQuickJump);
 }
 
 void TTCutFrameNavigation::onStreamPoints()

@@ -100,6 +100,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onSetSelectedCutOut(const TTCutItem&);
 		void onSetCutOut(int index);
 		void onStreamPoints();
+		void onQuickJump();
 
     void onGotoMarker(const TTMarkerItem& marker);
 

@@ -31,9 +31,11 @@
 #include <QApplication>
 #include <QPixmap>
 #include <QDebug>
+#include <QScreen>
 #include <QStyle>
 
 #include "ttcutmainwindow.h"
+#include "ttquickjumpdialog.h"
 
 #include "../common/ttexception.h"
 #include "../common/ttthreadtask.h"
@@ -141,6 +143,33 @@ TTCutMainWindow::TTCutMainWindow()
   TTCut::recentFileList.clear();
   settings = new TTCutSettings();
   settings->readSettings();
+
+  // Restore window geometry or default to 80% of screen
+  QByteArray savedGeometry = settings->value("MainWindow/geometry").toByteArray();
+  bool restored = false;
+  if (!savedGeometry.isEmpty()) {
+    restoreGeometry(savedGeometry);
+    // Verify window center is still on an existing screen
+    QPoint center = geometry().center();
+    bool onScreen = false;
+    for (QScreen* s : QGuiApplication::screens()) {
+      if (s->availableGeometry().contains(center)) {
+        onScreen = true;
+        break;
+      }
+    }
+    restored = onScreen;
+  }
+  if (!restored) {
+    QRect screenGeom = QGuiApplication::primaryScreen()->availableGeometry();
+    int w = screenGeom.width() * 80 / 100;
+    int h = screenGeom.height() * 80 / 100;
+    setGeometry(
+      screenGeom.x() + (screenGeom.width() - w) / 2,
+      screenGeom.y() + (screenGeom.height() - h) / 2,
+      w, h);
+  }
+
   log->enableLogFile(TTCut::createLogFile);
   log->setLogModeConsole(TTCut::logModeConsole);
   log->setLogModeExtended(TTCut::logModeExtended);
@@ -224,6 +253,7 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(moveToHome()),          currentFrame, SLOT(onMoveToHome()));
   connect(navigation, SIGNAL(moveToEnd()),           currentFrame, SLOT(onMoveToEnd()));
   connect(navigation, SIGNAL(streamPoints()),        this,         SLOT(onStreamPoints()));
+  connect(navigation, SIGNAL(openQuickJump()),        this, SLOT(onQuickJump()));
 
   // Connect signal from video slider
   // --------------------------------------------------------------------------
@@ -470,7 +500,10 @@ void TTCutMainWindow::onFileExit()
  */
 void TTCutMainWindow::closeEvent(QCloseEvent* event)
 {
-  if (settings != 0)  settings->writeSettings();
+  if (settings != 0) {
+    settings->setValue("MainWindow/geometry", saveGeometry());
+    settings->writeSettings();
+  }
 
   //TTMessageBox msgBox;
   //msgBox.initSaveRequest("The document has been modified.", "Do you want to save your changes?");
@@ -1025,6 +1058,27 @@ void TTCutMainWindow::updateRecentFileActions()
 
   for (int j = numRecentFiles; j < MaxRecentFiles; ++j) {
     recentFileAction[j]->setVisible(false);
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Open Quick Jump thumbnail browser dialog
+ */
+void TTCutMainWindow::onQuickJump()
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* videoStream = mpCurrentAVDataItem->videoStream();
+  if (!videoStream) return;
+
+  int currentPos = videoStream->currentIndex();
+
+  TTQuickJumpDialog dlg(videoStream, currentPos, this);
+  if (dlg.exec() == QDialog::Accepted) {
+    int selectedFrame = dlg.selectedFrameIndex();
+    if (selectedFrame >= 0) {
+      currentFrame->onGotoFrame(selectedFrame);
+    }
   }
 }
 

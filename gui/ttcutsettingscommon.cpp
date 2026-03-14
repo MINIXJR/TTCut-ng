@@ -53,6 +53,18 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
     gl->addWidget(sbBurstThreshold, row, 1);
   }
 
+  // Zeitsprung interval spinbox
+  sbQuickJumpInterval = new QSpinBox(this);
+  sbQuickJumpInterval->setRange(0, 600);
+  sbQuickJumpInterval->setSuffix(" s");
+  sbQuickJumpInterval->setSpecialValueText(tr("All keyframes"));
+  QLabel* lblQuickJump = new QLabel(tr("Zeitsprung interval (0=all)"), this);
+  if (gl) {
+    int row3 = gl->rowCount();
+    gl->addWidget(lblQuickJump, row3, 0);
+    gl->addWidget(sbQuickJumpInterval, row3, 1);
+  }
+
   // Preview I-frame hint
   QLabel* lblPreviewHint = new QLabel(
       tr("Die Vorschau beginnt für jeden Schnitt bei einem I-Frame."), this);
@@ -100,7 +112,6 @@ void TTCutSettingsCommon::setTabData()
   sbArrowKeyPlacement->setValue( TTCut::stepArrowKeys );
   sbAltDistance->setValue( TTCut::stepPlusAlt );
   sbCtrlDistance->setValue( TTCut::stepPlusCtrl );
-  sbQuickJumpDistance->setValue( TTCut::stepQuickJump );
   sbMouseWheel->setValue( TTCut::stepMouseWheel );
 
   // Preview
@@ -116,6 +127,9 @@ void TTCutSettingsCommon::setTabData()
 
   // Audio burst detection
   sbBurstThreshold->setValue(TTCut::burstThresholdDb);
+
+  // Zeitsprung
+  sbQuickJumpInterval->setValue(TTCut::quickJumpIntervalSec);
 }
 
 // get the tab data and fill the global parameter
@@ -127,7 +141,6 @@ void TTCutSettingsCommon::getTabData()
   TTCut::stepArrowKeys   = sbArrowKeyPlacement->value( );
   TTCut::stepPlusAlt     = sbAltDistance->value( );
   TTCut::stepPlusCtrl    = sbCtrlDistance->value( );
-  TTCut::stepQuickJump   = sbQuickJumpDistance->value( );
   TTCut::stepMouseWheel  = sbMouseWheel->value( );
 
   // Preview
@@ -146,6 +159,9 @@ void TTCutSettingsCommon::getTabData()
 
   // Audio burst detection
   TTCut::burstThresholdDb = sbBurstThreshold->value();
+
+  // Zeitsprung
+  TTCut::quickJumpIntervalSec = sbQuickJumpInterval->value();
 }
 
 

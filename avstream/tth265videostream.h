@@ -105,6 +105,9 @@ protected:
     // Check if NAL type is a Random Access Point
     static bool isRAPNalType(int nalType);
 
+public:
+    const QList<TTFrameInfo>& ffmpegFrameIndex() const { return mFFmpeg->frameIndex(); }
+
 private:
     TTFFmpegWrapper* mFFmpeg;
     TTH265SPS* mSPS;

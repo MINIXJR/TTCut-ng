@@ -112,7 +112,6 @@ class TTCut
    static int stepPlusAlt;
    static int stepPlusCtrl;
    static int stepPlusShift;
-   static int stepQuickJump;
    static int stepMouseWheel;
 
    // Index files
@@ -169,6 +168,9 @@ class TTCut
 
    // --- audio boundary detection ---
    static int burstThresholdDb;      // dB RMS threshold for burst detection (-30 default, 0=disabled)
+
+   // --- Zeitsprung (Quick Jump) ---
+   static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)
 
    // --------------------------------------------------------------
    // muxer settings

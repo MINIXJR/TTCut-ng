@@ -109,7 +109,6 @@ int TTCut::stepArrowKeys   =   1;
 int TTCut::stepPlusAlt     = 100;
 int TTCut::stepPlusCtrl    = 200;
 int TTCut::stepPlusShift   = 200;
-int TTCut::stepQuickJump   =  25;
 int TTCut::stepMouseWheel  = 120;
 
 // Index files
@@ -169,6 +168,9 @@ int  TTCut::previewPreset = 0;     // ultrafast (for fast preview generation)
 
 // --- audio boundary detection ---
 int TTCut::burstThresholdDb = -30;
+
+// --- Zeitsprung (Quick Jump) ---
+int TTCut::quickJumpIntervalSec = 30;
 
 // --------------------------------------------------------------
 // muxer settings

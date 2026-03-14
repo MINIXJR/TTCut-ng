@@ -651,7 +651,7 @@
         <string>Jump to a specific frame or time</string>
        </property>
        <property name="text" >
-        <string>Quick jump ...</string>
+        <string>Zeitsprung ...</string>
        </property>
       </widget>
      </item>

@@ -65,7 +65,6 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void onGotoCutIn();
     void onGotoCutOut();
     void onAddCutRange();
-    void onQuickJump();
     void onStreamPoints();
     void onSetMarker();
     void onGotoMarker();
@@ -89,10 +88,10 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void moveNumSteps(int);
     void moveToHome();
     void moveToEnd();
-    void quickJump();
     void streamPoints();
     void setMarker();
     void gotoMarker(int);
+    void openQuickJump();
 
   protected:
 

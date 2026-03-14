@@ -158,7 +158,11 @@ HEADERS     = common/ttcut.h\
               gui/ttmplayerwidget.h\
               gui/ttcutaboutdlg.h\
               gui/ttcutavcutdlg.h\
-              gui/ttcutmainwindow.h
+              gui/ttcutmainwindow.h\
+              gui/ttquickjumpmodel.h\
+              gui/ttquickjumpdelegate.h\
+              gui/ttquickjumpworker.h\
+              gui/ttquickjumpdialog.h
 SOURCES     = common/ttcut.cpp\
               common/ttthreadtask.cpp\
               common/ttthreadtaskpool.cpp\  
@@ -240,6 +244,10 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutaboutdlg.cpp\
               gui/ttcutavcutdlg.cpp\
               gui/ttcutmainwindow.cpp\
+              gui/ttquickjumpmodel.cpp\
+              gui/ttquickjumpdelegate.cpp\
+              gui/ttquickjumpworker.cpp\
+              gui/ttquickjumpdialog.cpp\
               gui/ttcutmain.cpp
 #
 # -------------------------------------------------------------------------------

@@ -169,6 +169,7 @@ public:
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
+    void setFrameIndex(const QList<TTFrameInfo>& index) { mFrameIndex = index; }
     int frameCount() const { return mFrameIndex.size(); }
 
     // Build GOP index
