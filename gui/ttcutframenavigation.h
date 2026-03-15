@@ -48,6 +48,7 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     //void setTitle ( const QString & title );
 
     void controlEnabled( bool enabled );
+    void setThresholds(float blackThreshold, float sceneThreshold);
     void checkCutPosition(TTAVItem* avData, int pos = -1);
     void keyPressEvent(QKeyEvent* e);
 
@@ -65,9 +66,17 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void onGotoCutIn();
     void onGotoCutOut();
     void onAddCutRange();
-    void onStreamPoints();
     void onSetMarker();
-    void onGotoMarker();
+    void onPrevBlackFrame();
+    void onNextBlackFrame();
+    void onCancelBlackSearch();
+    void setBlackSearchRunning(bool running);
+    void onPrevSceneChange();
+    void onNextSceneChange();
+    void onCancelSceneSearch();
+    void setSceneSearchRunning(bool running);
+    void onBlackThresholdChanged(double value);
+    void onSceneThresholdChanged(double value);
 
     void onEditCut(const TTCutItem& cutData);
 
@@ -88,10 +97,12 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void moveNumSteps(int);
     void moveToHome();
     void moveToEnd();
-    void streamPoints();
     void setMarker();
-    void gotoMarker(int);
     void openQuickJump();
+    void searchBlackFrame(int currentPos, int direction, float threshold);
+    void abortBlackSearch();
+    void searchSceneChange(int currentPos, int direction, float threshold);
+    void abortSceneSearch();
 
   protected:
 
