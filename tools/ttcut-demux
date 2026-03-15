@@ -742,13 +742,18 @@ if $ES_MODE; then
             mkdir -p "$PAD_LOG_DIR"
 
             # Start all audio padding in parallel
+            # Strategy: Generate silence separately, then concatenate with original
+            # using ffmpeg concat demuxer + stream copy. This preserves original
+            # AC3 frames bit-for-bit (including per-frame acmod/channel changes).
             PAD_PIDS=()
             for i in "${!AUDIO_FILES[@]}"; do
                 AUDIO_FILE="${AUDIO_FILES[$i]}"
                 AUDIO_EXT="${AUDIO_FILE##*.}"
                 TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
+                TEMP_SILENCE="$OUTDIR/.temp_silence_${i}.${AUDIO_EXT}"
+                TEMP_CONCAT="$OUTDIR/.temp_concat_${i}.txt"
 
-                # Get audio codec, bitrate, and channels from original for re-encoding
+                # Get audio codec, bitrate, channels, and sample rate from original
                 AUDIO_CODEC=$(ffprobe -v error -select_streams a:0 \
                     -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \
                     "$AUDIO_FILE" 2>/dev/null || echo "copy")
@@ -758,17 +763,26 @@ if $ES_MODE; then
                 ORIG_CHANNELS=$(ffprobe -v error -select_streams a:0 \
                     -show_entries stream=channels -of default=noprint_wrappers=1:nokey=1 \
                     "$AUDIO_FILE" 2>/dev/null)
+                ORIG_SAMPLE_RATE=$(ffprobe -v error -select_streams a:0 \
+                    -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 \
+                    "$AUDIO_FILE" 2>/dev/null)
+                ORIG_DURATION=$(ffprobe -v error -show_entries format=duration \
+                    -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
                 # Clear non-numeric values (e.g. "N/A") so fallback defaults trigger
                 [[ "$ORIG_BITRATE" =~ ^[0-9]+$ ]] || ORIG_BITRATE=""
                 [[ "$ORIG_CHANNELS" =~ ^[0-9]+$ ]] || ORIG_CHANNELS=""
+                [[ "$ORIG_SAMPLE_RATE" =~ ^[0-9]+$ ]] || ORIG_SAMPLE_RATE=""
 
-                # Choose encoder matching original quality (fallback to safe defaults)
+                # Calculate padding duration
+                PAD_DURATION=$(awk "BEGIN {d = $TARGET_AUDIO_DUR - $ORIG_DURATION; printf \"%.6f\", (d > 0) ? d : 0}")
+
+                # Choose encoder for silence generation (matching original format)
                 case "$AUDIO_CODEC" in
                     mp2)
                         ENCODER="-c:a mp2 -b:a ${ORIG_BITRATE:-192000} -ac ${ORIG_CHANNELS:-2}"
                         ;;
                     ac3)
-                        ENCODER="-c:a ac3 -b:a ${ORIG_BITRATE:-384000} -ac ${ORIG_CHANNELS:-6}"
+                        ENCODER="-c:a ac3 -b:a ${ORIG_BITRATE:-384000} -ac ${ORIG_CHANNELS:-2}"
                         ;;
                     aac)
                         ENCODER="-c:a aac -b:a ${ORIG_BITRATE:-192000} -ac ${ORIG_CHANNELS:-2}"
@@ -780,11 +794,20 @@ if $ES_MODE; then
 
                 # Run padding in background
                 (
-                    ffmpeg -y -i "$AUDIO_FILE" \
-                        -af "apad=whole_dur=${TARGET_AUDIO_DUR}" \
-                        -t "$TARGET_AUDIO_DUR" \
+                    # 1. Generate silence matching original audio format
+                    ffmpeg -y -f lavfi \
+                        -i "anullsrc=r=${ORIG_SAMPLE_RATE:-48000}:cl=${ORIG_CHANNELS:-2}c" \
+                        -t "$PAD_DURATION" \
                         $ENCODER \
+                        "$TEMP_SILENCE" 2>&1
+
+                    # 2. Concatenate original + silence via concat demuxer (stream copy)
+                    printf "file '%s'\nfile '%s'\n" "$AUDIO_FILE" "$TEMP_SILENCE" > "$TEMP_CONCAT"
+                    ffmpeg -y -f concat -safe 0 -i "$TEMP_CONCAT" \
+                        -c:a copy \
                         "$TEMP_PADDED" 2>&1
+
+                    rm -f "$TEMP_SILENCE" "$TEMP_CONCAT"
                 ) > "$PAD_LOG_DIR/pad_$i.log" 2>&1 &
                 PAD_PIDS+=($!)
             done
