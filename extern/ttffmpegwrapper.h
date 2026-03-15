@@ -148,6 +148,7 @@ public:
     static void cleanupFFmpeg();
 
     // Open/close media file
+    void setAnalysisMode(bool enabled) { mAnalysisMode = enabled; }
     bool openFile(const QString& filePath);
     void closeFile();
     bool isOpen() const { return mFormatCtx != nullptr; }
@@ -192,6 +193,15 @@ public:
     QImage decodeFrame(int frameIndex);
     QImage decodeCurrentFrame();
     bool skipCurrentFrame();
+
+    // Lightweight black frame check (no RGB conversion, no QImage)
+    bool isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold);
+
+    // Scene change detection via luma histogram comparison
+    bool isSceneChange(int indexA, int indexB, float threshold);
+
+    // Build luma histogram for a single frame (for cached scene change search)
+    bool buildHistogram(int frameIndex, int hist[256], int& totalPixels);
     int videoWidth() const;
     int videoHeight() const;
 
@@ -232,6 +242,8 @@ private:
     int mCurrentFrameIndex;
     int mDecoderFrameIndex;     // Actual decoder position (last decoded frame)
     bool mDecoderDrained;       // True if decoder was flushed for EOF drain
+    bool mIsElementaryStream;   // Cached: true if file is raw ES (byte-seeking)
+    bool mAnalysisMode;         // True: use multi-threaded decoding for analysis
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;

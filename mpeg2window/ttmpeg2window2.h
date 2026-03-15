@@ -67,6 +67,7 @@ class TTMPEG2Window2 : public QLabel
 
     // Check if using FFmpeg decoder (H.264/H.265)
     bool isFFmpegStream() const { return mUseFFmpeg; }
+    TTFFmpegWrapper* ffmpegWrapper() const { return mpFFmpegWrapper; }
 
     // navigation
     void moveToFirstFrame(bool show = true);
@@ -79,6 +80,9 @@ class TTMPEG2Window2 : public QLabel
     void saveCurrentFrame(QString fName, const char* format);
 
     void invalidateDisplay();
+    bool isBlackAt(int index, int pixelThreshold, float ratioThreshold);
+    bool isSceneChangeAt(int indexA, int indexB, float threshold);
+    bool buildHistogramAt(int index, int hist[256], int& totalPixels);
 
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();

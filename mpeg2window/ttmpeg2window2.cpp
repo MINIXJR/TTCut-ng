@@ -353,9 +353,126 @@ void TTMPEG2Window2::closeVideoStream()
   repaint();
 }
 
+static float histogramDifference(const int histA[256], const int histB[256],
+                                  int totalA, int totalB)
+{
+    float diff = 0.0f;
+    for (int i = 0; i < 256; i++) {
+        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
+    }
+    return diff / 2.0f;  // normalize to 0.0–1.0
+}
+
+bool TTMPEG2Window2::buildHistogramAt(int index, int hist[256], int& totalPixels)
+{
+  memset(hist, 0, 256 * sizeof(int));
+  totalPixels = 0;
+
+  if (mUseFFmpeg) {
+    if (!mpFFmpegWrapper) return false;
+    return mpFFmpegWrapper->buildHistogram(index, hist, totalPixels);
+  }
+
+  // MPEG-2: decode, convert to grayscale, build histogram
+  if (!mpeg2Decoder) return false;
+  try {
+    mpeg2Decoder->moveToFrameIndex(index);
+    TFrameInfo* fi = mpeg2Decoder->getFrameInfo();
+    if (!fi || !fi->Y) return false;
+    QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
+    QImage gray = rgb.convertToFormat(QImage::Format_Grayscale8);
+
+    int w = gray.width(), h = gray.height();
+    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
+    const int step = 2;
+
+    for (int row = y0; row < y1; row += step) {
+      const uchar* line = gray.constScanLine(row);
+      for (int col = x0; col < x1; col += step) {
+        hist[line[col]]++;
+        totalPixels++;
+      }
+    }
+    return totalPixels > 0;
+  } catch (TTMpeg2DecoderException&) {
+    return false;
+  }
+}
+
+bool TTMPEG2Window2::isSceneChangeAt(int indexA, int indexB, float threshold)
+{
+  int histA[256], histB[256];
+  int totalA = 0, totalB = 0;
+
+  if (!buildHistogramAt(indexA, histA, totalA)) return false;
+  if (!buildHistogramAt(indexB, histB, totalB)) return false;
+
+  float diff = histogramDifference(histA, histB, totalA, totalB);
+  qDebug() << "Scene: frames" << indexA << "->" << indexB
+           << "diff=" << diff << "threshold=" << threshold
+           << (diff > threshold ? "MATCH" : "");
+  return diff > threshold;
+}
+
 /*!
- * Move to specified frame position
+ * Check if frame at index is black
  */
+bool TTMPEG2Window2::isBlackAt(int index, int pixelThreshold, float ratioThreshold)
+{
+  QImage gray;
+
+  if (mUseFFmpeg) {
+    // Use lightweight Y-plane check (no RGB conversion, no QImage)
+    if (!mpFFmpegWrapper) return false;
+    return mpFFmpegWrapper->isFrameBlack(index, pixelThreshold, ratioThreshold);
+  } else {
+    // MPEG-2: fi->Y is RGB32 data (formatRGB32), not raw Y plane
+    if (!mpeg2Decoder) return false;
+    try {
+      mpeg2Decoder->moveToFrameIndex(index);
+      TFrameInfo* fi = mpeg2Decoder->getFrameInfo();
+      if (!fi || !fi->Y) return false;
+      QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
+      gray = rgb.convertToFormat(QImage::Format_Grayscale8);
+    } catch (TTMpeg2DecoderException&) {
+      return false;
+    }
+  }
+
+  if (gray.isNull()) return false;
+
+  int w = gray.width(), h = gray.height();
+  int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
+
+  // Pixel-sampling (every 2nd row, every 2nd col = ~4x faster) + early exit
+  const int step = 2;
+  const int earlyExitSamples = 500;
+  long lumaSum = 0;
+  int totalPixels = 0, blackPixels = 0;
+
+  for (int row = y0; row < y1; row += step) {
+    const uchar* line = gray.constScanLine(row);
+    for (int col = x0; col < x1; col += step) {
+      totalPixels++;
+      lumaSum += line[col];
+      if (line[col] < pixelThreshold) blackPixels++;
+    }
+
+    // Early exit: if average luma already too high after enough samples
+    if (totalPixels >= earlyExitSamples) {
+      float avgSoFar = (float)lumaSum / totalPixels;
+      if (avgSoFar > 5.0f) return false;
+    }
+  }
+
+  if (totalPixels == 0) return false;
+
+  float avgLuma = (float)lumaSum / totalPixels;
+  if (avgLuma > 5.0f) return false;
+
+  return (float)blackPixels / totalPixels >= ratioThreshold;
+}
+
 void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
 {
   if (iFramePos == currentIndex) return;
