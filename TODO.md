@@ -42,24 +42,6 @@
   - **Dependencies:** ffmpeg, ffprobe, python3, syncstart (pip install syncstart)
 
 
-- **Quick Jump: Keyframe thumbnail browser**
-  - New window showing keyframes as thumbnails in a grid (ca. 6x5 = 30 per page)
-  - Paginated navigation, starting from current position
-  - Double-click thumbnail → close window and jump to that frame
-  - Existing "Quick Jump" button in main window should open this
-
-
-
-- **Built-in stream point detection ("Stream Points" button)**
-  - TTCut analyzes the stream and creates markers automatically
-  - Detection methods:
-    - Black frames (common at ad boundaries)
-    - Audio silence detection
-    - Scene changes (frame difference analysis)
-    - Logo detection (presence/absence of channel logo)
-  - Results are added to the Marker list for review
-  - User can then convert selected markers to cut points
-  - Could use ffmpeg's blackdetect/silencedetect filters or native implementation
 
 
 
@@ -86,11 +68,23 @@
 
 ## Medium Priority
 
+- **Projektdatei-Endung: .prj → .ttcut**
+  - `.prj` ist generisch (AutoCAD, IDEs) — `.ttcut` ist eindeutig und programmspezifisch
+  - Speichern: immer als `.ttcut`
+  - Öffnen: beide Endungen akzeptieren (`.ttcut` und `.prj` für Rückwärtskompatibilität)
+  - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`
+
 - **CLI Interface for batch Smart Cut (headless mode)**
   - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
   - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux
   - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
   - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
+
+- **Parallele Dekodierung mit mehreren FFmpegWrapper-Instanzen**
+  - Schwarzbild- und Szenenwechsel-Suche: N Worker-Threads mit je eigenem FFmpegWrapper
+  - Jeder Worker prüft andere I-Frames gleichzeitig → ~Nx Speedup
+  - Hauptgewinn bei HEVC (I-Frame-Decode ~12-15ms bei 1080p, Seek+Flush ~4ms)
+  - Erfordert: Thread-Pool, Ergebnis-Aggregation, Abbruch-Koordination
 
 - **Navigation Widget: B-Frame Buttons sind redundant mit P-Frame Buttons**
   - B▶/B◀ und P▶/P◀ im Navigation-Widget haben identisches Verhalten
@@ -173,6 +167,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **Deprecated qSort() → std::sort()**
+  - `avstream/ttsubtitleheaderlist.cpp:86` verwendet `qSort()` (deprecated seit Qt 5.2)
+  - Ersetzen durch `std::sort()` mit dem gleichen Comparator
+  - Ggf. weitere qSort-Vorkommen im Projekt prüfen
+
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen
   - Für manuelle Marker-Listen: Button der Marker-Paare in Cut-Einträge konvertiert
@@ -226,6 +225,8 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] VDR demux example script (`tools/vdr-demux-example.sh`)
 - [x] Replace transcode CLI with libavcodec API for MPEG-2 encoding (TTTranscodeProvider)
 - [x] H.264/H.265 A/V Sync in ttcut-demux: audio trim, padding, duration mismatch, bitrate autodetect, VDR multi-file
+- [x] Zeitsprung (Quick Jump) thumbnail browser dialog with interval filter (v0.61.7)
+- [x] Stream Point Detection: Landezonen widget with black frame, silence, audio format change, scene change detection via libavfilter; cut pair auto-derivation; .prj persistence (v0.62.0)
 
 ## Known Limitations
 
