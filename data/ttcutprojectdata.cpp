@@ -31,6 +31,7 @@
 #include "ttcutprojectdata.h"
 #include "ttavdata.h"
 #include "ttsubtitlelist.h"
+#include "ttstreampoint.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttsrtsubtitlestream.h"
 #include "../common/ttexception.h"
@@ -213,6 +214,10 @@ void TTCutProjectData::parseMarkerSection(QDomNodeList markerNodesList, TTAVItem
   //int type  = markerNodesList.at(2).toElement().text().toInt();
 
   avItem->appendMarker(pos, order);
+
+  // Also collect as legacy stream point for Landezonen widget
+  mParsedLegacyMarkers.append(TTStreamPoint(pos, StreamPointType::ManualMarker,
+    QString("Marker (manuell)")));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -303,6 +308,98 @@ QDomElement TTCutProjectData::writeMarkerSection(QDomElement& parent, int marker
   xmlMarkerType.appendChild(xmlDocument->createTextNode(QString("%1").arg(markerType)));
 
   return marker;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Serialize stream points to XML (top-level, after all Video elements)
+ */
+void TTCutProjectData::serializeStreamPoints(const QList<TTStreamPoint>& points)
+{
+  for (int i = 0; i < points.size(); i++) {
+    const TTStreamPoint& pt = points.at(i);
+
+    QDomElement elem = xmlDocument->createElement("StreamPoint");
+    xmlRoot->appendChild(elem);
+
+    QDomElement frameElem = xmlDocument->createElement("Frame");
+    elem.appendChild(frameElem);
+    frameElem.appendChild(xmlDocument->createTextNode(QString::number(pt.frameIndex())));
+
+    QDomElement typeElem = xmlDocument->createElement("Type");
+    elem.appendChild(typeElem);
+    typeElem.appendChild(xmlDocument->createTextNode(TTStreamPoint::typeToString(pt.type())));
+
+    QDomElement descElem = xmlDocument->createElement("Description");
+    elem.appendChild(descElem);
+    descElem.appendChild(xmlDocument->createTextNode(pt.description()));
+
+    QDomElement confElem = xmlDocument->createElement("Confidence");
+    elem.appendChild(confElem);
+    confElem.appendChild(xmlDocument->createTextNode(QString::number(pt.confidence(), 'f', 2)));
+
+    QDomElement durElem = xmlDocument->createElement("Duration");
+    elem.appendChild(durElem);
+    durElem.appendChild(xmlDocument->createTextNode(QString::number(pt.duration(), 'f', 2)));
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Deserialize stream points from XML
+ */
+QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
+{
+  QList<TTStreamPoint> points;
+
+  if (!xmlRoot) return points;
+
+  QDomNodeList nodes = xmlRoot->childNodes();
+  for (int i = 0; i < nodes.size(); i++) {
+    QDomElement elem = nodes.at(i).toElement();
+    if (elem.isNull()) continue;
+
+    if (elem.tagName() == "StreamPoint") {
+      QDomNodeList children = elem.childNodes();
+      int frame = 0;
+      QString type, desc;
+      float confidence = 0.0f, duration = 0.0f;
+
+      for (int j = 0; j < children.size(); j++) {
+        QDomElement child = children.at(j).toElement();
+        if (child.isNull()) continue;
+
+        if (child.tagName() == "Frame")
+          frame = child.text().toInt();
+        else if (child.tagName() == "Type")
+          type = child.text();
+        else if (child.tagName() == "Description")
+          desc = child.text();
+        else if (child.tagName() == "Confidence")
+          confidence = child.text().toFloat();
+        else if (child.tagName() == "Duration")
+          duration = child.text().toFloat();
+      }
+
+      points.append(TTStreamPoint(frame, TTStreamPoint::stringToType(type),
+                                   desc, confidence, duration));
+    }
+    // Legacy Marker elements at top level (convert to ManualMarker)
+    else if (elem.tagName() == "Marker") {
+      QDomNodeList children = elem.childNodes();
+      int pos = 0;
+      for (int j = 0; j < children.size(); j++) {
+        QDomElement child = children.at(j).toElement();
+        if (!child.isNull() && child.tagName() == "MarkerPos")
+          pos = child.text().toInt();
+      }
+      points.append(TTStreamPoint(pos, StreamPointType::ManualMarker,
+                                   QString("Marker (manuell)")));
+    }
+  }
+
+  // Include markers parsed from within <Video> sections
+  points.append(mParsedLegacyMarkers);
+
+  return points;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

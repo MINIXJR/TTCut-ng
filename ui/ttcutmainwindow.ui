@@ -320,22 +320,6 @@
               </item>
              </layout>
             </widget>
-            <widget class="QWidget" name="tab_3">
-             <attribute name="title">
-              <string>Marker</string>
-             </attribute>
-             <layout class="QGridLayout" name="gridLayout_8">
-              <property name="margin">
-               <number>0</number>
-              </property>
-              <property name="spacing">
-               <number>0</number>
-              </property>
-              <item row="0" column="0">
-               <widget class="TTMarkerTreeView" name="markerList" native="true"/>
-              </item>
-             </layout>
-            </widget>
            </widget>
           </item>
          </layout>
@@ -641,12 +625,6 @@
    <class>TTVideoTreeView</class>
    <extends>QWidget</extends>
    <header>../gui/ttvideotreeview.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>TTMarkerTreeView</class>
-   <extends>QWidget</extends>
-   <header>../gui/ttmarkertreeview.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>

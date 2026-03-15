@@ -172,6 +172,17 @@ class TTCut
    // --- Zeitsprung (Quick Jump) ---
    static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)
 
+   // --- Navigation search thresholds ---
+   static float  navBlackThreshold;     // Black frame detection threshold (default 0.980)
+   static float  navSceneThreshold;     // Scene change detection threshold (default 0.300)
+
+   // --- Stream Point detection ---
+   static bool   spDetectSilence;
+   static int    spSilenceThresholdDb;
+   static float  spSilenceMinDuration;
+   static bool   spDetectAudioChange;
+   static bool   spDetectAspectChange;
+
    // --------------------------------------------------------------
    // muxer settings
    // --------------------------------------------------------------

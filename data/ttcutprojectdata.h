@@ -34,12 +34,16 @@
 class TTAVItem;
 class TTAVData;
 class TTVideoStream;
+class TTStreamPointModel;
+
+#include "ttstreampoint.h"
 
 #include <QFileInfo>
 #include <QDomElement>
 #include <QTextStream>
 #include <QString>
 #include <QStringList>
+#include <QList>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutProjectData
@@ -51,7 +55,9 @@ class TTCutProjectData
     ~TTCutProjectData();
 
     void serializeAVDataItem(TTAVItem* vitem);
+    void serializeStreamPoints(const QList<TTStreamPoint>& points);
     void deserializeAVDataItem(TTAVData* avData);
+    QList<TTStreamPoint> deserializeStreamPoints();
 
     QString fileName();
     QString filePath();
@@ -79,6 +85,7 @@ class TTCutProjectData
     QDomDocument* xmlDocument;
     QDomElement*  xmlRoot;
     QDomNodeList* xmlNodeList;
+    QList<TTStreamPoint> mParsedLegacyMarkers;
 };
 
 #endif //TTCUTPROJECTDATA_H

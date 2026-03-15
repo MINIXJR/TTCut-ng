@@ -11,8 +11,8 @@
 #
 #
 PROJECT     = TTCut-ng
-VERSION     = 0.61.7
-CONFIG      += qt warn_on debug c++14
+VERSION     = 0.62.0
+CONFIG      += qt warn_on debug c++17
 QT          += core widgets gui xml network
 DEFINES     += _FILE_OFFSET_BITS=64
 DEFINES     += APP_VERSION=\\\"$$VERSION\\\"
@@ -23,7 +23,7 @@ LIBS        = -lmpeg2 -lmpeg2convert
 # libav/ffmpeg libraries for H.264/H.265 support
 unix {
   CONFIG += link_pkgconfig
-  PKGCONFIG += libavformat libavcodec libavutil libswscale
+  PKGCONFIG += libavformat libavcodec libavutil libswscale libavfilter
 }
 
 unix {
@@ -54,7 +54,6 @@ RESOURCES   = ui/ttcutvideoinfowidget.qrc\
 FORMS       = ui/audiofilelistwidget.ui\
               ui/videofilelistwidget.ui\
               ui/subtitlefilelistwidget.ui\
-              ui/markerlistwidget.ui\
               ui/cutoutframewidget.ui\
               ui/currentframewidget.ui\
               ui/navigatordisplaywidget.ui\
@@ -87,6 +86,11 @@ HEADERS     = common/ttcut.h\
               data/ttsubtitlelist.h\
               data/ttcutlist.h\
               data/ttmarkerlist.h\
+              data/ttstreampoint.h\
+              data/ttstreampointmodel.h\
+              data/ttstreampoint_videoworker.h\
+              data/ttstreampoint_audioworker.h\
+              data/ttstreampoint_cutderivation.h\
               data/ttcutparameter.h\
               data/ttmuxlistdata.h\
               data/ttavdata.h\
@@ -143,7 +147,7 @@ HEADERS     = common/ttcut.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
               gui/ttsubtitletreeview.h\
-              gui/ttmarkertreeview.h\
+              gui/ttstreampointwidget.h\
               gui/ttcutoutframe.h\
               gui/ttcurrentframe.h\
               gui/ttcutframenavigation.h\
@@ -174,6 +178,11 @@ SOURCES     = common/ttcut.cpp\
               data/ttsubtitlelist.cpp\
               data/ttcutlist.cpp\
               data/ttmarkerlist.cpp\
+              data/ttstreampoint.cpp\
+              data/ttstreampointmodel.cpp\
+              data/ttstreampoint_videoworker.cpp\
+              data/ttstreampoint_audioworker.cpp\
+              data/ttstreampoint_cutderivation.cpp\
               data/ttcutparameter.cpp\
               data/ttmuxlistdata.cpp\
               data/ttavdata.cpp\
@@ -228,7 +237,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttaudiotreeview.cpp\
               gui/ttvideotreeview.cpp\
               gui/ttsubtitletreeview.cpp\
-              gui/ttmarkertreeview.cpp\
+              gui/ttstreampointwidget.cpp\
               gui/ttcutoutframe.cpp\
               gui/ttcurrentframe.cpp\
               gui/ttcutframenavigation.cpp\
