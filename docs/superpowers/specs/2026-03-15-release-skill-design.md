@@ -22,16 +22,16 @@ Interactive release checklist skill for TTCut-ng that guides the user step-by-st
 - Semantic version suggestion based on commit history
 - Version bump across all files
 - CHANGELOG.md entry generation from commits
-- README.md review
-- Wiki update check and push (`/usr/local/src/TTCut-ng.wiki`)
+- README.md and CLAUDE.md review
+- Wiki update check, commit, and push (`/usr/local/src/TTCut-ng.wiki`)
 - Full rebuild and smoke test
-- Debian package build (`build-package.sh`)
+- Debian package build (`build-package.sh`) with .deb attached to GitHub Release
 - Git commit, tag, push
 - GitHub Release creation (`gh release create`)
 
 ### Out of Scope
-- .deb upload to external repositories
-- Automated testing beyond smoke test (binary starts)
+- .deb upload to external package repositories (apt repos etc.)
+- Automated testing beyond smoke test
 - Branch creation or merge (assumed done before `/release`)
 - Wiki content writing (skill prompts user to update, doesn't auto-generate)
 
@@ -41,59 +41,66 @@ Interactive release checklist skill for TTCut-ng that guides the user step-by-st
 
 | # | Step | Action | Failure |
 |---|------|--------|---------|
-| 1 | Branch check | Verify on `master` | Abort with message |
+| 1 | Branch & merge state | Verify on `master`. If not, list current branch and unmerged feature branches with suggested merge commands | Abort with guidance |
 | 2 | Working tree | `git status` — must be clean | Show dirty files, ask to proceed |
-| 3 | Open branches | List feature branches not yet merged | Warn, ask to proceed |
-| 4 | Security issues | Grep TODO.md for CRITICAL/HIGH security items | Warn with count |
-| 5 | Translations | Run `lrelease` on `.ts` files, check for untranslated strings | Warn with details |
+| 3 | GitHub CLI auth | `gh auth status` — verify authenticated | Abort — needed for GitHub Release |
+| 4 | Security issues | Grep TODO.md for CRITICAL/HIGH security items | Warn with count, ask to proceed |
+| 5 | Translations | Run `lupdate ttcut-ng.pro` to update .ts from source, then check for `type="unfinished"` entries in .ts XML files | Warn with details |
 | 6 | Last tag analysis | `git log v0.X.Y..HEAD --oneline` — show commits since last release | Display for review |
 
 ### Phase 2 — Version Bump
 
 | # | Step | Action |
 |---|------|--------|
-| 7 | Version suggestion | Analyze commits: "Fix"→Patch, "Add"/"Feature"→Minor. Present suggestion, user confirms or overrides |
+| 7 | Version suggestion | Analyze commits since last tag (see algorithm below). Present suggestion, user confirms or overrides |
 | 8 | Update `ttcut-ng.pro` | Edit `VERSION = X.Y.Z` line |
-| 9 | Scan for old version | Grep entire project for old version string, show matches. User decides which to update |
+| 9 | Scan for old version | Grep project for old version string including `CLAUDE.md`, `TODO.md`, `README.md`. Show matches, user decides which to update |
 
-### Phase 3 — Documentation
-
-| # | Step | Action |
-|---|------|--------|
-| 10 | CHANGELOG.md | Generate entry from commits since last tag. Format: version header, date, grouped by type (Features, Fixes, Changes). User can edit before saving |
-| 11 | README.md | Show current README, ask user if updates needed. If yes, user describes changes |
-| 12 | Wiki check | `cd /usr/local/src/TTCut-ng.wiki && git status` — if dirty or commits ahead, list changes. Ask user which pages need updates for this release |
-
-### Phase 4 — Build & Verify
+### Phase 3 — Build & Verify
 
 | # | Step | Action | Failure |
 |---|------|--------|---------|
-| 13 | Full rebuild | `make clean && qmake ttcut-ng.pro && bear -- make -j$(nproc)` | Abort — must fix before release |
-| 14 | Smoke test | Run `./ttcut-ng --version` or similar quick check | Abort |
-| 15 | Debian package | Run `build-package.sh` (pipe changelog message) | Abort |
-| 16 | Cleanup | `git checkout -- debian/changelog` | Warn |
+| 10 | Full rebuild | `make clean && qmake ttcut-ng.pro && bear -- make -j$(nproc)` | Abort — must fix before release |
+| 11 | Smoke test | `file ./ttcut-ng` (verify ELF binary) + `ldd ./ttcut-ng \| grep "not found"` (verify shared libs) | Abort |
+| 12 | Debian package | `echo "Release vX.Y.Z" \| bash build-package.sh` — note .deb output path | Abort |
+| 13 | Cleanup | `git checkout -- debian/changelog` | Warn |
+
+### Phase 4 — Documentation
+
+| # | Step | Action |
+|---|------|--------|
+| 14 | CHANGELOG.md | Generate entry from commits since last tag. Format: version header, date, grouped by type (Features, Fixes, Changes). User can edit before saving |
+| 15 | TODO.md | Check for items completed in this release — prompt user to move to Completed section |
+| 16 | README.md | Ask user if updates needed for this release |
+| 17 | CLAUDE.md | Check if "Recent Fixes and Features" section needs new entries |
+| 18 | Wiki check | `cd /usr/local/src/TTCut-ng.wiki && git status` — show state. Ask user which pages need updates (Changelog, Features, etc.) |
 
 ### Phase 5 — Publish
 
 | # | Step | Action |
 |---|------|--------|
-| 17 | Commit | Stage all changed files, commit "Release vX.Y.Z" |
-| 18 | Tag | `git tag vX.Y.Z` |
-| 19 | Push repo | `git push origin master --tags` — with confirmation |
-| 20 | GitHub Release | `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <changelog-excerpt>` |
-| 21 | Wiki push | If wiki has changes: `cd /usr/local/src/TTCut-ng.wiki && git push` — with confirmation |
+| 19 | Commit | Stage specific files (`git add ttcut-ng.pro CHANGELOG.md ...`), show `git diff --cached` for review, commit "Release vX.Y.Z" |
+| 20 | Tag | `git tag vX.Y.Z` |
+| 21 | Push repo | `git push origin master --tags` — with confirmation |
+| 22 | GitHub Release | `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <changelog-excerpt> /path/to/ttcut-ng_*.deb` |
+| 23 | Wiki commit & push | If wiki has changes: `cd /usr/local/src/TTCut-ng.wiki && git add -A && git commit -m "Update wiki for vX.Y.Z" && git push` — with confirmation |
 
 ## Version Suggestion Algorithm
 
 ```
 commits = git log <last-tag>..HEAD --oneline
+
 if any commit starts with "Add" or contains "feature" or "support":
-    suggest MINOR bump (0.X.0 → 0.X+1.0)
-else:
+    suggest MINOR bump (0.X.Y → 0.X+1.0)
+elif any commit starts with "Fix" and touches CRITICAL/HIGH security items:
+    suggest MINOR bump
+elif any commit starts with "Fix", "Update", "Improve", "Enhance":
     suggest PATCH bump (0.X.Y → 0.X.Y+1)
+else:
+    suggest PATCH bump
 ```
 
-User always has final say on version number.
+MAJOR bumps (pre-1.0 → 1.0) are only suggested manually by the user. User always has final say on version number.
 
 ## CHANGELOG Entry Format
 
@@ -107,7 +114,7 @@ User always has final say on version number.
 - Description (from "Fix ..." commits)
 
 ### Changes
-- Description (other commits)
+- Description (other commits: Update, Improve, Refactor, etc.)
 ```
 
 ## File Locations
@@ -118,7 +125,8 @@ User always has final say on version number.
 | `ttcut-ng.pro` | Version source of truth |
 | `CHANGELOG.md` | Release history |
 | `README.md` | Project overview |
-| `TODO.md` | May reference versions |
+| `CLAUDE.md` | Developer guide — version refs in "Recent Fixes" |
+| `TODO.md` | Feature roadmap — completed items reference versions |
 | `/usr/local/src/TTCut-ng.wiki/` | GitHub Wiki local clone |
 | `build-package.sh` | Debian package builder |
 
@@ -129,10 +137,16 @@ User always has final say on version number.
 - If build fails, abort release — code must compile
 - If push fails (network), allow retry
 
+### Partial Publish Recovery
+
+If Steps 19-20 succeed (commit + tag) but Step 21-22 fail:
+- To retry: just re-run the failed step
+- To rollback: `git tag -d vX.Y.Z && git reset --soft HEAD~1` — removes tag and uncommits (changes preserved in staging)
+
 ## Constraints
 
 - Skill does NOT run `sudo` commands
-- Skill does NOT upload .deb to external repos
+- Skill does NOT upload .deb to external apt repositories
 - Wiki path is hardcoded to `/usr/local/src/TTCut-ng.wiki`
-- Requires `gh` CLI for GitHub Release
+- Requires `gh` CLI (authenticated) for GitHub Release
 - Requires `bear` for compile_commands.json generation
