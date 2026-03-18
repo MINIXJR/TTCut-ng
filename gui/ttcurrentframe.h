@@ -53,6 +53,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 		void setTitle(const QString & title);
 		void controlEnabled(bool enabled);
+		TTMPEG2Window2* videoWindow() { return mpegWindow; }
 		int currentFramePos();
 		void saveCurrentFrame();
 		void closeVideoStream();

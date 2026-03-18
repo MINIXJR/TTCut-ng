@@ -36,10 +36,17 @@
 
 #include "ttcutmainwindow.h"
 #include "ttquickjumpdialog.h"
+#include "ttstreampointwidget.h"
 
 #include "../common/ttexception.h"
 #include "../common/ttthreadtask.h"
+#include "../common/ttthreadtaskpool.h"
 #include "../common/ttmessagebox.h"
+
+#include "../data/ttstreampointmodel.h"
+#include "../data/ttstreampoint_videoworker.h"
+#include "../data/ttstreampoint_audioworker.h"
+#include "../data/ttstreampoint_videoworker.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttprogressbar.h"
@@ -47,8 +54,12 @@
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
+
+// TTMPEG2Window2 for black frame detection via isBlackAt()
+#include "../mpeg2window/ttmpeg2window2.h"
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
+#include "../avstream/ttaudioheaderlist.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -85,6 +96,9 @@
 TTCutMainWindow::TTCutMainWindow()
 : QMainWindow()
 {
+  // Register metatype for cross-thread signal/slot
+  qRegisterMetaType<QList<TTStreamPoint>>("QList<TTStreamPoint>");
+
   // setup Qt Designer UI
   setupUi( this );
 
@@ -144,6 +158,9 @@ TTCutMainWindow::TTCutMainWindow()
   settings = new TTCutSettings();
   settings->readSettings();
 
+  // Initialize navigation spinboxes from saved settings
+  navigation->setThresholds(TTCut::navBlackThreshold, TTCut::navSceneThreshold);
+
   // Restore window geometry or default to 80% of screen
   QByteArray savedGeometry = settings->value("MainWindow/geometry").toByteArray();
   bool restored = false;
@@ -180,7 +197,20 @@ TTCutMainWindow::TTCutMainWindow()
 
   videoFileList->setAVData(mpAVData);
   cutList->setAVData(mpAVData);
-  markerList->setAVData(mpAVData);
+
+  // Stream point model and widget
+  mpStreamPointModel = new TTStreamPointModel(this);
+  mpStreamPointWidget = new TTStreamPointWidget(mpStreamPointModel, this);
+  mpStreamPointTaskPool = new TTThreadTaskPool();
+  mStreamPointWorkersRunning = 0;
+  mBlackSearchAborted = false;
+  mSceneSearchAborted = false;
+
+  // Add stream point widget below navigation in the Navigation GroupBox
+  QGridLayout* navLayout = qobject_cast<QGridLayout*>(gbNavigation->layout());
+  if (navLayout) {
+    navLayout->addWidget(mpStreamPointWidget, 1, 0);
+  }
 
   // no navigation
   navigationEnabled( false );
@@ -241,6 +271,10 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(prevFrame()),           currentFrame, SLOT(onPrevBFrame()));
   connect(navigation, SIGNAL(nextFrame()),           currentFrame, SLOT(onNextBFrame()));
   connect(navigation, SIGNAL(setCutOut(int)),        this, SLOT(onSetCutOut(int)));
+  connect(navigation, SIGNAL(searchBlackFrame(int,int,float)), this, SLOT(onSearchBlackFrame(int,int,float)));
+  connect(navigation, SIGNAL(abortBlackSearch()), this, SLOT(onAbortBlackSearch()));
+  connect(navigation, SIGNAL(searchSceneChange(int,int,float)), this, SLOT(onSearchSceneChange(int,int,float)));
+  connect(navigation, SIGNAL(abortSceneSearch()), this, SLOT(onAbortSceneSearch()));
 
   connect(navigation, SIGNAL(setCutOut(int)),        cutOutFrame,  SLOT(onGotoCutOut(int)));
 
@@ -248,12 +282,19 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(gotoCutIn(int)),        currentFrame, SLOT(onGotoCutIn(int)));
   connect(navigation, SIGNAL(gotoCutOut(int)),       currentFrame, SLOT(onGotoCutOut(int)));
   connect(navigation, SIGNAL(addCutRange(int, int)),               SLOT(onAppendCutEntry(int, int)));
-  connect(navigation, SIGNAL(gotoMarker(int)),       currentFrame, SLOT(onGotoMarker(int)));
   connect(navigation, SIGNAL(moveNumSteps(int)),     currentFrame, SLOT(onMoveNumSteps(int)));
   connect(navigation, SIGNAL(moveToHome()),          currentFrame, SLOT(onMoveToHome()));
   connect(navigation, SIGNAL(moveToEnd()),           currentFrame, SLOT(onMoveToEnd()));
-  connect(navigation, SIGNAL(streamPoints()),        this,         SLOT(onStreamPoints()));
   connect(navigation, SIGNAL(openQuickJump()),        this, SLOT(onQuickJump()));
+
+  // Stream point widget signals
+  connect(mpStreamPointWidget, SIGNAL(analyzeRequested()),      this, SLOT(onAnalyzeStreamPoints()));
+  connect(mpStreamPointWidget, SIGNAL(abortRequested()),        this, SLOT(onAbortStreamPoints()));
+  connect(mpStreamPointWidget, SIGNAL(jumpToFrame(int)),        this, SLOT(onStreamPointJump(int)));
+  connect(mpStreamPointWidget, SIGNAL(deleteRequested(int)),    this, SLOT(onStreamPointDelete(int)));
+  connect(mpStreamPointWidget, SIGNAL(deleteAllRequested()),    this, SLOT(onStreamPointDeleteAll()));
+  connect(mpStreamPointWidget, SIGNAL(setCutIn(int)),           this, SLOT(onStreamPointSetCutIn(int)));
+  connect(mpStreamPointWidget, SIGNAL(setCutOut(int)),          this, SLOT(onStreamPointSetCutOut(int)));
 
   // Connect signal from video slider
   // --------------------------------------------------------------------------
@@ -267,7 +308,7 @@ TTCutMainWindow::TTCutMainWindow()
   // --------------------------------------------------------------------------
   connect(currentFrame, SIGNAL(newFramePosition(int)), SLOT(onNewFramePos(int)));
   connect(currentFrame, SIGNAL(newFramePosition(int)), mpAVData, SLOT(onCurrentFramePositionChanged(int)));
-  connect(currentFrame, SIGNAL(setMarker(int)),        mpAVData, SLOT(onAppendMarker(int)));
+  // "Set marker" button now handled via navigation signal → onSetMarker adds to model
 
   // Connect signals from cut list widget
   // --------------------------------------------------------------------------
@@ -281,10 +322,16 @@ TTCutMainWindow::TTCutMainWindow()
   connect(cutList, SIGNAL(audioVideoCut(bool, TTCutList*)),               SLOT(onAudioVideoCut(bool, TTCutList*)));
   connect(cutList, SIGNAL(itemUpdated(const TTCutItem&)),    cutOutFrame, SLOT(onCutOutChanged(const TTCutItem&)));
 
-  connect(markerList, SIGNAL(gotoMarker(const TTMarkerItem&)), SLOT(onGotoMarker(const TTMarkerItem&)));
+  // Navigation "Set marker" → add manual marker to stream point model
+  connect(navigation, SIGNAL(setMarker()), this, SLOT(onSetStreamPointMarker()));
+  connect(currentFrame, SIGNAL(setMarker(int)), this, SLOT(onSetStreamPointMarker()));
 
   connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)), SLOT(onAVItemChanged(TTAVItem*)));
   connect(mpAVData, SIGNAL(foundEqualFrame(int)),           currentFrame, SLOT(onGotoFrame(int)));
+  connect(mpAVData, SIGNAL(streamPointsLoaded(const QList<TTStreamPoint>&)),
+          this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
+  connect(mpAVData, SIGNAL(vdrMarkersLoaded(const QList<TTStreamPoint>&)),
+          this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -433,7 +480,7 @@ void TTCutMainWindow::onFileSave()
 
   try
   {
-    mpAVData->writeProjectFile(fInfo);
+    mpAVData->writeProjectFile(fInfo, mpStreamPointModel->points());
   }
   catch (const TTException& ex)
   {
@@ -718,39 +765,144 @@ void TTCutMainWindow::onSetSelectedCutOut(const TTCutItem& cutItem)
 	cutOutFrame->onGotoCutOut(cutItem.cutOut());
 }
 
-void TTCutMainWindow::onGotoMarker(const TTMarkerItem& marker)
+void TTCutMainWindow::onSetStreamPointMarker()
 {
-	mpAVData->onChangeCurrentAVItem(marker.avDataItem());
+  if (!mpCurrentAVDataItem) return;
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
 
-	onVideoSliderChanged(marker.markerPos());
+  int pos = vs->currentIndex();
+  TTStreamPoint pt(pos, StreamPointType::ManualMarker,
+    QString("Marker (manuell)"));
+  mpStreamPointModel->addPoint(pt);
 }
 
-void TTCutMainWindow::onStreamPoints()
+void TTCutMainWindow::onAnalyzeStreamPoints()
 {
-	if (mpCurrentAVDataItem == 0) {
-		QMessageBox::information(this, tr("Stream Points"),
-			tr("No video stream loaded."));
-		return;
-	}
+  if (!mpCurrentAVDataItem) {
+    QMessageBox::information(this, tr("Stream Points"),
+      tr("No video stream loaded."));
+    return;
+  }
 
-	TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-	if (vs == 0) return;
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
 
-	TTSequenceHeader* seqHeader = vs->currentSequenceHeader();
+  // Save settings from widget
+  mpStreamPointWidget->saveSettings();
 
-	QString info;
-	info += tr("Video File: %1\n\n").arg(vs->fileName());
-	info += tr("Total Frames: %1\n").arg(vs->frameCount());
-	info += tr("Frame Rate: %1 fps\n").arg(vs->frameRate());
-	if (seqHeader) {
-		info += tr("Resolution: %1 x %2\n").arg(seqHeader->horizontalSize()).arg(seqHeader->verticalSize());
-		info += tr("Aspect Ratio: %1\n").arg(seqHeader->aspectRatioText());
-	}
-	info += tr("Bitrate: %1 kbit/s\n\n").arg(vs->bitRate() / 1000);
-	info += tr("Current Position: %1\n").arg(vs->currentIndex());
-	info += tr("Current Time: %1\n").arg(vs->currentFrameTime().toString("hh:mm:ss.zzz"));
+  // Clear previous auto-detected points
+  mpStreamPointModel->clearAutoDetected();
 
-	QMessageBox::information(this, tr("Stream Information"), info);
+  mStreamPointWorkersRunning = 0;
+
+  // Video worker (aspect ratio changes, MPEG-2 only)
+  if (TTCut::spDetectAspectChange) {
+    TTVideoHeaderList* videoHeaders = vs->headerList();
+    if (videoHeaders && videoHeaders->size() > 0) {
+      TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
+        vs->filePath(), vs->streamType(), vs->frameRate(),
+        TTCut::spDetectAspectChange, videoHeaders);
+
+      connect(videoWorker, SIGNAL(pointsDetected(const QList<TTStreamPoint>&)),
+              this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
+      connect(videoWorker, SIGNAL(finished(TTThreadTask*)),
+              this, SLOT(onAnalysisWorkerFinished()));
+
+      mpStreamPointTaskPool->start(videoWorker);
+      mStreamPointWorkersRunning++;
+    }
+  }
+
+  // Audio worker (silence, audio format changes)
+  if (TTCut::spDetectSilence || TTCut::spDetectAudioChange) {
+    // Use first audio stream if available
+    TTAudioStream* audio = nullptr;
+    TTAudioHeaderList* audioHeaders = nullptr;
+    if (mpCurrentAVDataItem->audioCount() > 0) {
+      audio = mpCurrentAVDataItem->audioStreamAt(0);
+      if (audio) {
+        audioHeaders = audio->headerList();
+      }
+    }
+
+    if (audio) {
+      TTStreamPointAudioWorker* audioWorker = new TTStreamPointAudioWorker(
+        audio->filePath(),
+        vs->frameRate(),
+        TTCut::spDetectSilence, TTCut::spSilenceThresholdDb, TTCut::spSilenceMinDuration,
+        TTCut::spDetectAudioChange, audioHeaders);
+
+      connect(audioWorker, SIGNAL(pointsDetected(const QList<TTStreamPoint>&)),
+              this, SLOT(onAudioPointsDetected(const QList<TTStreamPoint>&)));
+      connect(audioWorker, SIGNAL(finished(TTThreadTask*)),
+              this, SLOT(onAnalysisWorkerFinished()));
+
+      mpStreamPointTaskPool->start(audioWorker);
+      mStreamPointWorkersRunning++;
+    }
+  }
+
+  if (mStreamPointWorkersRunning > 0) {
+    mpStreamPointWidget->setAnalysisRunning(true);
+  } else {
+    QMessageBox::information(this, tr("Stream Points"),
+      tr("No detection methods enabled. Check Settings tab."));
+  }
+}
+
+void TTCutMainWindow::onAbortStreamPoints()
+{
+  mpStreamPointTaskPool->onUserAbortRequest();
+}
+
+void TTCutMainWindow::onStreamPointJump(int frameIndex)
+{
+  if (!mpCurrentAVDataItem) return;
+  onVideoSliderChanged(frameIndex);
+}
+
+void TTCutMainWindow::onStreamPointDelete(int row)
+{
+  mpStreamPointModel->removeAt(row);
+}
+
+void TTCutMainWindow::onStreamPointDeleteAll()
+{
+  mpStreamPointModel->clear();
+}
+
+void TTCutMainWindow::onStreamPointSetCutIn(int frameIndex)
+{
+  if (!mpCurrentAVDataItem) return;
+  currentFrame->onGotoFrame(frameIndex);
+  navigation->onSetCutIn();
+}
+
+void TTCutMainWindow::onStreamPointSetCutOut(int frameIndex)
+{
+  if (!mpCurrentAVDataItem) return;
+  currentFrame->onGotoFrame(frameIndex);
+  navigation->onSetCutOut();
+}
+
+void TTCutMainWindow::onVideoPointsDetected(const QList<TTStreamPoint>& points)
+{
+  mpStreamPointModel->addPoints(points);
+}
+
+void TTCutMainWindow::onAudioPointsDetected(const QList<TTStreamPoint>& points)
+{
+  mpStreamPointModel->addPoints(points);
+}
+
+void TTCutMainWindow::onAnalysisWorkerFinished()
+{
+  mStreamPointWorkersRunning--;
+  if (mStreamPointWorkersRunning <= 0) {
+    mStreamPointWorkersRunning = 0;
+    mpStreamPointWidget->setAnalysisRunning(false);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -887,6 +1039,7 @@ void TTCutMainWindow::closeProject()
   TTCut::projectFileName = "";
   navigationEnabled(false);
 
+  mpStreamPointModel->clear();
   mpAVData->clear();
 
   connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
@@ -904,7 +1057,6 @@ void TTCutMainWindow::navigationEnabled( bool enabled )
   navigation->controlEnabled(enabled);
   streamNavigator->controlEnabled(enabled);
   cutList->controlEnabled(enabled);
-  markerList->controlEnabled(enabled);
 }
 
 /*! //////////////////////////////////////////////////////////////////////////////////////
@@ -977,6 +1129,11 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
    }
 
   mpCurrentAVDataItem = avItem;
+
+  // Update stream point model frame rate for time display
+  if (avItem->videoStream()) {
+    mpStreamPointModel->setFrameRate(avItem->videoStream()->frameRate());
+  }
 
   videoFileInfo->onAVDataChanged(mpAVData, avItem);
   currentFrame->onAVDataChanged(avItem);
@@ -1100,4 +1257,240 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
       mainWin->updateRecentFileActions();
     }
   }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Search for next/previous black frame from current position
+ * Uses TTCut-ng's own decoder via TTMPEG2Window2::isBlackAt() for correct
+ * frame index mapping (display order, matching the video stream's index).
+ */
+void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float threshold)
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  int frameCount = vs->frameCount();
+  if (frameCount <= 0) return;
+
+  TTVideoIndexList* idxList = vs->indexList();
+  if (!idxList) return;
+
+  const int pixelThreshold = 18;  // Y <= 17
+
+  mBlackSearchAborted = false;
+  navigation->setBlackSearchRunning(true);
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+
+  QElapsedTimer timer;
+  timer.start();
+
+  int foundPos = -1;
+  int checked = 0;
+
+  // Jump directly between I-frames using the index list
+  int pos = (direction > 0)
+      ? idxList->moveToNextIndexPos(startPos, 1)
+      : idxList->moveToPrevIndexPos(startPos, 1);
+
+  while (pos >= 0 && pos < frameCount && !mBlackSearchAborted) {
+    if (currentFrame->videoWindow()->isBlackAt(pos, pixelThreshold, threshold)) {
+      foundPos = pos;
+      break;
+    }
+    checked++;
+
+    if (checked % 20 == 0)
+      QApplication::processEvents();
+
+    pos = (direction > 0)
+        ? idxList->moveToNextIndexPos(pos, 1)
+        : idxList->moveToPrevIndexPos(pos, 1);
+  }
+
+  qint64 elapsed = timer.elapsed();
+  qDebug() << "Black frame search:" << checked << "I-frames checked in"
+           << elapsed << "ms" << (checked > 0 ? QString("(%1 ms/frame)").arg(elapsed/checked) : "");
+
+  QApplication::restoreOverrideCursor();
+  navigation->setBlackSearchRunning(false);
+
+  if (mBlackSearchAborted) {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Schwarzbild-Suche abgebrochen"), 3000);
+  } else if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+  } else {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Kein Schwarzbild gefunden"), 3000);
+  }
+}
+
+void TTCutMainWindow::onAbortBlackSearch()
+{
+  mBlackSearchAborted = true;
+}
+
+/*!
+ * Scene change search: compare luma histograms of consecutive I-frame pairs
+ */
+void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float threshold)
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  int frameCount = vs->frameCount();
+  if (frameCount <= 0) return;
+
+  TTVideoIndexList* idxList = vs->indexList();
+  if (!idxList) return;
+
+  mSceneSearchAborted = false;
+  navigation->setSceneSearchRunning(true);
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+
+  QElapsedTimer timer;
+  timer.start();
+
+  int foundPos = -1;
+  int checked = 0;
+
+  // For H.264/H.265: open a dedicated multi-threaded decoder for analysis
+  TTFFmpegWrapper* analysisWrapper = nullptr;
+  bool useAnalysisWrapper = currentFrame->videoWindow()->isFFmpegStream();
+  if (useAnalysisWrapper) {
+    analysisWrapper = new TTFFmpegWrapper();
+    analysisWrapper->setAnalysisMode(true);
+    if (analysisWrapper->openFile(vs->filePath())) {
+      // Reuse existing frame index from preview decoder (avoids re-reading entire file)
+      TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+      if (previewWrapper)
+        analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+      else
+        analysisWrapper->buildFrameIndex();
+    } else {
+      delete analysisWrapper;
+      analysisWrapper = nullptr;
+      useAnalysisWrapper = false;
+    }
+  }
+
+  // Helper lambda: build histogram using either the analysis wrapper or MPEG-2 path
+  auto buildHist = [&](int index, int hist[256], int& total) -> bool {
+    if (useAnalysisWrapper && analysisWrapper)
+      return analysisWrapper->buildHistogram(index, hist, total);
+    return currentFrame->videoWindow()->buildHistogramAt(index, hist, total);
+  };
+
+  // Histogram caching: reuse histogram from previous iteration
+  // Forward: histB becomes histA of next pair
+  // Backward: histA becomes histB of next pair
+  int histA[256], histB[256];
+  int totalA = 0, totalB = 0;
+  bool hasHistA = false, hasHistB = false;
+
+  if (direction > 0) {
+    // Forward: posA = I-frame at or after startPos, posB = next I-frame
+    int posA = idxList->moveToIndexPos(startPos, 1);
+    int posB = (posA >= 0) ? idxList->moveToNextIndexPos(posA, 1) : -1;
+
+    while (posB >= 0 && posB < frameCount && !mSceneSearchAborted) {
+      if (!hasHistA) {
+        if (!buildHist(posA, histA, totalA)) break;
+        hasHistA = true;
+      }
+      if (!buildHist(posB, histB, totalB)) break;
+
+      float diff = 0.0f;
+      for (int i = 0; i < 256; i++)
+        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
+      diff /= 2.0f;
+
+      qDebug() << "Scene: frames" << posA << "->" << posB
+               << "diff=" << diff << "threshold=" << threshold
+               << (diff > threshold ? "MATCH" : "");
+
+      if (diff > threshold) {
+        foundPos = posB;
+        break;
+      }
+      checked++;
+
+      if (checked % 20 == 0)
+        QApplication::processEvents();
+
+      // Cache: histB becomes histA for next iteration
+      memcpy(histA, histB, 256 * sizeof(int));
+      totalA = totalB;
+      posA = posB;
+      posB = idxList->moveToNextIndexPos(posA, 1);
+    }
+  } else {
+    // Backward: posB = I-frame strictly before startPos, posA = I-frame before posB
+    int posB = idxList->moveToPrevIndexPos(startPos, 1);
+    int posA = (posB >= 0) ? idxList->moveToPrevIndexPos(posB, 1) : -1;
+
+    while (posA >= 0 && !mSceneSearchAborted) {
+      if (!hasHistB) {
+        if (!buildHist(posB, histB, totalB)) break;
+        hasHistB = true;
+      }
+      if (!buildHist(posA, histA, totalA)) break;
+
+      float diff = 0.0f;
+      for (int i = 0; i < 256; i++)
+        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
+      diff /= 2.0f;
+
+      qDebug() << "Scene: frames" << posA << "->" << posB
+               << "diff=" << diff << "threshold=" << threshold
+               << (diff > threshold ? "MATCH" : "");
+
+      if (diff > threshold) {
+        foundPos = posB;
+        break;
+      }
+      checked++;
+
+      if (checked % 20 == 0)
+        QApplication::processEvents();
+
+      // Cache: histA becomes histB for next iteration
+      memcpy(histB, histA, 256 * sizeof(int));
+      totalB = totalA;
+      posB = posA;
+      posA = idxList->moveToPrevIndexPos(posB, 1);
+    }
+  }
+
+  // Clean up analysis decoder
+  if (analysisWrapper) {
+    analysisWrapper->closeFile();
+    delete analysisWrapper;
+  }
+
+  qint64 elapsed = timer.elapsed();
+  qDebug() << "Scene change search:" << checked << "I-frames checked in"
+           << elapsed << "ms" << (checked > 0 ? QString("(%1 ms/frame)").arg(elapsed/checked) : "");
+
+  QApplication::restoreOverrideCursor();
+  navigation->setSceneSearchRunning(false);
+
+  if (mSceneSearchAborted) {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Szenenwechsel-Suche abgebrochen"), 3000);
+  } else if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+  } else {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Kein Szenenwechsel gefunden"), 3000);
+  }
+}
+
+void TTCutMainWindow::onAbortSceneSearch()
+{
+  mSceneSearchAborted = true;
 }

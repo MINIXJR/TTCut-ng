@@ -86,6 +86,33 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	pbNextFrame->setText(tr("F ▶"));
 	pbNextFrame->setStyleSheet("QPushButton { color: #aaaaaa; }");
 
+	// Black Frame = Monitor icon with directional arrows
+	pbPrevBlackFrame->setText(tr("◀"));
+	pbPrevBlackFrame->setLayoutDirection(Qt::RightToLeft);  // arrow before icon
+	pbNextBlackFrame->setText(tr("▶"));
+
+	// Cancel button: red, initially hidden
+	pbCancelBlackSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
+	                                   "QPushButton:hover { background-color: #ee3333; }");
+	pbCancelBlackSearch->hide();
+
+	// Scene change navigation buttons - Cyan (#44cccc)
+	pbPrevSceneChange->setIcon(QIcon());
+	pbPrevSceneChange->setText(tr("\u25C0 \u25E7"));
+	pbPrevSceneChange->setStyleSheet("QPushButton { color: #44cccc; font-weight: bold; }");
+	pbNextSceneChange->setIcon(QIcon());
+	pbNextSceneChange->setText(tr("\u25E7 \u25B6"));
+	pbNextSceneChange->setStyleSheet("QPushButton { color: #44cccc; font-weight: bold; }");
+
+	// Scene cancel button: red, initially hidden
+	pbCancelSceneSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
+	                                    "QPushButton:hover { background-color: #ee3333; }");
+	pbCancelSceneSearch->hide();
+
+	// Keep TTCut variables in sync with spinbox changes
+	connect(sbBlackThreshold, SIGNAL(valueChanged(double)), SLOT(onBlackThresholdChanged(double)));
+	connect(sbSceneThreshold, SIGNAL(valueChanged(double)), SLOT(onSceneThresholdChanged(double)));
+
 	// Cut-In = Green background (start/go - universal convention)
 	pbSetCutIn->setStyleSheet("QPushButton { background-color: #2d7a2d; color: white; font-weight: bold; }"
 	                          "QPushButton:disabled { background-color: #1a4a1a; color: #666666; }");
@@ -106,11 +133,9 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	pbAddCut->setStyleSheet("QPushButton { background-color: #2a5a8a; color: white; }"
 	                        "QPushButton:hover { background-color: #3a6a9a; }");
 
-	// Marker buttons = Purple (industry convention for notes/music)
+	// Marker button = Purple (industry convention for notes/music)
 	pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
 	pbSetMarker->setStyleSheet("QPushButton { color: #9966cc; }");
-	pbGotoMarker->setIcon(QIcon::fromTheme("go-jump", style->standardIcon(QStyle::SP_ArrowRight)));
-	pbGotoMarker->setStyleSheet("QPushButton { color: #9966cc; }");
 
 	connect(pbNextIFrame, SIGNAL(clicked()), SLOT(onNextIFrame()));
 	connect(pbPrevIFrame, SIGNAL(clicked()), SLOT(onPrevIFrame()));
@@ -126,14 +151,24 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	connect(pbGotoCutOut, SIGNAL(clicked()), SLOT(onGotoCutOut()));
 	connect(pbAddCut, SIGNAL(clicked()), SLOT(onAddCutRange()));
 	connect(pbQuickJump, SIGNAL(clicked()), SIGNAL(openQuickJump()));
-	connect(pbStreamPoints, SIGNAL(clicked()), SLOT(onStreamPoints()));
 	connect(pbSetMarker, SIGNAL(clicked()), SLOT(onSetMarker()));
-	connect(pbGotoMarker, SIGNAL(clicked()), SLOT(onGotoMarker()));
+	connect(pbPrevBlackFrame, SIGNAL(clicked()), SLOT(onPrevBlackFrame()));
+	connect(pbNextBlackFrame, SIGNAL(clicked()), SLOT(onNextBlackFrame()));
+	connect(pbCancelBlackSearch, SIGNAL(clicked()), SLOT(onCancelBlackSearch()));
+	connect(pbPrevSceneChange, SIGNAL(clicked()), SLOT(onPrevSceneChange()));
+	connect(pbNextSceneChange, SIGNAL(clicked()), SLOT(onNextSceneChange()));
+	connect(pbCancelSceneSearch, SIGNAL(clicked()), SLOT(onCancelSceneSearch()));
 }
 
 //void TTCutFrameNavigation::setTitle(const QString & title)
 //{
 //}
+
+void TTCutFrameNavigation::setThresholds(float blackThreshold, float sceneThreshold)
+{
+  sbBlackThreshold->setValue(blackThreshold);
+  sbSceneThreshold->setValue(sceneThreshold);
+}
 
 void TTCutFrameNavigation::controlEnabled(bool enabled)
 {
@@ -152,9 +187,9 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbGotoCutOut->setEnabled(enabled);
 	pbAddCut->setEnabled(enabled);
 	pbQuickJump->setEnabled(enabled);
-	pbStreamPoints->setEnabled(enabled);
 	pbSetMarker->setEnabled(enabled);
-	pbGotoMarker->setEnabled(enabled);
+	pbPrevSceneChange->setEnabled(enabled);
+	pbNextSceneChange->setEnabled(enabled);
 }
 
 void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData, int pos)
@@ -494,35 +529,65 @@ void TTCutFrameNavigation::onNextFrame()
 	emit nextFrame();
 }
 
-void TTCutFrameNavigation::onStreamPoints()
-{
-	emit streamPoints();
-}
-
 void TTCutFrameNavigation::onSetMarker()
 {
-	QString szTemp1, szTemp2;
-
-	markerPosition = currentPosition;
-
-	szTemp1 = currentTime;
-	szTemp2 = QString(" (%1)").arg(markerPosition);
-
-	if (currentFrameType == 1)
-		szTemp2 += " [I]";
-	if (currentFrameType == 2)
-		szTemp2 += " [P]";
-	if (currentFrameType == 3)
-		szTemp2 += " [B]";
-
-	szTemp1 += szTemp2;
-	laMarkerPosition->setText(szTemp1);
-
 	emit setMarker();
 }
 
-void TTCutFrameNavigation::onGotoMarker()
+void TTCutFrameNavigation::onPrevBlackFrame()
 {
-	if (markerPosition >= 0)
-		emit gotoMarker(markerPosition);
+  if (!isControlEnabled) return;
+  emit searchBlackFrame(currentPosition, -1, sbBlackThreshold->value());
+}
+
+void TTCutFrameNavigation::onNextBlackFrame()
+{
+  if (!isControlEnabled) return;
+  emit searchBlackFrame(currentPosition, +1, sbBlackThreshold->value());
+}
+
+void TTCutFrameNavigation::onCancelBlackSearch()
+{
+  emit abortBlackSearch();
+}
+
+void TTCutFrameNavigation::setBlackSearchRunning(bool running)
+{
+  pbCancelBlackSearch->setVisible(running);
+  pbPrevBlackFrame->setEnabled(!running);
+  pbNextBlackFrame->setEnabled(!running);
+}
+
+void TTCutFrameNavigation::onPrevSceneChange()
+{
+  if (!isControlEnabled) return;
+  emit searchSceneChange(currentPosition, -1, sbSceneThreshold->value());
+}
+
+void TTCutFrameNavigation::onNextSceneChange()
+{
+  if (!isControlEnabled) return;
+  emit searchSceneChange(currentPosition, +1, sbSceneThreshold->value());
+}
+
+void TTCutFrameNavigation::onCancelSceneSearch()
+{
+  emit abortSceneSearch();
+}
+
+void TTCutFrameNavigation::setSceneSearchRunning(bool running)
+{
+  pbCancelSceneSearch->setVisible(running);
+  pbPrevSceneChange->setEnabled(!running);
+  pbNextSceneChange->setEnabled(!running);
+}
+
+void TTCutFrameNavigation::onBlackThresholdChanged(double value)
+{
+  TTCut::navBlackThreshold = value;
+}
+
+void TTCutFrameNavigation::onSceneThresholdChanged(double value)
+{
+  TTCut::navSceneThreshold = value;
 }

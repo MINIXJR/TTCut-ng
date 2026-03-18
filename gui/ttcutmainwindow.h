@@ -38,6 +38,7 @@
 #include "../common/ttmessagelogger.h"
 #include "../data/ttaudiolist.h"
 #include "../data/ttcutlist.h"
+#include "../data/ttstreampoint.h"
 
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
@@ -51,6 +52,9 @@ class TTAVItem;
 class TTCutList;
 class TTProgressBar;
 class TTThreadTask;
+class TTStreamPointModel;
+class TTStreamPointWidget;
+class TTThreadTaskPool;
 
 //class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindow
 class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
@@ -99,10 +103,22 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onCutSelectionChanged(const TTCutItem&, int column);
 		void onSetSelectedCutOut(const TTCutItem&);
 		void onSetCutOut(int index);
-		void onStreamPoints();
+		void onSetStreamPointMarker();
+		void onAnalyzeStreamPoints();
+		void onAbortStreamPoints();
+		void onStreamPointJump(int frameIndex);
+		void onStreamPointDelete(int row);
+		void onStreamPointDeleteAll();
+		void onStreamPointSetCutIn(int frameIndex);
+		void onStreamPointSetCutOut(int frameIndex);
+		void onVideoPointsDetected(const QList<TTStreamPoint>& points);
+		void onAudioPointsDetected(const QList<TTStreamPoint>& points);
+		void onAnalysisWorkerFinished();
 		void onQuickJump();
-
-    void onGotoMarker(const TTMarkerItem& marker);
+		void onSearchBlackFrame(int startPos, int direction, float threshold);
+	void onAbortBlackSearch();
+	void onSearchSceneChange(int startPos, int direction, float threshold);
+	void onAbortSceneSearch();
 
 		void onNextAVData();
     void onPrevAVData();
@@ -129,8 +145,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		TTProgressBar*   progressBar;
 		TTCutSettings*   settings;
 		TTCutList*       mpPreviewOriginalCutList;
-		
+
     TTMessageLogger* log;
+
+    // Stream point detection
+    TTStreamPointModel*  mpStreamPointModel;
+    TTStreamPointWidget* mpStreamPointWidget;
+    TTThreadTaskPool*    mpStreamPointTaskPool;
+    int                  mStreamPointWorkersRunning;
+    bool                 mBlackSearchAborted;
+    bool                 mSceneSearchAborted;
 
 		// recent files menu
 		enum

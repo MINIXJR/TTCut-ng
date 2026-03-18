@@ -77,6 +77,23 @@ void TTCutSettings::readSettings()
   TTCut::quickJumpIntervalSec = value( "QuickJumpInterval/", TTCut::quickJumpIntervalSec ).toInt();
   endGroup();
 
+  // Navigation search thresholds
+  // ---------------------------------------------------------------------------
+  beginGroup( "/Navigation" );
+  TTCut::navBlackThreshold  = value( "BlackThreshold/",  TTCut::navBlackThreshold ).toFloat();
+  TTCut::navSceneThreshold  = value( "SceneThreshold/",  TTCut::navSceneThreshold ).toFloat();
+  endGroup();
+
+  // Stream Point detection
+  // ---------------------------------------------------------------------------
+  beginGroup( "/StreamPoints" );
+  TTCut::spDetectSilence      = value( "DetectSilence/",      TTCut::spDetectSilence ).toBool();
+  TTCut::spSilenceThresholdDb = value( "SilenceThresholdDb/", TTCut::spSilenceThresholdDb ).toInt();
+  TTCut::spSilenceMinDuration = value( "SilenceMinDuration/", TTCut::spSilenceMinDuration ).toFloat();
+  TTCut::spDetectAudioChange  = value( "DetectAudioChange/",  TTCut::spDetectAudioChange ).toBool();
+  TTCut::spDetectAspectChange = value( "DetectAspectChange/", TTCut::spDetectAspectChange ).toBool();
+  endGroup();
+
   // Preview
   // ---------------------------------------------------------------------------
   beginGroup( "/Preview" );
@@ -239,6 +256,23 @@ void TTCutSettings::writeSettings()
   setValue( "LastDirPath/" ,      TTCut::lastDirPath );
   setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
   setValue( "QuickJumpInterval/", TTCut::quickJumpIntervalSec );
+  endGroup();
+
+  // Navigation search thresholds
+  // ---------------------------------------------------------------------------
+  beginGroup( "/Navigation" );
+  setValue( "BlackThreshold/",  TTCut::navBlackThreshold );
+  setValue( "SceneThreshold/",  TTCut::navSceneThreshold );
+  endGroup();
+
+  // Stream Point detection
+  // ---------------------------------------------------------------------------
+  beginGroup( "/StreamPoints" );
+  setValue( "DetectSilence/",      TTCut::spDetectSilence );
+  setValue( "SilenceThresholdDb/", TTCut::spSilenceThresholdDb );
+  setValue( "SilenceMinDuration/", TTCut::spSilenceMinDuration );
+  setValue( "DetectAudioChange/",  TTCut::spDetectAudioChange );
+  setValue( "DetectAspectChange/", TTCut::spDetectAspectChange );
   endGroup();
 
   // Preview

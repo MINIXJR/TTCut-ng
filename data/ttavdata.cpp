@@ -33,6 +33,7 @@
 
 #include <QMessageBox>
 #include <QProcess>
+#include <QTime>
 
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
@@ -444,12 +445,14 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   mpAVList->append(avItem);
 
-  // Add pending VDR markers as cut entries AND markers (after video stream is set)
+  // Add pending VDR markers as cut entries AND stream points (after video stream is set)
   if (mpPendingVdrMarkers.contains(avItem)) {
     QList<QPair<int, int>> cutPairs = mpPendingVdrMarkers.take(avItem);
     int frameCount = vStream ? vStream->frameCount() : 0;
 
     qDebug() << "Adding" << cutPairs.size() << "VDR cut entries, video has" << frameCount << "frames";
+
+    QList<TTStreamPoint> vdrPoints;
 
     for (const auto& pair : cutPairs) {
       int cutIn = pair.first;
@@ -467,7 +470,17 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
         // Also add individual markers for the Marker tab
         avItem->appendMarker(cutIn);
         avItem->appendMarker(cutOut);
+
+        // Collect as VDR stream points for Landezonen widget
+        vdrPoints.append(TTStreamPoint(cutIn, StreamPointType::VDRImportMarker,
+          QString("VDR Mark (Cut-In)")));
+        vdrPoints.append(TTStreamPoint(cutOut, StreamPointType::VDRImportMarker,
+          QString("VDR Mark (Cut-Out)")));
       }
+    }
+
+    if (!vdrPoints.isEmpty()) {
+      emit vdrMarkersLoaded(vdrPoints);
     }
   }
 
@@ -703,12 +716,17 @@ QFileInfoList TTAVData::getSubtitleNames(const QFileInfo& vFileInfo)
 /**
  * Write the xml project file
  */
-void TTAVData::writeProjectFile(const QFileInfo& fInfo)
+void TTAVData::writeProjectFile(const QFileInfo& fInfo,
+                                 const QList<TTStreamPoint>& streamPoints)
 {
 	TTCutProjectData* prj = new TTCutProjectData(fInfo);
 
 	for (int i = 0; i < mpAVList->count(); i++) {
 		prj->serializeAVDataItem(mpAVList->at(i));
+	}
+
+	if (!streamPoints.isEmpty()) {
+		prj->serializeStreamPoints(streamPoints);
 	}
 
 	prj->writeXml();
@@ -751,8 +769,14 @@ void TTAVData::onReadProjectFileFinished()
   if (avCount() > 0)
     emit currentAVItemChanged(avItemAt(0));
 
+  // Load stream points from project file
+  QList<TTStreamPoint> loadedPoints = mpProjectData->deserializeStreamPoints();
+  if (!loadedPoints.isEmpty()) {
+    emit streamPointsLoaded(loadedPoints);
+  }
+
   emit readProjectFileFinished(mpProjectData->filePath());
-  
+
   delete mpProjectData;
   mpProjectData = 0;
 }

@@ -172,6 +172,17 @@ int TTCut::burstThresholdDb = -30;
 // --- Zeitsprung (Quick Jump) ---
 int TTCut::quickJumpIntervalSec = 30;
 
+// --- Navigation search thresholds ---
+float TTCut::navBlackThreshold  = 0.980f;
+float TTCut::navSceneThreshold  = 0.300f;
+
+// --- Stream Point detection ---
+bool  TTCut::spDetectSilence      = true;
+int   TTCut::spSilenceThresholdDb = -75;
+float TTCut::spSilenceMinDuration = 0.3f;
+bool  TTCut::spDetectAudioChange  = true;
+bool  TTCut::spDetectAspectChange = true;
+
 // --------------------------------------------------------------
 // muxer settings
 // --------------------------------------------------------------

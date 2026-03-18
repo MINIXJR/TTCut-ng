@@ -38,6 +38,7 @@
 #include <cmath>
 
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QTime>
 
 #include <QFile>
@@ -73,6 +74,8 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mCurrentFrameIndex(-1)
     , mDecoderFrameIndex(-1)
     , mDecoderDrained(false)
+    , mIsElementaryStream(false)
+    , mAnalysisMode(false)
     , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
@@ -123,6 +126,7 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
     bool isES = (suffix == "264" || suffix == "h264" ||
                  suffix == "265" || suffix == "h265" || suffix == "hevc" ||
                  suffix == "m2v" || suffix == "mpv");
+    mIsElementaryStream = isES;
 
     AVDictionary* opts = nullptr;
     const AVInputFormat* inputFmt = nullptr;
@@ -180,8 +184,14 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
             mVideoCodecCtx = avcodec_alloc_context3(codec);
             if (mVideoCodecCtx) {
                 avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
-                mVideoCodecCtx->thread_count = 1;
-                mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                if (mAnalysisMode) {
+                    mVideoCodecCtx->thread_count = 0;  // auto-detect (all cores)
+                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                    mVideoCodecCtx->skip_loop_filter = AVDISCARD_ALL;  // skip deblocking (safe for analysis)
+                } else {
+                    mVideoCodecCtx->thread_count = 1;
+                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                }
                 ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
                 if (ret < 0) {
                     qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
@@ -238,6 +248,7 @@ void TTFFmpegWrapper::closeFile()
     mCurrentFrameIndex = -1;
     mDecoderFrameIndex = -1;
     mDecoderDrained = false;
+    mIsElementaryStream = false;
     clearFrameCache();
 }
 
@@ -840,14 +851,8 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         keyframeIndex--;
     }
 
-    // Check if this is an ES file (needs byte-based seeking)
-    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
-    bool isES = (suffix == "264" || suffix == "h264" ||
-                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-                 suffix == "m2v" || suffix == "mpv");
-
     int64_t ret;
-    if (isES && mFormatCtx->pb) {
+    if (mIsElementaryStream && mFormatCtx->pb) {
         // For ES files, use byte-based seeking
         int64_t byteOffset = mFrameIndex[keyframeIndex].fileOffset;
 
@@ -1139,6 +1144,208 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
 
     av_packet_free(&packet);
     return result;
+}
+
+// ----------------------------------------------------------------------------
+// Lightweight black frame check — decode to YUV, analyze Y-plane directly.
+// No RGB conversion, no QImage, no cache. Much faster than decodeFrame().
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold)
+{
+    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) return false;
+    if (!mFormatCtx || !mVideoCodecCtx) return false;
+
+    // Seek to keyframe for this frame
+    int keyframeIndex = frameIndex;
+    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe)
+        keyframeIndex--;
+
+    // Only seek if needed (decoder already past the keyframe)
+    bool needSeek = true;
+    if (!mDecoderDrained && mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex
+        && mDecoderFrameIndex >= keyframeIndex)
+        needSeek = false;
+
+    if (needSeek) {
+        if (!seekToFrame(frameIndex)) return false;
+        mDecoderFrameIndex = mCurrentFrameIndex;
+    }
+
+    // Skip intermediate frames to reach target
+    while (mDecoderFrameIndex < frameIndex) {
+        if (!skipCurrentFrame()) break;
+        mDecoderFrameIndex++;
+    }
+
+    // Decode one frame (YUV, no RGB conversion)
+    if (!mDecodedFrame) {
+        mDecodedFrame = av_frame_alloc();
+        if (!mDecodedFrame) return false;
+    }
+
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
+
+    bool decoded = false;
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == mVideoStreamIndex) {
+            if (avcodec_send_packet(mVideoCodecCtx, packet) >= 0) {
+                if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+                    decoded = true;
+                    av_packet_unref(packet);
+                    break;
+                }
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    // EOF drain if needed
+    if (!decoded) {
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
+        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+            decoded = true;
+            mDecoderDrained = true;
+        }
+    }
+
+    av_packet_free(&packet);
+    if (!decoded) return false;
+
+    mDecoderFrameIndex = frameIndex;
+    mCurrentFrameIndex = frameIndex;
+
+    // Analyze Y-plane directly (YUV420P: data[0] = Y, linesize[0] = Y stride)
+    int w = mDecodedFrame->width, h = mDecodedFrame->height;
+    uint8_t* yPlane = mDecodedFrame->data[0];
+    int yStride = mDecodedFrame->linesize[0];
+    if (!yPlane || w <= 0 || h <= 0) return false;
+
+    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
+    const int step = 2;
+    const int earlyExitSamples = 500;
+    long lumaSum = 0;
+    int totalPixels = 0, blackPixels = 0;
+
+    for (int row = y0; row < y1; row += step) {
+        uint8_t* line = yPlane + row * yStride;
+        for (int col = x0; col < x1; col += step) {
+            totalPixels++;
+            lumaSum += line[col];
+            if (line[col] < pixelThreshold) blackPixels++;
+        }
+        if (totalPixels >= earlyExitSamples) {
+            float avgSoFar = (float)lumaSum / totalPixels;
+            if (avgSoFar > 20.0f) return false;  // video-range: black ≈ 16
+        }
+    }
+
+    if (totalPixels == 0) return false;
+    float avgLuma = (float)lumaSum / totalPixels;
+    if (avgLuma > 20.0f) return false;
+
+    return (float)blackPixels / totalPixels >= ratioThreshold;
+}
+
+// ----------------------------------------------------------------------------
+// Build luma histogram for a single frame (public, for cached search)
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPixels)
+{
+    memset(hist, 0, 256 * sizeof(int));
+    totalPixels = 0;
+
+    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) return false;
+    if (!mFormatCtx || !mVideoCodecCtx) return false;
+
+    // Seek to keyframe, skip intermediate frames
+    if (!seekToFrame(frameIndex)) return false;
+    mDecoderFrameIndex = mCurrentFrameIndex;
+
+    while (mDecoderFrameIndex < frameIndex) {
+        if (!skipCurrentFrame()) break;
+        mDecoderFrameIndex++;
+    }
+
+    if (!mDecodedFrame) {
+        mDecodedFrame = av_frame_alloc();
+        if (!mDecodedFrame) return false;
+    }
+
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
+
+    // Read packets until decoder produces a frame
+    // In analysis mode (AVDISCARD_NONKEY), only keyframes produce output
+    bool decoded = false;
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == mVideoStreamIndex) {
+            if (avcodec_send_packet(mVideoCodecCtx, packet) >= 0) {
+                if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+                    decoded = true;
+                    av_packet_unref(packet);
+                    break;
+                }
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    if (!decoded) {
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
+        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
+            decoded = true;
+            mDecoderDrained = true;
+        }
+    }
+
+    av_packet_free(&packet);
+    if (!decoded) return false;
+
+    mDecoderFrameIndex = frameIndex;
+    mCurrentFrameIndex = frameIndex;
+
+    // Build histogram from Y-plane center 80%
+    int w = mDecodedFrame->width, h = mDecodedFrame->height;
+    uint8_t* yPlane = mDecodedFrame->data[0];
+    int yStride = mDecodedFrame->linesize[0];
+    if (!yPlane || w <= 0 || h <= 0) return false;
+
+    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
+    const int step = 2;
+
+    for (int row = y0; row < y1; row += step) {
+        uint8_t* line = yPlane + row * yStride;
+        for (int col = x0; col < x1; col += step) {
+            hist[line[col]]++;
+            totalPixels++;
+        }
+    }
+    return totalPixels > 0;
+}
+
+// ----------------------------------------------------------------------------
+// Scene change detection: decode two I-frames and compare luma histograms
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::isSceneChange(int indexA, int indexB, float threshold)
+{
+    int histA[256], histB[256];
+    int totalA = 0, totalB = 0;
+
+    if (!buildHistogram(indexA, histA, totalA)) return false;
+    if (!buildHistogram(indexB, histB, totalB)) return false;
+
+    // Compare normalized histograms
+    float diff = 0.0f;
+    for (int i = 0; i < 256; i++) {
+        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
+    }
+    diff /= 2.0f;  // normalize to 0.0–1.0
+
+    qDebug() << "Scene FFmpeg: frames" << indexA << "->" << indexB
+             << "diff=" << diff << "threshold=" << threshold
+             << (diff > threshold ? "MATCH" : "");
+    return diff > threshold;
 }
 
 // ----------------------------------------------------------------------------
