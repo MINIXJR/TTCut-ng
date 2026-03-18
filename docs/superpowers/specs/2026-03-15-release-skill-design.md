@@ -33,7 +33,7 @@ Interactive release checklist skill for TTCut-ng that guides the user step-by-st
 - .deb upload to external package repositories (apt repos etc.)
 - Automated testing beyond smoke test
 - Branch creation or merge (assumed done before `/release`)
-- Wiki content writing (skill prompts user to update, doesn't auto-generate)
+- Wiki content auto-generation without user review (skill proposes changes, user approves)
 
 ## Phases and Steps
 
@@ -73,17 +73,18 @@ Interactive release checklist skill for TTCut-ng that guides the user step-by-st
 | 15 | TODO.md | Check for items completed in this release — prompt user to move to Completed section |
 | 16 | README.md | Ask user if updates needed for this release |
 | 17 | CLAUDE.md | Check if "Recent Fixes and Features" section needs new entries |
-| 18 | Wiki check | `cd /usr/local/src/TTCut-ng.wiki && git status` — show state. Ask user which pages need updates (Changelog, Features, etc.) |
+| 18 | Screenshots | If UI changed in this release: list affected screenshots in README.md and Wiki. Remind user to capture new screenshots with Tux test video loaded (no film footage for copyright reasons) |
+| 19 | Wiki update | Analyze commits since last tag and current Wiki pages (`/usr/local/src/TTCut-ng.wiki/`). Compare new features/fixes/changes against existing Wiki content. Propose concrete changes per page (new sections, updated text, removed outdated info). If changes are non-trivial or affect multiple pages, run a brainstorming session to align with user before editing. Show `git status` of wiki repo for any already-pending changes |
 
 ### Phase 5 — Publish
 
 | # | Step | Action |
 |---|------|--------|
-| 19 | Commit | Stage specific files (`git add ttcut-ng.pro CHANGELOG.md ...`), show `git diff --cached` for review, commit "Release vX.Y.Z" |
-| 20 | Tag | `git tag vX.Y.Z` |
-| 21 | Push repo | `git push origin master --tags` — with confirmation |
-| 22 | GitHub Release | `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <changelog-excerpt> /path/to/ttcut-ng_*.deb` |
-| 23 | Wiki commit & push | If wiki has changes: `cd /usr/local/src/TTCut-ng.wiki && git add -A && git commit -m "Update wiki for vX.Y.Z" && git push` — with confirmation |
+| 20 | Commit | Stage specific files (`git add ttcut-ng.pro CHANGELOG.md ...`), show `git diff --cached` for review, commit "Release vX.Y.Z" |
+| 21 | Tag | `git tag vX.Y.Z` |
+| 22 | Push repo | `git push origin master --tags` — with confirmation |
+| 23 | GitHub Release | `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <changelog-excerpt> /path/to/ttcut-ng_*.deb` |
+| 24 | Wiki commit & push | If wiki has changes: `cd /usr/local/src/TTCut-ng.wiki && git add -A && git commit -m "Update wiki for vX.Y.Z" && git push` — with confirmation |
 
 ## Version Suggestion Algorithm
 
@@ -139,7 +140,7 @@ MAJOR bumps (pre-1.0 → 1.0) are only suggested manually by the user. User alwa
 
 ### Partial Publish Recovery
 
-If Steps 19-20 succeed (commit + tag) but Step 21-22 fail:
+If Steps 20-21 succeed (commit + tag) but Step 22-23 fail:
 - To retry: just re-run the failed step
 - To rollback: `git tag -d vX.Y.Z && git reset --soft HEAD~1` — removes tag and uncommits (changes preserved in staging)
 
