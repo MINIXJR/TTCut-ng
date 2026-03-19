@@ -18,6 +18,9 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 - **H.264/H.265** — Smart Cut (~99,5% Stream-Copy, ~0,5% Re-Encode)
 - **SRT-Untertitel** — automatisches Laden, Vorschau-Overlay, Schnitt zusammen mit dem Video
 - **MKV-Ausgabe** mit Kapitelmarken (via libav matroska muxer)
+- **Landezonen** — automatische Erkennung von Schwarzbildern, Stille, Audioformatwechsel,
+  Szenenwechsel und Seitenverhältnisänderungen (4:3/16:9) mit Schnittvorschlägen
+- **Zeitsprung** — Keyframe-Thumbnail-Browser für schnelle Navigation mit Intervallfilter
 - **ttcut-demux** — Multi-Core TS-Demuxer mit A/V-Sync-Korrektur, Audio-Padding und VDR-Marks-Unterstützung
 - Tastaturkürzel für Frame-Navigation und Schnittpunkt-Auswahl (`?` für Hilfe)
 

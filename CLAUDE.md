@@ -145,6 +145,10 @@ Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 - Frame position is remembered when switching between videos
 - User warnings for destructive actions (New Project)
 - German translations (de_DE)
+- Zeitsprung: Keyframe-Thumbnail-Browser with page navigation, dynamic AR thumbnails, interval filter
+- Landezonen (Stream Points): Black frame, silence, audio format change (AC3 acmod), scene change,
+  and aspect ratio change (MPEG-2 4:3/16:9) detection with auto-derived cut pairs and .prj persistence
+- Interactive black frame and scene change navigation buttons in navigation widget
 
 ### SRT Subtitle Support
 
@@ -202,7 +206,7 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 - Multi-core optimized (parallel audio/video demuxing)
 - Generates .info file with frame rate, resolution, audio tracks
 - Audio trim at start for A/V offset correction
-- Audio padding at end (ProjectX-style) — reduces drift from 372ms to 8ms
+- Audio padding at end (ProjectX-style, concat stream-copy) — preserves per-frame AC3 acmod changes
 - Duration mismatch detection and reporting in .info file
 - VDR marks support (loads .marks file)
 - Automatic filler NALU stripping for H.264/H.265 (via ffmpeg `filter_units` bitstream filter)

@@ -2,6 +2,28 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.62.0 (2026-03-18)
+
+**Landezonen, Zeitsprung & Uebersetzungen**
+
+### Features
+- Landezonen (Stream Point Detection): Automatische Erkennung von Schwarzbildern, Stille,
+  Audioformatwechsel (AC3 acmod), Szenenwechsel und Seitenverhaeltnisaenderungen (MPEG-2 4:3/16:9)
+  mit Schnittvorschlaegen und Projektpersistenz
+- Zeitsprung: Keyframe-basierter Thumbnail-Browser mit Seitennavigation, dynamischen
+  Seitenverhaeltnis-Thumbnails, Intervallfilter und Fenstergeometrie-Persistenz
+- Interaktive Schwarzbild- und Szenenwechsel-Navigation ueber Buttons im Navigationswidget
+- Histogramm- und Szenenwechselanalyse in Video-Decodern (MPEG-2, H.264, H.265)
+
+### Fixes
+- Fix: ttcut-demux Audio-Padding zerstoerte AC3 per-Frame acmod (Stereo/5.1 Wechsel gingen verloren)
+  - Padding nutzt jetzt anullsrc + concat stream-copy statt Vollre-Encoding
+- Fix: B/F Navigationsbuttons sprangen zurueck zur Cut-In Position
+
+### Changes
+- Deutsche Uebersetzungen vollstaendig aktualisiert (165 fehlende Strings ergaenzt)
+- TODO bereinigt: erledigte Eintraege entfernt (Quick Jump, AC3 Demux)
+
 ## v0.61.7 (2026-03-11)
 
 **MPEG-2 MKV Muxing Fix + Settings Migration**
