@@ -34,6 +34,14 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutpreviewtask.h"
+#include "../data/ttcutvideotask.h"
+#include "../data/ttcutaudiotask.h"
+#include "../extern/ttessmartcut.h"
+#include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttmkvmergeprovider.h"
+#include "../avstream/ttesinfo.h"
+#include "../avstream/ttavtypes.h"
+#include "../common/ttthreadtaskpool.h"
 #include "ttmplayerwidget.h"
 
 #include <QApplication>
@@ -515,94 +523,18 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   TTCutItem firstItem = tmpCutList.at(0);
   TTAVItem* avItem = firstItem.avDataItem();
   TTVideoStream* vStream = avItem->videoStream();
-  QString sourceFile = vStream->filePath();
-  double frameRate = vStream->frameRate();
-  QString suffix = QFileInfo(sourceFile).suffix().toLower();
+  TTAVTypes::AVStreamType streamType = vStream->streamType();
+  bool isMpeg2 = (streamType == TTAVTypes::mpeg2_demuxed_video ||
+                  streamType == TTAVTypes::mpeg2_mplexed_video);
 
-  // Get frame rate and A/V offset from .info file
-  int avOffsetMs = 0;
-  QString infoFile = TTESInfo::findInfoFile(sourceFile);
-  if (!infoFile.isEmpty()) {
-    TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded()) {
-      if (esInfo.frameRate() > 0)
-        frameRate = esInfo.frameRate();
-      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
-        avOffsetMs = esInfo.avOffsetMs();
-    }
-  }
+  QString outputFile;
 
-  progress.setLabelText(tr("Video Smart Cut..."));
-  QApplication::processEvents();
-
-  // --- Smart Cut video ---
-  TTESSmartCut smartCut;
-  smartCut.setPresetOverride(TTCut::previewPreset);
-  if (!smartCut.initialize(sourceFile, frameRate)) {
-    qDebug() << "Regenerate: Smart Cut init failed:" << smartCut.lastError();
-    return;
-  }
-
-  QList<QPair<int, int>> cutFrames;
-  for (int i = 0; i < tmpCutList.count(); i++) {
-    TTCutItem item = tmpCutList.at(i);
-    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
-  }
-
-  QString tempVideoFile = QString("%1/preview_video_temp.%2")
-      .arg(TTCut::tempDirPath).arg(suffix);
-
-  if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
-    qDebug() << "Regenerate: Smart Cut failed:" << smartCut.lastError();
-    return;
-  }
-
-  progress.setLabelText(tr("Audio schneiden..."));
-  QApplication::processEvents();
-
-  // --- Cut audio ---
-  bool hasAudio = (avItem->audioCount() > 0);
-  QString audioFile;
-  QStringList cutAudioFiles;
-
-  if (hasAudio) {
-    audioFile = avItem->audioStreamAt(0)->filePath();
-    QList<QPair<double, double>> keepList;
-    for (int i = 0; i < tmpCutList.count(); i++) {
-      TTCutItem item = tmpCutList.at(i);
-      double cutInTime = item.cutInIndex() / frameRate;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-      keepList.append(qMakePair(cutInTime, cutOutTime));
-    }
-
-    QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-        .arg(TTCut::tempDirPath)
-        .arg(QFileInfo(audioFile).suffix());
-
-    TTFFmpegWrapper ffmpeg;
-    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
-      cutAudioFiles.append(cutAudioFile);
-    }
-  }
-
-  progress.setLabelText(tr("MKV erstellen..."));
-  QApplication::processEvents();
-
-  // --- Mux to MKV ---
-  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
-  int frameDurationNs = (int)(1000000000.0 / frameRate);
-
-  TTMkvMergeProvider mkvProvider;
-  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-  if (avOffsetMs != 0) {
-    mkvProvider.setAudioSyncOffset(avOffsetMs);
-  }
-  mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList());
-
-  // Clean up temp files
-  QFile::remove(tempVideoFile);
-  for (const QString& f : cutAudioFiles) {
-    QFile::remove(f);
+  if (isMpeg2) {
+    regenerateMpeg2PreviewClip(iCut, &tmpCutList, &progress);
+    outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpg");
+  } else {
+    regenerateSmartCutPreviewClip(iCut, &tmpCutList, &progress);
+    outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
   }
 
   qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
@@ -624,6 +556,168 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
     lblBurstWarning->setStyleSheet("QLabel { color: #228B22; font-weight: bold; }");
     lblBurstWarning->setText(QString::fromUtf8("\xe2\x9c\x93 Burst behoben"));
     lblBurstWarning->show();
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Regenerate MPEG-2 preview clip using TTCutVideoTask + mplex
+ */
+void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
+                                               QProgressDialog* progress)
+{
+  TTCutItem firstItem = tmpCutList->at(0);
+  TTAVItem* avItem = firstItem.avDataItem();
+  TTVideoStream* vStream = avItem->videoStream();
+
+  // Get A/V sync offset from .info file
+  int avOffsetMs = 0;
+  QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
+      avOffsetMs = esInfo.avOffsetMs();
+  }
+
+  progress->setLabelText(tr("MPEG-2 Video schneiden..."));
+  QApplication::processEvents();
+
+  // --- Cut video ---
+  QString videoFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "m2v");
+  TTCutVideoTask cutVideoTask(mpAVData);
+  cutVideoTask.init(videoFile, tmpCutList);
+  mpAVData->threadTaskPool()->start(&cutVideoTask, true);
+
+  // --- Cut audio ---
+  bool hasAudio = (avItem->audioCount() > 0);
+  QString audioFile;
+  if (hasAudio) {
+    progress->setLabelText(tr("Audio schneiden..."));
+    QApplication::processEvents();
+
+    audioFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpa");
+    TTCutAudioTask cutAudioTask;
+    cutAudioTask.init(audioFile, tmpCutList, 0, cutVideoTask.muxListItem());
+    mpAVData->threadTaskPool()->start(&cutAudioTask, true);
+  }
+
+  progress->setLabelText(tr("Muxing (mplex)..."));
+  QApplication::processEvents();
+
+  // --- Mux with mplex ---
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpg");
+  QString muxCommand;
+  if (hasAudio) {
+    if (avOffsetMs != 0) {
+      muxCommand = QString("mplex -f 8 -O %1ms -o \"%2\" \"%3\" \"%4\" 2>/dev/null")
+          .arg(avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
+    } else {
+      muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null")
+          .arg(outputFile).arg(videoFile).arg(audioFile);
+    }
+  } else {
+    muxCommand = QString("mv \"%1\" \"%2\" 2>/dev/null")
+        .arg(videoFile).arg(outputFile);
+  }
+  qDebug() << "Regenerate MPEG-2 mux:" << muxCommand;
+  system(qPrintable(muxCommand));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Regenerate H.264/H.265 preview clip using Smart Cut
+ */
+void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList,
+                                                  QProgressDialog* progress)
+{
+  TTCutItem firstItem = tmpCutList->at(0);
+  TTAVItem* avItem = firstItem.avDataItem();
+  TTVideoStream* vStream = avItem->videoStream();
+  QString sourceFile = vStream->filePath();
+  double frameRate = vStream->frameRate();
+  QString suffix = QFileInfo(sourceFile).suffix().toLower();
+
+  // Get frame rate and A/V offset from .info file
+  int avOffsetMs = 0;
+  QString infoFile = TTESInfo::findInfoFile(sourceFile);
+  if (!infoFile.isEmpty()) {
+    TTESInfo esInfo(infoFile);
+    if (esInfo.isLoaded()) {
+      if (esInfo.frameRate() > 0)
+        frameRate = esInfo.frameRate();
+      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
+        avOffsetMs = esInfo.avOffsetMs();
+    }
+  }
+
+  progress->setLabelText(tr("Video Smart Cut..."));
+  QApplication::processEvents();
+
+  // --- Smart Cut video ---
+  TTESSmartCut smartCut;
+  smartCut.setPresetOverride(TTCut::previewPreset);
+  if (!smartCut.initialize(sourceFile, frameRate)) {
+    qDebug() << "Regenerate: Smart Cut init failed:" << smartCut.lastError();
+    return;
+  }
+
+  QList<QPair<int, int>> cutFrames;
+  for (int i = 0; i < tmpCutList->count(); i++) {
+    TTCutItem item = tmpCutList->at(i);
+    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+  }
+
+  QString tempVideoFile = QString("%1/preview_video_temp.%2")
+      .arg(TTCut::tempDirPath).arg(suffix);
+
+  if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
+    qDebug() << "Regenerate: Smart Cut failed:" << smartCut.lastError();
+    return;
+  }
+
+  progress->setLabelText(tr("Audio schneiden..."));
+  QApplication::processEvents();
+
+  // --- Cut audio ---
+  bool hasAudio = (avItem->audioCount() > 0);
+  QStringList cutAudioFiles;
+
+  if (hasAudio) {
+    QString audioFile = avItem->audioStreamAt(0)->filePath();
+    QList<QPair<double, double>> keepList;
+    for (int i = 0; i < tmpCutList->count(); i++) {
+      TTCutItem item = tmpCutList->at(i);
+      double cutInTime = item.cutInIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      keepList.append(qMakePair(cutInTime, cutOutTime));
+    }
+
+    QString cutAudioFile = QString("%1/preview_audio_temp.%2")
+        .arg(TTCut::tempDirPath)
+        .arg(QFileInfo(audioFile).suffix());
+
+    TTFFmpegWrapper ffmpeg;
+    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+      cutAudioFiles.append(cutAudioFile);
+    }
+  }
+
+  progress->setLabelText(tr("MKV erstellen..."));
+  QApplication::processEvents();
+
+  // --- Mux to MKV ---
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+  int frameDurationNs = (int)(1000000000.0 / frameRate);
+
+  TTMkvMergeProvider mkvProvider;
+  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  if (avOffsetMs != 0) {
+    mkvProvider.setAudioSyncOffset(avOffsetMs);
+  }
+  mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList());
+
+  // Clean up temp files
+  QFile::remove(tempVideoFile);
+  for (const QString& f : cutAudioFiles) {
+    QFile::remove(f);
   }
 }
 
