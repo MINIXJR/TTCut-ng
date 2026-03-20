@@ -125,6 +125,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onAVItemChanged(TTAVItem* avItem);
 
     void onOpenProjectFileFinished(const QString&);
+    void onProjectModified();
 
 		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
 
@@ -138,6 +139,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void navigationEnabled(bool enabled);
 		void updateRecentFileActions();
 		void insertRecentFile(const QString& fName);
+		void setProjectModified(bool modified);
+		void updateWindowTitle();
 
 	private:
 		TTAVData*        mpAVData;
@@ -155,6 +158,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     int                  mStreamPointWorkersRunning;
     bool                 mBlackSearchAborted;
     bool                 mSceneSearchAborted;
+
+    // Dirty tracking
+    bool                 mProjectModified;
 
 		// recent files menu
 		enum

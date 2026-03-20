@@ -99,6 +99,8 @@ TTCutMainWindow::TTCutMainWindow()
   // Register metatype for cross-thread signal/slot
   qRegisterMetaType<QList<TTStreamPoint>>("QList<TTStreamPoint>");
 
+  mProjectModified = false;
+
   // setup Qt Designer UI
   setupUi( this );
 
@@ -332,6 +334,17 @@ TTCutMainWindow::TTCutMainWindow()
           this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
   connect(mpAVData, SIGNAL(vdrMarkersLoaded(const QList<TTStreamPoint>&)),
           this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
+
+  // Dirty tracking: set mProjectModified on any data change
+  // Signal signatures must match exactly (Qt4-style SIGNAL/SLOT)
+  connect(mpAVData, SIGNAL(cutItemAppended(const TTCutItem&)),                       SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(cutItemRemoved(int)),                                     SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(cutItemUpdated(const TTCutItem&, const TTCutItem&)),       SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(cutOrderUpdated(const TTCutItem&, int)),                   SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(avItemAppended(const TTAVItem&)),                          SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(avItemRemoved(int)),                                      SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(markerAppended(const TTMarkerItem&)),                      SLOT(onProjectModified()));
+  connect(mpAVData, SIGNAL(markerRemoved(int)),                                      SLOT(onProjectModified()));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -424,14 +437,16 @@ void TTCutMainWindow::onFileNew()
 {
   if (mpAVData->avCount() == 0) return;
 
-  // Warn user before closing current project
-  QMessageBox::StandardButton reply = QMessageBox::question(this,
-      tr("New Project"),
-      tr("Close current project and start a new one?\nUnsaved changes will be lost."),
-      QMessageBox::Yes | QMessageBox::No,
-      QMessageBox::No);
+  // Warn user only if there are unsaved changes
+  if (mProjectModified) {
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        tr("New Project"),
+        tr("Close current project and start a new one?\nUnsaved changes will be lost."),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
 
-  if (reply != QMessageBox::Yes) return;
+    if (reply != QMessageBox::Yes) return;
+  }
 
   closeProject();
 }
@@ -487,6 +502,8 @@ void TTCutMainWindow::onFileSave()
     log->errorMsg(__FILE__, __LINE__, QString(tr("error save project file: %1").arg(TTCut::projectFileName)));
     return;
   }
+
+  setProjectModified(false);
 }
 
 
@@ -552,9 +569,21 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
     settings->writeSettings();
   }
 
-  //TTMessageBox msgBox;
-  //msgBox.initSaveRequest("The document has been modified.", "Do you want to save your changes?");
-  //msgBox.exec();
+  if (mProjectModified) {
+    QMessageBox::StandardButton reply = QMessageBox::question(this,
+        tr("Beenden"),
+        tr("Änderungen vor dem Schließen speichern?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+
+    if (reply == QMessageBox::Cancel) {
+      event->ignore();
+      return;
+    }
+    if (reply == QMessageBox::Save) {
+      onFileSave();
+    }
+  }
 
   closeProject();
 
@@ -1021,6 +1050,31 @@ void TTCutMainWindow::onCutFinished()
  */
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Dirty tracking: project has been modified
+ */
+void TTCutMainWindow::onProjectModified()
+{
+  if (!mProjectModified) {
+    mProjectModified = true;
+    updateWindowTitle();
+  }
+}
+
+void TTCutMainWindow::setProjectModified(bool modified)
+{
+  mProjectModified = modified;
+  updateWindowTitle();
+}
+
+void TTCutMainWindow::updateWindowTitle()
+{
+  QString title = TTCut::versionString;
+  if (mProjectModified)
+    title += " *";
+  setWindowTitle(title);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Close current project or video file
  */
 void TTCutMainWindow::closeProject()
@@ -1041,6 +1095,8 @@ void TTCutMainWindow::closeProject()
 
   mpStreamPointModel->clear();
   mpAVData->clear();
+
+  setProjectModified(false);
 
   connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
   connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
@@ -1087,6 +1143,7 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   if (mpCurrentAVDataItem == 0) return;
 
   insertRecentFile(fName);
+  setProjectModified(false);
   disconnect(mpAVData, SIGNAL(readProjectFileFinished(const QString&)), this, SLOT(onOpenProjectFileFinished(const QString&)));
 }
 
