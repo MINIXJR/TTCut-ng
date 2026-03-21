@@ -427,8 +427,25 @@
      </item>
     </layout>
    </item>
-   <!-- Row 4: Black frame navigation + threshold -->
+   <!-- Row 4: Spacing before stream point navigation -->
    <item row="4" column="0" >
+    <spacer name="spacerBeforeStreamPoints" >
+     <property name="orientation" >
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType" >
+      <enum>QSizePolicy::Fixed</enum>
+     </property>
+     <property name="sizeHint" stdset="0" >
+      <size>
+       <width>0</width>
+       <height>8</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <!-- Row 5: Black frame navigation + threshold -->
+   <item row="5" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_black" >
      <property name="spacing" >
       <number>4</number>
@@ -580,8 +597,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 5: Scene change navigation + threshold -->
-   <item row="5" column="0" >
+   <!-- Row 6: Scene change navigation + threshold -->
+   <item row="6" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_scene" >
      <property name="spacing" >
       <number>4</number>
@@ -725,25 +742,25 @@
      </item>
     </layout>
    </item>
-   <!-- Row 6: Spacer -->
-   <item row="6" column="0" >
-    <spacer>
+   <!-- Row 7: Spacing before cut controls -->
+   <item row="7" column="0" >
+    <spacer name="spacerBeforeCutControls" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
      </property>
      <property name="sizeType" >
-      <enum>QSizePolicy::Minimum</enum>
+      <enum>QSizePolicy::Fixed</enum>
      </property>
      <property name="sizeHint" stdset="0" >
       <size>
-       <width>20</width>
-       <height>4</height>
+       <width>0</width>
+       <height>8</height>
       </size>
      </property>
     </spacer>
    </item>
-   <!-- Row 7: Cut In goto -->
-   <item row="7" column="0" >
+   <!-- Row 8: Cut In goto -->
+   <item row="8" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_3" >
      <property name="spacing" >
       <number>4</number>
@@ -807,8 +824,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 8: Cut Out goto -->
-   <item row="8" column="0" >
+   <!-- Row 9: Cut Out goto -->
+   <item row="9" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_4" >
      <property name="spacing" >
       <number>4</number>
@@ -872,25 +889,25 @@
      </item>
     </layout>
    </item>
-   <!-- Row 9: Spacer -->
-   <item row="9" column="0" >
-    <spacer>
+   <!-- Row 10: Spacing before action buttons -->
+   <item row="10" column="0" >
+    <spacer name="spacerBeforeActions" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
      </property>
      <property name="sizeType" >
-      <enum>QSizePolicy::Minimum</enum>
+      <enum>QSizePolicy::Fixed</enum>
      </property>
      <property name="sizeHint" stdset="0" >
       <size>
-       <width>375</width>
-       <height>4</height>
+       <width>0</width>
+       <height>8</height>
       </size>
      </property>
     </spacer>
    </item>
-   <!-- Row 10: Add range to cut list -->
-   <item row="10" column="0" >
+   <!-- Row 11: Add range to cut list -->
+   <item row="11" column="0" >
     <widget class="QPushButton" name="pbAddCut" >
      <property name="minimumSize" >
       <size>
@@ -919,8 +936,8 @@
      </property>
     </widget>
    </item>
-   <!-- Row 11: Quick jump + Set marker -->
-   <item row="11" column="0" >
+   <!-- Row 12: Quick jump + Set marker -->
+   <item row="12" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_5" >
      <property name="spacing" >
       <number>4</number>
@@ -983,8 +1000,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 12: Vertical spacer to push all content to top -->
-   <item row="12" column="0" >
+   <!-- Row 13: Vertical spacer to push all content to top -->
+   <item row="13" column="0" >
     <spacer name="verticalSpacerBottom" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
