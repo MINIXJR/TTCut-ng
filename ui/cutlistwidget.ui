@@ -273,7 +273,7 @@
      </column>
      <column>
       <property name="text" >
-       <string notr="true"/>
+       <string>Notice</string>
       </property>
      </column>
     </widget>

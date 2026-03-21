@@ -74,6 +74,7 @@ void TTCutSettings::readSettings()
   TTCut::tempDirPath      = value( "TempDirPath/", TTCut::tempDirPath ).toString();
   TTCut::lastDirPath      = value( "LastDirPath/", TTCut::lastDirPath ).toString();
   TTCut::burstThresholdDb = value( "BurstThresholdDb/", TTCut::burstThresholdDb ).toInt();
+  TTCut::normalizeAcmod   = value( "NormalizeAcmod/",   TTCut::normalizeAcmod ).toBool();
   TTCut::quickJumpIntervalSec = value( "QuickJumpInterval/", TTCut::quickJumpIntervalSec ).toInt();
   endGroup();
 
@@ -255,6 +256,7 @@ void TTCutSettings::writeSettings()
   setValue( "TempDirPath/" ,      TTCut::tempDirPath );
   setValue( "LastDirPath/" ,      TTCut::lastDirPath );
   setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
+  setValue( "NormalizeAcmod/",   TTCut::normalizeAcmod );
   setValue( "QuickJumpInterval/", TTCut::quickJumpIntervalSec );
   endGroup();
 

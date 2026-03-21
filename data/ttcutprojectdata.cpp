@@ -396,8 +396,20 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
     }
   }
 
-  // Include markers parsed from within <Video> sections
-  points.append(mParsedLegacyMarkers);
+  // Include markers parsed from within <Video> sections ONLY if no StreamPoint
+  // elements exist (legacy project without Landezonen). Otherwise the markers
+  // would be duplicated on every project load since they are already saved
+  // as StreamPoints.
+  bool hasStreamPoints = false;
+  for (int i = 0; i < nodes.size(); i++) {
+    if (nodes.at(i).toElement().tagName() == "StreamPoint") {
+      hasStreamPoints = true;
+      break;
+    }
+  }
+  if (!hasStreamPoints) {
+    points.append(mParsedLegacyMarkers);
+  }
 
   return points;
 }

@@ -93,11 +93,12 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
     void createActions();
     void updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
+    void updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
 
   private:
     TTAVData*        mAVData;
     int              editItemIndex;
-    bool      allowSelectionChanged;
+    bool             allowSelectionChanged;
     QTreeWidgetItem* currentEditItem;
     QMenu*           contextMenu;
     QAction*         itemUpAction;

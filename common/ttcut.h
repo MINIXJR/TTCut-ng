@@ -168,6 +168,7 @@ class TTCut
 
    // --- audio boundary detection ---
    static int burstThresholdDb;      // dB RMS threshold for burst detection (-30 default, 0=disabled)
+   static bool normalizeAcmod;       // Re-encode AC3 frames at cuts when acmod changes (default: true)
 
    // --- Zeitsprung (Quick Jump) ---
    static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)

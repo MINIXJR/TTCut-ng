@@ -210,13 +210,28 @@ public:
     void clearFrameCache();
 
     // Audio ES cutting - time-based stream-copy (ms-accurate)
+    // If normalizeAcmod is true and targetAcmods is provided, frames with wrong acmod
+    // at segment boundaries are re-encoded to match the target channel layout.
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
-                        const QList<QPair<double, double>>& cutList);
+                        const QList<QPair<double, double>>& cutList,
+                        bool normalizeAcmod = false,
+                        const QList<int>& targetAcmods = QList<int>());
 
     // Detect audio burst near a boundary (returns true if burst found)
     // Sets burstRmsDb and contextRmsDb if burst detected
     static bool detectAudioBurst(const QString& audioFile, double boundaryTime,
                                   bool isCutOut, double& burstRmsDb, double& contextRmsDb);
+
+    // AC3 acmod analysis - detect channel format changes at cut boundaries
+    struct AcmodInfo {
+        int mainAcmod;            // Majority acmod of segment (-1 if not AC3)
+        int cutInAcmod;           // acmod at CutIn position
+        int cutOutAcmod;          // acmod at CutOut position
+        double cutInChangeTime;   // Time where acmod changes to mainAcmod (0 if no change)
+        double cutOutChangeTime;  // Time where acmod changes from mainAcmod (0 if no change)
+    };
+    static AcmodInfo analyzeAcmod(const QString& audioFile,
+                                   double cutInTime, double cutOutTime);
 
     // SRT subtitle cutting - text-based time filtering
     bool cutSrtSubtitle(const QString& inputFile, const QString& outputFile,

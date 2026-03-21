@@ -36,7 +36,6 @@
 class TTAVData;
 class TTCutList;
 class TTCutVideoTask;
-class TTCutAudioTask;
 class TTCutSubtitleTask;
 class TTESSmartCut;
 
@@ -70,7 +69,6 @@ class TTCutPreviewTask : public TTThreadTask
 		TTCutList*         mpCutList;
 		TTCutList*         mpPreviewCutList;
 		TTCutVideoTask*    cutVideoTask;
-		TTCutAudioTask*    cutAudioTask;
 		TTCutSubtitleTask* cutSubtitleTask;
 };
 

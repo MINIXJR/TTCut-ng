@@ -34,6 +34,7 @@
 
 #include "../common/ttcut.h"
 
+#include <QCheckBox>
 #include <QSpinBox>
 
 class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
@@ -51,8 +52,9 @@ class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
       void onOpenDir();
 
   private:
-    QSpinBox* sbBurstThreshold;
-    QSpinBox* sbQuickJumpInterval;
+    QSpinBox*   sbBurstThreshold;
+    QCheckBox*  cbNormalizeAcmod;
+    QSpinBox*   sbQuickJumpInterval;
 };
 
 #endif

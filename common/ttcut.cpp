@@ -168,6 +168,7 @@ int  TTCut::previewPreset = 0;     // ultrafast (for fast preview generation)
 
 // --- audio boundary detection ---
 int TTCut::burstThresholdDb = -30;
+bool TTCut::normalizeAcmod  = true;
 
 // --- Zeitsprung (Quick Jump) ---
 int TTCut::quickJumpIntervalSec = 30;
