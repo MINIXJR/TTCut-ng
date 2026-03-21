@@ -148,26 +148,32 @@ void TTMPEGAudioStream::parseAudioHeader( quint8* data, int offset, TTMpegAudioH
   audio_header->original_home      = (data[offset+2] & 0x04) == 4;
   audio_header->emphasis           = (data[offset+2] & 0x03);
 
-  switch (audio_header->version)
-  {
-  case 3: // Mpeg 1
-    if (audio_header->layer == 3) // Layer I
-      frame_length = (int)trunc((12*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
-    else // Layer II, Layer III
-      frame_length = (int)trunc(144*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
-    break;
-  case 0: // Mpeg 2.5
-  case 2: // Mpeg 2
-    if (audio_header->layer==3) // Layer I
-      frame_length = (int)trunc((6*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
-    else // Layer II, Layer III
-      frame_length = (int)trunc(72*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
-    break;
-  default:
-    log->errorMsg(__FILE__, __LINE__, QString("Reserved MPEG audio verion %1!").arg(audio_header->version));
+  // Guard against division by zero (corrupt header with sampleRate 0)
+  if (audio_header->sampleRate() <= 0 || audio_header->bitRate() <= 0) {
     frame_length = 0;
-    frame_time   = (double)0.0;
-    break;
+    frame_time   = 0.0;
+  } else {
+    switch (audio_header->version)
+    {
+    case 3: // Mpeg 1
+      if (audio_header->layer == 3) // Layer I
+        frame_length = (int)trunc((12*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
+      else // Layer II, Layer III
+        frame_length = (int)trunc(144*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
+      break;
+    case 0: // Mpeg 2.5
+    case 2: // Mpeg 2
+      if (audio_header->layer==3) // Layer I
+        frame_length = (int)trunc((6*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
+      else // Layer II, Layer III
+        frame_length = (int)trunc(72*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
+      break;
+    default:
+      log->errorMsg(__FILE__, __LINE__, QString("Reserved MPEG audio version %1!").arg(audio_header->version));
+      frame_length = 0;
+      frame_time   = 0.0;
+      break;
+    }
   }
 
   if (frame_length > 0)
@@ -225,7 +231,7 @@ int TTMPEGAudioStream::createHeaderList( )
   try
   {
     updateTime.start();
-    emit statusReport(StatusReportArgs::Start, "Create audio-header list", stream_buffer->size());
+    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
 
     while ( !stream_buffer->atEnd() )
     {
@@ -261,12 +267,12 @@ int TTMPEGAudioStream::createHeaderList( )
       stream_buffer->seekRelative( audio_header->frame_length-4 );
 
       if (updateTime.elapsed() >= updateIntervalMs) {
-        emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
         updateTime.restart();
       }
     }
 
-    emit statusReport(StatusReportArgs::Finished, "Audio-header list created", stream_buffer->position());
+    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
   }
   catch (TTFileBufferException)
   {

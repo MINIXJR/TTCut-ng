@@ -128,7 +128,13 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   audio_header->crc1            = daten[0]<<(8+daten[1]);
   audio_header->fscod           = (quint8)((daten[2]&0xc0)>>6);
   audio_header->frmsizecod      = (quint8)(daten[2]&0x3f);
-  audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
+
+  // Guard against OOB: AC3FrameLength is [4][38], fscod 3 is reserved, frmsizecod >= 38 is invalid
+  if (audio_header->fscod >= 3 || audio_header->frmsizecod >= 38) {
+    audio_header->syncframe_words = 0;
+  } else {
+    audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
+  }
   audio_header->frame_length    = audio_header->syncframe_words*2;
   audio_header->frame_time      = 1000.0*((double)audio_header->syncframe_words*16.0)/(double)audio_header->bitRate();
   audio_header->bsid            = (quint8)(daten[3]>>3);
@@ -172,7 +178,7 @@ int TTAC3AudioStream::createHeaderList()
   try
   {
     updateTime.start();
-    emit statusReport(StatusReportArgs::Start, "Create audio-header list", stream_buffer->size());
+    emit statusReport(StatusReportArgs::Start, tr("Creating audio header list"), stream_buffer->size());
 
     while (!stream_buffer->atEnd())
     {
@@ -216,11 +222,11 @@ int TTAC3AudioStream::createHeaderList()
       stream_buffer->seekRelative(audio_header->syncframe_words*2-8);
 
       if (updateTime.elapsed() >= updateIntervalMs) {
-        emit statusReport(StatusReportArgs::Step, "Create audio-header list", stream_buffer->position());
+        emit statusReport(StatusReportArgs::Step, tr("Creating audio header list"), stream_buffer->position());
         updateTime.restart();
       }
     }
-    emit statusReport(StatusReportArgs::Finished, "Audio-header list created", stream_buffer->position());
+    emit statusReport(StatusReportArgs::Finished, tr("Audio header list created"), stream_buffer->position());
   }
   catch (TTFileBufferException)
   {

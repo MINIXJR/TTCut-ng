@@ -311,9 +311,9 @@ private:
     void deduplicateList(QList<int>& list);
 
     // Exp-Golomb decoding (for slice header parsing)
-    static uint32_t readExpGolombUE(const uint8_t* data, int& bitPos);
-    static int32_t readExpGolombSE(const uint8_t* data, int& bitPos);
-    static uint32_t readBits(const uint8_t* data, int& bitPos, int numBits);
+    static uint32_t readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos);
+    static int32_t readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos);
+    static uint32_t readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
 };
 
 #endif // TTNALUPARSER_H

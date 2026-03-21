@@ -430,16 +430,16 @@ bool TTNaluParser::parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal)
     int bitPos = 8;  // Skip NAL header byte
 
     // first_mb_in_slice (ue(v))
-    nal.firstMbInSlice = static_cast<int>(readExpGolombUE(bytes, bitPos));
+    nal.firstMbInSlice = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
 
     // slice_type (ue(v))
-    uint32_t sliceType = readExpGolombUE(bytes, bitPos);
+    uint32_t sliceType = readExpGolombUE(bytes, data.size(), bitPos);
     // Normalize slice type (0-4 and 5-9 mean the same thing)
     if (sliceType > 4) sliceType -= 5;
     nal.sliceType = static_cast<int>(sliceType);
 
     // pic_parameter_set_id (ue(v))
-    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, bitPos));
+    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
 
     // frame_num would require knowing log2_max_frame_num from SPS
     // For now, we skip it
@@ -543,16 +543,16 @@ bool TTNaluParser::parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal)
     int bitPos = 16;  // Skip 2-byte NAL header
 
     // first_slice_segment_in_pic_flag (1 bit)
-    uint32_t firstSliceFlag = readBits(bytes, bitPos, 1);
+    uint32_t firstSliceFlag = readBits(bytes, data.size(), bitPos, 1);
     nal.firstMbInSlice = (firstSliceFlag == 1) ? 0 : -1;
 
     // For BLA/IDR/CRA: no_output_of_prior_pics_flag (1 bit)
     if (nal.type >= H265::NAL_BLA_W_LP && nal.type <= H265::NAL_CRA_NUT) {
-        readBits(bytes, bitPos, 1);  // no_output_of_prior_pics_flag
+        readBits(bytes, data.size(), bitPos, 1);  // no_output_of_prior_pics_flag
     }
 
     // slice_pic_parameter_set_id (ue(v))
-    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, bitPos));
+    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
 
     // For first slice in picture, we can read slice_type directly from the bitstream.
     // For dependent slices (firstSliceFlag == 0), we'd need PPS data we don't have,
@@ -560,7 +560,7 @@ bool TTNaluParser::parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal)
     if (firstSliceFlag == 1) {
         // HEVC spec: slice_type is ue(v) right after slice_pic_parameter_set_id
         // (assuming num_extra_slice_header_bits == 0, which is standard for DVB)
-        uint32_t sliceType = readExpGolombUE(bytes, bitPos);
+        uint32_t sliceType = readExpGolombUE(bytes, data.size(), bitPos);
         if (sliceType <= 2) {
             nal.sliceType = static_cast<int>(sliceType);
         } else {
@@ -1082,11 +1082,11 @@ void TTNaluParser::setError(const QString& error)
 // ----------------------------------------------------------------------------
 // Read Exp-Golomb unsigned value (ue(v))
 // ----------------------------------------------------------------------------
-uint32_t TTNaluParser::readExpGolombUE(const uint8_t* data, int& bitPos)
+uint32_t TTNaluParser::readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos)
 {
     // Count leading zeros
     int leadingZeros = 0;
-    while (readBits(data, bitPos, 1) == 0 && leadingZeros < 32) {
+    while (readBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 32) {
         leadingZeros++;
     }
 
@@ -1095,16 +1095,16 @@ uint32_t TTNaluParser::readExpGolombUE(const uint8_t* data, int& bitPos)
     }
 
     // Read the value bits
-    uint32_t value = readBits(data, bitPos, leadingZeros);
+    uint32_t value = readBits(data, dataSize, bitPos, leadingZeros);
     return (1u << leadingZeros) - 1 + value;
 }
 
 // ----------------------------------------------------------------------------
 // Read Exp-Golomb signed value (se(v))
 // ----------------------------------------------------------------------------
-int32_t TTNaluParser::readExpGolombSE(const uint8_t* data, int& bitPos)
+int32_t TTNaluParser::readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos)
 {
-    uint32_t ue = readExpGolombUE(data, bitPos);
+    uint32_t ue = readExpGolombUE(data, dataSize, bitPos);
     if (ue & 1) {
         return static_cast<int32_t>((ue + 1) / 2);
     } else {
@@ -1113,14 +1113,15 @@ int32_t TTNaluParser::readExpGolombSE(const uint8_t* data, int& bitPos)
 }
 
 // ----------------------------------------------------------------------------
-// Read bits from byte array
+// Read bits from byte array with bounds checking
 // ----------------------------------------------------------------------------
-uint32_t TTNaluParser::readBits(const uint8_t* data, int& bitPos, int numBits)
+uint32_t TTNaluParser::readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits)
 {
     uint32_t value = 0;
 
     for (int i = 0; i < numBits; i++) {
         int byteIndex = bitPos / 8;
+        if (byteIndex >= dataSize) return value;  // OOB guard
         int bitIndex = 7 - (bitPos % 8);
 
         value <<= 1;
@@ -1167,11 +1168,11 @@ int TTNaluParser::parseH264SliceTypeFromPacket(const uint8_t* data, int size)
                     if (nalDataSize < 3) return -1;
 
                     // first_mb_in_slice (ue(v)) — skip
-                    readExpGolombUE(nalData, bitPos);
+                    readExpGolombUE(nalData, nalDataSize, bitPos);
 
                     // slice_type (ue(v))
                     if (bitPos / 8 + 1 >= nalDataSize) return -1;
-                    uint32_t sliceType = readExpGolombUE(nalData, bitPos);
+                    uint32_t sliceType = readExpGolombUE(nalData, nalDataSize, bitPos);
 
                     // Normalize: values 5-9 are same as 0-4
                     if (sliceType >= 5 && sliceType <= 9)
@@ -1192,9 +1193,9 @@ int TTNaluParser::parseH264SliceTypeFromPacket(const uint8_t* data, int size)
         uint8_t nalType = data[0] & 0x1F;
         if (nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE) {
             int bitPos = 8;
-            readExpGolombUE(data, bitPos);  // first_mb_in_slice
+            readExpGolombUE(data, size, bitPos);  // first_mb_in_slice
             if (bitPos / 8 + 1 >= size) return -1;
-            uint32_t sliceType = readExpGolombUE(data, bitPos);
+            uint32_t sliceType = readExpGolombUE(data, size, bitPos);
             if (sliceType >= 5 && sliceType <= 9)
                 sliceType -= 5;
             if (sliceType <= 4)
@@ -1243,11 +1244,11 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
                     int bitPos = 16;  // Skip 2-byte NAL header
 
                     // first_slice_segment_in_pic_flag (1 bit)
-                    uint32_t firstSliceFlag = readBits(nalData, bitPos, 1);
+                    uint32_t firstSliceFlag = readBits(nalData, nalDataSize, bitPos, 1);
 
                     // For BLA/IDR/CRA: no_output_of_prior_pics_flag (1 bit)
                     if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
-                        readBits(nalData, bitPos, 1);
+                        readBits(nalData, nalDataSize, bitPos, 1);
                     }
 
                     if (firstSliceFlag != 1) {
@@ -1259,13 +1260,13 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
                     }
 
                     // slice_pic_parameter_set_id (ue(v))
-                    readExpGolombUE(nalData, bitPos);
+                    readExpGolombUE(nalData, nalDataSize, bitPos);
 
                     // slice_type (ue(v))
                     // Guard: make sure we have enough data
                     if (bitPos / 8 + 2 >= nalDataSize) return -1;
 
-                    uint32_t sliceType = readExpGolombUE(nalData, bitPos);
+                    uint32_t sliceType = readExpGolombUE(nalData, nalDataSize, bitPos);
                     if (sliceType <= 2) {
                         return static_cast<int>(sliceType);
                     }
@@ -1284,19 +1285,19 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
         if (nalType <= 31) {
             int bitPos = 16;  // Skip 2-byte NAL header
 
-            uint32_t firstSliceFlag = readBits(data, bitPos, 1);
+            uint32_t firstSliceFlag = readBits(data, size, bitPos, 1);
 
             if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
-                readBits(data, bitPos, 1);
+                readBits(data, size, bitPos, 1);
             }
 
             if (firstSliceFlag != 1) return -1;
 
-            readExpGolombUE(data, bitPos);  // pps_id
+            readExpGolombUE(data, size, bitPos);  // pps_id
 
             if (bitPos / 8 + 2 >= size) return -1;
 
-            uint32_t sliceType = readExpGolombUE(data, bitPos);
+            uint32_t sliceType = readExpGolombUE(data, size, bitPos);
             if (sliceType <= 2) {
                 return static_cast<int>(sliceType);
             }

@@ -83,8 +83,8 @@ quint64 TTFrameSearchTask::compareFrames(TFrameInfo* frameInfo, quint8* refData,
 //! Clean up after operation
 void TTFrameSearchTask::cleanUp()
 {
-  if (mpReferenceData != 0) delete mpReferenceData;
-  if (mpSearchData    != 0) delete mpSearchData;
+  if (mpReferenceData != 0) delete[] mpReferenceData;
+  if (mpSearchData    != 0) delete[] mpSearchData;
 }
 
 //! Abort request
@@ -117,7 +117,7 @@ void TTFrameSearchTask::operation()
   quint64 threshold        = (quint64)(mpRefFrameInfo->size + 2 * mpRefFrameInfo->chroma_size) * 625;
   quint64 minDelta         = threshold;
 
-  onStatusReport(this, StatusReportArgs::Start, "search frame", searchFrameCount);
+  onStatusReport(this, StatusReportArgs::Start, tr("Searching frame"), searchFrameCount);
 
   do
   {
@@ -149,7 +149,7 @@ void TTFrameSearchTask::operation()
     }
 
     index++;
-    onStatusReport(this, StatusReportArgs::Step, "search frame", index);
+    onStatusReport(this, StatusReportArgs::Step, tr("Searching frame"), index);
     searchDecoder->moveToFrameIndex(mSearchIndex+index);
   } while (index < searchFrameCount);
 
@@ -159,7 +159,7 @@ void TTFrameSearchTask::operation()
   if (minDelta >= threshold) {
     log->debugMsg(__FILE__, __LINE__, QString("no matching frame found (minDelta %1 >= threshold %2)")
         .arg(minDelta).arg(threshold));
-    onStatusReport(this, StatusReportArgs::Step, "no match found", searchFrameCount);
+    onStatusReport(this, StatusReportArgs::Step, tr("No match found"), searchFrameCount);
     emit finished(-1);  // -1 indicates no match
     return;
   }
@@ -167,7 +167,7 @@ void TTFrameSearchTask::operation()
   log->debugMsg(__FILE__, __LINE__, QString("found equal frame at %1 searchIndex %2 foundPos %3 delta %4")
       .arg(mSearchIndex+foundPosition).arg(mSearchIndex).arg(foundPosition).arg(minDelta));
 
-  onStatusReport(this, StatusReportArgs::Step, "found equal frame", searchFrameCount);
+  onStatusReport(this, StatusReportArgs::Step, tr("Frame found"), searchFrameCount);
 
   emit finished(mSearchIndex+foundPosition);
 }

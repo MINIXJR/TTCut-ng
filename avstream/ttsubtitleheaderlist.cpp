@@ -47,6 +47,8 @@
 
 #include "ttsubtitleheaderlist.h"
 
+#include <algorithm>
+
 bool subtitleHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
 
 TTSubtitleHeaderList::TTSubtitleHeaderList( int size )
@@ -83,7 +85,7 @@ int TTSubtitleHeaderList::searchTimeIndex( int search_time )
 
 void TTSubtitleHeaderList::sort()
 {
-  qSort( begin(), end(), subtitleHeaderListCompareItems );
+  std::sort( begin(), end(), subtitleHeaderListCompareItems );
 }
 
 bool subtitleHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 )

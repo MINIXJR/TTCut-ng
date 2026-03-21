@@ -325,7 +325,9 @@ bool TTPicturesHeader::readHeader( TTFileBuffer* mpeg2_stream )
     parseBasicData( header_data );
 
     // search for next start code (picture coding extension)
+    // Limit search to 1024 bytes to avoid scanning entire file on corrupt data
     int count_zeros = 0;
+    int searchLimit = 1024;
     quint8 value;
     do
     {
@@ -338,6 +340,7 @@ bool TTPicturesHeader::readHeader( TTFileBuffer* mpeg2_stream )
       {
         count_zeros = 0;
       }
+      if (--searchLimit <= 0) return false;
     }
     while ( value != 0x01 || count_zeros < 2 );
 

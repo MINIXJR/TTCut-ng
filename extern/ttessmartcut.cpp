@@ -112,7 +112,7 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
     }
 
     qDebug() << "TTESSmartCut: Parsing ES file...";
-    emit progressChanged(0, "Parsing ES file...");
+    emit progressChanged(0, tr("Parsing ES file..."));
 
     if (!mParser.parseFile()) {
         setError(QString("Cannot parse ES file: %1").arg(mParser.lastError()));
@@ -398,7 +398,7 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
 
         framesProcessed += (seg.endFrame - seg.startFrame + 1);
         int percent = (framesProcessed * 100) / totalFrames;
-        emit progressChanged(percent, QString("Processing segment %1/%2")
+        emit progressChanged(percent, tr("Processing segment %1/%2")
             .arg(i + 1).arg(segments.size()));
     }
 
@@ -709,11 +709,11 @@ static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReor
 // Forward declarations for bitstream helpers (defined after writeParameterSets)
 static QByteArray removeEmulationPrevention(const QByteArray& nal);
 static QByteArray addEmulationPrevention(const QByteArray& rbsp);
-static uint32_t spsReadBits(const uint8_t* data, int& bitPos, int numBits);
-static void spsWriteBits(uint8_t* data, int& bitPos, uint32_t value, int numBits);
-static uint32_t spsReadUE(const uint8_t* data, int& bitPos);
-static int32_t spsReadSE(const uint8_t* data, int& bitPos);
-static void skipScalingList(const uint8_t* data, int& bitPos, int sizeOfScalingList);
+static uint32_t spsReadBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
+static void spsWriteBits(uint8_t* data, int dataSize, int& bitPos, uint32_t value, int numBits);
+static uint32_t spsReadUE(const uint8_t* data, int dataSize, int& bitPos);
+static int32_t spsReadSE(const uint8_t* data, int dataSize, int& bitPos);
+static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int sizeOfScalingList);
 
 // ----------------------------------------------------------------------------
 // Parse H.264 SPS fields needed for frame_num patching and POC domain fix.
@@ -740,13 +740,14 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
 
     QByteArray rbsp = removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
+    int dataSize = rbsp.size();
     int bitPos = 0;
 
-    spsReadBits(data, bitPos, 8);  // NAL header
-    uint32_t profile_idc = spsReadBits(data, bitPos, 8);
-    spsReadBits(data, bitPos, 8);  // constraint flags
-    spsReadBits(data, bitPos, 8);  // level_idc
-    spsReadUE(data, bitPos);       // seq_parameter_set_id
+    spsReadBits(data, dataSize, bitPos, 8);  // NAL header
+    uint32_t profile_idc = spsReadBits(data, dataSize, bitPos, 8);
+    spsReadBits(data, dataSize, bitPos, 8);  // constraint flags
+    spsReadBits(data, dataSize, bitPos, 8);  // level_idc
+    spsReadUE(data, dataSize, bitPos);       // seq_parameter_set_id
 
     // High profile extensions
     if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
@@ -754,43 +755,43 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
         profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
         profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
         profile_idc == 135) {
-        uint32_t chroma_format_idc = spsReadUE(data, bitPos);
+        uint32_t chroma_format_idc = spsReadUE(data, dataSize, bitPos);
         if (chroma_format_idc == 3)
-            spsReadBits(data, bitPos, 1);  // separate_colour_plane_flag
-        spsReadUE(data, bitPos);    // bit_depth_luma_minus8
-        spsReadUE(data, bitPos);    // bit_depth_chroma_minus8
-        spsReadBits(data, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
-        uint32_t seq_scaling_matrix_present = spsReadBits(data, bitPos, 1);
+            spsReadBits(data, dataSize, bitPos, 1);  // separate_colour_plane_flag
+        spsReadUE(data, dataSize, bitPos);    // bit_depth_luma_minus8
+        spsReadUE(data, dataSize, bitPos);    // bit_depth_chroma_minus8
+        spsReadBits(data, dataSize, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
+        uint32_t seq_scaling_matrix_present = spsReadBits(data, dataSize, bitPos, 1);
         if (seq_scaling_matrix_present) {
             int limit = (chroma_format_idc != 3) ? 8 : 12;
             for (int i = 0; i < limit; i++) {
-                uint32_t present = spsReadBits(data, bitPos, 1);
+                uint32_t present = spsReadBits(data, dataSize, bitPos, 1);
                 if (present)
-                    skipScalingList(data, bitPos, (i < 6) ? 16 : 64);
+                    skipScalingList(data, dataSize, bitPos, (i < 6) ? 16 : 64);
             }
         }
     }
 
-    info.log2MaxFrameNumMinus4 = static_cast<int>(spsReadUE(data, bitPos));
+    info.log2MaxFrameNumMinus4 = static_cast<int>(spsReadUE(data, dataSize, bitPos));
 
-    info.pocType = static_cast<int>(spsReadUE(data, bitPos));
+    info.pocType = static_cast<int>(spsReadUE(data, dataSize, bitPos));
     if (info.pocType == 0) {
-        info.log2MaxPocLsbMinus4 = static_cast<int>(spsReadUE(data, bitPos));
+        info.log2MaxPocLsbMinus4 = static_cast<int>(spsReadUE(data, dataSize, bitPos));
     } else if (info.pocType == 1) {
-        spsReadBits(data, bitPos, 1);  // delta_pic_order_always_zero_flag
-        spsReadSE(data, bitPos);       // offset_for_non_ref_pic
-        spsReadSE(data, bitPos);       // offset_for_top_to_bottom_field
-        uint32_t num_ref = spsReadUE(data, bitPos);
+        spsReadBits(data, dataSize, bitPos, 1);  // delta_pic_order_always_zero_flag
+        spsReadSE(data, dataSize, bitPos);       // offset_for_non_ref_pic
+        spsReadSE(data, dataSize, bitPos);       // offset_for_top_to_bottom_field
+        uint32_t num_ref = spsReadUE(data, dataSize, bitPos);
         for (uint32_t i = 0; i < num_ref; i++)
-            spsReadSE(data, bitPos);   // offset_for_ref_frame
+            spsReadSE(data, dataSize, bitPos);   // offset_for_ref_frame
     }
 
-    spsReadUE(data, bitPos);  // max_num_ref_frames
-    spsReadBits(data, bitPos, 1);  // gaps_in_frame_num_allowed_flag
-    spsReadUE(data, bitPos);  // pic_width_in_mbs_minus1
-    spsReadUE(data, bitPos);  // pic_height_in_map_units_minus1
+    spsReadUE(data, dataSize, bitPos);  // max_num_ref_frames
+    spsReadBits(data, dataSize, bitPos, 1);  // gaps_in_frame_num_allowed_flag
+    spsReadUE(data, dataSize, bitPos);  // pic_width_in_mbs_minus1
+    spsReadUE(data, dataSize, bitPos);  // pic_height_in_map_units_minus1
 
-    info.frameMbsOnly = (spsReadBits(data, bitPos, 1) != 0);
+    info.frameMbsOnly = (spsReadBits(data, dataSize, bitPos, 1) != 0);
 
     return info;
 }
@@ -808,12 +809,12 @@ static int readFrameNumFromSlice(const uint8_t* nalData, int nalSize, int frameN
     if (nalType != 1 && nalType != 5) return -1;  // not a slice
 
     int bitPos = 8;  // skip NAL header byte
-    spsReadUE(nalData, bitPos);   // first_mb_in_slice
-    spsReadUE(nalData, bitPos);   // slice_type
-    spsReadUE(nalData, bitPos);   // pic_parameter_set_id
+    spsReadUE(nalData, nalSize, bitPos);   // first_mb_in_slice
+    spsReadUE(nalData, nalSize, bitPos);   // slice_type
+    spsReadUE(nalData, nalSize, bitPos);   // pic_parameter_set_id
 
     // frame_num is u(v) with v = frameNumBitWidth
-    return static_cast<int>(spsReadBits(nalData, bitPos, frameNumBitWidth));
+    return static_cast<int>(spsReadBits(nalData, nalSize, bitPos, frameNumBitWidth));
 }
 
 // ----------------------------------------------------------------------------
@@ -830,12 +831,12 @@ static void writeFrameNumInSlice(uint8_t* nalData, int nalSize, int frameNumBitW
     if (nalType != 1 && nalType != 5) return;  // not a slice
 
     int bitPos = 8;  // skip NAL header byte
-    spsReadUE(nalData, bitPos);   // first_mb_in_slice
-    spsReadUE(nalData, bitPos);   // slice_type
-    spsReadUE(nalData, bitPos);   // pic_parameter_set_id
+    spsReadUE(nalData, nalSize, bitPos);   // first_mb_in_slice
+    spsReadUE(nalData, nalSize, bitPos);   // slice_type
+    spsReadUE(nalData, nalSize, bitPos);   // pic_parameter_set_id
 
     // Overwrite frame_num at current position
-    spsWriteBits(nalData, bitPos, newFrameNum, frameNumBitWidth);
+    spsWriteBits(nalData, nalSize, bitPos, newFrameNum, frameNumBitWidth);
 }
 
 // ----------------------------------------------------------------------------
@@ -852,19 +853,19 @@ static int locatePocLsbInSlice(const uint8_t* rbspData, int rbspSize,
     if (nalType != 1 && nalType != 5) return -1;
 
     int bitPos = 8;  // skip NAL header byte
-    spsReadUE(rbspData, bitPos);   // first_mb_in_slice
-    spsReadUE(rbspData, bitPos);   // slice_type
-    spsReadUE(rbspData, bitPos);   // pic_parameter_set_id
-    spsReadBits(rbspData, bitPos, frameNumBitWidth);  // frame_num
+    spsReadUE(rbspData, rbspSize, bitPos);   // first_mb_in_slice
+    spsReadUE(rbspData, rbspSize, bitPos);   // slice_type
+    spsReadUE(rbspData, rbspSize, bitPos);   // pic_parameter_set_id
+    spsReadBits(rbspData, rbspSize, bitPos, frameNumBitWidth);  // frame_num
 
     if (!frameMbsOnly) {
-        uint32_t fieldPicFlag = spsReadBits(rbspData, bitPos, 1);
+        uint32_t fieldPicFlag = spsReadBits(rbspData, rbspSize, bitPos, 1);
         if (fieldPicFlag)
-            spsReadBits(rbspData, bitPos, 1);  // bottom_field_flag
+            spsReadBits(rbspData, rbspSize, bitPos, 1);  // bottom_field_flag
     }
 
     if (nalType == 5) {
-        spsReadUE(rbspData, bitPos);  // idr_pic_id
+        spsReadUE(rbspData, rbspSize, bitPos);  // idr_pic_id
     }
 
     // bitPos now points to pic_order_cnt_lsb
@@ -882,7 +883,7 @@ static int readPocLsbFromSlice(const uint8_t* rbspData, int rbspSize,
     if (pocLsbBitWidth <= 0) return -1;
     int bitPos = locatePocLsbInSlice(rbspData, rbspSize, frameNumBitWidth, frameMbsOnly);
     if (bitPos < 0) return -1;
-    return static_cast<int>(spsReadBits(rbspData, bitPos, pocLsbBitWidth));
+    return static_cast<int>(spsReadBits(rbspData, rbspSize, bitPos, pocLsbBitWidth));
 }
 
 // ----------------------------------------------------------------------------
@@ -896,7 +897,7 @@ static void writePocLsbInSlice(uint8_t* rbspData, int rbspSize,
     if (pocLsbBitWidth <= 0) return;
     int bitPos = locatePocLsbInSlice(rbspData, rbspSize, frameNumBitWidth, frameMbsOnly);
     if (bitPos < 0) return;
-    spsWriteBits(rbspData, bitPos, newPocLsb, pocLsbBitWidth);
+    spsWriteBits(rbspData, rbspSize, bitPos, newPocLsb, pocLsbBitWidth);
 }
 
 // ----------------------------------------------------------------------------
@@ -2351,12 +2352,13 @@ static QByteArray addEmulationPrevention(const QByteArray& rbsp)
     return nal;
 }
 
-// Read bits from RBSP byte array (same as TTNaluParser::readBits but standalone)
-static uint32_t spsReadBits(const uint8_t* data, int& bitPos, int numBits)
+// Read bits from RBSP byte array with bounds checking
+static uint32_t spsReadBits(const uint8_t* data, int dataSize, int& bitPos, int numBits)
 {
     uint32_t value = 0;
     for (int i = 0; i < numBits; i++) {
         int byteIndex = bitPos / 8;
+        if (byteIndex >= dataSize) return value;  // OOB guard
         int bitIndex = 7 - (bitPos % 8);
         value <<= 1;
         value |= (data[byteIndex] >> bitIndex) & 1;
@@ -2365,11 +2367,12 @@ static uint32_t spsReadBits(const uint8_t* data, int& bitPos, int numBits)
     return value;
 }
 
-// Write bits to RBSP byte array
-static void spsWriteBits(uint8_t* data, int& bitPos, uint32_t value, int numBits)
+// Write bits to RBSP byte array with bounds checking
+static void spsWriteBits(uint8_t* data, int dataSize, int& bitPos, uint32_t value, int numBits)
 {
     for (int i = numBits - 1; i >= 0; i--) {
         int byteIndex = bitPos / 8;
+        if (byteIndex >= dataSize) return;  // OOB guard
         int bitIndex = 7 - (bitPos % 8);
         if (value & (1u << i))
             data[byteIndex] |= (1 << bitIndex);
@@ -2380,26 +2383,26 @@ static void spsWriteBits(uint8_t* data, int& bitPos, uint32_t value, int numBits
 }
 
 // Read Exp-Golomb unsigned value from RBSP
-static uint32_t spsReadUE(const uint8_t* data, int& bitPos)
+static uint32_t spsReadUE(const uint8_t* data, int dataSize, int& bitPos)
 {
     int leadingZeros = 0;
-    while (spsReadBits(data, bitPos, 1) == 0 && leadingZeros < 32)
+    while (spsReadBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 32)
         leadingZeros++;
     if (leadingZeros == 0) return 0;
-    uint32_t value = spsReadBits(data, bitPos, leadingZeros);
+    uint32_t value = spsReadBits(data, dataSize, bitPos, leadingZeros);
     return (1u << leadingZeros) - 1 + value;
 }
 
 // Read Exp-Golomb signed value from RBSP
-static int32_t spsReadSE(const uint8_t* data, int& bitPos)
+static int32_t spsReadSE(const uint8_t* data, int dataSize, int& bitPos)
 {
-    uint32_t ue = spsReadUE(data, bitPos);
+    uint32_t ue = spsReadUE(data, dataSize, bitPos);
     if (ue & 1) return static_cast<int32_t>((ue + 1) / 2);
     return -static_cast<int32_t>(ue / 2);
 }
 
 // Write Exp-Golomb unsigned value to RBSP
-static void spsWriteUE(uint8_t* data, int& bitPos, uint32_t value)
+static void spsWriteUE(uint8_t* data, int dataSize, int& bitPos, uint32_t value)
 {
     // Exp-Golomb: codeNum = value, code = (leadingZeros zeros)(1)(value bits)
     uint32_t codeNum = value + 1;
@@ -2409,38 +2412,38 @@ static void spsWriteUE(uint8_t* data, int& bitPos, uint32_t value)
     int leadingZeros = numBits - 1;
     // Write leading zeros
     for (int i = 0; i < leadingZeros; i++)
-        spsWriteBits(data, bitPos, 0, 1);
+        spsWriteBits(data, dataSize, bitPos, 0, 1);
     // Write 1 followed by value bits
-    spsWriteBits(data, bitPos, codeNum, numBits);
+    spsWriteBits(data, dataSize, bitPos, codeNum, numBits);
 }
 
 // Skip H.264 scaling list in SPS
-static void skipScalingList(const uint8_t* data, int& bitPos, int sizeOfScalingList)
+static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int sizeOfScalingList)
 {
     int nextScale = 8;
     for (int j = 0; j < sizeOfScalingList; j++) {
         if (nextScale != 0) {
-            int32_t delta = spsReadSE(data, bitPos);
+            int32_t delta = spsReadSE(data, dataSize, bitPos);
             nextScale = (nextScale + delta + 256) % 256;
         }
     }
 }
 
 // Skip H.264 HRD parameters in VUI
-static void skipHrdParameters(const uint8_t* data, int& bitPos)
+static void skipHrdParameters(const uint8_t* data, int dataSize, int& bitPos)
 {
-    uint32_t cpb_cnt_minus1 = spsReadUE(data, bitPos);
-    spsReadBits(data, bitPos, 4);  // bit_rate_scale
-    spsReadBits(data, bitPos, 4);  // cpb_size_scale
+    uint32_t cpb_cnt_minus1 = spsReadUE(data, dataSize, bitPos);
+    spsReadBits(data, dataSize, bitPos, 4);  // bit_rate_scale
+    spsReadBits(data, dataSize, bitPos, 4);  // cpb_size_scale
     for (uint32_t i = 0; i <= cpb_cnt_minus1; i++) {
-        spsReadUE(data, bitPos);   // bit_rate_value_minus1
-        spsReadUE(data, bitPos);   // cpb_size_value_minus1
-        spsReadBits(data, bitPos, 1); // cbr_flag
+        spsReadUE(data, dataSize, bitPos);   // bit_rate_value_minus1
+        spsReadUE(data, dataSize, bitPos);   // cpb_size_value_minus1
+        spsReadBits(data, dataSize, bitPos, 1); // cbr_flag
     }
-    spsReadBits(data, bitPos, 5);  // initial_cpb_removal_delay_length_minus1
-    spsReadBits(data, bitPos, 5);  // cpb_removal_delay_length_minus1
-    spsReadBits(data, bitPos, 5);  // dpb_output_delay_length_minus1
-    spsReadBits(data, bitPos, 5);  // time_offset_length
+    spsReadBits(data, dataSize, bitPos, 5);  // initial_cpb_removal_delay_length_minus1
+    spsReadBits(data, dataSize, bitPos, 5);  // cpb_removal_delay_length_minus1
+    spsReadBits(data, dataSize, bitPos, 5);  // dpb_output_delay_length_minus1
+    spsReadBits(data, dataSize, bitPos, 5);  // time_offset_length
 }
 
 // Patch H.264 SPS NAL to set bitstream_restriction with max_num_reorder_frames.
@@ -2467,16 +2470,17 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     // Remove emulation prevention bytes to get RBSP
     QByteArray rbsp = removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
+    int dataSize = rbsp.size();
     int bitPos = 0;
 
     // Parse NAL header (8 bits)
-    spsReadBits(data, bitPos, 8);  // forbidden_zero_bit + nal_ref_idc + nal_unit_type
+    spsReadBits(data, dataSize, bitPos, 8);  // forbidden_zero_bit + nal_ref_idc + nal_unit_type
 
     // Parse SPS fields
-    uint32_t profile_idc = spsReadBits(data, bitPos, 8);
-    spsReadBits(data, bitPos, 8);   // constraint flags + reserved
-    spsReadBits(data, bitPos, 8);   // level_idc
-    spsReadUE(data, bitPos);        // seq_parameter_set_id
+    uint32_t profile_idc = spsReadBits(data, dataSize, bitPos, 8);
+    spsReadBits(data, dataSize, bitPos, 8);   // constraint flags + reserved
+    spsReadBits(data, dataSize, bitPos, 8);   // level_idc
+    spsReadUE(data, dataSize, bitPos);        // seq_parameter_set_id
 
     // High profile extensions
     if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
@@ -2484,111 +2488,111 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
         profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
         profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
         profile_idc == 135) {
-        uint32_t chroma_format_idc = spsReadUE(data, bitPos);
+        uint32_t chroma_format_idc = spsReadUE(data, dataSize, bitPos);
         if (chroma_format_idc == 3)
-            spsReadBits(data, bitPos, 1);  // separate_colour_plane_flag
-        spsReadUE(data, bitPos);    // bit_depth_luma_minus8
-        spsReadUE(data, bitPos);    // bit_depth_chroma_minus8
-        spsReadBits(data, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
+            spsReadBits(data, dataSize, bitPos, 1);  // separate_colour_plane_flag
+        spsReadUE(data, dataSize, bitPos);    // bit_depth_luma_minus8
+        spsReadUE(data, dataSize, bitPos);    // bit_depth_chroma_minus8
+        spsReadBits(data, dataSize, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
 
-        uint32_t seq_scaling_matrix_present = spsReadBits(data, bitPos, 1);
+        uint32_t seq_scaling_matrix_present = spsReadBits(data, dataSize, bitPos, 1);
         if (seq_scaling_matrix_present) {
             int limit = (chroma_format_idc != 3) ? 8 : 12;
             for (int i = 0; i < limit; i++) {
-                uint32_t present = spsReadBits(data, bitPos, 1);
+                uint32_t present = spsReadBits(data, dataSize, bitPos, 1);
                 if (present)
-                    skipScalingList(data, bitPos, (i < 6) ? 16 : 64);
+                    skipScalingList(data, dataSize, bitPos, (i < 6) ? 16 : 64);
             }
         }
     }
 
-    spsReadUE(data, bitPos);  // log2_max_frame_num_minus4
-    uint32_t poc_type = spsReadUE(data, bitPos);
+    spsReadUE(data, dataSize, bitPos);  // log2_max_frame_num_minus4
+    uint32_t poc_type = spsReadUE(data, dataSize, bitPos);
     if (poc_type == 0) {
-        spsReadUE(data, bitPos);  // log2_max_pic_order_cnt_lsb_minus4
+        spsReadUE(data, dataSize, bitPos);  // log2_max_pic_order_cnt_lsb_minus4
     } else if (poc_type == 1) {
-        spsReadBits(data, bitPos, 1);  // delta_pic_order_always_zero_flag
-        spsReadSE(data, bitPos);       // offset_for_non_ref_pic
-        spsReadSE(data, bitPos);       // offset_for_top_to_bottom_field
-        uint32_t num_ref = spsReadUE(data, bitPos);
+        spsReadBits(data, dataSize, bitPos, 1);  // delta_pic_order_always_zero_flag
+        spsReadSE(data, dataSize, bitPos);       // offset_for_non_ref_pic
+        spsReadSE(data, dataSize, bitPos);       // offset_for_top_to_bottom_field
+        uint32_t num_ref = spsReadUE(data, dataSize, bitPos);
         for (uint32_t i = 0; i < num_ref; i++)
-            spsReadSE(data, bitPos);   // offset_for_ref_frame
+            spsReadSE(data, dataSize, bitPos);   // offset_for_ref_frame
     }
 
-    uint32_t max_num_ref_frames = spsReadUE(data, bitPos);
-    spsReadBits(data, bitPos, 1);  // gaps_in_frame_num_allowed_flag
-    spsReadUE(data, bitPos);       // pic_width_in_mbs_minus1
-    spsReadUE(data, bitPos);       // pic_height_in_map_units_minus1
+    uint32_t max_num_ref_frames = spsReadUE(data, dataSize, bitPos);
+    spsReadBits(data, dataSize, bitPos, 1);  // gaps_in_frame_num_allowed_flag
+    spsReadUE(data, dataSize, bitPos);       // pic_width_in_mbs_minus1
+    spsReadUE(data, dataSize, bitPos);       // pic_height_in_map_units_minus1
 
-    uint32_t frame_mbs_only = spsReadBits(data, bitPos, 1);
+    uint32_t frame_mbs_only = spsReadBits(data, dataSize, bitPos, 1);
     if (!frame_mbs_only)
-        spsReadBits(data, bitPos, 1);  // mb_adaptive_frame_field_flag
+        spsReadBits(data, dataSize, bitPos, 1);  // mb_adaptive_frame_field_flag
 
-    spsReadBits(data, bitPos, 1);  // direct_8x8_inference_flag
+    spsReadBits(data, dataSize, bitPos, 1);  // direct_8x8_inference_flag
 
-    uint32_t frame_cropping = spsReadBits(data, bitPos, 1);
+    uint32_t frame_cropping = spsReadBits(data, dataSize, bitPos, 1);
     if (frame_cropping) {
-        spsReadUE(data, bitPos);  // crop_left
-        spsReadUE(data, bitPos);  // crop_right
-        spsReadUE(data, bitPos);  // crop_top
-        spsReadUE(data, bitPos);  // crop_bottom
+        spsReadUE(data, dataSize, bitPos);  // crop_left
+        spsReadUE(data, dataSize, bitPos);  // crop_right
+        spsReadUE(data, dataSize, bitPos);  // crop_top
+        spsReadUE(data, dataSize, bitPos);  // crop_bottom
     }
 
-    uint32_t vui_present = spsReadBits(data, bitPos, 1);
+    uint32_t vui_present = spsReadBits(data, dataSize, bitPos, 1);
     if (!vui_present) {
         qDebug() << "  SPS patch: no VUI, cannot add bitstream_restriction";
         return QByteArray();
     }
 
     // Parse VUI parameters to find bitstream_restriction_flag
-    uint32_t aspect_ratio_present = spsReadBits(data, bitPos, 1);
+    uint32_t aspect_ratio_present = spsReadBits(data, dataSize, bitPos, 1);
     if (aspect_ratio_present) {
-        uint32_t aspect_ratio_idc = spsReadBits(data, bitPos, 8);
+        uint32_t aspect_ratio_idc = spsReadBits(data, dataSize, bitPos, 8);
         if (aspect_ratio_idc == 255) {  // Extended_SAR
-            spsReadBits(data, bitPos, 16);  // sar_width
-            spsReadBits(data, bitPos, 16);  // sar_height
+            spsReadBits(data, dataSize, bitPos, 16);  // sar_width
+            spsReadBits(data, dataSize, bitPos, 16);  // sar_height
         }
     }
 
-    uint32_t overscan_present = spsReadBits(data, bitPos, 1);
+    uint32_t overscan_present = spsReadBits(data, dataSize, bitPos, 1);
     if (overscan_present)
-        spsReadBits(data, bitPos, 1);  // overscan_appropriate_flag
+        spsReadBits(data, dataSize, bitPos, 1);  // overscan_appropriate_flag
 
-    uint32_t video_signal_present = spsReadBits(data, bitPos, 1);
+    uint32_t video_signal_present = spsReadBits(data, dataSize, bitPos, 1);
     if (video_signal_present) {
-        spsReadBits(data, bitPos, 3);  // video_format
-        spsReadBits(data, bitPos, 1);  // video_full_range_flag
-        uint32_t colour_desc = spsReadBits(data, bitPos, 1);
+        spsReadBits(data, dataSize, bitPos, 3);  // video_format
+        spsReadBits(data, dataSize, bitPos, 1);  // video_full_range_flag
+        uint32_t colour_desc = spsReadBits(data, dataSize, bitPos, 1);
         if (colour_desc) {
-            spsReadBits(data, bitPos, 8);  // colour_primaries
-            spsReadBits(data, bitPos, 8);  // transfer_characteristics
-            spsReadBits(data, bitPos, 8);  // matrix_coefficients
+            spsReadBits(data, dataSize, bitPos, 8);  // colour_primaries
+            spsReadBits(data, dataSize, bitPos, 8);  // transfer_characteristics
+            spsReadBits(data, dataSize, bitPos, 8);  // matrix_coefficients
         }
     }
 
-    uint32_t chroma_loc_present = spsReadBits(data, bitPos, 1);
+    uint32_t chroma_loc_present = spsReadBits(data, dataSize, bitPos, 1);
     if (chroma_loc_present) {
-        spsReadUE(data, bitPos);  // chroma_sample_loc_type_top_field
-        spsReadUE(data, bitPos);  // chroma_sample_loc_type_bottom_field
+        spsReadUE(data, dataSize, bitPos);  // chroma_sample_loc_type_top_field
+        spsReadUE(data, dataSize, bitPos);  // chroma_sample_loc_type_bottom_field
     }
 
-    uint32_t timing_present = spsReadBits(data, bitPos, 1);
+    uint32_t timing_present = spsReadBits(data, dataSize, bitPos, 1);
     if (timing_present) {
-        spsReadBits(data, bitPos, 32);  // num_units_in_tick
-        spsReadBits(data, bitPos, 32);  // time_scale
-        spsReadBits(data, bitPos, 1);   // fixed_frame_rate_flag
+        spsReadBits(data, dataSize, bitPos, 32);  // num_units_in_tick
+        spsReadBits(data, dataSize, bitPos, 32);  // time_scale
+        spsReadBits(data, dataSize, bitPos, 1);   // fixed_frame_rate_flag
     }
 
-    uint32_t nal_hrd_present = spsReadBits(data, bitPos, 1);
-    if (nal_hrd_present) skipHrdParameters(data, bitPos);
+    uint32_t nal_hrd_present = spsReadBits(data, dataSize, bitPos, 1);
+    if (nal_hrd_present) skipHrdParameters(data, dataSize, bitPos);
 
-    uint32_t vcl_hrd_present = spsReadBits(data, bitPos, 1);
-    if (vcl_hrd_present) skipHrdParameters(data, bitPos);
+    uint32_t vcl_hrd_present = spsReadBits(data, dataSize, bitPos, 1);
+    if (vcl_hrd_present) skipHrdParameters(data, dataSize, bitPos);
 
     if (nal_hrd_present || vcl_hrd_present)
-        spsReadBits(data, bitPos, 1);  // low_delay_hrd_flag
+        spsReadBits(data, dataSize, bitPos, 1);  // low_delay_hrd_flag
 
-    spsReadBits(data, bitPos, 1);  // pic_struct_present_flag
+    spsReadBits(data, dataSize, bitPos, 1);  // pic_struct_present_flag
 
     // Now at bitstream_restriction_flag position
     int bsrFlagPos = bitPos;
@@ -2602,26 +2606,27 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
 
     int writeBitPos = bsrFlagPos;
     uint8_t* writeData = reinterpret_cast<uint8_t*>(newRbsp.data());
+    int writeDataSize = newRbsp.size();
 
     // Write bitstream_restriction_flag = 1
-    spsWriteBits(writeData, writeBitPos, 1, 1);
+    spsWriteBits(writeData, writeDataSize, writeBitPos, 1, 1);
 
     // Write bitstream_restriction fields
-    spsWriteBits(writeData, writeBitPos, 1, 1);  // motion_vectors_over_pic_boundaries_flag
-    spsWriteUE(writeData, writeBitPos, 0);        // max_bytes_per_pic_denom
-    spsWriteUE(writeData, writeBitPos, 0);        // max_bits_per_mb_denom
-    spsWriteUE(writeData, writeBitPos, 16);       // log2_max_mv_length_horizontal
-    spsWriteUE(writeData, writeBitPos, 16);       // log2_max_mv_length_vertical
-    spsWriteUE(writeData, writeBitPos, maxReorderFrames);  // max_num_reorder_frames
+    spsWriteBits(writeData, writeDataSize, writeBitPos, 1, 1);  // motion_vectors_over_pic_boundaries_flag
+    spsWriteUE(writeData, writeDataSize, writeBitPos, 0);        // max_bytes_per_pic_denom
+    spsWriteUE(writeData, writeDataSize, writeBitPos, 0);        // max_bits_per_mb_denom
+    spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_horizontal
+    spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_vertical
+    spsWriteUE(writeData, writeDataSize, writeBitPos, maxReorderFrames);  // max_num_reorder_frames
     // max_dec_frame_buffering >= max_num_ref_frames and >= max_num_reorder_frames
     uint32_t maxDecBuf = qMax(maxReorderFrames, (int)max_num_ref_frames);
-    spsWriteUE(writeData, writeBitPos, maxDecBuf);  // max_dec_frame_buffering
+    spsWriteUE(writeData, writeDataSize, writeBitPos, maxDecBuf);  // max_dec_frame_buffering
 
     // RBSP stop bit + byte alignment
-    spsWriteBits(writeData, writeBitPos, 1, 1);  // rbsp_stop_one_bit
+    spsWriteBits(writeData, writeDataSize, writeBitPos, 1, 1);  // rbsp_stop_one_bit
     int padding = (8 - (writeBitPos % 8)) % 8;
     if (padding > 0)
-        spsWriteBits(writeData, writeBitPos, 0, padding);
+        spsWriteBits(writeData, writeDataSize, writeBitPos, 0, padding);
 
     // Trim to actual size
     newRbsp.resize(writeBitPos / 8);

@@ -97,12 +97,7 @@
   - Brainstorming nötig: Bestandsaufnahme was gespeichert wird vs. was fehlt
   - Rückwärtskompatibilität beachten (alte .prj Dateien müssen weiterhin ladbar sein)
 
-- **Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**
-  - `onFileNew()` warnt immer vor Datenverlust, auch wenn gerade gespeichert wurde
-  - Benötigt `mProjectModified`-Flag in TTCutMainWindow oder TTAVData
-  - Flag setzen bei: Cut/Audio/Video/Subtitle hinzufügen/entfernen/ändern
-  - Flag zurücksetzen bei: Save, Load, New (nach Bestätigung)
-  - Optional: Auch für `onFileExit()` und Fenster-Schließen nutzen
+- ~~**Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**~~ → Completed (v0.62.1)
 
 - **Manual audio delay/offset per track**
   - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list

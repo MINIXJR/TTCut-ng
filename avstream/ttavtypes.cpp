@@ -213,7 +213,8 @@ void TTAudioType::getAudioStreamType()
 
       frame_size_code = buffer[start_pos+4] & 0x3F;
       sample_rate     = (buffer[start_pos+4] & 0xC0)>>6;
-      frame_len       = 2*AC3FrameLength[sample_rate][frame_size_code];
+      frame_len       = (sample_rate < 3 && frame_size_code < 38)
+                        ? 2*AC3FrameLength[sample_rate][frame_size_code] : 0;
 
       //log->debugMsg(__FILE__, __LINE__, QString("AC3 frame size code: %1").arg(frame_size_code));
       //log->debugMsg(__FILE__, __LINE__, QString("AC3 sample rate    : %1").arg(sample_rate ));

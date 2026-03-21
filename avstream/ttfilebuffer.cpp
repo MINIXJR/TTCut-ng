@@ -271,7 +271,7 @@ void TTFileBuffer::seekForward(quint64 offset)
 void TTFileBuffer::seekBackward(quint64 offset)
 {
   //printf("seek backward: %lld / %lld\n", offset, readPos);
-  readPos -= offset;
+  readPos = (offset <= readPos) ? readPos - offset : 0;
 
   seekAbsolute(readPos);
 }
