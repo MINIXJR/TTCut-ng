@@ -61,3 +61,6 @@ debian/.debhelper/
 
 # Testing
 testing/
+
+# Generated test media (tools/ttcut-screenshots.sh)
+tools/testdata/

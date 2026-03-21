@@ -11,18 +11,18 @@
   </Audio>
   <Cut>
    <Order>0</Order>
-   <CutIn>250</CutIn>
-   <CutOut>7450</CutOut>
+   <CutIn>100</CutIn>
+   <CutOut>750</CutOut>
   </Cut>
   <Cut>
    <Order>1</Order>
-   <CutIn>10100</CutIn>
-   <CutOut>14950</CutOut>
+   <CutIn>1100</CutIn>
+   <CutOut>1800</CutOut>
   </Cut>
   <Cut>
    <Order>2</Order>
-   <CutIn>22600</CutIn>
-   <CutOut>29900</CutOut>
+   <CutIn>2200</CutIn>
+   <CutOut>2800</CutOut>
   </Cut>
  </Video>
 </TTCut-Projectfile>

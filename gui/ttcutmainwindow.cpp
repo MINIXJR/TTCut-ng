@@ -1261,22 +1261,21 @@ void TTCutMainWindow::runScreenshotMode()
     // 1. Main window
     saveWidgetScreenshot(this, "ttcutng-main.png", 1200);
 
-    // 2. Frames area
-    saveWidgetScreenshot(currentFrame, "ttcutng-frames.png", 1200);
+    // 2. Both frames (CutOut + Current) — grab parent widget containing both
+    QWidget* framesParent = cutOutFrame->parentWidget();
+    if (framesParent)
+        saveWidgetScreenshot(framesParent, "ttcutng-frames.png", 1200);
 
     // 3. Navigation panel
     saveWidgetScreenshot(navigation, "ttcutng-nav-panel.png", 0);
 
     // 4. Cut list
-    saveWidgetScreenshot(cutList, "ttcutng-cutlist-detail.png", 800);
+    saveWidgetScreenshot(cutList, "ttcutng-cutlist-detail.png", 1200);
 
     // 5. Stream navigator / controls
     saveWidgetScreenshot(streamNavigator, "ttcutng-controls.png", 1200);
 
-    // 6. Video file info / tabs
-    saveWidgetScreenshot(videoFileInfo, "ttcutng-tabs.png", 0);
-
-    // 7. Landezonen: run analysis
+    // 6. Landezonen: run analysis and wait for results
     onAnalyzeStreamPoints();
     timer.restart();
     while (mStreamPointWorkersRunning > 0 && timer.elapsed() < 60000) {
@@ -1295,42 +1294,69 @@ void TTCutMainWindow::runScreenshotMode()
     saveWidgetScreenshot(mpStreamPointWidget, "ttcutng-landezonen-settings.png", 0);
     mpStreamPointWidget->showLandezonenTab();
 
-    // 9. Zeitsprung dialog
-    onQuickJump();
-    QThread::msleep(3000);
-    QApplication::processEvents();
-    for (QWidget* w : QApplication::topLevelWidgets()) {
-        if (w != this && w->isVisible() && w->windowTitle().contains("Zeitsprung")) {
-            saveWidgetScreenshot(w, "ttcutng-zeitsprung.png", 1200);
-            w->close();
-            break;
-        }
+    // 9. Zeitsprung dialog (non-modal for screenshot)
+    if (mpCurrentAVDataItem && mpCurrentAVDataItem->videoStream()) {
+        TTQuickJumpDialog zeitsprungDlg(mpCurrentAVDataItem->videoStream(),
+                                         mpCurrentAVDataItem->videoStream()->currentIndex(), this);
+        zeitsprungDlg.show();
+        QThread::msleep(5000);
+        QApplication::processEvents();
+        saveWidgetScreenshot(&zeitsprungDlg, "ttcutng-zeitsprung.png", 1200);
+        zeitsprungDlg.close();
     }
 
-    // 10. Settings dialog
-    onActionSettings();
-    QApplication::processEvents();
-    for (QWidget* w : QApplication::topLevelWidgets()) {
-        if (qobject_cast<TTCutSettingsDlg*>(w)) {
-            saveWidgetScreenshot(w, "ttcutng-settings.png", 0);
-            w->close();
-            break;
+    // 10. Settings dialog — one screenshot per tab
+    {
+        TTCutSettingsDlg settingsDlg(this);
+        settingsDlg.show();
+        QApplication::processEvents();
+
+        QTabWidget* settingsTab = settingsDlg.findChild<QTabWidget*>("settingsTab");
+        if (settingsTab) {
+            QStringList tabNames = {"common", "files", "encoding", "muxing"};
+            for (int i = 0; i < settingsTab->count() && i < tabNames.size(); ++i) {
+                settingsTab->setCurrentIndex(i);
+                QApplication::processEvents();
+                saveWidgetScreenshot(&settingsDlg,
+                    QString("ttcutng-settings-%1.png").arg(tabNames[i]), 0);
+            }
+        } else {
+            saveWidgetScreenshot(&settingsDlg, "ttcutng-settings.png", 0);
         }
+        settingsDlg.close();
     }
 
-    // 11. About dialog
-    onHelpAbout();
-    QApplication::processEvents();
-    for (QWidget* w : QApplication::topLevelWidgets()) {
-        QDialog* dlg = qobject_cast<QDialog*>(w);
-        if (dlg && dlg->isVisible()) {
-            saveWidgetScreenshot(dlg, "ttcutng-about.png", 0);
-            dlg->close();
-            break;
+    // 11. Cut dialog (AV Cut) — one screenshot per tab
+    {
+        TTCutAVCutDlg cutDlg(this);
+        cutDlg.show();
+        QApplication::processEvents();
+
+        QTabWidget* cutTab = cutDlg.findChild<QTabWidget*>("tabWidget");
+        if (cutTab) {
+            QStringList tabNames = {"common", "encoding", "muxing"};
+            for (int i = 0; i < cutTab->count() && i < tabNames.size(); ++i) {
+                cutTab->setCurrentIndex(i);
+                QApplication::processEvents();
+                saveWidgetScreenshot(&cutDlg,
+                    QString("ttcutng-cutdlg-%1.png").arg(tabNames[i]), 0);
+            }
+        } else {
+            saveWidgetScreenshot(&cutDlg, "ttcutng-cutdlg.png", 0);
         }
+        cutDlg.close();
     }
 
-    // 12. Copy main window as docs/MainWindow.png
+    // 12. About dialog (non-modal for screenshot)
+    {
+        TTCutAboutDlg aboutDlg(this);
+        aboutDlg.show();
+        QApplication::processEvents();
+        saveWidgetScreenshot(&aboutDlg, "ttcutng-about.png", 0);
+        aboutDlg.close();
+    }
+
+    // 13. Copy main window as docs/MainWindow.png
     QString docsPath = QFileInfo(QApplication::applicationDirPath() + "/../docs/MainWindow.png").absoluteFilePath();
     QFile::remove(docsPath);
     QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);
