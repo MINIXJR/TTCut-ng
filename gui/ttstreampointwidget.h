@@ -43,6 +43,10 @@ private slots:
   void onContextMenu(const QPoint& pos);
   void onDeleteKey();
 
+public:
+  void showLandezonenTab();
+  void showSettingsTab();
+
 private:
   void setupLandezonenTab(QWidget* tab);
   void setupSettingsTab(QWidget* tab);

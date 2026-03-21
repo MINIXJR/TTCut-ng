@@ -173,6 +173,10 @@ class TTCut
    // --- Zeitsprung (Quick Jump) ---
    static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)
 
+   // --- Screenshot mode ---
+   static QString screenshotDir;
+   static QString screenshotProject;
+
    // --- Navigation search thresholds ---
    static float  navBlackThreshold;     // Black frame detection threshold (default 0.980)
    static float  navSceneThreshold;     // Scene change detection threshold (default 0.300)

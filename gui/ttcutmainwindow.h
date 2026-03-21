@@ -126,6 +126,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
     void onOpenProjectFileFinished(const QString&);
     void onProjectModified();
+    void runScreenshotMode();
 
 		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
 
@@ -141,6 +142,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void insertRecentFile(const QString& fName);
 		void setProjectModified(bool modified);
 		void updateWindowTitle();
+		void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
 
 	private:
 		TTAVData*        mpAVData;

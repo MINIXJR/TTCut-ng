@@ -42,6 +42,9 @@
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcut.h"
 
+#include <QCommandLineParser>
+#include <QTimer>
+
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCut main
  */
@@ -90,32 +93,54 @@ int main( int argc, char **argv )
     // set initial size of applications main window
     mainWnd->resize(1024, 768);
 
-    // Process command line arguments for video file
-    QStringList args = a.arguments();
-    QString videoFile;
-    for (int i = 1; i < args.size(); i++) {
-      QString arg = args.at(i);
-      // Skip options starting with -
-      if (arg.startsWith("-")) continue;
-      // Check if it's a file that exists
-      QFileInfo fInfo(arg);
-      if (fInfo.exists() && fInfo.isFile()) {
-        videoFile = fInfo.absoluteFilePath();
-        TTCut::lastDirPath = fInfo.absolutePath();
-        break;
-      }
-    }
+    // Command line options
+    QCommandLineParser parser;
+    parser.setApplicationDescription("TTCut-ng - Frame-accurate video cutter");
+    parser.addHelpOption();
 
-    // Open file from command line after event loop starts
-    if (!videoFile.isEmpty()) {
-      qDebug() << "Opening file from command line:" << videoFile;
-      QTimer::singleShot(100, [mainWnd, videoFile]() {
-        if (videoFile.endsWith(".prj", Qt::CaseInsensitive)) {
-          mainWnd->openProjectFile(videoFile);
-        } else {
-          mainWnd->onReadVideoStream(videoFile);
+    QCommandLineOption screenshotOpt("screenshots",
+        "Capture all widget screenshots to <dir> and exit.", "dir");
+    QCommandLineOption projectOpt("project",
+        "Load project file <file>.", "file");
+    parser.addOption(screenshotOpt);
+    parser.addOption(projectOpt);
+    parser.addPositionalArgument("file", "Video or project file to open.");
+    parser.process(a);
+
+    // Screenshot mode
+    if (parser.isSet(screenshotOpt)) {
+      TTCut::screenshotDir = parser.value(screenshotOpt);
+      TTCut::screenshotProject = parser.value(projectOpt);
+      QTimer::singleShot(500, mainWnd, &TTCutMainWindow::runScreenshotMode);
+    } else {
+      // Process positional arguments for video/project file
+      QString videoFile;
+      QStringList positional = parser.positionalArguments();
+      for (const QString& arg : positional) {
+        QFileInfo fInfo(arg);
+        if (fInfo.exists() && fInfo.isFile()) {
+          videoFile = fInfo.absoluteFilePath();
+          TTCut::lastDirPath = fInfo.absolutePath();
+          break;
         }
-      });
+      }
+
+      // Also check --project option for normal mode
+      if (videoFile.isEmpty() && parser.isSet(projectOpt)) {
+        videoFile = parser.value(projectOpt);
+      }
+
+      // Open file from command line after event loop starts
+      if (!videoFile.isEmpty()) {
+        qDebug() << "Opening file from command line:" << videoFile;
+        QTimer::singleShot(100, [mainWnd, videoFile]() {
+          if (videoFile.endsWith(".prj", Qt::CaseInsensitive)) {
+            mainWnd->openProjectFile(videoFile);
+          } else {
+            mainWnd->onReadVideoStream(videoFile);
+          }
+        });
+      }
     }
 
     a.connect( &a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()) );

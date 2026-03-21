@@ -231,6 +231,16 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
   }
 }
 
+void TTStreamPointWidget::showLandezonenTab()
+{
+  if (mTabWidget) mTabWidget->setCurrentIndex(0);
+}
+
+void TTStreamPointWidget::showSettingsTab()
+{
+  if (mTabWidget) mTabWidget->setCurrentIndex(1);
+}
+
 void TTStreamPointWidget::onDeleteAllClicked()
 {
   emit deleteAllRequested();

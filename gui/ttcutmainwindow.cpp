@@ -1217,6 +1217,128 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   navigationEnabled( true );
 }
 
+/* /////////////////////////////////////////////////////////////////////////////
+ * Screenshot mode: capture all widgets and dialogs, then exit
+ */
+void TTCutMainWindow::saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth)
+{
+    QPixmap pixmap = widget->grab();
+    if (maxWidth > 0 && pixmap.width() > maxWidth) {
+        pixmap = pixmap.scaledToWidth(maxWidth, Qt::SmoothTransformation);
+    }
+    QString path = QDir(TTCut::screenshotDir).filePath(filename);
+    pixmap.save(path, "PNG");
+    qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
+}
+
+void TTCutMainWindow::runScreenshotMode()
+{
+    if (TTCut::screenshotProject.isEmpty()) {
+        qDebug() << "Screenshot mode: no --project specified";
+        QApplication::quit();
+        return;
+    }
+
+    QDir outDir(TTCut::screenshotDir);
+    if (!outDir.exists()) outDir.mkpath(".");
+
+    // Load project
+    openProjectFile(TTCut::screenshotProject);
+
+    // Wait for project to load
+    QElapsedTimer timer;
+    timer.start();
+    while (mpAVData->avCount() == 0 && timer.elapsed() < 30000) {
+        QApplication::processEvents();
+        QThread::msleep(100);
+    }
+    // Wait for audio streams
+    QThread::msleep(2000);
+    QApplication::processEvents();
+
+    qDebug() << "Screenshot mode: project loaded, avCount=" << mpAVData->avCount();
+
+    // 1. Main window
+    saveWidgetScreenshot(this, "ttcutng-main.png", 1200);
+
+    // 2. Frames area
+    saveWidgetScreenshot(currentFrame, "ttcutng-frames.png", 1200);
+
+    // 3. Navigation panel
+    saveWidgetScreenshot(navigation, "ttcutng-nav-panel.png", 0);
+
+    // 4. Cut list
+    saveWidgetScreenshot(cutList, "ttcutng-cutlist-detail.png", 800);
+
+    // 5. Stream navigator / controls
+    saveWidgetScreenshot(streamNavigator, "ttcutng-controls.png", 1200);
+
+    // 6. Video file info / tabs
+    saveWidgetScreenshot(videoFileInfo, "ttcutng-tabs.png", 0);
+
+    // 7. Landezonen: run analysis
+    onAnalyzeStreamPoints();
+    timer.restart();
+    while (mStreamPointWorkersRunning > 0 && timer.elapsed() < 60000) {
+        QApplication::processEvents();
+        QThread::msleep(100);
+    }
+    QApplication::processEvents();
+    QThread::msleep(500);
+    QApplication::processEvents();
+
+    saveWidgetScreenshot(mpStreamPointWidget, "ttcutng-landezonen.png", 0);
+
+    // 8. Landezonen settings tab
+    mpStreamPointWidget->showSettingsTab();
+    QApplication::processEvents();
+    saveWidgetScreenshot(mpStreamPointWidget, "ttcutng-landezonen-settings.png", 0);
+    mpStreamPointWidget->showLandezonenTab();
+
+    // 9. Zeitsprung dialog
+    onQuickJump();
+    QThread::msleep(3000);
+    QApplication::processEvents();
+    for (QWidget* w : QApplication::topLevelWidgets()) {
+        if (w != this && w->isVisible() && w->windowTitle().contains("Zeitsprung")) {
+            saveWidgetScreenshot(w, "ttcutng-zeitsprung.png", 1200);
+            w->close();
+            break;
+        }
+    }
+
+    // 10. Settings dialog
+    onActionSettings();
+    QApplication::processEvents();
+    for (QWidget* w : QApplication::topLevelWidgets()) {
+        if (qobject_cast<TTCutSettingsDlg*>(w)) {
+            saveWidgetScreenshot(w, "ttcutng-settings.png", 0);
+            w->close();
+            break;
+        }
+    }
+
+    // 11. About dialog
+    onHelpAbout();
+    QApplication::processEvents();
+    for (QWidget* w : QApplication::topLevelWidgets()) {
+        QDialog* dlg = qobject_cast<QDialog*>(w);
+        if (dlg && dlg->isVisible()) {
+            saveWidgetScreenshot(dlg, "ttcutng-about.png", 0);
+            dlg->close();
+            break;
+        }
+    }
+
+    // 12. Copy main window as docs/MainWindow.png
+    QString docsPath = QFileInfo(QApplication::applicationDirPath() + "/../docs/MainWindow.png").absoluteFilePath();
+    QFile::remove(docsPath);
+    QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);
+
+    qDebug() << "Screenshot mode complete:" << outDir.absolutePath();
+    QApplication::quit();
+}
+
 // needed by frame navigation!
 void TTCutMainWindow::onSetCutOut(int index)
 {

@@ -1,0 +1,28 @@
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>__VIDEO_PATH__</Name>
+  <Audio>
+   <Order>0</Order>
+   <Name>__AUDIO_PATH__</Name>
+   <Language>deu</Language>
+  </Audio>
+  <Cut>
+   <Order>0</Order>
+   <CutIn>250</CutIn>
+   <CutOut>7450</CutOut>
+  </Cut>
+  <Cut>
+   <Order>1</Order>
+   <CutIn>10100</CutIn>
+   <CutOut>14950</CutOut>
+  </Cut>
+  <Cut>
+   <Order>2</Order>
+   <CutIn>22600</CutIn>
+   <CutOut>29900</CutOut>
+  </Cut>
+ </Video>
+</TTCut-Projectfile>

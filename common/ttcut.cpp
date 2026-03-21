@@ -173,6 +173,10 @@ bool TTCut::normalizeAcmod  = true;
 // --- Zeitsprung (Quick Jump) ---
 int TTCut::quickJumpIntervalSec = 30;
 
+// --- Screenshot mode ---
+QString TTCut::screenshotDir;
+QString TTCut::screenshotProject;
+
 // --- Navigation search thresholds ---
 float TTCut::navBlackThreshold  = 0.980f;
 float TTCut::navSceneThreshold  = 0.300f;
