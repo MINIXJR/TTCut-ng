@@ -87,12 +87,12 @@ void TTOpenAudioTask::operation()
 	}
 	catch (TTException* ex)
 	{
-    throw new TTException(__FILE__, __LINE__, QString(tr("Unsupported audio type or file not found %1!")).arg(mFilePath));
+    throw new TTException(__FILE__, __LINE__, tr("Unsupported audio type or file not found %1!").arg(mFilePath));
 	}
 
 	if (mpAudioType->avStreamType() != TTAVTypes::mpeg_audio &&
 			mpAudioType->avStreamType() != TTAVTypes::ac3_audio) 
-    throw new TTException(__FILE__, __LINE__, QString(tr("Unsupported audio type %1!")).arg(mFilePath));
+    throw new TTException(__FILE__, __LINE__, tr("Unsupported audio type %1!").arg(mFilePath));
 
 	mpAudioStream = (TTAudioStream*) mpAudioType->createAudioStream();
 

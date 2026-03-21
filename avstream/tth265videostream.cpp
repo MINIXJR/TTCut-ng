@@ -35,6 +35,7 @@
 #include "../data/ttcutparameter.h"
 #include "../common/ttexception.h"
 #include "../common/ttcut.h"
+#include "../common/istatusreporter.h"
 
 #include <QDebug>
 #include <QDir>
@@ -139,23 +140,40 @@ bool TTH265VideoStream::closeStream()
 // -----------------------------------------------------------------------------
 int TTH265VideoStream::createHeaderList()
 {
+    emit statusReport(StatusReportArgs::Start, tr("Opening H.265 stream..."), 100);
+
+    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part)
+    connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, [this](int percent, const QString&) {
+        int mapped = 10 + percent * 70 / 100;
+        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
+    });
+
     if (!openStream()) {
+        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.265 stream"), 0);
         return -1;
     }
 
     mLog->infoMsg(__FILE__, __LINE__, "Building H.265 header list...");
+    emit statusReport(StatusReportArgs::Step, tr("Creating H.265 header list..."), 10);
 
-    // Build frame index first
+    // Build frame index first (slow — progress forwarded via lambda above)
     if (!mFFmpeg->buildFrameIndex()) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("Failed to build frame index: %1").arg(mFFmpeg->lastError()));
+        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+        emit statusReport(StatusReportArgs::Error, tr("Failed to build frame index"), 0);
         return -1;
     }
+
+    disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82);
 
     // Build GOP index
     if (!mFFmpeg->buildGOPIndex()) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("Failed to build GOP index: %1").arg(mFFmpeg->lastError()));
+        emit statusReport(StatusReportArgs::Error, tr("Failed to build GOP index"), 0);
         return -1;
     }
 
@@ -206,12 +224,16 @@ int TTH265VideoStream::createHeaderList()
                 .arg(mSPS->levelString()));
     }
 
+    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90);
+
     buildHeaderListFromFFmpeg();
 
     mLog->infoMsg(__FILE__, __LINE__,
         QString("Header list created: %1 frames, %2 GOPs")
             .arg(mFFmpeg->frameCount())
             .arg(mFFmpeg->gopCount()));
+
+    emit statusReport(StatusReportArgs::Finished, tr("H.265 header list created"), 100);
 
     return mFFmpeg->frameCount();
 }

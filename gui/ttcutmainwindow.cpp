@@ -499,7 +499,7 @@ void TTCutMainWindow::onFileSave()
   }
   catch (const TTException& ex)
   {
-    log->errorMsg(__FILE__, __LINE__, QString(tr("error save project file: %1").arg(TTCut::projectFileName)));
+    log->errorMsg(__FILE__, __LINE__, tr("error save project file: %1").arg(TTCut::projectFileName));
     return;
   }
 
@@ -571,8 +571,8 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
 
   if (mProjectModified) {
     QMessageBox::StandardButton reply = QMessageBox::question(this,
-        tr("Beenden"),
-        tr("Änderungen vor dem Schließen speichern?"),
+        tr("Exit"),
+        tr("Save changes before closing?"),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
         QMessageBox::Save);
 
@@ -1144,6 +1144,10 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
 
   insertRecentFile(fName);
   setProjectModified(false);
+
+  // Refresh cut list to update acmod icons (audio streams are now loaded)
+  emit mpAVData->cutDataReloaded();
+
   disconnect(mpAVData, SIGNAL(readProjectFileFinished(const QString&)), this, SLOT(onOpenProjectFileFinished(const QString&)));
 }
 

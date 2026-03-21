@@ -88,11 +88,11 @@ void TTOpenSubtitleTask::operation()
   }
   catch (TTException* ex)
   {
-    throw new TTException(__FILE__, __LINE__, QString(tr("Unsupported subtitle type or file not found %1!")).arg(mFilePath));
+    throw new TTException(__FILE__, __LINE__, tr("Unsupported subtitle type or file not found %1!").arg(mFilePath));
   }
 
   if (mpSubtitleType->avStreamType() != TTAVTypes::srt_subtitle)
-    throw new TTException(__FILE__, __LINE__, QString(tr("Unsupported subtitle type %1!")).arg(mFilePath));
+    throw new TTException(__FILE__, __LINE__, tr("Unsupported subtitle type %1!").arg(mFilePath));
 
   mpSubtitleStream = (TTSubtitleStream*) mpSubtitleType->createSubtitleStream();
 

@@ -145,6 +145,13 @@ int TTH264VideoStream::createHeaderList()
     // Emit Start with total=100 for percentage-based progress
     emit statusReport(StatusReportArgs::Start, tr("Opening H.264 stream..."), 100);
 
+    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part)
+    connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, [this](int percent, const QString&) {
+        // Map FFmpeg 0-100% to our 10-80% range (buildFrameIndex phase)
+        int mapped = 10 + percent * 70 / 100;
+        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
+    });
+
     if (!openStream()) {
         emit statusReport(StatusReportArgs::Error, tr("Failed to open H.264 stream"), 0);
         return -1;
@@ -202,22 +209,26 @@ int TTH264VideoStream::createHeaderList()
             .arg(mSPS->profileString())
             .arg(mSPS->levelString()));
 
-    emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 20);
+    emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 10);
 
-    // Build frame index
+    // Build frame index (slow — progress forwarded via lambda above)
     if (!mFFmpeg->buildFrameIndex(videoStreamIdx)) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("Failed to build frame index: %1").arg(mFFmpeg->lastError()));
+        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
         emit statusReport(StatusReportArgs::Error, tr("Failed to build frame index"), 0);
         return -1;
     }
 
-    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 70);
+    // Disconnect progress forwarding
+    disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+
+    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82);
 
     // Build GOP index
     mFFmpeg->buildGOPIndex();
 
-    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 80);
+    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90);
 
     // Create access units from frame index
     buildHeaderListFromFFmpeg();

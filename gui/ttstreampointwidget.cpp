@@ -85,7 +85,7 @@ void TTStreamPointWidget::setupLandezonenTab(QWidget* tab)
   connect(mBtnAnalyze, SIGNAL(clicked()), this, SLOT(onAnalyzeClicked()));
   btnLayout->addWidget(mBtnAnalyze);
 
-  mBtnDeleteAll = new QPushButton(tr("Alle löschen"), tab);
+  mBtnDeleteAll = new QPushButton(tr("Delete all"), tab);
   connect(mBtnDeleteAll, SIGNAL(clicked()), this, SLOT(onDeleteAllClicked()));
   btnLayout->addWidget(mBtnDeleteAll);
 
@@ -126,7 +126,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // Aspect ratio change detection (MPEG-2 only)
-  mCbAspectChange = new QCheckBox(tr("Seitenverhältnis (4:3/16:9)"), tab);
+  mCbAspectChange = new QCheckBox(tr("Aspect ratio (4:3/16:9)"), tab);
   gl->addWidget(mCbAspectChange, row, 0, 1, 2);
   row++;
 
@@ -214,7 +214,7 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
 
   QAction* actDeleteAll = nullptr;
   if (mModel->rowCount() > 0) {
-    actDeleteAll = menu.addAction(tr("Alle löschen"));
+    actDeleteAll = menu.addAction(tr("Delete all"));
   }
 
   if (menu.isEmpty()) return;

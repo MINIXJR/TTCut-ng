@@ -174,7 +174,7 @@ void TTMplexProvider::mplexPart(int index)
     }
   }
 
-  emit statusReport(StatusReportArgs::HideProcessForm, "Finished mplex", 0);
+  emit statusReport(StatusReportArgs::HideProcessForm, tr("Mplex finished"), 0);
 
   qApp->processEvents();
 }
@@ -267,7 +267,7 @@ void TTMplexProvider::onProcReadOut()
 //! state() returns running
 void TTMplexProvider::onProcStarted()
 {
-  emit statusReport(StatusReportArgs::AddProcessLine, "start mplex process", 0);
+  emit statusReport(StatusReportArgs::AddProcessLine, tr("Starting mplex process"), 0);
   qApp->processEvents();
   procOutput();
 }

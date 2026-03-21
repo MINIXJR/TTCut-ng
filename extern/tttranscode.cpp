@@ -322,11 +322,11 @@ cleanup:
  */
 bool TTTranscodeProvider::encodePart(TTVideoStream* vStream, int start, int end)
 {
-  emit statusReport(StatusReportArgs::ShowProcessForm, "encode part", 0);
+  emit statusReport(StatusReportArgs::ShowProcessForm, tr("Encoding"), 0);
   qApp->processEvents();
 
   if (!setupEncoder()) {
-    emit statusReport(StatusReportArgs::HideProcessForm, "encode failed - encoder setup", 0);
+    emit statusReport(StatusReportArgs::HideProcessForm, tr("Encoding failed - encoder setup"), 0);
     return false;
   }
 
@@ -334,7 +334,7 @@ bool TTTranscodeProvider::encodePart(TTVideoStream* vStream, int start, int end)
 
   freeEncoder();
 
-  emit statusReport(StatusReportArgs::HideProcessForm, "encode finished", 0);
+  emit statusReport(StatusReportArgs::HideProcessForm, tr("Encoding finished"), 0);
   qApp->processEvents();
 
   return success;

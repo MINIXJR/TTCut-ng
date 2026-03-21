@@ -103,7 +103,7 @@ void TTCutVideoTask::operation()
 	mpCutParams->setIsWriteSequenceEnd(true);
 	mpTgtStream->open();
 
-  onStatusReport(this, StatusReportArgs::Start, QString(tr("Cut 1 from %1").arg(mpCutList->count())), mpCutList->count());
+  onStatusReport(this, StatusReportArgs::Start, tr("Cut 1 of %1").arg(mpCutList->count()), mpCutList->count());
 
   for (int i = 0; i < mpCutList->count(); i++) {
 
@@ -133,7 +133,7 @@ void TTCutVideoTask::operation()
 		if (i == mpCutList->count() - 1)
 		  mpCutParams->lastCall();
 
-    onStatusReport(this, StatusReportArgs::Step, QString(tr("Cut %1 from %2")).arg(i+1).arg(mpCutList->count()), i+1);
+    onStatusReport(this, StatusReportArgs::Step, tr("Cut %1 of %2").arg(i+1).arg(mpCutList->count()), i+1);
 	}
 
   log->debugMsg(__FILE__, __LINE__, QString("close target stream %1").arg(mTgtFilePath));

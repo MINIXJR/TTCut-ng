@@ -54,6 +54,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
 
 // Static initialization flag
@@ -528,7 +529,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
             int64_t progress = (frameIndex * 100) / estimatedFrames;
             if (progress != lastProgress && progress <= 100) {
                 emit progressChanged(static_cast<int>(progress),
-                    QString("Indexing frame %1...").arg(frameIndex));
+                    tr("Indexing frame %1...").arg(frameIndex));
                 lastProgress = progress;
             }
         }
@@ -608,7 +609,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
                  << "Last PTS:" << mFrameIndex.last().pts;
     }
 
-    emit progressChanged(100, QString("Indexed %1 frames").arg(mFrameIndex.size()));
+    emit progressChanged(100, tr("Indexed %1 frames").arg(mFrameIndex.size()));
 
     return true;
 }
@@ -1422,12 +1423,126 @@ void TTFFmpegWrapper::clearFrameCache()
 }
 
 // ----------------------------------------------------------------------------
+// Analyze AC3 acmod (audio coding mode) for a segment between cutInTime and cutOutTime.
+// Returns the majority acmod and detects changes at cut boundaries.
+// Uses direct AC3 sync word scanning on the raw file instead of libav (which crashes
+// on av_seek_frame for raw AC3 ES files).
+// ----------------------------------------------------------------------------
+TTFFmpegWrapper::AcmodInfo TTFFmpegWrapper::analyzeAcmod(const QString& audioFile,
+                                                          double cutInTime, double cutOutTime)
+{
+    AcmodInfo info = { -1, -1, -1, 0.0, 0.0 };
+
+    QFile file(audioFile);
+    if (!file.open(QIODevice::ReadOnly))
+        return info;
+
+    // AC3 frame size lookup table [fscod][frmsizecod] in 16-bit words
+    static const int AC3FrameWords[3][38] = {
+        { 64, 64, 80, 80, 96, 96,112,112,128,128,160,160,192,192,224,224,256,256,320,320,
+         384,384,448,448,512,512,640,640,768,768,896,896,1024,1024,1152,1152,1280,1280},
+        { 69, 70, 87, 88,104,105,121,122,139,140,174,175,208,209,243,244,278,279,348,349,
+         417,418,487,488,557,558,696,697,835,836,975,976,1114,1115,1253,1254,1393,1394},
+        { 96, 96,120,120,144,144,168,168,192,192,240,240,288,288,336,336,384,384,480,480,
+         576,576,672,672,768,768,960,960,1152,1152,1344,1344,1536,1536,1728,1728,1920,1920}
+    };
+
+    // Scan AC3 frames by sync word (0x0B77)
+    static const int SAMPLE_FRAMES = 100;
+    int acmodCount[8] = {0};
+    int firstAcmod = -1;
+    int lastAcmod = -1;
+    int totalFrames = 0;
+    int frameIndex = 0;
+    double frameTime = 0.032;  // AC3 = 32ms per frame at 48kHz
+
+    // Calculate frame indices for cutIn/cutOut
+    int cutInFrame = static_cast<int>(cutInTime / frameTime);
+    int cutOutFrame = static_cast<int>(cutOutTime / frameTime);
+
+    quint8 header[8];
+    qint64 pos = 0;
+
+    while (pos < file.size() - 8) {
+        file.seek(pos);
+        if (file.read(reinterpret_cast<char*>(header), 8) != 8)
+            break;
+
+        // Check sync word
+        if (header[0] != 0x0B || header[1] != 0x77) {
+            pos++;
+            continue;
+        }
+
+        int fscod = (header[4] >> 6) & 0x03;
+        int frmsizecod = header[4] & 0x3F;
+        if (fscod >= 3 || frmsizecod >= 38) {
+            pos++;
+            continue;
+        }
+
+        int frameSize = AC3FrameWords[fscod][frmsizecod] * 2;
+        if (frameSize <= 0) {
+            pos++;
+            continue;
+        }
+
+        int acmod = (header[6] >> 5) & 0x07;
+
+        // Sample first SAMPLE_FRAMES from CutIn and last SAMPLE_FRAMES before CutOut
+        bool inCutInRange  = (frameIndex >= cutInFrame && frameIndex < cutInFrame + SAMPLE_FRAMES);
+        bool inCutOutRange = (frameIndex >= cutOutFrame - SAMPLE_FRAMES && frameIndex < cutOutFrame);
+
+        if (inCutInRange || inCutOutRange) {
+            acmodCount[acmod]++;
+            totalFrames++;
+            if (firstAcmod < 0) firstAcmod = acmod;
+            lastAcmod = acmod;
+        }
+
+        // Stop scanning well past cutOut
+        if (frameIndex > cutOutFrame + SAMPLE_FRAMES)
+            break;
+
+        frameIndex++;
+        pos += frameSize;
+    }
+
+    file.close();
+
+    if (totalFrames == 0)
+        return info;
+
+    // Determine main acmod (majority)
+    int mainAcmod = 0;
+    int maxCount = 0;
+    for (int i = 0; i < 8; i++) {
+        if (acmodCount[i] > maxCount) {
+            maxCount = acmodCount[i];
+            mainAcmod = i;
+        }
+    }
+
+    info.mainAcmod = mainAcmod;
+    info.cutInAcmod = firstAcmod;
+    info.cutOutAcmod = lastAcmod;
+
+    qDebug() << "analyzeAcmod:" << QFileInfo(audioFile).fileName()
+             << "main=" << mainAcmod << "cutIn=" << firstAcmod << "cutOut=" << lastAcmod
+             << "frames=" << totalFrames;
+
+    return info;
+}
+
+// ----------------------------------------------------------------------------
 // Cut audio elementary stream using libav stream-copy (no external process)
 // All segments are handled in a single pass with PTS offset management.
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                                       const QString& outputFile,
-                                      const QList<QPair<double, double>>& cutList)
+                                      const QList<QPair<double, double>>& cutList,
+                                      bool normalizeAcmod,
+                                      const QList<int>& targetAcmods)
 {
     if (!QFile::exists(inputFile)) {
         setError(QString("Audio file not found: %1").arg(inputFile));
@@ -1529,6 +1644,16 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
+    // Setup AC3 decoder/encoder for acmod normalization (lazy init)
+    AVCodecContext* ac3DecCtx = nullptr;
+    AVCodecContext* ac3EncCtx = nullptr;
+    struct SwrContext* swrCtx = nullptr;
+    AVFrame* ac3Frame = nullptr;
+    AVFrame* ac3ConvertedFrame = nullptr;
+    bool acmodNormActive = normalizeAcmod &&
+                           inStream->codecpar->codec_id == AV_CODEC_ID_AC3;
+    int acmodReencoded = 0;
+
     // Process all segments in a single pass with PTS offset management
     int64_t ptsOffset = 0;
     int64_t nextOutputPts = 0;
@@ -1537,7 +1662,14 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         double startTime = cutList[segIdx].first;
         double endTime = cutList[segIdx].second;
 
-        qDebug() << "  Segment" << segIdx << ":" << startTime << "->" << endTime;
+        // Determine target acmod for this segment
+        int segTargetAcmod = -1;
+        if (acmodNormActive && segIdx < targetAcmods.size()) {
+            segTargetAcmod = targetAcmods[segIdx];
+        }
+
+        qDebug() << "  Segment" << segIdx << ":" << startTime << "->" << endTime
+                 << (segTargetAcmod >= 0 ? QString("targetAcmod=%1").arg(segTargetAcmod) : "");
 
         // Seek to just before start time using audio stream timebase
         int64_t seekTs = static_cast<int64_t>(startTime / av_q2d(inStream->time_base));
@@ -1563,8 +1695,9 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 continue;
             }
 
-            // Stop at end time
-            if (pktTime >= endTime) {
+            // Stop at end time — only include frames that fit completely
+            double frameDurSec = frameDuration * av_q2d(inStream->time_base);
+            if (pktTime + frameDurSec > endTime + 0.001) {
                 av_packet_unref(pkt);
                 break;
             }
@@ -1575,21 +1708,115 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 segmentStarted = true;
             }
 
-            // Shift PTS/DTS for continuous output timeline
-            pkt->pts += ptsOffset;
-            pkt->dts = pkt->pts;
-            pkt->stream_index = 0;
-            pkt->pos = -1;
-
-            ret = av_write_frame(outFmtCtx, pkt);
-            if (ret < 0) {
-                qDebug() << "  Warning: av_write_frame failed at" << pktTime;
-            } else {
-                nextOutputPts = pkt->pts + frameDuration;
+            // Check if this frame needs acmod re-encoding
+            bool needsReencode = false;
+            if (segTargetAcmod >= 0 && pkt->size >= 7) {
+                int frameAcmod = (pkt->data[6] >> 5) & 0x07;
+                needsReencode = (frameAcmod != segTargetAcmod);
             }
 
-            av_packet_unref(pkt);
+            if (needsReencode) {
+                // Lazy init decoder/encoder on first re-encode
+                if (!ac3DecCtx) {
+                    const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
+                    ac3DecCtx = avcodec_alloc_context3(dec);
+                    avcodec_parameters_to_context(ac3DecCtx, inStream->codecpar);
+                    avcodec_open2(ac3DecCtx, dec, nullptr);
+                    ac3Frame = av_frame_alloc();
+                }
+                if (!ac3EncCtx) {
+                    const AVCodec* enc = avcodec_find_encoder(AV_CODEC_ID_AC3);
+                    ac3EncCtx = avcodec_alloc_context3(enc);
+                    ac3EncCtx->sample_rate = inStream->codecpar->sample_rate;
+                    ac3EncCtx->bit_rate = inStream->codecpar->bit_rate > 0
+                        ? inStream->codecpar->bit_rate : 384000;
+                    ac3EncCtx->time_base = inStream->time_base;
+                    // Set target channel layout based on target acmod
+                    if (segTargetAcmod == 7 || segTargetAcmod == 6) {
+                        // 5.1: 3/2 + LFE
+                        AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
+                        av_channel_layout_copy(&ac3EncCtx->ch_layout, &layout51);
+                    } else {
+                        // Stereo: 2/0
+                        AVChannelLayout layoutStereo = AV_CHANNEL_LAYOUT_STEREO;
+                        av_channel_layout_copy(&ac3EncCtx->ch_layout, &layoutStereo);
+                    }
+                    ac3EncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+                    avcodec_open2(ac3EncCtx, enc, nullptr);
+                }
+
+                // Decode
+                avcodec_send_packet(ac3DecCtx, pkt);
+                int decRet = avcodec_receive_frame(ac3DecCtx, ac3Frame);
+                if (decRet == 0) {
+                    // Setup resampler on first use (channel layout conversion)
+                    if (!swrCtx) {
+                        swr_alloc_set_opts2(&swrCtx,
+                            &ac3EncCtx->ch_layout, ac3EncCtx->sample_fmt, ac3EncCtx->sample_rate,
+                            &ac3Frame->ch_layout, (AVSampleFormat)ac3Frame->format, ac3Frame->sample_rate,
+                            0, nullptr);
+                        swr_init(swrCtx);
+
+                        ac3ConvertedFrame = av_frame_alloc();
+                        av_channel_layout_copy(&ac3ConvertedFrame->ch_layout, &ac3EncCtx->ch_layout);
+                        ac3ConvertedFrame->format = ac3EncCtx->sample_fmt;
+                        ac3ConvertedFrame->sample_rate = ac3EncCtx->sample_rate;
+                        ac3ConvertedFrame->nb_samples = ac3Frame->nb_samples;
+                        av_frame_get_buffer(ac3ConvertedFrame, 0);
+                    }
+
+                    // Convert channel layout
+                    ac3ConvertedFrame->nb_samples = ac3Frame->nb_samples;
+                    swr_convert(swrCtx,
+                        ac3ConvertedFrame->data, ac3ConvertedFrame->nb_samples,
+                        (const uint8_t**)ac3Frame->data, ac3Frame->nb_samples);
+
+                    ac3ConvertedFrame->pts = pkt->pts + ptsOffset;
+
+                    // Re-encode with target channel layout
+                    avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
+                    AVPacket* encPkt = av_packet_alloc();
+                    if (avcodec_receive_packet(ac3EncCtx, encPkt) == 0) {
+                        encPkt->pts = pkt->pts + ptsOffset;
+                        encPkt->dts = encPkt->pts;
+                        encPkt->stream_index = 0;
+                        encPkt->pos = -1;
+                        ret = av_write_frame(outFmtCtx, encPkt);
+                        if (ret >= 0) {
+                            nextOutputPts = encPkt->pts + frameDuration;
+                            acmodReencoded++;
+                        }
+                    }
+                    av_packet_free(&encPkt);
+                }
+                av_packet_unref(pkt);
+            } else {
+                // Normal stream-copy
+                pkt->pts += ptsOffset;
+                pkt->dts = pkt->pts;
+                pkt->stream_index = 0;
+                pkt->pos = -1;
+
+                ret = av_write_frame(outFmtCtx, pkt);
+                if (ret < 0) {
+                    qDebug() << "  Warning: av_write_frame failed at" << pktTime;
+                } else {
+                    nextOutputPts = pkt->pts + frameDuration;
+                }
+
+                av_packet_unref(pkt);
+            }
         }
+    }
+
+    // Cleanup acmod re-encode resources
+    if (swrCtx)             swr_free(&swrCtx);
+    if (ac3ConvertedFrame)  av_frame_free(&ac3ConvertedFrame);
+    if (ac3DecCtx)          avcodec_free_context(&ac3DecCtx);
+    if (ac3EncCtx)          avcodec_free_context(&ac3EncCtx);
+    if (ac3Frame)           av_frame_free(&ac3Frame);
+    if (acmodReencoded > 0) {
+        qDebug() << "  AC3 acmod normalization: re-encoded" << acmodReencoded << "frames";
     }
 
     av_packet_free(&pkt);

@@ -50,6 +50,8 @@ class TTVideoIndexList;
 // -----------------------------------------------------------------------------
 class TTH265VideoStream : public TTVideoStream
 {
+    Q_OBJECT
+
 public:
     TTH265VideoStream(const QFileInfo& fInfo);
     virtual ~TTH265VideoStream();

@@ -51,6 +51,8 @@
 
 class TTSrtSubtitleStream : public TTSubtitleStream
 {
+  Q_OBJECT
+
   public:
     TTSrtSubtitleStream(const QFileInfo &f_info);
     virtual ~TTSrtSubtitleStream();

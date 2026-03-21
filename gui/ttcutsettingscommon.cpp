@@ -65,9 +65,17 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
     gl->addWidget(sbQuickJumpInterval, row3, 1);
   }
 
+  // AC3 acmod normalization checkbox
+  cbNormalizeAcmod = new QCheckBox(tr("Normalize AC3 channel format at cuts"), this);
+  cbNormalizeAcmod->setToolTip(tr("Re-encode AC3 frames at cut boundaries when channel format changes (e.g. stereo/5.1)"));
+  if (gl) {
+    int row4 = gl->rowCount();
+    gl->addWidget(cbNormalizeAcmod, row4, 0, 1, 2);
+  }
+
   // Preview I-frame hint
   QLabel* lblPreviewHint = new QLabel(
-      tr("Die Vorschau beginnt für jeden Schnitt bei einem I-Frame."), this);
+      tr("Preview starts at an I-frame for each cut."), this);
   lblPreviewHint->setStyleSheet("QLabel { color: #666; font-style: italic; }");
   lblPreviewHint->setWordWrap(true);
   if (gl) {
@@ -128,6 +136,9 @@ void TTCutSettingsCommon::setTabData()
   // Audio burst detection
   sbBurstThreshold->setValue(TTCut::burstThresholdDb);
 
+  // AC3 acmod normalization
+  cbNormalizeAcmod->setChecked(TTCut::normalizeAcmod);
+
   // Zeitsprung
   sbQuickJumpInterval->setValue(TTCut::quickJumpIntervalSec);
 }
@@ -159,6 +170,9 @@ void TTCutSettingsCommon::getTabData()
 
   // Audio burst detection
   TTCut::burstThresholdDb = sbBurstThreshold->value();
+
+  // AC3 acmod normalization
+  TTCut::normalizeAcmod = cbNormalizeAcmod->isChecked();
 
   // Zeitsprung
   TTCut::quickJumpIntervalSec = sbQuickJumpInterval->value();

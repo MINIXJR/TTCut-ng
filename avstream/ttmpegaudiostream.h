@@ -55,6 +55,8 @@
  */
 class TTMPEGAudioStream : public TTAudioStream
 {
+  Q_OBJECT
+
  public:
   TTMPEGAudioStream( const QFileInfo &f_info, int s_pos=0 );
   virtual ~TTMPEGAudioStream();

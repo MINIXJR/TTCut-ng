@@ -61,7 +61,6 @@
 #include "ttopensubtitletask.h"
 #include "ttcutpreviewtask.h"
 #include "ttcutvideotask.h"
-#include "ttcutaudiotask.h"
 #include "ttcutsubtitletask.h"
 #include "ttframesearchtask.h"
 
@@ -910,12 +909,12 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     }
 
     if (!burstWarnings.isEmpty()) {
-      QString msg = tr("Folgende Schnitte haben erkannte Audio-Bursts:\n\n")
+      QString msg = tr("The following cuts have detected audio bursts:\n\n")
                   + burstWarnings.join("\n")
-                  + tr("\n\nVorschau nutzen um zu prüfen ob Shift nötig ist.");
+                  + tr("\n\nUse preview to check if shift is needed.");
 
-      int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio-Burst Warning"),
-                    msg, tr("Trotzdem schneiden"), tr("Abbrechen"));
+      int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
+                    msg, tr("Cut anyway"), tr("Cancel"));
       if (ret == 1) {
         emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
         return;
@@ -947,7 +946,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   connect(mpThreadTaskPool, SIGNAL(exit()),    this, SLOT(onCutFinished()));
   connect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onCutAborted()));
 
-  mpThreadTaskPool->init(cutList->count()*2);
+  // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
+  mpThreadTaskPool->init(cutList->count());
   mpThreadTaskPool->start(cutVideoTask);
 
   // all video must have the same count of audio streams!
@@ -962,17 +962,44 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     // audio file exists
     if (QFileInfo(tgtAudioFilePath).exists()) {
       // TODO: Warning about deleting file
-      log->warningMsg(__FILE__, __LINE__, QString(tr("deleting existing audio cut file: %1").arg(tgtAudioFilePath)));
+      log->warningMsg(__FILE__, __LINE__, tr("deleting existing audio cut file: %1").arg(tgtAudioFilePath));
       QFile tempFile(tgtAudioFilePath);
       tempFile.remove();
       tempFile.close();
     }
 
-    cutAudioTask = new TTCutAudioTask();
-    TTAudioItem audioItem = cutList->at(0).avDataItem()->audioListItemAt(i);
-    cutAudioTask->init(tgtAudioFilePath, cutList, i, cutVideoTask->muxListItem(), audioItem.getLanguage());
+    // Use FFmpegWrapper for audio cutting (same as H.264/H.265 path)
+    // This enables AC3 acmod normalization at cut boundaries
+    TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
+    double frameRate = vStream->frameRate();
+    QList<QPair<double, double>> audioKeepList;
+    for (int c = 0; c < cutList->count(); c++) {
+      TTCutItem ci = cutList->at(c);
+      double cutInTime = ci.cutInIndex() / frameRate;
+      double cutOutTime = (ci.cutOutIndex() + 1) / frameRate;
+      audioKeepList.append(qMakePair(cutInTime, cutOutTime));
+    }
 
-    mpThreadTaskPool->start(cutAudioTask);
+    // Build per-segment target acmod list for AC3 normalization
+    QList<int> targetAcmods;
+    QString audioExt = QFileInfo(audioStream->filePath()).suffix().toLower();
+    if (TTCut::normalizeAcmod && audioExt == "ac3") {
+      for (int s = 0; s < audioKeepList.size(); s++) {
+        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+            audioStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
+        targetAcmods.append(aInfo.mainAcmod);
+      }
+    }
+
+    TTFFmpegWrapper ffmpegAudio;
+    TTAudioItem audioItem = cutList->at(0).avDataItem()->audioListItemAt(i);
+    if (ffmpegAudio.cutAudioStream(audioStream->filePath(), tgtAudioFilePath,
+                                     audioKeepList, TTCut::normalizeAcmod, targetAcmods)) {
+      // Register audio file with mux list item so onCutFinished can mux it
+      cutVideoTask->muxListItem()->appendAudioFile(tgtAudioFilePath, audioItem.getLanguage());
+    } else {
+      log->errorMsg(__FILE__, __LINE__, QString("Audio cut failed for track %1").arg(i+1));
+    }
   }
 
   // cut subtitle streams
@@ -986,7 +1013,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
 
     // subtitle file exists
     if (QFileInfo(tgtSubtitleFilePath).exists()) {
-      log->warningMsg(__FILE__, __LINE__, QString(tr("deleting existing subtitle cut file: %1").arg(tgtSubtitleFilePath)));
+      log->warningMsg(__FILE__, __LINE__, tr("deleting existing subtitle cut file: %1").arg(tgtSubtitleFilePath));
       QFile tempFile(tgtSubtitleFilePath);
       tempFile.remove();
       tempFile.close();
@@ -1162,8 +1189,19 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       QString cutAudioFile = QFileInfo(QDir(TTCut::cutDirPath),
           QFileInfo(sourceFile).completeBaseName() + QString("_audio%1.").arg(i+1) + audioExt).absoluteFilePath();
 
-      // Use FFmpeg wrapper for audio cutting (stream-copy)
-      if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, keepList)) {
+      // Build per-segment target acmod list for AC3 normalization
+      QList<int> targetAcmods;
+      if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+        for (int s = 0; s < keepList.size(); s++) {
+          TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+              srcAudioFile, keepList[s].first, keepList[s].second);
+          targetAcmods.append(aInfo.mainAcmod);
+        }
+      }
+
+      // Use FFmpeg wrapper for audio cutting (stream-copy + optional acmod normalization)
+      if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, keepList,
+                                 TTCut::normalizeAcmod, targetAcmods)) {
         cutAudioFiles.append(cutAudioFile);
         log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(cutAudioFile));
       } else {

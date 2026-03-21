@@ -488,7 +488,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   }
 
   // Show progress dialog — repaint() forces synchronous painting before blocking work
-  QProgressDialog progress(tr("Vorschau wird neu generiert..."), QString(), 0, 0, this);
+  QProgressDialog progress(tr("Regenerating preview..."), QString(), 0, 0, this);
   progress.setWindowModality(Qt::WindowModal);
   progress.setMinimumDuration(0);
   progress.show();
@@ -578,7 +578,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
       avOffsetMs = esInfo.avOffsetMs();
   }
 
-  progress->setLabelText(tr("MPEG-2 Video schneiden..."));
+  progress->setLabelText(tr("Cutting MPEG-2 video..."));
   QApplication::processEvents();
 
   // --- Cut video ---
@@ -589,37 +589,54 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
 
   // --- Cut audio ---
   bool hasAudio = (avItem->audioCount() > 0);
-  QString audioFile;
+  QStringList cutAudioFiles;
   if (hasAudio) {
-    progress->setLabelText(tr("Audio schneiden..."));
+    progress->setLabelText(tr("Cutting audio..."));
     QApplication::processEvents();
 
-    audioFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpa");
-    TTCutAudioTask cutAudioTask;
-    cutAudioTask.init(audioFile, tmpCutList, 0, cutVideoTask.muxListItem());
-    mpAVData->threadTaskPool()->start(&cutAudioTask, true);
+    TTAudioStream* aStream = avItem->audioStreamAt(0);
+    double fps = vStream->frameRate();
+    QList<QPair<double, double>> audioKeepList;
+    for (int c = 0; c < tmpCutList->count(); c++) {
+      TTCutItem ci = tmpCutList->at(c);
+      audioKeepList.append(qMakePair(ci.cutInIndex() / fps, (ci.cutOutIndex() + 1) / fps));
+    }
+
+    QString audioExt = QFileInfo(aStream->filePath()).suffix();
+    QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, audioExt);
+
+    QList<int> targetAcmods;
+    if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+      for (int s = 0; s < audioKeepList.size(); s++) {
+        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+            aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
+        targetAcmods.append(aInfo.mainAcmod);
+      }
+    }
+
+    TTFFmpegWrapper ffmpegAudio;
+    if (ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
+                                    audioKeepList, TTCut::normalizeAcmod, targetAcmods)) {
+      cutAudioFiles.append(cutAudioFile);
+    }
   }
 
-  progress->setLabelText(tr("Muxing (mplex)..."));
+  progress->setLabelText(tr("Creating MKV..."));
   QApplication::processEvents();
 
-  // --- Mux with mplex ---
-  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpg");
-  QString muxCommand;
-  if (hasAudio) {
-    if (avOffsetMs != 0) {
-      muxCommand = QString("mplex -f 8 -O %1ms -o \"%2\" \"%3\" \"%4\" 2>/dev/null")
-          .arg(avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
-    } else {
-      muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null")
-          .arg(outputFile).arg(videoFile).arg(audioFile);
-    }
+  // --- Mux to MKV ---
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+  if (hasAudio && !cutAudioFiles.isEmpty()) {
+    double fps = vStream->frameRate();
+    int frameDurationNs = static_cast<int>(1000000000.0 / fps);
+    TTMkvMergeProvider mkvProv;
+    mkvProv.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+    if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
+    mkvProv.mux(outputFile, videoFile, cutAudioFiles, QStringList());
   } else {
-    muxCommand = QString("mv \"%1\" \"%2\" 2>/dev/null")
-        .arg(videoFile).arg(outputFile);
+    QFile::rename(videoFile, outputFile);
   }
-  qDebug() << "Regenerate MPEG-2 mux:" << muxCommand;
-  system(qPrintable(muxCommand));
+  qDebug() << "Regenerate MPEG-2 preview (MKV):" << outputFile;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -673,7 +690,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList
     return;
   }
 
-  progress->setLabelText(tr("Audio schneiden..."));
+  progress->setLabelText(tr("Cutting audio..."));
   QApplication::processEvents();
 
   // --- Cut audio ---
@@ -700,7 +717,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList
     }
   }
 
-  progress->setLabelText(tr("MKV erstellen..."));
+  progress->setLabelText(tr("Creating MKV..."));
   QApplication::processEvents();
 
   // --- Mux to MKV ---

@@ -89,7 +89,7 @@ void TTOpenVideoTask::operation()
   QFileInfo fInfo(mFileName);
 
   if (!fInfo.exists())
-    throw new TTFileNotFoundException(__FILE__, __LINE__, QString(tr("file %1 does not exists!")).arg(fInfo.filePath()));
+    throw new TTFileNotFoundException(__FILE__, __LINE__, tr("file %1 does not exists!").arg(fInfo.filePath()));
 
   QString videoFilePath = fInfo.absoluteFilePath();
 
@@ -103,13 +103,13 @@ void TTOpenVideoTask::operation()
 
   if (containerExtensions.contains(suffix)) {
     throw new TTDataFormatException(__FILE__, __LINE__,
-        QString(tr("Container format detected: %1\n\n"
+        tr("Container format detected: %1\n\n"
                    "TTCut only works with elementary streams.\n"
                    "Please demux first using: ttcut-demux %2\n\n"
                    "Supported formats:\n"
                    "  Video: .m2v, .264, .265\n"
                    "  Audio: .ac3, .mp2\n"
-                   "  Subtitles: .srt"))
+                   "  Subtitles: .srt")
             .arg(suffix.toUpper()).arg(fInfo.fileName()));
   }
 
@@ -125,7 +125,7 @@ void TTOpenVideoTask::operation()
       streamType != TTAVTypes::h264_video &&
       streamType != TTAVTypes::h265_video) {
     throw new TTDataFormatException(__FILE__, __LINE__,
-        QString(tr("unsupported video type %1")).arg(fInfo.filePath()));
+        tr("unsupported video type %1").arg(fInfo.filePath()));
   }
 
   // Use factory method to create the appropriate video stream
@@ -133,7 +133,7 @@ void TTOpenVideoTask::operation()
 
   if (mpVideoStream == nullptr) {
     throw new TTDataFormatException(__FILE__, __LINE__,
-        QString(tr("failed to create video stream for %1")).arg(fInfo.filePath()));
+        tr("failed to create video stream for %1").arg(fInfo.filePath()));
   }
 
   qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
@@ -144,13 +144,13 @@ void TTOpenVideoTask::operation()
   int headerCount = mpVideoStream->createHeaderList();
   if (headerCount <= 0) {
     throw new TTDataFormatException(__FILE__, __LINE__,
-        QString(tr("Failed to parse video stream headers: %1")).arg(fInfo.filePath()));
+        tr("Failed to parse video stream headers: %1").arg(fInfo.filePath()));
   }
 
   int indexCount = mpVideoStream->createIndexList();
   if (indexCount <= 0) {
     throw new TTDataFormatException(__FILE__, __LINE__,
-        QString(tr("Failed to create video index: %1")).arg(fInfo.filePath()));
+        tr("Failed to create video index: %1").arg(fInfo.filePath()));
   }
 
   if (mpVideoStream->indexList() != nullptr) {

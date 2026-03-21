@@ -53,6 +53,8 @@
  */
 class TTAC3AudioStream : public TTAudioStream
 {
+  Q_OBJECT
+
  public:
   TTAC3AudioStream(const QFileInfo &f_info, int s_pos=0);
   virtual ~TTAC3AudioStream();

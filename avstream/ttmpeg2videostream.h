@@ -65,6 +65,8 @@ class TTCutList;
 // -----------------------------------------------------------------------------
 class TTMpeg2VideoStream : public TTVideoStream
 {
+  Q_OBJECT
+
   public:
     TTMpeg2VideoStream( const QFileInfo &f_info );
     virtual ~TTMpeg2VideoStream();

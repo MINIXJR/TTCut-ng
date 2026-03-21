@@ -84,12 +84,12 @@ TTAVStream::TTAVStream(const QFileInfo &f_info)
 
   // check if stream exists
   if (!stream_info->exists())
-    throw new TTIOException(QString(tr("Stream does not exists: %1")).arg(stream_info->filePath()));
+    throw new TTIOException(tr("Stream does not exists: %1").arg(stream_info->filePath()));
 
   stream_buffer = new TTFileBuffer(stream_info->filePath(), QIODevice::ReadOnly);
 
   if (!ttAssigned(stream_buffer))
-    throw new TTIOException(QString(tr("Error allocating buffer for: %1")).arg(stream_info->filePath()));
+    throw new TTIOException(tr("Error allocating buffer for: %1").arg(stream_info->filePath()));
 
   stream_type = TTAVTypes::unknown;
 }
@@ -175,7 +175,7 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
 
   stream_buffer->seekAbsolute( start_adr );
 
-  emit statusReport(StatusReportArgs::Start, "Audio-cut: copy segment", count);
+  emit statusReport(StatusReportArgs::Start, tr("Cutting audio"), count);
   qApp->processEvents();
 
   while( count > buffer_size )
@@ -190,14 +190,14 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
 
     count   -= buffer_size;
     progress = end_adr-start_adr+1-count;
-    emit statusReport(StatusReportArgs::Step, "Audio-cut: copy segment", progress);
+    emit statusReport(StatusReportArgs::Step, tr("Cutting audio"), progress);
     qApp->processEvents();
   }
 
   stream_buffer->readByte(buffer, count);
   cut_stream->directWrite(buffer, count);
-  emit statusReport(StatusReportArgs::Step, "Audio-cut: copy segment", end_adr-start_adr+1);
-  emit statusReport(StatusReportArgs::Finished, "Audio-cut: finished", end_adr-start_adr+1);
+  emit statusReport(StatusReportArgs::Step, tr("Cutting audio"), end_adr-start_adr+1);
+  emit statusReport(StatusReportArgs::Finished, tr("Audio cut finished"), end_adr-start_adr+1);
   qApp->processEvents();
 
   delete []buffer;

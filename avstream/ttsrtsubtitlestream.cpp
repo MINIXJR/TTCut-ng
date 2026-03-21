@@ -101,7 +101,7 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
   int progress = 0;
   int offsett = cp->getCutInIndex()-start;
 
-  emit statusReport(StatusReportArgs::Start, "Subtitle-cut: copy subtitle", header_list->searchTimeIndex(end) - index + 1);
+  emit statusReport(StatusReportArgs::Start, tr("Cutting subtitles"), header_list->searchTimeIndex(end) - index + 1);
   qApp->processEvents();
 
   while (index < header_list->count())
@@ -128,11 +128,11 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
     cp->setNumPicturesWritten(picsWritten);
     index++;
     progress++;
-    emit statusReport(StatusReportArgs::Step, "Subtitle-cut: copy subtitle", progress);
+    emit statusReport(StatusReportArgs::Step, tr("Cutting subtitles"), progress);
     qApp->processEvents();
   }
-  emit statusReport(StatusReportArgs::Step, "Subtitle-cut: copy segment", progress);
-  emit statusReport(StatusReportArgs::Finished, "Subtitle-cut: finished", progress);
+  emit statusReport(StatusReportArgs::Step, tr("Copying subtitle segment"), progress);
+  emit statusReport(StatusReportArgs::Finished, tr("Subtitle cut finished"), progress);
   qApp->processEvents();
 }
 
@@ -143,7 +143,7 @@ int TTSrtSubtitleStream::createHeaderList()
 
   try
   {
-    emit statusReport(StatusReportArgs::Start, "Create subtitle-header list", stream_buffer->size());
+    emit statusReport(StatusReportArgs::Start, tr("Creating subtitle header list"), stream_buffer->size());
 
     QString lineEnd;
     quint8 byte = 0;
@@ -194,9 +194,9 @@ int TTSrtSubtitleStream::createHeaderList()
 
       header_list->append(header);
 
-      emit statusReport(StatusReportArgs::Step, "Create subtitle-header list", stream_buffer->position());
+      emit statusReport(StatusReportArgs::Step, tr("Creating subtitle header list"), stream_buffer->position());
     }
-    emit statusReport(StatusReportArgs::Finished, "Subtitle-header list created", stream_buffer->position());
+    emit statusReport(StatusReportArgs::Finished, tr("Subtitle header list created"), stream_buffer->position());
   }
   catch (TTFileBufferException)
   {

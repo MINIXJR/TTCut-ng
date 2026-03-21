@@ -41,7 +41,6 @@
 #include "../data/ttcutlist.h"
 #include "../data/ttavdata.h"
 #include "../avstream/ttavstream.h"
-#include "../data/ttcutaudiotask.h"
 #include "../data/ttcutvideotask.h"
 #include "../data/ttcutsubtitletask.h"
 #include "../data/ttmuxlistdata.h"
@@ -68,7 +67,6 @@ TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
 	mpAVData        = avData;
 	mpCutList       = cutList;
  	cutVideoTask    = new TTCutVideoTask(mpAVData);
-	cutAudioTask    = new TTCutAudioTask();
 	cutSubtitleTask = new TTCutSubtitleTask();
 }
 
@@ -116,10 +114,8 @@ void TTCutPreviewTask::operation()
 	TTAVTypes::AVStreamType streamType = firstStream->streamType();
 	bool isH264H265 = (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video);
 
-	// Choose file extensions based on stream type
-	// H.264/H.265: use ffmpeg directly to extract to .mkv (cutting not yet implemented in TTCutVideoTask)
-	// MPEG-2: use traditional cutting workflow with .m2v and mplex to .mpg
-	QString outputExt = isH264H265 ? "mkv" : "mpg";
+	// Always use MKV for preview output (handles all audio formats)
+	QString outputExt = "mkv";
 
 	// For H.264/H.265: create shared Smart Cut instance (parses ES file once)
 	TTESSmartCut* sharedSmartCut = nullptr;
@@ -159,7 +155,7 @@ void TTCutPreviewTask::operation()
     if (isAborted())
   		throw new TTAbortException(__FILE__, __LINE__, "Task gets abort signal!");
 
-    onStatusReport(this, StatusReportArgs::Step, QString("create preview cut %1 from %2").
+    onStatusReport(this, StatusReportArgs::Step, tr("Creating preview clip %1 of %2").
         arg(i+1).arg(numPreview), i+1);
 
     TTCutList* tmpCutList = new TTCutList();
@@ -204,8 +200,30 @@ void TTCutPreviewTask::operation()
 
         if (tmpCutList->at(0).avDataItem()->audioCount() > 0) {
           hasAudio = true;
-          cutAudioTask->init(createPreviewFileName(i + 1, "mpa"), tmpCutList, 0, cutVideoTask->muxListItem());
-          mpAVData->threadTaskPool()->start(cutAudioTask, true);
+          // Use FFmpegWrapper for audio cutting (enables AC3 acmod normalization)
+          TTAudioStream* aStream = tmpCutList->at(0).avDataItem()->audioStreamAt(0);
+          TTVideoStream* vs = tmpCutList->at(0).avDataItem()->videoStream();
+          double fps = vs->frameRate();
+          QList<QPair<double, double>> audioKeepList;
+          for (int c = 0; c < tmpCutList->count(); c++) {
+            TTCutItem ci = tmpCutList->at(c);
+            audioKeepList.append(qMakePair(ci.cutInIndex() / fps, (ci.cutOutIndex() + 1) / fps));
+          }
+          QString audioExt = QFileInfo(aStream->filePath()).suffix();
+          QString cutAudioFile = createPreviewFileName(i + 1, audioExt);
+
+          QList<int> targetAcmods;
+          if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+            for (int s = 0; s < audioKeepList.size(); s++) {
+              TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+                  aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
+              targetAcmods.append(aInfo.mainAcmod);
+            }
+          }
+
+          TTFFmpegWrapper ffmpegAudio;
+          ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
+                                      audioKeepList, TTCut::normalizeAcmod, targetAcmods);
         }
 
         // Cut subtitle stream if available (use first subtitle stream)
@@ -226,26 +244,27 @@ void TTCutPreviewTask::operation()
           }
         }
 
-        // Mux MPEG-2 with mplex
-        QString muxCommand;
+        // Mux MPEG-2 video + audio into MKV
         QString videoFile = createPreviewFileName(i + 1, videoExt);
         if (hasAudio) {
-          QString audioFile = createPreviewFileName(i + 1, "mpa");
-          // mplex -O: offset of timestamps (video-audio) in ms
-          // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
-          if (avOffsetMs != 0) {
-            muxCommand = QString("mplex -f 8 -O %1ms -o \"%2\" \"%3\" \"%4\" 2>/dev/null").
-                arg(avOffsetMs).arg(outputFile).arg(videoFile).arg(audioFile);
-          } else {
-            muxCommand = QString("mplex -f 8 -o \"%1\" \"%2\" \"%3\" 2>/dev/null").
-                arg(outputFile).arg(videoFile).arg(audioFile);
-          }
+          TTAudioStream* aStr = tmpCutList->at(0).avDataItem()->audioStreamAt(0);
+          QString audioExt2 = QFileInfo(aStr->filePath()).suffix();
+          QString audioFile = createPreviewFileName(i + 1, audioExt2);
+
+          double frameRate2 = tmpCutList->at(0).avDataItem()->videoStream()->frameRate();
+          int frameDurationNs = static_cast<int>(1000000000.0 / frameRate2);
+          QStringList audioFiles;
+          audioFiles.append(audioFile);
+          TTMkvMergeProvider mkvProv;
+          mkvProv.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+          if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
+          mkvProv.mux(outputFile, videoFile, audioFiles, QStringList());
+          qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
         } else {
-          muxCommand = QString("mv \"%1\" \"%2\" 2>/dev/null").
-              arg(videoFile).arg(outputFile);
+          // No audio — just rename video file to output
+          QFile::rename(videoFile, outputFile);
+          qDebug() << "MPEG-2 preview (no audio):" << outputFile;
         }
-        qDebug() << "MPEG-2 preview mux command:" << muxCommand;
-        system(qPrintable(muxCommand));
       }
       catch (TTException* ex)
       {
@@ -256,7 +275,7 @@ void TTCutPreviewTask::operation()
       }
     }
 
-    onStatusReport(this, StatusReportArgs::Step, QString("preview cut %1 from %2 created").
+    onStatusReport(this, StatusReportArgs::Step, tr("Preview clip %1 of %2 created").
         arg(i+1).arg(numPreview), i+1);
     delete tmpCutList;
   }
