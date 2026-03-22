@@ -68,6 +68,12 @@
 
 ## Medium Priority
 
+- **Decode error detection for H.264/H.265 streams during demux**
+  - Current MPEG-2 approach (`ffmpeg -err_detect +careful+explode`) shows false positives for H.264
+    and is too slow for H.265 (minutes for full decode pass)
+  - Needs different approach: possibly NAL-level consistency check or PTS analysis on TS before demux
+  - MPEG-2 detection works well (3.5s for 56min SD video)
+
 - **Projektdatei-Endung: .prj → .ttcut**
   - `.prj` ist generisch (AutoCAD, IDEs) — `.ttcut` ist eindeutig und programmspezifisch
   - Speichern: immer als `.ttcut`
@@ -166,6 +172,13 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - `avstream/ttsubtitleheaderlist.cpp:86` verwendet `qSort()` (deprecated seit Qt 5.2)
   - Ersetzen durch `std::sort()` mit dem gleichen Comparator
   - Ggf. weitere qSort-Vorkommen im Projekt prüfen
+
+- **Live-Timecode bei mpv-Wiedergabe**
+  - Im "Aktueller Frame" Widget den Timecode/Frame-Counter während der mpv-Wiedergabe mitlaufen lassen
+  - mpv läuft als externer QProcess — kein direkter Zugriff auf die aktuelle Position
+  - Ansatz 1: mpv IPC via JSON-Socket (`--input-ipc-server=`) + QTimer-Poll für `playback-time`
+  - Ansatz 2: mpv als eingebettetes Widget (libmpv) statt externer Prozess
+  - Ansatz 1 ist deutlich einfacher, Ansatz 2 ermöglicht langfristig mehr Kontrolle
 
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen

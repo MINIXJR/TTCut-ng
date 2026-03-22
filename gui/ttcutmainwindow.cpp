@@ -1356,7 +1356,33 @@ void TTCutMainWindow::runScreenshotMode()
         aboutDlg.close();
     }
 
-    // 13. Copy main window as docs/MainWindow.png
+    // 13. Stream Integrity Warning dialog (simulated decode errors)
+    {
+        QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
+                             "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
+                             "Recommendation: Use ProjectX to demux this file instead.")
+                          .arg(333).arg(7);
+        warnMsg += "\n\n" + tr("Affected regions:");
+        warnMsg += "\n  ~Frame 0 (00:00:00.00): 1 " + tr("errors");
+        warnMsg += "\n  ~Frame 10645 (00:07:05): 105 " + tr("errors");
+        warnMsg += "\n  ~Frame 22220 (00:14:48): 6 " + tr("errors");
+        warnMsg += "\n  ~Frame 34220 (00:22:48): 12 " + tr("errors");
+        warnMsg += "\n  ~Frame 46803 (00:31:12): 81 " + tr("errors");
+        warnMsg += "\n  ~Frame 57597 (00:38:23): 57 " + tr("errors");
+        warnMsg += "\n  ~Frame 72384 (00:48:15): 71 " + tr("errors");
+
+        QMessageBox msgBox(QMessageBox::Warning,
+                           tr("Stream Integrity Warning"),
+                           warnMsg, QMessageBox::NoButton, this);
+        msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
+        msgBox.addButton(QMessageBox::Ok);
+        msgBox.show();
+        QApplication::processEvents();
+        saveWidgetScreenshot(&msgBox, "ttcutng-integrity-warning.png", 0);
+        msgBox.close();
+    }
+
+    // 14. Copy main window as docs/MainWindow.png
     QString docsPath = QFileInfo(QApplication::applicationDirPath() + "/../docs/MainWindow.png").absoluteFilePath();
     QFile::remove(docsPath);
     QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);

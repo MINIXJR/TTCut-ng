@@ -66,6 +66,10 @@ TTESInfo::TTESInfo()
     , mFirstVideoPts(0.0)
     , mFirstAudioPts(0.0)
     , mAvOffsetMs(0)
+    , mHasWarnings(false)
+    , mDecodeErrors(0)
+    , mDecodeErrorRegionCount(0)
+    , mRecommendProjectX(false)
 {
 }
 
@@ -205,6 +209,33 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
 
         if (mAvOffsetMs != 0) {
             qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
+        }
+    }
+    else if (section == "warnings") {
+        mDecodeErrors = values.value("decode_errors", "0").toInt();
+        mDecodeErrorRegionCount = values.value("decode_error_regions", "0").toInt();
+        mRecommendProjectX = (values.value("recommend_projectx", "false") == "true");
+        mHasWarnings = (mDecodeErrors > 0);
+
+        mDecodeErrorRegions.clear();
+        for (int i = 0; i < mDecodeErrorRegionCount; ++i) {
+            QString regionStr = values.value(QString("error_region_%1").arg(i));
+            if (regionStr.isEmpty()) continue;
+
+            // Format: frame|time|count
+            QStringList parts = regionStr.split('|');
+            if (parts.size() >= 3) {
+                TTDecodeErrorRegion region;
+                region.frame = parts[0].toInt();
+                region.time = parts[1];
+                region.errorCount = parts[2].toInt();
+                mDecodeErrorRegions.append(region);
+            }
+        }
+
+        if (mHasWarnings) {
+            qDebug() << "  Warnings:" << mDecodeErrors << "decode errors in"
+                     << mDecodeErrorRegions.size() << "regions";
         }
     }
 

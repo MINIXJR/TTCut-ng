@@ -52,6 +52,7 @@ QString TTStreamPoint::typeToString(StreamPointType type)
     case StreamPointType::AudioChange:     return "AudioChange";
     case StreamPointType::SceneChange:     return "SceneChange";
     case StreamPointType::AspectChange:    return "AspectChange";
+    case StreamPointType::Error:          return "Error";
   }
   return "ManualMarker";
 }
@@ -64,5 +65,6 @@ StreamPointType TTStreamPoint::stringToType(const QString& str)
   if (str == "AudioChange")     return StreamPointType::AudioChange;
   if (str == "SceneChange")     return StreamPointType::SceneChange;
   if (str == "AspectChange")    return StreamPointType::AspectChange;
+  if (str == "Error")           return StreamPointType::Error;
   return StreamPointType::ManualMarker;
 }

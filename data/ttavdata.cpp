@@ -32,6 +32,7 @@
 #include <cstdio>
 
 #include <QMessageBox>
+#include <QPushButton>
 #include <QProcess>
 #include <QTime>
 
@@ -361,6 +362,50 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
 
         if (!cutPairs.isEmpty()) {
           mpPendingVdrMarkers[avItem] = cutPairs;
+        }
+      }
+
+      // Show warning if decode errors were detected during demux
+      if (esInfo.hasWarnings()) {
+        QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
+                             "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
+                             "Recommendation: Use ProjectX to demux this file instead.")
+                          .arg(esInfo.decodeErrors())
+                          .arg(esInfo.decodeErrorRegions().size());
+
+        // Add region details (max 10)
+        QList<TTDecodeErrorRegion> regions = esInfo.decodeErrorRegions();
+        if (!regions.isEmpty()) {
+          warnMsg += "\n\n" + tr("Affected regions:");
+          int showCount = qMin(regions.size(), 10);
+          for (int i = 0; i < showCount; ++i) {
+            warnMsg += QString("\n  ~Frame %1 (%2): %3 %4")
+                       .arg(regions[i].frame)
+                       .arg(regions[i].time)
+                       .arg(regions[i].errorCount)
+                       .arg(tr("errors"));
+          }
+          if (regions.size() > 10) {
+            warnMsg += QString("\n  ... %1 %2")
+                       .arg(regions.size() - 10)
+                       .arg(tr("more regions"));
+          }
+        }
+
+        QMessageBox msgBox(QMessageBox::Warning,
+                           tr("Stream Integrity Warning"),
+                           warnMsg, QMessageBox::NoButton, TTCut::mainWindow);
+        QPushButton* importBtn = msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
+        msgBox.addButton(QMessageBox::Ok);
+        msgBox.exec();
+
+        if (msgBox.clickedButton() == importBtn && !regions.isEmpty()) {
+          QList<TTStreamPoint> errorPoints;
+          for (const auto& region : regions) {
+            errorPoints.append(TTStreamPoint(region.frame, StreamPointType::Error,
+              QString("Decode Error (%1 errors)").arg(region.errorCount)));
+          }
+          emit vdrMarkersLoaded(errorPoints);
         }
       }
     }

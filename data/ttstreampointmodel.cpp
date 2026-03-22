@@ -5,6 +5,8 @@
 #include "ttstreampointmodel.h"
 
 #include <algorithm>
+#include <QBrush>
+#include <QColor>
 #include <QTime>
 
 TTStreamPointModel::TTStreamPointModel(QObject* parent)
@@ -42,6 +44,10 @@ QVariant TTStreamPointModel::data(const QModelIndex& index, int role) const
       return pt.confidence();
     case DurationRole:
       return pt.duration();
+    case Qt::ForegroundRole:
+      if (pt.type() == StreamPointType::Error)
+        return QBrush(QColor(Qt::red));
+      return QVariant();
   }
 
   return QVariant();

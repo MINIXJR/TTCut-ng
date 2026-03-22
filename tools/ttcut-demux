@@ -602,6 +602,82 @@ if $ES_MODE; then
     echo ""
 
     #########################################################################
+    # MPEG-2 DECODE ERROR CHECK
+    # Detect defective GOPs that ffmpeg stream-copy doesn't catch
+    # (ProjectX catches these as "verwerfe GOP# ... errorcode: 24")
+    #########################################################################
+    DECODE_ERRORS=0
+    DECODE_ERROR_REGIONS=""
+    DECODE_ERROR_REGION_COUNT=0
+
+    if [ "$VIDEO_CODEC" = "mpeg2video" ] && [ -s "$OUTPUT_VIDEO" ]; then
+        step "Checking MPEG-2 stream integrity..."
+
+        DECODE_CHECK_OUTPUT=$(ffmpeg -v verbose -err_detect +careful+explode \
+            -i "$OUTPUT_VIDEO" -f null - 2>&1)
+
+        # Parse with Python: extract error count and regions into bash array
+        declare -a DECODE_ERROR_REGION_LIST=()
+        while IFS= read -r line; do
+            DECODE_ERROR_REGION_LIST+=("$line")
+        done < <(
+            echo "$DECODE_CHECK_OUTPUT" | python3 -c "
+import sys, re
+
+last_frame = 0
+last_time = '00:00:00.00'
+errors_in_region = 0
+regions = []
+total_from_summary = 0
+
+for line in sys.stdin:
+    prog = re.search(r'frame=\s*(\d+).*?time=(\S+)', line)
+    if prog:
+        if errors_in_region > 0:
+            regions.append((last_frame, last_time, errors_in_region))
+            errors_in_region = 0
+        last_frame = int(prog.group(1))
+        last_time = prog.group(2)
+
+    if 'Error submitting' in line:
+        errors_in_region += 1
+
+    rep = re.search(r'Last message repeated (\d+) times', line)
+    if rep:
+        errors_in_region += int(rep.group(1))
+
+    m = re.search(r'(\d+) decode errors', line)
+    if m:
+        total_from_summary = int(m.group(1))
+
+if errors_in_region > 0:
+    regions.append((last_frame, last_time, errors_in_region))
+
+total = total_from_summary if total_from_summary > 0 else sum(c for _,_,c in regions)
+print(total)
+print(len(regions))
+for f, t, c in regions:
+    print(f'{f}|{t}|{c}')
+" 2>/dev/null
+        )
+
+        # First two lines are total errors and region count
+        DECODE_ERRORS="${DECODE_ERROR_REGION_LIST[0]:-0}"
+        DECODE_ERROR_REGION_COUNT="${DECODE_ERROR_REGION_LIST[1]:-0}"
+
+        if [ "$DECODE_ERRORS" -gt 0 ]; then
+            warn "$DECODE_ERRORS decode errors in $DECODE_ERROR_REGION_COUNT region(s) — recommend ProjectX for this MPEG-2 stream"
+            for ((i=2; i<${#DECODE_ERROR_REGION_LIST[@]}; i++)); do
+                IFS='|' read -r frame time count <<< "${DECODE_ERROR_REGION_LIST[$i]}"
+                warn "  ~Frame $frame ($time): $count errors"
+            done
+        else
+            info "  MPEG-2 stream integrity: OK"
+        fi
+        echo ""
+    fi
+
+    #########################################################################
     # AC3 HEADER REPAIR
     # Fix corrupt acmod field in DVB AC3 streams (stereo header + 384kbps)
     #########################################################################
@@ -1017,6 +1093,21 @@ EOF
     for i in "${!SUBTITLE_FILES[@]}"; do
         echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
     done
+
+    # Add warnings section if decode errors were found
+    if [ "$DECODE_ERRORS" -gt 0 ]; then
+        cat >> "$OUTPUT_INFO" << WARN_EOF
+
+[warnings]
+decode_errors=$DECODE_ERRORS
+decode_error_regions=$DECODE_ERROR_REGION_COUNT
+recommend_projectx=true
+WARN_EOF
+        # Write individual regions from array (index 2+ = region data)
+        for ((i=2; i<${#DECODE_ERROR_REGION_LIST[@]}; i++)); do
+            echo "error_region_$((i-2))=${DECODE_ERROR_REGION_LIST[$i]}" >> "$OUTPUT_INFO"
+        done
+    fi
 
     # Add VDR markers if found
     if [ ${#VDR_MARKS[@]} -gt 0 ]; then

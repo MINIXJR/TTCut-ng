@@ -36,111 +36,144 @@
 <context>
     <name>TTAVData</name>
     <message>
-        <location filename="../data/ttavdata.cpp" line="284"/>
+        <location filename="../data/ttavdata.cpp" line="285"/>
         <source>exception in createAVDataItem!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="665"/>
+        <location filename="../data/ttavdata.cpp" line="370"/>
+        <source>%1 decode errors detected in %2 region(s) during demux.
+
+This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
+Recommendation: Use ProjectX to demux this file instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="379"/>
+        <source>Affected regions:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="386"/>
+        <source>errors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="391"/>
+        <source>more regions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="396"/>
+        <source>Stream Integrity Warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="398"/>
+        <source>Import as Stream Points</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="718"/>
         <source>starting thread pool</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="670"/>
+        <location filename="../data/ttavdata.cpp" line="723"/>
         <source>exiting thread pool</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="905"/>
+        <location filename="../data/ttavdata.cpp" line="958"/>
         <source>Schnitt %1: Audio-Burst am Ende (%2 dB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="912"/>
+        <location filename="../data/ttavdata.cpp" line="965"/>
         <source>The following cuts have detected audio bursts:
 
 </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="914"/>
+        <location filename="../data/ttavdata.cpp" line="967"/>
         <source>
 
 Use preview to check if shift is needed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="916"/>
+        <location filename="../data/ttavdata.cpp" line="969"/>
         <source>Audio Burst Warning</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="917"/>
+        <location filename="../data/ttavdata.cpp" line="970"/>
         <source>Cut anyway</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="917"/>
+        <location filename="../data/ttavdata.cpp" line="970"/>
         <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="919"/>
+        <location filename="../data/ttavdata.cpp" line="972"/>
         <source>Cut cancelled</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="965"/>
+        <location filename="../data/ttavdata.cpp" line="1018"/>
         <source>deleting existing audio cut file: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1016"/>
+        <location filename="../data/ttavdata.cpp" line="1069"/>
         <source>deleting existing subtitle cut file: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1066"/>
+        <location filename="../data/ttavdata.cpp" line="1119"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1068"/>
+        <location filename="../data/ttavdata.cpp" line="1121"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1119"/>
+        <location filename="../data/ttavdata.cpp" line="1172"/>
         <source>Cutting failed - could not initialize</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1148"/>
+        <location filename="../data/ttavdata.cpp" line="1201"/>
         <source>Cutting video (Smart Cut)...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1152"/>
+        <location filename="../data/ttavdata.cpp" line="1205"/>
         <source>Cutting failed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1184"/>
+        <location filename="../data/ttavdata.cpp" line="1237"/>
         <source>Cutting audio track %1...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1225"/>
+        <location filename="../data/ttavdata.cpp" line="1278"/>
         <source>Muxing video and audio...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1279"/>
+        <location filename="../data/ttavdata.cpp" line="1332"/>
         <source>Muxing failed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1287"/>
+        <location filename="../data/ttavdata.cpp" line="1340"/>
         <source>H.264/H.265 cutting complete</source>
         <translation type="unfinished"></translation>
     </message>

@@ -14,7 +14,8 @@ enum class StreamPointType {
   Silence,
   AudioChange,
   SceneChange,
-  AspectChange
+  AspectChange,
+  Error
 };
 
 class TTStreamPoint
