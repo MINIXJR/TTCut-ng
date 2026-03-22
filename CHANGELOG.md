@@ -2,6 +2,26 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.63.0 (2026-03-22)
+
+**Screenshot-Automation, Dirty-Tracking & Sicherheitsfixes**
+
+### Features
+- Screenshot-Automation: `--screenshots <dir> --project <prj>` CLI-Modus fuer automatisierte
+  Wiki-Screenshots mit Testmedia-Generierung (`tools/ttcut-screenshots.sh`)
+- Dirty-Tracking: Warnung bei ungespeicherten Projektaenderungen vor destruktiven Aktionen
+- AC3 acmod Normalisierung beim MPEG-2 Schnitt (Stereo/5.1 Kanalwechsel)
+
+### Fixes
+- Fix: MPEG-2 Preview-Freeze beim Burst-Shift (Segmentgrenzen-Behandlung)
+- Fix: Security-Audit Findings — Bounds-Checks und Cleanup (2 Critical, 6 High)
+- Fix: Schnittliste Spalte 5 Header von "Burst" auf tr("Notice")/"Hinweis"
+
+### Changes
+- i18n-Standardisierung: Q_OBJECT Makros, englische Source-Texte, QString(tr()) Fixes
+- Visueller Abstand zwischen Navigationswidget-Gruppen
+- Inaktive UI-Elemente dokumentiert (Chapters-Tabs, Configure-Button, videoFileInfo)
+
 ## v0.62.0 (2026-03-18)
 
 **Landezonen, Zeitsprung & Uebersetzungen**
