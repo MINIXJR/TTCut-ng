@@ -64,7 +64,7 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   header->resizeSection(2, 140);
   header->resizeSection(3, 150);
   header->resizeSection(4,  80);
-  videoCutList->headerItem()->setText(5, "Burst");
+  videoCutList->headerItem()->setText(5, tr("Notice"));
   videoCutList->setColumnWidth(5, 120);
 
   allowSelectionChanged = true;

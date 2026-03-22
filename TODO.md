@@ -174,7 +174,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Class name and files (`mpeg2window/ttmpeg2window2.*`) are misleading — the widget handles MPEG-2, H.264, and H.265
   - Rename class, files, and directory (e.g., `videoframe/ttvideoframewidget.*`)
   - Update all includes, .pro file, .ui references, and moc references
-- Remove some unused settings and buttons without function
+- **Inaktive UI-Elemente prüfen und ggf. entfernen oder implementieren**
+  - Chapters-Tab im Settings-Dialog (`ttcutsettingsdlg.cpp:41`): `removeTab(4)` — "not implemented yet"
+  - Chapters-Tab im Schnittdialog (`ttcutavcutdlg.cpp:53`): `removeTab(3)` — "not implemented yet"
+  - "Configure..." Button im Muxer-Settings (`ttcutsettingsmuxer.cpp:50`): `setEnabled(false)` — keine Funktion
+  - videoFileInfo Widget (`ttcutmainwindow.ui:103`): `maximumSize height=0` — permanent unsichtbar
 - Implement plugin interface for external tools (encoders, muxers, players)
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
