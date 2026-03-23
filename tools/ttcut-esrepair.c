@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -417,6 +418,63 @@ static int test_segments(const uint8_t *data, Segment *segs, int count,
     return defective_count;
 }
 
+static ssize_t write_all(int fd, const void *buf, size_t count)
+{
+    const uint8_t *p = (const uint8_t *)buf;
+    size_t remaining = count;
+    while (remaining > 0) {
+        ssize_t written = write(fd, p, remaining);
+        if (written < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        p += written;
+        remaining -= written;
+    }
+    return (ssize_t)count;
+}
+
+static int write_repaired(const char *path, const uint8_t *data,
+                          const Segment *segs, int count)
+{
+    char tmp_path[PATH_MAX];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.repair.tmp", path);
+
+    int fd = open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        fprintf(stderr, "Error: cannot create '%s': %s\n", tmp_path, strerror(errno));
+        return -1;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (!segs[i].defective) {
+            if (write_all(fd, data + segs[i].offset, segs[i].size) < 0) {
+                fprintf(stderr, "Error: write failed: %s\n", strerror(errno));
+                close(fd);
+                unlink(tmp_path);
+                return -1;
+            }
+        }
+    }
+
+    if (fsync(fd) < 0) {
+        fprintf(stderr, "Error: fsync failed: %s\n", strerror(errno));
+        close(fd);
+        unlink(tmp_path);
+        return -1;
+    }
+    close(fd);
+
+    if (rename(tmp_path, path) < 0) {
+        fprintf(stderr, "Error: rename '%s' -> '%s' failed: %s\n",
+                tmp_path, path, strerror(errno));
+        unlink(tmp_path);
+        return -1;
+    }
+
+    return 0;
+}
+
 static void print_usage(const char *prog)
 {
     fprintf(stderr,
@@ -528,9 +586,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Log file:    %s\n", log_file ? log_file : "(none)");
     }
 
-    /* Suppress unused warnings for variables used in later tasks */
-    (void)check_only;
-    (void)log_file;
 
     const uint8_t *data = NULL;
     int64_t file_size = 0;
@@ -565,9 +620,80 @@ int main(int argc, char *argv[])
     if (verbose)
         fprintf(stderr, "Decode test complete: %d defective segments\n", defective);
 
-    /* TODO: write_repaired */
+    /* Count defective stats */
+    int defective_count = defective;
+    int removed_frames = 0;
+    for (int i = 0; i < seg_count; i++) {
+        if (segments[i].defective)
+            removed_frames += segments[i].frame_count;
+    }
+
+    /* Determine codec name for output */
+    const char *codec_name;
+    switch (codec) {
+    case CODEC_MPEG2: codec_name = "mpeg2video"; break;
+    case CODEC_H264:  codec_name = "h264"; break;
+    case CODEC_H265:  codec_name = "h265"; break;
+    default:          codec_name = "unknown"; break;
+    }
+
+    /* Write log file if requested */
+    if (log_file) {
+        FILE *lf = fopen(log_file, "w");
+        if (!lf) {
+            fprintf(stderr, "Warning: cannot open log file '%s': %s\n",
+                    log_file, strerror(errno));
+        } else {
+            fprintf(lf, "# ttcut-esrepair log for %s\n", input_file);
+            fprintf(lf, "# codec=%s threshold=%d\n\n", codec_name, threshold);
+            for (int i = 0; i < seg_count; i++) {
+                fprintf(lf, "segment %4d: offset=%10lld size=%10lld frames=%4d errors=%4d %s\n",
+                        i + 1,
+                        (long long)segments[i].offset,
+                        (long long)segments[i].size,
+                        segments[i].frame_count,
+                        segments[i].error_count,
+                        segments[i].defective ? "DEFECTIVE" : "OK");
+            }
+            fclose(lf);
+        }
+    }
+
+    int exit_code;
+
+    if (defective_count == 0) {
+        /* No defects found */
+        exit_code = 0;
+    } else if (defective_count == seg_count) {
+        /* ALL segments defective — don't write empty file */
+        fprintf(stderr, "Error: all %d segments are defective — cannot repair\n", seg_count);
+        exit_code = 2;
+    } else if (check_only) {
+        /* Check-only mode: report but don't modify */
+        exit_code = 1;
+    } else {
+        /* Repair mode: write repaired file */
+        if (write_repaired(input_file, data, segments, seg_count) < 0) {
+            fprintf(stderr, "Error: failed to write repaired file\n");
+            exit_code = 2;
+        } else {
+            if (verbose)
+                fprintf(stderr, "Repaired: removed %d segments (%d frames)\n",
+                        defective_count, removed_frames);
+            exit_code = 1;
+        }
+    }
+
+    /* Machine-readable statistics on stdout */
+    printf("codec=%s\n", codec_name);
+    printf("repaired=%d\n", (exit_code == 1 && !check_only) ? 1 : 0);
+    printf("total_segments=%d\n", seg_count);
+    printf("defective_segments=%d\n", defective_count);
+    printf("removed_frames=%d\n", removed_frames);
+    printf("total_frames_before=%d\n", total_frames);
+    printf("total_frames_after=%d\n", total_frames - removed_frames);
 
     free(segments);
     close_mmap(data, file_size);
-    return (defective > 0) ? 1 : 0;
+    return exit_code;
 }
