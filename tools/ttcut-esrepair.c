@@ -96,6 +96,98 @@ static void close_mmap(const uint8_t *data, int64_t size)
     if (data) munmap((void *)data, size);
 }
 
+static int scan_segments(const uint8_t *data, int64_t size, int codec,
+                         Segment **out, int *count)
+{
+    int capacity = 256;
+    Segment *segments = (Segment *)malloc(capacity * sizeof(Segment));
+    if (!segments)
+        return -1;
+
+    int num = 0;
+    bool in_segment = false;
+
+    int64_t limit = size - 3;
+    for (int64_t i = 0; i < limit; ) {
+        /* Find 0x00 0x00 0x01 start code prefix */
+        if (data[i] != 0x00 || data[i + 1] != 0x00 || data[i + 2] != 0x01) {
+            i++;
+            continue;
+        }
+
+        /* Determine the start of this NAL (include leading 0x00 for 4-byte codes) */
+        int64_t sc_offset = (i > 0 && data[i - 1] == 0x00) ? i - 1 : i;
+        uint8_t sc_byte = data[i + 3];
+
+        bool is_boundary = false;
+        bool is_frame = false;
+
+        switch (codec) {
+        case CODEC_MPEG2:
+            if (sc_byte == 0xB3)
+                is_boundary = true;
+            else if (sc_byte == 0x00)
+                is_frame = true;
+            break;
+        case CODEC_H264: {
+            int nal_type = sc_byte & 0x1F;
+            if (nal_type == 7)
+                is_boundary = true;
+            else if (nal_type == 1 || nal_type == 5)
+                is_frame = true;
+            break;
+        }
+        case CODEC_H265: {
+            int nal_type = (sc_byte >> 1) & 0x3F;
+            if (nal_type == 33)
+                is_boundary = true;
+            else if (nal_type <= 21)
+                is_frame = true;
+            break;
+        }
+        default:
+            break;
+        }
+
+        if (is_boundary) {
+            /* Finalize previous segment */
+            if (in_segment)
+                segments[num - 1].size = sc_offset - segments[num - 1].offset;
+
+            /* Grow array if needed */
+            if (num >= capacity) {
+                capacity *= 2;
+                Segment *tmp = (Segment *)realloc(segments, capacity * sizeof(Segment));
+                if (!tmp) {
+                    free(segments);
+                    return -1;
+                }
+                segments = tmp;
+            }
+
+            segments[num].offset      = sc_offset;
+            segments[num].size        = 0;
+            segments[num].frame_count = 0;
+            segments[num].error_count = 0;
+            segments[num].defective   = false;
+            num++;
+            in_segment = true;
+        } else if (is_frame && in_segment) {
+            segments[num - 1].frame_count++;
+        }
+
+        i += 3;  /* Skip past the start code prefix */
+    }
+
+    /* Finalize last segment */
+    if (in_segment && num > 0)
+        segments[num - 1].size = size - segments[num - 1].offset;
+
+    *out = segments;
+    *count = num;
+    return 0;
+}
+
 static void print_usage(const char *prog)
 {
     fprintf(stderr,
@@ -208,7 +300,6 @@ int main(int argc, char *argv[])
     }
 
     /* Suppress unused warnings for structures defined for later tasks */
-    (void)sizeof(Segment);
     (void)sizeof(MmapIOContext);
 
     const uint8_t *data = NULL;
@@ -218,8 +309,30 @@ int main(int argc, char *argv[])
     if (verbose)
         fprintf(stderr, "Mapped %s: %lld bytes\n", input_file, (long long)file_size);
 
-    /* TODO: scan_segments, test_segments, write_repaired */
+    Segment *segments = NULL;
+    int seg_count = 0;
+    if (scan_segments(data, file_size, codec, &segments, &seg_count) < 0) {
+        fprintf(stderr, "Error: segment scan failed\n");
+        close_mmap(data, file_size);
+        return 2;
+    }
 
+    if (seg_count == 0) {
+        fprintf(stderr, "Error: no valid segments found in '%s'\n", input_file);
+        close_mmap(data, file_size);
+        return 2;
+    }
+
+    int total_frames = 0;
+    for (int i = 0; i < seg_count; i++)
+        total_frames += segments[i].frame_count;
+
+    if (verbose)
+        fprintf(stderr, "Found %d segments, %d total frames\n", seg_count, total_frames);
+
+    /* TODO: test_segments, write_repaired */
+
+    free(segments);
     close_mmap(data, file_size);
     return 0;
 }
