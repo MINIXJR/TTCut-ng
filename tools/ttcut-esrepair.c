@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <stdarg.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -305,6 +306,12 @@ static void close_segment_io(AVIOContext **avio, AVFormatContext **fmt)
 
 /* ---- Per-segment decode test ---- */
 
+/* Suppress libav log output (stderr noise from decoder warnings) */
+static void libav_log_quiet(void *ptr, int level, const char *fmt, va_list vl)
+{
+    (void)ptr; (void)level; (void)fmt; (void)vl;
+}
+
 static int test_segment(const uint8_t *file_data, const Segment *seg, int codec)
 {
     MmapIOContext io_ctx;
@@ -388,6 +395,10 @@ static int test_segment(const uint8_t *file_data, const Segment *seg, int codec)
 static int test_segments(const uint8_t *data, Segment *segs, int count,
                          int codec, int threshold, int verbose)
 {
+    /* Suppress libav stderr noise unless verbose */
+    if (!verbose)
+        av_log_set_callback(libav_log_quiet);
+
     int effective_threshold = (threshold == 0) ? 1 : threshold;
     int defective_count = 0;
 
