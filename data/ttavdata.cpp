@@ -365,8 +365,20 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         }
       }
 
-      // Show warning if decode errors were detected during demux
-      if (esInfo.hasWarnings()) {
+      // Show info if ES was repaired by ttcut-esrepair
+      if (esInfo.esRepaired()) {
+        QString repairMsg = tr("Stream was repaired by ttcut-esrepair:\n"
+                               "Removed %1 defective segments (%2 frames).\n"
+                               "Frames: %3 → %4")
+                            .arg(esInfo.esRemovedSegments())
+                            .arg(esInfo.esRemovedFrames())
+                            .arg(esInfo.esFramesBefore())
+                            .arg(esInfo.esFramesAfter());
+        QMessageBox::information(TTCut::mainWindow,
+                                 tr("Stream Repaired"), repairMsg);
+      }
+      // Show warning if decode errors were detected but NOT repaired (legacy .info)
+      else if (esInfo.hasWarnings()) {
         QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
                              "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
                              "Recommendation: Use ProjectX to demux this file instead.")

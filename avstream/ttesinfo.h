@@ -128,6 +128,13 @@ public:
     bool recommendProjectX() const { return mRecommendProjectX; }
     QList<TTDecodeErrorRegion> decodeErrorRegions() const { return mDecodeErrorRegions; }
 
+    // ES repair info (from ttcut-esrepair)
+    bool esRepaired() const { return mEsRepaired; }
+    int esRemovedSegments() const { return mEsRemovedSegments; }
+    int esRemovedFrames() const { return mEsRemovedFrames; }
+    int esFramesBefore() const { return mEsFramesBefore; }
+    int esFramesAfter() const { return mEsFramesAfter; }
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -170,6 +177,13 @@ private:
     int mDecodeErrorRegionCount;
     bool mRecommendProjectX;
     QList<TTDecodeErrorRegion> mDecodeErrorRegions;
+
+    // ES repair info
+    bool mEsRepaired;
+    int mEsRemovedSegments;
+    int mEsRemovedFrames;
+    int mEsFramesBefore;
+    int mEsFramesAfter;
 };
 
 #endif // TTESINFO_H
