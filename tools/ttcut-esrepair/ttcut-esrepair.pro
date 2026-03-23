@@ -3,4 +3,5 @@ CONFIG += console link_pkgconfig
 CONFIG -= qt app_bundle
 QMAKE_CFLAGS += -std=c17 -Wall -Wextra
 PKGCONFIG += libavcodec libavformat libavutil
+LIBS += -lpthread
 SOURCES = ttcut-esrepair.c

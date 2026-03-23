@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+#include <pthread.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -390,25 +391,81 @@ static int test_segment(const uint8_t *file_data, const Segment *seg, int codec)
     return errors;
 }
 
-/* ---- Test all segments ---- */
+/* ---- Multi-threaded segment testing ---- */
+
+typedef struct {
+    const uint8_t *data;     /* Shared mmap (read-only) */
+    Segment       *segs;     /* Segment array (each thread writes own range) */
+    int            start;    /* First segment index for this thread */
+    int            end;      /* One past last segment index */
+    int            codec;
+    int            threshold;
+} ThreadArg;
+
+static void *test_thread(void *arg)
+{
+    ThreadArg *ta = (ThreadArg *)arg;
+    int effective_threshold = (ta->threshold == 0) ? 1 : ta->threshold;
+
+    for (int i = ta->start; i < ta->end; i++) {
+        int result = test_segment(ta->data, &ta->segs[i], ta->codec);
+        ta->segs[i].error_count = (result >= 0) ? result : 0;
+        ta->segs[i].defective   = (ta->segs[i].error_count >= effective_threshold);
+    }
+    return NULL;
+}
+
+static int get_num_cpus(void)
+{
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return (n > 0) ? (int)n : 4;
+}
 
 static int test_segments(const uint8_t *data, Segment *segs, int count,
                          int codec, int threshold, int verbose)
 {
-    /* Suppress libav stderr noise unless verbose */
+    /* Suppress libav stderr noise (global, before threads start) */
     if (!verbose)
         av_log_set_callback(libav_log_quiet);
 
-    int effective_threshold = (threshold == 0) ? 1 : threshold;
+    int num_threads = get_num_cpus();
+    if (num_threads > count)
+        num_threads = count;
+    if (num_threads < 1)
+        num_threads = 1;
+
+    if (verbose)
+        fprintf(stderr, "Decode testing %d segments with %d threads...\n", count, num_threads);
+
+    pthread_t *threads = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
+    ThreadArg *args = (ThreadArg *)malloc(num_threads * sizeof(ThreadArg));
+
+    /* Distribute segments evenly across threads */
+    int per_thread = count / num_threads;
+    int remainder = count % num_threads;
+    int offset = 0;
+
+    for (int t = 0; t < num_threads; t++) {
+        int chunk = per_thread + (t < remainder ? 1 : 0);
+        args[t].data      = data;
+        args[t].segs      = segs;
+        args[t].start     = offset;
+        args[t].end       = offset + chunk;
+        args[t].codec     = codec;
+        args[t].threshold = threshold;
+        pthread_create(&threads[t], NULL, test_thread, &args[t]);
+        offset += chunk;
+    }
+
+    for (int t = 0; t < num_threads; t++)
+        pthread_join(threads[t], NULL);
+
+    free(threads);
+    free(args);
+
+    /* Count results and print verbose output (sequential, after all threads done) */
     int defective_count = 0;
-
     for (int i = 0; i < count; i++) {
-        int result = test_segment(data, &segs[i], codec);
-
-        /* Treat I/O failures (result == -1) as non-defective to be safe */
-        segs[i].error_count = (result >= 0) ? result : 0;
-        segs[i].defective   = (segs[i].error_count >= effective_threshold);
-
         if (segs[i].defective)
             defective_count++;
 
@@ -420,8 +477,6 @@ static int test_segments(const uint8_t *data, Segment *segs, int count,
                     segs[i].defective ? "DEFECTIVE" : "OK");
             if (segs[i].defective)
                 fprintf(stderr, " (%d errors)", segs[i].error_count);
-            else if (result < 0)
-                fprintf(stderr, " (skipped: I/O error)");
             fprintf(stderr, "\n");
         }
     }
