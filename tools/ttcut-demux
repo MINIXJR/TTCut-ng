@@ -617,8 +617,11 @@ if $ES_MODE; then
         step "Checking stream integrity..."
 
         REPAIR_LOG="$OUTDIR/${BASENAME}_esrepair.log"
+        # Exit codes: 0=clean, 1=repaired, 2=error — must not trigger set -e
+        set +e
         REPAIR_OUTPUT=$(ttcut-esrepair --verbose --log "$REPAIR_LOG" "$OUTPUT_VIDEO" 2>&1)
         REPAIR_EXIT=$?
+        set -e
 
         # Parse machine-readable stdout
         ES_REMOVED_SEGMENTS=$(echo "$REPAIR_OUTPUT" | grep -oP '^defective_segments=\K\d+' || echo 0)
