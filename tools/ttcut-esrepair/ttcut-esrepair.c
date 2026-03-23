@@ -343,8 +343,14 @@ static int test_segment(const uint8_t *file_data, const Segment *seg, int codec)
     }
     avcodec_parameters_to_context(dec_ctx, fmt->streams[vidx]->codecpar);
 
-    /* Enable strict error detection (equivalent to ffmpeg -err_detect +careful+explode) */
-    dec_ctx->err_recognition = AV_EF_CAREFUL | AV_EF_EXPLODE;
+    /* Enable strict error detection.
+     * MPEG-2: +careful+explode works reliably (real errors only).
+     * H.264/H.265: +explode causes false positives (every frame flagged).
+     *   Use +careful only — detects real corruption without false alarms. */
+    if (codec == CODEC_MPEG2)
+        dec_ctx->err_recognition = AV_EF_CAREFUL | AV_EF_EXPLODE;
+    else
+        dec_ctx->err_recognition = AV_EF_CAREFUL;
 
     if (avcodec_open2(dec_ctx, dec, NULL) < 0) {
         avcodec_free_context(&dec_ctx);
