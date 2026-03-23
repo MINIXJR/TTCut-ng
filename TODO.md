@@ -166,6 +166,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Support DVB-SUB (bitmap subtitles) and Teletext subtitles
 - Extract and convert to SRT or keep as PGS for MKV output
 
+- **Systemanforderungen dokumentieren**
+  - Mindestanforderungen für README/Wiki: Architektur (x86_64), OS, Qt, ffmpeg/libav, libmpeg2
+  - Optionale Abhängigkeiten: mplex, mpv, ttcut-esrepair
+  - Empfehlungen für Speicher/Plattenplatz bei großen DVB-Aufnahmen
+
 ## Low Priority
 
 - **Deprecated qSort() → std::sort()**
