@@ -24,6 +24,10 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+
 enum CodecType {
     CODEC_MPEG2,
     CODEC_H264,
@@ -188,6 +192,231 @@ static int scan_segments(const uint8_t *data, int64_t size, int codec,
     return 0;
 }
 
+/* ---- Custom AVIOContext callbacks for mmap-based segment I/O ---- */
+
+static int mmap_read_packet(void *opaque, uint8_t *buf, int buf_size)
+{
+    MmapIOContext *ctx = (MmapIOContext *)opaque;
+    int64_t remaining = ctx->size - ctx->pos;
+    if (remaining <= 0)
+        return AVERROR_EOF;
+    int to_read = buf_size < remaining ? buf_size : (int)remaining;
+    memcpy(buf, ctx->base + ctx->pos, to_read);
+    ctx->pos += to_read;
+    return to_read;
+}
+
+static int64_t mmap_seek(void *opaque, int64_t offset, int whence)
+{
+    MmapIOContext *ctx = (MmapIOContext *)opaque;
+    int64_t new_pos;
+    if (whence == AVSEEK_SIZE)
+        return ctx->size;
+    else if (whence == SEEK_SET)
+        new_pos = offset;
+    else if (whence == SEEK_CUR)
+        new_pos = ctx->pos + offset;
+    else if (whence == SEEK_END)
+        new_pos = ctx->size + offset;
+    else
+        return AVERROR(EINVAL);
+    if (new_pos < 0) new_pos = 0;
+    if (new_pos > ctx->size) new_pos = ctx->size;
+    ctx->pos = new_pos;
+    return new_pos;
+}
+
+/* ---- Segment I/O open/close using Custom AVIOContext ---- */
+
+static int open_segment_io(const uint8_t *file_data, const Segment *seg,
+                           int codec, MmapIOContext *io_ctx,
+                           AVIOContext **avio_out, AVFormatContext **fmt_out)
+{
+    /* Set up mmap region for this segment */
+    io_ctx->base = file_data + seg->offset;
+    io_ctx->size = seg->size;
+    io_ctx->pos  = 0;
+
+    /* Allocate AVIO buffer */
+    uint8_t *avio_buf = (uint8_t *)av_malloc(32768);
+    if (!avio_buf) {
+        fprintf(stderr, "Error: av_malloc failed for avio buffer\n");
+        return -1;
+    }
+
+    /* Create custom AVIOContext */
+    *avio_out = avio_alloc_context(avio_buf, 32768, 0, io_ctx,
+                                   mmap_read_packet, NULL, mmap_seek);
+    if (!*avio_out) {
+        fprintf(stderr, "Error: avio_alloc_context failed\n");
+        av_free(avio_buf);
+        return -1;
+    }
+
+    /* Allocate format context with custom I/O */
+    *fmt_out = avformat_alloc_context();
+    if (!*fmt_out) {
+        fprintf(stderr, "Error: avformat_alloc_context failed\n");
+        av_freep(&(*avio_out)->buffer);
+        avio_context_free(avio_out);
+        return -1;
+    }
+    (*fmt_out)->pb = *avio_out;
+    (*fmt_out)->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    /* Determine format name from codec type */
+    const char *format_name;
+    switch (codec) {
+    case CODEC_MPEG2: format_name = "mpegvideo"; break;
+    case CODEC_H264:  format_name = "h264";      break;
+    case CODEC_H265:  format_name = "hevc";      break;
+    default:
+        avformat_free_context(*fmt_out);
+        *fmt_out = NULL;
+        av_freep(&(*avio_out)->buffer);
+        avio_context_free(avio_out);
+        return -1;
+    }
+
+    const AVInputFormat *ifmt = av_find_input_format(format_name);
+    int ret = avformat_open_input(fmt_out, NULL, ifmt, NULL);
+    if (ret < 0) {
+        /* avformat_open_input frees *fmt_out on failure */
+        *fmt_out = NULL;
+        av_freep(&(*avio_out)->buffer);
+        avio_context_free(avio_out);
+        return -1;
+    }
+
+    return 0;
+}
+
+static void close_segment_io(AVIOContext **avio, AVFormatContext **fmt)
+{
+    if (*fmt) {
+        avformat_close_input(fmt);
+    }
+    if (*avio) {
+        av_freep(&(*avio)->buffer);
+        avio_context_free(avio);
+    }
+}
+
+/* ---- Per-segment decode test ---- */
+
+static int test_segment(const uint8_t *file_data, const Segment *seg, int codec)
+{
+    MmapIOContext io_ctx;
+    AVIOContext *avio = NULL;
+    AVFormatContext *fmt = NULL;
+
+    if (open_segment_io(file_data, seg, codec, &io_ctx, &avio, &fmt) < 0)
+        return -1;
+
+    avformat_find_stream_info(fmt, NULL);
+
+    int vidx = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+    if (vidx < 0) {
+        close_segment_io(&avio, &fmt);
+        return -1;
+    }
+
+    /* Create decoder */
+    const AVCodec *dec = avcodec_find_decoder(fmt->streams[vidx]->codecpar->codec_id);
+    if (!dec) {
+        close_segment_io(&avio, &fmt);
+        return -1;
+    }
+    AVCodecContext *dec_ctx = avcodec_alloc_context3(dec);
+    if (!dec_ctx) {
+        close_segment_io(&avio, &fmt);
+        return -1;
+    }
+    avcodec_parameters_to_context(dec_ctx, fmt->streams[vidx]->codecpar);
+
+    /* Enable strict error detection (equivalent to ffmpeg -err_detect +careful+explode) */
+    dec_ctx->err_recognition = AV_EF_CAREFUL | AV_EF_EXPLODE;
+
+    if (avcodec_open2(dec_ctx, dec, NULL) < 0) {
+        avcodec_free_context(&dec_ctx);
+        close_segment_io(&avio, &fmt);
+        return -1;
+    }
+
+    /* Decode loop */
+    AVPacket *pkt = av_packet_alloc();
+    AVFrame *frame = av_frame_alloc();
+    int errors = 0;
+
+    while (av_read_frame(fmt, pkt) >= 0) {
+        if (pkt->stream_index == vidx) {
+            int ret = avcodec_send_packet(dec_ctx, pkt);
+            if (ret < 0 && ret != AVERROR(EAGAIN))
+                errors++;
+            while (1) {
+                ret = avcodec_receive_frame(dec_ctx, frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                    break;
+                if (ret < 0)
+                    errors++;
+            }
+        }
+        av_packet_unref(pkt);
+    }
+
+    /* Flush decoder */
+    avcodec_send_packet(dec_ctx, NULL);
+    while (1) {
+        int ret = avcodec_receive_frame(dec_ctx, frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            break;
+        if (ret < 0)
+            errors++;
+    }
+
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    avcodec_free_context(&dec_ctx);
+    close_segment_io(&avio, &fmt);
+
+    return errors;
+}
+
+/* ---- Test all segments ---- */
+
+static int test_segments(const uint8_t *data, Segment *segs, int count,
+                         int codec, int threshold, int verbose)
+{
+    int effective_threshold = (threshold == 0) ? 1 : threshold;
+    int defective_count = 0;
+
+    for (int i = 0; i < count; i++) {
+        int result = test_segment(data, &segs[i], codec);
+
+        /* Treat I/O failures (result == -1) as non-defective to be safe */
+        segs[i].error_count = (result >= 0) ? result : 0;
+        segs[i].defective   = (segs[i].error_count >= effective_threshold);
+
+        if (segs[i].defective)
+            defective_count++;
+
+        if (verbose) {
+            fprintf(stderr, "Segment %4d/%d: %4d frames, %8lld bytes — %s",
+                    i + 1, count,
+                    segs[i].frame_count,
+                    (long long)segs[i].size,
+                    segs[i].defective ? "DEFECTIVE" : "OK");
+            if (segs[i].defective)
+                fprintf(stderr, " (%d errors)", segs[i].error_count);
+            else if (result < 0)
+                fprintf(stderr, " (skipped: I/O error)");
+            fprintf(stderr, "\n");
+        }
+    }
+
+    return defective_count;
+}
+
 static void print_usage(const char *prog)
 {
     fprintf(stderr,
@@ -299,8 +528,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Log file:    %s\n", log_file ? log_file : "(none)");
     }
 
-    /* Suppress unused warnings for structures defined for later tasks */
-    (void)sizeof(MmapIOContext);
+    /* Suppress unused warnings for variables used in later tasks */
+    (void)check_only;
+    (void)log_file;
 
     const uint8_t *data = NULL;
     int64_t file_size = 0;
@@ -330,9 +560,14 @@ int main(int argc, char *argv[])
     if (verbose)
         fprintf(stderr, "Found %d segments, %d total frames\n", seg_count, total_frames);
 
-    /* TODO: test_segments, write_repaired */
+    /* Decode-test all segments */
+    int defective = test_segments(data, segments, seg_count, codec, threshold, verbose);
+    if (verbose)
+        fprintf(stderr, "Decode test complete: %d defective segments\n", defective);
+
+    /* TODO: write_repaired */
 
     free(segments);
     close_mmap(data, file_size);
-    return 0;
+    return (defective > 0) ? 1 : 0;
 }
