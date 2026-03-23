@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE  /* madvise, MADV_SEQUENTIAL */
+
 /*
  * ttcut-esrepair - Elementary Stream Repair Tool for TTCut-ng
  *
@@ -16,6 +18,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
 enum CodecType {
     CODEC_MPEG2,
@@ -56,6 +63,37 @@ static int detect_codec(const char *filename)
         return CODEC_H265;
 
     return CODEC_UNKNOWN;
+}
+
+static int open_mmap(const char *path, const uint8_t **data, int64_t *size)
+{
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "Error: cannot open '%s': %s\n", path, strerror(errno));
+        return -1;
+    }
+    struct stat st;
+    if (fstat(fd, &st) < 0 || st.st_size == 0) {
+        fprintf(stderr, "Error: cannot stat '%s' or file is empty: %s\n", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    *size = st.st_size;
+    void *mapped = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);  /* fd can be closed after mmap */
+    if (mapped == MAP_FAILED) {
+        fprintf(stderr, "Error: mmap failed for '%s': %s\n", path, strerror(errno));
+        *data = NULL;
+        return -1;
+    }
+    *data = (const uint8_t *)mapped;
+    madvise(mapped, st.st_size, MADV_SEQUENTIAL);
+    return 0;
+}
+
+static void close_mmap(const uint8_t *data, int64_t size)
+{
+    if (data) munmap((void *)data, size);
 }
 
 static void print_usage(const char *prog)
@@ -173,6 +211,15 @@ int main(int argc, char *argv[])
     (void)sizeof(Segment);
     (void)sizeof(MmapIOContext);
 
-    fprintf(stderr, "Not yet implemented\n");
-    return 2;
+    const uint8_t *data = NULL;
+    int64_t file_size = 0;
+    if (open_mmap(input_file, &data, &file_size) < 0)
+        return 2;
+    if (verbose)
+        fprintf(stderr, "Mapped %s: %lld bytes\n", input_file, (long long)file_size);
+
+    /* TODO: scan_segments, test_segments, write_repaired */
+
+    close_mmap(data, file_size);
+    return 0;
 }
