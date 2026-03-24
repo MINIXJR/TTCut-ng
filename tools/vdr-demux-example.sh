@@ -32,7 +32,7 @@ TTCUT="ttcut-ng"
 TTCUT_DEMUX="ttcut-demux"
 
 # Fallback auf lokale Version falls nicht installiert
-[ -x "$(command -v "$TTCUT_DEMUX")" ] || TTCUT_DEMUX="/usr/local/src/TTCut-ng/tools/ttcut-demux"
+[ -x "$(command -v "$TTCUT_DEMUX")" ] || TTCUT_DEMUX="/usr/local/src/TTCut-ng/tools/ttcut-demux/ttcut-demux"
 [ -x "$(command -v "$TTCUT")" ] || TTCUT="/usr/local/src/TTCut-ng/ttcut-ng"
 
 # Farben (deaktiviert wenn stdout kein Terminal ist)
