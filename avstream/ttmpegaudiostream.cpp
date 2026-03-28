@@ -262,6 +262,11 @@ int TTMPEGAudioStream::createHeaderList( )
           prev_audio_header->frame_time;
       }
 
+      if (audio_header->frame_length < 4) {
+        log->warningMsg(__FILE__, __LINE__, "Invalid MPEG audio frame_length %d, skipping", audio_header->frame_length);
+        delete audio_header;
+        break;
+      }
       // add audio header to header list
       header_list->add( audio_header );
       stream_buffer->seekRelative( audio_header->frame_length-4 );

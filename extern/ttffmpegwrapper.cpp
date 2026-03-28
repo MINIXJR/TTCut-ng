@@ -1065,6 +1065,7 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
         int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24,
             mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
         uint8_t* buffer = (uint8_t*)av_malloc(numBytes);
+        if (!buffer) { qDebug() << "av_malloc failed for RGB frame buffer"; return QImage(); }
         av_image_fill_arrays(mRgbFrame->data, mRgbFrame->linesize, buffer,
             AV_PIX_FMT_RGB24, mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
     }
@@ -1720,9 +1721,16 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 if (!ac3DecCtx) {
                     const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
                     ac3DecCtx = avcodec_alloc_context3(dec);
-                    avcodec_parameters_to_context(ac3DecCtx, inStream->codecpar);
-                    avcodec_open2(ac3DecCtx, dec, nullptr);
-                    ac3Frame = av_frame_alloc();
+                    if (!ac3DecCtx) { needsReencode = false; }
+                    else {
+                        avcodec_parameters_to_context(ac3DecCtx, inStream->codecpar);
+                        avcodec_open2(ac3DecCtx, dec, nullptr);
+                        ac3Frame = av_frame_alloc();
+                        if (!ac3Frame) {
+                            avcodec_free_context(&ac3DecCtx);
+                            needsReencode = false;
+                        }
+                    }
                 }
                 if (!ac3EncCtx) {
                     const AVCodec* enc = avcodec_find_encoder(AV_CODEC_ID_AC3);
@@ -1758,6 +1766,7 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                         swr_init(swrCtx);
 
                         ac3ConvertedFrame = av_frame_alloc();
+                        if (!ac3ConvertedFrame) { av_packet_unref(pkt); continue; }
                         av_channel_layout_copy(&ac3ConvertedFrame->ch_layout, &ac3EncCtx->ch_layout);
                         ac3ConvertedFrame->format = ac3EncCtx->sample_fmt;
                         ac3ConvertedFrame->sample_rate = ac3EncCtx->sample_rate;
@@ -1776,7 +1785,7 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                     // Re-encode with target channel layout
                     avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
                     AVPacket* encPkt = av_packet_alloc();
-                    if (avcodec_receive_packet(ac3EncCtx, encPkt) == 0) {
+                    if (encPkt && avcodec_receive_packet(ac3EncCtx, encPkt) == 0) {
                         encPkt->pts = pkt->pts + ptsOffset;
                         encPkt->dts = encPkt->pts;
                         encPkt->stream_index = 0;
@@ -2060,6 +2069,13 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
     // Decode audio and collect per-frame RMS values
     AVPacket* packet = av_packet_alloc();
     AVFrame*  frame  = av_frame_alloc();
+    if (!packet || !frame) {
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+        avcodec_free_context(&decCtx);
+        avformat_close_input(&fmtCtx);
+        return {};
+    }
     QList<double> rmsValues;
 
     while (av_read_frame(fmtCtx, packet) >= 0) {

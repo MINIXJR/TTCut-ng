@@ -348,7 +348,7 @@ bool TTNaluParser::parseNalUnit(int64_t offset, int startCodeLen, TTNalUnit& nal
 
     // Read NAL header (first 1-2 bytes after start code)
     mFile.seek(nal.dataOffset);
-    QByteArray header = mFile.read(32);  // Read enough for basic header parsing
+    QByteArray header = mFile.read(128);  // Read enough for slice header (4K first_mb_in_slice needs >32 bytes)
 
     if (header.isEmpty()) {
         return false;
@@ -833,6 +833,22 @@ QByteArray TTNaluParser::readAccessUnitData(int index)
 }
 
 // ----------------------------------------------------------------------------
+// Zero-copy pointer to Access Unit data via mmap
+// Returns nullptr if file is not memory-mapped or index is invalid
+// ----------------------------------------------------------------------------
+const uchar* TTNaluParser::accessUnitPtr(int index, int64_t& size) const
+{
+    if (!mMappedFile || index < 0 || index >= mAccessUnits.size()) {
+        size = 0;
+        return nullptr;
+    }
+
+    const TTAccessUnit& au = mAccessUnits[index];
+    size = au.endOffset - au.startOffset;
+    return mMappedFile + au.startOffset;
+}
+
+// ----------------------------------------------------------------------------
 // Get SPS data
 // ----------------------------------------------------------------------------
 QByteArray TTNaluParser::getSPS(int index) const
@@ -1086,7 +1102,7 @@ uint32_t TTNaluParser::readExpGolombUE(const uint8_t* data, int dataSize, int& b
 {
     // Count leading zeros
     int leadingZeros = 0;
-    while (readBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 32) {
+    while (readBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 31) {
         leadingZeros++;
     }
 

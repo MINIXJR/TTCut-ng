@@ -185,6 +185,15 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   AVPacket* pkt = av_packet_alloc();
   AVFrame* frame = av_frame_alloc();
   AVFrame* filtFrame = av_frame_alloc();
+  if (!pkt || !frame || !filtFrame) {
+    av_packet_free(&pkt);
+    av_frame_free(&frame);
+    av_frame_free(&filtFrame);
+    avcodec_free_context(&codecCtx);
+    avfilter_graph_free(&filterGraph);
+    avformat_close_input(&fmtCtx);
+    return {};
+  }
 
   while (av_read_frame(fmtCtx, pkt) >= 0 && !mIsAborted) {
     if (pkt->stream_index == audioIdx) {

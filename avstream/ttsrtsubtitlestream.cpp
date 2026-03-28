@@ -87,6 +87,7 @@ QString TTSrtSubtitleStream::streamExtension()
 //! Return the stream length as QTime
 QTime TTSrtSubtitleStream::streamLengthTime()
 {
+  if (!header_list || header_list->count() == 0) return QTime(0, 0, 0, 0);
   TTSubtitleHeader* lastHeader = (TTSubtitleHeader*)header_list->at(header_list->count()-1);
   return lastHeader->endTime();
 }
@@ -186,6 +187,7 @@ int TTSrtSubtitleStream::createHeaderList()
         line = stream_buffer->readLine(lineEnd);
         text.append(line);
         text.append("\r\n");
+        if (text.size() > 65536) break;  // Limit subtitle text to 64KB
       }
       while (!line.isEmpty());
       while(text.right(2) == "\r\n")

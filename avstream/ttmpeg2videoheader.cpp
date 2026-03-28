@@ -120,7 +120,11 @@ void TTSequenceHeader::parseBasicData( quint8* data, int offset )
   horizontal_size_value        = (data[offset+0] << 4) + ((data[offset+1] & 0xF0) >> 4);
   vertical_size_value          = ((data[offset+1] & 0x0F) << 8) + data[offset+2];
   aspect_ratio_information     = (data[offset+3] & 0xF0) >> 4;
+  if (aspect_ratio_information == 0 || aspect_ratio_information > 4)
+    aspect_ratio_information = 1;  // default: square pixels
   frame_rate_code              = (data[offset+3] & 0x0F);
+  if (frame_rate_code == 0 || frame_rate_code > 8)
+    frame_rate_code = 3;  // default: 25 fps (PAL)
   bit_rate_value               = (int)(((data[offset+4] << 10) + (data[offset+5] << 2)+((data[offset+6] & 0xC0) >> 6))*400);
   vbv_buffer_size_value        = ((data[offset+6] & 0x1F) << 5)+((data[offset+7] & 0xF8) >> 3);
 }

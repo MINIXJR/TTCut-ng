@@ -85,6 +85,7 @@ TTFileBuffer::~TTFileBuffer()
  */
 void TTFileBuffer::initInstance(int bufSize)
 {
+  Q_ASSERT((bufSize & (bufSize - 1)) == 0 && "bufSize must be a power of 2");
   bufferSize = bufSize;
   bufferMask = bufferSize-1;
   readInc    = bufferSize/2;

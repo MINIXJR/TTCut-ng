@@ -456,6 +456,11 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
       iddStream->readByte(headerType);
       iddStream->readUInt64(offset);
 
+      if (offset >= (quint64)stream_buffer->size()) {
+        log->warningMsg(__FILE__, __LINE__, "IDD offset %llu exceeds stream size, stopping", (unsigned long long)offset);
+        break;
+      }
+
       switch (headerType)
       {
         case TTMpeg2VideoHeader::sequence_start_code:
@@ -709,7 +714,8 @@ quint64 TTMpeg2VideoStream::getByteCount(TTVideoHeader* startObject, TTVideoHead
  */
 void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoHeader* endObject, TTCutParameter* cr)
 {
-  quint8    buffer[262144];
+  QByteArray bufferStorage(262144, '\0');
+  quint8*   buffer = reinterpret_cast<quint8*>(bufferStorage.data());
   quint64   bytesToWrite      = getByteCount(startObject, endObject);
   quint64   bufferStartOffset = startObject->headerOffset();
   int       numPicsWritten    = cr->getNumPicturesWritten();
@@ -936,6 +942,12 @@ void TTMpeg2VideoStream::rewriteGOP(quint8* buffer, quint64 abs_pos, TTGOPHeader
     return;
   }
 
+  int idx = (int)(gop->headerOffset() - abs_pos);
+  if (idx < 0 || idx + 7 >= 262144) {
+    log->errorMsg(__FILE__, __LINE__, "GOP time code index out of buffer bounds!");
+    return;
+  }
+
   quint8      time_code[4];
   TTTimeCode  tc = ttFrameToTimeCode(cr->getNumPicturesWritten(), frameRate());
 
@@ -950,10 +962,10 @@ void TTMpeg2VideoStream::rewriteGOP(quint8* buffer, quint64 abs_pos, TTGOPHeader
   time_code[3]=(quint8)((((tc.pictures & 0x01)==1)?0x80:0x00)
       | ((close_gop || gop->closed_gop)?0x40:0)
       | (gop->broken_link ? 0x20:0x00));
-  buffer[(int)(gop->headerOffset()-abs_pos)+4] = time_code[0];
-  buffer[(int)(gop->headerOffset()-abs_pos)+5] = time_code[1];
-  buffer[(int)(gop->headerOffset()-abs_pos)+6] = time_code[2];
-  buffer[(int)(gop->headerOffset()-abs_pos)+7] = time_code[3];
+  buffer[idx+4] = time_code[0];
+  buffer[idx+5] = time_code[1];
+  buffer[idx+6] = time_code[2];
+  buffer[idx+7] = time_code[3];
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1045,10 +1057,10 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   new_mpeg_stream->cut(0, cutOut, cr);
 
   // remove temporary files
-  QString rmCmd = QString("rm %1/encode.*").arg(mpeg2FileInfo.absolutePath());
-
-  if (system(rmCmd.toLatin1().data()) < 0)
-    log->errorMsg(__FILE__, __LINE__, tr("system call %1 failed!").arg(rmCmd));
+  QDir encodeDir(mpeg2FileInfo.absolutePath());
+  QStringList encodeFiles = encodeDir.entryList(QStringList() << "encode.*", QDir::Files);
+  for (const QString& f : encodeFiles)
+    encodeDir.remove(f);
 
   cr->setIsWriteMaxBitrate(savIsWriteMaxBitrate);
   cr->setIsWriteSequenceEnd(savIsWriteSequenceEnd);

@@ -462,6 +462,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         vin.syncMs = mVideoSyncOffsetMs;
         vin.ownsCtx = false;  // We'll close videoInCtx at the end
         vin.pkt = av_packet_alloc();
+        if (!vin.pkt) { qDebug() << "av_packet_alloc failed for video input"; return false; }
 
         // Frame duration from setDefaultDuration (e.g. "40000000ns" for 25fps)
         // NOTE: frameDur is recalculated AFTER avformat_write_header() because
@@ -523,6 +524,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             ain.syncMs = mAudioSyncOffsetMs;
             ain.ownsCtx = true;
             ain.pkt = av_packet_alloc();
+            if (!ain.pkt) { qDebug() << "av_packet_alloc failed for audio input"; avformat_close_input(&audioCtx); continue; }
             inputs.append(ain);
 
             qDebug() << "  Audio" << i << ":" << audioFiles[i]
@@ -563,6 +565,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             sin.outIdx = outStreamIdx++;
             sin.ownsCtx = true;
             sin.pkt = av_packet_alloc();
+            if (!sin.pkt) { qDebug() << "av_packet_alloc failed for subtitle input"; avformat_close_input(&subCtx); continue; }
             inputs.append(sin);
 
             qDebug() << "  Subtitle" << i << ":" << subtitleFiles[i];
@@ -607,6 +610,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     if (containerRemux) {
         // Container remux: simple loop, copy all packets
         AVPacket* pkt = av_packet_alloc();
+        if (!pkt) { qDebug() << "av_packet_alloc failed for container remux"; return false; }
         int64_t totalSize = avio_size(videoInCtx->pb);
         int lastPercent = -1;
 

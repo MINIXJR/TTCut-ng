@@ -208,19 +208,27 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
     qDebug() << "TTMplexProvider: Using A/V sync offset" << mAudioSyncOffsetMs << "ms";
   }
 
+  auto shellEscape = [](const QString& s) -> QString {
+    QString escaped = s;
+    escaped.replace("'", "'\\''");
+    return QString("'%1'").arg(escaped);
+  };
+
   mplexArgs << "-o"
             << (escapeFileNames
-									? toAscii(QString("\"%1\"").arg(createOutputFilePath(videoFilePath)))
+									? toAscii(shellEscape(createOutputFilePath(videoFilePath)))
 									: toAscii(QString("%1").arg(createOutputFilePath(videoFilePath))))
             << (escapeFileNames
-									? toAscii(QString("\"%1\"").arg(videoFilePath))
+									? toAscii(shellEscape(videoFilePath))
 			            : toAscii(QString("%1").arg(videoFilePath)));
 
   QStringListIterator listIterator(audioFilePaths);
-  while(listIterator.hasNext())
+  while(listIterator.hasNext()) {
+    QString audioPath = listIterator.next();
     mplexArgs << (escapeFileNames
-						? toAscii(QString("\"%1\"").arg(listIterator.next()))
-						: toAscii(QString("%1").arg(listIterator.next())));
+						? toAscii(shellEscape(audioPath))
+						: toAscii(QString("%1").arg(audioPath)));
+  }
 
   return mplexArgs;
 }

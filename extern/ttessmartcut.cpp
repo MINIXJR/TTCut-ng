@@ -1245,11 +1245,50 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
                  << "(MaxFrameNum=" << (1 << mLog2MaxFrameNum) << ")";
     }
 
+    bool needsPatching = (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264)
+                      || (frameNumDelta != 0 && mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264);
     int maxFrameNum = (mLog2MaxFrameNum > 0) ? (1 << mLog2MaxFrameNum) : 0;
 
+    // --- Bulk-write path: no patching needed, mmap available ---
+    if (!needsPatching && mParser.isMapped()) {
+        int64_t startSize, endSize;
+        const uchar* startPtr = mParser.accessUnitPtr(startFrame, startSize);
+        const uchar* endPtr = mParser.accessUnitPtr(endFrame, endSize);
+
+        if (startPtr && endPtr) {
+            int64_t totalSize = (endPtr + endSize) - startPtr;
+            qDebug() << "    Bulk-write:" << (endFrame - startFrame + 1) << "frames,"
+                     << (totalSize / (1024*1024)) << "MB";
+
+            if (outFile.write(reinterpret_cast<const char*>(startPtr), totalSize) != totalSize) {
+                setError(QString("Bulk write failed for frames %1-%2").arg(startFrame).arg(endFrame));
+                return false;
+            }
+
+            mFramesStreamCopied += (endFrame - startFrame + 1);
+            return true;
+        }
+        // Fall through to per-frame path if accessUnitPtr failed
+    }
+
+    // --- Per-frame path: patching required or mmap unavailable ---
     for (int i = startFrame; i <= endFrame; ++i) {
-        // Read access unit (frame) data
-        QByteArray auData = mParser.readAccessUnitData(i);
+        QByteArray auData;
+
+        // Prefer mmap over QFile seek+read
+        if (mParser.isMapped()) {
+            int64_t auSize;
+            const uchar* auPtr = mParser.accessUnitPtr(i, auSize);
+            if (auPtr) {
+                auData = QByteArray(reinterpret_cast<const char*>(auPtr), auSize);
+            }
+        }
+
+        // Fallback to QFile read
+        if (auData.isEmpty()) {
+            auData = mParser.readAccessUnitData(i);
+        }
+
         if (auData.isEmpty()) {
             setError(QString("Failed to read frame %1").arg(i));
             return false;
@@ -1351,6 +1390,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     auto drainDecoder = [&]() {
         while (true) {
             AVFrame* frame = av_frame_alloc();
+            if (!frame) break;
             int ret = avcodec_receive_frame(mDecoder, frame);
             if (ret < 0) {
                 av_frame_free(&frame);
@@ -1447,6 +1487,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
         // Send packet to decoder, retry on EAGAIN
         AVPacket* packet = av_packet_alloc();
+        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
         av_new_packet(packet, auData.size());
         memcpy(packet->data, auData.constData(), auData.size());
 
@@ -1482,6 +1523,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // Drain loop for flush - call receive_frame until EOF
     while (true) {
         AVFrame* frame = av_frame_alloc();
+        if (!frame) break;
         int ret = avcodec_receive_frame(mDecoder, frame);
         if (ret < 0) {
             av_frame_free(&frame);
@@ -1660,6 +1702,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         framesSent++;
 
         AVPacket* packet = av_packet_alloc();
+        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
         while (true) {
             ret = avcodec_receive_packet(mEncoder, packet);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
@@ -1706,6 +1749,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // Flush encoder
     avcodec_send_frame(mEncoder, nullptr);
     AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
     while (true) {
         int ret = avcodec_receive_packet(mEncoder, packet);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
@@ -2107,6 +2151,7 @@ bool TTESSmartCut::decodeFrame(const QByteArray& nalData, AVFrame* frame)
     if (!mDecoder) return false;
 
     AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
 
     if (!nalData.isEmpty()) {
         av_new_packet(packet, nalData.size());
@@ -2186,6 +2231,7 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
     }
 
     AVPacket* packet = av_packet_alloc();
+    if (!packet) return QByteArray();
     int ret = avcodec_receive_packet(mEncoder, packet);
 
     if (ret < 0) {
@@ -2386,7 +2432,7 @@ static void spsWriteBits(uint8_t* data, int dataSize, int& bitPos, uint32_t valu
 static uint32_t spsReadUE(const uint8_t* data, int dataSize, int& bitPos)
 {
     int leadingZeros = 0;
-    while (spsReadBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 32)
+    while (spsReadBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 31)
         leadingZeros++;
     if (leadingZeros == 0) return 0;
     uint32_t value = spsReadBits(data, dataSize, bitPos, leadingZeros);

@@ -526,10 +526,10 @@ void TTCutProjectData::readXml()
 
   QDomElement version = xmlNodeList->at(0).toElement();
 
-  float ver = version.text().toFloat();
+  int ver = qRound(version.text().toFloat());
 
-  if (ver != 1.0) {
-    qDebug("wrong project file version!");
+  if (ver != 1) {
+    qDebug("wrong project file version: %d", ver);
     return;
   }
 }

@@ -210,7 +210,7 @@ void TTMessageLogger::infoMsg(QString caller, int line, const char* msg, ...)
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(INFO, caller, line, buf);
@@ -225,7 +225,7 @@ void TTMessageLogger::warningMsg(QString caller, int line, const char* msg, ...)
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(WARNING, caller, line, buf);
@@ -240,7 +240,7 @@ void TTMessageLogger::errorMsg(QString caller, int line, const char* msg, ...)
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(ERROR, caller, line, buf);
@@ -255,7 +255,7 @@ void TTMessageLogger::fatalMsg(QString caller, int line, const char* msg, ...)
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(FATAL, caller, line, buf);
@@ -268,7 +268,7 @@ void TTMessageLogger::showErrorMsg(QString caller, int line, const char* msg, ..
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(ERROR, caller, line, buf, true);
@@ -280,7 +280,7 @@ void TTMessageLogger::showFatalMsg(QString caller, int line, const char* msg, ..
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(FATAL, caller, line, buf, true);
@@ -293,7 +293,7 @@ void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
   va_list ap;
 
   va_start( ap, msg );
-  vsprintf( buf, msg, ap );
+  vsnprintf( buf, sizeof(buf), msg, ap );
   va_end( ap );
 
   logMsg(DEBUG, caller, line, buf);
@@ -342,7 +342,7 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line, QString 
   (void)show;
 
   if (logMode & CONSOLE || msgType == ERROR)
-    qDebug(logMsgStr.toUtf8().data());
+    qDebug("%s", logMsgStr.toUtf8().data());
 
   writeMsg(logMsgStr);
 }
