@@ -2,17 +2,8 @@
 
 ## High Priority
 
-- **Security Audit Findings beheben** (siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md))
-  - **CRITICAL:** `readBits()` / `readExpGolombUE()` ohne Bounds-Check (ttnaluparser.cpp, ttessmartcut.cpp)
-  - **HIGH:** AC3 `frmsizecod >= 38` Array-OOB (ttac3audiostream.cpp)
-  - **HIGH:** `delete` statt `delete[]` (ttframesearchtask.cpp)
-  - **HIGH:** MPEG Audio `frame_length` Integer-Underflow (ttmpegaudiostream.cpp)
-  - **HIGH:** `seekBackward()` Underflow (ttfilebuffer.cpp)
-  - **HIGH:** Picture Extension Endlosschleife (ttmpeg2videoheader.cpp)
-  - **MEDIUM:** `vsprintf` -> `vsnprintf`, Format-String Fix (ttmessagelogger.cpp)
-  - **MEDIUM:** `system()` durch Qt-Operationen ersetzen (ttmpeg2videostream.cpp, ttcutpreviewtask.cpp)
-  - **MEDIUM:** SRT NULL-Deref + unbegrenzte Text-Akkumulation (ttsrtsubtitlestream.cpp)
-  - 25 Findings gesamt (2 Critical, 6 High, 11 Medium, 6 Low)
+- ~~**Security Audit Findings beheben**~~ → **25/25 FIXED** (2026-03-28, commits aea1809 + 66eacb2)
+  - Siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md) für alle Findings
 
 - **Smart Cut Quality Test Suite**
   - Automated test to verify cut quality by comparing input and output material
@@ -40,6 +31,7 @@
   - **Output:** Machine-readable report (pass/fail per test, values, expected ranges)
   - **Tool:** Standalone Python script `tools/ttcut-quality-check.py`
   - **Dependencies:** ffmpeg, ffprobe, python3, syncstart (pip install syncstart)
+  - ~~**Bug (LOW):** -428ms Residual-Offset~~ → **FIXED** (2026-03-28). Extra-Frame-Korrektur in allen Zeitberechnungen. A/V Sync jetzt +10ms. Visual Comparison: B-Frame-Probe ±3 + end-20 Fix. Defect Region Report. Defekte Streams: Visual wird als WARN übersprungen (Frame-Zählung divergiert).
 
 
 
@@ -57,14 +49,9 @@
   - `ffprobe -v debug`: Keine "backward timestamps" oder "co located POCs" Meldungen
   - Code-Pfad: `ttnaluparser.cpp:495` (CRA nicht isIDR) → `ttessmartcut.cpp:407` (Re-Encode Trigger)
 
-- **Smart Cut Performance: mmap statt QFile für Stream-Copy**
-  - `readAccessUnitData()` nutzt `QFile::seek()`+`read()` — 140k einzelne Syscalls bei Langfilm
-  - Aktuell: ~130s für 6 GB / 140k Frames (~46 MB/s)
-  - Mögliche Optimierungen:
-    1. Bulk-Copy: Wenn kein Patching nötig, ganze Byte-Ranges statt einzelne Frames kopieren
-    2. mmap: `TTNaluParser` nutzt bereits mmap zum Parsen, `readAccessUnitData()` aber nicht
-    3. Größere I/O-Blöcke: Benachbarte Frames zu einem `read()` zusammenfassen
-  - GPU bringt nichts (nur 58 von 140k Frames encoded, Rest ist I/O)
+- ~~**Smart Cut Performance: mmap statt QFile für Stream-Copy**~~ → **IMPLEMENTIERT** (2026-03-28, commits d80b918 + 2f3bb69)
+  - `accessUnitPtr()` für Zero-Copy mmap Frame-Zugriff, Bulk-Write für ungepatche Segmente
+  - **Noch zu testen:** Funktionale Verifikation + Performance-Messung mit echten Dateien
 
 ## Medium Priority
 
@@ -168,7 +155,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 - **Systemanforderungen dokumentieren**
   - Mindestanforderungen für README/Wiki: Architektur (x86_64), OS, Qt, ffmpeg/libav, libmpeg2
-  - Optionale Abhängigkeiten: mplex, mpv, ttcut-esrepair
+  - Optionale Abhängigkeiten: mplex, mpv, ttcut-pts-analyze
   - Empfehlungen für Speicher/Plattenplatz bei großen DVB-Aufnahmen
 
 ## Low Priority

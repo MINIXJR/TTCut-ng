@@ -226,6 +226,10 @@ public:
     TTAccessUnit accessUnitAt(int index) const;
     QByteArray readAccessUnitData(int index);
 
+    // Zero-copy access to AU data via mmap (returns nullptr if not mapped)
+    const uchar* accessUnitPtr(int index, int64_t& size) const;
+    bool isMapped() const { return mMappedFile != nullptr; }
+
     // Parameter sets
     QByteArray getSPS(int index = 0) const;
     QByteArray getPPS(int index = 0) const;
