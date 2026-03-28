@@ -50,7 +50,7 @@ tools/test_es_smartcut
 tools/test_nalu_parser
 tools/test_prj_smartcut
 tools/ttcut-ac3fix/ttcut-ac3fix
-tools/ttcut-esrepair/ttcut-esrepair
+tools/ttcut-pts-analyze/ttcut-pts-analyze
 ttcut-strip-filler
 
 # Debian build artifacts

@@ -207,7 +207,13 @@ void TTCutPreviewTask::operation()
           QList<QPair<double, double>> audioKeepList;
           for (int c = 0; c < tmpCutList->count(); c++) {
             TTCutItem ci = tmpCutList->at(c);
-            audioKeepList.append(qMakePair(ci.cutInIndex() / fps, (ci.cutOutIndex() + 1) / fps));
+            // Correct for extra frames: subtract extras before each cut point
+            // so audio position matches real content time, not inflated frame count
+            int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
+            int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
+            double cutIn  = (ci.cutInIndex()  - extraIn)  / fps;
+            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
+            audioKeepList.append(qMakePair(cutIn, cutOut));
           }
           QString audioExt = QFileInfo(aStream->filePath()).suffix();
           QString cutAudioFile = createPreviewFileName(i + 1, audioExt);

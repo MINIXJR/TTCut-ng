@@ -365,20 +365,77 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         }
       }
 
-      // Show info if ES was repaired by ttcut-esrepair
-      if (esInfo.esRepaired()) {
-        QString repairMsg = tr("Stream was repaired by ttcut-esrepair:\n"
-                               "Removed %1 defective segments (%2 frames).\n"
-                               "Frames: %3 → %4")
-                            .arg(esInfo.esRemovedSegments())
-                            .arg(esInfo.esRemovedFrames())
-                            .arg(esInfo.esFramesBefore())
-                            .arg(esInfo.esFramesAfter());
-        QMessageBox::information(TTCut::mainWindow,
-                                 tr("Stream Repaired"), repairMsg);
+      // Store extra frame indices for audio time correction
+      mExtraFrameIndices = esInfo.esExtraFrames();
+      if (!mExtraFrameIndices.isEmpty()) {
+        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
-      // Show warning if decode errors were detected but NOT repaired (legacy .info)
-      else if (esInfo.hasWarnings()) {
+
+      // Show clustering dialog if extra frames were detected (not on project reload)
+      if (!mExtraFrameIndices.isEmpty() && avItem) {
+        TTVideoStream* vs = avItem->videoStream();
+        double frameRate = vs ? vs->frameRate() : 25.0;
+        int gapFrames = TTCut::extraFrameClusterGapSec * frameRate;
+        int offsetFrames = TTCut::extraFrameClusterOffsetSec * frameRate;
+
+        // Cluster extra frames by gap
+        QList<TTStreamPoint> clusters;
+        int clusterStart = mExtraFrameIndices.first();
+        int clusterEnd = clusterStart;
+        int clusterCount = 1;
+
+        auto emitCluster = [&]() {
+            int pos = qMax(0, clusterStart - offsetFrames);
+            double durSec = (clusterEnd - clusterStart + 1) / frameRate;
+            QString desc = QString("Defekt: %1\u2013%2 (%3 Frames, %4s)")
+                .arg(clusterStart).arg(clusterEnd)
+                .arg(clusterCount).arg(durSec, 0, 'f', 1);
+            clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+        };
+
+        for (int i = 1; i < mExtraFrameIndices.size(); ++i) {
+            if (mExtraFrameIndices[i] - clusterEnd <= gapFrames) {
+                clusterEnd = mExtraFrameIndices[i];
+                clusterCount++;
+            } else {
+                emitCluster();
+                clusterStart = mExtraFrameIndices[i];
+                clusterEnd = clusterStart;
+                clusterCount = 1;
+            }
+        }
+        emitCluster();
+
+        // Show dialog with group listing
+        QString msg = tr("%1 defective frames in %2 groups detected.\n")
+            .arg(mExtraFrameIndices.size())
+            .arg(clusters.size());
+
+        int showCount = qMin(clusters.size(), 10);
+        for (int i = 0; i < showCount; ++i) {
+            msg += QString("\n  %1").arg(clusters[i].description());
+        }
+        if (clusters.size() > 10) {
+            msg += QString("\n  ... %1 %2")
+                .arg(clusters.size() - 10)
+                .arg(tr("more groups"));
+        }
+
+        QMessageBox msgBox(QMessageBox::Warning,
+                           tr("Defective Frames Detected"),
+                           msg, QMessageBox::NoButton, TTCut::mainWindow);
+        QPushButton* importBtn = msgBox.addButton(
+            tr("Import as Stream Points"), QMessageBox::AcceptRole);
+        msgBox.addButton(QMessageBox::Ok);
+        msgBox.exec();
+
+        if (msgBox.clickedButton() == importBtn) {
+            emit vdrMarkersLoaded(clusters);
+        }
+      }
+
+      // Show warning if decode errors were detected (legacy .info)
+      if (esInfo.hasWarnings()) {
         QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
                              "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
                              "Recommendation: Use ProjectX to demux this file instead.")
@@ -496,6 +553,19 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
   if (avItem == nullptr) return;
 
   avItem->setVideoStream(vStream);
+
+  // Load extra frame indices from .info (for audio time correction)
+  // This runs for ALL paths: direct open, project load, etc.
+  if (vStream && mExtraFrameIndices.isEmpty()) {
+    QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
+    if (!infoFile.isEmpty()) {
+      TTESInfo esInfo(infoFile);
+      if (esInfo.isLoaded() && !esInfo.esExtraFrames().isEmpty()) {
+        mExtraFrameIndices = esInfo.esExtraFrames();
+        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
+      }
+    }
+  }
 
   if (mpAVList == nullptr) return;
 
@@ -954,7 +1024,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     QStringList burstWarnings;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      int extraOut = countExtraFramesBefore(item.cutOutIndex() + 1);
+      double cutOutTime = (item.cutOutIndex() + 1 - extraOut) / frameRate;
       double burstDb = 0, contextDb = 0;
 
       if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, burstDb, contextDb)) {
@@ -991,9 +1062,16 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
   QString infoFile = TTESInfo::findInfoFile(firstStream->filePath());
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
-      mAvSyncOffsetMs = esInfo.avOffsetMs();
-      log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(mAvSyncOffsetMs));
+    if (esInfo.isLoaded()) {
+      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
+        mAvSyncOffsetMs = esInfo.avOffsetMs();
+        log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(mAvSyncOffsetMs));
+      }
+      // Ensure extra frame indices are loaded for audio time correction
+      if (mExtraFrameIndices.isEmpty() && !esInfo.esExtraFrames().isEmpty()) {
+        mExtraFrameIndices = esInfo.esExtraFrames();
+        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction (cut path)";
+      }
     }
   }
 
@@ -1032,8 +1110,10 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     QList<QPair<double, double>> audioKeepList;
     for (int c = 0; c < cutList->count(); c++) {
       TTCutItem ci = cutList->at(c);
-      double cutInTime = ci.cutInIndex() / frameRate;
-      double cutOutTime = (ci.cutOutIndex() + 1) / frameRate;
+      int extraIn  = countExtraFramesBefore(ci.cutInIndex());
+      int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
+      double cutInTime  = (ci.cutInIndex()  - extraIn)  / frameRate;
+      double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
       audioKeepList.append(qMakePair(cutInTime, cutOutTime));
     }
 
@@ -1139,8 +1219,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     int startFrame = item.cutInIndex();
     int endFrame = item.cutOutIndex();
 
-    double cutInTime = startFrame / frameRate;
-    double cutOutTime = (endFrame + 1) / frameRate;  // +1 because endFrame is inclusive (last frame to keep)
+    int extraIn  = countExtraFramesBefore(startFrame);
+    int extraOut = countExtraFramesBefore(endFrame + 1);
+    double cutInTime  = (startFrame - extraIn) / frameRate;
+    double cutOutTime = (endFrame + 1 - extraOut) / frameRate;  // +1 because endFrame is inclusive
 
     log->infoMsg(__FILE__, __LINE__, QString("Cut %1: frames %2-%3, time %4-%5")
         .arg(i+1).arg(startFrame).arg(endFrame)
@@ -1619,4 +1701,23 @@ void TTAVData::deleteElementaryStreams(const QString& videoFilePath,
     log->debugMsg(__FILE__, __LINE__, QString("Removing subtitle stream %1 (%2)").
         arg(subtitlePath).arg(success ? "ok" : "failed"));
   }
+}
+
+// *****************************************************************************
+// Count extra frames before a given frame index (binary search)
+// Used for audio time correction: time = (frame - extras_before) / fps
+// *****************************************************************************
+int TTAVData::countExtraFramesBefore(int frameIndex) const
+{
+  if (mExtraFrameIndices.isEmpty()) return 0;
+
+  int lo = 0, hi = mExtraFrameIndices.size();
+  while (lo < hi) {
+    int mid = (lo + hi) / 2;
+    if (mExtraFrameIndices[mid] < frameIndex)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return lo;
 }

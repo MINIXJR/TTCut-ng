@@ -128,12 +128,9 @@ public:
     bool recommendProjectX() const { return mRecommendProjectX; }
     QList<TTDecodeErrorRegion> decodeErrorRegions() const { return mDecodeErrorRegions; }
 
-    // ES repair info (from ttcut-esrepair)
-    bool esRepaired() const { return mEsRepaired; }
-    int esRemovedSegments() const { return mEsRemovedSegments; }
-    int esRemovedFrames() const { return mEsRemovedFrames; }
-    int esFramesBefore() const { return mEsFramesBefore; }
-    int esFramesAfter() const { return mEsFramesAfter; }
+    // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
+    QList<int> esExtraFrames() const { return mEsExtraFrames; }
+    int countExtraFramesBefore(int frameIndex) const;
 
     // Error handling
     QString lastError() const { return mLastError; }
@@ -178,12 +175,8 @@ private:
     bool mRecommendProjectX;
     QList<TTDecodeErrorRegion> mDecodeErrorRegions;
 
-    // ES repair info
-    bool mEsRepaired;
-    int mEsRemovedSegments;
-    int mEsRemovedFrames;
-    int mEsFramesBefore;
-    int mEsFramesAfter;
+    // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
+    QList<int> mEsExtraFrames;  // sorted list of extra frame indices
 };
 
 #endif // TTESINFO_H

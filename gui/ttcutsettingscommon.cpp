@@ -34,6 +34,7 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QLabel>
 
 TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
@@ -71,6 +72,29 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
   if (gl) {
     int row4 = gl->rowCount();
     gl->addWidget(cbNormalizeAcmod, row4, 0, 1, 2);
+  }
+
+  // Defective frame grouping
+  QGroupBox* gbCluster = new QGroupBox(tr("Defective Frame Grouping"), this);
+  QGridLayout* clusterLayout = new QGridLayout(gbCluster);
+
+  sbClusterGap = new QSpinBox(gbCluster);
+  sbClusterGap->setRange(1, 30);
+  sbClusterGap->setSuffix(tr(" seconds"));
+  QLabel* lblClusterGap = new QLabel(tr("Group size"), gbCluster);
+  clusterLayout->addWidget(lblClusterGap, 0, 0);
+  clusterLayout->addWidget(sbClusterGap, 0, 1);
+
+  sbClusterOffset = new QSpinBox(gbCluster);
+  sbClusterOffset->setRange(0, 10);
+  sbClusterOffset->setSuffix(tr(" seconds"));
+  QLabel* lblClusterOffset = new QLabel(tr("Start offset"), gbCluster);
+  clusterLayout->addWidget(lblClusterOffset, 1, 0);
+  clusterLayout->addWidget(sbClusterOffset, 1, 1);
+
+  if (gl) {
+    int rowCluster = gl->rowCount();
+    gl->addWidget(gbCluster, rowCluster, 0, 1, 3);
   }
 
   // Preview I-frame hint
@@ -141,6 +165,10 @@ void TTCutSettingsCommon::setTabData()
 
   // Zeitsprung
   sbQuickJumpInterval->setValue(TTCut::quickJumpIntervalSec);
+
+  // Gruppierung defekter Frames
+  sbClusterGap->setValue(TTCut::extraFrameClusterGapSec);
+  sbClusterOffset->setValue(TTCut::extraFrameClusterOffsetSec);
 }
 
 // get the tab data and fill the global parameter
@@ -176,6 +204,10 @@ void TTCutSettingsCommon::getTabData()
 
   // Zeitsprung
   TTCut::quickJumpIntervalSec = sbQuickJumpInterval->value();
+
+  // Gruppierung defekter Frames
+  TTCut::extraFrameClusterGapSec    = sbClusterGap->value();
+  TTCut::extraFrameClusterOffsetSec = sbClusterOffset->value();
 }
 
 

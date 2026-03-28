@@ -188,6 +188,10 @@ class TTCut
    static bool   spDetectAudioChange;
    static bool   spDetectAspectChange;
 
+   // --- Gruppierung defekter Frames ---
+   static int extraFrameClusterGapSec;      // Cluster gap threshold (default 5s)
+   static int extraFrameClusterOffsetSec;   // Start offset before cluster (default 2s)
+
    // --------------------------------------------------------------
    // muxer settings
    // --------------------------------------------------------------

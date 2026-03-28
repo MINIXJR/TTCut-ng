@@ -260,5 +260,21 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutmain.cpp
 #
 # -------------------------------------------------------------------------------
+# Tools (built after main target)
+# -------------------------------------------------------------------------------
+tools.commands = \
+    $(MAKE) -C $$PWD/tools/ttcut-pts-analyze && \
+    gcc -O2 -Wall -o $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix.c
+QMAKE_EXTRA_TARGETS += tools
+QMAKE_POST_LINK += $(MAKE) -C $$PWD/tools/ttcut-pts-analyze && \
+    gcc -O2 -Wall -o $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix.c
+
+tools_clean.commands = \
+    $(MAKE) -C $$PWD/tools/ttcut-pts-analyze clean; \
+    rm -f $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix
+QMAKE_EXTRA_TARGETS += tools_clean
+CLEAN_DEPS += tools_clean
+#
+# -------------------------------------------------------------------------------
 # TTCUT.PRO ENDE
 # -------------------------------------------------------------------------------

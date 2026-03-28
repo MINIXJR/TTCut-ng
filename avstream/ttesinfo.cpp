@@ -70,11 +70,6 @@ TTESInfo::TTESInfo()
     , mDecodeErrors(0)
     , mDecodeErrorRegionCount(0)
     , mRecommendProjectX(false)
-    , mEsRepaired(false)
-    , mEsRemovedSegments(0)
-    , mEsRemovedFrames(0)
-    , mEsFramesBefore(0)
-    , mEsFramesAfter(0)
 {
 }
 
@@ -169,7 +164,7 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         parseFrameRate(frameRateStr);
     }
     else if (section == "audio") {
-        int count = values.value("count", "0").toInt();
+        int count = qMin(values.value("count", "0").toInt(), 32);
         mAudioTracks.clear();
 
         for (int i = 0; i < count; ++i) {
@@ -217,25 +212,24 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         }
     }
     else if (section == "warnings") {
-        // New format: ES repair results from ttcut-esrepair
-        mEsRepaired = (values.value("es_repaired", "false") == "true");
-        if (mEsRepaired) {
-            mEsRemovedSegments = values.value("es_removed_segments", "0").toInt();
-            mEsRemovedFrames = values.value("es_removed_frames", "0").toInt();
-            mEsFramesBefore = values.value("es_frames_before", "0").toInt();
-            mEsFramesAfter = values.value("es_frames_after", "0").toInt();
-            mHasWarnings = true;
-            qDebug() << "  ES repaired: removed" << mEsRemovedSegments << "segments"
-                     << "(" << mEsRemovedFrames << "frames),"
-                     << mEsFramesBefore << "→" << mEsFramesAfter << "frames";
+        // Parse extra frame indices (comma-separated list)
+        QString extraFrameStr = values.value("es_extra_frames", "");
+        if (!extraFrameStr.isEmpty()) {
+            QStringList indices = extraFrameStr.split(',');
+            for (const QString& idx : indices) {
+                bool ok;
+                int frameIdx = idx.trimmed().toInt(&ok);
+                if (ok) mEsExtraFrames.append(frameIdx);
+            }
+            if (!mEsExtraFrames.isEmpty())
+                qDebug() << "Loaded" << mEsExtraFrames.size() << "extra frame indices from .info";
         }
 
         // Legacy format: decode error regions (from old ffmpeg -err_detect check)
         mDecodeErrors = values.value("decode_errors", "0").toInt();
         mDecodeErrorRegionCount = values.value("decode_error_regions", "0").toInt();
         mRecommendProjectX = (values.value("recommend_projectx", "false") == "true");
-        if (!mHasWarnings)
-            mHasWarnings = (mDecodeErrors > 0);
+        mHasWarnings = (mDecodeErrors > 0);
 
         mDecodeErrorRegions.clear();
         for (int i = 0; i < mDecodeErrorRegionCount; ++i) {
@@ -253,7 +247,7 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             }
         }
 
-        if (mDecodeErrors > 0 && !mEsRepaired) {
+        if (mDecodeErrors > 0) {
             qDebug() << "  Warnings:" << mDecodeErrors << "decode errors in"
                      << mDecodeErrorRegions.size() << "regions";
         }
@@ -370,6 +364,27 @@ TTMarkerInfo TTESInfo::marker(int index) const
         return mMarkers[index];
     }
     return TTMarkerInfo();
+}
+
+// ----------------------------------------------------------------------------
+// Count extra frames before a given frame index (binary search)
+// Used by TTCut-ng to correct audio time calculations:
+//   corrected_time = (frame - countExtraFramesBefore(frame)) / fps
+// ----------------------------------------------------------------------------
+int TTESInfo::countExtraFramesBefore(int frameIndex) const
+{
+    if (mEsExtraFrames.isEmpty()) return 0;
+
+    // Binary search: find first element >= frameIndex
+    int lo = 0, hi = mEsExtraFrames.size();
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (mEsExtraFrames[mid] < frameIndex)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo;  // number of elements < frameIndex
 }
 
 // ----------------------------------------------------------------------------

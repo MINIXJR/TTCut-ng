@@ -188,6 +188,10 @@ float TTCut::spSilenceMinDuration = 0.3f;
 bool  TTCut::spDetectAudioChange  = true;
 bool  TTCut::spDetectAspectChange = true;
 
+// --- Gruppierung defekter Frames ---
+int TTCut::extraFrameClusterGapSec    = 5;
+int TTCut::extraFrameClusterOffsetSec = 2;
+
 // --------------------------------------------------------------
 // muxer settings
 // --------------------------------------------------------------

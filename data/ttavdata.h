@@ -237,9 +237,17 @@ class TTAVData : public QObject
     // A/V sync offset in milliseconds (from .info file, used during muxing)
     int mAvSyncOffsetMs;
 
+    // Extra frame indices from PTS analysis (sorted, for audio time correction)
+    QList<int> mExtraFrameIndices;
+
     // Pending language overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
     QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;
+
+  public:
+    // Count extra frames before a given frame index (for audio time correction)
+    int countExtraFramesBefore(int frameIndex) const;
+    const QList<int>& extraFrameIndices() const { return mExtraFrameIndices; }
 };
 
 

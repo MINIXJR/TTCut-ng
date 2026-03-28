@@ -76,6 +76,8 @@ void TTCutSettings::readSettings()
   TTCut::burstThresholdDb = value( "BurstThresholdDb/", TTCut::burstThresholdDb ).toInt();
   TTCut::normalizeAcmod   = value( "NormalizeAcmod/",   TTCut::normalizeAcmod ).toBool();
   TTCut::quickJumpIntervalSec = value( "QuickJumpInterval/", TTCut::quickJumpIntervalSec ).toInt();
+  TTCut::extraFrameClusterGapSec    = value( "ExtraFrameClusterGap/",    TTCut::extraFrameClusterGapSec ).toInt();
+  TTCut::extraFrameClusterOffsetSec = value( "ExtraFrameClusterOffset/", TTCut::extraFrameClusterOffsetSec ).toInt();
   endGroup();
 
   // Navigation search thresholds
@@ -258,6 +260,8 @@ void TTCutSettings::writeSettings()
   setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
   setValue( "NormalizeAcmod/",   TTCut::normalizeAcmod );
   setValue( "QuickJumpInterval/", TTCut::quickJumpIntervalSec );
+  setValue( "ExtraFrameClusterGap/",    TTCut::extraFrameClusterGapSec );
+  setValue( "ExtraFrameClusterOffset/", TTCut::extraFrameClusterOffsetSec );
   endGroup();
 
   // Navigation search thresholds

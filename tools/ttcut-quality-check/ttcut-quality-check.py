@@ -124,6 +124,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from bisect import bisect_left
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Optional
@@ -239,8 +240,8 @@ def ffprobe_packets(filepath: str, stream_type: str) -> list[dict]:
 
 
 def parse_info_file(info_path: str) -> dict:
-    """Parse TTCut .info file, return dict with fps, avOffset etc."""
-    result = {"fps": None, "av_offset_ms": 0}
+    """Parse TTCut .info file, return dict with fps, avOffset, extra_frames."""
+    result = {"fps": None, "av_offset_ms": 0, "extra_frames": []}
     section = None
     with open(info_path) as f:
         for line in f:
@@ -264,6 +265,11 @@ def parse_info_file(info_path: str) -> dict:
                     result["fps"] = float(val)
             elif section == "timing" and key == "av_offset_ms":
                 result["av_offset_ms"] = int(val)
+            elif section == "warnings" and key == "es_extra_frames":
+                if val:
+                    result["extra_frames"] = sorted(
+                        int(x.strip()) for x in val.split(",") if x.strip()
+                    )
     return result
 
 
@@ -279,8 +285,43 @@ def parse_cuts(cuts_str: str) -> list[tuple[int, int]]:
     return segments
 
 
-def frames_to_seconds(frame: int, fps: float) -> float:
+def count_extras_before(frame: int, extra_frames: list) -> int:
+    """Count extra frames with index < frame (binary search)."""
+    if not extra_frames:
+        return 0
+    return bisect_left(extra_frames, frame)
+
+
+def frames_to_seconds(frame: int, fps: float, extra_frames: list = None) -> float:
+    """Convert frame index to time in seconds, correcting for extra frames."""
+    if extra_frames:
+        frame -= count_extras_before(frame, extra_frames)
     return frame / fps
+
+
+def parse_ttcut_settings() -> dict:
+    """Read defect region settings from TTCut-ng config file."""
+    result = {"defect_gap_sec": 5, "defect_offset_sec": 2}
+    conf = Path.home() / ".config" / "TTCut-ng" / "TTCut-ng.conf"
+    if not conf.exists():
+        return result
+    section = None
+    with open(conf) as f:
+        for line in f:
+            line = line.strip()
+            m = re.match(r"\[(.+)\]", line)
+            if m:
+                section = m.group(1)
+                continue
+            if section == "Common" and "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip()
+                if key == "ExtraFrameClusterGap":
+                    result["defect_gap_sec"] = int(val)
+                elif key == "ExtraFrameClusterOffset":
+                    result["defect_offset_sec"] = int(val)
+    return result
 
 
 def which(program: str) -> bool:
@@ -292,7 +333,8 @@ def which(program: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def test_metadata(original_es: str, cut_mkv: str, fps: float,
-                  cuts: list[tuple[int, int]]) -> TestResult:
+                  cuts: list[tuple[int, int]],
+                  extra_frames: list = None) -> TestResult:
     """Verify codec, fps, and frame count in the cut MKV."""
     name = "Stream Metadata"
     try:
@@ -319,6 +361,14 @@ def test_metadata(original_es: str, cut_mkv: str, fps: float,
         cut_frames = len(cut_packets)
 
         expected_frames = sum(end - start + 1 for start, end in cuts)
+
+        # MPEG-2 cutter removes extra frames during cutting — subtract them
+        if extra_frames:
+            extras_in_cuts = sum(
+                1 for ef in extra_frames
+                if any(start <= ef <= end for start, end in cuts)
+            )
+            expected_frames -= extras_in_cuts
 
         details_parts = []
         ok = True
@@ -570,7 +620,8 @@ def _detect_boundary_offset(ref_mkv: str, cut_mkv: str,
 
 
 def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
-                           cuts: list[tuple[int, int]], tmpdir: str) -> TestResult:
+                           cuts: list[tuple[int, int]], tmpdir: str,
+                           extra_frames: list = None) -> TestResult:
     """Extract frames from reference and cut MKV, compare with SSIM.
 
     Handles display-order mapping: Smart Cut may shift the effective CutIn
@@ -579,6 +630,19 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
     """
     name_sc = "Visual (stream-copy)"
     name_re = "Visual (re-encoded)"
+
+    # Defective MPEG-2 streams have frame count divergence between
+    # mkvmerge (reference MKV) and TTCut-ng — visual comparison is
+    # unreliable because frame positions don't match.
+    if extra_frames:
+        return [
+            TestResult(name=name_re, passed=False, warn=True,
+                       details="Skipped: defective stream (extra frames cause "
+                               "frame count divergence in reference MKV)"),
+            TestResult(name=name_sc, passed=False, warn=True,
+                       details="Skipped: defective stream (extra frames cause "
+                               "frame count divergence in reference MKV)"),
+        ]
 
     try:
         # Step 1: Create reference MKV from original ES
@@ -599,7 +663,7 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
         cut_offset_time = 0.0
         for seg_idx, (start_frame, end_frame) in enumerate(cuts):
             seg_frames = end_frame - start_frame + 1
-            ref_start = start_frame / fps
+            ref_start = frames_to_seconds(start_frame, fps, extra_frames)
 
             offset = _detect_boundary_offset(
                 ref_mkv, cut_mkv, ref_start, cut_offset_time,
@@ -609,7 +673,7 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                 print(f"    Segment {seg_idx+1}: display-order offset detected: "
                       f"+{offset} frames (effective start: {start_frame+offset})")
 
-            cut_offset_time += seg_frames / fps
+            cut_offset_time += frames_to_seconds(end_frame + 1, fps, extra_frames) - frames_to_seconds(start_frame, fps, extra_frames)
 
         # Step 3: Define comparison positions using corrected offsets
         # For each segment: start+1 (re-encoded), start+20 (stream-copy),
@@ -621,12 +685,12 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
         cut_offset = 0.0  # cumulative time offset in cut MKV
         for seg_idx, (start_frame, end_frame) in enumerate(cuts):
             seg_frames = end_frame - start_frame + 1
-            seg_dur = seg_frames / fps
+            seg_dur = frames_to_seconds(end_frame + 1, fps, extra_frames) - frames_to_seconds(start_frame, fps, extra_frames)
             disp_offset = boundary_offsets[seg_idx]
 
             # Effective start in reference MKV (adjusted for display-order offset)
             eff_start_frame = start_frame + disp_offset
-            ref_eff_start = eff_start_frame / fps
+            ref_eff_start = frames_to_seconds(eff_start_frame, fps, extra_frames)
 
             # Effective segment duration in cut MKV
             eff_seg_frames = end_frame - eff_start_frame + 1
@@ -654,12 +718,13 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                 cut_offset + mid_frame_offset/fps
             ))
 
-            # Stream-copy: end - 1 frame
-            if eff_seg_frames > 2:
-                ref_end = end_frame / fps
+            # Stream-copy: end - 20 frames (mirror of start+20, avoids
+            # re-encode zone at CutOut boundary for MPEG-2)
+            if eff_seg_frames > 25:
+                ref_end = frames_to_seconds(end_frame, fps, extra_frames)
                 stream_copy_positions.append((
-                    ref_end - 1/fps,
-                    cut_offset + (eff_seg_frames - 2)/fps
+                    ref_end - 20/fps,
+                    cut_offset + (eff_seg_frames - 21)/fps
                 ))
 
             cut_offset += seg_dur
@@ -684,18 +749,32 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                 continue
 
             ssim_values = []
+            reorder_probe = 3  # probe ±3 frames for B-frame reorder offset
             for i, (ref_time, cut_time) in enumerate(positions):
-                ref_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_ref.png")
                 cut_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_cut.png")
 
-                if not _extract_frame(ref_mkv, ref_time, ref_png):
-                    continue
                 if not _extract_frame(cut_mkv, cut_time, cut_png):
                     continue
 
-                ssim = _compute_ssim(ref_png, cut_png)
-                if ssim is not None:
-                    ssim_values.append(ssim)
+                # Probe reference at ±reorder_probe frames to handle
+                # B-frame decode/display order mismatch between muxers
+                best_ssim = None
+                for offset in range(-reorder_probe, reorder_probe + 1):
+                    probe_time = ref_time + offset / fps
+                    if probe_time < 0:
+                        continue
+                    ref_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_ref.png")
+                    if not _extract_frame(ref_mkv, probe_time, ref_png):
+                        continue
+                    ssim = _compute_ssim(ref_png, cut_png)
+                    if ssim is not None:
+                        if best_ssim is None or ssim > best_ssim:
+                            best_ssim = ssim
+                        if ssim >= 0.99:
+                            break  # perfect match, no need to probe further
+
+                if best_ssim is not None:
+                    ssim_values.append(best_ssim)
 
             if not ssim_values:
                 results.append(TestResult(
@@ -801,7 +880,8 @@ def _try_numpy_correlation(audio_a: str, audio_b: str, tmpdir: str) -> Optional[
 
 
 def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
-                 fps: float, cuts: list[tuple[int, int]], tmpdir: str) -> TestResult:
+                 fps: float, cuts: list[tuple[int, int]], tmpdir: str,
+                 extra_frames: list = None) -> TestResult:
     """Measure A/V sync offset in the cut MKV.
 
     Method: Create a reference MKV from the original ES+audio, extract the same
@@ -826,8 +906,8 @@ def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
                               details=f"mkvmerge reference creation failed: {r.stderr[:200]}")
 
         # Use the first segment, limited to 30 seconds for speed
-        first_start = cuts[0][0] / fps
-        first_end = cuts[0][1] / fps
+        first_start = frames_to_seconds(cuts[0][0], fps, extra_frames)
+        first_end = frames_to_seconds(cuts[0][1], fps, extra_frames)
         seg_dur = min(first_end - first_start, 30.0)
 
         # Extract audio as PCM from both files (re-encoding, not stream-copy!)
@@ -955,7 +1035,8 @@ def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
 # ---------------------------------------------------------------------------
 
 def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
-                        fps: float, tmpdir: str) -> TestResult:
+                        fps: float, tmpdir: str,
+                        extra_frames: list = None) -> TestResult:
     """Check for audio glitches (clicks/pops) at cut boundaries in the output MKV."""
     name = "Audio Waveform"
     try:
@@ -974,7 +1055,8 @@ def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
         boundary_times = []
         cumulative = 0.0
         for i, (start, end) in enumerate(cuts):
-            seg_dur = (end - start + 1) / fps
+            seg_dur = frames_to_seconds(end + 1, fps, extra_frames) \
+                    - frames_to_seconds(start, fps, extra_frames)
             if i > 0:
                 # This is a boundary: end of previous segment = start of this segment
                 boundary_times.append(cumulative)
@@ -1065,10 +1147,94 @@ def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
 
 
 # ---------------------------------------------------------------------------
+# Test 7: Defect Region Report
+# ---------------------------------------------------------------------------
+
+def test_defect_regions(cuts: list[tuple[int, int]], fps: float,
+                        extra_frames: list, defect_gap_sec: int,
+                        defect_offset_sec: int) -> TestResult:
+    """Report defective frames within cut segments, grouped into regions."""
+    name = "Defect Regions"
+
+    if not extra_frames:
+        return TestResult(name=name, passed=True, warn=False,
+                          details="no extra frames in .info (clean stream)")
+
+    # Filter extra frames that fall within any cut segment
+    in_cut = []
+    for ef in extra_frames:
+        for start, end in cuts:
+            if start <= ef <= end:
+                in_cut.append(ef)
+                break
+
+    if not in_cut:
+        return TestResult(name=name, passed=True, warn=False,
+                          details="no defective frames within cut segments")
+
+    # Group into regions: consecutive frames within defect_gap_sec
+    gap_frames = int(defect_gap_sec * fps)
+    regions = []
+    region_start = in_cut[0]
+    region_end = in_cut[0]
+
+    for ef in in_cut[1:]:
+        if ef - region_end <= gap_frames:
+            region_end = ef
+        else:
+            regions.append((region_start, region_end))
+            region_start = ef
+            region_end = ef
+    regions.append((region_start, region_end))
+
+    # Format output
+    lines = []
+    for i, (rs, re_) in enumerate(regions):
+        n_frames = sum(1 for ef in in_cut if rs <= ef <= re_)
+        dur = (re_ - rs + 1) / fps
+        # Position in cut MKV: cumulative time up to this frame
+        cut_time = 0.0
+        for start, end in cuts:
+            if rs >= start:
+                offset_in_seg = frames_to_seconds(min(rs, end), fps, extra_frames) \
+                              - frames_to_seconds(start, fps, extra_frames)
+                cut_time += offset_in_seg
+                break
+            cut_time += frames_to_seconds(end + 1, fps, extra_frames) \
+                      - frames_to_seconds(start, fps, extra_frames)
+
+        minutes = int(cut_time) // 60
+        seconds = int(cut_time) % 60
+        lines.append(
+            f"Region {i+1}: frames {rs}-{re_} "
+            f"({n_frames} frames, {dur:.1f}s) at {minutes:02d}:{seconds:02d}"
+        )
+
+    settings_source = "defaults"
+    conf = Path.home() / ".config" / "TTCut-ng" / "TTCut-ng.conf"
+    if conf.exists():
+        settings_source = str(conf)
+
+    detail_header = (
+        f"{len(in_cut)} defective frames in {len(regions)} regions "
+        f"within cut segments"
+    )
+    detail_body = "\n       ".join(lines)
+    detail_footer = (
+        f"Settings: defect-gap={defect_gap_sec}s, "
+        f"defect-offset={defect_offset_sec}s (from {settings_source})"
+    )
+    details = f"{detail_header}\n       {detail_body}\n       {detail_footer}"
+
+    return TestResult(name=name, passed=True, warn=False,
+                      value=len(in_cut), details=details)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-ALL_TESTS = ["metadata", "timing", "duration", "visual", "avsync", "waveform"]
+ALL_TESTS = ["metadata", "timing", "duration", "visual", "avsync", "waveform", "defects"]
 
 
 def main():
@@ -1101,6 +1267,12 @@ Examples:
                         help="Do not delete temporary directory after run")
     parser.add_argument("--tmpdir", default=None,
                         help="Use this temporary directory instead of auto-creating one")
+    parser.add_argument("--defect-gap", type=int, default=None,
+                        help="Defect region grouping gap in seconds "
+                             "(default: from TTCut-ng settings or 5)")
+    parser.add_argument("--defect-offset", type=int, default=None,
+                        help="Defect region start offset in seconds "
+                             "(default: from TTCut-ng settings or 2)")
 
     args = parser.parse_args()
 
@@ -1116,10 +1288,12 @@ Examples:
 
     # Parse .info if provided
     fps = args.fps
+    extra_frames = []
     if args.info:
         info_data = parse_info_file(args.info)
         if info_data["fps"] is not None:
             fps = info_data["fps"]
+        extra_frames = info_data.get("extra_frames", [])
 
     if fps is None:
         print("Error: --fps is required (or provide --info with frame_rate)", file=sys.stderr)
@@ -1170,12 +1344,14 @@ Examples:
         print(f"FPS:   {fps}")
         print(f"Cuts:  {args.cuts}")
         print(f"Tmpdir: {tmpdir}")
+        if extra_frames:
+            print(f"Extra Frames: {len(extra_frames)} (from .info, audio time correction active)")
         print()
 
         # Run selected tests
         if "metadata" in selected:
             print("Running: Stream Metadata...", flush=True)
-            r = test_metadata(args.video, args.cut, fps, cuts)
+            r = test_metadata(args.video, args.cut, fps, cuts, extra_frames)
             report.tests.append(r)
             print(f"  [{r.status_str()}] {r.details}")
 
@@ -1193,7 +1369,7 @@ Examples:
 
         if "visual" in selected:
             print("Running: Visual Comparison...", flush=True)
-            results = test_visual_comparison(args.video, args.cut, fps, cuts, tmpdir)
+            results = test_visual_comparison(args.video, args.cut, fps, cuts, tmpdir, extra_frames=extra_frames)
             if isinstance(results, list):
                 for r in results:
                     report.tests.append(r)
@@ -1204,13 +1380,22 @@ Examples:
 
         if "avsync" in selected:
             print("Running: A/V Sync...", flush=True)
-            r = test_av_sync(args.video, args.audio, args.cut, fps, cuts, tmpdir)
+            r = test_av_sync(args.video, args.audio, args.cut, fps, cuts, tmpdir, extra_frames)
             report.tests.append(r)
             print(f"  [{r.status_str()}] {r.details}")
 
         if "waveform" in selected:
             print("Running: Audio Waveform...", flush=True)
-            r = test_audio_waveform(args.cut, cuts, fps, tmpdir)
+            r = test_audio_waveform(args.cut, cuts, fps, tmpdir, extra_frames)
+            report.tests.append(r)
+            print(f"  [{r.status_str()}] {r.details}")
+
+        if "defects" in selected:
+            print("Running: Defect Regions...", flush=True)
+            ttcut_settings = parse_ttcut_settings()
+            defect_gap = args.defect_gap if args.defect_gap is not None else ttcut_settings["defect_gap_sec"]
+            defect_offset = args.defect_offset if args.defect_offset is not None else ttcut_settings["defect_offset_sec"]
+            r = test_defect_regions(cuts, fps, extra_frames, defect_gap, defect_offset)
             report.tests.append(r)
             print(f"  [{r.status_str()}] {r.details}")
 

@@ -41,7 +41,7 @@
         <translation>Ausnahme in createAVDataItem!</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="370"/>
+        <location filename="../data/ttavdata.cpp" line="439"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
@@ -52,47 +52,65 @@ Dieser MPEG-2 Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="379"/>
+        <location filename="../data/ttavdata.cpp" line="448"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="386"/>
+        <location filename="../data/ttavdata.cpp" line="455"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="391"/>
+        <location filename="../data/ttavdata.cpp" line="460"/>
         <source>more regions</source>
         <translation>weitere Regionen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="396"/>
+        <location filename="../data/ttavdata.cpp" line="465"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="398"/>
+        <location filename="../data/ttavdata.cpp" line="428"/>
+        <location filename="../data/ttavdata.cpp" line="467"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="718"/>
+        <location filename="../data/ttavdata.cpp" line="410"/>
+        <source>%1 defective frames in %2 groups detected.
+</source>
+        <translation>%1 defekte Frames in %2 Gruppen erkannt.
+</translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="421"/>
+        <source>more groups</source>
+        <translation>weitere Gruppen</translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="425"/>
+        <source>Defective Frames Detected</source>
+        <translation>Defekte Frames erkannt</translation>
+    </message>
+    <message>
+        <location filename="../data/ttavdata.cpp" line="792"/>
         <source>starting thread pool</source>
         <translation>Starte Thread-Pool</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="723"/>
+        <location filename="../data/ttavdata.cpp" line="797"/>
         <source>exiting thread pool</source>
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="958"/>
+        <location filename="../data/ttavdata.cpp" line="1033"/>
         <source>Schnitt %1: Audio-Burst am Ende (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="965"/>
+        <location filename="../data/ttavdata.cpp" line="1040"/>
         <source>The following cuts have detected audio bursts:
 
 </source>
@@ -101,7 +119,7 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="967"/>
+        <location filename="../data/ttavdata.cpp" line="1042"/>
         <source>
 
 Use preview to check if shift is needed.</source>
@@ -110,77 +128,77 @@ Use preview to check if shift is needed.</source>
 Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="969"/>
+        <location filename="../data/ttavdata.cpp" line="1044"/>
         <source>Audio Burst Warning</source>
         <translation>Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="970"/>
+        <location filename="../data/ttavdata.cpp" line="1045"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="970"/>
+        <location filename="../data/ttavdata.cpp" line="1045"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="972"/>
+        <location filename="../data/ttavdata.cpp" line="1047"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1018"/>
+        <location filename="../data/ttavdata.cpp" line="1100"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1069"/>
+        <location filename="../data/ttavdata.cpp" line="1153"/>
         <source>deleting existing subtitle cut file: %1</source>
         <translation>Lösche vorhandene Untertitel-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1119"/>
+        <location filename="../data/ttavdata.cpp" line="1203"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1121"/>
+        <location filename="../data/ttavdata.cpp" line="1205"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1172"/>
+        <location filename="../data/ttavdata.cpp" line="1258"/>
         <source>Cutting failed - could not initialize</source>
         <translation>Schneiden fehlgeschlagen - Initialisierung nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1201"/>
+        <location filename="../data/ttavdata.cpp" line="1287"/>
         <source>Cutting video (Smart Cut)...</source>
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1205"/>
+        <location filename="../data/ttavdata.cpp" line="1291"/>
         <source>Cutting failed</source>
         <translation>Schneiden fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1237"/>
+        <location filename="../data/ttavdata.cpp" line="1323"/>
         <source>Cutting audio track %1...</source>
         <translation>Schneide Audiospur %1...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1278"/>
+        <location filename="../data/ttavdata.cpp" line="1364"/>
         <source>Muxing video and audio...</source>
         <translation>Multiplexe Video und Audio...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1332"/>
+        <location filename="../data/ttavdata.cpp" line="1418"/>
         <source>Muxing failed</source>
         <translation>Multiplexen fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1340"/>
+        <location filename="../data/ttavdata.cpp" line="1426"/>
         <source>H.264/H.265 cutting complete</source>
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
@@ -1036,22 +1054,59 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1530"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1361"/>
+        <source>%1 decode errors detected in %2 region(s) during demux.
+
+This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
+Recommendation: Use ProjectX to demux this file instead.</source>
+        <translation type="unfinished">%1 Dekodierungsfehler in %2 Region(en) beim Demux erkannt.
+
+Dieser MPEG-2 Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursachen können.
+Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1365"/>
+        <source>Affected regions:</source>
+        <translation type="unfinished">Betroffene Regionen:</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1366"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1367"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1368"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1369"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1370"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1371"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1372"/>
+        <source>errors</source>
+        <translation type="unfinished">Fehler</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1375"/>
+        <source>Stream Integrity Warning</source>
+        <translation type="unfinished">Stream-Integritätswarnung</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1377"/>
+        <source>Import as Stream Points</source>
+        <translation type="unfinished">Als Landezonen übernehmen</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1556"/>
         <source>Schwarzbild-Suche abgebrochen</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1535"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1561"/>
         <source>Kein Schwarzbild gefunden</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1693"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1719"/>
         <source>Szenenwechsel-Suche abgebrochen</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1698"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1724"/>
         <source>Kein Szenenwechsel gefunden</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
@@ -1072,7 +1127,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1418"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1444"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -1326,12 +1381,12 @@ Ausgabedatei:
         <translation>Vorschau-Clip %1 von %2 erstellen</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="278"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="284"/>
         <source>Preview clip %1 of %2 created</source>
         <translation>Vorschau-Clip %1 von %2 erstellt</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="287"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="293"/>
         <source>preview cuts done</source>
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
@@ -1444,32 +1499,53 @@ Ausgabedatei:
         <translation>Überspringen bei Wiedergabe</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingscommon.cpp" line="48"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="49"/>
         <source>Audio-Burst Threshold (dB, 0=off)</source>
         <translation>Audio-Burst Schwellwert (dB, 0=aus)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingscommon.cpp" line="60"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="61"/>
         <source>All keyframes</source>
         <translation>Alle Keyframes</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingscommon.cpp" line="61"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="62"/>
         <source>Zeitsprung interval (0=all)</source>
         <translation>Zeitsprung-Intervall (0=alle)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingscommon.cpp" line="69"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="70"/>
         <source>Normalize AC3 channel format at cuts</source>
         <translation>AC3-Kanalformat am Schnitt normalisieren</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingscommon.cpp" line="70"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="71"/>
         <source>Re-encode AC3 frames at cut boundaries when channel format changes (e.g. stereo/5.1)</source>
         <translation>AC3-Frames am Schnittrand re-encoden wenn sich das Kanalformat ändert (z.B. Stereo/5.1)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingscommon.cpp" line="78"/>
+        <source>Defective Frame Grouping</source>
+        <translation>Gruppierung defekter Frames</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="83"/>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="90"/>
+        <source> seconds</source>
+        <translation> Sekunden</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="84"/>
+        <source>Group size</source>
+        <translation>Gruppengröße</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="91"/>
+        <source>Start offset</source>
+        <translation>Start-Offset</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingscommon.cpp" line="102"/>
         <source>Preview starts at an I-frame for each cut.</source>
         <translation>Die Vorschau beginnt für jeden Schnitt bei einem I-Frame.</translation>
     </message>

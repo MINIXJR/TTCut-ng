@@ -55,6 +55,8 @@ class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
     QSpinBox*   sbBurstThreshold;
     QCheckBox*  cbNormalizeAcmod;
     QSpinBox*   sbQuickJumpInterval;
+    QSpinBox*   sbClusterGap;
+    QSpinBox*   sbClusterOffset;
 };
 
 #endif

@@ -140,23 +140,42 @@ sed -e "s|__VIDEO_PATH__|$VIDEO_FILE|g" \
     "$TEMPLATE_FILE" > "$PRJ_FILE"
 
 #-----------------------------------------------------------------------------
-# Run TTCut-ng in screenshot mode
+# Run TTCut-ng in screenshot mode (generate to temp dir, then compare)
 #-----------------------------------------------------------------------------
+TMP_SCREENSHOTS="/tmp/ttcut-screenshots-$$"
+mkdir -p "$TMP_SCREENSHOTS"
+
 echo "Running TTCut-ng screenshot mode..."
-echo "  Output: $OUTPUT_DIR"
+echo "  Temp:    $TMP_SCREENSHOTS"
+echo "  Output:  $OUTPUT_DIR"
 echo "  Project: $PRJ_FILE"
 
-QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$OUTPUT_DIR" --project "$PRJ_FILE" 2>&1 | \
+QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PRJ_FILE" 2>&1 | \
     grep -E "Screenshot" || true
 
 #-----------------------------------------------------------------------------
-# Report
+# Compare and copy only changed screenshots
 #-----------------------------------------------------------------------------
 echo ""
-echo "Screenshots generated:"
-ls -1 "$OUTPUT_DIR"/ttcutng-*.png 2>/dev/null | while read -r f; do
-    echo "  $(basename "$f")"
+UPDATED=0
+UNCHANGED=0
+
+for f in "$TMP_SCREENSHOTS"/ttcutng-*.png; do
+    [[ -f "$f" ]] || continue
+    NAME="$(basename "$f")"
+    TARGET="$OUTPUT_DIR/$NAME"
+
+    if [[ -f "$TARGET" ]] && cmp -s "$f" "$TARGET"; then
+        UNCHANGED=$((UNCHANGED + 1))
+    else
+        cp "$f" "$TARGET"
+        UPDATED=$((UPDATED + 1))
+        echo "  Updated: $NAME"
+    fi
 done
 
+# Clean up temp dir
+rm -rf "$TMP_SCREENSHOTS"
+
 echo ""
-echo "Done. Copy to wiki with: cp $OUTPUT_DIR/ttcutng-*.png /usr/local/src/TTCut-ng.wiki/images/"
+echo "Screenshots: $UPDATED updated, $UNCHANGED unchanged."
