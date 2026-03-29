@@ -116,9 +116,22 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
 
 /*!
  * operator <
+ * Sort priority: 1) AC3 before other codecs, 2) system locale language first, 3) original order
  */
 bool TTAudioItem::operator<(const TTAudioItem& item) const
 {
+  // Primary: AC3 before other codecs
+  bool thisIsAC3  = audioStream->fileExtension().toLower() == "ac3";
+  bool otherIsAC3 = item.audioStream->fileExtension().toLower() == "ac3";
+  if (thisIsAC3 != otherIsAC3) return thisIsAC3;
+
+  // Secondary: System locale language first
+  QString localeLang = TTCut::iso639_1to2(QLocale::system().name().left(2));
+  bool thisIsLocale  = (mLanguage == localeLang);
+  bool otherIsLocale = (item.mLanguage == localeLang);
+  if (thisIsLocale != otherIsLocale) return thisIsLocale;
+
+  // Tertiary: Original discovery order
   return mOrder < item.mOrder;
 }
 

@@ -794,7 +794,16 @@ void TTAVData::onThreadPoolInit()
 
 void TTAVData::onThreadPoolExit()
 {
+  // Sort audio lists by priority (AC3 first, locale language first)
+  for (int i = 0; i < mpAVList->count(); i++) {
+    TTAudioList* audioList = mpAVList->at(i)->audioDataList();
+    if (audioList->count() > 1) {
+      audioList->sortByOrder();
+    }
+  }
+
   emit statusReport(0, StatusReportArgs::Exit, tr("exiting thread pool"), 0);
+  emit avDataReloaded();
   emit threadPoolExit();
 }
 
