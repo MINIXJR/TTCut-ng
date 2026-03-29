@@ -28,16 +28,20 @@ public:
   int rowCount(const QModelIndex& parent = QModelIndex()) const override;
   QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
-  void setPage(int pageNum);
+  void setStartIndex(int startIdx);
+  int startIndex() const;
   int pageCount() const;
   int currentPage() const;
+  bool canPageBack() const;
+  bool canPageForward() const;
   void setItemsPerPage(int count);
   int itemsPerPage() const;
 
+  void setAnchorFrame(int frameIndex);
   void setIntervalSeconds(int seconds);
   int intervalSeconds() const;
 
-  int pageForFrameIndex(int frameIndex) const;
+  int keyframeListIndex(int frameIndex) const;
   int keyframeCount() const;
   const QList<int>& keyframeIndices() const;
   bool isFailedFrame(int frameIndex) const;
@@ -47,7 +51,6 @@ public slots:
 
 private:
   void buildKeyframeIndex();
-  int pageOffset() const;
 
 private:
   TTVideoStream*   mVideoStream;
@@ -55,9 +58,10 @@ private:
   QList<int>       mKeyframeIndices;
   QMap<int, QPixmap> mThumbnails;
   QSet<int>        mFailedFrames;
-  int              mCurrentPage;
+  int              mStartIndex;
   int              mItemsPerPage;
   float            mFrameRate;
+  int              mAnchorFrame;
   int              mIntervalSec;
 };
 

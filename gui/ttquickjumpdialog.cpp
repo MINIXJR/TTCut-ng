@@ -61,6 +61,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
     mVideoStream(videoStream),
     mCurrentPosition(currentPosition),
     mSelectedFrameIndex(-1),
+    mHighlightKeyframeListIndex(0),
     mCurrentWorker(0),
     mTaskPool(new TTThreadTaskPool()),
     mResizeTimer(new QTimer(this))
@@ -75,18 +76,18 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
   mDelegate = new TTQuickJumpDelegate(thumbWidth, THUMB_HEIGHT, this);
   mModel = new TTQuickJumpModel(videoStream, this);
 
-  // Apply interval from global settings
+  // Apply anchor and interval from global settings
+  mModel->setAnchorFrame(mCurrentPosition);
   mModel->setIntervalSeconds(TTCut::quickJumpIntervalSec);
 
   setupUI();
   calculateItemsPerPage();
 
-  // Navigate to page containing current position
-  int page = mModel->pageForFrameIndex(mCurrentPosition);
-  navigateToPage(page);
-
-  // Highlight the keyframe closest to current position
-  mDelegate->setHighlightFrameIndex(mCurrentPosition);
+  // Find keyframe closest to current position and center it
+  mHighlightKeyframeListIndex = mModel->keyframeListIndex(mCurrentPosition);
+  int highlightFrameIndex = mModel->keyframeIndices().at(mHighlightKeyframeListIndex);
+  mDelegate->setHighlightFrameIndex(highlightFrameIndex);
+  navigateCenteredOn(mHighlightKeyframeListIndex);
 
   // Restore window size or use 80% of available screen
   QSettings settings;
@@ -195,10 +196,23 @@ void TTQuickJumpDialog::calculateItemsPerPage()
   mModel->setItemsPerPage(cols * rows);
 }
 
-void TTQuickJumpDialog::navigateToPage(int page)
+void TTQuickJumpDialog::navigateCenteredOn(int keyframeListIdx)
+{
+  // Place keyframeListIdx in the center of the page
+  // For even item count, use the earlier (left) center position
+  int halfPage = (mModel->itemsPerPage() - 1) / 2;
+  int startIdx = keyframeListIdx - halfPage;
+
+  abortCurrentWorker();
+  mModel->setStartIndex(startIdx);  // setStartIndex clamps to [0, max]
+  updatePageLabel();
+  startThumbnailWorker();
+}
+
+void TTQuickJumpDialog::navigateToOffset(int startIdx)
 {
   abortCurrentWorker();
-  mModel->setPage(page);
+  mModel->setStartIndex(startIdx);
   updatePageLabel();
   startThumbnailWorker();
 }
@@ -209,14 +223,14 @@ void TTQuickJumpDialog::updatePageLabel()
     .arg(mModel->currentPage() + 1)
     .arg(mModel->pageCount()));
 
-  mBtnBack->setEnabled(mModel->currentPage() > 0);
-  mBtnForward->setEnabled(mModel->currentPage() < mModel->pageCount() - 1);
+  mBtnBack->setEnabled(mModel->canPageBack());
+  mBtnForward->setEnabled(mModel->canPageForward());
 }
 
 void TTQuickJumpDialog::startThumbnailWorker()
 {
   // Collect frame indices for current page
-  int offset = mModel->currentPage() * mModel->itemsPerPage();
+  int offset = mModel->startIndex();
   int count = mModel->rowCount();
   const QList<int>& allKeyframes = mModel->keyframeIndices();
 
@@ -285,15 +299,16 @@ void TTQuickJumpDialog::onItemDoubleClicked(const QModelIndex& index)
 
 void TTQuickJumpDialog::onPageBack()
 {
-  if (mModel->currentPage() > 0) {
-    navigateToPage(mModel->currentPage() - 1);
+  if (mModel->canPageBack()) {
+    int newStart = mModel->startIndex() - mModel->itemsPerPage();
+    navigateToOffset(qMax(0, newStart));
   }
 }
 
 void TTQuickJumpDialog::onPageForward()
 {
-  if (mModel->currentPage() < mModel->pageCount() - 1) {
-    navigateToPage(mModel->currentPage() + 1);
+  if (mModel->canPageForward()) {
+    navigateToOffset(mModel->startIndex() + mModel->itemsPerPage());
   }
 }
 
@@ -330,9 +345,8 @@ void TTQuickJumpDialog::onResizeDebounced()
 {
   calculateItemsPerPage();
 
-  // Re-navigate to recalculate page with new items per page
-  int page = mModel->pageForFrameIndex(mCurrentPosition);
-  navigateToPage(page);
+  // Re-center on the highlighted keyframe
+  navigateCenteredOn(mHighlightKeyframeListIndex);
 }
 
 void TTQuickJumpDialog::onIntervalChanged(int value)
@@ -341,6 +355,9 @@ void TTQuickJumpDialog::onIntervalChanged(int value)
   mModel->setIntervalSeconds(value);
   calculateItemsPerPage();
 
-  int page = mModel->pageForFrameIndex(mCurrentPosition);
-  navigateToPage(page);
+  // Recalculate highlight index (keyframe list changed due to new interval)
+  mHighlightKeyframeListIndex = mModel->keyframeListIndex(mCurrentPosition);
+  int highlightFrameIndex = mModel->keyframeIndices().at(mHighlightKeyframeListIndex);
+  mDelegate->setHighlightFrameIndex(highlightFrameIndex);
+  navigateCenteredOn(mHighlightKeyframeListIndex);
 }

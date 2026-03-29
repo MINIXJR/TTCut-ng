@@ -88,7 +88,7 @@ void TTQuickJumpDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
   // Highlight outline for current position
   if (frameIndex == mHighlightFrameIndex) {
-    painter->setPen(QPen(QColor(137, 180, 250), 2));  // #89b4fa -- blue
+    painter->setPen(QPen(QColor(0x44, 0x88, 0xff), 2));  // #4488ff -- I-Frame blue
     painter->drawRect(thumbRect.adjusted(-1, -1, 1, 1));
   }
 

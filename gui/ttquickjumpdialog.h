@@ -42,7 +42,8 @@ private slots:
 
 private:
   void setupUI();
-  void navigateToPage(int page);
+  void navigateCenteredOn(int keyframeListIdx);
+  void navigateToOffset(int startIdx);
   void updatePageLabel();
   void startThumbnailWorker();
   void abortCurrentWorker();
@@ -52,6 +53,7 @@ private:
   TTVideoStream*        mVideoStream;
   int                   mCurrentPosition;
   int                   mSelectedFrameIndex;
+  int                   mHighlightKeyframeListIndex;
 
   QListView*            mListView;
   TTQuickJumpModel*     mModel;

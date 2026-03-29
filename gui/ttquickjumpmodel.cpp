@@ -13,9 +13,10 @@ TTQuickJumpModel::TTQuickJumpModel(TTVideoStream* videoStream, QObject* parent)
   : QAbstractListModel(parent),
     mVideoStream(videoStream),
     mIndexList(videoStream->indexList()),
-    mCurrentPage(0),
+    mStartIndex(0),
     mItemsPerPage(30),
     mFrameRate(videoStream->frameRate()),
+    mAnchorFrame(0),
     mIntervalSec(0)
 {
   buildKeyframeIndex();
@@ -24,20 +25,60 @@ TTQuickJumpModel::TTQuickJumpModel(TTVideoStream* videoStream, QObject* parent)
 void TTQuickJumpModel::buildKeyframeIndex()
 {
   mKeyframeIndices.clear();
-  int pos = -1;
-  float lastTimeSec = -999999.0f;
 
+  // Collect all I-frames
+  QList<int> allKeyframes;
+  int pos = -1;
   while (true) {
     pos = mIndexList->moveToNextIndexPos(pos, 1);  // frame_type=1 = I-frame
     if (pos < 0) break;
+    allKeyframes.append(pos);
+  }
 
-    if (mIntervalSec > 0 && mFrameRate > 0) {
-      float timeSec = (float)pos / mFrameRate;
-      if (timeSec - lastTimeSec < (float)mIntervalSec) continue;
+  if (allKeyframes.isEmpty()) return;
+
+  // No interval filtering — use all keyframes
+  if (mIntervalSec <= 0 || mFrameRate <= 0) {
+    mKeyframeIndices = allKeyframes;
+    return;
+  }
+
+  // Find anchor: last I-frame <= mAnchorFrame
+  int anchorIdx = 0;
+  for (int i = 0; i < allKeyframes.size(); ++i) {
+    if (allKeyframes.at(i) <= mAnchorFrame)
+      anchorIdx = i;
+    else
+      break;
+  }
+
+  float anchorTimeSec = (float)allKeyframes.at(anchorIdx) / mFrameRate;
+  float intervalSec = (float)mIntervalSec;
+
+  // Backward from anchor
+  QList<int> backward;
+  float lastTimeSec = anchorTimeSec;
+  for (int i = anchorIdx - 1; i >= 0; --i) {
+    float timeSec = (float)allKeyframes.at(i) / mFrameRate;
+    if (lastTimeSec - timeSec >= intervalSec) {
+      backward.prepend(allKeyframes.at(i));
       lastTimeSec = timeSec;
     }
+  }
 
-    mKeyframeIndices.append(pos);
+  mKeyframeIndices = backward;
+
+  // Anchor itself — always included
+  mKeyframeIndices.append(allKeyframes.at(anchorIdx));
+
+  // Forward from anchor
+  lastTimeSec = anchorTimeSec;
+  for (int i = anchorIdx + 1; i < allKeyframes.size(); ++i) {
+    float timeSec = (float)allKeyframes.at(i) / mFrameRate;
+    if (timeSec - lastTimeSec >= intervalSec) {
+      mKeyframeIndices.append(allKeyframes.at(i));
+      lastTimeSec = timeSec;
+    }
   }
 }
 
@@ -45,21 +86,15 @@ int TTQuickJumpModel::rowCount(const QModelIndex& parent) const
 {
   if (parent.isValid()) return 0;
 
-  int offset = pageOffset();
-  int remaining = mKeyframeIndices.size() - offset;
+  int remaining = mKeyframeIndices.size() - mStartIndex;
   return qMin(remaining, mItemsPerPage);
-}
-
-int TTQuickJumpModel::pageOffset() const
-{
-  return mCurrentPage * mItemsPerPage;
 }
 
 QVariant TTQuickJumpModel::data(const QModelIndex& index, int role) const
 {
   if (!index.isValid()) return QVariant();
 
-  int keyframeIdx = pageOffset() + index.row();
+  int keyframeIdx = mStartIndex + index.row();
   if (keyframeIdx < 0 || keyframeIdx >= mKeyframeIndices.size())
     return QVariant();
 
@@ -85,13 +120,19 @@ QVariant TTQuickJumpModel::data(const QModelIndex& index, int role) const
   }
 }
 
-void TTQuickJumpModel::setPage(int pageNum)
+void TTQuickJumpModel::setStartIndex(int startIdx)
 {
-  if (pageNum < 0 || pageNum >= pageCount()) return;
+  int maxStart = qMax(0, mKeyframeIndices.size() - 1);
+  startIdx = qBound(0, startIdx, maxStart);
 
   beginResetModel();
-  mCurrentPage = pageNum;
+  mStartIndex = startIdx;
   endResetModel();
+}
+
+int TTQuickJumpModel::startIndex() const
+{
+  return mStartIndex;
 }
 
 int TTQuickJumpModel::pageCount() const
@@ -102,7 +143,18 @@ int TTQuickJumpModel::pageCount() const
 
 int TTQuickJumpModel::currentPage() const
 {
-  return mCurrentPage;
+  if (mItemsPerPage <= 0) return 0;
+  return mStartIndex / mItemsPerPage;
+}
+
+bool TTQuickJumpModel::canPageBack() const
+{
+  return mStartIndex > 0;
+}
+
+bool TTQuickJumpModel::canPageForward() const
+{
+  return mStartIndex + mItemsPerPage < mKeyframeIndices.size();
 }
 
 void TTQuickJumpModel::setItemsPerPage(int count)
@@ -115,12 +167,17 @@ int TTQuickJumpModel::itemsPerPage() const
   return mItemsPerPage;
 }
 
+void TTQuickJumpModel::setAnchorFrame(int frameIndex)
+{
+  mAnchorFrame = frameIndex;
+}
+
 void TTQuickJumpModel::setIntervalSeconds(int seconds)
 {
   mIntervalSec = qMax(0, seconds);
   beginResetModel();
   buildKeyframeIndex();
-  mCurrentPage = 0;
+  mStartIndex = 0;
   endResetModel();
 }
 
@@ -129,13 +186,20 @@ int TTQuickJumpModel::intervalSeconds() const
   return mIntervalSec;
 }
 
-int TTQuickJumpModel::pageForFrameIndex(int frameIndex) const
+int TTQuickJumpModel::keyframeListIndex(int frameIndex) const
 {
   for (int i = 0; i < mKeyframeIndices.size(); ++i) {
-    if (mKeyframeIndices.at(i) >= frameIndex)
-      return i / mItemsPerPage;
+    if (mKeyframeIndices.at(i) >= frameIndex) {
+      // Exact match or first keyframe
+      if (i == 0 || mKeyframeIndices.at(i) == frameIndex)
+        return i;
+      // Pick the closer keyframe (previous vs next)
+      int distPrev = frameIndex - mKeyframeIndices.at(i - 1);
+      int distNext = mKeyframeIndices.at(i) - frameIndex;
+      return (distPrev <= distNext) ? i - 1 : i;
+    }
   }
-  return pageCount() - 1;
+  return qMax(0, mKeyframeIndices.size() - 1);
 }
 
 int TTQuickJumpModel::keyframeCount() const
@@ -159,7 +223,7 @@ void TTQuickJumpModel::onThumbnailReady(int frameIndex, const QImage& thumbnail)
   }
 
   // Find the row for this frameIndex on the current page
-  int offset = pageOffset();
+  int offset = mStartIndex;
   for (int row = 0; row < rowCount(); ++row) {
     if (mKeyframeIndices.at(offset + row) == frameIndex) {
       QModelIndex idx = index(row);
