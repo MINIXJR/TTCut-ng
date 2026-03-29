@@ -157,9 +157,7 @@ void TTCutOutFrame::onPrevCutOutPos()
 
   videoStream->moveToIndexPos(currentPosition);
 
-  int newFramePos = (!TTCut::encoderMode)
-		? videoStream->moveToPrevPIFrame()
-		: videoStream->moveToPrevFrame();
+  int newFramePos = videoStream->moveToPrevFrame();
 
   currentPosition = newFramePos;
 
@@ -181,9 +179,7 @@ void TTCutOutFrame::onNextCutOutPos()
 
   videoStream->moveToIndexPos(currentPosition);
 
-  int newFramePos = (!TTCut::encoderMode)
-		  ? videoStream->moveToNextPIFrame()
-		  : videoStream->moveToNextFrame();
+  int newFramePos = videoStream->moveToNextFrame();
 
   currentPosition = newFramePos;
 

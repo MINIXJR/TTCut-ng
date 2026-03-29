@@ -275,8 +275,6 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(nextPFrame()),          currentFrame, SLOT(onNextPFrame()));
   connect(navigation, SIGNAL(prevBFrame()),          currentFrame, SLOT(onPrevBFrame()));
   connect(navigation, SIGNAL(nextBFrame()),          currentFrame, SLOT(onNextBFrame()));
-  connect(navigation, SIGNAL(prevFrame()),           currentFrame, SLOT(onPrevBFrame()));
-  connect(navigation, SIGNAL(nextFrame()),           currentFrame, SLOT(onNextBFrame()));
   connect(navigation, SIGNAL(setCutOut(int)),        this, SLOT(onSetCutOut(int)));
   connect(navigation, SIGNAL(searchBlackFrame(int,int,float)), this, SLOT(onSearchBlackFrame(int,int,float)));
   connect(navigation, SIGNAL(abortBlackSearch()), this, SLOT(onAbortBlackSearch()));
@@ -331,7 +329,6 @@ TTCutMainWindow::TTCutMainWindow()
   connect(cutList, SIGNAL(gotoCutIn(int)),               currentFrame,    SLOT(onGotoFrame(int)));
   connect(cutList, SIGNAL(gotoCutOut(int)),              currentFrame,    SLOT(onGotoFrame(int)));
   connect(cutList, SIGNAL(refreshDisplay()),             streamNavigator, SLOT(onRefreshDisplay()));
-  connect(cutList, SIGNAL(setCutOut(const TTCutItem&)),                   SLOT(onSetSelectedCutOut(const TTCutItem&)));
   connect(cutList, SIGNAL(previewCut(TTCutList*)),                        SLOT(onCutPreview(TTCutList*)));
   connect(cutList, SIGNAL(audioVideoCut(bool, TTCutList*)),               SLOT(onAudioVideoCut(bool, TTCutList*)));
   connect(cutList, SIGNAL(itemUpdated(const TTCutItem&)),    cutOutFrame, SLOT(onCutOutChanged(const TTCutItem&)));
@@ -346,6 +343,8 @@ TTCutMainWindow::TTCutMainWindow()
           this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
   connect(mpAVData, SIGNAL(vdrMarkersLoaded(const QList<TTStreamPoint>&)),
           this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
+  connect(mpAVData, SIGNAL(logoDataLoaded(const TTLogoProjectData&)),
+          this, SLOT(onLogoDataLoaded(const TTLogoProjectData&)));
 
   // Dirty tracking: set mProjectModified on any data change
   // Signal signatures must match exactly (Qt4-style SIGNAL/SLOT)
@@ -472,7 +471,7 @@ void TTCutMainWindow::onFileOpen()
   QString fn = QFileDialog::getOpenFileName(this,
       tr("Open project-file"),
       TTCut::lastDirPath,
-      "Project(*.prj)");
+      "TTCut Project (*.ttcut);;Legacy Project (*.prj)");
 
   if (!fn.isEmpty()) {
     openProjectFile(fn);
@@ -489,13 +488,13 @@ void TTCutMainWindow::onFileSave()
   // Ask for file name
   if (TTCut::projectFileName.isEmpty())
   {
-    TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "prj");
+    TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
     QFileInfo prjFileInfo(QDir(TTCut::lastDirPath), TTCut::projectFileName);
 
     TTCut::projectFileName = QFileDialog::getSaveFileName(this,
         tr("Save project-file"),
         prjFileInfo.absoluteFilePath(),
-        "Project(*.prj)");
+        "TTCut Project (*.ttcut);;Legacy Project (*.prj)");
 
     if (TTCut::projectFileName.isEmpty()) return;
   }
@@ -504,11 +503,22 @@ void TTCutMainWindow::onFileSave()
   QFileInfo fInfo(TTCut::projectFileName);
 
   if (fInfo.suffix().isEmpty())
-    TTCut::projectFileName.append(".prj");
+    TTCut::projectFileName.append(".ttcut");
 
   try
   {
-    mpAVData->writeProjectFile(fInfo, mpStreamPointModel->points());
+    TTLogoProjectData logoData;
+    if (mLogoDetector->hasProfile()) {
+      logoData.valid = true;
+      if (mLogoDetector->isFromMarkadLogo()) {
+        logoData.isMarkad = true;
+        logoData.markadPath = mLogoDetector->markadLogoPath();
+      } else {
+        logoData.isMarkad = false;
+        logoData.roi = mLogoDetector->roi();
+      }
+    }
+    mpAVData->writeProjectFile(fInfo, mpStreamPointModel->points(), logoData);
   }
   catch (const TTException& ex)
   {
@@ -529,13 +539,13 @@ void TTCutMainWindow::onFileSaveAs()
     return;
   }
 
-  TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "prj");
+  TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
   QFileInfo prjFileInfo(QDir(TTCut::lastDirPath), TTCut::projectFileName);
 
   TTCut::projectFileName = QFileDialog::getSaveFileName( this,
       tr("Save project-file as"),
       prjFileInfo.absoluteFilePath(),
-      "Project(*.prj)" );
+      "TTCut Project (*.ttcut);;Legacy Project (*.prj)" );
 
   if (!TTCut::projectFileName.isEmpty())
   {
@@ -660,9 +670,9 @@ void TTCutMainWindow::onHelpKeyboardShortcuts()
     "<h3>Frame Types</h3>"
     "<table>"
     "<tr><td><b>I / Ctrl+I</b></td><td>Next / Previous I-frame</td></tr>"
-    "<tr><td><b>P / Ctrl+P</b></td><td>Next / Previous P-frame</td></tr>"
-    "<tr><td><b>B / Ctrl+B</b></td><td>Next / Previous B-frame</td></tr>"
-    "<tr><td><b>F / Ctrl+F</b></td><td>Next / Previous frame</td></tr>"
+    "<tr><td><b>P / Ctrl+P</b></td><td>Next / Previous P- or I-frame</td></tr>"
+    "<tr><td><b>B / Ctrl+B</b></td><td>Next / Previous frame (B, P, or I)</td></tr>"
+    "<tr><td><b>F / Ctrl+F</b></td><td>Next / Previous frame (same as B)</td></tr>"
     "</table>"
     "<h3>Cutting</h3>"
     "<table>"
@@ -799,12 +809,6 @@ void TTCutMainWindow::onNewFramePos(int newPos)
   streamNavigator->slider()->blockSignals(false);
   videoFileInfo->refreshInfo(mpCurrentAVDataItem);
   navigation->checkCutPosition(mpCurrentAVDataItem, newPos);
-}
-
-void TTCutMainWindow::onSetSelectedCutOut(const TTCutItem& cutItem)
-{
-	cutOutFrame->onAVDataChanged(cutItem.avDataItem());
-	cutOutFrame->onGotoCutOut(cutItem.cutOut());
 }
 
 void TTCutMainWindow::onSetStreamPointMarker()
@@ -1852,6 +1856,67 @@ void TTCutMainWindow::onCancelLogoROI()
   currentFrame->videoWindow()->clearLogoROIOverlay();
   navigation->setLogoSearchEnabled(false);
   statusBar()->showMessage(tr("Logo-Profil entfernt"), 3000);
+}
+
+void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  if (logoData.isMarkad) {
+    // Reload markad PGM file
+    QFileInfo fi(logoData.markadPath);
+    if (!fi.exists()) {
+      statusBar()->showMessage(tr("Logo-Datei nicht gefunden: %1").arg(logoData.markadPath), 5000);
+      return;
+    }
+
+    TTFFmpegWrapper* analysisWrapper = nullptr;
+    bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
+    if (useAnalysis) {
+      analysisWrapper = new TTFFmpegWrapper();
+      analysisWrapper->setAnalysisMode(true);
+      if (analysisWrapper->openFile(vs->filePath())) {
+        TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+        if (previewWrapper)
+          analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+        else
+          analysisWrapper->buildFrameIndex();
+      } else {
+        delete analysisWrapper;
+        analysisWrapper = nullptr;
+        useAnalysis = false;
+      }
+    }
+
+    TTVideoIndexList* idxList = vs->indexList();
+
+    auto decodeFn = [&](int frameIndex) -> QImage {
+      if (useAnalysis && analysisWrapper)
+        return analysisWrapper->decodeFrame(frameIndex);
+      currentFrame->videoWindow()->moveToVideoFrame(frameIndex);
+      return currentFrame->videoWindow()->grabFrameImage();
+    };
+    auto nextIFn = [&](int pos) -> int {
+      return idxList ? idxList->moveToNextIndexPos(pos, 1) : -1;
+    };
+
+    if (mLogoDetector->loadMarkadLogo(logoData.markadPath, decodeFn, nextIFn, 0)) {
+      currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
+      navigation->setLogoSearchEnabled(true);
+      statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(fi.fileName()), 3000);
+    }
+
+    if (analysisWrapper) {
+      analysisWrapper->closeFile();
+      delete analysisWrapper;
+    }
+  } else {
+    // Recreate manual ROI profile from saved coordinates
+    onLogoROISelected(logoData.roi);
+  }
 }
 
 void TTCutMainWindow::onLogoROISelected(QRect imageCoords)

@@ -79,14 +79,6 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	pbNextBFrame->setText(tr("B ▶"));
 	pbNextBFrame->setStyleSheet("QPushButton { color: #ff9933; font-weight: bold; }");
 
-	// Single Frame = Light gray (neutral)
-	pbPrevFrame->setIcon(QIcon());
-	pbPrevFrame->setText(tr("◀ F"));
-	pbPrevFrame->setStyleSheet("QPushButton { color: #aaaaaa; }");
-	pbNextFrame->setIcon(QIcon());
-	pbNextFrame->setText(tr("F ▶"));
-	pbNextFrame->setStyleSheet("QPushButton { color: #aaaaaa; }");
-
 	// Black Frame = Monitor icon with directional arrows
 	pbPrevBlackFrame->setText(tr("◀"));
 	pbPrevBlackFrame->setLayoutDirection(Qt::RightToLeft);  // arrow before icon
@@ -163,8 +155,6 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	connect(pbPrevPFrame, SIGNAL(clicked()), SLOT(onPrevPFrame()));
 	connect(pbNextBFrame, SIGNAL(clicked()), SLOT(onNextBFrame()));
 	connect(pbPrevBFrame, SIGNAL(clicked()), SLOT(onPrevBFrame()));
-	connect(pbNextFrame, SIGNAL(clicked()), SLOT(onNextFrame()));
-	connect(pbPrevFrame, SIGNAL(clicked()), SLOT(onPrevFrame()));
 	connect(pbSetCutIn, SIGNAL(clicked()), SLOT(onSetCutIn()));
 	connect(pbSetCutOut, SIGNAL(clicked()), SLOT(onSetCutOut()));
 	connect(pbGotoCutIn, SIGNAL(clicked()), SLOT(onGotoCutIn()));
@@ -204,8 +194,6 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbPrevPFrame->setEnabled(enabled);
 	pbNextBFrame->setEnabled(enabled);
 	pbPrevBFrame->setEnabled(enabled);
-	pbNextFrame->setEnabled(enabled);
-	pbPrevFrame->setEnabled(enabled);
 	pbSetCutIn->setEnabled(enabled);
 	pbSetCutOut->setEnabled(enabled);
 	pbGotoCutIn->setEnabled(enabled);
@@ -345,10 +333,10 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 	case Qt::Key_F:
 		// previous frame
 		if (e->modifiers() == Qt::ControlModifier)
-			emit prevFrame();
+			emit prevBFrame();
 		// next frame
 		else
-			emit nextFrame();
+			emit nextBFrame();
 		break;
 
 	// ---------------------------------------------------------------------------
@@ -356,12 +344,12 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 	// ---------------------------------------------------------------------------
 	case Qt::Key_J:
 		// j = next frame (vim: down/forward)
-		emit nextFrame();
+		emit nextBFrame();
 		break;
 
 	case Qt::Key_K:
 		// k = previous frame (vim: up/backward)
-		emit prevFrame();
+		emit prevBFrame();
 		break;
 
 	case Qt::Key_G:
@@ -542,16 +530,6 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 	pbAddCut->setText(tr("Update range in cut list"));
 
 	emit gotoCutIn(cutInPosition);
-}
-
-void TTCutFrameNavigation::onPrevFrame()
-{
-	emit prevFrame();
-}
-
-void TTCutFrameNavigation::onNextFrame()
-{
-	emit nextFrame();
 }
 
 void TTCutFrameNavigation::onSetMarker()

@@ -64,7 +64,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to previous I-Frame</string>
+        <string>Previous I-Frame (keyframe only)</string>
        </property>
        <property name="text" >
         <string>&lt;</string>
@@ -96,7 +96,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to next I-Frame</string>
+        <string>Next I-Frame (keyframe only)</string>
        </property>
        <property name="text" >
         <string>&gt;</string>
@@ -104,6 +104,16 @@
        <property name="icon" >
         <iconset resource="ttcutframenavigationwidget.qrc" >
          <normaloff>:/pixmaps/pixmaps/iframe_18.xpm</normaloff>:/pixmaps/pixmaps/iframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblIFrameTypes" >
+       <property name="text" >
+        <string>I</string>
+       </property>
+       <property name="styleSheet" >
+        <string>color: #888888;</string>
        </property>
       </widget>
      </item>
@@ -174,7 +184,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to previous P-Frame</string>
+        <string>Previous P- or I-Frame</string>
        </property>
        <property name="text" >
         <string>&lt;</string>
@@ -206,7 +216,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to next P-Frame</string>
+        <string>Next P- or I-Frame</string>
        </property>
        <property name="text" >
         <string>&gt;</string>
@@ -214,6 +224,16 @@
        <property name="icon" >
         <iconset resource="ttcutframenavigationwidget.qrc" >
          <normaloff>:/pixmaps/pixmaps/pframe_18.xpm</normaloff>:/pixmaps/pixmaps/pframe_18.xpm</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblPFrameTypes" >
+       <property name="text" >
+        <string>P/I</string>
+       </property>
+       <property name="styleSheet" >
+        <string>color: #888888;</string>
        </property>
       </widget>
      </item>
@@ -284,7 +304,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to previous B-Frame</string>
+        <string>Previous frame (B, P, or I)</string>
        </property>
        <property name="text" >
         <string>&lt;</string>
@@ -316,7 +336,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Go to next B-Frame</string>
+        <string>Next frame (B, P, or I)</string>
        </property>
        <property name="text" >
         <string>&gt;</string>
@@ -328,6 +348,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QLabel" name="lblBFrameTypes" >
+       <property name="text" >
+        <string>B/P/I</string>
+       </property>
+       <property name="styleSheet" >
+        <string>color: #888888;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer>
        <property name="orientation" >
         <enum>Qt::Horizontal</enum>
@@ -342,93 +372,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 3: F-frame (single frame) navigation -->
+   <!-- Row 3: Spacing before stream point navigation -->
    <item row="3" column="0" >
-    <layout class="QHBoxLayout" name="horizontalLayout_f" >
-     <property name="spacing" >
-      <number>4</number>
-     </property>
-     <item>
-      <widget class="QPushButton" name="pbPrevFrame" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
-         <horstretch>1</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize" >
-        <size>
-         <width>45</width>
-         <height>24</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>45</width>
-         <height>32</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Go to previous frame</string>
-       </property>
-       <property name="text" >
-        <string>&lt;</string>
-       </property>
-       <property name="icon" >
-        <iconset resource="ttcutframenavigationwidget.qrc" >
-         <normaloff>:/pixmaps/pixmaps/fframe_18.xpm</normaloff>:/pixmaps/pixmaps/fframe_18.xpm</iconset>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pbNextFrame" >
-       <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Minimum" >
-         <horstretch>1</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize" >
-        <size>
-         <width>45</width>
-         <height>24</height>
-        </size>
-       </property>
-       <property name="maximumSize" >
-        <size>
-         <width>45</width>
-         <height>32</height>
-        </size>
-       </property>
-       <property name="toolTip" >
-        <string>Go to next frame</string>
-       </property>
-       <property name="text" >
-        <string>&gt;</string>
-       </property>
-       <property name="icon" >
-        <iconset resource="ttcutframenavigationwidget.qrc" >
-         <normaloff>:/pixmaps/pixmaps/fframe_18.xpm</normaloff>:/pixmaps/pixmaps/fframe_18.xpm</iconset>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer>
-       <property name="orientation" >
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0" >
-        <size>
-         <width>183</width>
-         <height>17</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-    </layout>
-   </item>
-   <!-- Row 4: Spacing before stream point navigation -->
-   <item row="4" column="0" >
     <spacer name="spacerBeforeStreamPoints" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
@@ -444,8 +389,8 @@
      </property>
     </spacer>
    </item>
-   <!-- Row 5: Black frame navigation + threshold -->
-   <item row="5" column="0" >
+   <!-- Row 4: Black frame navigation + threshold -->
+   <item row="4" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_black" >
      <property name="spacing" >
       <number>4</number>
@@ -597,8 +542,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 6: Scene change navigation + threshold -->
-   <item row="6" column="0" >
+   <!-- Row 5: Scene change navigation + threshold -->
+   <item row="5" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_scene" >
      <property name="spacing" >
       <number>4</number>
@@ -742,8 +687,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 7: Logo detection — select + search + threshold -->
-   <item row="7" column="0" >
+   <!-- Row 6: Logo detection — select + search + threshold -->
+   <item row="6" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_logo" >
      <property name="spacing" >
       <number>4</number>
@@ -924,8 +869,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 8: Spacing before cut controls -->
-   <item row="8" column="0" >
+   <!-- Row 7: Spacing before cut controls -->
+   <item row="7" column="0" >
     <spacer name="spacerBeforeCutControls" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
@@ -941,8 +886,8 @@
      </property>
     </spacer>
    </item>
-   <!-- Row 9: Cut In goto -->
-   <item row="9" column="0" >
+   <!-- Row 8: Cut In goto -->
+   <item row="8" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_3" >
      <property name="spacing" >
       <number>4</number>
@@ -1006,8 +951,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 10: Cut Out goto -->
-   <item row="10" column="0" >
+   <!-- Row 9: Cut Out goto -->
+   <item row="9" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_4" >
      <property name="spacing" >
       <number>4</number>
@@ -1071,8 +1016,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 11: Spacing before action buttons -->
-   <item row="11" column="0" >
+   <!-- Row 10: Spacing before action buttons -->
+   <item row="10" column="0" >
     <spacer name="spacerBeforeActions" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>
@@ -1088,8 +1033,8 @@
      </property>
     </spacer>
    </item>
-   <!-- Row 12: Add range to cut list -->
-   <item row="12" column="0" >
+   <!-- Row 11: Add range to cut list -->
+   <item row="11" column="0" >
     <widget class="QPushButton" name="pbAddCut" >
      <property name="minimumSize" >
       <size>
@@ -1118,8 +1063,8 @@
      </property>
     </widget>
    </item>
-   <!-- Row 13: Quick jump + Set marker -->
-   <item row="13" column="0" >
+   <!-- Row 12: Quick jump + Set marker -->
+   <item row="12" column="0" >
     <layout class="QHBoxLayout" name="horizontalLayout_5" >
      <property name="spacing" >
       <number>4</number>
@@ -1182,8 +1127,8 @@
      </item>
     </layout>
    </item>
-   <!-- Row 14: Vertical spacer to push all content to top -->
-   <item row="14" column="0" >
+   <!-- Row 13: Vertical spacer to push all content to top -->
+   <item row="13" column="0" >
     <spacer name="verticalSpacerBottom" >
      <property name="orientation" >
       <enum>Qt::Vertical</enum>

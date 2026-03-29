@@ -59,7 +59,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void onEntrySelected(QTreeWidgetItem* item, int column);
     void onItemSelectionChanged();
     void onEntryEdit();
-    void onSetCutOut();
     void onGotoCutIn();
     void onGotoCutOut();
     void onEntryPreview();
@@ -81,7 +80,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void selectionChanged(const TTCutItem& item, int column);
     void entryEdit(const TTCutItem& item);
     void cutOutUpdated(const TTCutItem& item);
-    void setCutOut(const TTCutItem& item);
     void gotoCutIn(int index);
     void gotoCutOut(int index);
     void refreshDisplay();
@@ -105,7 +103,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     QAction*         itemDownAction;
     QAction*         itemDeleteAction;
     QAction*         itemEditAction;
-    QAction*			   setCutOutAction;
     QAction*         gotoCutInAction;
     QAction*         gotoCutOutAction;
     QAction*         itemPreviewAction;

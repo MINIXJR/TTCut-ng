@@ -88,8 +88,6 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 	signals:
 		void newFramePosition(int);
-    void prevFrame();
-    void nextFrame();
     void setMarker(int);
 
 	private:

@@ -39,6 +39,7 @@
 #include "../data/ttaudiolist.h"
 #include "../data/ttcutlist.h"
 #include "../data/ttstreampoint.h"
+#include "../data/ttcutprojectdata.h"
 
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
@@ -102,7 +103,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onCutFinished();
 
 		void onCutSelectionChanged(const TTCutItem&, int column);
-		void onSetSelectedCutOut(const TTCutItem&);
 		void onSetCutOut(int index);
 		void onSetStreamPointMarker();
 		void onAnalyzeStreamPoints();
@@ -123,6 +123,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onSelectLogoROI();
     void onCancelLogoROI();
     void onLoadLogoFile();
+    void onLogoDataLoaded(const TTLogoProjectData& logoData);
     void onLogoROISelected(QRect imageCoords);
     void onSearchLogo(int startPos, int direction, float threshold);
     void onAbortLogoSearch();

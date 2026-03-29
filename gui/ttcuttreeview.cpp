@@ -409,20 +409,6 @@ void TTCutTreeView::onEntryEdit()
 }
 
 /*!
- * onSetCutOut
- */
-void TTCutTreeView::onSetCutOut()
-{
-  if (mAVData == 0 || videoCutList->currentItem() == 0) return;
-
-  int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-
-  TTCutItem cutItem = mAVData->cutItemAt(index);
-
-  emit setCutOut(cutItem);
-}
-
-/*!
  * onGotoCutIn
  */
 void TTCutTreeView::onGotoCutIn()
@@ -552,23 +538,19 @@ void TTCutTreeView::onContextMenuRequest( const QPoint& point)
   bool bMultipleSelected = ( videoCutList->selectedItems().count() > 1 );
 
   if ( !bMultipleSelected ) {
-  	contextMenu.addAction(setCutOutAction);
     contextMenu.addAction(gotoCutInAction);
     contextMenu.addAction(gotoCutOutAction);
     contextMenu.addSeparator();
+    contextMenu.addAction(itemEditAction);
   }
+  contextMenu.addAction(itemPreviewAction);
+  contextMenu.addAction(itemCutAction);
+  contextMenu.addSeparator();
   contextMenu.addAction(itemUpAction);
-  contextMenu.addAction(itemDeleteAction);
   contextMenu.addAction(itemDuplicateAction);
   contextMenu.addAction(itemDownAction);
   contextMenu.addSeparator();
-  contextMenu.addAction(itemCutAction);
-  contextMenu.addSeparator();
-  contextMenu.addAction(itemPreviewAction);
-  if ( !bMultipleSelected ) {
-    contextMenu.addSeparator();
-    contextMenu.addAction(itemEditAction);
-  }
+  contextMenu.addAction(itemDeleteAction);
 
   contextMenu.exec(videoCutList->mapToGlobal(point));
 }
@@ -794,9 +776,4 @@ void TTCutTreeView::createActions()
   gotoCutOutAction->setIcon(QIcon::fromTheme("go-last", style->standardIcon(QStyle::SP_MediaSkipForward)));
   gotoCutOutAction->setStatusTip(tr("Goto selected cut-out position"));
   connect(gotoCutOutAction, SIGNAL(triggered()), this, SLOT(onGotoCutOut()));
-
-  setCutOutAction = new QAction(tr("Set Cut-Out"), this);
-  setCutOutAction->setIcon(QIcon::fromTheme("go-jump", style->standardIcon(QStyle::SP_ArrowRight)));
-  setCutOutAction->setStatusTip(tr("Show selected cut-out frame in cut-out window"));
-  connect(setCutOutAction, SIGNAL(triggered()), this, SLOT(onSetCutOut()));
 }

@@ -59,8 +59,6 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void onNextPFrame();
     void onPrevBFrame();
     void onNextBFrame();
-    void onPrevFrame();
-    void onNextFrame();
     void onSetCutIn();
     void onSetCutOut();
     void onGotoCutIn();
@@ -95,8 +93,6 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void nextPFrame();
     void prevBFrame();
     void nextBFrame();
-    void prevFrame();
-    void nextFrame();
     void setCutIn(int);
     void setCutOut(int);
     void gotoCutIn(int);

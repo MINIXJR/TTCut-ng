@@ -239,14 +239,12 @@ void TTCurrentFrame::onNextPFrame()
   updateCurrentPosition(newFramePos);
 }
 
-//! Navigate to previous P/I-frame (or previous frame in encoder mode)
+//! Navigate to previous frame (any type)
 void TTCurrentFrame::onPrevBFrame()
 {
   if (videoStream == 0) return;
 
-  int newFramePos = (!TTCut::encoderMode)
-      ? videoStream->moveToPrevPIFrame()
-      : videoStream->moveToPrevFrame();
+  int newFramePos = videoStream->moveToPrevFrame();
 
   currentCutPosition = newFramePos;
 
@@ -254,14 +252,12 @@ void TTCurrentFrame::onPrevBFrame()
   updateCurrentPosition(newFramePos);
 }
 
-//! Navigate to next P/I-frame (or next frame in encoder mode)
+//! Navigate to next frame (any type)
 void TTCurrentFrame::onNextBFrame()
 {
   if (videoStream == 0) return;
 
-  int newFramePos = (!TTCut::encoderMode)
-      ? videoStream->moveToNextPIFrame()
-      : videoStream->moveToNextFrame();
+  int newFramePos = videoStream->moveToNextFrame();
 
   currentCutPosition = newFramePos;
 
