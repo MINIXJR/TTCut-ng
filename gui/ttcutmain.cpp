@@ -134,7 +134,8 @@ int main( int argc, char **argv )
       if (!videoFile.isEmpty()) {
         qDebug() << "Opening file from command line:" << videoFile;
         QTimer::singleShot(100, [mainWnd, videoFile]() {
-          if (videoFile.endsWith(".prj", Qt::CaseInsensitive)) {
+          if (videoFile.endsWith(".prj", Qt::CaseInsensitive) ||
+              videoFile.endsWith(".ttcut", Qt::CaseInsensitive)) {
             mainWnd->openProjectFile(videoFile);
           } else {
             mainWnd->onReadVideoStream(videoFile);

@@ -60,10 +60,8 @@
     per-segment decode testing with custom AVIOContext, multi-threaded, integrated into ttcut-demux and TTCut-ng
   - H.265 false positives fixed: `AV_EF_CAREFUL` only for H.264/H.265 (not MPEG-2)
 
-- **Projektdatei-Endung: .prj → .ttcut**
-  - `.prj` ist generisch (AutoCAD, IDEs) — `.ttcut` ist eindeutig und programmspezifisch
-  - Speichern: immer als `.ttcut`
-  - Öffnen: beide Endungen akzeptieren (`.ttcut` und `.prj` für Rückwärtskompatibilität)
+- ~~**Projektdatei-Endung: .prj → .ttcut**~~ → **DONE** (v0.63.0)
+  - Neue Dateien: `.ttcut`, bestehende `.prj` behalten Endung
   - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`
 
 - **CLI Interface for batch Smart Cut (headless mode)**
