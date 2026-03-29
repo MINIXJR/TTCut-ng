@@ -76,11 +76,6 @@
   - Hauptgewinn bei HEVC (I-Frame-Decode ~12-15ms bei 1080p, Seek+Flush ~4ms)
   - Erfordert: Thread-Pool, Ergebnis-Aggregation, Abbruch-Koordination
 
-- **Navigation Widget: B-Frame Buttons sind redundant mit P-Frame Buttons**
-  - B▶/B◀ und P▶/P◀ im Navigation-Widget haben identisches Verhalten
-  - Brainstorming nötig: Sollen B-Buttons entfernt oder mit anderer Funktion belegt werden?
-  - Auch F▶/F◀ im Navigation-Widget vs. CurrentFrame-Widget klären
-
 - **Projektdatei (.prj): Fehlende Einstellungen speichern**
   - Aktuell werden nicht alle relevanten Einstellungen in die .prj Datei geschrieben
   - Fehlend u.a.: Ausgabepfad inkl. Dateiname, Encoder-Einstellungen
@@ -235,6 +230,13 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] German translations (de_DE): all 165 strings, Q_OBJECT standardization (v0.62.0)
 - [x] Screenshot automation: `--screenshots` CLI mode with test media generation
 - [x] MPEG-2 extra-frame correction for A/V sync and quality-check (v0.63.0)
+- [x] Remove redundant F-buttons from navigation widget, add frame-type labels (I, P/I, B/P/I)
+- [x] Remove redundant "Set Cut-Out" from cut list context menu, reorder entries
+- [x] Logo detection: markad PGM import and manual ROI selection with Sobel edge profiling
+- [x] Logo profile persistence in project file (.ttcut)
+- [x] Project file extension change: .prj → .ttcut (with backward compatibility)
+- [x] Pillarbox detection: 4:3 in 16:9 with 10s hysteresis (all codecs, I-frame analysis)
+- [x] Progress dialog for Landezonen analysis
 
 ## Known Limitations
 
