@@ -32,6 +32,7 @@
 #include "../avstream/ttavstream.h"
 
 #include <QDebug>
+#include <QMouseEvent>
 
 /*!
  * TTMPEG2Window2
@@ -55,6 +56,8 @@ TTMPEG2Window2::TTMPEG2Window2(QWidget *parent )
   videoWidth       = 0;
   videoHeight      = 0;
   frameInfo        = 0;
+  mLogoSelectionMode = false;
+  mRubberBand      = nullptr;
 }
 
 /*!
@@ -562,4 +565,150 @@ void TTMPEG2Window2::getFrameInfo()
 	picBuffer   = frameInfo->Y;
 	videoWidth  = frameInfo->width;
 	videoHeight = frameInfo->height;
+}
+
+// ---------------------------------------------------------------------------
+// Coordinate transform helpers
+// ---------------------------------------------------------------------------
+
+QRect TTMPEG2Window2::currentPixmapRect() const
+{
+  const QPixmap* pm = pixmap();
+  if (!pm || pm->isNull()) return QRect();
+
+  QSize pmSize = pm->size();
+  int x = (width() - pmSize.width()) / 2;
+  int y = (height() - pmSize.height()) / 2;
+  return QRect(x, y, pmSize.width(), pmSize.height());
+}
+
+QRect TTMPEG2Window2::imageToWidgetRect(const QRect& imageRect) const
+{
+  QRect pmRect = currentPixmapRect();
+  if (pmRect.isEmpty() || videoWidth <= 0 || videoHeight <= 0) return QRect();
+
+  float scaleX = (float)pmRect.width() / videoWidth;
+  float scaleY = (float)pmRect.height() / videoHeight;
+
+  return QRect(
+    pmRect.x() + (int)(imageRect.x() * scaleX),
+    pmRect.y() + (int)(imageRect.y() * scaleY),
+    (int)(imageRect.width() * scaleX),
+    (int)(imageRect.height() * scaleY)
+  );
+}
+
+QRect TTMPEG2Window2::widgetToImageRect(const QRect& widgetRect) const
+{
+  QRect pmRect = currentPixmapRect();
+  if (pmRect.isEmpty() || videoWidth <= 0 || videoHeight <= 0) return QRect();
+
+  float scaleX = (float)videoWidth / pmRect.width();
+  float scaleY = (float)videoHeight / pmRect.height();
+
+  QRect imageRect(
+    (int)((widgetRect.x() - pmRect.x()) * scaleX),
+    (int)((widgetRect.y() - pmRect.y()) * scaleY),
+    (int)(widgetRect.width() * scaleX),
+    (int)(widgetRect.height() * scaleY)
+  );
+
+  return imageRect.intersected(QRect(0, 0, videoWidth, videoHeight));
+}
+
+// ---------------------------------------------------------------------------
+// Logo ROI selection mode
+// ---------------------------------------------------------------------------
+
+void TTMPEG2Window2::setLogoSelectionMode(bool enable)
+{
+  mLogoSelectionMode = enable;
+  setCursor(enable ? Qt::CrossCursor : Qt::ArrowCursor);
+  if (!enable && mRubberBand) {
+    mRubberBand->hide();
+  }
+}
+
+void TTMPEG2Window2::mousePressEvent(QMouseEvent* event)
+{
+  if (mLogoSelectionMode && event->button() == Qt::LeftButton) {
+    mRubberBandOrigin = event->pos();
+    if (!mRubberBand)
+      mRubberBand = new QRubberBand(QRubberBand::Rectangle, this);
+    mRubberBand->setGeometry(QRect(mRubberBandOrigin, QSize()));
+    mRubberBand->show();
+    return;
+  }
+  QLabel::mousePressEvent(event);
+}
+
+void TTMPEG2Window2::mouseMoveEvent(QMouseEvent* event)
+{
+  if (mLogoSelectionMode && mRubberBand && mRubberBand->isVisible()) {
+    mRubberBand->setGeometry(QRect(mRubberBandOrigin, event->pos()).normalized());
+    return;
+  }
+  QLabel::mouseMoveEvent(event);
+}
+
+void TTMPEG2Window2::mouseReleaseEvent(QMouseEvent* event)
+{
+  if (mLogoSelectionMode && mRubberBand && event->button() == Qt::LeftButton) {
+    mRubberBand->hide();
+    QRect widgetRect = QRect(mRubberBandOrigin, event->pos()).normalized();
+    QRect imageRect = widgetToImageRect(widgetRect);
+
+    if (imageRect.width() >= 4 && imageRect.height() >= 4) {
+      mLogoSelectionMode = false;
+      setCursor(Qt::ArrowCursor);
+      emit logoROISelected(imageRect);
+    }
+    return;
+  }
+  QLabel::mouseReleaseEvent(event);
+}
+
+// ---------------------------------------------------------------------------
+// Logo ROI overlay drawing
+// ---------------------------------------------------------------------------
+
+void TTMPEG2Window2::setLogoROIOverlay(const QRect& imageCoords)
+{
+  mLogoROIOverlay = imageCoords;
+  update();
+}
+
+void TTMPEG2Window2::clearLogoROIOverlay()
+{
+  mLogoROIOverlay = QRect();
+  update();
+}
+
+void TTMPEG2Window2::paintEvent(QPaintEvent* event)
+{
+  QLabel::paintEvent(event);
+
+  if (mLogoROIOverlay.isValid()) {
+    QRect widgetRect = imageToWidgetRect(mLogoROIOverlay);
+    if (!widgetRect.isEmpty()) {
+      QPainter painter(this);
+      painter.setPen(QPen(QColor(0xcc, 0x44, 0xcc), 1));  // #cc44cc magenta
+      painter.drawRect(widgetRect);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Grab current frame as QImage
+// ---------------------------------------------------------------------------
+
+QImage TTMPEG2Window2::grabFrameImage() const
+{
+  if (mUseFFmpeg)
+    return mCurrentFrame;
+
+  if (picBuffer && videoWidth > 0 && videoHeight > 0)
+    return QImage(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32).copy();
+
+  return QImage();
 }

@@ -180,6 +180,7 @@ QString TTCut::screenshotProject;
 // --- Navigation search thresholds ---
 float TTCut::navBlackThreshold  = 0.980f;
 float TTCut::navSceneThreshold  = 0.300f;
+float TTCut::navLogoThreshold   = 0.500f;
 
 // --- Stream Point detection ---
 bool  TTCut::spDetectSilence      = true;

@@ -85,6 +85,7 @@ void TTCutSettings::readSettings()
   beginGroup( "/Navigation" );
   TTCut::navBlackThreshold  = value( "BlackThreshold/",  TTCut::navBlackThreshold ).toFloat();
   TTCut::navSceneThreshold  = value( "SceneThreshold/",  TTCut::navSceneThreshold ).toFloat();
+  TTCut::navLogoThreshold   = value( "LogoThreshold/",   TTCut::navLogoThreshold ).toFloat();
   endGroup();
 
   // Stream Point detection
@@ -269,6 +270,7 @@ void TTCutSettings::writeSettings()
   beginGroup( "/Navigation" );
   setValue( "BlackThreshold/",  TTCut::navBlackThreshold );
   setValue( "SceneThreshold/",  TTCut::navSceneThreshold );
+  setValue( "LogoThreshold/",   TTCut::navLogoThreshold );
   endGroup();
 
   // Stream Point detection

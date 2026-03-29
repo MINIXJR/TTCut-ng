@@ -33,6 +33,8 @@
 #include <QDebug>
 #include <QScreen>
 #include <QStyle>
+#include <QTimer>
+#include <QFileInfo>
 
 #include "ttcutmainwindow.h"
 #include "ttquickjumpdialog.h"
@@ -54,6 +56,7 @@
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
+#include "../data/ttlogodetector.h"
 
 // TTMPEG2Window2 for black frame detection via isBlackAt()
 #include "../mpeg2window/ttmpeg2window2.h"
@@ -207,6 +210,8 @@ TTCutMainWindow::TTCutMainWindow()
   mStreamPointWorkersRunning = 0;
   mBlackSearchAborted = false;
   mSceneSearchAborted = false;
+  mLogoDetector = new TTLogoDetector();
+  mLogoSearchAborted = false;
 
   // Add stream point widget below navigation in the Navigation GroupBox
   QGridLayout* navLayout = qobject_cast<QGridLayout*>(gbNavigation->layout());
@@ -277,6 +282,13 @@ TTCutMainWindow::TTCutMainWindow()
   connect(navigation, SIGNAL(abortBlackSearch()), this, SLOT(onAbortBlackSearch()));
   connect(navigation, SIGNAL(searchSceneChange(int,int,float)), this, SLOT(onSearchSceneChange(int,int,float)));
   connect(navigation, SIGNAL(abortSceneSearch()), this, SLOT(onAbortSceneSearch()));
+
+  connect(navigation, SIGNAL(selectLogoROI()), this, SLOT(onSelectLogoROI()));
+  connect(navigation, SIGNAL(cancelLogoROI()), this, SLOT(onCancelLogoROI()));
+  connect(navigation, SIGNAL(loadLogoFile()), this, SLOT(onLoadLogoFile()));
+  connect(navigation, SIGNAL(searchLogo(int,int,float)), this, SLOT(onSearchLogo(int,int,float)));
+  connect(navigation, SIGNAL(abortLogoSearch()), this, SLOT(onAbortLogoSearch()));
+  connect(currentFrame->videoWindow(), SIGNAL(logoROISelected(QRect)), this, SLOT(onLogoROISelected(QRect)));
 
   connect(navigation, SIGNAL(setCutOut(int)),        cutOutFrame,  SLOT(onGotoCutOut(int)));
 
@@ -354,6 +366,7 @@ TTCutMainWindow::~TTCutMainWindow()
 {
   if (mpAVData    != 0) delete mpAVData;
   if (settings    != 0) delete settings;
+  delete mLogoDetector;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1215,6 +1228,57 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   streamNavigator->onAVItemChanged(mpCurrentAVDataItem);
 
   navigationEnabled( true );
+
+  // Clear previous logo profile
+  mLogoDetector->clearProfile();
+  currentFrame->videoWindow()->clearLogoROIOverlay();
+  navigation->setLogoSearchEnabled(false);
+
+  // Auto-load markad logo if available (deferred to let UI finish initialization)
+  if (mpCurrentAVDataItem) {
+    TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+    if (vs) {
+      QString videoPath = vs->filePath();
+      QString logoPath = videoPath.left(videoPath.lastIndexOf('.')) + ".logo.pgm";
+      if (QFile::exists(logoPath)) {
+        QTimer::singleShot(0, this, [this, logoPath]() {
+          if (!mpCurrentAVDataItem) return;
+          TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+          if (!vs) return;
+
+          TTVideoIndexList* idxList = vs->indexList();
+
+          auto decodeFn = [this](int idx) -> QImage {
+            currentFrame->videoWindow()->moveToVideoFrame(idx);
+            return currentFrame->videoWindow()->grabFrameImage();
+          };
+          auto nextIFn = [idxList](int pos) -> int {
+            return idxList->moveToNextIndexPos(pos, 1);
+          };
+
+          QApplication::setOverrideCursor(Qt::WaitCursor);
+
+          auto progressFn = [this](int current, int total) {
+            statusBar()->showMessage(tr("Lade Logo-Profil (%1/%2 Frames)...").arg(current).arg(total), 0);
+            QApplication::processEvents();
+          };
+
+          progressFn(0, 10);
+
+          if (mLogoDetector->loadMarkadLogo(logoPath, decodeFn, nextIFn, 0, progressFn)) {
+            currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
+            navigation->setLogoSearchEnabled(true);
+            statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(QFileInfo(logoPath).fileName()), 3000);
+          } else {
+            statusBar()->showMessage(tr("Logo-Profil konnte nicht verifiziert werden"), 3000);
+          }
+
+          QApplication::restoreOverrideCursor();
+          currentFrame->videoWindow()->showFrameAt(vs->currentIndex());
+        });
+      }
+    }
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1728,4 +1792,252 @@ void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float thr
 void TTCutMainWindow::onAbortSceneSearch()
 {
   mSceneSearchAborted = true;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Logo detection: ROI selection, profile creation, search loop
+ */
+void TTCutMainWindow::onSelectLogoROI()
+{
+  if (!mpCurrentAVDataItem) return;
+  currentFrame->videoWindow()->setLogoSelectionMode(true);
+  statusBar()->showMessage(tr("Logo-Bereich im Videobild auswählen..."), 0);
+}
+
+void TTCutMainWindow::onLoadLogoFile()
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  // Start in the video file's directory
+  QString startDir = QFileInfo(vs->filePath()).absolutePath();
+
+  QString pgmPath = QFileDialog::getOpenFileName(this,
+    tr("Logo-Datei laden"), startDir, tr("PGM Logo (*.pgm)"));
+
+  if (pgmPath.isEmpty()) return;
+
+  TTVideoIndexList* idxList = vs->indexList();
+
+  auto decodeFn = [this](int idx) -> QImage {
+    currentFrame->videoWindow()->moveToVideoFrame(idx);
+    return currentFrame->videoWindow()->grabFrameImage();
+  };
+  auto nextIFn = [idxList](int pos) -> int {
+    return idxList->moveToNextIndexPos(pos, 1);
+  };
+
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+  statusBar()->showMessage(tr("Lade Logo-Profil..."), 0);
+  QApplication::processEvents();
+
+  if (mLogoDetector->loadMarkadLogo(pgmPath, decodeFn, nextIFn, 0)) {
+    currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
+    navigation->setLogoSearchEnabled(true);
+    statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(QFileInfo(pgmPath).fileName()), 3000);
+  } else {
+    statusBar()->showMessage(tr("Logo-Profil konnte nicht verifiziert werden"), 3000);
+  }
+
+  QApplication::restoreOverrideCursor();
+  currentFrame->videoWindow()->showFrameAt(vs->currentIndex());
+}
+
+void TTCutMainWindow::onCancelLogoROI()
+{
+  currentFrame->videoWindow()->setLogoSelectionMode(false);
+  mLogoDetector->clearProfile();
+  currentFrame->videoWindow()->clearLogoROIOverlay();
+  navigation->setLogoSearchEnabled(false);
+  statusBar()->showMessage(tr("Logo-Profil entfernt"), 3000);
+}
+
+void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
+{
+  if (!mpCurrentAVDataItem) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  TTVideoIndexList* idxList = vs->indexList();
+  if (!idxList) return;
+
+  mLogoDetector->setROI(imageCoords);
+
+  const int profileFrames = 10;
+
+  // For H.264/H.265: create dedicated analysis decoder
+  TTFFmpegWrapper* analysisWrapper = nullptr;
+  bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
+  if (useAnalysis) {
+    analysisWrapper = new TTFFmpegWrapper();
+    analysisWrapper->setAnalysisMode(true);
+    if (analysisWrapper->openFile(vs->filePath())) {
+      TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+      if (previewWrapper)
+        analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+      else
+        analysisWrapper->buildFrameIndex();
+    } else {
+      delete analysisWrapper;
+      analysisWrapper = nullptr;
+      useAnalysis = false;
+    }
+  }
+
+  int pos = idxList->moveToIndexPos(vs->currentIndex(), 1);
+  int collected = 0;
+
+  while (pos >= 0 && pos < vs->frameCount() && collected < profileFrames) {
+    statusBar()->showMessage(tr("Erstelle Logo-Profil (%1/%2 Frames)")
+      .arg(collected + 1).arg(profileFrames));
+    QApplication::processEvents();
+
+    QImage frame;
+    if (useAnalysis && analysisWrapper) {
+      frame = analysisWrapper->decodeFrame(pos);
+    } else {
+      currentFrame->videoWindow()->moveToVideoFrame(pos);
+      frame = currentFrame->videoWindow()->grabFrameImage();
+    }
+
+    if (!frame.isNull()) {
+      mLogoDetector->addEdgeSample(frame);
+      collected++;
+    }
+
+    pos = idxList->moveToNextIndexPos(pos, 1);
+  }
+
+  if (analysisWrapper) {
+    analysisWrapper->closeFile();
+    delete analysisWrapper;
+  }
+
+  if (collected > 0) {
+    mLogoDetector->finalizeProfile();
+    currentFrame->videoWindow()->setLogoROIOverlay(imageCoords);
+    navigation->setLogoSearchEnabled(true);
+    statusBar()->showMessage(tr("Logo-Profil erstellt (%1 Frames)").arg(collected), 3000);
+  } else {
+    mLogoDetector->clearProfile();
+    statusBar()->showMessage(tr("Logo-Profil konnte nicht erstellt werden"), 3000);
+  }
+
+  currentFrame->videoWindow()->showFrameAt(vs->currentIndex());
+}
+
+void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
+{
+  if (!mpCurrentAVDataItem || !mLogoDetector->hasProfile()) return;
+
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return;
+
+  int frameCount = vs->frameCount();
+  if (frameCount <= 0) return;
+
+  TTVideoIndexList* idxList = vs->indexList();
+  if (!idxList) return;
+
+  mLogoSearchAborted = false;
+  navigation->setLogoSearchRunning(true);
+  QApplication::setOverrideCursor(Qt::WaitCursor);
+
+  QElapsedTimer timer;
+  timer.start();
+
+  TTFFmpegWrapper* analysisWrapper = nullptr;
+  bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
+  if (useAnalysis) {
+    analysisWrapper = new TTFFmpegWrapper();
+    analysisWrapper->setAnalysisMode(true);
+    if (analysisWrapper->openFile(vs->filePath())) {
+      TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+      if (previewWrapper)
+        analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+      else
+        analysisWrapper->buildFrameIndex();
+    } else {
+      delete analysisWrapper;
+      analysisWrapper = nullptr;
+      useAnalysis = false;
+    }
+  }
+
+  auto getScore = [&](int pos) -> float {
+    QImage frame;
+    if (useAnalysis && analysisWrapper) {
+      frame = analysisWrapper->decodeFrame(pos);
+    } else {
+      currentFrame->videoWindow()->moveToVideoFrame(pos);
+      frame = currentFrame->videoWindow()->grabFrameImage();
+    }
+    if (frame.isNull()) return 0.0f;
+    return mLogoDetector->matchScore(frame);
+  };
+
+  int foundPos = -1;
+  int checked = 0;
+
+  int pos = idxList->moveToIndexPos(startPos, 1);
+  if (pos < 0) pos = idxList->moveToNextIndexPos(startPos, 1);
+  if (pos < 0) goto cleanup;
+
+  {
+    float initialScore = getScore(pos);
+    bool initialLogoPresent = (initialScore >= threshold);
+
+    pos = (direction > 0)
+        ? idxList->moveToNextIndexPos(pos, 1)
+        : idxList->moveToPrevIndexPos(pos, 1);
+
+    while (pos >= 0 && pos < frameCount && !mLogoSearchAborted) {
+      float score = getScore(pos);
+      bool logoPresent = (score >= threshold);
+
+      if (logoPresent != initialLogoPresent) {
+        foundPos = pos;
+        break;
+      }
+      checked++;
+
+      if (checked % 20 == 0)
+        QApplication::processEvents();
+
+      pos = (direction > 0)
+          ? idxList->moveToNextIndexPos(pos, 1)
+          : idxList->moveToPrevIndexPos(pos, 1);
+    }
+  }
+
+cleanup:
+  if (analysisWrapper) {
+    analysisWrapper->closeFile();
+    delete analysisWrapper;
+  }
+
+  qint64 elapsed = timer.elapsed();
+  qDebug() << "Logo search:" << checked << "I-frames checked in"
+           << elapsed << "ms" << (checked > 0 ? QString("(%1 ms/frame)").arg(elapsed/checked) : "");
+
+  QApplication::restoreOverrideCursor();
+  navigation->setLogoSearchRunning(false);
+
+  if (mLogoSearchAborted) {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Logo-Suche abgebrochen"), 3000);
+  } else if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+  } else {
+    currentFrame->videoWindow()->showFrameAt(startPos);
+    statusBar()->showMessage(tr("Keine Logo-Statusänderung gefunden"), 3000);
+  }
+}
+
+void TTCutMainWindow::onAbortLogoSearch()
+{
+  mLogoSearchAborted = true;
 }

@@ -34,6 +34,7 @@
 #include <QApplication>
 #include <QIcon>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QStyle>
 
 TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
@@ -109,6 +110,25 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	                                    "QPushButton:hover { background-color: #ee3333; }");
 	pbCancelSceneSearch->hide();
 
+	// Logo detection buttons - Magenta (#cc44cc)
+	pbSelectLogoROI->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; font-size: 16px; }"
+	                                "QPushButton:checked { background-color: #cc44cc; color: white; }");
+	pbSelectLogoROI->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(pbSelectLogoROI, SIGNAL(customContextMenuRequested(QPoint)), SLOT(onLogoContextMenu(QPoint)));
+	pbPrevLogo->setIcon(QIcon());
+	pbPrevLogo->setText(tr("\u25C0 \u2B26"));  // ◀ ⬦
+	pbPrevLogo->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; }");
+	pbNextLogo->setIcon(QIcon());
+	pbNextLogo->setText(tr("\u2B26 \u25B6"));  // ⬦ ▶
+	pbNextLogo->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; }");
+
+	// Logo cancel button: red, initially hidden
+	pbCancelLogoSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
+	                                  "QPushButton:hover { background-color: #ee3333; }");
+	pbCancelLogoSearch->hide();
+
+	sbLogoThreshold->setValue(TTCut::navLogoThreshold);
+
 	// Keep TTCut variables in sync with spinbox changes
 	connect(sbBlackThreshold, SIGNAL(valueChanged(double)), SLOT(onBlackThresholdChanged(double)));
 	connect(sbSceneThreshold, SIGNAL(valueChanged(double)), SLOT(onSceneThresholdChanged(double)));
@@ -158,6 +178,11 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	connect(pbPrevSceneChange, SIGNAL(clicked()), SLOT(onPrevSceneChange()));
 	connect(pbNextSceneChange, SIGNAL(clicked()), SLOT(onNextSceneChange()));
 	connect(pbCancelSceneSearch, SIGNAL(clicked()), SLOT(onCancelSceneSearch()));
+	connect(pbSelectLogoROI, SIGNAL(clicked()), SLOT(onSelectLogoROI()));
+	connect(pbPrevLogo, SIGNAL(clicked()), SLOT(onPrevLogo()));
+	connect(pbNextLogo, SIGNAL(clicked()), SLOT(onNextLogo()));
+	connect(pbCancelLogoSearch, SIGNAL(clicked()), SLOT(onCancelLogoSearch()));
+	connect(sbLogoThreshold, SIGNAL(valueChanged(double)), SLOT(onLogoThresholdChanged(double)));
 }
 
 //void TTCutFrameNavigation::setTitle(const QString & title)
@@ -590,4 +615,60 @@ void TTCutFrameNavigation::onBlackThresholdChanged(double value)
 void TTCutFrameNavigation::onSceneThresholdChanged(double value)
 {
   TTCut::navSceneThreshold = value;
+}
+
+void TTCutFrameNavigation::onSelectLogoROI()
+{
+  if (pbSelectLogoROI->isChecked()) {
+    // Entering selection mode
+    emit selectLogoROI();
+  } else {
+    // Clicked again while in selection mode → cancel and clear profile
+    emit cancelLogoROI();
+  }
+}
+
+void TTCutFrameNavigation::onPrevLogo()
+{
+  if (!isControlEnabled) return;
+  emit searchLogo(currentPosition, -1, sbLogoThreshold->value());
+}
+
+void TTCutFrameNavigation::onNextLogo()
+{
+  if (!isControlEnabled) return;
+  emit searchLogo(currentPosition, +1, sbLogoThreshold->value());
+}
+
+void TTCutFrameNavigation::onCancelLogoSearch()
+{
+  emit abortLogoSearch();
+}
+
+void TTCutFrameNavigation::setLogoSearchRunning(bool running)
+{
+  pbCancelLogoSearch->setVisible(running);
+  pbPrevLogo->setEnabled(!running);
+  pbNextLogo->setEnabled(!running);
+  pbSelectLogoROI->setEnabled(!running);
+}
+
+void TTCutFrameNavigation::setLogoSearchEnabled(bool enabled)
+{
+  pbPrevLogo->setEnabled(enabled);
+  pbNextLogo->setEnabled(enabled);
+  // Uncheck select button when profile state changes
+  pbSelectLogoROI->setChecked(false);
+}
+
+void TTCutFrameNavigation::onLogoThresholdChanged(double value)
+{
+  TTCut::navLogoThreshold = value;
+}
+
+void TTCutFrameNavigation::onLogoContextMenu(const QPoint& pos)
+{
+  QMenu menu(this);
+  menu.addAction(tr("Logo-Datei laden..."), this, SIGNAL(loadLogoFile()));
+  menu.exec(pbSelectLogoROI->mapToGlobal(pos));
 }

@@ -1083,6 +1083,14 @@ EOF
         info "  Added ${#VDR_MARKS[@]} VDR markers to info file"
     fi
 
+    # Copy markad logo PGM if available
+    pgm_file=$(find "$INPUT_DIR" -maxdepth 1 -name '*-P0.pgm' -type f 2>/dev/null | head -1)
+    if [ -n "$pgm_file" ]; then
+        logo_dest="${OUTDIR}/${BASENAME}.logo.pgm"
+        cp "$pgm_file" "$logo_dest"
+        info "Logo PGM copied: $(basename "$pgm_file") -> $(basename "$logo_dest")"
+    fi
+
     echo ""
 
     # Summary

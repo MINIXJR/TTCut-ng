@@ -104,6 +104,7 @@ HEADERS     = common/ttcut.h\
               data/ttcutsubtitletask.h\
               data/ttcutpreviewtask.h\
               data/ttframesearchtask.h\
+              data/ttlogodetector.h\
               avstream/ttcommon.h\
               avstream/ttac3audioheader.h\
               avstream/ttac3audiostream.h\
@@ -196,6 +197,7 @@ SOURCES     = common/ttcut.cpp\
               data/ttcutsubtitletask.cpp\
               data/ttcutpreviewtask.cpp\
               data/ttframesearchtask.cpp\
+              data/ttlogodetector.cpp\
               avstream/ttcommon.cpp\
               avstream/ttac3audioheader.cpp\
               avstream/ttac3audiostream.cpp\

@@ -52,6 +52,7 @@ class TTAVItem;
 class TTCutList;
 class TTProgressBar;
 class TTThreadTask;
+class TTLogoDetector;
 class TTStreamPointModel;
 class TTStreamPointWidget;
 class TTThreadTaskPool;
@@ -119,6 +120,12 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 	void onAbortBlackSearch();
 	void onSearchSceneChange(int startPos, int direction, float threshold);
 	void onAbortSceneSearch();
+    void onSelectLogoROI();
+    void onCancelLogoROI();
+    void onLoadLogoFile();
+    void onLogoROISelected(QRect imageCoords);
+    void onSearchLogo(int startPos, int direction, float threshold);
+    void onAbortLogoSearch();
 
 		void onNextAVData();
     void onPrevAVData();
@@ -160,6 +167,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     int                  mStreamPointWorkersRunning;
     bool                 mBlackSearchAborted;
     bool                 mSceneSearchAborted;
+    TTLogoDetector*      mLogoDetector;
+    bool                 mLogoSearchAborted;
 
     // Dirty tracking
     bool                 mProjectModified;

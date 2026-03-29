@@ -38,6 +38,7 @@
 #include <QLabel>
 #include <QPainter>
 #include <QFont>
+#include <QRubberBand>
 
 #include "../common/ttcut.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
@@ -87,13 +88,37 @@ class TTMPEG2Window2 : public QLabel
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();
 
+    void setLogoSelectionMode(bool enable);
+    void setLogoROIOverlay(const QRect& imageCoords);
+    void clearLogoROIOverlay();
+    QImage grabFrameImage() const;
+
+  signals:
+    void logoROISelected(QRect imageCoords);
+
   protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
   	void getFrameInfo();
     void decodeAndShowSlice();
     QString getSubtitleTextAtCurrentFrame();
     void drawSubtitleOnImage(QImage& image, const QString& text);
 
   private:
+    // Logo ROI selection
+    bool            mLogoSelectionMode;
+    QRubberBand*    mRubberBand;
+    QPoint          mRubberBandOrigin;
+    QRect           mLogoROIOverlay;  // in image coordinates, empty = no overlay
+
+    // Coordinate transform helpers
+    QRect imageToWidgetRect(const QRect& imageRect) const;
+    QRect widgetToImageRect(const QRect& widgetRect) const;
+    QRect currentPixmapRect() const;
+
     TFrameInfo*         frameInfo;
     quint8*             picBuffer;
     int                 videoWidth;

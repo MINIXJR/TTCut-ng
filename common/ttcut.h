@@ -180,6 +180,7 @@ class TTCut
    // --- Navigation search thresholds ---
    static float  navBlackThreshold;     // Black frame detection threshold (default 0.980)
    static float  navSceneThreshold;     // Scene change detection threshold (default 0.300)
+   static float  navLogoThreshold;     // Logo detection NCC threshold (default 0.500)
 
    // --- Stream Point detection ---
    static bool   spDetectSilence;

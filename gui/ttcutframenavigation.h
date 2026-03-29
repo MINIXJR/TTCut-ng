@@ -77,6 +77,14 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void setSceneSearchRunning(bool running);
     void onBlackThresholdChanged(double value);
     void onSceneThresholdChanged(double value);
+    void onSelectLogoROI();
+    void onPrevLogo();
+    void onNextLogo();
+    void onCancelLogoSearch();
+    void setLogoSearchRunning(bool running);
+    void setLogoSearchEnabled(bool enabled);
+    void onLogoThresholdChanged(double value);
+    void onLogoContextMenu(const QPoint& pos);
 
     void onEditCut(const TTCutItem& cutData);
 
@@ -103,6 +111,11 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void abortBlackSearch();
     void searchSceneChange(int currentPos, int direction, float threshold);
     void abortSceneSearch();
+    void selectLogoROI();
+    void cancelLogoROI();
+    void loadLogoFile();
+    void searchLogo(int currentPos, int direction, float threshold);
+    void abortLogoSearch();
 
   protected:
 
