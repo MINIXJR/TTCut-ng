@@ -113,7 +113,9 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
 void TTCutProjectData::deserializeAVDataItem(TTAVData* avData)
 {
   for (int i = 1; i < xmlNodeList->size(); i++) {
-    parseVideoSection(xmlNodeList->at(i).childNodes(), avData);
+    QDomElement elem = xmlNodeList->at(i).toElement();
+    if (elem.isNull() || elem.tagName() != "Video") continue;
+    parseVideoSection(elem.childNodes(), avData);
   }
 }
 
