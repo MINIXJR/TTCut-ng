@@ -19,7 +19,8 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 - **SRT-Untertitel** — automatisches Laden, Vorschau-Overlay, Schnitt zusammen mit dem Video
 - **MKV-Ausgabe** mit Kapitelmarken (via libav matroska muxer)
 - **Landezonen** — automatische Erkennung von Schwarzbildern, Stille, Audioformatwechsel,
-  Szenenwechsel und Seitenverhältnisänderungen (4:3/16:9) mit Schnittvorschlägen
+  Szenenwechsel, Seitenverhältnisänderungen (4:3/16:9) und Pillarbox (4:3 in 16:9) mit Schnittvorschlägen
+- **Logo-Erkennung** — Senderlogo-Detektion via markad PGM-Import oder manueller ROI-Selektion zur Werbeblock-Navigation
 - **Zeitsprung** — Keyframe-Thumbnail-Browser für schnelle Navigation mit Intervallfilter
 - **ttcut-demux** — Multi-Core TS-Demuxer mit A/V-Sync-Korrektur, Audio-Padding und VDR-Marks-Unterstützung
 - Tastaturkürzel für Frame-Navigation und Schnittpunkt-Auswahl (`?` für Hilfe)
