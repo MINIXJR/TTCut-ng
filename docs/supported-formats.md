@@ -151,6 +151,24 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ---
 
+## Stream Point Detection (Landezonen)
+
+TTCut-ng can automatically analyze streams and detect points suitable for cuts.
+
+| Type | Description | Stream |
+|------|-------------|--------|
+| Black frame | Fully black frames | Video |
+| Silence | Segments below loudness threshold | Audio |
+| Audio format change | AC3 stereo/5.1 switch (acmod) | Audio |
+| Scene change | Histogram-based detection (all codecs) | Video |
+| Aspect ratio | 4:3 ↔ 16:9 change (MPEG-2 sequence headers) | Video |
+| Pillarbox | 4:3 content in 16:9 frame (black bars left/right, all codecs) | Video |
+| Defective frames | Extra frames from PTS analysis | Video |
+
+Pillarbox detection analyzes I-frames only and is a sub-option under the aspect ratio setting.
+
+---
+
 ## External Dependencies
 
 ### Required

@@ -188,6 +188,8 @@ int   TTCut::spSilenceThresholdDb = -75;
 float TTCut::spSilenceMinDuration = 0.3f;
 bool  TTCut::spDetectAudioChange  = true;
 bool  TTCut::spDetectAspectChange = true;
+bool  TTCut::spDetectPillarbox    = true;
+int   TTCut::spPillarboxThreshold = 20;
 
 // --- Gruppierung defekter Frames ---
 int TTCut::extraFrameClusterGapSec    = 5;

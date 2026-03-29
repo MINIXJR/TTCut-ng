@@ -96,6 +96,8 @@ void TTCutSettings::readSettings()
   TTCut::spSilenceMinDuration = value( "SilenceMinDuration/", TTCut::spSilenceMinDuration ).toFloat();
   TTCut::spDetectAudioChange  = value( "DetectAudioChange/",  TTCut::spDetectAudioChange ).toBool();
   TTCut::spDetectAspectChange = value( "DetectAspectChange/", TTCut::spDetectAspectChange ).toBool();
+  TTCut::spDetectPillarbox    = value( "DetectPillarbox/",    TTCut::spDetectPillarbox ).toBool();
+  TTCut::spPillarboxThreshold = value( "PillarboxThreshold/", TTCut::spPillarboxThreshold ).toInt();
   endGroup();
 
   // Preview
@@ -281,6 +283,8 @@ void TTCutSettings::writeSettings()
   setValue( "SilenceMinDuration/", TTCut::spSilenceMinDuration );
   setValue( "DetectAudioChange/",  TTCut::spDetectAudioChange );
   setValue( "DetectAspectChange/", TTCut::spDetectAspectChange );
+  setValue( "DetectPillarbox/",    TTCut::spDetectPillarbox );
+  setValue( "PillarboxThreshold/", TTCut::spPillarboxThreshold );
   endGroup();
 
   // Preview

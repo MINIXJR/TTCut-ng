@@ -188,6 +188,8 @@ class TTCut
    static float  spSilenceMinDuration;
    static bool   spDetectAudioChange;
    static bool   spDetectAspectChange;
+   static bool   spDetectPillarbox;
+   static int    spPillarboxThreshold;
 
    // --- Gruppierung defekter Frames ---
    static int extraFrameClusterGapSec;      // Cluster gap threshold (default 5s)

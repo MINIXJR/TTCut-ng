@@ -207,6 +207,8 @@ TTCutMainWindow::TTCutMainWindow()
   mpStreamPointModel = new TTStreamPointModel(this);
   mpStreamPointWidget = new TTStreamPointWidget(mpStreamPointModel, this);
   mpStreamPointTaskPool = new TTThreadTaskPool();
+  connect(mpStreamPointTaskPool, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
+                                 SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
   mStreamPointWorkersRunning = 0;
   mBlackSearchAborted = false;
   mSceneSearchAborted = false;
@@ -842,13 +844,15 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
 
   mStreamPointWorkersRunning = 0;
 
-  // Video worker (aspect ratio changes, MPEG-2 only)
-  if (TTCut::spDetectAspectChange) {
+  // Video worker (aspect ratio changes, pillarbox detection)
+  if (TTCut::spDetectAspectChange || TTCut::spDetectPillarbox) {
     TTVideoHeaderList* videoHeaders = vs->headerList();
+    TTVideoIndexList*  videoIndex   = vs->indexList();
     if (videoHeaders && videoHeaders->size() > 0) {
       TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
         vs->filePath(), vs->streamType(), vs->frameRate(),
-        TTCut::spDetectAspectChange, videoHeaders);
+        TTCut::spDetectAspectChange, TTCut::spDetectPillarbox,
+        TTCut::spPillarboxThreshold, videoHeaders, videoIndex);
 
       connect(videoWorker, SIGNAL(pointsDetected(const QList<TTStreamPoint>&)),
               this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
@@ -948,6 +952,12 @@ void TTCutMainWindow::onAnalysisWorkerFinished()
   if (mStreamPointWorkersRunning <= 0) {
     mStreamPointWorkersRunning = 0;
     mpStreamPointWidget->setAnalysisRunning(false);
+
+    // Close progress dialog
+    if (progressBar != 0) {
+      progressBar->hideBar();
+    }
+    this->setEnabled(true);
   }
 }
 
@@ -1478,6 +1488,7 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       if (progressBar == 0) {
         progressBar = new TTProgressBar(this);
         connect(progressBar, SIGNAL(cancel()), mpAVData, SLOT(onUserAbortRequest()));
+        connect(progressBar, SIGNAL(cancel()), mpStreamPointTaskPool, SLOT(onUserAbortRequest()));
       }
       this->setEnabled(false);
       break;
@@ -1497,8 +1508,19 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       break;
   }
 
-  if (progressBar != 0)
-    progressBar->onSetProgress(task, state, msg, mpAVData->totalProcess(), mpAVData->totalTime());
+  if (progressBar != 0) {
+    // Use the correct task pool for progress calculation
+    int progress;
+    QTime time;
+    if (mStreamPointWorkersRunning > 0) {
+      progress = mpStreamPointTaskPool->overallPercentage();
+      time = mpStreamPointTaskPool->overallTime();
+    } else {
+      progress = mpAVData->totalProcess();
+      time = mpAVData->totalTime();
+    }
+    progressBar->onSetProgress(task, state, msg, progress, time);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

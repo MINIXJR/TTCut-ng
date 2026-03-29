@@ -48,20 +48,20 @@ void TTStreamPointAudioWorker::operation()
 
   if (mDetectSilence && !mIsAborted) {
     qDebug() << "StreamPointAudio: Detecting silence...";
+    onStatusReport(StatusReportArgs::Step, tr("Stille-Erkennung..."), mStepCount);
     QList<TTStreamPoint> silencePoints = detectSilencePoints();
     allPoints.append(silencePoints);
     qDebug() << "StreamPointAudio: Found" << silencePoints.size() << "silence regions";
     mStepCount = 1;
-    onStatusReport(StatusReportArgs::Step, QString(), mStepCount);
   }
 
   if (mDetectAudioChange && !mIsAborted) {
     qDebug() << "StreamPointAudio: Detecting audio format changes...";
+    onStatusReport(StatusReportArgs::Step, tr("Audioformat-Erkennung..."), mStepCount);
     QList<TTStreamPoint> changePoints = detectAudioChanges();
     allPoints.append(changePoints);
     qDebug() << "StreamPointAudio: Found" << changePoints.size() << "format changes";
     mStepCount = 2;
-    onStatusReport(StatusReportArgs::Step, QString(), mStepCount);
   }
 
   if (!mIsAborted) {

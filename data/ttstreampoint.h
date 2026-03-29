@@ -15,6 +15,7 @@ enum class StreamPointType {
   AudioChange,
   SceneChange,
   AspectChange,
+  PillarboxChange,
   Error
 };
 

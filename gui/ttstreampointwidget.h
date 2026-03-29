@@ -65,6 +65,8 @@ private:
   QDoubleSpinBox* mSbSilenceMinDuration;
   QCheckBox*      mCbAudioChange;
   QCheckBox*      mCbAspectChange;
+  QCheckBox*      mCbPillarbox;
+  QSpinBox*       mSbPillarboxThreshold;
 };
 
 #endif // TTSTREAMPOINTWIDGET_H

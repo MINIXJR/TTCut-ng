@@ -130,6 +130,25 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   gl->addWidget(mCbAspectChange, row, 0, 1, 2);
   row++;
 
+  // Pillarbox detection (sub-option of aspect ratio)
+  mCbPillarbox = new QCheckBox(tr("Pillarbox-Erkennung (4:3 in 16:9)"), tab);
+  mCbPillarbox->setStyleSheet("QCheckBox { padding-left: 20px; }");
+  gl->addWidget(mCbPillarbox, row, 0, 1, 2);
+  row++;
+
+  QLabel* lblPillarboxThreshold = new QLabel(tr("Schwellwert (Luminanz):"), tab);
+  lblPillarboxThreshold->setStyleSheet("QLabel { padding-left: 20px; }");
+  gl->addWidget(lblPillarboxThreshold, row, 0);
+  mSbPillarboxThreshold = new QSpinBox(tab);
+  mSbPillarboxThreshold->setRange(5, 50);
+  gl->addWidget(mSbPillarboxThreshold, row, 1);
+  row++;
+
+  // Enable/disable pillarbox controls based on aspect change checkbox
+  connect(mCbAspectChange, SIGNAL(toggled(bool)), mCbPillarbox, SLOT(setEnabled(bool)));
+  connect(mCbAspectChange, SIGNAL(toggled(bool)), mSbPillarboxThreshold, SLOT(setEnabled(bool)));
+  connect(mCbAspectChange, SIGNAL(toggled(bool)), lblPillarboxThreshold, SLOT(setEnabled(bool)));
+
   // Vertical spacer
   gl->setRowStretch(row, 1);
 }
@@ -141,6 +160,11 @@ void TTStreamPointWidget::loadSettings()
   mSbSilenceMinDuration->setValue(TTCut::spSilenceMinDuration);
   mCbAudioChange->setChecked(TTCut::spDetectAudioChange);
   mCbAspectChange->setChecked(TTCut::spDetectAspectChange);
+  mCbPillarbox->setChecked(TTCut::spDetectPillarbox);
+  mSbPillarboxThreshold->setValue(TTCut::spPillarboxThreshold);
+  // Sync enabled state
+  mCbPillarbox->setEnabled(mCbAspectChange->isChecked());
+  mSbPillarboxThreshold->setEnabled(mCbAspectChange->isChecked());
 }
 
 void TTStreamPointWidget::saveSettings()
@@ -150,6 +174,8 @@ void TTStreamPointWidget::saveSettings()
   TTCut::spSilenceMinDuration = mSbSilenceMinDuration->value();
   TTCut::spDetectAudioChange  = mCbAudioChange->isChecked();
   TTCut::spDetectAspectChange = mCbAspectChange->isChecked();
+  TTCut::spDetectPillarbox    = mCbPillarbox->isChecked();
+  TTCut::spPillarboxThreshold = mSbPillarboxThreshold->value();
 }
 
 void TTStreamPointWidget::setAnalysisRunning(bool running)

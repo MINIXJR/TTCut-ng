@@ -147,7 +147,8 @@ Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 - German translations (de_DE)
 - Zeitsprung: Keyframe-Thumbnail-Browser with page navigation, dynamic AR thumbnails, interval filter
 - Landezonen (Stream Points): Black frame, silence, audio format change (AC3 acmod), scene change,
-  and aspect ratio change (MPEG-2 4:3/16:9) detection with auto-derived cut pairs and project file persistence
+  aspect ratio change (MPEG-2 4:3/16:9), and pillarbox detection (4:3 in 16:9, all codecs)
+  with auto-derived cut pairs and project file persistence
 - Interactive black frame and scene change navigation buttons in navigation widget
 
 ### SRT Subtitle Support
