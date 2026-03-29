@@ -44,6 +44,7 @@
 #include "ttstreampoint.h"
 
 #include <QMessageBox>
+#include "ttcutprojectdata.h"
 
 class TTThreadTaskPool;
 class TTThreadTask;
@@ -77,7 +78,8 @@ class TTAVData : public QObject
 
     void      openAVStreams(const QString& videoFilePath);
     void      writeProjectFile(const QFileInfo& fInfo,
-                               const QList<TTStreamPoint>& streamPoints = QList<TTStreamPoint>());
+                               const QList<TTStreamPoint>& streamPoints = QList<TTStreamPoint>(),
+                               const TTLogoProjectData& logoData = TTLogoProjectData());
     void      readProjectFile(const QFileInfo& fInfo);
 
     void      appendAudioStream(TTAVItem* avItem, const QFileInfo& fInfo, int order=-1);
@@ -176,6 +178,7 @@ class TTAVData : public QObject
 
     void readProjectFileFinished(const QString&);
     void streamPointsLoaded(const QList<TTStreamPoint>& points);
+    void logoDataLoaded(const TTLogoProjectData& logoData);
     void vdrMarkersLoaded(const QList<TTStreamPoint>& points);
 
     void avItemAppended(const TTAVItem& item);

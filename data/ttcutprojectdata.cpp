@@ -415,6 +415,78 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Serialize logo detection data to XML (top-level)
+ */
+void TTCutProjectData::serializeLogoData(const TTLogoProjectData& logoData)
+{
+  if (!logoData.valid) return;
+
+  QDomElement elem = xmlDocument->createElement("LogoProfile");
+  xmlRoot->appendChild(elem);
+
+  if (logoData.isMarkad) {
+    QDomElement typeElem = xmlDocument->createElement("Source");
+    elem.appendChild(typeElem);
+    typeElem.appendChild(xmlDocument->createTextNode("markad"));
+
+    QDomElement pathElem = xmlDocument->createElement("Path");
+    elem.appendChild(pathElem);
+    pathElem.appendChild(xmlDocument->createTextNode(logoData.markadPath));
+  } else {
+    QDomElement typeElem = xmlDocument->createElement("Source");
+    elem.appendChild(typeElem);
+    typeElem.appendChild(xmlDocument->createTextNode("manual"));
+
+    QDomElement roiElem = xmlDocument->createElement("ROI");
+    elem.appendChild(roiElem);
+    roiElem.setAttribute("x", logoData.roi.x());
+    roiElem.setAttribute("y", logoData.roi.y());
+    roiElem.setAttribute("w", logoData.roi.width());
+    roiElem.setAttribute("h", logoData.roi.height());
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Deserialize logo detection data from XML
+ */
+TTLogoProjectData TTCutProjectData::deserializeLogoData()
+{
+  TTLogoProjectData data;
+  if (!xmlRoot) return data;
+
+  QDomNodeList nodes = xmlRoot->childNodes();
+  for (int i = 0; i < nodes.size(); i++) {
+    QDomElement elem = nodes.at(i).toElement();
+    if (elem.isNull() || elem.tagName() != "LogoProfile") continue;
+
+    QDomNodeList children = elem.childNodes();
+    QString source;
+
+    for (int j = 0; j < children.size(); j++) {
+      QDomElement child = children.at(j).toElement();
+      if (child.isNull()) continue;
+
+      if (child.tagName() == "Source")
+        source = child.text();
+      else if (child.tagName() == "Path")
+        data.markadPath = child.text();
+      else if (child.tagName() == "ROI") {
+        data.roi = QRect(child.attribute("x").toInt(),
+                         child.attribute("y").toInt(),
+                         child.attribute("w").toInt(),
+                         child.attribute("h").toInt());
+      }
+    }
+
+    data.isMarkad = (source == "markad");
+    data.valid = true;
+    break;  // only one LogoProfile element
+  }
+
+  return data;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Write subtitle section to XML
  */
 QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language)

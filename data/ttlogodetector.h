@@ -40,6 +40,10 @@ public:
   // Matching
   float matchScore(const QImage& fullFrame) const;
 
+  // Persistence — which source was used to create the profile
+  QString markadLogoPath() const;
+  bool isFromMarkadLogo() const;
+
 private:
   QImage extractGrayscaleROI(const QImage& fullFrame) const;
   QVector<float> sobelEdge(const QImage& gray) const;
@@ -54,6 +58,7 @@ private:
   bool            mFinalized;
   int             mEdgeWidth;
   int             mEdgeHeight;
+  QString         mMarkadLogoPath;
 };
 
 #endif // TTLOGODETECTOR_H

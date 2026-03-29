@@ -843,7 +843,8 @@ QFileInfoList TTAVData::getSubtitleNames(const QFileInfo& vFileInfo)
  * Write the xml project file
  */
 void TTAVData::writeProjectFile(const QFileInfo& fInfo,
-                                 const QList<TTStreamPoint>& streamPoints)
+                                 const QList<TTStreamPoint>& streamPoints,
+                                 const TTLogoProjectData& logoData)
 {
 	TTCutProjectData* prj = new TTCutProjectData(fInfo);
 
@@ -854,6 +855,8 @@ void TTAVData::writeProjectFile(const QFileInfo& fInfo,
 	if (!streamPoints.isEmpty()) {
 		prj->serializeStreamPoints(streamPoints);
 	}
+
+	prj->serializeLogoData(logoData);
 
 	prj->writeXml();
 
@@ -899,6 +902,12 @@ void TTAVData::onReadProjectFileFinished()
   QList<TTStreamPoint> loadedPoints = mpProjectData->deserializeStreamPoints();
   if (!loadedPoints.isEmpty()) {
     emit streamPointsLoaded(loadedPoints);
+  }
+
+  // Load logo detection data from project file
+  TTLogoProjectData logoData = mpProjectData->deserializeLogoData();
+  if (logoData.valid) {
+    emit logoDataLoaded(logoData);
   }
 
   emit readProjectFileFinished(mpProjectData->filePath());

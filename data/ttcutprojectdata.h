@@ -44,6 +44,18 @@ class TTStreamPointModel;
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include <QRect>
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Logo profile persistence data
+ */
+struct TTLogoProjectData
+{
+  bool    valid = false;
+  bool    isMarkad = false;
+  QString markadPath;
+  QRect   roi;
+};
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutProjectData
@@ -56,8 +68,10 @@ class TTCutProjectData
 
     void serializeAVDataItem(TTAVItem* vitem);
     void serializeStreamPoints(const QList<TTStreamPoint>& points);
+    void serializeLogoData(const TTLogoProjectData& logoData);
     void deserializeAVDataItem(TTAVData* avData);
     QList<TTStreamPoint> deserializeStreamPoints();
+    TTLogoProjectData deserializeLogoData();
 
     QString fileName();
     QString filePath();

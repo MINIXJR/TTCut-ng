@@ -95,6 +95,8 @@ bool TTLogoDetector::loadMarkadLogo(const QString& pgmPath,
   mFinalized = true;
   mSampleCount = 1;
 
+  mMarkadLogoPath = pgmPath;
+
   qDebug() << "Loaded markad logo:" << pgmPath
            << logoW << "x" << logoH << "corner" << corner
            << "ROI" << mROI;
@@ -106,6 +108,7 @@ void TTLogoDetector::setROI(const QRect& roiInImageCoords)
 {
   mROI = roiInImageCoords;
   clearProfile();
+  mMarkadLogoPath.clear();
 }
 
 QRect TTLogoDetector::roi() const
@@ -184,6 +187,17 @@ void TTLogoDetector::clearProfile()
   mFinalized = false;
   mEdgeWidth = 0;
   mEdgeHeight = 0;
+  mMarkadLogoPath.clear();
+}
+
+QString TTLogoDetector::markadLogoPath() const
+{
+  return mMarkadLogoPath;
+}
+
+bool TTLogoDetector::isFromMarkadLogo() const
+{
+  return !mMarkadLogoPath.isEmpty();
 }
 
 int TTLogoDetector::sampleCount() const
