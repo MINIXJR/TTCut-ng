@@ -2,6 +2,35 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.64.0 (2026-03-29)
+
+**Logo-Erkennung, Pillarbox-Erkennung & UI-Verbesserungen**
+
+### Features
+- Logo-Erkennung: Senderlogo-Detektion via markad PGM-Import oder manueller ROI-Selektion
+  mit Sobel-Edge-Profiling fuer Werbeblock-Navigation
+- Logo-Profil-Persistenz in Projektdateien (.ttcut)
+- Pillarbox-Erkennung: 4:3 Inhalt in 16:9 Containern (schwarze Balken links/rechts)
+  mit 10-Sekunden-Hysterese, alle Codecs (MPEG-2, H.264, H.265)
+- Fortschrittsdialog fuer Landezonen-Analyse (Prozentanzeige, Abbrechen-Button)
+- Projektdatei-Endung: Neue Projekte speichern als `.ttcut` (`.prj` wird weiterhin geladen)
+- ttcut-pts-analyze: mmap-basierter Start-Code-Scanner mit Multi-Thread Decode-Testing
+  (ersetzt ttcut-esrepair)
+- Smart Cut Performance: mmap Bulk-Write-Optimierung fuer Stream-Copy
+- Extra-Frame-Korrektur fuer A/V-Sync und Quality-Check bei defekten MPEG-2 Streams
+
+### Fixes
+- Fix: Projektdatei-Parser behandelte LogoProfile/StreamPoint XML-Elemente als Video-Streams
+- Fix: Zeitsprung zentriert auf aktuellen Frame mit Anker-basiertem Intervallfilter
+- Fix: Alle 25 Security-Audit-Findings behoben (Bounds-Checks, Cleanup)
+- Fix: H.265 false positives bei Decode-Testing (AV_EF_CAREFUL nur fuer H.264/H.265)
+
+### Changes
+- Redundante F-Buttons aus Navigation-Widget entfernt, Frame-Typ-Labels hinzugefuegt (I, P/I, B/P/I)
+- Redundanter "Cut-Out setzen" Eintrag aus Schnittlisten-Kontextmenue entfernt, Eintraege neu sortiert
+- Uebersetzungen aktualisiert (25 neue Strings)
+- Tools in eigene Unterverzeichnisse verschoben, Debian-Build aktualisiert
+
 ## v0.63.0 (2026-03-22)
 
 **Screenshot-Automation, Dirty-Tracking & Sicherheitsfixes**

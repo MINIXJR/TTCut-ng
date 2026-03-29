@@ -105,12 +105,12 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1033"/>
+        <location filename="../data/ttavdata.cpp" line="1042"/>
         <source>Schnitt %1: Audio-Burst am Ende (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1040"/>
+        <location filename="../data/ttavdata.cpp" line="1049"/>
         <source>The following cuts have detected audio bursts:
 
 </source>
@@ -119,7 +119,7 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1042"/>
+        <location filename="../data/ttavdata.cpp" line="1051"/>
         <source>
 
 Use preview to check if shift is needed.</source>
@@ -128,77 +128,77 @@ Use preview to check if shift is needed.</source>
 Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1044"/>
+        <location filename="../data/ttavdata.cpp" line="1053"/>
         <source>Audio Burst Warning</source>
         <translation>Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1045"/>
+        <location filename="../data/ttavdata.cpp" line="1054"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1045"/>
+        <location filename="../data/ttavdata.cpp" line="1054"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1047"/>
+        <location filename="../data/ttavdata.cpp" line="1056"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1100"/>
+        <location filename="../data/ttavdata.cpp" line="1109"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1153"/>
+        <location filename="../data/ttavdata.cpp" line="1162"/>
         <source>deleting existing subtitle cut file: %1</source>
         <translation>Lösche vorhandene Untertitel-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1203"/>
+        <location filename="../data/ttavdata.cpp" line="1212"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1205"/>
+        <location filename="../data/ttavdata.cpp" line="1214"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1258"/>
+        <location filename="../data/ttavdata.cpp" line="1267"/>
         <source>Cutting failed - could not initialize</source>
         <translation>Schneiden fehlgeschlagen - Initialisierung nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1287"/>
+        <location filename="../data/ttavdata.cpp" line="1296"/>
         <source>Cutting video (Smart Cut)...</source>
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1291"/>
+        <location filename="../data/ttavdata.cpp" line="1300"/>
         <source>Cutting failed</source>
         <translation>Schneiden fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1323"/>
+        <location filename="../data/ttavdata.cpp" line="1332"/>
         <source>Cutting audio track %1...</source>
         <translation>Schneide Audiospur %1...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1364"/>
+        <location filename="../data/ttavdata.cpp" line="1373"/>
         <source>Muxing video and audio...</source>
         <translation>Multiplexe Video und Audio...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1418"/>
+        <location filename="../data/ttavdata.cpp" line="1427"/>
         <source>Muxing failed</source>
         <translation>Multiplexen fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1426"/>
+        <location filename="../data/ttavdata.cpp" line="1435"/>
         <source>H.264/H.265 cutting complete</source>
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
@@ -617,84 +617,87 @@ p, li { white-space: pre-wrap; }
 <context>
     <name>TTCutFrameNavigation</name>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="59"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="60"/>
         <source>◀ I</source>
         <translation>◀ I</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="62"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="63"/>
         <source>I ▶</source>
         <translation>I ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="67"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="68"/>
         <source>◀ P</source>
         <translation>◀ P</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="70"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="71"/>
         <source>P ▶</source>
         <translation>P ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="75"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="76"/>
         <source>◀ B</source>
         <translation>◀ B</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="78"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="79"/>
         <source>B ▶</source>
         <translation>B ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="83"/>
         <source>◀ F</source>
-        <translation>◀ F</translation>
+        <translation type="vanished">◀ F</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="86"/>
         <source>F ▶</source>
-        <translation>F ▶</translation>
+        <translation type="vanished">F ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="90"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="83"/>
         <source>◀</source>
         <translation>◀</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="92"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="85"/>
         <source>▶</source>
         <translation>▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="101"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="94"/>
         <source>◀ ◧</source>
         <translation>◀ ◧</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="104"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="97"/>
         <source>◧ ▶</source>
         <translation>◧ ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="116"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="111"/>
         <source>◀ ⬦</source>
         <translation>◀ ⬦</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="119"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="114"/>
         <source>⬦ ▶</source>
         <translation>⬦ ▶</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="489"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="480"/>
         <source>Add range to cut list</source>
         <translation>Bereich zur Schnittliste hinzufügen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutframenavigation.cpp" line="539"/>
+        <location filename="../gui/ttcutframenavigation.cpp" line="530"/>
         <source>Update range in cut list</source>
         <translation>Bereich in der Schnittliste aktualisieren</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutframenavigation.cpp" line="650"/>
+        <source>Logo-Datei laden...</source>
+        <translation>Logo-Datei laden...</translation>
     </message>
 </context>
 <context>
@@ -705,198 +708,244 @@ p, li { white-space: pre-wrap; }
         <translation>Form</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="67"/>
         <source>Go to previous I-Frame</source>
-        <translation>Zum vorherigen I-Frame springen</translation>
+        <translation type="vanished">Zum vorherigen I-Frame springen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="70"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="180"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="290"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="375"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="477"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="190"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="310"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="422"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="99"/>
         <source>Go to next I-Frame</source>
-        <translation>Zum nächsten I-Frame</translation>
+        <translation type="vanished">Zum nächsten I-Frame</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="102"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="212"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="322"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="407"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="509"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="222"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="342"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="454"/>
         <source>&gt;</source>
         <translation>&gt;</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="144"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="154"/>
         <source>Set cut-in</source>
         <translation>Cut-In setzen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="177"/>
         <source>Go to previous P-Frame</source>
-        <translation>Zum vorherigen P-Frame</translation>
+        <translation type="vanished">Zum vorherigen P-Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="209"/>
         <source>Go to next P-Frame</source>
-        <translation>Zum nächsten P-Frame</translation>
+        <translation type="vanished">Zum nächsten P-Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="254"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="274"/>
         <source>Set cut-out</source>
         <translation>Cut-Out setzen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="287"/>
         <source>Go to previous B-Frame</source>
-        <translation>Zum vorherigen B-Frame</translation>
+        <translation type="vanished">Zum vorherigen B-Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="319"/>
         <source>Go to next B-Frame</source>
-        <translation>Zum nächsten B-Frame</translation>
+        <translation type="vanished">Zum nächsten B-Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="372"/>
         <source>Go to previous frame</source>
-        <translation>Zum vorherigen Frame</translation>
+        <translation type="vanished">Zum vorherigen Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="404"/>
         <source>Go to next frame</source>
-        <translation>Zum nächsten Frame</translation>
+        <translation type="vanished">Zum nächsten Frame</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="474"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="419"/>
         <source>Vorheriges Schwarzbild suchen</source>
         <translation>Vorheriges Schwarzbild suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="506"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="451"/>
         <source>Nächstes Schwarzbild suchen</source>
         <translation>Nächstes Schwarzbild suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="551"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="496"/>
         <source>Schwarzbild-Suche abbrechen</source>
         <translation>Schwarzbild-Suche abbrechen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="554"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="699"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="881"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="499"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="644"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="826"/>
         <source>✕</source>
         <translation>✕</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="579"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="524"/>
         <source>Schwellwert für Schwarzbild-Erkennung</source>
         <translation>Schwellwert für Schwarzbild-Erkennung</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="627"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="572"/>
         <source>Vorherigen Szenenwechsel suchen</source>
         <translation>Vorherigen Szenenwechsel suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="655"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="600"/>
         <source>Nächsten Szenenwechsel suchen</source>
         <translation>Nächsten Szenenwechsel suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="696"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="641"/>
         <source>Szenenwechsel-Suche abbrechen</source>
         <translation>Szenenwechsel-Suche abbrechen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="724"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="669"/>
         <source>Schwellwert für Szenenwechsel-Erkennung</source>
         <translation>Schwellwert für Szenenwechsel-Erkennung</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="772"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="779"/>
         <source>Senderlogo-Bereich auswählen. Das Referenzprofil wird aus 10 aufeinanderfolgenden I-Frames gemittelt — achten Sie darauf, dass alle Frames das Logo enthalten.</source>
         <translation>Senderlogo-Bereich auswählen. Das Referenzprofil wird aus 10 aufeinanderfolgenden I-Frames gemittelt — achten Sie darauf, dass alle Frames das Logo enthalten.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="775"/>
         <source>Select</source>
-        <translation>Auswählen</translation>
+        <translation type="vanished">Auswählen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="803"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="67"/>
+        <source>Previous I-Frame (keyframe only)</source>
+        <translation>Vorheriger I-Frame (nur Keyframes)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="99"/>
+        <source>Next I-Frame (keyframe only)</source>
+        <translation>Nächster I-Frame (nur Keyframes)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="113"/>
+        <source>I</source>
+        <translation>I</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="116"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="236"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="356"/>
+        <source>color: #888888;</source>
+        <translation>color: #888888;</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="187"/>
+        <source>Previous P- or I-Frame</source>
+        <translation>Vorheriger P- oder I-Frame</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="219"/>
+        <source>Next P- or I-Frame</source>
+        <translation>Nächster P- oder I-Frame</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="233"/>
+        <source>P/I</source>
+        <translation>P/I</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="307"/>
+        <source>Previous frame (B, P, or I)</source>
+        <translation>Vorheriger Frame (B, P oder I)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="339"/>
+        <source>Next frame (B, P, or I)</source>
+        <translation>Nächster Frame (B, P oder I)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="353"/>
+        <source>B/P/I</source>
+        <translation>B/P/I</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="717"/>
         <source>Vorherige Logo-Statusänderung suchen</source>
         <translation>Vorherige Logo-Statusänderung suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="834"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="748"/>
         <source>Nächste Logo-Statusänderung suchen</source>
         <translation>Nächste Logo-Statusänderung suchen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="878"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="782"/>
+        <source>⌖</source>
+        <translation>⌖</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="823"/>
         <source>Logo-Suche abbrechen</source>
         <translation>Logo-Suche abbrechen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="906"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="851"/>
         <source>Schwellwert für Logo-Erkennung (NCC)</source>
         <translation>Schwellwert für Logo-Erkennung (NCC)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="971"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="916"/>
         <source>Go to cut-in position</source>
         <translation>Zur Cut-In Position</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="974"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="919"/>
         <source>In</source>
         <translation>In</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1003"/>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1068"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="948"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1013"/>
         <source>...</source>
         <translation>...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1036"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="981"/>
         <source>Go to cut-out position</source>
         <translation>Zur Cut-Out Position</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1039"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="984"/>
         <source>Out</source>
         <translation>Out</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1107"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1052"/>
         <source>Add range to cut list</source>
         <translation>Bereich zur Schnittliste hinzufügen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1148"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1093"/>
         <source>Jump to a specific frame or time</source>
         <translation>Zu einem bestimmten Frame oder Zeitpunkt springen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1151"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1096"/>
         <source>Zeitsprung ...</source>
         <translation>Zeitsprung ...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1176"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1121"/>
         <source>Set a marker at current position</source>
         <translation>Marker an aktueller Position setzen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutframenavigationwidget.ui" line="1179"/>
+        <location filename="../ui/ttcutframenavigationwidget.ui" line="1124"/>
         <source>Set marker</source>
         <translation>Marker setzen</translation>
     </message>
@@ -982,84 +1031,83 @@ p, li { white-space: pre-wrap; }
 <context>
     <name>TTCutMainWindow</name>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="382"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="387"/>
         <source>Open video file</source>
         <translation>Video öffnen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="384"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="389"/>
         <source>All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;MPEG-2 Video (*.m2v *.mpv);;H.264/AVC (*.264 *.h264);;H.265/HEVC (*.265 *.h265 *.hevc);;All Files (*)</source>
         <translation>All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;MPEG-2 Video (*.m2v *.mpv);;H.264/AVC (*.264 *.h264);;H.265/HEVC (*.265 *.h265 *.hevc);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="405"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="410"/>
         <source>Open audio file</source>
         <translation>Audio öffnen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="407"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="412"/>
         <source>All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;MPEG Audio (*.mpa *.mp2);;AC3/Dolby Digital (*.ac3 *.eac3);;AAC Audio (*.aac *.m4a);;DTS Audio (*.dts);;All Files (*)</source>
         <translation>All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;MPEG Audio (*.mpa *.mp2);;AC3/Dolby Digital (*.ac3 *.eac3);;AAC Audio (*.aac *.m4a);;DTS Audio (*.dts);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="430"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="435"/>
         <source>Open subtitle file</source>
         <translation>Untertiteldatei öffnen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="452"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="457"/>
         <source>New Project</source>
         <translation>Neues Projekt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="453"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="458"/>
         <source>Close current project and start a new one?
 Unsaved changes will be lost.</source>
         <translation>Aktuelles Projekt schließen und ein neues beginnen?
 Nicht gespeicherte Änderungen gehen verloren.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="469"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="474"/>
         <source>Open project-file</source>
         <translation>Projekt öffnen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="492"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="497"/>
         <source>Save project-file</source>
         <translation>Projekt speichern</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="511"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="527"/>
         <source>error save project file: %1</source>
         <translation>Fehler beim Speichern der Projektdatei %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="532"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="548"/>
         <source>Save project-file as</source>
         <translation>Projekt speichern unter</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="583"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="599"/>
         <source>Exit</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="584"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="600"/>
         <source>Save changes before closing?</source>
         <translation>Änderungen vor dem Schließen speichern?</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="644"/>
         <source>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Previous/Next frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (vim-style)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %1 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %2 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %3 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Page Up/Down&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %4 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Home / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to first frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;End / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to last frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame Types&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous P-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous B-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Cutting&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-in point&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-out point&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Mouse&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mouse wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate faster&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Umschalt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Strg+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Strg+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Strg+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger B-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Strg+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+        <translation type="vanished">&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Umschalt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Strg+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Strg+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Strg+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger B-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Strg+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="679"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="695"/>
         <source>Keyboard Shortcuts</source>
         <translation>Tastenkürzel</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="731"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="747"/>
         <source>Audio and video length differ by %1 seconds.
 
 Video: %2
@@ -1074,135 +1122,168 @@ Audio: %3
 Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="737"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="753"/>
         <source>Length Mismatch</source>
         <translation>Längenunterschied</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="821"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="887"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="831"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="899"/>
         <source>Stream Points</source>
         <translation>Stream-Punkte</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="822"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="832"/>
         <source>No video stream loaded.</source>
         <translation>Kein Videostream geladen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="888"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="900"/>
         <source>No detection methods enabled. Check Settings tab.</source>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1262"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1859"/>
         <source>Lade Logo-Profil...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1268"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1285"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1865"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1931"/>
         <source>Logo-Profil geladen: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1270"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="660"/>
+        <source>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Previous/Next frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (vim-style)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %1 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %2 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %3 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Page Up/Down&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %4 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Home / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to first frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;End / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to last frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame Types&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous P- or I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (B, P, or I)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (same as B)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Cutting&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-in point&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-out point&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Mouse&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mouse wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate faster&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
+        <translation>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P- oder I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (B, P oder I)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (wie B)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Rad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1276"/>
+        <source>Lade Logo-Profil (%1/%2 Frames)...</source>
+        <translation>Lade Logo-Profil (%1/%2 Frames)...</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1287"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1867"/>
         <source>Logo-Profil konnte nicht verifiziert werden</source>
         <translation>Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1420"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1439"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
 Recommendation: Use ProjectX to demux this file instead.</source>
-        <translation type="unfinished">%1 Dekodierungsfehler in %2 Region(en) beim Demux erkannt.
+        <translation>%1 Dekodierungsfehler in %2 Region(en) beim Demux erkannt.
 
 Dieser MPEG-2 Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursachen können.
 Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1424"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1443"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1425"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1426"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1427"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1428"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1429"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1430"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1431"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1444"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1445"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1446"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1447"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1448"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1449"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1450"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1434"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1453"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1436"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1455"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1615"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1646"/>
         <source>Schwarzbild-Suche abgebrochen</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1620"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1651"/>
         <source>Kein Schwarzbild gefunden</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1778"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1809"/>
         <source>Szenenwechsel-Suche abgebrochen</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1783"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1814"/>
         <source>Kein Szenenwechsel gefunden</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1799"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1830"/>
         <source>Logo-Bereich im Videobild auswählen...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1839"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1844"/>
+        <source>Logo-Datei laden</source>
+        <translation>Logo-Datei laden</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1844"/>
+        <source>PGM Logo (*.pgm)</source>
+        <translation>PGM Logo (*.pgm)</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1880"/>
+        <source>Logo-Profil entfernt</source>
+        <translation>Logo-Profil entfernt</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1894"/>
+        <source>Logo-Datei nicht gefunden: %1</source>
+        <translation>Logo-Datei nicht gefunden: %1</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1981"/>
         <source>Erstelle Logo-Profil (%1/%2 Frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1868"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2010"/>
         <source>Logo-Profil erstellt (%1 Frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1871"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2013"/>
         <source>Logo-Profil konnte nicht erstellt werden</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1976"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2118"/>
         <source>Logo-Suche abgebrochen</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1981"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2123"/>
         <source>Keine Logo-Statusänderung gefunden</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1053"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1071"/>
         <source>Cutting Complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1054"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1072"/>
         <source>Video cutting has finished successfully.
 
 Output file:
@@ -1213,7 +1294,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1503"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1534"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -1919,151 +2000,149 @@ Ausgabedatei:
         <translation>Hinweis</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="612"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="594"/>
         <source>Burst start+end</source>
         <translation>Burst Anfang+Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="614"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="596"/>
         <source>Burst end</source>
         <translation>Burst Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="616"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="598"/>
         <source>Burst start</source>
         <translation>Burst Anfang</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="719"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="701"/>
         <source>AC3 start+end</source>
         <translation>AC3 Anfang+Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="721"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="703"/>
         <source>AC3 start</source>
         <translation>AC3 Anfang</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="723"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="705"/>
         <source>AC3 end</source>
         <translation>AC3 Ende</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="732"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="714"/>
         <source>Audio format change at start: %1 → %2</source>
         <translation>Audioformatwechsel am Anfang: %1 → %2</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="736"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="718"/>
         <source>Audio format change at end: %1 → %2</source>
         <translation>Audioformatwechsel am Ende: %1 → %2</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="740"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="722"/>
         <source>
 (Will be normalized during cut)</source>
         <translation>
 (Wird beim Schnitt normalisiert)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="753"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="735"/>
         <source>Move &amp;up</source>
         <translation>Nach &amp;oben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="755"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="737"/>
         <source>Move selected cut one position upward</source>
         <translation>Verschiebt den ausgewählten Eintrag eine Position nach oben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="758"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="740"/>
         <source>&amp;Delete</source>
         <translation>&amp;Entfernen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="760"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="742"/>
         <source>Remove selected cut from list</source>
         <translation>Entfernt den ausgewählten Eintrag aus der Liste</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="763"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="745"/>
         <source>Duplicate Cut</source>
         <translation>Schnitt duplizieren</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="765"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="747"/>
         <source>Duplicate the selected cut</source>
         <translation>Dupliziert den ausgewählten Schnittpunkt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="768"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="750"/>
         <source>Move d&amp;own</source>
         <translation>Nach &amp;unten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="770"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="752"/>
         <source>Move selected cut one position downward</source>
         <translation>Verschiebt den ausgewählten Eintrag eine Position nach unten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="773"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="755"/>
         <source>Edit &amp;cut</source>
         <translation>Schnitt &amp;bearbeiten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="775"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="757"/>
         <source>Edit selected cut</source>
         <translation>Öffnet den ausgewählten Schnitt zum Bearbeiten</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="778"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="760"/>
         <source>Preview cut</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="780"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="762"/>
         <source>Preview selected cut</source>
         <translation>Vorschau des ausgewählten Schnittpunktes</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="783"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="765"/>
         <source>Cut selected entries</source>
         <translation>Auswahl schneiden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="785"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="767"/>
         <source>Cut the selected entries</source>
         <translation>Schneidet nur die ausgewählten Einträge</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="788"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="770"/>
         <source>Goto Cut-In</source>
         <translation>Gehe zu Cut-In</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="790"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="772"/>
         <source>Goto selected cut-in position</source>
         <translation>Zeigt die Cut-In Position des ausgewählten Eintrags an</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="793"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="775"/>
         <source>Goto Cut-Out</source>
         <translation>Gehe zu Cut-Out</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="795"/>
+        <location filename="../gui/ttcuttreeview.cpp" line="777"/>
         <source>Goto selected cut-out position</source>
         <translation>Zeigt die Cut-Out Position des ausgewählten Eintrags an</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="798"/>
         <source>Set Cut-Out</source>
-        <translation>Zeige Cut-Out</translation>
+        <translation type="vanished">Zeige Cut-Out</translation>
     </message>
     <message>
-        <location filename="../gui/ttcuttreeview.cpp" line="800"/>
         <source>Show selected cut-out frame in cut-out window</source>
-        <translation>Zeigt den Cut-Out Frame des ausgewählten Eintrags im Cut-Out Fenster an</translation>
+        <translation type="vanished">Zeigt den Cut-Out Frame des ausgewählten Eintrags im Cut-Out Fenster an</translation>
     </message>
 </context>
 <context>
@@ -2813,6 +2892,16 @@ Unterstützte Formate:
         <translation>Audio wird analysiert...</translation>
     </message>
     <message>
+        <location filename="../data/ttstreampoint_audioworker.cpp" line="51"/>
+        <source>Stille-Erkennung...</source>
+        <translation>Stille-Erkennung...</translation>
+    </message>
+    <message>
+        <location filename="../data/ttstreampoint_audioworker.cpp" line="60"/>
+        <source>Audioformat-Erkennung...</source>
+        <translation>Audioformat-Erkennung...</translation>
+    </message>
+    <message>
         <location filename="../data/ttstreampoint_audioworker.cpp" line="71"/>
         <source>Audio analysis complete</source>
         <translation>Audioanalyse abgeschlossen</translation>
@@ -2821,14 +2910,29 @@ Unterstützte Formate:
 <context>
     <name>TTStreamPointVideoWorker</name>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="29"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="40"/>
         <source>Analyzing video...</source>
         <translation>Video wird analysiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="43"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="45"/>
+        <source>Seitenverhältnis-Analyse...</source>
+        <translation>Seitenverhältnis-Analyse...</translation>
+    </message>
+    <message>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="53"/>
+        <source>Pillarbox-Analyse...</source>
+        <translation>Pillarbox-Analyse...</translation>
+    </message>
+    <message>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="65"/>
         <source>Video analysis complete</source>
         <translation>Videoanalyse abgeschlossen</translation>
+    </message>
+    <message>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="314"/>
+        <source>Pillarbox: %1 I-frames analyzed, %2 changes</source>
+        <translation>Pillarbox: %1 I-Frames analysiert, %2 Änderungen</translation>
     </message>
 </context>
 <context>
@@ -2845,7 +2949,7 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="84"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="166"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="192"/>
         <source>Analyse starten</source>
         <translation>Analyse starten</translation>
     </message>
@@ -2871,7 +2975,7 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="88"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="217"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="243"/>
         <source>Delete all</source>
         <translation>Alle löschen</translation>
     </message>
@@ -2881,32 +2985,42 @@ Unterstützte Formate:
         <translation>Seitenverhältnis (4:3/16:9)</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="161"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="134"/>
+        <source>Pillarbox-Erkennung (4:3 in 16:9)</source>
+        <translation>Pillarbox-Erkennung (4:3 in 16:9)</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttstreampointwidget.cpp" line="139"/>
+        <source>Schwellwert (Luminanz):</source>
+        <translation>Schwellwert (Luminanz):</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttstreampointwidget.cpp" line="187"/>
         <source>Abbrechen</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="162"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="188"/>
         <source>Analyse läuft...</source>
         <translation>Analyse läuft...</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="169"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="195"/>
         <source>%1 stream points detected</source>
         <translation>%1 Landezonen erkannt</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="208"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="234"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="210"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="236"/>
         <source>Set as Cut-In</source>
         <translation>Als Schnittanfang setzen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="211"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="237"/>
         <source>Set as Cut-Out</source>
         <translation>Als Schnittende setzen</translation>
     </message>
