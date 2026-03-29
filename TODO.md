@@ -55,11 +55,10 @@
 
 ## Medium Priority
 
-- **Decode error detection for H.264/H.265 streams during demux**
-  - Current MPEG-2 approach (`ffmpeg -err_detect +careful+explode`) shows false positives for H.264
-    and is too slow for H.265 (minutes for full decode pass)
-  - Needs different approach: possibly NAL-level consistency check or PTS analysis on TS before demux
-  - MPEG-2 detection works well (3.5s for 56min SD video)
+- ~~**Decode error detection for H.264/H.265 streams during demux**~~ → **DONE** (v0.63.0)
+  - Implemented as `ttcut-pts-analyze` (formerly `ttcut-esrepair`): mmap-based start-code scanner,
+    per-segment decode testing with custom AVIOContext, multi-threaded, integrated into ttcut-demux and TTCut-ng
+  - H.265 false positives fixed: `AV_EF_CAREFUL` only for H.264/H.265 (not MPEG-2)
 
 - **Projektdatei-Endung: .prj → .ttcut**
   - `.prj` ist generisch (AutoCAD, IDEs) — `.ttcut` ist eindeutig und programmspezifisch
@@ -102,6 +101,7 @@
 - Make the current frame position clickable (enter current frame position)
 - Prepare long term processes for user cancellation (abort button)
 - Internationalisation (i18n) - translate UI to other languages
+  - **de_DE: DONE** (v0.62.0) — alle 165 Strings übersetzt, Q_OBJECT/English source texts standardisiert
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
 
@@ -231,6 +231,12 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] H.264/H.265 A/V Sync in ttcut-demux: audio trim, padding, duration mismatch, bitrate autodetect, VDR multi-file
 - [x] Zeitsprung (Quick Jump) thumbnail browser dialog with interval filter (v0.61.7)
 - [x] Stream Point Detection: Landezonen widget with black frame, silence, audio format change, scene change detection via libavfilter; cut pair auto-derivation; .prj persistence (v0.62.0)
+- [x] Dirty-tracking for unsaved project changes (v0.62.1)
+- [x] Decode error detection for H.264/H.265 streams — ttcut-pts-analyze with mmap, multi-threaded decode testing (v0.63.0)
+- [x] Security audit: all 25 findings fixed (v0.63.0)
+- [x] German translations (de_DE): all 165 strings, Q_OBJECT standardization (v0.62.0)
+- [x] Screenshot automation: `--screenshots` CLI mode with test media generation
+- [x] MPEG-2 extra-frame correction for A/V sync and quality-check (v0.63.0)
 
 ## Known Limitations
 

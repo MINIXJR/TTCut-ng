@@ -16,6 +16,8 @@ All notable changes to TTCut-ng are documented in this file.
 - Fix: MPEG-2 Preview-Freeze beim Burst-Shift (Segmentgrenzen-Behandlung)
 - Fix: Security-Audit Findings — Bounds-Checks und Cleanup (2 Critical, 6 High)
 - Fix: Schnittliste Spalte 5 Header von "Burst" auf tr("Notice")/"Hinweis"
+- Fix: Zeitsprung zentriert auf aktuellen Frame mit Anker-basiertem Intervallfilter
+  (vorher: feste Seitengrenzen, aktueller Keyframe oft nicht sichtbar)
 
 ### Changes
 - i18n-Standardisierung: Q_OBJECT Makros, englische Source-Texte, QString(tr()) Fixes
