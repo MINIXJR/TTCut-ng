@@ -75,6 +75,13 @@ public:
     // Total duration for chapter end calculation (avoids INT64_MAX overflow)
     void setTotalDurationMs(qint64 durationMs);
 
+    // PAFF: H.264 field-coded stream — 2 field packets per frame in ES.
+    // log2MaxFrameNum needed to parse field_pic_flag from slice headers.
+    void setIsPAFF(bool paff, int log2MaxFrameNum = 4) {
+        mIsPAFF = paff;
+        mH264Log2MaxFrameNum = log2MaxFrameNum;
+    }
+
     // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -93,6 +100,8 @@ private:
     int mAudioSyncOffsetMs;
     int mVideoSyncOffsetMs;
     qint64 mTotalDurationMs;
+    bool mIsPAFF;
+    int mH264Log2MaxFrameNum;
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
 

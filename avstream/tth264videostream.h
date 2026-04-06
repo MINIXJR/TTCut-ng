@@ -61,6 +61,8 @@ public:
 
     // Frame rate (override to use stored value instead of MPEG-2 sequence header)
     virtual float frameRate() override;
+    virtual bool isPAFF() const override { return mFFmpeg && mFFmpeg->isPAFF(); }
+    virtual int paffLog2MaxFrameNum() const override;
 
     // Header and index list creation (using libav)
     virtual int createHeaderList() override;

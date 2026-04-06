@@ -224,6 +224,8 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 
 1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
 
+2. **PAFF Smart Cut: MBAFF→PAFF transition handled via EOS + MMCO neutralization**: For H.264 PAFF (1080i50) content, x264 produces MBAFF output while the stream-copy section is PAFF. An EOS NAL flushes the decoder DPB at the transition, and MMCO commands in the first 32 stream-copy AUs are neutralized (adaptive_ref_pic_marking_mode_flag set to 0) to prevent DPB management errors on the empty DPB. All 7/7 test previews pass decoder-error-free.
+
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
 ### Navigation and Smart Cut Fixes (v0.61.1–v0.61.7)

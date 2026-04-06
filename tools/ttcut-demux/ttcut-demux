@@ -717,6 +717,43 @@ if $ES_MODE; then
     FRAME_RATE_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
     FRAME_RATE_DEN="${FRAME_RATE_DEN:-1}"  # Default to 1 if not fractional
 
+    # Detect interlaced: for PAFF/MBAFF content, ffprobe may report the field
+    # rate as r_frame_rate (e.g. 50/1 for 25fps PAFF). The original TS typically
+    # reports the correct frame rate (25/1), but the ES after filler stripping
+    # may report the field rate (50/1). Only halve if r_frame_rate is actually
+    # the field rate (roughly 2x the expected frame rate).
+    if $ES_MODE; then
+        FIELD_ORDER=$(ffprobe -v error -select_streams v:0 \
+            -show_entries stream=field_order \
+            -of default=noprint_wrappers=1:nokey=1 "$OUTPUT_VIDEO" 2>/dev/null)
+
+        if [[ -n "$FIELD_ORDER" && "$FIELD_ORDER" != "progressive" && "$FIELD_ORDER" != "unknown" ]]; then
+            # Check if FRAME_RATE is actually the field rate by comparing with
+            # avg_frame_rate from the ES. If r_frame_rate ≈ 2 × avg_frame_rate,
+            # then r_frame_rate is the field rate and needs halving.
+            AVG_FPS=$(ffprobe -v error -select_streams v:0 \
+                -show_entries stream=avg_frame_rate \
+                -of default=noprint_wrappers=1:nokey=1 "$OUTPUT_VIDEO" 2>/dev/null)
+            AVG_NUM=$(echo "$AVG_FPS" | cut -d'/' -f1)
+            AVG_DEN=$(echo "$AVG_FPS" | cut -d'/' -f2)
+            AVG_DEN="${AVG_DEN:-1}"
+
+            # Calculate ratio: r_frame_rate / avg_frame_rate
+            # If ≈ 2.0, then r_frame_rate is the field rate → halve it
+            if [[ -n "$AVG_NUM" && "$AVG_NUM" -gt 0 && "$AVG_DEN" -gt 0 ]]; then
+                RATIO=$(awk "BEGIN {printf \"%.1f\", ($FRAME_RATE_NUM / $FRAME_RATE_DEN) / ($AVG_NUM / $AVG_DEN)}")
+                if [[ "$RATIO" == "2.0" ]]; then
+                    ORIG_RATE="$FRAME_RATE_NUM/$FRAME_RATE_DEN"
+                    FRAME_RATE_NUM=$((FRAME_RATE_NUM / 2))
+                    FRAME_RATE="${FRAME_RATE_NUM}/${FRAME_RATE_DEN}"
+                    info "  Interlaced ($FIELD_ORDER): corrected field rate $ORIG_RATE to frame rate $FRAME_RATE"
+                else
+                    info "  Interlaced ($FIELD_ORDER): r_frame_rate=$FRAME_RATE_NUM/$FRAME_RATE_DEN is already frame rate (ratio=$RATIO)"
+                fi
+            fi
+        fi
+    fi
+
     # Get video duration - use container duration if available (FAST)
     # Otherwise fall back to probing elementary stream (slow)
     if [ -n "$CONTAINER_VIDEO_DURATION" ]; then

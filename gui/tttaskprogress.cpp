@@ -44,7 +44,7 @@ TTTaskProgress::TTTaskProgress(QWidget* parent, TTThreadTask* task)
   setupUi( this );
 
   progressBar->setMinimum(0);
-  progressBar->setMaximum(1000);
+  progressBar->setMaximum(100);
 
   mpTask = task;
 }
@@ -73,8 +73,8 @@ void TTTaskProgress::onTaskFinished(const QString& msg)
 void TTTaskProgress::onRefreshProgress(const QString& msg)
 {
   lblAction->setText(msg);
-  lblPercent->setText(QString("%1%").arg(mpTask->processValue()/1000.0, 0, 'f', 0));
-  progressBar->setValue(mpTask->processValue()/100);
+  lblPercent->setText(QString("%1%").arg(mpTask->processValue()));
+  progressBar->setValue(mpTask->processValue());
 }
 
 

@@ -161,6 +161,8 @@ class TTVideoStream : public TTAVStream
 
   int     frameCount();
   virtual float   frameRate();
+  virtual bool    isPAFF() const { return false; }
+  virtual int     paffLog2MaxFrameNum() const { return 4; }
   float   bitRate();
   QTime   streamLengthTime();
   int     currentFrameType();

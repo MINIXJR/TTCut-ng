@@ -24,6 +24,7 @@ TTNaluParser::TTNaluParser()
     : mFileSize(0)
     , mCodecType(NALU_CODEC_UNKNOWN)
     , mMappedFile(nullptr)
+    , mIsPAFF(false)
 {
 }
 
@@ -86,6 +87,9 @@ void TTNaluParser::closeFile()
     mSPSList.clear();
     mPPSList.clear();
     mVPSList.clear();
+    mSpsInfoMap.clear();
+    mPpsToSpsMap.clear();
+    mIsPAFF = false;
     mCodecType = NALU_CODEC_UNKNOWN;
     mFileSize = 0;
 }
@@ -212,8 +216,26 @@ bool TTNaluParser::parseFile()
             nalCount++;
 
             // Track parameter sets (deduplicated after parse loop when sizes are set)
-            if (nal.isSPS) mSPSList.append(nalCount - 1);
-            if (nal.isPPS) mPPSList.append(nalCount - 1);
+            if (nal.isSPS) {
+                mSPSList.append(nalCount - 1);
+                // Parse SPS for PAFF detection (H.264 only)
+                // Note: nal.dataSize may be 0 here (set when next NAL is found),
+                // so we read a fixed amount from dataOffset directly
+                if (mCodecType == NALU_CODEC_H264) {
+                    mFile.seek(nal.dataOffset);
+                    QByteArray spsData = mFile.read(512);
+                    parseH264SpsData(spsData);
+                }
+            }
+            if (nal.isPPS) {
+                mPPSList.append(nalCount - 1);
+                // Parse PPS for PPS->SPS mapping (H.264 only)
+                if (mCodecType == NALU_CODEC_H264) {
+                    mFile.seek(nal.dataOffset);
+                    QByteArray ppsData = mFile.read(64);
+                    parseH264PpsData(ppsData);
+                }
+            }
             if (nal.isVPS) mVPSList.append(nalCount - 1);
 
             // Progress output
@@ -345,6 +367,8 @@ bool TTNaluParser::parseNalUnit(int64_t offset, int startCodeLen, TTNalUnit& nal
     nal.poc = -1;
     nal.firstMbInSlice = -1;
     nal.ppsId = -1;
+    nal.isField = false;
+    nal.isBottomField = false;
 
     // Read NAL header (first 1-2 bytes after start code)
     mFile.seek(nal.dataOffset);
@@ -420,7 +444,130 @@ bool TTNaluParser::parseH264NalUnit(const QByteArray& data, TTNalUnit& nal)
 }
 
 // ----------------------------------------------------------------------------
-// Parse H.264 slice header (basic info only)
+// Parse H.264 SPS to extract fields needed for PAFF detection
+// H.264 spec Table 7-3: Sequence Parameter Set RBSP syntax
+// We need: sps_id, log2_max_frame_num_minus4, frame_mbs_only_flag
+// ----------------------------------------------------------------------------
+void TTNaluParser::parseH264SpsData(const QByteArray& data)
+{
+    if (data.size() < 5) return;
+
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
+    int bitPos = 8;  // Skip NAL header byte
+
+    // profile_idc (8 bits)
+    int profileIdc = static_cast<int>(readBits(bytes, data.size(), bitPos, 8));
+
+    // constraint_set0..5_flags (6 bits) + reserved (2 bits) = 8 bits
+    readBits(bytes, data.size(), bitPos, 8);
+
+    // level_idc (8 bits)
+    readBits(bytes, data.size(), bitPos, 8);
+
+    // seq_parameter_set_id (ue(v))
+    int spsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+
+    // For High profile and above, parse chroma_format_idc etc.
+    if (profileIdc == 100 || profileIdc == 110 || profileIdc == 122 ||
+        profileIdc == 244 || profileIdc == 44  || profileIdc == 83  ||
+        profileIdc == 86  || profileIdc == 118 || profileIdc == 128 ||
+        profileIdc == 138 || profileIdc == 139 || profileIdc == 134 ||
+        profileIdc == 135) {
+
+        // chroma_format_idc (ue(v))
+        int chromaFormatIdc = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+        if (chromaFormatIdc == 3) {
+            // separate_colour_plane_flag (1 bit)
+            readBits(bytes, data.size(), bitPos, 1);
+        }
+
+        // bit_depth_luma_minus8 (ue(v))
+        readExpGolombUE(bytes, data.size(), bitPos);
+        // bit_depth_chroma_minus8 (ue(v))
+        readExpGolombUE(bytes, data.size(), bitPos);
+
+        // qpprime_y_zero_transform_bypass_flag (1 bit)
+        readBits(bytes, data.size(), bitPos, 1);
+
+        // seq_scaling_matrix_present_flag (1 bit)
+        uint32_t scalingMatrixPresent = readBits(bytes, data.size(), bitPos, 1);
+        if (scalingMatrixPresent) {
+            int numLists = (chromaFormatIdc != 3) ? 8 : 12;
+            for (int i = 0; i < numLists; i++) {
+                uint32_t listPresent = readBits(bytes, data.size(), bitPos, 1);
+                if (listPresent) {
+                    int sizeOfList = (i < 6) ? 16 : 64;
+                    int lastScale = 8;
+                    int nextScale = 8;
+                    for (int j = 0; j < sizeOfList; j++) {
+                        if (nextScale != 0) {
+                            int deltaScale = readExpGolombSE(bytes, data.size(), bitPos);
+                            nextScale = (lastScale + deltaScale + 256) % 256;
+                        }
+                        lastScale = (nextScale == 0) ? lastScale : nextScale;
+                    }
+                }
+            }
+        }
+    }
+
+    // log2_max_frame_num_minus4 (ue(v))
+    int log2MaxFrameNumMinus4 = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+
+    // pic_order_cnt_type (ue(v))
+    int pocType = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    if (pocType == 0) {
+        readExpGolombUE(bytes, data.size(), bitPos);
+    } else if (pocType == 1) {
+        readBits(bytes, data.size(), bitPos, 1);
+        readExpGolombSE(bytes, data.size(), bitPos);
+        readExpGolombSE(bytes, data.size(), bitPos);
+        int numRefFrames = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+        for (int i = 0; i < numRefFrames; i++) {
+            readExpGolombSE(bytes, data.size(), bitPos);
+        }
+    }
+
+    readExpGolombUE(bytes, data.size(), bitPos);  // max_num_ref_frames
+    readBits(bytes, data.size(), bitPos, 1);       // gaps_in_frame_num
+    readExpGolombUE(bytes, data.size(), bitPos);   // pic_width
+    readExpGolombUE(bytes, data.size(), bitPos);   // pic_height
+
+    // frame_mbs_only_flag (1 bit) -- THIS IS WHAT WE NEED
+    bool frameMbsOnlyFlag = (readBits(bytes, data.size(), bitPos, 1) == 1);
+
+    TTSpsInfo info;
+    info.spsId = spsId;
+    info.log2MaxFrameNumMinus4 = log2MaxFrameNumMinus4;
+    info.frameMbsOnlyFlag = frameMbsOnlyFlag;
+    mSpsInfoMap[spsId] = info;
+
+    if (!frameMbsOnlyFlag) {
+        qDebug() << "  SPS" << spsId << ": frame_mbs_only_flag=0 (may contain field pictures)"
+                 << "log2_max_frame_num_minus4=" << log2MaxFrameNumMinus4;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Parse H.264 PPS to extract PPS ID -> SPS ID mapping
+// ----------------------------------------------------------------------------
+void TTNaluParser::parseH264PpsData(const QByteArray& data)
+{
+    if (data.size() < 2) return;
+
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
+    int bitPos = 8;  // Skip NAL header byte
+
+    int ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    int spsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+
+    mPpsToSpsMap[ppsId] = spsId;
+}
+
+// ----------------------------------------------------------------------------
+// Parse H.264 slice header
+// Extracts: first_mb_in_slice, slice_type, pps_id, frame_num,
+//           field_pic_flag, bottom_field_flag (for PAFF detection)
 // ----------------------------------------------------------------------------
 bool TTNaluParser::parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal)
 {
@@ -441,8 +588,25 @@ bool TTNaluParser::parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal)
     // pic_parameter_set_id (ue(v))
     nal.ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
 
-    // frame_num would require knowing log2_max_frame_num from SPS
-    // For now, we skip it
+    // Look up SPS via PPS -> SPS chain for frame_num bit-width and field info
+    int spsId = mPpsToSpsMap.value(nal.ppsId, -1);
+    if (spsId < 0 || !mSpsInfoMap.contains(spsId)) {
+        return true;  // Can't parse further without SPS info -- still valid
+    }
+
+    const TTSpsInfo& sps = mSpsInfoMap[spsId];
+
+    // frame_num -- u(log2_max_frame_num_minus4 + 4) bits
+    int frameNumBits = sps.log2MaxFrameNumMinus4 + 4;
+    nal.frameNum = static_cast<int>(readBits(bytes, data.size(), bitPos, frameNumBits));
+
+    // field_pic_flag -- only present if frame_mbs_only_flag == 0
+    if (!sps.frameMbsOnlyFlag) {
+        nal.isField = (readBits(bytes, data.size(), bitPos, 1) == 1);
+        if (nal.isField) {
+            nal.isBottomField = (readBits(bytes, data.size(), bitPos, 1) == 1);
+        }
+    }
 
     return true;
 }
@@ -604,6 +768,7 @@ void TTNaluParser::buildAccessUnits()
     currentAU.sliceType = -1;
     currentAU.poc = -1;
     currentAU.gopIndex = 0;
+    currentAU.isFieldCoded = false;
 
     int auCount = 0;
     int currentGop = 0;
@@ -655,6 +820,7 @@ void TTNaluParser::buildAccessUnits()
             currentAU.isIDR = false;
             currentAU.sliceType = -1;
             currentAU.poc = -1;
+            currentAU.isFieldCoded = false;
 
             // Check for new GOP
             if (nal.isKeyframe) {
@@ -689,6 +855,92 @@ void TTNaluParser::buildAccessUnits()
     }
 
     qDebug() << "  Built" << mAccessUnits.size() << "access units";
+
+    // Pass 2: Merge field pairs (PAFF)
+    bool hasFieldSlices = false;
+    if (mCodecType == NALU_CODEC_H264) {
+        bool spsAllowsFields = false;
+        for (auto it = mSpsInfoMap.constBegin(); it != mSpsInfoMap.constEnd(); ++it) {
+            if (!it.value().frameMbsOnlyFlag) {
+                spsAllowsFields = true;
+                break;
+            }
+        }
+
+        if (spsAllowsFields) {
+            int mergeCount = 0;
+            int i = 0;
+            while (i < mAccessUnits.size() - 1) {
+                TTAccessUnit& topAU = mAccessUnits[i];
+                TTAccessUnit& botAU = mAccessUnits[i + 1];
+
+                bool topIsField = false;
+                bool botIsField = false;
+                int topFrameNum = -1;
+                int botFrameNum = -1;
+
+                for (int idx : topAU.nalIndices) {
+                    if (mNalUnits[idx].isSlice) {
+                        topIsField = mNalUnits[idx].isField;
+                        topFrameNum = mNalUnits[idx].frameNum;
+                        break;
+                    }
+                }
+                for (int idx : botAU.nalIndices) {
+                    if (mNalUnits[idx].isSlice) {
+                        botIsField = mNalUnits[idx].isField;
+                        botFrameNum = mNalUnits[idx].frameNum;
+                        break;
+                    }
+                }
+
+                bool topIsTop = false;
+                bool botIsBot = false;
+                for (int idx : topAU.nalIndices) {
+                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
+                        topIsTop = !mNalUnits[idx].isBottomField;
+                        break;
+                    }
+                }
+                for (int idx : botAU.nalIndices) {
+                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
+                        botIsBot = mNalUnits[idx].isBottomField;
+                        break;
+                    }
+                }
+
+                if (topIsField && botIsField && topIsTop && botIsBot &&
+                    topFrameNum >= 0 && topFrameNum == botFrameNum) {
+                    topAU.nalIndices.append(botAU.nalIndices);
+                    topAU.endOffset = botAU.endOffset;
+                    topAU.isFieldCoded = true;
+                    hasFieldSlices = true;
+
+                    if (botAU.isKeyframe) topAU.isKeyframe = true;
+                    if (botAU.isIDR) topAU.isIDR = true;
+
+                    mAccessUnits.removeAt(i + 1);
+                    mergeCount++;
+                } else {
+                    i++;
+                }
+            }
+
+            if (mergeCount > 0) {
+                for (int j = 0; j < mAccessUnits.size(); j++) {
+                    mAccessUnits[j].index = j;
+                    mAccessUnits[j].decodeIndex = j;
+                }
+                mIsPAFF = true;
+                qDebug() << "  PAFF detected: merged" << mergeCount << "field pairs"
+                         << "-> " << mAccessUnits.size() << "frames";
+            }
+        }
+    }
+
+    if (!hasFieldSlices) {
+        mIsPAFF = false;
+    }
 }
 
 // ----------------------------------------------------------------------------

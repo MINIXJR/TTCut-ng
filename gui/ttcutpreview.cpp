@@ -652,13 +652,13 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList
   double frameRate = vStream->frameRate();
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
-  // Get frame rate and A/V offset from .info file
+  // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
   int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(sourceFile);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
     if (esInfo.isLoaded()) {
-      if (esInfo.frameRate() > 0)
+      if (frameRate <= 0 && esInfo.frameRate() > 0)
         frameRate = esInfo.frameRate();
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
         avOffsetMs = esInfo.avOffsetMs();
@@ -726,6 +726,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList
 
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }

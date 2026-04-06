@@ -132,6 +132,9 @@ public:
     QList<int> esExtraFrames() const { return mEsExtraFrames; }
     int countExtraFramesBefore(int frameIndex) const;
 
+    // Correct field rate to frame rate for PAFF streams (old .info files)
+    void correctFrameRateForPAFF();
+
     // Error handling
     QString lastError() const { return mLastError; }
 

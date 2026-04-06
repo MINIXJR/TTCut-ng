@@ -37,6 +37,45 @@ static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth);
 static int readPocLsbFromAU(const QByteArray& auData, int frameNumBitWidth,
                              int pocLsbBitWidth, bool frameMbsOnly);
 static bool findH264SpsInPacket(const QByteArray& packetData, H264SpsInfo& spsInfo);
+static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReorderFrames);
+
+// IDR injection and SPS unification helpers
+struct H264PpsInfo {
+    bool entropyCodingModeFlag;            // 0=CAVLC, 1=CABAC
+    bool bottomFieldPicOrderPresent;       // bottom_field_pic_order_in_frame_present_flag
+    bool deblockingFilterControlPresent;   // deblocking_filter_control_present_flag
+    bool redundantPicCntPresent;           // redundant_pic_cnt_present_flag
+    bool weightedPredFlag;                 // weighted_pred_flag (P-slices)
+    int  weightedBipredIdc;                // weighted_bipred_idc (B-slices)
+    int  numRefIdxL0DefaultActiveMinus1;   // for pred_weight_table parsing
+    int  numRefIdxL1DefaultActiveMinus1;   // for B-slice pred_weight_table parsing
+    bool valid;                            // true if parsing succeeded
+};
+static H264PpsInfo parseH264PpsInfo(const QByteArray& ppsNal);
+static QByteArray convertAUToIDR(const QByteArray& auData,
+    int log2MaxFrameNum, int pocType, int log2MaxPocLsb,
+    bool frameMbsOnly, const H264PpsInfo& pps);
+
+// SPS unification helpers (for PAFF seamless re-encode→stream-copy transition)
+static QByteArray rewriteEncoderSliceForSourceSps(
+    const QByteArray& nalBody,
+    int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
+    int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex);
+static QByteArray rewriteEncoderPacketForSourceSps(
+    const QByteArray& packetData,
+    int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
+    int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex);
+static QByteArray extractPpsFromPacket(const QByteArray& packetData);
+static QByteArray patchPpsId(const QByteArray& ppsNal, uint32_t newPpsId);
+
+// MMCO neutralization for stream-copy AUs after EOS
+static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
+    int log2MaxFrameNum, int pocLsbBitWidth, bool frameMbsOnly,
+    const H264PpsInfo& pps);
+static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWidth,
+    int frameNumDelta, int maxFrameNum);
 
 // ----------------------------------------------------------------------------
 // Constructor
@@ -62,6 +101,11 @@ TTESSmartCut::TTESSmartCut()
     , mEncoderLog2MaxPocLsb(0)
     , mEncoderPocType(-1)
     , mEncoderFrameMbsOnly(true)
+    , mSpsUnification(false)
+    , mSpsUnificationOutFile(nullptr)
+    , mEncoderPacketsWritten(0)
+    , mSyntheticPpsNeeded(false)
+    , mPpsReserveOffset(-1)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
@@ -120,6 +164,13 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
         return false;
     }
 
+    // Correct frame rate if PAFF detected with old .info file
+    if (mParser.isPAFF() && mFrameRate > 30) {
+        qDebug() << "TTESSmartCut: PAFF detected, correcting frame rate from" << mFrameRate
+                 << "to" << mFrameRate / 2.0;
+        mFrameRate /= 2.0;
+    }
+
     // Parse H.264 SPS for frame_num patching and POC domain mismatch fix
     if (mParser.codecType() == NALU_CODEC_H264 && mParser.spsCount() > 0) {
         QByteArray sps = mParser.getSPS(0);
@@ -167,6 +218,9 @@ void TTESSmartCut::cleanup()
     mFrameMbsOnly = true;
     mEncoderLog2MaxFrameNum = 0;
     mEncoderLog2MaxPocLsb = 0;
+    mSpsUnification = false;
+    mSpsUnificationOutFile = nullptr;
+    mEncoderPacketsWritten = 0;
     mEncoderPocType = -1;
     mEncoderFrameMbsOnly = true;
     mEncoderPts = 0;
@@ -265,6 +319,9 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mFramesStreamCopied = 0;
     mFramesReencoded = 0;
     mBytesWritten = 0;
+    mTotalFrames = 0;
+    mCurrentSegment = 0;
+    mTotalSegments = 0;
     mActualOutputRanges.clear();
 
     // Analyze cut points
@@ -293,6 +350,15 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         return false;
     }
 
+    // For PAFF H.264 SPS unification: encoder PPS(id=1) is written INLINE
+    // before the re-encode section (in processSegment), not at the ES start.
+    // Writing filler/PPS at the ES start corrupts the MKV muxer's NAL parsing
+    // ("Invalid NAL unit size" errors on all source keyframe AUs).
+    // Seeking into the re-encode section still works because the decoder finds
+    // the inline PPS when decoding from the nearest keyframe.
+    mSyntheticPpsNeeded = false;
+    mPpsReserveOffset = -1;
+
     // Detect B-frame reorder delay from parsed stream structure.
     // This is needed for SPS patching so the decoder pre-allocates its
     // reorder buffer instead of increasing it on-the-fly (which causes stutter).
@@ -304,9 +370,9 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     }
 
     // Process each segment
-    int totalFrames = 0;
+    mTotalFrames = 0;
     for (const auto& seg : segments) {
-        totalFrames += (seg.endFrame - seg.startFrame + 1);
+        mTotalFrames += (seg.endFrame - seg.startFrame + 1);
     }
 
     // H.264 frame_num patching: track cumulative delta for inter-segment continuity.
@@ -315,9 +381,10 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     int cumulativeFrameNumDelta = 0;
     int maxFrameNum = (mLog2MaxFrameNum > 0) ? (1 << mLog2MaxFrameNum) : 0;
 
-    int framesProcessed = 0;
+    mTotalSegments = segments.size();
     for (int i = 0; i < segments.size(); ++i) {
         const TTCutSegmentInfo& seg = segments[i];
+        mCurrentSegment = i + 1;
 
         qDebug() << "  Processing segment" << i << ":"
                  << "frames" << seg.startFrame << "->" << seg.endFrame;
@@ -396,14 +463,13 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
             }
         }
 
-        framesProcessed += (seg.endFrame - seg.startFrame + 1);
-        int percent = (framesProcessed * 100) / totalFrames;
-        emit progressChanged(percent, tr("Processing segment %1/%2")
-            .arg(i + 1).arg(segments.size()));
+        // Progress is emitted granularly from streamCopyFrames/reencodeFrames
     }
 
     outFile.close();
     mBytesWritten = QFileInfo(outputFile).size();
+
+    emit progressChanged(100, tr("Cut complete"));
 
     qDebug() << "TTESSmartCut: Complete";
     qDebug() << "  Frames stream-copied:" << mFramesStreamCopied;
@@ -554,7 +620,7 @@ bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut)
 // Each section starts with its own SPS/PPS + IDR, allowing clean decoder reset
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
-                                   int frameNumDelta, int* actualStartAU)
+                                   int& frameNumDelta, int* actualStartAU)
 {
     if (actualStartAU)
         *actualStartAU = -1;  // -1 = no adjustment
@@ -577,55 +643,198 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     qDebug() << "    Smart Cut: Re-encode" << segment.reencodeStartFrame << "->" << segment.reencodeEndFrame
              << "then stream-copy" << segment.streamCopyStartFrame << "->" << segment.streamCopyEndFrame;
 
-    // 1. Re-encode section (x264/x265 includes SPS/PPS automatically)
-    //    When B-frame reorder delay shifts the display-order CutIn past the
-    //    stream-copy boundary, re-encode is extended to the next keyframe.
-    //    adjustedStart receives the new stream-copy start if this happens.
-    int adjustedStart = -1;
-    if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                        segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
-        return false;
-    }
+    // PAFF H.264: SPS Unification — rewrite encoder output to match source SPS.
+    // This eliminates the MBAFF→PAFF mode switch at the transition, allowing
+    // seamless stream-copy without IDR/EOS DPB flush (which causes stutter).
+    // Strategy:
+    //   1. Write source SPS/PPS (id=0) before re-encode
+    //   2. Write encoder PPS with id=1 (extracted from first encoder packet)
+    //   3. Rewrite encoder slice NALs to use source SPS params + pps_id=1
+    //   4. At transition: no IDR, no EOS — just continue with stream-copy
+    //   5. Stream-copy frames use source PPS (id=0) naturally
+    // SPS Unification is only needed for PAFF (separated fields).
+    // MBAFF (frame-based interlacing) also has frame_mbs_only=0 but does NOT
+    // need SPS unification — the encoder produces MBAFF output that is compatible
+    // with the source MBAFF stream. Only PAFF has the MBAFF→PAFF mode mismatch.
+    // Force SPS Unification path for all PAFF segments (test: skip fallback)
+    bool useSpsUnification = (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264);
 
-    // Use adjusted stream-copy start if re-encode was extended past original boundary
-    int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
-    int scEnd = segment.streamCopyEndFrame;
+    if (useSpsUnification) {
+        qDebug() << "    PAFF SPS Unification: rewriting encoder output for source SPS";
+        qDebug() << "      Encoder: log2_fn=" << mEncoderLog2MaxFrameNum
+                 << "log2_poc=" << mEncoderLog2MaxPocLsb
+                 << "frame_mbs_only=" << mEncoderFrameMbsOnly;
+        qDebug() << "      Source:  log2_fn=" << mLog2MaxFrameNum
+                 << "log2_poc=" << mLog2MaxPocLsb
+                 << "frame_mbs_only=" << mFrameMbsOnly;
 
-    // Check if stream-copy range is still valid after adjustment
-    if (scStart > scEnd) {
-        qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
-        return true;
-    }
+        // 1. Write source SPS/PPS (id=0) first — these are the "active" params
+        writeParameterSets(outFile, mReorderDelay);
 
-    // 2. Transition from re-encoded to stream-copied section
-    // Always write EOS NAL to flush decoder DPB, preventing co-located reference
-    // mismatches when stream-copied B-frames use temporal_direct prediction.
-    // Without DPB flush, stale re-encoded frames (different POC domain) remain
-    // in the DPB, corrupting co-located MB lookup for B-frames.
-    // Note: Between segments, EOS is also always written (smartCutFrames) and
-    // works correctly with Non-IDR I-frames on all major decoders.
-    if (mParser.codecType() == NALU_CODEC_H264) {
-        static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
-        outFile.write(eosNal, sizeof(eosNal));
-        qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB before stream-copy at" << scStart;
-    } else if (mParser.codecType() == NALU_CODEC_H265) {
-        static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x4A, 0x01};
-        outFile.write(eosNal, sizeof(eosNal));
-        qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB before stream-copy at" << scStart;
-    }
+        // 2. Re-encode with SPS unification
+        //    Encoder packets are rewritten on-the-fly in reencodeFrames.
+        //    The encoder PPS (id=1) is written after extraction from first packet.
+        mSpsUnification = true;
+        mSpsUnificationOutFile = &outFile;
+        mEncoderPacketsWritten = 0;
 
-    // 3. Write source parameter sets for decoder transition
-    // Patch max_num_reorder_frames to match encoder SPS for consistent signaling
-    writeParameterSets(outFile, mReorderDelay);
+        int adjustedStart = -1;
+        if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+            mSpsUnification = false;
+            mSpsUnificationOutFile = nullptr;
+            return false;
+        }
+        mSpsUnification = false;
+        mSpsUnificationOutFile = nullptr;
 
-    // 4. Stream-copy section starting from keyframe
-    // Note: frameNumDelta only applies to stream-copied frames, not re-encoded ones
-    // (x264 encoder produces its own frame_num sequence)
-    // Patch inline SPS NALs with max_num_reorder_frames so the decoder doesn't
-    // reset and dynamically grow its reorder buffer at each SPS NAL
-    if (!streamCopyFrames(outFile, scStart,
-                          scEnd, mReorderDelay, frameNumDelta)) {
-        return false;
+        int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
+        int scEnd = segment.streamCopyEndFrame;
+
+        if (scStart > scEnd) {
+            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            return true;
+        }
+
+        // 3. EOS to flush DPB before stream-copy.
+        // The re-encode produces MBAFF frames (x264 can't do PAFF). Without
+        // EOS, these stay in the DPB and corrupt PAFF B-frame references at
+        // stream-copy start (mmco failures, exceeds max, visual artifacts).
+        // EOS flushes all MBAFF references so stream-copy starts clean.
+        // The overlap extension (in reencodeFrames) ensures the re-encode
+        // covers all frames up to the next keyframe, so no Open-GOP B-frames
+        // need the flushed MBAFF references.
+        {
+            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
+            outFile.write(eosNal, sizeof(eosNal));
+            qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
+        }
+
+        // Do NOT write SPS/PPS here — the first stream-copy keyframe AU has
+        // inline SPS/PPS which patchSpsNalsInAccessUnit will patch.
+        // Writing duplicate SPS/PPS causes the h264 parser to combine them
+        // with the first AU into one oversized packet → "Invalid NAL unit size".
+
+        // frameNumDelta bridges re-encoded frame_nums (0..N) to stream-copy
+        // frame_nums (original values from source ES).
+        QByteArray firstAU = mParser.readAccessUnitData(scStart);
+        {
+            int lastEncFrameNum = mEncoderPacketsWritten;  // encoder fn goes 0..N-1
+            int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
+            if (firstScFrameNum > 0) {
+                frameNumDelta = lastEncFrameNum - firstScFrameNum;
+                qDebug() << "    frameNumDelta:" << frameNumDelta
+                         << "(encoder last fn:" << lastEncFrameNum
+                         << ", stream-copy first fn:" << firstScFrameNum << ")";
+            } else {
+                frameNumDelta = 0;
+            }
+        }
+
+        // MMCO neutralization count: one full GOP (~32 AUs) covers DPB refill
+        int mmcoNeutralizeCount = 32;
+
+        if (!streamCopyFrames(outFile, scStart, scEnd,
+                              mReorderDelay, frameNumDelta, mmcoNeutralizeCount))
+            return false;
+
+    } else if (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264) {
+        // PAFF fallback: SPS unification not possible (encoder SPS not yet parsed)
+        // Use IDR injection as before
+        qDebug() << "    PAFF fallback: using IDR injection (encoder SPS not available)";
+
+        int adjustedStart = -1;
+        if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+            return false;
+        }
+
+        int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
+        int scEnd = segment.streamCopyEndFrame;
+
+        if (scStart > scEnd) {
+            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            return true;
+        }
+
+        // EOS to flush MBAFF references from DPB before PAFF stream-copy
+        {
+            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
+            outFile.write(eosNal, sizeof(eosNal));
+            qDebug() << "    PAFF fallback: EOS before stream-copy at" << scStart;
+        }
+
+        H264PpsInfo ppsInfo = { true, false, true, false, false, 0, 0, 0, false };
+        if (mParser.ppsCount() > 0)
+            ppsInfo = parseH264PpsInfo(mParser.getPPS(0));
+
+        writeParameterSets(outFile, mReorderDelay);
+
+        QByteArray firstAU;
+        if (mParser.isMapped()) {
+            int64_t auSize;
+            const uchar* auPtr = mParser.accessUnitPtr(scStart, auSize);
+            if (auPtr) firstAU = QByteArray(reinterpret_cast<const char*>(auPtr), auSize);
+        }
+        if (firstAU.isEmpty())
+            firstAU = mParser.readAccessUnitData(scStart);
+        if (firstAU.isEmpty()) {
+            setError(QString("Failed to read first stream-copy AU at frame %1").arg(scStart));
+            return false;
+        }
+
+        int origFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
+        QByteArray idrAU = convertAUToIDR(firstAU, mLog2MaxFrameNum, mPocType,
+                                           mLog2MaxPocLsb, mFrameMbsOnly, ppsInfo);
+        if (mReorderDelay > 0)
+            idrAU = patchSpsNalsInAccessUnit(idrAU, mReorderDelay);
+
+        if (outFile.write(idrAU) != idrAU.size()) {
+            setError("Failed to write IDR AU");
+            return false;
+        }
+        mFramesStreamCopied++;
+
+        frameNumDelta = (origFrameNum > 0) ? -origFrameNum : 0;
+        if (scStart + 1 <= scEnd) {
+            if (!streamCopyFrames(outFile, scStart + 1, scEnd,
+                                  mReorderDelay, frameNumDelta))
+                return false;
+        }
+    } else {
+        // Standard path: re-encode + EOS + stream-copy
+        int adjustedStart = -1;
+        if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+            return false;
+        }
+
+        int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
+        int scEnd = segment.streamCopyEndFrame;
+
+        if (scStart > scEnd) {
+            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            return true;
+        }
+        // Non-PAFF: use EOS to flush decoder DPB
+        if (mParser.codecType() == NALU_CODEC_H264) {
+            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
+            outFile.write(eosNal, sizeof(eosNal));
+            qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB at" << scStart;
+        } else if (mParser.codecType() == NALU_CODEC_H265) {
+            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x4A, 0x01};
+            outFile.write(eosNal, sizeof(eosNal));
+            qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB at" << scStart;
+        }
+
+        // Write source parameter sets
+        writeParameterSets(outFile, mReorderDelay);
+
+        // Stream-copy from keyframe
+        if (!streamCopyFrames(outFile, scStart, scEnd,
+                              mReorderDelay, frameNumDelta)) {
+            return false;
+        }
     }
 
     return true;
@@ -713,6 +922,8 @@ static uint32_t spsReadBits(const uint8_t* data, int dataSize, int& bitPos, int 
 static void spsWriteBits(uint8_t* data, int dataSize, int& bitPos, uint32_t value, int numBits);
 static uint32_t spsReadUE(const uint8_t* data, int dataSize, int& bitPos);
 static int32_t spsReadSE(const uint8_t* data, int dataSize, int& bitPos);
+static void spsWriteUE(uint8_t* data, int dataSize, int& bitPos, uint32_t value);
+static void spsWriteSE(uint8_t* data, int dataSize, int& bitPos, int32_t value);
 static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int sizeOfScalingList);
 
 // ----------------------------------------------------------------------------
@@ -1232,21 +1443,317 @@ static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth)
 }
 
 // ----------------------------------------------------------------------------
+// Neutralize MMCO commands in all reference slices of an AU.
+// After EOS flush, the DPB is empty. Non-IDR slices with adaptive MMCO
+// commands try to unref frames that no longer exist → "mmco: unref short
+// failure" + DPB overflow. Fix: set adaptive_ref_pic_marking_mode_flag
+// from 1→0, removing all MMCO data. The RBSP is rebuilt with the MMCO
+// bits removed and CABAC data byte-aligned.
+// Handles all slice types: I, P, B (with ref_pic_list_modification,
+// pred_weight_table, etc.).
+// ----------------------------------------------------------------------------
+static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
+    int log2MaxFrameNum, int pocLsbBitWidth, bool frameMbsOnly,
+    const H264PpsInfo& pps)
+{
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
+    int auSize = auData.size();
+    QByteArray result = auData;
+
+    // Iterate over all NALs in the AU
+    int pos = 0;
+    while (pos < result.size()) {
+        data = reinterpret_cast<const uint8_t*>(result.constData());
+        auSize = result.size();
+
+        int scStart = -1;
+        for (int i = pos; i + 2 < auSize; i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < auSize && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; break;
+                }
+            }
+        }
+        if (scStart < 0) break;
+
+        int scLen = (data[scStart+2] == 0) ? 4 : 3;
+        int nalStart = scStart + scLen;
+        if (nalStart >= auSize) break;
+
+        uint8_t nalByte = data[nalStart];
+        uint8_t nalType = nalByte & 0x1F;
+        uint8_t nalRefIdc = (nalByte >> 5) & 0x03;
+
+        if (nalType != 1 || nalRefIdc == 0) {
+            pos = nalStart + 1;
+            continue;
+        }
+
+        // Find end of this NAL
+        int nalEnd = auSize;
+        for (int i = nalStart + 1; i + 2 < auSize; i++) {
+            if (data[i] == 0 && data[i+1] == 0 &&
+                (data[i+2] == 0 || data[i+2] == 1)) {
+                nalEnd = i; break;
+            }
+        }
+
+        QByteArray nalBody = result.mid(nalStart, nalEnd - nalStart);
+        QByteArray rbsp = removeEmulationPrevention(nalBody);
+        const uint8_t* r = reinterpret_cast<const uint8_t*>(rbsp.constData());
+        int rSize = rbsp.size();
+
+        // Parse slice header
+        int bitPos = 8;  // skip NAL header byte
+        spsReadUE(r, rSize, bitPos);                       // first_mb_in_slice
+        uint32_t sliceType = spsReadUE(r, rSize, bitPos);  // slice_type
+        int sliceTypeM5 = sliceType % 5;  // 0=P, 1=B, 2=I, 3=SP, 4=SI
+
+        spsReadUE(r, rSize, bitPos);                              // pic_parameter_set_id
+        spsReadBits(r, rSize, bitPos, log2MaxFrameNum);           // frame_num
+
+        bool isFieldSlice = false;
+        if (!frameMbsOnly) {
+            uint32_t fieldPicFlag = spsReadBits(r, rSize, bitPos, 1);
+            isFieldSlice = (fieldPicFlag != 0);
+            if (isFieldSlice)
+                spsReadBits(r, rSize, bitPos, 1);                 // bottom_field_flag
+        }
+
+        // pic_order_cnt_lsb (poc_type == 0)
+        spsReadBits(r, rSize, bitPos, pocLsbBitWidth);
+
+        // delta_pic_order_cnt_bottom: only when PPS flag set AND frame slice
+        if (pps.bottomFieldPicOrderPresent && !isFieldSlice)
+            spsReadSE(r, rSize, bitPos);
+
+        // --- P/B specific fields ---
+        if (sliceTypeM5 == 1)  // B-slice
+            spsReadBits(r, rSize, bitPos, 1);  // direct_spatial_mv_pred_flag
+
+        int numRefL0 = pps.numRefIdxL0DefaultActiveMinus1;
+        int numRefL1 = pps.numRefIdxL1DefaultActiveMinus1;
+
+        if (sliceTypeM5 == 0 || sliceTypeM5 == 1 || sliceTypeM5 == 3) {
+            // P, B, or SP: num_ref_idx_active_override_flag
+            uint32_t overrideFlag = spsReadBits(r, rSize, bitPos, 1);
+            if (overrideFlag) {
+                numRefL0 = spsReadUE(r, rSize, bitPos);  // num_ref_idx_l0_active_minus1
+                if (sliceTypeM5 == 1)
+                    numRefL1 = spsReadUE(r, rSize, bitPos);  // num_ref_idx_l1_active_minus1
+            }
+        }
+
+        // ref_pic_list_modification (P, SP, B only)
+        if (sliceTypeM5 != 2 && sliceTypeM5 != 4) {
+            // L0
+            uint32_t rplmFlag = spsReadBits(r, rSize, bitPos, 1);
+            if (rplmFlag) {
+                while (true) {
+                    uint32_t idc = spsReadUE(r, rSize, bitPos);
+                    if (idc == 3) break;
+                    spsReadUE(r, rSize, bitPos);  // abs_diff_pic_num_minus1 or long_term_pic_num
+                }
+            }
+            // L1 (B-slices only)
+            if (sliceTypeM5 == 1) {
+                rplmFlag = spsReadBits(r, rSize, bitPos, 1);
+                if (rplmFlag) {
+                    while (true) {
+                        uint32_t idc = spsReadUE(r, rSize, bitPos);
+                        if (idc == 3) break;
+                        spsReadUE(r, rSize, bitPos);
+                    }
+                }
+            }
+        }
+
+        // pred_weight_table (P with weighted_pred, B with weighted_bipred_idc==1)
+        bool hasWeightTable = false;
+        if ((sliceTypeM5 == 0 || sliceTypeM5 == 3) && pps.weightedPredFlag)
+            hasWeightTable = true;
+        if (sliceTypeM5 == 1 && pps.weightedBipredIdc == 1)
+            hasWeightTable = true;
+
+        if (hasWeightTable) {
+            spsReadUE(r, rSize, bitPos);  // luma_log2_weight_denom
+            spsReadUE(r, rSize, bitPos);  // chroma_log2_weight_denom
+            for (int i = 0; i <= numRefL0; i++) {
+                uint32_t lumaFlag = spsReadBits(r, rSize, bitPos, 1);
+                if (lumaFlag) {
+                    spsReadSE(r, rSize, bitPos);  // luma_weight
+                    spsReadSE(r, rSize, bitPos);  // luma_offset
+                }
+                uint32_t chromaFlag = spsReadBits(r, rSize, bitPos, 1);
+                if (chromaFlag) {
+                    spsReadSE(r, rSize, bitPos);  // cb_weight
+                    spsReadSE(r, rSize, bitPos);  // cb_offset
+                    spsReadSE(r, rSize, bitPos);  // cr_weight
+                    spsReadSE(r, rSize, bitPos);  // cr_offset
+                }
+            }
+            if (sliceTypeM5 == 1) {
+                for (int i = 0; i <= numRefL1; i++) {
+                    uint32_t lumaFlag = spsReadBits(r, rSize, bitPos, 1);
+                    if (lumaFlag) {
+                        spsReadSE(r, rSize, bitPos);
+                        spsReadSE(r, rSize, bitPos);
+                    }
+                    uint32_t chromaFlag = spsReadBits(r, rSize, bitPos, 1);
+                    if (chromaFlag) {
+                        spsReadSE(r, rSize, bitPos);
+                        spsReadSE(r, rSize, bitPos);
+                        spsReadSE(r, rSize, bitPos);
+                        spsReadSE(r, rSize, bitPos);
+                    }
+                }
+            }
+        }
+
+        // dec_ref_pic_marking
+        int flagBitPos = bitPos;
+        uint32_t adaptiveFlag = spsReadBits(r, rSize, bitPos, 1);
+
+        if (adaptiveFlag == 0) {
+            pos = nalEnd;
+            continue;
+        }
+
+        // Skip all MMCO commands
+        int mmcoBitsStart = bitPos;
+        while (true) {
+            uint32_t mmcoOp = spsReadUE(r, rSize, bitPos);
+            if (mmcoOp == 0) break;
+            if (mmcoOp == 1 || mmcoOp == 3)
+                spsReadUE(r, rSize, bitPos);  // difference_of_pic_nums_minus1
+            if (mmcoOp == 2)
+                spsReadUE(r, rSize, bitPos);  // long_term_pic_num
+            if (mmcoOp == 3 || mmcoOp == 6)
+                spsReadUE(r, rSize, bitPos);  // long_term_frame_idx
+            if (mmcoOp == 4)
+                spsReadUE(r, rSize, bitPos);  // max_long_term_frame_idx_plus1
+        }
+        int afterMmcoBitPos = bitPos;
+        int mmcoBitsRemoved = afterMmcoBitPos - mmcoBitsStart;
+
+        // Parse remaining header after MMCO
+        // cabac_init_idc: present for non-I/SI when CABAC
+        if (pps.entropyCodingModeFlag && sliceTypeM5 != 2 && sliceTypeM5 != 4)
+            spsReadUE(r, rSize, bitPos);  // cabac_init_idc
+
+        spsReadSE(r, rSize, bitPos);  // slice_qp_delta
+
+        if (sliceTypeM5 == 3 || sliceTypeM5 == 4) {
+            if (sliceTypeM5 == 3)
+                spsReadBits(r, rSize, bitPos, 1);  // sp_for_switch_flag (u(1))
+            spsReadSE(r, rSize, bitPos);  // slice_qs_delta
+        }
+
+        if (pps.deblockingFilterControlPresent) {
+            uint32_t disableDeblocking = spsReadUE(r, rSize, bitPos);
+            if (disableDeblocking != 1) {
+                spsReadSE(r, rSize, bitPos);  // slice_alpha_c0_offset_div2
+                spsReadSE(r, rSize, bitPos);  // slice_beta_offset_div2
+            }
+        }
+        int headerEndBitPos = bitPos;
+
+        // Rebuild RBSP without MMCO data
+        int origCabacByte = (headerEndBitPos + 7) / 8;
+        int newHeaderBits = flagBitPos + 1 + (headerEndBitPos - afterMmcoBitPos);
+        int newCabacByte = (newHeaderBits + 7) / 8;
+        int alignBitsNeeded = newCabacByte * 8 - newHeaderBits;
+
+        int cabacDataSize = rSize - origCabacByte;
+        if (cabacDataSize < 0) {
+            pos = nalEnd;
+            continue;
+        }
+
+        QByteArray newRbsp(newCabacByte + cabacDataSize, '\0');
+        uint8_t* out = reinterpret_cast<uint8_t*>(newRbsp.data());
+        int outBit = 0;
+
+        // Copy header bits before flag
+        for (int i = 0; i < flagBitPos; i++) {
+            int srcByte = i / 8, srcBitIdx = 7 - (i % 8);
+            if ((r[srcByte] >> srcBitIdx) & 1) {
+                int dstByte = outBit / 8, dstBitIdx = 7 - (outBit % 8);
+                out[dstByte] |= (1 << dstBitIdx);
+            }
+            outBit++;
+        }
+
+        // Write flag = 0 (buffer is zero-initialized)
+        outBit++;
+
+        // Copy post-MMCO header bits
+        for (int i = afterMmcoBitPos; i < headerEndBitPos; i++) {
+            int srcByte = i / 8, srcBitIdx = 7 - (i % 8);
+            if ((r[srcByte] >> srcBitIdx) & 1) {
+                int dstByte = outBit / 8, dstBitIdx = 7 - (outBit % 8);
+                out[dstByte] |= (1 << dstBitIdx);
+            }
+            outBit++;
+        }
+
+        // CABAC alignment bits (1 per spec)
+        for (int i = 0; i < alignBitsNeeded; i++) {
+            int dstByte = outBit / 8, dstBitIdx = 7 - (outBit % 8);
+            out[dstByte] |= (1 << dstBitIdx);
+            outBit++;
+        }
+
+        // Copy CABAC data bytes verbatim
+        if (cabacDataSize > 0)
+            memcpy(out + newCabacByte, r + origCabacByte, cabacDataSize);
+
+        QByteArray newNalBody = addEmulationPrevention(newRbsp);
+
+        // Reassemble AU with replaced NAL
+        QByteArray newResult;
+        newResult.reserve(auSize);
+        newResult.append(result.left(scStart));
+        newResult.append(result.mid(scStart, scLen));
+        newResult.append(newNalBody);
+        newResult.append(result.mid(nalEnd));
+
+        qDebug() << "    MMCO neutralized: slice_type=" << sliceType
+                 << mmcoBitsRemoved << "bits removed,"
+                 << "NAL" << nalBody.size() << "->" << newNalBody.size() << "bytes";
+
+        result = newResult;
+        // Continue scanning from after the replaced NAL
+        pos = scStart + scLen + newNalBody.size();
+    }
+
+    return result;
+}
+
+// ----------------------------------------------------------------------------
 // Stream-copy frames (no re-encoding)
 // If patchReorderFrames > 0, patches H.264 SPS NALs inline for correct
 // decoder reorder buffer signaling.
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame,
-                                     int patchReorderFrames, int frameNumDelta)
+                                     int patchReorderFrames, int frameNumDelta,
+                                     int neutralizeMmcoFrames)
 {
     qDebug() << "    Stream-copying frames" << startFrame << "->" << endFrame;
     if (frameNumDelta != 0) {
         qDebug() << "    frame_num delta:" << frameNumDelta
                  << "(MaxFrameNum=" << (1 << mLog2MaxFrameNum) << ")";
     }
+    if (neutralizeMmcoFrames > 0) {
+        qDebug() << "    MMCO neutralization for first" << neutralizeMmcoFrames << "frames";
+    }
 
     bool needsPatching = (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264)
-                      || (frameNumDelta != 0 && mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264);
+                      || (frameNumDelta != 0 && mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264)
+                      || (neutralizeMmcoFrames > 0);
     int maxFrameNum = (mLog2MaxFrameNum > 0) ? (1 << mLog2MaxFrameNum) : 0;
 
     // --- Bulk-write path: no patching needed, mmap available ---
@@ -1294,6 +1801,16 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
             return false;
         }
 
+        // Neutralize MMCO in first N frames after EOS (PAFF DPB refill)
+        if (neutralizeMmcoFrames > 0 && (i - startFrame) < neutralizeMmcoFrames &&
+            mParser.codecType() == NALU_CODEC_H264) {
+            H264PpsInfo ppsInfo = { true, false, true, false, false, 0, 0, 0, false };
+            if (mParser.ppsCount() > 0)
+                ppsInfo = parseH264PpsInfo(mParser.getPPS(0));
+            auData = neutralizeMmcoInAU(auData, mLog2MaxFrameNum,
+                mLog2MaxPocLsb, mFrameMbsOnly, ppsInfo);
+        }
+
         // Patch H.264 SPS NALs inline if requested
         if (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264) {
             auData = patchSpsNalsInAccessUnit(auData, patchReorderFrames);
@@ -1312,6 +1829,13 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
         }
 
         mFramesStreamCopied++;
+
+        // Granular progress update (every 50 frames to avoid signal overhead)
+        if (mTotalFrames > 0 && (mFramesStreamCopied % 50 == 0 || i == endFrame)) {
+            int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
+            emit progressChanged(qMin(percent, 99),
+                tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
+        }
     }
 
     return true;
@@ -1553,96 +2077,184 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
              << "(" << lostFrames << "lost to decoder delay)";
 
     // ---- Display-order to AU-index mapping ----
-    // TTCut-ng navigates by seeking to the nearest keyframe and counting decoded
-    // frames in display order. Due to B-frame reordering, the displayed content
-    // at "frame N" comes from a DIFFERENT AU than AU N. The frame number stored
-    // in the project file is the AU index, but the user selected content at the
-    // corresponding DISPLAY position.
-    //
-    // We replicate TTCut-ng's navigation: find the keyframe in our decoder output,
-    // count forward by displayOffset frames (skipping Open GOP B-frames from
-    // before the keyframe), and use the resulting AU index for frame selection.
-    // This is safe for all streams: without B-frames, displayOffset maps to the
-    // same AU index (no-op). With B-frames at CutIn=keyframe, displayOffset=0.
-    int uiKeyframe = mParser.findKeyframeBefore(startFrame);
-    int displayOffset = startFrame - uiKeyframe;
-
-    // Find the UI keyframe in our decoder output by PTS
-    int kfOutputIdx = -1;
-    for (int i = 0; i < allDecodedFrames.size(); ++i) {
-        if (allDecodedFrames[i]->pts == uiKeyframe) {
-            kfOutputIdx = i;
-            break;
-        }
-    }
-
-    int realStartAU = startFrame;  // fallback if mapping fails
-    if (kfOutputIdx >= 0) {
-        // Count displayOffset frames forward from keyframe in display order,
-        // skipping Open GOP B-frames from before the keyframe (these wouldn't
-        // be in TTCut-ng's decode since it starts fresh at the keyframe).
-        int count = 0;
-        for (int i = kfOutputIdx; i < allDecodedFrames.size(); ++i) {
-            int au = static_cast<int>(allDecodedFrames[i]->pts);
-            if (au < uiKeyframe) continue;  // Skip Open GOP B-frames
-            if (count == displayOffset) {
-                realStartAU = au;
-                break;
-            }
-            count++;
-        }
-        qDebug() << "      Display-order mapping: UI frame" << startFrame
-                 << "= keyframe" << uiKeyframe << "+" << displayOffset
-                 << "-> AU" << realStartAU
-                 << "(keyframe at decoded[" << kfOutputIdx << "])";
-    } else {
-        qDebug() << "      WARNING: keyframe AU" << uiKeyframe
-                 << "not found in decoder output, using AU index directly";
-    }
-
     QList<AVFrame*> framesToEncode;
     int streamCopyLimit = (streamCopyStartFrame >= 0) ? streamCopyStartFrame : (endFrame + 1);
+    int realStartAU = startFrame;  // fallback if mapping fails
 
-    // Check if display-order mapping moved CutIn past the stream-copy boundary.
-    // This happens when the B-frame reorder delay shifts the real content to AUs
-    // at or after the stream-copy keyframe.
-    if (realStartAU >= streamCopyLimit) {
-        // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
-        // Extend re-encode to next keyframe so encoder produces IDR for clean
-        // DPB reset. Any POC domain mismatch at the transition is handled by
-        // poc_lsb patching below.
-        int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
-        if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
-            nextKF = frameCount();
+    if (mParser.isPAFF()) {
+        // PAFF: Position-based frame selection counting from decodeStart.
+        // The navigation decoder (individual field packets) and this decoder
+        // (merged AUs) produce slightly different display-order sequences due
+        // to B-frame reorder buffering. This means position-based counting may
+        // select frames whose AU indices extend past streamCopyLimit, causing
+        // the re-encode to overlap with stream-copy.
+        //
+        // When overlap is detected, we extend the re-encode to the next
+        // keyframe (collecting all decoded frames in between) and adjust
+        // streamCopyStart accordingly. This prevents both frame repetitions
+        // (from overlap) and frame gaps (from jumping stream-copy forward
+        // without filling the re-encode).
+        int skipCount = startFrame - decodeStart;
+        int encodeCount = streamCopyLimit - startFrame;
+
+        qDebug() << "      PAFF frame selection: startFrame" << startFrame
+                 << "decodeStart" << decodeStart << "skipCount" << skipCount
+                 << "encodeCount" << encodeCount
+                 << "decoded" << allDecodedFrames.size() << "streamCopyLimit" << streamCopyLimit;
+
+        // First pass: collect encodeCount frames and track max AU
+        int collected = 0;
+        int maxSelectedAU = -1;
+        for (int i = 0; i < allDecodedFrames.size(); ++i) {
+            if (i < skipCount) continue;
+            if (collected >= encodeCount) break;
+            int au = static_cast<int>(allDecodedFrames[i]->pts);
+            if (au > maxSelectedAU) maxSelectedAU = au;
+            collected++;
         }
-        streamCopyLimit = nextKF;
 
-        qDebug() << "      CutIn AU" << realStartAU
-                 << ">= stream-copy start" << streamCopyStartFrame
-                 << "-> extending re-encode to next keyframe" << nextKF;
-
-        if (adjustedStreamCopyStart) {
-            *adjustedStreamCopyStart = nextKF;
+        // Check for overlap and determine extended limit if needed
+        int extendedStreamCopyLimit = streamCopyLimit;
+        if (maxSelectedAU >= streamCopyLimit && adjustedStreamCopyStart) {
+            int nextKF = mParser.findKeyframeAfter(streamCopyLimit + 1);
+            if (nextKF > 0) {
+                extendedStreamCopyLimit = nextKF;
+                *adjustedStreamCopyStart = nextKF;
+                qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
+                         << ">= streamCopyLimit" << streamCopyLimit
+                         << "-> extending re-encode to next keyframe" << nextKF;
+            }
         }
-    }
 
-    // Report actual start AU if it differs from requested (B-frame reorder shift)
-    if (actualStartAU && realStartAU != startFrame) {
-        *actualStartAU = realStartAU;
-        qDebug() << "      Actual start AU:" << realStartAU
-                 << "(requested:" << startFrame << ", shift:" << (realStartAU - startFrame) << "frames)";
-    }
+        // Second pass: collect frames — initial encodeCount + extension if needed
+        collected = 0;
+        for (int i = 0; i < allDecodedFrames.size(); ++i) {
+            if (i < skipCount) {
+                av_frame_free(&allDecodedFrames[i]);
+                continue;
+            }
 
-    // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
-    for (int i = 0; i < allDecodedFrames.size(); ++i) {
-        int auIndex = static_cast<int>(allDecodedFrames[i]->pts);
-        if (auIndex >= realStartAU && auIndex < streamCopyLimit) {
-            framesToEncode.append(allDecodedFrames[i]);
+            int au = static_cast<int>(allDecodedFrames[i]->pts);
+
+            // Collect initial encodeCount frames (position-based)
+            // OR extension frames (AU-index-based, fill gap to next keyframe)
+            bool inInitialRange = (collected < encodeCount);
+            bool inExtension = (extendedStreamCopyLimit > streamCopyLimit
+                                && collected >= encodeCount
+                                && au >= streamCopyLimit
+                                && au < extendedStreamCopyLimit);
+
+            if (inInitialRange || inExtension) {
+                if (framesToEncode.isEmpty()) {
+                    realStartAU = au;
+                }
+                framesToEncode.append(allDecodedFrames[i]);
+                collected++;
+            } else {
+                av_frame_free(&allDecodedFrames[i]);
+            }
+        }
+        allDecodedFrames.clear();
+
+        qDebug() << "      PAFF: selected" << framesToEncode.size() << "frames,"
+                 << "realStartAU =" << realStartAU
+                 << "(requested:" << encodeCount
+                 << ", extended to:" << extendedStreamCopyLimit << ")";
+
+        // PAFF: Do NOT report actualStartAU.
+        // The video output has the full segment frame count (position-based
+        // counting matches the UI). Audio keepList must NOT be shortened.
+    } else {
+        // Non-PAFF: Display-order to AU-index mapping (tested and stable since v0.61.4-v0.61.6).
+        // TTCut-ng navigates by seeking to the nearest keyframe and counting decoded
+        // frames in display order. Due to B-frame reordering, the displayed content
+        // at "frame N" comes from a DIFFERENT AU than AU N. The frame number stored
+        // in the project file is the AU index, but the user selected content at the
+        // corresponding DISPLAY position.
+        //
+        // We replicate TTCut-ng's navigation: find the keyframe in our decoder output,
+        // count forward by displayOffset frames (skipping Open GOP B-frames from
+        // before the keyframe), and use the resulting AU index for frame selection.
+        // This is safe for all streams: without B-frames, displayOffset maps to the
+        // same AU index (no-op). With B-frames at CutIn=keyframe, displayOffset=0.
+        int uiKeyframe = mParser.findKeyframeBefore(startFrame);
+        int displayOffset = startFrame - uiKeyframe;
+
+        // Find the UI keyframe in our decoder output by PTS
+        int kfOutputIdx = -1;
+        for (int i = 0; i < allDecodedFrames.size(); ++i) {
+            if (allDecodedFrames[i]->pts == uiKeyframe) {
+                kfOutputIdx = i;
+                break;
+            }
+        }
+
+        if (kfOutputIdx >= 0) {
+            // Count displayOffset frames forward from keyframe in display order,
+            // skipping Open GOP B-frames from before the keyframe (these wouldn't
+            // be in TTCut-ng's decode since it starts fresh at the keyframe).
+            int count = 0;
+            for (int i = kfOutputIdx; i < allDecodedFrames.size(); ++i) {
+                int au = static_cast<int>(allDecodedFrames[i]->pts);
+                if (au < uiKeyframe) continue;  // Skip Open GOP B-frames
+                if (count == displayOffset) {
+                    realStartAU = au;
+                    break;
+                }
+                count++;
+            }
+            qDebug() << "      Display-order mapping: UI frame" << startFrame
+                     << "= keyframe" << uiKeyframe << "+" << displayOffset
+                     << "-> AU" << realStartAU
+                     << "(keyframe at decoded[" << kfOutputIdx << "])";
         } else {
-            av_frame_free(&allDecodedFrames[i]);
+            qDebug() << "      WARNING: keyframe AU" << uiKeyframe
+                     << "not found in decoder output, using AU index directly";
         }
+
+        // Check if display-order mapping moved CutIn past the stream-copy boundary.
+        // This happens when the B-frame reorder delay shifts the real content to AUs
+        // at or after the stream-copy keyframe.
+        if (realStartAU >= streamCopyLimit) {
+            // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
+            // Extend re-encode to next keyframe so encoder produces IDR for clean
+            // DPB reset. Any POC domain mismatch at the transition is handled by
+            // poc_lsb patching below.
+            int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
+            if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
+                nextKF = frameCount();
+            }
+            streamCopyLimit = nextKF;
+
+            qDebug() << "      CutIn AU" << realStartAU
+                     << ">= stream-copy start" << streamCopyStartFrame
+                     << "-> extending re-encode to next keyframe" << nextKF;
+
+            if (adjustedStreamCopyStart) {
+                *adjustedStreamCopyStart = nextKF;
+            }
+        }
+
+        // Report actual start AU if it differs from requested (B-frame reorder shift)
+        if (actualStartAU && realStartAU != startFrame) {
+            *actualStartAU = realStartAU;
+            qDebug() << "      Actual start AU:" << realStartAU
+                     << "(requested:" << startFrame << ", shift:" << (realStartAU - startFrame) << "frames)";
+        }
+
+        // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
+        // Open-GOP B-frames before realStartAU are ad content in display order
+        // and must be excluded from the output.
+        for (int i = 0; i < allDecodedFrames.size(); ++i) {
+            int auIndex = static_cast<int>(allDecodedFrames[i]->pts);
+            if (auIndex >= realStartAU && auIndex < streamCopyLimit) {
+                framesToEncode.append(allDecodedFrames[i]);
+            } else {
+                av_frame_free(&allDecodedFrames[i]);
+            }
+        }
+        allDecodedFrames.clear();
     }
-    allDecodedFrames.clear();
 
     qDebug() << "      Selected" << framesToEncode.size() << "frames for encoding"
              << "(AU range" << startFrame << "-" << (streamCopyLimit - 1) << ")";
@@ -1656,10 +2268,42 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     int packetsReceived = 0;
     QByteArray pendingPacket;  // buffered last encoder packet
 
-    // Helper: apply SPS reorder patch and buffer (write previous pending)
+    // Encoder PPS info for SPS unification (parsed from first encoder packet)
+    H264PpsInfo encPpsForRewrite = { true, false, true, false, false, 0, 0, 0, false };
+    bool encPpsParsed = false;
+
+    // Helper: apply SPS reorder patch (or SPS unification rewrite) and buffer
     auto writeEncoderPacket = [&](const QByteArray& rawData) -> bool {
         QByteArray encodedData = rawData;
-        if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
+
+        if (mSpsUnification && mParser.codecType() == NALU_CODEC_H264 && encoderSpsParsed) {
+            // SPS Unification: extract encoder PPS from first packet, rewrite all slices
+            if (!encPpsParsed) {
+                // Extract encoder PPS for slice header field layout.
+                // The PPS(id=1) is written INLINE before the first encoder slice
+                // (not at ES start — that corrupts MKV NAL parsing).
+                QByteArray encPpsNal = extractPpsFromPacket(rawData);
+                if (!encPpsNal.isEmpty()) {
+                    encPpsForRewrite = parseH264PpsInfo(encPpsNal);
+                    encPpsParsed = true;
+
+                    // PPS(id=1) is now kept inside each encoder packet
+                    // by rewriteEncoderPacketForSourceSps (patches pps_id inline).
+                    // No separate PPS write needed.
+                    qDebug() << "      SPS Unification: encoder PPS parsed, pps_id=1 kept inline";
+                }
+            }
+
+            // Rewrite encoder packet: strip SPS/PPS, rewrite slice NALs
+            if (encPpsParsed) {
+                encodedData = rewriteEncoderPacketForSourceSps(
+                    encodedData,
+                    mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly,
+                    mLog2MaxFrameNum, mLog2MaxPocLsb, mFrameMbsOnly,
+                    encPpsForRewrite, 1, mEncoderPacketsWritten);  // newPpsId=1
+            }
+        } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
+            // Standard path: just patch SPS reorder frames
             QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay);
             if (patched != encodedData)
                 encodedData = patched;
@@ -1674,6 +2318,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         }
         pendingPacket = encodedData;
         packetsReceived++;
+        mEncoderPacketsWritten++;
         return true;
     };
 
@@ -1789,10 +2434,18 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // POC domain mismatch fix: patch poc_lsb in the last encoder packet
     // to prevent PicOrderCntMsb wrap at re-encode→stream-copy transition.
     // Only needed for H.264 with poc_type=0 when stream-copy follows.
+    // With SPS Unification, poc_lsb is already widened to source domain,
+    // so we use source params for both reading and patching.
     int actualScStart = (adjustedStreamCopyStart && *adjustedStreamCopyStart >= 0)
         ? *adjustedStreamCopyStart : streamCopyStartFrame;
+
+    // Determine which params to use for the pending packet's poc_lsb
+    int pendingFnWidth = mSpsUnification ? mLog2MaxFrameNum : mEncoderLog2MaxFrameNum;
+    int pendingPocWidth = mSpsUnification ? mLog2MaxPocLsb : mEncoderLog2MaxPocLsb;
+    bool pendingFmOnly = mSpsUnification ? mFrameMbsOnly : mEncoderFrameMbsOnly;
+
     if (!pendingPacket.isEmpty() && mEncoderPocType == 0 &&
-        mEncoderLog2MaxPocLsb > 0 && mLog2MaxPocLsb > 0 &&
+        pendingPocWidth > 0 && mLog2MaxPocLsb > 0 &&
         actualScStart >= 0 && mParser.codecType() == NALU_CODEC_H264) {
 
         // Read source's first stream-copy frame poc_lsb
@@ -1800,29 +2453,26 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         int srcPocLsb = readPocLsbFromAU(srcAU, mLog2MaxFrameNum,
                                           mLog2MaxPocLsb, mFrameMbsOnly);
 
-        // Read encoder's last slice poc_lsb
-        int encPocLsb = readPocLsbFromAU(pendingPacket, mEncoderLog2MaxFrameNum,
-                                          mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly);
+        // Read encoder's last slice poc_lsb (already in source domain if SPS unification)
+        int encPocLsb = readPocLsbFromAU(pendingPacket, pendingFnWidth,
+                                          pendingPocWidth, pendingFmOnly);
 
         if (srcPocLsb >= 0 && encPocLsb >= 0) {
             int srcMaxPocLsb = 1 << mLog2MaxPocLsb;
             int diff = qAbs(srcPocLsb - encPocLsb);
             if (diff > srcMaxPocLsb / 2) {
-                // Compute safe poc_lsb: target value that avoids wrap
-                // newPocLsb = srcPocLsb - srcMaxPocLsb/2, clamped to encoder range
-                int encMaxPocLsb = 1 << mEncoderLog2MaxPocLsb;
+                // Compute safe poc_lsb that avoids wrap
+                int patchMaxPocLsb = 1 << pendingPocWidth;
                 int target = srcPocLsb - srcMaxPocLsb / 2;
                 if (target < 0) target += srcMaxPocLsb;
-                int newPocLsb = target % encMaxPocLsb;
+                int newPocLsb = target % patchMaxPocLsb;
 
-                // Post-patch validation: verify newPocLsb actually prevents wrap
+                // Post-patch validation
                 int newDiff = qAbs(srcPocLsb - newPocLsb);
                 if (newDiff > srcMaxPocLsb / 2) {
-                    // Modulo clamping re-introduced wrap — search for safe value
-                    // Try values in [0, encMaxPocLsb) closest to srcPocLsb
                     int bestPocLsb = newPocLsb;
                     int bestDiff = newDiff;
-                    for (int v = 0; v < encMaxPocLsb; ++v) {
+                    for (int v = 0; v < patchMaxPocLsb; ++v) {
                         int d = qAbs(srcPocLsb - v);
                         if (d <= srcMaxPocLsb / 2 && d < bestDiff) {
                             bestPocLsb = v;
@@ -1835,7 +2485,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                                  << "using search result" << newPocLsb;
                     } else {
                         qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
-                                   << "found in encoder range [0," << encMaxPocLsb << ")";
+                                   << "found in range [0," << patchMaxPocLsb << ")";
                     }
                 }
 
@@ -1845,8 +2495,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                          << "-> patching to" << newPocLsb;
 
                 pendingPacket = patchPocLsbInPacket(pendingPacket,
-                    mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb,
-                    mEncoderFrameMbsOnly, static_cast<uint32_t>(newPocLsb));
+                    pendingFnWidth, pendingPocWidth,
+                    pendingFmOnly, static_cast<uint32_t>(newPocLsb));
             }
         }
     }
@@ -1861,6 +2511,12 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
     qDebug() << "      Encoding complete: sent" << framesSent << "frames, received" << packetsReceived << "packets";
     mFramesReencoded += packetsReceived;
+
+    if (mTotalFrames > 0) {
+        int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
+        emit progressChanged(qMin(percent, 99),
+            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
+    }
 
     return true;
 }
@@ -2065,6 +2721,8 @@ bool TTESSmartCut::setupEncoder()
         // decoder's delayed_pic[] reorder buffer, causing frame interleaving
         // at segment boundaries.
         av_dict_set(&opts, "forced-idr", "1", 0);
+
+
     } else {
         // H.265
         crf        = TTCut::h265Crf;
@@ -2463,6 +3121,904 @@ static void spsWriteUE(uint8_t* data, int dataSize, int& bitPos, uint32_t value)
     spsWriteBits(data, dataSize, bitPos, codeNum, numBits);
 }
 
+// Write Exp-Golomb signed value to RBSP
+static void spsWriteSE(uint8_t* data, int dataSize, int& bitPos, int32_t value)
+{
+    uint32_t ue;
+    if (value > 0)
+        ue = 2 * static_cast<uint32_t>(value) - 1;
+    else
+        ue = static_cast<uint32_t>(-2 * value);
+    spsWriteUE(data, dataSize, bitPos, ue);
+}
+
+// ----------------------------------------------------------------------------
+// SPS Unification: Rewrite a single encoder slice NAL to be compatible with
+// the source SPS. Changes pps_id, widens frame_num and poc_lsb bit fields,
+// inserts field_pic_flag=0 if needed. CABAC data is realigned.
+// Input: NAL body (after start code, WITH emulation prevention bytes).
+// Returns: rewritten NAL body, or empty on error.
+// ----------------------------------------------------------------------------
+static QByteArray rewriteEncoderSliceForSourceSps(
+    const QByteArray& nalBody,
+    int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
+    int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex)
+{
+    if (nalBody.isEmpty()) return QByteArray();
+
+    uint8_t nalHeader = static_cast<uint8_t>(nalBody[0]);
+    uint8_t nalType = nalHeader & 0x1F;
+    if (nalType != 1 && nalType != 5) return QByteArray();  // only slice NALs
+
+    uint8_t nalRefIdc = (nalHeader >> 5) & 0x03;
+
+    // Demote subsequent IDRs (frameIndex > 0) to non-IDR I-slices.
+    // The encoder produces IDRs at regular intervals (keyint). With linear
+    // frame_num, a mid-sequence IDR at fn=54 causes a frame_num gap (the spec
+    // requires fn=0 for IDR, but we write fn=54). This gap creates gray DPB
+    // frames → artifacts. Converting to non-IDR keeps the linear fn sequence
+    // intact and prevents unwanted DPB flushes within the re-encode.
+    uint8_t origNalType = nalType;
+    bool demoteIdr = (nalType == 5 && frameIndex > 0);
+    if (demoteIdr) {
+        nalType = 1;  // non-IDR slice
+    }
+
+    // Remove emulation prevention → RBSP
+    QByteArray oldRbsp = removeEmulationPrevention(nalBody);
+    const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldRbsp.constData());
+    int oldSize = oldRbsp.size();
+
+    // Allocate new RBSP (generous: old size + room for widened fields)
+    QByteArray newRbsp(oldSize + 64, '\0');
+    uint8_t* newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+    int newSize = newRbsp.size();
+
+    int readPos = 0;
+    int writePos = 0;
+
+    // 1. NAL header — write with potentially changed nalType (IDR→non-IDR)
+    uint32_t header = spsReadBits(oldData, oldSize, readPos, 8);
+    if (demoteIdr) {
+        // Rewrite header: keep forbidden_zero_bit + nal_ref_idc, change nal_unit_type
+        header = (header & 0xE0) | (nalType & 0x1F);
+    }
+    spsWriteBits(newData, newSize, writePos, header, 8);
+
+    // 2. first_mb_in_slice (UE) — copy
+    uint32_t firstMb = spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, firstMb);
+
+    // 3. slice_type (UE) — copy, save for later
+    uint32_t sliceType = spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, sliceType);
+    uint32_t sliceTypeMod = sliceType % 5;
+    // 0=P, 1=B, 2=I, 3=SP, 4=SI
+
+    // 4. pps_id (UE) — read old, write new
+    spsReadUE(oldData, oldSize, readPos);  // skip old pps_id
+    spsWriteUE(newData, newSize, writePos, newPpsId);
+
+    // 5. frame_num — read encoder fn, write linear frameIndex to eliminate gaps.
+    // The encoder cycles fn 0..MaxFN-1 (e.g., 0..15 with MaxFN=16). After SPS
+    // rewriting to source MaxFN (e.g., 512), this cycling creates frame_num gaps
+    // at every wrap (15→0 with MaxFN=512 = gap of 496 frames). At the re-encode
+    // → stream-copy transition, the gap between the last encoder fn (15) and the
+    // first stream-copy fn (e.g., 181) causes the decoder to create gray gap
+    // frames in the DPB. Open-GOP B-frames then reference these gray frames as
+    // L0 → block artifacts. Fix: use the linear frame index (0,1,2,...,N-1) as
+    // frame_num. This produces a monotonic sequence that directly precedes the
+    // stream-copy frame_nums, eliminating all gaps.
+    spsReadBits(oldData, oldSize, readPos, encLog2MaxFN);  // consume encoder fn
+    uint32_t srcMaxFrameNum = 1u << srcLog2MaxFN;
+    uint32_t newFrameNum = static_cast<uint32_t>(frameIndex) % srcMaxFrameNum;
+    spsWriteBits(newData, newSize, writePos, newFrameNum, srcLog2MaxFN);
+
+    // 6. field_pic_flag (if !frame_mbs_only in SOURCE SPS)
+    bool fieldPicFlag = false;
+    if (!srcFrameMbsOnly) {
+        if (!encFrameMbsOnly) {
+            // Encoder also has field_pic_flag — read and copy
+            fieldPicFlag = (spsReadBits(oldData, oldSize, readPos, 1) != 0);
+            spsWriteBits(newData, newSize, writePos, fieldPicFlag ? 1 : 0, 1);
+            if (fieldPicFlag) {
+                uint32_t bottomFlag = spsReadBits(oldData, oldSize, readPos, 1);
+                spsWriteBits(newData, newSize, writePos, bottomFlag, 1);
+            }
+        } else {
+            // Encoder has frame_mbs_only=1, INSERT field_pic_flag=0 (frame-coded)
+            spsWriteBits(newData, newSize, writePos, 0, 1);
+        }
+    }
+
+    // 7. idr_pic_id (only in original IDR NALs, NAL type 5)
+    if (origNalType == 5) {
+        uint32_t idrPicId = spsReadUE(oldData, oldSize, readPos);
+        if (!demoteIdr) {
+            // Keep as IDR (first frame): write idr_pic_id
+            spsWriteUE(newData, newSize, writePos, idrPicId);
+        }
+        // Demoted IDR: skip writing — non-IDR slices don't have idr_pic_id
+    }
+
+    // 8. poc_lsb (if poc_type 0) — linearize, not just widen.
+    // The encoder's poc_lsb wraps at encMaxPocLsb (e.g. 16), producing
+    // values 0,2,4,...,14,0,2,... When widened to srcMaxPocLsb (e.g. 256),
+    // the decoder sees frequent backward jumps (14→0 is only -14, which
+    // doesn't trigger PicOrderCntMsb increment at MaxPocLsb=256).
+    // Fix: compute linear poc_lsb = (frameIndex * 2) % srcMaxPocLsb,
+    // which only wraps at the source's MaxPocLsb boundary.
+    if (encLog2MaxPocLsb > 0 && srcLog2MaxPocLsb > 0) {
+        spsReadBits(oldData, oldSize, readPos, encLog2MaxPocLsb);  // skip old
+        int srcMaxPocLsb = 1 << srcLog2MaxPocLsb;
+        uint32_t newPocLsb = (static_cast<uint32_t>(frameIndex) * 2) % srcMaxPocLsb;
+        spsWriteBits(newData, newSize, writePos, newPocLsb, srcLog2MaxPocLsb);
+
+        // delta_pic_order_cnt_bottom (if PPS flag && !field_pic_flag) — copy
+        if (encPps.bottomFieldPicOrderPresent && !fieldPicFlag) {
+            int32_t deltaBottom = spsReadSE(oldData, oldSize, readPos);
+            spsWriteSE(newData, newSize, writePos, deltaBottom);
+        }
+    }
+
+    // 9. redundant_pic_cnt (if PPS flag) — copy
+    if (encPps.redundantPicCntPresent) {
+        uint32_t rpc = spsReadUE(oldData, oldSize, readPos);
+        spsWriteUE(newData, newSize, writePos, rpc);
+    }
+
+    // 10. For P/B slices: additional fields before dec_ref_pic_marking
+    if (sliceTypeMod == 1) {
+        // B-slice: direct_spatial_mv_pred_flag (1 bit)
+        uint32_t dsmpf = spsReadBits(oldData, oldSize, readPos, 1);
+        spsWriteBits(newData, newSize, writePos, dsmpf, 1);
+    }
+
+    if (sliceTypeMod == 0 || sliceTypeMod == 1 || sliceTypeMod == 3) {
+        // P, B, or SP: num_ref_idx_active_override_flag
+        uint32_t overrideFlag = spsReadBits(oldData, oldSize, readPos, 1);
+        spsWriteBits(newData, newSize, writePos, overrideFlag, 1);
+        int numRefL0 = encPps.numRefIdxL0DefaultActiveMinus1;
+        if (overrideFlag) {
+            uint32_t numRefL0Override = spsReadUE(oldData, oldSize, readPos);
+            spsWriteUE(newData, newSize, writePos, numRefL0Override);
+            numRefL0 = numRefL0Override;
+            if (sliceTypeMod == 1) {
+                uint32_t numRefL1Override = spsReadUE(oldData, oldSize, readPos);
+                spsWriteUE(newData, newSize, writePos, numRefL1Override);
+            }
+        }
+
+        // 11. ref_pic_list_modification
+        // For P/SP slices: ref_pic_list_modification_flag_l0
+        uint32_t rplmFlag0 = spsReadBits(oldData, oldSize, readPos, 1);
+        spsWriteBits(newData, newSize, writePos, rplmFlag0, 1);
+        if (rplmFlag0) {
+            uint32_t idc;
+            do {
+                idc = spsReadUE(oldData, oldSize, readPos);
+                spsWriteUE(newData, newSize, writePos, idc);
+                if (idc == 0 || idc == 1) {
+                    uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                    spsWriteUE(newData, newSize, writePos, v);
+                } else if (idc == 2) {
+                    uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                    spsWriteUE(newData, newSize, writePos, v);
+                }
+            } while (idc != 3);
+        }
+        if (sliceTypeMod == 1) {
+            // B-slice: ref_pic_list_modification_flag_l1
+            uint32_t rplmFlag1 = spsReadBits(oldData, oldSize, readPos, 1);
+            spsWriteBits(newData, newSize, writePos, rplmFlag1, 1);
+            if (rplmFlag1) {
+                uint32_t idc;
+                do {
+                    idc = spsReadUE(oldData, oldSize, readPos);
+                    spsWriteUE(newData, newSize, writePos, idc);
+                    if (idc == 0 || idc == 1) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    } else if (idc == 2) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    }
+                } while (idc != 3);
+            }
+        }
+
+        // 12. pred_weight_table (if weighted pred for P, or explicit bipred for B)
+        bool needWeightTable = (encPps.weightedPredFlag && (sliceTypeMod == 0 || sliceTypeMod == 3))
+                            || (encPps.weightedBipredIdc == 1 && sliceTypeMod == 1);
+        if (needWeightTable) {
+            uint32_t lumaLog2WeightDenom = spsReadUE(oldData, oldSize, readPos);
+            spsWriteUE(newData, newSize, writePos, lumaLog2WeightDenom);
+            // ChromaArrayType=1 for 4:2:0 (standard DVB/x264)
+            uint32_t chromaLog2WeightDenom = spsReadUE(oldData, oldSize, readPos);
+            spsWriteUE(newData, newSize, writePos, chromaLog2WeightDenom);
+
+            // L0 weights
+            for (int i = 0; i <= numRefL0; i++) {
+                uint32_t lumaFlag = spsReadBits(oldData, oldSize, readPos, 1);
+                spsWriteBits(newData, newSize, writePos, lumaFlag, 1);
+                if (lumaFlag) {
+                    int32_t w = spsReadSE(oldData, oldSize, readPos);
+                    int32_t o = spsReadSE(oldData, oldSize, readPos);
+                    spsWriteSE(newData, newSize, writePos, w);
+                    spsWriteSE(newData, newSize, writePos, o);
+                }
+                uint32_t chromaFlag = spsReadBits(oldData, oldSize, readPos, 1);
+                spsWriteBits(newData, newSize, writePos, chromaFlag, 1);
+                if (chromaFlag) {
+                    for (int j = 0; j < 2; j++) {
+                        int32_t w = spsReadSE(oldData, oldSize, readPos);
+                        int32_t o = spsReadSE(oldData, oldSize, readPos);
+                        spsWriteSE(newData, newSize, writePos, w);
+                        spsWriteSE(newData, newSize, writePos, o);
+                    }
+                }
+            }
+            // L1 weights for B-slices omitted (bf=0, no B-slices)
+        }
+    }
+
+    // 13. dec_ref_pic_marking — copy (with IDR→non-IDR conversion if needed)
+    if (nalRefIdc != 0) {
+        if (origNalType == 5 && demoteIdr) {
+            // Demoted IDR: READ IDR format (2 bits), WRITE non-IDR format
+            spsReadBits(oldData, oldSize, readPos, 1);  // no_output_of_prior_pics
+            spsReadBits(oldData, oldSize, readPos, 1);  // long_term_reference
+            // Write adaptive_ref_pic_marking_mode_flag = 0 (sliding window)
+            spsWriteBits(newData, newSize, writePos, 0, 1);
+        } else if (origNalType == 5) {
+            // First IDR (frameIndex=0): keep IDR format
+            uint32_t noOutput = spsReadBits(oldData, oldSize, readPos, 1);
+            uint32_t longTerm = spsReadBits(oldData, oldSize, readPos, 1);
+            spsWriteBits(newData, newSize, writePos, noOutput, 1);
+            spsWriteBits(newData, newSize, writePos, longTerm, 1);
+        } else {
+            // Non-IDR: adaptive_ref_pic_marking_mode_flag + possible MMCO
+            uint32_t modeFlag = spsReadBits(oldData, oldSize, readPos, 1);
+            spsWriteBits(newData, newSize, writePos, modeFlag, 1);
+            if (modeFlag) {
+                uint32_t mmco;
+                do {
+                    mmco = spsReadUE(oldData, oldSize, readPos);
+                    spsWriteUE(newData, newSize, writePos, mmco);
+                    if (mmco == 1 || mmco == 3) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    }
+                    if (mmco == 2) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    }
+                    if (mmco == 3 || mmco == 6) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    }
+                    if (mmco == 4) {
+                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                        spsWriteUE(newData, newSize, writePos, v);
+                    }
+                } while (mmco != 0);
+            }
+        }
+    }
+
+    // 14. cabac_init_idc (for P/B slices with CABAC) — copy
+    if (encPps.entropyCodingModeFlag && sliceTypeMod != 2 && sliceTypeMod != 4) {
+        uint32_t cabacInitIdc = spsReadUE(oldData, oldSize, readPos);
+        spsWriteUE(newData, newSize, writePos, cabacInitIdc);
+    }
+
+    // 15. slice_qp_delta (SE) — copy
+    int32_t sliceQpDelta = spsReadSE(oldData, oldSize, readPos);
+    spsWriteSE(newData, newSize, writePos, sliceQpDelta);
+
+    // 16. Deblocking filter params (if PPS flag) — copy
+    if (encPps.deblockingFilterControlPresent) {
+        uint32_t ddfIdc = spsReadUE(oldData, oldSize, readPos);
+        spsWriteUE(newData, newSize, writePos, ddfIdc);
+        if (ddfIdc != 1) {
+            int32_t alphaOff = spsReadSE(oldData, oldSize, readPos);
+            int32_t betaOff = spsReadSE(oldData, oldSize, readPos);
+            spsWriteSE(newData, newSize, writePos, alphaOff);
+            spsWriteSE(newData, newSize, writePos, betaOff);
+        }
+    }
+
+    // 17. CABAC alignment + slice data
+    if (encPps.entropyCodingModeFlag) {
+        // Old: skip cabac_alignment_one_bit + padding to byte boundary
+        spsReadBits(oldData, oldSize, readPos, 1);  // cabac_alignment_one_bit (=1)
+        int oldPad = (8 - (readPos % 8)) % 8;
+        if (oldPad > 0) spsReadBits(oldData, oldSize, readPos, oldPad);
+
+        // New: write cabac_alignment_one_bit + padding to byte boundary
+        // All alignment bits must be 1 per H.264 spec (cabac_alignment_one_bit = f(1) = 1)
+        spsWriteBits(newData, newSize, writePos, 1, 1);
+        int newPad = (8 - (writePos % 8)) % 8;
+        if (newPad > 0) spsWriteBits(newData, newSize, writePos, (1 << newPad) - 1, newPad);
+
+        // Copy CABAC data bytes (byte-aligned in both streams)
+        int oldCabacByte = readPos / 8;
+        int newCabacByte = writePos / 8;
+        int cabacLen = oldSize - oldCabacByte;
+        if (cabacLen > 0) {
+            int needed = newCabacByte + cabacLen;
+            if (needed > newSize) {
+                newRbsp.resize(needed);
+                newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+                newSize = newRbsp.size();
+            }
+            memcpy(newData + newCabacByte, oldData + oldCabacByte, cabacLen);
+            writePos = (newCabacByte + cabacLen) * 8;
+        }
+    } else {
+        // CAVLC: copy remaining bits
+        while (readPos < oldSize * 8) {
+            uint32_t bit = spsReadBits(oldData, oldSize, readPos, 1);
+            if (writePos / 8 >= newSize) {
+                newRbsp.resize(newSize + 64);
+                newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+                newSize = newRbsp.size();
+            }
+            spsWriteBits(newData, newSize, writePos, bit, 1);
+        }
+    }
+
+    // Trim to actual size
+    newRbsp.resize((writePos + 7) / 8);
+
+    // Re-add emulation prevention bytes
+    return addEmulationPrevention(newRbsp);
+}
+
+// ----------------------------------------------------------------------------
+// Extract the first PPS NAL (with start code) from an encoder packet.
+// Returns the complete PPS NAL including start code, or empty if not found.
+// ----------------------------------------------------------------------------
+static QByteArray extractPpsFromPacket(const QByteArray& packetData)
+{
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(packetData.constData());
+    int size = packetData.size();
+    int pos = 0;
+
+    while (pos + 4 < size) {
+        int scStart = -1, scLen = 0;
+        for (int i = pos; i + 2 < size; i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < size && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; scLen = 4; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; scLen = 3; break;
+                }
+            }
+        }
+        if (scStart < 0) break;
+
+        int nalStart = scStart + scLen;
+        int nalEnd = size;
+        for (int i = nalStart + 1; i + 2 < size; i++) {
+            if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
+                nalEnd = i; break;
+            }
+        }
+
+        if (nalStart < size) {
+            int nalType = data[nalStart] & 0x1F;
+            if (nalType == 8) {  // PPS
+                return packetData.mid(scStart, nalEnd - scStart);
+            }
+        }
+        pos = nalEnd;
+    }
+    return QByteArray();
+}
+
+// ----------------------------------------------------------------------------
+// Patch pps_id in a PPS NAL via RBSP reconstruction.
+// Input: PPS NAL WITH start code. Returns patched PPS NAL WITH start code.
+// ----------------------------------------------------------------------------
+static QByteArray patchPpsId(const QByteArray& ppsNal, uint32_t newPpsId)
+{
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(ppsNal.constData());
+    int startCodeLen = 0;
+    if (ppsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
+        startCodeLen = 4;
+    else if (ppsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
+        startCodeLen = 3;
+    else
+        return QByteArray();
+
+    QByteArray startCode = ppsNal.left(startCodeLen);
+    QByteArray nalBody = ppsNal.mid(startCodeLen);
+    if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 8)
+        return QByteArray();
+
+    QByteArray oldRbsp = removeEmulationPrevention(nalBody);
+    const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldRbsp.constData());
+    int oldSize = oldRbsp.size();
+
+    QByteArray newRbsp(oldSize + 16, '\0');
+    uint8_t* newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+    int newSize = newRbsp.size();
+
+    int readPos = 0, writePos = 0;
+
+    // NAL header (8 bits) — copy
+    spsWriteBits(newData, newSize, writePos,
+                 spsReadBits(oldData, oldSize, readPos, 8), 8);
+
+    // old pps_id — skip; write new
+    spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, newPpsId);
+
+    // Copy all remaining bits
+    while (readPos < oldSize * 8) {
+        uint32_t bit = spsReadBits(oldData, oldSize, readPos, 1);
+        if (writePos / 8 >= newSize) {
+            newRbsp.resize(newSize + 32);
+            newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+            newSize = newRbsp.size();
+        }
+        spsWriteBits(newData, newSize, writePos, bit, 1);
+    }
+
+    newRbsp.resize((writePos + 7) / 8);
+    QByteArray result = startCode;
+    result.append(addEmulationPrevention(newRbsp));
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Rewrite all NALs in an encoder packet for source SPS compatibility.
+// Strips SPS/PPS/SEI/AUD NALs, rewrites slice NALs.
+// Returns rewritten packet, or original on error.
+// ----------------------------------------------------------------------------
+static QByteArray rewriteEncoderPacketForSourceSps(
+    const QByteArray& packetData,
+    int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
+    int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex)
+{
+    QByteArray result;
+    result.reserve(packetData.size() + 128);
+    bool modified = false;
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(packetData.constData());
+    int pos = 0;
+
+    while (pos < packetData.size()) {
+        int scStart = -1, scLen = 0;
+        for (int i = pos; i + 2 < packetData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < packetData.size() && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; scLen = 4; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; scLen = 3; break;
+                }
+            }
+        }
+        if (scStart < 0) {
+            result.append(packetData.mid(pos));
+            break;
+        }
+
+        if (scStart > pos)
+            result.append(packetData.mid(pos, scStart - pos));
+
+        int nalStart = scStart + scLen;
+        int nalEnd = packetData.size();
+        for (int i = nalStart + 1; i + 2 < packetData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
+                nalEnd = i; break;
+            }
+        }
+
+        if (nalStart < packetData.size()) {
+            int nalType = data[nalStart] & 0x1F;
+
+            if (nalType == 7 || nalType == 6 || nalType == 9) {
+                // Strip SPS(7), SEI(6), AUD(9) — but KEEP PPS(8)!
+                // PPS must stay in the packet so the MKV muxer includes it
+                // in the same block as the encoder slices. This ensures the
+                // decoder finds PPS(id=1) during both sequential and seek playback.
+                modified = true;
+            } else if (nalType == 8) {
+                // PPS — patch pps_id from 0→newPpsId and keep in packet
+                QByteArray ppsNal = packetData.mid(scStart, nalEnd - scStart);
+                QByteArray patched = patchPpsId(ppsNal, newPpsId);
+                if (!patched.isEmpty()) {
+                    result.append(patched);
+                } else {
+                    result.append(ppsNal);  // keep original if patch fails
+                }
+                modified = true;
+            } else if (nalType == 1 || nalType == 5) {
+                // Slice — rewrite
+                QByteArray nalBody = packetData.mid(nalStart, nalEnd - nalStart);
+                QByteArray rewritten = rewriteEncoderSliceForSourceSps(
+                    nalBody, encLog2MaxFN, encLog2MaxPocLsb, encFrameMbsOnly,
+                    srcLog2MaxFN, srcLog2MaxPocLsb, srcFrameMbsOnly,
+                    encPps, newPpsId, frameIndex);
+                if (!rewritten.isEmpty()) {
+                    result.append(packetData.mid(scStart, scLen));  // start code
+                    result.append(rewritten);
+                    modified = true;
+                } else {
+                    // Rewrite failed — keep original NAL
+                    result.append(packetData.mid(scStart, nalEnd - scStart));
+                }
+            } else {
+                // Other NAL types — copy as-is
+                result.append(packetData.mid(scStart, nalEnd - scStart));
+            }
+        }
+        pos = nalEnd;
+    }
+
+    return modified ? result : packetData;
+}
+
+// ----------------------------------------------------------------------------
+// Parse H.264 PPS for fields needed by IDR conversion.
+// Input: raw PPS NAL data WITH start code prefix.
+// ----------------------------------------------------------------------------
+static H264PpsInfo parseH264PpsInfo(const QByteArray& ppsNal)
+{
+    H264PpsInfo info = { true, false, true, false, false, 0, 0, 0, false };  // safe defaults
+
+    // Find and strip start code
+    int startCodeLen = 0;
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(ppsNal.constData());
+    if (ppsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
+        startCodeLen = 4;
+    else if (ppsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
+        startCodeLen = 3;
+    else
+        return info;
+
+    QByteArray nalBody = ppsNal.mid(startCodeLen);
+    if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 8)
+        return info;  // not PPS
+
+    QByteArray rbsp = removeEmulationPrevention(nalBody);
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
+    int dataSize = rbsp.size();
+    int bitPos = 8;  // skip NAL header
+
+    spsReadUE(data, dataSize, bitPos);   // pps_id
+    spsReadUE(data, dataSize, bitPos);   // sps_id
+    info.entropyCodingModeFlag = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+    info.bottomFieldPicOrderPresent = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+    uint32_t numSliceGroupsMinus1 = spsReadUE(data, dataSize, bitPos);
+    if (numSliceGroupsMinus1 > 0) {
+        // Complex slice group map — bail, use defaults (very rare in DVB)
+        qDebug() << "  PPS: num_slice_groups > 1 (" << numSliceGroupsMinus1+1
+                 << "), using default PPS flags for IDR conversion";
+        info.valid = true;
+        return info;
+    }
+    info.numRefIdxL0DefaultActiveMinus1 = spsReadUE(data, dataSize, bitPos);
+    info.numRefIdxL1DefaultActiveMinus1 = spsReadUE(data, dataSize, bitPos);
+    info.weightedPredFlag = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+    info.weightedBipredIdc = spsReadBits(data, dataSize, bitPos, 2);
+    spsReadSE(data, dataSize, bitPos);   // pic_init_qp_minus26
+    spsReadSE(data, dataSize, bitPos);   // pic_init_qs_minus26
+    spsReadSE(data, dataSize, bitPos);   // chroma_qp_index_offset
+    info.deblockingFilterControlPresent = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+    spsReadBits(data, dataSize, bitPos, 1);  // constrained_intra_pred_flag
+    info.redundantPicCntPresent = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+    info.valid = true;
+
+    qDebug() << "  PPS parsed: entropy=" << (info.entropyCodingModeFlag ? "CABAC" : "CAVLC")
+             << "deblocking=" << info.deblockingFilterControlPresent
+             << "redundant_pic_cnt=" << info.redundantPicCntPresent
+             << "weighted_pred=" << info.weightedPredFlag
+             << "bottomFieldPicOrder=" << info.bottomFieldPicOrderPresent;
+    return info;
+}
+
+// ----------------------------------------------------------------------------
+// Convert a single Non-IDR I-slice NAL to IDR via slice header reconstruction.
+// Input: NAL body (after start code, WITH emulation prevention bytes).
+// Returns: modified NAL body with IDR slice header, or empty on error.
+//
+// Modifications:
+// - NAL type 1→5, nal_ref_idc >= 1
+// - frame_num set to 0 (IDR requirement)
+// - idr_pic_id=0 inserted after field flags
+// - dec_ref_pic_marking replaced with IDR syntax (2 bits)
+// - CABAC alignment adjusted for new header length
+// - Slice data (CABAC/CAVLC) copied byte-exact
+// ----------------------------------------------------------------------------
+static QByteArray convertSliceNalToIDR(
+    const QByteArray& nalBody,
+    int log2MaxFrameNum,
+    int pocType,
+    int log2MaxPocLsb,
+    bool frameMbsOnly,
+    const H264PpsInfo& pps)
+{
+    if (nalBody.isEmpty()) return QByteArray();
+
+    uint8_t nalHeader = static_cast<uint8_t>(nalBody[0]);
+    uint8_t nalType = nalHeader & 0x1F;
+    if (nalType != 1) return QByteArray();  // only convert non-IDR slices
+
+    uint8_t nalRefIdc = (nalHeader >> 5) & 0x03;
+
+    // Remove emulation prevention → RBSP
+    QByteArray oldRbsp = removeEmulationPrevention(nalBody);
+    const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldRbsp.constData());
+    int oldSize = oldRbsp.size();
+
+    // Allocate new RBSP (generous: old size + room for inserted fields)
+    QByteArray newRbsp(oldSize + 32, '\0');
+    uint8_t* newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+    int newSize = newRbsp.size();
+
+    int readPos = 0;
+    int writePos = 0;
+
+    // 1. NAL header: set type=5 (IDR), ensure nal_ref_idc >= 1
+    spsReadBits(oldData, oldSize, readPos, 8);  // skip old header
+    uint8_t newRefIdc = (nalRefIdc > 0) ? nalRefIdc : 2;
+    uint8_t newHeader = (nalHeader & 0x80) | (newRefIdc << 5) | 5;
+    spsWriteBits(newData, newSize, writePos, newHeader, 8);
+
+    // 2. first_mb_in_slice (ue) — copy
+    uint32_t firstMb = spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, firstMb);
+
+    // 3. slice_type (ue) — copy
+    uint32_t sliceType = spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, sliceType);
+
+    // Verify this is an I-slice (type 2 or 7)
+    uint32_t sliceTypeMod = sliceType % 5;
+    if (sliceTypeMod != 2) {
+        qDebug() << "  convertSliceNalToIDR: not an I-slice (type=" << sliceType << "), skipping";
+        return QByteArray();
+    }
+
+    // 4. pps_id (ue) — copy
+    uint32_t ppsId = spsReadUE(oldData, oldSize, readPos);
+    spsWriteUE(newData, newSize, writePos, ppsId);
+
+    // 5. frame_num: read old (skip), write 0 (same bit width — IDR requires frame_num=0)
+    spsReadBits(oldData, oldSize, readPos, log2MaxFrameNum);
+    spsWriteBits(newData, newSize, writePos, 0, log2MaxFrameNum);
+
+    // 6. field_pic_flag + bottom_field_flag (if !frame_mbs_only)
+    if (!frameMbsOnly) {
+        uint32_t fieldPicFlag = spsReadBits(oldData, oldSize, readPos, 1);
+        spsWriteBits(newData, newSize, writePos, fieldPicFlag, 1);
+        if (fieldPicFlag) {
+            uint32_t bottomFlag = spsReadBits(oldData, oldSize, readPos, 1);
+            spsWriteBits(newData, newSize, writePos, bottomFlag, 1);
+        }
+    }
+
+    // 7. idr_pic_id = 0 — INSERT (not present in original non-IDR slice)
+    spsWriteUE(newData, newSize, writePos, 0);
+
+    // 8. pic_order_cnt_lsb (if poc_type == 0)
+    if (pocType == 0 && log2MaxPocLsb > 0) {
+        uint32_t pocLsb = spsReadBits(oldData, oldSize, readPos, log2MaxPocLsb);
+        spsWriteBits(newData, newSize, writePos, pocLsb, log2MaxPocLsb);
+        // delta_pic_order_cnt_bottom: only if !field_pic_flag — skipped for PAFF fields
+    }
+    // poc_type 1: delta_pic_order_cnt would need handling — not used by source stream
+    // poc_type 2: no POC fields in slice header
+
+    // 9. redundant_pic_cnt (if PPS flag set — extremely rare in DVB)
+    if (pps.redundantPicCntPresent) {
+        uint32_t rpc = spsReadUE(oldData, oldSize, readPos);
+        spsWriteUE(newData, newSize, writePos, rpc);
+    }
+
+    // 10. ref_pic_list_modification — empty for I-slices (nothing in bitstream)
+    // 11. pred_weight_table — not present for I-slices
+
+    // 12. dec_ref_pic_marking — SKIP old, WRITE new IDR syntax
+    // Old (non-IDR, if nal_ref_idc > 0):
+    if (nalRefIdc != 0) {
+        uint32_t modeFlag = spsReadBits(oldData, oldSize, readPos, 1);
+        if (modeFlag) {
+            // Skip MMCO commands
+            uint32_t mmco;
+            do {
+                mmco = spsReadUE(oldData, oldSize, readPos);
+                if (mmco == 1 || mmco == 3)
+                    spsReadUE(oldData, oldSize, readPos);  // difference_of_pic_nums_minus1
+                if (mmco == 2)
+                    spsReadUE(oldData, oldSize, readPos);  // long_term_pic_num
+                if (mmco == 3 || mmco == 6)
+                    spsReadUE(oldData, oldSize, readPos);  // long_term_frame_idx
+                if (mmco == 4)
+                    spsReadUE(oldData, oldSize, readPos);  // max_long_term_frame_idx_plus1
+            } while (mmco != 0);
+        }
+    }
+    // New (IDR): always present, 2 bits
+    spsWriteBits(newData, newSize, writePos, 0, 1);  // no_output_of_prior_pics_flag = 0
+    spsWriteBits(newData, newSize, writePos, 0, 1);  // long_term_reference_flag = 0
+
+    // 13. slice_qp_delta (se) — copy
+    int32_t sliceQpDelta = spsReadSE(oldData, oldSize, readPos);
+    spsWriteSE(newData, newSize, writePos, sliceQpDelta);
+
+    // 14. Deblocking filter (if PPS flag set)
+    if (pps.deblockingFilterControlPresent) {
+        uint32_t ddfIdc = spsReadUE(oldData, oldSize, readPos);
+        spsWriteUE(newData, newSize, writePos, ddfIdc);
+        if (ddfIdc != 1) {
+            int32_t alphaOff = spsReadSE(oldData, oldSize, readPos);
+            int32_t betaOff = spsReadSE(oldData, oldSize, readPos);
+            spsWriteSE(newData, newSize, writePos, alphaOff);
+            spsWriteSE(newData, newSize, writePos, betaOff);
+        }
+    }
+
+    // 15. CABAC alignment + slice data
+    if (pps.entropyCodingModeFlag) {
+        // Old: skip cabac_alignment_one_bit + padding zeros to byte boundary
+        spsReadBits(oldData, oldSize, readPos, 1);  // cabac_alignment_one_bit (must be 1)
+        int oldPad = (8 - (readPos % 8)) % 8;
+        if (oldPad > 0) spsReadBits(oldData, oldSize, readPos, oldPad);
+        // readPos is now at CABAC byte boundary
+
+        // New: write cabac_alignment_one_bit + padding to byte boundary
+        // All alignment bits must be 1 per H.264 spec (cabac_alignment_one_bit = f(1) = 1)
+        spsWriteBits(newData, newSize, writePos, 1, 1);
+        int newPad = (8 - (writePos % 8)) % 8;
+        if (newPad > 0) spsWriteBits(newData, newSize, writePos, (1 << newPad) - 1, newPad);
+        // writePos is now at byte boundary
+
+        // Copy CABAC data bytes (byte-aligned in both streams)
+        int oldCabacByte = readPos / 8;
+        int newCabacByte = writePos / 8;
+        int cabacLen = oldSize - oldCabacByte;
+        if (cabacLen > 0) {
+            int needed = newCabacByte + cabacLen;
+            if (needed > newSize) {
+                newRbsp.resize(needed);
+                newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+                newSize = newRbsp.size();
+            }
+            memcpy(newData + newCabacByte, oldData + oldCabacByte, cabacLen);
+            writePos = (newCabacByte + cabacLen) * 8;
+        }
+    } else {
+        // CAVLC: copy remaining bits one by one (no alignment issues)
+        while (readPos < oldSize * 8) {
+            uint32_t bit = spsReadBits(oldData, oldSize, readPos, 1);
+            if (writePos / 8 >= newSize) {
+                newRbsp.resize(newSize + 64);
+                newData = reinterpret_cast<uint8_t*>(newRbsp.data());
+                newSize = newRbsp.size();
+            }
+            spsWriteBits(newData, newSize, writePos, bit, 1);
+        }
+    }
+
+    // Trim to actual size
+    newRbsp.resize((writePos + 7) / 8);
+
+    // Re-add emulation prevention bytes
+    QByteArray result = addEmulationPrevention(newRbsp);
+    qDebug() << "    IDR conversion: NAL" << nalBody.size() << "→" << result.size()
+             << "bytes (RBSP" << oldSize << "→" << newRbsp.size() << ")";
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Convert all Non-IDR I-slice NALs in an access unit to IDR.
+// Iterates over NALs in AU, converts type 1 I-slices via convertSliceNalToIDR.
+// Non-slice NALs (SPS, PPS, SEI) are kept unchanged.
+// Returns modified AU, or original if no conversion was made.
+// ----------------------------------------------------------------------------
+static QByteArray convertAUToIDR(
+    const QByteArray& auData,
+    int log2MaxFrameNum,
+    int pocType,
+    int log2MaxPocLsb,
+    bool frameMbsOnly,
+    const H264PpsInfo& pps)
+{
+    QByteArray result;
+    result.reserve(auData.size() + 64);
+    bool converted = false;
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
+    int pos = 0;
+
+    while (pos < auData.size()) {
+        // Find next start code
+        int scStart = -1;
+        for (int i = pos; i + 2 < auData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0) {
+                if (i + 3 < auData.size() && data[i+2] == 0 && data[i+3] == 1) {
+                    scStart = i; break;
+                }
+                if (data[i+2] == 1) {
+                    scStart = i; break;
+                }
+            }
+        }
+        if (scStart < 0) {
+            result.append(auData.mid(pos));
+            break;
+        }
+
+        // Copy data before start code
+        if (scStart > pos)
+            result.append(auData.mid(pos, scStart - pos));
+
+        int scLen = (data[scStart+2] == 0) ? 4 : 3;
+
+        // Find end of NAL
+        int nalEnd = auData.size();
+        for (int i = scStart + scLen + 1; i + 2 < auData.size(); i++) {
+            if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
+                nalEnd = i; break;
+            }
+        }
+
+        QByteArray nalBody = auData.mid(scStart + scLen, nalEnd - scStart - scLen);
+        if (!nalBody.isEmpty()) {
+            uint8_t nalType = static_cast<uint8_t>(nalBody[0]) & 0x1F;
+
+            if (nalType == 1) {
+                // Try full IDR conversion (works for I-slices)
+                QByteArray idrBody = convertSliceNalToIDR(
+                    nalBody, log2MaxFrameNum, pocType, log2MaxPocLsb,
+                    frameMbsOnly, pps);
+
+                if (!idrBody.isEmpty()) {
+                    result.append(auData.mid(scStart, scLen));  // start code
+                    result.append(idrBody);
+                    converted = true;
+                    pos = nalEnd;
+                    continue;
+                }
+
+                // IDR conversion failed (e.g., P-slice bottom field).
+                // Still need to patch frame_num=0 so both fields match the IDR.
+                QByteArray rbsp = removeEmulationPrevention(nalBody);
+                if (!rbsp.isEmpty()) {
+                    writeFrameNumInSlice(
+                        reinterpret_cast<uint8_t*>(rbsp.data()),
+                        rbsp.size(), log2MaxFrameNum, 0);
+                    QByteArray patchedNal = addEmulationPrevention(rbsp);
+                    result.append(auData.mid(scStart, scLen));  // start code
+                    result.append(patchedNal);
+                    qDebug() << "    IDR AU: patched companion field frame_num→0"
+                             << "(NAL type 1," << patchedNal.size() << "bytes)";
+                    converted = true;
+                    pos = nalEnd;
+                    continue;
+                }
+            }
+        }
+
+        // Not converted — copy as-is
+        result.append(auData.mid(scStart, nalEnd - scStart));
+        pos = nalEnd;
+    }
+
+    if (converted) {
+        qDebug() << "    convertAUToIDR: AU" << auData.size() << "→" << result.size() << "bytes";
+    }
+    return converted ? result : auData;
+}
+
 // Skip H.264 scaling list in SPS
 static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int sizeOfScalingList)
 {
@@ -2565,14 +4121,20 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
             spsReadSE(data, dataSize, bitPos);   // offset_for_ref_frame
     }
 
+    int maxRefReadPos = bitPos;  // bit position of max_num_ref_frames in RBSP
     uint32_t max_num_ref_frames = spsReadUE(data, dataSize, bitPos);
+    // Increase for PAFF transition: prevent DPB overflow from stale MMCO references
+    uint32_t patched_max_ref = qMax(8u, max_num_ref_frames);
     spsReadBits(data, dataSize, bitPos, 1);  // gaps_in_frame_num_allowed_flag
     spsReadUE(data, dataSize, bitPos);       // pic_width_in_mbs_minus1
     spsReadUE(data, dataSize, bitPos);       // pic_height_in_map_units_minus1
 
     uint32_t frame_mbs_only = spsReadBits(data, dataSize, bitPos, 1);
-    if (!frame_mbs_only)
+    int mbAdaptiveBitPos = -1;  // bit position of mb_adaptive_frame_field_flag in RBSP
+    if (!frame_mbs_only) {
+        mbAdaptiveBitPos = bitPos;  // record position before reading
         spsReadBits(data, dataSize, bitPos, 1);  // mb_adaptive_frame_field_flag
+    }
 
     spsReadBits(data, dataSize, bitPos, 1);  // direct_8x8_inference_flag
 
@@ -2643,16 +4205,55 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     // Now at bitstream_restriction_flag position
     int bsrFlagPos = bitPos;
 
-    // Build new RBSP: copy everything up to (not including) bitstream_restriction_flag,
-    // then write our modified bitstream_restriction section
-    int bytesNeeded = (bsrFlagPos + 7) / 8 + 16;  // generous buffer for added fields
+    // Build new RBSP: copy up to max_num_ref_frames, write patched value,
+    // then copy from after max_num_ref_frames to bsrFlagPos, then write new
+    // bitstream_restriction section.
+    int bytesNeeded = (bsrFlagPos + 7) / 8 + 32;  // generous buffer
     QByteArray newRbsp(bytesNeeded, '\0');
-    // Copy existing data up to the flag position
-    memcpy(newRbsp.data(), rbsp.constData(), (bsrFlagPos + 7) / 8);
-
-    int writeBitPos = bsrFlagPos;
     uint8_t* writeData = reinterpret_cast<uint8_t*>(newRbsp.data());
     int writeDataSize = newRbsp.size();
+
+    // Copy bits [0..maxRefReadPos) verbatim
+    int writeBitPos = 0;
+    for (int b = 0; b < maxRefReadPos; b++) {
+        uint32_t bit = (data[b/8] >> (7 - (b%8))) & 1;
+        spsWriteBits(writeData, writeDataSize, writeBitPos, bit, 1);
+    }
+
+    // Write patched max_num_ref_frames (may be different bit-length than original)
+    spsWriteUE(writeData, writeDataSize, writeBitPos, patched_max_ref);
+
+    // Skip the original max_num_ref_frames UE value — readPos after it was stored
+    // We need the bit position right after the original max_num_ref_frames.
+    // Re-read it to find the end position.
+    int tempPos = maxRefReadPos;
+    spsReadUE(data, dataSize, tempPos);  // skip original value
+    int afterMaxRefPos = tempPos;
+
+    // Copy bits [afterMaxRefPos..bsrFlagPos) verbatim (gaps_flag, dimensions, VUI etc.)
+    for (int b = afterMaxRefPos; b < bsrFlagPos; b++) {
+        uint32_t bit = (data[b/8] >> (7 - (b%8))) & 1;
+        spsWriteBits(writeData, writeDataSize, writeBitPos, bit, 1);
+    }
+
+    // PAFF→MBAFF: set mb_adaptive_frame_field_flag=1 in the NEW RBSP
+    if (mbAdaptiveBitPos >= 0) {
+        // Calculate the new position: offset by the UE size difference
+        int sizeOrigUE = afterMaxRefPos - maxRefReadPos;
+        // Count bits of patched_max_ref UE
+        int sizePatchedUE = 1;
+        { uint32_t tmp = patched_max_ref + 1; while (tmp > 1) { tmp >>= 1; sizePatchedUE += 2; } }
+        int newMbAdaptivePos = mbAdaptiveBitPos + (sizePatchedUE - sizeOrigUE);
+        int byteIdx = newMbAdaptivePos / 8;
+        int bitIdx = 7 - (newMbAdaptivePos % 8);
+        if (byteIdx < writeDataSize && !(writeData[byteIdx] & (1 << bitIdx))) {
+            writeData[byteIdx] |= (1 << bitIdx);
+            qDebug() << "  SPS patched: mb_adaptive_frame_field_flag 0->1 (PAFF->MBAFF signaling)";
+        }
+    }
+    // Refresh pointers (newRbsp may have been resized)
+    writeData = reinterpret_cast<uint8_t*>(newRbsp.data());
+    writeDataSize = newRbsp.size();
 
     // Write bitstream_restriction_flag = 1
     spsWriteBits(writeData, writeDataSize, writeBitPos, 1, 1);
@@ -2664,8 +4265,10 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_horizontal
     spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_vertical
     spsWriteUE(writeData, writeDataSize, writeBitPos, maxReorderFrames);  // max_num_reorder_frames
-    // max_dec_frame_buffering >= max_num_ref_frames and >= max_num_reorder_frames
-    uint32_t maxDecBuf = qMax(maxReorderFrames, (int)max_num_ref_frames);
+    // max_dec_frame_buffering: increase to at least 8 to prevent DPB overflow at
+    // MBAFF re-encode → PAFF stream-copy transitions where MMCO references
+    // non-existent frames (harmless unref failures, but DPB must not overflow)
+    uint32_t maxDecBuf = qMax(8u, qMax((uint32_t)maxReorderFrames, max_num_ref_frames));
     spsWriteUE(writeData, writeDataSize, writeBitPos, maxDecBuf);  // max_dec_frame_buffering
 
     // RBSP stop bit + byte alignment

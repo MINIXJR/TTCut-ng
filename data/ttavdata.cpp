@@ -576,13 +576,29 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
     QList<QPair<int, int>> cutPairs = mpPendingVdrMarkers.take(avItem);
     int frameCount = vStream ? vStream->frameCount() : 0;
 
+    // PAFF correction: markad frame numbers may be at field rate (50fps)
+    // while the video now has frame-rate indexed frames (25fps).
+    // Detect: if any marker exceeds frameCount, markers are at field rate.
+    bool markersAtFieldRate = false;
+    if (frameCount > 0) {
+      for (const auto& pair : cutPairs) {
+        if (pair.first >= frameCount || pair.second >= frameCount) {
+          markersAtFieldRate = true;
+          break;
+        }
+      }
+    }
+    if (markersAtFieldRate) {
+      qDebug() << "  VDR markers exceed frame count — halving for PAFF field-rate correction";
+    }
+
     qDebug() << "Adding" << cutPairs.size() << "VDR cut entries, video has" << frameCount << "frames";
 
     QList<TTStreamPoint> vdrPoints;
 
     for (const auto& pair : cutPairs) {
-      int cutIn = pair.first;
-      int cutOut = pair.second;
+      int cutIn = markersAtFieldRate ? pair.first / 2 : pair.first;
+      int cutOut = markersAtFieldRate ? pair.second / 2 : pair.second;
 
       // Validate frame numbers against video length
       if (frameCount > 0 && cutOut >= frameCount) {
@@ -1194,15 +1210,15 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   double frameRate = vStream->frameRate();
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
-  // Get frame rate and A/V offset from .info file
+  // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
   int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(sourceFile);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
     if (esInfo.isLoaded()) {
-      if (esInfo.frameRate() > 0) {
+      if (frameRate <= 0 && esInfo.frameRate() > 0) {
         frameRate = esInfo.frameRate();
-        log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info: %1 fps").arg(frameRate));
+        log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info (fallback): %1 fps").arg(frameRate));
       }
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
         avOffsetMs = esInfo.avOffsetMs();
@@ -1388,6 +1404,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // Calculate frame duration in nanoseconds (e.g., "0:20000000ns" for 50fps)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
     mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+    mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
 
     // Apply A/V sync offset if present
     if (avOffsetMs != 0) {
@@ -1494,6 +1511,7 @@ void TTAVData::onCutFinished()
         double frameRate = videoStream->frameRate();
         int frameDurationNs = (int)(1000000000.0 / frameRate);
         mkvProvider->setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+        mkvProvider->setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
 
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {

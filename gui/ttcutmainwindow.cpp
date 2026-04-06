@@ -1481,7 +1481,7 @@ void TTCutMainWindow::onSetCutOut(int index)
 /* /////////////////////////////////////////////////////////////////////////////
  * onStatusReport;
  */
-void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64)
+void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value)
 {
   switch(state) {
     case StatusReportArgs::Init:
@@ -1509,10 +1509,18 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
   }
 
   if (progressBar != 0) {
-    // Use the correct task pool for progress calculation
     int progress;
     QTime time;
-    if (mStreamPointWorkersRunning > 0) {
+    if (task == 0) {
+      // No ThreadTask (e.g. Smart Cut, MKV mux) — use value directly as percent
+      progress = static_cast<int>(value);
+      if (!mDirectProgressTimer.isValid())
+        mDirectProgressTimer.start();
+      time = QTime(0, 0, 0, 0).addMSecs(mDirectProgressTimer.elapsed());
+      if (state == StatusReportArgs::Exit || state == StatusReportArgs::Finished ||
+          state == StatusReportArgs::Error || state == StatusReportArgs::Canceled)
+        mDirectProgressTimer.invalidate();
+    } else if (mStreamPointWorkersRunning > 0) {
       progress = mpStreamPointTaskPool->overallPercentage();
       time = mpStreamPointTaskPool->overallTime();
     } else {

@@ -217,7 +217,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   // Flush decoder + filter
   avcodec_send_packet(codecCtx, nullptr);
   while (avcodec_receive_frame(codecCtx, frame) >= 0 && !mIsAborted) {
-    av_buffersrc_add_frame(bufferSrcCtx, frame);
+    if (av_buffersrc_add_frame(bufferSrcCtx, frame) < 0) break;
     while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
       collectSilenceResult(filtFrame, results);
       av_frame_unref(filtFrame);
@@ -225,7 +225,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     av_frame_unref(frame);
   }
   // Final flush
-  av_buffersrc_add_frame(bufferSrcCtx, nullptr);
+  (void)av_buffersrc_add_frame(bufferSrcCtx, nullptr);
   while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
     collectSilenceResult(filtFrame, results);
     av_frame_unref(filtFrame);

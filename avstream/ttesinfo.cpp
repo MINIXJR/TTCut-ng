@@ -388,6 +388,21 @@ int TTESInfo::countExtraFramesBefore(int frameIndex) const
 }
 
 // ----------------------------------------------------------------------------
+// Correct field rate to frame rate for PAFF streams (old .info files)
+// Old .info files written before PAFF detection store the field rate (50/60)
+// instead of the true frame rate (25/30). Halve it when it looks like a field rate.
+// ----------------------------------------------------------------------------
+void TTESInfo::correctFrameRateForPAFF()
+{
+    if (mFrameRateNum > 30 && mFrameRateDen == 1) {
+        int oldRate = mFrameRateNum;
+        mFrameRateNum /= 2;
+        qDebug() << "TTESInfo: PAFF frame rate correction:" << oldRate
+                 << "/" << mFrameRateDen << " -> " << mFrameRateNum << "/" << mFrameRateDen;
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Find .info file for a video file
 // E.g., for "Petrocelli_5min_video.264" looks for:
 //   1. "Petrocelli_5min_video.info"

@@ -573,10 +573,10 @@ void TTMPEG2Window2::getFrameInfo()
 
 QRect TTMPEG2Window2::currentPixmapRect() const
 {
-  const QPixmap* pm = pixmap();
-  if (!pm || pm->isNull()) return QRect();
+  QPixmap pm = pixmap(Qt::ReturnByValue);
+  if (pm.isNull()) return QRect();
 
-  QSize pmSize = pm->size();
+  QSize pmSize = pm.size();
   int x = (width() - pmSize.width()) / 2;
   int y = (height() - pmSize.height()) / 2;
   return QRect(x, y, pmSize.width(), pmSize.height());

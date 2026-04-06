@@ -86,6 +86,7 @@ struct TTFrameInfo {
     bool isKeyframe;        // IDR frame (H.264) or keyframe
     int gopIndex;           // Which GOP this frame belongs to
     int frameIndex;         // Sequential frame number
+    bool isFieldCoded;      // true if merged from two PAFF field packets
 };
 
 // ----------------------------------------------------------------------------
@@ -172,6 +173,8 @@ public:
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
     void setFrameIndex(const QList<TTFrameInfo>& index) { mFrameIndex = index; }
     int frameCount() const { return mFrameIndex.size(); }
+    bool isPAFF() const { return mIsPAFF; }
+    int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
 
     // Build GOP index
     bool buildGOPIndex();
@@ -259,6 +262,19 @@ private:
     bool mDecoderDrained;       // True if decoder was flushed for EOF drain
     bool mIsElementaryStream;   // Cached: true if file is raw ES (byte-seeking)
     bool mAnalysisMode;         // True: use multi-threaded decoding for analysis
+
+    bool mIsPAFF;                       // PAFF stream detected
+    int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing
+    bool mH264FrameMbsOnlyFlag;         // from SPS, true = no field coding
+
+    // H.264 PAFF field info from packet data
+    struct TTFieldInfo {
+        bool isField;        // field_pic_flag
+        bool isBottomField;  // bottom_field_flag
+        int frameNum;        // frame_num from slice header
+    };
+    TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
+    void parseH264SpsFromExtradata(const uint8_t* data, int size);
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;

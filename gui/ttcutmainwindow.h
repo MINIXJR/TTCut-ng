@@ -32,6 +32,7 @@
 
 #include "ui_ttcutmainwindow.h"
 
+#include <QElapsedTimer>
 #include <QMutexLocker>
 
 #include "../common/ttcut.h"
@@ -166,6 +167,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTStreamPointWidget* mpStreamPointWidget;
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
+    QElapsedTimer        mDirectProgressTimer;
     bool                 mBlackSearchAborted;
     bool                 mSceneSearchAborted;
     TTLogoDetector*      mLogoDetector;

@@ -36,6 +36,7 @@
 #include <QList>
 #include <QByteArray>
 #include <QFile>
+#include <QMap>
 
 // ----------------------------------------------------------------------------
 // NAL Unit types for H.264 (AVC)
@@ -117,6 +118,15 @@ namespace H265 {
 }
 
 // ----------------------------------------------------------------------------
+// SPS info extracted for PAFF detection
+// ----------------------------------------------------------------------------
+struct TTSpsInfo {
+    int spsId;
+    int log2MaxFrameNumMinus4;    // needed to parse frame_num bit-width
+    bool frameMbsOnlyFlag;        // false = may contain field-coded pictures
+};
+
+// ----------------------------------------------------------------------------
 // NAL Unit information structure
 // ----------------------------------------------------------------------------
 struct TTNalUnit {
@@ -145,6 +155,8 @@ struct TTNalUnit {
     int poc;                     // Picture Order Count
     int firstMbInSlice;          // First macroblock address
     int ppsId;                   // PPS ID used by this slice
+    bool isField;                // field_pic_flag == 1
+    bool isBottomField;          // bottom_field_flag == 1 (only valid if isField)
 };
 
 // ----------------------------------------------------------------------------
@@ -164,6 +176,7 @@ struct TTAccessUnit {
     int sliceType;               // Dominant slice type (I, P, B)
     int poc;                     // Picture Order Count
     int gopIndex;                // Which GOP this frame belongs to
+    bool isFieldCoded;           // true if AU was merged from two field pictures
 };
 
 // ----------------------------------------------------------------------------
@@ -266,6 +279,14 @@ public:
     // Returns H265::SLICE_B (0), H265::SLICE_P (1), H265::SLICE_I (2), or -1 on error.
     static int parseH265SliceTypeFromPacket(const uint8_t* data, int size);
 
+    // PAFF detection
+    bool isPAFF() const { return mIsPAFF; }
+
+    // Exp-Golomb decoding (public static helpers for SPS/slice parsing)
+    static uint32_t readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos);
+    static int32_t readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos);
+    static uint32_t readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -291,6 +312,11 @@ private:
     QList<int> mPPSList;
     QList<int> mVPSList;
 
+    // SPS/PPS info for PAFF detection
+    QMap<int, TTSpsInfo> mSpsInfoMap;   // SPS ID -> SPS info
+    QMap<int, int> mPpsToSpsMap;        // PPS ID -> SPS ID
+    bool mIsPAFF;                       // true if any field-coded slices found
+
     // Error handling
     QString mLastError;
     void setError(const QString& error);
@@ -307,6 +333,10 @@ private:
     bool parseH264NalUnit(const QByteArray& data, TTNalUnit& nal);
     bool parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal);
 
+    // SPS/PPS parsing for PAFF
+    void parseH264SpsData(const QByteArray& data);
+    void parseH264PpsData(const QByteArray& data);
+
     // H.265 specific parsing
     bool parseH265NalUnit(const QByteArray& data, TTNalUnit& nal);
     bool parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal);
@@ -314,10 +344,6 @@ private:
     // Parameter set deduplication (only store unique SPS/PPS/VPS by content)
     void deduplicateList(QList<int>& list);
 
-    // Exp-Golomb decoding (for slice header parsing)
-    static uint32_t readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos);
-    static int32_t readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos);
-    static uint32_t readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
 };
 
 #endif // TTNALUPARSER_H

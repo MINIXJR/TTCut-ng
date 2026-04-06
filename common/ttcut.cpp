@@ -164,7 +164,7 @@ int  TTCut::h265Profile = 0;       // main profile
 int  TTCut::h265Muxer = 1;         // mkvmerge (MKV)
 
 // Preview settings
-int  TTCut::previewPreset = 0;     // ultrafast (for fast preview generation)
+int  TTCut::previewPreset = 0;     // ultrafast (preview speed over quality)
 
 // --- audio boundary detection ---
 int TTCut::burstThresholdDb = -30;

@@ -239,6 +239,81 @@ def ffprobe_packets(filepath: str, stream_type: str) -> list[dict]:
     return data.get("packets", [])
 
 
+def detect_paff(es_file: str) -> bool:
+    """Detect PAFF (Picture-Adaptive Frame-Field) H.264 content.
+
+    Both PAFF and MBAFF have field_order=tt and r_frame_rate ≈ 2 × avg_frame_rate.
+    The only reliable distinction is the NAL structure: PAFF has 2 slice NALs per
+    frame (one per field), MBAFF has 1 slice NAL per frame.
+
+    Method: extract a small sample, count slice NALs (type 1+5) vs AUD NALs (type 9).
+    PAFF: slices ≈ 2 × AUDs. MBAFF: slices ≈ 1 × AUDs.
+    """
+    try:
+        info = ffprobe_json(es_file, "-select_streams", "v:0", "-show_streams")
+        stream = info.get("streams", [{}])[0]
+        field_order = stream.get("field_order", "progressive")
+        if field_order in ("progressive", "unknown"):
+            return False
+
+        # Extract first 1s as Annex-B and count NAL types
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".264", delete=False) as tmp:
+            tmp_path = tmp.name
+        r = run_cmd(["ffmpeg", "-y", "-v", "error", "-t", "1", "-i", es_file,
+                      "-c:v", "copy", "-bsf:v", "h264_mp4toannexb",
+                      "-f", "h264", tmp_path], timeout=30)
+        if r.returncode != 0:
+            os.remove(tmp_path)
+            return False
+
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+        os.remove(tmp_path)
+
+        slices = 0  # NAL type 1 (non-IDR) + 5 (IDR)
+        auds = 0    # NAL type 9 (access unit delimiter)
+        i = 0
+        while i < len(data) - 4:
+            if data[i:i+4] == b'\x00\x00\x00\x01':
+                nal_type = data[i+4] & 0x1F
+                if nal_type in (1, 5):
+                    slices += 1
+                elif nal_type == 9:
+                    auds += 1
+                i += 4
+            elif data[i:i+3] == b'\x00\x00\x01':
+                nal_type = data[i+3] & 0x1F
+                if nal_type in (1, 5):
+                    slices += 1
+                elif nal_type == 9:
+                    auds += 1
+                i += 3
+            else:
+                i += 1
+
+        if auds == 0:
+            return False
+
+        # PAFF has 2 AUDs per frame (one per field), MBAFF has 1 AUD per frame.
+        # Compare AUD count with expected frame count from avg_frame_rate.
+        avg_fps = stream.get("avg_frame_rate", "0/1")
+        def parse_frac(s):
+            if "/" in s:
+                n, d = s.split("/")
+                return int(n) / max(int(d), 1)
+            return float(s)
+        expected_frames = parse_frac(avg_fps)  # frames in 1 second
+        if expected_frames <= 0:
+            return False
+
+        aud_ratio = auds / expected_frames
+        # PAFF: ~2 AUDs per frame, MBAFF: ~1 AUD per frame
+        return aud_ratio > 1.5
+    except Exception:
+        return False
+
+
 def parse_info_file(info_path: str) -> dict:
     """Parse TTCut .info file, return dict with fps, avOffset, extra_frames."""
     result = {"fps": None, "av_offset_ms": 0, "extra_frames": []}
@@ -621,7 +696,8 @@ def _detect_boundary_offset(ref_mkv: str, cut_mkv: str,
 
 def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                            cuts: list[tuple[int, int]], tmpdir: str,
-                           extra_frames: list = None) -> TestResult:
+                           extra_frames: list = None,
+                           is_paff: bool = False) -> TestResult:
     """Extract frames from reference and cut MKV, compare with SSIM.
 
     Handles display-order mapping: Smart Cut may shift the effective CutIn
@@ -647,6 +723,8 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
     try:
         # Step 1: Create reference MKV from original ES
         ref_mkv = os.path.join(tmpdir, "reference.mkv")
+        # mkvmerge interprets --default-duration as per-frame, not per-field.
+        # For PAFF, it splits each frame into 2 field packets automatically.
         frame_dur = f"{round(1_000_000_000 / fps)}ns"
         cmd = [
             "mkvmerge", "-o", ref_mkv,
@@ -749,18 +827,26 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
                 continue
 
             ssim_values = []
-            reorder_probe = 3  # probe ±3 frames for B-frame reorder offset
+            # PAFF: reference MKV has field-level packets (50fps for 25fps content).
+            # Probe in field steps (half-frame = 20ms) with wider range to account
+            # for field-pair alignment differences between mkvmerge and TTCut-ng.
+            if is_paff:
+                reorder_probe = 12   # ±12 field steps = ±6 frame pairs
+                probe_step_fps = fps * 2  # field rate (50fps)
+            else:
+                reorder_probe = 3    # ±3 frames
+                probe_step_fps = fps
             for i, (ref_time, cut_time) in enumerate(positions):
                 cut_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_cut.png")
 
                 if not _extract_frame(cut_mkv, cut_time, cut_png):
                     continue
 
-                # Probe reference at ±reorder_probe frames to handle
+                # Probe reference at ±reorder_probe steps to handle
                 # B-frame decode/display order mismatch between muxers
                 best_ssim = None
                 for offset in range(-reorder_probe, reorder_probe + 1):
-                    probe_time = ref_time + offset / fps
+                    probe_time = ref_time + offset / probe_step_fps
                     if probe_time < 0:
                         continue
                     ref_png = os.path.join(tmpdir, f"{label.replace(' ', '_')}_{i}_ref.png")
@@ -881,7 +967,8 @@ def _try_numpy_correlation(audio_a: str, audio_b: str, tmpdir: str) -> Optional[
 
 def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
                  fps: float, cuts: list[tuple[int, int]], tmpdir: str,
-                 extra_frames: list = None) -> TestResult:
+                 extra_frames: list = None,
+                 is_paff: bool = False) -> TestResult:
     """Measure A/V sync offset in the cut MKV.
 
     Method: Create a reference MKV from the original ES+audio, extract the same
@@ -1322,6 +1409,9 @@ Examples:
             print(f"Error: required tool '{tool}' not found in PATH", file=sys.stderr)
             sys.exit(1)
 
+    # Detect PAFF (H.264 separated field coding)
+    is_paff = detect_paff(args.video)
+
     # Temporary directory
     if args.tmpdir:
         tmpdir = args.tmpdir
@@ -1344,6 +1434,8 @@ Examples:
         print(f"FPS:   {fps}")
         print(f"Cuts:  {args.cuts}")
         print(f"Tmpdir: {tmpdir}")
+        if is_paff:
+            print(f"PAFF:  yes (field_order=tt, mkvmerge handles field pairing automatically)")
         if extra_frames:
             print(f"Extra Frames: {len(extra_frames)} (from .info, audio time correction active)")
         print()
@@ -1369,7 +1461,7 @@ Examples:
 
         if "visual" in selected:
             print("Running: Visual Comparison...", flush=True)
-            results = test_visual_comparison(args.video, args.cut, fps, cuts, tmpdir, extra_frames=extra_frames)
+            results = test_visual_comparison(args.video, args.cut, fps, cuts, tmpdir, extra_frames=extra_frames, is_paff=is_paff)
             if isinstance(results, list):
                 for r in results:
                     report.tests.append(r)
@@ -1380,7 +1472,7 @@ Examples:
 
         if "avsync" in selected:
             print("Running: A/V Sync...", flush=True)
-            r = test_av_sync(args.video, args.audio, args.cut, fps, cuts, tmpdir, extra_frames)
+            r = test_av_sync(args.video, args.audio, args.cut, fps, cuts, tmpdir, extra_frames, is_paff=is_paff)
             report.tests.append(r)
             print(f"  [{r.status_str()}] {r.details}")
 

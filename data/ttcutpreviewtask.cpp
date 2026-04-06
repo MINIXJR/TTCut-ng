@@ -122,13 +122,15 @@ void TTCutPreviewTask::operation()
 	if (isH264H265) {
 		TTVideoStream* vStream = mpCutList->at(0).avDataItem()->videoStream();
 		double frameRate = vStream->frameRate();
-
-		// Get frame rate from .info file if available
-		QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
-		if (!infoFile.isEmpty()) {
-			TTESInfo esInfo(infoFile);
-			if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-				frameRate = esInfo.frameRate();
+		// vStream->frameRate() is authoritative (already PAFF-corrected).
+		// Only fall back to .info if stream has no frame rate.
+		if (frameRate <= 0) {
+			QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
+			if (!infoFile.isEmpty()) {
+				TTESInfo esInfo(infoFile);
+				if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
+					frameRate = esInfo.frameRate();
+				}
 			}
 		}
 
@@ -320,15 +322,15 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // Get file extension for output
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
-  // Get frame rate and A/V offset from .info file
+  // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
   int avOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(sourceFile);
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
     if (esInfo.isLoaded()) {
-      if (esInfo.frameRate() > 0) {
+      if (frameRate <= 0 && esInfo.frameRate() > 0) {
         frameRate = esInfo.frameRate();
-        qDebug() << "Preview: ES frame rate from .info:" << frameRate << "fps";
+        qDebug() << "Preview: ES frame rate from .info (fallback):" << frameRate << "fps";
       }
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
         avOffsetMs = esInfo.avOffsetMs();
@@ -417,6 +419,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   muxTimer.start();
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
 
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);

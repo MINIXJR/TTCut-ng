@@ -88,6 +88,11 @@ float TTH264VideoStream::frameRate()
     return frame_rate;
 }
 
+int TTH264VideoStream::paffLog2MaxFrameNum() const
+{
+    return mFFmpeg ? mFFmpeg->h264Log2MaxFrameNum() : 4;
+}
+
 // -----------------------------------------------------------------------------
 // Open stream using FFmpeg wrapper
 // -----------------------------------------------------------------------------
@@ -222,6 +227,15 @@ int TTH264VideoStream::createHeaderList()
 
     // Disconnect progress forwarding
     disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+
+    // Correct frame rate for PAFF streams (field rate → frame rate)
+    if (mFFmpeg->isPAFF() && frame_rate > 30) {
+        mLog->infoMsg(__FILE__, __LINE__,
+            QString("PAFF detected: correcting frame rate from %1 to %2 fps")
+                .arg(frame_rate).arg(frame_rate / 2.0f));
+        frame_rate /= 2.0f;
+        if (mSPS) mSPS->setFrameRate(static_cast<double>(frame_rate));
+    }
 
     emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82);
 

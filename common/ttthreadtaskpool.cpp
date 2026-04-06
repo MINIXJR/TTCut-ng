@@ -300,8 +300,8 @@ int TTThreadTaskPool::overallPercentage()
   if (totalSteps == 0)
     return 0;
 
-  // Return percentage in permille (0-1000 = 0-100%)
-  return (int)((double)totalProgress / (double)totalSteps * 1000.0);
+  // Return percentage (0-100)
+  return (int)((double)totalProgress / (double)totalSteps * 100.0);
 }
 
 //! Calculate the total progress time value of all enqueued tasks

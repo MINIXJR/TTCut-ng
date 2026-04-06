@@ -222,12 +222,12 @@ void TTThreadTask::run()
 }
 
 /**
- * Returns the current task progress in % * 1000
+ * Returns the current task progress in percent (0-100)
  */
 int TTThreadTask::processValue() const
 {
   int value = (mTotalSteps > 0)
-      ? (int)(((double)mStepCount / (double)mTotalSteps) * 100000.0)
+      ? (int)(((double)mStepCount / (double)mTotalSteps) * 100.0)
       : 0;
 
   return value;

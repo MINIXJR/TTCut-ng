@@ -167,6 +167,14 @@ private:
     int mEncoderPocType;
     bool mEncoderFrameMbsOnly;
 
+    // SPS Unification mode: rewrite encoder output to match source SPS
+    // Set by processSegment() for PAFF H.264, checked in reencodeFrames()
+    bool mSpsUnification;
+    QFile* mSpsUnificationOutFile;  // output file for encoder PPS injection
+    int mEncoderPacketsWritten;     // track encoder packets for PPS injection
+    bool mSyntheticPpsNeeded;       // need encoder PPS at ES start
+    qint64 mPpsReserveOffset;       // file offset of reserved PPS space
+
     // Encoder PTS counter (reset per segment in setupEncoder)
     int64_t mEncoderPts;
 
@@ -174,6 +182,11 @@ private:
     int mFramesStreamCopied;
     int mFramesReencoded;
     int64_t mBytesWritten;
+
+    // Progress tracking
+    int mTotalFrames;
+    int mCurrentSegment;
+    int mTotalSegments;
 
     // Actual output frame ranges (start AU may differ from requested due to B-frame reorder)
     QList<QPair<int, int>> mActualOutputRanges;
@@ -194,13 +207,14 @@ private:
     // frameNumDelta: H.264 frame_num offset for inter-segment continuity
     // actualStartAU: output — actual first AU written (may differ from segment.startFrame)
     bool processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
-                        int frameNumDelta = 0, int* actualStartAU = nullptr);
+                        int& frameNumDelta, int* actualStartAU = nullptr);
 
     // Stream-copy NAL units (no re-encoding)
     // patchReorderFrames > 0: patch inline H.264 SPS NALs with max_num_reorder_frames
     // frameNumDelta != 0: patch H.264 slice frame_num for inter-segment continuity
     bool streamCopyFrames(QFile& outFile, int startFrame, int endFrame,
-                          int patchReorderFrames = 0, int frameNumDelta = 0);
+                          int patchReorderFrames = 0, int frameNumDelta = 0,
+                          int neutralizeMmcoFrames = 0);
 
     // Re-encode frames (for partial GOPs)
     // streamCopyStartFrame: AU index where stream-copy begins after re-encode (-1 if none)

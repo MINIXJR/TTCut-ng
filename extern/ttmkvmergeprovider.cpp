@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttmkvmergeprovider.h"
+#include "../avstream/ttnaluparser.h"
 
 #include <QDebug>
 #include <QFile>
@@ -168,12 +169,79 @@ struct MuxInput {
     int64_t frameDur;   // Frame duration in output time_base units
     int64_t frameCount; // Frame counter for PTS assignment
     bool ownsCtx;       // True = this MuxInput owns the AVFormatContext (for cleanup)
-
     MuxInput()
         : fmtCtx(nullptr), srcIdx(-1), outIdx(-1), pkt(nullptr), eof(false)
         , syncMs(0), assignPts(false), frameDur(0), frameCount(0)
         , ownsCtx(false) {}
 };
+
+// Scan a packet for an H.264 SPS NAL (type 7) and extract log2_max_frame_num.
+// This is needed because Smart Cut output contains TWO different SPS:
+//   1. Encoder SPS (x264 MBAFF, log2_max_frame_num=4)
+//   2. Source SPS  (PAFF stream, log2_max_frame_num=9)
+// The muxer must use the correct log2_max_frame_num for field_pic_flag parsing,
+// otherwise it reads field_pic_flag at the wrong bit position and may falsely
+// detect re-encoded frames as field packets, causing frame merging corruption.
+static bool parseInlineSpsLog2MaxFrameNum(const uint8_t* data, int size, int& log2MaxFrameNum)
+{
+    for (int p = 0; p < size - 5; p++) {
+        if (data[p] != 0 || data[p+1] != 0) continue;
+        int s = -1;
+        if (data[p+2] == 1) s = p + 3;
+        else if (data[p+2] == 0 && p+3 < size && data[p+3] == 1) s = p + 4;
+        if (s < 0 || s >= size) continue;
+        uint8_t nt = data[s] & 0x1F;
+        if (nt != 7) continue;  // Not SPS
+
+        // Parse SPS: skip NAL header, profile_idc, constraint_flags, level_idc
+        const uint8_t* sps = data + s + 1;
+        int spsSz = size - s - 1;
+        if (spsSz < 4) continue;
+
+        uint8_t profile_idc = sps[0];
+        int bp = 24;  // After profile_idc(8) + constraint(8) + level(8)
+
+        // sps_id
+        TTNaluParser::readExpGolombUE(sps, spsSz, bp);
+
+        // High profile: chroma, bit depth, etc.
+        if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
+            profile_idc == 244 || profile_idc == 44  || profile_idc == 83  ||
+            profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
+            profile_idc == 138 || profile_idc == 139 || profile_idc == 134) {
+            uint32_t chroma = TTNaluParser::readExpGolombUE(sps, spsSz, bp);
+            if (chroma == 3)
+                TTNaluParser::readBits(sps, spsSz, bp, 1); // separate_colour_plane
+            TTNaluParser::readExpGolombUE(sps, spsSz, bp); // bit_depth_luma
+            TTNaluParser::readExpGolombUE(sps, spsSz, bp); // bit_depth_chroma
+            TTNaluParser::readBits(sps, spsSz, bp, 1);     // qpprime_y_zero
+            uint32_t scaling = TTNaluParser::readBits(sps, spsSz, bp, 1);
+            if (scaling) {
+                int cnt = (chroma != 3) ? 8 : 12;
+                for (int i = 0; i < cnt; i++) {
+                    uint32_t present = TTNaluParser::readBits(sps, spsSz, bp, 1);
+                    if (present) {
+                        int sz = (i < 6) ? 16 : 64;
+                        int lastScale = 8, nextScale = 8;
+                        for (int j = 0; j < sz; j++) {
+                            if (nextScale != 0) {
+                                // Read signed exp-golomb (delta_scale)
+                                int delta = TTNaluParser::readExpGolombSE(sps, spsSz, bp);
+                                nextScale = (lastScale + delta + 256) % 256;
+                            }
+                            lastScale = (nextScale == 0) ? lastScale : nextScale;
+                        }
+                    }
+                }
+            }
+        }
+
+        uint32_t l2mfn = TTNaluParser::readExpGolombUE(sps, spsSz, bp);
+        log2MaxFrameNum = static_cast<int>(l2mfn) + 4;
+        return true;
+    }
+    return false;
+}
 
 // Read next packet matching srcIdx from this input
 static bool readNextPacket(MuxInput& in)
@@ -212,6 +280,8 @@ TTMkvMergeProvider::TTMkvMergeProvider()
     , mAudioSyncOffsetMs(0)
     , mVideoSyncOffsetMs(0)
     , mTotalDurationMs(0)
+    , mIsPAFF(false)
+    , mH264Log2MaxFrameNum(4)
 {
 }
 
@@ -642,6 +712,12 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         int lastPercent = -1;
         int64_t totalPacketsWritten = 0;
 
+        // Track active SPS log2_max_frame_num for correct PAFF field_pic_flag parsing.
+        // Smart Cut ES files contain two SPS: encoder (log2_max_frame_num=4) then
+        // source (log2_max_frame_num=9). Using the wrong width causes false field
+        // detection and frame merging corruption.
+        int activeLog2MaxFrameNum = mH264Log2MaxFrameNum;
+
         qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
                  << "inputs=" << inputs.size();
 
@@ -674,10 +750,163 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
             // Assign or rescale PTS
             if (in.assignPts) {
-                in.pkt->pts = in.frameCount * in.frameDur;
-                in.pkt->dts = in.pkt->pts;
-                in.pkt->duration = in.frameDur;
-                in.frameCount++;
+                // PAFF detection: re-encoded frames are single packets (MBAFF),
+                // stream-copied frames may be 2 field packets (PAFF).
+                // Parse field_pic_flag from each video packet to distinguish.
+                //
+                // IMPORTANT: Track inline SPS to use correct log2_max_frame_num.
+                // Smart Cut ES contains encoder SPS (log2_max_frame_num=4) followed
+                // by source SPS (log2_max_frame_num=9). Using the wrong width causes
+                // field_pic_flag to be read at the wrong bit position.
+                bool isFieldPacket = false;
+                bool hasVclNal = false;
+                if (mIsPAFF && in.outIdx == 0 && in.pkt->data && in.pkt->size > 4) {
+                    const uint8_t* d = in.pkt->data;
+                    int sz = in.pkt->size;
+
+                    // Update log2_max_frame_num from inline SPS if present
+                    int newL2mfn = 0;
+                    if (parseInlineSpsLog2MaxFrameNum(d, sz, newL2mfn)) {
+                        if (newL2mfn != activeLog2MaxFrameNum) {
+                            qDebug() << "  MKV PAFF: SPS change log2_max_frame_num"
+                                     << activeLog2MaxFrameNum << "->" << newL2mfn
+                                     << "at packet" << totalPacketsWritten;
+                            activeLog2MaxFrameNum = newL2mfn;
+                        }
+                    }
+
+                    // Find VCL NAL and parse field_pic_flag
+                    int nalStart = -1;
+                    for (int p = 0; p < sz - 4; p++) {
+                        if (d[p] == 0 && d[p+1] == 0) {
+                            int s = -1;
+                            if (d[p+2] == 1) s = p + 3;
+                            else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
+                            if (s >= 0 && s < sz) {
+                                uint8_t nt = d[s] & 0x1F;
+                                if (nt == 1 || nt == 5) { nalStart = s; break; }
+                            }
+                        }
+                    }
+                    if (nalStart < 0 && sz >= 3) {
+                        uint8_t nt = d[0] & 0x1F;
+                        if (nt == 1 || nt == 5) nalStart = 0;
+                    }
+                    hasVclNal = (nalStart >= 0);
+                    if (hasVclNal) {
+                        const uint8_t* nal = d + nalStart;
+                        int nalSz = sz - nalStart;
+                        int bp = 8;
+                        TTNaluParser::readExpGolombUE(nal, nalSz, bp); // first_mb
+                        TTNaluParser::readExpGolombUE(nal, nalSz, bp); // slice_type
+                        TTNaluParser::readExpGolombUE(nal, nalSz, bp); // pps_id
+                        TTNaluParser::readBits(nal, nalSz, bp, activeLog2MaxFrameNum); // frame_num
+                        isFieldPacket = (TTNaluParser::readBits(nal, nalSz, bp, 1) == 1); // field_pic_flag
+                    }
+                } else if (in.outIdx == 0 && in.pkt->data && in.pkt->size > 0) {
+                    // Non-PAFF video: check for VCL NAL
+                    const uint8_t* d = in.pkt->data;
+                    int sz = in.pkt->size;
+                    for (int p = 0; p < sz - 3; p++) {
+                        if (d[p] == 0 && d[p+1] == 0) {
+                            int s = -1;
+                            if (d[p+2] == 1) s = p + 3;
+                            else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
+                            if (s >= 0 && s < sz) {
+                                uint8_t nt = d[s] & 0x1F;
+                                if (nt == 1 || nt == 5) { hasVclNal = true; break; }
+                            }
+                        }
+                    }
+                    if (!hasVclNal && sz >= 1) {
+                        uint8_t nt = d[0] & 0x1F;
+                        if (nt == 1 || nt == 5) hasVclNal = true;
+                    }
+                } else {
+                    // Audio/subtitle or empty: always write
+                    hasVclNal = true;
+                }
+
+                // Skip non-VCL video packets (EOS, SPS/PPS-only).
+                // These contain no video frames and must not increment frameCount,
+                // otherwise PTS gets shifted by phantom frames.
+                if (in.outIdx == 0 && !hasVclNal) {
+                    qDebug() << "  MKV PAFF: skip non-VCL video packet"
+                             << totalPacketsWritten << "sz=" << in.pkt->size
+                             << "fc=" << in.frameCount;
+                    readNextPacket(in);
+                    continue;
+                }
+
+                if (isFieldPacket) {
+                    // PAFF: merge both field packets into a single MKV block.
+                    // The matroska muxer discards the second field packet (same PTS,
+                    // DTS+1 treated as duplicate). Without merging, only top fields
+                    // end up in the MKV → half the fields missing → artifacts.
+                    QByteArray firstField(reinterpret_cast<const char*>(in.pkt->data),
+                                          in.pkt->size);
+                    int firstFlags = in.pkt->flags;  // preserve keyframe flag
+                    av_packet_unref(in.pkt);
+
+                    // Read the second field packet from the same input
+                    readNextPacket(in);
+
+                    // Skip non-VCL packets between field pairs (e.g. SEI)
+                    while (!in.eof && in.pkt->data && in.pkt->size > 0) {
+                        const uint8_t* nd = in.pkt->data;
+                        int nsz = in.pkt->size;
+                        bool nextIsVcl = false;
+                        for (int p = 0; p < nsz - 3; p++) {
+                            if (nd[p] == 0 && nd[p+1] == 0) {
+                                int s = -1;
+                                if (nd[p+2] == 1) s = p + 3;
+                                else if (nd[p+2] == 0 && p+3 < nsz && nd[p+3] == 1) s = p + 4;
+                                if (s >= 0 && s < nsz) {
+                                    uint8_t nt = nd[s] & 0x1F;
+                                    if (nt == 1 || nt == 5) { nextIsVcl = true; break; }
+                                }
+                            }
+                        }
+                        if (nextIsVcl) break;
+                        qDebug() << "  MKV PAFF: skip non-VCL between fields, sz=" << nsz;
+                        av_packet_unref(in.pkt);
+                        readNextPacket(in);
+                    }
+
+                    QByteArray merged = firstField;
+                    if (!in.eof) {
+                        merged.append(reinterpret_cast<const char*>(in.pkt->data), in.pkt->size);
+                        av_packet_unref(in.pkt);
+                    }
+
+                    av_new_packet(in.pkt, merged.size());
+                    memcpy(in.pkt->data, merged.constData(), merged.size());
+                    in.pkt->flags = firstFlags;  // restore keyframe flag
+
+                    in.pkt->pts = in.frameCount * in.frameDur;
+                    in.pkt->dts = in.pkt->pts;
+                    in.pkt->duration = in.frameDur;
+                    in.frameCount++;
+
+                    qDebug() << "  MKV PAFF: merged field pair pkt" << totalPacketsWritten
+                             << "pts=" << in.pkt->pts << "fc=" << in.frameCount
+                             << "sz=" << in.pkt->size
+                             << "l2mfn=" << activeLog2MaxFrameNum;
+                } else {
+                    // Frame packet (progressive or MBAFF re-encoded): 1 packet = 1 frame
+                    in.pkt->pts = in.frameCount * in.frameDur;
+                    in.pkt->dts = in.pkt->pts;
+                    in.pkt->duration = in.frameDur;
+                    in.frameCount++;
+
+                    if (in.outIdx == 0) {
+                        qDebug() << "  MKV: frame pkt" << totalPacketsWritten
+                                 << "pts=" << in.pkt->pts << "fc=" << in.frameCount
+                                 << "sz=" << in.pkt->size
+                                 << "field=" << isFieldPacket
+                                 << "l2mfn=" << activeLog2MaxFrameNum;
+                    }
+                }
             } else {
                 av_packet_rescale_ts(in.pkt,
                     in.fmtCtx->streams[in.srcIdx]->time_base,

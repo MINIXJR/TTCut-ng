@@ -95,22 +95,22 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Defekte Frames erkannt</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="792"/>
+        <location filename="../data/ttavdata.cpp" line="808"/>
         <source>starting thread pool</source>
         <translation>Starte Thread-Pool</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="797"/>
+        <location filename="../data/ttavdata.cpp" line="821"/>
         <source>exiting thread pool</source>
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1042"/>
+        <location filename="../data/ttavdata.cpp" line="1067"/>
         <source>Schnitt %1: Audio-Burst am Ende (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1049"/>
+        <location filename="../data/ttavdata.cpp" line="1074"/>
         <source>The following cuts have detected audio bursts:
 
 </source>
@@ -119,7 +119,7 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1051"/>
+        <location filename="../data/ttavdata.cpp" line="1076"/>
         <source>
 
 Use preview to check if shift is needed.</source>
@@ -128,77 +128,77 @@ Use preview to check if shift is needed.</source>
 Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1053"/>
+        <location filename="../data/ttavdata.cpp" line="1078"/>
         <source>Audio Burst Warning</source>
         <translation>Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1054"/>
+        <location filename="../data/ttavdata.cpp" line="1079"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1054"/>
+        <location filename="../data/ttavdata.cpp" line="1079"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1056"/>
+        <location filename="../data/ttavdata.cpp" line="1081"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1109"/>
+        <location filename="../data/ttavdata.cpp" line="1134"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1162"/>
+        <location filename="../data/ttavdata.cpp" line="1187"/>
         <source>deleting existing subtitle cut file: %1</source>
         <translation>Lösche vorhandene Untertitel-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1212"/>
+        <location filename="../data/ttavdata.cpp" line="1237"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1214"/>
+        <location filename="../data/ttavdata.cpp" line="1239"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1267"/>
+        <location filename="../data/ttavdata.cpp" line="1292"/>
         <source>Cutting failed - could not initialize</source>
         <translation>Schneiden fehlgeschlagen - Initialisierung nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1296"/>
+        <location filename="../data/ttavdata.cpp" line="1321"/>
         <source>Cutting video (Smart Cut)...</source>
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1300"/>
+        <location filename="../data/ttavdata.cpp" line="1325"/>
         <source>Cutting failed</source>
         <translation>Schneiden fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1332"/>
+        <location filename="../data/ttavdata.cpp" line="1357"/>
         <source>Cutting audio track %1...</source>
         <translation>Schneide Audiospur %1...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1373"/>
+        <location filename="../data/ttavdata.cpp" line="1398"/>
         <source>Muxing video and audio...</source>
         <translation>Multiplexe Video und Audio...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1427"/>
+        <location filename="../data/ttavdata.cpp" line="1453"/>
         <source>Muxing failed</source>
         <translation>Multiplexen fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1435"/>
+        <location filename="../data/ttavdata.cpp" line="1461"/>
         <source>H.264/H.265 cutting complete</source>
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
@@ -647,14 +647,6 @@ p, li { white-space: pre-wrap; }
         <translation>B ▶</translation>
     </message>
     <message>
-        <source>◀ F</source>
-        <translation type="vanished">◀ F</translation>
-    </message>
-    <message>
-        <source>F ▶</source>
-        <translation type="vanished">F ▶</translation>
-    </message>
-    <message>
         <location filename="../gui/ttcutframenavigation.cpp" line="83"/>
         <source>◀</source>
         <translation>◀</translation>
@@ -708,20 +700,12 @@ p, li { white-space: pre-wrap; }
         <translation>Form</translation>
     </message>
     <message>
-        <source>Go to previous I-Frame</source>
-        <translation type="vanished">Zum vorherigen I-Frame springen</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="70"/>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="190"/>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="310"/>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="422"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
-    </message>
-    <message>
-        <source>Go to next I-Frame</source>
-        <translation type="vanished">Zum nächsten I-Frame</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="102"/>
@@ -737,33 +721,9 @@ p, li { white-space: pre-wrap; }
         <translation>Cut-In setzen</translation>
     </message>
     <message>
-        <source>Go to previous P-Frame</source>
-        <translation type="vanished">Zum vorherigen P-Frame</translation>
-    </message>
-    <message>
-        <source>Go to next P-Frame</source>
-        <translation type="vanished">Zum nächsten P-Frame</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="274"/>
         <source>Set cut-out</source>
         <translation>Cut-Out setzen</translation>
-    </message>
-    <message>
-        <source>Go to previous B-Frame</source>
-        <translation type="vanished">Zum vorherigen B-Frame</translation>
-    </message>
-    <message>
-        <source>Go to next B-Frame</source>
-        <translation type="vanished">Zum nächsten B-Frame</translation>
-    </message>
-    <message>
-        <source>Go to previous frame</source>
-        <translation type="vanished">Zum vorherigen Frame</translation>
-    </message>
-    <message>
-        <source>Go to next frame</source>
-        <translation type="vanished">Zum nächsten Frame</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="419"/>
@@ -816,10 +776,6 @@ p, li { white-space: pre-wrap; }
         <location filename="../ui/ttcutframenavigationwidget.ui" line="779"/>
         <source>Senderlogo-Bereich auswählen. Das Referenzprofil wird aus 10 aufeinanderfolgenden I-Frames gemittelt — achten Sie darauf, dass alle Frames das Logo enthalten.</source>
         <translation>Senderlogo-Bereich auswählen. Das Referenzprofil wird aus 10 aufeinanderfolgenden I-Frames gemittelt — achten Sie darauf, dass alle Frames das Logo enthalten.</translation>
-    </message>
-    <message>
-        <source>Select</source>
-        <translation type="vanished">Auswählen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutframenavigationwidget.ui" line="67"/>
@@ -1096,10 +1052,6 @@ Nicht gespeicherte Änderungen gehen verloren.</translation>
         <location filename="../gui/ttcutmainwindow.cpp" line="600"/>
         <source>Save changes before closing?</source>
         <translation>Änderungen vor dem Schließen speichern?</translation>
-    </message>
-    <message>
-        <source>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Previous/Next frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame (vim-style)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %1 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %2 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Left/Right&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %3 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Page Up/Down&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Jump %4 frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Home / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to first frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;End / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to last frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame Types&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous I-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous P-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous B-frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Next / Previous frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Cutting&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-in point&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Set cut-out point&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Mouse&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mouse wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate frames&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Wheel&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Navigate faster&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation type="vanished">&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Umschalt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Strg+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Strg+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Strg+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger B-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Strg+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Strg+Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="695"/>
@@ -1538,22 +1490,22 @@ Ausgabedatei:
 <context>
     <name>TTCutPreviewTask</name>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="152"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="154"/>
         <source>create cut preview clips</source>
         <translation>Erstelle Vorschau-Clips</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="158"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="160"/>
         <source>Creating preview clip %1 of %2</source>
         <translation>Vorschau-Clip %1 von %2 erstellen</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="284"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="286"/>
         <source>Preview clip %1 of %2 created</source>
         <translation>Vorschau-Clip %1 von %2 erstellt</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="293"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="295"/>
         <source>preview cuts done</source>
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
@@ -2136,14 +2088,6 @@ Ausgabedatei:
         <source>Goto selected cut-out position</source>
         <translation>Zeigt die Cut-Out Position des ausgewählten Eintrags an</translation>
     </message>
-    <message>
-        <source>Set Cut-Out</source>
-        <translation type="vanished">Zeige Cut-Out</translation>
-    </message>
-    <message>
-        <source>Show selected cut-out frame in cut-out window</source>
-        <translation type="vanished">Zeigt den Cut-Out Frame des ausgewählten Eintrags im Cut-Out Fenster an</translation>
-    </message>
 </context>
 <context>
     <name>TTCutVideoInfoWidget</name>
@@ -2192,12 +2136,18 @@ Ausgabedatei:
 <context>
     <name>TTESSmartCut</name>
     <message>
-        <location filename="../extern/ttessmartcut.cpp" line="115"/>
+        <location filename="../extern/ttessmartcut.cpp" line="159"/>
         <source>Parsing ES file...</source>
         <translation>ES-Datei analysieren...</translation>
     </message>
     <message>
-        <location filename="../extern/ttessmartcut.cpp" line="401"/>
+        <location filename="../extern/ttessmartcut.cpp" line="472"/>
+        <source>Cut complete</source>
+        <translation>Schnitt abgeschlossen</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttessmartcut.cpp" line="1837"/>
+        <location filename="../extern/ttessmartcut.cpp" line="2523"/>
         <source>Processing segment %1/%2</source>
         <translation>Segment %1/%2 verarbeiten</translation>
     </message>
@@ -2205,12 +2155,13 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="532"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="690"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="770"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="612"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="863"/>
         <source>Indexed %1 frames</source>
         <translation>%1 Frames indiziert</translation>
     </message>
@@ -2237,48 +2188,48 @@ Ausgabedatei:
 <context>
     <name>TTH264VideoStream</name>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="146"/>
+        <location filename="../avstream/tth264videostream.cpp" line="151"/>
         <source>Opening H.264 stream...</source>
         <translation>Öffne H.264 Stream...</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="156"/>
+        <location filename="../avstream/tth264videostream.cpp" line="161"/>
         <source>Failed to open H.264 stream</source>
         <translation>H.264 Stream konnte nicht geöffnet werden</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="161"/>
+        <location filename="../avstream/tth264videostream.cpp" line="166"/>
         <source>Creating H.264 header list...</source>
         <translation>Erstelle H.264-Headerliste...</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="167"/>
+        <location filename="../avstream/tth264videostream.cpp" line="172"/>
         <source>No video stream found</source>
         <translation>Kein Videostream gefunden</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="152"/>
-        <location filename="../avstream/tth264videostream.cpp" line="212"/>
+        <location filename="../avstream/tth264videostream.cpp" line="157"/>
+        <location filename="../avstream/tth264videostream.cpp" line="217"/>
         <source>Building frame index...</source>
         <translation>Erstelle Frame-Index...</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="219"/>
+        <location filename="../avstream/tth264videostream.cpp" line="224"/>
         <source>Failed to build frame index</source>
         <translation>Frame-Index konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="226"/>
+        <location filename="../avstream/tth264videostream.cpp" line="240"/>
         <source>Building GOP index...</source>
         <translation>Erstelle GOP-Index...</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="231"/>
+        <location filename="../avstream/tth264videostream.cpp" line="245"/>
         <source>Processing frames...</source>
         <translation>Verarbeite Frames...</translation>
     </message>
     <message>
-        <location filename="../avstream/tth264videostream.cpp" line="241"/>
+        <location filename="../avstream/tth264videostream.cpp" line="255"/>
         <source>H.264 header list created</source>
         <translation>H.264-Headerliste erstellt</translation>
     </message>
@@ -2353,8 +2304,8 @@ Ausgabedatei:
 <context>
     <name>TTMkvMergeProvider</name>
     <message>
-        <location filename="../extern/ttmkvmergeprovider.cpp" line="633"/>
-        <location filename="../extern/ttmkvmergeprovider.cpp" line="707"/>
+        <location filename="../extern/ttmkvmergeprovider.cpp" line="703"/>
+        <location filename="../extern/ttmkvmergeprovider.cpp" line="936"/>
         <source>Muxing...</source>
         <translation>Multiplexe...</translation>
     </message>
@@ -2467,10 +2418,6 @@ Ausgabedatei:
         <location filename="../avstream/ttmpeg2videostream.cpp" line="891"/>
         <source>Transfer complete</source>
         <translation>Übertragung abgeschlossen</translation>
-    </message>
-    <message>
-        <source>system call %1 failed!</source>
-        <translation type="vanished">Systemaufruf %1 fehlgeschlagen!</translation>
     </message>
 </context>
 <context>

@@ -690,7 +690,7 @@ QString TTCurrentFrame::createTempMkvForPlayback()
   if (!infoFile.isEmpty()) {
     TTESInfo esInfo(infoFile);
     if (esInfo.isLoaded()) {
-      if (esInfo.frameRate() > 0) {
+      if (frameRate <= 0 && esInfo.frameRate() > 0) {
         frameRate = esInfo.frameRate();
       }
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
@@ -704,6 +704,7 @@ QString TTCurrentFrame::createTempMkvForPlayback()
   int frameDurationNs = static_cast<int>(1000000000.0 / frameRate);
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+  mkvProvider.setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }

@@ -64,6 +64,12 @@
   - Neue Dateien: `.ttcut`, bestehende `.prj` behalten Endung
   - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`
 
+- **Automatisierter Schnitt-Test mit Inputdatei**
+  - CLI-Tool das eine `.ttcut` Projektdatei + ES/Audio lädt und Smart Cut ausführt
+  - Ergebnis-ES mit `ffprobe` analysieren: NAL-Typen, Frame-Count, PTS-Lücken, IDR-Positionen
+  - Ermöglicht automatisiertes Testen ohne GUI (Regression-Tests, CI)
+  - Basiert auf `TTESSmartCut` + `TTNaluParser` + `TTMkvMergeProvider`
+
 - **CLI Interface for batch Smart Cut (headless mode)**
   - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
   - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux

@@ -77,6 +77,9 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mDecoderDrained(false)
     , mIsElementaryStream(false)
     , mAnalysisMode(false)
+    , mIsPAFF(false)
+    , mH264Log2MaxFrameNum(4)
+    , mH264FrameMbsOnlyFlag(true)
     , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
@@ -250,6 +253,9 @@ void TTFFmpegWrapper::closeFile()
     mDecoderFrameIndex = -1;
     mDecoderDrained = false;
     mIsElementaryStream = false;
+    mIsPAFF = false;
+    mH264Log2MaxFrameNum = 4;
+    mH264FrameMbsOnlyFlag = true;
     clearFrameCache();
 }
 
@@ -422,6 +428,136 @@ QString TTFFmpegWrapper::containerTypeToString(TTContainerType type)
 }
 
 // ----------------------------------------------------------------------------
+// Parse H.264 SPS from extradata for PAFF detection
+// Sets mH264Log2MaxFrameNum and mH264FrameMbsOnlyFlag
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::parseH264SpsFromExtradata(const uint8_t* data, int size)
+{
+    if (!data || size < 5) return;
+
+    int nalStart = -1;
+    for (int pos = 0; pos < size - 4; pos++) {
+        if (data[pos] == 0 && data[pos+1] == 0) {
+            int start = -1;
+            if (data[pos+2] == 1) start = pos + 3;
+            else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) start = pos + 4;
+            if (start >= 0 && start < size && (data[start] & 0x1F) == 7) {
+                nalStart = start;
+                break;
+            }
+        }
+    }
+    if (nalStart < 0) return;
+
+    const uint8_t* sps = data + nalStart;
+    int spsSize = size - nalStart;
+    int bitPos = 8;
+
+    int profileIdc = static_cast<int>(TTNaluParser::readBits(sps, spsSize, bitPos, 8));
+    TTNaluParser::readBits(sps, spsSize, bitPos, 8);  // constraint+reserved
+    TTNaluParser::readBits(sps, spsSize, bitPos, 8);  // level_idc
+    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);  // sps_id
+
+    if (profileIdc == 100 || profileIdc == 110 || profileIdc == 122 ||
+        profileIdc == 244 || profileIdc == 44  || profileIdc == 83  ||
+        profileIdc == 86  || profileIdc == 118 || profileIdc == 128 ||
+        profileIdc == 138 || profileIdc == 139 || profileIdc == 134 ||
+        profileIdc == 135) {
+        int chromaFormatIdc = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
+        if (chromaFormatIdc == 3) TTNaluParser::readBits(sps, spsSize, bitPos, 1);
+        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+        TTNaluParser::readBits(sps, spsSize, bitPos, 1);
+        uint32_t scalingPresent = TTNaluParser::readBits(sps, spsSize, bitPos, 1);
+        if (scalingPresent) {
+            int numLists = (chromaFormatIdc != 3) ? 8 : 12;
+            for (int i = 0; i < numLists; i++) {
+                if (TTNaluParser::readBits(sps, spsSize, bitPos, 1)) {
+                    int listSize = (i < 6) ? 16 : 64;
+                    int lastScale = 8, nextScale = 8;
+                    for (int j = 0; j < listSize; j++) {
+                        if (nextScale != 0) {
+                            int delta = TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
+                            nextScale = (lastScale + delta + 256) % 256;
+                        }
+                        lastScale = (nextScale == 0) ? lastScale : nextScale;
+                    }
+                }
+            }
+        }
+    }
+
+    mH264Log2MaxFrameNum = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos)) + 4;
+
+    int pocType = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
+    if (pocType == 0) {
+        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+    } else if (pocType == 1) {
+        TTNaluParser::readBits(sps, spsSize, bitPos, 1);
+        TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
+        TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
+        int n = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
+        for (int i = 0; i < n; i++) TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
+    }
+
+    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+    TTNaluParser::readBits(sps, spsSize, bitPos, 1);
+    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
+
+    mH264FrameMbsOnlyFlag = (TTNaluParser::readBits(sps, spsSize, bitPos, 1) == 1);
+
+    if (!mH264FrameMbsOnlyFlag) {
+        qDebug() << "FFmpegWrapper SPS: frame_mbs_only_flag=0, log2_max_frame_num=" << mH264Log2MaxFrameNum;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Parse H.264 field info from packet data (field_pic_flag, bottom_field_flag)
+// ----------------------------------------------------------------------------
+TTFFmpegWrapper::TTFieldInfo TTFFmpegWrapper::parseH264FieldInfoFromPacket(const uint8_t* data, int size)
+{
+    TTFieldInfo result = {false, false, -1};
+    if (!data || size < 4 || mH264FrameMbsOnlyFlag) return result;
+
+    int nalStart = -1;
+    for (int pos = 0; pos < size - 4; pos++) {
+        if (data[pos] == 0 && data[pos+1] == 0) {
+            int start = -1;
+            if (data[pos+2] == 1) start = pos + 3;
+            else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) start = pos + 4;
+            if (start >= 0 && start < size) {
+                uint8_t nalType = data[start] & 0x1F;
+                if (nalType == 1 || nalType == 5) { nalStart = start; break; }
+            }
+        }
+    }
+
+    if (nalStart < 0 && size >= 3) {
+        uint8_t nalType = data[0] & 0x1F;
+        if (nalType == 1 || nalType == 5) nalStart = 0;
+    }
+    if (nalStart < 0) return result;
+
+    const uint8_t* nal = data + nalStart;
+    int nalSize = size - nalStart;
+    int bitPos = 8;
+
+    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // first_mb_in_slice
+    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // slice_type
+    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // pps_id
+
+    result.frameNum = static_cast<int>(TTNaluParser::readBits(nal, nalSize, bitPos, mH264Log2MaxFrameNum));
+
+    result.isField = (TTNaluParser::readBits(nal, nalSize, bitPos, 1) == 1);
+    if (result.isField) {
+        result.isBottomField = (TTNaluParser::readBits(nal, nalSize, bitPos, 1) == 1);
+    }
+
+    return result;
+}
+
+// ----------------------------------------------------------------------------
 // Build frame index by scanning all packets
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
@@ -476,8 +612,110 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
     qDebug() << "Building frame index for stream" << videoStreamIndex;
     qDebug() << "Estimated frames:" << estimatedFrames;
 
+    // Parse SPS from extradata for PAFF detection (H.264 only)
+    AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
+    if (codecId == AV_CODEC_ID_H264) {
+        uint8_t* extradata = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata;
+        int extradataSize = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata_size;
+        if (extradata && extradataSize > 0) {
+            parseH264SpsFromExtradata(extradata, extradataSize);
+        }
+    }
+
+    // PAFF field merging state
+    bool hasPendingTopField = false;
+    TTFrameInfo pendingTopFrame;
+    int pendingTopFrameNum = -1;
+
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == videoStreamIndex) {
+            // Check for PAFF field packet (H.264 only)
+            AVCodecID cid = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
+            if (cid == AV_CODEC_ID_H264 && !mH264FrameMbsOnlyFlag) {
+                TTFieldInfo fieldInfo = parseH264FieldInfoFromPacket(packet->data, packet->size);
+                if (fieldInfo.isField) {
+                    mIsPAFF = true;
+
+                    if (!fieldInfo.isBottomField) {
+                        // Top field: buffer it
+                        if (hasPendingTopField) {
+                            // Orphaned top field — emit as standalone frame
+                            pendingTopFrame.isFieldCoded = true;
+                            pendingTopFrame.gopIndex = currentGOP;
+                            mFrameIndex.append(pendingTopFrame);
+                            frameIndex++;
+                        }
+                        pendingTopFrame = TTFrameInfo();
+                        pendingTopFrame.pts = packet->pts;
+                        pendingTopFrame.dts = packet->dts;
+                        pendingTopFrame.fileOffset = packet->pos;
+                        pendingTopFrame.packetSize = packet->size;
+                        pendingTopFrame.isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
+                        pendingTopFrame.frameIndex = frameIndex;
+                        pendingTopFrame.isFieldCoded = true;
+
+                        // Determine frame type for top field
+                        if (pendingTopFrame.isKeyframe) {
+                            pendingTopFrame.frameType = AV_PICTURE_TYPE_I;
+                        } else {
+                            int sliceType = TTNaluParser::parseH264SliceTypeFromPacket(
+                                packet->data, packet->size);
+                            if (sliceType == H264::SLICE_B)
+                                pendingTopFrame.frameType = AV_PICTURE_TYPE_B;
+                            else if (sliceType == H264::SLICE_I)
+                                pendingTopFrame.frameType = AV_PICTURE_TYPE_I;
+                            else
+                                pendingTopFrame.frameType = AV_PICTURE_TYPE_P;
+                        }
+
+                        pendingTopFrameNum = fieldInfo.frameNum;
+                        hasPendingTopField = true;
+                        av_packet_unref(packet);
+                        continue;
+                    } else {
+                        // Bottom field
+                        if (hasPendingTopField && fieldInfo.frameNum == pendingTopFrameNum) {
+                            // Merge: use top field's info, add bottom field's packet size
+                            pendingTopFrame.packetSize += packet->size;
+                            if (pendingTopFrame.isKeyframe) {
+                                if (frameIndex > 0) currentGOP++;
+                            }
+                            pendingTopFrame.gopIndex = currentGOP;
+                            mFrameIndex.append(pendingTopFrame);
+                            frameIndex++;
+
+                            int64_t progress = (frameIndex * 100) / estimatedFrames;
+                            if (progress != lastProgress && progress <= 100) {
+                                emit progressChanged(static_cast<int>(progress),
+                                    tr("Indexing frame %1...").arg(frameIndex));
+                                lastProgress = progress;
+                            }
+
+                            hasPendingTopField = false;
+                            pendingTopFrameNum = -1;
+                            av_packet_unref(packet);
+                            continue;
+                        }
+                        // Unmatched bottom field — fall through to normal handling
+                        if (hasPendingTopField) {
+                            // Emit orphaned top field first
+                            pendingTopFrame.gopIndex = currentGOP;
+                            mFrameIndex.append(pendingTopFrame);
+                            frameIndex++;
+                            hasPendingTopField = false;
+                            pendingTopFrameNum = -1;
+                        }
+                    }
+                } else if (hasPendingTopField) {
+                    // Non-field packet after a pending top field — emit orphaned top
+                    pendingTopFrame.gopIndex = currentGOP;
+                    mFrameIndex.append(pendingTopFrame);
+                    frameIndex++;
+                    hasPendingTopField = false;
+                    pendingTopFrameNum = -1;
+                }
+            }
+
             TTFrameInfo frameInfo;
             frameInfo.pts = packet->pts;
             frameInfo.dts = packet->dts;
@@ -485,6 +723,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
             frameInfo.packetSize = packet->size;
             frameInfo.isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
             frameInfo.frameIndex = frameIndex;
+            frameInfo.isFieldCoded = false;
 
             // Determine frame type
             if (frameInfo.isKeyframe) {
@@ -495,8 +734,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
                 }
             } else {
                 // Parse slice_type from packet data for B-frame detection
-                AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
-                if (codecId == AV_CODEC_ID_H264) {
+                if (cid == AV_CODEC_ID_H264) {
                     int sliceType = TTNaluParser::parseH264SliceTypeFromPacket(
                         packet->data, packet->size);
                     // H264: P=0, B=1, I=2
@@ -506,7 +744,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
                         frameInfo.frameType = AV_PICTURE_TYPE_I;
                     else
                         frameInfo.frameType = AV_PICTURE_TYPE_P;
-                } else if (codecId == AV_CODEC_ID_HEVC) {
+                } else if (cid == AV_CODEC_ID_HEVC) {
                     int sliceType = TTNaluParser::parseH265SliceTypeFromPacket(
                         packet->data, packet->size);
                     // H265: B=0, P=1, I=2
@@ -535,6 +773,13 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
         }
 
         av_packet_unref(packet);
+    }
+
+    // Flush any pending top field after loop
+    if (hasPendingTopField) {
+        pendingTopFrame.gopIndex = currentGOP;
+        mFrameIndex.append(pendingTopFrame);
+        frameIndex++;
     }
 
     av_packet_free(&packet);
@@ -578,6 +823,12 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
         if (frameRate <= 0 || frameRate > 120) {
             frameRate = 25.0; // Default fallback
             qDebug() << "Invalid frame rate, using default:" << frameRate;
+        }
+
+        // PAFF: field-rate reported as frame-rate, correct to actual frame-rate
+        if (mIsPAFF && frameRate > 30) {
+            qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
+            frameRate /= 2.0;
         }
 
         // Get time base from stream
@@ -1367,34 +1618,37 @@ bool TTFFmpegWrapper::skipCurrentFrame()
     if (!packet) return false;
 
     bool decoded = false;
+
+    // Keep sending packets until a frame is produced.
+    // For PAFF: decoder needs 2 field packets per frame (returns EAGAIN after first).
+    // For progressive: 1 packet = 1 frame.
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == mVideoStreamIndex) {
             int ret = avcodec_send_packet(mVideoCodecCtx, packet);
-            if (ret < 0) {
-                av_packet_unref(packet);
-                continue;
-            }
+            av_packet_unref(packet);
+            if (ret < 0) continue;
+
             ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
             if (ret == 0) {
-                // Frame decoded (reference chain updated) — no RGB conversion
                 decoded = true;
-                av_packet_unref(packet);
                 break;
             }
+            // EAGAIN: decoder needs more data (e.g. PAFF second field) → keep reading
+        } else {
+            av_packet_unref(packet);
         }
-        av_packet_unref(packet);
     }
 
     // EOF drain: flush decoder pipeline to retrieve buffered frames
     if (!decoded) {
-        int ret = avcodec_send_packet(mVideoCodecCtx, nullptr);
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
         int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
         if (recvRet == 0) {
             decoded = true;
             mDecoderDrained = true;
         } else {
             qDebug() << "skipCurrentFrame: EOF drain exhausted"
-                     << "send_packet=" << ret << "receive_frame=" << recvRet;
+                     << "receive_frame=" << recvRet;
         }
     }
 
