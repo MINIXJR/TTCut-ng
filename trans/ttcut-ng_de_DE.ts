@@ -1095,14 +1095,14 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1859"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1867"/>
         <source>Lade Logo-Profil...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1285"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1865"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1931"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1873"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1939"/>
         <source>Logo-Profil geladen: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
@@ -1118,7 +1118,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1287"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1867"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1875"/>
         <source>Logo-Profil konnte nicht verifiziert werden</source>
         <translation>Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
@@ -1160,72 +1160,72 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1646"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1654"/>
         <source>Schwarzbild-Suche abgebrochen</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1651"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1659"/>
         <source>Kein Schwarzbild gefunden</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1809"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1817"/>
         <source>Szenenwechsel-Suche abgebrochen</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1814"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1822"/>
         <source>Kein Szenenwechsel gefunden</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1830"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1838"/>
         <source>Logo-Bereich im Videobild auswählen...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1844"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1852"/>
         <source>Logo-Datei laden</source>
         <translation>Logo-Datei laden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1844"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1852"/>
         <source>PGM Logo (*.pgm)</source>
         <translation>PGM Logo (*.pgm)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1880"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1888"/>
         <source>Logo-Profil entfernt</source>
         <translation>Logo-Profil entfernt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1894"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1902"/>
         <source>Logo-Datei nicht gefunden: %1</source>
         <translation>Logo-Datei nicht gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1981"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1989"/>
         <source>Erstelle Logo-Profil (%1/%2 Frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2010"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2018"/>
         <source>Logo-Profil erstellt (%1 Frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2013"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2021"/>
         <source>Logo-Profil konnte nicht erstellt werden</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2118"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2126"/>
         <source>Logo-Suche abgebrochen</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2123"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2131"/>
         <source>Keine Logo-Statusänderung gefunden</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
@@ -1246,7 +1246,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1534"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1542"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -2147,7 +2147,7 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../extern/ttessmartcut.cpp" line="1837"/>
-        <location filename="../extern/ttessmartcut.cpp" line="2523"/>
+        <location filename="../extern/ttessmartcut.cpp" line="2518"/>
         <source>Processing segment %1/%2</source>
         <translation>Segment %1/%2 verarbeiten</translation>
     </message>

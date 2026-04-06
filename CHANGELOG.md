@@ -2,6 +2,32 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.65.0 (2026-04-06)
+
+**PAFF Smart Cut & Progress-Fix**
+
+### Features
+- H.264 PAFF (1080i50) Smart Cut: Frame-accurate cutting for DVB PAFF streams
+  (separated field coding, used by kabel eins, DF1 HD, etc.)
+- TTNaluParser: PAFF field-pair merging, independent PAFF detection
+- SPS Unification: Rewrite encoder MBAFF output for source PAFF SPS compatibility
+- EOS DPB flush + MMCO neutralization at re-encode/stream-copy transitions
+  (all slice types I/P/B, first 32 AUs after EOS)
+- PAFF-aware MKV muxing: field-pair PTS assignment, per-packet detection
+- ttcut-demux: Correct frame rate detection for interlaced streams
+- Audio file sorting by codec priority (AC3 first) then locale language
+
+### Fixes
+- Fix: Smart Cut progress bar was always 0% (task=0 bypassed TaskPool)
+- Fix: Elapsed time display during Smart Cut (QElapsedTimer for non-task operations)
+- Fix: MBAFF regression where ad frames appeared at cut boundaries (restore realStartAU filter)
+- Fix: Frame repetitions at PAFF re-encode/stream-copy transition (overlap extension)
+- Fix: Compiler warnings (unused variables, deprecated QLabel::pixmap, signed/unsigned)
+
+### Changes
+- Progress reporting standardized from permille (0-1000) to percent (0-100) throughout
+- verify-smartcut skill: added top_block decoder error check
+
 ## v0.64.0 (2026-03-29)
 
 **Logo-Erkennung, Pillarbox-Erkennung & UI-Verbesserungen**
