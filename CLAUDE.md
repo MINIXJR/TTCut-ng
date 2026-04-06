@@ -125,35 +125,12 @@ TTAVStream
 
 Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 
-## Recent Fixes and Features
+## Feature Overview
 
-### Compatibility Fixes
-- Fixed header guard typo in extern/tttranscode.h (TTTRASNCODE_H → TTTRANSCODE_H)
-- Fixed deprecated Qt5 QFlags constructor usage in gui/ttprogressbar.h (using `{}` instead of `0`)
-- Migrated from deprecated QGLWidget to QImage/QPixmap-based rendering for full Wayland compatibility
-- Replaced discontinued transcode with libavcodec API for MPEG-2 frame-accurate cutting
-- Migrated from mplayer to mpv for preview playback
-- Interlace detection for MPEG-2 re-encoding
-- Fixed MPEG-2 cutting for short segments without I-frames
-
-### UI Improvements
-- Theme icons and video editing color scheme
-- Vim-style keyboard shortcuts (j/k, g/G, [/] for cut-in/out) with Help dialog
-- Play button in Current Frame widget (H.264/H.265 via mpv with temporary MKV)
-- Previous/Next cut navigation buttons in preview dialog
-- Corrected preview button order (Back/Start/Forward)
-- Frame position is remembered when switching between videos
-- User warnings for destructive actions (New Project)
-- German translations (de_DE)
-- Zeitsprung: Keyframe-Thumbnail-Browser with page navigation, dynamic AR thumbnails, interval filter
-- Landezonen (Stream Points): Black frame, silence, audio format change (AC3 acmod), scene change,
-  aspect ratio change (MPEG-2 4:3/16:9), and pillarbox detection (4:3 in 16:9, all codecs)
-  with auto-derived cut pairs and project file persistence
-- Interactive black frame and scene change navigation buttons in navigation widget
+For version-specific changes, see `CHANGELOG.md`.
 
 ### SRT Subtitle Support
 
-Full SRT subtitle support:
 - **Auto-loading**: SRT files matching the video filename are automatically loaded
 - **Preview overlay**: Subtitles displayed in the main video frame using QPainter
 - **mpv preview**: Subtitles passed to mpv via `--sub-file` parameter
@@ -202,7 +179,7 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 
 ### ttcut-demux (tools/ttcut-demux)
 
-Demux-Tool für H.264/H.265 TS-Dateien:
+Demux tool for H.264/H.265 TS files:
 - Demuxes TS to elementary streams (similar to ProjectX for MPEG-2)
 - Multi-core optimized (parallel audio/video demuxing)
 - Generates .info file with frame rate, resolution, audio tracks
@@ -224,19 +201,13 @@ Demux-Tool für H.264/H.265 TS-Dateien:
 
 1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
 
-2. **PAFF Smart Cut: MBAFF→PAFF transition handled via EOS + MMCO neutralization**: For H.264 PAFF (1080i50) content, x264 produces MBAFF output while the stream-copy section is PAFF. An EOS NAL flushes the decoder DPB at the transition, and MMCO commands in the first 32 stream-copy AUs are neutralized (adaptive_ref_pic_marking_mode_flag set to 0) to prevent DPB management errors on the empty DPB. All 7/7 test previews pass decoder-error-free.
+**PAFF Smart Cut implementation notes:**
+- x264 produces MBAFF output while the source stream is PAFF. An EOS NAL flushes the decoder DPB at the re-encode→stream-copy transition.
+- MMCO commands in the first 32 stream-copy AUs are neutralized (`adaptive_ref_pic_marking_mode_flag` set to 0) to prevent DPB management errors on the empty DPB.
+- SPS Unification rewrites encoder output to use source SPS parameters (log2_max_frame_num, log2_max_pic_order_cnt_lsb, frame_mbs_only_flag).
+- Non-PAFF (MBAFF) streams use `realStartAU` filtering to exclude Open-GOP B-frames from before the cut-in.
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
-
-### Navigation and Smart Cut Fixes (v0.61.1–v0.61.7)
-
-- **v0.61.1**: Fix frame position sync between slider and navigation buttons
-- **v0.61.2**: Fix shared videoStream position corruption — explicit position parameter passed through all navigation methods and `checkCutPosition()`
-- **v0.61.3**: Separate navigation from auto-save in CurrentFrame widget — B/I/P buttons only navigate, Set Cut-In/Out buttons explicitly save
-- **v0.61.4**: Fix Smart Cut segment boundary stutter for B-frame reorder crossing. Replaces `needsIDR` with `adjustedStreamCopyStart` output parameter. EOS NAL always written before stream-copy.
-- **v0.61.5**: Fix H.264 POC domain mismatch at re-encode/stream-copy boundaries — x264 encoder SPS (MaxPocLsb=16) vs source SPS (MaxPocLsb=64) caused PicOrderCntMsb wrap and frame drops. Fix patches poc_lsb in last encoder slice. Case A/B unified (both extend re-encode to next keyframe). Encoder SPS parsed from inline NAL in first packet (`findH264SpsInPacket()` helper).
-- **v0.61.6**: Fix cumulative A/V audio drift (up to 448ms with 4 segments) in H.264 B-frame streams. B-frame display-order mapping shifts CutIn AU forward, causing video to output fewer frames than audio cut ranges specify. Smart Cut now reports actual start AUs via `actualOutputFrameRanges()`, audio keepList adjusted accordingly. Residual drift: 32ms (1 AC3 frame = physical minimum for stream-copy).
-- **v0.61.7**: Fix MPEG-2 MKV muxing — missing `setDefaultDuration()` caused video-less output; missing stream-level SAR caused wrong aspect ratio (16:9 displayed as 4:3). Settings path migrated from `~/.config/TriTime/` to `~/.config/TTCut-ng/`.
 
 ## Running on Wayland
 

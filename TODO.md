@@ -5,33 +5,7 @@
 - ~~**Security Audit Findings beheben**~~ → **25/25 FIXED** (2026-03-28, commits aea1809 + 66eacb2)
   - Siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md) für alle Findings
 
-- **Smart Cut Quality Test Suite**
-  - Automated test to verify cut quality by comparing input and output material
-  - Must run after each Smart Cut change to catch regressions
-  - **Test dimensions:**
-    1. **Stream metadata**: FPS, GOP count, frame count, codec params (input vs output)
-    2. **Frame timing**: PTS consistency check (expected interval vs actual, flag anomalies)
-    3. **Visual comparison**: Extract frames at specific positions (cut boundaries, mid-segment,
-       segment transitions) from both input and output, compare with PSNR/SSIM
-       - Use `ffmpeg -ss X -i file -frames:v 1 -f image2 frame.png` for extraction
-       - Compare corresponding frames: `ffmpeg -i ref.png -i cut.png -lavfi ssim -f null -`
-       - Flag if SSIM < 0.95 (re-encoded sections) or < 0.99 (stream-copied sections)
-    4. **Audio sync measurement**: Use [syncstart](https://github.com/rpuntaie/syncstart) to
-       measure A/V offset between original and cut material via cross-correlation
-       - Extract matching segments from original (by time) and from cut output
-       - `syncstart original_segment.mkv cut_segment.mkv` → reports offset in seconds
-       - Also compare audio waveforms at cut boundaries for glitches/gaps
-       - `ffmpeg -i file -af astats=metadata=1:reset=1 -f null -` for audio level analysis
-    5. **Duration check**: Total video duration vs total audio duration (must match within 50ms)
-    6. **Cut-point integrity**: Verify first/last frame of each segment matches expected content
-  - **Reference workflow:**
-    1. Mux original ES + audio with libav matroska muxer (same params as cutting) → reference.mkv
-    2. Run Smart Cut → cut.mkv
-    3. Compare both at equivalent time positions
-  - **Output:** Machine-readable report (pass/fail per test, values, expected ranges)
-  - **Tool:** Standalone Python script `tools/ttcut-quality-check.py`
-  - **Dependencies:** ffmpeg, ffprobe, python3, syncstart (pip install syncstart)
-  - ~~**Bug (LOW):** -428ms Residual-Offset~~ → **FIXED** (2026-03-28). Extra-Frame-Korrektur in allen Zeitberechnungen. A/V Sync jetzt +10ms. Visual Comparison: B-Frame-Probe ±3 + end-20 Fix. Defect Region Report. Defekte Streams: Visual wird als WARN übersprungen (Frame-Zählung divergiert).
+- ~~**Smart Cut Quality Test Suite**~~ → **DONE** (`tools/ttcut-quality-check.py` + `verify-smartcut` skill)
 
 
 
@@ -64,15 +38,9 @@
   - Neue Dateien: `.ttcut`, bestehende `.prj` behalten Endung
   - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`
 
-- **Automatisierter Schnitt-Test mit Inputdatei**
-  - CLI-Tool das eine `.ttcut` Projektdatei + ES/Audio lädt und Smart Cut ausführt
-  - Ergebnis-ES mit `ffprobe` analysieren: NAL-Typen, Frame-Count, PTS-Lücken, IDR-Positionen
-  - Ermöglicht automatisiertes Testen ohne GUI (Regression-Tests, CI)
-  - Basiert auf `TTESSmartCut` + `TTNaluParser` + `TTMkvMergeProvider`
-
 - **CLI Interface for batch Smart Cut (headless mode)**
   - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
-  - Reads `.prj` project file, performs Smart Cut + audio cut + MKV mux
+  - Reads `.ttcut` project file, performs Smart Cut + audio cut + MKV mux
   - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
   - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
 
