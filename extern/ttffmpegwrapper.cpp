@@ -1103,19 +1103,33 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         keyframeIndex--;
     }
 
+    // Seek to the keyframe BEFORE keyframeIndex to fill the DPB with reference
+    // frames from the previous GOP. This prevents Open-GOP B-frames at the start
+    // of the target GOP from decoding incorrectly after a flush.
+    int seekKeyframe = keyframeIndex;
+    if (keyframeIndex > 0) {
+        int prevKey = keyframeIndex - 1;
+        while (prevKey > 0 && !mFrameIndex[prevKey].isKeyframe) {
+            prevKey--;
+        }
+        if (mFrameIndex[prevKey].isKeyframe) {
+            seekKeyframe = prevKey;
+        }
+    }
+
     int64_t ret;
     if (mIsElementaryStream && mFormatCtx->pb) {
         // For ES files, use byte-based seeking
-        int64_t byteOffset = mFrameIndex[keyframeIndex].fileOffset;
+        int64_t byteOffset = mFrameIndex[seekKeyframe].fileOffset;
 
         // If fileOffset is -1 (unknown), seek to byte 0 for first keyframe
         if (byteOffset < 0) {
-            if (keyframeIndex == 0) {
+            if (seekKeyframe == 0) {
                 byteOffset = 0;
             } else {
                 // For other frames, try to find a valid offset
                 // Walk back to find a frame with valid offset
-                for (int i = keyframeIndex; i >= 0; i--) {
+                for (int i = seekKeyframe; i >= 0; i--) {
                     if (mFrameIndex[i].fileOffset >= 0) {
                         byteOffset = mFrameIndex[i].fileOffset;
                         break;
@@ -1127,7 +1141,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         }
 
         ret = avio_seek(mFormatCtx->pb, byteOffset, SEEK_SET);
-        qDebug() << "ES seek to byte" << byteOffset << "avio_seek result:" << ret;
+        qDebug() << "ES seek to byte" << byteOffset << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex << "avio_seek result:" << ret;
         if (ret >= 0) {
             avformat_flush(mFormatCtx);
             ret = 0;  // Success
@@ -1136,8 +1150,8 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         }
     } else {
         // For container formats, use timestamp-based seeking
-        int64_t seekPts = mFrameIndex[keyframeIndex].pts;
-        qDebug() << "Container seek to PTS" << seekPts;
+        int64_t seekPts = mFrameIndex[seekKeyframe].pts;
+        qDebug() << "Container seek to PTS" << seekPts << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex;
         ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
     }
 
@@ -1152,8 +1166,8 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     }
     mDecoderDrained = false;
 
-    mCurrentFrameIndex = keyframeIndex;
-    mDecoderFrameIndex = keyframeIndex;
+    mCurrentFrameIndex = seekKeyframe;
+    mDecoderFrameIndex = seekKeyframe;
     return true;
 }
 
@@ -1182,23 +1196,13 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         return mFrameCache[frameIndex];
     }
 
-    // Check if decoder is already positioned just before target frame
-    // (sequential navigation: j/k stepping one frame at a time)
+    // Always seek to ensure consistent DPB state across decoder instances.
+    // The sequential optimization (reusing decoder position without seeking)
+    // was disabled because it produces a different DPB state than a fresh seek
+    // with DPB prefill. This caused Open-GOP B-frames to decode differently
+    // in the CutOut and CurrentFrame widgets for the same frame index.
+    // The LRU frame cache mitigates the performance impact for repeated access.
     bool needSeek = true;
-    if (mDecoderDrained) {
-        // Decoder was flushed for EOF drain — must seek to reset state
-        needSeek = true;
-    } else if (mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex) {
-        // Find keyframe for target
-        int keyframeIndex = frameIndex;
-        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
-            keyframeIndex--;
-        }
-        // If decoder is at or past the keyframe, we can continue without seeking
-        if (mDecoderFrameIndex >= keyframeIndex) {
-            needSeek = false;
-        }
-    }
 
     if (needSeek) {
         int keyframeIndex = frameIndex;
