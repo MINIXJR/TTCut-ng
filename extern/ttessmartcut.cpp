@@ -803,6 +803,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         }
     } else {
         // Standard path: re-encode + EOS + stream-copy
+        mEncoderPacketsWritten = 0;
+
         int adjustedStart = -1;
         if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
                             segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
@@ -829,6 +831,26 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
         // Write source parameter sets
         writeParameterSets(outFile, mReorderDelay);
+
+        // Recalculate frame_num delta for stream-copy after EOS.
+        // EOS flushes the DPB but does NOT reset PrevRefFrameNum (only IDR does).
+        // The inter-segment delta from the caller doesn't account for the encoder's
+        // own frame_num sequence (0..N-1). Using it directly can create a frame_num
+        // gap after PrevRefFrameNum that overflows the DPB with dummy references
+        // (especially with small MaxFrameNum, e.g. 32).
+        // Fix: bridge from encoder's last frame_num to stream-copy's first, so
+        // frame_nums continue seamlessly — same approach as the PAFF path.
+        if (mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264) {
+            QByteArray firstAU = mParser.readAccessUnitData(scStart);
+            int lastEncFrameNum = mEncoderPacketsWritten;
+            int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
+            if (firstScFrameNum >= 0) {
+                frameNumDelta = lastEncFrameNum - firstScFrameNum;
+                qDebug() << "    frameNumDelta recalculated:" << frameNumDelta
+                         << "(encoder last fn:" << lastEncFrameNum
+                         << ", stream-copy first fn:" << firstScFrameNum << ")";
+            }
+        }
 
         // Stream-copy from keyframe
         if (!streamCopyFrames(outFile, scStart, scEnd,
