@@ -206,6 +206,12 @@ Demux tool for H.264/H.265 TS files:
 - MMCO commands in the first 32 stream-copy AUs are neutralized (`adaptive_ref_pic_marking_mode_flag` set to 0) to prevent DPB management errors on the empty DPB.
 - SPS Unification rewrites encoder output to use source SPS parameters (log2_max_frame_num, log2_max_pic_order_cnt_lsb, frame_mbs_only_flag).
 - Non-PAFF (MBAFF) streams use `realStartAU` filtering to exclude Open-GOP B-frames from before the cut-in.
+- SPS patching (`patchH264SpsReorderFrames`) is stream-type-aware via `isPAFF` parameter: PAFF streams get increased `num_ref_frames`/`max_dec_frame_buffering` for MBAFF→PAFF DPB transitions; non-PAFF streams keep original values.
+- After EOS in the standard (non-PAFF) path, `frameNumDelta` is recalculated from the encoder's last frame_num to the first stream-copy frame_num, ensuring seamless frame_num continuity across the DPB flush.
+
+**Frame display (TTFFmpegWrapper):**
+- `seekToFrame()` seeks to the keyframe BEFORE the target keyframe (DPB prefill) to ensure Open-GOP B-frames decode correctly after `avcodec_flush_buffers()`.
+- The sequential decode optimization is disabled — `decodeFrame()` always seeks. This ensures identical DPB state across all decoder instances (CutOut and CurrentFrame widgets). The LRU frame cache mitigates the performance impact.
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
