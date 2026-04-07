@@ -37,7 +37,7 @@ static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth);
 static int readPocLsbFromAU(const QByteArray& auData, int frameNumBitWidth,
                              int pocLsbBitWidth, bool frameMbsOnly);
 static bool findH264SpsInPacket(const QByteArray& packetData, H264SpsInfo& spsInfo);
-static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReorderFrames);
+static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReorderFrames, bool isPAFF);
 
 // IDR injection and SPS unification helpers
 struct H264PpsInfo {
@@ -787,7 +787,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         QByteArray idrAU = convertAUToIDR(firstAU, mLog2MaxFrameNum, mPocType,
                                            mLog2MaxPocLsb, mFrameMbsOnly, ppsInfo);
         if (mReorderDelay > 0)
-            idrAU = patchSpsNalsInAccessUnit(idrAU, mReorderDelay);
+            idrAU = patchSpsNalsInAccessUnit(idrAU, mReorderDelay, true);  // PAFF fallback path
 
         if (outFile.write(idrAU) != idrAU.size()) {
             setError("Failed to write IDR AU");
@@ -841,12 +841,14 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 }
 
 // Forward declaration (defined after writeParameterSets)
-static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReorderFrames);
+static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReorderFrames, bool isPAFF);
 
 // Patch all H.264 SPS NALs within an access unit's raw data.
 // Scans for start codes followed by NAL type 7 (SPS), patches each with
 // patchH264SpsReorderFrames(). Returns modified data, or original if no SPS found.
-static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReorderFrames)
+// isPAFF: when true, increases num_ref_frames and max_dec_frame_buffering for
+// PAFF→MBAFF DPB transitions (not needed for non-PAFF streams).
+static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReorderFrames, bool isPAFF)
 {
     const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
     int size = auData.size();
@@ -897,7 +899,7 @@ static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReor
         if (nalType == 7) {  // SPS
             // Extract this SPS NAL with its start code, patch it
             QByteArray spsNal = auData.mid(scStart, nalEnd - scStart);
-            QByteArray patchedSps = patchH264SpsReorderFrames(spsNal, maxReorderFrames);
+            QByteArray patchedSps = patchH264SpsReorderFrames(spsNal, maxReorderFrames, isPAFF);
             if (!patchedSps.isEmpty()) {
                 result.append(patchedSps);
                 patched = true;
@@ -1813,7 +1815,7 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 
         // Patch H.264 SPS NALs inline if requested
         if (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264) {
-            auData = patchSpsNalsInAccessUnit(auData, patchReorderFrames);
+            auData = patchSpsNalsInAccessUnit(auData, patchReorderFrames, mParser.isPAFF());
         }
 
         // Patch H.264 frame_num for inter-segment continuity
@@ -2304,7 +2306,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             }
         } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
             // Standard path: just patch SPS reorder frames
-            QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay);
+            QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay, mParser.isPAFF());
             if (patched != encodedData)
                 encodedData = patched;
         }
@@ -4051,7 +4053,7 @@ static void skipHrdParameters(const uint8_t* data, int dataSize, int& bitPos)
 // Patch H.264 SPS NAL to set bitstream_restriction with max_num_reorder_frames.
 // Input: SPS NAL data WITH start code prefix.
 // Returns patched SPS NAL data WITH start code prefix, or empty on error.
-static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReorderFrames)
+static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReorderFrames, bool isPAFF)
 {
     // Find and strip start code
     int startCodeLen = 0;
@@ -4123,8 +4125,10 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
 
     int maxRefReadPos = bitPos;  // bit position of max_num_ref_frames in RBSP
     uint32_t max_num_ref_frames = spsReadUE(data, dataSize, bitPos);
-    // Increase for PAFF transition: prevent DPB overflow from stale MMCO references
-    uint32_t patched_max_ref = qMax(8u, max_num_ref_frames);
+    // PAFF only: increase num_ref_frames to prevent DPB overflow from stale MMCO
+    // references at the MBAFF re-encode → PAFF stream-copy transition.
+    // Non-PAFF streams keep the original value to avoid DPB layout mismatch.
+    uint32_t patched_max_ref = isPAFF ? qMax(8u, max_num_ref_frames) : max_num_ref_frames;
     spsReadBits(data, dataSize, bitPos, 1);  // gaps_in_frame_num_allowed_flag
     spsReadUE(data, dataSize, bitPos);       // pic_width_in_mbs_minus1
     spsReadUE(data, dataSize, bitPos);       // pic_height_in_map_units_minus1
@@ -4237,7 +4241,8 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     }
 
     // PAFF→MBAFF: set mb_adaptive_frame_field_flag=1 in the NEW RBSP
-    if (mbAdaptiveBitPos >= 0) {
+    // Only needed for PAFF streams where the encoder produces MBAFF output
+    if (isPAFF && mbAdaptiveBitPos >= 0) {
         // Calculate the new position: offset by the UE size difference
         int sizeOrigUE = afterMaxRefPos - maxRefReadPos;
         // Count bits of patched_max_ref UE
@@ -4265,10 +4270,12 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_horizontal
     spsWriteUE(writeData, writeDataSize, writeBitPos, 16);       // log2_max_mv_length_vertical
     spsWriteUE(writeData, writeDataSize, writeBitPos, maxReorderFrames);  // max_num_reorder_frames
-    // max_dec_frame_buffering: increase to at least 8 to prevent DPB overflow at
-    // MBAFF re-encode → PAFF stream-copy transitions where MMCO references
-    // non-existent frames (harmless unref failures, but DPB must not overflow)
-    uint32_t maxDecBuf = qMax(8u, qMax((uint32_t)maxReorderFrames, max_num_ref_frames));
+    // max_dec_frame_buffering: for PAFF, increase to at least 8 to prevent DPB
+    // overflow at MBAFF re-encode → PAFF stream-copy transitions where MMCO
+    // references non-existent frames. For non-PAFF, use original values.
+    uint32_t maxDecBuf = isPAFF
+        ? qMax(8u, qMax((uint32_t)maxReorderFrames, max_num_ref_frames))
+        : qMax((uint32_t)maxReorderFrames, max_num_ref_frames);
     spsWriteUE(writeData, writeDataSize, writeBitPos, maxDecBuf);  // max_dec_frame_buffering
 
     // RBSP stop bit + byte alignment
@@ -4320,7 +4327,7 @@ bool TTESSmartCut::writeParameterSets(QFile& outFile, int patchReorderFrames)
         QByteArray sps = mParser.getSPS(i);
         if (!sps.isEmpty()) {
             if (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264) {
-                QByteArray patched = patchH264SpsReorderFrames(sps, patchReorderFrames);
+                QByteArray patched = patchH264SpsReorderFrames(sps, patchReorderFrames, mParser.isPAFF());
                 if (!patched.isEmpty())
                     sps = patched;
                 else
