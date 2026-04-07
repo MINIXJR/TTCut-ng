@@ -2146,8 +2146,8 @@ Ausgabedatei:
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../extern/ttessmartcut.cpp" line="1837"/>
-        <location filename="../extern/ttessmartcut.cpp" line="2518"/>
+        <location filename="../extern/ttessmartcut.cpp" line="1861"/>
+        <location filename="../extern/ttessmartcut.cpp" line="2542"/>
         <source>Processing segment %1/%2</source>
         <translation>Segment %1/%2 verarbeiten</translation>
     </message>

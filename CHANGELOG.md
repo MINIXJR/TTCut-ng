@@ -2,6 +2,23 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.65.1 (2026-04-07)
+
+**H.264 Frame Display & Smart Cut Fixes**
+
+### Fixes
+- Fix: Cut-Out-Frame and Aktueller Frame showed different images for the same
+  frame index due to Open-GOP B-frames decoding differently with warm vs cold
+  DPB. seekToFrame() now seeks to the previous keyframe for DPB prefill, and
+  the sequential decode optimization is disabled for consistent results.
+- Fix: MBAFF SPS regression from PAFF commit — patchH264SpsReorderFrames()
+  unconditionally inflated num_ref_frames and max_dec_frame_buffering to 8,
+  causing "co located POCs unavailable" errors in MBAFF streams. Now
+  conditional on isPAFF.
+- Fix: Pre-existing frame_num gap after EOS in standard Smart Cut path caused
+  "illegal short term buffer state" decoder errors, especially with small
+  MaxFrameNum (32). frameNumDelta is now recalculated after re-encoding.
+
 ## v0.65.0 (2026-04-06)
 
 **PAFF Smart Cut & Progress-Fix**
