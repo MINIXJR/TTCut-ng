@@ -14,6 +14,8 @@ All notable changes to TTCut-ng are documented in this file.
 - Each audio track now gets its own PTS probe and individual trim value.
 - The .info file includes per-track fields (`audio_N_first_pts`,
   `audio_N_trimmed_ms`) for diagnostics.
+- Fix: Buffer overrun in `nextStartCodeTS()` when scanning past end of file
+  during MPEG-2 TS start code search (Boyer-Moore loop missing EOF check).
 
 ## v0.65.1 (2026-04-07)
 

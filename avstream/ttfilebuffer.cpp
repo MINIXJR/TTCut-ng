@@ -230,11 +230,17 @@ void TTFileBuffer::nextStartCodeTS()
       i = m-1;
       fillBuffer(2*m+1);
 
+      if (isAtEnd && readPos > writePos)
+        return;
+
       while (cBuffer[(int)((position()+i)&mask)] != tsStartCode[i])
       {
         quint8 pos = cBuffer[(int)((position()+m)&mask)];
         seekRelative(tsShift[(int)pos]);
         fillBuffer(2*m+1);
+
+        if (isAtEnd && readPos > writePos)
+          return;
       }
 
       --i;
