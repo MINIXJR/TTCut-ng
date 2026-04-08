@@ -2,6 +2,19 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.65.2 (2026-04-08)
+
+**ttcut-demux: Per-Track Audio Trim Fix**
+
+### Fixes
+- Fix: ttcut-demux used the first audio stream's PTS offset to trim all audio
+  tracks. When tracks had different PTS offsets (e.g., MP2 at -384ms vs AC3 at
+  -320ms from video), non-primary tracks were over-trimmed, causing A/V desync
+  (64ms in typical SAT.1/RTL recordings with dual MP2+AC3 audio).
+- Each audio track now gets its own PTS probe and individual trim value.
+- The .info file includes per-track fields (`audio_N_first_pts`,
+  `audio_N_trimmed_ms`) for diagnostics.
+
 ## v0.65.1 (2026-04-07)
 
 **H.264 Frame Display & Smart Cut Fixes**
