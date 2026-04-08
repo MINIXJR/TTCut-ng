@@ -60,9 +60,18 @@
 
 - **Manual audio delay/offset per track**
   - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list
-  - The "Delay" column already exists but is currently unused (always shows "0")
+  - The "Delay" column already exists but is currently unused (always shows "0", FIXME in `ttaudiolist.cpp:85`)
+  - Should show per-track trim from .info (`audio_N_trimmed_ms`) as default, allow manual override
   - Use case: Manual A/V sync correction when automatic detection is wrong or unavailable
   - Apply delay during muxing (mplex -O, libav matroska muxer sync offset)
+
+- **Schnittliste "Audio-Versatz" Spalte überarbeiten**
+  - Zeigt aktuell globalen `av_offset_ms` aus .info für jeden Schnitt (`ttcuttreeview.cpp:186`)
+  - Problem: gleicher Wert für alle Schnitte, kein per-Track Bezug
+  - Überdenken: Was soll diese Spalte sinnvoll anzeigen? Optionen:
+    - Akkumulierter Audio-Frame-Boundary-Offset pro Schnitt (aus `localAudioOffset`)
+    - Per-Track A/V Offset (erfordert per-Track .info Daten, siehe ttcut-demux Fix v0.66)
+    - Entfernen wenn redundant mit Audio-Liste "Verzögerung"
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)

@@ -346,21 +346,37 @@ if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC
 else
     ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
 fi
-ORIG_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
-AUDIO_TRIM_SEC="0"
+# Per-track audio PTS probe: each track gets its own trim value
+declare -a ORIG_AUDIO_PTS_ARR=()   # Original PTS per audio track
+declare -a AUDIO_TRIM_SECS=()      # Trim value per audio track
+AUDIO_TRIM_SEC="0"                 # Legacy: maximum trim (for B-frame skip base)
 
-if [ -n "$ORIG_VIDEO_PTS" ] && [ -n "$ORIG_AUDIO_PTS" ]; then
-    # Calculate how much earlier audio starts compared to video
-    AUDIO_AHEAD=$(awk "BEGIN {printf \"%.6f\", $ORIG_VIDEO_PTS - $ORIG_AUDIO_PTS}")
-    AUDIO_AHEAD_MS=$(awk "BEGIN {printf \"%.0f\", ($ORIG_VIDEO_PTS - $ORIG_AUDIO_PTS) * 1000}")
+for i in "${!AUDIO_STREAMS[@]}"; do
+    IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+    TRACK_PTS=$(ffprobe -v error -select_streams $idx -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
+    ORIG_AUDIO_PTS_ARR[$i]="${TRACK_PTS:-0}"
 
-    if awk "BEGIN {exit !($AUDIO_AHEAD > 0.01)}"; then
-        info "Audio starts ${AUDIO_AHEAD_MS}ms before video - will trim audio"
-        AUDIO_TRIM_SEC="$AUDIO_AHEAD"
-    elif awk "BEGIN {exit !($AUDIO_AHEAD < -0.01)}"; then
-        warn "Video starts before audio by ${AUDIO_AHEAD_MS}ms - may need padding"
-        AUDIO_TRIM_SEC="0"
+    if [ -n "$ORIG_VIDEO_PTS" ] && [ -n "$TRACK_PTS" ]; then
+        TRACK_AHEAD=$(awk "BEGIN {printf \"%.6f\", $ORIG_VIDEO_PTS - $TRACK_PTS}")
+        TRACK_AHEAD_MS=$(awk "BEGIN {printf \"%.0f\", ($ORIG_VIDEO_PTS - $TRACK_PTS) * 1000}")
+
+        if awk "BEGIN {exit !($TRACK_AHEAD > 0.01)}"; then
+            info "Audio track $idx ($codec [$lang]) starts ${TRACK_AHEAD_MS}ms before video - will trim"
+            AUDIO_TRIM_SECS[$i]="$TRACK_AHEAD"
+        elif awk "BEGIN {exit !($TRACK_AHEAD < -0.01)}"; then
+            warn "Audio track $idx ($codec [$lang]): video starts ${TRACK_AHEAD_MS}ms before audio - may need padding"
+            AUDIO_TRIM_SECS[$i]="0"
+        else
+            AUDIO_TRIM_SECS[$i]="0"
+        fi
+    else
+        AUDIO_TRIM_SECS[$i]="0"
     fi
+done
+
+# Legacy AUDIO_TRIM_SEC: use first track's value (for B-frame skip adjustment logging)
+if [ ${#AUDIO_TRIM_SECS[@]} -gt 0 ]; then
+    AUDIO_TRIM_SEC="${AUDIO_TRIM_SECS[0]}"
 fi
 
 # Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
@@ -453,9 +469,13 @@ if $ES_MODE; then
     # Adjust audio trim to account for skipped video B-frames
     # If we skipped video by VIDEO_START_TIME, we need to also skip that much audio
     if [ "$VIDEO_START_TIME" != "0" ]; then
-        AUDIO_TRIM_SEC=$(awk "BEGIN {printf \"%.6f\", $AUDIO_TRIM_SEC + $VIDEO_START_TIME}")
+        for i in "${!AUDIO_TRIM_SECS[@]}"; do
+            AUDIO_TRIM_SECS[$i]=$(awk "BEGIN {printf \"%.6f\", ${AUDIO_TRIM_SECS[$i]} + $VIDEO_START_TIME}")
+        done
+        # Legacy variable for logging
+        AUDIO_TRIM_SEC="${AUDIO_TRIM_SECS[0]}"
         TOTAL_SKIP_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
-        info "  Total audio trim adjusted to ${TOTAL_SKIP_MS}ms (A/V offset + B-frame skip)"
+        info "  Total audio trim adjusted (A/V offset + B-frame skip), e.g. track 0: ${TOTAL_SKIP_MS}ms"
     fi
 
     # 2. Prepare audio extraction parameters (before parallel extraction)
@@ -497,9 +517,10 @@ if $ES_MODE; then
             # -ss before -i does a byte-level input seek which has no effect
             # on MPEG-TS audio extraction (produces identical output).
             # -ss after -i discards packets before the seek point, which works.
-            if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.001)}"; then
+            TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
+            if awk "BEGIN {exit !($TRACK_TRIM > 0.001)}"; then
                 AUDIO_EXTRACT_INPUTS+=("$ORIGINAL_INPUT")
-                AUDIO_EXTRACT_SS+=("$AUDIO_TRIM_SEC")
+                AUDIO_EXTRACT_SS+=("$TRACK_TRIM")
             else
                 AUDIO_EXTRACT_INPUTS+=("$INPUT")
                 AUDIO_EXTRACT_SS+=("")
@@ -584,6 +605,26 @@ if $ES_MODE; then
     wait $VIDEO_PID
     VIDEO_EXIT=$?
     if [ $VIDEO_EXIT -eq 0 ]; then
+        # MPEG-2: Truncate trailing null bytes from ES file.
+        # ffmpeg stream-copy from TS extracts zero-stuffed PES payload,
+        # leaving invalid null padding that has no MPEG-2 start codes.
+        if [ "$VIDEO_CODEC" = "mpeg2video" ]; then
+            TRAILING=$(python3 -c "
+import os
+with open('$OUTPUT_VIDEO','rb') as f:
+    sz=os.fstat(f.fileno()).st_size
+    n=0; f.seek(sz-1)
+    while n<sz:
+        if f.read(1)!=b'\x00': break
+        n+=1; f.seek(sz-n-1)
+    print(n)" 2>/dev/null || echo 0)
+            if [ "$TRAILING" -gt 0 ]; then
+                ORIG_SIZE=$(stat -c%s "$OUTPUT_VIDEO")
+                TRUNC_SIZE=$((ORIG_SIZE - TRAILING))
+                truncate -s "$TRUNC_SIZE" "$OUTPUT_VIDEO"
+                info "  Truncated $TRAILING trailing null bytes from MPEG-2 ES"
+            fi
+        fi
         VIDEO_SIZE=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
         info "  Video done: $(numfmt --to=iec $VIDEO_SIZE)"
     else
@@ -1009,24 +1050,35 @@ if $ES_MODE; then
     else
         FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
     fi
-    FIRST_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
+    # Use per-track PTS from earlier probe (ORIG_AUDIO_PTS_ARR)
+    # Legacy: FIRST_AUDIO_PTS = first track's PTS (for backwards compat in .info)
+    FIRST_AUDIO_PTS="${ORIG_AUDIO_PTS_ARR[0]:-}"
 
-    # Calculate offset: positive = audio starts before video, negative = video starts before audio
-    if [ -n "$FIRST_VIDEO_PTS" ] && [ -n "$FIRST_AUDIO_PTS" ]; then
-        # Use awk for more reliable floating point math
-        AV_OFFSET=$(awk "BEGIN {printf \"%.6f\", $FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS}")
-        AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS) * 1000}")
+    # Calculate per-track A/V offset and report
+    if [ -n "$FIRST_VIDEO_PTS" ]; then
         info "  Original video PTS: ${FIRST_VIDEO_PTS}s"
-        info "  Original audio PTS: ${FIRST_AUDIO_PTS}s"
-        info "  Original A/V offset: ${AV_OFFSET_MS}ms"
+        for i in "${!AUDIO_STREAMS[@]}"; do
+            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+            TRACK_PTS="${ORIG_AUDIO_PTS_ARR[$i]:-}"
+            TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
+            if [ -n "$TRACK_PTS" ]; then
+                TRACK_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($TRACK_PTS - $FIRST_VIDEO_PTS) * 1000}")
+                TRACK_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $TRACK_TRIM * 1000}")
+                info "  Audio track $idx ($codec [$lang]): PTS=${TRACK_PTS}s offset=${TRACK_OFFSET_MS}ms trimmed=${TRACK_TRIM_MS}ms"
+            fi
+        done
 
-        # Report corrected offset if audio was trimmed
-        if awk "BEGIN {exit !($AUDIO_TRIM_SEC > 0.01)}"; then
-            AUDIO_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
-            CORRECTED_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", $AV_OFFSET_MS + $AUDIO_TRIM_MS}")
-            info "  Audio trimmed: ${AUDIO_TRIM_MS}ms"
-            info "  Corrected A/V offset: ${CORRECTED_OFFSET_MS}ms"
-            AV_OFFSET_MS="$CORRECTED_OFFSET_MS"
+        # Legacy global av_offset_ms: use first track
+        if [ -n "$FIRST_AUDIO_PTS" ]; then
+            AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", ($FIRST_AUDIO_PTS - $FIRST_VIDEO_PTS) * 1000}")
+            FIRST_TRIM="${AUDIO_TRIM_SECS[0]:-0}"
+            if awk "BEGIN {exit !($FIRST_TRIM > 0.01)}"; then
+                FIRST_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $FIRST_TRIM * 1000}")
+                AV_OFFSET_MS=$(awk "BEGIN {printf \"%.0f\", $AV_OFFSET_MS + $FIRST_TRIM_MS}")
+            fi
+            info "  Global av_offset_ms (from track 0): ${AV_OFFSET_MS}ms"
+        else
+            AV_OFFSET_MS="0"
         fi
     else
         AV_OFFSET="0"
@@ -1078,9 +1130,14 @@ EOF
 
     for i in "${!AUDIO_STREAMS[@]}"; do
         IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
+        TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
+        TRACK_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $TRACK_TRIM * 1000}")
+        TRACK_PTS="${ORIG_AUDIO_PTS_ARR[$i]:-}"
         echo "audio_${i}_file=$(basename "${AUDIO_FILES[$i]}" 2>/dev/null || echo "")" >> "$OUTPUT_INFO"
         echo "audio_${i}_codec=$codec" >> "$OUTPUT_INFO"
         echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
+        echo "audio_${i}_first_pts=$TRACK_PTS" >> "$OUTPUT_INFO"
+        echo "audio_${i}_trimmed_ms=$TRACK_TRIM_MS" >> "$OUTPUT_INFO"
         if [ -n "${AC3_FIX_RESULTS[$i]:-}" ]; then
             echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
             echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
