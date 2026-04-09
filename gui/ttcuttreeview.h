@@ -83,7 +83,7 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void gotoCutIn(int index);
     void gotoCutOut(int index);
     void refreshDisplay();
-    void previewCut(TTCutList* cutList);
+    void previewCut(TTCutList* cutList, bool skipFirst = false, bool skipLast = false);
     void audioVideoCut(bool, TTCutList* cutList);
 
   private:

@@ -123,6 +123,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   mpAVData = nullptr;
   mBurstSegmentIdx = -1;
   mBurstIsCutOut = false;
+  mClipOffset = 0;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -156,7 +157,7 @@ void TTCutPreview::closeEvent(QCloseEvent* event)
 /* /////////////////////////////////////////////////////////////////////////////
  * Initialize preview parameter
  */
-void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData)
+void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData, bool skipFirst, bool skipLast)
 {
   mpCutList = previewCutList;
   mpOriginalCutList = originalCutList;
@@ -169,10 +170,15 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
 
   int numPreview = previewCutList->count()/2+1;
 
+  // skipFirst/skipLast: skip standalone start/end clips when they are
+  // neighbor-only context (not the selected cut). mClipOffset maps
+  // combobox index → preview file index.
+  mClipOffset = skipFirst ? 1 : 0;
+
   // Create video and audio preview clips
   for (int i = 0; i < numPreview; i++ ) {
-    // first cut-in
-    if (i == 0) {
+    // first cut-in (skip when first cut is neighbor-only context)
+    if (i == 0 && !skipFirst) {
       TTCutItem item = previewCutList->at(i);
       selectionString = QString("Start: %1").arg(item.cutInTime().toString("hh:mm:ss"));
       cbCutPreview->addItem( selectionString );
@@ -191,8 +197,8 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
       cbCutPreview->addItem( selectionString );
     }
 
-    //last cut out
-    if (i == numPreview-1) {
+    //last cut out (skip when last cut is neighbor-only context)
+    if (i == numPreview-1 && !skipLast) {
       iPos = (i-1)*2+1;
 
       TTCutItem item = previewCutList->at(iPos);
@@ -226,17 +232,20 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   QFileInfo preview_video_info;
   QFileInfo preview_subtitle_info;
 
+  // Map combobox index to file index (offset for transitionsOnly mode)
+  int fileIndex = iCut + 1 + mClipOffset;
+
   // Try .mkv first (H.264/H.265 via mkvmerge), then .mpg (MPEG-2 via mplex)
-  preview_video_name = QString("preview_%1.mkv").arg(iCut+1, 3, 10, QChar('0'));
+  preview_video_name = QString("preview_%1.mkv").arg(fileIndex, 3, 10, QChar('0'));
   preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
   if (!preview_video_info.exists()) {
-    preview_video_name = QString("preview_%1.mpg").arg(iCut+1, 3, 10, QChar('0'));
+    preview_video_name = QString("preview_%1.mpg").arg(fileIndex, 3, 10, QChar('0'));
     preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
   }
   current_video_file = preview_video_info.absoluteFilePath();
 
   // Check for subtitle file
-  preview_subtitle_name = QString("preview_%1.srt").arg(iCut+1, 3, 10, QChar('0'));
+  preview_subtitle_name = QString("preview_%1.srt").arg(fileIndex, 3, 10, QChar('0'));
   preview_subtitle_info.setFile( QDir(TTCut::tempDirPath), preview_subtitle_name );
   if (preview_subtitle_info.exists()) {
     videoPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());

@@ -65,7 +65,7 @@ public:
 	~TTCutPreview();
 
 	void resizeEvent(QResizeEvent* event);
-	void initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData = nullptr);
+	void initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData = nullptr, bool skipFirst = false, bool skipLast = false);
 	void createPreview();
 
 protected:
@@ -97,6 +97,7 @@ private:
     TTCutList*   mpOriginalCutList;
     TTAVData*    mpAVData;
     int          mBurstSegmentIdx;
+    int          mClipOffset;
     bool         mBurstIsCutOut;
 
     void checkBurstForCurrentCut(int iCut);

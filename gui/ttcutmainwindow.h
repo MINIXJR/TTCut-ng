@@ -97,7 +97,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		void onAppendCutEntry(int cutIn, int cutOut);
 
-		void onCutPreview(TTCutList* cutList);
+		void onCutPreview(TTCutList* cutList, bool skipFirst = false, bool skipLast = false);
 		void onCutPreviewFinished(TTCutList* cutList);
 
 		void onAudioVideoCut(bool cutAudioOnly, TTCutList* cutList);
@@ -159,6 +159,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		TTProgressBar*   progressBar;
 		TTCutSettings*   settings;
 		TTCutList*       mpPreviewOriginalCutList;
+	bool             mPreviewSkipFirst;
+	bool             mPreviewSkipLast;
 
     TTMessageLogger* log;
 

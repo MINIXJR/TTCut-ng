@@ -331,7 +331,7 @@ TTCutMainWindow::TTCutMainWindow()
   connect(cutList, SIGNAL(gotoCutIn(int)),               currentFrame,    SLOT(onGotoFrame(int)));
   connect(cutList, SIGNAL(gotoCutOut(int)),              currentFrame,    SLOT(onGotoFrame(int)));
   connect(cutList, SIGNAL(refreshDisplay()),             streamNavigator, SLOT(onRefreshDisplay()));
-  connect(cutList, SIGNAL(previewCut(TTCutList*)),                        SLOT(onCutPreview(TTCutList*)));
+  connect(cutList, SIGNAL(previewCut(TTCutList*,bool,bool)),               SLOT(onCutPreview(TTCutList*,bool,bool)));
   connect(cutList, SIGNAL(audioVideoCut(bool, TTCutList*)),               SLOT(onAudioVideoCut(bool, TTCutList*)));
   connect(cutList, SIGNAL(itemUpdated(const TTCutItem&)),    cutOutFrame, SLOT(onCutOutChanged(const TTCutItem&)));
 
@@ -977,12 +977,14 @@ void TTCutMainWindow::onCutSelectionChanged(const TTCutItem& cutItem, int column
 /* /////////////////////////////////////////////////////////////////////////////
  * Create cut preview for current cut list
  */
-void TTCutMainWindow::onCutPreview(TTCutList* cutList)
+void TTCutMainWindow::onCutPreview(TTCutList* cutList, bool skipFirst, bool skipLast)
 {
   if (cutList == 0 || cutList->count() == 0)
     return;
 
   mpPreviewOriginalCutList = cutList;
+  mPreviewSkipFirst = skipFirst;
+  mPreviewSkipLast = skipLast;
 
   connect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)), this, SLOT(onCutPreviewFinished(TTCutList*)));
   mpAVData->doCutPreview(cutList);
@@ -995,7 +997,7 @@ void TTCutMainWindow::onCutPreviewFinished(TTCutList* cutList)
 {
   TTCutPreview* cutPreview = new TTCutPreview(this);
 
-  cutPreview->initPreview(cutList, mpPreviewOriginalCutList, mpAVData);
+  cutPreview->initPreview(cutList, mpPreviewOriginalCutList, mpAVData, mPreviewSkipFirst, mPreviewSkipLast);
   cutPreview->exec();
 
   delete cutPreview;

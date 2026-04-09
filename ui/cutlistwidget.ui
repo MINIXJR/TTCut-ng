@@ -340,7 +340,7 @@
         </size>
        </property>
        <property name="text" >
-        <string>Cut Audio/Video</string>
+        <string>A/V Cut</string>
        </property>
        <property name="icon" >
         <iconset resource="cutlistwidget.qrc" >
@@ -375,7 +375,7 @@
         </size>
        </property>
        <property name="text" >
-        <string>Cut Selected</string>
+        <string>Selection Cut</string>
        </property>
        <property name="icon" >
         <iconset resource="cutlistwidget.qrc" >
@@ -410,7 +410,7 @@
         </size>
        </property>
        <property name="text" >
-        <string>Cut Audio only</string>
+        <string>Audio Cut</string>
        </property>
        <property name="icon" >
         <iconset resource="cutlistwidget.qrc" >

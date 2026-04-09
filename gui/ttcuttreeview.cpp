@@ -80,7 +80,7 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   pbEntryCopy->setIcon(QIcon::fromTheme("edit-copy", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
 
   // Preview button - Cyan (playback/transport)
-  pbPreview->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
+  pbPreview->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogApplyButton)));
   pbPreview->setStyleSheet("QPushButton { background-color: #227777; color: white; }"
                            "QPushButton:hover { background-color: #338888; }");
 
@@ -456,12 +456,41 @@ TTCutList* TTCutTreeView::cutListFromSelection(bool ignoreSelection)
 
 /*!
  * onEntryPreview
+ * Preview selected cuts with neighboring cuts for transition visibility
  */
 void TTCutTreeView::onEntryPreview()
 {
   if (mAVData == 0 || videoCutList->currentItem() == 0)  return;
 
-  emit previewCut(cutListFromSelection());
+  int totalCuts = videoCutList->topLevelItemCount();
+
+  // Collect selected indices
+  QSet<int> selected;
+  for (int i = 0; i < totalCuts; i++) {
+    if (videoCutList->topLevelItem(i)->isSelected())
+      selected.insert(i);
+  }
+
+  // Build set of selected indices + their neighbors
+  QSet<int> indices = selected;
+  for (int i : selected) {
+    if (i > 0) indices.insert(i - 1);
+    if (i < totalCuts - 1) indices.insert(i + 1);
+  }
+
+  TTCutList* cutList = new TTCutList();
+  QList<int> sorted = indices.values();
+  std::sort(sorted.begin(), sorted.end());
+  for (int idx : sorted) {
+    TTCutItem cutItem = mAVData->cutItemAt(idx);
+    cutList->append(cutItem.avDataItem(), cutItem.cutInIndex(), cutItem.cutOutIndex());
+  }
+
+  // Skip standalone start/end clips when neighbor exists on that side
+  bool skipFirst = !selected.contains(sorted.first());
+  bool skipLast  = !selected.contains(sorted.last());
+
+  emit previewCut(cutList, skipFirst, skipLast);
 }
 
 /*!
@@ -758,7 +787,7 @@ void TTCutTreeView::createActions()
   connect(itemEditAction, SIGNAL(triggered()), this, SLOT(onEntryEdit()));
 
   itemPreviewAction = new QAction(tr("Preview cut"), this);
-  itemPreviewAction->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
+  itemPreviewAction->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogApplyButton)));
   itemPreviewAction->setStatusTip(tr("Preview selected cut"));
   connect(itemPreviewAction, SIGNAL(triggered()), this, SLOT(onEntryPreview()));
 
