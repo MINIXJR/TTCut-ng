@@ -270,6 +270,9 @@ void TTAudioList::append(TTAVItem* avDataItem, TTAudioStream* aStream, int order
 {
   TTAudioItem item(avDataItem, aStream);
 
+  if (order < 0)
+    order = data.count();
+
   item.setOrder(order);
   data.append(item);
   emit itemAppended(item);
