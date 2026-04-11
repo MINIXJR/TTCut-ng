@@ -58,13 +58,9 @@
 
 - ~~**Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**~~ → Completed (v0.62.1)
 
-- ~~**Manual audio delay/offset per track**~~ → **DONE** (feature/audio-delay-drift)
-  - QSpinBox ±9999ms in Audio-Liste, wirkt bei Audio-Schnitt (keepList PTS-Offset) und MKV-Muxen
-  - Persistiert in .ttcut Projektdatei, TTESInfo parst per-Track trimmed_ms/first_pts aus .info
+- ~~**Manual audio delay/offset per track**~~ → **DONE** (v0.66.0)
 
-- ~~**Schnittliste "Audio-Versatz" Spalte überarbeiten**~~ → **DONE** (feature/audio-delay-drift)
-  - Umbenannt zu "Audio-Drift", zeigt akkumulierten Audio-Frame-Boundary-Drift pro Schnitt
-  - Read-only, berechnet bei Preview (erste Audiospur), "—" als Platzhalter vor Preview
+- ~~**Schnittliste "Audio-Versatz" Spalte überarbeiten**~~ → **DONE** (v0.66.0)
 
 - **Audio-Drift Minimierung durch optimierte Rundungsstrategie**
   - `getStartIndex`/`getEndIndex` in `avstream/ttavstream.cpp` nutzen `round()` (lokal optimal)
@@ -221,6 +217,10 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Project file extension change: .prj → .ttcut (with backward compatibility)
 - [x] Pillarbox detection: 4:3 in 16:9 with 10s hysteresis (all codecs, I-frame analysis)
 - [x] Progress dialog for Landezonen analysis
+- [x] Per-track audio delay (±9999ms QSpinBox, applied in keepList for all codecs, persisted in .ttcut) (v0.66.0)
+- [x] Cut list "Audio-Drift" column showing accumulated boundary drift per cut after preview (v0.66.0)
+- [x] TTESInfo: parse per-track audio_N_trimmed_ms and first_pts from .info (v0.66.0)
+- [x] Fix audio list UI not refreshed after locale-based sorting (v0.66.0)
 
 ## Known Limitations
 
