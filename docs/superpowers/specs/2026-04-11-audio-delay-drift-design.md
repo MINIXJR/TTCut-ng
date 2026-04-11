@@ -32,7 +32,7 @@ Two related but independent improvements to audio offset handling:
 - Typischer Use Case: MPEG-2 mit ProjectX demuxed (kein Audio-Trim), oder wenn der automatische Trim von `ttcut-demux` nicht ausreichend war
 
 **Wirkung des Delay-Werts:**
-- **Audio-Schnitt** (`cutAudioStream()`): Der Delay wird als PTS-Offset eingerechnet, verschiebt die Audio-Schnittgrenzen um N ms
+- **Audio-Schnitt** (`cutAudioStream()`): Der Delay wird als PTS-Offset eingerechnet, verschiebt die Audio-Schnittgrenzen um N ms — funktioniert für alle Codecs (AC3, MP2, AAC, etc.)
 - **MKV-Muxen** (`TTMkvMergeProvider`): Track-Delay im Matroska-Container
 
 **Wichtig:** Der Delay-Wert aus der Audio-Liste ist ein **globaler** Versatz für die gesamte Spur. Er wird NICHT in der Schnittliste "Audio-Drift"-Spalte eingerechnet — das sind zwei getrennte Ebenen.
@@ -61,7 +61,7 @@ Diese Werte werden informativ geparst (z.B. für Logging, Debug-Ausgabe), beeinf
 ### UI-Änderung
 
 Column 6 im `TTAudioTreeView` wird von statischem Text zu einem editierbaren Widget (QSpinBox):
-- Range: -5000 bis +5000 ms
+- Range: -9999 bis +9999 ms
 - Default: 0
 - Suffix: " ms"
 - Signal bei Änderung: Wert in `TTAudioItem::audioDelay` speichern
@@ -86,6 +86,7 @@ Column 6 im `TTAudioTreeView` wird von statischem Text zu einem editierbaren Wid
 - `localAudioOffset` fällt bei der Vorschau bereits an (`TTAudioStream::getStartIndex/getEndIndex`)
 - Der Wert muss aus dem Preview-Schnitt zurück-transportiert werden in die Schnittlisten-Anzeige
 - Bezieht sich immer auf die **erste Audiospur** in der Audio-Liste
+- Funktioniert für alle Audio-Codecs — die Frame-Dauer variiert je nach Codec/Sample-Rate (AC3@48kHz=32ms, MP2@48kHz=24ms, etc.)
 
 **Read-only:** Die Spalte ist nicht editierbar. Der Wert ergibt sich rein technisch aus der Position der Audio-Frame-Grenzen relativ zu den Video-Cut-Punkten. Der User kann ihn nur indirekt beeinflussen, indem er Schnittpunkte verschiebt.
 
