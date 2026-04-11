@@ -104,6 +104,7 @@ class TTAVItem : public QObject
     void onRemoveAudioItem(int index);
     void onSwapAudioItems(int oldIndex, int newIndex);
     void onAudioLanguageChanged(int index, const QString& language);
+    void onAudioDelayChanged(int index, int delayMs);
     void onRemoveSubtitleItem(int index);
     void onSwapSubtitleItems(int oldIndex, int newIndex);
     void onSubtitleLanguageChanged(int index, const QString& language);

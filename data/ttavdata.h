@@ -111,6 +111,7 @@ class TTAVData : public QObject
     void      doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, int order=-1);
 
     void      setPendingAudioLanguage(TTAVItem* avItem, int order, const QString& lang);
+    void      setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs);
     void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      doCutPreview(TTCutList* cutList);
 
@@ -159,6 +160,7 @@ class TTAVData : public QObject
     void onOpenSubtitleAborted(TTAVItem* avItem);
 
     void onCutPreviewFinished(TTCutList* cutList);
+    void onCutPreviewAudioDrift(const QList<float>& driftsMs);
     void onCutPreviewAborted();
 
     void onReadProjectFileFinished();
@@ -202,6 +204,7 @@ class TTAVData : public QObject
 
     void foundEqualFrame(int index);
     void cutPreviewFinished(TTCutList* cutList);
+    void cutAudioDriftCalculated(const QList<float>& driftsMs);
     void cutFinished();
 
   private:
@@ -246,6 +249,9 @@ class TTAVData : public QObject
     // Pending language overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
     QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;
+
+    // Pending delay overrides from project file (applied after async stream open)
+    QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
 
   public:
     // Count extra frames before a given frame index (for audio time correction)

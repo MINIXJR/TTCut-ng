@@ -42,6 +42,7 @@
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QMenu>
+#include <QSpinBox>
 #include <QStyle>
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -102,6 +103,7 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
 	disconnect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
   disconnect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
   disconnect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
+  disconnect(this,   SIGNAL(delayChanged(int, int)),              mpAVItem, SLOT(onAudioDelayChanged(int, int)));
 
   disconnect(mpAVItem, SIGNAL(audioItemAppended(const TTAudioItem&)), this, SLOT(onAppendItem(const TTAudioItem&)));
   disconnect(mpAVItem, SIGNAL(audioItemRemoved(int)),                 this, SLOT(onItemRemoved(int)));
@@ -117,6 +119,7 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
   connect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
   connect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
   connect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
+  connect(this,   SIGNAL(delayChanged(int, int)),              mpAVItem, SLOT(onAudioDelayChanged(int, int)));
 
   onReloadList(mpAVItem);
 }
@@ -159,7 +162,21 @@ void TTAudioTreeView::onAppendItem(const TTAudioItem& item)
   treeItem->setText(3, item.getBitrate());
   treeItem->setText(4, item.getSamplerate());
   treeItem->setText(5, item.getMode());
-  treeItem->setText(6, item.getDelay());
+  QSpinBox* delaySpin = new QSpinBox();
+  delaySpin->setRange(-9999, 9999);
+  delaySpin->setSuffix(" ms");
+  delaySpin->setValue(item.getDelayMs());
+  audioListView->setItemWidget(treeItem, 6, delaySpin);
+
+  connect(delaySpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, delaySpin](int value) {
+    for (int row = 0; row < audioListView->topLevelItemCount(); row++) {
+      QTreeWidgetItem* rowItem = audioListView->topLevelItem(row);
+      if (audioListView->itemWidget(rowItem, 6) == delaySpin) {
+        emit delayChanged(row, value);
+        break;
+      }
+    }
+  });
 
   QComboBox* combo = createLanguageCombo(item.getLanguage());
   audioListView->setItemWidget(treeItem, 7, combo);

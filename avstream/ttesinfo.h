@@ -36,6 +36,8 @@ struct TTAudioTrackInfo {
     QString file;
     QString codec;
     QString language;
+    double  firstPts  = 0.0;   // PTS of first audio frame (from .info audio_N_first_pts)
+    int     trimmedMs = 0;     // Milliseconds trimmed from start (from .info audio_N_trimmed_ms)
 };
 
 // ----------------------------------------------------------------------------

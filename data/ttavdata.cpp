@@ -671,6 +671,15 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
       avItem->onAudioLanguageChanged(idx, lang);
     }
   }
+
+  // Apply saved delay from project file if available
+  if (mPendingAudioDelays.contains(key)) {
+    int delayMs = mPendingAudioDelays.take(key);
+    int idx = avItem->audioCount() - 1;
+    if (idx >= 0) {
+      avItem->onAudioDelayChanged(idx, delayMs);
+    }
+  }
 }
 
 /*!
@@ -971,6 +980,11 @@ void TTAVData::setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QSt
   mPendingSubtitleLanguages.insert(qMakePair(avItem, order), lang);
 }
 
+void TTAVData::setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs)
+{
+  mPendingAudioDelays.insert(qMakePair(avItem, order), delayMs);
+}
+
 // /////////////////////////////////////////////////////////////////////////////
 // Cut preview
 /**
@@ -983,6 +997,8 @@ void TTAVData::doCutPreview(TTCutList* cutList)
 
   connect(cutPreviewTask,   SIGNAL(finished(TTCutList*)),
           this,             SLOT(onCutPreviewFinished(TTCutList*)));
+  connect(cutPreviewTask,   SIGNAL(audioDriftCalculated(QList<float>)),
+          this,             SLOT(onCutPreviewAudioDrift(QList<float>)));
   connect(mpThreadTaskPool, SIGNAL(aborted()),
 					this,             SLOT(onCutPreviewAborted()));
 
@@ -994,6 +1010,12 @@ void TTAVData::doCutPreview(TTCutList* cutList)
 void TTAVData::onCutPreviewFinished(TTCutList* cutList)
 {
 	emit cutPreviewFinished(cutList);
+}
+
+//! Relay audio drift values from preview task to main window
+void TTAVData::onCutPreviewAudioDrift(const QList<float>& driftsMs)
+{
+    emit cutAudioDriftCalculated(driftsMs);
 }
 
 //! Cut preview aborted by user
@@ -1141,14 +1163,22 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     // This enables AC3 acmod normalization at cut boundaries
     TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
     double frameRate = vStream->frameRate();
+    int delayMs = cutList->at(0).avDataItem()->audioListItemAt(i).getDelayMs();
+    double delaySeconds = delayMs / 1000.0;
     QList<QPair<double, double>> audioKeepList;
     for (int c = 0; c < cutList->count(); c++) {
       TTCutItem ci = cutList->at(c);
       int extraIn  = countExtraFramesBefore(ci.cutInIndex());
       int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
-      double cutInTime  = (ci.cutInIndex()  - extraIn)  / frameRate;
-      double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+      double cutInTime  = (ci.cutInIndex()  - extraIn)  / frameRate + delaySeconds;
+      double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate + delaySeconds;
+      // Clamp to valid range (cutInTime >= 0, cutOutTime >= cutInTime)
+      cutInTime  = qMax(0.0, cutInTime);
+      cutOutTime = qMax(cutInTime, cutOutTime);
       audioKeepList.append(qMakePair(cutInTime, cutOutTime));
+    }
+    if (delayMs != 0) {
+      log->infoMsg(__FILE__, __LINE__, QString("Audio track %1: applying delay %2 ms").arg(i+1).arg(delayMs));
     }
 
     // Build per-segment target acmod list for AC3 normalization
@@ -1362,18 +1392,35 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       QString cutAudioFile = QFileInfo(QDir(TTCut::cutDirPath),
           QFileInfo(sourceFile).completeBaseName() + QString("_audio%1.").arg(i+1) + audioExt).absoluteFilePath();
 
+      // Build per-track audioKeepList by applying this track's delay to the
+      // video-domain keepList (which may already be B-frame-adjusted above).
+      // Each track can have a different delay, so keepList is NOT used directly.
+      int audioDelayMs = avItem->audioListItemAt(i).getDelayMs();
+      double delaySeconds = audioDelayMs / 1000.0;
+      QList<QPair<double, double>> audioKeepList;
+      for (int s = 0; s < keepList.size(); s++) {
+        double cutInTime  = keepList[s].first  + delaySeconds;
+        double cutOutTime = keepList[s].second + delaySeconds;
+        cutInTime  = qMax(0.0, cutInTime);
+        cutOutTime = qMax(cutInTime, cutOutTime);
+        audioKeepList.append(qMakePair(cutInTime, cutOutTime));
+      }
+      if (audioDelayMs != 0) {
+        log->infoMsg(__FILE__, __LINE__, QString("Audio track %1: applying delay %2 ms to keepList").arg(i+1).arg(audioDelayMs));
+      }
+
       // Build per-segment target acmod list for AC3 normalization
       QList<int> targetAcmods;
       if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
-        for (int s = 0; s < keepList.size(); s++) {
+        for (int s = 0; s < audioKeepList.size(); s++) {
           TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
-              srcAudioFile, keepList[s].first, keepList[s].second);
+              srcAudioFile, audioKeepList[s].first, audioKeepList[s].second);
           targetAcmods.append(aInfo.mainAcmod);
         }
       }
 
       // Use FFmpeg wrapper for audio cutting (stream-copy + optional acmod normalization)
-      if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, keepList,
+      if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, audioKeepList,
                                  TTCut::normalizeAcmod, targetAcmods)) {
         cutAudioFiles.append(cutAudioFile);
         log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(cutAudioFile));
@@ -1410,6 +1457,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (avOffsetMs != 0) {
       mkvProvider.setAudioSyncOffset(avOffsetMs);
     }
+
+    // Note: per-track audio delay is already baked into each track's cut audio
+    // file via audioKeepList above. Do NOT apply it again here via setAudioDelays()
+    // — that would double-apply the delay.
 
     mkvProvider.setAudioLanguages(cutAudioLanguages);
 
@@ -1518,6 +1569,10 @@ void TTAVData::onCutFinished()
           mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
           qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
         }
+
+        // Note: per-track audio delay is already baked into the audio cut files
+        // via the keepList times in onDoCut(). Do NOT apply it again here via
+        // setAudioDelays() — that would double-apply the delay.
 
         // Pass explicit language tags from data model
         mkvProvider->setAudioLanguages(muxItem.getAudioLanguages());
