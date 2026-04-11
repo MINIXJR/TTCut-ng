@@ -72,6 +72,7 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void onEntryDuplicate();
     void onClearList();
     void onReloadList();
+    void onAudioDriftUpdated(const QList<float>& driftsMs);
 
   signals:
     void removeItem(const TTCutItem& item);

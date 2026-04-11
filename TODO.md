@@ -58,20 +58,21 @@
 
 - ~~**Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**~~ → Completed (v0.62.1)
 
-- **Manual audio delay/offset per track**
-  - Allow user to enter a delay value (in ms) for each audio track in the Audio Files list
-  - The "Delay" column already exists but is currently unused (always shows "0", FIXME in `ttaudiolist.cpp:85`)
-  - Should show per-track trim from .info (`audio_N_trimmed_ms`) as default, allow manual override
-  - Use case: Manual A/V sync correction when automatic detection is wrong or unavailable
-  - Apply delay during muxing (mplex -O, libav matroska muxer sync offset)
+- ~~**Manual audio delay/offset per track**~~ → **DONE** (feature/audio-delay-drift)
+  - QSpinBox ±9999ms in Audio-Liste, wirkt bei Audio-Schnitt (keepList PTS-Offset) und MKV-Muxen
+  - Persistiert in .ttcut Projektdatei, TTESInfo parst per-Track trimmed_ms/first_pts aus .info
 
-- **Schnittliste "Audio-Versatz" Spalte überarbeiten**
-  - Zeigt aktuell globalen `av_offset_ms` aus .info für jeden Schnitt (`ttcuttreeview.cpp:186`)
-  - Problem: gleicher Wert für alle Schnitte, kein per-Track Bezug
-  - Überdenken: Was soll diese Spalte sinnvoll anzeigen? Optionen:
-    - Akkumulierter Audio-Frame-Boundary-Offset pro Schnitt (aus `localAudioOffset`)
-    - Per-Track A/V Offset (erfordert per-Track .info Daten, siehe ttcut-demux Fix v0.66)
-    - Entfernen wenn redundant mit Audio-Liste "Verzögerung"
+- ~~**Schnittliste "Audio-Versatz" Spalte überarbeiten**~~ → **DONE** (feature/audio-delay-drift)
+  - Umbenannt zu "Audio-Drift", zeigt akkumulierten Audio-Frame-Boundary-Drift pro Schnitt
+  - Read-only, berechnet bei Preview (erste Audiospur), "—" als Platzhalter vor Preview
+
+- **Audio-Drift Minimierung durch optimierte Rundungsstrategie**
+  - `getStartIndex`/`getEndIndex` in `avstream/ttavstream.cpp` nutzen `round()` (lokal optimal)
+  - Drift akkumuliert sich über Schnitte, weil Video-Raster (40ms@25fps) und Audio-Raster (24ms@MP2) nicht aufgehen
+  - Idee: Drift-aware Rounding — Rundungsrichtung wählen die akkumulierten Drift minimiert
+  - Problem: Korrektur-Granularität (1 Audio-Frame) > typischer Drift → Überkompensation/Oszillation
+  - Analyse nötig: Ist drift-aware rounding in Summe besser oder nur anders-schlecht?
+  - Alternative: Audio an Schnittgrenzen re-encoden (drift=0, aber nicht mehr lossless)
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)

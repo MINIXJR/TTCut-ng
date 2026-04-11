@@ -87,7 +87,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->audioCount(); i++) {
     TTAudioItem aItem   = vItem->audioListItemAt(i);
     TTAudioStream*      aStream = aItem.getAudioStream();
-    writeAudioSection(video, aStream->filePath(), aItem.order(), aItem.getLanguage());
+    writeAudioSection(video, aStream->filePath(), aItem.order(), aItem.getLanguage(), aItem.getDelayMs());
   }
 
   for (int i = 0; i < vItem->cutCount(); i++) {
@@ -179,10 +179,15 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   int     order = audioNodesList.at(0).toElement().text().toInt();
   QString name  = audioNodesList.at(1).toElement().text();
 
-  // Read optional Language element (added in TTCut-ng 0.52+)
+  // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.66+)
   QString lang;
-  if (audioNodesList.size() > 2 && audioNodesList.at(2).nodeName() == "Language") {
-    lang = audioNodesList.at(2).toElement().text();
+  int delayMs = 0;
+  for (int n = 2; n < audioNodesList.size(); n++) {
+    if (audioNodesList.at(n).nodeName() == "Language") {
+      lang = audioNodesList.at(n).toElement().text();
+    } else if (audioNodesList.at(n).nodeName() == "Delay") {
+      delayMs = audioNodesList.at(n).toElement().text().toInt();
+    }
   }
 
   QFileInfo fInfo(name);
@@ -190,6 +195,9 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   avData->doOpenAudioStream(avItem, name, order);
   if (!lang.isEmpty()) {
     avData->setPendingAudioLanguage(avItem, order, lang);
+  }
+  if (delayMs != 0) {
+    avData->setPendingAudioDelay(avItem, order, delayMs);
   }
   qDebug("after doOpenAudioStream...");
 }
@@ -244,7 +252,7 @@ QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int ord
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language)
+QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs)
 {
   QDomElement audio = xmlDocument->createElement("Audio");
   parent.appendChild(audio);
@@ -261,6 +269,12 @@ QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QStri
     QDomElement lang = xmlDocument->createElement("Language");
     audio.appendChild(lang);
     lang.appendChild(xmlDocument->createTextNode(language));
+  }
+
+  if (delayMs != 0) {
+    QDomElement delay = xmlDocument->createElement("Delay");
+    audio.appendChild(delay);
+    delay.appendChild(xmlDocument->createTextNode(QString::number(delayMs)));
   }
 
   return audio;

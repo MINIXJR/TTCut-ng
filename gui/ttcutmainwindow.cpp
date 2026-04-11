@@ -101,6 +101,7 @@ TTCutMainWindow::TTCutMainWindow()
 {
   // Register metatype for cross-thread signal/slot
   qRegisterMetaType<QList<TTStreamPoint>>("QList<TTStreamPoint>");
+  qRegisterMetaType<QList<float>>("QList<float>");
 
   mProjectModified = false;
 
@@ -986,7 +987,8 @@ void TTCutMainWindow::onCutPreview(TTCutList* cutList, bool skipFirst, bool skip
   mPreviewSkipFirst = skipFirst;
   mPreviewSkipLast = skipLast;
 
-  connect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)), this, SLOT(onCutPreviewFinished(TTCutList*)));
+  connect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)),       this,           SLOT(onCutPreviewFinished(TTCutList*)));
+  connect(mpAVData, SIGNAL(cutAudioDriftCalculated(QList<float>)), this->cutList, SLOT(onAudioDriftUpdated(QList<float>)));
   mpAVData->doCutPreview(cutList);
 }
 
@@ -1002,7 +1004,8 @@ void TTCutMainWindow::onCutPreviewFinished(TTCutList* cutList)
 
   delete cutPreview;
 
-  disconnect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)), this, SLOT(onCutPreviewFinished(TTCutList*)));
+  disconnect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)),       this,           SLOT(onCutPreviewFinished(TTCutList*)));
+  disconnect(mpAVData, SIGNAL(cutAudioDriftCalculated(QList<float>)), this->cutList, SLOT(onAudioDriftUpdated(QList<float>)));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

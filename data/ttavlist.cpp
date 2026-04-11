@@ -152,6 +152,15 @@ void TTAVItem::onAudioLanguageChanged(int index, const QString& language)
   mpAudioList->update(item, updated);
 }
 
+void TTAVItem::onAudioDelayChanged(int index, int delayMs)
+{
+  if (index < 0 || index >= audioCount()) return;
+  TTAudioItem item = mpAudioList->at(index);
+  TTAudioItem updated(item);
+  updated.setDelayMs(delayMs);
+  mpAudioList->update(item, updated);
+}
+
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */

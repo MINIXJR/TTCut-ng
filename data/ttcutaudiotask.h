@@ -47,7 +47,7 @@ class TTCutAudioTask : public TTThreadTask
   public:
     TTCutAudioTask();
     void init(QString tgtFilePath, TTCutList* cutList, int srcAudioIndex, TTMuxListDataItem* muxListItem,
-              const QString& language = QString());
+              const QString& language = QString(), int delayMs = 0);
 
   protected:
     void cleanUp();
@@ -68,6 +68,7 @@ class TTCutAudioTask : public TTThreadTask
     TTAudioStream*     mpCutStream;
     TTMuxListDataItem* mMuxListItem;
     QString            mLanguage;
+    int                mDelayMs;
 };
 
 #endif

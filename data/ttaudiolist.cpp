@@ -55,6 +55,7 @@ TTAudioItem::TTAudioItem(TTAVItem* avDataItem, TTAudioStream* aStream)
   audioStream   = aStream;
   mOrder        = -1;
   mLanguage     = "und";
+  mAudioDelayMs = 0;
 
   setItemData();
 }
@@ -65,12 +66,12 @@ TTAudioItem::TTAudioItem(TTAVItem* avDataItem, TTAudioStream* aStream)
  */
 TTAudioItem::TTAudioItem(const TTAudioItem& item)
 {
-  mpAVDataItem = item.mpAVDataItem;
-  mOrder       = item.mOrder;
-  audioStream  = item.audioStream;
-  audioLength  = item.audioLength;
-  audioDelay   = item.audioDelay;
-  mLanguage    = item.mLanguage;
+  mpAVDataItem  = item.mpAVDataItem;
+  mOrder        = item.mOrder;
+  audioStream   = item.audioStream;
+  audioLength   = item.audioLength;
+  mAudioDelayMs = item.mAudioDelayMs;
+  mLanguage     = item.mLanguage;
 }
 
 /*!
@@ -81,9 +82,6 @@ void TTAudioItem::setItemData()
   audioLength = QString("%1 (%2 MB)")
   			.arg(audioStream->streamLengthTime().toString("hh:mm:ss.zzz"))
   			.arg((double)audioStream->streamLengthByte()/1024.0/1024.0);
-
-  // FIXME: use real delay value for audio delay
-  audioDelay  = "0";
 
   // Extract language from filename: Show_deu.ac3, Show_deu_1.ac3
   QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
@@ -104,12 +102,12 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
   if (this == &item)
     return *this;
 
-  mOrder       = item.mOrder;
-  mpAVDataItem = item.mpAVDataItem;
-  audioStream  = item.audioStream;
-  audioLength  = item.audioLength;
-  audioDelay   = item.audioDelay;
-  mLanguage    = item.mLanguage;
+  mOrder        = item.mOrder;
+  mpAVDataItem  = item.mpAVDataItem;
+  audioStream   = item.audioStream;
+  audioLength   = item.audioLength;
+  mAudioDelayMs = item.mAudioDelayMs;
+  mLanguage     = item.mLanguage;
 
   return *this;
 }
@@ -214,9 +212,14 @@ QString TTAudioItem::getSamplerate() const
 /*!
  * delay
  */
-QString TTAudioItem::getDelay() const
+int TTAudioItem::getDelayMs() const
 {
-  return audioDelay;
+  return mAudioDelayMs;
+}
+
+void TTAudioItem::setDelayMs(int ms)
+{
+  mAudioDelayMs = ms;
 }
 
 QString TTAudioItem::getLanguage() const

@@ -591,7 +591,12 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             ain.fmtCtx = audioCtx;
             ain.srcIdx = audioIdx;
             ain.outIdx = outStreamIdx++;
-            ain.syncMs = mAudioSyncOffsetMs;
+            {
+                // A/V sync offset from .info file (e.g. DVB stream A/V misalignment).
+                // Per-track user delay is already baked into the cut audio file's
+                // keepList times — do NOT add it here again.
+                ain.syncMs = mAudioSyncOffsetMs;
+            }
             ain.ownsCtx = true;
             ain.pkt = av_packet_alloc();
             if (!ain.pkt) { qDebug() << "av_packet_alloc failed for audio input"; avformat_close_input(&audioCtx); continue; }

@@ -206,6 +206,10 @@ void TTCutPreviewTask::operation()
           TTAudioStream* aStream = tmpCutList->at(0).avDataItem()->audioStreamAt(0);
           TTVideoStream* vs = tmpCutList->at(0).avDataItem()->videoStream();
           double fps = vs->frameRate();
+          // Apply per-track audio delay (first audio track only for preview)
+          int audioDelayMs = tmpCutList->at(0).avDataItem()->audioListItemAt(0).getDelayMs();
+          double audioDelaySec = audioDelayMs / 1000.0;
+
           QList<QPair<double, double>> audioKeepList;
           for (int c = 0; c < tmpCutList->count(); c++) {
             TTCutItem ci = tmpCutList->at(c);
@@ -213,8 +217,10 @@ void TTCutPreviewTask::operation()
             // so audio position matches real content time, not inflated frame count
             int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
             int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
-            double cutIn  = (ci.cutInIndex()  - extraIn)  / fps;
-            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
+            double cutIn  = (ci.cutInIndex()  - extraIn)  / fps + audioDelaySec;
+            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps + audioDelaySec;
+            if (cutIn < 0) cutIn = 0;
+            cutOut = qMax(cutIn, cutOut);
             audioKeepList.append(qMakePair(cutIn, cutOut));
           }
           QString audioExt = QFileInfo(aStream->filePath()).suffix();
@@ -291,6 +297,24 @@ void TTCutPreviewTask::operation()
   delete sharedSmartCut;
 
   qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";
+
+  // Calculate accumulated audio boundary drift per cut for the first audio track
+  QList<float> audioDrifts;
+  if (mpCutList->count() > 0) {
+    TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
+    if (driftAvItem && driftAvItem->audioCount() > 0) {
+      TTAudioStream* firstAudio = driftAvItem->audioStreamAt(0);
+      double fr = driftAvItem->videoStream() ? driftAvItem->videoStream()->frameRate() : 25.0;
+      float localOffset = 0.0f;
+      for (int i = 0; i < mpCutList->count(); i++) {
+        TTCutItem item = mpCutList->at(i);
+        firstAudio->getStartIndex(item.cutInIndex(), (float)fr, localOffset);
+        firstAudio->getEndIndex(item.cutOutIndex(), (float)fr, localOffset);
+        audioDrifts.append(localOffset);  // already in ms
+      }
+    }
+  }
+  emit audioDriftCalculated(audioDrifts);
 
   onStatusReport(this, StatusReportArgs::Finished, tr("preview cuts done"), 0);
   emit finished(mpPreviewCutList);
@@ -391,11 +415,19 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     // With correctly trimmed audio (ttcut-demux aligns audio start to first display frame),
     // the keepList times frame/fps already match the audio ES positions exactly.
 
+    // Apply per-track audio delay for the first audio track.
+    // Preview only uses a single audio track (track 0), so we only need
+    // the delay for that track. Multi-track preview is not supported.
+    int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
+    double audioDelaySec = audioDelayMs / 1000.0;
+
     QList<QPair<double, double>> keepList;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      double cutInTime = item.cutInIndex() / frameRate;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      double cutInTime  = item.cutInIndex() / frameRate + audioDelaySec;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate + audioDelaySec;
+      if (cutInTime < 0.0) cutInTime = 0.0;
+      if (cutOutTime < 0.0) cutOutTime = 0.0;
       keepList.append(qMakePair(cutInTime, cutOutTime));
     }
 
@@ -424,6 +456,9 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }
+
+  // Per-track audio delay is already baked into the cut audio file's keepList times,
+  // so we do NOT add it again here via setAudioDelays.
 
   if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
     qDebug() << "Preview mux complete in" << muxTimer.elapsed() << "ms:" << outputFile;

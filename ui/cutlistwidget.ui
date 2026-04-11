@@ -268,7 +268,7 @@
      </column>
      <column>
       <property name="text" >
-       <string>Audiooffset</string>
+       <string>Audio-Drift</string>
       </property>
      </column>
      <column>

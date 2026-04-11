@@ -34,7 +34,6 @@
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttac3audiostream.h"
 #include "../avstream/ttaudioheaderlist.h"
-#include "../avstream/ttesinfo.h"
 #include "../extern/ttffmpegwrapper.h"
 
 #include "ttcuttreeview.h"
@@ -175,20 +174,8 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
   treeItem->setText(2, item.cutOutString());
   treeItem->setText(3, item.cutLengthString());
 
-  // Get A/V offset from .info file if available
-  QString offsetStr = "-";  // No .info file
-  if (item.avDataItem() != nullptr && item.avDataItem()->videoStream() != nullptr) {
-    QString videoPath = item.avDataItem()->videoStream()->filePath();
-    QString infoFile = TTESInfo::findInfoFile(videoPath);
-    if (!infoFile.isEmpty()) {
-      TTESInfo esInfo(infoFile);
-      if (esInfo.isLoaded() && esInfo.hasTimingInfo()) {
-        int offsetMs = esInfo.avOffsetMs();
-        offsetStr = QString("%1 ms").arg(offsetMs);
-      }
-    }
-  }
-  treeItem->setText(4, offsetStr);
+  treeItem->setText(4, QString::fromUtf8("\u2014"));  // em-dash "—"
+  treeItem->setToolTip(4, tr("Audio drift is calculated during preview (first audio track)"));
 
   updateBurstIcon(treeItem, item);
   updateAcmodIcon(treeItem, item);
@@ -752,6 +739,19 @@ void TTCutTreeView::updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
     if (!existingTip.isEmpty())
         tip = existingTip + "\n" + tip;
     treeItem->setToolTip(5, tip);
+}
+
+/*!
+ * onAudioDriftUpdated
+ * Display accumulated audio boundary drift per cut after preview
+ */
+void TTCutTreeView::onAudioDriftUpdated(const QList<float>& driftsMs)
+{
+    for (int i = 0; i < driftsMs.size() && i < videoCutList->topLevelItemCount(); i++) {
+        QTreeWidgetItem* treeItem = videoCutList->topLevelItem(i);
+        float driftMs = driftsMs.at(i);
+        treeItem->setText(4, QString("%1 ms").arg(driftMs, 0, 'f', 1));
+    }
 }
 
 /*!

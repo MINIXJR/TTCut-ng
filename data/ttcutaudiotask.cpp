@@ -30,6 +30,8 @@
 
 #include "ttcutaudiotask.h"
 
+#include <cmath>
+
 #include "../common/ttexception.h"
 #include "../avstream/ttfilebuffer.h"
 #include "../data/ttcutparameter.h"
@@ -45,13 +47,14 @@ TTCutAudioTask::TTCutAudioTask() :
   mpCutStream    = 0;
   mSrcAudioIndex = 0;
   mMuxListItem   = 0;
+  mDelayMs       = 0;
 }
 
 /**
  * Init cut audio task
  */
 void TTCutAudioTask::init(QString tgtFilePath, TTCutList* cutList, int srcAudioIndex, TTMuxListDataItem* muxListItem,
-                          const QString& language)
+                          const QString& language, int delayMs)
 {
   mTgtFilePath   = tgtFilePath;
   mpCutList      = cutList;
@@ -59,6 +62,7 @@ void TTCutAudioTask::init(QString tgtFilePath, TTCutList* cutList, int srcAudioI
   mSrcAudioIndex = srcAudioIndex;
   mMuxListItem   = muxListItem;
   mLanguage      = language;
+  mDelayMs       = delayMs;
 }
 
 //! Operation abort request
@@ -99,13 +103,24 @@ void TTCutAudioTask::operation()
     connect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
         this,        SLOT(onStatusReport(int, const QString&, quint64)));
 
-    int startIndex = mpCutStream->getStartIndex(cutItem.cutInIndex(),
+    // Apply per-track audio delay: shift the video frame indices by the delay
+    // so that the audio cut window moves accordingly.
+    // Positive delay = audio should start later = shift cut window forward.
+    int adjustedCutIn  = cutItem.cutInIndex();
+    int adjustedCutOut = cutItem.cutOutIndex();
+    if (mDelayMs != 0) {
+      int delayFrames = (int)round((mDelayMs / 1000.0f) * frameRate);
+      adjustedCutIn  = qMax(0, adjustedCutIn  + delayFrames);
+      adjustedCutOut = qMax(adjustedCutIn, adjustedCutOut + delayFrames);
+    }
+
+    int startIndex = mpCutStream->getStartIndex(adjustedCutIn,
         frameRate, localAudioOffset);
-    int endIndex = mpCutStream->getEndIndex(cutItem.cutOutIndex(),
+    int endIndex = mpCutStream->getEndIndex(adjustedCutOut,
         frameRate, localAudioOffset);
 
-    log->debugMsg(__FILE__, __LINE__,	QString("AudioCut %1/%2 start %3 end %4").
-        arg(i).arg(mpCutList->count()).arg(startIndex).arg(endIndex));
+    log->debugMsg(__FILE__, __LINE__, QString("AudioCut %1/%2 start %3 end %4 (delay %5 ms)").
+        arg(i).arg(mpCutList->count()).arg(startIndex).arg(endIndex).arg(mDelayMs));
 
     if (i == 0)
       mpCutParams->firstCall();

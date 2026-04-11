@@ -169,9 +169,11 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
 
         for (int i = 0; i < count; ++i) {
             TTAudioTrackInfo track;
-            track.file = values.value(QString("audio_%1_file").arg(i));
-            track.codec = values.value(QString("audio_%1_codec").arg(i));
-            track.language = values.value(QString("audio_%1_lang").arg(i), "und");
+            track.file      = values.value(QString("audio_%1_file").arg(i));
+            track.codec     = values.value(QString("audio_%1_codec").arg(i));
+            track.language  = values.value(QString("audio_%1_lang").arg(i), "und");
+            track.firstPts  = values.value(QString("audio_%1_first_pts").arg(i), "0").toDouble();
+            track.trimmedMs = values.value(QString("audio_%1_trimmed_ms").arg(i), "0").toInt();
             mAudioTracks.append(track);
         }
     }

@@ -42,6 +42,7 @@ class TTAudioItem;
 class QMenu;
 class QAction;
 class QComboBox;
+class QSpinBox;
 
 class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
 {
@@ -59,6 +60,7 @@ class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
     void removeItem(int index);
     void swapItems(int oldIndex, int newIndex);
     void languageChanged(int index, const QString& language);
+    void delayChanged(int index, int delayMs);
 
   public slots:
     void onAVDataChanged(const TTAVItem* avData);
