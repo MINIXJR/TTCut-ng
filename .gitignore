@@ -65,3 +65,6 @@ testing/
 
 # Generated test media (tools/ttcut-screenshots.sh)
 tools/testdata/
+
+# Git worktrees
+.worktrees/
