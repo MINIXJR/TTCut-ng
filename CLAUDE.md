@@ -129,6 +129,19 @@ Defined centrally in `ttcut-ng.pro` (`VERSION = ...`)
 
 For version-specific changes, see `CHANGELOG.md`.
 
+### Per-Track Audio Delay & Audio-Drift
+
+- **Audio delay**: Editable per-track delay (±9999 ms, QSpinBox in audio list) applied during audio cutting (keepList PTS offset) for all codecs
+- **Audio-Drift column**: Cut list shows accumulated audio frame boundary drift per cut, calculated during preview (first audio track only)
+- **TTESInfo**: Parses per-track `audio_N_trimmed_ms` and `audio_N_first_pts` from `.info` files
+- **Persistence**: Delay stored in `.ttcut` project file XML (`<Delay>` element, optional)
+
+Key classes:
+- **TTAudioItem** (data/ttaudiolist.h): `mAudioDelayMs` field, `getDelayMs()`/`setDelayMs()`
+- **TTAudioTreeView** (gui/ttaudiotreeview.h): QSpinBox widget, `delayChanged` signal
+- **TTCutTreeView** (gui/ttcuttreeview.h): `onAudioDriftUpdated()` slot for drift display
+- **TTCutPreviewTask** (data/ttcutpreviewtask.h): `audioDriftCalculated` signal
+
 ### SRT Subtitle Support
 
 - **Auto-loading**: SRT files matching the video filename are automatically loaded
