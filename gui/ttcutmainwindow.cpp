@@ -341,6 +341,7 @@ TTCutMainWindow::TTCutMainWindow()
   connect(currentFrame, SIGNAL(setMarker(int)), this, SLOT(onSetStreamPointMarker()));
 
   connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)), SLOT(onAVItemChanged(TTAVItem*)));
+  connect(mpAVData, SIGNAL(avDataReloaded()),               SLOT(onAVDataReloaded()));
   connect(mpAVData, SIGNAL(foundEqualFrame(int)),           currentFrame, SLOT(onGotoFrame(int)));
   connect(mpAVData, SIGNAL(streamPointsLoaded(const QList<TTStreamPoint>&)),
           this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
@@ -1297,6 +1298,18 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
         });
       }
     }
+  }
+}
+
+/*!
+ * onAVDataReloaded
+ * Refresh audio/subtitle tree views after sort in onThreadPoolExit
+ */
+void TTCutMainWindow::onAVDataReloaded()
+{
+  if (mpCurrentAVDataItem) {
+    audioFileList->onReloadList(mpCurrentAVDataItem);
+    subtitleFileList->onReloadList(mpCurrentAVDataItem);
   }
 }
 

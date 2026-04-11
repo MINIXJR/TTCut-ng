@@ -132,6 +132,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onNextAVData();
     void onPrevAVData();
 		void onAVItemChanged(TTAVItem* avItem);
+    void onAVDataReloaded();
 
     void onOpenProjectFileFinished(const QString&);
     void onProjectModified();
