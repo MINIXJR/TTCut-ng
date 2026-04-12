@@ -944,6 +944,27 @@ void TTAVData::onReadProjectFileFinished()
     emit logoDataLoaded(logoData);
   }
 
+  // Restore global settings from project file
+  mpProjectData->deserializeSettings();
+
+  // Map generic encoder values to codec-specific fields based on video type
+  if (avCount() > 0 && avItemAt(0)->videoStream()) {
+    TTAVTypes::AVStreamType st = avItemAt(0)->videoStream()->streamType();
+    if (st == TTAVTypes::mpeg2_demuxed_video) {
+      TTCut::mpeg2Preset  = TTCut::encoderPreset;
+      TTCut::mpeg2Crf     = TTCut::encoderCrf;
+      TTCut::mpeg2Profile = TTCut::encoderProfile;
+    } else if (st == TTAVTypes::h264_video) {
+      TTCut::h264Preset  = TTCut::encoderPreset;
+      TTCut::h264Crf     = TTCut::encoderCrf;
+      TTCut::h264Profile = TTCut::encoderProfile;
+    } else if (st == TTAVTypes::h265_video) {
+      TTCut::h265Preset  = TTCut::encoderPreset;
+      TTCut::h265Crf     = TTCut::encoderCrf;
+      TTCut::h265Profile = TTCut::encoderProfile;
+    }
+  }
+
   emit readProjectFileFinished(mpProjectData->filePath());
 
   delete mpProjectData;

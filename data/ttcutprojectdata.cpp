@@ -35,6 +35,7 @@
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttsrtsubtitlestream.h"
 #include "../common/ttexception.h"
+#include "../common/ttcut.h"
 
 
 
@@ -550,6 +551,77 @@ void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAV
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Serialize global settings to XML (top-level <Settings> element)
+ */
+void TTCutProjectData::serializeSettings()
+{
+  QDomElement root = xmlDocument->documentElement();
+  QDomElement settings = xmlDocument->createElement("Settings");
+  root.appendChild(settings);
+
+  auto addElement = [&](const QString& name, const QString& value) {
+    QDomElement el = xmlDocument->createElement(name);
+    settings.appendChild(el);
+    el.appendChild(xmlDocument->createTextNode(value));
+  };
+
+  // Output
+  addElement("CutDirPath",    TTCut::cutDirPath);
+  addElement("CutVideoName",  TTCut::cutVideoName);
+  addElement("CutAddSuffix",  TTCut::cutAddSuffix ? "true" : "false");
+
+  // Muxing
+  addElement("OutputContainer",    QString::number(TTCut::outputContainer));
+  addElement("MkvCreateChapters",  TTCut::mkvCreateChapters ? "true" : "false");
+  addElement("MkvChapterInterval", QString::number(TTCut::mkvChapterInterval));
+  addElement("MuxDeleteES",        TTCut::muxDeleteES ? "true" : "false");
+
+  // Encoder (active codec values)
+  addElement("EncoderPreset",  QString::number(TTCut::encoderPreset));
+  addElement("EncoderCrf",     QString::number(TTCut::encoderCrf));
+  addElement("EncoderProfile", QString::number(TTCut::encoderProfile));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Deserialize global settings from XML
+ */
+void TTCutProjectData::deserializeSettings()
+{
+  QDomElement root = xmlDocument->documentElement();
+  QDomNodeList settingsList = root.elementsByTagName("Settings");
+  if (settingsList.isEmpty()) return;
+  parseSettingsSection(settingsList.at(0).toElement());
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Parse <Settings> element children into TTCut global state
+ */
+void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
+{
+  QDomNodeList children = settingsElement.childNodes();
+  for (int i = 0; i < children.size(); i++) {
+    QDomElement el = children.at(i).toElement();
+    if (el.isNull()) continue;
+    QString name  = el.tagName();
+    QString value = el.text();
+
+    // Output
+    if      (name == "CutDirPath")         TTCut::cutDirPath = value;
+    else if (name == "CutVideoName")       TTCut::cutVideoName = value;
+    else if (name == "CutAddSuffix")       TTCut::cutAddSuffix = (value == "true");
+    // Muxing
+    else if (name == "OutputContainer")    TTCut::outputContainer = value.toInt();
+    else if (name == "MkvCreateChapters")  TTCut::mkvCreateChapters = (value == "true");
+    else if (name == "MkvChapterInterval") TTCut::mkvChapterInterval = value.toInt();
+    else if (name == "MuxDeleteES")        TTCut::muxDeleteES = (value == "true");
+    // Encoder
+    else if (name == "EncoderPreset")      TTCut::encoderPreset = value.toInt();
+    else if (name == "EncoderCrf")         TTCut::encoderCrf = value.toInt();
+    else if (name == "EncoderProfile")     TTCut::encoderProfile = value.toInt();
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Clear the xml structure
  */
 void TTCutProjectData::clear()
@@ -570,6 +642,8 @@ void TTCutProjectData::printXml()
  */
 void TTCutProjectData::writeXml()
 {
+  serializeSettings();
+
   QFile xmlFile(xmlFileInfo->absoluteFilePath());
 
   xmlFile.resize(0);

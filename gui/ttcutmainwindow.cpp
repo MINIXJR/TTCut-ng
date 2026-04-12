@@ -1033,13 +1033,15 @@ void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
     TTCut::encoderCodec = 0;  // MPEG-2
   }
 
-  // compose video cut name from video file name and set to global variable
-  // Use base name only, extension will be added by dialog based on codec/muxer
-  QString baseName = QFileInfo(vStream->fileName()).completeBaseName();
-  if (TTCut::cutAddSuffix) {
-    TTCut::cutVideoName = QString("%1_cut").arg(baseName);
-  } else {
-    TTCut::cutVideoName = baseName;
+  // Set default video cut name from video file name if not already set
+  // (project settings may have loaded a custom name)
+  if (TTCut::cutVideoName.isEmpty()) {
+    QString baseName = QFileInfo(vStream->fileName()).completeBaseName();
+    if (TTCut::cutAddSuffix) {
+      TTCut::cutVideoName = QString("%1_cut").arg(baseName);
+    } else {
+      TTCut::cutVideoName = baseName;
+    }
   }
 
   // start dialog for cut options
@@ -1128,6 +1130,11 @@ void TTCutMainWindow::closeProject()
 
   mpStreamPointModel->clear();
   mpAVData->clear();
+
+  // Restore global settings from QSettings (discard project overrides)
+  settings->readSettings();
+  // Clear cut video name so next cut dialog derives it from video filename
+  TTCut::cutVideoName = "";
 
   setProjectModified(false);
 

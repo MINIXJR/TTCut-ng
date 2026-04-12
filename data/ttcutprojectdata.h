@@ -72,6 +72,7 @@ class TTCutProjectData
     void deserializeAVDataItem(TTAVData* avData);
     QList<TTStreamPoint> deserializeStreamPoints();
     TTLogoProjectData deserializeLogoData();
+    void deserializeSettings();
 
     QString fileName();
     QString filePath();
@@ -93,6 +94,8 @@ class TTCutProjectData
     void        parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
     void        parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);
     void        parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem);
+    void        serializeSettings();
+    void        parseSettingsSection(QDomElement settingsElement);
 
   private:
     QFileInfo*    xmlFileInfo;
