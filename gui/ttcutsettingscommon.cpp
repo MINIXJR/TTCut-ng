@@ -74,6 +74,19 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
     gl->addWidget(cbNormalizeAcmod, row4, 0, 1, 2);
   }
 
+  // Audio language preference
+  leAudioLangPref = new QLineEdit(this);
+  leAudioLangPref->setPlaceholderText(tr("e.g. deu,eng,fra"));
+  leAudioLangPref->setToolTip(tr(
+      "Comma-separated audio language codes (2- or 3-letter). "
+      "Empty = use system locale. Unknown codes are silently dropped."));
+  QLabel* lblAudioLangPref = new QLabel(tr("Audio language preference"), this);
+  if (gl) {
+    int rowLang = gl->rowCount();
+    gl->addWidget(lblAudioLangPref, rowLang, 0);
+    gl->addWidget(leAudioLangPref, rowLang, 1, 1, 2);
+  }
+
   // Defective frame grouping
   QGroupBox* gbCluster = new QGroupBox(tr("Defective Frame Grouping"), this);
   QGridLayout* clusterLayout = new QGridLayout(gbCluster);
@@ -169,6 +182,9 @@ void TTCutSettingsCommon::setTabData()
   // Gruppierung defekter Frames
   sbClusterGap->setValue(TTCut::extraFrameClusterGapSec);
   sbClusterOffset->setValue(TTCut::extraFrameClusterOffsetSec);
+
+  // Audio language preference
+  leAudioLangPref->setText(TTCut::audioLanguagePreference.join(","));
 }
 
 // get the tab data and fill the global parameter
@@ -208,6 +224,16 @@ void TTCutSettingsCommon::getTabData()
   // Gruppierung defekter Frames
   TTCut::extraFrameClusterGapSec    = sbClusterGap->value();
   TTCut::extraFrameClusterOffsetSec = sbClusterOffset->value();
+
+  // Audio language preference — parse, normalize, drop empties/unknowns
+  TTCut::audioLanguagePreference.clear();
+  QStringList rawEntries = leAudioLangPref->text().split(',', Qt::SkipEmptyParts);
+  for (const QString& raw : rawEntries) {
+    QString normalized = TTCut::normalizeLangCode(raw);
+    if (!normalized.isEmpty()) {
+      TTCut::audioLanguagePreference.append(normalized);
+    }
+  }
 }
 
 

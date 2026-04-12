@@ -35,6 +35,7 @@
 #include "../avstream/ttavstream.h"
 
 #include <algorithm>
+#include <climits>
 
 #include <QFileInfo>
 #include <QLocale>
@@ -114,7 +115,7 @@ const TTAudioItem& TTAudioItem::operator=(const TTAudioItem& item)
 
 /*!
  * operator <
- * Sort priority: 1) AC3 before other codecs, 2) system locale language first, 3) original order
+ * Sort priority: 1) AC3 before other codecs, 2) language priority, 3) original order
  */
 bool TTAudioItem::operator<(const TTAudioItem& item) const
 {
@@ -123,11 +124,22 @@ bool TTAudioItem::operator<(const TTAudioItem& item) const
   bool otherIsAC3 = item.audioStream->fileExtension().toLower() == "ac3";
   if (thisIsAC3 != otherIsAC3) return thisIsAC3;
 
-  // Secondary: System locale language first
-  QString localeLang = TTCut::iso639_1to2(QLocale::system().name().left(2));
-  bool thisIsLocale  = (mLanguage == localeLang);
-  bool otherIsLocale = (item.mLanguage == localeLang);
-  if (thisIsLocale != otherIsLocale) return thisIsLocale;
+  // Secondary: Language priority
+  // - If preference list is set: index in list (lower = higher priority)
+  // - If empty: system locale language = priority 0, others = lowest
+  // Not in list / no match = INT_MAX
+  auto languagePriority = [](const QString& lang) -> int {
+    if (TTCut::audioLanguagePreference.isEmpty()) {
+      QString localeLang = TTCut::iso639_1to2(QLocale::system().name().left(2));
+      return (lang == localeLang) ? 0 : INT_MAX;
+    }
+    int idx = TTCut::audioLanguagePreference.indexOf(lang);
+    return (idx >= 0) ? idx : INT_MAX;
+  };
+
+  int thisPrio  = languagePriority(mLanguage);
+  int otherPrio = languagePriority(item.mLanguage);
+  if (thisPrio != otherPrio) return thisPrio < otherPrio;
 
   // Tertiary: Original discovery order
   return mOrder < item.mOrder;

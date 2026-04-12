@@ -35,6 +35,7 @@
 #include "../common/ttcut.h"
 
 #include <QCheckBox>
+#include <QLineEdit>
 #include <QSpinBox>
 
 class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
@@ -57,6 +58,7 @@ class TTCutSettingsCommon : public QWidget, Ui::TTCutSettingsCommon
     QSpinBox*   sbQuickJumpInterval;
     QSpinBox*   sbClusterGap;
     QSpinBox*   sbClusterOffset;
+    QLineEdit*  leAudioLangPref;
 };
 
 #endif

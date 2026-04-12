@@ -1130,6 +1130,7 @@ void TTCutMainWindow::closeProject()
 
   mpStreamPointModel->clear();
   mpAVData->clear();
+  mpCurrentAVDataItem = 0;  // AVItem was deleted by clear(), null the dangling pointer
 
   // Restore global settings from QSettings (discard project overrides)
   settings->readSettings();
