@@ -19,21 +19,51 @@ Neues `QLineEdit` im Einstellungsdialog → Allgemein-Tab:
 Audio-Sprachpräferenz: [ deu,eng,fra                    ]
 ```
 
-- Kommaseparierte ISO 639-2/B Codes (`deu`, `eng`, `fra`, ...)
+- Kommaseparierte Sprachcodes
+- Akzeptiert ISO 639-1 (2 Zeichen: `de`), kanonische TTCut-Codes (3 Zeichen: `deu`) und alternative ISO 639-2 Varianten (`ger`, `fre`, ...)
 - Default: leer
-- Tooltip mit Beispiel: `"z.B. deu,eng,fra — kommaseparierte ISO 639-2/B Codes. Leer = System-Locale"`
-- Beim Speichern: splitten an Kommas, Whitespace trimmen, Kleinbuchstaben, leere Einträge entfernen
+- Tooltip mit Beispiel: `"z.B. deu,eng,fra — akzeptiert 2- oder 3-Buchstaben Codes. Leer = System-Locale"`
+- Beim Speichern: splitten, trimmen, **via `normalizeLangCode()` normalisieren**, ungültige Einträge verwerfen
 
 ## Neue globale Einstellung
 
 `common/ttcut.h`:
 ```cpp
 static QStringList audioLanguagePreference;
+static QString normalizeLangCode(const QString& code);  // "de"/"ger"/"deu" → "deu"
 ```
 
-Default: leere Liste.
+Default für `audioLanguagePreference`: leere Liste.
 
 Persistiert in `QSettings` unter `Common/AudioLanguagePreference` (Gruppe `Common`, Key `AudioLanguagePreference`). Lese/Schreibe-Code in `gui/ttcutsettings.cpp` analog zu bestehenden Common-Einträgen.
+
+## Sprachcode-Normalisierung
+
+`TTCut::normalizeLangCode(const QString& code)` in `common/ttcut.cpp`:
+
+1. Eingabe auf lowercase + trimmed
+2. Länge 2 → Lookup in bestehender `iso639_1to2` Map (`de` → `deu`, `en` → `eng`, ...)
+3. Länge 3 → Alias-Tabelle prüfen, Rückgabe der kanonischen TTCut-Form:
+
+| Alias (Eingabe) | Kanonisch (TTCut) | Sprache |
+|-----------------|-------------------|---------|
+| `ger`           | `deu`             | Deutsch |
+| `fre`           | `fra`             | Französisch |
+| `nld`           | `dut`             | Niederländisch |
+| `ces`           | `cze`             | Tschechisch |
+| `zho`           | `chi`             | Chinesisch |
+| `ell`           | `gre`             | Griechisch |
+| `slk`           | `slo`             | Slowakisch |
+| `ron`           | `rum`             | Rumänisch |
+| `mkd`           | `mac`             | Mazedonisch |
+| `fas`           | `per`             | Persisch |
+
+4. Länge 3 und nicht in Alias-Tabelle → Prüfung ob der Code in der Liste der TTCut bekannten Codes (`languageCodes()`) enthalten ist; wenn ja zurückgeben, sonst leerer String
+5. Alle anderen Längen → leerer String
+
+Die Normalisierung wird beim **Einlesen des Settings-Feldes** angewendet, nicht zur Vergleichszeit. So ist `TTCut::audioLanguagePreference` intern immer kanonisch.
+
+Beispiel: Eingabe `"de, eng, fre, XX"` → Normalisierung → `["deu", "eng", "fra"]` (`XX` verworfen).
 
 ## Sortierlogik
 
@@ -90,9 +120,9 @@ Material: `show_deu.ac3`, `show_deu.mp2`, `show_eng.ac3`, `show_fra.mp2`, `show_
 
 ## Betroffene Dateien
 
-- `common/ttcut.h` — Deklaration `static QStringList audioLanguagePreference`
-- `common/ttcut.cpp` — Definition mit Default `{}`
-- `gui/ttcutsettings.cpp` — Lesen/Schreiben im `Common`-Block
+- `common/ttcut.h` — Deklaration `audioLanguagePreference` und `normalizeLangCode()`
+- `common/ttcut.cpp` — Definitionen, Alias-Tabelle in `normalizeLangCode()`
+- `gui/ttcutsettings.cpp` — Lesen/Schreiben im `Common`-Block, Normalisierung beim Schreiben
 - `gui/ttcutsettingscommon.h/.cpp` — Getter/Setter für UI
 - `ui/ttcutsettingscommon.ui` — Neues `QLineEdit` mit Label
 - `data/ttaudiolist.h` — Private Hilfsfunktion (oder inline im .cpp)
