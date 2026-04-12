@@ -169,6 +169,7 @@ int  TTCut::previewPreset = 0;     // ultrafast (preview speed over quality)
 // --- audio boundary detection ---
 int TTCut::burstThresholdDb = -30;
 bool TTCut::normalizeAcmod  = true;
+QStringList TTCut::audioLanguagePreference = QStringList();
 
 // --- Zeitsprung (Quick Jump) ---
 int TTCut::quickJumpIntervalSec = 30;
@@ -307,4 +308,39 @@ QString TTCut::iso639_1to2(const QString& code2)
     map["ja"] = "jpn"; map["zh"] = "chi"; map["ko"] = "kor"; map["ar"] = "ara";
   }
   return map.value(code2, "und");
+}
+
+QString TTCut::normalizeLangCode(const QString& code)
+{
+  QString c = code.trimmed().toLower();
+  if (c.isEmpty()) return QString();
+
+  // 2-letter ISO 639-1 → use existing map
+  if (c.length() == 2) {
+    QString result = iso639_1to2(c);
+    return (result == "und") ? QString() : result;
+  }
+
+  if (c.length() != 3) return QString();
+
+  // Alias table: alternative ISO 639-2 forms → TTCut canonical
+  static QMap<QString, QString> alias;
+  if (alias.isEmpty()) {
+    alias["ger"] = "deu";  // German
+    alias["fre"] = "fra";  // French
+    alias["nld"] = "dut";  // Dutch
+    alias["ces"] = "cze";  // Czech
+    alias["zho"] = "chi";  // Chinese
+    alias["ell"] = "gre";  // Greek
+    alias["slk"] = "slo";  // Slovak
+    alias["ron"] = "rum";  // Romanian
+    alias["mkd"] = "mac";  // Macedonian
+    alias["fas"] = "per";  // Persian
+  }
+  if (alias.contains(c)) return alias[c];
+
+  // Accept if already canonical (in TTCut's known codes list)
+  if (languageCodes().contains(c)) return c;
+
+  return QString();
 }

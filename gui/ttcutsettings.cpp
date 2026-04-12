@@ -76,6 +76,7 @@ void TTCutSettings::readSettings()
   TTCut::burstThresholdDb = value( "BurstThresholdDb/", TTCut::burstThresholdDb ).toInt();
   TTCut::normalizeAcmod   = value( "NormalizeAcmod/",   TTCut::normalizeAcmod ).toBool();
   TTCut::quickJumpIntervalSec = value( "QuickJumpInterval/", TTCut::quickJumpIntervalSec ).toInt();
+  TTCut::audioLanguagePreference = value( "AudioLanguagePreference/", TTCut::audioLanguagePreference ).toStringList();
   TTCut::extraFrameClusterGapSec    = value( "ExtraFrameClusterGap/",    TTCut::extraFrameClusterGapSec ).toInt();
   TTCut::extraFrameClusterOffsetSec = value( "ExtraFrameClusterOffset/", TTCut::extraFrameClusterOffsetSec ).toInt();
   endGroup();
@@ -263,6 +264,7 @@ void TTCutSettings::writeSettings()
   setValue( "BurstThresholdDb/",  TTCut::burstThresholdDb );
   setValue( "NormalizeAcmod/",   TTCut::normalizeAcmod );
   setValue( "QuickJumpInterval/", TTCut::quickJumpIntervalSec );
+  setValue( "AudioLanguagePreference/", TTCut::audioLanguagePreference );
   setValue( "ExtraFrameClusterGap/",    TTCut::extraFrameClusterGapSec );
   setValue( "ExtraFrameClusterOffset/", TTCut::extraFrameClusterOffsetSec );
   endGroup();

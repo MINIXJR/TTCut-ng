@@ -169,6 +169,7 @@ class TTCut
    // --- audio boundary detection ---
    static int burstThresholdDb;      // dB RMS threshold for burst detection (-30 default, 0=disabled)
    static bool normalizeAcmod;       // Re-encode AC3 frames at cuts when acmod changes (default: true)
+   static QStringList audioLanguagePreference;  // e.g. {"deu","eng"}, empty = use system locale
 
    // --- Zeitsprung (Quick Jump) ---
    static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)
@@ -257,6 +258,7 @@ class TTCut
    static QStringList languageCodes();    // {"und","deu","eng","fra",...}
    static QStringList languageNames();    // {"Undetermined","Deutsch","English",...}
    static QString iso639_1to2(const QString& code2);  // "de" → "deu"
+   static QString normalizeLangCode(const QString& code);  // "de"/"ger"/"DEU" → "deu", unknown → ""
 };
 
 
