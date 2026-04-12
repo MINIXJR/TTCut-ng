@@ -50,11 +50,12 @@
   - Hauptgewinn bei HEVC (I-Frame-Decode ~12-15ms bei 1080p, Seek+Flush ~4ms)
   - Erfordert: Thread-Pool, Ergebnis-Aggregation, Abbruch-Koordination
 
-- **Projektdatei (.prj): Fehlende Einstellungen speichern**
-  - Aktuell werden nicht alle relevanten Einstellungen in die .prj Datei geschrieben
-  - Fehlend u.a.: Ausgabepfad inkl. Dateiname, Encoder-Einstellungen
-  - Brainstorming nötig: Bestandsaufnahme was gespeichert wird vs. was fehlt
-  - Rückwärtskompatibilität beachten (alte .prj Dateien müssen weiterhin ladbar sein)
+- ~~**Projektdatei: Fehlende Einstellungen speichern**~~ → **DONE** (v0.66.0)
+  - Ausgabepfad, Dateiname, Suffix-Option, Mux-Settings, Encoder-Settings werden
+    jetzt in `<Settings>`-Sektion der `.ttcut` Datei gespeichert
+  - Beim Laden: Override der TTCut-Globals, beim Schließen: Restore aus QSettings
+  - Codec-spezifisches Encoder-Mapping basierend auf Video-Typ
+  - Rückwärtskompatibel: alte .ttcut Dateien ohne Settings-Sektion laden normal
 
 - ~~**Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen**~~ → Completed (v0.62.1)
 
@@ -221,6 +222,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Cut list "Audio-Drift" column showing accumulated boundary drift per cut after preview (v0.66.0)
 - [x] TTESInfo: parse per-track audio_N_trimmed_ms and first_pts from .info (v0.66.0)
 - [x] Fix audio list UI not refreshed after locale-based sorting (v0.66.0)
+- [x] Per-project settings persistence in .ttcut (output path, muxing, encoder with codec-specific mapping) (v0.66.0)
 
 ## Known Limitations
 
