@@ -74,6 +74,11 @@
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)
 - Prepare long term processes for user cancellation (abort button)
+
+- **Einstellungsdialog neu strukturieren**
+  - Der Allgemein-Tab wird zunehmend überladen (Navigation, Preview, Search, Audio, Language, Defect Grouping, ...)
+  - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
+  - Ziel: Bessere Übersicht, schnelleres Finden relevanter Einstellungen
 - Internationalisation (i18n) - translate UI to other languages
   - **de_DE: DONE** (v0.62.0) — alle 165 Strings übersetzt, Q_OBJECT/English source texts standardisiert
 - Undo/Redo for cut list operations
@@ -223,6 +228,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] TTESInfo: parse per-track audio_N_trimmed_ms and first_pts from .info (v0.66.0)
 - [x] Fix audio list UI not refreshed after locale-based sorting (v0.66.0)
 - [x] Per-project settings persistence in .ttcut (output path, muxing, encoder with codec-specific mapping) (v0.66.0)
+- [x] Audio language preference list (replaces hardcoded system-locale sort, accepts 2/3-letter codes with alias normalization) (v0.66.0)
 
 ## Known Limitations
 

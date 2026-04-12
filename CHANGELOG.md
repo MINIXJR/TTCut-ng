@@ -4,7 +4,7 @@ All notable changes to TTCut-ng are documented in this file.
 
 ## v0.66.0 (unreleased)
 
-**Per-Track Audio Delay, Audio-Drift Display, Project Settings Persistence**
+**Per-Track Audio Delay, Audio-Drift Display, Project Settings Persistence, Audio Language Preference**
 
 ### Features
 - Audio list: Editable per-track audio delay (±9999 ms) via QSpinBox. Applied
@@ -21,6 +21,15 @@ All notable changes to TTCut-ng are documented in this file.
   On project load, these override the global defaults. On project close,
   globals are restored from QSettings. Old `.ttcut` files without settings
   load without error.
+- Audio language preference: New setting (Allgemein tab) to configure a
+  comma-separated list of preferred audio languages. Replaces the hardcoded
+  system-locale sort. Accepts 2-letter (`de`), canonical 3-letter (`deu`),
+  and alternative ISO 639-2 forms (`ger`, `fre`, `nld`, ...). Empty list =
+  system locale (previous behavior).
+
+### Fixes
+- Fix: Dangling pointer in `closeProject()` caused segfault when opening a
+  new video after a project was previously loaded.
 
 ### Fixes
 - Fix: Audio list UI not refreshed after locale-based sorting — system language

@@ -142,6 +142,13 @@ Key classes:
 - **TTCutTreeView** (gui/ttcuttreeview.h): `onAudioDriftUpdated()` slot for drift display
 - **TTCutPreviewTask** (data/ttcutpreviewtask.h): `audioDriftCalculated` signal
 
+### Audio Language Preference
+
+- **Preference list**: `TTCut::audioLanguagePreference` (QStringList) — user-configurable sort priority, persisted in QSettings
+- **Normalization**: `TTCut::normalizeLangCode()` accepts 2-letter, canonical 3-letter, and alternative ISO 639-2 forms (ger→deu, fre→fra, nld→dut, ces→cze, zho→chi, ell→gre, slk→slo, ron→rum, mkd→mac, fas→per); unknown codes return empty string
+- **Sort logic**: `TTAudioItem::operator<` — AC3 > preference index (0..N-1, unmatched = INT_MAX) > discovery order. Empty list → fall back to system locale
+- **UI**: QLineEdit in settings Allgemein tab, input normalized on save (unknown codes silently dropped)
+
 ### SRT Subtitle Support
 
 - **Auto-loading**: SRT files matching the video filename are automatically loaded
