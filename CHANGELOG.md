@@ -2,7 +2,7 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## v0.66.0 (unreleased)
+## v0.66.0 (2026-04-12)
 
 **Per-Track Audio Delay, Audio-Drift Display, Project Settings Persistence, Audio Language Preference**
 
