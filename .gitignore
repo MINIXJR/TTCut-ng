@@ -68,3 +68,4 @@ tools/testdata/
 
 # Git worktrees
 .worktrees/
+.superpowers/
