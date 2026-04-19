@@ -261,17 +261,6 @@ TTCut::~TTCut()
 }
 
 
-const char* toAscii(const QString& string)
-{
-	//qDebug(qPrintable(QString("converting string %1").arg(string)));
-
-	char* result = string.toLatin1().data();
-
-	//qDebug(qPrintable(QString("result is %1").arg(result)));
-
-	return result;
-}
-
 // ISO 639-2/B language codes typically used in DVB broadcasts
 QStringList TTCut::languageCodes()
 {

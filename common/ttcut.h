@@ -43,8 +43,6 @@ class QString;
 class QWidget;
 class QStringList;
 
-extern "C" const char* toAscii(const QString& string);
-
 class TTCut
 {
  public:

@@ -250,7 +250,7 @@ DfInfo TTCutAVCutDlg::getDiskSpaceInfo(QString path)
 	dfInfo.used        = 0.0;
 	dfInfo.percentUsed = 0.0;
 
-	if (statvfs(toAscii(path), &fsInfo) == -1) {
+	if (statvfs(path.toLocal8Bit().constData(), &fsInfo) == -1) {
 		QString msg = QString("could not stat free disk space for %1!").arg(path);
 		log->errorMsg(__FILE__, __LINE__, msg);
 		return dfInfo;

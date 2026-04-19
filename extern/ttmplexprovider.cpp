@@ -216,18 +216,18 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
 
   mplexArgs << "-o"
             << (escapeFileNames
-									? toAscii(shellEscape(createOutputFilePath(videoFilePath)))
-									: toAscii(QString("%1").arg(createOutputFilePath(videoFilePath))))
+                  ? shellEscape(createOutputFilePath(videoFilePath))
+                  : createOutputFilePath(videoFilePath))
             << (escapeFileNames
-									? toAscii(shellEscape(videoFilePath))
-			            : toAscii(QString("%1").arg(videoFilePath)));
+                  ? shellEscape(videoFilePath)
+                  : videoFilePath);
 
   QStringListIterator listIterator(audioFilePaths);
   while(listIterator.hasNext()) {
     QString audioPath = listIterator.next();
     mplexArgs << (escapeFileNames
-						? toAscii(shellEscape(audioPath))
-						: toAscii(QString("%1").arg(audioPath)));
+                    ? shellEscape(audioPath)
+                    : audioPath);
   }
 
   return mplexArgs;
