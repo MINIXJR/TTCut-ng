@@ -236,6 +236,7 @@ void TTCutSettingsMuxer::onMuxerProgChanged(int index)
   }
 
   updateMuxerVisibility();
+  emit containerChanged(value);
 }
 
 int TTCutSettingsMuxer::muxerValueAt(int displayIndex) const

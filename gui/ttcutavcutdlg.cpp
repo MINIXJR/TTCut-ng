@@ -79,6 +79,13 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent)
   connect(encodingPage, SIGNAL(codecChanged(int)),
           muxingPage,   SLOT(onEncoderCodecChanged(int)));
 
+  // Live filename updates: suffix toggle, codec change, container change.
+  // Wired before the initial onEncoderCodecChanged() sync below so that
+  // the very first container change (if any) propagates to the filename.
+  connect(cbAddSuffix,  SIGNAL(toggled(bool)),           SLOT(updateOutputFilename()));
+  connect(encodingPage, SIGNAL(codecChanged(int)),       SLOT(updateOutputFilename()));
+  connect(muxingPage,   SIGNAL(containerChanged(int)),   SLOT(updateOutputFilename()));
+
   // Initial sync based on current codec.
   muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);
 }
@@ -167,6 +174,9 @@ void TTCutAVCutDlg::setCommonData()
   // write sequence end code
   cbEndCode->setChecked(TTCut::cutWriteSeqEnd);
 
+  // Populate the field with suffix + extension from current state.
+  updateOutputFilename();
+
   getFreeDiskSpace();
  }
 
@@ -175,48 +185,25 @@ void TTCutAVCutDlg::setCommonData()
  */
 void TTCutAVCutDlg::getCommonData()
 {
-  // cut output filename and output path
-  TTCut::cutVideoName  = leOutputFile->text();
+  QString displayName  = leOutputFile->text();
   TTCut::cutDirPath    = leOutputPath->text();
   TTCut::cutAddSuffix  = cbAddSuffix->isChecked();
 
-  if ( !QDir(TTCut::cutDirPath).exists() )
-    TTCut::cutDirPath    = QDir::currentPath();
+  if (!QDir(TTCut::cutDirPath).exists())
+    TTCut::cutDirPath = QDir::currentPath();
 
-  // Check for video file extension based on codec and muxer selection
-  QFileInfo cutFile(TTCut::cutVideoName);
-  QString ext = cutFile.suffix().toLower();
+  // The UI field holds the final container extension (.mkv or .mpg).
+  // The downstream cut pipeline uses TTCut::cutVideoName as the path
+  // for the *intermediate* elementary-stream file, which needs a
+  // codec-specific ES extension (.m2v / .h264 / .h265). Strip the UI
+  // container extension here and re-attach the ES one.
+  QFileInfo fi(displayName);
+  QString base = fi.completeBaseName();
+  TTCut::cutVideoName = base + "." + expectedEsExtension(TTCut::outputContainer,
+                                                         TTCut::encoderCodec);
 
-  // Determine appropriate extension based on output container and codec
-  // TTCut::outputContainer: 0=mplex, 1=mkvmerge, 2=ffmpeg
-  // TTCut::encoderCodec: 0=MPEG-2, 1=H.264, 2=H.265
-  QString expectedExt;
-
-  if (TTCut::outputContainer == 1) {
-    // MKV output - extension is .mkv, video will be .h264/.h265/.m2v
-    if (TTCut::encoderCodec == 1) {
-      expectedExt = "h264";
-    } else if (TTCut::encoderCodec == 2) {
-      expectedExt = "h265";
-    } else {
-      expectedExt = "m2v";
-    }
-  } else {
-    // mplex (MPEG-2 only) - always .m2v
-    expectedExt = "m2v";
-  }
-
-  // Add extension if missing or different
-  if (ext.isEmpty() || (ext != expectedExt && ext != "m2v" && ext != "h264" && ext != "h265" && ext != "ts")) {
-    TTCut::cutVideoName += "." + expectedExt;
-  }
-
-  // cut options
-  // write max bittrate tp first sequence
   TTCut::cutWriteMaxBitrate = cbMaxBitrate->isChecked();
-
-  // write sequence end code
-  TTCut::cutWriteSeqEnd = cbEndCode->isChecked();
+  TTCut::cutWriteSeqEnd     = cbEndCode->isChecked();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -272,5 +259,57 @@ DfInfo TTCutAVCutDlg::getDiskSpaceInfo(QString path)
 	return dfInfo;
 }
 
+/* /////////////////////////////////////////////////////////////////////////////
+ * Extension that matches the final on-disk container.
+ * 0 = MPG (mplex) → mpg
+ * 1 = MKV (libav) → mkv
+ */
+QString TTCutAVCutDlg::expectedContainerExtension(int container)
+{
+  return (container == 1) ? QStringLiteral("mkv") : QStringLiteral("mpg");
+}
 
+/* /////////////////////////////////////////////////////////////////////////////
+ * Extension for the intermediate elementary-stream file written by the cut
+ * pipeline. Not shown to the user; separate from the container extension
+ * because cut video/audio tasks write raw ES that is muxed afterwards.
+ *   container 0 (mplex)        → m2v  (MPEG-2 only)
+ *   container 1 (MKV), codec 0 → m2v  (MPEG-2)
+ *   container 1 (MKV), codec 1 → h264 (H.264)
+ *   container 1 (MKV), codec 2 → h265 (H.265)
+ */
+QString TTCutAVCutDlg::expectedEsExtension(int container, int codec)
+{
+  if (container == 1) {
+    if (codec == 1) return QStringLiteral("h264");
+    if (codec == 2) return QStringLiteral("h265");
+  }
+  return QStringLiteral("m2v");
+}
 
+/* /////////////////////////////////////////////////////////////////////////////
+ * Rebuild leOutputFile from the current widget state:
+ *   basename (± "_cut" suffix) + "." + container extension.
+ * A manual base name typed by the user is preserved; only the "_cut" suffix
+ * and the extension are adjusted.
+ */
+void TTCutAVCutDlg::updateOutputFilename()
+{
+  QFileInfo fi(leOutputFile->text());
+  QString base = fi.completeBaseName();
+
+  bool hasSuffix  = base.endsWith(QStringLiteral("_cut"));
+  bool wantSuffix = cbAddSuffix->isChecked();
+  if      ( wantSuffix && !hasSuffix) base += QStringLiteral("_cut");
+  else if (!wantSuffix &&  hasSuffix) base.chop(4);
+
+  QString ext = expectedContainerExtension(TTCut::outputContainer);
+  QString newText = base + "." + ext;
+
+  // Idempotency guard: setText() emits textChanged unconditionally.
+  // If anything connects to that signal in the future, this prevents
+  // re-entrant loops.
+  if (leOutputFile->text() != newText) {
+    leOutputFile->setText(newText);
+  }
+}
