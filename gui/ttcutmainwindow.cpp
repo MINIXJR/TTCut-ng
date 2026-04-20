@@ -710,6 +710,14 @@ void TTCutMainWindow::onHelpKeyboardShortcuts()
  */
 void TTCutMainWindow::onReadVideoStream(QString fName)
 {
+  // Fresh video open (no existing AV-item): clear the output filename so
+  // the Cut dialog derives a fresh default from the current video.
+  // If an AV-item already exists (multi-video project or project-loaded
+  // session), keep the current name so project-defined custom names are
+  // preserved.
+  if (mpAVData->avCount() == 0) {
+    TTCut::cutVideoName = "";
+  }
   mpAVData->openAVStreams(fName);
 }
 
