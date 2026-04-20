@@ -72,6 +72,11 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
   private:
     void   getFreeDiskSpace();
     DfInfo getDiskSpaceInfo(QString path);
+    static QString expectedContainerExtension(int container);
+    static QString expectedEsExtension(int container, int codec);
+
+  private slots:
+    void updateOutputFilename();
 
  private:
     TTMessageLogger* log;

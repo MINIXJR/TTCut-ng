@@ -49,6 +49,9 @@ class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
   public slots:
     void onEncoderCodecChanged(int codecIndex);
 
+  signals:
+    void containerChanged(int containerValue);
+
   private:
     void initMuxProgList();
     void initMuxTargetList();
