@@ -144,6 +144,31 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Ersetzen durch `std::sort()` mit dem gleichen Comparator
   - Ggf. weitere qSort-Vorkommen im Projekt prüfen
 
+- **H.265 MKV-Muxing: Video-Pakete werden als non-VCL verworfen**
+  - `extern/ttmkvmergeprovider.cpp:811-829` parst NAL-Header H.264-spezifisch:
+    - `uint8_t nt = d[s] & 0x1F` — H.264: 5-bit type in Bits 0-4
+    - `if (nt == 1 || nt == 5)` — H.264 VCL: Typ 1=Slice, 5=IDR
+  - HEVC-NAL-Header: 2-Byte, Type in Bits 1-6 via `(d[s] >> 1) & 0x3F`
+  - HEVC-VCL-Typen: 0-31 (TRAIL_N, TRAIL_R, IDR_W_RADL, CRA_NUT, …)
+  - Ergebnis: H.265-Video-Pakete matchen nie → `MKV PAFF: skip non-VCL video packet` → MKV-Output enthält nur Audio
+  - Log-Beispiel: `/usr/local/src/CLAUDE_TMP/ttcut-debug.log`
+  - Fix: codec-aware NAL-Parsing (HEVC-Pfad separat), evtl. `isHEVC`-Flag im Muxer
+  - Getrennt von Muxer-UI-Cleanup (2026-04-19) dokumentiert — eigener Brainstorm+Spec nötig
+
+- **Suffix-Checkbox im Cut-Dialog reagiert nicht live**
+  - `cbAddSuffix` in `gui/ttcutavcutdlg.cpp` ändert beim Toggle nur `TTCut::cutAddSuffix`
+  - `leOutputFile` wird nicht aktualisiert → `_cut`-Suffix erscheint/verschwindet nicht im Feld
+  - Suffix wird derzeit nur **einmal** bei Dialog-Öffnung in `doCut()` (`gui/ttcutmainwindow.cpp:1040-1044`) angewandt
+  - Fix: Slot auf `cbAddSuffix->toggled` der `leOutputFile` live neu berechnet (Basisname aus Videodatei ± `_cut`)
+  - Vorsicht: User kann Feldinhalt manuell editiert haben — Toggle sollte manuellen Text nicht wegwerfen
+
+- **Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**
+  - Ohne die Env-Variable startet TTCut-ng unter Wayland nicht sauber (bestätigt 2026-04-19)
+  - Historischer Grund (`QGLWidget`) ist seit Migration zu QImage/QPixmap weg; trotzdem weiter nötig
+  - Grep im Source zeigt keinen expliziten XCB-Zwang → Problem liegt in Qt-Wayland-Plugin, mpv-Embedding oder Widget-Interaktion
+  - Diagnose: `QT_DEBUG_PLUGINS=1 QT_LOGGING_RULES="qt.qpa.*=true" ./ttcut-ng` unter Wayland starten, Output analysieren
+  - Ziel: Root Cause finden, ggf. beheben, XCB-Krücke aus `ttcut.sh`/`ttcut.desktop`/README/INSTALL entfernen
+
 - **Live-Timecode bei mpv-Wiedergabe**
   - Im "Aktueller Frame" Widget den Timecode/Frame-Counter während der mpv-Wiedergabe mitlaufen lassen
   - mpv läuft als externer QProcess — kein direkter Zugriff auf die aktuelle Position
