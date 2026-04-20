@@ -28,9 +28,6 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#include <algorithm>
-#include <cstdio>
-
 #include <QMessageBox>
 #include <QPushButton>
 #include <QProcess>
@@ -43,7 +40,6 @@
 #include "ttcutprojectdata.h"
 #include "ttcutlist.h"
 #include "ttaudiolist.h"
-#include "ttcutparameter.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttexception.h"
@@ -1565,10 +1561,9 @@ void TTAVData::onCutFinished()
   qDebug() << "onCutFinished: subtitle =" << muxItem.getSubtitleNames();
 
   // Select muxer based on outputContainer setting
-  // 0 = TS (Transport Stream, mplex)
-  // 1 = MKV (mkvmerge)
-  // 2 = MP4 (FFmpeg)
-  // 3 = Elementary (no muxing)
+  // 0 = MPG (mplex)
+  // 1 = MKV (libav matroska muxer)
+  // 3 = Elementary (no muxing; not reachable from UI, kept as defensive default)
 
   switch (TTCut::outputContainer) {
     case 1: // MKV - use mkvmerge
@@ -1655,84 +1650,6 @@ void TTAVData::onCutFinished()
         }
 
         delete mkvProvider;
-      }
-      break;
-
-    case 2: // MP4 - use FFmpeg
-      {
-        // Build MP4 output filename
-        QFileInfo videoInfo(muxItem.getVideoName());
-        QString mp4Output = QFileInfo(QDir(TTCut::cutDirPath),
-                                       videoInfo.completeBaseName() + ".mp4").absoluteFilePath();
-
-        qDebug() << "Muxing to MP4:" << mp4Output;
-        if (mAvSyncOffsetMs != 0) {
-          qDebug() << "MP4 muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
-        }
-
-        QStringList ffmpegArgs;
-        ffmpegArgs << "-y";  // Overwrite
-
-        // Input video
-        ffmpegArgs << "-i" << muxItem.getVideoName();
-
-        // Input audio files with A/V sync offset
-        // av_offset_ms = audio_pts - video_pts; positive = audio starts after video
-        // Positive -itsoffset delays audio input → correct for audio that is too early
-        QStringList audioNames = muxItem.getAudioNames();
-        for (const QString& audio : audioNames) {
-          if (mAvSyncOffsetMs != 0) {
-            ffmpegArgs << "-itsoffset" << QString("%1ms").arg(mAvSyncOffsetMs);
-          }
-          ffmpegArgs << "-i" << audio;
-        }
-
-        // Input subtitle files
-        QStringList subtitleNames = muxItem.getSubtitleNames();
-        for (const QString& sub : subtitleNames) {
-          ffmpegArgs << "-i" << sub;
-        }
-
-        // Map all streams
-        int inputIdx = 0;
-        ffmpegArgs << "-map" << QString::number(inputIdx++);  // Video
-        for (int i = 0; i < audioNames.count(); i++) {
-          ffmpegArgs << "-map" << QString::number(inputIdx++);
-        }
-        for (int i = 0; i < subtitleNames.count(); i++) {
-          ffmpegArgs << "-map" << QString::number(inputIdx++);
-        }
-
-        // Copy streams (no re-encoding)
-        ffmpegArgs << "-c" << "copy";
-
-        // Output
-        ffmpegArgs << mp4Output;
-
-        qDebug() << "FFmpeg command:" << ffmpegArgs.join(" ");
-
-        QProcess ffmpegProc;
-        ffmpegProc.start("/usr/bin/ffmpeg", ffmpegArgs);
-
-        bool muxSuccess = false;
-        if (ffmpegProc.waitForStarted(5000) && ffmpegProc.waitForFinished(600000)) {
-          if (ffmpegProc.exitCode() == 0) {
-            qDebug() << "MP4 muxing completed successfully";
-            muxSuccess = true;
-          } else {
-            qDebug() << "MP4 muxing failed, exit code:" << ffmpegProc.exitCode();
-            qDebug() << "stderr:" << QString::fromUtf8(ffmpegProc.readAllStandardError());
-          }
-        } else {
-          qDebug() << "FFmpeg process error";
-        }
-
-        // Delete elementary streams if option is set and muxing succeeded
-        if (muxSuccess && TTCut::muxDeleteES) {
-          deleteElementaryStreams(muxItem.getVideoName(),
-                                  audioNames,
-                                  subtitleNames);
-        }
       }
       break;
 

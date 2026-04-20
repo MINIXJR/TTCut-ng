@@ -54,6 +54,8 @@ class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
     void initMuxTargetList();
     void initOutputContainerList();
     void updateMuxerVisibility();
+    int  muxerValueAt(int displayIndex) const;
+    int  indexForMuxerValue(int outputContainerValue) const;
 
   protected slots:
     void onCreateMuxScript();
@@ -62,7 +64,6 @@ class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
     void onOpenOutputPath();
     void onStateDeleteES(int state);
     void onStatePause(int state);
-    void onOutputContainerChanged(int index);
     void onMuxerProgChanged(int index);
     void onMkvChaptersChanged(int state);
 };
