@@ -235,7 +235,7 @@ bool TTCut::isWorking         = false;
 // cut option
 QString  TTCut::muxFileName        = "muxscript.sh";
 QString  TTCut::cutDirPath         = QDir::currentPath();
-QString  TTCut::cutVideoName       = "_cut.m2v";
+QString  TTCut::cutVideoName       = "";
 bool     TTCut::cutAddSuffix       = true;
 bool     TTCut::cutWriteMaxBitrate = false;
 bool     TTCut::cutWriteSeqEnd     = false;
