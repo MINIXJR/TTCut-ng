@@ -190,6 +190,12 @@ void TTCutSettings::readSettings()
   TTCut::muxMode         = value( "MuxMode/",         TTCut::muxMode ).toInt();
   TTCut::mpeg2Target     = value( "Mpeg2Target/",     TTCut::mpeg2Target ).toInt();
   TTCut::outputContainer = value( "OutputContainer/", TTCut::outputContainer ).toInt();
+  // Legacy migration: the MP4 option (value 2) was removed.
+  // Any of the four related preferences still holding 2 → remap to MKV (1).
+  if (TTCut::outputContainer == 2) TTCut::outputContainer = 1;
+  if (TTCut::mpeg2Muxer     == 2) TTCut::mpeg2Muxer     = 1;
+  if (TTCut::h264Muxer      == 2) TTCut::h264Muxer      = 1;
+  if (TTCut::h265Muxer      == 2) TTCut::h265Muxer      = 1;
   TTCut::muxProg         = value( "MuxProg/",         TTCut::muxProg ).toString();
   TTCut::muxProgPath     = value( "MuxProgPath/",     TTCut::muxProgPath ).toString();
   TTCut::muxProgCmd      = value( "MuxProgCmd/",      TTCut::muxProgCmd ).toString();

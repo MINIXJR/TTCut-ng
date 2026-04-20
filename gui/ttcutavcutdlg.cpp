@@ -73,6 +73,14 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent)
   encodingPage->setTabData();
   muxingPage->setTabData();
   //chaptersPage->setTabData();
+
+  // React to encoder codec changes (disable MPG row for H.264/H.265,
+  // update muxer visibility).
+  connect(encodingPage, SIGNAL(codecChanged(int)),
+          muxingPage,   SLOT(onEncoderCodecChanged(int)));
+
+  // Initial sync based on current codec.
+  muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -190,13 +198,6 @@ void TTCutAVCutDlg::getCommonData()
       expectedExt = "h264";
     } else if (TTCut::encoderCodec == 2) {
       expectedExt = "h265";
-    } else {
-      expectedExt = "m2v";
-    }
-  } else if (TTCut::outputContainer == 2) {
-    // MP4/TS output via ffmpeg - extension is based on codec
-    if (TTCut::encoderCodec == 1 || TTCut::encoderCodec == 2) {
-      expectedExt = "ts";  // TS container for H.264/H.265
     } else {
       expectedExt = "m2v";
     }
