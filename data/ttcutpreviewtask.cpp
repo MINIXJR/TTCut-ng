@@ -45,6 +45,10 @@
 #include "../data/ttcutsubtitletask.h"
 #include "../data/ttmuxlistdata.h"
 #include "../extern/ttmkvmergeprovider.h"
+
+extern "C" {
+#include <libavcodec/codec_id.h>
+}
 #include "../extern/ttessmartcut.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../avstream/ttesinfo.h"
@@ -271,6 +275,15 @@ void TTCutPreviewTask::operation()
           audioFiles.append(audioFile);
           TTMkvMergeProvider mkvProv;
           mkvProv.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+          {
+            AVCodecID codecId;
+            switch (vStream->streamType()) {
+              case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
+              case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
+              default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
+            }
+            mkvProv.setVideoCodecId(codecId);
+          }
           if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
           mkvProv.mux(outputFile, videoFile, audioFiles, QStringList());
           qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
@@ -452,6 +465,15 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
   mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
+  {
+    AVCodecID codecId;
+    switch (vStream->streamType()) {
+      case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
+      case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
+      default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
+    }
+    mkvProvider.setVideoCodecId(codecId);
+  }
 
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);

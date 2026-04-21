@@ -44,6 +44,40 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
+namespace {
+
+// Returns true if the byte at `b` starts a Video Coding Layer NAL unit
+// for the given codec. `b` must point to the first NAL payload byte
+// (after the start code).
+//
+// H.264: 1-byte header, 5-bit nal_unit_type in bits 0-4.
+//        VCL types: 1 (non-IDR slice), 5 (IDR slice).
+// H.265: 2-byte header, 6-bit nal_unit_type in bits 1-6 of first byte.
+//        VCL types: 0-31 per HEVC spec.
+bool isVclNalByte(enum AVCodecID codec, const uint8_t* b)
+{
+    switch (codec) {
+        case AV_CODEC_ID_H264: {
+            uint8_t nt = b[0] & 0x1F;
+            return nt == H264::NAL_SLICE || nt == H264::NAL_IDR_SLICE;
+        }
+        case AV_CODEC_ID_HEVC: {
+            uint8_t nt = (b[0] >> 1) & 0x3F;
+            return nt <= 31;
+        }
+        case AV_CODEC_ID_MPEG2VIDEO:
+            // MPEG-2 ES has no NAL layer; treat every packet as "VCL" so
+            // it is passed through to the matroska writer unchanged.
+            return true;
+        default:
+            Q_ASSERT_X(false, "isVclNalByte",
+                       "unexpected video codec in MKV ES mux path");
+            return false;
+    }
+}
+
+} // namespace
+
 // ----------------------------------------------------------------------------
 // Helper: libav error code to QString
 // ----------------------------------------------------------------------------
@@ -282,6 +316,7 @@ TTMkvMergeProvider::TTMkvMergeProvider()
     , mTotalDurationMs(0)
     , mIsPAFF(false)
     , mH264Log2MaxFrameNum(4)
+    , mVideoCodecId(AV_CODEC_ID_NONE)
 {
 }
 
@@ -439,6 +474,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
     qDebug() << "TTMkvMergeProvider::mux (libav matroska)";
     qDebug() << "  Output:" << outputFile;
+    qDebug() << "  MKV mux: videoCodecId =" << avcodec_get_name(static_cast<AVCodecID>(mVideoCodecId));
     qDebug() << "  Video:" << videoFile
              << "size:" << QFileInfo(videoFile).size() << "bytes";
     for (int i = 0; i < audioFiles.size(); i++) {
@@ -780,22 +816,20 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                         }
                     }
 
-                    // Find VCL NAL and parse field_pic_flag
+                    // Find VCL NAL and parse field_pic_flag (H.264-only path)
                     int nalStart = -1;
                     for (int p = 0; p < sz - 4; p++) {
                         if (d[p] == 0 && d[p+1] == 0) {
                             int s = -1;
                             if (d[p+2] == 1) s = p + 3;
                             else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
-                            if (s >= 0 && s < sz) {
-                                uint8_t nt = d[s] & 0x1F;
-                                if (nt == 1 || nt == 5) { nalStart = s; break; }
+                            if (s >= 0 && s < sz && isVclNalByte(AV_CODEC_ID_H264, d + s)) {
+                                nalStart = s; break;
                             }
                         }
                     }
-                    if (nalStart < 0 && sz >= 3) {
-                        uint8_t nt = d[0] & 0x1F;
-                        if (nt == 1 || nt == 5) nalStart = 0;
+                    if (nalStart < 0 && sz >= 1 && isVclNalByte(AV_CODEC_ID_H264, d)) {
+                        nalStart = 0;
                     }
                     hasVclNal = (nalStart >= 0);
                     if (hasVclNal) {
@@ -809,23 +843,22 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                         isFieldPacket = (TTNaluParser::readBits(nal, nalSz, bp, 1) == 1); // field_pic_flag
                     }
                 } else if (in.outIdx == 0 && in.pkt->data && in.pkt->size > 0) {
-                    // Non-PAFF video: check for VCL NAL
+                    // Non-PAFF video: check for VCL NAL (codec-aware)
                     const uint8_t* d = in.pkt->data;
                     int sz = in.pkt->size;
+                    const AVCodecID codec = static_cast<AVCodecID>(mVideoCodecId);
                     for (int p = 0; p < sz - 3; p++) {
                         if (d[p] == 0 && d[p+1] == 0) {
                             int s = -1;
                             if (d[p+2] == 1) s = p + 3;
                             else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
-                            if (s >= 0 && s < sz) {
-                                uint8_t nt = d[s] & 0x1F;
-                                if (nt == 1 || nt == 5) { hasVclNal = true; break; }
+                            if (s >= 0 && s < sz && isVclNalByte(codec, d + s)) {
+                                hasVclNal = true; break;
                             }
                         }
                     }
-                    if (!hasVclNal && sz >= 1) {
-                        uint8_t nt = d[0] & 0x1F;
-                        if (nt == 1 || nt == 5) hasVclNal = true;
+                    if (!hasVclNal && sz >= 1 && isVclNalByte(codec, d)) {
+                        hasVclNal = true;
                     }
                 } else {
                     // Audio/subtitle or empty: always write
@@ -856,7 +889,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                     // Read the second field packet from the same input
                     readNextPacket(in);
 
-                    // Skip non-VCL packets between field pairs (e.g. SEI)
+                    // Skip non-VCL packets between field pairs (e.g. SEI).
+                    // This path is H.264-only (mIsPAFF implies H.264), but use
+                    // the codec-aware helper for consistency.
+                    const AVCodecID codec = static_cast<AVCodecID>(mVideoCodecId);
                     while (!in.eof && in.pkt->data && in.pkt->size > 0) {
                         const uint8_t* nd = in.pkt->data;
                         int nsz = in.pkt->size;
@@ -866,9 +902,8 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                                 int s = -1;
                                 if (nd[p+2] == 1) s = p + 3;
                                 else if (nd[p+2] == 0 && p+3 < nsz && nd[p+3] == 1) s = p + 4;
-                                if (s >= 0 && s < nsz) {
-                                    uint8_t nt = nd[s] & 0x1F;
-                                    if (nt == 1 || nt == 5) { nextIsVcl = true; break; }
+                                if (s >= 0 && s < nsz && isVclNalByte(codec, nd + s)) {
+                                    nextIsVcl = true; break;
                                 }
                             }
                         }

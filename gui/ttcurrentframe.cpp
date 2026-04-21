@@ -37,6 +37,10 @@
 #include "../extern/ttmkvmergeprovider.h"
 #include "../common/ttcut.h"
 
+extern "C" {
+#include <libavcodec/codec_id.h>
+}
+
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
@@ -705,6 +709,15 @@ QString TTCurrentFrame::createTempMkvForPlayback()
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
   mkvProvider.setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
+  {
+    AVCodecID codecId;
+    switch (videoStream->streamType()) {
+      case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
+      case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
+      default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
+    }
+    mkvProvider.setVideoCodecId(codecId);
+  }
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }
