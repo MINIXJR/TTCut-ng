@@ -144,17 +144,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Ersetzen durch `std::sort()` mit dem gleichen Comparator
   - Ggf. weitere qSort-Vorkommen im Projekt prüfen
 
-- **H.265 MKV-Muxing: Video-Pakete werden als non-VCL verworfen**
-  - `extern/ttmkvmergeprovider.cpp:811-829` parst NAL-Header H.264-spezifisch:
-    - `uint8_t nt = d[s] & 0x1F` — H.264: 5-bit type in Bits 0-4
-    - `if (nt == 1 || nt == 5)` — H.264 VCL: Typ 1=Slice, 5=IDR
-  - HEVC-NAL-Header: 2-Byte, Type in Bits 1-6 via `(d[s] >> 1) & 0x3F`
-  - HEVC-VCL-Typen: 0-31 (TRAIL_N, TRAIL_R, IDR_W_RADL, CRA_NUT, …)
-  - Ergebnis: H.265-Video-Pakete matchen nie → `MKV PAFF: skip non-VCL video packet` → MKV-Output enthält nur Audio
-  - Log-Beispiel: `/usr/local/src/CLAUDE_TMP/ttcut-debug.log`
-  - Fix: codec-aware NAL-Parsing (HEVC-Pfad separat), evtl. `isHEVC`-Flag im Muxer
-  - Getrennt von Muxer-UI-Cleanup (2026-04-19) dokumentiert — eigener Brainstorm+Spec nötig
-
 - **Suffix-Checkbox im Cut-Dialog reagiert nicht live**
   - `cbAddSuffix` in `gui/ttcutavcutdlg.cpp` ändert beim Toggle nur `TTCut::cutAddSuffix`
   - `leOutputFile` wird nicht aktualisiert → `_cut`-Suffix erscheint/verschwindet nicht im Feld

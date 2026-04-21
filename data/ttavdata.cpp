@@ -70,6 +70,10 @@
 
 #include "../avstream/ttavtypes.h"
 
+extern "C" {
+#include <libavcodec/codec_id.h>
+}
+
 /* /////////////////////////////////////////////////////////////////////////////
  * Class TTAVData
  */
@@ -1469,6 +1473,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
     mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
     mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
+    AVCodecID codecId = (vStream->streamType() == TTAVTypes::h265_video)
+                      ? AV_CODEC_ID_HEVC
+                      : AV_CODEC_ID_H264;
+    mkvProvider.setVideoCodecId(codecId);
 
     // Apply A/V sync offset if present
     if (avOffsetMs != 0) {
@@ -1579,6 +1587,10 @@ void TTAVData::onCutFinished()
         int frameDurationNs = (int)(1000000000.0 / frameRate);
         mkvProvider->setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
         mkvProvider->setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
+        AVCodecID codecId = (videoStream->streamType() == TTAVTypes::h265_video)
+                          ? AV_CODEC_ID_HEVC
+                          : AV_CODEC_ID_H264;
+        mkvProvider->setVideoCodecId(codecId);
 
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {

@@ -83,6 +83,13 @@ public:
         mH264Log2MaxFrameNum = log2MaxFrameNum;
     }
 
+    // Video codec of the ES input stream — used by the muxer to parse
+    // NAL unit types correctly. H.264 and H.265 have different header layouts.
+    // Caller (ttavdata.cpp) passes an AVCodecID value from libavcodec/codec_id.h
+    // (implicit enum-to-int conversion). Stored as int to keep libav headers
+    // out of this public header.
+    void setVideoCodecId(int codecId) { mVideoCodecId = codecId; }
+
     // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -103,6 +110,7 @@ private:
     qint64 mTotalDurationMs;
     bool mIsPAFF;
     int mH264Log2MaxFrameNum;
+    int mVideoCodecId;   // AVCodecID value (from libavcodec/codec_id.h)
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
 
