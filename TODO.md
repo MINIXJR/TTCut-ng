@@ -139,18 +139,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
-- **Deprecated qSort() → std::sort()**
-  - `avstream/ttsubtitleheaderlist.cpp:86` verwendet `qSort()` (deprecated seit Qt 5.2)
-  - Ersetzen durch `std::sort()` mit dem gleichen Comparator
-  - Ggf. weitere qSort-Vorkommen im Projekt prüfen
-
-- **Suffix-Checkbox im Cut-Dialog reagiert nicht live**
-  - `cbAddSuffix` in `gui/ttcutavcutdlg.cpp` ändert beim Toggle nur `TTCut::cutAddSuffix`
-  - `leOutputFile` wird nicht aktualisiert → `_cut`-Suffix erscheint/verschwindet nicht im Feld
-  - Suffix wird derzeit nur **einmal** bei Dialog-Öffnung in `doCut()` (`gui/ttcutmainwindow.cpp:1040-1044`) angewandt
-  - Fix: Slot auf `cbAddSuffix->toggled` der `leOutputFile` live neu berechnet (Basisname aus Videodatei ± `_cut`)
-  - Vorsicht: User kann Feldinhalt manuell editiert haben — Toggle sollte manuellen Text nicht wegwerfen
-
 - **Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**
   - Ohne die Env-Variable startet TTCut-ng unter Wayland nicht sauber (bestätigt 2026-04-19)
   - Historischer Grund (`QGLWidget`) ist seit Migration zu QImage/QPixmap weg; trotzdem weiter nötig
@@ -243,6 +231,8 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Fix audio list UI not refreshed after locale-based sorting (v0.66.0)
 - [x] Per-project settings persistence in .ttcut (output path, muxing, encoder with codec-specific mapping) (v0.66.0)
 - [x] Audio language preference list (replaces hardcoded system-locale sort, accepts 2/3-letter codes with alias normalization) (v0.66.0)
+- [x] Replace deprecated qSort() with std::sort() in TTSubtitleHeaderList
+- [x] Suffix-Checkbox im Cut-Dialog reagiert live auf Toggle (updateOutputFilename slot)
 
 ## Known Limitations
 
