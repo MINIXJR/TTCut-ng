@@ -2,6 +2,43 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.67.0 (2026-04-23)
+
+**HEVC MKV output, UI cleanup, various fixes**
+
+### Fixes
+- MKV muxer: codec-aware NAL parsing. H.265/HEVC MKV output now contains
+  both video and audio; previously the muxer parsed all NAL units as H.264,
+  dropped every HEVC video packet as non-VCL, and silently wrote MKV files
+  with only an audio track. `TTMkvMergeProvider` now receives the codec
+  ID via `setVideoCodecId()` and dispatches parsing per codec (H.264, HEVC,
+  MPEG-2 pass-through).
+- Cut dialog: filename field updates live when the suffix checkbox, video
+  codec, or output container changes. Previously the suffix was applied
+  only once on dialog open; switching container from MKV to MPG after
+  opening left the wrong extension in the field.
+- cutVideoName session leak: first cut after app start no longer writes
+  to a stale output path from the previous session. The global
+  `TTCut::cutVideoName` is now reset in the new-project flow.
+- mplex muxer: filenames with non-ASCII characters (umlauts etc.) are now
+  passed correctly through the mplex call; previously UTF-8 was not
+  preserved and the multiplex step failed.
+
+### Changes
+- Muxing tab UI cleanup: the muxing-program combo was relabeled, the
+  non-functional MP4 output option was removed, and the mplex selection is
+  now guarded for MPEG-2 only (it cannot be picked together with H.264 or
+  H.265, because mplex does not mux those).
+- Removed four inactive UI elements: the Chapters tab in the Settings
+  dialog and in the Cut dialog (both spumux/DVD-authoring legacy, always
+  hidden at construction time), the empty Configure Muxer button
+  (leftover from the mplex-CLI era before v0.60.0), and the
+  `videoFileInfo` widget in the main window (pinned to 0 pixels height,
+  fully redundant with the video tree view columns). The orphaned
+  `chapter_18.xpm` pixmap and the unused `TTCut::imgChapter` singleton
+  are cleaned up along with them. A new TODO tracks a future custom
+  MKV chapter editor.
+
 ## v0.66.0 (2026-04-12)
 
 **Per-Track Audio Delay, Audio-Drift Display, Project Settings Persistence, Audio Language Preference**
