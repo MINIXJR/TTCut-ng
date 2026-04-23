@@ -80,7 +80,6 @@
 #include "../ui/pixmaps/stop_18.xpm"
 #include "../ui/pixmaps/search_18.xpm"
 #include "../ui/pixmaps/preview_18.xpm"
-#include "../ui/pixmaps/chapter_18.xpm"
 #include "../ui/pixmaps/cutav_18.xpm"
 #include "../ui/pixmaps/cutaudio_18.xpm"
 #include "../ui/pixmaps/goto_18.xpm"
@@ -125,7 +124,6 @@ TTCutMainWindow::TTCutMainWindow()
   TTCut::imgPlay       = new QPixmap( play_18_xpm );
   TTCut::imgStop       = new QPixmap( stop_18_xpm );
   TTCut::imgSearch     = new QPixmap( search_18_xpm );
-  TTCut::imgChapter    = new QPixmap( chapter_18_xpm );
   TTCut::imgPreview    = new QPixmap( preview_18_xpm );
   TTCut::imgCutAV      = new QPixmap( cutav_18_xpm );
   TTCut::imgCutAudio   = new QPixmap( cutaudio_18_xpm );
@@ -259,12 +257,6 @@ TTCutMainWindow::TTCutMainWindow()
   connect(mpAVData,  SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
                      SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
 
-
-  // Connect signals from video and audio info
-  // --------------------------------------------------------------------------
-  connect(videoFileInfo,  SIGNAL(openFile()),       SLOT(onOpenVideoFile()));
-  connect(videoFileInfo,  SIGNAL(nextAVClicked()),  SLOT(onNextAVData()));
-  connect(videoFileInfo,  SIGNAL(prevAVClicked()),  SLOT(onPrevAVData()));
 
   connect(videoFileList,     SIGNAL(openFile()),                   SLOT(onOpenVideoFile()));
   connect(audioFileList,     SIGNAL(openFile()),                   SLOT(onOpenAudioFile()));
@@ -803,7 +795,6 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
   else
     currentFrame->onGotoFrame( sPos, 0 );
 
-  videoFileInfo->refreshInfo(mpCurrentAVDataItem);
   navigation->checkCutPosition(mpCurrentAVDataItem);
 }
 
@@ -819,7 +810,6 @@ void TTCutMainWindow::onNewFramePos(int newPos)
   streamNavigator->slider()->blockSignals(true);
   streamNavigator->slider()->setValue( newPos );
   streamNavigator->slider()->blockSignals(false);
-  videoFileInfo->refreshInfo(mpCurrentAVDataItem);
   navigation->checkCutPosition(mpCurrentAVDataItem, newPos);
 }
 
@@ -1125,7 +1115,6 @@ void TTCutMainWindow::closeProject()
 	disconnect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
   disconnect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
 
-  videoFileInfo->onAVDataChanged(mpAVData, 0);
   audioFileList->onAVDataChanged(0);
   subtitleFileList->onAVDataChanged(0);
   streamNavigator->onAVItemChanged(0);
@@ -1156,7 +1145,6 @@ void TTCutMainWindow::closeProject()
  */
 void TTCutMainWindow::navigationEnabled( bool enabled )
 {
-	videoFileInfo->controlEnabled(true);
   cutOutFrame->controlEnabled(enabled);
   currentFrame->controlEnabled(enabled);
   navigation->controlEnabled(enabled);
@@ -1200,35 +1188,6 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   disconnect(mpAVData, SIGNAL(readProjectFileFinished(const QString&)), this, SLOT(onOpenProjectFileFinished(const QString&)));
 }
 
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTCutMainWindow::onNextAVData()
-{
-  if (mpCurrentAVDataItem == 0) return;
-
-  int index = mpAVData->avIndexOf(mpCurrentAVDataItem);
-
-  if (index+1 < 0 || index+1 >= mpAVData->avCount()) return;
-
-  mpAVData->onChangeCurrentAVItem(mpAVData->avItemAt(index+1));
-}
-
-/* //////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTCutMainWindow::onPrevAVData()
-{
-  if (mpCurrentAVDataItem == 0) return;
-
-  int index = mpAVData->avIndexOf(mpCurrentAVDataItem);
-
-  if (index-1 < 0 || index-1 >= mpAVData->avCount()) return;
-
-  mpAVData->onChangeCurrentAVItem(mpAVData->avItemAt(index-1));
-}
-
 void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
 {
   if (avItem == mpCurrentAVDataItem)  return;
@@ -1245,7 +1204,6 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
     mpStreamPointModel->setFrameRate(avItem->videoStream()->frameRate());
   }
 
-  videoFileInfo->onAVDataChanged(mpAVData, avItem);
   currentFrame->onAVDataChanged(avItem);
   cutOutFrame->onAVDataChanged(avItem);
   audioFileList->onAVDataChanged(avItem);

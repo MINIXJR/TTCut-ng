@@ -37,16 +37,12 @@ TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
 {
   setupUi(this);
 
-  // not implemented yet
-  settingsTab->removeTab(4);
-
   // set the tabs data
   // ------------------------------------------------------------------
   commonPage->setTabData();
   filesPage->setTabData();
   encodingPage->setTabData();
   muxingPage->setTabData();
-  //chaptersPage->setTabData();
 
   // signal and slot connections
   connect(okButton,     SIGNAL(clicked()), SLOT(onDlgOk()));
@@ -67,7 +63,6 @@ void TTCutSettingsDlg::setGlobalData()
     filesPage->getTabData();
     encodingPage->getTabData();
     muxingPage->getTabData();
-    //chaptersPage->getTabData();
 }
 
 

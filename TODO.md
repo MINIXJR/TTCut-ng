@@ -79,6 +79,12 @@
   - Der Allgemein-Tab wird zunehmend überladen (Navigation, Preview, Search, Audio, Language, Defect Grouping, ...)
   - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
   - Ziel: Bessere Übersicht, schnelleres Finden relevanter Einstellungen
+
+- **Custom MKV Chapter Editor**
+  - Dialog mit Liste editierbarer Kapitel: Zeitstempel (hh:mm:ss.zzz), Name, Sprache
+  - Vor-Populierung aus Cut-Ins (jeder Cut-In wird Default-Kapitel)
+  - Persistenz in `.ttcut`-Projektdatei
+  - Die Intervall-basierte Auto-Generierung (`cbMkvCreateChapters` + `leChapterInterval`) im Muxer-Tab bleibt als einfacher Default bestehen
 - Internationalisation (i18n) - translate UI to other languages
   - **de_DE: DONE** (v0.62.0) — alle 165 Strings übersetzt, Q_OBJECT/English source texts standardisiert
 - Undo/Redo for cut list operations
@@ -160,11 +166,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Class name and files (`mpeg2window/ttmpeg2window2.*`) are misleading — the widget handles MPEG-2, H.264, and H.265
   - Rename class, files, and directory (e.g., `videoframe/ttvideoframewidget.*`)
   - Update all includes, .pro file, .ui references, and moc references
-- **Inaktive UI-Elemente prüfen und ggf. entfernen oder implementieren**
-  - Chapters-Tab im Settings-Dialog (`ttcutsettingsdlg.cpp:41`): `removeTab(4)` — "not implemented yet"
-  - Chapters-Tab im Schnittdialog (`ttcutavcutdlg.cpp:53`): `removeTab(3)` — "not implemented yet"
-  - "Configure..." Button im Muxer-Settings (`ttcutsettingsmuxer.cpp:50`): `setEnabled(false)` — keine Funktion
-  - videoFileInfo Widget (`ttcutmainwindow.ui:103`): `maximumSize height=0` — permanent unsichtbar
 - Implement plugin interface for external tools (encoders, muxers, players)
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
@@ -233,6 +234,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Audio language preference list (replaces hardcoded system-locale sort, accepts 2/3-letter codes with alias normalization) (v0.66.0)
 - [x] Replace deprecated qSort() with std::sort() in TTSubtitleHeaderList
 - [x] Suffix-Checkbox im Cut-Dialog reagiert live auf Toggle (updateOutputFilename slot)
+- [x] Remove inactive UI elements: Chapters tabs (spumux-legacy), Configure Muxer button, hidden videoFileInfo widget
 
 ## Known Limitations
 
