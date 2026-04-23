@@ -106,27 +106,6 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="tabChapters">
-      <attribute name="icon">
-       <iconset resource="ttsettingsdialog.qrc">
-        <normaloff>:/pixmaps/pixmaps/chapter_18.xpm</normaloff>:/pixmaps/pixmaps/chapter_18.xpm</iconset>
-      </attribute>
-      <attribute name="title">
-       <string>Chapters</string>
-      </attribute>
-      <layout class="QGridLayout">
-       <property name="margin">
-        <number>6</number>
-       </property>
-       <item row="0" column="0">
-        <widget class="TTCutSettingsChapter" name="chaptersPage">
-         <property name="title">
-          <string>GroupBox</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
     </widget>
    </item>
    <item row="1" column="0">
@@ -167,12 +146,6 @@
    <class>TTCutSettingsMuxer</class>
    <extends>QGroupBox</extends>
    <header>../gui/ttcutsettingsmuxer.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>TTCutSettingsChapter</class>
-   <extends>QGroupBox</extends>
-   <header>../gui/ttcutsettingschapter.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>

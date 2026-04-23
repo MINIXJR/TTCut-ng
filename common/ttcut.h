@@ -66,7 +66,6 @@ class TTCut
    static QPixmap* imgPlay;
    static QPixmap* imgStop;
    static QPixmap* imgSearch;
-   static QPixmap* imgChapter;
    static QPixmap* imgPreview;
    static QPixmap* imgCutAV;
    static QPixmap* imgCutAudio;

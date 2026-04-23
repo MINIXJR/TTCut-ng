@@ -129,8 +129,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onSearchLogo(int startPos, int direction, float threshold);
     void onAbortLogoSearch();
 
-		void onNextAVData();
-    void onPrevAVData();
 		void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
 

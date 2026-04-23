@@ -47,11 +47,9 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   // Enable muxer selection now that we have multiple options
   cbMuxerProg->setEnabled(true);
   cbMuxTarget->setEnabled(true);
-  pbConfigureMuxer->setEnabled(false);
 
   connect(rbCreateMuxScript, SIGNAL(clicked()),         SLOT(onCreateMuxScript()));
   connect(rbMuxStreams,      SIGNAL(clicked()),         SLOT(onCreateMuxStreams()));
-  connect(pbConfigureMuxer,  SIGNAL(clicked()),         SLOT(onConfigureMuxer()));
   connect(btnOutputPath,     SIGNAL(clicked()),         SLOT(onOpenOutputPath()));
   connect(cbDeleteES,        SIGNAL(stateChanged(int)), SLOT(onStateDeleteES(int)));
   connect(cbPause,           SIGNAL(stateChanged(int)), SLOT(onStatePause(int)));
@@ -161,10 +159,6 @@ void TTCutSettingsMuxer::onCreateMuxScript()
 
   cbDeleteES->setEnabled(false);
   cbPause->setEnabled(false);
-}
-
-void TTCutSettingsMuxer::onConfigureMuxer()
-{
 }
 
 void TTCutSettingsMuxer::onOpenOutputPath()

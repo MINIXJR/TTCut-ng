@@ -36,8 +36,7 @@ UI_DIR      = ui_h
 RCC_DIR     = res
 TRANSLATIONS = trans/ttcut-ng_de_DE.ts \
                trans/ttcut-ng_en_US.ts
-RESOURCES   = ui/ttcutvideoinfowidget.qrc\
-              ui/audiofilelistwidget.qrc\
+RESOURCES   = ui/audiofilelistwidget.qrc\
               ui/videofilelistwidget.qrc\
               ui/subtitlefilelistwidget.qrc\
               ui/cutoutframewidget.qrc\
@@ -59,7 +58,6 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/navigatordisplaywidget.ui\
               ui/streamnavigationwidget.ui\
               ui/cutlistwidget.ui\
-              ui/ttcutsettingschapter.ui\
               ui/ttcutsettingsmuxer.ui\
               ui/ttcutsettingsencoder.ui\
               ui/ttcutsettingsfiles.ui\
@@ -71,7 +69,6 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/avcutdialog.ui\
               ui/aboutdlg.ui\
               ui/ttcutmainwindow.ui\
-              ui/ttcutvideoinfowidget.ui\
               ui/ttcutframenavigationwidget.ui\
               ui/ttprogressform.ui\
               ui/tttaskprogresswidget.ui
@@ -138,13 +135,11 @@ HEADERS     = common/ttcut.h\
               extern/ttessmartcut.h\
               extern/ttmkvmergeprovider.h\
               gui/ttcutsettings.h\
-              gui/ttcutsettingschapter.h\
               gui/ttcutsettingsmuxer.h\
               gui/ttcutsettingsencoder.h\
               gui/ttcutsettingsfiles.h\
               gui/ttcutsettingscommon.h\
               gui/ttcutsettingsdlg.h\
-              gui/ttcutvideoinfo.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
               gui/ttsubtitletreeview.h\
@@ -229,13 +224,11 @@ SOURCES     = common/ttcut.cpp\
               extern/ttessmartcut.cpp\
               extern/ttmkvmergeprovider.cpp\
               gui/ttcutsettings.cpp\
-              gui/ttcutsettingschapter.cpp\
               gui/ttcutsettingsmuxer.cpp\
               gui/ttcutsettingsencoder.cpp\
               gui/ttcutsettingsfiles.cpp\
               gui/ttcutsettingscommon.cpp\
               gui/ttcutsettingsdlg.cpp\
-              gui/ttcutvideoinfo.cpp\
               gui/ttaudiotreeview.cpp\
               gui/ttvideotreeview.cpp\
               gui/ttsubtitletreeview.cpp\

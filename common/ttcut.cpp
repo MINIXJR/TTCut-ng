@@ -67,7 +67,6 @@ QPixmap* TTCut::imgExit       = NULL;
 QPixmap* TTCut::imgPlay       = NULL;
 QPixmap* TTCut::imgStop       = NULL;
 QPixmap* TTCut::imgSearch     = NULL;
-QPixmap* TTCut::imgChapter    = NULL;
 QPixmap* TTCut::imgPreview    = NULL;
 QPixmap* TTCut::imgCutAV      = NULL;
 QPixmap* TTCut::imgCutAudio   = NULL;

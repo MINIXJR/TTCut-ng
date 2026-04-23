@@ -49,9 +49,6 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent)
 {
   setupUi(this);
 
-  // not implemented yet
-  tabWidget->removeTab(3);
-
   // message logger instance
   log = TTMessageLogger::getInstance();
 
@@ -72,7 +69,6 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent)
   setCommonData();
   encodingPage->setTabData();
   muxingPage->setTabData();
-  //chaptersPage->setTabData();
 
   // React to encoder codec changes (disable MPG row for H.264/H.265,
   // update muxer visibility).
@@ -107,7 +103,6 @@ void TTCutAVCutDlg::setGlobalData()
   getCommonData();
   encodingPage->getTabData();
   muxingPage->getTabData();
-  //chaptersPage->getTabData();
 }
 
 
