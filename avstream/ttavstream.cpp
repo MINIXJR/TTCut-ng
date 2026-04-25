@@ -242,40 +242,6 @@ TTAudioHeader* TTAudioStream::headerAt( int index )
 }
 
 
-int TTAudioStream::getStartIndex(int startPos, float frameRate, float& localAudioOffset)
-{
-  TTAudioHeader* audioHeader = header_list->audioHeaderAt(0);
-
-  float frameTime        = audioHeader->frame_time;
-  float videoFrameLength = 1000.0 / frameRate;
-  float audioStartTime   = ((float)startPos*videoFrameLength+localAudioOffset)/frameTime;
-  int   audioStartIndex  = ((int)round(audioStartTime) >= 0)
-            ? (int)round(audioStartTime)
-            : 0;
-
-  localAudioOffset = ((float)startPos*videoFrameLength) -
-                      (float)audioStartIndex*frameTime+localAudioOffset;
-
-  return audioStartIndex;
-}
-
-int TTAudioStream::getEndIndex(int endPos, float frameRate, float& localAudioOffset)
-{
-  TTAudioHeader* audioHeader = header_list->audioHeaderAt(0);
-
-  float frameTime        = audioHeader->frame_time;
-  float videoFrameLength = 1000.0 / frameRate;
-  float audioEndTime     = ((float)endPos*videoFrameLength+localAudioOffset)/frameTime;
-  int   audioEndIndex    = ((int)round(audioEndTime) < header_list->count())
-             ? (int)round(audioEndTime)
-             : header_list->count()-1;
-
-  localAudioOffset = ((float)(audioEndIndex+1)*frameTime) -
-                     ((float)(endPos+1)*videoFrameLength)+localAudioOffset;
-
-  return audioEndIndex;
-}
-
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
 // *** TTVideoStream: Base class for all video streams

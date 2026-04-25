@@ -1009,6 +1009,128 @@ cleanup:
 }
 
 // -----------------------------------------------------------------------------
+// Audio-only matroska output (.mka): copies all input audio streams into a
+// single matroska container with optional language tags. Stream-copy only.
+// -----------------------------------------------------------------------------
+bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
+                                      const QStringList& audioFiles,
+                                      const QStringList& audioLanguages)
+{
+    if (audioFiles.isEmpty()) {
+        setError("muxAudioOnly: empty input list");
+        return false;
+    }
+
+    qDebug() << "TTMkvMergeProvider::muxAudioOnly:" << audioFiles.size() << "tracks ->" << outputFile;
+
+    AVFormatContext* outCtx = nullptr;
+    int ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
+                                              outputFile.toUtf8().constData());
+    if (ret < 0 || !outCtx) {
+        setError("Cannot create matroska output context");
+        return false;
+    }
+
+    QString baseName = QFileInfo(outputFile).completeBaseName();
+    if (baseName.endsWith("_cut")) baseName.chop(4);
+    QString title = decodeVdrName(baseName);
+    if (!title.isEmpty()) {
+        av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
+    }
+
+    // Open all inputs and create one output stream per usable input.
+    QList<AVFormatContext*> inputs;
+    QList<int> inputAudioIdx;
+    QList<int> outStreamIdx;
+
+    for (int i = 0; i < audioFiles.size(); i++) {
+        AVFormatContext* inCtx = openInput(audioFiles[i], ret);
+        if (!inCtx) {
+            qDebug() << "  skip" << audioFiles[i] << ":" << avErrStr(ret);
+            continue;
+        }
+        int audioIdx = av_find_best_stream(inCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+        if (audioIdx < 0) {
+            avformat_close_input(&inCtx);
+            continue;
+        }
+
+        AVStream* outStream = avformat_new_stream(outCtx, nullptr);
+        if (!outStream) {
+            avformat_close_input(&inCtx);
+            continue;
+        }
+        avcodec_parameters_copy(outStream->codecpar, inCtx->streams[audioIdx]->codecpar);
+        outStream->time_base = inCtx->streams[audioIdx]->time_base;
+
+        if (i < audioLanguages.size() && !audioLanguages[i].isEmpty()) {
+            av_dict_set(&outStream->metadata, "language",
+                        audioLanguages[i].toUtf8().constData(), 0);
+        }
+
+        inputs.append(inCtx);
+        inputAudioIdx.append(audioIdx);
+        outStreamIdx.append(outStream->index);
+    }
+
+    if (inputs.isEmpty()) {
+        avformat_free_context(outCtx);
+        setError("muxAudioOnly: no usable audio streams");
+        return false;
+    }
+
+    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&outCtx->pb, outputFile.toUtf8().constData(), AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            for (auto* c : inputs) avformat_close_input(&c);
+            avformat_free_context(outCtx);
+            setError(QString("muxAudioOnly: cannot open output: %1").arg(avErrStr(ret)));
+            return false;
+        }
+    }
+
+    ret = avformat_write_header(outCtx, nullptr);
+    if (ret < 0) {
+        for (auto* c : inputs) avformat_close_input(&c);
+        if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
+        avformat_free_context(outCtx);
+        setError(QString("muxAudioOnly: write_header failed: %1").arg(avErrStr(ret)));
+        return false;
+    }
+
+    // Read packets from each input and rescale into the matroska output.
+    // av_interleaved_write_frame handles interleaving across tracks.
+    AVPacket* pkt = av_packet_alloc();
+    for (int i = 0; i < inputs.size(); i++) {
+        AVRational inTb  = inputs[i]->streams[inputAudioIdx[i]]->time_base;
+        AVRational outTb = outCtx->streams[outStreamIdx[i]]->time_base;
+
+        while (av_read_frame(inputs[i], pkt) >= 0) {
+            if (pkt->stream_index != inputAudioIdx[i]) {
+                av_packet_unref(pkt);
+                continue;
+            }
+            pkt->stream_index = outStreamIdx[i];
+            av_packet_rescale_ts(pkt, inTb, outTb);
+            pkt->pos = -1;
+            av_interleaved_write_frame(outCtx, pkt);
+            av_packet_unref(pkt);
+        }
+    }
+    av_packet_free(&pkt);
+
+    av_write_trailer(outCtx);
+
+    for (auto* c : inputs) avformat_close_input(&c);
+    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
+    avformat_free_context(outCtx);
+
+    qDebug() << "muxAudioOnly complete:" << outputFile
+             << "size:" << QFileInfo(outputFile).size() << "bytes";
+    return true;
+}
+
+// -----------------------------------------------------------------------------
 // Set error message
 // -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setError(const QString& error)

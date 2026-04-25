@@ -129,8 +129,6 @@ public:
   // virtual cut methods
   virtual bool isCutInPoint(int)  {return true;};
   virtual bool isCutOutPoint(int)  {return true;};
-  virtual int  getStartIndex(int startPos, float frameRate, float& localAudioOffset);
-  virtual int  getEndIndex(int endPos, float frameRate, float& localAudioOffset);
 
 protected:
   // header list

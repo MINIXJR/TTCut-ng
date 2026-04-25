@@ -97,7 +97,6 @@ HEADERS     = common/ttcut.h\
               data/ttopenaudiotask.h\
               data/ttopensubtitletask.h\
               data/ttcutvideotask.h\
-              data/ttcutaudiotask.h\
               data/ttcutsubtitletask.h\
               data/ttcutpreviewtask.h\
               data/ttframesearchtask.h\
@@ -188,7 +187,6 @@ SOURCES     = common/ttcut.cpp\
               data/ttopenaudiotask.cpp\
               data/ttopensubtitletask.cpp\
               data/ttcutvideotask.cpp\
-              data/ttcutaudiotask.cpp\
               data/ttcutsubtitletask.cpp\
               data/ttcutpreviewtask.cpp\
               data/ttframesearchtask.cpp\

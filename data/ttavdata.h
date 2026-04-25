@@ -143,7 +143,7 @@ class TTAVData : public QObject
 
     void onUserAbortRequest();
 
-    void onDoCut(QString tgtFileName, TTCutList* cutList);
+    void onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly = false);
     void onCutFinished();
     void onCutAborted();
 
@@ -218,6 +218,7 @@ class TTAVData : public QObject
                                            const QStringList& audioFilePaths,
                                            const QStringList& subtitleFilePaths = QStringList());
     void           doH264Cut(QString tgtFileName, TTCutList* cutList);
+    void           doAudioOnlyCut(QString tgtFileName, TTCutList* cutList);
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;
@@ -253,6 +254,10 @@ class TTAVData : public QObject
     // Pending delay overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
 
+    // Last-cut metadata (set by the cut path, read by the completion dialog)
+    bool    mLastCutWasAudioOnly = false;
+    QString mLastCutOutputSummary;
+
   public:
     // Count extra frames before a given frame index (for audio time correction)
     int countExtraFramesBefore(int frameIndex) const;
@@ -267,6 +272,31 @@ class TTAVData : public QObject
     // Detect audio bursts at cut boundaries using extra-frame-corrected probe times.
     CutBurstInfo detectCutOutBurst(const TTCutItem& item) const;
     CutBurstInfo detectCutInBurst(const TTCutItem& item)  const;
+
+    // Audio-cut plan with audio-frame-boundary snapping and feed-forward drift
+    // compensation. keepList holds (startTime, endTime) pairs in seconds whose
+    // boundaries align with the source audio's frame grid; cutAudioStream's
+    // skip/stop rules then keep exactly the planned frames per segment.
+    // drifts holds the cumulative A/V offset in ms after each segment (audio
+    // length minus video length, sum of all preceding segments). Bounded to
+    // ±½ audio-frame in steady state.
+    struct AudioCutPlan {
+      QList<QPair<double, double>> keepList;
+      QList<float>                 drifts;
+    };
+    // Plan from a video-domain keep list: (startTime, endTime) per segment in
+    // seconds (already extra-frame-corrected, B-frame-adjusted, etc., but
+    // without per-track audio delay). Adds the delay and snaps to audio-frame
+    // boundaries with feed-forward.
+    AudioCutPlan planAudioCut(TTAudioStream* audioStream,
+                              const QList<QPair<double, double>>& videoKeepList,
+                              int delayMs) const;
+
+    // Last-cut metadata so the main window can build a meaningful completion
+    // message after an audio-only cut (where cutVideoName + container extension
+    // do not point at the actual output file).
+    bool    lastCutWasAudioOnly()  const { return mLastCutWasAudioOnly; }
+    QString lastCutOutputSummary() const { return mLastCutOutputSummary; }
 };
 
 

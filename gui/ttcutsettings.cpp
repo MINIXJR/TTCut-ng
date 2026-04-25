@@ -204,6 +204,8 @@ void TTCutSettings::readSettings()
   TTCut::muxPause        = value( "MuxPause/",        TTCut::muxPause ).toBool();
   TTCut::mkvCreateChapters  = value( "MkvCreateChapters/",  TTCut::mkvCreateChapters ).toBool();
   TTCut::mkvChapterInterval = value( "MkvChapterInterval/", TTCut::mkvChapterInterval ).toInt();
+  TTCut::audioOnlyFormat       = value( "AudioOnlyFormat/",       TTCut::audioOnlyFormat       ).toInt();
+  TTCut::audioOnlyBitrateKbps  = value( "AudioOnlyBitrateKbps/",  TTCut::audioOnlyBitrateKbps  ).toInt();
   endGroup();
 
   // Chapter settings
@@ -372,6 +374,8 @@ void TTCutSettings::writeSettings()
   setValue( "MuxPause/",        TTCut::muxPause );
   setValue( "MkvCreateChapters/",  TTCut::mkvCreateChapters );
   setValue( "MkvChapterInterval/", TTCut::mkvChapterInterval );
+  setValue( "AudioOnlyFormat/",       TTCut::audioOnlyFormat );
+  setValue( "AudioOnlyBitrateKbps/",  TTCut::audioOnlyBitrateKbps );
   endGroup();
 
   // Chapter settings

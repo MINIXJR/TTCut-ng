@@ -67,6 +67,7 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void onAVCut();
     void onAVSelCut();
     void onAudioCut();
+    void onAudioSelCut();
     void onEditCutOut(const TTCutItem& item, int cutOut);
     void onContextMenuRequest(const QPoint& point);
     void onEntryDuplicate();

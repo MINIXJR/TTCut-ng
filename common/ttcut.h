@@ -213,6 +213,15 @@ class TTCut
    static bool    mkvCreateChapters;   // Create chapters in MKV (default: true)
    static int     mkvChapterInterval;  // Chapter interval in minutes (default: 5)
 
+   // Audio-only cut output settings
+   // Format: 0 = Original ES per track (stream-copy, multiple files)
+   //         1 = Matroska Audio (.mka, single multi-track file, stream-copy)
+   //         2 = MP3 (re-encode, one .mp3 per track)
+   //         3 = AAC (re-encode, one .m4a per track)
+   enum AudioOnlyFormat { AOF_OriginalES = 0, AOF_OriginalMKA = 1, AOF_MP3 = 2, AOF_AAC = 3 };
+   static int     audioOnlyFormat;     // AudioOnlyFormat preset (default 0)
+   static int     audioOnlyBitrateKbps; // 0 = match source bitrate (default 0)
+
    // --------------------------------------------------------------
    // chapter settings
    // --------------------------------------------------------------

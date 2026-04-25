@@ -63,13 +63,27 @@
 
 - ~~**Schnittliste "Audio-Versatz" Spalte überarbeiten**~~ → **DONE** (v0.66.0)
 
-- **Audio-Drift Minimierung durch optimierte Rundungsstrategie**
-  - `getStartIndex`/`getEndIndex` in `avstream/ttavstream.cpp` nutzen `round()` (lokal optimal)
-  - Drift akkumuliert sich über Schnitte, weil Video-Raster (40ms@25fps) und Audio-Raster (24ms@MP2) nicht aufgehen
-  - Idee: Drift-aware Rounding — Rundungsrichtung wählen die akkumulierten Drift minimiert
-  - Problem: Korrektur-Granularität (1 Audio-Frame) > typischer Drift → Überkompensation/Oszillation
-  - Analyse nötig: Ist drift-aware rounding in Summe besser oder nur anders-schlecht?
-  - Alternative: Audio an Schnittgrenzen re-encoden (drift=0, aber nicht mehr lossless)
+- ~~**Audio-Drift Minimierung durch optimierte Rundungsstrategie**~~ → **DONE**
+  - `TTAVData::planAudioCut()` in `data/ttavdata.cpp` snappt pro Segment auf
+    Audio-Frame-Grenzen mit Feed-Forward-Kompensation des akkumulierten Drift
+  - Drift bleibt steady-state ±½ Audio-Frame statt monoton zu wachsen
+  - Alle drei Sites (MPEG-2 final, H.264 final, Preview) und Drift-Anzeige
+    nutzen denselben Plan
+  - Tote Funktionen `getStartIndex`/`getEndIndex` und `TTCutAudioTask` entfernt
+
+- **Echte Fortschrittsanzeige für `cutAudioStream` / Audio-Only-Cut**
+  - Aktuell springt der Balken pro Audiospur in einem Schritt, da `TTFFmpegWrapper::cutAudioStream` keine Pro-Packet-Progress-Callbacks liefert
+  - Lösung: Optionalen `std::function<void(int percent)>` Callback in `cutAudioStream` einbauen, an `av_read_frame`-Loop koppeln (bekanntes Total über `endTime − startTime` pro Segment)
+  - Audio-Only-Pfad in `TTAVData::doAudioOnlyCut` daraus echte Step-Updates emittieren
+  - Auch dem MP3/AAC-Re-Encode-Pfad (Stage 2) gleich mitgeben
+
+- **Dead-Code-Audit (Medium Priority)**
+  - Systematische Suche nach toten Klassen/Funktionen/Includes (Beispiel:
+    `TTCutAudioTask` blieb seit der v0.60.0-libav-Migration jahrelang stehen)
+  - Vorgehen: clangd-Suche nach Klassen ohne lebende Caller, dann
+    cross-check via grep, dann entfernen
+  - Außerdem: ungenutzte includes in .cpp/.h entfernen (clangd `unused-includes`)
+  - Sollte als wiederkehrender Wartungs-Pass laufen, nicht als Einmalaktion
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)

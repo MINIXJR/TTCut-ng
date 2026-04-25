@@ -213,6 +213,10 @@ int     TTCut::outputContainer = 1;  // Default to MKV for modern codecs
 bool    TTCut::mkvCreateChapters  = true;   // Create chapters by default
 int     TTCut::mkvChapterInterval = 5;      // Every 5 minutes
 
+// Audio-only cut output settings
+int     TTCut::audioOnlyFormat       = TTCut::AOF_OriginalES;
+int     TTCut::audioOnlyBitrateKbps  = 0;   // 0 = match source bitrate
+
 // --------------------------------------------------------------
 // chapter settings
 // --------------------------------------------------------------

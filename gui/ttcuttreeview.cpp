@@ -44,6 +44,8 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QModelIndex>
+#include <QPainter>
+#include <QPixmap>
 #include <QPoint>
 #include <QStyle>
 
@@ -78,33 +80,70 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   pbEntryDelete->setStyleSheet("QPushButton { color: #cc4444; }");  // Red for destructive
   pbEntryCopy->setIcon(QIcon::fromTheme("edit-copy", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
 
-  // Preview button - Cyan (playback/transport)
-  pbPreview->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogApplyButton)));
-  pbPreview->setStyleSheet("QPushButton { background-color: #227777; color: white; }"
-                           "QPushButton:hover { background-color: #338888; }");
+  // Cut/Preview button accent palette.
+  // Backgrounds picked for >=5:1 contrast with white text (WCAG AA) so the
+  // labels stay readable in dark *and* light Qt themes — we fix both fg and
+  // bg, the surrounding theme only colours neighbouring widgets.
+  // "All-cuts" buttons get bold weight; "selection" buttons get regular.
+  static const QString kPreviewBg = "#1f6868";  // teal
+  static const QString kPreviewHv = "#2a8585";
+  static const QString kAVBg      = "#2d7a2d";  // green
+  static const QString kAVHv      = "#3d8a3d";
+  static const QString kAudioBg   = "#2a5cad";  // blue
+  static const QString kAudioHv   = "#3a6dbd";
 
-  // Cut buttons - green accent (main action, same as Cut-In)
-  pbCutAudioVideo->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogSaveButton)));
-  pbCutAudioVideo->setStyleSheet("QPushButton { background-color: #2d7a2d; color: white; font-weight: bold; }"
-                                  "QPushButton:hover { background-color: #3d8a3d; }");
-  pbCutSelected->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogSaveButton)));
-  pbCutSelected->setStyleSheet("QPushButton { background-color: #2d7a2d; color: white; }"
-                                "QPushButton:hover { background-color: #3d8a3d; }");
-  pbCutAudio->setIcon(QIcon::fromTheme("audio-x-generic", style->standardIcon(QStyle::SP_DriveCDIcon)));
-  pbCutAudio->setStyleSheet("QPushButton { color: #4488ff; }");  // Blue like I-Frame
+  auto styleAccent = [](const QString& bg, const QString& hv, bool bold) -> QString {
+    return QString("QPushButton { background-color: %1; color: white; %2 }"
+                   "QPushButton:hover { background-color: %3; }")
+                   .arg(bg, bold ? "font-weight: bold;" : "", hv);
+  };
+
+  // Theme icons (Breeze/Plasma etc.) tinted to white via alpha-mask paint.
+  // Plasma's icon cache renders the same theme key slightly differently
+  // between sibling buttons; replacing the colour with a flat fill makes
+  // every instance pixel-identical and matches the white button label.
+  auto tintIcon = [](const QIcon& src, const QColor& color, int size) -> QIcon {
+    QPixmap pm = src.pixmap(size, size);
+    if (pm.isNull()) return src;
+    QPainter p(&pm);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(pm.rect(), color);
+    p.end();
+    return QIcon(pm);
+  };
+
+  const int kIconSize = 16;
+  const QColor kIconColor = Qt::white;
+  QIcon iconCut    = tintIcon(QIcon::fromTheme("edit-cut",        style->standardIcon(QStyle::SP_DialogSaveButton)),  kIconColor, kIconSize);
+  QIcon iconCutAlt = tintIcon(QIcon::fromTheme("edit-cut",        style->standardIcon(QStyle::SP_DialogApplyButton)), kIconColor, kIconSize);
+  QIcon iconAudio  = tintIcon(QIcon::fromTheme("audio-x-generic", style->standardIcon(QStyle::SP_DriveCDIcon)),       kIconColor, kIconSize);
+
+  pbPreview->setIcon(iconCutAlt);
+  pbPreview->setStyleSheet(styleAccent(kPreviewBg, kPreviewHv, false));
+
+  pbCutAudioVideo->setIcon(iconCut);
+  pbCutAudioVideo->setStyleSheet(styleAccent(kAVBg, kAVHv, true));
+  pbCutSelected->setIcon(iconCut);
+  pbCutSelected->setStyleSheet(styleAccent(kAVBg, kAVHv, false));
+
+  pbCutAudio->setIcon(iconAudio);
+  pbCutAudio->setStyleSheet(styleAccent(kAudioBg, kAudioHv, true));
+  pbCutAudioSelected->setIcon(iconAudio);
+  pbCutAudioSelected->setStyleSheet(styleAccent(kAudioBg, kAudioHv, false));
 
   // actions for context menu
   createActions();
 
   // signal and slot connections
-  connect(pbEntryUp,       SIGNAL(clicked()),                                 SLOT(onEntryUp()));
-  connect(pbEntryDown,     SIGNAL(clicked()),                                 SLOT(onEntryDown()));
-  connect(pbEntryDelete,   SIGNAL(clicked()),                                 SLOT(onEntryDelete()));
-  connect(pbEntryCopy,     SIGNAL(clicked()),                                 SLOT(onEntryDuplicate()));
-  connect(pbPreview,       SIGNAL(clicked()),                                 SLOT(onPreview()));
-  connect(pbCutAudioVideo, SIGNAL(clicked()),                                 SLOT(onAVCut()));
-  connect(pbCutSelected,   SIGNAL(clicked()),                                 SLOT(onAVSelCut()));
-  connect(pbCutAudio,      SIGNAL(clicked()),                                 SLOT(onAudioCut()));
+  connect(pbEntryUp,         SIGNAL(clicked()),                                 SLOT(onEntryUp()));
+  connect(pbEntryDown,       SIGNAL(clicked()),                                 SLOT(onEntryDown()));
+  connect(pbEntryDelete,     SIGNAL(clicked()),                                 SLOT(onEntryDelete()));
+  connect(pbEntryCopy,       SIGNAL(clicked()),                                 SLOT(onEntryDuplicate()));
+  connect(pbPreview,         SIGNAL(clicked()),                                 SLOT(onPreview()));
+  connect(pbCutAudioVideo,   SIGNAL(clicked()),                                 SLOT(onAVCut()));
+  connect(pbCutSelected,     SIGNAL(clicked()),                                 SLOT(onAVSelCut()));
+  connect(pbCutAudio,        SIGNAL(clicked()),                                 SLOT(onAudioCut()));
+  connect(pbCutAudioSelected,SIGNAL(clicked()),                                 SLOT(onAudioSelCut()));
   connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
   connect(videoCutList,    SIGNAL(itemClicked(QTreeWidgetItem*, int)),        SLOT(onEntrySelected(QTreeWidgetItem*, int)));
   connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
@@ -522,9 +561,19 @@ void TTCutTreeView::onAVSelCut()
 }
 
 /*!
- * onAudioCut
+ * onAudioCut — audio variant of "A/V Cut": always all entries, ignoring selection.
  */
 void TTCutTreeView::onAudioCut()
+{
+  if (mAVData == 0) return;
+
+  emit audioVideoCut(true, cutListFromSelection(true));
+}
+
+/*!
+ * onAudioSelCut — audio variant of "Selection Cut": only selected entries.
+ */
+void TTCutTreeView::onAudioSelCut()
 {
   if (mAVData == 0) return;
 

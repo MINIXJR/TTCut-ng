@@ -50,6 +50,7 @@
 #include "../extern/ttmkvmergeprovider.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttesinfo.h"
+#include "../avstream/ttavheader.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../extern/ttessmartcut.h"
 
@@ -1083,9 +1084,42 @@ QString TTAVData::createSubtitleCutFileName(QString cutBaseFileName, QString sub
 // Audio and video cut
 //
 //! Do the audio and video cut for given cut-list
-void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
+void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 {
   if (cutList == 0) cutList = mpCutList;
+
+  // Reset last-cut metadata; non-audio-only path leaves it cleared.
+  mLastCutWasAudioOnly = false;
+  mLastCutOutputSummary.clear();
+
+  if (audioOnly) {
+    // Burst warning still useful, dispatch the rest to the audio-only pipeline.
+    if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
+      QStringList burstWarnings;
+      for (int i = 0; i < cutList->count(); i++) {
+        TTCutItem item = cutList->at(i);
+        CutBurstInfo bout = detectCutOutBurst(item);
+        if (bout.present) burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
+                                          .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
+        CutBurstInfo bin = detectCutInBurst(item);
+        if (bin.present) burstWarnings << tr("Schnitt %1: Audio-Burst am Anfang (%2 dB)")
+                                          .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
+      }
+      if (!burstWarnings.isEmpty()) {
+        QString msg = tr("The following cuts have detected audio bursts:\n\n")
+                    + burstWarnings.join("\n")
+                    + tr("\n\nUse preview to check if shift is needed.");
+        int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
+                                       msg, tr("Cut anyway"), tr("Cancel"));
+        if (ret == 1) {
+          emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
+          return;
+        }
+      }
+    }
+    doAudioOnlyCut(tgtFileName, cutList);
+    return;
+  }
 
   // Detect stream type from first cut item
   TTVideoStream* firstStream = cutList->at(0).avDataItem()->videoStream();
@@ -1181,19 +1215,19 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
     TTVideoStream* vStream = cutList->at(0).avDataItem()->videoStream();
     double frameRate = vStream->frameRate();
     int delayMs = cutList->at(0).avDataItem()->audioListItemAt(i).getDelayMs();
-    double delaySeconds = delayMs / 1000.0;
-    QList<QPair<double, double>> audioKeepList;
+
+    // Build video-domain keep list (extra-frame-corrected, no delay yet)
+    QList<QPair<double, double>> videoKeepList;
     for (int c = 0; c < cutList->count(); c++) {
       TTCutItem ci = cutList->at(c);
       int extraIn  = countExtraFramesBefore(ci.cutInIndex());
       int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
-      double cutInTime  = (ci.cutInIndex()  - extraIn)  / frameRate + delaySeconds;
-      double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate + delaySeconds;
-      // Clamp to valid range (cutInTime >= 0, cutOutTime >= cutInTime)
-      cutInTime  = qMax(0.0, cutInTime);
-      cutOutTime = qMax(cutInTime, cutOutTime);
-      audioKeepList.append(qMakePair(cutInTime, cutOutTime));
+      double cutInTime  = (ci.cutInIndex()      - extraIn)  / frameRate;
+      double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+      videoKeepList.append(qMakePair(cutInTime, cutOutTime));
     }
+    AudioCutPlan plan = planAudioCut(audioStream, videoKeepList, delayMs);
+    QList<QPair<double, double>> audioKeepList = plan.keepList;
     if (delayMs != 0) {
       log->infoMsg(__FILE__, __LINE__, QString("Audio track %1: applying delay %2 ms").arg(i+1).arg(delayMs));
     }
@@ -1409,19 +1443,12 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       QString cutAudioFile = QFileInfo(QDir(TTCut::cutDirPath),
           QFileInfo(sourceFile).completeBaseName() + QString("_audio%1.").arg(i+1) + audioExt).absoluteFilePath();
 
-      // Build per-track audioKeepList by applying this track's delay to the
-      // video-domain keepList (which may already be B-frame-adjusted above).
-      // Each track can have a different delay, so keepList is NOT used directly.
+      // Build per-track audioKeepList from the (B-frame-adjusted) video keepList,
+      // applying delay and snapping to audio-frame boundaries with feed-forward
+      // drift compensation.
       int audioDelayMs = avItem->audioListItemAt(i).getDelayMs();
-      double delaySeconds = audioDelayMs / 1000.0;
-      QList<QPair<double, double>> audioKeepList;
-      for (int s = 0; s < keepList.size(); s++) {
-        double cutInTime  = keepList[s].first  + delaySeconds;
-        double cutOutTime = keepList[s].second + delaySeconds;
-        cutInTime  = qMax(0.0, cutInTime);
-        cutOutTime = qMax(cutInTime, cutOutTime);
-        audioKeepList.append(qMakePair(cutInTime, cutOutTime));
-      }
+      AudioCutPlan plan = planAudioCut(audioStream, keepList, audioDelayMs);
+      QList<QPair<double, double>> audioKeepList = plan.keepList;
       if (audioDelayMs != 0) {
         log->infoMsg(__FILE__, __LINE__, QString("Audio track %1: applying delay %2 ms to keepList").arg(i+1).arg(audioDelayMs));
       }
@@ -1695,6 +1722,143 @@ void TTAVData::onCutAborted()
   disconnect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onCutAborted()));
 }
 
+// /////////////////////////////////////////////////////////////////////////////
+// Audio-only cut: extracts the audio track(s) for the kept segments without
+// touching video. Output format is selected by TTCut::audioOnlyFormat:
+//   AOF_OriginalES   — one ES file per track (.ac3, .mp2, ...)
+//   AOF_OriginalMKA  — one .mka with all tracks (stream-copy)
+//   AOF_MP3          — one .mp3 per track (re-encode, Stage 2)
+//   AOF_AAC          — one .m4a per track (re-encode, Stage 2)
+// /////////////////////////////////////////////////////////////////////////////
+void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
+{
+  mLastCutWasAudioOnly = true;
+  mLastCutOutputSummary.clear();
+
+  if (cutList == 0 || cutList->count() == 0) return;
+  TTAVItem* avItem = cutList->at(0).avDataItem();
+  if (!avItem || avItem->audioCount() == 0) return;
+  TTVideoStream* vStream = avItem->videoStream();
+  if (!vStream) return;
+  double frameRate = vStream->frameRate();
+
+  emit statusReport(0, StatusReportArgs::Init, tr("Initializing audio cut..."), 0);
+  qApp->processEvents();
+
+  // Build video-domain keep list (extra-frame-corrected, no delay yet)
+  QList<QPair<double, double>> videoKeepList;
+  for (int c = 0; c < cutList->count(); c++) {
+    TTCutItem ci = cutList->at(c);
+    int extraIn  = countExtraFramesBefore(ci.cutInIndex());
+    int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
+    double cutIn  = (ci.cutInIndex()      - extraIn)  / frameRate;
+    double cutOut = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+    videoKeepList.append(qMakePair(cutIn, cutOut));
+  }
+
+  emit statusReport(0, StatusReportArgs::Start, tr("Cutting audio tracks..."), avItem->audioCount());
+  qApp->processEvents();
+
+  // Stage 1: stream-copy each track to its source codec
+  QStringList trackFiles;
+  QStringList trackLanguages;
+  QList<float> firstTrackDrifts;
+
+  for (int i = 0; i < avItem->audioCount(); i++) {
+    TTAudioStream* audioStream = avItem->audioStreamAt(i);
+    int delayMs = avItem->audioListItemAt(i).getDelayMs();
+
+    AudioCutPlan plan = planAudioCut(audioStream, videoKeepList, delayMs);
+    if (plan.keepList.isEmpty()) {
+      log->errorMsg(__FILE__, __LINE__, QString("Audio track %1: empty plan").arg(i+1));
+      continue;
+    }
+    if (i == 0) firstTrackDrifts = plan.drifts;
+
+    QString tgtAudioFilePath = createAudioCutFileName(tgtFileName, audioStream->fileName(), i+1);
+    if (QFileInfo(tgtAudioFilePath).exists()) QFile::remove(tgtAudioFilePath);
+
+    QList<int> targetAcmods;
+    QString audioExt = QFileInfo(audioStream->filePath()).suffix().toLower();
+    if (TTCut::normalizeAcmod && audioExt == "ac3") {
+      for (int s = 0; s < plan.keepList.size(); s++) {
+        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+            audioStream->filePath(), plan.keepList[s].first, plan.keepList[s].second);
+        targetAcmods.append(aInfo.mainAcmod);
+      }
+    }
+
+    TTFFmpegWrapper ffmpegAudio;
+    if (ffmpegAudio.cutAudioStream(audioStream->filePath(), tgtAudioFilePath,
+                                    plan.keepList, TTCut::normalizeAcmod, targetAcmods)) {
+      trackFiles     << tgtAudioFilePath;
+      trackLanguages << avItem->audioListItemAt(i).getLanguage();
+      log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(tgtAudioFilePath));
+    } else {
+      log->errorMsg(__FILE__, __LINE__, QString("Audio cut failed for track %1").arg(i+1));
+    }
+
+    emit statusReport(0, StatusReportArgs::Step, tr("Audio track %1 done").arg(i+1), i+1);
+    qApp->processEvents();
+  }
+
+  // Drift display (first track only, matches existing convention)
+  emit cutAudioDriftCalculated(firstTrackDrifts);
+
+  if (trackFiles.isEmpty()) {
+    log->errorMsg(__FILE__, __LINE__, "Audio-only cut produced no output files");
+    mLastCutOutputSummary = tr("Audio cut failed");
+    emit statusReport(0, StatusReportArgs::Exit, tr("Audio cut failed"), 0);
+    emit cutFinished();
+    return;
+  }
+
+  // Dispatch by chosen output format
+  switch (TTCut::audioOnlyFormat) {
+    case TTCut::AOF_OriginalES: {
+      QString dir = QFileInfo(trackFiles.first()).absolutePath();
+      log->infoMsg(__FILE__, __LINE__,
+                   QString("Audio-only cut complete: %1 ES file(s) in %2")
+                     .arg(trackFiles.size()).arg(dir));
+      mLastCutOutputSummary = tr("%1 audio file(s) in %2").arg(trackFiles.size()).arg(dir);
+      break;
+    }
+
+    case TTCut::AOF_OriginalMKA: {
+      QString mkaPath = QFileInfo(QDir(TTCut::cutDirPath),
+                                  QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
+      if (QFileInfo(mkaPath).exists()) QFile::remove(mkaPath);
+
+      emit statusReport(0, StatusReportArgs::Step, tr("Muxing audio tracks into MKA..."), 0);
+      qApp->processEvents();
+
+      TTMkvMergeProvider mkvProv;
+      if (!mkvProv.muxAudioOnly(mkaPath, trackFiles, trackLanguages)) {
+        log->errorMsg(__FILE__, __LINE__,
+                      QString("MKA mux failed: %1").arg(mkvProv.lastError()));
+        mLastCutOutputSummary = tr("MKA mux failed: %1").arg(mkvProv.lastError());
+      } else {
+        log->infoMsg(__FILE__, __LINE__, QString("Audio-only cut complete: %1").arg(mkaPath));
+        for (const QString& f : trackFiles) QFile::remove(f);
+        mLastCutOutputSummary = mkaPath;
+      }
+      break;
+    }
+
+    case TTCut::AOF_MP3:
+    case TTCut::AOF_AAC: {
+      QString dir = QFileInfo(trackFiles.first()).absolutePath();
+      log->warningMsg(__FILE__, __LINE__,
+                      "MP3/AAC re-encoding not implemented yet — leaving original ES files");
+      mLastCutOutputSummary = tr("MP3/AAC re-encoding not implemented yet — original ES files in %1").arg(dir);
+      break;
+    }
+  }
+
+  emit statusReport(0, StatusReportArgs::Exit, tr("Audio cut complete"), 0);
+  emit cutFinished();
+}
+
 void TTAVData::onStatusReport(int state, const QString& msg, quint64 value)
 {
   emit statusReport(0, state, msg, value);
@@ -1789,6 +1953,63 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
 
   info.present = detected;
   return info;
+}
+
+// *****************************************************************************
+// Build the audio cut plan: per-segment (startTime, endTime) snapped to the
+// source audio's frame grid, with feed-forward drift compensation across
+// segments. Without this, each segment loses up to one audio frame at start
+// and end (cutAudioStream's "fit completely" rule), and the loss accumulates
+// monotonically over the whole timeline. With feed-forward, the cumulative
+// drift stays bounded ±½ audio-frame in steady state.
+//
+// The resulting (startTime, endTime) pairs are exact multiples of the audio
+// frame duration, so cutAudioStream's skip/stop rules keep precisely the
+// planned frames per segment.
+// *****************************************************************************
+TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
+                                              const QList<QPair<double, double>>& videoKeepList,
+                                              int delayMs) const
+{
+  AudioCutPlan plan;
+  if (!audioStream || videoKeepList.isEmpty()) return plan;
+
+  TTAudioHeader* hdr = audioStream->headerAt(0);
+  if (!hdr) return plan;
+
+  double audioFrameMs = hdr->frame_time;       // ms per audio frame, codec-aware
+  if (audioFrameMs <= 0) return plan;
+  double audioFrameSec = audioFrameMs / 1000.0;
+
+  double delaySec = delayMs / 1000.0;
+  double runningDriftMs = 0.0;                 // audio_so_far - video_so_far, in ms
+
+  for (int c = 0; c < videoKeepList.size(); c++) {
+    double videoStartSec = qMax(0.0, videoKeepList[c].first  + delaySec);
+    double videoEndSec   = qMax(videoStartSec, videoKeepList[c].second + delaySec);
+
+    double videoSegMs = (videoEndSec - videoStartSec) * 1000.0;
+
+    // Snap segment start to the nearest audio-frame boundary in the source.
+    int    startFrame    = (int)qMax<double>(0.0, qRound(videoStartSec / audioFrameSec));
+    double audioStartSec = startFrame * audioFrameSec;
+
+    // Choose the number of audio frames so that, after this segment, the
+    // accumulated audio length matches the accumulated video length as
+    // closely as possible. Compensates the drift carried in from previous
+    // segments (Feed-Forward).
+    double targetAudioMs = videoSegMs - runningDriftMs;
+    int    numFrames     = (int)qMax<double>(1.0, qRound(targetAudioMs / audioFrameMs));
+    double actualAudioMs = numFrames * audioFrameMs;
+    double audioEndSec   = audioStartSec + actualAudioMs / 1000.0;
+
+    runningDriftMs += actualAudioMs - videoSegMs;
+
+    plan.keepList.append(qMakePair(audioStartSec, audioEndSec));
+    plan.drifts.append(static_cast<float>(runningDriftMs));
+  }
+
+  return plan;
 }
 
 TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const

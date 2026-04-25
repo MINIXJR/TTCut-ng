@@ -1010,7 +1010,7 @@ void TTCutMainWindow::onCutPreviewFinished(TTCutList* cutList)
 /* /////////////////////////////////////////////////////////////////////////////
  * Do video and audio cut
  */
-void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
+void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
 {
   // no video stream open or no cut sequences defined; exit
   if (mpAVData->avCount() == 0 || cutData->count() == 0 )
@@ -1043,7 +1043,7 @@ void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
   }
 
   // start dialog for cut options
-  TTCutAVCutDlg* cutAVDlg = new TTCutAVCutDlg(this);
+  TTCutAVCutDlg* cutAVDlg = new TTCutAVCutDlg(this, audioOnly);
 
   // user cancel; exit
   if ( cutAVDlg->exec() == 1 )
@@ -1060,7 +1060,7 @@ void TTCutMainWindow::onAudioVideoCut(bool, TTCutList* cutData)
   bool connected = connect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
   qDebug() << "Connection result:" << connected;
 
-  mpAVData->onDoCut(QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath(), cutData);
+  mpAVData->onDoCut(QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath(), cutData, audioOnly);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1070,6 +1070,13 @@ void TTCutMainWindow::onCutFinished()
 {
   qDebug() << "TTCutMainWindow::onCutFinished() called!";
   disconnect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
+
+  if (mpAVData->lastCutWasAudioOnly()) {
+    QString summary = mpAVData->lastCutOutputSummary();
+    QMessageBox::information(this, tr("Audio Cut Complete"),
+        tr("Audio cutting has finished.\n\n%1").arg(summary));
+    return;
+  }
 
   QString outputFile = QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath();
   qDebug() << "Showing completion dialog for:" << outputFile;

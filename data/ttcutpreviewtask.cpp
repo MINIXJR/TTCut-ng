@@ -210,23 +210,20 @@ void TTCutPreviewTask::operation()
           TTAudioStream* aStream = tmpCutList->at(0).avDataItem()->audioStreamAt(0);
           TTVideoStream* vs = tmpCutList->at(0).avDataItem()->videoStream();
           double fps = vs->frameRate();
-          // Apply per-track audio delay (first audio track only for preview)
           int audioDelayMs = tmpCutList->at(0).avDataItem()->audioListItemAt(0).getDelayMs();
-          double audioDelaySec = audioDelayMs / 1000.0;
 
-          QList<QPair<double, double>> audioKeepList;
+          // Build video-domain keep list (extra-frame-corrected, no delay yet)
+          QList<QPair<double, double>> videoKeepList;
           for (int c = 0; c < tmpCutList->count(); c++) {
             TTCutItem ci = tmpCutList->at(c);
-            // Correct for extra frames: subtract extras before each cut point
-            // so audio position matches real content time, not inflated frame count
             int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
             int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
-            double cutIn  = (ci.cutInIndex()  - extraIn)  / fps + audioDelaySec;
-            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps + audioDelaySec;
-            if (cutIn < 0) cutIn = 0;
-            cutOut = qMax(cutIn, cutOut);
-            audioKeepList.append(qMakePair(cutIn, cutOut));
+            double cutIn  = (ci.cutInIndex()      - extraIn)  / fps;
+            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
+            videoKeepList.append(qMakePair(cutIn, cutOut));
           }
+          TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
+          QList<QPair<double, double>> audioKeepList = plan.keepList;
           QString audioExt = QFileInfo(aStream->filePath()).suffix();
           QString cutAudioFile = createPreviewFileName(i + 1, audioExt);
 
@@ -311,20 +308,27 @@ void TTCutPreviewTask::operation()
 
   qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";
 
-  // Calculate accumulated audio boundary drift per cut for the first audio track
+  // Report the cumulative A/V drift after each segment as produced by the
+  // audio cut planner (audio-frame-aligned with feed-forward compensation).
+  // This matches what cutAudioStream actually outputs — no separate model.
   QList<float> audioDrifts;
   if (mpCutList->count() > 0) {
     TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
-    if (driftAvItem && driftAvItem->audioCount() > 0) {
+    if (driftAvItem && driftAvItem->audioCount() > 0 && driftAvItem->videoStream()) {
       TTAudioStream* firstAudio = driftAvItem->audioStreamAt(0);
-      double fr = driftAvItem->videoStream() ? driftAvItem->videoStream()->frameRate() : 25.0;
-      float localOffset = 0.0f;
+      double fr = driftAvItem->videoStream()->frameRate();
+      int    delayMs = driftAvItem->audioListItemAt(0).getDelayMs();
+
+      QList<QPair<double, double>> videoKeepList;
       for (int i = 0; i < mpCutList->count(); i++) {
         TTCutItem item = mpCutList->at(i);
-        firstAudio->getStartIndex(item.cutInIndex(), (float)fr, localOffset);
-        firstAudio->getEndIndex(item.cutOutIndex(), (float)fr, localOffset);
-        audioDrifts.append(localOffset);  // already in ms
+        int extraIn  = mpAVData->countExtraFramesBefore(item.cutInIndex());
+        int extraOut = mpAVData->countExtraFramesBefore(item.cutOutIndex() + 1);
+        double cutIn  = (item.cutInIndex()      - extraIn)  / fr;
+        double cutOut = (item.cutOutIndex() + 1 - extraOut) / fr;
+        videoKeepList.append(qMakePair(cutIn, cutOut));
       }
+      audioDrifts = mpAVData->planAudioCut(firstAudio, videoKeepList, delayMs).drifts;
     }
   }
   emit audioDriftCalculated(audioDrifts);

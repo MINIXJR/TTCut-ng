@@ -44,6 +44,12 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   initMuxTargetList();
   initOutputContainerList();
 
+  // Audio-only format presets
+  cbAudioOnlyFormat->addItem(tr("Original codec (per track)"), TTCut::AOF_OriginalES);
+  cbAudioOnlyFormat->addItem(tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
+  cbAudioOnlyFormat->addItem(tr("MP3"),                        TTCut::AOF_MP3);
+  cbAudioOnlyFormat->addItem(tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
+
   // Enable muxer selection now that we have multiple options
   cbMuxerProg->setEnabled(true);
   cbMuxTarget->setEnabled(true);
@@ -128,6 +134,11 @@ void TTCutSettingsMuxer::setTabData()
   cbMkvCreateChapters->setChecked(TTCut::mkvCreateChapters);
   sbMkvChapterInterval->setValue(TTCut::mkvChapterInterval);
   sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
+
+  // Audio-only preset
+  int aofIdx = cbAudioOnlyFormat->findData(TTCut::audioOnlyFormat);
+  cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
+  sbAudioOnlyBitrate->setValue(TTCut::audioOnlyBitrateKbps);
 }
 
 void TTCutSettingsMuxer::getTabData()
@@ -138,6 +149,10 @@ void TTCutSettingsMuxer::getTabData()
   // MKV chapter settings
   TTCut::mkvCreateChapters  = cbMkvCreateChapters->isChecked();
   TTCut::mkvChapterInterval = sbMkvChapterInterval->value();
+
+  // Audio-only preset
+  TTCut::audioOnlyFormat       = cbAudioOnlyFormat->currentData().toInt();
+  TTCut::audioOnlyBitrateKbps  = sbAudioOnlyBitrate->value();
 
   QFileInfo fInfo(TTCut::muxOutputPath);
 

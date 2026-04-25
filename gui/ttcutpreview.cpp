@@ -35,7 +35,6 @@
 #include "../data/ttavlist.h"
 #include "../data/ttcutpreviewtask.h"
 #include "../data/ttcutvideotask.h"
-#include "../data/ttcutaudiotask.h"
 #include "../extern/ttessmartcut.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../extern/ttmkvmergeprovider.h"

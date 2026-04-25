@@ -55,6 +55,12 @@ public:
              const QStringList& audioFiles,
              const QStringList& subtitleFiles = QStringList());
 
+    // Audio-only matroska output (typically .mka): copies all given audio
+    // streams into one matroska container with optional language tags.
+    bool muxAudioOnly(const QString& outputFile,
+                      const QStringList& audioFiles,
+                      const QStringList& audioLanguages = QStringList());
+
     // Always available (libav is linked at build time)
     bool isAvailable() const;
     QString lastError() const { return mLastError; }
