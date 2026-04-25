@@ -577,49 +577,32 @@ void TTCutTreeView::onContextMenuRequest( const QPoint& point)
  */
 void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item)
 {
-    if (!item.avDataItem() || item.avDataItem()->audioCount() == 0) {
+    if (!mAVData || !item.avDataItem() || item.avDataItem()->audioCount() == 0) {
         treeItem->setIcon(5, QIcon());
         treeItem->setToolTip(5, "");
         return;
     }
 
-    TTVideoStream* vStream = item.avDataItem()->videoStream();
-    if (!vStream) return;
-    double frameRate = vStream->frameRate();
-    QString audioFile = item.avDataItem()->audioStreamAt(0)->filePath();
-    int threshold = TTCut::burstThresholdDb;
+    TTAVData::CutBurstInfo bout = mAVData->detectCutOutBurst(item);
+    TTAVData::CutBurstInfo bin  = mAVData->detectCutInBurst(item);
 
-    // Check cut-out boundary
-    double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-    double outBurstDb = 0, outContextDb = 0;
-    bool hasCutOutBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, outBurstDb, outContextDb);
-    if (hasCutOutBurst && threshold != 0 && outBurstDb < threshold)
-        hasCutOutBurst = false;
-
-    // Check cut-in boundary
-    double cutInTime = item.cutInIndex() / frameRate;
-    double inBurstDb = 0, inContextDb = 0;
-    bool hasCutInBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false, inBurstDb, inContextDb);
-    if (hasCutInBurst && threshold != 0 && inBurstDb < threshold)
-        hasCutInBurst = false;
-
-    if (hasCutOutBurst || hasCutInBurst) {
+    if (bout.present || bin.present) {
         treeItem->setIcon(5, style()->standardIcon(QStyle::SP_MessageBoxWarning));
         QString shortText;
-        if (hasCutOutBurst && hasCutInBurst)
+        if (bout.present && bin.present)
             shortText = tr("Burst start+end");
-        else if (hasCutOutBurst)
+        else if (bout.present)
             shortText = tr("Burst end");
         else
             shortText = tr("Burst start");
         treeItem->setText(5, shortText);
 
         QString tip;
-        if (hasCutOutBurst)
-            tip += QString("Audio-Burst am Ende: %1 dB (Context: %2 dB)").arg(outBurstDb, 0, 'f', 1).arg(outContextDb, 0, 'f', 1);
-        if (hasCutInBurst) {
+        if (bout.present)
+            tip += QString("Audio-Burst am Ende: %1 dB (Context: %2 dB)").arg(bout.burstDb, 0, 'f', 1).arg(bout.contextDb, 0, 'f', 1);
+        if (bin.present) {
             if (!tip.isEmpty()) tip += "\n";
-            tip += QString("Audio-Burst am Anfang: %1 dB (Context: %2 dB)").arg(inBurstDb, 0, 'f', 1).arg(inContextDb, 0, 'f', 1);
+            tip += QString("Audio-Burst am Anfang: %1 dB (Context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
         }
         treeItem->setToolTip(5, tip);
     } else {

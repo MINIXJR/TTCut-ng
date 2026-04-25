@@ -257,6 +257,16 @@ class TTAVData : public QObject
     // Count extra frames before a given frame index (for audio time correction)
     int countExtraFramesBefore(int frameIndex) const;
     const QList<int>& extraFrameIndices() const { return mExtraFrameIndices; }
+
+    // Burst detection result for a single cut boundary, after threshold filter.
+    struct CutBurstInfo {
+      bool   present  = false;
+      double burstDb  = 0.0;
+      double contextDb = 0.0;
+    };
+    // Detect audio bursts at cut boundaries using extra-frame-corrected probe times.
+    CutBurstInfo detectCutOutBurst(const TTCutItem& item) const;
+    CutBurstInfo detectCutInBurst(const TTCutItem& item)  const;
 };
 
 

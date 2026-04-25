@@ -350,33 +350,38 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
   pbBurstShift->setText(tr("Shift -1 Frame"));
   mBurstSegmentIdx = -1;
 
-  if (!mpCutList || mpCutList->count() < 2) return;
+  if (!mpAVData || !mpCutList || mpCutList->count() < 2) return;
 
   int numPreview = mpCutList->count() / 2 + 1;
 
-  // Only middle items (transitions) have bursts to check
-  if (iCut <= 0 || iCut >= numPreview - 1) return;
+  if (iCut < 0 || iCut >= numPreview) return;
 
-  // iPos = index of the CutOut entry in the cut list for this transition
+  // Start preview (iCut == 0): only CutIn of first cut is relevant.
+  if (iCut == 0) {
+    TTCutItem cutInItem = mpCutList->at(0);
+    TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
+    if (bin.present) {
+      lblBurstWarning->setText(QString::fromUtf8("\xe2\x9a\xa0 Audio-Burst am Anfang von Schnitt 1 (%1 dB)")
+          .arg(bin.burstDb, 0, 'f', 1));
+      lblBurstWarning->show();
+      pbBurstShift->setText(tr("Shift +1 Frame"));
+      pbBurstShift->show();
+      mBurstSegmentIdx = 0;
+      mBurstIsCutOut = false;
+    }
+    return;
+  }
+
+  // iPos = index of the CutOut entry in the cut list for this transition (or End preview)
   int iPos = (iCut - 1) * 2 + 1;
   if (iPos >= mpCutList->count()) return;
 
   TTCutItem cutOutItem = mpCutList->at(iPos);
-  if (!cutOutItem.avDataItem() || cutOutItem.avDataItem()->audioCount() == 0) return;
+  TTAVData::CutBurstInfo bout = mpAVData->detectCutOutBurst(cutOutItem);
 
-  double frameRate = cutOutItem.avDataItem()->videoStream()->frameRate();
-  QString audioFile = cutOutItem.avDataItem()->audioStreamAt(0)->filePath();
-  int threshold = TTCut::burstThresholdDb;
-
-  // Check CutOut of left segment
-  double cutOutTime = (cutOutItem.cutOutIndex() + 1) / frameRate;
-  double outBurstDb = 0, outContextDb = 0;
-  bool hasCutOutBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, outBurstDb, outContextDb);
-  if (hasCutOutBurst && threshold != 0 && outBurstDb < threshold) hasCutOutBurst = false;
-
-  if (hasCutOutBurst) {
+  if (bout.present) {
     lblBurstWarning->setText(QString::fromUtf8("\xe2\x9a\xa0 Audio-Burst am Ende von Schnitt %1 (%2 dB)")
-        .arg(iCut).arg(outBurstDb, 0, 'f', 1));
+        .arg(iCut).arg(bout.burstDb, 0, 'f', 1));
     lblBurstWarning->show();
     pbBurstShift->show();
     mBurstSegmentIdx = iPos;
@@ -384,17 +389,13 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
     return;  // Show only one burst per transition (CutOut takes priority)
   }
 
-  // Check CutIn of right segment
+  // Check CutIn of right segment (skipped automatically for End preview)
   if (iPos + 1 < mpCutList->count()) {
     TTCutItem cutInItem = mpCutList->at(iPos + 1);
-    double cutInTime = cutInItem.cutInIndex() / frameRate;
-    double inBurstDb = 0, inContextDb = 0;
-    bool hasCutInBurst = TTFFmpegWrapper::detectAudioBurst(audioFile, cutInTime, false, inBurstDb, inContextDb);
-    if (hasCutInBurst && threshold != 0 && inBurstDb < threshold) hasCutInBurst = false;
-
-    if (hasCutInBurst) {
+    TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
+    if (bin.present) {
       lblBurstWarning->setText(QString::fromUtf8("\xe2\x9a\xa0 Audio-Burst am Anfang von Schnitt %1 (%2 dB)")
-          .arg(iCut + 1).arg(inBurstDb, 0, 'f', 1));
+          .arg(iCut + 1).arg(bin.burstDb, 0, 'f', 1));
       lblBurstWarning->show();
       pbBurstShift->setText(tr("Shift +1 Frame"));
       pbBurstShift->show();

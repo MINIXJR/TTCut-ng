@@ -2246,18 +2246,6 @@ bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
 bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundaryTime,
                                         bool isCutOut, double& burstRmsDb, double& contextRmsDb)
 {
-    // Analyze window around boundary
-    // CutOut: 200ms before + 48ms after (catch commercial audio leaking in)
-    // CutIn: 48ms before + 200ms after
-    double windowStart, windowEnd;
-    if (isCutOut) {
-        windowStart = qMax(0.0, boundaryTime - 0.200);
-        windowEnd   = boundaryTime + 0.048;
-    } else {
-        windowStart = qMax(0.0, boundaryTime - 0.048);
-        windowEnd   = boundaryTime + 0.200;
-    }
-
     // Open audio file
     AVFormatContext* fmtCtx = nullptr;
     int ret = avformat_open_input(&fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
@@ -2311,6 +2299,28 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
         return false;
     }
 
+    // Audio frame duration is the natural per-codec snap unit:
+    //   MP2 @48k = 24 ms, AC3 @48k = 32 ms.
+    // planAudioCut snaps the audio cut to this grid, so the boundary can
+    // round at most ½ frame past the video cut. Anything further past the
+    // boundary in the SOURCE can never end up in the kept audio — clamping
+    // the analysis tail to frameDuration/2 keeps the detector honest for
+    // all codecs without a separate code path per format.
+    double frameDuration = (double)decCtx->frame_size / sampleRate;
+    if (frameDuration <= 0) frameDuration = 0.032;  // AC3 default
+    double tailSec = frameDuration * 0.5;
+
+    // Analyze a 200 ms context window on the kept side, plus the tail
+    // (the only part of the source that frame-snapping could leak in).
+    double windowStart, windowEnd;
+    if (isCutOut) {
+        windowStart = qMax(0.0, boundaryTime - 0.200);
+        windowEnd   = boundaryTime + tailSec;
+    } else {
+        windowStart = qMax(0.0, boundaryTime - tailSec);
+        windowEnd   = boundaryTime + 0.200;
+    }
+
     // Seek to window start using stream timebase for precision
     int64_t seekTs = (int64_t)(windowStart / av_q2d(stream->time_base));
     ret = av_seek_frame(fmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
@@ -2319,10 +2329,6 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
         av_seek_frame(fmtCtx, audioIdx, 0, AVSEEK_FLAG_BACKWARD);
     }
     avcodec_flush_buffers(decCtx);
-
-    // Audio frame duration for tolerance (one frame)
-    double frameDuration = (double)decCtx->frame_size / sampleRate;
-    if (frameDuration <= 0) frameDuration = 0.032;  // AC3 default
 
     // Decode audio and collect per-frame RMS values
     AVPacket* packet = av_packet_alloc();
@@ -2342,9 +2348,11 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
             continue;
         }
 
-        // Check if we're past the window
+        // Check if we're past the window. The frame-level reject below uses
+        // a strict windowEnd, so the packet stop matches — no extra frame
+        // duration of slack here either.
         double pktTime = packet->pts * av_q2d(stream->time_base);
-        if (pktTime > windowEnd + frameDuration) {
+        if (pktTime >= windowEnd) {
             av_packet_unref(packet);
             break;
         }
@@ -2355,12 +2363,18 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
 
         while (avcodec_receive_frame(decCtx, frame) == 0) {
             // Check frame timestamp
+            // Keep frames that overlap the window: reject those whose end is
+            // at/before windowStart, or whose start is at/after windowEnd.
+            // Earlier code allowed a +frameDuration slack on the upper bound,
+            // which made the effective tail another full frame longer than
+            // intended and produced false-positive bursts on material that
+            // can't actually leak through frame snapping.
             double frameTime = frame->pts * av_q2d(stream->time_base);
-            if (frameTime < windowStart - frameDuration) {
+            if (frameTime + frameDuration <= windowStart) {
                 av_frame_unref(frame);
                 continue;
             }
-            if (frameTime > windowEnd + frameDuration) {
+            if (frameTime >= windowEnd) {
                 av_frame_unref(frame);
                 goto done_reading;
             }

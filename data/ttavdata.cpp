@@ -1094,22 +1094,18 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList)
 
   // Check for unresolved audio bursts
   if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
-    double frameRate = firstStream->frameRate();
-    QString audioFile = cutList->at(0).avDataItem()->audioStreamAt(0)->filePath();
-    int threshold = TTCut::burstThresholdDb;
-
     QStringList burstWarnings;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      int extraOut = countExtraFramesBefore(item.cutOutIndex() + 1);
-      double cutOutTime = (item.cutOutIndex() + 1 - extraOut) / frameRate;
-      double burstDb = 0, contextDb = 0;
-
-      if (TTFFmpegWrapper::detectAudioBurst(audioFile, cutOutTime, true, burstDb, contextDb)) {
-        if (threshold == 0 || burstDb >= threshold) {
-          burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
-                           .arg(i + 1).arg(burstDb, 0, 'f', 1);
-        }
+      CutBurstInfo bout = detectCutOutBurst(item);
+      if (bout.present) {
+        burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
+                         .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
+      }
+      CutBurstInfo bin = detectCutInBurst(item);
+      if (bin.present) {
+        burstWarnings << tr("Schnitt %1: Audio-Burst am Anfang (%2 dB)")
+                         .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
       }
     }
 
@@ -1761,4 +1757,62 @@ int TTAVData::countExtraFramesBefore(int frameIndex) const
       hi = mid;
   }
   return lo;
+}
+
+// *****************************************************************************
+// Audio-burst detection helpers shared by cut list, preview dialog, and the
+// final-cut warning. All sites must probe the same boundary time, including
+// the extra-frame correction; otherwise threshold checks land on different
+// audio frames and produce inconsistent warnings.
+// *****************************************************************************
+TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
+{
+  CutBurstInfo info;
+  TTAVItem* avItem = item.avDataItem();
+  if (!avItem || avItem->audioCount() == 0) return info;
+
+  TTVideoStream* vStream = avItem->videoStream();
+  if (!vStream) return info;
+  double frameRate = vStream->frameRate();
+  if (frameRate <= 0) return info;
+
+  QString audioFile = avItem->audioStreamAt(0)->filePath();
+
+  int extraOut = countExtraFramesBefore(item.cutOutIndex() + 1);
+  double cutOutTime = (item.cutOutIndex() + 1 - extraOut) / frameRate;
+
+  bool detected = TTFFmpegWrapper::detectAudioBurst(
+      audioFile, cutOutTime, true, info.burstDb, info.contextDb);
+
+  int threshold = TTCut::burstThresholdDb;
+  if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
+
+  info.present = detected;
+  return info;
+}
+
+TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
+{
+  CutBurstInfo info;
+  TTAVItem* avItem = item.avDataItem();
+  if (!avItem || avItem->audioCount() == 0) return info;
+
+  TTVideoStream* vStream = avItem->videoStream();
+  if (!vStream) return info;
+  double frameRate = vStream->frameRate();
+  if (frameRate <= 0) return info;
+
+  QString audioFile = avItem->audioStreamAt(0)->filePath();
+
+  int extraIn = countExtraFramesBefore(item.cutInIndex());
+  double cutInTime = (item.cutInIndex() - extraIn) / frameRate;
+
+  bool detected = TTFFmpegWrapper::detectAudioBurst(
+      audioFile, cutInTime, false, info.burstDb, info.contextDb);
+
+  int threshold = TTCut::burstThresholdDb;
+  if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
+
+  info.present = detected;
+  return info;
 }
