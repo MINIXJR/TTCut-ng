@@ -497,6 +497,8 @@ void TTFFmpegWrapper::parseH264SpsFromExtradata(const uint8_t* data, int size)
         TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
         TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
         int n = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
+        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
+        if (n > 256) return;
         for (int i = 0; i < n; i++) TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
     }
 

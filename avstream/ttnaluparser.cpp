@@ -448,8 +448,35 @@ bool TTNaluParser::parseH264NalUnit(const QByteArray& data, TTNalUnit& nal)
 // H.264 spec Table 7-3: Sequence Parameter Set RBSP syntax
 // We need: sps_id, log2_max_frame_num_minus4, frame_mbs_only_flag
 // ----------------------------------------------------------------------------
-void TTNaluParser::parseH264SpsData(const QByteArray& data)
+// Remove emulation prevention bytes (00 00 03 -> 00 00) to recover RBSP from
+// a NAL unit body. Required before parsing any field that lives past the
+// first ~3 bytes of the NAL, since 00 00 03 escapes can otherwise shift the
+// bit position and produce wrong field values.
+static QByteArray ttNaluRemoveEpb(const QByteArray& nal)
 {
+    QByteArray rbsp;
+    rbsp.reserve(nal.size());
+    for (int i = 0; i < nal.size(); ++i) {
+        if (i + 2 < nal.size() &&
+            (uint8_t)nal[i] == 0x00 &&
+            (uint8_t)nal[i+1] == 0x00 &&
+            (uint8_t)nal[i+2] == 0x03) {
+            rbsp.append(nal[i]);
+            rbsp.append(nal[i+1]);
+            i += 2;  // skip the 0x03 escape byte
+        } else {
+            rbsp.append(nal[i]);
+        }
+    }
+    return rbsp;
+}
+
+void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
+{
+    // Strip emulation-prevention bytes before parsing — scaling lists and
+    // VUI HRD parameters can extend past EP escapes, and reading them
+    // bit-aligned without stripping shifts every following field.
+    QByteArray data = ttNaluRemoveEpb(rawNal);
     if (data.size() < 5) return;
 
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
@@ -523,6 +550,9 @@ void TTNaluParser::parseH264SpsData(const QByteArray& data)
         readExpGolombSE(bytes, data.size(), bitPos);
         readExpGolombSE(bytes, data.size(), bitPos);
         int numRefFrames = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
+        // Cap to bound CPU time for malicious SPS values up to ~2^31.
+        if (numRefFrames > 256) return;
         for (int i = 0; i < numRefFrames; i++) {
             readExpGolombSE(bytes, data.size(), bitPos);
         }

@@ -93,6 +93,7 @@ QString& TTAC3AudioHeader::modeString()
 
 int TTAC3AudioHeader::bitRate()
 {
+  if (frmsizecod >= 38) return 0;
   return 1000*AC3BitRate[frmsizecod];
 }
 

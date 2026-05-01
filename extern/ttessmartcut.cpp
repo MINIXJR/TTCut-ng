@@ -1017,6 +1017,8 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
         spsReadSE(data, dataSize, bitPos);       // offset_for_non_ref_pic
         spsReadSE(data, dataSize, bitPos);       // offset_for_top_to_bottom_field
         uint32_t num_ref = spsReadUE(data, dataSize, bitPos);
+        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
+        if (num_ref > 256) return info;
         for (uint32_t i = 0; i < num_ref; i++)
             spsReadSE(data, dataSize, bitPos);   // offset_for_ref_frame
     }
@@ -4059,6 +4061,8 @@ static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int 
 static void skipHrdParameters(const uint8_t* data, int dataSize, int& bitPos)
 {
     uint32_t cpb_cnt_minus1 = spsReadUE(data, dataSize, bitPos);
+    // Spec H.264 E.1.2: cpb_cnt_minus1 is in [0,31]. Clamp to bound CPU time.
+    if (cpb_cnt_minus1 > 31) cpb_cnt_minus1 = 31;
     spsReadBits(data, dataSize, bitPos, 4);  // bit_rate_scale
     spsReadBits(data, dataSize, bitPos, 4);  // cpb_size_scale
     for (uint32_t i = 0; i <= cpb_cnt_minus1; i++) {
@@ -4141,6 +4145,8 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
         spsReadSE(data, dataSize, bitPos);       // offset_for_non_ref_pic
         spsReadSE(data, dataSize, bitPos);       // offset_for_top_to_bottom_field
         uint32_t num_ref = spsReadUE(data, dataSize, bitPos);
+        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
+        if (num_ref > 256) return QByteArray();
         for (uint32_t i = 0; i < num_ref; i++)
             spsReadSE(data, dataSize, bitPos);   // offset_for_ref_frame
     }

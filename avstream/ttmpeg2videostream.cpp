@@ -461,6 +461,11 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
         break;
       }
 
+      // Reset on every iteration: a malformed IDD with an unknown headerType
+      // would otherwise leave newHeader pointing at the previous iteration's
+      // (already-owned-by-list) object, causing a double-add and double-free.
+      newHeader = NULL;
+
       switch (headerType)
       {
         case TTMpeg2VideoHeader::sequence_start_code:
@@ -487,6 +492,11 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
           newHeader = new TTSequenceEndHeader();
           newHeader->readHeader(stream_buffer, offset);
           break;
+        default:
+          log->warningMsg(__FILE__, __LINE__,
+              "Unknown IDD header type 0x%02X at offset %llu, skipping",
+              (unsigned)headerType, (unsigned long long)offset);
+          continue;
       }
 
       header_list->add( newHeader );
@@ -973,8 +983,21 @@ void TTMpeg2VideoStream::rewriteGOP(quint8* buffer, quint64 abs_pos, TTGOPHeader
  */
 void TTMpeg2VideoStream::rewriteTempRefData(quint8* buffer, TTPicturesHeader* currentPicture, quint64 bufferStartOffset, int tempRefDelta)
 {
+  // Bounds-check before computing offset: a malformed picture-header offset
+  // smaller than bufferStartOffset would underflow the unsigned subtraction
+  // and produce an out-of-range buffer index.
+  if (currentPicture->headerOffset() < bufferStartOffset) {
+    log->errorMsg(__FILE__, __LINE__, "picture offset before buffer start in rewriteTempRefData!");
+    return;
+  }
+
   qint16 newTempRef = (qint16)(currentPicture->temporal_reference-tempRefDelta);
   int    offset     = (int)(currentPicture->headerOffset()-bufferStartOffset)+4; // Hier rein damit!
+
+  if (offset < 0 || offset + 1 >= 262144) {
+    log->errorMsg(__FILE__, __LINE__, "temporal-ref index out of buffer bounds!");
+    return;
+  }
 
   buffer[offset]   = (quint8)(newTempRef >> 2);               // Bit 10 - 2 von 10 Bit Tempref
   buffer[offset+1] = (quint8)(((newTempRef & 0x0003) << 6) +  // Bit 1 und 0 von 10 Bit Tempref

@@ -333,8 +333,8 @@ private:
     bool parseH264NalUnit(const QByteArray& data, TTNalUnit& nal);
     bool parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal);
 
-    // SPS/PPS parsing for PAFF
-    void parseH264SpsData(const QByteArray& data);
+    // SPS/PPS parsing for PAFF (raw NAL body in, EP bytes are stripped internally)
+    void parseH264SpsData(const QByteArray& rawNal);
     void parseH264PpsData(const QByteArray& data);
 
     // H.265 specific parsing
