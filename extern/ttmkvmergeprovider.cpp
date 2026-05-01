@@ -377,6 +377,15 @@ void TTMkvMergeProvider::setLanguage(int trackId, const QString& lang)
 
 void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
 {
+    // Defensive: reject NUL/control bytes regardless of caller. The current
+    // callers all hand in paths produced internally by generateChapterFile(),
+    // but a future caller could plumb in user-controlled data.
+    for (QChar c : chapterFile) {
+        if (c.unicode() < 0x20 || c.unicode() == 0x7F) {
+            qWarning() << "setChapterFile: rejecting path with control bytes";
+            return;
+        }
+    }
     mChapterFile = chapterFile;
 }
 
@@ -437,10 +446,18 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
     if (chapters.isEmpty())
         return;
 
-    outCtx->nb_chapters = chapters.size();
     outCtx->chapters = (AVChapter**)av_malloc(chapters.size() * sizeof(AVChapter*));
+    if (!outCtx->chapters) {
+        qWarning() << "av_malloc failed for chapter array — chapters dropped";
+        return;
+    }
+    outCtx->nb_chapters = 0;  // populated below; only set for entries actually allocated
     for (int i = 0; i < chapters.size(); i++) {
         AVChapter* ch = (AVChapter*)av_mallocz(sizeof(AVChapter));
+        if (!ch) {
+            qWarning() << "av_mallocz failed for chapter" << i << "— remaining chapters dropped";
+            break;
+        }
         ch->id = i;
         ch->time_base = {1, 1000};
         ch->start = chapters[i].first;
@@ -451,6 +468,7 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
                          chapters[i].second.toUtf8().constData(), 0);
         }
         outCtx->chapters[i] = ch;
+        outCtx->nb_chapters = i + 1;
     }
 
     qDebug() << "Added" << chapters.size() << "chapters from" << chapterFile;
@@ -919,7 +937,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                         av_packet_unref(in.pkt);
                     }
 
-                    av_new_packet(in.pkt, merged.size());
+                    if (av_new_packet(in.pkt, merged.size()) < 0) {
+                        setError("av_new_packet failed during PAFF field merge");
+                        return false;
+                    }
                     memcpy(in.pkt->data, merged.constData(), merged.size());
                     in.pkt->flags = firstFlags;  // restore keyframe flag
 

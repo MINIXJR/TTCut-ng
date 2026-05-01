@@ -2038,7 +2038,12 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         // Send packet to decoder, retry on EAGAIN
         AVPacket* packet = av_packet_alloc();
         if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
-        av_new_packet(packet, auData.size());
+        if (av_new_packet(packet, auData.size()) < 0) {
+            qDebug() << "av_new_packet failed";
+            av_packet_free(&packet);
+            for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
+            return false;
+        }
         memcpy(packet->data, auData.constData(), auData.size());
 
         // Tag packet with AU index so we can identify frames in decoder output.
@@ -2591,9 +2596,13 @@ bool TTESSmartCut::setupDecoder()
         extradata.append(mParser.getPPS(i));
 
     if (!extradata.isEmpty()) {
-        mDecoder->extradata_size = extradata.size();
         mDecoder->extradata = static_cast<uint8_t*>(
             av_mallocz(extradata.size() + AV_INPUT_BUFFER_PADDING_SIZE));
+        if (!mDecoder->extradata) {
+            setError("av_mallocz failed for decoder extradata");
+            return false;
+        }
+        mDecoder->extradata_size = extradata.size();
         memcpy(mDecoder->extradata, extradata.constData(), extradata.size());
     }
 
@@ -2838,7 +2847,10 @@ bool TTESSmartCut::decodeFrame(const QByteArray& nalData, AVFrame* frame)
     if (!packet) return false;
 
     if (!nalData.isEmpty()) {
-        av_new_packet(packet, nalData.size());
+        if (av_new_packet(packet, nalData.size()) < 0) {
+            av_packet_free(&packet);
+            return false;
+        }
         memcpy(packet->data, nalData.constData(), nalData.size());
 
         int ret = avcodec_send_packet(mDecoder, packet);

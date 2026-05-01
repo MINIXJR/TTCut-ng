@@ -1980,39 +1980,59 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 // Lazy init decoder/encoder on first re-encode
                 if (!ac3DecCtx) {
                     const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
-                    ac3DecCtx = avcodec_alloc_context3(dec);
+                    ac3DecCtx = dec ? avcodec_alloc_context3(dec) : nullptr;
                     if (!ac3DecCtx) { needsReencode = false; }
                     else {
-                        avcodec_parameters_to_context(ac3DecCtx, inStream->codecpar);
-                        avcodec_open2(ac3DecCtx, dec, nullptr);
-                        ac3Frame = av_frame_alloc();
-                        if (!ac3Frame) {
+                        if (avcodec_parameters_to_context(ac3DecCtx, inStream->codecpar) < 0 ||
+                            avcodec_open2(ac3DecCtx, dec, nullptr) < 0) {
                             avcodec_free_context(&ac3DecCtx);
                             needsReencode = false;
+                        } else {
+                            ac3Frame = av_frame_alloc();
+                            if (!ac3Frame) {
+                                avcodec_free_context(&ac3DecCtx);
+                                needsReencode = false;
+                            }
                         }
                     }
                 }
-                if (!ac3EncCtx) {
+                if (needsReencode && !ac3EncCtx) {
                     const AVCodec* enc = avcodec_find_encoder(AV_CODEC_ID_AC3);
-                    ac3EncCtx = avcodec_alloc_context3(enc);
-                    ac3EncCtx->sample_rate = inStream->codecpar->sample_rate;
-                    ac3EncCtx->bit_rate = inStream->codecpar->bit_rate > 0
-                        ? inStream->codecpar->bit_rate : 384000;
-                    ac3EncCtx->time_base = inStream->time_base;
-                    // Set target channel layout based on target acmod
-                    if (segTargetAcmod == 7 || segTargetAcmod == 6) {
-                        // 5.1: 3/2 + LFE
-                        AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
-                        av_channel_layout_copy(&ac3EncCtx->ch_layout, &layout51);
+                    if (!enc) {
+                        qWarning() << "AC3 encoder not available — skipping AC3 re-encode";
+                        needsReencode = false;
                     } else {
-                        // Stereo: 2/0
-                        AVChannelLayout layoutStereo = AV_CHANNEL_LAYOUT_STEREO;
-                        av_channel_layout_copy(&ac3EncCtx->ch_layout, &layoutStereo);
+                        ac3EncCtx = avcodec_alloc_context3(enc);
+                        if (!ac3EncCtx) {
+                            qWarning() << "avcodec_alloc_context3 failed for AC3 encoder";
+                            needsReencode = false;
+                        } else {
+                            ac3EncCtx->sample_rate = inStream->codecpar->sample_rate;
+                            ac3EncCtx->bit_rate = inStream->codecpar->bit_rate > 0
+                                ? inStream->codecpar->bit_rate : 384000;
+                            ac3EncCtx->time_base = inStream->time_base;
+                            // Set target channel layout based on target acmod
+                            if (segTargetAcmod == 7 || segTargetAcmod == 6) {
+                                // 5.1: 3/2 + LFE
+                                AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
+                                av_channel_layout_copy(&ac3EncCtx->ch_layout, &layout51);
+                            } else {
+                                // Stereo: 2/0
+                                AVChannelLayout layoutStereo = AV_CHANNEL_LAYOUT_STEREO;
+                                av_channel_layout_copy(&ac3EncCtx->ch_layout, &layoutStereo);
+                            }
+                            ac3EncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+                            if (avcodec_open2(ac3EncCtx, enc, nullptr) < 0) {
+                                qWarning() << "avcodec_open2 failed for AC3 encoder";
+                                avcodec_free_context(&ac3EncCtx);
+                                needsReencode = false;
+                            }
+                        }
                     }
-                    ac3EncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-                    avcodec_open2(ac3EncCtx, enc, nullptr);
                 }
+            }
 
+            if (needsReencode) {
                 // Decode
                 avcodec_send_packet(ac3DecCtx, pkt);
                 int decRet = avcodec_receive_frame(ac3DecCtx, ac3Frame);
@@ -2285,7 +2305,15 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
     }
 
     AVCodecContext* decCtx = avcodec_alloc_context3(codec);
-    avcodec_parameters_to_context(decCtx, stream->codecpar);
+    if (!decCtx) {
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
+    if (avcodec_parameters_to_context(decCtx, stream->codecpar) < 0) {
+        avcodec_free_context(&decCtx);
+        avformat_close_input(&fmtCtx);
+        return false;
+    }
     ret = avcodec_open2(decCtx, codec, nullptr);
     if (ret < 0) {
         avcodec_free_context(&decCtx);
