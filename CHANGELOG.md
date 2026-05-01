@@ -2,6 +2,103 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.68.0 (2026-05-01)
+
+**Audio-only cut, audio-burst detection overhaul, cut-list/preview polish**
+
+### Features
+- Audio-only cut: the *Audio schneiden* button in the cut list now
+  actually performs an audio-only cut. Previously it dispatched the
+  same A/V cut path because the receiving slot dropped the
+  `audioOnly` flag. New output-format selector with four presets:
+  *Original codec (per track)* leaves per-track elementary streams
+  in the cut directory; *Matroska Audio (.mka)* muxes all tracks
+  into one MKA via the libav matroska muxer; *MP3* and *AAC* are
+  reserved for re-encoding (currently fall back to ES with a
+  warning until the encoding stage lands). The cut list also gains
+  a fourth *Auswahl schneiden* button for selection-only audio cuts,
+  symmetric to the existing A/V variant.
+- Audio drift bounded to ±½ frame: each segment no longer loses
+  0…2 audio-frame durations independently. The new feed-forward
+  planning in `TTAVData::planAudioCut()` snaps once per segment
+  and carries the per-segment residual into the next one, so
+  cumulative drift stays bounded across the timeline. The cut
+  list's *Audio-Drift* column now reflects what the actual cut
+  produces, not a parallel estimate.
+- Diagnostic tools (`make diag`): three small helper binaries —
+  `check_idr`, `test_nalu_parser`, `test_au_types` — now build
+  reproducibly under `tools/diag/` against the existing
+  `obj/ttnaluparser.o`. Useful for inspecting GOP structure and
+  Access-Unit types of arbitrary H.264/H.265 elementary streams.
+- VDR demux example script (`tools/vdr-demux-example.sh`) now
+  decodes VFAT character escapes (`#3A → :`, `#3F → ?`, etc.) in
+  show names and neutralises stray slashes, so the demuxed file
+  basenames are readable instead of `09x01_-_Ehekrise#3A_…#3F`.
+- Cut entries can now be opened for editing by double-clicking the
+  row in the cut list. Same effect as the existing context menu
+  / toolbar Edit button.
+
+### Fixes
+- Audio-burst detection: same boundary-time at all three call
+  sites (cut list, preview dialog, final-cut warning). Previously
+  cut list and preview probed the raw frame index while the
+  final-cut warning subtracted `countExtraFramesBefore`, so on
+  streams with TS-corruption-induced extra frames a borderline
+  burst could be flagged in one place but not the other. The
+  preview dialog also missed CutIn warnings on the first cut and
+  CutOut warnings on the last cut. New helpers
+  `TTAVData::detectCutOut/InBurst()` apply the extra-frame
+  correction and the threshold filter consistently in one place.
+- Audio-burst detection window: post-boundary tail tightened from
+  a hardcoded 48 ms to half an audio-frame (12 ms on MP2,
+  16 ms on AC3). The prior tail plus extra reject-slack let the
+  analyser inspect frames up to 72/80 ms past the cut, well
+  beyond what frame-snapping can ever leak into the kept audio,
+  and produced false-positive bursts on inaudible material.
+- Burst-shift in the preview: clicking *Shift -1 Frame* on an
+  MPEG-2 source now actually reloads the regenerated clip. The
+  output path was being constructed with `.mpg` extension while
+  the helper muxed to `.mkv`, so mpv started, failed to open the
+  dead path, and silently bounced back to *Play*. Also fixes a
+  latent file-index mismatch when the preview was launched in
+  *transitions only* mode (the regen overwrote the wrong file).
+- Burst-shift label colour reset: navigating between cuts after a
+  successful shift no longer renders the next cut's burst warning
+  in green. The orange-warning style is now reset at the top of
+  every check, not only after a regenerate.
+- Edit re-entry: double-clicking a different cut while another
+  one is in edit mode now clears the previous row's highlight
+  brushes instead of leaving two rows visually highlighted with
+  inconsistent `editItemIndex` state.
+
+### Changes
+- QGroupBox titles are now centred application-wide via a
+  one-line stylesheet in `main()`. The current Breeze default
+  is left-aligned; the stylesheet pins the centred look across
+  styles. Per-widget alignment overrides in `.ui` files (only
+  `gbProcessView` today) still win.
+- Two `gridLayout` name collisions in `ui/currentframewidget.ui`
+  and `ui/avcutdialog.ui` resolved (renamed to
+  `gridLayoutCurrentFrame` / `gridLayoutOutputOptions`); uic no
+  longer prints "name 'gridLayout' is already in use" warnings
+  on every build.
+
+### Build / repository
+- `tools/ttcut-pts-analyze` is now buildable on a fresh clone:
+  the C source and its Makefile were tracked properly (they had
+  been excluded by the global `Makefile` ignore pattern).
+- `tools/` cleanup: dead one-off test programs from the v0.60.0
+  libav migration (`test_es_smartcut`, `test_prj_smartcut`,
+  `test_smartcut`) are gone; the still-useful diagnostic sources
+  are consolidated under `tools/diag/`. The Python NAL test
+  harness (`tools/nal-test-harness/nal-verify.py`) is now
+  tracked and uses standard tempdir resolution.
+- Working notes (implementation plans and design specs that used
+  to accumulate under `docs/plans/` and `docs/superpowers/`) are
+  no longer tracked; `ttcut-quality-check.py` defaults to the
+  standard `tempfile` location instead of a developer-machine
+  fallback path.
+
 ## v0.67.0 (2026-04-23)
 
 **HEVC MKV output, UI cleanup, various fixes**
