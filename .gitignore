@@ -6,6 +6,8 @@ ttcut
 *.o
 *.tmp
 *~
+# Static tool Makefiles (override the global Makefile pattern)
+!tools/diag/Makefile
 
 # qmake generated
 .qmake.stash
@@ -45,14 +47,15 @@ logfile.log
 # Core dumps
 core.*
 
-# Compiled test tools and binaries
-tools/check_idr
-tools/test_es_smartcut
-tools/test_nalu_parser
-tools/test_prj_smartcut
+# Compiled tool binaries
 tools/ttcut-ac3fix/ttcut-ac3fix
 tools/ttcut-pts-analyze/ttcut-pts-analyze
-ttcut-strip-filler
+tools/diag/check_idr
+tools/diag/test_nalu_parser
+tools/diag/test_au_types
+
+# Python bytecode cache (e.g. tools/ttcut-quality-check.py)
+__pycache__/
 
 # Debian build artifacts
 debian/debhelper-build-stamp

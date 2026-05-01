@@ -4,7 +4,7 @@
  * Usage: ./test_nalu_parser <input.264|input.265>
  */
 
-#include "../avstream/ttnaluparser.h"
+#include "../../avstream/ttnaluparser.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <iostream>

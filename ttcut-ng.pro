@@ -264,9 +264,17 @@ QMAKE_POST_LINK += $(MAKE) -C $$PWD/tools/ttcut-pts-analyze && \
 
 tools_clean.commands = \
     $(MAKE) -C $$PWD/tools/ttcut-pts-analyze clean; \
-    rm -f $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix
+    rm -f $$PWD/tools/ttcut-ac3fix/ttcut-ac3fix; \
+    $(MAKE) -C $$PWD/tools/diag clean
 QMAKE_EXTRA_TARGETS += tools_clean
 CLEAN_DEPS += tools_clean
+
+# `make diag` — explicit, on-demand build of the diagnostic tools in
+# tools/diag/. Linked against obj/ttnaluparser.o, so the main target
+# must be built first.
+diag.depends = $(TARGET)
+diag.commands = $(MAKE) -C $$PWD/tools/diag
+QMAKE_EXTRA_TARGETS += diag
 #
 # -------------------------------------------------------------------------------
 # TTCUT.PRO ENDE

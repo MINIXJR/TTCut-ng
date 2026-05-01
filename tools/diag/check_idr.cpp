@@ -1,4 +1,4 @@
-#include "../avstream/ttnaluparser.h"
+#include "../../avstream/ttnaluparser.h"
 #include <QCoreApplication>
 #include <iostream>
 
