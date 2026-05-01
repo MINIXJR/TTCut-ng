@@ -37,6 +37,36 @@
 #include "../common/ttexception.h"
 #include "../common/ttcut.h"
 
+#include <QDir>
+
+namespace {
+// Validate a file-path read from a .ttcut project. Project files may carry
+// either an absolute path (the historic format) or a path relative to the
+// project file's directory. We reject anything that looks like a path-traversal
+// or contains control characters/null bytes; the resulting absolute path
+// (canonical-ish, but without requiring the file to exist yet) is returned.
+// Empty return = invalid / refused.
+static QString resolveProjectPath(const QString& name, const QFileInfo* projectFile)
+{
+    if (name.isEmpty()) return QString();
+    // Reject NUL and other control bytes that can confuse downstream consumers.
+    for (QChar c : name) {
+        if (c.unicode() < 0x20 || c.unicode() == 0x7F) return QString();
+    }
+    // Reject explicit '..' path segments — VDR/normal video paths never need
+    // them and they're the hallmark of a path-traversal payload.
+    QStringList parts = name.split('/', Qt::SkipEmptyParts);
+    for (const QString& p : parts) {
+        if (p == "..") return QString();
+    }
+    QFileInfo fi(name);
+    if (fi.isAbsolute()) return fi.absoluteFilePath();
+    // Relative: anchor against the project file directory.
+    if (!projectFile) return QString();
+    return QDir(projectFile->absolutePath()).absoluteFilePath(name);
+}
+}  // namespace
+
 
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -141,11 +171,25 @@ void TTCutProjectData::createDocumentStructure()
  */
 void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData)
 {
+  if (videoNodesList.size() < 2) {
+    qDebug("TTCutProjectData::parseVideoSection -> insufficient nodes");
+    return;
+  }
   int     order = videoNodesList.at(0).toElement().text().toInt();
-  QString name  = videoNodesList.at(1).toElement().text();
+  QString rawName = videoNodesList.at(1).toElement().text();
+  QString name = resolveProjectPath(rawName, xmlFileInfo);
+  if (name.isEmpty()) {
+    qWarning("TTCutProjectData::parseVideoSection -> rejected unsafe path: %s",
+             qPrintable(rawName));
+    return;
+  }
 
   qDebug("TTCutProjectData::parseVideoSection -> doOpenVideoStream...");
   TTAVItem* avItem = avData->doOpenVideoStream(name, order);
+  if (!avItem) {
+    qDebug("TTCutProjectData::parseVideoSection -> doOpenVideoStream returned null");
+    return;
+  }
 
   qDebug("after doOpenVideoStream");
   //create the data item;
@@ -177,8 +221,18 @@ void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
  */
 void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem)
 {
+  if (audioNodesList.size() < 2) {
+    qDebug("TTCutProjectData::parseAudioSection -> insufficient nodes");
+    return;
+  }
   int     order = audioNodesList.at(0).toElement().text().toInt();
-  QString name  = audioNodesList.at(1).toElement().text();
+  QString rawName = audioNodesList.at(1).toElement().text();
+  QString name = resolveProjectPath(rawName, xmlFileInfo);
+  if (name.isEmpty()) {
+    qWarning("TTCutProjectData::parseAudioSection -> rejected unsafe path: %s",
+             qPrintable(rawName));
+    return;
+  }
 
   // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.66+)
   QString lang;
@@ -533,8 +587,18 @@ QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QS
  */
 void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem)
 {
+  if (subtitleNodesList.size() < 2) {
+    qDebug("TTCutProjectData::parseSubtitleSection -> insufficient nodes");
+    return;
+  }
   int     order = subtitleNodesList.at(0).toElement().text().toInt();
-  QString name  = subtitleNodesList.at(1).toElement().text();
+  QString rawName = subtitleNodesList.at(1).toElement().text();
+  QString name = resolveProjectPath(rawName, xmlFileInfo);
+  if (name.isEmpty()) {
+    qWarning("TTCutProjectData::parseSubtitleSection -> rejected unsafe path: %s",
+             qPrintable(rawName));
+    return;
+  }
 
   // Read optional Language element (added in TTCut-ng 0.52+)
   QString lang;
@@ -606,8 +670,23 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
     QString value = el.text();
 
     // Output
-    if      (name == "CutDirPath")         TTCut::cutDirPath = value;
-    else if (name == "CutVideoName")       TTCut::cutVideoName = value;
+    if      (name == "CutDirPath") {
+      // Validate against path traversal / NUL injection. We don't anchor a
+      // CutDirPath to the project file's directory — users put cut output
+      // wherever they want — but we still require a sane absolute path.
+      QString validated = resolveProjectPath(value, xmlFileInfo);
+      if (!validated.isEmpty()) TTCut::cutDirPath = validated;
+      else qWarning("parseSettingsSection: rejected unsafe CutDirPath '%s'",
+                    qPrintable(value));
+    }
+    else if (name == "CutVideoName") {
+      // Filename only — must not contain '/' or control chars.
+      bool ok = !value.contains('/') && !value.contains('\\');
+      for (QChar c : value) if (c.unicode() < 0x20 || c.unicode() == 0x7F) ok = false;
+      if (ok) TTCut::cutVideoName = value;
+      else qWarning("parseSettingsSection: rejected unsafe CutVideoName '%s'",
+                    qPrintable(value));
+    }
     else if (name == "CutAddSuffix")       TTCut::cutAddSuffix = (value == "true");
     // Muxing
     else if (name == "OutputContainer")    TTCut::outputContainer = value.toInt();

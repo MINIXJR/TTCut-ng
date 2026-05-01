@@ -342,6 +342,10 @@ int TTFileBuffer::readByte(quint8* byteArray, int length)
  */
 QString TTFileBuffer::readLine(QString delimiter)
 {
+  // Cap line length to prevent unbounded memory consumption from a single
+  // line without delimiter (~1 MB is well above any realistic SRT/VDR mark
+  // line, and bounds malicious or corrupt input).
+  static const int MAX_LINE_BYTES = 1 << 20;
   QString line;
   quint8 byte;
 
@@ -355,6 +359,7 @@ QString TTFileBuffer::readLine(QString delimiter)
         line.chop(delimiter.length());
         break;
       }
+      if (line.size() >= MAX_LINE_BYTES) break;
     }
   } catch (TTFileBufferException) {
     // End of file reached

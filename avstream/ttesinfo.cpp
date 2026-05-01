@@ -214,11 +214,14 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         }
     }
     else if (section == "warnings") {
-        // Parse extra frame indices (comma-separated list)
+        // Parse extra frame indices (comma-separated list).
+        // Cap list size to bound memory use against malformed .info files.
+        const int maxExtraFrames = 100000;
         QString extraFrameStr = values.value("es_extra_frames", "");
         if (!extraFrameStr.isEmpty()) {
             QStringList indices = extraFrameStr.split(',');
             for (const QString& idx : indices) {
+                if (mEsExtraFrames.size() >= maxExtraFrames) break;
                 bool ok;
                 int frameIdx = idx.trimmed().toInt(&ok);
                 if (ok) mEsExtraFrames.append(frameIdx);
@@ -227,9 +230,11 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
                 qDebug() << "Loaded" << mEsExtraFrames.size() << "extra frame indices from .info";
         }
 
-        // Legacy format: decode error regions (from old ffmpeg -err_detect check)
+        // Legacy format: decode error regions (from old ffmpeg -err_detect check).
+        // Clamp region count against malformed .info files (DoS guard).
         mDecodeErrors = values.value("decode_errors", "0").toInt();
-        mDecodeErrorRegionCount = values.value("decode_error_regions", "0").toInt();
+        mDecodeErrorRegionCount = qBound(0,
+            values.value("decode_error_regions", "0").toInt(), 4096);
         mRecommendProjectX = (values.value("recommend_projectx", "false") == "true");
         mHasWarnings = (mDecodeErrors > 0);
 
