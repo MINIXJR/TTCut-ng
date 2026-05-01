@@ -363,7 +363,7 @@
          <property name="title" >
           <string>Cut Output Options</string>
          </property>
-         <layout class="QGridLayout" name="gridLayout" >
+         <layout class="QGridLayout" name="gridLayoutOutputOptions" >
           <property name="spacing" >
            <number>12</number>
           </property>

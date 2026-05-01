@@ -55,7 +55,7 @@
      <property name="title">
       <string>Current Frame</string>
      </property>
-     <layout class="QGridLayout" name="gridLayout">
+     <layout class="QGridLayout" name="gridLayoutCurrentFrame">
       <property name="leftMargin">
        <number>2</number>
       </property>
