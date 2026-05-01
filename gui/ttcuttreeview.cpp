@@ -146,6 +146,7 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   connect(pbCutAudioSelected,SIGNAL(clicked()),                                 SLOT(onAudioSelCut()));
   connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
   connect(videoCutList,    SIGNAL(itemClicked(QTreeWidgetItem*, int)),        SLOT(onEntrySelected(QTreeWidgetItem*, int)));
+  connect(videoCutList,    SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)),  SLOT(onEntryEdit()));
   connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
 }
 
@@ -416,7 +417,23 @@ void TTCutTreeView::onEntryEdit()
   if (mAVData == 0 || videoCutList->currentItem() == 0) return;
 
   QTreeWidgetItem* curItem = videoCutList->currentItem();
-  editItemIndex = videoCutList->indexOfTopLevelItem(curItem);
+  int newIndex = videoCutList->indexOfTopLevelItem(curItem);
+
+  // Re-entry: user starts editing a different row while another edit is
+  // still active. Drop the previous row's edit highlight so we don't end
+  // up with two visually highlighted rows and stale editItemIndex state.
+  // Same-row re-entry is a no-op.
+  if (editItemIndex >= 0 && editItemIndex != newIndex) {
+    QTreeWidgetItem* prev = videoCutList->topLevelItem(editItemIndex);
+    if (prev) {
+      for (int c = 0; c < videoCutList->columnCount(); c++)
+        prev->setBackground(c, QBrush());
+    }
+  } else if (editItemIndex == newIndex) {
+    return;
+  }
+
+  editItemIndex = newIndex;
 
   // Use palette mid color for edit highlight (works with light and dark themes)
   QBrush editBrush = palette().mid();

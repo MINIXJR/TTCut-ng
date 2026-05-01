@@ -345,6 +345,9 @@ void TTCutPreview::onNextCut()
 void TTCutPreview::checkBurstForCurrentCut(int iCut)
 {
   lblBurstWarning->hide();
+  // Reset to warning color — earlier shifts may have left the label green
+  // ("Burst behoben"), and we'd otherwise show the next burst in green too.
+  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   pbBurstShift->hide();
   pbBurstShift->setText(tr("Shift -1 Frame"));
   mBurstSegmentIdx = -1;
@@ -540,14 +543,16 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   bool isMpeg2 = (streamType == TTAVTypes::mpeg2_demuxed_video ||
                   streamType == TTAVTypes::mpeg2_mplexed_video);
 
-  QString outputFile;
+  // File index must match onCutSelectionChanged()'s lookup, including
+  // mClipOffset (1 in transitionsOnly mode), or the regen overwrites
+  // the wrong file. All preview output is .mkv (set by TTCutPreviewTask).
+  int fileIndex = iCut + 1 + mClipOffset;
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "mkv");
 
   if (isMpeg2) {
-    regenerateMpeg2PreviewClip(iCut, &tmpCutList, &progress);
-    outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mpg");
+    regenerateMpeg2PreviewClip(fileIndex, &tmpCutList, &progress);
   } else {
-    regenerateSmartCutPreviewClip(iCut, &tmpCutList, &progress);
-    outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+    regenerateSmartCutPreviewClip(fileIndex, &tmpCutList, &progress);
   }
 
   qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
@@ -559,9 +564,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
       QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 
-  // Re-check burst for the current cut
-  // Reset label style back to warning color for next check
-  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
+  // Re-check burst for the current cut (resets label color internally)
   checkBurstForCurrentCut(iCut);
 
   // If no burst detected after shift, show success
@@ -575,7 +578,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
 /* /////////////////////////////////////////////////////////////////////////////
  * Regenerate MPEG-2 preview clip using TTCutVideoTask + mplex
  */
-void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
+void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutList,
                                                QProgressDialog* progress)
 {
   TTCutItem firstItem = tmpCutList->at(0);
@@ -595,7 +598,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
   QApplication::processEvents();
 
   // --- Cut video ---
-  QString videoFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "m2v");
+  QString videoFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "m2v");
   TTCutVideoTask cutVideoTask(mpAVData);
   cutVideoTask.init(videoFile, tmpCutList);
   mpAVData->threadTaskPool()->start(&cutVideoTask, true);
@@ -616,7 +619,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
     }
 
     QString audioExt = QFileInfo(aStream->filePath()).suffix();
-    QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, audioExt);
+    QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(fileIndex, audioExt);
 
     QList<int> targetAcmods;
     if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
@@ -638,7 +641,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
   QApplication::processEvents();
 
   // --- Mux to MKV ---
-  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "mkv");
   if (hasAudio && !cutAudioFiles.isEmpty()) {
     double fps = vStream->frameRate();
     int frameDurationNs = static_cast<int>(1000000000.0 / fps);
@@ -664,7 +667,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int iCut, TTCutList* tmpCutList,
 /* /////////////////////////////////////////////////////////////////////////////
  * Regenerate H.264/H.265 preview clip using Smart Cut
  */
-void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList,
+void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList,
                                                   QProgressDialog* progress)
 {
   TTCutItem firstItem = tmpCutList->at(0);
@@ -743,7 +746,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int iCut, TTCutList* tmpCutList
   QApplication::processEvents();
 
   // --- Mux to MKV ---
-  QString outputFile = TTCutPreviewTask::createPreviewFileName(iCut + 1, "mkv");
+  QString outputFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "mkv");
   int frameDurationNs = (int)(1000000000.0 / frameRate);
 
   TTMkvMergeProvider mkvProvider;
