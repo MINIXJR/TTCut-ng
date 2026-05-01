@@ -1417,8 +1417,7 @@ Examples:
         tmpdir = args.tmpdir
         os.makedirs(tmpdir, exist_ok=True)
     else:
-        tmpdir = tempfile.mkdtemp(prefix="ttcut_qc_",
-                                  dir=os.environ.get("TMPDIR", "/usr/local/src/CLAUDE_TMP"))
+        tmpdir = tempfile.mkdtemp(prefix="ttcut_qc_")
 
     try:
         report = QualityReport(

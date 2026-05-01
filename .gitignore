@@ -74,3 +74,11 @@ tools/testdata/
 # Git worktrees
 .worktrees/
 .superpowers/
+
+# Tool-internal workspaces (Anthropic / Claude Code)
+.claude/
+
+# Working notes / implementation plans (kept locally, may contain
+# personal paths and recording-specific filenames — privacy-sensitive)
+docs/plans/
+docs/superpowers/
