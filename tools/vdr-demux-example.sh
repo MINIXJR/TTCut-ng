@@ -141,11 +141,16 @@ done
 # Auswahldialog: kdialog -> dialog -> alle verarbeiten
 SELECTED_DIRS=()
 if command -v kdialog &>/dev/null; then
-    SELECTED=$(kdialog --checklist \
+    # --separate-output prints one tag per line; mapfile parses safely without
+    # `eval`, which would otherwise execute backticks/$() embedded in directory
+    # names (or the kdialog response) as shell code.
+    SELECTED=$(kdialog --separate-output --checklist \
         "Quellverzeichnis: $IN_PFAD"$'\n'"Zielverzeichnis: $OUT_PFAD"$'\n\n'"Aufnahmen auswählen (abgewählte werden übersprungen):" \
         "${CHECKLIST_ARGS[@]}" \
         --title "VDR Demux — ${#REC_DIRS[@]} Aufnahme(n)" 2>/dev/null) || exit 0
-    eval "SELECTED_DIRS=($SELECTED)"
+    if [[ -n "$SELECTED" ]]; then
+        mapfile -t SELECTED_DIRS <<< "$SELECTED"
+    fi
 elif command -v dialog &>/dev/null; then
     SELECTED=$(dialog --stdout --separator $'\n' \
         --backtitle "Quelle: $IN_PFAD → Ziel: $OUT_PFAD" \
