@@ -55,6 +55,27 @@ warn()  { printf '%b\n' "${YELLOW}[WARN]${NC} $1"; }
 error() { printf '%b\n' "${RED}[ERROR]${NC} $1"; }
 step()  { printf '%b\n' "${BLUE}[STEP]${NC} $1"; }
 
+# VDR-VFAT-Demaskierung: #XX-Hex-Sequenzen → ASCII (Linux-safe)
+# Spaces bleiben als Underscore. `#` selbst (#23) wird als Letztes ersetzt,
+# damit ein literales `#23` im Originalnamen nicht doppelt entkodiert wird.
+# Slashes (aus #2F oder bereits vorhanden) werden zu Underscore neutralisiert,
+# damit das Ergebnis nie als Pfadtrenner missverstanden wird.
+vdr_unmask() {
+    local s="$1"
+    s="${s//#3A/:}"
+    s="${s//#3F/?}"
+    s="${s//#22/\"}"
+    s="${s//#2A/*}"
+    s="${s//#2F//}"
+    s="${s//#3C/<}"
+    s="${s//#3E/>}"
+    s="${s//#7C/|}"
+    s="${s//#7E/~}"
+    s="${s//#23/#}"
+    s="${s//\//_}"
+    printf '%s' "$s"
+}
+
 # ---- kdialog Fortschritts-Popup ----
 PROGRESS_DBUS=""
 
@@ -111,7 +132,7 @@ fi
 CHECKLIST_ARGS=()
 for dir in "${REC_DIRS[@]}"; do
     rel_path="${dir#$IN_PFAD/}"
-    show_name="$(basename "$(dirname "$dir")")"
+    show_name="$(vdr_unmask "$(basename "$(dirname "$dir")")")"
     rec_name="${rel_path#*/}"
     rec_date=$(echo "$rec_name" | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})\.([0-9]{2})\.([0-9]{2})\..*/\1 \2:\3/')
     CHECKLIST_ARGS+=("$dir" "${show_name} — ${rec_date}" "on")
@@ -188,7 +209,7 @@ for ts_datei in "${TS_FILES[@]}"; do
     rec_dir=$(dirname "$ts_datei")
     # VDR directory structure: .../Series/Episode/Date.Time.rec/00001.ts
     # Use the directory directly above .rec as the show/episode name
-    show_name="$(basename "$(dirname "$rec_dir")")"
+    show_name="$(vdr_unmask "$(basename "$(dirname "$rec_dir")")")"
 
     info "Demuxe: $show_name ($(basename "$ts_datei"))"
     progress_update "$CURRENT_STEP" "Demuxe: $show_name"$'\n'"(${DEMUX_COUNT}/${#TS_FILES[@]})"
