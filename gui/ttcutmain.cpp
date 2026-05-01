@@ -58,6 +58,14 @@ int main( int argc, char **argv )
 
     a.setApplicationName("TTCut-ng");
 
+    // Centre QGroupBox titles application-wide. Most styles (including
+    // current Breeze) default to left-aligned titles; we want the visual
+    // consistency of centred titles across all panels regardless of the
+    // user's KDE theme. Per-widget alignment properties in .ui files
+    // would still override this.
+    a.setStyleSheet(a.styleSheet() +
+                    "\nQGroupBox::title { subcontrol-position: top center; }");
+
     QTranslator qtTranslator;
     if (!qtTranslator.load("qt_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath))) {
       TTMessageLogger* log = TTMessageLogger::getInstance();
