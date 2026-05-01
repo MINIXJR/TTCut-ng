@@ -8,6 +8,7 @@ ttcut
 *~
 # Static tool Makefiles (override the global Makefile pattern)
 !tools/diag/Makefile
+!tools/ttcut-pts-analyze/Makefile
 
 # qmake generated
 .qmake.stash
