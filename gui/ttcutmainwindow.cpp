@@ -359,9 +359,12 @@ TTCutMainWindow::TTCutMainWindow()
  */
 TTCutMainWindow::~TTCutMainWindow()
 {
-  if (mpAVData    != 0) delete mpAVData;
-  if (settings    != 0) delete settings;
+  delete mpAVData;
+  mpAVData = nullptr;
+  delete settings;
+  settings = nullptr;
   delete mLogoDetector;
+  mLogoDetector = nullptr;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -606,8 +609,8 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
 
   closeProject();
 
-  if (mpAVData    != 0) delete mpAVData;
-  if (settings    != 0) delete settings;
+  // Don't delete mpAVData / settings here — the destructor handles cleanup.
+  // Doing it twice (closeEvent then ~TTCutMainWindow) is a double-free.
 
   event->accept();
 }

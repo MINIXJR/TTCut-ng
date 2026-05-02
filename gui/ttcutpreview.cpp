@@ -780,11 +780,6 @@ void TTCutPreview::cleanUp()
 {
   videoPlayer->cleanUp();
 
-  // DEBUG: Temporarily skip cleanup so user can test preview files with VLC
-  // Preview files are in TTCut::tempDirPath (e.g., preview_001.mkv, preview_001.mpg)
-  qDebug() << "DEBUG: Skipping preview file cleanup. Files in:" << TTCut::tempDirPath;
-  return;
-
   // Clean up all preview* files in temp directory
   QDir tempDir(TTCut::tempDirPath);
   QStringList filters;

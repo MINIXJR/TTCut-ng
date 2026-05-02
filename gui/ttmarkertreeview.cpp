@@ -228,8 +228,6 @@ void TTMarkerTreeView::onContextMenuRequest(const QPoint& point)
     return;
 
   QMenu contextMenu(this);
-  contextMenu.addAction(itemNewAction);
-  contextMenu.addSeparator();
   contextMenu.addAction(itemUpAction);
   contextMenu.addAction(itemDeleteAction);
   contextMenu.addAction(itemDownAction);

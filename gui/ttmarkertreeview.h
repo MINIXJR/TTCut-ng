@@ -84,6 +84,5 @@ class TTMarkerTreeView : public QWidget, Ui::TTMarkerListWidget
     QAction*      itemUpAction;
     QAction*      itemDownAction;
     QAction*      itemDeleteAction;
-    QAction*      itemNewAction;
 };
 #endif

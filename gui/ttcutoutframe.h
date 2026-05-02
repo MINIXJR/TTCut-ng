@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #ifndef TTCUTOUTFRAME_H
+#define TTCUTOUTFRAME_H
 
 #include "../ui_h/ui_cutoutframewidget.h"
 #include "../avstream/ttavstream.h"
