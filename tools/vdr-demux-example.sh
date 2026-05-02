@@ -77,15 +77,22 @@ vdr_unmask() {
 }
 
 # ---- kdialog Fortschritts-Popup ----
-PROGRESS_DBUS=""
+# kdialog --progressbar liefert "service objectpath" mit Leerzeichen — daher
+# beim Setzen aufsplitten und einzeln gequotet an qdbus weiterreichen.
+PROGRESS_SERVICE=""
+PROGRESS_PATH=""
 
 progress_start() {
     local title="$1"
     local total="$2"
+    PROGRESS_SERVICE=""
+    PROGRESS_PATH=""
     if command -v kdialog &>/dev/null; then
-        PROGRESS_DBUS=$(kdialog --progressbar "$title" "$total" --title "VDR Demux" 2>/dev/null) || PROGRESS_DBUS=""
-        if [ -n "$PROGRESS_DBUS" ]; then
-            qdbus $PROGRESS_DBUS setAutoClose true 2>/dev/null || true
+        local handle
+        handle=$(kdialog --progressbar "$title" "$total" --title "VDR Demux" 2>/dev/null) || handle=""
+        if [ -n "$handle" ]; then
+            read -r PROGRESS_SERVICE PROGRESS_PATH <<< "$handle"
+            qdbus "$PROGRESS_SERVICE" "$PROGRESS_PATH" setAutoClose true 2>/dev/null || true
         fi
     fi
 }
@@ -93,16 +100,17 @@ progress_start() {
 progress_update() {
     local value="$1"
     local label="$2"
-    if [ -n "$PROGRESS_DBUS" ]; then
-        qdbus $PROGRESS_DBUS setLabelText "$label" 2>/dev/null || true
-        qdbus $PROGRESS_DBUS Set "" value "$value" 2>/dev/null || true
+    if [ -n "$PROGRESS_SERVICE" ]; then
+        qdbus "$PROGRESS_SERVICE" "$PROGRESS_PATH" setLabelText "$label" 2>/dev/null || true
+        qdbus "$PROGRESS_SERVICE" "$PROGRESS_PATH" Set "" value "$value" 2>/dev/null || true
     fi
 }
 
 progress_close() {
-    if [ -n "$PROGRESS_DBUS" ]; then
-        qdbus $PROGRESS_DBUS close 2>/dev/null || true
-        PROGRESS_DBUS=""
+    if [ -n "$PROGRESS_SERVICE" ]; then
+        qdbus "$PROGRESS_SERVICE" "$PROGRESS_PATH" close 2>/dev/null || true
+        PROGRESS_SERVICE=""
+        PROGRESS_PATH=""
     fi
 }
 
@@ -319,7 +327,8 @@ fi
 
 # Log-Dateien in Editor öffnen (optional)
 if command -v kdialog &>/dev/null; then
-    LOG_FILES=($(find "$OUT_PFAD" -maxdepth 1 -name "*.log" -mmin -5 2>/dev/null))
+    # Use mapfile + -print0 to handle filenames with spaces/glob chars safely.
+    mapfile -d '' -t LOG_FILES < <(find "$OUT_PFAD" -maxdepth 1 -name "*.log" -mmin -5 -print0 2>/dev/null)
     if [ ${#LOG_FILES[@]} -gt 0 ]; then
         if kdialog --yesno "Log-Dateien anzeigen? (${#LOG_FILES[@]} Datei(en))" --title "VDR Demux" 2>/dev/null; then
             kwrite "${LOG_FILES[@]}" &
