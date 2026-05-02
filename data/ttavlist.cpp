@@ -82,6 +82,7 @@ TTAVItem::~TTAVItem()
   if (mpAudioList    != 0) delete mpAudioList;
   if (mpSubtitleList != 0) delete mpSubtitleList;
   if (mpCutList      != 0) delete mpCutList;
+  if (mpMarkerList   != 0) delete mpMarkerList;
   if (mpVideoStream  != 0) delete mpVideoStream;
 }
 

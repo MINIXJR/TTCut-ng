@@ -262,6 +262,11 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
  */
 void TTCutProjectData::parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem)
 {
+  if (cutNodesList.size() < 3) {
+    qWarning("parseCutSection: <Cut> element has only %d children, expected 3", cutNodesList.size());
+    return;
+  }
+
   int order       = cutNodesList.at(0).toElement().text().toInt();
   int cutIn       = cutNodesList.at(1).toElement().text().toInt();
   int cutOut      = cutNodesList.at(2).toElement().text().toInt();
@@ -274,6 +279,11 @@ void TTCutProjectData::parseCutSection(QDomNodeList cutNodesList, TTAVItem* avIt
  */
 void TTCutProjectData::parseMarkerSection(QDomNodeList markerNodesList, TTAVItem* avItem)
 {
+  if (markerNodesList.size() < 2) {
+    qWarning("parseMarkerSection: <Marker> element has only %d children, expected 2", markerNodesList.size());
+    return;
+  }
+
   int order = markerNodesList.at(0).toElement().text().toInt();
   int pos   = markerNodesList.at(1).toElement().text().toInt();
   //int type  = markerNodesList.at(2).toElement().text().toInt();
