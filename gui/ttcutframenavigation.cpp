@@ -204,6 +204,9 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbSetMarker->setEnabled(enabled);
 	pbPrevSceneChange->setEnabled(enabled);
 	pbNextSceneChange->setEnabled(enabled);
+	pbPrevLogo->setEnabled(enabled);
+	pbNextLogo->setEnabled(enabled);
+	pbSelectLogoROI->setEnabled(enabled);
 }
 
 void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData, int pos)

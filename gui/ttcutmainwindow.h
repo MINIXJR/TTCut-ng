@@ -140,7 +140,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		signals:
 
-		public:
+	public:
+		// Called from main() to load a project given on the command line.
 		void openProjectFile(QString fName);
 
 	private:
