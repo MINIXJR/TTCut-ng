@@ -754,7 +754,13 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 videoInCtx->streams[srcIdx]->time_base,
                 outCtx->streams[srcIdx]->time_base);
             pkt->pos = -1;
-            av_interleaved_write_frame(outCtx, pkt);
+            int wfRet = av_interleaved_write_frame(outCtx, pkt);
+            if (wfRet < 0) {
+                setError(QString("av_interleaved_write_frame failed (container remux): %1")
+                             .arg(avErrStr(wfRet)));
+                av_packet_free(&pkt);
+                goto cleanup;
+            }
 
             if (totalSize > 0) {
                 int percent = (int)(avio_tell(videoInCtx->pb) * 100 / totalSize);
@@ -987,8 +993,13 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             in.pkt->stream_index = in.outIdx;
             in.pkt->pos = -1;
 
-            av_interleaved_write_frame(outCtx, in.pkt);
+            int wfRet = av_interleaved_write_frame(outCtx, in.pkt);
             // av_interleaved_write_frame takes ownership and unrefs the packet
+            if (wfRet < 0) {
+                setError(QString("av_interleaved_write_frame failed (ES mux): %1")
+                             .arg(avErrStr(wfRet)));
+                goto cleanup;
+            }
             totalPacketsWritten++;
 
             if (totalVideoSize > 0) {
@@ -1135,7 +1146,15 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
             pkt->stream_index = outStreamIdx[i];
             av_packet_rescale_ts(pkt, inTb, outTb);
             pkt->pos = -1;
-            av_interleaved_write_frame(outCtx, pkt);
+            int wfRet = av_interleaved_write_frame(outCtx, pkt);
+            if (wfRet < 0) {
+                setError(QString("muxAudioOnly: write_frame failed: %1").arg(avErrStr(wfRet)));
+                av_packet_free(&pkt);
+                for (auto* c : inputs) avformat_close_input(&c);
+                if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
+                avformat_free_context(outCtx);
+                return false;
+            }
             av_packet_unref(pkt);
         }
     }
