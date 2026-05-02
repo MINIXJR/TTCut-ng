@@ -735,8 +735,11 @@ void TTCutProjectData::writeXml()
 
   QFile xmlFile(xmlFileInfo->absoluteFilePath());
 
-  xmlFile.resize(0);
-  xmlFile.open(QIODevice::WriteOnly);
+  if (!xmlFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    throw TTIOException(__FILE__, __LINE__,
+      QString("Cannot open project file for writing: %1 (%2)")
+        .arg(xmlFileInfo->absoluteFilePath(), xmlFile.errorString()));
+  }
   xmlFile.write(xmlDocument->toByteArray());
 
   xmlFile.flush();

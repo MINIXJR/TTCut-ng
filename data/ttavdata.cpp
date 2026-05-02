@@ -1055,29 +1055,17 @@ void TTAVData::onCutPreviewAborted()
 }
 
 /*!
- * createAudioCutFileName
+ * createCutFileName — builds "<cutBase>_NNN.<ext>" inside TTCut::cutDirPath.
+ * Used for both per-track audio and subtitle output filenames.
  */
-QString TTAVData::createAudioCutFileName(QString cutBaseFileName, QString audioFileName, int index)
+QString TTAVData::createCutFileName(QString cutBaseFileName, QString sourceFileName, int index)
 {
-  QString audioCutFileName = QString("%1_%2.%3").
+  QString cutFileName = QString("%1_%2.%3").
     arg(QFileInfo(cutBaseFileName).completeBaseName()).
     arg(index, 3, 10, QLatin1Char('0')).
-    arg(QFileInfo(audioFileName).suffix());
+    arg(QFileInfo(sourceFileName).suffix());
 
-  return QFileInfo(QDir(TTCut::cutDirPath), audioCutFileName).absoluteFilePath();
-}
-
-/*!
- * createSubtitleCutFileName
- */
-QString TTAVData::createSubtitleCutFileName(QString cutBaseFileName, QString subtitleFileName, int index)
-{
-  QString subtitleCutFileName = QString("%1_%2.%3").
-    arg(QFileInfo(cutBaseFileName).completeBaseName()).
-    arg(index, 3, 10, QLatin1Char('0')).
-    arg(QFileInfo(subtitleFileName).suffix());
-
-  return QFileInfo(QDir(TTCut::cutDirPath), subtitleCutFileName).absoluteFilePath();
+  return QFileInfo(QDir(TTCut::cutDirPath), cutFileName).absoluteFilePath();
 }
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -1196,7 +1184,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   for (int i = 0; i < cutList->at(0).avDataItem()->audioCount(); i++) {
     TTAudioStream* audioStream = cutList->at(0).avDataItem()->audioStreamAt(i);
 
-    QString tgtAudioFilePath = createAudioCutFileName(tgtFileName, audioStream->fileName(), i+1);
+    QString tgtAudioFilePath = createCutFileName(tgtFileName, audioStream->fileName(), i+1);
 
     log->debugMsg(__FILE__, __LINE__, QString("current audio stream %1").arg(audioStream->fileName()));
     log->debugMsg(__FILE__, __LINE__, QString("audio cut file %1").arg(tgtAudioFilePath));
@@ -1258,7 +1246,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   for (int i = 0; i < cutList->at(0).avDataItem()->subtitleCount(); i++) {
     TTSubtitleStream* subtitleStream = cutList->at(0).avDataItem()->subtitleStreamAt(i);
 
-    QString tgtSubtitleFilePath = createSubtitleCutFileName(tgtFileName, subtitleStream->fileName(), i+1);
+    QString tgtSubtitleFilePath = createCutFileName(tgtFileName, subtitleStream->fileName(), i+1);
 
     log->debugMsg(__FILE__, __LINE__, QString("current subtitle stream %1").arg(subtitleStream->fileName()));
     log->debugMsg(__FILE__, __LINE__, QString("subtitle cut file %1").arg(tgtSubtitleFilePath));
@@ -1775,7 +1763,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
     }
     if (i == 0) firstTrackDrifts = plan.drifts;
 
-    QString tgtAudioFilePath = createAudioCutFileName(tgtFileName, audioStream->fileName(), i+1);
+    QString tgtAudioFilePath = createCutFileName(tgtFileName, audioStream->fileName(), i+1);
     if (QFileInfo(tgtAudioFilePath).exists()) QFile::remove(tgtAudioFilePath);
 
     QList<int> targetAcmods;

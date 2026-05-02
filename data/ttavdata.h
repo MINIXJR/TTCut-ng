@@ -212,8 +212,7 @@ class TTAVData : public QObject
     TTAVList*      videoDataList() { return mpAVList; }
     QFileInfoList  getAudioNames(const QFileInfo& vFileInfo);
     QFileInfoList  getSubtitleNames(const QFileInfo& vFileInfo);
-    QString        createAudioCutFileName(QString cutBaseFileName, QString audioFileName, int index);
-    QString        createSubtitleCutFileName(QString cutBaseFileName, QString subtitleFileName, int index);
+    QString        createCutFileName(QString cutBaseFileName, QString sourceFileName, int index);
     void           deleteElementaryStreams(const QString& videoFilePath,
                                            const QStringList& audioFilePaths,
                                            const QStringList& subtitleFilePaths = QStringList());
