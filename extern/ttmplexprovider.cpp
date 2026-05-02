@@ -145,11 +145,15 @@ void TTMplexProvider::mplexPart(int index)
   proc->setProcessChannelMode( QProcess::MergedChannels );
   qApp->processEvents();
 
-  connect(proc, SIGNAL(error(QProcess::ProcessError)),        SLOT(onProcError(QProcess::ProcessError)));
-  connect(proc, SIGNAL(finished(int, QProcess::ExitStatus)),  SLOT(onProcFinished(int, QProcess::ExitStatus)));
-  connect(proc, SIGNAL(readyRead()),                          SLOT(onProcReadOut()));
-  connect(proc, SIGNAL(started()),                            SLOT(onProcStarted()));
-  connect(proc, SIGNAL(stateChanged(QProcess::ProcessState)), SLOT(onProcStateChanged(QProcess::ProcessState)));
+  // Qt5 functor connects: errorOccurred replaces deprecated 'error' signal
+  // (Qt 6 removed it entirely), and the new-style syntax is type-checked
+  // at compile time so typos no longer fail silently at runtime.
+  connect(proc, &QProcess::errorOccurred, this, &TTMplexProvider::onProcError);
+  connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+          this, &TTMplexProvider::onProcFinished);
+  connect(proc, &QProcess::readyRead,    this, &TTMplexProvider::onProcReadOut);
+  connect(proc, &QProcess::started,      this, &TTMplexProvider::onProcStarted);
+  connect(proc, &QProcess::stateChanged, this, &TTMplexProvider::onProcStateChanged);
 
   QString     mplexCmd  = "mplex";
   QStringList mplexArgs = createMplexArguments(mpMuxList->videoFilePathAt(index), mpMuxList->audioFilePathsAt(index), false);

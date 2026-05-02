@@ -57,7 +57,11 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-// Static initialization flag
+// Static initialization flag — std::call_once gives us thread-safe one-shot
+// initialization so concurrent TTFFmpegWrapper construction from multiple
+// threads can't accidentally run av_register_all twice.
+#include <mutex>
+static std::once_flag sFFmpegInitOnce;
 static bool sFFmpegInitialized = false;
 
 // ----------------------------------------------------------------------------
@@ -98,7 +102,7 @@ TTFFmpegWrapper::~TTFFmpegWrapper()
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::initializeFFmpeg()
 {
-    if (!sFFmpegInitialized) {
+    std::call_once(sFFmpegInitOnce, []() {
         // Note: av_register_all() is deprecated in newer FFmpeg versions
         // and not needed for FFmpeg 4.0+
 #if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)
@@ -106,7 +110,7 @@ void TTFFmpegWrapper::initializeFFmpeg()
 #endif
         sFFmpegInitialized = true;
         qDebug() << "FFmpeg initialized, version:" << av_version_info();
-    }
+    });
 }
 
 // ----------------------------------------------------------------------------
