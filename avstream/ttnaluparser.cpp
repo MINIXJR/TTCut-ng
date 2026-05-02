@@ -11,6 +11,7 @@
 
 #include <QDebug>
 #include <QFileInfo>
+#include <QSet>
 #include <algorithm>
 
 // Start code patterns
@@ -1066,24 +1067,20 @@ QByteArray TTNaluParser::readNalDataWithStartCode(int index)
 // ----------------------------------------------------------------------------
 void TTNaluParser::deduplicateList(QList<int>& list)
 {
+    // QSet<QByteArray> hashes the data for O(1) average lookup; the previous
+    // O(n^2) linear scan blew up on DVB streams that repeat SPS/PPS before
+    // every I-slice (e.g. ~5700 SPS in a 93-minute file).
     QList<int> unique;
-    QList<QByteArray> seen;
+    QSet<QByteArray> seen;
 
     for (int nalIdx : list) {
         QByteArray data = readNalDataWithStartCode(nalIdx);
         if (data.isEmpty())
             continue;
 
-        bool isDuplicate = false;
-        for (const QByteArray& s : seen) {
-            if (s == data) {
-                isDuplicate = true;
-                break;
-            }
-        }
-        if (!isDuplicate) {
+        if (!seen.contains(data)) {
             unique.append(nalIdx);
-            seen.append(data);
+            seen.insert(data);
         }
     }
     list = unique;

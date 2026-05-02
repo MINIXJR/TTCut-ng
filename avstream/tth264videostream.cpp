@@ -463,32 +463,27 @@ int TTH264VideoStream::findGOPForFrame(int frameIndex)
 }
 
 // -----------------------------------------------------------------------------
-// Get start frame of GOP
+// Get start frame of GOP — O(1) via the GOP index built by buildGOPIndex.
+// (Previous O(n) scan over mAccessUnits matched the H.265 implementation
+// before that one was rewritten to use mFFmpeg->gopIndex().)
 // -----------------------------------------------------------------------------
 int TTH264VideoStream::getGOPStart(int gopIndex)
 {
-    for (int i = 0; i < mAccessUnits.size(); ++i) {
-        if (mAccessUnits[i]->gopIndex() == gopIndex) {
-            return i;
-        }
+    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
+        return mFFmpeg->gopIndex()[gopIndex].startFrame;
     }
     return -1;
 }
 
 // -----------------------------------------------------------------------------
-// Get end frame of GOP
+// Get end frame of GOP — O(1) via the GOP index.
 // -----------------------------------------------------------------------------
 int TTH264VideoStream::getGOPEnd(int gopIndex)
 {
-    int lastFrame = -1;
-    for (int i = 0; i < mAccessUnits.size(); ++i) {
-        if (mAccessUnits[i]->gopIndex() == gopIndex) {
-            lastFrame = i;
-        } else if (mAccessUnits[i]->gopIndex() > gopIndex) {
-            break;
-        }
+    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
+        return mFFmpeg->gopIndex()[gopIndex].endFrame;
     }
-    return lastFrame;
+    return -1;
 }
 
 // -----------------------------------------------------------------------------
