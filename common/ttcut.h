@@ -271,6 +271,13 @@ class TTCut
    // Show_eng.srt). Falls back to the current system locale converted via
    // iso639_1to2 if no match. Used by TTAudioItem and TTSubtitleItem.
    static QString langFromFilename(const QString& filePath);
+
+   // Populate a QComboBox with "<code> (<name>)" entries from
+   // languageCodes() / languageNames() and select the entry whose userData
+   // matches currentLang. Shared by TTAudioTreeView and TTSubtitleTreeView,
+   // which previously each duplicated the loop. The caller wires the
+   // currentIndexChanged signal — the row-lookup logic differs per view.
+   static void populateLanguageCombo(class QComboBox* combo, const QString& currentLang);
 };
 
 

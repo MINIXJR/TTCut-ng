@@ -301,15 +301,7 @@ void TTAudioTreeView::createActions()
 QComboBox* TTAudioTreeView::createLanguageCombo(const QString& currentLang)
 {
   QComboBox* combo = new QComboBox();
-  QStringList codes = TTCut::languageCodes();
-  QStringList names = TTCut::languageNames();
-  int selectIdx = 0;
-
-  for (int i = 0; i < codes.size(); i++) {
-    combo->addItem(QString("%1 (%2)").arg(codes[i]).arg(names[i]), codes[i]);
-    if (codes[i] == currentLang) selectIdx = i;
-  }
-  combo->setCurrentIndex(selectIdx);
+  TTCut::populateLanguageCombo(combo, currentLang);
 
   connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, combo](int idx) {
     // Find which row this combo belongs to

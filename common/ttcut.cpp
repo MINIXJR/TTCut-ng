@@ -36,6 +36,7 @@
 #include "ttcut.h"
 
 #include <QWidget>
+#include <QComboBox>
 #include <QDir>
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -287,6 +288,19 @@ QStringList TTCut::languageNames()
     << "Български" << "Srpski" << "Slovenščina" << "日本語" << "中文"
     << "한국어" << "العربية"
     << "Klare Sprache" << "Hörfilm";
+}
+
+void TTCut::populateLanguageCombo(QComboBox* combo, const QString& currentLang)
+{
+  QStringList codes = languageCodes();
+  QStringList names = languageNames();
+  int selectIdx = 0;
+
+  for (int i = 0; i < codes.size(); i++) {
+    combo->addItem(QString("%1 (%2)").arg(codes[i]).arg(names[i]), codes[i]);
+    if (codes[i] == currentLang) selectIdx = i;
+  }
+  combo->setCurrentIndex(selectIdx);
 }
 
 QString TTCut::langFromFilename(const QString& filePath)
