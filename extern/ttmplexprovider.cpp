@@ -85,11 +85,14 @@ TTMplexProvider::TTMplexProvider(TTMuxListData* muxList) : IStatusReporter()
   log       = TTMessageLogger::getInstance();
   mpMuxList = muxList;
   mAudioSyncOffsetMs = 0;
+  proc      = nullptr;
 }
 
 //! Clean up used resources
 TTMplexProvider::~TTMplexProvider()
 {
+  delete proc;
+  proc = nullptr;
 }
 
 /*! \brief Write mux data in muxscript
@@ -140,6 +143,7 @@ void TTMplexProvider::mplexPart(int index)
 {
   mCurrentMuxIndex = index;
   int  update      = EVENT_LOOP_INTERVALL;
+  delete proc;             // free any QProcess from a previous startMplex
   proc             = new QProcess();
 
   proc->setProcessChannelMode( QProcess::MergedChannels );

@@ -591,10 +591,17 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         int outStreamIdx = 1;
 
         for (int i = 0; i < audioFiles.size(); i++) {
-            if (!QFile::exists(audioFiles[i])) continue;
+            if (!QFile::exists(audioFiles[i])) {
+                qWarning() << "ES-mux: audio file missing, skipping:" << audioFiles[i];
+                continue;
+            }
 
             AVFormatContext* audioCtx = openInput(audioFiles[i], ret);
-            if (!audioCtx) continue;
+            if (!audioCtx) {
+                qWarning() << "ES-mux: cannot open audio" << audioFiles[i]
+                           << ":" << avErrStr(ret);
+                continue;
+            }
 
             int audioIdx = av_find_best_stream(audioCtx, AVMEDIA_TYPE_AUDIO,
                                                 -1, -1, nullptr, 0);
@@ -643,10 +650,17 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
         // Subtitle streams
         for (int i = 0; i < subtitleFiles.size(); i++) {
-            if (!QFile::exists(subtitleFiles[i])) continue;
+            if (!QFile::exists(subtitleFiles[i])) {
+                qWarning() << "ES-mux: subtitle file missing, skipping:" << subtitleFiles[i];
+                continue;
+            }
 
             AVFormatContext* subCtx = openInput(subtitleFiles[i], ret);
-            if (!subCtx) continue;
+            if (!subCtx) {
+                qWarning() << "ES-mux: cannot open subtitle" << subtitleFiles[i]
+                           << ":" << avErrStr(ret);
+                continue;
+            }
 
             int subIdx = av_find_best_stream(subCtx, AVMEDIA_TYPE_SUBTITLE,
                                               -1, -1, nullptr, 0);

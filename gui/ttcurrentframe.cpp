@@ -318,16 +318,6 @@ void TTCurrentFrame::onSetMarker()
 	emit setMarker(videoStream->currentIndex());
 }
 
-//! Cut in position was set
-void TTCurrentFrame::onSetCutIn(__attribute__((unused))int cutInPos)
-{
-}
-
-//! Cut out position was set
-void TTCurrentFrame::onSetCutOut(__attribute__((unused))int cutOutPos)
-{
-}
-
 //! Goto cut in position
 void TTCurrentFrame::onGotoCutIn(int pos)
 {

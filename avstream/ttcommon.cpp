@@ -38,8 +38,8 @@ bool ttAssigned( const void* pointer )
 // change file extension from fName to cExt
 QString ttChangeFileExt( QString fName, const char* cExt )
 {
-  QFile     file( fName );
-  QFileInfo fInfo( file );
+  // QFileInfo accepts a path string directly — no need to round-trip via QFile.
+  QFileInfo fInfo( fName );
   QString   sNewFileName;
   uint len1, len2, len;
 

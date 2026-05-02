@@ -100,7 +100,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     int              editItemIndex;
     bool             allowSelectionChanged;
     QTreeWidgetItem* currentEditItem;
-    QMenu*           contextMenu;
     QAction*         itemUpAction;
     QAction*         itemDownAction;
     QAction*         itemDeleteAction;
