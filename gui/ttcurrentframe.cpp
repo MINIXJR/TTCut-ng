@@ -141,6 +141,7 @@ void TTCurrentFrame::onCutInChanged(const TTCutItem& cutItem)
 //! Returns the current frame position in stream
 int TTCurrentFrame::currentFramePos()
 {
+  if (videoStream == nullptr) return 0;
   return videoStream->currentIndex();
 }
 
