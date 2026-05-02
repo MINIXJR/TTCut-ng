@@ -148,20 +148,6 @@ TTVideoHeader* TTVideoHeaderList::getPrevHeader(TTVideoHeader* current, TTMpeg2V
 }
 
 
-int TTVideoHeaderList::findIndexOf(TTVideoHeader* current)
-{
-  for (int i = 0; i < size(); i++) {
-    TTAVHeader* check = at(i);
-
-    if (check == NULL)
-      qDebug("check is null!");
-
-    if (check->headerOffset() == ((TTAVHeader*)current)->headerOffset())
-      return i;
-  }
-  return -2;
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns the TTSequenceHeader at header list index position
  */

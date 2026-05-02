@@ -77,7 +77,6 @@ class TTVideoHeaderList : public TTHeaderList
     int headerIndex(TTVideoHeader* current);
 
   protected:
-     virtual int findIndexOf(TTVideoHeader* current);
     virtual void sort();
 };
 #endif //TTVIDEOHEADERLIST_H
