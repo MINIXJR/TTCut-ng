@@ -34,6 +34,7 @@
 #include "ttesinfo.h"
 #include "../data/ttcutparameter.h"
 #include "../common/ttcut.h"
+#include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 
 #include <QDebug>
@@ -47,9 +48,6 @@ TTH264VideoStream::TTH264VideoStream(const QFileInfo& fInfo)
     : TTVideoStream(fInfo)
     , mFFmpeg(nullptr)
     , mSPS(nullptr)
-    , mEncoderPreset("medium")
-    , mEncoderCrf(18)
-    , mEncoderProfile("high")
 {
     mLog = TTMessageLogger::getInstance();
     stream_type = TTAVTypes::h264_video;
@@ -494,159 +492,15 @@ int TTH264VideoStream::getGOPEnd(int gopIndex)
 }
 
 // -----------------------------------------------------------------------------
-// Main cut operation
+// cut() — required by TTAVStream pure-virtual contract, but H.264 cutting
+// goes through TTESSmartCut (driven by TTCutVideoTask), not through here.
+// Throw loudly so a future virtual-dispatch caller cannot silently produce
+// empty output via this stale prototype path.
 // -----------------------------------------------------------------------------
-void TTH264VideoStream::cut(int cutInPos, int cutOutPos, TTCutParameter* cutParams)
+void TTH264VideoStream::cut(int cutInPos, int cutOutPos, TTCutParameter* /*cp*/)
 {
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("H.264 cut: %1 -> %2").arg(cutInPos).arg(cutOutPos));
-
-    if (!openStream()) {
-        mLog->errorMsg(__FILE__, __LINE__, "Failed to open stream for cutting");
-        return;
-    }
-
-    // Check if cut-in is at IDR
-    bool cutInAtIDR = isCutInPoint(cutInPos);
-    bool cutOutAtIDR = isCutInPoint(cutOutPos);
-
-    if (cutInAtIDR && cutOutAtIDR) {
-        // Both at IDR - can copy directly without re-encoding
-        mLog->infoMsg(__FILE__, __LINE__, "Both cut points at IDR - direct copy");
-        copyFrameSegment(cutInPos, cutOutPos, cutParams);
-    } else {
-        // Need to re-encode at least part of the segment
-        mLog->infoMsg(__FILE__, __LINE__, "Cut points require partial re-encoding");
-
-        // Find IDR boundaries
-        int idrBefore = findIDRBefore(cutInPos);
-        int idrAfter = findIDRAfter(cutOutPos);
-
-        if (idrBefore < 0) idrBefore = 0;
-        if (idrAfter < 0) idrAfter = mAccessUnits.size() - 1;
-
-        // Strategy:
-        // 1. Re-encode from idrBefore to cutInPos (if cutInPos != idrBefore)
-        // 2. Copy from cutInPos to cutOutPos (the main segment)
-        // 3. Re-encode from cutOutPos to idrAfter (if cutOutPos != idrAfter)
-
-        // For simplicity in initial implementation, re-encode the affected GOPs
-        if (!cutInAtIDR) {
-            // Re-encode the first GOP segment
-            int gopStart = findIDRBefore(cutInPos);
-            encodeSegment(gopStart, cutInPos, cutParams);
-        }
-
-        // Copy the middle segment (if there is one between cut points at IDR boundaries)
-        int copyStart = cutInAtIDR ? cutInPos : findIDRAfter(cutInPos);
-        int copyEnd = cutOutAtIDR ? cutOutPos : findIDRBefore(cutOutPos);
-
-        if (copyStart <= copyEnd && copyStart >= 0) {
-            copyFrameSegment(copyStart, copyEnd, cutParams);
-        }
-
-        if (!cutOutAtIDR) {
-            // Re-encode the last GOP segment
-            int gopEnd = findIDRAfter(cutOutPos);
-            if (gopEnd < 0) gopEnd = mAccessUnits.size() - 1;
-            encodeSegment(cutOutPos, gopEnd, cutParams);
-        }
-    }
-
-    closeStream();
-}
-
-// -----------------------------------------------------------------------------
-// Copy segment directly (between keyframes)
-// -----------------------------------------------------------------------------
-void TTH264VideoStream::copyFrameSegment(int startFrame, int endFrame, TTCutParameter* cp)
-{
-    Q_UNUSED(cp);
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Copy segment: frames %1 to %2").arg(startFrame).arg(endFrame));
-
-    // TODO: Implement actual byte-level copying
-    // This requires reading packets from source and writing to output
-    // For now, this is a placeholder
-}
-
-// -----------------------------------------------------------------------------
-// Encode segment using ffmpeg
-// -----------------------------------------------------------------------------
-void TTH264VideoStream::encodeSegment(int startFrame, int endFrame, TTCutParameter* cp)
-{
-    Q_UNUSED(cp);
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Encode segment: frames %1 to %2").arg(startFrame).arg(endFrame));
-
-    // Get timestamps for the segment
-    double startTime = mFFmpeg->ptsToSeconds(
-        mAccessUnits[startFrame]->pts(),
-        mFFmpeg->findBestVideoStream());
-    double endTime = mFFmpeg->ptsToSeconds(
-        mAccessUnits[endFrame]->pts(),
-        mFFmpeg->findBestVideoStream());
-
-    // Build ffmpeg command for re-encoding
-    QStringList args;
-    args << "-y"                                    // Overwrite output
-         << "-ss" << QString::number(startTime, 'f', 6)  // Start time
-         << "-i" << filePath()                      // Input file
-         << "-t" << QString::number(endTime - startTime, 'f', 6)  // Duration
-         << "-c:v" << "libx264"                     // H.264 encoder
-         << "-preset" << mEncoderPreset             // Encoding preset
-         << "-crf" << QString::number(mEncoderCrf)  // Quality
-         << "-profile:v" << mEncoderProfile         // Profile
-         << "-pix_fmt" << "yuv420p";                // Pixel format
-
-    // Add GOP settings to match source
-    if (mSPS && mSPS->hasFrameRate()) {
-        int gopSize = static_cast<int>(mSPS->frameRate() * 0.5); // ~0.5 second GOP
-        args << "-g" << QString::number(gopSize);
-    }
-
-    // Output file
-    QDir tempDir(TTCut::tempDirPath);
-    QString outputFile = tempDir.filePath(
-        QString("h264_encode_%1_%2.h264").arg(startFrame).arg(endFrame));
-    args << "-f" << "h264"
-         << outputFile;
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("FFmpeg encode command: ffmpeg %1").arg(args.join(" ")));
-
-    // Execute ffmpeg
-    QProcess proc;
-    proc.start("/usr/bin/ffmpeg", args);
-
-    if (!proc.waitForStarted(5000)) {
-        mLog->errorMsg(__FILE__, __LINE__, "FFmpeg failed to start");
-        return;
-    }
-
-    if (!proc.waitForFinished(300000)) { // 5 minute timeout
-        mLog->errorMsg(__FILE__, __LINE__, "FFmpeg timed out");
-        proc.kill();
-        return;
-    }
-
-    if (proc.exitCode() != 0) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            QString("FFmpeg encoding failed: %1")
-                .arg(QString::fromUtf8(proc.readAllStandardError())));
-        return;
-    }
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Segment encoded successfully: %1").arg(outputFile));
-}
-
-// -----------------------------------------------------------------------------
-// Encode part (compatibility wrapper for existing code)
-// -----------------------------------------------------------------------------
-void TTH264VideoStream::encodePartH264(int start, int end, TTCutParameter* cp)
-{
-    encodeSegment(start, end, cp);
+    Q_UNUSED(cutInPos);
+    Q_UNUSED(cutOutPos);
+    throw TTInvalidOperationException(__FILE__, __LINE__,
+        "TTH264VideoStream::cut is a deprecated stub; use TTESSmartCut instead");
 }

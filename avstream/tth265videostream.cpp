@@ -49,9 +49,6 @@ TTH265VideoStream::TTH265VideoStream(const QFileInfo& fInfo)
     , mFFmpeg(nullptr)
     , mSPS(nullptr)
     , mVPS(nullptr)
-    , mEncoderPreset("medium")
-    , mEncoderCrf(20)       // HEVC CRF slightly higher than H.264 for same quality
-    , mEncoderProfile("main")
 {
     mLog = TTMessageLogger::getInstance();
     mLog->infoMsg(__FILE__, __LINE__,
@@ -345,46 +342,17 @@ void TTH265VideoStream::buildIndexListFromFFmpeg()
 }
 
 // -----------------------------------------------------------------------------
-// Cut operation
+// cut() — required by TTAVStream pure-virtual contract, but H.265 cutting
+// goes through TTESSmartCut (driven by TTCutVideoTask), not through here.
+// Throw loudly so a future virtual-dispatch caller cannot silently produce
+// empty output via this stale prototype path.
 // -----------------------------------------------------------------------------
-void TTH265VideoStream::cut(int start, int end, TTCutParameter* cp)
+void TTH265VideoStream::cut(int start, int end, TTCutParameter* /*cp*/)
 {
-    if (!cp) {
-        mLog->errorMsg(__FILE__, __LINE__, "Cut parameter is null");
-        return;
-    }
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("H.265 cut from frame %1 to %2").arg(start).arg(end));
-
-    // Find RAP boundaries for the cut range
-    int rapBefore = findRAPBefore(start);
-    int rapAfter = findRAPAfter(end);
-
-    // Determine which segments need re-encoding
-    bool needStartReencode = (start != rapBefore && start > 0);
-    bool needEndReencode = false;
-
-    // Check if end frame is the frame before a RAP (clean boundary)
-    int nextRAP = findRAPAfter(end);
-    if (nextRAP > 0 && end != (nextRAP - 1)) {
-        needEndReencode = true;
-    }
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Cut strategy: start=%1, end=%2, rapBefore=%3, rapAfter=%4")
-            .arg(start).arg(end).arg(rapBefore).arg(rapAfter));
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Need re-encode: start=%1, end=%2")
-            .arg(needStartReencode).arg(needEndReencode));
-
-    if (needStartReencode || needEndReencode) {
-        // Use partial re-encoding
-        encodeSegment(start, end, cp);
-    } else {
-        // Pure stream copy possible
-        copyFrameSegment(rapBefore, rapAfter, cp);
-    }
+    Q_UNUSED(start);
+    Q_UNUSED(end);
+    throw TTInvalidOperationException(__FILE__, __LINE__,
+        "TTH265VideoStream::cut is a deprecated stub; use TTESSmartCut instead");
 }
 
 // -----------------------------------------------------------------------------
@@ -545,48 +513,6 @@ int TTH265VideoStream::getGOPEnd(int gopIndex)
 }
 
 // -----------------------------------------------------------------------------
-// Copy segment without re-encoding
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::copyFrameSegment(int startFrame, int endFrame, TTCutParameter* cp)
-{
-    Q_UNUSED(cp);
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Copy segment: frames %1 to %2").arg(startFrame).arg(endFrame));
-
-    // TODO: Implement actual byte-level copying
-    // This requires reading packets from source and writing to output TTFileBuffer
-    // For now, this is a placeholder
-}
-
-// -----------------------------------------------------------------------------
-// Encode segment (partial re-encoding)
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::encodeSegment(int startFrame, int endFrame, TTCutParameter* cp)
-{
-    Q_UNUSED(cp);
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Encode segment: frames %1 to %2").arg(startFrame).arg(endFrame));
-
-    // Get timestamps for the segment
-    double startTime = mFFmpeg->ptsToSeconds(
-        mAccessUnits[startFrame]->pts(),
-        mFFmpeg->findBestVideoStream());
-    double endTime = mFFmpeg->ptsToSeconds(
-        mAccessUnits[endFrame]->pts(),
-        mFFmpeg->findBestVideoStream());
-
-    // TODO: Implement actual re-encoding using ffmpeg
-    // This will require:
-    // 1. Decode frames from startFrame to endFrame
-    // 2. Re-encode with H.265 codec
-    // 3. Write to output TTFileBuffer
-    Q_UNUSED(startTime);
-    Q_UNUSED(endTime);
-}
-
-// -----------------------------------------------------------------------------
 // Check if NAL type is a Random Access Point
 // -----------------------------------------------------------------------------
 bool TTH265VideoStream::isRAPNalType(int nalType)
@@ -604,11 +530,3 @@ bool TTH265VideoStream::isRAPNalType(int nalType)
     }
 }
 
-// -----------------------------------------------------------------------------
-// Re-encode part of stream with H.265
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::encodePartH265(int start, int end, TTCutParameter* cp)
-{
-    // Delegate to encodeSegment
-    encodeSegment(start, end, cp);
-}

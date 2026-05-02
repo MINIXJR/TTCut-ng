@@ -88,21 +88,12 @@ public:
     int getGOPStart(int gopIndex);
     int getGOPEnd(int gopIndex);
 
-    // Re-encoding support
-    void encodePartH265(int start, int end, TTCutParameter* cp);
-
 protected:
     // Internal helpers
     bool openStream();
     bool closeStream();
     void buildHeaderListFromFFmpeg();
     void buildIndexListFromFFmpeg();
-
-    // Copy segment without re-encoding (between keyframes)
-    void copyFrameSegment(int startFrame, int endFrame, TTCutParameter* cp);
-
-    // Encode segment (at cut boundaries)
-    void encodeSegment(int startFrame, int endFrame, TTCutParameter* cp);
 
     // Check if NAL type is a Random Access Point
     static bool isRAPNalType(int nalType);
@@ -116,11 +107,6 @@ private:
     TTH265VPS* mVPS;
     QList<TTH265AccessUnit*> mAccessUnits;
     TTMessageLogger* mLog;
-
-    // Encoding parameters for partial re-encoding
-    QString mEncoderPreset;
-    int mEncoderCrf;
-    QString mEncoderProfile;
 };
 
 #endif // TTH265VIDEOSTREAM_H

@@ -89,21 +89,12 @@ public:
     int getGOPStart(int gopIndex);
     int getGOPEnd(int gopIndex);
 
-    // Re-encoding support
-    void encodePartH264(int start, int end, TTCutParameter* cp);
-
 protected:
     // Internal helpers
     bool openStream();
     bool closeStream();
     void buildHeaderListFromFFmpeg();
     void buildIndexListFromFFmpeg();
-
-    // Copy segment without re-encoding (between keyframes)
-    void copyFrameSegment(int startFrame, int endFrame, TTCutParameter* cp);
-
-    // Encode segment (at cut boundaries)
-    void encodeSegment(int startFrame, int endFrame, TTCutParameter* cp);
 
 public:
     const QList<TTFrameInfo>& ffmpegFrameIndex() const { return mFFmpeg->frameIndex(); }
@@ -113,11 +104,6 @@ private:
     TTH264SPS* mSPS;
     QList<TTH264AccessUnit*> mAccessUnits;
     TTMessageLogger* mLog;
-
-    // Encoding parameters for partial re-encoding
-    QString mEncoderPreset;
-    int mEncoderCrf;
-    QString mEncoderProfile;
 };
 
 #endif // TTH264VIDEOSTREAM_H
