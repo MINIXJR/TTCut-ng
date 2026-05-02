@@ -60,32 +60,26 @@ void TTCutSettingsEncoder::initCodecList()
   cbCodec->insertItem(2, "H.265/HEVC");
 }
 
+// libx264 / libx265 share the same speed-preset name set.
+static void populatePresetCombo(QComboBox* combo)
+{
+  static const char* const kPresets[] = {
+    "ultrafast", "superfast", "veryfast", "faster", "fast",
+    "medium", "slow", "slower", "veryslow"
+  };
+  combo->clear();
+  for (int i = 0; i < int(sizeof(kPresets)/sizeof(kPresets[0])); ++i)
+    combo->insertItem(i, QString::fromLatin1(kPresets[i]));
+}
+
 void TTCutSettingsEncoder::initPresetList()
 {
-  cbPreset->clear();
-  cbPreset->insertItem(0, "ultrafast");
-  cbPreset->insertItem(1, "superfast");
-  cbPreset->insertItem(2, "veryfast");
-  cbPreset->insertItem(3, "faster");
-  cbPreset->insertItem(4, "fast");
-  cbPreset->insertItem(5, "medium");
-  cbPreset->insertItem(6, "slow");
-  cbPreset->insertItem(7, "slower");
-  cbPreset->insertItem(8, "veryslow");
+  populatePresetCombo(cbPreset);
 }
 
 void TTCutSettingsEncoder::initPreviewPresetList()
 {
-  cbPreviewPreset->clear();
-  cbPreviewPreset->insertItem(0, "ultrafast");
-  cbPreviewPreset->insertItem(1, "superfast");
-  cbPreviewPreset->insertItem(2, "veryfast");
-  cbPreviewPreset->insertItem(3, "faster");
-  cbPreviewPreset->insertItem(4, "fast");
-  cbPreviewPreset->insertItem(5, "medium");
-  cbPreviewPreset->insertItem(6, "slow");
-  cbPreviewPreset->insertItem(7, "slower");
-  cbPreviewPreset->insertItem(8, "veryslow");
+  populatePresetCombo(cbPreviewPreset);
 }
 
 void TTCutSettingsEncoder::updateProfileList()
