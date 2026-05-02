@@ -2928,19 +2928,24 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
 
     AVPacket* packet = av_packet_alloc();
     if (!packet) return QByteArray();
-    int ret = avcodec_receive_packet(mEncoder, packet);
 
-    if (ret < 0) {
-        if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+    // Drain all packets the encoder has buffered (lookahead, flush).
+    // A single receive_packet would silently drop subsequent packets.
+    QByteArray result;
+    while (true) {
+        int ret = avcodec_receive_packet(mEncoder, packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            break;
+        }
+        if (ret < 0) {
             char errbuf[AV_ERROR_MAX_STRING_SIZE];
             av_strerror(ret, errbuf, sizeof(errbuf));
             qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << errbuf;
+            break;
         }
-        av_packet_free(&packet);
-        return QByteArray();
+        result.append(reinterpret_cast<const char*>(packet->data), packet->size);
+        av_packet_unref(packet);
     }
-
-    QByteArray result(reinterpret_cast<char*>(packet->data), packet->size);
     av_packet_free(&packet);
 
     return result;
