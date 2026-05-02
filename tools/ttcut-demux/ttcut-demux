@@ -17,6 +17,23 @@
 
 set -e
 
+# Track all temp files/dirs we create so a failure (set -e abort, SIGINT,
+# disk-full, ...) doesn't leave multi-GB junk in $OUTDIR. Files are removed;
+# directories are removed recursively (via rm -rf inside the trap below).
+_CLEANUP_FILES=()
+_CLEANUP_DIRS=()
+_cleanup_temps() {
+    local rc=$?
+    if [ ${#_CLEANUP_FILES[@]} -gt 0 ]; then
+        rm -f "${_CLEANUP_FILES[@]}" 2>/dev/null || true
+    fi
+    if [ ${#_CLEANUP_DIRS[@]} -gt 0 ]; then
+        rm -rf "${_CLEANUP_DIRS[@]}" 2>/dev/null || true
+    fi
+    exit $rc
+}
+trap _cleanup_temps EXIT INT TERM
+
 # Colors for output (disabled when stdout is not a terminal)
 if [ -t 1 ]; then
     RED='\033[0;31m'
@@ -334,6 +351,7 @@ echo ""
 step "Repairing timestamps (normalizing to start at 0)..."
 
 REPAIRED_INPUT="$OUTDIR/.${BASENAME}_repaired.ts"
+_CLEANUP_FILES+=("$REPAIRED_INPUT")
 
 # Calculate A/V offset BEFORE repair (from original file)
 # For H.264/H.265: use minimum PTS from first 2 seconds (= first display frame PTS)
@@ -381,6 +399,7 @@ fi
 
 # Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
 FFMPEG_LOG="$OUTDIR/.ffmpeg_repair.log"
+_CLEANUP_FILES+=("$FFMPEG_LOG")
 if ffmpeg -y -v warning -fflags +genpts+igndts -i "$INPUT" \
     -c copy \
     -avoid_negative_ts make_zero \
@@ -537,6 +556,7 @@ if $ES_MODE; then
     # Create a temporary directory for extraction logs
     EXTRACT_LOG_DIR="$OUTDIR/.extract_logs_$$"
     mkdir -p "$EXTRACT_LOG_DIR"
+    _CLEANUP_DIRS+=("$EXTRACT_LOG_DIR")
 
     # Start video extraction in background
     info "  Video -> $OUTPUT_VIDEO"
@@ -858,6 +878,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # Create temp directory for padding logs
             PAD_LOG_DIR="$OUTDIR/.pad_logs_$$"
             mkdir -p "$PAD_LOG_DIR"
+            _CLEANUP_DIRS+=("$PAD_LOG_DIR")
 
             # Start all audio padding in parallel
             # Strategy: Generate silence separately, then concatenate with original
@@ -870,6 +891,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 TEMP_PADDED="$OUTDIR/.temp_padded_${i}.${AUDIO_EXT}"
                 TEMP_SILENCE="$OUTDIR/.temp_silence_${i}.${AUDIO_EXT}"
                 TEMP_CONCAT="$OUTDIR/.temp_concat_${i}.txt"
+                _CLEANUP_FILES+=("$TEMP_PADDED" "$TEMP_SILENCE" "$TEMP_CONCAT")
 
                 # Get audio codec, bitrate, channels, and sample rate from original
                 AUDIO_CODEC=$(ffprobe -v error -select_streams a:0 \
@@ -1227,27 +1249,47 @@ else
         # First extract video and audio separately with ffmpeg IN PARALLEL
         TEMP_VIDEO="$OUTDIR/.temp_video_$$.mkv"
         TEMP_AUDIO="$OUTDIR/.temp_audio_$$.mka"
+        MKV_LOG_DIR="$OUTDIR/.mkv_extract_logs_$$"
+        mkdir -p "$MKV_LOG_DIR"
+        _CLEANUP_FILES+=("$TEMP_VIDEO" "$TEMP_AUDIO")
+        _CLEANUP_DIRS+=("$MKV_LOG_DIR")
 
         step "Extracting video and audio streams in parallel..."
 
-        # Start video extraction in background
+        # Start video extraction in background; capture stderr so we can
+        # diagnose failures instead of silently feeding mkvmerge garbage.
         ffmpeg -y -i "$INPUT" \
             -map 0:$VIDEO_STREAM \
             -c copy \
-            "$TEMP_VIDEO" 2>/dev/null &
+            "$TEMP_VIDEO" > "$MKV_LOG_DIR/video.log" 2>&1 &
         VIDEO_PID=$!
 
         # Start audio extraction in background
         ffmpeg -y -i "$INPUT" \
             -map 0:$FIRST_AUDIO \
             -c copy \
-            "$TEMP_AUDIO" 2>/dev/null &
+            "$TEMP_AUDIO" > "$MKV_LOG_DIR/audio.log" 2>&1 &
         AUDIO_PID=$!
 
-        # Wait for both to complete
-        wait $VIDEO_PID
+        # Wait for both to complete and check exit codes — silent failures
+        # produced broken MKVs without diagnostics in the past.
+        set +e
+        wait $VIDEO_PID; VIDEO_EXIT=$?
+        wait $AUDIO_PID; AUDIO_EXIT=$?
+        set -e
+
+        if [ $VIDEO_EXIT -ne 0 ]; then
+            warn "ffmpeg video extraction failed (exit $VIDEO_EXIT):"
+            tail -20 "$MKV_LOG_DIR/video.log" | while IFS= read -r line; do warn "  $line"; done
+            error "Aborting: video stream extraction failed"
+        fi
         info "  Video extraction complete"
-        wait $AUDIO_PID
+
+        if [ $AUDIO_EXIT -ne 0 ]; then
+            warn "ffmpeg audio extraction failed (exit $AUDIO_EXIT):"
+            tail -20 "$MKV_LOG_DIR/audio.log" | while IFS= read -r line; do warn "  $line"; done
+            error "Aborting: audio stream extraction failed"
+        fi
         info "  Audio extraction complete"
 
         # Use mkvmerge to create the final MKV with bitstream timing fix
@@ -1257,8 +1299,9 @@ else
             "$TEMP_VIDEO" \
             "$TEMP_AUDIO"
 
-        # Clean up temp files
+        # Clean up temp files (trap will catch leftovers on abort)
         rm -f "$TEMP_VIDEO" "$TEMP_AUDIO"
+        rm -rf "$MKV_LOG_DIR"
 
         # Verify output
         NEW_START=$(ffprobe -v error -show_entries stream=start_time -of csv "$OUTPUT_MKV" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
