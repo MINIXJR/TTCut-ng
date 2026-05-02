@@ -142,7 +142,13 @@ sed -e "s|__VIDEO_PATH__|$VIDEO_FILE|g" \
 #-----------------------------------------------------------------------------
 # Run TTCut-ng in screenshot mode (generate to temp dir, then compare)
 #-----------------------------------------------------------------------------
-TMP_SCREENSHOTS="/tmp/ttcut-screenshots-$$"
+# Honour project temp-dir policy (CLAUDE.md): use /usr/local/src/CLAUDE_TMP/<project>
+# subdirectory if present, otherwise fall back to /tmp.
+if [ -d /usr/local/src/CLAUDE_TMP/TTCut-ng ]; then
+    TMP_SCREENSHOTS="/usr/local/src/CLAUDE_TMP/TTCut-ng/ttcut-screenshots-$$"
+else
+    TMP_SCREENSHOTS="/tmp/ttcut-screenshots-$$"
+fi
 mkdir -p "$TMP_SCREENSHOTS"
 
 echo "Running TTCut-ng screenshot mode..."

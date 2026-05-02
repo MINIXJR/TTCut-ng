@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 
 /* AC3 Sync Word */
@@ -290,7 +291,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
                 if (opts->show_segments) {
                     char time_buf[32];
                     format_time(current_time, time_buf, sizeof(time_buf));
-                    printf("Format change at %s (frame %lu): %s -> %s\n",
+                    printf("Format change at %s (frame %" PRIu64 "): %s -> %s\n",
                            time_buf, stats.total_frames,
                            ac3_acmod_names[stats.last_acmod],
                            ac3_acmod_names[info.acmod]);
@@ -317,7 +318,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
                         if (opts->verbose) {
                             char time_buf[32];
                             format_time(current_time, time_buf, sizeof(time_buf));
-                            printf("Frame %lu @ %s: %d kbps stereo -> 5.1 (FIX)\n",
+                            printf("Frame %" PRIu64 " @ %s: %d kbps stereo -> 5.1 (FIX)\n",
                                    stats.total_frames, time_buf, info.bitrate);
                         }
                     }
@@ -336,7 +337,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             /* Write frame to output */
             if (out_fp) {
                 if (fwrite(frame_buffer, 1, info.frame_size, out_fp) != info.frame_size) {
-                    fprintf(stderr, "\nError: Write failed at frame %lu\n", stats.total_frames);
+                    fprintf(stderr, "\nError: Write failed at frame %" PRIu64 "\n", stats.total_frames);
                     ret = 1;
                     goto cleanup;
                 }
@@ -377,26 +378,26 @@ static int process_ac3_file(const ac3fix_options_t *opts)
     printf("Statistics:\n");
     printf("-----------\n");
     printf("Duration:            %s\n", duration_buf);
-    printf("Total frames:        %lu\n", stats.total_frames);
+    printf("Total frames:        %" PRIu64 "\n", stats.total_frames);
     if (stats.total_frames > 0) {
-        printf("5.1 surround frames: %lu (%.1f%%)\n", stats.surround_frames,
+        printf("5.1 surround frames: %" PRIu64 " (%.1f%%)\n", stats.surround_frames,
                100.0 * stats.surround_frames / stats.total_frames);
-        printf("Stereo frames:       %lu (%.1f%%)\n", stats.stereo_frames,
+        printf("Stereo frames:       %" PRIu64 " (%.1f%%)\n", stats.stereo_frames,
                100.0 * stats.stereo_frames / stats.total_frames);
     }
     if (stats.other_frames > 0)
-        printf("Other frames:        %lu\n", stats.other_frames);
-    printf("Format changes:      %lu\n", stats.format_changes);
+        printf("Other frames:        %" PRIu64 "\n", stats.other_frames);
+    printf("Format changes:      %" PRIu64 "\n", stats.format_changes);
     printf("\n");
-    printf("Inconsistent frames: %lu (>=%d kbps + stereo header)\n",
+    printf("Inconsistent frames: %" PRIu64 " (>=%d kbps + stereo header)\n",
            stats.inconsistent_frames, opts->min_bitrate);
 
     if (opts->force_fix) {
-        printf("Fixed frames:        %lu\n", stats.fixed_frames);
+        printf("Fixed frames:        %" PRIu64 "\n", stats.fixed_frames);
     }
 
     if (stats.inconsistent_frames > 0 && opts->analyze_only) {
-        printf("\nRecommendation: Run with --force-fix to repair %lu frames\n",
+        printf("\nRecommendation: Run with --force-fix to repair %" PRIu64 " frames\n",
                stats.inconsistent_frames);
         printf("Example: %s --force-fix %s output.ac3\n",
                "ttcut-ac3fix", opts->input_file);

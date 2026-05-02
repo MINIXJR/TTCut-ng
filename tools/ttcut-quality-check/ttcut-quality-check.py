@@ -907,62 +907,6 @@ def _try_syncstart(file_a: str, file_b: str) -> Optional[float]:
         return None
 
 
-def _try_numpy_correlation(audio_a: str, audio_b: str, tmpdir: str) -> Optional[float]:
-    """Fallback: cross-correlate audio with numpy to find offset."""
-    try:
-        import numpy as np
-    except ImportError:
-        return None
-
-    try:
-        # Extract raw PCM from both files (first 20 seconds)
-        pcm_a = os.path.join(tmpdir, "sync_a.raw")
-        pcm_b = os.path.join(tmpdir, "sync_b.raw")
-
-        for src, dst in [(audio_a, pcm_a), (audio_b, pcm_b)]:
-            cmd = [
-                "ffmpeg", "-y", "-v", "quiet",
-                "-t", "20",
-                "-i", src,
-                "-ac", "1", "-ar", "16000",
-                "-f", "s16le", "-acodec", "pcm_s16le",
-                dst
-            ]
-            r = run_cmd(cmd, timeout=30)
-            if r.returncode != 0:
-                return None
-
-        # Load PCM data
-        a = np.fromfile(pcm_a, dtype=np.int16).astype(np.float32)
-        b = np.fromfile(pcm_b, dtype=np.int16).astype(np.float32)
-
-        if len(a) < 1600 or len(b) < 1600:
-            return None
-
-        # Normalize
-        a = a / (np.max(np.abs(a)) + 1e-10)
-        b = b / (np.max(np.abs(b)) + 1e-10)
-
-        # Cross-correlation via FFT
-        n = len(a) + len(b) - 1
-        fft_size = 1
-        while fft_size < n:
-            fft_size <<= 1
-
-        fa = np.fft.rfft(a, fft_size)
-        fb = np.fft.rfft(b, fft_size)
-        corr = np.fft.irfft(fa * np.conj(fb), fft_size)
-
-        # Find peak
-        peak = np.argmax(np.abs(corr))
-        if peak > fft_size // 2:
-            peak -= fft_size
-
-        offset_sec = peak / 16000.0
-        return offset_sec
-
-    except Exception:
-        return None
 
 
 def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
