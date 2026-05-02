@@ -150,17 +150,18 @@ int TTH264VideoStream::createHeaderList()
     // Emit Start with total=100 for percentage-based progress
     emit statusReport(StatusReportArgs::Start, tr("Opening H.264 stream..."), 100);
 
-    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part)
+    if (!openStream()) {
+        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.264 stream"), 0);
+        return -1;
+    }
+
+    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part).
+    // Must be done after openStream() since that is what creates mFFmpeg.
     connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, [this](int percent, const QString&) {
         // Map FFmpeg 0-100% to our 10-80% range (buildFrameIndex phase)
         int mapped = 10 + percent * 70 / 100;
         emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
     });
-
-    if (!openStream()) {
-        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.264 stream"), 0);
-        return -1;
-    }
 
     mLog->infoMsg(__FILE__, __LINE__, "Creating H.264 header list...");
     emit statusReport(StatusReportArgs::Step, tr("Creating H.264 header list..."), 10);

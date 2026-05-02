@@ -142,17 +142,17 @@ int TTH265VideoStream::createHeaderList()
 {
     emit statusReport(StatusReportArgs::Start, tr("Opening H.265 stream..."), 100);
 
-    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part)
+    if (!openStream()) {
+        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.265 stream"), 0);
+        return -1;
+    }
+
+    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part).
+    // Must be done after openStream() since that is what creates mFFmpeg.
     connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, [this](int percent, const QString&) {
         int mapped = 10 + percent * 70 / 100;
         emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
     });
-
-    if (!openStream()) {
-        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
-        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.265 stream"), 0);
-        return -1;
-    }
 
     mLog->infoMsg(__FILE__, __LINE__, "Building H.265 header list...");
     emit statusReport(StatusReportArgs::Step, tr("Creating H.265 header list..."), 10);
