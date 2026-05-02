@@ -129,24 +129,14 @@ def check_ldecod(es_file):
     return output
 
 def analyze_mkv_transition(mkv_file):
-    """Extract raw ES from MKV and find MBAFF→PAFF transition."""
-    es_file = os.path.join(TMPDIR, "extracted.264")
-    subprocess.run(
-        ['ffmpeg', '-i', mkv_file, '-c:v', 'copy', '-bsf:v',
-         'h264_mp4toannexb', es_file, '-y'],
-        capture_output=True, timeout=30)
+    """Extract raw ES from MKV and find MBAFF→PAFF transition.
 
-    with open(es_file, 'rb') as f:
-        es = f.read()
-
-    nals = find_nals(es)
-    print(f"ES: {len(es)} bytes, {len(nals)} NALs")
-
-    # Find MBAFF→PAFF transition (field_pic_flag 0→1)
-    from nal_parser import parse_slice_info
-    # ... (would need the parser)
-
-    return es_file, es, nals
+    Stub: the slice_info parsing depended on a never-checked-in nal_parser
+    module. Re-implement against TTNaluParser when this codepath is needed.
+    """
+    raise NotImplementedError(
+        "analyze_mkv_transition: --transition is not implemented "
+        "(nal_parser module never landed)")
 
 def verify_nal(es_file, description=""):
     """Run all verification tools on an ES file."""
