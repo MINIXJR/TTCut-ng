@@ -25,6 +25,14 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+// End-of-stream / end-of-bitstream NAL units written between Smart Cut
+// segments to flush the decoder DPB. Defined once at file scope so a
+// future spec change (or a new codec) can be applied in a single place.
+//   H.264: NAL type 11 (end_of_stream_rbsp), per ITU-T H.264 §7.3.2.5.
+//   H.265: NAL type 37 (EOB_NUT, end_of_bitstream_rbsp), per ITU-T H.265 §7.3.2.6.
+static constexpr char kEosNalH264[] = { 0x00, 0x00, 0x00, 0x01, 0x0B };
+static constexpr char kEosNalH265[] = { 0x00, 0x00, 0x00, 0x01, 0x4A, 0x01 };
+
 // Forward declarations for static helpers used by member functions
 struct H264SpsInfo {
     int log2MaxFrameNumMinus4;   // -1 on error
@@ -409,13 +417,11 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         // Between segments: write EOS NAL + SPS/PPS, compute frame_num delta
         if (i < segments.size() - 1) {
             // Write EOS NAL to flush decoder DPB
-            QByteArray eosNal;
             if (mParser.codecType() == NALU_CODEC_H265) {
-                eosNal = QByteArray::fromHex("000000014A01");  // EOB_NUT (type 37)
+                outFile.write(kEosNalH265, sizeof(kEosNalH265));
             } else {
-                eosNal = QByteArray::fromHex("000000010B");    // end_of_stream (type 11)
+                outFile.write(kEosNalH264, sizeof(kEosNalH264));
             }
-            outFile.write(eosNal);
             writeParameterSets(outFile, mReorderDelay);
             qDebug() << "    Wrote EOS + SPS/PPS between segments" << i << "and" << i + 1;
 
@@ -704,11 +710,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // The overlap extension (in reencodeFrames) ensures the re-encode
         // covers all frames up to the next keyframe, so no Open-GOP B-frames
         // need the flushed MBAFF references.
-        {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
-            outFile.write(eosNal, sizeof(eosNal));
-            qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
-        }
+        outFile.write(kEosNalH264, sizeof(kEosNalH264));
+        qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
 
         // Do NOT write SPS/PPS here — the first stream-copy keyframe AU has
         // inline SPS/PPS which patchSpsNalsInAccessUnit will patch.
@@ -759,8 +762,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
         // EOS to flush MBAFF references from DPB before PAFF stream-copy
         {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
-            outFile.write(eosNal, sizeof(eosNal));
+            outFile.write(kEosNalH264, sizeof(kEosNalH264));
             qDebug() << "    PAFF fallback: EOS before stream-copy at" << scStart;
         }
 
@@ -820,12 +822,10 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         }
         // Non-PAFF: use EOS to flush decoder DPB
         if (mParser.codecType() == NALU_CODEC_H264) {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x0B};
-            outFile.write(eosNal, sizeof(eosNal));
+            outFile.write(kEosNalH264, sizeof(kEosNalH264));
             qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB at" << scStart;
         } else if (mParser.codecType() == NALU_CODEC_H265) {
-            static const char eosNal[] = {0x00, 0x00, 0x00, 0x01, 0x4A, 0x01};
-            outFile.write(eosNal, sizeof(eosNal));
+            outFile.write(kEosNalH265, sizeof(kEosNalH265));
             qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB at" << scStart;
         }
 
