@@ -119,11 +119,6 @@ TTVideoHeader* TTVideoHeaderList::getNextHeader(int startPos, TTMpeg2VideoHeader
     return NULL;
 
   if (nextIndex < count() && type == TTMpeg2VideoHeader::ndef) {
-    TTAVHeader* next = at(nextIndex);
-
-    if (next == at(startPos))
-      qDebug("ksfjgkdfjgkdjfgkldjf");
-
     return (TTVideoHeader*)at(nextIndex);
   }
 

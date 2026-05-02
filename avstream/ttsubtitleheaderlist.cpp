@@ -66,9 +66,10 @@ TTSubtitleHeader* TTSubtitleHeaderList::subtitleHeaderAt( int index )
 
 int TTSubtitleHeaderList::searchTimeIndex( int search_time )
 {
+  if (size() == 0) return -1;
+
   int abs_time = 0;
   TTSubtitleHeader* subtitle_header;
-
   int index = 0;
 
   do

@@ -124,7 +124,8 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
         .arg(subtitleEnd.addMSecs(offsett).toString("hh:mm:ss,zzz"))
         .arg(header->text());
 
-    stream_buffer->directWrite((quint8*)subtitleCode.toUtf8().data(), subtitleCode.toUtf8().length());
+    QByteArray utf8 = subtitleCode.toUtf8();
+    stream_buffer->directWrite((quint8*)utf8.constData(), utf8.length());
 
     cp->setNumPicturesWritten(picsWritten);
     index++;

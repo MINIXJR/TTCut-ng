@@ -116,7 +116,7 @@ bool TTFileBuffer::open()
 
   file->open(this->mode);
 
-  return (file->exists() & file->isOpen());
+  return file->exists() && file->isOpen();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
