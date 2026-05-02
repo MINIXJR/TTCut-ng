@@ -187,20 +187,26 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
         if (codec) {
             mVideoCodecCtx = avcodec_alloc_context3(codec);
             if (mVideoCodecCtx) {
-                avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
-                if (mAnalysisMode) {
-                    mVideoCodecCtx->thread_count = 0;  // auto-detect (all cores)
-                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
-                    mVideoCodecCtx->skip_loop_filter = AVDISCARD_ALL;  // skip deblocking (safe for analysis)
-                } else {
-                    mVideoCodecCtx->thread_count = 1;
-                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
-                }
-                ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
-                if (ret < 0) {
-                    qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
+                int p2cRet = avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
+                if (p2cRet < 0) {
+                    qDebug() << "Warning: avcodec_parameters_to_context failed:" << avErrorToString(p2cRet);
                     avcodec_free_context(&mVideoCodecCtx);
                     mVideoCodecCtx = nullptr;
+                } else {
+                    if (mAnalysisMode) {
+                        mVideoCodecCtx->thread_count = 0;  // auto-detect (all cores)
+                        mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                        mVideoCodecCtx->skip_loop_filter = AVDISCARD_ALL;  // skip deblocking (safe for analysis)
+                    } else {
+                        mVideoCodecCtx->thread_count = 1;
+                        mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                    }
+                    ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
+                    if (ret < 0) {
+                        qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
+                        avcodec_free_context(&mVideoCodecCtx);
+                        mVideoCodecCtx = nullptr;
+                    }
                 }
             }
         }
