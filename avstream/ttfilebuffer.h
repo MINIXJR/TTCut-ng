@@ -87,7 +87,6 @@ public:
   void    fillBuffer();
   void    fillBuffer(int length);
   quint8  readByte();
-  bool    readArray(quint8* buffer, int length);
 
  private:
   QFile*     file;

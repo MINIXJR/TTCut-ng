@@ -473,18 +473,6 @@ quint8 TTFileBuffer::readByte()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- *
- */
-bool TTFileBuffer::readArray(quint8* buffer, int length)
-{
-  (void)buffer; // TODO: This function has a bug - buffer assignment is useless
-  while(readPos > (writePos-length))
-    fillBuffer();
-
-  return true;
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
  * Exception class for TTFileBuffer
  */
 TTFileBufferException::TTFileBufferException(ExceptionType type)
