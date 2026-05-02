@@ -47,10 +47,6 @@
 const int   TTMessageLogger::STD_LOG_MODE      = TTMessageLogger::SUMMARIZE;
 int         TTMessageLogger::logMode           = TTMessageLogger::STD_LOG_MODE;
 int         TTMessageLogger::logLevel          = TTMessageLogger::ALL;
-const char* TTMessageLogger::INFO_FILE_NAME    = "info.log";
-const char* TTMessageLogger::WARNING_FILE_NAME = "warning.log";
-const char* TTMessageLogger::ERROR_FILE_NAME   = "error.log";
-const char* TTMessageLogger::DEBUG_FILE_NAME   = "debug.log";
 const char* TTMessageLogger::SUM_FILE_NAME     = "logfile.log";
 
 TTMessageLogger* TTMessageLogger::loggerInstance = NULL;
