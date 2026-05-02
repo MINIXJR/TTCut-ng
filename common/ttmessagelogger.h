@@ -5,9 +5,6 @@
 /* PROJEKT  : TTCUT 2006                                                      */
 /* FILE     : ttmessagelogger.h                                               */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 01/28/2006 */
-/* MODIFIED:                                                 DATE:            */
-/*----------------------------------------------------------------------------*/
 
 // -----------------------------------------------------------------------------
 // TTMESSAGELOGGER
@@ -18,15 +15,6 @@
 /* under the terms of the GNU General Public License as published by the Free */
 /* Software Foundation;                                                       */
 /* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
 
@@ -36,8 +24,8 @@
 #include <QString>
 #include <QFile>
 #include <QFileInfo>
-#include <QTextStream>
 #include <QDateTime>
+#include <mutex>
 
 class TTMessageLogger
 {
@@ -48,10 +36,14 @@ class TTMessageLogger
     static TTMessageLogger* getInstance(int mode=STD_LOG_MODE);
     ~TTMessageLogger();
 
+    // Override the default log file path (e.g. from main() before any
+    // logging happens). Pass an empty string to fall back to the default.
+    void setLogFilePath(const QString& path);
+
     void enableLogFile(bool enable);
     void setLogModeConsole(bool console);
     void setLogModeExtended(bool extended);
-    
+
     void setLogMode(int mode);
     void setLogLevel(int level);
 
@@ -97,9 +89,12 @@ class TTMessageLogger
     void writeMsg(QString msgString);
 
   private:
-    QFile* logfile;
+    void   ensureLogFileOpen();   // lazy open on first writeMsg call
+
+    QFile*  logfile;
+    QString mLogFilePath;
+    bool    mLogFileOpenAttempted;
     static TTMessageLogger* loggerInstance;
-    static QString stdLogFilePath;
     bool   logEnabled;
     bool   logConsole;
     bool   logExtended;
@@ -110,4 +105,3 @@ class TTMessageLogger
     static const char* SUM_FILE_NAME;
 };
 #endif //TTMESSAGELOGGER_H
-   

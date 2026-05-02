@@ -5,314 +5,284 @@
 /* PROJEKT  : TTCUT 2008                                                      */
 /* FILE     : ttmessagelogger.cpp                                             */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 01/28/2006 */
-/*----------------------------------------------------------------------------*/
-
-// -----------------------------------------------------------------------------
-// TTMESSAGELOGGER
-// -----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
-/*----------------------------------------------------------------------------*/
 
 /*!
- * The TTMessageLogger class provide a tool for writing a logfile during
- * runtime. Theire are four logging-level options:
- * INFO    for informational messages
- * WARNING for generell warnings about possible problems
- * ERROR   for realy program errors during runtime
- * FATAL   for fatal errors during runtime
- * DEBUG   for debug messages
- * The TTMessageLogger object is a singleton. The first call to getInstance()
- * instantiate the statical TTMessageLogger object.
+ * The TTMessageLogger class provides runtime logging.  The first
+ * getInstance() call creates the (singleton) object but does NOT open
+ * the log file yet — the file is opened lazily on the first writeMsg
+ * call so that QCoreApplication / main() has had a chance to set the
+ * working directory and configure the path via setLogFilePath().
  */
 
 #include "ttmessagelogger.h"
 
 #include <QFileInfo>
+#include <QDir>
+#include <QStandardPaths>
 
-const int   TTMessageLogger::STD_LOG_MODE      = TTMessageLogger::SUMMARIZE;
-int         TTMessageLogger::logMode           = TTMessageLogger::STD_LOG_MODE;
-int         TTMessageLogger::logLevel          = TTMessageLogger::ALL;
-const char* TTMessageLogger::SUM_FILE_NAME     = "logfile.log";
+#include <cstdarg>
+#include <cstdio>
 
-TTMessageLogger* TTMessageLogger::loggerInstance = NULL;
-QString TTMessageLogger::stdLogFilePath = "./logfile.log";
+const int   TTMessageLogger::STD_LOG_MODE   = TTMessageLogger::SUMMARIZE;
+int         TTMessageLogger::logMode        = TTMessageLogger::STD_LOG_MODE;
+int         TTMessageLogger::logLevel       = TTMessageLogger::ALL;
+const char* TTMessageLogger::SUM_FILE_NAME  = "logfile.log";
 
-/*!
- * The private constructor for the TTMessageLogger object. This constructor
- * is only called from the public getInstance() method.
- */
-TTMessageLogger::TTMessageLogger(int mode)
+TTMessageLogger* TTMessageLogger::loggerInstance = nullptr;
+
+namespace {
+
+// Default log path lives under XDG cache. Falls back to QDir::tempPath()
+// only if QStandardPaths returns empty (very early init / minimal env).
+QString defaultLogPath()
 {
-  logfile     = new QFile(stdLogFilePath);
-  logEnabled  = true;
-  logMode     = mode;
-  logConsole  = false;
-  logExtended = false;
-
-  QFile file(stdLogFilePath);
-
-  if(file.exists())
-    file.remove();
-
-  logfile->open(QIODevice::WriteOnly | QIODevice::Text);
+    QString cacheDir = QStandardPaths::writableLocation(
+        QStandardPaths::GenericCacheLocation);
+    if (cacheDir.isEmpty()) {
+        cacheDir = QDir::tempPath();
+    }
+    QDir().mkpath(cacheDir + "/ttcut-ng");
+    return cacheDir + "/ttcut-ng/logfile.log";
 }
 
-/*!
- * The public destructor. The destructor removes the statical TTMessageLogger
- * object from memory an closes the logfile.
- */
+QString formatVa(const char* fmt, va_list ap)
+{
+    return QString::vasprintf(fmt, ap);
+}
+
+}  // namespace
+
+// -----------------------------------------------------------------------------
+// Construction / singleton access
+// -----------------------------------------------------------------------------
+TTMessageLogger::TTMessageLogger(int mode)
+    : logfile(nullptr)
+    , mLogFilePath(defaultLogPath())
+    , mLogFileOpenAttempted(false)
+    , logEnabled(true)
+    , logConsole(false)
+    , logExtended(false)
+{
+    logMode = mode;
+}
+
 TTMessageLogger::~TTMessageLogger()
 {
-  if (logfile != NULL) {
-    logfile->close();
-    delete logfile;
-  }
+    if (logfile) {
+        logfile->close();
+        delete logfile;
+        logfile = nullptr;
+    }
 }
 
-/*!
- * This public method is used to get an instance of the TTMessageLogger
- * object.
- */
 TTMessageLogger* TTMessageLogger::getInstance(int mode)
 {
-  if(loggerInstance == NULL)
-    loggerInstance = new TTMessageLogger(mode);
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [mode]() {
+        loggerInstance = new TTMessageLogger(mode);
+    });
+    return loggerInstance;
+}
 
-  return loggerInstance;
+// -----------------------------------------------------------------------------
+// Configuration
+// -----------------------------------------------------------------------------
+void TTMessageLogger::setLogFilePath(const QString& path)
+{
+    if (path == mLogFilePath) return;
+
+    // If the file is already open, close it; the next write reopens at the
+    // new path. If the user passes an empty string, fall back to default.
+    mLogFilePath = path.isEmpty() ? defaultLogPath() : path;
+    if (logfile) {
+        logfile->close();
+        delete logfile;
+        logfile = nullptr;
+    }
+    mLogFileOpenAttempted = false;
 }
 
 void TTMessageLogger::enableLogFile(bool enable)
 {
-  logEnabled = enable;
-
-  if (!logEnabled)
-	  logLevel = NONE;
+    // File-write toggle ONLY — does not touch logLevel any more
+    // (consumers configure logLevel via setLogLevel / setLogModeExtended).
+    logEnabled = enable;
 }
 
 void TTMessageLogger::setLogModeConsole(bool console)
 {
-  if (console) {
-    logMode = SUMMARIZE | CONSOLE;
-  } else {
-    logMode = SUMMARIZE;
-  }
-  logConsole = console;
+    if (console) {
+        logMode = SUMMARIZE | CONSOLE;
+    } else {
+        logMode = SUMMARIZE;
+    }
+    logConsole = console;
 }
 
 void TTMessageLogger::setLogModeExtended(bool extended)
 {
-  logExtended = extended;
-
-  logLevel = (logExtended) ? ALL : MINIMAL;
+    logExtended = extended;
+    logLevel = (logExtended) ? ALL : MINIMAL;
 }
 
 void TTMessageLogger::setLogMode(int mode)
 {
-  logMode = mode;
+    logMode = mode;
 }
 
 void TTMessageLogger::setLogLevel(int level)
 {
-  logLevel = level;
+    logLevel = level;
 }
 
-/*!
- * Writes an logfile message from type INFO
- */
+// -----------------------------------------------------------------------------
+// Per-type message methods (QString variants)
+// -----------------------------------------------------------------------------
 void TTMessageLogger::infoMsg(QString caller, int line, QString msgString)
 {
-  logMsg(INFO, caller, line, msgString);
+    logMsg(INFO, caller, line, msgString);
 }
 
 void TTMessageLogger::warningMsg(QString caller, int line, QString msgString)
 {
-  logMsg(WARNING, caller, line, msgString);
+    logMsg(WARNING, caller, line, msgString);
 }
 
 void TTMessageLogger::errorMsg(QString caller, int line, QString msgString)
 {
-  logMsg(ERROR, caller, line, msgString);
+    logMsg(ERROR, caller, line, msgString);
 }
 
 void TTMessageLogger::fatalMsg(QString caller, int line, QString msgString)
 {
-  logMsg(FATAL, caller, line, msgString);
+    logMsg(FATAL, caller, line, msgString);
 }
 
 void TTMessageLogger::debugMsg(QString caller, int line, QString msgString)
 {
-  logMsg(DEBUG, caller, line, msgString);
+    logMsg(DEBUG, caller, line, msgString);
 }
 
-/*!
- * Writes an logfile message from type INFO
- */
+// -----------------------------------------------------------------------------
+// printf-style overloads — dynamic via QString::vasprintf (no truncation)
+// -----------------------------------------------------------------------------
 void TTMessageLogger::infoMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(INFO, caller, line, buf);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(INFO, caller, line, s);
 }
 
-/*!
- * Writes an logfile message from type WARNING
- */
 void TTMessageLogger::warningMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(WARNING, caller, line, buf);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(WARNING, caller, line, s);
 }
 
-/*!
- * Writes an logfile message from type ERROR
- */
 void TTMessageLogger::errorMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(ERROR, caller, line, buf);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(ERROR, caller, line, s);
 }
 
-/*!
- * Writes an logfile message from type FATAL
- */
 void TTMessageLogger::fatalMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(FATAL, caller, line, buf);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(FATAL, caller, line, s);
 }
 
+void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
+{
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(DEBUG, caller, line, s);
+}
 
 void TTMessageLogger::showErrorMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(ERROR, caller, line, buf, true);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(ERROR, caller, line, s, true);
 }
 
 void TTMessageLogger::showFatalMsg(QString caller, int line, const char* msg, ...)
 {
-  char buf[1024];
-  va_list ap;
-
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
-
-  logMsg(FATAL, caller, line, buf, true);
+    va_list ap; va_start(ap, msg);
+    QString s = formatVa(msg, ap);
+    va_end(ap);
+    logMsg(FATAL, caller, line, s, true);
 }
 
-
-void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
+// -----------------------------------------------------------------------------
+// Common write path
+// -----------------------------------------------------------------------------
+void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
+                              QString msgString, bool show)
 {
-  char buf[1024];
-  va_list ap;
+    QString msgTypeStr;
+    QFileInfo fInfo(caller);
+    QString msgCaller = fInfo.baseName();
 
-  va_start( ap, msg );
-  vsnprintf( buf, sizeof(buf), msg, ap );
-  va_end( ap );
+    if ((logLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
 
-  logMsg(DEBUG, caller, line, buf);
+    if ((logLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
+                                  (msgType != WARNING))) return;
+
+    if ((logLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
+                                   (msgType != WARNING) && (msgType != INFO))) return;
+
+    if (msgType == INFO)    msgTypeStr = "info";
+    if (msgType == WARNING) msgTypeStr = "warning";
+    if (msgType == ERROR)   msgTypeStr = "error";
+    if (msgType == DEBUG)   msgTypeStr = "debug";
+
+    QString logMsgStr = (line > 0)
+        ? QString("[%1][%2][%3:%4] %5").arg(msgTypeStr).arg(QDateTime::currentDateTime().toString("hh:mm:ss")).arg(msgCaller).arg(line).arg(msgString)
+        : QString("[%1][%2][%3] %4").arg(msgTypeStr).arg(QDateTime::currentDateTime().toString("hh:mm:ss")).arg(msgCaller).arg(msgString);
+
+    // TODO: implement message window display
+    (void)show;
+
+    if (logMode & CONSOLE || msgType == ERROR)
+        qDebug("%s", logMsgStr.toUtf8().data());
+
+    writeMsg(logMsgStr);
 }
 
-
-
-/*!
- * This method finally writes the message to the logfile.
- * You must set the message type.
- */
-void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line, QString msgString, bool show)
+void TTMessageLogger::ensureLogFileOpen()
 {
-  QString msgTypeStr;
-  QFileInfo fInfo(caller);
-  QString msgCaller = fInfo.baseName();
+    if (mLogFileOpenAttempted) return;
+    mLogFileOpenAttempted = true;
 
-  //if (!logEnabled && msgType != ERROR) return;
-
-  if ((logLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
-
-  if ((logLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
-                                (msgType != WARNING))) return;
-
-  if ((logLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
-                                 (msgType != WARNING) && (msgType != INFO))) return;
-
-  if(msgType == INFO)
-    msgTypeStr = "info";
-
-  if(msgType == WARNING)
-    msgTypeStr = "warning";
-
-  if(msgType == ERROR)
-   msgTypeStr = "error";
-
-  if(msgType == DEBUG)
-    msgTypeStr = "debug";
-
-  QString logMsgStr = (line > 0)
-      ? QString("[%1][%2][%3:%4] %5").arg(msgTypeStr).arg(QDateTime::currentDateTime().toString("hh:mm:ss")).arg(msgCaller).arg(line).arg(msgString)
-      : QString("[%1][%2][%3] %4").arg(msgTypeStr).arg(QDateTime::currentDateTime().toString("hh:mm:ss")).arg(msgCaller).arg(msgString);
-
-  // show message window
-  // TODO: implement message window display
-  (void)show;
-
-  if (logMode & CONSOLE || msgType == ERROR)
-    qDebug("%s", logMsgStr.toUtf8().data());
-
-  writeMsg(logMsgStr);
+    QFile* f = new QFile(mLogFilePath);
+    // Truncate any previous run's file (matches pre-refactor behaviour).
+    if (!f->open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        qDebug("TTMessageLogger: cannot open log file %s",
+               mLogFilePath.toUtf8().constData());
+        delete f;
+        return;
+    }
+    logfile = f;
 }
 
-/*!
- * This method finally writes the message to the logfile.
- */
 void TTMessageLogger::writeMsg(QString msgString)
 {
-  QTextStream out(logfile);
+    if (!logEnabled) return;          // file writes suppressed (LOW-1 fix)
 
-  out << msgString << "\n";
+    ensureLogFileOpen();              // lazy open (MEDIUM-2 fix)
+    if (!logfile) return;             // open failed earlier — silent skip
 
-  logfile->flush();
+    QByteArray bytes = msgString.toUtf8();
+    bytes.append('\n');
+    logfile->write(bytes);
+    logfile->flush();
 }
