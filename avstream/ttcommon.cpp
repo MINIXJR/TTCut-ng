@@ -95,29 +95,8 @@ QString ttAddFileExt( QString fName, const char* cExt )
 // convert msec to QTime
 QTime ttMsecToTime( int msec )
 {
-  QTime time;
-  int hour, minute, second, msecond;
-
-  //qDebug( "TTMSECTOSEC   : msec: %d",msec );
-
-  if ( msec <= 0 )
-  {
-      hour    = 0;
-      minute  = 0;
-      second  = 0;
-      msecond = 0;
-  }
-  else
-  {
-    hour    = (int)trunc(msec / 3600000.0);
-    minute  = (int)trunc((msec - hour * 3600000.0) / 60000.0);
-    second  = (int)trunc((msec - hour * 3600000.0 - minute * 60000.0) / 1000.0);
-    msecond = (int)trunc(msec - hour * 3600000.0 - minute * 60000.0 - second * 1000.0);
-  }
-
-  time.setHMS( hour, minute, second, msecond );
-
-  return time;
+  // Trivially defer to the double-arg variant; same arithmetic, no duplicate.
+  return ttMsecToTimeD(static_cast<double>(msec));
 }
 
 QTime ttMsecToTimeD( double msec )

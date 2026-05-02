@@ -60,7 +60,6 @@ public:
   QString readLine(QString delimiter = "\n");
 
   // search
-  void    nextStartCodeBF();
   void    initTSearch();
   void    nextStartCodeTS();
    
