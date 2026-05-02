@@ -513,6 +513,15 @@ int main(int argc, char **argv)
         opts.analyze_only = false;  /* force_fix implies writing */
     }
 
+    /* force_fix without an output file would silently produce no output:
+     * process_ac3_file's write loop is gated on (output_file != NULL), so it
+     * would read the whole file and report "Fixed frames: N" but write
+     * nothing. Reject up front instead of misleading the user. */
+    if (!opts.analyze_only && !opts.output_file) {
+        fprintf(stderr, "Error: --force-fix requires an output file (-o).\n");
+        return 1;
+    }
+
     /* Check if output exists */
     if (opts.output_file && !opts.force) {
         FILE *f = fopen(opts.output_file, "r");

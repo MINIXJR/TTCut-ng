@@ -9,6 +9,11 @@ DISTRO=$(lsb_release -cs)
 
 cd "$SOURCE_DIR"
 
+# dch modifies debian/changelog in-place. Restore the working copy on exit so
+# a second run starts from a clean slate (otherwise dch sees the previous
+# version entry and complains, or worse, accumulates stale entries).
+trap 'git checkout -- debian/changelog 2>/dev/null || true' EXIT
+
 # Get version from .pro file (single source of truth)
 VERSION=$(grep -oP '^VERSION\s*=\s*\K[0-9.]+' ttcut-ng.pro)
 
