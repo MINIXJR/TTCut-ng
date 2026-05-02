@@ -587,7 +587,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         vin.syncMs = mVideoSyncOffsetMs;
         vin.ownsCtx = false;  // We'll close videoInCtx at the end
         vin.pkt = av_packet_alloc();
-        if (!vin.pkt) { qDebug() << "av_packet_alloc failed for video input"; return false; }
+        if (!vin.pkt) { qDebug() << "av_packet_alloc failed for video input"; goto cleanup; }
 
         // Frame duration from setDefaultDuration (e.g. "40000000ns" for 25fps)
         // NOTE: frameDur is recalculated AFTER avformat_write_header() because
@@ -740,7 +740,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     if (containerRemux) {
         // Container remux: simple loop, copy all packets
         AVPacket* pkt = av_packet_alloc();
-        if (!pkt) { qDebug() << "av_packet_alloc failed for container remux"; return false; }
+        if (!pkt) { qDebug() << "av_packet_alloc failed for container remux"; goto cleanup; }
         int64_t totalSize = avio_size(videoInCtx->pb);
         int lastPercent = -1;
 
@@ -940,7 +940,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
                     if (av_new_packet(in.pkt, merged.size()) < 0) {
                         setError("av_new_packet failed during PAFF field merge");
-                        return false;
+                        goto cleanup;
                     }
                     memcpy(in.pkt->data, merged.constData(), merged.size());
                     in.pkt->flags = firstFlags;  // restore keyframe flag
