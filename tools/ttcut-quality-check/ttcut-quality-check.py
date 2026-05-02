@@ -1403,8 +1403,12 @@ Examples:
     else:
         selected = ALL_TESTS[:]
 
-    # Check required tools
-    for tool in ["ffmpeg", "ffprobe", "mkvmerge"]:
+    # Check required tools. mkvmerge is only used by the visual / avsync
+    # tests, so don't insist on it for runs that skip both.
+    required_tools = ["ffmpeg", "ffprobe"]
+    if {"visual", "avsync"} & set(selected):
+        required_tools.append("mkvmerge")
+    for tool in required_tools:
         if not which(tool):
             print(f"Error: required tool '{tool}' not found in PATH", file=sys.stderr)
             sys.exit(1)
