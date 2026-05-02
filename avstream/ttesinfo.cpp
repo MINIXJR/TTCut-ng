@@ -439,10 +439,15 @@ QString TTESInfo::findInfoFile(const QString& videoFilePath)
     // Try 3: Look for any .info file in the directory that matches the base
     QDir directory(dir);
     QStringList infoFiles = directory.entryList(QStringList() << "*.info", QDir::Files);
+    int undeg = baseName.indexOf('_');
+    QString commonBase = (undeg > 0) ? baseName.left(undeg) : QString();
     for (const QString& infoFile : infoFiles) {
-        // Check if the info file's base matches our video file's base
+        // Match if either side is a prefix of the other, but require a
+        // non-empty common base — otherwise infoBase.startsWith("") would
+        // pick the first arbitrary .info file in the directory.
         QString infoBase = QFileInfo(infoFile).completeBaseName();
-        if (baseName.startsWith(infoBase) || infoBase.startsWith(baseName.left(baseName.indexOf('_')))) {
+        if (baseName.startsWith(infoBase) ||
+            (!commonBase.isEmpty() && infoBase.startsWith(commonBase))) {
             return dir + "/" + infoFile;
         }
     }
