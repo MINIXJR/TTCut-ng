@@ -239,11 +239,7 @@ static bool parseInlineSpsLog2MaxFrameNum(const uint8_t* data, int size, int& lo
         TTNaluParser::readExpGolombUE(sps, spsSz, bp);
 
         // High profile: chroma, bit depth, etc.
-        if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
-            profile_idc == 244 || profile_idc == 44  || profile_idc == 83  ||
-            profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
-            profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
-            profile_idc == 135) {
+        if (TTNaluParser::isH264HighProfile(profile_idc)) {
             uint32_t chroma = TTNaluParser::readExpGolombUE(sps, spsSz, bp);
             if (chroma == 3)
                 TTNaluParser::readBits(sps, spsSz, bp, 1); // separate_colour_plane

@@ -1431,6 +1431,28 @@ uint32_t TTNaluParser::readBits(const uint8_t* data, int dataSize, int& bitPos, 
 }
 
 // ----------------------------------------------------------------------------
+// Returns true for H.264 profile_idc values whose SPS carries the high-profile
+// extension fields (chroma_format_idc, bit_depth_*_minus8, scaling lists).
+// Per ITU-T H.264 (08/2021) §7.3.2.1.1: 100 (High), 110 (High10),
+// 122 (High422), 244 (High444Predictive), 44 (CAVLC444), 83 (Scalable Baseline),
+// 86 (Scalable High), 118 (Multiview High), 128 (Stereo High),
+// 134 (MFC High), 135 (MFC Depth High), 138 (Multiview Depth High),
+// 139 (Enhanced Multiview Depth High).
+// ----------------------------------------------------------------------------
+bool TTNaluParser::isH264HighProfile(uint32_t profile_idc)
+{
+    switch (profile_idc) {
+        case 100: case 110: case 122:
+        case 244: case 44:  case 83:
+        case 86:  case 118: case 128:
+        case 134: case 135: case 138: case 139:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Parse H.264 slice_type from raw packet data (e.g. AVPacket->data)
 // Scans for first VCL NAL unit (type 1 or 5), parses slice header to extract
 // slice_type. H.264 slice header: 1-byte NAL header, first_mb_in_slice (ue),

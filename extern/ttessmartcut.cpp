@@ -985,11 +985,7 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
     spsReadUE(data, dataSize, bitPos);       // seq_parameter_set_id
 
     // High profile extensions
-    if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
-        profile_idc == 244 || profile_idc == 44  || profile_idc == 83  ||
-        profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
-        profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
-        profile_idc == 135) {
+    if (TTNaluParser::isH264HighProfile(profile_idc)) {
         uint32_t chroma_format_idc = spsReadUE(data, dataSize, bitPos);
         if (chroma_format_idc == 3)
             spsReadBits(data, dataSize, bitPos, 1);  // separate_colour_plane_flag
@@ -4130,11 +4126,7 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     spsReadUE(data, dataSize, bitPos);        // seq_parameter_set_id
 
     // High profile extensions
-    if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 ||
-        profile_idc == 244 || profile_idc == 44  || profile_idc == 83  ||
-        profile_idc == 86  || profile_idc == 118 || profile_idc == 128 ||
-        profile_idc == 138 || profile_idc == 139 || profile_idc == 134 ||
-        profile_idc == 135) {
+    if (TTNaluParser::isH264HighProfile(profile_idc)) {
         uint32_t chroma_format_idc = spsReadUE(data, dataSize, bitPos);
         if (chroma_format_idc == 3)
             spsReadBits(data, dataSize, bitPos, 1);  // separate_colour_plane_flag

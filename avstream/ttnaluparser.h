@@ -287,6 +287,11 @@ public:
     static int32_t readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos);
     static uint32_t readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
 
+    // True for H.264 profiles whose SPS carries the high-profile extension
+    // fields (chroma_format_idc, bit_depth, scaling lists). Centralises the
+    // 12-value list so future profile additions need only one edit.
+    static bool isH264HighProfile(uint32_t profile_idc);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

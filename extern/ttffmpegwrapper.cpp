@@ -464,11 +464,7 @@ void TTFFmpegWrapper::parseH264SpsFromExtradata(const uint8_t* data, int size)
     TTNaluParser::readBits(sps, spsSize, bitPos, 8);  // level_idc
     TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);  // sps_id
 
-    if (profileIdc == 100 || profileIdc == 110 || profileIdc == 122 ||
-        profileIdc == 244 || profileIdc == 44  || profileIdc == 83  ||
-        profileIdc == 86  || profileIdc == 118 || profileIdc == 128 ||
-        profileIdc == 138 || profileIdc == 139 || profileIdc == 134 ||
-        profileIdc == 135) {
+    if (TTNaluParser::isH264HighProfile(static_cast<uint32_t>(profileIdc))) {
         int chromaFormatIdc = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
         if (chromaFormatIdc == 3) TTNaluParser::readBits(sps, spsSize, bitPos, 1);
         TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);

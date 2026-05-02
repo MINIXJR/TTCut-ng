@@ -29,6 +29,22 @@
 
 ## Medium Priority
 
+- **Bit-Stream API in extern/ vereinheitlichen**
+  - `extern/ttessmartcut.cpp` hat eigene file-lokale Bit-Primitives (`spsReadBits`,
+    `spsWriteBits`, `spsReadUE`, `spsWriteUE`, `spsReadSE`, `spsWriteSE`,
+    `skipScalingList`) für SPS-Patching mit Read+Write-Pfad. Andere Caller
+    (`ttffmpegwrapper.cpp`, `ttmkvmergeprovider.cpp`) nutzen die nur lesenden
+    `TTNaluParser::readBits` / `readExpGolombUE` / `readExpGolombSE`.
+  - Folge: SPS-Bit-Skipping-Block (chroma, bit_depth, scaling lists) ist 4×
+    dupliziert (siehe code-review-2026-05-01/02-extern.md MEDIUM-2). Die
+    Predicate-Hälfte ist konsolidiert (`TTNaluParser::isH264HighProfile`),
+    aber die Bit-Skipping-Logik selbst kann erst zusammengelegt werden, wenn
+    beide APIs unifiziert sind — entweder TTNaluParser um Write-Primitives
+    erweitern, oder die ttessmartcut-locals als file-scope-statics in einen
+    Shared-Header ziehen.
+  - Risiko: SPS-Patching ist heißer Pfad bei PAFF/MBAFF Smart Cut → erst
+    abdeckende Tests bauen, dann unifizieren.
+
 - ~~**Decode error detection for H.264/H.265 streams during demux**~~ → **DONE** (v0.63.0)
   - Implemented as `ttcut-pts-analyze` (formerly `ttcut-esrepair`): mmap-based start-code scanner,
     per-segment decode testing with custom AVIOContext, multi-threaded, integrated into ttcut-demux and TTCut-ng
