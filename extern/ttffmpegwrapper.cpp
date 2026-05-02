@@ -1318,13 +1318,17 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
             return QImage();
         }
 
-        // Allocate buffer for RGB frame
-        int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24,
-            mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
-        uint8_t* buffer = (uint8_t*)av_malloc(numBytes);
-        if (!buffer) { qDebug() << "av_malloc failed for RGB frame buffer"; return QImage(); }
-        av_image_fill_arrays(mRgbFrame->data, mRgbFrame->linesize, buffer,
-            AV_PIX_FMT_RGB24, mVideoCodecCtx->width, mVideoCodecCtx->height, 1);
+        // Ref-counted buffer: av_frame_free will release it via AVBufferRef.
+        // (av_image_fill_arrays + av_malloc would leak since no buf[0] is set.)
+        mRgbFrame->format = AV_PIX_FMT_RGB24;
+        mRgbFrame->width  = mVideoCodecCtx->width;
+        mRgbFrame->height = mVideoCodecCtx->height;
+        int bufRet = av_frame_get_buffer(mRgbFrame, 1);
+        if (bufRet < 0) {
+            setError("Could not allocate RGB frame buffer");
+            av_frame_free(&mRgbFrame);
+            return QImage();
+        }
     }
 
     // Initialize scaler if needed
