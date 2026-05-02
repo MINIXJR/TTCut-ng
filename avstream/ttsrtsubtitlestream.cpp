@@ -174,7 +174,8 @@ int TTSrtSubtitleStream::createHeaderList()
         line  = stream_buffer->readLine(lineEnd).simplified();
       }
       if (line.toInt() != counter + 1 && counter != -1)
-        log->warningMsg("TTSrtSubtitleStream", QString("Subtitles in %1 missing. Reading subtitle %2, last was %3.").arg(fileName()).arg(counter).arg(line));
+        log->warningMsg("TTSrtSubtitleStream", __LINE__,
+                        QString("Subtitles in %1 missing. Reading subtitle %2, last was %3.").arg(fileName()).arg(counter).arg(line));
       counter = line.toInt();
 
       line = stream_buffer->readLine(lineEnd).simplified();

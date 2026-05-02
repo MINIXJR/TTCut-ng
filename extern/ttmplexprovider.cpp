@@ -261,7 +261,7 @@ void TTMplexProvider::deleteElementaryStreams(const QString& videoFilePath, cons
 //! This signal is emitted when an error occurs with the process
 void TTMplexProvider::onProcError(QProcess::ProcessError procError)
 {
-  log->errorMsg(__FILE__, QString("QProcess error %1").arg(procError), __LINE__);
+  log->errorMsg(__FILE__, __LINE__, QString("QProcess error %1").arg(procError));
 }
 
 //! This signal is emitted once every time new data is available for reading from
@@ -311,7 +311,7 @@ void TTMplexProvider::onProcStateChanged(QProcess::ProcessState procState)
       break;
   }
 
-  log->debugMsg(__FILE__, stateMsg, __LINE__);
+  log->debugMsg(__FILE__, __LINE__, stateMsg);
   emit statusReport(StatusReportArgs::AddProcessLine, stateMsg, 0);
   qApp->processEvents();
 }

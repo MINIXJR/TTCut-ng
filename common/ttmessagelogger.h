@@ -55,21 +55,13 @@ class TTMessageLogger
     void setLogMode(int mode);
     void setLogLevel(int level);
 
-    // deprecated calls
-    void infoMsg(QString caller, QString msgString, int line=-1);
-    void warningMsg(QString caller, QString msgString, int line=-1);
-    void errorMsg(QString caller, QString msgString, int line=-1);
-    void fatalMsg(QString caller, QString msgString, int line=-1);
-    void debugMsg(QString caller, QString msgString, int line=-1);
-    
-    // new signature!
     void infoMsg(QString caller, int line, QString msgString);
     void warningMsg(QString caller, int line, QString msgString);
     void errorMsg(QString caller, int line, QString msgString);
     void fatalMsg(QString caller, int line, QString msgString);
     void debugMsg(QString caller, int line, QString msgString);
 
-    // deprecated calls
+    // printf-style overloads (caller, line, fmt, ...)
     void infoMsg(QString caller, int line, const char* msg, ...);
     void warningMsg(QString caller, int line, const char* msg, ...);
     void errorMsg(QString caller, int line, const char* msg, ...);

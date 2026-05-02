@@ -194,7 +194,7 @@ float TTSequenceHeader::frameRateValue()
   if ( frame_rate_code == 5 ) value = 30.0;
 
   if ( frame_rate_code < 2 || frame_rate_code > 5 )
-    log->errorMsg(cName, "Couldn't determine the correct frame rate: assume 25 fps!");
+    log->errorMsg(cName, __LINE__, "Couldn't determine the correct frame rate: assume 25 fps!");
 
   return value;
 }

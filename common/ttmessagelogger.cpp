@@ -134,44 +134,6 @@ void TTMessageLogger::setLogLevel(int level)
 /*!
  * Writes an logfile message from type INFO
  */
-void TTMessageLogger::infoMsg(QString caller, QString msgString, int line)
-{
-  logMsg(INFO, caller, line, msgString);
-}
-
-/*!
- * Writes an logfile message from type WARNING
- */
-void TTMessageLogger::warningMsg(QString caller, QString msgString, int line)
-{
-  logMsg(WARNING, caller, line, msgString);
-}
-
-
-/*!
- * Writes an logfile messages from type ERROR
- */
-void TTMessageLogger::errorMsg(QString caller, QString msgString, int line)
-{
-  logMsg(ERROR, caller, line, msgString);
-}
-
-/*!
- * Write an logfile message from type FATAL
- */
-void TTMessageLogger::fatalMsg(QString caller, QString msgString, int line)
-{
-  logMsg(FATAL, caller, line, msgString);
-}
-
-/*!
- * Writes an logfile messages from type DEBUG
- */
-void TTMessageLogger::debugMsg(QString caller, QString msgString, int line)
-{
-  logMsg(DEBUG, caller, line, msgString);
-}
-
 void TTMessageLogger::infoMsg(QString caller, int line, QString msgString)
 {
   logMsg(INFO, caller, line, msgString);
