@@ -24,16 +24,20 @@
 
 class TTTimeCode;
 
-extern "C" bool    ttAssigned( const void* pointer );
-extern "C" bool    ttFileExists( QString fName );
-extern "C" bool    ttDeleteFile( QString fName );
-extern "C" QString ttAddFileExt( QString fName, const char* cExt );
-extern "C" QString ttChangeFileExt( QString fName, const char* cExt );
-extern "C" QTime   ttMsecToTime( int msec );
-extern "C" QTime   ttMsecToTimeD( double msec );
-extern "C" QTime   ttFramesToTime(long lFrames, float fps);
-extern "C" long    ttTimeToFrames(QTime timeCode, float fps);
-extern "C" TTTimeCode ttFrameToTimeCode( int FrameNr, float fps);
+// These helpers return Qt classes (QString / QTime / TTTimeCode), so they
+// cannot have C linkage — only POD-returning functions are eligible. The
+// 'extern "C"' wrappers here were never legal; keep the names as plain C++
+// free functions.
+bool    ttAssigned( const void* pointer );
+bool    ttFileExists( QString fName );
+bool    ttDeleteFile( QString fName );
+QString ttAddFileExt( QString fName, const char* cExt );
+QString ttChangeFileExt( QString fName, const char* cExt );
+QTime   ttMsecToTime( int msec );
+QTime   ttMsecToTimeD( double msec );
+QTime   ttFramesToTime(long lFrames, float fps);
+long    ttTimeToFrames(QTime timeCode, float fps);
+TTTimeCode ttFrameToTimeCode( int FrameNr, float fps);
 
 #ifndef TTTIMECODE_H
 #define TTTIMECODE_H

@@ -235,24 +235,24 @@ void TTAudioType::getAudioStreamType()
     {
       //log->debugMsg(__FILE__, __LINE__, QString("Found MPEG audio sync word: %1").arg(start_pos));
 
+      // Heap-allocated probe objects: free regardless of match outcome.
+      // Previously the non-match fall-through leaked both on every iteration
+      // where the 0xFFE0 sync word matched but the frame boundary didn't.
       TTMpegAudioHeader* mpeg_header = new TTMpegAudioHeader();
       TTMPEGAudioStream* mpeg_stream = new TTMPEGAudioStream(*av_stream_info, 0);
 
       mpeg_stream->parseAudioHeader( buffer, start_pos+1, mpeg_header );
 
-      //log->debugMsg(__FILE__, __LINE__, QString("frame length   : %1").arg(mpeg_stream->frameLength()));
-      //log->debugMsg(__FILE__, __LINE__, QString("sync word      : %1").arg(((buffer[start_pos+mpeg_stream->frameLength()]<<8)+buffer[start_pos+1+mpeg_stream->frameLength()]) & 0xFFE0));
+      bool matched = ( mpeg_header->frameLength() > 0 &&
+                       start_pos+mpeg_header->frameLength()+1 < count &&
+                       // next sync_word is MPEG audio
+                       (((buffer[start_pos+mpeg_header->frameLength()]<<8)+buffer[start_pos+1+mpeg_header->frameLength()]) & 0xFFE0) == 0xFFE0 );
 
-      if ( mpeg_header->frameLength() > 0 &&
-          start_pos+mpeg_header->frameLength()+1 < count &&
-          // next sync_word is MPEG audio
-          (((buffer[start_pos+mpeg_header->frameLength()]<<8)+buffer[start_pos+1+mpeg_header->frameLength()]) & 0xFFE0) == 0xFFE0 )
-      {
+      delete mpeg_stream;
+      delete mpeg_header;
+
+      if (matched) {
         av_stream_type = mpeg_audio;
-
-        if (mpeg_stream != 0) delete mpeg_stream;
-        if (mpeg_header != 0) delete mpeg_header;
-
         break;
       }
     }
