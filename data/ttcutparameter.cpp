@@ -45,7 +45,7 @@ TTCutParameter::TTCutParameter(TTFileBuffer* fBuffer)
   numPicturesWritten     = 0;
   maxBitrateValue        = 0;
   dvdCompliantMaxBitrate = 0.0;
-  dvdCompliantMaxMrames  = 0;
+  dvdCompliantMaxFrames  = 0;
 }
 
 /*!

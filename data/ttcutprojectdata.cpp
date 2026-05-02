@@ -711,14 +711,6 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Clear the xml structure
- */
-void TTCutProjectData::clear()
-{
-
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
  *
  */
 void TTCutProjectData::printXml()

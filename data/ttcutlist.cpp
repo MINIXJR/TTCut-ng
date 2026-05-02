@@ -274,7 +274,7 @@ void TTCutList::clear()
     emit itemRemoved(item);
     emit itemRemoved(i);
   }
-  data.clear();
+  // takeAt() drained the list — no trailing data.clear() needed.
 }
 
 /*!

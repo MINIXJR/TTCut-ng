@@ -40,7 +40,6 @@ class TTStreamPointModel;
 
 #include <QFileInfo>
 #include <QDomElement>
-#include <QTextStream>
 #include <QString>
 #include <QStringList>
 #include <QList>
@@ -77,7 +76,6 @@ class TTCutProjectData
     QString fileName();
     QString filePath();
 
-    void clear();
     void writeXml();
     void readXml();
     void printXml();

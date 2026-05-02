@@ -38,8 +38,6 @@
 #include "ttavdata.h"
 #include "ttmuxlistdata.h"
 #include "ttcutprojectdata.h"
-#include "ttcutlist.h"
-#include "ttaudiolist.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttexception.h"

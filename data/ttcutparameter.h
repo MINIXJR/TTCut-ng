@@ -78,6 +78,6 @@ class TTCutParameter
     int                  numPicturesWritten;
     int                  maxBitrateValue;
     float                dvdCompliantMaxBitrate;
-    int                  dvdCompliantMaxMrames;
+    int                  dvdCompliantMaxFrames;
 };
 #endif //TTCUTPARAMETER_H
