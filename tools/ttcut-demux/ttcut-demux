@@ -54,6 +54,18 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 
+# Map an ffprobe codec_name to the file extension we use for the demuxed
+# audio track. Used by both the ES-mode and MKV-mode audio loops.
+audio_ext_for_codec() {
+    case "$1" in
+        mp2|mp3) echo "mp2" ;;
+        ac3)     echo "ac3" ;;
+        eac3)    echo "eac3" ;;
+        aac)     echo "aac" ;;
+        *)       echo "$1" ;;
+    esac
+}
+
 # Parse arguments
 ES_MODE=false
 AC3FIX=true
@@ -509,13 +521,7 @@ if $ES_MODE; then
             IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
 
             # Determine extension
-            case "$codec" in
-                mp2|mp3) EXT="mp2" ;;
-                ac3) EXT="ac3" ;;
-                eac3) EXT="eac3" ;;
-                aac) EXT="aac" ;;
-                *) EXT="$codec" ;;
-            esac
+            EXT=$(audio_ext_for_codec "$codec")
 
             # Include language in filename
             # If same language+extension appears multiple times, add index
@@ -1323,13 +1329,7 @@ else
 
             IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
 
-            case "$codec" in
-                mp2|mp3) EXT="mp2" ;;
-                ac3) EXT="ac3" ;;
-                eac3) EXT="eac3" ;;
-                aac) EXT="aac" ;;
-                *) EXT="$codec" ;;
-            esac
+            EXT=$(audio_ext_for_codec "$codec")
 
             # If same language+extension appears multiple times, add index
             OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
