@@ -25,6 +25,15 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+// Helper: libav error code to QString (mirrors avErrStr in ttmkvmergeprovider).
+// Used by every error-path qDebug / setError site in this file.
+static QString avErrStr(int errnum)
+{
+    char buf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(errnum, buf, sizeof(buf));
+    return QString::fromUtf8(buf);
+}
+
 // End-of-stream / end-of-bitstream NAL units written between Smart Cut
 // segments to flush the decoder DPB. Defined once at file scope so a
 // future spec change (or a new codec) can be applied in a single place.
@@ -2057,9 +2066,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                 continue;
             }
             // Other error, skip this AU
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "      send_packet error at frame" << i << ":" << errbuf;
+            qDebug() << "      send_packet error at frame" << i << ":" << avErrStr(ret);
             break;
         }
         av_packet_free(&packet);
@@ -2364,10 +2371,9 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
         int ret = avcodec_send_frame(mEncoder, frame);
         if (ret < 0 && ret != AVERROR(EAGAIN)) {
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errbuf;
-            setError(QString("Encoding failed: %1").arg(errbuf));
+            QString errStr = avErrStr(ret);
+            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errStr;
+            setError(QString("Encoding failed: %1").arg(errStr));
             for (AVFrame* f : framesToEncode) av_frame_free(&f);
             return false;
         }
@@ -2380,9 +2386,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                 break;
             if (ret < 0) {
-                char errbuf[AV_ERROR_MAX_STRING_SIZE];
-                av_strerror(ret, errbuf, sizeof(errbuf));
-                qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << errbuf;
+                qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
                 av_packet_free(&packet);
                 for (AVFrame* f : framesToEncode) av_frame_free(&f);
                 return false;
@@ -2427,9 +2431,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
         if (ret < 0) {
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << errbuf;
+            qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << avErrStr(ret);
             break;
         }
         QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
@@ -2609,9 +2611,7 @@ bool TTESSmartCut::setupDecoder()
 
     int ret = avcodec_open2(mDecoder, codec, nullptr);
     if (ret < 0) {
-        char errbuf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(ret, errbuf, sizeof(errbuf));
-        setError(QString("Cannot open decoder: %1").arg(errbuf));
+        setError(QString("Cannot open decoder: %1").arg(avErrStr(ret)));
         avcodec_free_context(&mDecoder);
         return false;
     }
@@ -2796,9 +2796,7 @@ bool TTESSmartCut::setupEncoder()
     av_dict_free(&opts);
 
     if (ret < 0) {
-        char errbuf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(ret, errbuf, sizeof(errbuf));
-        setError(QString("Cannot open encoder: %1").arg(errbuf));
+        setError(QString("Cannot open encoder: %1").arg(avErrStr(ret)));
         avcodec_free_context(&mEncoder);
         return false;
     }
@@ -2907,18 +2905,14 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
 
         int ret = avcodec_send_frame(mEncoder, frame);
         if (ret < 0) {
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errbuf;
+            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << avErrStr(ret);
             return QByteArray();
         }
     } else {
         // Flush
         int ret = avcodec_send_frame(mEncoder, nullptr);
         if (ret < 0 && ret != AVERROR_EOF) {
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "TTESSmartCut: avcodec_send_frame (flush) failed:" << errbuf;
+            qDebug() << "TTESSmartCut: avcodec_send_frame (flush) failed:" << avErrStr(ret);
         }
     }
 
@@ -2934,9 +2928,7 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
             break;
         }
         if (ret < 0) {
-            char errbuf[AV_ERROR_MAX_STRING_SIZE];
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << errbuf;
+            qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
             break;
         }
         result.append(reinterpret_cast<const char*>(packet->data), packet->size);
