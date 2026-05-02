@@ -39,6 +39,11 @@ QTime   ttFramesToTime(long lFrames, float fps);
 long    ttTimeToFrames(QTime timeCode, float fps);
 TTTimeCode ttFrameToTimeCode( int FrameNr, float fps);
 
+// Frame-type label such as " [I]", " [P]", " [B]" for the position display
+// in TTCurrentFrame / TTCutOutFrame / TTCutFrameNavigation. Returns an empty
+// string for unknown types (instead of dropping the whole tag silently).
+QString ttFrameTypeTag(int frameType);
+
 #ifndef TTTIMECODE_H
 #define TTTIMECODE_H
 

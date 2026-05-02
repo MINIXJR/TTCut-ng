@@ -30,6 +30,7 @@
 #include "ttcutframenavigation.h"
 #include "../common/ttcut.h"
 #include "../data/ttavlist.h"
+#include "../avstream/ttcommon.h"
 
 #include <QApplication>
 #include <QIcon>
@@ -417,13 +418,7 @@ void TTCutFrameNavigation::onSetCutIn()
 
 	szTemp1 = currentTime;
 	szTemp2 = QString(" (%1)").arg(cutInPosition);
-
-	if (currentFrameType == 1)
-		szTemp2 += " [I]";
-	if (currentFrameType == 2)
-		szTemp2 += " [P]";
-	if (currentFrameType == 3)
-		szTemp2 += " [B]";
+	szTemp2 += ttFrameTypeTag(currentFrameType);
 
 	szTemp1 += szTemp2;
 	laCutInPosition->setText(szTemp1);
@@ -440,13 +435,7 @@ void TTCutFrameNavigation::onSetCutOut()
 
 	szTemp1 = currentTime;
 	szTemp2 = QString(" (%1)").arg(cutOutPosition);
-
-	if (currentFrameType == 1)
-		szTemp2 += " [I]";
-	if (currentFrameType == 2)
-		szTemp2 += " [P]";
-	if (currentFrameType == 3)
-		szTemp2 += " [B]";
+	szTemp2 += ttFrameTypeTag(currentFrameType);
 
 	szTemp1 += szTemp2;
 	laCutOutPosition->setText(szTemp1);
@@ -499,13 +488,7 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 	//szTemp1 = cutData.getCutInTime().toString("hh:mm:ss.zzz");
 	szTemp1 = cutData.cutInTime().toString("hh:mm:ss");
 		szTemp2 = QString(" (%1)").arg(cutInPosition);
-
-	if (cutData.cutInFrameType() == 1)
-		szTemp2 += " [I]";
-	if (cutData.cutInFrameType() == 2)
-		szTemp2 += " [P]";
-	if (cutData.cutInFrameType() == 3)
-		szTemp2 += " [B]";
+	szTemp2 += ttFrameTypeTag(cutData.cutInFrameType());
 
 	szTemp1 += szTemp2;
 	laCutInPosition->setText(szTemp1);
@@ -513,13 +496,7 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
 	//szTemp1 = cutData.getCutOutTime().toString("hh:mm:ss.zzz");
 	szTemp1 = cutData.cutOutTime().toString("hh:mm:ss");
 	szTemp2 = QString(" (%1)").arg(cutOutPosition);
-
-	if (cutData.cutOutFrameType() == 1)
-		szTemp2 += " [I]";
-	if (cutData.cutOutFrameType() == 2)
-		szTemp2 += " [P]";
-	if (cutData.cutOutFrameType() == 3)
-		szTemp2 += " [B]";
+	szTemp2 += ttFrameTypeTag(cutData.cutOutFrameType());
 
 	szTemp1 += szTemp2;
 	laCutOutPosition->setText(szTemp1);

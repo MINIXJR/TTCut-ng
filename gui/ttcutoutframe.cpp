@@ -30,6 +30,7 @@
 
 #include "ttcutoutframe.h"
 #include "../data/ttavlist.h"
+#include "../avstream/ttcommon.h"
 
 #include <QApplication>
 #include <QIcon>
@@ -220,9 +221,7 @@ void TTCutOutFrame::updateCurrentPosition(int pos)
 
   szTemp2 = QString(" (%1)").arg(actualPos);
 
-  if ( frame_type == 1 ) szTemp2 += " [I]";
-  if ( frame_type == 2 ) szTemp2 += " [P]";
-  if ( frame_type == 3 ) szTemp2 += " [B]";
+  szTemp2 += ttFrameTypeTag(frame_type);
 
   szTemp1 += szTemp2;
   laCutOutFramePosition->setText( szTemp1 );

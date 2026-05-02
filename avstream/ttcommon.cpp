@@ -232,3 +232,13 @@ TTTimeCode::TTTimeCode()
 {
 
 }
+
+QString ttFrameTypeTag(int frameType)
+{
+  switch (frameType) {
+    case 1: return QStringLiteral(" [I]");
+    case 2: return QStringLiteral(" [P]");
+    case 3: return QStringLiteral(" [B]");
+    default: return QString();
+  }
+}
