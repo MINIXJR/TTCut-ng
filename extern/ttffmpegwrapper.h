@@ -45,6 +45,7 @@ struct AVCodecContext;
 struct AVStream;
 struct AVPacket;
 struct AVFrame;
+struct AVInputFormat;
 struct SwsContext;
 
 // ----------------------------------------------------------------------------
@@ -292,6 +293,14 @@ private:
     // Helper functions
     static QString avErrorToString(int errnum);
     int getFrameType(AVPacket* packet, AVCodecContext* codecCtx);
+
+public:
+    // Public ES-detection helpers shared with TTMkvMergeProvider.
+    // Recognises raw H.264/H.265/MPEG-2 elementary streams by extension.
+    static bool isElementaryStreamPath(const QString& filePath);
+    // Returns the libav input format ('h264', 'hevc', 'mpegvideo') matching
+    // the file extension, or nullptr for non-ES paths.
+    static const AVInputFormat* esInputFormatForPath(const QString& filePath);
 };
 
 #endif // TTFFMPEGWRAPPER_H

@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttmkvmergeprovider.h"
+#include "ttffmpegwrapper.h"
 #include "../avstream/ttnaluparser.h"
 
 #include <QDebug>
@@ -126,19 +127,9 @@ static QString decodeVdrName(const QString& name)
 }
 
 // ----------------------------------------------------------------------------
-// Check if file is a raw elementary stream (needs special demuxer handling)
-// ----------------------------------------------------------------------------
-static bool isElementaryStream(const QString& filePath)
-{
-    QString suffix = QFileInfo(filePath).suffix().toLower();
-    return (suffix == "264" || suffix == "h264" ||
-            suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-            suffix == "m2v" || suffix == "mpv");
-}
-
-// ----------------------------------------------------------------------------
-// Open input file with appropriate format detection
-// For ES files, forces the correct demuxer format
+// Open input file with appropriate format detection.
+// ES detection and format lookup live in TTFFmpegWrapper as static helpers
+// so this provider and the wrapper agree on which extensions are ES.
 // ----------------------------------------------------------------------------
 static AVFormatContext* openInput(const QString& filePath, int& ret)
 {
@@ -146,17 +137,10 @@ static AVFormatContext* openInput(const QString& filePath, int& ret)
     AVDictionary* opts = nullptr;
     const AVInputFormat* inputFmt = nullptr;
 
-    if (isElementaryStream(filePath)) {
-        QString suffix = QFileInfo(filePath).suffix().toLower();
+    if (TTFFmpegWrapper::isElementaryStreamPath(filePath)) {
         av_dict_set(&opts, "probesize", "50000000", 0);
         av_dict_set(&opts, "analyzeduration", "10000000", 0);
-
-        if (suffix == "264" || suffix == "h264")
-            inputFmt = av_find_input_format("h264");
-        else if (suffix == "265" || suffix == "h265" || suffix == "hevc")
-            inputFmt = av_find_input_format("hevc");
-        else if (suffix == "m2v" || suffix == "mpv")
-            inputFmt = av_find_input_format("mpegvideo");
+        inputFmt = TTFFmpegWrapper::esInputFormatForPath(filePath);
     }
 
     ret = avformat_open_input(&fmtCtx, filePath.toUtf8().constData(), inputFmt, &opts);

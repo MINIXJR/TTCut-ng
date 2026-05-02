@@ -126,10 +126,7 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
     closeFile();
 
     // Check if this is an elementary stream (by extension)
-    QString suffix = QFileInfo(filePath).suffix().toLower();
-    bool isES = (suffix == "264" || suffix == "h264" ||
-                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-                 suffix == "m2v" || suffix == "mpv");
+    bool isES = isElementaryStreamPath(filePath);
     mIsElementaryStream = isES;
 
     AVDictionary* opts = nullptr;
@@ -140,16 +137,7 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
         // Set large probesize and analyzeduration for proper detection
         av_dict_set(&opts, "probesize", "50000000", 0);  // 50MB
         av_dict_set(&opts, "analyzeduration", "10000000", 0);  // 10 seconds
-
-        // Force input format based on extension
-        if (suffix == "264" || suffix == "h264") {
-            inputFmt = av_find_input_format("h264");
-        } else if (suffix == "265" || suffix == "h265" || suffix == "hevc") {
-            inputFmt = av_find_input_format("hevc");
-        } else if (suffix == "m2v" || suffix == "mpv") {
-            inputFmt = av_find_input_format("mpegvideo");
-        }
-
+        inputFmt = esInputFormatForPath(filePath);
         qDebug() << "Opening ES file with forced format:" << (inputFmt ? inputFmt->name : "auto");
     }
 
@@ -1032,6 +1020,29 @@ QString TTFFmpegWrapper::avErrorToString(int errnum)
     char errbuf[AV_ERROR_MAX_STRING_SIZE];
     av_strerror(errnum, errbuf, sizeof(errbuf));
     return QString::fromUtf8(errbuf);
+}
+
+// ----------------------------------------------------------------------------
+// Elementary-stream detection (shared with TTMkvMergeProvider)
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::isElementaryStreamPath(const QString& filePath)
+{
+    QString suffix = QFileInfo(filePath).suffix().toLower();
+    return (suffix == "264" || suffix == "h264" ||
+            suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+            suffix == "m2v" || suffix == "mpv");
+}
+
+const AVInputFormat* TTFFmpegWrapper::esInputFormatForPath(const QString& filePath)
+{
+    QString suffix = QFileInfo(filePath).suffix().toLower();
+    if (suffix == "264" || suffix == "h264")
+        return av_find_input_format("h264");
+    if (suffix == "265" || suffix == "h265" || suffix == "hevc")
+        return av_find_input_format("hevc");
+    if (suffix == "m2v" || suffix == "mpv")
+        return av_find_input_format("mpegvideo");
+    return nullptr;
 }
 
 // ----------------------------------------------------------------------------
