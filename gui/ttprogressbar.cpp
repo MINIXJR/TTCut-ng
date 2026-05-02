@@ -151,7 +151,7 @@ void TTProgressBar::resetProgress()
 {
   progressBar->reset();
 
-  foreach (TTTaskProgress* value, *taskProgressHash) {
+  for (TTTaskProgress* value : *taskProgressHash) {
     if (value == 0) continue;
 
     verticalLayout->removeWidget(value);

@@ -1585,7 +1585,7 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
     TTCut::recentFileList.removeLast();
   }
 
-  foreach (QWidget* widget, QApplication::topLevelWidgets()) {
+  for (QWidget* widget : QApplication::topLevelWidgets()) {
     TTCutMainWindow* mainWin = qobject_cast<TTCutMainWindow*>(widget);
     if (mainWin) {
       mainWin->updateRecentFileActions();
