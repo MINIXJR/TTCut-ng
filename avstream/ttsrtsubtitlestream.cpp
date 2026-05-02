@@ -109,7 +109,7 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
   {
     if (mAbort) {
       mAbort = false;
-      throw new TTAbortException("User abort request in TTSrtSubtitleStream::cut!");
+      throw TTAbortException("User abort request in TTSrtSubtitleStream::cut!");
     }
     TTSubtitleHeader* header = (TTSubtitleHeader*)header_list->at(index);
     if (header->startMSec() > end)

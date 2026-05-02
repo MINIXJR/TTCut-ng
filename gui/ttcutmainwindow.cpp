@@ -775,10 +775,10 @@ void TTCutMainWindow::onAppendCutEntry(int cutIn, int cutOut)
   {
   mpAVData->appendCutEntry(mpCurrentAVDataItem, cutIn, cutOut);
   }
-  catch (TTInvalidOperationException* ex)
+  catch (const TTInvalidOperationException& ex)
   {
   	QMessageBox msgBox;
-  	msgBox.setText(ex->getMessage());
+  	msgBox.setText(ex.getMessage());
   	msgBox.exec();
   }
 }

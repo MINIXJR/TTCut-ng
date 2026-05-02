@@ -159,7 +159,7 @@ void TTCutPreviewTask::operation()
 
   for (int i = 0; i < numPreview; i++) {
     if (isAborted())
-  		throw new TTAbortException(__FILE__, __LINE__, "Task gets abort signal!");
+  		throw TTAbortException(__FILE__, __LINE__, "Task gets abort signal!");
 
     onStatusReport(this, StatusReportArgs::Step, tr("Creating preview clip %1 of %2").
         arg(i+1).arg(numPreview), i+1);
@@ -290,12 +290,12 @@ void TTCutPreviewTask::operation()
           qDebug() << "MPEG-2 preview (no audio):" << outputFile;
         }
       }
-      catch (TTException* ex)
+      catch (const TTException&)
       {
         qDebug() << "catched exception from cutVideoTask!";
         delete tmpCutList;
         qDebug() << "redirect exception from cutVideoTask...";
-        throw ex;
+        throw;
       }
     }
 

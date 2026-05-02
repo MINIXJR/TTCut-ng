@@ -95,7 +95,7 @@ TTMuxListDataItem* TTCutVideoTask::muxListItem()
 void TTCutVideoTask::operation()
 {
   if (mTgtFilePath.isEmpty())
-    throw new TTInvalidOperationException(__FILE__, __LINE__, tr("No target file path given for video cut!"));
+    throw TTInvalidOperationException(__FILE__, __LINE__, tr("No target file path given for video cut!"));
 
  	mpTgtStream = new TTFileBuffer(mTgtFilePath, QIODevice::WriteOnly);
   mpCutParams = new TTCutParameter(mpTgtStream);
@@ -108,7 +108,7 @@ void TTCutVideoTask::operation()
   for (int i = 0; i < mpCutList->count(); i++) {
 
     if (isAborted())
-      throw new TTAbortException(__FILE__, __LINE__, tr("Operation aborted!"));
+      throw TTAbortException(__FILE__, __LINE__, tr("Operation aborted!"));
 
 	  TTCutItem cutItem = mpCutList->at(i);
 	  int       cutIn   = cutItem.cutInIndex();
@@ -192,7 +192,7 @@ void TTCutTask::onUserAbort()
 void TTCutTask::operation()
 {
   if (mpCutStream == 0)
-    throw new TTInvalidOperationException(__FILE__, __LINE__, tr("No cut stream specified!"));
+    throw TTInvalidOperationException(__FILE__, __LINE__, tr("No cut stream specified!"));
 
 	connect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
 	  			this,        SLOT(onStatusReport(int, const QString&, quint64)));

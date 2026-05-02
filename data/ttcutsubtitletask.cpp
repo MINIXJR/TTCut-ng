@@ -65,7 +65,7 @@ void TTCutSubtitleTask::init(QString tgtFilePath, TTCutList* cutList, int srcSub
 void TTCutSubtitleTask::onUserAbort()
 {
   if (mpCutStream == 0) 
-    throw new TTAbortException(QString("Task %1 with UUID %2 aborted").arg(taskName()).arg(taskID().toString()));
+    throw TTAbortException(QString("Task %1 with UUID %2 aborted").arg(taskName()).arg(taskID().toString()));
 
    mpCutStream->setAbort(true);
 }
@@ -81,7 +81,7 @@ void TTCutSubtitleTask::cleanUp()
 void TTCutSubtitleTask::operation()
 {
   if (mTgtFilePath.isEmpty())
-    throw new TTInvalidOperationException(tr("No target file path given for subtitle cut!"));
+    throw TTInvalidOperationException(tr("No target file path given for subtitle cut!"));
 
   mpTgtStream = new TTFileBuffer(mTgtFilePath, QIODevice::WriteOnly);
   mpCutParams = new TTCutParameter(mpTgtStream);

@@ -89,7 +89,7 @@ void TTOpenVideoTask::operation()
   QFileInfo fInfo(mFileName);
 
   if (!fInfo.exists())
-    throw new TTFileNotFoundException(__FILE__, __LINE__, tr("file %1 does not exists!").arg(fInfo.filePath()));
+    throw TTFileNotFoundException(__FILE__, __LINE__, tr("file %1 does not exists!").arg(fInfo.filePath()));
 
   QString videoFilePath = fInfo.absoluteFilePath();
 
@@ -102,7 +102,7 @@ void TTOpenVideoTask::operation()
   QStringList containerExtensions = {"ts", "m2ts", "mts", "mkv", "mp4", "m4v", "mov", "avi", "mpg", "mpeg", "vob"};
 
   if (containerExtensions.contains(suffix)) {
-    throw new TTDataFormatException(__FILE__, __LINE__,
+    throw TTDataFormatException(__FILE__, __LINE__,
         tr("Container format detected: %1\n\n"
                    "TTCut only works with elementary streams.\n"
                    "Please demux first using: ttcut-demux %2\n\n"
@@ -124,7 +124,7 @@ void TTOpenVideoTask::operation()
       streamType != TTAVTypes::mpeg2_mplexed_video &&
       streamType != TTAVTypes::h264_video &&
       streamType != TTAVTypes::h265_video) {
-    throw new TTDataFormatException(__FILE__, __LINE__,
+    throw TTDataFormatException(__FILE__, __LINE__,
         tr("unsupported video type %1").arg(fInfo.filePath()));
   }
 
@@ -132,7 +132,7 @@ void TTOpenVideoTask::operation()
   mpVideoStream = mpVideoType->createVideoStream();
 
   if (mpVideoStream == nullptr) {
-    throw new TTDataFormatException(__FILE__, __LINE__,
+    throw TTDataFormatException(__FILE__, __LINE__,
         tr("failed to create video stream for %1").arg(fInfo.filePath()));
   }
 
@@ -143,13 +143,13 @@ void TTOpenVideoTask::operation()
 
   int headerCount = mpVideoStream->createHeaderList();
   if (headerCount <= 0) {
-    throw new TTDataFormatException(__FILE__, __LINE__,
+    throw TTDataFormatException(__FILE__, __LINE__,
         tr("Failed to parse video stream headers: %1").arg(fInfo.filePath()));
   }
 
   int indexCount = mpVideoStream->createIndexList();
   if (indexCount <= 0) {
-    throw new TTDataFormatException(__FILE__, __LINE__,
+    throw TTDataFormatException(__FILE__, __LINE__,
         tr("Failed to create video index: %1").arg(fInfo.filePath()));
   }
 

@@ -751,11 +751,11 @@ void TTCutProjectData::readXml()
   QFile xmlFile(xmlFileInfo->absoluteFilePath());
 
   if (!xmlFile.open(QIODevice::ReadOnly)) {
-    throw new TTDataFormatException(QString("Error opening project file %1!").arg(xmlFileInfo->filePath()));
+    throw TTDataFormatException(QString("Error opening project file %1!").arg(xmlFileInfo->filePath()));
   }
 
   if (!xmlDocument->setContent(&xmlFile)) {
-    throw new TTDataFormatException(QString("Error parsing xml project file %1!").arg(xmlFileInfo->filePath()));
+    throw TTDataFormatException(QString("Error parsing xml project file %1!").arg(xmlFileInfo->filePath()));
   }
 
   xmlFile.close();

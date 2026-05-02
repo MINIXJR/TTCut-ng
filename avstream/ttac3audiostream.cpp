@@ -184,7 +184,7 @@ int TTAC3AudioStream::createHeaderList()
     {
       if (mAbort) {
         mAbort = false;
-        throw new TTAbortException("User abort in TTAC3AudioStream::createHeaderList!");
+        throw TTAbortException("User abort in TTAC3AudioStream::createHeaderList!");
       }
 
       searchNextSyncByte();

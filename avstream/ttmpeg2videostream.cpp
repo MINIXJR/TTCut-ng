@@ -160,7 +160,7 @@ int TTMpeg2VideoStream::createIndexList()
   {
   	if (mAbort) {
   		mAbort = false;
-  		throw new TTAbortException(tr("Index list creation aborted!"));
+  		throw TTAbortException(tr("Index list creation aborted!"));
   	}
 
     start_code = header_list->at(index)->headerType();
@@ -276,7 +276,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
     {
     	if (mAbort) {
     		mAbort = false;
-    		throw new TTAbortException(tr("Headerlist creation aborted by user!"));
+    		throw TTAbortException(tr("Headerlist creation aborted by user!"));
     	}
 
       headerType = 0xFF;
@@ -326,7 +326,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
     log->debugMsg(__FILE__, __LINE__, QString("time for creating header list %1ms").
         arg(time.elapsed()));
   }
-  catch (TTFileBufferException* ex)
+  catch (const TTFileBufferException&)
   {
     qDebug("ttfilebuffer exception...");
   }
@@ -387,7 +387,7 @@ void TTMpeg2VideoStream::writeIDDFile( )
   {
   	if (mAbort) {
   		mAbort = false;
-  		throw new TTAbortException("Writing IDD file aborted!");
+  		throw TTAbortException("Writing IDD file aborted!");
   	}
 
     headerType = header_list->at(index)->headerType();
@@ -439,7 +439,7 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
   TTMpeg2VideoHeader* newHeader = NULL;
 
   if (iddFileVersion < 2) {
-    throw new TTDataFormatException(tr("IDD file version %1 not supported!").arg(iddFileVersion));
+    throw TTDataFormatException(tr("IDD file version %1 not supported!").arg(iddFileVersion));
   }
 
   emit statusReport(StatusReportArgs::Start, tr("Read Mpeg2Schnitt IDD-file"), iddStream->size());
@@ -450,7 +450,7 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
     {
     	if (mAbort) {
     		mAbort = false;
-     		throw new TTAbortException(tr("Read IDD header file aborted!"));
+     		throw TTAbortException(tr("Read IDD header file aborted!"));
     	}
 
       iddStream->readByte(headerType);
@@ -631,14 +631,14 @@ TTVideoHeader* TTMpeg2VideoStream::checkIFrameSequence(int iFramePos, TTCutParam
       seqHeaderIndex, TTMpeg2VideoHeader::sequence_start_code);
 
   if (!ttAssigned(seqHeader))
-    throw new TTArgumentException(tr("No sequence header for I-Frame at index %1").arg(iFramePos));
+    throw TTArgumentException(tr("No sequence header for I-Frame at index %1").arg(iFramePos));
 
   //Check for GOP
   int gopHeaderIndex      = header_list->headerIndex((TTVideoHeader*)seqHeader) + 1;
   TTVideoHeader* gopHeader = header_list->headerAt(gopHeaderIndex);
 
   if (!ttAssigned(gopHeader))
-    throw new TTArgumentException(tr("No GOP Header found for I-Frame at index %1").arg(iFramePos));
+    throw TTArgumentException(tr("No GOP Header found for I-Frame at index %1").arg(iFramePos));
 
   // Inject the sequence header into the target stream (copy bytes from
   // the nearest sequence header up to the GOP header)
@@ -667,7 +667,7 @@ TTVideoHeader* TTMpeg2VideoStream::getCutEndObject(int cutOutPos, TTCutParameter
     ipFramePos--;
 
   if (index_list->pictureCodingType(ipFramePos) == 3)
-    throw new TTInvalidOperationException(tr("No I- or P-Frame found at cut out position: %1").arg(cutOutPos));
+    throw TTInvalidOperationException(tr("No I- or P-Frame found at cut out position: %1").arg(cutOutPos));
 
   int headerListPos           = index_list->headerListIndex(ipFramePos);
   TTPicturesHeader* endObject = (TTPicturesHeader*)header_list->headerAt(headerListPos);
@@ -761,7 +761,7 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
     {
     	if (mAbort) {
     		mAbort = false;
-    		throw new TTAbortException(tr("Transfer cut objects aborted!"));
+    		throw TTAbortException(tr("Transfer cut objects aborted!"));
     	}
 
       isContinue = false;

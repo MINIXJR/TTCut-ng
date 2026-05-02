@@ -175,7 +175,7 @@ void TTAVData::appendCutEntry(TTAVItem* avItem, int cutIn, int cutOut)
 void TTAVData::copyCutEntry(const TTCutItem& cutItem)
 {
 	if (mpCurrentAVItem == 0)
-		throw new TTInvalidOperationException("No current AV-Data set!");
+		throw TTInvalidOperationException("No current AV-Data set!");
 
 	appendCutEntry(mpCurrentAVItem, cutItem.cutIn(), cutItem.cutOut());
 }
@@ -227,7 +227,7 @@ void TTAVData::onRemoveMarker(const TTMarkerItem& mItem)
 void TTAVData::copyMarker(const TTMarkerItem& markerItem)
 {
 	if (mpCurrentAVItem == 0)
-		throw new TTInvalidOperationException("No current AV-Data set!");
+		throw TTInvalidOperationException("No current AV-Data set!");
 
 	appendMarker(mpCurrentAVItem, markerItem.markerPos());
 }
@@ -913,9 +913,9 @@ void TTAVData::readProjectFile(const QFileInfo& fInfo)
 	  mpProjectData->readXml();
 	  mpProjectData->deserializeAVDataItem(this);
   }
-  catch (TTException* ex)
+  catch (const TTException& ex)
   {
-		log->errorMsg(__FILE__, __LINE__, ex->getMessage());
+		log->errorMsg(__FILE__, __LINE__, ex.getMessage());
     onReadProjectFileAborted();
   }
 }

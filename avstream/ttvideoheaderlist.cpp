@@ -185,7 +185,7 @@ TTSequenceHeader* TTVideoHeaderList::firstSequenceHeader()
   quint8 type  = 0xFF;
 
   if (size() == 0)
-  	throw new TTInvalidOperationException("Invalid");
+  	throw TTInvalidOperationException("Invalid");
 
   do
   {

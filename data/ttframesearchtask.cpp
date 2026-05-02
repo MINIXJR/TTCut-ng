@@ -124,7 +124,7 @@ void TTFrameSearchTask::operation()
   	if (mAbort)
     {
       delete searchDecoder;
-  		throw new TTAbortException("User abort in TTFrameSearchTask!");
+  		throw TTAbortException("User abort in TTFrameSearchTask!");
     }
 
     TFrameInfo* frameInfo = searchDecoder->getFrameInfo();

@@ -186,7 +186,7 @@ void TTThreadTask::run()
   {
     if (mIsAborted) {
       qDebug() << taskName() << " entering running state while already aborted!";
-      throw new TTAbortException("Aborting operation!");
+      throw TTAbortException("Aborting operation!");
     }
 
      //qDebug() << "run task " << taskName() << " with uuid " << taskID();
@@ -200,7 +200,7 @@ void TTThreadTask::run()
     emit finished(this);
     cleanUp();
   }
-  catch(TTAbortException* ex)
+  catch(const TTAbortException&)
   {
     qDebug() << taskName() << " with UUID " << taskID() << " catched TTAbortException";
     mIsRunning = false;
@@ -209,10 +209,10 @@ void TTThreadTask::run()
 
     if (mIsSynchron) {
       qDebug() << taskName() << " with UUID " << taskID() << " redirect TTAbortException";
-      throw ex;
+      throw;
     }
   }
-  catch(TTException* ex)
+  catch(const TTException&)
   {
     qDebug() << taskName() << "with UUID " << taskID() << " catched TTException";
     mIsRunning = false;

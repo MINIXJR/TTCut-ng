@@ -84,12 +84,12 @@ TTAVStream::TTAVStream(const QFileInfo &f_info)
 
   // check if stream exists
   if (!stream_info->exists())
-    throw new TTIOException(tr("Stream does not exists: %1").arg(stream_info->filePath()));
+    throw TTIOException(tr("Stream does not exists: %1").arg(stream_info->filePath()));
 
   stream_buffer = new TTFileBuffer(stream_info->filePath(), QIODevice::ReadOnly);
 
   if (!ttAssigned(stream_buffer))
-    throw new TTIOException(tr("Error allocating buffer for: %1").arg(stream_info->filePath()));
+    throw TTIOException(tr("Error allocating buffer for: %1").arg(stream_info->filePath()));
 
   stream_type = TTAVTypes::unknown;
 }
@@ -182,7 +182,7 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
   {
     if (mAbort) {
       mAbort = false;
-      throw new TTAbortException("User abort request in TTAVStream::copySegment!");
+      throw TTAbortException("User abort request in TTAVStream::copySegment!");
     }
 
     stream_buffer->readByte(buffer, buffer_size );

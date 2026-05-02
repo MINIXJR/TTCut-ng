@@ -53,7 +53,7 @@ TTException::TTException(const QString& caller, int line, const QString& msg)
   log->fatalMsg(caller, line, msg);
 }
 
-QString TTException::getMessage()
+QString TTException::getMessage() const
 {
   return message;
 }
