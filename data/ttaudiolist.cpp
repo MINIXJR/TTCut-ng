@@ -84,15 +84,9 @@ void TTAudioItem::setItemData()
   			.arg(audioStream->streamLengthTime().toString("hh:mm:ss.zzz"))
   			.arg((double)audioStream->streamLengthByte()/1024.0/1024.0);
 
-  // Extract language from filename: Show_deu.ac3, Show_deu_1.ac3
-  QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
-  QRegularExpressionMatch match = langRe.match(QFileInfo(audioStream->fileName()).completeBaseName());
-  if (match.hasMatch()) {
-    mLanguage = match.captured(1);
-  } else {
-    // Fallback: system locale → ISO 639-2
-    mLanguage = TTCut::iso639_1to2(QLocale::system().name().left(2));
-  }
+  // Extract language from filename: Show_deu.ac3, Show_deu_1.ac3 (else fall
+  // back to system locale). Shared helper used by TTSubtitleItem too.
+  mLanguage = TTCut::langFromFilename(audioStream->fileName());
 }
 
 /*!

@@ -265,6 +265,12 @@ class TTCut
    static QStringList languageNames();    // {"Undetermined","Deutsch","English",...}
    static QString iso639_1to2(const QString& code2);  // "de" → "deu"
    static QString normalizeLangCode(const QString& code);  // "de"/"ger"/"DEU" → "deu", unknown → ""
+
+   // Extract a 3-letter ISO 639-2 language code from a filename of the form
+   // "<base>_<lang>[_<n>].<ext>" (matches Show_deu.ac3 / Show_deu_1.ac3 /
+   // Show_eng.srt). Falls back to the current system locale converted via
+   // iso639_1to2 if no match. Used by TTAudioItem and TTSubtitleItem.
+   static QString langFromFilename(const QString& filePath);
 };
 
 

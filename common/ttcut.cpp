@@ -38,10 +38,12 @@
 #include <QWidget>
 #include <QDir>
 #include <QCoreApplication>
+#include <QFileInfo>
 #include <QString>
 #include <QStringList>
 #include <QMap>
 #include <QLocale>
+#include <QRegularExpression>
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
@@ -285,6 +287,18 @@ QStringList TTCut::languageNames()
     << "Български" << "Srpski" << "Slovenščina" << "日本語" << "中文"
     << "한국어" << "العربية"
     << "Klare Sprache" << "Hörfilm";
+}
+
+QString TTCut::langFromFilename(const QString& filePath)
+{
+  // Match "<...>_<lang>[_<digit+>]" at end of completeBaseName.
+  static const QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
+  QRegularExpressionMatch match = langRe.match(QFileInfo(filePath).completeBaseName());
+  if (match.hasMatch()) {
+    return match.captured(1);
+  }
+  // Fallback: system locale → ISO 639-2.
+  return iso639_1to2(QLocale::system().name().left(2));
 }
 
 QString TTCut::iso639_1to2(const QString& code2)

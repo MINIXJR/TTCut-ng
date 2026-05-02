@@ -86,14 +86,9 @@ void TTSubtitleItem::setItemData()
   // FIXME: use real delay value for subtitle delay
   subtitleDelay  = "0";
 
-  // Extract language from filename: Show_deu.srt, Show_deu_1.srt
-  QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
-  QRegularExpressionMatch match = langRe.match(QFileInfo(subtitleStream->fileName()).completeBaseName());
-  if (match.hasMatch()) {
-    mLanguage = match.captured(1);
-  } else {
-    mLanguage = TTCut::iso639_1to2(QLocale::system().name().left(2));
-  }
+  // Extract language from filename: Show_deu.srt, Show_deu_1.srt (else fall
+  // back to system locale). Shared helper with TTAudioItem.
+  mLanguage = TTCut::langFromFilename(subtitleStream->fileName());
 }
 
 /*!
