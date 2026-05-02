@@ -127,11 +127,7 @@ bool TTSubtitleItem::operator<(const TTSubtitleItem& item) const
  */
 bool TTSubtitleItem::operator==(const TTSubtitleItem& item) const
 {
-  int check = 0;
-  check += (subtitleStream  == item.subtitleStream)  ? 0 : 1;
-  check += (mpAVDataItem    == item.mpAVDataItem)    ? 0 : 1;
-
-  return (check == 0);
+  return subtitleStream == item.subtitleStream && mpAVDataItem == item.mpAVDataItem;
 }
 
 /*!

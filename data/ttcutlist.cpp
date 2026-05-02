@@ -49,6 +49,7 @@ TTCutItem::TTCutItem(TTAVItem* avDataItem, int cutIn, int cutOut)
   mpAVDataItem = avDataItem;
   mCutInIndex  = cutIn;
   mCutOutIndex = cutOut;
+  mOrder       = -1;  // overwritten by TTCutList::append's setOrder() call
 
   mID = QUuid::createUuid();
 }

@@ -733,7 +733,7 @@ void TTAVData::onChangeCurrentAVItem(TTAVItem* avItem)
 
 void TTAVData::onChangeCurrentAVItem(int index)
 {
-	if (index < 0 || index > mpAVList->count()) return;
+	if (index < 0 || index >= mpAVList->count()) return;
 
 	mpCurrentAVItem = avItemAt(index);
 

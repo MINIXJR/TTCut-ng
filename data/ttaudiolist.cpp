@@ -150,11 +150,7 @@ bool TTAudioItem::operator<(const TTAudioItem& item) const
  */
 bool TTAudioItem::operator==(const TTAudioItem& item) const
 {
-  int check = 0;
-  check += (audioStream  == item.audioStream)  ? 0 : 1;
-  check += (mpAVDataItem == item.mpAVDataItem) ? 0 : 1;
-
-  return (check == 0);
+  return audioStream == item.audioStream && mpAVDataItem == item.mpAVDataItem;
 }
 
 /*!
