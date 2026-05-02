@@ -382,7 +382,7 @@ void TTCurrentFrame::onMoveToHome()
 
 void TTCurrentFrame::onMoveToEnd()
 {
-  onGotoFrame(videoStream->frameCount(), 0);
+  onGotoFrame(videoStream->frameCount() - 1, 0);
 }
 
 void TTCurrentFrame::updateCurrentPosition(int pos)

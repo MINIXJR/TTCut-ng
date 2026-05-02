@@ -602,7 +602,7 @@ void TTCutTreeView::onAudioSelCut()
  */
 void TTCutTreeView::onEditCutOut(const TTCutItem& cutItem, int cutOut)
 {
-  if (mAVData == 0) return
+  if (mAVData == 0) return;
 
   cutItem.avDataItem()->updateCutEntry(cutItem, cutItem.cutInIndex(), cutOut);
   emit cutOutUpdated(cutItem);

@@ -48,7 +48,6 @@
 #include "../data/ttstreampointmodel.h"
 #include "../data/ttstreampoint_videoworker.h"
 #include "../data/ttstreampoint_audioworker.h"
-#include "../data/ttstreampoint_videoworker.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttprogressbar.h"

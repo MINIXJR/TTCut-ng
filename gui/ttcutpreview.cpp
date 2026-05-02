@@ -56,11 +56,6 @@ extern "C" {
 #include <QProgressDialog>
 #include <QStyle>
 
-#include "../extern/ttffmpegwrapper.h"
-#include "../extern/ttessmartcut.h"
-#include "../extern/ttmkvmergeprovider.h"
-#include "../avstream/ttesinfo.h"
-
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutPreview constructor
  */
