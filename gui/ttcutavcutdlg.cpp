@@ -53,12 +53,7 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   // and show the audio-format selector. Default values come from QSettings.
   gbAudioOnly->setVisible(audioOnly);
   if (audioOnly) {
-    cbAudioOnlyFormat->addItem(tr("Original codec (per track)"), TTCut::AOF_OriginalES);
-    cbAudioOnlyFormat->addItem(tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
-    cbAudioOnlyFormat->addItem(tr("MP3"),                        TTCut::AOF_MP3);
-    cbAudioOnlyFormat->addItem(tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
-    int aofIdx = cbAudioOnlyFormat->findData(TTCut::audioOnlyFormat);
-    cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
+    TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
     sbAudioOnlyBitrate->setValue(TTCut::audioOnlyBitrateKbps);
     setWindowTitle(tr("Audio Cut Options"));
   }

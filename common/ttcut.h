@@ -278,6 +278,11 @@ class TTCut
    // which previously each duplicated the loop. The caller wires the
    // currentIndexChanged signal — the row-lookup logic differs per view.
    static void populateLanguageCombo(class QComboBox* combo, const QString& currentLang);
+
+   // Populate a QComboBox with the audio-only output formats (Original ES,
+   // Matroska Audio, MP3, AAC) and select the entry matching
+   // TTCut::audioOnlyFormat. Used by TTCutAVCutDlg and TTCutSettingsMuxer.
+   static void populateAudioOnlyFormatCombo(class QComboBox* combo);
 };
 
 

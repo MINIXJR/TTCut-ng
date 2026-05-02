@@ -44,11 +44,8 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   initMuxTargetList();
   initOutputContainerList();
 
-  // Audio-only format presets
-  cbAudioOnlyFormat->addItem(tr("Original codec (per track)"), TTCut::AOF_OriginalES);
-  cbAudioOnlyFormat->addItem(tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
-  cbAudioOnlyFormat->addItem(tr("MP3"),                        TTCut::AOF_MP3);
-  cbAudioOnlyFormat->addItem(tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
+  // Audio-only format presets (helper also selects the current saved value)
+  TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
 
   // Enable muxer selection now that we have multiple options
   cbMuxerProg->setEnabled(true);
@@ -135,7 +132,8 @@ void TTCutSettingsMuxer::setTabData()
   sbMkvChapterInterval->setValue(TTCut::mkvChapterInterval);
   sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
 
-  // Audio-only preset
+  // Audio-only preset: re-select since the user may have changed it via this
+  // tab and getData() is called when the dialog is reopened.
   int aofIdx = cbAudioOnlyFormat->findData(TTCut::audioOnlyFormat);
   cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
   sbAudioOnlyBitrate->setValue(TTCut::audioOnlyBitrateKbps);

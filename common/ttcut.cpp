@@ -290,6 +290,16 @@ QStringList TTCut::languageNames()
     << "Klare Sprache" << "Hörfilm";
 }
 
+void TTCut::populateAudioOnlyFormatCombo(QComboBox* combo)
+{
+  combo->addItem(QObject::tr("Original codec (per track)"), TTCut::AOF_OriginalES);
+  combo->addItem(QObject::tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
+  combo->addItem(QObject::tr("MP3"),                        TTCut::AOF_MP3);
+  combo->addItem(QObject::tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
+  int idx = combo->findData(TTCut::audioOnlyFormat);
+  combo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
 void TTCut::populateLanguageCombo(QComboBox* combo, const QString& currentLang)
 {
   QStringList codes = languageCodes();

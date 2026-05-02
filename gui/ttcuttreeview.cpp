@@ -229,9 +229,6 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
 void TTCutTreeView::onRemoveItem(int index)
 {
   delete videoCutList->takeTopLevelItem(index);
-
-  videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-
   allowSelectionChanged = true;
 }
 
