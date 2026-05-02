@@ -144,6 +144,14 @@ void TTCutSettingsMuxer::getTabData()
   TTCut::mpeg2Target   = cbMuxTarget->currentIndex();
   TTCut::muxOutputPath = leOutputPath->text();
 
+  // muxMode/muxDeleteES/muxPause were only being persisted via the per-widget
+  // signal handlers (onCreateMuxStreams etc.). If callers ever reset the UI
+  // and called getTabData() expecting the displayed state, those three were
+  // stale. Persist them here too — symmetric with setTabData.
+  TTCut::muxMode      = rbMuxStreams->isChecked() ? 0 : 1;
+  TTCut::muxDeleteES  = cbDeleteES->isChecked();
+  TTCut::muxPause     = cbPause->isChecked();
+
   // MKV chapter settings
   TTCut::mkvCreateChapters  = cbMkvCreateChapters->isChecked();
   TTCut::mkvChapterInterval = sbMkvChapterInterval->value();
