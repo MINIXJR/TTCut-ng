@@ -189,15 +189,18 @@ void TTCutSettingsEncoder::getTabData()
   TTCut::encoderCodec = cbCodec->currentIndex();
 
   // Save current UI values to the current codec's settings
-  saveCurrentCodecSettings();
+  saveCurrentCodecSettings(cbCodec->currentIndex());
 
   // Preview preset
   TTCut::previewPreset = cbPreviewPreset->currentIndex();
 }
 
-void TTCutSettingsEncoder::saveCurrentCodecSettings()
+// Save the encoder UI's current preset/crf/profile values into the per-codec
+// TTCut fields for the codec passed in. Pass cbCodec->currentIndex() to save
+// under the codec the user is editing right now; pass the previous codec
+// from onCodecChanged() to save under the codec the user is leaving.
+void TTCutSettingsEncoder::saveCurrentCodecSettings(int codec)
 {
-  int codec = cbCodec->currentIndex();
   int preset = cbPreset->currentIndex();
   int crf = sbCrf->value();
   int profile = cbProfile->currentIndex();
@@ -271,28 +274,8 @@ void TTCutSettingsEncoder::onCodecChanged(int newCodec)
   int oldCodec = TTCut::encoderCodec;
 
   if (oldCodec != newCodec) {
-    // Save current UI values to the old codec
-    int preset = cbPreset->currentIndex();
-    int crf = sbCrf->value();
-    int profile = cbProfile->currentIndex();
-
-    switch (oldCodec) {
-      case 0:  // MPEG-2
-        TTCut::mpeg2Preset = preset;
-        TTCut::mpeg2Crf = crf;
-        TTCut::mpeg2Profile = profile;
-        break;
-      case 1:  // H.264
-        TTCut::h264Preset = preset;
-        TTCut::h264Crf = crf;
-        TTCut::h264Profile = profile;
-        break;
-      case 2:  // H.265
-        TTCut::h265Preset = preset;
-        TTCut::h265Crf = crf;
-        TTCut::h265Profile = profile;
-        break;
-    }
+    // Save current UI values to the codec we are leaving
+    saveCurrentCodecSettings(oldCodec);
 
     // Update current codec
     TTCut::encoderCodec = newCodec;
