@@ -9,7 +9,8 @@
 
 // ----------------------------------------------------------------------------
 // TTH264VIDEOSTREAM
-// H.264/AVC Video Stream handling for frame-accurate cutting
+// H.264/AVC Video Stream — codec-specific bits only. Common ffmpeg / GOP /
+// header-list flow lives in TTH26xVideoStream.
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -17,93 +18,59 @@
 /* under the terms of the GNU General Public License as published by the Free */
 /* Software Foundation;                                                       */
 /* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
 #ifndef TTH264VIDEOSTREAM_H
 #define TTH264VIDEOSTREAM_H
 
-#include "ttavstream.h"
+#include "tth26xvideostream.h"
 #include "tth264videoheader.h"
-#include "../extern/ttffmpegwrapper.h"
-#include "../common/ttmessagelogger.h"
 
 #include <QString>
 #include <QFileInfo>
 #include <QList>
 
 class TTCutParameter;
-class TTVideoHeaderList;
-class TTVideoIndexList;
 
-// -----------------------------------------------------------------------------
-// TTH264VideoStream
-// Handles H.264/AVC elementary streams for frame-accurate cutting
-// -----------------------------------------------------------------------------
-class TTH264VideoStream : public TTVideoStream
+class TTH264VideoStream : public TTH26xVideoStream
 {
     Q_OBJECT
 
 public:
-    TTH264VideoStream(const QFileInfo& fInfo);
+    explicit TTH264VideoStream(const QFileInfo& fInfo);
     virtual ~TTH264VideoStream();
 
-    // Stream type identification
+    // Stream identity
     virtual TTAVTypes::AVStreamType streamType() const override;
-
-    // Frame rate (override to use stored value instead of MPEG-2 sequence header)
-    virtual float frameRate() override;
     virtual bool isPAFF() const override { return mFFmpeg && mFFmpeg->isPAFF(); }
-    virtual int paffLog2MaxFrameNum() const override;
+    virtual int  paffLog2MaxFrameNum() const override;
 
-    // Header and index list creation (using libav)
-    virtual int createHeaderList() override;
-    virtual int createIndexList() override;
-
-    // Cut operations
-    virtual void cut(int start, int end, TTCutParameter* cp) override;
-
-    // Cut point validation
-    virtual bool isCutInPoint(int pos) override;
-    virtual bool isCutOutPoint(int pos) override;
-
-    // Access to SPS information
-    TTH264SPS* getSPS() const { return mSPS; }
-
-    // Access to frame info
+    // Typed accessors (kept for callers that need concrete H.264 types)
+    TTH264SPS*        getSPS() const { return mSPS; }
     TTH264AccessUnit* frameAt(int index);
-    int findIDRBefore(int frameIndex) override;
-    int findIDRAfter(int frameIndex);
-
-    // GOP information
-    int gopCount() const;
-    int findGOPForFrame(int frameIndex);
-    int getGOPStart(int gopIndex);
-    int getGOPEnd(int gopIndex);
+    int               findIDRAfter(int frameIndex);
 
 protected:
-    // Internal helpers
-    bool openStream();
-    bool closeStream();
-    void buildHeaderListFromFFmpeg();
-    void buildIndexListFromFFmpeg();
+    // Hooks
+    TTVideoCodecType expectedCodec() const override;
+    const char*      codecLabel() const override { return "H.264"; }
 
-public:
-    const QList<TTFrameInfo>& ffmpegFrameIndex() const { return mFFmpeg->frameIndex(); }
+    void    resetSPS() override;
+    void    buildSPSFromStreamInfo(const TTStreamInfo& info) override;
+    void    setSPSFrameRate(double fps) override;
+    QString spsDescription() const override;
+
+    void    buildAccessUnits() override;
+    int     accessUnitCount() const override { return mAccessUnits.size(); }
+    bool    accessUnitIsIDR(int idx) const override;
+    bool    accessUnitIsRAP(int idx) const override { return accessUnitIsIDR(idx); }  // H.264 RAP == IDR
+    int     accessUnitToCodingType(int idx) const override;
+
+    bool    isPAFFCorrectionApplicable() const override { return true; }
 
 private:
-    TTFFmpegWrapper* mFFmpeg;
     TTH264SPS* mSPS;
     QList<TTH264AccessUnit*> mAccessUnits;
-    TTMessageLogger* mLog;
 };
 
 #endif // TTH264VIDEOSTREAM_H

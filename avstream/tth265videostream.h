@@ -9,7 +9,8 @@
 
 // ----------------------------------------------------------------------------
 // TTH265VIDEOSTREAM
-// H.265/HEVC Video Stream handling for frame-accurate cutting
+// H.265/HEVC Video Stream — codec-specific bits only. Common ffmpeg / GOP /
+// header-list flow lives in TTH26xVideoStream.
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -17,96 +18,59 @@
 /* under the terms of the GNU General Public License as published by the Free */
 /* Software Foundation;                                                       */
 /* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
 #ifndef TTH265VIDEOSTREAM_H
 #define TTH265VIDEOSTREAM_H
 
-#include "ttavstream.h"
+#include "tth26xvideostream.h"
 #include "tth265videoheader.h"
-#include "../extern/ttffmpegwrapper.h"
-#include "../common/ttmessagelogger.h"
 
 #include <QString>
 #include <QFileInfo>
 #include <QList>
 
 class TTCutParameter;
-class TTVideoHeaderList;
-class TTVideoIndexList;
 
-// -----------------------------------------------------------------------------
-// TTH265VideoStream
-// Handles H.265/HEVC elementary streams for frame-accurate cutting
-// -----------------------------------------------------------------------------
-class TTH265VideoStream : public TTVideoStream
+class TTH265VideoStream : public TTH26xVideoStream
 {
     Q_OBJECT
 
 public:
-    TTH265VideoStream(const QFileInfo& fInfo);
+    explicit TTH265VideoStream(const QFileInfo& fInfo);
     virtual ~TTH265VideoStream();
 
-    // Stream type identification
     virtual TTAVTypes::AVStreamType streamType() const override;
 
-    // Frame rate (override to use stored value instead of MPEG-2 sequence header)
-    virtual float frameRate() override;
-
-    // Header and index list creation (using libav)
-    virtual int createHeaderList() override;
-    virtual int createIndexList() override;
-
-    // Cut operations
-    virtual void cut(int start, int end, TTCutParameter* cp) override;
-
-    // Cut point validation
-    virtual bool isCutInPoint(int pos) override;
-    virtual bool isCutOutPoint(int pos) override;
-
-    // Access to SPS information
-    TTH265SPS* getSPS() const { return mSPS; }
-
-    // Access to frame info
+    // Typed accessors
+    TTH265SPS*        getSPS() const { return mSPS; }
+    TTH265VPS*        getVPS() const { return mVPS; }
     TTH265AccessUnit* frameAt(int index);
-    int findRAPBefore(int frameIndex);  // Random Access Point (IDR/CRA/BLA)
-    int findRAPAfter(int frameIndex);
-    int findIDRBefore(int frameIndex) override;
-
-    // GOP information
-    int gopCount() const;
-    int findGOPForFrame(int frameIndex);
-    int getGOPStart(int gopIndex);
-    int getGOPEnd(int gopIndex);
+    int               findRAPBefore(int frameIndex);
+    int               findRAPAfter(int frameIndex);
 
 protected:
-    // Internal helpers
-    bool openStream();
-    bool closeStream();
-    void buildHeaderListFromFFmpeg();
-    void buildIndexListFromFFmpeg();
+    // Hooks
+    TTVideoCodecType expectedCodec() const override;
+    const char*      codecLabel() const override { return "H.265"; }
 
-    // Check if NAL type is a Random Access Point
+    void    resetSPS() override;
+    void    buildSPSFromStreamInfo(const TTStreamInfo& info) override;
+    void    setSPSFrameRate(double fps) override;
+    QString spsDescription() const override;
+
+    void    buildAccessUnits() override;
+    int     accessUnitCount() const override { return mAccessUnits.size(); }
+    bool    accessUnitIsIDR(int idx) const override;
+    bool    accessUnitIsRAP(int idx) const override;
+    int     accessUnitToCodingType(int idx) const override;
+
     static bool isRAPNalType(int nalType);
 
-public:
-    const QList<TTFrameInfo>& ffmpegFrameIndex() const { return mFFmpeg->frameIndex(); }
-
 private:
-    TTFFmpegWrapper* mFFmpeg;
     TTH265SPS* mSPS;
     TTH265VPS* mVPS;
     QList<TTH265AccessUnit*> mAccessUnits;
-    TTMessageLogger* mLog;
 };
 
 #endif // TTH265VIDEOSTREAM_H

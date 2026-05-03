@@ -4,12 +4,11 @@
 /* PROJEKT  : TTCUT 2024                                                      */
 /* FILE     : tth265videostream.cpp                                           */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : MINIXJR                                           DATE: 01/2025  */
-/*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
 // TTH265VIDEOSTREAM
-// H.265/HEVC Video Stream handling implementation
+// H.265/HEVC Video Stream — codec-specific bits only. Common ffmpeg / GOP /
+// header-list flow lives in TTH26xVideoStream.
 // ----------------------------------------------------------------------------
 
 /*----------------------------------------------------------------------------*/
@@ -17,60 +16,37 @@
 /* under the terms of the GNU General Public License as published by the Free */
 /* Software Foundation;                                                       */
 /* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
 #include "tth265videostream.h"
-#include "ttvideoheaderlist.h"
-#include "ttvideoindexlist.h"
-#include "ttesinfo.h"
-#include "../data/ttcutparameter.h"
-#include "../common/ttexception.h"
-#include "../common/ttcut.h"
-#include "../common/istatusreporter.h"
 
 #include <QDebug>
-#include <QDir>
-#include <QProcess>
 
 // -----------------------------------------------------------------------------
-// Constructor
+// Constructor / destructor
 // -----------------------------------------------------------------------------
 TTH265VideoStream::TTH265VideoStream(const QFileInfo& fInfo)
-    : TTVideoStream(fInfo)
-    , mFFmpeg(nullptr)
+    : TTH26xVideoStream(fInfo)
     , mSPS(nullptr)
     , mVPS(nullptr)
 {
-    mLog = TTMessageLogger::getInstance();
     mLog->infoMsg(__FILE__, __LINE__,
         QString("Creating H.265/HEVC video stream for: %1").arg(fInfo.filePath()));
 }
 
-// -----------------------------------------------------------------------------
-// Destructor
-// -----------------------------------------------------------------------------
 TTH265VideoStream::~TTH265VideoStream()
 {
-    closeStream();
-
     qDeleteAll(mAccessUnits);
     mAccessUnits.clear();
-
     delete mSPS;
+    mSPS = nullptr;
     delete mVPS;
+    mVPS = nullptr;
+    // mFFmpeg cleanup is handled by ~TTH26xVideoStream
 }
 
 // -----------------------------------------------------------------------------
-// Return stream type
+// Stream identity
 // -----------------------------------------------------------------------------
 TTAVTypes::AVStreamType TTH265VideoStream::streamType() const
 {
@@ -78,176 +54,55 @@ TTAVTypes::AVStreamType TTH265VideoStream::streamType() const
 }
 
 // -----------------------------------------------------------------------------
-// Return frame rate (using stored value from FFmpeg)
+// Hook implementations
 // -----------------------------------------------------------------------------
-float TTH265VideoStream::frameRate()
+TTVideoCodecType TTH265VideoStream::expectedCodec() const
 {
-    // Use the frame_rate member stored in createHeaderList()
-    // This avoids trying to access MPEG-2 sequence headers which don't exist in H.265
-    return frame_rate;
+    return CODEC_H265;
 }
 
-// -----------------------------------------------------------------------------
-// Open stream using FFmpeg wrapper
-// -----------------------------------------------------------------------------
-bool TTH265VideoStream::openStream()
+void TTH265VideoStream::resetSPS()
 {
-    if (mFFmpeg && mFFmpeg->isOpen()) {
-        return true;
-    }
-
-    if (!mFFmpeg) {
-        mFFmpeg = new TTFFmpegWrapper();
-    }
-
-    if (!mFFmpeg->openFile(stream_info->filePath())) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            QString("Failed to open H.265 stream: %1").arg(mFFmpeg->lastError()));
-        return false;
-    }
-
-    // Verify this is indeed H.265
-    TTVideoCodecType codecType = mFFmpeg->detectVideoCodec();
-    if (codecType != CODEC_H265) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            QString("File is not H.265/HEVC: detected %1")
-                .arg(TTFFmpegWrapper::codecTypeToString(codecType)));
-        closeStream();
-        return false;
-    }
-
-    return true;
+    delete mSPS;
+    mSPS = nullptr;
+    delete mVPS;
+    mVPS = nullptr;
 }
 
-// -----------------------------------------------------------------------------
-// Close stream
-// -----------------------------------------------------------------------------
-bool TTH265VideoStream::closeStream()
+void TTH265VideoStream::buildSPSFromStreamInfo(const TTStreamInfo& info)
 {
-    if (mFFmpeg) {
-        mFFmpeg->closeFile();
-        delete mFFmpeg;
-        mFFmpeg = nullptr;
+    mSPS = new TTH265SPS();
+    mSPS->setWidth(info.width);
+    mSPS->setHeight(info.height);
+    mSPS->setProfile(info.profile);
+    mSPS->setLevel(info.level);
+    if (info.frameRate > 0) {
+        mSPS->setFrameRate(info.frameRate);
     }
-    return true;
+
+    // Minimal VPS placeholder; full VPS parsing happens elsewhere if needed.
+    mVPS = new TTH265VPS();
 }
 
-// -----------------------------------------------------------------------------
-// Create header list by parsing NAL units via FFmpeg
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::createHeaderList()
+void TTH265VideoStream::setSPSFrameRate(double fps)
 {
-    emit statusReport(StatusReportArgs::Start, tr("Opening H.265 stream..."), 100);
-
-    if (!openStream()) {
-        emit statusReport(StatusReportArgs::Error, tr("Failed to open H.265 stream"), 0);
-        return -1;
-    }
-
-    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part).
-    // Must be done after openStream() since that is what creates mFFmpeg.
-    connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, [this](int percent, const QString&) {
-        int mapped = 10 + percent * 70 / 100;
-        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
-    });
-
-    mLog->infoMsg(__FILE__, __LINE__, "Building H.265 header list...");
-    emit statusReport(StatusReportArgs::Step, tr("Creating H.265 header list..."), 10);
-
-    // Build frame index first (slow — progress forwarded via lambda above)
-    if (!mFFmpeg->buildFrameIndex()) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            QString("Failed to build frame index: %1").arg(mFFmpeg->lastError()));
-        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
-        emit statusReport(StatusReportArgs::Error, tr("Failed to build frame index"), 0);
-        return -1;
-    }
-
-    disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
-    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82);
-
-    // Build GOP index
-    if (!mFFmpeg->buildGOPIndex()) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            QString("Failed to build GOP index: %1").arg(mFFmpeg->lastError()));
-        emit statusReport(StatusReportArgs::Error, tr("Failed to build GOP index"), 0);
-        return -1;
-    }
-
-    // Extract SPS/VPS info from first video stream
-    int videoIdx = mFFmpeg->findBestVideoStream();
-    if (videoIdx >= 0) {
-        TTStreamInfo info = mFFmpeg->getStreamInfo(videoIdx);
-
-        // Create SPS with extracted info
-        if (!mSPS) {
-            mSPS = new TTH265SPS();
-        }
-        mSPS->setWidth(info.width);
-        mSPS->setHeight(info.height);
-        mSPS->setProfile(info.profile);
-        mSPS->setLevel(info.level);
-        if (info.frameRate > 0) {
-            mSPS->setFrameRate(info.frameRate);
-        }
-
-        // Store frame rate - prefer .info file over ffmpeg detection
-        frame_rate = static_cast<float>(info.frameRate);
-        QString infoFile = TTESInfo::findInfoFile(filePath());
-        if (!infoFile.isEmpty()) {
-            TTESInfo esInfo(infoFile);
-            if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-                frame_rate = static_cast<float>(esInfo.frameRate());
-                mSPS->setFrameRate(esInfo.frameRate());
-                mLog->infoMsg(__FILE__, __LINE__,
-                    QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
-            }
-        }
-
-        // Store bit rate
-        bit_rate = static_cast<float>(info.bitRate) / 1000.0f; // kbit/s
-
-        // Create VPS (minimal info)
-        if (!mVPS) {
-            mVPS = new TTH265VPS();
-        }
-
-        mLog->infoMsg(__FILE__, __LINE__,
-            QString("H.265 stream: %1x%2, %3 fps, %4 %5")
-                .arg(info.width)
-                .arg(info.height)
-                .arg(info.frameRate, 0, 'f', 2)
-                .arg(mSPS->profileString())
-                .arg(mSPS->levelString()));
-    }
-
-    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90);
-
-    buildHeaderListFromFFmpeg();
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Header list created: %1 frames, %2 GOPs")
-            .arg(mFFmpeg->frameCount())
-            .arg(mFFmpeg->gopCount()));
-
-    emit statusReport(StatusReportArgs::Finished, tr("H.265 header list created"), 100);
-
-    return mFFmpeg->frameCount();
+    if (mSPS) mSPS->setFrameRate(fps);
 }
 
-// -----------------------------------------------------------------------------
-// Build header list from FFmpeg frame index
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::buildHeaderListFromFFmpeg()
+QString TTH265VideoStream::spsDescription() const
 {
-    if (!mFFmpeg) return;
+    if (!mSPS) return QString();
+    return QString("%1 %2").arg(mSPS->profileString(), mSPS->levelString());
+}
 
+void TTH265VideoStream::buildAccessUnits()
+{
     qDeleteAll(mAccessUnits);
     mAccessUnits.clear();
 
     const QList<TTFrameInfo>& frameIndex = mFFmpeg->frameIndex();
 
-    for (int i = 0; i < frameIndex.size(); i++) {
+    for (int i = 0; i < frameIndex.size(); ++i) {
         const TTFrameInfo& frame = frameIndex[i];
 
         TTH265AccessUnit* au = new TTH265AccessUnit();
@@ -280,241 +135,56 @@ void TTH265VideoStream::buildHeaderListFromFFmpeg()
     }
 }
 
-// -----------------------------------------------------------------------------
-// Create index list
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::createIndexList()
+bool TTH265VideoStream::accessUnitIsIDR(int idx) const
 {
-    if (!mFFmpeg || mFFmpeg->frameCount() == 0) {
-        mLog->errorMsg(__FILE__, __LINE__,
-            "Cannot create index list: header list not built");
-        return -1;
-    }
-
-    mLog->infoMsg(__FILE__, __LINE__, "Creating H.265 index list...");
-
-    if (index_list == nullptr) {
-        index_list = new TTVideoIndexList();
-    }
-
-    // Build index from frame info
-    buildIndexListFromFFmpeg();
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("Index list created: %1 entries").arg(index_list->count()));
-
-    return index_list->count();
+    if (idx < 0 || idx >= mAccessUnits.size()) return false;
+    return mAccessUnits[idx]->isIDR();
 }
 
-// -----------------------------------------------------------------------------
-// Build index list from FFmpeg data
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::buildIndexListFromFFmpeg()
+bool TTH265VideoStream::accessUnitIsRAP(int idx) const
 {
-    if (!mFFmpeg || !index_list) return;
+    if (idx < 0 || idx >= mAccessUnits.size()) return false;
+    return mAccessUnits[idx]->isRAP();
+}
 
-    for (int i = 0; i < mAccessUnits.size(); i++) {
-        TTH265AccessUnit* au = mAccessUnits[i];
-
-        TTVideoIndex* vidIndex = new TTVideoIndex();
-        vidIndex->setDisplayOrder(i);
-        vidIndex->setHeaderListIndex(i);
-
-        // Map slice type to picture coding type (compatible with MPEG-2)
-        int codingType = 1; // I-frame
-        if (!au->isIDR()) {
-            switch (au->sliceType()) {
-                case HEVC_SLICE_I:
-                    codingType = 1;
-                    break;
-                case HEVC_SLICE_P:
-                    codingType = 2;
-                    break;
-                case HEVC_SLICE_B:
-                    codingType = 3;
-                    break;
-            }
-        }
-        vidIndex->setPictureCodingType(codingType);
-
-        index_list->add(vidIndex);
+int TTH265VideoStream::accessUnitToCodingType(int idx) const
+{
+    if (idx < 0 || idx >= mAccessUnits.size()) return 1;
+    TTH265AccessUnit* au = mAccessUnits[idx];
+    if (au->isIDR()) return 1;
+    switch (au->sliceType()) {
+        case HEVC_SLICE_I:  return 1;
+        case HEVC_SLICE_P:  return 2;
+        case HEVC_SLICE_B:  return 3;
+        default:            return 1;
     }
 }
 
 // -----------------------------------------------------------------------------
-// cut() — required by TTAVStream pure-virtual contract, but H.265 cutting
-// goes through TTESSmartCut (driven by TTCutVideoTask), not through here.
-// Throw loudly so a future virtual-dispatch caller cannot silently produce
-// empty output via this stale prototype path.
-// -----------------------------------------------------------------------------
-void TTH265VideoStream::cut(int start, int end, TTCutParameter* /*cp*/)
-{
-    Q_UNUSED(start);
-    Q_UNUSED(end);
-    throw TTInvalidOperationException(__FILE__, __LINE__,
-        "TTH265VideoStream::cut is a deprecated stub; use TTESSmartCut instead");
-}
-
-// -----------------------------------------------------------------------------
-// Check if position is valid cut-in point
-// With encoder mode: any frame is valid (will be re-encoded)
-// Without encoder mode: must be RAP for lossless cutting
-// pos < 0 means use currentIndex() (like MPEG-2 implementation)
-// -----------------------------------------------------------------------------
-bool TTH265VideoStream::isCutInPoint(int pos)
-{
-    // When encoder mode is enabled, any frame can be a cut-in point
-    if (TTCut::encoderMode) {
-        return true;
-    }
-
-    // Use current position if pos < 0 (same convention as MPEG-2)
-    int index = (pos < 0) ? currentIndex() : pos;
-
-    if (index < 0 || index >= mAccessUnits.size()) {
-        return false;
-    }
-
-    // For lossless cutting, must be a Random Access Point
-    TTH265AccessUnit* au = mAccessUnits[index];
-    return au->isRAP();
-}
-
-// -----------------------------------------------------------------------------
-// Check if position is valid cut-out point
-// With encoder mode: any frame is valid
-// Without encoder mode: any frame (will re-encode at boundaries if needed)
-// pos < 0 means use currentIndex()
-// -----------------------------------------------------------------------------
-bool TTH265VideoStream::isCutOutPoint(int pos)
-{
-    // When encoder mode is enabled, any frame can be a cut-out point
-    if (TTCut::encoderMode) {
-        return true;
-    }
-
-    // Use current position if pos < 0 (same convention as MPEG-2)
-    int index = (pos < 0) ? currentIndex() : pos;
-
-    if (index < 0 || index >= mAccessUnits.size()) {
-        return false;
-    }
-
-    // For lossless cutting, should be the frame before a RAP
-    // Or the last frame
-    if (index == mAccessUnits.size() - 1) {
-        return true;
-    }
-
-    // Check if next frame is a RAP
-    if (index + 1 < mAccessUnits.size()) {
-        TTH265AccessUnit* nextAU = mAccessUnits[index + 1];
-        if (nextAU->isRAP()) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-// -----------------------------------------------------------------------------
-// Get frame at index
+// Typed accessors
 // -----------------------------------------------------------------------------
 TTH265AccessUnit* TTH265VideoStream::frameAt(int index)
 {
-    if (index >= 0 && index < mAccessUnits.size()) {
-        return mAccessUnits[index];
-    }
-    return nullptr;
+    if (index < 0 || index >= mAccessUnits.size()) return nullptr;
+    return mAccessUnits[index];
 }
 
-// -----------------------------------------------------------------------------
-// Find Random Access Point before frame index
-// -----------------------------------------------------------------------------
 int TTH265VideoStream::findRAPBefore(int frameIndex)
 {
-    for (int i = frameIndex; i >= 0; i--) {
-        if (mAccessUnits[i]->isRAP()) {
-            return i;
-        }
+    for (int i = frameIndex; i >= 0; --i) {
+        if (mAccessUnits[i]->isRAP()) return i;
     }
-    return 0;  // First frame is always accessible
+    return 0;  // matches previous behaviour: first frame as fallback
 }
 
-// -----------------------------------------------------------------------------
-// Find Random Access Point after frame index
-// -----------------------------------------------------------------------------
 int TTH265VideoStream::findRAPAfter(int frameIndex)
 {
-    for (int i = frameIndex; i < mAccessUnits.size(); i++) {
-        if (mAccessUnits[i]->isRAP()) {
-            return i;
-        }
+    for (int i = frameIndex; i < mAccessUnits.size(); ++i) {
+        if (mAccessUnits[i]->isRAP()) return i;
     }
-    return mAccessUnits.size() - 1;  // Last frame
+    return mAccessUnits.size() - 1;
 }
 
-// -----------------------------------------------------------------------------
-// Find true IDR frame at or before frame index (NAL types 19, 20)
-// Unlike findRAPBefore(), this excludes CRA/BLA which don't flush the DPB
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::findIDRBefore(int frameIndex)
-{
-    for (int i = frameIndex; i >= 0; i--) {
-        if (mAccessUnits[i]->isIDR()) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// -----------------------------------------------------------------------------
-// Get GOP count
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::gopCount() const
-{
-    if (mFFmpeg) {
-        return mFFmpeg->gopCount();
-    }
-    return 0;
-}
-
-// -----------------------------------------------------------------------------
-// Find GOP for frame
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::findGOPForFrame(int frameIndex)
-{
-    if (mFFmpeg) {
-        return mFFmpeg->findGOPForFrame(frameIndex);
-    }
-    return -1;
-}
-
-// -----------------------------------------------------------------------------
-// Get GOP start frame
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::getGOPStart(int gopIndex)
-{
-    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
-        return mFFmpeg->gopIndex()[gopIndex].startFrame;
-    }
-    return -1;
-}
-
-// -----------------------------------------------------------------------------
-// Get GOP end frame
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::getGOPEnd(int gopIndex)
-{
-    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
-        return mFFmpeg->gopIndex()[gopIndex].endFrame;
-    }
-    return -1;
-}
-
-// -----------------------------------------------------------------------------
-// Check if NAL type is a Random Access Point
-// -----------------------------------------------------------------------------
 bool TTH265VideoStream::isRAPNalType(int nalType)
 {
     switch (nalType) {
@@ -529,4 +199,3 @@ bool TTH265VideoStream::isRAPNalType(int nalType)
             return false;
     }
 }
-
