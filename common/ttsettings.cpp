@@ -241,6 +241,19 @@ void TTSettings::setLogAudioIndexInfo(bool v)
   TTCut::logAudioIndexInfo = v;
 }
 
+// ---- Recent Files group setter (Task 7) ------------------------------------
+// First setter in Phase B that emits a change-notification signal. Mutating
+// call sites (append/prepend/removeAll) must read-modify-write through this
+// setter so the signal fires and the legacy mirror stays consistent.
+
+void TTSettings::setRecentFileList(const QStringList& v)
+{
+  if (mRecentFileList == v) return;
+  mRecentFileList = v;
+  TTCut::recentFileList = v;
+  emit recentFilesChanged(v);
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -335,6 +348,12 @@ void TTSettings::load()
   TTCut::logAudioIndexInfo = mLogAudioIndexInfo;
   settings.endGroup();
 
+  // ----- Recent Files group (Task 7) -----------------------------------
+  settings.beginGroup("RecentFiles");
+  mRecentFileList = settings.value("RecentFiles/", QStringList{}).toStringList();
+  TTCut::recentFileList = mRecentFileList;
+  settings.endGroup();
+
   settings.endGroup();
 }
 
@@ -393,6 +412,11 @@ void TTSettings::save()
   settings.setValue("LogModeExtended/",   mLogModeExtended);
   settings.setValue("LogVideoIndexInfo/", mLogVideoIndexInfo);
   settings.setValue("LogAudioIndexInfo/", mLogAudioIndexInfo);
+  settings.endGroup();
+
+  // ----- Recent Files group (Task 7) -----------------------------------
+  settings.beginGroup("RecentFiles");
+  settings.setValue("RecentFiles/", mRecentFileList);
   settings.endGroup();
 
   settings.endGroup();

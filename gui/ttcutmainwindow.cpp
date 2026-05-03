@@ -158,7 +158,7 @@ TTCutMainWindow::TTCutMainWindow()
   log->infoMsg(__FILE__, __LINE__, QString("Qt-Version:    %1").arg(qVersion()));
 
   // Settings
-  TTCut::recentFileList.clear();
+  TTSettings::instance()->setRecentFileList(QStringList{});
   settings = new TTCutSettings();
   settings->readSettings();
 
@@ -1547,13 +1547,14 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
  */
 void TTCutMainWindow::updateRecentFileActions()
 {
-  int numRecentFiles = qMin(TTCut::recentFileList.size(), (int)MaxRecentFiles);
+  const QStringList& recentFiles = TTSettings::instance()->recentFileList();
+  int numRecentFiles = qMin(recentFiles.size(), (int)MaxRecentFiles);
 
   for (int i = 0; i < numRecentFiles; ++i) {
     QString text = tr("&%1 %2").arg(i+1).
-      arg(QFileInfo(TTCut::recentFileList[i]).fileName());
+      arg(QFileInfo(recentFiles[i]).fileName());
     recentFileAction[i]->setText(text);
-    recentFileAction[i]->setData(TTCut::recentFileList[i]);
+    recentFileAction[i]->setData(recentFiles[i]);
     recentFileAction[i]->setVisible(true);
   }
 
@@ -1588,12 +1589,17 @@ void TTCutMainWindow::onQuickJump()
  */
 void TTCutMainWindow::insertRecentFile(const QString& fName)
 {
-  TTCut::recentFileList.removeAll(fName);
-  TTCut::recentFileList.prepend(fName);
+  // Read-modify-write through the setter so recentFilesChanged() fires
+  // exactly once and the legacy TTCut::recentFileList mirror stays
+  // consistent with the TTSettings field.
+  QStringList list = TTSettings::instance()->recentFileList();
+  list.removeAll(fName);
+  list.prepend(fName);
 
-  while (TTCut::recentFileList.size() > MaxRecentFiles) {
-    TTCut::recentFileList.removeLast();
+  while (list.size() > MaxRecentFiles) {
+    list.removeLast();
   }
+  TTSettings::instance()->setRecentFileList(list);
 
   for (QWidget* widget : QApplication::topLevelWidgets()) {
     TTCutMainWindow* mainWin = qobject_cast<TTCutMainWindow*>(widget);

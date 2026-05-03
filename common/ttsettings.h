@@ -118,10 +118,20 @@ public:
   bool    logAudioIndexInfo() const  { return mLogAudioIndexInfo; }
   void    setLogAudioIndexInfo(bool v);
 
+  // ----- Recent Files group (Task 7) --------------------------------------
+  // Setter mirrors to legacy TTCut::xxx during the migration window so call
+  // sites that have not been migrated yet still observe consistent state,
+  // and additionally emits recentFilesChanged() so subscribed UI elements
+  // (recent-files menu) can refresh without ad-hoc refresh hooks.
+  const QStringList& recentFileList() const { return mRecentFileList; }
+  void    setRecentFileList(const QStringList& v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
-  // No signals declared for the Common Options group; no UI dependents need
-  // change-notification yet.
+  // Tasks 4-6 declare none (no UI dependents need change-notification).
+  // Task 7 adds the first signal: the recent-files menu is the canonical
+  // subscriber, but follow-up commits will wire that up.
+  void recentFilesChanged(const QStringList& list);
 
 private:
   static TTSettings* sInstance;
@@ -161,6 +171,11 @@ private:
   bool    mLogModeExtended   = true;
   bool    mLogVideoIndexInfo = false;
   bool    mLogAudioIndexInfo = false;
+
+  // ----- Recent Files group (Task 7) ---------------------------------------
+  // Default matches common/ttcut.cpp line 133 (`QStringList TTCut::recentFileList;`
+  // — empty list, no initializer).
+  QStringList mRecentFileList;
 };
 
 #endif
