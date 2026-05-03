@@ -208,26 +208,26 @@ void TTCutSettingsEncoder::saveCurrentCodecSettings(int codec)
   int crf = sbCrf->value();
   int profile = cbProfile->currentIndex();
 
+  TTSettings* s = TTSettings::instance();
   switch (codec) {
     case 0:  // MPEG-2
-      TTCut::mpeg2Preset = preset;
-      TTCut::mpeg2Crf = crf;
-      TTCut::mpeg2Profile = profile;
+      s->setMpeg2Preset(preset);
+      s->setMpeg2Crf(crf);
+      s->setMpeg2Profile(profile);
       break;
     case 1:  // H.264
-      TTCut::h264Preset = preset;
-      TTCut::h264Crf = crf;
-      TTCut::h264Profile = profile;
+      s->setH264Preset(preset);
+      s->setH264Crf(crf);
+      s->setH264Profile(profile);
       break;
     case 2:  // H.265
-      TTCut::h265Preset = preset;
-      TTCut::h265Crf = crf;
-      TTCut::h265Profile = profile;
+      s->setH265Preset(preset);
+      s->setH265Crf(crf);
+      s->setH265Profile(profile);
       break;
   }
 
   // Also update the current working values
-  TTSettings* s = TTSettings::instance();
   s->setEncoderPreset(preset);
   s->setEncoderCrf(crf);
   s->setEncoderProfile(profile);
@@ -237,22 +237,23 @@ void TTCutSettingsEncoder::loadCodecSettings(int codec)
 {
   int preset, crf, profile;
 
+  TTSettings* s = TTSettings::instance();
   switch (codec) {
     case 0:  // MPEG-2
-      preset = TTCut::mpeg2Preset;
-      crf = TTCut::mpeg2Crf;
-      profile = TTCut::mpeg2Profile;
+      preset  = s->mpeg2Preset();
+      crf     = s->mpeg2Crf();
+      profile = s->mpeg2Profile();
       break;
     case 1:  // H.264
-      preset = TTCut::h264Preset;
-      crf = TTCut::h264Crf;
-      profile = TTCut::h264Profile;
+      preset  = s->h264Preset();
+      crf     = s->h264Crf();
+      profile = s->h264Profile();
       break;
     case 2:  // H.265
     default:
-      preset = TTCut::h265Preset;
-      crf = TTCut::h265Crf;
-      profile = TTCut::h265Profile;
+      preset  = s->h265Preset();
+      crf     = s->h265Crf();
+      profile = s->h265Profile();
       break;
   }
 

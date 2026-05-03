@@ -955,17 +955,17 @@ void TTAVData::onReadProjectFileFinished()
     const int profile = s->encoderProfile();
     TTAVTypes::AVStreamType st = avItemAt(0)->videoStream()->streamType();
     if (st == TTAVTypes::mpeg2_demuxed_video) {
-      TTCut::mpeg2Preset  = preset;
-      TTCut::mpeg2Crf     = crf;
-      TTCut::mpeg2Profile = profile;
+      s->setMpeg2Preset(preset);
+      s->setMpeg2Crf(crf);
+      s->setMpeg2Profile(profile);
     } else if (st == TTAVTypes::h264_video) {
-      TTCut::h264Preset  = preset;
-      TTCut::h264Crf     = crf;
-      TTCut::h264Profile = profile;
+      s->setH264Preset(preset);
+      s->setH264Crf(crf);
+      s->setH264Profile(profile);
     } else if (st == TTAVTypes::h265_video) {
-      TTCut::h265Preset  = preset;
-      TTCut::h265Crf     = crf;
-      TTCut::h265Profile = profile;
+      s->setH265Preset(preset);
+      s->setH265Crf(crf);
+      s->setH265Profile(profile);
     }
   }
 

@@ -113,7 +113,7 @@ void TTCutSettingsMuxer::setTabData()
 
   // Set muxer program based on outputContainer setting
   cbMuxerProg->setCurrentIndex(indexForMuxerValue(TTCut::outputContainer));
-  cbMuxTarget->setCurrentIndex(TTCut::mpeg2Target);
+  cbMuxTarget->setCurrentIndex(TTSettings::instance()->mpeg2Target());
   updateMuxerVisibility();
 
   leOutputPath->setText(TTCut::muxOutputPath);
@@ -142,7 +142,7 @@ void TTCutSettingsMuxer::setTabData()
 
 void TTCutSettingsMuxer::getTabData()
 {
-  TTCut::mpeg2Target   = cbMuxTarget->currentIndex();
+  TTSettings::instance()->setMpeg2Target(cbMuxTarget->currentIndex());
   TTCut::muxOutputPath = leOutputPath->text();
 
   // muxMode/muxDeleteES/muxPause were only being persisted via the per-widget
@@ -245,10 +245,11 @@ void TTCutSettingsMuxer::onMuxerProgChanged(int index)
   TTCut::outputContainer = value;
 
   // Save the muxer preference for the current codec
-  switch (TTSettings::instance()->encoderCodec()) {
-    case 0:  TTCut::mpeg2Muxer = value; break;
-    case 1:  TTCut::h264Muxer  = value; break;
-    case 2:  TTCut::h265Muxer  = value; break;
+  TTSettings* s = TTSettings::instance();
+  switch (s->encoderCodec()) {
+    case 0:  s->setMpeg2Muxer(value); break;
+    case 1:  s->setH264Muxer(value);  break;
+    case 2:  s->setH265Muxer(value);  break;
   }
 
   updateMuxerVisibility();
@@ -290,11 +291,12 @@ void TTCutSettingsMuxer::onEncoderCodecChanged(int codecIndex)
   }
 
   // Fetch stored preference for this codec.
+  TTSettings* s = TTSettings::instance();
   int preferred;
   switch (codecIndex) {
-    case 0:  preferred = TTCut::mpeg2Muxer; break;
-    case 1:  preferred = TTCut::h264Muxer;  break;
-    case 2:  preferred = TTCut::h265Muxer;  break;
+    case 0:  preferred = s->mpeg2Muxer(); break;
+    case 1:  preferred = s->h264Muxer();  break;
+    case 2:  preferred = s->h265Muxer();  break;
     default: preferred = 1;  // MKV
   }
   if (!mpgSupported && preferred == 0) {

@@ -10,6 +10,7 @@
 #include "ttessmartcut.h"
 #include "../avstream/ttesinfo.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -2726,10 +2727,11 @@ bool TTESSmartCut::setupEncoder()
     AVDictionary* opts = nullptr;
 
     if (mParser.codecType() == NALU_CODEC_H264) {
-        crf        = TTCut::h264Crf;
+        TTSettings* s = TTSettings::instance();
+        crf        = s->h264Crf();
         presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, TTCut::h264Preset, 8);
-        profileIdx = qBound(0, TTCut::h264Profile, 5);
+                                            : qBound(0, s->h264Preset(), 8);
+        profileIdx = qBound(0, s->h264Profile(), 5);
 
         static const char* h264Profiles[] = {
             "baseline", "main", "high", "high10", "high422", "high444"
@@ -2756,10 +2758,11 @@ bool TTESSmartCut::setupEncoder()
 
     } else {
         // H.265
-        crf        = TTCut::h265Crf;
+        TTSettings* s = TTSettings::instance();
+        crf        = s->h265Crf();
         presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, TTCut::h265Preset, 8);
-        profileIdx = qBound(0, TTCut::h265Profile, 4);
+                                            : qBound(0, s->h265Preset(), 8);
+        profileIdx = qBound(0, s->h265Profile(), 4);
 
         static const char* h265Profiles[] = {
             "main", "main10", "main12", "main422-10", "main444-10"

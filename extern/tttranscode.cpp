@@ -34,6 +34,7 @@
 #include "../avstream/ttavstream.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -94,7 +95,7 @@ bool TTTranscodeProvider::setupEncoder()
 
   // Quality: qscale mode using mpeg2Crf setting (2-31)
   mEncoder->flags |= AV_CODEC_FLAG_QSCALE;
-  mEncoder->global_quality = FF_QP2LAMBDA * TTCut::mpeg2Crf;
+  mEncoder->global_quality = FF_QP2LAMBDA * TTSettings::instance()->mpeg2Crf();
 
   // GOP size based on frame rate (PAL=15, NTSC=18)
   int gopSize = 15;
@@ -151,7 +152,7 @@ bool TTTranscodeProvider::setupEncoder()
   }
 
   qDebug() << "MPEG-2 encoder setup:" << mEncoder->width << "x" << mEncoder->height
-           << "qscale=" << TTCut::mpeg2Crf << "gop=" << gopSize
+           << "qscale=" << TTSettings::instance()->mpeg2Crf() << "gop=" << gopSize
            << "interlaced=" << enc_par.videoInterlaced()
            << "bitrate_cap=" << bitrateKbit << "kbit/s";
 
