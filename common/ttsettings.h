@@ -126,12 +126,50 @@ public:
   const QStringList& recentFileList() const { return mRecentFileList; }
   void    setRecentFileList(const QStringList& v);
 
+  // ----- Encoder Generic group setters (Task 8) ---------------------------
+  // Setters mirror to legacy TTCut::xxx during the migration window so call
+  // sites that have not been migrated yet still observe consistent state.
+  // setEncoderCodec also emits encoderCodecChanged(int) so non-dialog
+  // subscribers can react to codec switches; the existing
+  // TTCutSettingsEncoder::codecChanged signal continues to drive the
+  // settings-dialog UI and is unchanged by this task.
+  //
+  // NOTE: encoderPreset, encoderCrf, encoderProfile are TRANSIENT working
+  // values copied at runtime from the codec-specific settings
+  // (mpeg2/h264/h265 Preset/Crf/Profile — Task 9). They are persisted in
+  // the .ttcut project file (data/ttcutprojectdata.cpp), NOT in QSettings,
+  // and therefore have no load()/save() round-trip in TTSettings — only
+  // in-memory storage with mirror-write setters.
+  bool    encoderMode() const        { return mEncoderMode; }
+  void    setEncoderMode(bool v);
+
+  int     encoderCodec() const       { return mEncoderCodec; }
+  void    setEncoderCodec(int v);
+
+  int     encoderPreset() const      { return mEncoderPreset; }
+  void    setEncoderPreset(int v);
+
+  int     encoderCrf() const         { return mEncoderCrf; }
+  void    setEncoderCrf(int v);
+
+  int     encoderProfile() const     { return mEncoderProfile; }
+  void    setEncoderProfile(int v);
+
+  int     previewPreset() const      { return mPreviewPreset; }
+  void    setPreviewPreset(int v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
   // Task 7 adds the first signal: the recent-files menu is the canonical
   // subscriber, but follow-up commits will wire that up.
   void recentFilesChanged(const QStringList& list);
+
+  // Task 8: emitted by setEncoderCodec so non-dialog subscribers (e.g.
+  // muxer settings page, project-load handlers) can react to codec
+  // switches uniformly. The settings dialog keeps its own codecChanged
+  // signal for intra-dialog wiring.
+  void encoderCodecChanged(int v);
 
 private:
   static TTSettings* sInstance;
@@ -176,6 +214,17 @@ private:
   // Default matches common/ttcut.cpp line 133 (`QStringList TTCut::recentFileList;`
   // — empty list, no initializer).
   QStringList mRecentFileList;
+
+  // ----- Encoder Generic group (Task 8) ------------------------------------
+  // Defaults match common/ttcut.cpp lines 142-148 + 169 verbatim.
+  // mEncoderPreset/Crf/Profile are TRANSIENT working values — see the
+  // commentary above the public setters for the rationale.
+  bool    mEncoderMode    = true;
+  int     mEncoderCodec   = 0;   // 0=MPEG-2, 1=H.264, 2=H.265
+  int     mEncoderPreset  = 4;   // transient working value (project-file persisted)
+  int     mEncoderCrf     = 2;   // transient working value (project-file persisted)
+  int     mEncoderProfile = 0;   // transient working value (project-file persisted)
+  int     mPreviewPreset  = 0;   // ultrafast (preview speed over quality)
 };
 
 #endif

@@ -254,6 +254,59 @@ void TTSettings::setRecentFileList(const QStringList& v)
   emit recentFilesChanged(v);
 }
 
+// ---- Encoder Generic group setters (Task 8) --------------------------------
+// Each setter early-outs on no-op assignment and mirrors the new value to the
+// legacy TTCut::xxx static so unmigrated call sites observe consistent state.
+// setEncoderCodec also emits encoderCodecChanged(int) for non-dialog
+// subscribers. encoderPreset/Crf/Profile have NO QSettings load/save
+// round-trip — they are transient working values persisted in the .ttcut
+// project file (data/ttcutprojectdata.cpp). The setters still mirror to the
+// legacy statics so the project-file persistence path works during the
+// Strangler migration window.
+
+void TTSettings::setEncoderMode(bool v)
+{
+  if (mEncoderMode == v) return;
+  mEncoderMode = v;
+  TTCut::encoderMode = v;
+}
+
+void TTSettings::setEncoderCodec(int v)
+{
+  if (mEncoderCodec == v) return;
+  mEncoderCodec = v;
+  TTCut::encoderCodec = v;
+  emit encoderCodecChanged(v);
+}
+
+void TTSettings::setEncoderPreset(int v)
+{
+  if (mEncoderPreset == v) return;
+  mEncoderPreset = v;
+  TTCut::encoderPreset = v;
+}
+
+void TTSettings::setEncoderCrf(int v)
+{
+  if (mEncoderCrf == v) return;
+  mEncoderCrf = v;
+  TTCut::encoderCrf = v;
+}
+
+void TTSettings::setEncoderProfile(int v)
+{
+  if (mEncoderProfile == v) return;
+  mEncoderProfile = v;
+  TTCut::encoderProfile = v;
+}
+
+void TTSettings::setPreviewPreset(int v)
+{
+  if (mPreviewPreset == v) return;
+  mPreviewPreset = v;
+  TTCut::previewPreset = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -354,6 +407,21 @@ void TTSettings::load()
   TTCut::recentFileList = mRecentFileList;
   settings.endGroup();
 
+  // ----- Encoder Generic group (Task 8) --------------------------------
+  // Only 3 of the 6 fields round-trip through QSettings. The other 3
+  // (encoderPreset, encoderCrf, encoderProfile) are transient working
+  // values copied at runtime from the codec-specific settings (Task 9)
+  // and persisted in the .ttcut project file
+  // (data/ttcutprojectdata.cpp). See header comment for rationale.
+  settings.beginGroup("Encoder");
+  mEncoderMode   = settings.value("EncoderMode/",   mEncoderMode).toBool();
+  mEncoderCodec  = settings.value("EncoderCodec/",  mEncoderCodec).toInt();
+  mPreviewPreset = settings.value("PreviewPreset/", mPreviewPreset).toInt();
+  TTCut::encoderMode   = mEncoderMode;
+  TTCut::encoderCodec  = mEncoderCodec;
+  TTCut::previewPreset = mPreviewPreset;
+  settings.endGroup();
+
   settings.endGroup();
 }
 
@@ -417,6 +485,14 @@ void TTSettings::save()
   // ----- Recent Files group (Task 7) -----------------------------------
   settings.beginGroup("RecentFiles");
   settings.setValue("RecentFiles/", mRecentFileList);
+  settings.endGroup();
+
+  // ----- Encoder Generic group (Task 8) --------------------------------
+  // Only 3 of the 6 fields round-trip through QSettings — see load().
+  settings.beginGroup("Encoder");
+  settings.setValue("EncoderMode/",   mEncoderMode);
+  settings.setValue("EncoderCodec/",  mEncoderCodec);
+  settings.setValue("PreviewPreset/", mPreviewPreset);
   settings.endGroup();
 
   settings.endGroup();
