@@ -278,6 +278,49 @@ public:
   int     extraFrameClusterOffsetSec() const { return mExtraFrameClusterOffsetSec; }
   void    setExtraFrameClusterOffsetSec(int v);
 
+  // ----- Muxer group (Task 12) --------------------------------------------
+  // Twelve fields extend the existing /Settings/Muxer block (Task 9 already
+  // populated mpeg2Target). Setters mirror to legacy TTCut::xxx during the
+  // migration window so call sites that have not been migrated yet still
+  // observe consistent state. setOutputContainer additionally emits
+  // outputContainerChanged(int) so non-dialog subscribers (e.g. cut-target
+  // file-extension logic) can react to container switches uniformly.
+  int     muxMode() const                  { return mMuxMode; }
+  void    setMuxMode(int v);
+
+  QString muxProg() const                  { return mMuxProg; }
+  void    setMuxProg(const QString& v);
+
+  QString muxProgPath() const              { return mMuxProgPath; }
+  void    setMuxProgPath(const QString& v);
+
+  QString muxProgCmd() const               { return mMuxProgCmd; }
+  void    setMuxProgCmd(const QString& v);
+
+  QString muxOutputPath() const            { return mMuxOutputPath; }
+  void    setMuxOutputPath(const QString& v);
+
+  bool    muxDeleteES() const              { return mMuxDeleteES; }
+  void    setMuxDeleteES(bool v);
+
+  bool    muxPause() const                 { return mMuxPause; }
+  void    setMuxPause(bool v);
+
+  int     outputContainer() const          { return mOutputContainer; }
+  void    setOutputContainer(int v);
+
+  bool    mkvCreateChapters() const        { return mMkvCreateChapters; }
+  void    setMkvCreateChapters(bool v);
+
+  int     mkvChapterInterval() const       { return mMkvChapterInterval; }
+  void    setMkvChapterInterval(int v);
+
+  int     audioOnlyFormat() const          { return mAudioOnlyFormat; }
+  void    setAudioOnlyFormat(int v);
+
+  int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
+  void    setAudioOnlyBitrateKbps(int v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
@@ -297,6 +340,12 @@ signals:
   // list. Mutating call sites must read-modify-write through the setter
   // so the signal fires and the legacy mirror stays consistent.
   void audioLanguagePreferenceChanged(const QStringList& v);
+
+  // Task 12: emitted by setOutputContainer so non-dialog subscribers
+  // (e.g. cut-target file-extension logic, mux-target path resolution)
+  // can react to container switches uniformly. The settings dialog wires
+  // its own intra-dialog signals separately and is unchanged by this task.
+  void outputContainerChanged(int v);
 
 private:
   static TTSettings* sInstance;
@@ -403,6 +452,24 @@ private:
   int   mSpPillarboxThreshold     = 20;
   int   mExtraFrameClusterGapSec    = 5;
   int   mExtraFrameClusterOffsetSec = 2;
+
+  // ----- Muxer group (Task 12) ---------------------------------------------
+  // Defaults match common/ttcut.cpp lines 205-221 verbatim.
+  // mMuxOutputPath is initialised to QDir::homePath() in the ctor (matches
+  // the runtime-dependent init pattern of mTempDirPath/mLastDirPath).
+  // mMpeg2Target (Task 9) already lives in /Settings/Muxer above.
+  int     mMuxMode             = 0;
+  QString mMuxProg             = "mplex";
+  QString mMuxProgPath         = "/usr/local/bin/";
+  QString mMuxProgCmd          = "-f 8";
+  QString mMuxOutputPath;          // initialised to QDir::homePath() in ctor
+  bool    mMuxDeleteES         = false;
+  bool    mMuxPause            = true;
+  int     mOutputContainer     = 1;   // 1=MKV (default for modern codecs)
+  bool    mMkvCreateChapters   = true;
+  int     mMkvChapterInterval  = 5;
+  int     mAudioOnlyFormat;        // initialised to TTCut::AOF_OriginalES in ctor
+  int     mAudioOnlyBitrateKbps = 0;  // 0 = match source bitrate
 };
 
 #endif

@@ -34,6 +34,10 @@ TTSettings::TTSettings(QObject* parent)
   mTempDirPath = QDir::tempPath();
   mLastDirPath = QDir::homePath();
   mProjectFileName = QString();
+  // Task 12: muxOutputPath default mirrors common/ttcut.cpp:210 (QDir::homePath()).
+  // audioOnlyFormat default mirrors common/ttcut.cpp:220 (TTCut::AOF_OriginalES).
+  mMuxOutputPath = QDir::homePath();
+  mAudioOnlyFormat = TTCut::AOF_OriginalES;
 }
 
 TTSettings::~TTSettings()
@@ -546,6 +550,99 @@ void TTSettings::setExtraFrameClusterOffsetSec(int v)
   TTCut::extraFrameClusterOffsetSec = v;
 }
 
+// ---- Muxer group setters (Task 12) -----------------------------------------
+// Twelve setters extend the existing /Settings/Muxer block (Task 9 already
+// populated mpeg2Target). Each setter early-outs on no-op assignment and
+// mirrors the new value to the legacy TTCut::xxx static so unmigrated call
+// sites observe consistent state. setOutputContainer also emits
+// outputContainerChanged(int) so non-dialog subscribers can react to
+// container switches uniformly.
+
+void TTSettings::setMuxMode(int v)
+{
+  if (mMuxMode == v) return;
+  mMuxMode = v;
+  TTCut::muxMode = v;
+}
+
+void TTSettings::setMuxProg(const QString& v)
+{
+  if (mMuxProg == v) return;
+  mMuxProg = v;
+  TTCut::muxProg = v;
+}
+
+void TTSettings::setMuxProgPath(const QString& v)
+{
+  if (mMuxProgPath == v) return;
+  mMuxProgPath = v;
+  TTCut::muxProgPath = v;
+}
+
+void TTSettings::setMuxProgCmd(const QString& v)
+{
+  if (mMuxProgCmd == v) return;
+  mMuxProgCmd = v;
+  TTCut::muxProgCmd = v;
+}
+
+void TTSettings::setMuxOutputPath(const QString& v)
+{
+  if (mMuxOutputPath == v) return;
+  mMuxOutputPath = v;
+  TTCut::muxOutputPath = v;
+}
+
+void TTSettings::setMuxDeleteES(bool v)
+{
+  if (mMuxDeleteES == v) return;
+  mMuxDeleteES = v;
+  TTCut::muxDeleteES = v;
+}
+
+void TTSettings::setMuxPause(bool v)
+{
+  if (mMuxPause == v) return;
+  mMuxPause = v;
+  TTCut::muxPause = v;
+}
+
+void TTSettings::setOutputContainer(int v)
+{
+  if (mOutputContainer == v) return;
+  mOutputContainer = v;
+  TTCut::outputContainer = v;
+  emit outputContainerChanged(v);
+}
+
+void TTSettings::setMkvCreateChapters(bool v)
+{
+  if (mMkvCreateChapters == v) return;
+  mMkvCreateChapters = v;
+  TTCut::mkvCreateChapters = v;
+}
+
+void TTSettings::setMkvChapterInterval(int v)
+{
+  if (mMkvChapterInterval == v) return;
+  mMkvChapterInterval = v;
+  TTCut::mkvChapterInterval = v;
+}
+
+void TTSettings::setAudioOnlyFormat(int v)
+{
+  if (mAudioOnlyFormat == v) return;
+  mAudioOnlyFormat = v;
+  TTCut::audioOnlyFormat = v;
+}
+
+void TTSettings::setAudioOnlyBitrateKbps(int v)
+{
+  if (mAudioOnlyBitrateKbps == v) return;
+  mAudioOnlyBitrateKbps = v;
+  TTCut::audioOnlyBitrateKbps = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -750,13 +847,45 @@ void TTSettings::load()
   TTCut::h265Muxer    = mH265Muxer;
   settings.endGroup();
 
-  // ----- Muxer group (Task 9 partial) ----------------------------------
-  // Task 12 will fill out the rest of /Settings/Muxer. For now we open
-  // the block solely for mpeg2Target so the codec-specific encoder
-  // group (Task 9) is functionally complete in isolation.
+  // ----- Muxer group (Tasks 9 + 12) ------------------------------------
+  // Task 9 populated mpeg2Target; Task 12 fills out the remaining 12
+  // fields. Key strings preserved verbatim from gui/ttcutsettings.cpp
+  // (lines 187-209) for round-trip compatibility with already-installed
+  // user settings.
+  // NOTE: muxOutputPath persists under "MuxOutputDir/" (NOT
+  // "MuxOutputPath/") — the on-disk key differs from the field name.
   settings.beginGroup("Muxer");
   mMpeg2Target = settings.value("Mpeg2Target/", mMpeg2Target).toInt();
   TTCut::mpeg2Target = mMpeg2Target;
+  mMuxMode             = settings.value("MuxMode/",             mMuxMode).toInt();
+  mMuxProg             = settings.value("MuxProg/",             mMuxProg).toString();
+  mMuxProgPath         = settings.value("MuxProgPath/",         mMuxProgPath).toString();
+  mMuxProgCmd          = settings.value("MuxProgCmd/",          mMuxProgCmd).toString();
+  mMuxOutputPath       = settings.value("MuxOutputDir/",        mMuxOutputPath).toString();   // key is "MuxOutputDir/"
+  mMuxDeleteES         = settings.value("MuxDeleteES/",         mMuxDeleteES).toBool();
+  mMuxPause            = settings.value("MuxPause/",            mMuxPause).toBool();
+  mOutputContainer     = settings.value("OutputContainer/",     mOutputContainer).toInt();
+  // Legacy migration: the MP4 option (value 2) was removed; remap any
+  // stale persisted value of 2 to MKV (1). Mirrors the migration in
+  // gui/ttcutsettings.cpp:193-195. The sibling mpeg2/h264/h265 Muxer ==2
+  // migrations belong to Task 9 and are intentionally NOT replicated here.
+  if (mOutputContainer == 2) mOutputContainer = 1;
+  mMkvCreateChapters   = settings.value("MkvCreateChapters/",   mMkvCreateChapters).toBool();
+  mMkvChapterInterval  = settings.value("MkvChapterInterval/",  mMkvChapterInterval).toInt();
+  mAudioOnlyFormat     = settings.value("AudioOnlyFormat/",     mAudioOnlyFormat).toInt();
+  mAudioOnlyBitrateKbps = settings.value("AudioOnlyBitrateKbps/", mAudioOnlyBitrateKbps).toInt();
+  TTCut::muxMode             = mMuxMode;
+  TTCut::muxProg             = mMuxProg;
+  TTCut::muxProgPath         = mMuxProgPath;
+  TTCut::muxProgCmd          = mMuxProgCmd;
+  TTCut::muxOutputPath       = mMuxOutputPath;
+  TTCut::muxDeleteES         = mMuxDeleteES;
+  TTCut::muxPause            = mMuxPause;
+  TTCut::outputContainer     = mOutputContainer;
+  TTCut::mkvCreateChapters   = mMkvCreateChapters;
+  TTCut::mkvChapterInterval  = mMkvChapterInterval;
+  TTCut::audioOnlyFormat     = mAudioOnlyFormat;
+  TTCut::audioOnlyBitrateKbps = mAudioOnlyBitrateKbps;
   settings.endGroup();
 
   settings.endGroup();
@@ -875,9 +1004,23 @@ void TTSettings::save()
   settings.setValue("H265Muxer/",    mH265Muxer);
   settings.endGroup();
 
-  // ----- Muxer group (Task 9 partial — Task 12 will extend) ------------
+  // ----- Muxer group (Tasks 9 + 12) ------------------------------------
+  // NOTE: muxOutputPath persists under "MuxOutputDir/" (NOT
+  // "MuxOutputPath/") — the on-disk key differs from the field name.
   settings.beginGroup("Muxer");
-  settings.setValue("Mpeg2Target/", mMpeg2Target);
+  settings.setValue("Mpeg2Target/",         mMpeg2Target);
+  settings.setValue("MuxMode/",             mMuxMode);
+  settings.setValue("MuxProg/",             mMuxProg);
+  settings.setValue("MuxProgPath/",         mMuxProgPath);
+  settings.setValue("MuxProgCmd/",          mMuxProgCmd);
+  settings.setValue("MuxOutputDir/",        mMuxOutputPath);   // key is "MuxOutputDir/"
+  settings.setValue("MuxDeleteES/",         mMuxDeleteES);
+  settings.setValue("MuxPause/",            mMuxPause);
+  settings.setValue("OutputContainer/",     mOutputContainer);
+  settings.setValue("MkvCreateChapters/",   mMkvCreateChapters);
+  settings.setValue("MkvChapterInterval/",  mMkvChapterInterval);
+  settings.setValue("AudioOnlyFormat/",     mAudioOnlyFormat);
+  settings.setValue("AudioOnlyBitrateKbps/", mAudioOnlyBitrateKbps);
   settings.endGroup();
 
   settings.endGroup();
