@@ -153,6 +153,94 @@ void TTSettings::setStepMouseWheel(int v)
   TTCut::stepMouseWheel = v;
 }
 
+// ---- Index Files & Logging group setters (Task 6) --------------------------
+// Each setter early-outs on no-op assignment and mirrors the new value to the
+// legacy TTCut::xxx static so unmigrated call sites observe consistent state.
+
+void TTSettings::setCreateVideoIDD(bool v)
+{
+  if (mCreateVideoIDD == v) return;
+  mCreateVideoIDD = v;
+  TTCut::createVideoIDD = v;
+}
+
+void TTSettings::setCreateAudioIDD(bool v)
+{
+  if (mCreateAudioIDD == v) return;
+  mCreateAudioIDD = v;
+  TTCut::createAudioIDD = v;
+}
+
+void TTSettings::setCreatePrevIDD(bool v)
+{
+  if (mCreatePrevIDD == v) return;
+  mCreatePrevIDD = v;
+  TTCut::createPrevIDD = v;
+}
+
+void TTSettings::setCreateD2V(bool v)
+{
+  if (mCreateD2V == v) return;
+  mCreateD2V = v;
+  TTCut::createD2V = v;
+}
+
+void TTSettings::setReadVideoIDD(bool v)
+{
+  if (mReadVideoIDD == v) return;
+  mReadVideoIDD = v;
+  TTCut::readVideoIDD = v;
+}
+
+void TTSettings::setReadAudioIDD(bool v)
+{
+  if (mReadAudioIDD == v) return;
+  mReadAudioIDD = v;
+  TTCut::readAudioIDD = v;
+}
+
+void TTSettings::setReadPrevIDD(bool v)
+{
+  if (mReadPrevIDD == v) return;
+  mReadPrevIDD = v;
+  TTCut::readPrevIDD = v;
+}
+
+void TTSettings::setCreateLogFile(bool v)
+{
+  if (mCreateLogFile == v) return;
+  mCreateLogFile = v;
+  TTCut::createLogFile = v;
+}
+
+void TTSettings::setLogModeConsole(bool v)
+{
+  if (mLogModeConsole == v) return;
+  mLogModeConsole = v;
+  TTCut::logModeConsole = v;
+}
+
+void TTSettings::setLogModeExtended(bool v)
+{
+  if (mLogModeExtended == v) return;
+  mLogModeExtended = v;
+  TTCut::logModeExtended = v;
+}
+
+void TTSettings::setLogVideoIndexInfo(bool v)
+{
+  if (mLogVideoIndexInfo == v) return;
+  mLogVideoIndexInfo = v;
+  TTCut::logVideoIndexInfo = v;
+}
+
+void TTSettings::setLogAudioIndexInfo(bool v)
+{
+  if (mLogAudioIndexInfo == v) return;
+  mLogAudioIndexInfo = v;
+  TTCut::logAudioIndexInfo = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -167,12 +255,9 @@ void TTSettings::load()
   // — that key-compatibility invariant lets the user's existing settings
   // survive the refactor.
 
-  // ----- Common Options group (Task 4) ---------------------------------
-  // fastSlider lives in /Settings/Navigation per legacy layout.
-  // ----- Navigation Steps group (Task 5) -------------------------------
-  // Step fields live in the same /Settings/Navigation sub-group; legacy code
-  // entered the group twice (once for steps, once for thresholds) but
-  // TTSettings consolidates to a single entry.
+  // ----- Navigation group (Tasks 4-5) ----------------------------------
+  // fastSlider (Task 4) + step fields (Task 5) share /Settings/Navigation.
+  // Legacy code entered the group twice; TTSettings consolidates to one.
   settings.beginGroup("Navigation");
   mFastSlider = settings.value("FastSlider/", mFastSlider).toBool();
   TTCut::fastSlider = mFastSlider;
@@ -215,6 +300,41 @@ void TTSettings::load()
   TTCut::searchAccuracy = mSearchAccuracy;
   settings.endGroup();
 
+  // ----- Index Files group (Task 6) ------------------------------------
+  // NOTE: ReadAudioIDD has NO trailing slash — pre-existing legacy quirk
+  // preserved verbatim from the Task 1 inventory to keep already-installed
+  // user settings round-tripping. The 6 sibling keys all carry a slash.
+  settings.beginGroup("IndexFiles");
+  mCreateVideoIDD = settings.value("CreateVideoIDD/", mCreateVideoIDD).toBool();
+  mCreateAudioIDD = settings.value("CreateAudioIDD/", mCreateAudioIDD).toBool();
+  mCreatePrevIDD  = settings.value("CreatePrevIDD/",  mCreatePrevIDD).toBool();
+  mCreateD2V      = settings.value("CreateD2V/",      mCreateD2V).toBool();
+  mReadVideoIDD   = settings.value("ReadVideoIDD/",   mReadVideoIDD).toBool();
+  mReadAudioIDD   = settings.value("ReadAudioIDD",    mReadAudioIDD).toBool();   // NO slash
+  mReadPrevIDD    = settings.value("ReadPrevIDD/",    mReadPrevIDD).toBool();
+  TTCut::createVideoIDD = mCreateVideoIDD;
+  TTCut::createAudioIDD = mCreateAudioIDD;
+  TTCut::createPrevIDD  = mCreatePrevIDD;
+  TTCut::createD2V      = mCreateD2V;
+  TTCut::readVideoIDD   = mReadVideoIDD;
+  TTCut::readAudioIDD   = mReadAudioIDD;
+  TTCut::readPrevIDD    = mReadPrevIDD;
+  settings.endGroup();
+
+  // ----- Logging group (Task 6) ----------------------------------------
+  settings.beginGroup("LogFile");
+  mCreateLogFile     = settings.value("CreateLogFile/",     mCreateLogFile).toBool();
+  mLogModeConsole    = settings.value("LogModeConsole/",    mLogModeConsole).toBool();
+  mLogModeExtended   = settings.value("LogModeExtended/",   mLogModeExtended).toBool();
+  mLogVideoIndexInfo = settings.value("LogVideoIndexInfo/", mLogVideoIndexInfo).toBool();
+  mLogAudioIndexInfo = settings.value("LogAudioIndexInfo/", mLogAudioIndexInfo).toBool();
+  TTCut::createLogFile     = mCreateLogFile;
+  TTCut::logModeConsole    = mLogModeConsole;
+  TTCut::logModeExtended   = mLogModeExtended;
+  TTCut::logVideoIndexInfo = mLogVideoIndexInfo;
+  TTCut::logAudioIndexInfo = mLogAudioIndexInfo;
+  settings.endGroup();
+
   settings.endGroup();
 }
 
@@ -225,8 +345,8 @@ void TTSettings::save()
   settings.beginGroup("/Settings");
   // Per-group field saves added in tasks 4-13.
 
-  // ----- Common Options group (Task 4) ---------------------------------
-  // ----- Navigation Steps group (Task 5) -------------------------------
+  // ----- Navigation group (Tasks 4-5) ----------------------------------
+  // fastSlider (Task 4) + step fields (Task 5) share /Settings/Navigation.
   settings.beginGroup("Navigation");
   settings.setValue("FastSlider/",      mFastSlider);
   settings.setValue("StepSliderClick/", mStepSliderClick);
@@ -252,6 +372,27 @@ void TTSettings::save()
   settings.beginGroup("Search");
   settings.setValue("Length/",   mSearchLength);
   settings.setValue("Accuracy/", mSearchAccuracy);
+  settings.endGroup();
+
+  // ----- Index Files group (Task 6) ------------------------------------
+  // ReadAudioIDD intentionally has NO trailing slash — see load().
+  settings.beginGroup("IndexFiles");
+  settings.setValue("CreateVideoIDD/", mCreateVideoIDD);
+  settings.setValue("CreateAudioIDD/", mCreateAudioIDD);
+  settings.setValue("CreatePrevIDD/",  mCreatePrevIDD);
+  settings.setValue("CreateD2V/",      mCreateD2V);
+  settings.setValue("ReadVideoIDD/",   mReadVideoIDD);
+  settings.setValue("ReadAudioIDD",    mReadAudioIDD);   // NO slash
+  settings.setValue("ReadPrevIDD/",    mReadPrevIDD);
+  settings.endGroup();
+
+  // ----- Logging group (Task 6) ----------------------------------------
+  settings.beginGroup("LogFile");
+  settings.setValue("CreateLogFile/",     mCreateLogFile);
+  settings.setValue("LogModeConsole/",    mLogModeConsole);
+  settings.setValue("LogModeExtended/",   mLogModeExtended);
+  settings.setValue("LogVideoIndexInfo/", mLogVideoIndexInfo);
+  settings.setValue("LogAudioIndexInfo/", mLogAudioIndexInfo);
   settings.endGroup();
 
   settings.endGroup();

@@ -79,6 +79,45 @@ public:
   int     stepMouseWheel() const     { return mStepMouseWheel; }
   void    setStepMouseWheel(int v);
 
+  // ----- Index Files & Logging group (Task 6) -----------------------------
+  // Setters mirror to legacy TTCut::xxx during the migration window so call
+  // sites that have not been migrated yet still observe consistent state.
+  bool    createVideoIDD() const     { return mCreateVideoIDD; }
+  void    setCreateVideoIDD(bool v);
+
+  bool    createAudioIDD() const     { return mCreateAudioIDD; }
+  void    setCreateAudioIDD(bool v);
+
+  bool    createPrevIDD() const      { return mCreatePrevIDD; }
+  void    setCreatePrevIDD(bool v);
+
+  bool    createD2V() const          { return mCreateD2V; }
+  void    setCreateD2V(bool v);
+
+  bool    readVideoIDD() const       { return mReadVideoIDD; }
+  void    setReadVideoIDD(bool v);
+
+  bool    readAudioIDD() const       { return mReadAudioIDD; }
+  void    setReadAudioIDD(bool v);
+
+  bool    readPrevIDD() const        { return mReadPrevIDD; }
+  void    setReadPrevIDD(bool v);
+
+  bool    createLogFile() const      { return mCreateLogFile; }
+  void    setCreateLogFile(bool v);
+
+  bool    logModeConsole() const     { return mLogModeConsole; }
+  void    setLogModeConsole(bool v);
+
+  bool    logModeExtended() const    { return mLogModeExtended; }
+  void    setLogModeExtended(bool v);
+
+  bool    logVideoIndexInfo() const  { return mLogVideoIndexInfo; }
+  void    setLogVideoIndexInfo(bool v);
+
+  bool    logAudioIndexInfo() const  { return mLogAudioIndexInfo; }
+  void    setLogAudioIndexInfo(bool v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // No signals declared for the Common Options group; no UI dependents need
@@ -107,6 +146,21 @@ private:
   int     mStepPlusCtrl      = 200;
   int     mStepPlusShift     = 200;
   int     mStepMouseWheel    = 120;
+
+  // ----- Index Files & Logging group (Task 6) ------------------------------
+  // Defaults match common/ttcut.cpp lines 117-130 verbatim.
+  bool    mCreateVideoIDD    = true;
+  bool    mCreateAudioIDD    = true;
+  bool    mCreatePrevIDD     = false;
+  bool    mCreateD2V         = false;
+  bool    mReadVideoIDD      = true;
+  bool    mReadAudioIDD      = true;
+  bool    mReadPrevIDD       = false;
+  bool    mCreateLogFile     = true;
+  bool    mLogModeConsole    = false;
+  bool    mLogModeExtended   = true;
+  bool    mLogVideoIndexInfo = false;
+  bool    mLogAudioIndexInfo = false;
 };
 
 #endif
