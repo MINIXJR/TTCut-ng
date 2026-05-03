@@ -520,7 +520,7 @@ void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVe
  */
 bool TTMpeg2VideoStream::isCutInPoint(int pos)
 {
-  if (TTCut::encoderMode)
+  if (TTSettings::instance()->encoderMode())
     return true;
 
   int index      = (pos < 0) ? currentIndex() : pos;
@@ -538,7 +538,7 @@ bool TTMpeg2VideoStream::isCutInPoint(int pos)
  */
 bool TTMpeg2VideoStream::isCutOutPoint(int pos)
 {
-  if (TTCut::encoderMode)
+  if (TTSettings::instance()->encoderMode())
     return true;
 
   int index      = (pos < 0) ? currentIndex() : pos;

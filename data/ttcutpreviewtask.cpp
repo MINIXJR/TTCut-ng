@@ -147,9 +147,10 @@ void TTCutPreviewTask::operation()
 			delete sharedSmartCut;
 			sharedSmartCut = nullptr;
 		} else {
-			sharedSmartCut->setPresetOverride(TTCut::previewPreset);
+			const int previewPreset = TTSettings::instance()->previewPreset();
+			sharedSmartCut->setPresetOverride(previewPreset);
 			qDebug() << "Preview: Shared Smart Cut initialized in" << initTimer.elapsed() << "ms"
-			         << "(ES parsed once for all clips, preview preset:" << TTCut::previewPreset << ")";
+			         << "(ES parsed once for all clips, preview preset:" << previewPreset << ")";
 		}
 	}
 
@@ -401,7 +402,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   TTESSmartCut localSmartCut;
   TTESSmartCut* smartCut = sharedSmartCut;
   if (!smartCut) {
-    localSmartCut.setPresetOverride(TTCut::previewPreset);
+    localSmartCut.setPresetOverride(TTSettings::instance()->previewPreset());
     if (!localSmartCut.initialize(sourceFile, frameRate)) {
       qDebug() << "Preview Smart Cut init failed:" << localSmartCut.lastError();
       return;

@@ -33,6 +33,8 @@
 
 #include "ttcutavcutdlg.h"
 
+#include "../common/ttsettings.h"
+
 #include <sys/statvfs.h>
 #include <math.h>
 #include <QApplication>
@@ -92,7 +94,7 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   connect(muxingPage,   &TTCutSettingsMuxer::containerChanged, this, &TTCutAVCutDlg::updateOutputFilename);
 
   // Initial sync based on current codec.
-  muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);
+  muxingPage->onEncoderCodecChanged(TTSettings::instance()->encoderCodec());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -209,7 +211,7 @@ void TTCutAVCutDlg::getCommonData()
   QFileInfo fi(displayName);
   QString base = fi.completeBaseName();
   TTCut::cutVideoName = base + "." + expectedEsExtension(TTCut::outputContainer,
-                                                         TTCut::encoderCodec);
+                                                         TTSettings::instance()->encoderCodec());
 
   TTCut::cutWriteMaxBitrate = cbMaxBitrate->isChecked();
   TTCut::cutWriteSeqEnd     = cbEndCode->isChecked();

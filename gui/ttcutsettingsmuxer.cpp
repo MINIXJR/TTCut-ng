@@ -30,6 +30,7 @@
 #include "ttcutsettingsmuxer.h"
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 #include <QFileDialog>
 #include <QStandardItemModel>
@@ -230,7 +231,7 @@ void TTCutSettingsMuxer::updateMuxerVisibility()
   // MPEG-2 Target is only relevant when:
   // 1. Using mplex (current == 0)
   // 2. Encoder codec is MPEG-2 (encoderCodec == 0)
-  bool enableMpeg2Target = (current == 0 && TTCut::encoderCodec == 0);
+  bool enableMpeg2Target = (current == 0 && TTSettings::instance()->encoderCodec() == 0);
   cbMuxTarget->setEnabled(enableMpeg2Target);
 
   // MKV chapter settings only visible when using MKV (current == 1)
@@ -244,7 +245,7 @@ void TTCutSettingsMuxer::onMuxerProgChanged(int index)
   TTCut::outputContainer = value;
 
   // Save the muxer preference for the current codec
-  switch (TTCut::encoderCodec) {
+  switch (TTSettings::instance()->encoderCodec()) {
     case 0:  TTCut::mpeg2Muxer = value; break;
     case 1:  TTCut::h264Muxer  = value; break;
     case 2:  TTCut::h265Muxer  = value; break;

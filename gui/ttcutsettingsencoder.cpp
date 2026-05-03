@@ -30,6 +30,7 @@
 #include "ttcutsettingsencoder.h"
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 
 TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
@@ -163,36 +164,38 @@ void TTCutSettingsEncoder::updateQualityUI(int codec)
 
 void TTCutSettingsEncoder::setTabData()
 {
-  cbEncodingMode->setChecked(TTCut::encoderMode);
-  cbCodec->setCurrentIndex(TTCut::encoderCodec);
+  TTSettings* s = TTSettings::instance();
+  cbEncodingMode->setChecked(s->encoderMode());
+  cbCodec->setCurrentIndex(s->encoderCodec());
 
   // Update quality UI (label, range, tooltip) based on current codec
-  updateQualityUI(TTCut::encoderCodec);
+  updateQualityUI(s->encoderCodec());
 
-  cbPreset->setCurrentIndex(TTCut::encoderPreset);
-  slCrf->setValue(TTCut::encoderCrf);
-  sbCrf->setValue(TTCut::encoderCrf);
+  cbPreset->setCurrentIndex(s->encoderPreset());
+  slCrf->setValue(s->encoderCrf());
+  sbCrf->setValue(s->encoderCrf());
 
   updateProfileList();
-  cbProfile->setCurrentIndex(TTCut::encoderProfile);
+  cbProfile->setCurrentIndex(s->encoderProfile());
 
   // Preview preset
-  cbPreviewPreset->setCurrentIndex(TTCut::previewPreset);
+  cbPreviewPreset->setCurrentIndex(s->previewPreset());
 
   // Enable/disable codec settings based on encoder mode
-  gbCodecSettings->setEnabled(TTCut::encoderMode);
+  gbCodecSettings->setEnabled(s->encoderMode());
 }
 
 void TTCutSettingsEncoder::getTabData()
 {
-  TTCut::encoderMode = cbEncodingMode->isChecked();
-  TTCut::encoderCodec = cbCodec->currentIndex();
+  TTSettings* s = TTSettings::instance();
+  s->setEncoderMode(cbEncodingMode->isChecked());
+  s->setEncoderCodec(cbCodec->currentIndex());
 
   // Save current UI values to the current codec's settings
   saveCurrentCodecSettings(cbCodec->currentIndex());
 
   // Preview preset
-  TTCut::previewPreset = cbPreviewPreset->currentIndex();
+  s->setPreviewPreset(cbPreviewPreset->currentIndex());
 }
 
 // Save the encoder UI's current preset/crf/profile values into the per-codec
@@ -224,9 +227,10 @@ void TTCutSettingsEncoder::saveCurrentCodecSettings(int codec)
   }
 
   // Also update the current working values
-  TTCut::encoderPreset = preset;
-  TTCut::encoderCrf = crf;
-  TTCut::encoderProfile = profile;
+  TTSettings* s = TTSettings::instance();
+  s->setEncoderPreset(preset);
+  s->setEncoderCrf(crf);
+  s->setEncoderProfile(profile);
 }
 
 void TTCutSettingsEncoder::loadCodecSettings(int codec)
@@ -269,16 +273,17 @@ void TTCutSettingsEncoder::loadCodecSettings(int codec)
 
 void TTCutSettingsEncoder::onCodecChanged(int newCodec)
 {
-  // Save settings of the previous codec before switching
-  // The previous codec is stored in TTCut::encoderCodec
-  int oldCodec = TTCut::encoderCodec;
+  // Save settings of the previous codec before switching.
+  // The previous codec is stored in TTSettings::encoderCodec().
+  TTSettings* s = TTSettings::instance();
+  int oldCodec = s->encoderCodec();
 
   if (oldCodec != newCodec) {
     // Save current UI values to the codec we are leaving
     saveCurrentCodecSettings(oldCodec);
 
     // Update current codec
-    TTCut::encoderCodec = newCodec;
+    s->setEncoderCodec(newCodec);
 
     // Load settings for the new codec
     loadCodecSettings(newCodec);

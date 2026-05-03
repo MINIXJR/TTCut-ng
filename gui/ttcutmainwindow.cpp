@@ -1036,11 +1036,11 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   TTAVTypes::AVStreamType streamType = vStream->streamType();
 
   if (streamType == TTAVTypes::h264_video) {
-    TTCut::encoderCodec = 1;  // H.264
+    TTSettings::instance()->setEncoderCodec(1);  // H.264
   } else if (streamType == TTAVTypes::h265_video) {
-    TTCut::encoderCodec = 2;  // H.265
+    TTSettings::instance()->setEncoderCodec(2);  // H.265
   } else {
-    TTCut::encoderCodec = 0;  // MPEG-2
+    TTSettings::instance()->setEncoderCodec(0);  // MPEG-2
   }
 
   // Set default video cut name from video file name if not already set

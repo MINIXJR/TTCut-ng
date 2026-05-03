@@ -42,6 +42,7 @@
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 #include "../common/istatusreporter.h"
 
 #include "../extern/ttmplexprovider.h"
@@ -948,19 +949,23 @@ void TTAVData::onReadProjectFileFinished()
 
   // Map generic encoder values to codec-specific fields based on video type
   if (avCount() > 0 && avItemAt(0)->videoStream()) {
+    TTSettings* s = TTSettings::instance();
+    const int preset  = s->encoderPreset();
+    const int crf     = s->encoderCrf();
+    const int profile = s->encoderProfile();
     TTAVTypes::AVStreamType st = avItemAt(0)->videoStream()->streamType();
     if (st == TTAVTypes::mpeg2_demuxed_video) {
-      TTCut::mpeg2Preset  = TTCut::encoderPreset;
-      TTCut::mpeg2Crf     = TTCut::encoderCrf;
-      TTCut::mpeg2Profile = TTCut::encoderProfile;
+      TTCut::mpeg2Preset  = preset;
+      TTCut::mpeg2Crf     = crf;
+      TTCut::mpeg2Profile = profile;
     } else if (st == TTAVTypes::h264_video) {
-      TTCut::h264Preset  = TTCut::encoderPreset;
-      TTCut::h264Crf     = TTCut::encoderCrf;
-      TTCut::h264Profile = TTCut::encoderProfile;
+      TTCut::h264Preset  = preset;
+      TTCut::h264Crf     = crf;
+      TTCut::h264Profile = profile;
     } else if (st == TTAVTypes::h265_video) {
-      TTCut::h265Preset  = TTCut::encoderPreset;
-      TTCut::h265Crf     = TTCut::encoderCrf;
-      TTCut::h265Profile = TTCut::encoderProfile;
+      TTCut::h265Preset  = preset;
+      TTCut::h265Crf     = crf;
+      TTCut::h265Profile = profile;
     }
   }
 

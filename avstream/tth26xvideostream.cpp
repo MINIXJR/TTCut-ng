@@ -9,6 +9,7 @@
 #include "ttvideoindexlist.h"
 #include "ttesinfo.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 
@@ -213,7 +214,7 @@ void TTH26xVideoStream::cut(int start, int end, TTCutParameter* /*cp*/)
 
 bool TTH26xVideoStream::isCutInPoint(int pos)
 {
-    if (TTCut::encoderMode) return true;
+    if (TTSettings::instance()->encoderMode()) return true;
 
     int index = (pos < 0) ? currentIndex() : pos;
     if (index < 0 || index >= accessUnitCount()) return false;
@@ -223,7 +224,7 @@ bool TTH26xVideoStream::isCutInPoint(int pos)
 
 bool TTH26xVideoStream::isCutOutPoint(int pos)
 {
-    if (TTCut::encoderMode) return true;
+    if (TTSettings::instance()->encoderMode()) return true;
 
     int index = (pos < 0) ? currentIndex() : pos;
     int n = accessUnitCount();

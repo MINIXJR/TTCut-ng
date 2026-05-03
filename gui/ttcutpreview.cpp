@@ -691,7 +691,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
 
   // --- Smart Cut video ---
   TTESSmartCut smartCut;
-  smartCut.setPresetOverride(TTCut::previewPreset);
+  smartCut.setPresetOverride(TTSettings::instance()->previewPreset());
   if (!smartCut.initialize(sourceFile, frameRate)) {
     qDebug() << "Regenerate: Smart Cut init failed:" << smartCut.lastError();
     return;

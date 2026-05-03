@@ -30,6 +30,7 @@
 #include "ttcutsettingsdlg.h"
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
   
 TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
@@ -53,7 +54,7 @@ TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
           muxingPage,   &TTCutSettingsMuxer::onEncoderCodecChanged);
 
   // Initial sync of muxer visibility based on current codec
-  muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);
+  muxingPage->onEncoderCodecChanged(TTSettings::instance()->encoderCodec());
 }
 
 // save the tabs data
