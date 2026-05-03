@@ -45,6 +45,7 @@
 
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
+#include "../common/ttsettings.h"
 #include "../data/ttcutlist.h"
 #include "../data/ttcutparameter.h"
 
@@ -1032,7 +1033,7 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   // frame size (width x height) and aspect ratio
   TTSequenceHeader* seq_head  = getSequenceHeader(current_index);
 
-  QDir      tempDir( TTCut::tempDirPath );
+  QDir      tempDir( TTSettings::instance()->tempDirPath() );
   QString   aviOutFile   = "encode.avi";
   QString   mpeg2OutFile = "encode";          // extension is added by transcode (!)
   QFileInfo aviFileInfo(tempDir, aviOutFile);

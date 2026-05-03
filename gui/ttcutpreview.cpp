@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "../common/ttexception.h"
+#include "../common/ttsettings.h"
 #include "ttcutpreview.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavdata.h"
@@ -209,11 +210,11 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   // Check for H.264/H.265 (.mkv) or MPEG-2 (.mpg) preview files
   // Try .mkv first (mkvmerge output for H.264/H.265)
   preview_video_name = "preview_001.mkv";
-  preview_video_info.setFile(QDir(TTCut::tempDirPath), preview_video_name);
+  preview_video_info.setFile(QDir(TTSettings::instance()->tempDirPath()), preview_video_name);
   if (!preview_video_info.exists()) {
     // Fallback to .mpg for MPEG-2
     preview_video_name = "preview_001.mpg";
-    preview_video_info.setFile(QDir(TTCut::tempDirPath), preview_video_name);
+    preview_video_info.setFile(QDir(TTSettings::instance()->tempDirPath()), preview_video_name);
   }
 
   current_video_file = preview_video_info.absoluteFilePath();
@@ -235,16 +236,16 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
 
   // Try .mkv first (H.264/H.265 via mkvmerge), then .mpg (MPEG-2 via mplex)
   preview_video_name = QString("preview_%1.mkv").arg(fileIndex, 3, 10, QChar('0'));
-  preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
+  preview_video_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_video_name );
   if (!preview_video_info.exists()) {
     preview_video_name = QString("preview_%1.mpg").arg(fileIndex, 3, 10, QChar('0'));
-    preview_video_info.setFile( QDir(TTCut::tempDirPath), preview_video_name );
+    preview_video_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_video_name );
   }
   current_video_file = preview_video_info.absoluteFilePath();
 
   // Check for subtitle file
   preview_subtitle_name = QString("preview_%1.srt").arg(fileIndex, 3, 10, QChar('0'));
-  preview_subtitle_info.setFile( QDir(TTCut::tempDirPath), preview_subtitle_name );
+  preview_subtitle_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_subtitle_name );
   if (preview_subtitle_info.exists()) {
     videoPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
   } else {
@@ -703,7 +704,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   }
 
   QString tempVideoFile = QString("%1/preview_video_temp.%2")
-      .arg(TTCut::tempDirPath).arg(suffix);
+      .arg(TTSettings::instance()->tempDirPath()).arg(suffix);
 
   if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
     qDebug() << "Regenerate: Smart Cut failed:" << smartCut.lastError();
@@ -728,7 +729,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
     }
 
     QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-        .arg(TTCut::tempDirPath)
+        .arg(TTSettings::instance()->tempDirPath())
         .arg(QFileInfo(audioFile).suffix());
 
     TTFFmpegWrapper ffmpeg;
@@ -776,7 +777,7 @@ void TTCutPreview::cleanUp()
   videoPlayer->cleanUp();
 
   // Clean up all preview* files in temp directory
-  QDir tempDir(TTCut::tempDirPath);
+  QDir tempDir(TTSettings::instance()->tempDirPath());
   QStringList filters;
   filters << "preview*";
   QFileInfoList previewFiles = tempDir.entryInfoList(filters, QDir::Files);

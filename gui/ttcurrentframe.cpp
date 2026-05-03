@@ -37,6 +37,7 @@
 #include "../avstream/ttesinfo.h"
 #include "../extern/ttmkvmergeprovider.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 extern "C" {
 #include <libavcodec/codec_id.h>
@@ -412,7 +413,7 @@ void TTCurrentFrame::saveCurrentFrame()
   // get the image file name
   fileDlg = new QFileDialog( this,
       "save current frame",
-      TTCut::lastDirPath,
+      TTSettings::instance()->lastDirPath(),
       "Portable Network Graphics (*.png);;JPEG (*.jpg);;Bitmap (*.bmp)" );
 
   // enable specifying a file that doesn't exist
@@ -520,7 +521,7 @@ void TTCurrentFrame::onPlayVideo()
   QStringList args;
 
   // Create IPC socket for querying playback position
-  mMpvSocketPath = QDir(TTCut::tempDirPath).filePath("mpv-ipc.sock");
+  mMpvSocketPath = QDir(TTSettings::instance()->tempDirPath()).filePath("mpv-ipc.sock");
   QFile::remove(mMpvSocketPath);  // Remove stale socket
 
   // Embed mpv into mpegWindow
@@ -672,7 +673,7 @@ double TTCurrentFrame::getMpvPlaybackPosition()
 //! This muxes the ES video and audio so mpv can seek and sync properly
 QString TTCurrentFrame::createTempMkvForPlayback()
 {
-  QString tempMkv = QDir(TTCut::tempDirPath).filePath("playback_temp.mkv");
+  QString tempMkv = QDir(TTSettings::instance()->tempDirPath()).filePath("playback_temp.mkv");
 
   // Remove old temp file if exists
   QFile::remove(tempMkv);

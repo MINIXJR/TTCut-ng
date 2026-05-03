@@ -33,6 +33,7 @@
 #include <QFileInfo>
 
 #include "../common/ttexception.h"
+#include "../common/ttsettings.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/istatusreporter.h"
 #include "../avstream/ttfilebuffer.h"
@@ -98,7 +99,7 @@ void TTCutPreviewTask::operation()
 {
   // Clean up old preview files BEFORE creating new ones
   // This prevents stale files from previous sessions being loaded
-  QDir tempDir(TTCut::tempDirPath);
+  QDir tempDir(TTSettings::instance()->tempDirPath());
   QStringList filters;
   filters << "preview*";
   QFileInfoList oldPreviewFiles = tempDir.entryInfoList(filters, QDir::Files);
@@ -410,7 +411,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
   // Create temporary video output
   QString tempVideoFile = QString("%1/preview_video_temp.%2")
-      .arg(TTCut::tempDirPath)
+      .arg(TTSettings::instance()->tempDirPath())
       .arg(suffix);
 
   // Perform frame-accurate video cut
@@ -449,7 +450,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     }
 
     QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-        .arg(TTCut::tempDirPath)
+        .arg(TTSettings::instance()->tempDirPath())
         .arg(QFileInfo(audioFile).suffix());
 
     QElapsedTimer audioTimer;
@@ -513,7 +514,7 @@ TTCutList* TTCutPreviewTask::createPreviewCutList(TTCutList* cutList)
 	long           previewFrames;
 
 	previewTime.setHMS(0, 0, 0);
-	previewTime   = previewTime.addSecs(TTCut::cutPreviewSeconds);
+	previewTime   = previewTime.addSecs(TTSettings::instance()->cutPreviewSeconds());
 	previewFrames = ttTimeToFrames(previewTime, vStream->frameRate()) / 2;
 
 	for (int i = 0; i < cutList->count(); i++) {
@@ -557,5 +558,5 @@ QString TTCutPreviewTask::createPreviewFileName(int index, QString extension)
 
 	 previewFileName = QString("preview_%1.%2").arg(index, 3, 10, QChar('0')).arg(extension);
 
-	 return QFileInfo(QDir(TTCut::tempDirPath), previewFileName).absoluteFilePath();
+	 return QFileInfo(QDir(TTSettings::instance()->tempDirPath()), previewFileName).absoluteFilePath();
 }

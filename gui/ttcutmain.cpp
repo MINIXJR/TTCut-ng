@@ -135,7 +135,7 @@ int main( int argc, char **argv )
         QFileInfo fInfo(arg);
         if (fInfo.exists() && fInfo.isFile()) {
           videoFile = fInfo.absoluteFilePath();
-          TTCut::lastDirPath = fInfo.absolutePath();
+          TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
           break;
         }
       }

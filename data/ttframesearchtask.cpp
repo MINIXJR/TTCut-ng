@@ -33,6 +33,7 @@
 #include <QDebug>
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 #include "../avstream/ttavstream.h"
@@ -108,7 +109,7 @@ void TTFrameSearchTask::operation()
   searchDecoder->moveToFrameIndex(mSearchIndex);
 
   QTime   searchTime(0,0,0,0);
-  int     searchFrameCount = ttTimeToFrames(searchTime.addSecs(TTCut::searchLength), mpSearchStream->frameRate());
+  int     searchFrameCount = ttTimeToFrames(searchTime.addSecs(TTSettings::instance()->searchLength()), mpSearchStream->frameRate());
   int     index            = 0;
   int     foundPosition    = 0;
   // Threshold based on frame size: allow ~10% average difference per pixel

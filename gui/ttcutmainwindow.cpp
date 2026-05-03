@@ -226,7 +226,7 @@ TTCutMainWindow::TTCutMainWindow()
   // init
   mpCurrentAVDataItem     = 0;
   progressBar            = 0;
-  TTCut::projectFileName = "";
+  TTSettings::instance()->setProjectFileName("");
 
   // Signal and slot connections
   //
@@ -380,7 +380,7 @@ void TTCutMainWindow::onOpenVideoFile()
 {
   QString fn = QFileDialog::getOpenFileName( this,
       tr("Open video file"),
-      TTCut::lastDirPath,
+      TTSettings::instance()->lastDirPath(),
       tr("All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;"
          "MPEG-2 Video (*.m2v *.mpv);;"
          "H.264/AVC (*.264 *.h264);;"
@@ -390,7 +390,7 @@ void TTCutMainWindow::onOpenVideoFile()
   if (fn.isEmpty()) return;
 
   QFileInfo fInfo( fn );
-  TTCut::lastDirPath = fInfo.absolutePath();
+  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
   onReadVideoStream(fn);
 }
 
@@ -403,7 +403,7 @@ void TTCutMainWindow::onOpenAudioFile()
 
 	QString fn = QFileDialog::getOpenFileName( this,
       tr("Open audio file"),
-      TTCut::lastDirPath,
+      TTSettings::instance()->lastDirPath(),
       tr("All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;"
          "MPEG Audio (*.mpa *.mp2);;"
          "AC3/Dolby Digital (*.ac3 *.eac3);;"
@@ -415,7 +415,7 @@ void TTCutMainWindow::onOpenAudioFile()
     return;
 
   QFileInfo fInfo(fn);
-  TTCut::lastDirPath = fInfo.absolutePath();
+  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
   onReadAudioStream(fn);
 }
 
@@ -428,14 +428,14 @@ void TTCutMainWindow::onOpenSubtitleFile()
 
   QString fn = QFileDialog::getOpenFileName( this,
       tr("Open subtitle file"),
-      TTCut::lastDirPath,
+      TTSettings::instance()->lastDirPath(),
       "Subtitle (*.srt)" );
 
   if (fn.isEmpty())
     return;
 
   QFileInfo fInfo(fn);
-  TTCut::lastDirPath = fInfo.absolutePath();
+  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
   onReadSubtitleStream(fn);
 }
 
@@ -467,7 +467,7 @@ void TTCutMainWindow::onFileOpen()
 {
   QString fn = QFileDialog::getOpenFileName(this,
       tr("Open project-file"),
-      TTCut::lastDirPath,
+      TTSettings::instance()->lastDirPath(),
       "TTCut Project (*.ttcut);;Legacy Project (*.prj)");
 
   if (!fn.isEmpty()) {
@@ -483,24 +483,26 @@ void TTCutMainWindow::onFileSave()
   if (mpAVData->avCount() == 0) return;
 
   // Ask for file name
-  if (TTCut::projectFileName.isEmpty())
+  if (TTSettings::instance()->projectFileName().isEmpty())
   {
-    TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
-    QFileInfo prjFileInfo(QDir(TTCut::lastDirPath), TTCut::projectFileName);
+    QString prjName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
+    TTSettings::instance()->setProjectFileName(prjName);
+    QFileInfo prjFileInfo(QDir(TTSettings::instance()->lastDirPath()), prjName);
 
-    TTCut::projectFileName = QFileDialog::getSaveFileName(this,
+    QString chosen = QFileDialog::getSaveFileName(this,
         tr("Save project-file"),
         prjFileInfo.absoluteFilePath(),
         "TTCut Project (*.ttcut);;Legacy Project (*.prj)");
+    TTSettings::instance()->setProjectFileName(chosen);
 
-    if (TTCut::projectFileName.isEmpty()) return;
+    if (TTSettings::instance()->projectFileName().isEmpty()) return;
   }
 
   // append project file extension
-  QFileInfo fInfo(TTCut::projectFileName);
+  QFileInfo fInfo(TTSettings::instance()->projectFileName());
 
   if (fInfo.suffix().isEmpty())
-    TTCut::projectFileName.append(".ttcut");
+    TTSettings::instance()->setProjectFileName(TTSettings::instance()->projectFileName() + ".ttcut");
 
   try
   {
@@ -519,7 +521,7 @@ void TTCutMainWindow::onFileSave()
   }
   catch (const TTException& ex)
   {
-    log->errorMsg(__FILE__, __LINE__, tr("error save project file: %1").arg(TTCut::projectFileName));
+    log->errorMsg(__FILE__, __LINE__, tr("error save project file: %1").arg(TTSettings::instance()->projectFileName()));
     return;
   }
 
@@ -536,18 +538,21 @@ void TTCutMainWindow::onFileSaveAs()
     return;
   }
 
-  TTCut::projectFileName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
-  QFileInfo prjFileInfo(QDir(TTCut::lastDirPath), TTCut::projectFileName);
+  {
+    QString prjName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
+    TTSettings::instance()->setProjectFileName(prjName);
+  }
+  QFileInfo prjFileInfo(QDir(TTSettings::instance()->lastDirPath()), TTSettings::instance()->projectFileName());
 
-  TTCut::projectFileName = QFileDialog::getSaveFileName( this,
+  TTSettings::instance()->setProjectFileName(QFileDialog::getSaveFileName( this,
       tr("Save project-file as"),
       prjFileInfo.absoluteFilePath(),
-      "TTCut Project (*.ttcut);;Legacy Project (*.prj)" );
+      "TTCut Project (*.ttcut);;Legacy Project (*.prj)" ));
 
-  if (!TTCut::projectFileName.isEmpty())
+  if (!TTSettings::instance()->projectFileName().isEmpty())
   {
-    QFileInfo fInfo(TTCut::projectFileName);
-    TTCut::lastDirPath = fInfo.absolutePath();
+    QFileInfo fInfo(TTSettings::instance()->projectFileName());
+    TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
 
     onFileSave();
   }
@@ -797,7 +802,7 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
 {
   if (mpAVData->avCount() == 0) return;
 
-  if( TTCut::fastSlider )
+  if( TTSettings::instance()->fastSlider() )
     currentFrame->onGotoFrame( sPos, 1 );
   else
     currentFrame->onGotoFrame( sPos, 0 );
@@ -1136,7 +1141,7 @@ void TTCutMainWindow::closeProject()
   currentFrame->clearSubtitleStream();
   cutOutFrame->onAVDataChanged(0);
 
-  TTCut::projectFileName = "";
+  TTSettings::instance()->setProjectFileName("");
   navigationEnabled(false);
 
   mpStreamPointModel->clear();
@@ -1180,7 +1185,7 @@ void TTCutMainWindow::openProjectFile(QString fName)
   }
 
   QFileInfo fInfo(fName );
-  TTCut::lastDirPath = fInfo.absolutePath();
+  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
 
   connect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
   mpAVData->readProjectFile(fInfo);

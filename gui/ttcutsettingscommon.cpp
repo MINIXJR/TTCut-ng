@@ -30,6 +30,7 @@
 #include "ttcutsettingscommon.h"
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 #include <QFileDialog>
 #include <QDir>
@@ -132,15 +133,15 @@ void TTCutSettingsCommon::onOpenDir()
 {
   QString str_dir = QFileDialog::getExistingDirectory( this,
 						       "Select temporary directory",
-						       TTCut::tempDirPath,
+						       TTSettings::instance()->tempDirPath(),
 						       (QFileDialog::DontResolveSymlinks |
 							QFileDialog::ShowDirsOnly) );
 
   if ( !str_dir.isEmpty() )
   {
-    TTCut::tempDirPath = str_dir;
+    TTSettings::instance()->setTempDirPath(str_dir);
 
-    leTempDirectory->setText( TTCut::tempDirPath );
+    leTempDirectory->setText( TTSettings::instance()->tempDirPath() );
   }
 }
 
@@ -160,15 +161,15 @@ void TTCutSettingsCommon::setTabData()
   sbMouseWheel->setValue( TTCut::stepMouseWheel );
 
   // Preview
-  spPreviewLength->setValue( TTCut::cutPreviewSeconds );
+  spPreviewLength->setValue( TTSettings::instance()->cutPreviewSeconds() );
 
   // Frame search
-  sbSearchIntervall->setValue( TTCut::searchLength );
-  sbSkipFrames->setValue( TTCut::playSkipFrames );
+  sbSearchIntervall->setValue( TTSettings::instance()->searchLength() );
+  sbSkipFrames->setValue( TTSettings::instance()->playSkipFrames() );
 
   // Options, directories
-  cbQuickSearch->setChecked(TTCut::fastSlider);
-  leTempDirectory->setText( TTCut::tempDirPath );
+  cbQuickSearch->setChecked(TTSettings::instance()->fastSlider());
+  leTempDirectory->setText( TTSettings::instance()->tempDirPath() );
 
   // Audio burst detection
   sbBurstThreshold->setValue(TTCut::burstThresholdDb);
@@ -199,18 +200,18 @@ void TTCutSettingsCommon::getTabData()
   TTCut::stepMouseWheel  = sbMouseWheel->value( );
 
   // Preview
-  TTCut::cutPreviewSeconds = spPreviewLength->value( );
+  TTSettings::instance()->setCutPreviewSeconds(spPreviewLength->value( ));
 
   // Frame search
-  TTCut::searchLength   = sbSearchIntervall->value( );
-  TTCut::playSkipFrames = sbSkipFrames->value( );
+  TTSettings::instance()->setSearchLength(sbSearchIntervall->value( ));
+  TTSettings::instance()->setPlaySkipFrames(sbSkipFrames->value( ));
 
   // Options, directories
-  TTCut::fastSlider  = cbQuickSearch->isChecked();
-  TTCut::tempDirPath = leTempDirectory->text( );
+  TTSettings::instance()->setFastSlider(cbQuickSearch->isChecked());
+  TTSettings::instance()->setTempDirPath(leTempDirectory->text( ));
 
-  if ( !QDir(TTCut::tempDirPath).exists() )
-    TTCut::tempDirPath = QDir::tempPath();
+  if ( !QDir(TTSettings::instance()->tempDirPath()).exists() )
+    TTSettings::instance()->setTempDirPath(QDir::tempPath());
 
   // Audio burst detection
   TTCut::burstThresholdDb = sbBurstThreshold->value();
