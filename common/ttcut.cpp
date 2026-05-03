@@ -226,15 +226,6 @@ int     TTCut::audioOnlyBitrateKbps  = 0;   // 0 = match source bitrate
 // Options
 bool TTCut::spumuxChapter = false;
 
-// -----------------------------------------------------------------------------
-// Status
-// -----------------------------------------------------------------------------
-bool TTCut::isVideoOpen       = false;
-int  TTCut::numAudioTracks    = 0;
-bool TTCut::isProjektModified = false;
-bool TTCut::isPlaying         = false;
-bool TTCut::isWorking         = false;
-
 // --------------------------------------------------------------
 // Cut settings
 // --------------------------------------------------------------
@@ -253,7 +244,6 @@ bool     TTCut::readCutIDD         = false;
 // --------------------------------------------------------------
 // Global properties
 // --------------------------------------------------------------
-float    TTCut::frameRate          = 25.0;
 QWidget* TTCut::mainWindow         = NULL;
 
 TTCut::TTCut()

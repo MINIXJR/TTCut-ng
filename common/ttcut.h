@@ -230,15 +230,6 @@ class TTCut
 
 
    // --------------------------------------------------------------
-   // Status variables
-   // --------------------------------------------------------------
-   static bool isVideoOpen;
-   static int  numAudioTracks;
-   static bool isProjektModified;
-   static bool isPlaying;
-   static bool isWorking;
-
-   // --------------------------------------------------------------
    // Cut settings
    // --------------------------------------------------------------
    static QString muxFileName;
@@ -255,7 +246,6 @@ class TTCut
    // --------------------------------------------------------------
    // Global properties
    // --------------------------------------------------------------
-   static float        frameRate;
    static QWidget*     mainWindow;
 
    // --------------------------------------------------------------
