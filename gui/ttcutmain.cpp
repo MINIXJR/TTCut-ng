@@ -41,6 +41,7 @@
 
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 #include <QCommandLineParser>
 #include <QTimer>
@@ -57,6 +58,12 @@ int main( int argc, char **argv )
     QApplication a( argc, argv );
 
     a.setApplicationName("TTCut-ng");
+
+    // Force the lazy TTSettings singleton to construct and run its first
+    // load() before any UI code reads a persisted value. The on-disk
+    // QSettings file is shared with the legacy TTCutSettings::readSettings()
+    // path (Strangler-pattern migration window).
+    (void)TTSettings::instance();
 
     // Centre QGroupBox titles application-wide. Most styles (including
     // current Breeze) default to left-aligned titles; we want the visual

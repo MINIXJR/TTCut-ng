@@ -36,16 +36,27 @@ TTSettings::~TTSettings()
 
 void TTSettings::load()
 {
-  QSettings settings;
-  Q_UNUSED(settings);
-  // Per-group field loads added in tasks 4-13.
+  // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
+  // so both code paths read/write the same on-disk file during the
+  // Strangler-pattern migration window.
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  settings.beginGroup("/Settings");
+  // Per-group field loads added in tasks 4-13. Each task enters its own
+  // sub-group (e.g. "Common", "Navigation") via beginGroup/endGroup using
+  // the EXACT key strings inventoried in
+  // docs/superpowers/plans/2026-05-03-task-1-qsettings-inventory.md
+  // — that key-compatibility invariant lets the user's existing settings
+  // survive the refactor.
+  settings.endGroup();
 }
 
 void TTSettings::save()
 {
-  QSettings settings;
-  Q_UNUSED(settings);
+  // Match TTCutSettings persistence target — see load().
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  settings.beginGroup("/Settings");
   // Per-group field saves added in tasks 4-13.
+  settings.endGroup();
 }
 
 void TTSettings::resetToDefaults()

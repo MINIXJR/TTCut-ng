@@ -44,6 +44,7 @@
 #include "../common/ttthreadtask.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttmessagebox.h"
+#include "../common/ttsettings.h"
 
 #include "../data/ttstreampointmodel.h"
 #include "../data/ttstreampoint_videoworker.h"
@@ -587,6 +588,12 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
     settings->setValue("MainWindow/geometry", saveGeometry());
     settings->writeSettings();
   }
+
+  // Mirror the legacy save path through TTSettings during the Strangler
+  // migration window — TTSettings::save() is currently a no-op shell that
+  // tasks 4-13 will populate group-by-group with the SAME QSettings keys
+  // TTCutSettings already uses, so both paths end up writing the same file.
+  TTSettings::instance()->save();
 
   if (mProjectModified) {
     QMessageBox::StandardButton reply = QMessageBox::question(this,
