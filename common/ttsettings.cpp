@@ -454,6 +454,98 @@ void TTSettings::setScreenshotProject(const QString& v)
   TTCut::screenshotProject = v;
 }
 
+// ---- Detection Thresholds group setters (Task 11) --------------------------
+// Twelve setters: 3 nav-thresholds extend /Settings/Navigation, 7 sp* fields
+// share /Settings/StreamPoints, 2 extraFrame* fields share /Settings/Common
+// (legacy keys without `Sec` suffix). Each setter early-outs on no-op
+// assignment and mirrors the new value to the legacy TTCut::xxx static so
+// unmigrated call sites observe consistent state. No signals — none of the
+// 12 fields have reactive UI dependents.
+
+void TTSettings::setNavBlackThreshold(float v)
+{
+  if (mNavBlackThreshold == v) return;
+  mNavBlackThreshold = v;
+  TTCut::navBlackThreshold = v;
+}
+
+void TTSettings::setNavSceneThreshold(float v)
+{
+  if (mNavSceneThreshold == v) return;
+  mNavSceneThreshold = v;
+  TTCut::navSceneThreshold = v;
+}
+
+void TTSettings::setNavLogoThreshold(float v)
+{
+  if (mNavLogoThreshold == v) return;
+  mNavLogoThreshold = v;
+  TTCut::navLogoThreshold = v;
+}
+
+void TTSettings::setSpDetectSilence(bool v)
+{
+  if (mSpDetectSilence == v) return;
+  mSpDetectSilence = v;
+  TTCut::spDetectSilence = v;
+}
+
+void TTSettings::setSpSilenceThresholdDb(int v)
+{
+  if (mSpSilenceThresholdDb == v) return;
+  mSpSilenceThresholdDb = v;
+  TTCut::spSilenceThresholdDb = v;
+}
+
+void TTSettings::setSpSilenceMinDuration(float v)
+{
+  if (mSpSilenceMinDuration == v) return;
+  mSpSilenceMinDuration = v;
+  TTCut::spSilenceMinDuration = v;
+}
+
+void TTSettings::setSpDetectAudioChange(bool v)
+{
+  if (mSpDetectAudioChange == v) return;
+  mSpDetectAudioChange = v;
+  TTCut::spDetectAudioChange = v;
+}
+
+void TTSettings::setSpDetectAspectChange(bool v)
+{
+  if (mSpDetectAspectChange == v) return;
+  mSpDetectAspectChange = v;
+  TTCut::spDetectAspectChange = v;
+}
+
+void TTSettings::setSpDetectPillarbox(bool v)
+{
+  if (mSpDetectPillarbox == v) return;
+  mSpDetectPillarbox = v;
+  TTCut::spDetectPillarbox = v;
+}
+
+void TTSettings::setSpPillarboxThreshold(int v)
+{
+  if (mSpPillarboxThreshold == v) return;
+  mSpPillarboxThreshold = v;
+  TTCut::spPillarboxThreshold = v;
+}
+
+void TTSettings::setExtraFrameClusterGapSec(int v)
+{
+  if (mExtraFrameClusterGapSec == v) return;
+  mExtraFrameClusterGapSec = v;
+  TTCut::extraFrameClusterGapSec = v;
+}
+
+void TTSettings::setExtraFrameClusterOffsetSec(int v)
+{
+  if (mExtraFrameClusterOffsetSec == v) return;
+  mExtraFrameClusterOffsetSec = v;
+  TTCut::extraFrameClusterOffsetSec = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -488,6 +580,35 @@ void TTSettings::load()
   TTCut::stepPlusShift   = mStepPlusShift;
   mStepMouseWheel  = settings.value("StepMouseWheel/",  mStepMouseWheel).toInt();
   TTCut::stepMouseWheel  = mStepMouseWheel;
+  // ----- Detection Thresholds (Task 11) -----
+  mNavBlackThreshold = settings.value("BlackThreshold/", mNavBlackThreshold).toFloat();
+  mNavSceneThreshold = settings.value("SceneThreshold/", mNavSceneThreshold).toFloat();
+  mNavLogoThreshold  = settings.value("LogoThreshold/",  mNavLogoThreshold).toFloat();
+  TTCut::navBlackThreshold = mNavBlackThreshold;
+  TTCut::navSceneThreshold = mNavSceneThreshold;
+  TTCut::navLogoThreshold  = mNavLogoThreshold;
+  settings.endGroup();
+
+  // ----- Stream Points group (Task 11) --------------------------------
+  // Seven sp* fields persisted via /Settings/StreamPoints in the legacy
+  // TTCutSettings path (gui/ttcutsettings.cpp lines 94-102). TTSettings
+  // reuses the exact same group + key strings so already-installed user
+  // settings round-trip across the migration window.
+  settings.beginGroup("StreamPoints");
+  mSpDetectSilence      = settings.value("DetectSilence/",      mSpDetectSilence).toBool();
+  mSpSilenceThresholdDb = settings.value("SilenceThresholdDb/", mSpSilenceThresholdDb).toInt();
+  mSpSilenceMinDuration = settings.value("SilenceMinDuration/", mSpSilenceMinDuration).toFloat();
+  mSpDetectAudioChange  = settings.value("DetectAudioChange/",  mSpDetectAudioChange).toBool();
+  mSpDetectAspectChange = settings.value("DetectAspectChange/", mSpDetectAspectChange).toBool();
+  mSpDetectPillarbox    = settings.value("DetectPillarbox/",    mSpDetectPillarbox).toBool();
+  mSpPillarboxThreshold = settings.value("PillarboxThreshold/", mSpPillarboxThreshold).toInt();
+  TTCut::spDetectSilence      = mSpDetectSilence;
+  TTCut::spSilenceThresholdDb = mSpSilenceThresholdDb;
+  TTCut::spSilenceMinDuration = mSpSilenceMinDuration;
+  TTCut::spDetectAudioChange  = mSpDetectAudioChange;
+  TTCut::spDetectAspectChange = mSpDetectAspectChange;
+  TTCut::spDetectPillarbox    = mSpDetectPillarbox;
+  TTCut::spPillarboxThreshold = mSpPillarboxThreshold;
   settings.endGroup();
 
   settings.beginGroup("Common");
@@ -508,6 +629,16 @@ void TTSettings::load()
   TTCut::normalizeAcmod         = mNormalizeAcmod;
   TTCut::audioLanguagePreference = mAudioLanguagePreference;
   TTCut::quickJumpIntervalSec   = mQuickJumpIntervalSec;
+  // ----- Extra Frame fields (Task 11) ---------------------------------
+  // Two extraFrame* fields share /Settings/Common with the Audio/QuickJump
+  // block. Legacy keys are `ExtraFrameClusterGap/` and
+  // `ExtraFrameClusterOffset/` (gui/ttcutsettings.cpp lines 80-81) — note
+  // there is no `Sec` suffix on disk. Reused verbatim for round-trip
+  // compatibility.
+  mExtraFrameClusterGapSec    = settings.value("ExtraFrameClusterGap/",    mExtraFrameClusterGapSec).toInt();
+  mExtraFrameClusterOffsetSec = settings.value("ExtraFrameClusterOffset/", mExtraFrameClusterOffsetSec).toInt();
+  TTCut::extraFrameClusterGapSec    = mExtraFrameClusterGapSec;
+  TTCut::extraFrameClusterOffsetSec = mExtraFrameClusterOffsetSec;
   settings.endGroup();
 
   // ----- Screenshot group (Task 10) ------------------------------------
@@ -649,6 +780,21 @@ void TTSettings::save()
   settings.setValue("StepPlusCtrl/",    mStepPlusCtrl);
   settings.setValue("StepPlusShift/",   mStepPlusShift);
   settings.setValue("StepMouseWheel/",  mStepMouseWheel);
+  // ----- Detection Thresholds (Task 11) -----
+  settings.setValue("BlackThreshold/", mNavBlackThreshold);
+  settings.setValue("SceneThreshold/", mNavSceneThreshold);
+  settings.setValue("LogoThreshold/",  mNavLogoThreshold);
+  settings.endGroup();
+
+  // ----- Stream Points group (Task 11) --------------------------------
+  settings.beginGroup("StreamPoints");
+  settings.setValue("DetectSilence/",      mSpDetectSilence);
+  settings.setValue("SilenceThresholdDb/", mSpSilenceThresholdDb);
+  settings.setValue("SilenceMinDuration/", mSpSilenceMinDuration);
+  settings.setValue("DetectAudioChange/",  mSpDetectAudioChange);
+  settings.setValue("DetectAspectChange/", mSpDetectAspectChange);
+  settings.setValue("DetectPillarbox/",    mSpDetectPillarbox);
+  settings.setValue("PillarboxThreshold/", mSpPillarboxThreshold);
   settings.endGroup();
 
   settings.beginGroup("Common");
@@ -660,6 +806,10 @@ void TTSettings::save()
   settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
   settings.setValue("AudioLanguagePreference/", mAudioLanguagePreference);
   settings.setValue("QuickJumpInterval/",       mQuickJumpIntervalSec);
+  // ----- Extra Frame fields (Task 11) ---------------------------------
+  // Legacy keys (no `Sec` suffix on disk) — see load().
+  settings.setValue("ExtraFrameClusterGap/",    mExtraFrameClusterGapSec);
+  settings.setValue("ExtraFrameClusterOffset/", mExtraFrameClusterOffsetSec);
   settings.endGroup();
 
   // ----- Screenshot group (Task 10 — first-time persisted) -------------

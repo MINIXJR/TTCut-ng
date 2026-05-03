@@ -231,6 +231,53 @@ public:
   const QString& screenshotProject() const { return mScreenshotProject; }
   void    setScreenshotProject(const QString& v);
 
+  // ----- Detection Thresholds group (Task 11) -----------------------------
+  // Twelve fields across two existing legacy persistence groups. Three
+  // nav-threshold fields extend /Settings/Navigation (Tasks 4-5). Seven
+  // StreamPoint fields share /Settings/StreamPoints. Two ExtraFrame fields
+  // share /Settings/Common with the Audio/QuickJump fields (Task 10) —
+  // their on-disk keys (`ExtraFrameClusterGap/`, `ExtraFrameClusterOffset/`)
+  // carry no `Sec` suffix; preserved verbatim from gui/ttcutsettings.cpp
+  // for round-trip compatibility with already-installed user settings.
+  // No signals — none of the 12 fields have reactive UI dependents.
+  // Setters mirror to legacy TTCut::xxx during the migration window so
+  // unmigrated call sites continue to observe consistent state.
+  float   navBlackThreshold() const  { return mNavBlackThreshold; }
+  void    setNavBlackThreshold(float v);
+
+  float   navSceneThreshold() const  { return mNavSceneThreshold; }
+  void    setNavSceneThreshold(float v);
+
+  float   navLogoThreshold() const   { return mNavLogoThreshold; }
+  void    setNavLogoThreshold(float v);
+
+  bool    spDetectSilence() const      { return mSpDetectSilence; }
+  void    setSpDetectSilence(bool v);
+
+  int     spSilenceThresholdDb() const { return mSpSilenceThresholdDb; }
+  void    setSpSilenceThresholdDb(int v);
+
+  float   spSilenceMinDuration() const { return mSpSilenceMinDuration; }
+  void    setSpSilenceMinDuration(float v);
+
+  bool    spDetectAudioChange() const  { return mSpDetectAudioChange; }
+  void    setSpDetectAudioChange(bool v);
+
+  bool    spDetectAspectChange() const { return mSpDetectAspectChange; }
+  void    setSpDetectAspectChange(bool v);
+
+  bool    spDetectPillarbox() const    { return mSpDetectPillarbox; }
+  void    setSpDetectPillarbox(bool v);
+
+  int     spPillarboxThreshold() const { return mSpPillarboxThreshold; }
+  void    setSpPillarboxThreshold(int v);
+
+  int     extraFrameClusterGapSec() const    { return mExtraFrameClusterGapSec; }
+  void    setExtraFrameClusterGapSec(int v);
+
+  int     extraFrameClusterOffsetSec() const { return mExtraFrameClusterOffsetSec; }
+  void    setExtraFrameClusterOffsetSec(int v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
@@ -337,6 +384,25 @@ private:
   int         mQuickJumpIntervalSec = 30;
   QString     mScreenshotDir;               // empty by default
   QString     mScreenshotProject;           // empty by default
+
+  // ----- Detection Thresholds group (Task 11) ------------------------------
+  // Defaults match common/ttcut.cpp lines 184-199 verbatim.
+  // navBlackThreshold/SceneThreshold/LogoThreshold extend /Settings/Navigation
+  // (Tasks 4-5). The seven sp* fields share /Settings/StreamPoints. The two
+  // extraFrame* fields share /Settings/Common (legacy keys without `Sec`
+  // suffix — see public-section comment for detail).
+  float mNavBlackThreshold        = 0.980f;
+  float mNavSceneThreshold        = 0.300f;
+  float mNavLogoThreshold         = 0.500f;
+  bool  mSpDetectSilence          = true;
+  int   mSpSilenceThresholdDb     = -75;
+  float mSpSilenceMinDuration     = 0.3f;
+  bool  mSpDetectAudioChange      = true;
+  bool  mSpDetectAspectChange     = true;
+  bool  mSpDetectPillarbox        = true;
+  int   mSpPillarboxThreshold     = 20;
+  int   mExtraFrameClusterGapSec    = 5;
+  int   mExtraFrameClusterOffsetSec = 2;
 };
 
 #endif
