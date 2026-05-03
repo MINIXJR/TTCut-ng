@@ -191,9 +191,9 @@ TTCutMainWindow::TTCutMainWindow()
       w, h);
   }
 
-  log->enableLogFile(TTCut::createLogFile);
-  log->setLogModeConsole(TTCut::logModeConsole);
-  log->setLogModeExtended(TTCut::logModeExtended);
+  log->enableLogFile(TTSettings::instance()->createLogFile());
+  log->setLogModeConsole(TTSettings::instance()->logModeConsole());
+  log->setLogModeExtended(TTSettings::instance()->logModeExtended());
 
   //AV stream controller instance
   mpAVData = new TTAVData();
@@ -640,9 +640,9 @@ void TTCutMainWindow::onActionSettings()
   TTCutSettingsDlg* settingsDlg = new TTCutSettingsDlg( this );
   settingsDlg->exec();
 
-  log->enableLogFile(TTCut::createLogFile);
-  log->setLogModeConsole(TTCut::logModeConsole);
-  log->setLogModeExtended(TTCut::logModeExtended);
+  log->enableLogFile(TTSettings::instance()->createLogFile());
+  log->setLogModeConsole(TTSettings::instance()->logModeConsole());
+  log->setLogModeExtended(TTSettings::instance()->logModeExtended());
 
   if (settings != 0) settings->writeSettings();
 

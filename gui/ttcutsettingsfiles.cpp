@@ -30,6 +30,7 @@
 #include "ttcutsettingsfiles.h"
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
   
 TTCutSettingsFiles::TTCutSettingsFiles(QWidget* parent)
@@ -48,36 +49,36 @@ void TTCutSettingsFiles::setTitle(__attribute__((unused))const QString& title)
 void TTCutSettingsFiles::setTabData()
 {
   // IDD files
-  cbCreateVideoIDD->setChecked( TTCut::createVideoIDD );
-  cbCreateAudioIDD->setChecked( TTCut::createAudioIDD );
+  cbCreateVideoIDD->setChecked( TTSettings::instance()->createVideoIDD() );
+  cbCreateAudioIDD->setChecked( TTSettings::instance()->createAudioIDD() );
   cbCreateCutIDD->setChecked( TTCut::createCutIDD );
-  cbReadVideoIDD->setChecked( TTCut::readVideoIDD );
-  cbReadAudioIDD->setChecked( TTCut::readAudioIDD );
+  cbReadVideoIDD->setChecked( TTSettings::instance()->readVideoIDD() );
+  cbReadAudioIDD->setChecked( TTSettings::instance()->readAudioIDD() );
 
   // Logfile
-  cbCreateLog->setChecked( TTCut::createLogFile );
-  cbLogConsole->setChecked( TTCut::logModeConsole );
-  cbLogExtended->setChecked( TTCut::logModeExtended );
-  cbLogPlusVideoIndex->setChecked( TTCut::logVideoIndexInfo );
+  cbCreateLog->setChecked( TTSettings::instance()->createLogFile() );
+  cbLogConsole->setChecked( TTSettings::instance()->logModeConsole() );
+  cbLogExtended->setChecked( TTSettings::instance()->logModeExtended() );
+  cbLogPlusVideoIndex->setChecked( TTSettings::instance()->logVideoIndexInfo() );
 
-  gbLogfileOptions->setEnabled(TTCut::createLogFile);
+  gbLogfileOptions->setEnabled(TTSettings::instance()->createLogFile());
 }
 
 // get the tab data and fill the global parameter
 void TTCutSettingsFiles::getTabData()
 {
   // IDD files
-  TTCut::createVideoIDD    = cbCreateVideoIDD->isChecked( );
-  TTCut::createAudioIDD    = cbCreateAudioIDD->isChecked( );
+  TTSettings::instance()->setCreateVideoIDD( cbCreateVideoIDD->isChecked( ) );
+  TTSettings::instance()->setCreateAudioIDD( cbCreateAudioIDD->isChecked( ) );
   TTCut::createCutIDD      = cbCreateCutIDD->isChecked( );
-  TTCut::readVideoIDD      = cbReadVideoIDD->isChecked( );
-  TTCut::readAudioIDD      = cbReadAudioIDD->isChecked( );
+  TTSettings::instance()->setReadVideoIDD( cbReadVideoIDD->isChecked( ) );
+  TTSettings::instance()->setReadAudioIDD( cbReadAudioIDD->isChecked( ) );
 
   // logfile
-  TTCut::createLogFile     = cbCreateLog->isChecked( );
-  TTCut::logModeConsole    = cbLogConsole->isChecked();
-  TTCut::logModeExtended   = cbLogExtended->isChecked( );
-  TTCut::logVideoIndexInfo = cbLogPlusVideoIndex->isChecked( );
+  TTSettings::instance()->setCreateLogFile( cbCreateLog->isChecked( ) );
+  TTSettings::instance()->setLogModeConsole( cbLogConsole->isChecked() );
+  TTSettings::instance()->setLogModeExtended( cbLogExtended->isChecked( ) );
+  TTSettings::instance()->setLogVideoIndexInfo( cbLogPlusVideoIndex->isChecked( ) );
 }
 
 void TTCutSettingsFiles::onCreateLogStateChanged(int state)

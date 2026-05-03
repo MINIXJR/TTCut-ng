@@ -104,7 +104,7 @@ int TTMpeg2VideoStream::createHeaderList()
   header_list = new TTVideoHeaderList( 2000 );
 
   // read the header from IDD file
-  if (TTCut::readVideoIDD)
+  if (TTSettings::instance()->readVideoIDD())
   {
     iddStreamName = ttChangeFileExt(stream_info->filePath(), "idd");
     iddStreamInfo.setFile(iddStreamName);
@@ -150,7 +150,7 @@ int TTMpeg2VideoStream::createIndexList()
 
   index_list  = new TTVideoIndexList();
 
-  if (TTCut::logVideoIndexInfo) {
+  if (TTSettings::instance()->logVideoIndexInfo()) {
     log->infoMsg(__FILE__, __LINE__, "Create index list");
     log->infoMsg(__FILE__, __LINE__, "---------------------------------------------");
   }
@@ -184,7 +184,7 @@ int TTMpeg2VideoStream::createIndexList()
 
           index_list->add( video_index );
 
-         if(TTCut::logVideoIndexInfo) {
+         if(TTSettings::instance()->logVideoIndexInfo()) {
             log->infoMsg(__FILE__, __LINE__,
                     QString("stream-order;%1;display-order;%2;frame-type;%3;offset;%4").
                     arg(current_pic_num).arg(video_index->getDisplayOrder()).
@@ -335,7 +335,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
   emit statusReport(StatusReportArgs::Finished, tr("MPEG-2 header list created"), stream_buffer->size());
 
   // write an idd file with the header information
-  if (header_list->count() > 0 && TTCut::createVideoIDD )
+  if (header_list->count() > 0 && TTSettings::instance()->createVideoIDD() )
     writeIDDFile();
 
   return (header_list->count() > 0);
@@ -1018,14 +1018,14 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   // save current cut parameter
   bool savIsWriteMaxBitrate  = cr->getIsWriteMaxBitrate();
   bool savIsWriteSequenceEnd = cr->getIsWriteSequenceEnd();
-  bool savCreateVideoIDD     = TTCut::createVideoIDD;
-  bool savReadVideoIDD       = TTCut::readVideoIDD;
+  bool savCreateVideoIDD     = TTSettings::instance()->createVideoIDD();
+  bool savReadVideoIDD       = TTSettings::instance()->readVideoIDD();
 
   // no sequence end code
   cr->setIsWriteSequenceEnd(false);
   cr->setIsWriteMaxBitrate(false);
-  TTCut::createVideoIDD = false;
-  TTCut::readVideoIDD   = false;
+  TTSettings::instance()->setCreateVideoIDD(false);
+  TTSettings::instance()->setReadVideoIDD(false);
 
   log->debugMsg(__FILE__, __LINE__, QString("enocdePart start %1 / end %2").arg(start).arg(end));
 
@@ -1088,8 +1088,8 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
 
   cr->setIsWriteMaxBitrate(savIsWriteMaxBitrate);
   cr->setIsWriteSequenceEnd(savIsWriteSequenceEnd);
-  TTCut::readVideoIDD   = savReadVideoIDD;
-  TTCut::createVideoIDD = savCreateVideoIDD;
+  TTSettings::instance()->setReadVideoIDD(savReadVideoIDD);
+  TTSettings::instance()->setCreateVideoIDD(savCreateVideoIDD);
 
   disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
   		       this,           &TTMpeg2VideoStream::statusReport);
