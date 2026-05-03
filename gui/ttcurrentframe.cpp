@@ -175,10 +175,10 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
     return;
 
   int currentPosition = videoStream->currentIndex();
-  int wheelDelta      = TTCut::stepMouseWheel;
+  int wheelDelta      = TTSettings::instance()->stepMouseWheel();
 
   if ( e->modifiers() == Qt::ControlModifier )
-        wheelDelta += TTCut::stepPlusCtrl;
+        wheelDelta += TTSettings::instance()->stepPlusCtrl();
 
   //wheel was rotated forwards away from the user
   if ( e->angleDelta().y() > 0 )

@@ -29,6 +29,7 @@
 
 #include "ttcutframenavigation.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttcommon.h"
 
@@ -236,17 +237,17 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 
 		switch (e->modifiers()) {
 
-		// backward TTCut::stepPlusAlt
+		// backward stepPlusAlt
 		case Qt::AltModifier:
-			steps -= TTCut::stepPlusAlt;
+			steps -= TTSettings::instance()->stepPlusAlt();
 			break;
-			// backward TTCut::stepPlusCtrl
+			// backward stepPlusCtrl
 		case Qt::ControlModifier:
-			steps -= TTCut::stepPlusCtrl;
+			steps -= TTSettings::instance()->stepPlusCtrl();
 			break;
-			// backward TTCut::stepPlusShift
+			// backward stepPlusShift
 		case Qt::ShiftModifier:
-			steps -= TTCut::stepPlusShift;
+			steps -= TTSettings::instance()->stepPlusShift();
 			break;
 			// backward one frame
 		default:
@@ -262,17 +263,17 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 
 		switch (e->modifiers()) {
 
-		// forward TTCut::stepPlusAlt
+		// forward stepPlusAlt
 		case Qt::AltModifier:
-			steps += TTCut::stepPlusAlt;
+			steps += TTSettings::instance()->stepPlusAlt();
 			break;
-			// forward TTCut::stepPlusCtrl
+			// forward stepPlusCtrl
 		case Qt::ControlModifier:
-			steps += TTCut::stepPlusCtrl;
+			steps += TTSettings::instance()->stepPlusCtrl();
 			break;
-			// forward TTCut::stepPlusShift
+			// forward stepPlusShift
 		case Qt::ShiftModifier:
-			steps += TTCut::stepPlusShift;
+			steps += TTSettings::instance()->stepPlusShift();
 			break;
 			// forward one frame
 		default:
@@ -292,12 +293,12 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 		break;
 		// page down
 	case Qt::Key_PageUp:
-		steps -= TTCut::stepPgUpDown;
+		steps -= TTSettings::instance()->stepPgUpDown();
 		emit moveNumSteps(steps);
 		break;
 		// page up
 	case Qt::Key_PageDown:
-		steps += TTCut::stepPgUpDown;
+		steps += TTSettings::instance()->stepPgUpDown();
 		emit moveNumSteps(steps);
 		break;
 		// I-frame

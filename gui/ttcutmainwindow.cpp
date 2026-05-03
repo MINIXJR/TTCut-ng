@@ -692,10 +692,10 @@ void TTCutMainWindow::onHelpKeyboardShortcuts()
     "<tr><td><b>Mouse wheel</b></td><td>Navigate frames</td></tr>"
     "<tr><td><b>Ctrl+Wheel</b></td><td>Navigate faster</td></tr>"
     "</table>"
-  ).arg(TTCut::stepPlusCtrl)
-   .arg(TTCut::stepPlusShift)
-   .arg(TTCut::stepPlusAlt)
-   .arg(TTCut::stepPgUpDown);
+  ).arg(TTSettings::instance()->stepPlusCtrl())
+   .arg(TTSettings::instance()->stepPlusShift())
+   .arg(TTSettings::instance()->stepPlusAlt())
+   .arg(TTSettings::instance()->stepPgUpDown());
 
   QMessageBox msgBox(this);
   msgBox.setWindowTitle(tr("Keyboard Shortcuts"));

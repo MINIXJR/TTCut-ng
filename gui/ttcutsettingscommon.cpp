@@ -153,12 +153,12 @@ void TTCutSettingsCommon::setTabData()
   // --------------------------------------------------------------
 
   // Navigation
-  sbSliderClickPlacement->setValue( TTCut::stepSliderClick );
-  sbPgUpDown->setValue( TTCut::stepPgUpDown );
-  sbArrowKeyPlacement->setValue( TTCut::stepArrowKeys );
-  sbAltDistance->setValue( TTCut::stepPlusAlt );
-  sbCtrlDistance->setValue( TTCut::stepPlusCtrl );
-  sbMouseWheel->setValue( TTCut::stepMouseWheel );
+  sbSliderClickPlacement->setValue( TTSettings::instance()->stepSliderClick() );
+  sbPgUpDown->setValue( TTSettings::instance()->stepPgUpDown() );
+  sbArrowKeyPlacement->setValue( TTSettings::instance()->stepArrowKeys() );
+  sbAltDistance->setValue( TTSettings::instance()->stepPlusAlt() );
+  sbCtrlDistance->setValue( TTSettings::instance()->stepPlusCtrl() );
+  sbMouseWheel->setValue( TTSettings::instance()->stepMouseWheel() );
 
   // Preview
   spPreviewLength->setValue( TTSettings::instance()->cutPreviewSeconds() );
@@ -192,12 +192,12 @@ void TTCutSettingsCommon::setTabData()
 void TTCutSettingsCommon::getTabData()
 {
   // Navigation
-  TTCut::stepSliderClick = sbSliderClickPlacement->value( );
-  TTCut::stepPgUpDown    = sbPgUpDown->value( );
-  TTCut::stepArrowKeys   = sbArrowKeyPlacement->value( );
-  TTCut::stepPlusAlt     = sbAltDistance->value( );
-  TTCut::stepPlusCtrl    = sbCtrlDistance->value( );
-  TTCut::stepMouseWheel  = sbMouseWheel->value( );
+  TTSettings::instance()->setStepSliderClick(sbSliderClickPlacement->value( ));
+  TTSettings::instance()->setStepPgUpDown(   sbPgUpDown->value( ));
+  TTSettings::instance()->setStepArrowKeys(  sbArrowKeyPlacement->value( ));
+  TTSettings::instance()->setStepPlusAlt(    sbAltDistance->value( ));
+  TTSettings::instance()->setStepPlusCtrl(   sbCtrlDistance->value( ));
+  TTSettings::instance()->setStepMouseWheel( sbMouseWheel->value( ));
 
   // Preview
   TTSettings::instance()->setCutPreviewSeconds(spPreviewLength->value( ));
