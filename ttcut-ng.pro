@@ -73,6 +73,7 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/ttprogressform.ui\
               ui/tttaskprogresswidget.ui
 HEADERS     = common/ttcut.h\
+              common/ttsettings.h\
               common/ttthreadtask.h\
               common/ttthreadtaskpool.h\
               common/ttmessagelogger.h\
@@ -164,6 +165,7 @@ HEADERS     = common/ttcut.h\
               gui/ttquickjumpworker.h\
               gui/ttquickjumpdialog.h
 SOURCES     = common/ttcut.cpp\
+              common/ttsettings.cpp\
               common/ttthreadtask.cpp\
               common/ttthreadtaskpool.cpp\  
               common/ttmessagelogger.cpp\
