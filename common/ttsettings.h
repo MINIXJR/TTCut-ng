@@ -206,6 +206,31 @@ public:
   int     mpeg2Target() const        { return mMpeg2Target; }
   void    setMpeg2Target(int v);
 
+  // ----- Audio/QuickJump/Screenshot group setters (Task 10) ---------------
+  // Four fields extend the existing /Settings/Common block (Task 4). Two
+  // fields open a NEW /Settings/Screenshot block — those are first-time
+  // persistence keys per the Task 1 inventory recommendation.
+  // setAudioLanguagePreference emits audioLanguagePreferenceChanged so the
+  // audio-list sort comparator can re-sort reactively when the user edits
+  // the preference list. The other 5 setters use the standard pattern.
+  int     burstThresholdDb() const   { return mBurstThresholdDb; }
+  void    setBurstThresholdDb(int v);
+
+  bool    normalizeAcmod() const     { return mNormalizeAcmod; }
+  void    setNormalizeAcmod(bool v);
+
+  const QStringList& audioLanguagePreference() const { return mAudioLanguagePreference; }
+  void    setAudioLanguagePreference(const QStringList& v);
+
+  int     quickJumpIntervalSec() const { return mQuickJumpIntervalSec; }
+  void    setQuickJumpIntervalSec(int v);
+
+  const QString& screenshotDir() const     { return mScreenshotDir; }
+  void    setScreenshotDir(const QString& v);
+
+  const QString& screenshotProject() const { return mScreenshotProject; }
+  void    setScreenshotProject(const QString& v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
@@ -218,6 +243,13 @@ signals:
   // switches uniformly. The settings dialog keeps its own codecChanged
   // signal for intra-dialog wiring.
   void encoderCodecChanged(int v);
+
+  // Task 10: emitted by setAudioLanguagePreference so the audio-list sort
+  // comparator (TTAudioItem::operator<) and any list views observing the
+  // ordering can re-sort reactively when the user edits the preference
+  // list. Mutating call sites must read-modify-write through the setter
+  // so the signal fires and the legacy mirror stays consistent.
+  void audioLanguagePreferenceChanged(const QStringList& v);
 
 private:
   static TTSettings* sInstance;
@@ -291,6 +323,20 @@ private:
 
   // /Settings/Muxer group — Task 12 will add the rest.
   int     mMpeg2Target  = 7;
+
+  // ----- Audio/QuickJump/Screenshot group (Task 10) -----------------------
+  // Defaults match common/ttcut.cpp lines 172-181 verbatim.
+  // burstThresholdDb/normalizeAcmod/audioLanguagePreference/
+  // quickJumpIntervalSec extend /Settings/Common (Task 4).
+  // screenshotDir/screenshotProject open a NEW /Settings/Screenshot block
+  // — they are newly persisted, were non-persistent statics before per the
+  // Task 1 inventory recommendation.
+  int         mBurstThresholdDb     = -30;
+  bool        mNormalizeAcmod       = true;
+  QStringList mAudioLanguagePreference;     // empty = use system locale
+  int         mQuickJumpIntervalSec = 30;
+  QString     mScreenshotDir;               // empty by default
+  QString     mScreenshotProject;           // empty by default
 };
 
 #endif

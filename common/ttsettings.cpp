@@ -404,6 +404,56 @@ void TTSettings::setMpeg2Target(int v)
   TTCut::mpeg2Target = v;
 }
 
+// ---- Audio/QuickJump/Screenshot group setters (Task 10) --------------------
+// Four fields extend /Settings/Common (Task 4). Two fields open a new
+// /Settings/Screenshot block — newly persisted per Task 1 inventory.
+// setAudioLanguagePreference emits audioLanguagePreferenceChanged so the
+// audio-list sort comparator can re-sort reactively. The other 5 setters
+// use the standard pattern.
+
+void TTSettings::setBurstThresholdDb(int v)
+{
+  if (mBurstThresholdDb == v) return;
+  mBurstThresholdDb = v;
+  TTCut::burstThresholdDb = v;
+}
+
+void TTSettings::setNormalizeAcmod(bool v)
+{
+  if (mNormalizeAcmod == v) return;
+  mNormalizeAcmod = v;
+  TTCut::normalizeAcmod = v;
+}
+
+void TTSettings::setAudioLanguagePreference(const QStringList& v)
+{
+  if (mAudioLanguagePreference == v) return;
+  mAudioLanguagePreference = v;
+  TTCut::audioLanguagePreference = v;
+  emit audioLanguagePreferenceChanged(v);
+}
+
+void TTSettings::setQuickJumpIntervalSec(int v)
+{
+  if (mQuickJumpIntervalSec == v) return;
+  mQuickJumpIntervalSec = v;
+  TTCut::quickJumpIntervalSec = v;
+}
+
+void TTSettings::setScreenshotDir(const QString& v)
+{
+  if (mScreenshotDir == v) return;
+  mScreenshotDir = v;
+  TTCut::screenshotDir = v;
+}
+
+void TTSettings::setScreenshotProject(const QString& v)
+{
+  if (mScreenshotProject == v) return;
+  mScreenshotProject = v;
+  TTCut::screenshotProject = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -447,6 +497,29 @@ void TTSettings::load()
   TTCut::tempDirPath     = mTempDirPath;
   TTCut::lastDirPath     = mLastDirPath;
   TTCut::projectFileName = mProjectFileName;
+  // ----- Audio/QuickJump fields (Task 10) -----------------------------
+  // Four fields extend the Common block. screenshotDir/Project live in
+  // their own Screenshot block (below) per the Task 1 inventory.
+  mBurstThresholdDb       = settings.value("BurstThresholdDb/",       mBurstThresholdDb).toInt();
+  mNormalizeAcmod         = settings.value("NormalizeAcmod/",         mNormalizeAcmod).toBool();
+  mAudioLanguagePreference = settings.value("AudioLanguagePreference/", QStringList{}).toStringList();
+  mQuickJumpIntervalSec   = settings.value("QuickJumpInterval/",      mQuickJumpIntervalSec).toInt();
+  TTCut::burstThresholdDb       = mBurstThresholdDb;
+  TTCut::normalizeAcmod         = mNormalizeAcmod;
+  TTCut::audioLanguagePreference = mAudioLanguagePreference;
+  TTCut::quickJumpIntervalSec   = mQuickJumpIntervalSec;
+  settings.endGroup();
+
+  // ----- Screenshot group (Task 10) ------------------------------------
+  // NEW persistence keys — the screenshotDir/Project fields were
+  // non-persistent TTCut statics before. Per Task 1 inventory, they
+  // round-trip through `/Settings/Screenshot` with keys `Dir/` and
+  // `Project/`. First-time load picks up empty defaults.
+  settings.beginGroup("Screenshot");
+  mScreenshotDir     = settings.value("Dir/",     mScreenshotDir).toString();
+  mScreenshotProject = settings.value("Project/", mScreenshotProject).toString();
+  TTCut::screenshotDir     = mScreenshotDir;
+  TTCut::screenshotProject = mScreenshotProject;
   settings.endGroup();
 
   settings.beginGroup("Preview");
@@ -582,6 +655,17 @@ void TTSettings::save()
   settings.setValue("TempDirPath/",     mTempDirPath);
   settings.setValue("LastDirPath/",     mLastDirPath);
   settings.setValue("ProjectFileName/", mProjectFileName);
+  // ----- Audio/QuickJump fields (Task 10) -----------------------------
+  settings.setValue("BurstThresholdDb/",        mBurstThresholdDb);
+  settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
+  settings.setValue("AudioLanguagePreference/", mAudioLanguagePreference);
+  settings.setValue("QuickJumpInterval/",       mQuickJumpIntervalSec);
+  settings.endGroup();
+
+  // ----- Screenshot group (Task 10 — first-time persisted) -------------
+  settings.beginGroup("Screenshot");
+  settings.setValue("Dir/",     mScreenshotDir);
+  settings.setValue("Project/", mScreenshotProject);
   settings.endGroup();
 
   settings.beginGroup("Preview");
