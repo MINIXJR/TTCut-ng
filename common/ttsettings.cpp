@@ -307,6 +307,103 @@ void TTSettings::setPreviewPreset(int v)
   TTCut::previewPreset = v;
 }
 
+// ---- Encoder Codec-Specific group setters (Task 9) -------------------------
+// Each setter early-outs on no-op assignment and mirrors the new value to the
+// legacy TTCut::xxx static so unmigrated call sites observe consistent state.
+// No signals — codec-switch UI reads these synchronously after Task 8's
+// encoderCodecChanged(int).
+
+void TTSettings::setMpeg2Preset(int v)
+{
+  if (mMpeg2Preset == v) return;
+  mMpeg2Preset = v;
+  TTCut::mpeg2Preset = v;
+}
+
+void TTSettings::setMpeg2Crf(int v)
+{
+  if (mMpeg2Crf == v) return;
+  mMpeg2Crf = v;
+  TTCut::mpeg2Crf = v;
+}
+
+void TTSettings::setMpeg2Profile(int v)
+{
+  if (mMpeg2Profile == v) return;
+  mMpeg2Profile = v;
+  TTCut::mpeg2Profile = v;
+}
+
+void TTSettings::setMpeg2Muxer(int v)
+{
+  if (mMpeg2Muxer == v) return;
+  mMpeg2Muxer = v;
+  TTCut::mpeg2Muxer = v;
+}
+
+void TTSettings::setH264Preset(int v)
+{
+  if (mH264Preset == v) return;
+  mH264Preset = v;
+  TTCut::h264Preset = v;
+}
+
+void TTSettings::setH264Crf(int v)
+{
+  if (mH264Crf == v) return;
+  mH264Crf = v;
+  TTCut::h264Crf = v;
+}
+
+void TTSettings::setH264Profile(int v)
+{
+  if (mH264Profile == v) return;
+  mH264Profile = v;
+  TTCut::h264Profile = v;
+}
+
+void TTSettings::setH264Muxer(int v)
+{
+  if (mH264Muxer == v) return;
+  mH264Muxer = v;
+  TTCut::h264Muxer = v;
+}
+
+void TTSettings::setH265Preset(int v)
+{
+  if (mH265Preset == v) return;
+  mH265Preset = v;
+  TTCut::h265Preset = v;
+}
+
+void TTSettings::setH265Crf(int v)
+{
+  if (mH265Crf == v) return;
+  mH265Crf = v;
+  TTCut::h265Crf = v;
+}
+
+void TTSettings::setH265Profile(int v)
+{
+  if (mH265Profile == v) return;
+  mH265Profile = v;
+  TTCut::h265Profile = v;
+}
+
+void TTSettings::setH265Muxer(int v)
+{
+  if (mH265Muxer == v) return;
+  mH265Muxer = v;
+  TTCut::h265Muxer = v;
+}
+
+void TTSettings::setMpeg2Target(int v)
+{
+  if (mMpeg2Target == v) return;
+  mMpeg2Target = v;
+  TTCut::mpeg2Target = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -420,6 +517,42 @@ void TTSettings::load()
   TTCut::encoderMode   = mEncoderMode;
   TTCut::encoderCodec  = mEncoderCodec;
   TTCut::previewPreset = mPreviewPreset;
+  // ----- Encoder Codec-Specific group (Task 9) -------------------------
+  // 12 codec-specific fields share /Settings/Encoder with the Task 8
+  // generic fields. mpeg2Target lives in /Settings/Muxer (block below).
+  mMpeg2Preset  = settings.value("Mpeg2Preset/",  mMpeg2Preset).toInt();
+  mMpeg2Crf     = settings.value("Mpeg2Crf/",     mMpeg2Crf).toInt();
+  mMpeg2Profile = settings.value("Mpeg2Profile/", mMpeg2Profile).toInt();
+  mMpeg2Muxer   = settings.value("Mpeg2Muxer/",   mMpeg2Muxer).toInt();
+  mH264Preset   = settings.value("H264Preset/",   mH264Preset).toInt();
+  mH264Crf      = settings.value("H264Crf/",      mH264Crf).toInt();
+  mH264Profile  = settings.value("H264Profile/",  mH264Profile).toInt();
+  mH264Muxer    = settings.value("H264Muxer/",    mH264Muxer).toInt();
+  mH265Preset   = settings.value("H265Preset/",   mH265Preset).toInt();
+  mH265Crf      = settings.value("H265Crf/",      mH265Crf).toInt();
+  mH265Profile  = settings.value("H265Profile/",  mH265Profile).toInt();
+  mH265Muxer    = settings.value("H265Muxer/",    mH265Muxer).toInt();
+  TTCut::mpeg2Preset  = mMpeg2Preset;
+  TTCut::mpeg2Crf     = mMpeg2Crf;
+  TTCut::mpeg2Profile = mMpeg2Profile;
+  TTCut::mpeg2Muxer   = mMpeg2Muxer;
+  TTCut::h264Preset   = mH264Preset;
+  TTCut::h264Crf      = mH264Crf;
+  TTCut::h264Profile  = mH264Profile;
+  TTCut::h264Muxer    = mH264Muxer;
+  TTCut::h265Preset   = mH265Preset;
+  TTCut::h265Crf      = mH265Crf;
+  TTCut::h265Profile  = mH265Profile;
+  TTCut::h265Muxer    = mH265Muxer;
+  settings.endGroup();
+
+  // ----- Muxer group (Task 9 partial) ----------------------------------
+  // Task 12 will fill out the rest of /Settings/Muxer. For now we open
+  // the block solely for mpeg2Target so the codec-specific encoder
+  // group (Task 9) is functionally complete in isolation.
+  settings.beginGroup("Muxer");
+  mMpeg2Target = settings.value("Mpeg2Target/", mMpeg2Target).toInt();
+  TTCut::mpeg2Target = mMpeg2Target;
   settings.endGroup();
 
   settings.endGroup();
@@ -493,6 +626,24 @@ void TTSettings::save()
   settings.setValue("EncoderMode/",   mEncoderMode);
   settings.setValue("EncoderCodec/",  mEncoderCodec);
   settings.setValue("PreviewPreset/", mPreviewPreset);
+  // ----- Encoder Codec-Specific group (Task 9) -------------------------
+  settings.setValue("Mpeg2Preset/",  mMpeg2Preset);
+  settings.setValue("Mpeg2Crf/",     mMpeg2Crf);
+  settings.setValue("Mpeg2Profile/", mMpeg2Profile);
+  settings.setValue("Mpeg2Muxer/",   mMpeg2Muxer);
+  settings.setValue("H264Preset/",   mH264Preset);
+  settings.setValue("H264Crf/",      mH264Crf);
+  settings.setValue("H264Profile/",  mH264Profile);
+  settings.setValue("H264Muxer/",    mH264Muxer);
+  settings.setValue("H265Preset/",   mH265Preset);
+  settings.setValue("H265Crf/",      mH265Crf);
+  settings.setValue("H265Profile/",  mH265Profile);
+  settings.setValue("H265Muxer/",    mH265Muxer);
+  settings.endGroup();
+
+  // ----- Muxer group (Task 9 partial — Task 12 will extend) ------------
+  settings.beginGroup("Muxer");
+  settings.setValue("Mpeg2Target/", mMpeg2Target);
   settings.endGroup();
 
   settings.endGroup();

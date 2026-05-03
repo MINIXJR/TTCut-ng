@@ -158,6 +158,54 @@ public:
   int     previewPreset() const      { return mPreviewPreset; }
   void    setPreviewPreset(int v);
 
+  // ----- Encoder Codec-Specific group setters (Task 9) --------------------
+  // Setters mirror to legacy TTCut::xxx during the migration window so call
+  // sites that have not been migrated yet still observe consistent state.
+  // No signals — the codec-switch UI in TTCutSettingsEncoder/Muxer reads
+  // these fields synchronously after setEncoderCodec() emits
+  // encoderCodecChanged(int) (Task 8); no further per-field notification
+  // is needed.
+  int     mpeg2Preset() const        { return mMpeg2Preset; }
+  void    setMpeg2Preset(int v);
+
+  int     mpeg2Crf() const           { return mMpeg2Crf; }
+  void    setMpeg2Crf(int v);
+
+  int     mpeg2Profile() const       { return mMpeg2Profile; }
+  void    setMpeg2Profile(int v);
+
+  int     mpeg2Muxer() const         { return mMpeg2Muxer; }
+  void    setMpeg2Muxer(int v);
+
+  int     h264Preset() const         { return mH264Preset; }
+  void    setH264Preset(int v);
+
+  int     h264Crf() const            { return mH264Crf; }
+  void    setH264Crf(int v);
+
+  int     h264Profile() const        { return mH264Profile; }
+  void    setH264Profile(int v);
+
+  int     h264Muxer() const          { return mH264Muxer; }
+  void    setH264Muxer(int v);
+
+  int     h265Preset() const         { return mH265Preset; }
+  void    setH265Preset(int v);
+
+  int     h265Crf() const            { return mH265Crf; }
+  void    setH265Crf(int v);
+
+  int     h265Profile() const        { return mH265Profile; }
+  void    setH265Profile(int v);
+
+  int     h265Muxer() const          { return mH265Muxer; }
+  void    setH265Muxer(int v);
+
+  // mpeg2Target lives in /Settings/Muxer (Task 12 will fill the rest of
+  // the Muxer group).
+  int     mpeg2Target() const        { return mMpeg2Target; }
+  void    setMpeg2Target(int v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
@@ -225,6 +273,24 @@ private:
   int     mEncoderCrf     = 2;   // transient working value (project-file persisted)
   int     mEncoderProfile = 0;   // transient working value (project-file persisted)
   int     mPreviewPreset  = 0;   // ultrafast (preview speed over quality)
+
+  // ----- Encoder Codec-Specific group (Task 9) -----------------------------
+  // Defaults match common/ttcut.cpp lines 151-166 (Encoder) and 206 (Muxer).
+  int     mMpeg2Preset  = 4;     // fast
+  int     mMpeg2Crf     = 2;     // qscale for MPEG-2 (2-31, lower=better)
+  int     mMpeg2Profile = 0;     // Main Profile
+  int     mMpeg2Muxer   = 0;     // mplex (TS/PS)
+  int     mH264Preset   = 4;     // fast
+  int     mH264Crf      = 18;    // CRF 18 (high quality for cut points)
+  int     mH264Profile  = 2;     // high profile
+  int     mH264Muxer    = 1;     // mkvmerge (MKV)
+  int     mH265Preset   = 4;     // fast
+  int     mH265Crf      = 20;    // CRF 20 (high quality for cut points)
+  int     mH265Profile  = 0;     // main profile
+  int     mH265Muxer    = 1;     // mkvmerge (MKV)
+
+  // /Settings/Muxer group — Task 12 will add the rest.
+  int     mMpeg2Target  = 7;
 };
 
 #endif
