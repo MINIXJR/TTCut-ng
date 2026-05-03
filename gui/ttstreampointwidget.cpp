@@ -5,6 +5,7 @@
 #include "ttstreampointwidget.h"
 #include "../data/ttstreampointmodel.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 #include <QListView>
 #include <QTabWidget>
@@ -155,13 +156,13 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
 
 void TTStreamPointWidget::loadSettings()
 {
-  mCbSilence->setChecked(TTCut::spDetectSilence);
-  mSbSilenceThreshold->setValue(TTCut::spSilenceThresholdDb);
-  mSbSilenceMinDuration->setValue(TTCut::spSilenceMinDuration);
-  mCbAudioChange->setChecked(TTCut::spDetectAudioChange);
-  mCbAspectChange->setChecked(TTCut::spDetectAspectChange);
-  mCbPillarbox->setChecked(TTCut::spDetectPillarbox);
-  mSbPillarboxThreshold->setValue(TTCut::spPillarboxThreshold);
+  mCbSilence->setChecked(TTSettings::instance()->spDetectSilence());
+  mSbSilenceThreshold->setValue(TTSettings::instance()->spSilenceThresholdDb());
+  mSbSilenceMinDuration->setValue(TTSettings::instance()->spSilenceMinDuration());
+  mCbAudioChange->setChecked(TTSettings::instance()->spDetectAudioChange());
+  mCbAspectChange->setChecked(TTSettings::instance()->spDetectAspectChange());
+  mCbPillarbox->setChecked(TTSettings::instance()->spDetectPillarbox());
+  mSbPillarboxThreshold->setValue(TTSettings::instance()->spPillarboxThreshold());
   // Sync enabled state
   mCbPillarbox->setEnabled(mCbAspectChange->isChecked());
   mSbPillarboxThreshold->setEnabled(mCbAspectChange->isChecked());
@@ -169,13 +170,13 @@ void TTStreamPointWidget::loadSettings()
 
 void TTStreamPointWidget::saveSettings()
 {
-  TTCut::spDetectSilence      = mCbSilence->isChecked();
-  TTCut::spSilenceThresholdDb = mSbSilenceThreshold->value();
-  TTCut::spSilenceMinDuration = mSbSilenceMinDuration->value();
-  TTCut::spDetectAudioChange  = mCbAudioChange->isChecked();
-  TTCut::spDetectAspectChange = mCbAspectChange->isChecked();
-  TTCut::spDetectPillarbox    = mCbPillarbox->isChecked();
-  TTCut::spPillarboxThreshold = mSbPillarboxThreshold->value();
+  TTSettings::instance()->setSpDetectSilence(mCbSilence->isChecked());
+  TTSettings::instance()->setSpSilenceThresholdDb(mSbSilenceThreshold->value());
+  TTSettings::instance()->setSpSilenceMinDuration(mSbSilenceMinDuration->value());
+  TTSettings::instance()->setSpDetectAudioChange(mCbAudioChange->isChecked());
+  TTSettings::instance()->setSpDetectAspectChange(mCbAspectChange->isChecked());
+  TTSettings::instance()->setSpDetectPillarbox(mCbPillarbox->isChecked());
+  TTSettings::instance()->setSpPillarboxThreshold(mSbPillarboxThreshold->value());
 }
 
 void TTStreamPointWidget::setAnalysisRunning(bool running)

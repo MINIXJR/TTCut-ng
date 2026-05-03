@@ -181,8 +181,8 @@ void TTCutSettingsCommon::setTabData()
   sbQuickJumpInterval->setValue(TTSettings::instance()->quickJumpIntervalSec());
 
   // Gruppierung defekter Frames
-  sbClusterGap->setValue(TTCut::extraFrameClusterGapSec);
-  sbClusterOffset->setValue(TTCut::extraFrameClusterOffsetSec);
+  sbClusterGap->setValue(TTSettings::instance()->extraFrameClusterGapSec());
+  sbClusterOffset->setValue(TTSettings::instance()->extraFrameClusterOffsetSec());
 
   // Audio language preference
   leAudioLangPref->setText(TTSettings::instance()->audioLanguagePreference().join(","));
@@ -223,8 +223,8 @@ void TTCutSettingsCommon::getTabData()
   TTSettings::instance()->setQuickJumpIntervalSec(sbQuickJumpInterval->value());
 
   // Gruppierung defekter Frames
-  TTCut::extraFrameClusterGapSec    = sbClusterGap->value();
-  TTCut::extraFrameClusterOffsetSec = sbClusterOffset->value();
+  TTSettings::instance()->setExtraFrameClusterGapSec(sbClusterGap->value());
+  TTSettings::instance()->setExtraFrameClusterOffsetSec(sbClusterOffset->value());
 
   // Audio language preference — parse, normalize, drop empties/unknowns
   // Read-modify-write through the setter so audioLanguagePreferenceChanged

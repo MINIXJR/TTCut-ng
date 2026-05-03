@@ -121,7 +121,7 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	                                  "QPushButton:hover { background-color: #ee3333; }");
 	pbCancelLogoSearch->hide();
 
-	sbLogoThreshold->setValue(TTCut::navLogoThreshold);
+	sbLogoThreshold->setValue(TTSettings::instance()->navLogoThreshold());
 
 	// Keep TTCut variables in sync with spinbox changes
 	connect(sbBlackThreshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onBlackThresholdChanged);
@@ -568,12 +568,12 @@ void TTCutFrameNavigation::setSceneSearchRunning(bool running)
 
 void TTCutFrameNavigation::onBlackThresholdChanged(double value)
 {
-  TTCut::navBlackThreshold = value;
+  TTSettings::instance()->setNavBlackThreshold(value);
 }
 
 void TTCutFrameNavigation::onSceneThresholdChanged(double value)
 {
-  TTCut::navSceneThreshold = value;
+  TTSettings::instance()->setNavSceneThreshold(value);
 }
 
 void TTCutFrameNavigation::onSelectLogoROI()
@@ -622,7 +622,7 @@ void TTCutFrameNavigation::setLogoSearchEnabled(bool enabled)
 
 void TTCutFrameNavigation::onLogoThresholdChanged(double value)
 {
-  TTCut::navLogoThreshold = value;
+  TTSettings::instance()->setNavLogoThreshold(value);
 }
 
 void TTCutFrameNavigation::onLogoContextMenu(const QPoint& pos)

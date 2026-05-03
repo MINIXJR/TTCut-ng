@@ -375,8 +375,8 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
       if (!mExtraFrameIndices.isEmpty() && avItem) {
         TTVideoStream* vs = avItem->videoStream();
         double frameRate = vs ? vs->frameRate() : 25.0;
-        int gapFrames = TTCut::extraFrameClusterGapSec * frameRate;
-        int offsetFrames = TTCut::extraFrameClusterOffsetSec * frameRate;
+        int gapFrames = TTSettings::instance()->extraFrameClusterGapSec() * frameRate;
+        int offsetFrames = TTSettings::instance()->extraFrameClusterOffsetSec() * frameRate;
 
         // Cluster extra frames by gap
         QList<TTStreamPoint> clusters;

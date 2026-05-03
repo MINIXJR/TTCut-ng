@@ -163,7 +163,7 @@ TTCutMainWindow::TTCutMainWindow()
   settings->readSettings();
 
   // Initialize navigation spinboxes from saved settings
-  navigation->setThresholds(TTCut::navBlackThreshold, TTCut::navSceneThreshold);
+  navigation->setThresholds(TTSettings::instance()->navBlackThreshold(), TTSettings::instance()->navSceneThreshold());
 
   // Restore window geometry or default to 80% of screen
   QByteArray savedGeometry = settings->value("MainWindow/geometry").toByteArray();
@@ -857,14 +857,14 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   mStreamPointWorkersRunning = 0;
 
   // Video worker (aspect ratio changes, pillarbox detection)
-  if (TTCut::spDetectAspectChange || TTCut::spDetectPillarbox) {
+  if (TTSettings::instance()->spDetectAspectChange() || TTSettings::instance()->spDetectPillarbox()) {
     TTVideoHeaderList* videoHeaders = vs->headerList();
     TTVideoIndexList*  videoIndex   = vs->indexList();
     if (videoHeaders && videoHeaders->size() > 0) {
       TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
         vs->filePath(), vs->streamType(), vs->frameRate(),
-        TTCut::spDetectAspectChange, TTCut::spDetectPillarbox,
-        TTCut::spPillarboxThreshold, videoHeaders, videoIndex);
+        TTSettings::instance()->spDetectAspectChange(), TTSettings::instance()->spDetectPillarbox(),
+        TTSettings::instance()->spPillarboxThreshold(), videoHeaders, videoIndex);
 
       connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
               this, &TTCutMainWindow::onVideoPointsDetected);
@@ -877,7 +877,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   }
 
   // Audio worker (silence, audio format changes)
-  if (TTCut::spDetectSilence || TTCut::spDetectAudioChange) {
+  if (TTSettings::instance()->spDetectSilence() || TTSettings::instance()->spDetectAudioChange()) {
     // Use first audio stream if available
     TTAudioStream* audio = nullptr;
     TTAudioHeaderList* audioHeaders = nullptr;
@@ -892,8 +892,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
       TTStreamPointAudioWorker* audioWorker = new TTStreamPointAudioWorker(
         audio->filePath(),
         vs->frameRate(),
-        TTCut::spDetectSilence, TTCut::spSilenceThresholdDb, TTCut::spSilenceMinDuration,
-        TTCut::spDetectAudioChange, audioHeaders);
+        TTSettings::instance()->spDetectSilence(), TTSettings::instance()->spSilenceThresholdDb(), TTSettings::instance()->spSilenceMinDuration(),
+        TTSettings::instance()->spDetectAudioChange(), audioHeaders);
 
       connect(audioWorker, &TTStreamPointAudioWorker::pointsDetected,
               this, &TTCutMainWindow::onAudioPointsDetected);
