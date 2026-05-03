@@ -36,8 +36,8 @@ TTStreamNavigator::TTStreamNavigator(QWidget* parent)
 {
   setupUi( this );
 
-  connect(videoSlider, SIGNAL(valueChanged(int)), SLOT(onNewSliderValue(int)));
-  connect(videoSlider, SIGNAL(sliderMoved(int)),  SLOT(onSliderMoved(int)));
+  connect(videoSlider, &QAbstractSlider::valueChanged, this, &TTStreamNavigator::onNewSliderValue);
+  connect(videoSlider, &QAbstractSlider::sliderMoved,  this, &TTStreamNavigator::onSliderMoved);
 }
 
 void TTStreamNavigator::setTitle(const QString&)

@@ -51,13 +51,13 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   cbMuxerProg->setEnabled(true);
   cbMuxTarget->setEnabled(true);
 
-  connect(rbCreateMuxScript, SIGNAL(clicked()),         SLOT(onCreateMuxScript()));
-  connect(rbMuxStreams,      SIGNAL(clicked()),         SLOT(onCreateMuxStreams()));
-  connect(btnOutputPath,     SIGNAL(clicked()),         SLOT(onOpenOutputPath()));
-  connect(cbDeleteES,        SIGNAL(stateChanged(int)), SLOT(onStateDeleteES(int)));
-  connect(cbPause,           SIGNAL(stateChanged(int)), SLOT(onStatePause(int)));
-  connect(cbMuxerProg,       SIGNAL(currentIndexChanged(int)), SLOT(onMuxerProgChanged(int)));
-  connect(cbMkvCreateChapters, SIGNAL(stateChanged(int)), SLOT(onMkvChaptersChanged(int)));
+  connect(rbCreateMuxScript,   &QRadioButton::clicked,   this, &TTCutSettingsMuxer::onCreateMuxScript);
+  connect(rbMuxStreams,        &QRadioButton::clicked,   this, &TTCutSettingsMuxer::onCreateMuxStreams);
+  connect(btnOutputPath,       &QPushButton::clicked,    this, &TTCutSettingsMuxer::onOpenOutputPath);
+  connect(cbDeleteES,          &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStateDeleteES);
+  connect(cbPause,             &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStatePause);
+  connect(cbMuxerProg,         qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutSettingsMuxer::onMuxerProgChanged);
+  connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
 }
 
 void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)

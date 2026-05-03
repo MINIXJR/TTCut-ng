@@ -157,18 +157,18 @@ void TTMplayerWidget::connectSignals()
 {
   if (mplayerProc == nullptr) return;
 
-  connect(mplayerProc, SIGNAL(started()),
-          this, SLOT(mplayerStarted()));
-  connect(mplayerProc, SIGNAL(readyReadStandardOutput()),
-          this, SLOT(readFromStdout()));
-  connect(mplayerProc, SIGNAL(readyReadStandardError()),
-          this, SLOT(readFromStdout()));
-  connect(mplayerProc, SIGNAL(finished(int, QProcess::ExitStatus)),
-          this, SLOT(exitMplayer(int, QProcess::ExitStatus)));
-  connect(mplayerProc, SIGNAL(errorOccurred(QProcess::ProcessError)),
-          this, SLOT(errorMplayer(QProcess::ProcessError)));
-  connect(mplayerProc, SIGNAL(stateChanged(QProcess::ProcessState)),
-          this, SLOT(stateChangedMplayer(QProcess::ProcessState)));
+  connect(mplayerProc, &QProcess::started,
+          this, &TTMplayerWidget::mplayerStarted);
+  connect(mplayerProc, &QProcess::readyReadStandardOutput,
+          this, &TTMplayerWidget::readFromStdout);
+  connect(mplayerProc, &QProcess::readyReadStandardError,
+          this, &TTMplayerWidget::readFromStdout);
+  connect(mplayerProc, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+          this, &TTMplayerWidget::exitMplayer);
+  connect(mplayerProc, &QProcess::errorOccurred,
+          this, &TTMplayerWidget::errorMplayer);
+  connect(mplayerProc, &QProcess::stateChanged,
+          this, &TTMplayerWidget::stateChangedMplayer);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

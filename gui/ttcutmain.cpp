@@ -152,7 +152,7 @@ int main( int argc, char **argv )
       }
     }
 
-    a.connect( &a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()) );
+    a.connect( &a, &QApplication::lastWindowClosed, &a, &QApplication::quit );
     // Execute application and start event loop
     return a.exec();
 

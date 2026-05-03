@@ -56,9 +56,9 @@ TTCutOutFrame::TTCutOutFrame(QWidget* parent)
   pbNextCutOutFrame->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_MediaSeekForward)));
   pbSearchFrame->setIcon(QIcon::fromTheme("edit-find", style->standardIcon(QStyle::SP_FileDialogContentsView)));
 
-  connect(pbPrevCutOutFrame, SIGNAL(clicked()), SLOT(onPrevCutOutPos()));
-  connect(pbNextCutOutFrame, SIGNAL(clicked()), SLOT(onNextCutOutPos()));
-  connect(pbSearchFrame,     SIGNAL(clicked()), SLOT(onSearchFrame()));
+  connect(pbPrevCutOutFrame, &QPushButton::clicked, this, &TTCutOutFrame::onPrevCutOutPos);
+  connect(pbNextCutOutFrame, &QPushButton::clicked, this, &TTCutOutFrame::onNextCutOutPos);
+  connect(pbSearchFrame,     &QPushButton::clicked, this, &TTCutOutFrame::onSearchFrame);
 }
 
 /*!

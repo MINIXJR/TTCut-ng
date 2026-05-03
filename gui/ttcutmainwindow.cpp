@@ -205,8 +205,8 @@ TTCutMainWindow::TTCutMainWindow()
   mpStreamPointModel = new TTStreamPointModel(this);
   mpStreamPointWidget = new TTStreamPointWidget(mpStreamPointModel, this);
   mpStreamPointTaskPool = new TTThreadTaskPool();
-  connect(mpStreamPointTaskPool, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-                                 SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+  connect(mpStreamPointTaskPool, &TTThreadTaskPool::statusReport,
+          this, &TTCutMainWindow::onStatusReport);
   mStreamPointWorkersRunning = 0;
   mBlackSearchAborted = false;
   mSceneSearchAborted = false;
@@ -231,125 +231,124 @@ TTCutMainWindow::TTCutMainWindow()
   //
   // Connect signals from main menu
   // --------------------------------------------------------------------------
-  connect(actionOpenVideo,        SIGNAL(triggered()), SLOT(onOpenVideoFile()));
-  connect(actionOpenAudio,        SIGNAL(triggered()), SLOT(onOpenAudioFile()));
-  connect(actionOpenSubtitle,     SIGNAL(triggered()), SLOT(onOpenSubtitleFile()));
-  connect(actionFileNew,          SIGNAL(triggered()), SLOT(onFileNew()));
-  connect(actionFileOpen,         SIGNAL(triggered()), SLOT(onFileOpen()));
-  connect(actionFileSave,         SIGNAL(triggered()), SLOT(onFileSave()));
-  connect(actionFileSaveAs,       SIGNAL(triggered()), SLOT(onFileSaveAs()));
-  connect(actionExit,             SIGNAL(triggered()), SLOT(onFileExit()));
-  connect(actionSaveCurrentFrame, SIGNAL(triggered()), SLOT(onActionSave()));
-  connect(actionSettings,         SIGNAL(triggered()), SLOT(onActionSettings()));
-  connect(actionAbout,            SIGNAL(triggered()), SLOT(onHelpAbout()));
-  connect(actionKeyboardShortcuts, SIGNAL(triggered()), SLOT(onHelpKeyboardShortcuts()));
+  connect(actionOpenVideo,         &QAction::triggered, this, &TTCutMainWindow::onOpenVideoFile);
+  connect(actionOpenAudio,         &QAction::triggered, this, &TTCutMainWindow::onOpenAudioFile);
+  connect(actionOpenSubtitle,      &QAction::triggered, this, &TTCutMainWindow::onOpenSubtitleFile);
+  connect(actionFileNew,           &QAction::triggered, this, &TTCutMainWindow::onFileNew);
+  connect(actionFileOpen,          &QAction::triggered, this, &TTCutMainWindow::onFileOpen);
+  connect(actionFileSave,          &QAction::triggered, this, &TTCutMainWindow::onFileSave);
+  connect(actionFileSaveAs,        &QAction::triggered, this, &TTCutMainWindow::onFileSaveAs);
+  connect(actionExit,              &QAction::triggered, this, &TTCutMainWindow::onFileExit);
+  connect(actionSaveCurrentFrame,  &QAction::triggered, this, &TTCutMainWindow::onActionSave);
+  connect(actionSettings,          &QAction::triggered, this, &TTCutMainWindow::onActionSettings);
+  connect(actionAbout,             &QAction::triggered, this, &TTCutMainWindow::onHelpAbout);
+  connect(actionKeyboardShortcuts, &QAction::triggered, this, &TTCutMainWindow::onHelpKeyboardShortcuts);
 
   // recent files
   for (int i = 0; i < MaxRecentFiles; ++i) {
     recentFileAction[i] = new QAction(this);
     recentFileAction[i]->setVisible(false);
     menuRecentProjects->addAction(recentFileAction[i]);
-    connect(recentFileAction[i], SIGNAL(triggered()), SLOT(onFileRecent()));
+    connect(recentFileAction[i], &QAction::triggered, this, &TTCutMainWindow::onFileRecent);
   }
 
   updateRecentFileActions();
-  connect(mpAVData,  SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-                     SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+  connect(mpAVData, qOverload<TTThreadTask*, int, const QString&, quint64>(&TTAVData::statusReport),
+          this, &TTCutMainWindow::onStatusReport);
 
 
-  connect(videoFileList,     SIGNAL(openFile()),                   SLOT(onOpenVideoFile()));
-  connect(audioFileList,     SIGNAL(openFile()),                   SLOT(onOpenAudioFile()));
-  connect(subtitleFileList,  SIGNAL(openFile()),                   SLOT(onOpenSubtitleFile()));
+  connect(videoFileList,    &TTVideoTreeView::openFile,    this, &TTCutMainWindow::onOpenVideoFile);
+  connect(audioFileList,    &TTAudioTreeView::openFile,    this, &TTCutMainWindow::onOpenAudioFile);
+  connect(subtitleFileList, &TTSubtitleTreeView::openFile, this, &TTCutMainWindow::onOpenSubtitleFile);
 
   // Connect signals from navigation widget
   // --------------------------------------------------------------------------
-  connect(navigation, SIGNAL(prevIFrame()),          currentFrame, SLOT(onPrevIFrame()));
-  connect(navigation, SIGNAL(nextIFrame()),          currentFrame, SLOT(onNextIFrame()));
-  connect(navigation, SIGNAL(prevPFrame()),          currentFrame, SLOT(onPrevPFrame()));
-  connect(navigation, SIGNAL(nextPFrame()),          currentFrame, SLOT(onNextPFrame()));
-  connect(navigation, SIGNAL(prevBFrame()),          currentFrame, SLOT(onPrevBFrame()));
-  connect(navigation, SIGNAL(nextBFrame()),          currentFrame, SLOT(onNextBFrame()));
-  connect(navigation, SIGNAL(setCutOut(int)),        this, SLOT(onSetCutOut(int)));
-  connect(navigation, SIGNAL(searchBlackFrame(int,int,float)), this, SLOT(onSearchBlackFrame(int,int,float)));
-  connect(navigation, SIGNAL(abortBlackSearch()), this, SLOT(onAbortBlackSearch()));
-  connect(navigation, SIGNAL(searchSceneChange(int,int,float)), this, SLOT(onSearchSceneChange(int,int,float)));
-  connect(navigation, SIGNAL(abortSceneSearch()), this, SLOT(onAbortSceneSearch()));
+  connect(navigation, &TTCutFrameNavigation::prevIFrame,         currentFrame, &TTCurrentFrame::onPrevIFrame);
+  connect(navigation, &TTCutFrameNavigation::nextIFrame,         currentFrame, &TTCurrentFrame::onNextIFrame);
+  connect(navigation, &TTCutFrameNavigation::prevPFrame,         currentFrame, &TTCurrentFrame::onPrevPFrame);
+  connect(navigation, &TTCutFrameNavigation::nextPFrame,         currentFrame, &TTCurrentFrame::onNextPFrame);
+  connect(navigation, &TTCutFrameNavigation::prevBFrame,         currentFrame, &TTCurrentFrame::onPrevBFrame);
+  connect(navigation, &TTCutFrameNavigation::nextBFrame,         currentFrame, &TTCurrentFrame::onNextBFrame);
+  connect(navigation, &TTCutFrameNavigation::setCutOut,          this, &TTCutMainWindow::onSetCutOut);
+  connect(navigation, &TTCutFrameNavigation::searchBlackFrame,   this, &TTCutMainWindow::onSearchBlackFrame);
+  connect(navigation, &TTCutFrameNavigation::abortBlackSearch,   this, &TTCutMainWindow::onAbortBlackSearch);
+  connect(navigation, &TTCutFrameNavigation::searchSceneChange,  this, &TTCutMainWindow::onSearchSceneChange);
+  connect(navigation, &TTCutFrameNavigation::abortSceneSearch,   this, &TTCutMainWindow::onAbortSceneSearch);
 
-  connect(navigation, SIGNAL(selectLogoROI()), this, SLOT(onSelectLogoROI()));
-  connect(navigation, SIGNAL(cancelLogoROI()), this, SLOT(onCancelLogoROI()));
-  connect(navigation, SIGNAL(loadLogoFile()), this, SLOT(onLoadLogoFile()));
-  connect(navigation, SIGNAL(searchLogo(int,int,float)), this, SLOT(onSearchLogo(int,int,float)));
-  connect(navigation, SIGNAL(abortLogoSearch()), this, SLOT(onAbortLogoSearch()));
-  connect(currentFrame->videoWindow(), SIGNAL(logoROISelected(QRect)), this, SLOT(onLogoROISelected(QRect)));
+  connect(navigation, &TTCutFrameNavigation::selectLogoROI,  this, &TTCutMainWindow::onSelectLogoROI);
+  connect(navigation, &TTCutFrameNavigation::cancelLogoROI,  this, &TTCutMainWindow::onCancelLogoROI);
+  connect(navigation, &TTCutFrameNavigation::loadLogoFile,   this, &TTCutMainWindow::onLoadLogoFile);
+  connect(navigation, &TTCutFrameNavigation::searchLogo,     this, &TTCutMainWindow::onSearchLogo);
+  connect(navigation, &TTCutFrameNavigation::abortLogoSearch, this, &TTCutMainWindow::onAbortLogoSearch);
+  connect(currentFrame->videoWindow(), &TTMPEG2Window2::logoROISelected, this, &TTCutMainWindow::onLogoROISelected);
 
-  connect(navigation, SIGNAL(setCutOut(int)),        cutOutFrame,  SLOT(onGotoCutOut(int)));
+  connect(navigation, &TTCutFrameNavigation::setCutOut, cutOutFrame, &TTCutOutFrame::onGotoCutOut);
 
-  connect(navigation, SIGNAL(gotoCutIn(int)),        currentFrame, SLOT(onGotoCutIn(int)));
-  connect(navigation, SIGNAL(gotoCutOut(int)),       currentFrame, SLOT(onGotoCutOut(int)));
-  connect(navigation, SIGNAL(addCutRange(int, int)),               SLOT(onAppendCutEntry(int, int)));
-  connect(navigation, SIGNAL(moveNumSteps(int)),     currentFrame, SLOT(onMoveNumSteps(int)));
-  connect(navigation, SIGNAL(moveToHome()),          currentFrame, SLOT(onMoveToHome()));
-  connect(navigation, SIGNAL(moveToEnd()),           currentFrame, SLOT(onMoveToEnd()));
-  connect(navigation, SIGNAL(openQuickJump()),        this, SLOT(onQuickJump()));
+  connect(navigation, &TTCutFrameNavigation::gotoCutIn,     currentFrame, &TTCurrentFrame::onGotoCutIn);
+  connect(navigation, &TTCutFrameNavigation::gotoCutOut,    currentFrame, &TTCurrentFrame::onGotoCutOut);
+  connect(navigation, &TTCutFrameNavigation::addCutRange,   this,         &TTCutMainWindow::onAppendCutEntry);
+  connect(navigation, &TTCutFrameNavigation::moveNumSteps,  currentFrame, &TTCurrentFrame::onMoveNumSteps);
+  connect(navigation, &TTCutFrameNavigation::moveToHome,    currentFrame, &TTCurrentFrame::onMoveToHome);
+  connect(navigation, &TTCutFrameNavigation::moveToEnd,     currentFrame, &TTCurrentFrame::onMoveToEnd);
+  connect(navigation, &TTCutFrameNavigation::openQuickJump, this,         &TTCutMainWindow::onQuickJump);
 
   // Stream point widget signals
-  connect(mpStreamPointWidget, SIGNAL(analyzeRequested()),      this, SLOT(onAnalyzeStreamPoints()));
-  connect(mpStreamPointWidget, SIGNAL(abortRequested()),        this, SLOT(onAbortStreamPoints()));
-  connect(mpStreamPointWidget, SIGNAL(jumpToFrame(int)),        this, SLOT(onStreamPointJump(int)));
-  connect(mpStreamPointWidget, SIGNAL(deleteRequested(int)),    this, SLOT(onStreamPointDelete(int)));
-  connect(mpStreamPointWidget, SIGNAL(deleteAllRequested()),    this, SLOT(onStreamPointDeleteAll()));
-  connect(mpStreamPointWidget, SIGNAL(setCutIn(int)),           this, SLOT(onStreamPointSetCutIn(int)));
-  connect(mpStreamPointWidget, SIGNAL(setCutOut(int)),          this, SLOT(onStreamPointSetCutOut(int)));
+  connect(mpStreamPointWidget, &TTStreamPointWidget::analyzeRequested,    this, &TTCutMainWindow::onAnalyzeStreamPoints);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::abortRequested,      this, &TTCutMainWindow::onAbortStreamPoints);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::jumpToFrame,         this, &TTCutMainWindow::onStreamPointJump);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::deleteRequested,     this, &TTCutMainWindow::onStreamPointDelete);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::deleteAllRequested,  this, &TTCutMainWindow::onStreamPointDeleteAll);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::setCutIn,            this, &TTCutMainWindow::onStreamPointSetCutIn);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::setCutOut,           this, &TTCutMainWindow::onStreamPointSetCutOut);
 
   // Connect signal from video slider
   // --------------------------------------------------------------------------
-  connect(streamNavigator, SIGNAL(sliderValueChanged(int)), SLOT(onVideoSliderChanged(int)));
+  connect(streamNavigator, &TTStreamNavigator::sliderValueChanged, this, &TTCutMainWindow::onVideoSliderChanged);
 
   // Connect signals from cut-out frame widget
   // --------------------------------------------------------------------------
-  connect(cutOutFrame, SIGNAL(searchEqualFrame(TTAVItem*, int)), mpAVData, SLOT(onDoFrameSearch(TTAVItem*, int)));
+  connect(cutOutFrame, &TTCutOutFrame::searchEqualFrame, mpAVData, &TTAVData::onDoFrameSearch);
 
   // Connect signals from current frame widget
   // --------------------------------------------------------------------------
-  connect(currentFrame, SIGNAL(newFramePosition(int)), SLOT(onNewFramePos(int)));
-  connect(currentFrame, SIGNAL(newFramePosition(int)), mpAVData, SLOT(onCurrentFramePositionChanged(int)));
+  connect(currentFrame, &TTCurrentFrame::newFramePosition, this,     &TTCutMainWindow::onNewFramePos);
+  connect(currentFrame, &TTCurrentFrame::newFramePosition, mpAVData, &TTAVData::onCurrentFramePositionChanged);
   // "Set marker" button now handled via navigation signal → onSetMarker adds to model
 
   // Connect signals from cut list widget
   // --------------------------------------------------------------------------
-  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)),       SLOT(onCutSelectionChanged(const TTCutItem&, int)));
-  connect(cutList, SIGNAL(entryEdit(const TTCutItem&)),  navigation,      SLOT(onEditCut(const TTCutItem&)));
-  connect(cutList, SIGNAL(gotoCutIn(int)),               currentFrame,    SLOT(onGotoFrame(int)));
-  connect(cutList, SIGNAL(gotoCutOut(int)),              currentFrame,    SLOT(onGotoFrame(int)));
-  connect(cutList, SIGNAL(refreshDisplay()),             streamNavigator, SLOT(onRefreshDisplay()));
-  connect(cutList, SIGNAL(previewCut(TTCutList*,bool,bool)),               SLOT(onCutPreview(TTCutList*,bool,bool)));
-  connect(cutList, SIGNAL(audioVideoCut(bool, TTCutList*)),               SLOT(onAudioVideoCut(bool, TTCutList*)));
-  connect(cutList, SIGNAL(itemUpdated(const TTCutItem&)),    cutOutFrame, SLOT(onCutOutChanged(const TTCutItem&)));
+  connect(cutList, &TTCutTreeView::selectionChanged, this,            &TTCutMainWindow::onCutSelectionChanged);
+  connect(cutList, &TTCutTreeView::entryEdit,        navigation,      &TTCutFrameNavigation::onEditCut);
+  connect(cutList, &TTCutTreeView::gotoCutIn,        currentFrame,    qOverload<int>(&TTCurrentFrame::onGotoFrame));
+  connect(cutList, &TTCutTreeView::gotoCutOut,       currentFrame,    qOverload<int>(&TTCurrentFrame::onGotoFrame));
+  connect(cutList, &TTCutTreeView::refreshDisplay,   streamNavigator, &TTStreamNavigator::onRefreshDisplay);
+  connect(cutList, &TTCutTreeView::previewCut,       this,            &TTCutMainWindow::onCutPreview);
+  connect(cutList, &TTCutTreeView::audioVideoCut,    this,            &TTCutMainWindow::onAudioVideoCut);
+  connect(cutList, &TTCutTreeView::itemUpdated,      cutOutFrame,     &TTCutOutFrame::onCutOutChanged);
 
   // Navigation "Set marker" → add manual marker to stream point model
-  connect(navigation, SIGNAL(setMarker()), this, SLOT(onSetStreamPointMarker()));
-  connect(currentFrame, SIGNAL(setMarker(int)), this, SLOT(onSetStreamPointMarker()));
+  connect(navigation,   &TTCutFrameNavigation::setMarker, this, &TTCutMainWindow::onSetStreamPointMarker);
+  connect(currentFrame, &TTCurrentFrame::setMarker,       this, &TTCutMainWindow::onSetStreamPointMarker);
 
-  connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)), SLOT(onAVItemChanged(TTAVItem*)));
-  connect(mpAVData, SIGNAL(avDataReloaded()),               SLOT(onAVDataReloaded()));
-  connect(mpAVData, SIGNAL(foundEqualFrame(int)),           currentFrame, SLOT(onGotoFrame(int)));
-  connect(mpAVData, SIGNAL(streamPointsLoaded(const QList<TTStreamPoint>&)),
-          this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
-  connect(mpAVData, SIGNAL(vdrMarkersLoaded(const QList<TTStreamPoint>&)),
-          this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
-  connect(mpAVData, SIGNAL(logoDataLoaded(const TTLogoProjectData&)),
-          this, SLOT(onLogoDataLoaded(const TTLogoProjectData&)));
+  connect(mpAVData, &TTAVData::currentAVItemChanged, this, &TTCutMainWindow::onAVItemChanged);
+  connect(mpAVData, &TTAVData::avDataReloaded,       this, &TTCutMainWindow::onAVDataReloaded);
+  connect(mpAVData, &TTAVData::foundEqualFrame,      currentFrame, qOverload<int>(&TTCurrentFrame::onGotoFrame));
+  connect(mpAVData, &TTAVData::streamPointsLoaded,
+          this, &TTCutMainWindow::onVideoPointsDetected);
+  connect(mpAVData, &TTAVData::vdrMarkersLoaded,
+          this, &TTCutMainWindow::onVideoPointsDetected);
+  connect(mpAVData, &TTAVData::logoDataLoaded,
+          this, &TTCutMainWindow::onLogoDataLoaded);
 
   // Dirty tracking: set mProjectModified on any data change
-  // Signal signatures must match exactly (Qt4-style SIGNAL/SLOT)
-  connect(mpAVData, SIGNAL(cutItemAppended(const TTCutItem&)),                       SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(cutItemRemoved(int)),                                     SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(cutItemUpdated(const TTCutItem&, const TTCutItem&)),       SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(cutOrderUpdated(const TTCutItem&, int)),                   SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(avItemAppended(const TTAVItem&)),                          SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(avItemRemoved(int)),                                      SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(markerAppended(const TTMarkerItem&)),                      SLOT(onProjectModified()));
-  connect(mpAVData, SIGNAL(markerRemoved(int)),                                      SLOT(onProjectModified()));
+  connect(mpAVData, &TTAVData::cutItemAppended,    this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::cutItemRemoved,     this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::cutItemUpdated,     this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::cutOrderUpdated,    this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::avItemAppended,     this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::avItemRemoved,      this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::markerAppended,     this, &TTCutMainWindow::onProjectModified);
+  connect(mpAVData, &TTAVData::markerRemoved,      this, &TTCutMainWindow::onProjectModified);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -855,10 +854,10 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
         TTCut::spDetectAspectChange, TTCut::spDetectPillarbox,
         TTCut::spPillarboxThreshold, videoHeaders, videoIndex);
 
-      connect(videoWorker, SIGNAL(pointsDetected(const QList<TTStreamPoint>&)),
-              this, SLOT(onVideoPointsDetected(const QList<TTStreamPoint>&)));
-      connect(videoWorker, SIGNAL(finished(TTThreadTask*)),
-              this, SLOT(onAnalysisWorkerFinished()));
+      connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
+              this, &TTCutMainWindow::onVideoPointsDetected);
+      connect(videoWorker, &TTThreadTask::finished,
+              this, &TTCutMainWindow::onAnalysisWorkerFinished);
 
       mpStreamPointTaskPool->start(videoWorker);
       mStreamPointWorkersRunning++;
@@ -884,10 +883,10 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
         TTCut::spDetectSilence, TTCut::spSilenceThresholdDb, TTCut::spSilenceMinDuration,
         TTCut::spDetectAudioChange, audioHeaders);
 
-      connect(audioWorker, SIGNAL(pointsDetected(const QList<TTStreamPoint>&)),
-              this, SLOT(onAudioPointsDetected(const QList<TTStreamPoint>&)));
-      connect(audioWorker, SIGNAL(finished(TTThreadTask*)),
-              this, SLOT(onAnalysisWorkerFinished()));
+      connect(audioWorker, &TTStreamPointAudioWorker::pointsDetected,
+              this, &TTCutMainWindow::onAudioPointsDetected);
+      connect(audioWorker, &TTThreadTask::finished,
+              this, &TTCutMainWindow::onAnalysisWorkerFinished);
 
       mpStreamPointTaskPool->start(audioWorker);
       mStreamPointWorkersRunning++;
@@ -987,8 +986,8 @@ void TTCutMainWindow::onCutPreview(TTCutList* cutList, bool skipFirst, bool skip
   mPreviewSkipFirst = skipFirst;
   mPreviewSkipLast = skipLast;
 
-  connect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)),       this,           SLOT(onCutPreviewFinished(TTCutList*)));
-  connect(mpAVData, SIGNAL(cutAudioDriftCalculated(QList<float>)), this->cutList, SLOT(onAudioDriftUpdated(QList<float>)));
+  connect(mpAVData, &TTAVData::cutPreviewFinished,        this,           &TTCutMainWindow::onCutPreviewFinished);
+  connect(mpAVData, &TTAVData::cutAudioDriftCalculated,   this->cutList,  &TTCutTreeView::onAudioDriftUpdated);
   mpAVData->doCutPreview(cutList);
 }
 
@@ -1004,8 +1003,8 @@ void TTCutMainWindow::onCutPreviewFinished(TTCutList* cutList)
 
   delete cutPreview;
 
-  disconnect(mpAVData, SIGNAL(cutPreviewFinished(TTCutList*)),       this,           SLOT(onCutPreviewFinished(TTCutList*)));
-  disconnect(mpAVData, SIGNAL(cutAudioDriftCalculated(QList<float>)), this->cutList, SLOT(onAudioDriftUpdated(QList<float>)));
+  disconnect(mpAVData, &TTAVData::cutPreviewFinished,      this,           &TTCutMainWindow::onCutPreviewFinished);
+  disconnect(mpAVData, &TTAVData::cutAudioDriftCalculated, this->cutList,  &TTCutTreeView::onAudioDriftUpdated);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1058,7 +1057,7 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
 
   // Connect to cutFinished signal for notification
   qDebug() << "Connecting cutFinished signal to onCutFinished slot";
-  bool connected = connect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
+  bool connected = connect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
   qDebug() << "Connection result:" << connected;
 
   mpAVData->onDoCut(QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath(), cutData, audioOnly);
@@ -1070,7 +1069,7 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
 void TTCutMainWindow::onCutFinished()
 {
   qDebug() << "TTCutMainWindow::onCutFinished() called!";
-  disconnect(mpAVData, SIGNAL(cutFinished()), this, SLOT(onCutFinished()));
+  disconnect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
 
   if (mpAVData->lastCutWasAudioOnly()) {
     QString summary = mpAVData->lastCutOutputSummary();
@@ -1120,8 +1119,8 @@ void TTCutMainWindow::updateWindowTitle()
  */
 void TTCutMainWindow::closeProject()
 {
-	disconnect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
-  disconnect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
+	disconnect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
+  disconnect(mpAVData, &TTAVData::currentAVItemChanged,     this, &TTCutMainWindow::onAVItemChanged);
 
   audioFileList->onAVDataChanged(0);
   subtitleFileList->onAVDataChanged(0);
@@ -1144,8 +1143,8 @@ void TTCutMainWindow::closeProject()
 
   setProjectModified(false);
 
-  connect(cutList, SIGNAL(selectionChanged(const TTCutItem&, int)), this, SLOT(onCutSelectionChanged(const TTCutItem&, int)));
-  connect(mpAVData, SIGNAL(currentAVItemChanged(TTAVItem*)),   this, SLOT(onAVItemChanged(TTAVItem*)));
+  connect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
+  connect(mpAVData, &TTAVData::currentAVItemChanged,     this, &TTCutMainWindow::onAVItemChanged);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1176,7 +1175,7 @@ void TTCutMainWindow::openProjectFile(QString fName)
   QFileInfo fInfo(fName );
   TTCut::lastDirPath = fInfo.absolutePath();
 
-  connect(mpAVData, SIGNAL(readProjectFileFinished(const QString&)), this, SLOT(onOpenProjectFileFinished(const QString&)));
+  connect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
   mpAVData->readProjectFile(fInfo);
 }
 
@@ -1193,7 +1192,7 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   // Refresh cut list to update acmod icons (audio streams are now loaded)
   emit mpAVData->cutDataReloaded();
 
-  disconnect(mpAVData, SIGNAL(readProjectFileFinished(const QString&)), this, SLOT(onOpenProjectFileFinished(const QString&)));
+  disconnect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
 }
 
 void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
@@ -1487,8 +1486,8 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
     case StatusReportArgs::Init:
       if (progressBar == 0) {
         progressBar = new TTProgressBar(this);
-        connect(progressBar, SIGNAL(cancel()), mpAVData, SLOT(onUserAbortRequest()));
-        connect(progressBar, SIGNAL(cancel()), mpStreamPointTaskPool, SLOT(onUserAbortRequest()));
+        connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
+        connect(progressBar, &TTProgressBar::cancel, mpStreamPointTaskPool, &TTThreadTaskPool::onUserAbortRequest);
       }
       this->setEnabled(false);
       break;

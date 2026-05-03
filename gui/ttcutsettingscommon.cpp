@@ -120,7 +120,7 @@ TTCutSettingsCommon::TTCutSettingsCommon(QWidget* parent)
     gl->addWidget(lblPreviewHint, row2, 0, 1, 3);
   }
 
-  connect(btnDirOpen, SIGNAL(clicked()), SLOT(onOpenDir()));
+  connect(btnDirOpen, &QPushButton::clicked, this, &TTCutSettingsCommon::onOpenDir);
 }
 
 void TTCutSettingsCommon::setTitle(__attribute__((unused))const QString& title)

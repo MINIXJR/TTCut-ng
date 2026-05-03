@@ -83,14 +83,14 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   pbPrevCut->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_ArrowBack)));
   pbNextCut->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_ArrowForward)));
 
-  connect(videoPlayer,  SIGNAL(optimalSizeChanged()),     SLOT(onOptimalSizeChanged()));
-  connect(videoPlayer,  SIGNAL(playerPlaying()),          SLOT(onPlayerPlaying()));
-  connect(videoPlayer,  SIGNAL(playerFinished()),         SLOT(onPlayerFinished()));
-  connect(cbCutPreview, SIGNAL(currentIndexChanged(int)), SLOT(onCutSelectionChanged(int)));
-  connect(pbPlay,       SIGNAL(clicked()),                SLOT(onPlayPreview()));
-  connect(pbExit,       SIGNAL(clicked()),                SLOT(onExitPreview()));
-  connect(pbPrevCut,    SIGNAL(clicked()),                SLOT(onPrevCut()));
-  connect(pbNextCut,    SIGNAL(clicked()),                SLOT(onNextCut()));
+  connect(videoPlayer,  &TTVideoPlayer::optimalSizeChanged, this, &TTCutPreview::onOptimalSizeChanged);
+  connect(videoPlayer,  &TTVideoPlayer::playerPlaying,      this, &TTCutPreview::onPlayerPlaying);
+  connect(videoPlayer,  &TTVideoPlayer::playerFinished,     this, &TTCutPreview::onPlayerFinished);
+  connect(cbCutPreview, qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutPreview::onCutSelectionChanged);
+  connect(pbPlay,       &QPushButton::clicked, this, &TTCutPreview::onPlayPreview);
+  connect(pbExit,       &QPushButton::clicked, this, &TTCutPreview::onExitPreview);
+  connect(pbPrevCut,    &QPushButton::clicked, this, &TTCutPreview::onPrevCut);
+  connect(pbNextCut,    &QPushButton::clicked, this, &TTCutPreview::onNextCut);
 
   // Burst warning widgets — inserted into existing controls layout
   lblBurstWarning = new QLabel(this);
@@ -100,7 +100,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   pbBurstShift = new QPushButton(tr("Shift -1 Frame"), this);
   pbBurstShift->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowLeft));
   pbBurstShift->hide();
-  connect(pbBurstShift, SIGNAL(clicked()), this, SLOT(onBurstShift()));
+  connect(pbBurstShift, &QPushButton::clicked, this, &TTCutPreview::onBurstShift);
 
   // Find the controls HBoxLayout (row 1 in the grid) and insert burst widgets
   // after pbNextCut (index 3) and before the spacer/pbExit

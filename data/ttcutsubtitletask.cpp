@@ -96,8 +96,8 @@ void TTCutSubtitleTask::operation()
 
     mpCutStream = cutItem.avDataItem()->subtitleStreamAt(mSrcSubtitleIndex);
 
-    connect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
-            this,        SLOT(onStatusReport(int, const QString&, quint64)));
+    connect(mpCutStream, &TTSubtitleStream::statusReport,
+            this,        qOverload<int, const QString&, quint64>(&TTCutSubtitleTask::onStatusReport));
 
     log->debugMsg(__FILE__, __LINE__,	QString("SubtitleCut %1/%2 start %3 end %4").
         arg(i).arg(mpCutList->count()).arg(cutItem.cutInTime().toString("hh:mm:ss.zzz")).arg(cutItem.cutOutTime().toString("hh:mm:ss.zzz")));
@@ -112,8 +112,8 @@ void TTCutSubtitleTask::operation()
     if (i == mpCutList->count() - 1)
       mpCutParams->lastCall();
 
-    disconnect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
-               this,        SLOT(onStatusReport(int, const QString&, quint64)));
+    disconnect(mpCutStream, &TTSubtitleStream::statusReport,
+               this,        qOverload<int, const QString&, quint64>(&TTCutSubtitleTask::onStatusReport));
   }
 
   mMuxListItem->appendSubtitleFile(mTgtFilePath, mLanguage);

@@ -75,10 +75,10 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
   pbPlayVideo->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
 
-  connect(pbPrevFrame,  SIGNAL(clicked()), this, SLOT(onWidgetPrevFrame()));
-  connect(pbNextFrame,  SIGNAL(clicked()), this, SLOT(onWidgetNextFrame()));
-  connect(pbSetMarker,  SIGNAL(clicked()), this, SLOT(onSetMarker()));
-  connect(pbPlayVideo,  SIGNAL(clicked()), this, SLOT(onPlayVideo()));
+  connect(pbPrevFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetPrevFrame);
+  connect(pbNextFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetNextFrame);
+  connect(pbSetMarker,  &QPushButton::clicked, this, &TTCurrentFrame::onSetMarker);
+  connect(pbPlayVideo,  &QPushButton::clicked, this, &TTCurrentFrame::onPlayVideo);
 }
 
 //! Needeb by Qt Designer

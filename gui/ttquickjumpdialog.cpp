@@ -68,7 +68,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
 {
   mResizeTimer->setSingleShot(true);
   mResizeTimer->setInterval(200);
-  connect(mResizeTimer, SIGNAL(timeout()), SLOT(onResizeDebounced()));
+  connect(mResizeTimer, &QTimer::timeout, this, &TTQuickJumpDialog::onResizeDebounced);
   setWindowTitle(tr("Zeitsprung — Keyframes"));
   setWindowModality(Qt::WindowModal);
 
@@ -126,8 +126,8 @@ void TTQuickJumpDialog::setupUI()
   mListView->setWrapping(true);
   mListView->setSpacing(2);
 
-  connect(mListView, SIGNAL(doubleClicked(QModelIndex)),
-          SLOT(onItemDoubleClicked(QModelIndex)));
+  connect(mListView, &QListView::doubleClicked,
+          this, &TTQuickJumpDialog::onItemDoubleClicked);
 
   mainLayout->addWidget(mListView, 1);
 
@@ -150,9 +150,9 @@ void TTQuickJumpDialog::setupUI()
   mIntervalSpinner->setValue(mModel->intervalSeconds());
   mIntervalSpinner->setToolTip(tr("Show keyframes every N seconds (0=all)"));
 
-  connect(mBtnBack,    SIGNAL(clicked()), SLOT(onPageBack()));
-  connect(mBtnForward, SIGNAL(clicked()), SLOT(onPageForward()));
-  connect(mIntervalSpinner, SIGNAL(valueChanged(int)), SLOT(onIntervalChanged(int)));
+  connect(mBtnBack,    &QPushButton::clicked, this, &TTQuickJumpDialog::onPageBack);
+  connect(mBtnForward, &QPushButton::clicked, this, &TTQuickJumpDialog::onPageForward);
+  connect(mIntervalSpinner, qOverload<int>(&QSpinBox::valueChanged), this, &TTQuickJumpDialog::onIntervalChanged);
 
   pageLayout->addWidget(intervalLabel);
   pageLayout->addWidget(mIntervalSpinner);
@@ -265,8 +265,8 @@ void TTQuickJumpDialog::startThumbnailWorker()
     prebuiltIndex
   );
 
-  connect(mCurrentWorker, SIGNAL(thumbnailReady(int, QImage)),
-          mModel, SLOT(onThumbnailReady(int, QImage)));
+  connect(mCurrentWorker, &TTQuickJumpWorker::thumbnailReady,
+          mModel, &TTQuickJumpModel::onThumbnailReady);
 
   mTaskPool->init(1);
   mTaskPool->start(mCurrentWorker);

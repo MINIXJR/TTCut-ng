@@ -135,19 +135,19 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbEntryUp,         SIGNAL(clicked()),                                 SLOT(onEntryUp()));
-  connect(pbEntryDown,       SIGNAL(clicked()),                                 SLOT(onEntryDown()));
-  connect(pbEntryDelete,     SIGNAL(clicked()),                                 SLOT(onEntryDelete()));
-  connect(pbEntryCopy,       SIGNAL(clicked()),                                 SLOT(onEntryDuplicate()));
-  connect(pbPreview,         SIGNAL(clicked()),                                 SLOT(onPreview()));
-  connect(pbCutAudioVideo,   SIGNAL(clicked()),                                 SLOT(onAVCut()));
-  connect(pbCutSelected,     SIGNAL(clicked()),                                 SLOT(onAVSelCut()));
-  connect(pbCutAudio,        SIGNAL(clicked()),                                 SLOT(onAudioCut()));
-  connect(pbCutAudioSelected,SIGNAL(clicked()),                                 SLOT(onAudioSelCut()));
-  connect(videoCutList,    SIGNAL(itemSelectionChanged()),                    SLOT(onItemSelectionChanged()));
-  connect(videoCutList,    SIGNAL(itemClicked(QTreeWidgetItem*, int)),        SLOT(onEntrySelected(QTreeWidgetItem*, int)));
-  connect(videoCutList,    SIGNAL(itemDoubleClicked(QTreeWidgetItem*, int)),  SLOT(onEntryEdit()));
-  connect(videoCutList,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
+  connect(pbEntryUp,          &QPushButton::clicked, this, &TTCutTreeView::onEntryUp);
+  connect(pbEntryDown,        &QPushButton::clicked, this, &TTCutTreeView::onEntryDown);
+  connect(pbEntryDelete,      &QPushButton::clicked, this, &TTCutTreeView::onEntryDelete);
+  connect(pbEntryCopy,        &QPushButton::clicked, this, &TTCutTreeView::onEntryDuplicate);
+  connect(pbPreview,          &QPushButton::clicked, this, &TTCutTreeView::onPreview);
+  connect(pbCutAudioVideo,    &QPushButton::clicked, this, &TTCutTreeView::onAVCut);
+  connect(pbCutSelected,      &QPushButton::clicked, this, &TTCutTreeView::onAVSelCut);
+  connect(pbCutAudio,         &QPushButton::clicked, this, &TTCutTreeView::onAudioCut);
+  connect(pbCutAudioSelected, &QPushButton::clicked, this, &TTCutTreeView::onAudioSelCut);
+  connect(videoCutList, &QTreeWidget::itemSelectionChanged,        this, &TTCutTreeView::onItemSelectionChanged);
+  connect(videoCutList, &QTreeWidget::itemClicked,                 this, &TTCutTreeView::onEntrySelected);
+  connect(videoCutList, &QTreeWidget::itemDoubleClicked,           this, &TTCutTreeView::onEntryEdit);
+  connect(videoCutList, &QTreeWidget::customContextMenuRequested,  this, &TTCutTreeView::onContextMenuRequest);
 }
 
 /*!
@@ -173,12 +173,12 @@ void TTCutTreeView::setAVData(TTAVData* avData)
 {
   mAVData = avData;
 
-  connect(mAVData, SIGNAL(cutItemAppended(const TTCutItem&)),                  SLOT(onAppendItem(const TTCutItem&)));
-  connect(mAVData, SIGNAL(cutItemRemoved(int)),                                SLOT(onRemoveItem(int)));
-  connect(mAVData, SIGNAL(cutItemUpdated(const TTCutItem&, const TTCutItem&)), SLOT(onUpdateItem(const TTCutItem&, const TTCutItem&)));
-  connect(mAVData, SIGNAL(cutDataReloaded()),                                  SLOT(onReloadList()));
-  connect(this,    SIGNAL(removeItem(const TTCutItem&)),              mAVData, SLOT(onRemoveCutItem(const TTCutItem&)));
-  connect(this,    SIGNAL(itemOrderChanged(int, int)),                mAVData, SLOT(onCutOrderChanged(int , int)));
+  connect(mAVData, &TTAVData::cutItemAppended,    this, &TTCutTreeView::onAppendItem);
+  connect(mAVData, &TTAVData::cutItemRemoved,     this, &TTCutTreeView::onRemoveItem);
+  connect(mAVData, &TTAVData::cutItemUpdated,     this, &TTCutTreeView::onUpdateItem);
+  connect(mAVData, &TTAVData::cutDataReloaded,    this, &TTCutTreeView::onReloadList);
+  connect(this,    &TTCutTreeView::removeItem,         mAVData, &TTAVData::onRemoveCutItem);
+  connect(this,    &TTCutTreeView::itemOrderChanged,   mAVData, &TTAVData::onCutOrderChanged);
 }
 
 /*!
@@ -810,45 +810,45 @@ void TTCutTreeView::createActions()
   itemUpAction = new QAction(tr("Move &up"), this);
   itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
   itemUpAction->setStatusTip(tr("Move selected cut one position upward"));
-  connect(itemUpAction, SIGNAL(triggered()), this, SLOT(onEntryUp()));
+  connect(itemUpAction, &QAction::triggered, this, &TTCutTreeView::onEntryUp);
 
   itemDeleteAction = new QAction(tr("&Delete"), this);
   itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
   itemDeleteAction->setStatusTip(tr("Remove selected cut from list"));
-  connect(itemDeleteAction, SIGNAL(triggered()), this, SLOT(onEntryDelete()));
+  connect(itemDeleteAction, &QAction::triggered, this, &TTCutTreeView::onEntryDelete);
 
   itemDuplicateAction = new QAction(tr("Duplicate Cut"), this);
   itemDuplicateAction->setIcon(QIcon::fromTheme("edit-copy", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
   itemDuplicateAction->setStatusTip(tr("Duplicate the selected cut"));
-  connect(itemDuplicateAction, SIGNAL(triggered()), this, SLOT(onEntryDuplicate()));
+  connect(itemDuplicateAction, &QAction::triggered, this, &TTCutTreeView::onEntryDuplicate);
 
   itemDownAction = new QAction(tr("Move d&own"), this);
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected cut one position downward"));
-  connect(itemDownAction, SIGNAL(triggered()), this, SLOT(onEntryDown()));
+  connect(itemDownAction, &QAction::triggered, this, &TTCutTreeView::onEntryDown);
 
   itemEditAction = new QAction(tr("Edit &cut"), this);
   itemEditAction->setIcon(QIcon::fromTheme("document-edit", style->standardIcon(QStyle::SP_FileDialogDetailedView)));
   itemEditAction->setStatusTip(tr("Edit selected cut"));
-  connect(itemEditAction, SIGNAL(triggered()), this, SLOT(onEntryEdit()));
+  connect(itemEditAction, &QAction::triggered, this, &TTCutTreeView::onEntryEdit);
 
   itemPreviewAction = new QAction(tr("Preview cut"), this);
   itemPreviewAction->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogApplyButton)));
   itemPreviewAction->setStatusTip(tr("Preview selected cut"));
-  connect(itemPreviewAction, SIGNAL(triggered()), this, SLOT(onEntryPreview()));
+  connect(itemPreviewAction, &QAction::triggered, this, &TTCutTreeView::onEntryPreview);
 
   itemCutAction = new QAction(tr("Cut selected entries"), this);
   itemCutAction->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogSaveButton)));
   itemCutAction->setStatusTip(tr("Cut the selected entries"));
-  connect(itemCutAction, SIGNAL(triggered()), this, SLOT(onEntryCut()));
+  connect(itemCutAction, &QAction::triggered, this, &TTCutTreeView::onEntryCut);
 
   gotoCutInAction = new QAction(tr("Goto Cut-In"), this);
   gotoCutInAction->setIcon(QIcon::fromTheme("go-first", style->standardIcon(QStyle::SP_MediaSkipBackward)));
   gotoCutInAction->setStatusTip(tr("Goto selected cut-in position"));
-  connect(gotoCutInAction, SIGNAL(triggered()), this, SLOT(onGotoCutIn()));
+  connect(gotoCutInAction, &QAction::triggered, this, &TTCutTreeView::onGotoCutIn);
 
   gotoCutOutAction = new QAction(tr("Goto Cut-Out"), this);
   gotoCutOutAction->setIcon(QIcon::fromTheme("go-last", style->standardIcon(QStyle::SP_MediaSkipForward)));
   gotoCutOutAction->setStatusTip(tr("Goto selected cut-out position"));
-  connect(gotoCutOutAction, SIGNAL(triggered()), this, SLOT(onGotoCutOut()));
+  connect(gotoCutOutAction, &QAction::triggered, this, &TTCutTreeView::onGotoCutOut);
 }

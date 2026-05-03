@@ -71,11 +71,11 @@ TTSubtitleTreeView::TTSubtitleTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbSubtitleFileOpen,    SIGNAL(clicked()), SIGNAL(openFile()));
-  connect(pbSubtitleEntryUp,     SIGNAL(clicked()), SLOT(onItemUp()));
-  connect(pbSubtitleEntryDown,   SIGNAL(clicked()), SLOT(onItemDown()));
-  connect(pbSubtitleEntryDelete, SIGNAL(clicked()), SLOT(onRemoveItem()));
-  connect(subtitleListView,      SIGNAL(customContextMenuRequested(const QPoint&)), SLOT( onContextMenuRequest(const QPoint&)));
+  connect(pbSubtitleFileOpen,    &QPushButton::clicked, this, &TTSubtitleTreeView::openFile);
+  connect(pbSubtitleEntryUp,     &QPushButton::clicked, this, &TTSubtitleTreeView::onItemUp);
+  connect(pbSubtitleEntryDown,   &QPushButton::clicked, this, &TTSubtitleTreeView::onItemDown);
+  connect(pbSubtitleEntryDelete, &QPushButton::clicked, this, &TTSubtitleTreeView::onRemoveItem);
+  connect(subtitleListView,      &QTreeWidget::customContextMenuRequested, this, &TTSubtitleTreeView::onContextMenuRequest);
 }
 
 //! Set the group box title string. This method is needed by designer.
@@ -95,24 +95,24 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
   }
 
   if (mpAVItem != 0) {
-    disconnect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveSubtitleItem(int)));
-    disconnect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapSubtitleItems(int, int)));
-    disconnect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onSubtitleLanguageChanged(int, const QString&)));
+    disconnect(this,     &TTSubtitleTreeView::removeItem,       mpAVItem, &TTAVItem::onRemoveSubtitleItem);
+    disconnect(this,     &TTSubtitleTreeView::swapItems,        mpAVItem, &TTAVItem::onSwapSubtitleItems);
+    disconnect(this,     &TTSubtitleTreeView::languageChanged,  mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
 
-    disconnect(mpAVItem, SIGNAL(subtitleItemAppended(const TTSubtitleItem&)), this, SLOT(onAppendItem(const TTSubtitleItem&)));
-    disconnect(mpAVItem, SIGNAL(subtitleItemRemoved(int)),                    this, SLOT(onItemRemoved(int)));
-    disconnect(mpAVItem, SIGNAL(subtitleItemsSwapped(int, int)),              this, SLOT(onSwapItems(int, int)));
+    disconnect(mpAVItem, &TTAVItem::subtitleItemAppended,        this, &TTSubtitleTreeView::onAppendItem);
+    disconnect(mpAVItem, qOverload<int>(&TTAVItem::subtitleItemRemoved), this, &TTSubtitleTreeView::onItemRemoved);
+    disconnect(mpAVItem, &TTAVItem::subtitleItemsSwapped,        this, &TTSubtitleTreeView::onSwapItems);
   }
 
   mpAVItem = avData;
 
-  connect(mpAVItem, SIGNAL(subtitleItemAppended(const TTSubtitleItem&)), SLOT(onAppendItem(const TTSubtitleItem&)));
-  connect(mpAVItem, SIGNAL(subtitleItemRemoved(int)),                    SLOT(onItemRemoved(int)));
-  connect(mpAVItem, SIGNAL(subtitleItemsSwapped(int, int)),              SLOT(onSwapItems(int, int)));
+  connect(mpAVItem, &TTAVItem::subtitleItemAppended,        this, &TTSubtitleTreeView::onAppendItem);
+  connect(mpAVItem, qOverload<int>(&TTAVItem::subtitleItemRemoved), this, &TTSubtitleTreeView::onItemRemoved);
+  connect(mpAVItem, &TTAVItem::subtitleItemsSwapped,        this, &TTSubtitleTreeView::onSwapItems);
 
-  connect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveSubtitleItem(int)));
-  connect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapSubtitleItems(int, int)));
-  connect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onSubtitleLanguageChanged(int, const QString&)));
+  connect(this,     &TTSubtitleTreeView::removeItem,        mpAVItem, &TTAVItem::onRemoveSubtitleItem);
+  connect(this,     &TTSubtitleTreeView::swapItems,         mpAVItem, &TTAVItem::onSwapSubtitleItems);
+  connect(this,     &TTSubtitleTreeView::languageChanged,   mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
 
   onReloadList(mpAVItem);
 }
@@ -255,22 +255,22 @@ void TTSubtitleTreeView::createActions()
   itemNewAction = new QAction(tr("&Insert subtitlefile"), this);
   itemNewAction->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
   itemNewAction->setStatusTip(tr("Open a new subtitlefile and insert to list"));
-  connect(itemNewAction, SIGNAL(triggered()), SIGNAL(openFile()));
+  connect(itemNewAction, &QAction::triggered, this, &TTSubtitleTreeView::openFile);
 
   itemUpAction = new QAction(tr("Move &up"), this);
   itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
   itemUpAction->setStatusTip(tr("Move selected subtitlefile one position upward"));
-  connect(itemUpAction, SIGNAL(triggered()), SLOT(onItemUp()));
+  connect(itemUpAction, &QAction::triggered, this, &TTSubtitleTreeView::onItemUp);
 
   itemDeleteAction = new QAction(tr("&Delete"), this);
   itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
   itemDeleteAction->setStatusTip(tr("Remove selected subtitlefile from list"));
-  connect(itemDeleteAction, SIGNAL(triggered()), SLOT(onRemoveItem()));
+  connect(itemDeleteAction, &QAction::triggered, this, &TTSubtitleTreeView::onRemoveItem);
 
   itemDownAction = new QAction(tr("Move d&own"), this);
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected subtitlefile one position downward"));
-  connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+  connect(itemDownAction, &QAction::triggered, this, &TTSubtitleTreeView::onItemDown);
 }
 
 QComboBox* TTSubtitleTreeView::createLanguageCombo(const QString& currentLang)

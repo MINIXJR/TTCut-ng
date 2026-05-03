@@ -90,25 +90,25 @@ TTAVData::TTAVData()
   mAvSyncOffsetMs   = 0;
   mCurrentFramePosition = 0;
 
-	connect(mpThreadTaskPool, SIGNAL(init()), this, SLOT(onThreadPoolInit()));
-  connect(mpThreadTaskPool, SIGNAL(exit()), this, SLOT(onThreadPoolExit()));
-  connect(mpThreadTaskPool, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-	                          SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)));
+	connect(mpThreadTaskPool, qOverload<>(&TTThreadTaskPool::init), this, &TTAVData::onThreadPoolInit);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onThreadPoolExit);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::statusReport,
+	        this, qOverload<TTThreadTask*, int, const QString&, quint64>(&TTAVData::statusReport));
 
-  connect(mpAVList,  SIGNAL(itemAppended(const TTAVItem&)),                   SIGNAL(avItemAppended(const TTAVItem&)));
-	connect(mpAVList,  SIGNAL(itemRemoved(int)),                                SIGNAL(avItemRemoved(int)));
-	connect(mpAVList,  SIGNAL(itemUpdated(const TTAVItem&, const TTAVItem&)),   SIGNAL(avItemUpdated(const TTAVItem&, const TTAVItem&)));
-	connect(mpAVList,  SIGNAL(itemsSwapped(int, int)),                          SIGNAL(avItemsSwapped(int, int)));
+  connect(mpAVList,  &TTAVList::itemAppended,                   this, &TTAVData::avItemAppended);
+	connect(mpAVList,  &TTAVList::itemRemoved,                    this, &TTAVData::avItemRemoved);
+	connect(mpAVList,  &TTAVList::itemUpdated,                    this, &TTAVData::avItemUpdated);
+	connect(mpAVList,  &TTAVList::itemsSwapped,                   this, &TTAVData::avItemsSwapped);
 
-	connect(mpCutList, SIGNAL(itemAppended(const TTCutItem&)),                  SIGNAL(cutItemAppended(const TTCutItem&)));
-	connect(mpCutList, SIGNAL(itemRemoved(int)),                                SIGNAL(cutItemRemoved(int)));
-	connect(mpCutList, SIGNAL(orderUpdated(const TTCutItem&, int)),             SIGNAL(cutOrderUpdated(const TTCutItem&, int)));
-	connect(mpCutList, SIGNAL(itemUpdated(const TTCutItem&, const TTCutItem&)), SIGNAL(cutItemUpdated(const TTCutItem&, const TTCutItem&)));
+	connect(mpCutList, &TTCutList::itemAppended,                            this, &TTAVData::cutItemAppended);
+	connect(mpCutList, qOverload<int>(&TTCutList::itemRemoved),             this, &TTAVData::cutItemRemoved);
+	connect(mpCutList, &TTCutList::orderUpdated,                            this, &TTAVData::cutOrderUpdated);
+	connect(mpCutList, &TTCutList::itemUpdated,                             this, &TTAVData::cutItemUpdated);
 
-	connect(mpMarkerList, SIGNAL(itemAppended(const TTMarkerItem&)),                     SIGNAL(markerAppended(const TTMarkerItem&)));
-	connect(mpMarkerList, SIGNAL(itemRemoved(int)),                                      SIGNAL(markerRemoved(int)));
-	connect(mpMarkerList, SIGNAL(orderUpdated(const TTMarkerItem&, int)),                SIGNAL(markerUpdated(const TTMarkerItem&, int)));
-	connect(mpMarkerList, SIGNAL(itemUpdated(const TTMarkerItem&, const TTMarkerItem&)), SIGNAL(markerUpdated(const TTMarkerItem&, const TTMarkerItem&)));
+	connect(mpMarkerList, &TTMarkerList::itemAppended,                      this, &TTAVData::markerAppended);
+	connect(mpMarkerList, qOverload<int>(&TTMarkerList::itemRemoved),       this, &TTAVData::markerRemoved);
+	connect(mpMarkerList, &TTMarkerList::orderUpdated,                      this, qOverload<const TTMarkerItem&, int>(&TTAVData::markerUpdated));
+	connect(mpMarkerList, &TTMarkerList::itemUpdated,                       this, qOverload<const TTMarkerItem&, const TTMarkerItem&>(&TTAVData::markerUpdated));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -259,23 +259,23 @@ TTAVItem* TTAVData::createAVItem()
   {
 		TTAVItem* avItem = new TTAVItem(0);
 
-		connect(avItem->mpCutList,  SIGNAL(itemAppended(const TTCutItem&)),
-            mpCutList,          SLOT(onAppendItem(const TTCutItem&)));
-		connect(avItem->mpCutList,  SIGNAL(itemRemoved(const TTCutItem&)),
-            mpCutList,          SLOT(onRemoveItem(const TTCutItem&)));
-		connect(avItem->mpCutList,  SIGNAL(itemUpdated(const TTCutItem&, const TTCutItem&)),
-            mpCutList,          SLOT(onUpdateItem(const TTCutItem&, const TTCutItem&)));
-		connect(mpCutList,          SIGNAL(orderUpdated(const TTCutItem&, int)),
-            avItem->mpCutList,  SLOT(onUpdateOrder(const TTCutItem&, int)));
+		connect(avItem->mpCutList,  &TTCutList::itemAppended,
+            mpCutList,          &TTCutList::onAppendItem);
+		connect(avItem->mpCutList,  qOverload<const TTCutItem&>(&TTCutList::itemRemoved),
+            mpCutList,          &TTCutList::onRemoveItem);
+		connect(avItem->mpCutList,  &TTCutList::itemUpdated,
+            mpCutList,          &TTCutList::onUpdateItem);
+		connect(mpCutList,          &TTCutList::orderUpdated,
+            avItem->mpCutList,  &TTCutList::onUpdateOrder);
 
-		connect(avItem->mpMarkerList, SIGNAL(itemAppended(const TTMarkerItem&)),
-            mpMarkerList,         SLOT(onAppendItem(const TTMarkerItem&)));
-		connect(avItem->mpMarkerList, SIGNAL(itemRemoved(const TTMarkerItem&)),
-            mpMarkerList,         SLOT(onRemoveItem(const TTMarkerItem&)));
-		connect(avItem->mpMarkerList, SIGNAL(itemUpdated(const TTMarkerItem&, const TTMarkerItem&)),
-            mpMarkerList,         SLOT(onUpdateItem(const TTMarkerItem&, const TTMarkerItem&)));
-		connect(mpMarkerList,         SIGNAL(orderUpdated(const TTMarkerItem&, int)),
-            avItem->mpMarkerList, SLOT(onUpdateOrder(const TTMarkerItem&, int)));
+		connect(avItem->mpMarkerList, &TTMarkerList::itemAppended,
+            mpMarkerList,         &TTMarkerList::onAppendItem);
+		connect(avItem->mpMarkerList, qOverload<const TTMarkerItem&>(&TTMarkerList::itemRemoved),
+            mpMarkerList,         &TTMarkerList::onRemoveItem);
+		connect(avItem->mpMarkerList, &TTMarkerList::itemUpdated,
+            mpMarkerList,         &TTMarkerList::onUpdateItem);
+		connect(mpMarkerList,         &TTMarkerList::orderUpdated,
+            avItem->mpMarkerList, &TTMarkerList::onUpdateOrder);
 
   	return avItem;
 	}
@@ -292,8 +292,8 @@ TTAVItem* TTAVData::createAVItem()
  */
 void TTAVData::openAVStreams(const QString& videoFilePath)
 {
-  connect(mpThreadTaskPool, SIGNAL(aborted()),
-          this,             SLOT(onOpenAVStreamsAborted()));
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+          this,             &TTAVData::onOpenAVStreamsAborted);
 
   TTAVItem* avItem = doOpenVideoStream(videoFilePath);
 
@@ -504,8 +504,8 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
   TTAVItem*        avItem        = createAVItem();
   TTOpenVideoTask* openVideoTask = new TTOpenVideoTask(avItem, filePath, order);
 
-  connect(openVideoTask, SIGNAL(finished(TTAVItem*, TTVideoStream*, int, const QString&)),
-          this,          SLOT(onOpenVideoFinished(TTAVItem*, TTVideoStream*, int, const QString&)),
+  connect(openVideoTask, qOverload<TTAVItem*, TTVideoStream*, int, const QString&>(&TTOpenVideoTask::finished),
+          this,          &TTAVData::onOpenVideoFinished,
           Qt::QueuedConnection);
 
   int audioCount = getAudioNames(QFileInfo(filePath)).count();
@@ -523,8 +523,8 @@ void TTAVData::doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int 
 {
   TTOpenAudioTask* openAudioTask = new TTOpenAudioTask(avItem, filePath, order);
 
-  connect(openAudioTask, SIGNAL(finished(TTAVItem*, TTAudioStream*, int)),
-          this,          SLOT(onOpenAudioFinished(TTAVItem*, TTAudioStream*, int)),
+  connect(openAudioTask, qOverload<TTAVItem*, TTAudioStream*, int>(&TTOpenAudioTask::finished),
+          this,          &TTAVData::onOpenAudioFinished,
           Qt::QueuedConnection);
 
   mpThreadTaskPool->start(openAudioTask);
@@ -537,8 +537,8 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
 {
   TTOpenSubtitleTask* openSubtitleTask = new TTOpenSubtitleTask(avItem, filePath, order);
 
-  connect(openSubtitleTask, SIGNAL(finished(TTAVItem*, TTSubtitleStream*, int)),
-          this,             SLOT(onOpenSubtitleFinished(TTAVItem*, TTSubtitleStream*, int)),
+  connect(openSubtitleTask, qOverload<TTAVItem*, TTSubtitleStream*, int>(&TTOpenSubtitleTask::finished),
+          this,             &TTAVData::onOpenSubtitleFinished,
           Qt::QueuedConnection);
 
   mpThreadTaskPool->start(openSubtitleTask);
@@ -644,8 +644,8 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
 void TTAVData::onOpenAVStreamsAborted()
 {
-  disconnect(mpThreadTaskPool, SIGNAL(aborted()),
-             this,             SLOT(onOpenAVStreamsAborted()));
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+             this,             &TTAVData::onOpenAVStreamsAborted);
 
   mpCurrentAVItem = (mpAVList->count() > 0) ? mpAVList->at(mpAVList->count()-1) : 0;
   emit currentAVItemChanged(mpCurrentAVItem);
@@ -794,7 +794,7 @@ void TTAVData::onDoFrameSearch(TTAVItem* avItem, int startIndex)
       avItem->videoStream(),          startIndex,
       mpCurrentAVItem->videoStream(), mCurrentFramePosition);
 
-	connect(frameSearch, SIGNAL(finished(int)), this, SIGNAL(foundEqualFrame(int)), Qt::QueuedConnection);
+	connect(frameSearch, qOverload<int>(&TTFrameSearchTask::finished), this, &TTAVData::foundEqualFrame, Qt::QueuedConnection);
 
 	mpThreadTaskPool->start(frameSearch);
 }
@@ -901,8 +901,8 @@ void TTAVData::writeProjectFile(const QFileInfo& fInfo,
  */
 void TTAVData::readProjectFile(const QFileInfo& fInfo)
 {
-  connect(mpThreadTaskPool, SIGNAL(exit()),    this, SLOT(onReadProjectFileFinished()));
-  connect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onReadProjectFileAborted()));
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onReadProjectFileFinished);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
   mpProjectData = new TTCutProjectData(fInfo);
 
@@ -923,8 +923,8 @@ void TTAVData::readProjectFile(const QFileInfo& fInfo)
  */
 void TTAVData::onReadProjectFileFinished()
 {
-  disconnect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onReadProjectFileAborted()));
-  disconnect(mpThreadTaskPool, SIGNAL(exit()),    this, SLOT(onReadProjectFileFinished()));
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onReadProjectFileFinished);
 
   emit avDataReloaded();
 
@@ -976,8 +976,8 @@ void TTAVData::onReadProjectFileFinished()
 void TTAVData::onReadProjectFileAborted()
 {
   qDebug() << "TAVData::onReadProjectFileAborted";
-  disconnect(mpThreadTaskPool, SIGNAL(exit()), this, SLOT(onReadProjectFileFinished()));
-  disconnect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onReadProjectFileAborted()));
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onReadProjectFileFinished);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
   emit currentAVItemChanged(0);
 
@@ -1015,12 +1015,12 @@ void TTAVData::doCutPreview(TTCutList* cutList)
   if (cutPreviewTask != 0) delete cutPreviewTask;
   cutPreviewTask = new TTCutPreviewTask(this, cutList);
 
-  connect(cutPreviewTask,   SIGNAL(finished(TTCutList*)),
-          this,             SLOT(onCutPreviewFinished(TTCutList*)));
-  connect(cutPreviewTask,   SIGNAL(audioDriftCalculated(QList<float>)),
-          this,             SLOT(onCutPreviewAudioDrift(QList<float>)));
-  connect(mpThreadTaskPool, SIGNAL(aborted()),
-					this,             SLOT(onCutPreviewAborted()));
+  connect(cutPreviewTask,   qOverload<TTCutList*>(&TTCutPreviewTask::finished),
+          this,             &TTAVData::onCutPreviewFinished);
+  connect(cutPreviewTask,   &TTCutPreviewTask::audioDriftCalculated,
+          this,             &TTAVData::onCutPreviewAudioDrift);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+					this,             &TTAVData::onCutPreviewAborted);
 
   mpThreadTaskPool->init(cutList->count()*2);
   mpThreadTaskPool->start(cutPreviewTask);
@@ -1041,10 +1041,10 @@ void TTAVData::onCutPreviewAudioDrift(const QList<float>& driftsMs)
 //! Cut preview aborted by user
 void TTAVData::onCutPreviewAborted()
 {
-  disconnect(cutPreviewTask,   SIGNAL(finished(TTCutList*)),
-             this,             SLOT(onCutPreviewFinished(TTCutList*)));
-  disconnect(mpThreadTaskPool, SIGNAL(aborted()),
-			   		 this,             SLOT(onCutPreviewAborted()));
+  disconnect(cutPreviewTask,   qOverload<TTCutList*>(&TTCutPreviewTask::finished),
+             this,             &TTAVData::onCutPreviewFinished);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+			   		 this,             &TTAVData::onCutPreviewAborted);
 
 	if (cutPreviewTask != 0) {
     delete cutPreviewTask;
@@ -1171,8 +1171,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   cutVideoTask = new TTCutVideoTask(this);
   cutVideoTask->init(tgtFileName, cutList);
 
-  connect(mpThreadTaskPool, SIGNAL(exit()),    this, SLOT(onCutFinished()));
-  connect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onCutAborted()));
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
   // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
   mpThreadTaskPool->init(cutList->count());
@@ -1475,8 +1475,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     emit statusReport(0, StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
     qApp->processEvents();
     TTMkvMergeProvider mkvProvider;
-    connect(&mkvProvider, SIGNAL(progressChanged(int, const QString&)),
-            this,        SLOT(onMuxProgress(int, const QString&)));
+    connect(&mkvProvider, &TTMkvMergeProvider::progressChanged,
+            this,        &TTAVData::onMuxProgress);
 
     // Calculate frame duration in nanoseconds (e.g., "0:20000000ns" for 50fps)
     int frameDurationNs = (int)(1000000000.0 / frameRate);
@@ -1563,7 +1563,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 //! Audio video cut finished
 void TTAVData::onCutFinished()
 {
-  disconnect(mpThreadTaskPool, SIGNAL(exit()), this, SLOT(onCutFinished()));
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onCutFinished);
 
   mpMuxList->appendItem(*(cutVideoTask->muxListItem()));
   mpMuxList->print();
@@ -1587,8 +1587,8 @@ void TTAVData::onCutFinished()
       {
         TTMkvMergeProvider* mkvProvider = new TTMkvMergeProvider();
 
-        connect(mkvProvider, SIGNAL(progressChanged(int, const QString&)),
-                this,        SLOT(onMuxProgress(int, const QString&)));
+        connect(mkvProvider, &TTMkvMergeProvider::progressChanged,
+                this,        &TTAVData::onMuxProgress);
 
         // Set frame duration for raw ES video (required for PTS assignment)
         TTVideoStream* videoStream = mpCutList->at(0).avDataItem()->videoStream();
@@ -1688,8 +1688,8 @@ void TTAVData::onCutFinished()
           mplexProvider->setAudioSyncOffset(mAvSyncOffsetMs);
         }
 
-        connect(mplexProvider, SIGNAL(statusReport(int, const QString&, quint64)),
-                this,          SLOT(onStatusReport(int, const QString&, quint64)));
+        connect(mplexProvider, &TTMplexProvider::statusReport,
+                this,          &TTAVData::onStatusReport);
 
         if (TTCut::muxMode == 1)
           mplexProvider->writeMuxScript();
@@ -1704,8 +1704,8 @@ void TTAVData::onCutFinished()
 
 void TTAVData::onCutAborted()
 {
-  disconnect(mpThreadTaskPool, SIGNAL(exit()),    this, SLOT(onCutFinished()));
-  disconnect(mpThreadTaskPool, SIGNAL(aborted()), this, SLOT(onCutAborted()));
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 }
 
 // /////////////////////////////////////////////////////////////////////////////

@@ -171,8 +171,8 @@ void TTCutTask::cleanUp()
 {
   if (mpCutStream == 0) return;
 
-  disconnect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
-	    			 this,        SLOT(onStatusReport(int, const QString&, quint64)));
+  disconnect(mpCutStream, &TTVideoStream::statusReport,
+	    			 this,        qOverload<int, const QString&, quint64>(&TTCutTask::onStatusReport));
 }
 
 /**
@@ -194,8 +194,8 @@ void TTCutTask::operation()
   if (mpCutStream == 0)
     throw TTInvalidOperationException(__FILE__, __LINE__, tr("No cut stream specified!"));
 
-	connect(mpCutStream, SIGNAL(statusReport(int, const QString&, quint64)),
-	  			this,        SLOT(onStatusReport(int, const QString&, quint64)));
+	connect(mpCutStream, &TTVideoStream::statusReport,
+	  			this,        qOverload<int, const QString&, quint64>(&TTCutTask::onStatusReport));
 
   mpCutStream->cut(mCutIn, mCutOut, mpCutParameter);
 }

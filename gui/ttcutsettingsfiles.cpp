@@ -37,7 +37,7 @@ TTCutSettingsFiles::TTCutSettingsFiles(QWidget* parent)
 {
   setupUi(this);
 
-  connect(cbCreateLog, SIGNAL(stateChanged(int)), SLOT(onCreateLogStateChanged(int)));
+  connect(cbCreateLog, &QCheckBox::stateChanged, this, &TTCutSettingsFiles::onCreateLogStateChanged);
 }
 
 void TTCutSettingsFiles::setTitle(__attribute__((unused))const QString& title)

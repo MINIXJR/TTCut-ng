@@ -61,15 +61,15 @@ void TTStreamPointWidget::setupLandezonenTab(QWidget* tab)
   mListView->setAlternatingRowColors(true);
   layout->addWidget(mListView, 1);
 
-  connect(mListView, SIGNAL(doubleClicked(const QModelIndex&)),
-          this, SLOT(onItemDoubleClicked(const QModelIndex&)));
-  connect(mListView, SIGNAL(customContextMenuRequested(const QPoint&)),
-          this, SLOT(onContextMenu(const QPoint&)));
+  connect(mListView, &QListView::doubleClicked,
+          this, &TTStreamPointWidget::onItemDoubleClicked);
+  connect(mListView, &QListView::customContextMenuRequested,
+          this, &TTStreamPointWidget::onContextMenu);
 
   // Delete key shortcut
   QShortcut* deleteShortcut = new QShortcut(QKeySequence(Qt::Key_Delete), mListView);
   deleteShortcut->setContext(Qt::WidgetShortcut);
-  connect(deleteShortcut, SIGNAL(activated()), this, SLOT(onDeleteKey()));
+  connect(deleteShortcut, &QShortcut::activated, this, &TTStreamPointWidget::onDeleteKey);
 
   // Status label
   mLblStatus = new QLabel(tab);
@@ -82,11 +82,11 @@ void TTStreamPointWidget::setupLandezonenTab(QWidget* tab)
   btnLayout->setSpacing(4);
 
   mBtnAnalyze = new QPushButton(tr("Analyse starten"), tab);
-  connect(mBtnAnalyze, SIGNAL(clicked()), this, SLOT(onAnalyzeClicked()));
+  connect(mBtnAnalyze, &QPushButton::clicked, this, &TTStreamPointWidget::onAnalyzeClicked);
   btnLayout->addWidget(mBtnAnalyze);
 
   mBtnDeleteAll = new QPushButton(tr("Delete all"), tab);
-  connect(mBtnDeleteAll, SIGNAL(clicked()), this, SLOT(onDeleteAllClicked()));
+  connect(mBtnDeleteAll, &QPushButton::clicked, this, &TTStreamPointWidget::onDeleteAllClicked);
   btnLayout->addWidget(mBtnDeleteAll);
 
   layout->addLayout(btnLayout);
@@ -145,9 +145,9 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // Enable/disable pillarbox controls based on aspect change checkbox
-  connect(mCbAspectChange, SIGNAL(toggled(bool)), mCbPillarbox, SLOT(setEnabled(bool)));
-  connect(mCbAspectChange, SIGNAL(toggled(bool)), mSbPillarboxThreshold, SLOT(setEnabled(bool)));
-  connect(mCbAspectChange, SIGNAL(toggled(bool)), lblPillarboxThreshold, SLOT(setEnabled(bool)));
+  connect(mCbAspectChange, &QCheckBox::toggled, mCbPillarbox,          &QWidget::setEnabled);
+  connect(mCbAspectChange, &QCheckBox::toggled, mSbPillarboxThreshold, &QWidget::setEnabled);
+  connect(mCbAspectChange, &QCheckBox::toggled, lblPillarboxThreshold, &QWidget::setEnabled);
 
   // Vertical spacer
   gl->setRowStretch(row, 1);

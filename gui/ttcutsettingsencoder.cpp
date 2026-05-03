@@ -44,8 +44,8 @@ TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
   updateProfileList();
 
   // Connect signals
-  connect(cbCodec, SIGNAL(currentIndexChanged(int)), SLOT(onCodecChanged(int)));
-  connect(cbEncodingMode, SIGNAL(stateChanged(int)), SLOT(onEncodingModeChanged(int)));
+  connect(cbCodec, qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutSettingsEncoder::onCodecChanged);
+  connect(cbEncodingMode, &QCheckBox::stateChanged, this, &TTCutSettingsEncoder::onEncodingModeChanged);
 }
 
 void TTCutSettingsEncoder::setTitle(__attribute__((unused))const QString& title)

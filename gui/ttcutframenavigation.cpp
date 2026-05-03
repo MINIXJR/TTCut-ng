@@ -107,7 +107,7 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	pbSelectLogoROI->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; font-size: 16px; }"
 	                                "QPushButton:checked { background-color: #cc44cc; color: white; }");
 	pbSelectLogoROI->setContextMenuPolicy(Qt::CustomContextMenu);
-	connect(pbSelectLogoROI, SIGNAL(customContextMenuRequested(QPoint)), SLOT(onLogoContextMenu(QPoint)));
+	connect(pbSelectLogoROI, &QPushButton::customContextMenuRequested, this, &TTCutFrameNavigation::onLogoContextMenu);
 	pbPrevLogo->setIcon(QIcon());
 	pbPrevLogo->setText(tr("\u25C0 \u2B26"));  // ◀ ⬦
 	pbPrevLogo->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; }");
@@ -123,8 +123,8 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	sbLogoThreshold->setValue(TTCut::navLogoThreshold);
 
 	// Keep TTCut variables in sync with spinbox changes
-	connect(sbBlackThreshold, SIGNAL(valueChanged(double)), SLOT(onBlackThresholdChanged(double)));
-	connect(sbSceneThreshold, SIGNAL(valueChanged(double)), SLOT(onSceneThresholdChanged(double)));
+	connect(sbBlackThreshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onBlackThresholdChanged);
+	connect(sbSceneThreshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onSceneThresholdChanged);
 
 	// Cut-In = Green background (start/go - universal convention)
 	pbSetCutIn->setStyleSheet("QPushButton { background-color: #2d7a2d; color: white; font-weight: bold; }"
@@ -150,30 +150,30 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 	pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
 	pbSetMarker->setStyleSheet("QPushButton { color: #9966cc; }");
 
-	connect(pbNextIFrame, SIGNAL(clicked()), SLOT(onNextIFrame()));
-	connect(pbPrevIFrame, SIGNAL(clicked()), SLOT(onPrevIFrame()));
-	connect(pbNextPFrame, SIGNAL(clicked()), SLOT(onNextPFrame()));
-	connect(pbPrevPFrame, SIGNAL(clicked()), SLOT(onPrevPFrame()));
-	connect(pbNextBFrame, SIGNAL(clicked()), SLOT(onNextBFrame()));
-	connect(pbPrevBFrame, SIGNAL(clicked()), SLOT(onPrevBFrame()));
-	connect(pbSetCutIn, SIGNAL(clicked()), SLOT(onSetCutIn()));
-	connect(pbSetCutOut, SIGNAL(clicked()), SLOT(onSetCutOut()));
-	connect(pbGotoCutIn, SIGNAL(clicked()), SLOT(onGotoCutIn()));
-	connect(pbGotoCutOut, SIGNAL(clicked()), SLOT(onGotoCutOut()));
-	connect(pbAddCut, SIGNAL(clicked()), SLOT(onAddCutRange()));
-	connect(pbQuickJump, SIGNAL(clicked()), SIGNAL(openQuickJump()));
-	connect(pbSetMarker, SIGNAL(clicked()), SLOT(onSetMarker()));
-	connect(pbPrevBlackFrame, SIGNAL(clicked()), SLOT(onPrevBlackFrame()));
-	connect(pbNextBlackFrame, SIGNAL(clicked()), SLOT(onNextBlackFrame()));
-	connect(pbCancelBlackSearch, SIGNAL(clicked()), SLOT(onCancelBlackSearch()));
-	connect(pbPrevSceneChange, SIGNAL(clicked()), SLOT(onPrevSceneChange()));
-	connect(pbNextSceneChange, SIGNAL(clicked()), SLOT(onNextSceneChange()));
-	connect(pbCancelSceneSearch, SIGNAL(clicked()), SLOT(onCancelSceneSearch()));
-	connect(pbSelectLogoROI, SIGNAL(clicked()), SLOT(onSelectLogoROI()));
-	connect(pbPrevLogo, SIGNAL(clicked()), SLOT(onPrevLogo()));
-	connect(pbNextLogo, SIGNAL(clicked()), SLOT(onNextLogo()));
-	connect(pbCancelLogoSearch, SIGNAL(clicked()), SLOT(onCancelLogoSearch()));
-	connect(sbLogoThreshold, SIGNAL(valueChanged(double)), SLOT(onLogoThresholdChanged(double)));
+	connect(pbNextIFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onNextIFrame);
+	connect(pbPrevIFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevIFrame);
+	connect(pbNextPFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onNextPFrame);
+	connect(pbPrevPFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevPFrame);
+	connect(pbNextBFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onNextBFrame);
+	connect(pbPrevBFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevBFrame);
+	connect(pbSetCutIn,          &QPushButton::clicked, this, &TTCutFrameNavigation::onSetCutIn);
+	connect(pbSetCutOut,         &QPushButton::clicked, this, &TTCutFrameNavigation::onSetCutOut);
+	connect(pbGotoCutIn,         &QPushButton::clicked, this, &TTCutFrameNavigation::onGotoCutIn);
+	connect(pbGotoCutOut,        &QPushButton::clicked, this, &TTCutFrameNavigation::onGotoCutOut);
+	connect(pbAddCut,            &QPushButton::clicked, this, &TTCutFrameNavigation::onAddCutRange);
+	connect(pbQuickJump,         &QPushButton::clicked, this, &TTCutFrameNavigation::openQuickJump);
+	connect(pbSetMarker,         &QPushButton::clicked, this, &TTCutFrameNavigation::onSetMarker);
+	connect(pbPrevBlackFrame,    &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevBlackFrame);
+	connect(pbNextBlackFrame,    &QPushButton::clicked, this, &TTCutFrameNavigation::onNextBlackFrame);
+	connect(pbCancelBlackSearch, &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelBlackSearch);
+	connect(pbPrevSceneChange,   &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevSceneChange);
+	connect(pbNextSceneChange,   &QPushButton::clicked, this, &TTCutFrameNavigation::onNextSceneChange);
+	connect(pbCancelSceneSearch, &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelSceneSearch);
+	connect(pbSelectLogoROI,     &QPushButton::clicked, this, &TTCutFrameNavigation::onSelectLogoROI);
+	connect(pbPrevLogo,          &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevLogo);
+	connect(pbNextLogo,          &QPushButton::clicked, this, &TTCutFrameNavigation::onNextLogo);
+	connect(pbCancelLogoSearch,  &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelLogoSearch);
+	connect(sbLogoThreshold,     qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onLogoThresholdChanged);
 }
 
 //void TTCutFrameNavigation::setTitle(const QString & title)
@@ -627,6 +627,6 @@ void TTCutFrameNavigation::onLogoThresholdChanged(double value)
 void TTCutFrameNavigation::onLogoContextMenu(const QPoint& pos)
 {
   QMenu menu(this);
-  menu.addAction(tr("Logo-Datei laden..."), this, SIGNAL(loadLogoFile()));
+  menu.addAction(tr("Logo-Datei laden..."), this, &TTCutFrameNavigation::loadLogoFile);
   menu.exec(pbSelectLogoROI->mapToGlobal(pos));
 }

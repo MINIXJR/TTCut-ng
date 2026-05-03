@@ -58,8 +58,8 @@ TTProgressBar::TTProgressBar(QWidget* parent)
 
   taskProgressHash = new QHash<QUuid, TTTaskProgress*>;
 
-  connect(pbCancel,  SIGNAL(clicked()),         this,  SLOT(onBtnCancelClicked()));
-  connect(cbDetails, SIGNAL(stateChanged(int)), this, SLOT(onDetailsStateChanged(int)));
+  connect(pbCancel,  &QPushButton::clicked,    this, &TTProgressBar::onBtnCancelClicked);
+  connect(cbDetails, &QCheckBox::stateChanged, this, &TTProgressBar::onDetailsStateChanged);
 }
 
 /**
@@ -266,7 +266,7 @@ void TTProgressBar::showProcessForm()
 
 	processForm = new TTProcessForm(this);
 
-  connect(processForm, SIGNAL(btnCancelClicked()), this, SLOT(onBtnCancelClicked()));
+  connect(processForm, &TTProcessForm::btnCancelClicked, this, &TTProgressBar::onBtnCancelClicked);
 
   processForm->setModal(isBlocking);
 	//processForm->showCancelButton(isBlocking);

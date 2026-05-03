@@ -77,8 +77,8 @@ void TTOpenVideoTask::cleanUp()
   if (mpVideoType   != 0) delete mpVideoType;
   if (mpVideoStream == 0) return;
 
-  disconnect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
-             this,          SLOT(onStatusReport(int, const QString&, quint64)));
+  disconnect(mpVideoStream, &TTVideoStream::statusReport,
+             this,          qOverload<int, const QString&, quint64>(&TTOpenVideoTask::onStatusReport));
 }
 
 /**
@@ -138,8 +138,8 @@ void TTOpenVideoTask::operation()
 
   qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
 
-  connect(mpVideoStream, SIGNAL(statusReport(int, const QString&, quint64)),
-          this,          SLOT(onStatusReport(int, const QString&, quint64)));
+  connect(mpVideoStream, &TTVideoStream::statusReport,
+          this,          qOverload<int, const QString&, quint64>(&TTOpenVideoTask::onStatusReport));
 
   int headerCount = mpVideoStream->createHeaderList();
   if (headerCount <= 0) {

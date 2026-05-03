@@ -43,7 +43,7 @@ TTProcessForm::TTProcessForm(QWidget* parent)
   btnCancel->setAutoDefault(false);
   btnCancel->hide();
 
-  connect(btnCancel, SIGNAL(clicked(bool)), SIGNAL(btnCancelClicked()));
+  connect(btnCancel, &QPushButton::clicked, this, &TTProcessForm::btnCancelClicked);
 }
 
 /**

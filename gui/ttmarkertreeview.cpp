@@ -67,11 +67,11 @@ TTMarkerTreeView::TTMarkerTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbEntryUp,      SIGNAL(clicked()),                                 SLOT(onItemUp()));
-  connect(pbEntryDown,    SIGNAL(clicked()),                                 SLOT(onItemDown()));
-  connect(pbEntryDelete,  SIGNAL(clicked()),                                 SLOT(onRemoveItem()));
-  connect(markerListView,  SIGNAL(doubleClicked(const QModelIndex)),          SLOT(onActivateMarker()));
-  connect(markerListView, SIGNAL(customContextMenuRequested(const QPoint&)), SLOT(onContextMenuRequest(const QPoint&)));
+  connect(pbEntryUp,      &QPushButton::clicked, this, &TTMarkerTreeView::onItemUp);
+  connect(pbEntryDown,    &QPushButton::clicked, this, &TTMarkerTreeView::onItemDown);
+  connect(pbEntryDelete,  &QPushButton::clicked, this, &TTMarkerTreeView::onRemoveItem);
+  connect(markerListView, &QTreeWidget::doubleClicked,               this, &TTMarkerTreeView::onActivateMarker);
+  connect(markerListView, &QTreeWidget::customContextMenuRequested,  this, &TTMarkerTreeView::onContextMenuRequest);
 }
 
 /*!
@@ -81,12 +81,12 @@ void TTMarkerTreeView::setAVData(TTAVData* avData)
 {
   mpAVData = avData;
 
-  connect(mpAVData, SIGNAL(markerAppended(const TTMarkerItem&)),                  SLOT(onAppendItem(const TTMarkerItem&)));
-  connect(mpAVData, SIGNAL(markerRemoved(int)),                                   SLOT(onItemRemoved(int)));
-  connect(mpAVData, SIGNAL(markerUpdated(const TTMarkerItem&, const TTMarkerItem&)), SLOT(onUpdateItem(const TTMarkerItem&, const TTMarkerItem&)));
-  connect(mpAVData, SIGNAL(markerDataReloaded()),                                 SLOT(onReloadList()));
-  connect(this,     SIGNAL(removeItem(const TTMarkerItem&)),            mpAVData, SLOT(onRemoveMarker(const TTMarkerItem&)));
-  connect(this,     SIGNAL(itemOrderChanged(int, int)),                 mpAVData, SLOT(onMarkerOrderChanged(int , int)));
+  connect(mpAVData, &TTAVData::markerAppended,        this, &TTMarkerTreeView::onAppendItem);
+  connect(mpAVData, &TTAVData::markerRemoved,         this, &TTMarkerTreeView::onItemRemoved);
+  connect(mpAVData, qOverload<const TTMarkerItem&, const TTMarkerItem&>(&TTAVData::markerUpdated), this, &TTMarkerTreeView::onUpdateItem);
+  connect(mpAVData, &TTAVData::markerDataReloaded,    this, &TTMarkerTreeView::onReloadList);
+  connect(this,     &TTMarkerTreeView::removeItem,        mpAVData, &TTAVData::onRemoveMarker);
+  connect(this,     &TTMarkerTreeView::itemOrderChanged,  mpAVData, &TTAVData::onMarkerOrderChanged);
 }
 
 void TTMarkerTreeView::clear()
@@ -269,16 +269,16 @@ void TTMarkerTreeView::createActions()
   itemUpAction = new QAction(tr("Move &up"), this);
   itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
   itemUpAction->setStatusTip(tr("Move selected marker one position upward"));
-  connect(itemUpAction, SIGNAL(triggered()), SLOT(onItemUp()));
+  connect(itemUpAction, &QAction::triggered, this, &TTMarkerTreeView::onItemUp);
 
   itemDeleteAction = new QAction(tr("&Delete"), this);
   itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
   itemDeleteAction->setStatusTip(tr("Remove selected marker from list"));
-  connect(itemDeleteAction, SIGNAL(triggered()), SLOT(onRemoveItem()));
+  connect(itemDeleteAction, &QAction::triggered, this, &TTMarkerTreeView::onRemoveItem);
 
   itemDownAction = new QAction(tr("Move d&own"), this);
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected marker one position downward"));
-  connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+  connect(itemDownAction, &QAction::triggered, this, &TTMarkerTreeView::onItemDown);
 }
 

@@ -100,12 +100,12 @@ void TTThreadTaskPool::cleanUpQueue()
 
     if (task == 0) continue;
 
-    disconnect(task, SIGNAL(started(TTThreadTask*)),  this, SLOT(onThreadTaskStarted(TTThreadTask*)));
-    disconnect(task, SIGNAL(finished(TTThreadTask*)), this, SLOT(onThreadTaskFinished(TTThreadTask*)));
-    disconnect(task, SIGNAL(aborted(TTThreadTask*)),  this, SLOT(onThreadTaskAborted(TTThreadTask*)));
+    disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+    disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+    disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
 
-    disconnect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-      this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+    disconnect(task, &TTThreadTask::statusReport,
+      this, &TTThreadTaskPool::onStatusReport);
 
 
     //qDebug() << "remove task " << task->taskName() << " with UUID " << task->taskID();
@@ -125,12 +125,12 @@ void TTThreadTaskPool::cleanUpQueue()
  */
 void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
 {
-  connect(task, SIGNAL(started(TTThreadTask*)),  this, SLOT(onThreadTaskStarted(TTThreadTask*)));
-  connect(task, SIGNAL(finished(TTThreadTask*)), this, SLOT(onThreadTaskFinished(TTThreadTask*)));
-  connect(task, SIGNAL(aborted(TTThreadTask*)),  this, SLOT(onThreadTaskAborted(TTThreadTask*)));
+  connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
 
-  connect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-    this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+  connect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
 
   if (runningTaskCount() == 0)
   {
@@ -165,12 +165,12 @@ void TTThreadTaskPool::onThreadTaskStarted(TTThreadTask* task)
  */
 void TTThreadTaskPool::onThreadTaskFinished(TTThreadTask* task)
 {
-  disconnect(task, SIGNAL(started(TTThreadTask*)),  this, SLOT(onThreadTaskStarted(TTThreadTask*)));
-  disconnect(task, SIGNAL(finished(TTThreadTask*)), this, SLOT(onThreadTaskFinished(TTThreadTask*)));
-  disconnect(task, SIGNAL(aborted(TTThreadTask*)),  this, SLOT(onThreadTaskAborted(TTThreadTask*)));
+  disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
 
-  disconnect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-    this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+  disconnect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
 
   mTaskQueue.removeAll(task);
 
@@ -198,12 +198,12 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
           arg(task->taskID()).
           arg(task->isRunning())));*/
 
-  disconnect(task, SIGNAL(started(TTThreadTask*)),  this, SLOT(onThreadTaskStarted(TTThreadTask*)));
-  disconnect(task, SIGNAL(finished(TTThreadTask*)), this, SLOT(onThreadTaskFinished(TTThreadTask*)));
-  disconnect(task, SIGNAL(aborted(TTThreadTask*)),  this, SLOT(onThreadTaskAborted(TTThreadTask*)));
+  disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
 
-  disconnect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-    this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+  disconnect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
 
   mTaskQueue.removeAll(task);
 
@@ -264,12 +264,12 @@ void TTThreadTaskPool::onUserAbortRequest()
   {
     TTThreadTask* task = mTaskQueue.at(i);
 
-    disconnect(task, SIGNAL(started(TTThreadTask*)),  this, SLOT(onThreadTaskStarted(TTThreadTask*)));
-    disconnect(task, SIGNAL(finished(TTThreadTask*)), this, SLOT(onThreadTaskFinished(TTThreadTask*)));
-    //disconnect(task, SIGNAL(aborted(TTThreadTask*)),  this, SLOT(onThreadTaskAborted(TTThreadTask*)));
+    disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+    disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+    //disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
 
-    //disconnect(task, SIGNAL(statusReport(TTThreadTask*, int, const QString&, quint64)),
-    //           this, SLOT(onStatusReport(TTThreadTask*, int, const QString&, quint64)));
+    //disconnect(task, &TTThreadTask::statusReport,
+    //           this, &TTThreadTaskPool::onStatusReport);
 
     //onStatusReport(task, StatusReportArgs::Step, "Aborting task...", 0);
     task->onUserAbort();

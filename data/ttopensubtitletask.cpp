@@ -73,8 +73,8 @@ void TTOpenSubtitleTask::cleanUp()
   if (mpSubtitleType   != 0) delete mpSubtitleType;
   if (mpSubtitleStream == 0) return;
 
-  disconnect(mpSubtitleStream, SIGNAL(statusReport(int, const QString&, quint64)),
-             this,             SLOT(onStatusReport(int, const QString&, quint64)));
+  disconnect(mpSubtitleStream, &TTSubtitleStream::statusReport,
+             this,             qOverload<int, const QString&, quint64>(&TTOpenSubtitleTask::onStatusReport));
 }
 
 /**
@@ -97,8 +97,8 @@ void TTOpenSubtitleTask::operation()
   mpSubtitleStream = (TTSubtitleStream*) mpSubtitleType->createSubtitleStream();
 
   qDebug("connect subtitle stream step signal");
-  connect(mpSubtitleStream, SIGNAL(statusReport(int, const QString&, quint64)),
-          this,             SLOT(onStatusReport(int, const QString&, quint64)));
+  connect(mpSubtitleStream, &TTSubtitleStream::statusReport,
+          this,             qOverload<int, const QString&, quint64>(&TTOpenSubtitleTask::onStatusReport));
   qDebug("create subtitle stream header list");
   mpSubtitleStream->createHeaderList();
 

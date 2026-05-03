@@ -76,11 +76,11 @@ TTAudioTreeView::TTAudioTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbAudioFileOpen,    SIGNAL(clicked()), SIGNAL(openFile()));
-  connect(pbAudioEntryUp,     SIGNAL(clicked()), SLOT(onItemUp()));
-  connect(pbAudioEntryDown,   SIGNAL(clicked()), SLOT(onItemDown()));
-  connect(pbAudioEntryDelete, SIGNAL(clicked()), SLOT(onRemoveItem()));
-  connect(audioListView,      SIGNAL(customContextMenuRequested(const QPoint&)), SLOT( onContextMenuRequest(const QPoint&)));
+  connect(pbAudioFileOpen,    &QPushButton::clicked, this, &TTAudioTreeView::openFile);
+  connect(pbAudioEntryUp,     &QPushButton::clicked, this, &TTAudioTreeView::onItemUp);
+  connect(pbAudioEntryDown,   &QPushButton::clicked, this, &TTAudioTreeView::onItemDown);
+  connect(pbAudioEntryDelete, &QPushButton::clicked, this, &TTAudioTreeView::onRemoveItem);
+  connect(audioListView,      &QTreeWidget::customContextMenuRequested, this, &TTAudioTreeView::onContextMenuRequest);
 }
 
 //! Set the group box title string. This method is needed by designer.
@@ -100,26 +100,26 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
 	}
 
 	if (mpAVItem != 0) {
-	disconnect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
-  disconnect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
-  disconnect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
-  disconnect(this,   SIGNAL(delayChanged(int, int)),              mpAVItem, SLOT(onAudioDelayChanged(int, int)));
+	disconnect(this,     &TTAudioTreeView::removeItem,       mpAVItem, &TTAVItem::onRemoveAudioItem);
+  disconnect(this,     &TTAudioTreeView::swapItems,        mpAVItem, &TTAVItem::onSwapAudioItems);
+  disconnect(this,     &TTAudioTreeView::languageChanged,  mpAVItem, &TTAVItem::onAudioLanguageChanged);
+  disconnect(this,     &TTAudioTreeView::delayChanged,     mpAVItem, &TTAVItem::onAudioDelayChanged);
 
-  disconnect(mpAVItem, SIGNAL(audioItemAppended(const TTAudioItem&)), this, SLOT(onAppendItem(const TTAudioItem&)));
-  disconnect(mpAVItem, SIGNAL(audioItemRemoved(int)),                 this, SLOT(onItemRemoved(int)));
-  disconnect(mpAVItem, SIGNAL(audioItemsSwapped(int, int)),           this, SLOT(onSwapItems(int, int)));
+  disconnect(mpAVItem, &TTAVItem::audioItemAppended,        this, &TTAudioTreeView::onAppendItem);
+  disconnect(mpAVItem, qOverload<int>(&TTAVItem::audioItemRemoved), this, &TTAudioTreeView::onItemRemoved);
+  disconnect(mpAVItem, &TTAVItem::audioItemsSwapped,        this, &TTAudioTreeView::onSwapItems);
 	}
 
   mpAVItem = avData;
 
-  connect(mpAVItem, SIGNAL(audioItemAppended(const TTAudioItem&)), SLOT(onAppendItem(const TTAudioItem&)));
-  connect(mpAVItem, SIGNAL(audioItemRemoved(int)),                 SLOT(onItemRemoved(int)));
-  connect(mpAVItem, SIGNAL(audioItemsSwapped(int, int)),           SLOT(onSwapItems(int, int)));
+  connect(mpAVItem, &TTAVItem::audioItemAppended,        this, &TTAudioTreeView::onAppendItem);
+  connect(mpAVItem, qOverload<int>(&TTAVItem::audioItemRemoved), this, &TTAudioTreeView::onItemRemoved);
+  connect(mpAVItem, &TTAVItem::audioItemsSwapped,        this, &TTAudioTreeView::onSwapItems);
 
-  connect(this,   SIGNAL(removeItem(int)),             mpAVItem, SLOT(onRemoveAudioItem(int)));
-  connect(this,   SIGNAL(swapItems(int, int)),         mpAVItem, SLOT(onSwapAudioItems(int, int)));
-  connect(this,   SIGNAL(languageChanged(int, const QString&)), mpAVItem, SLOT(onAudioLanguageChanged(int, const QString&)));
-  connect(this,   SIGNAL(delayChanged(int, int)),              mpAVItem, SLOT(onAudioDelayChanged(int, int)));
+  connect(this,     &TTAudioTreeView::removeItem,        mpAVItem, &TTAVItem::onRemoveAudioItem);
+  connect(this,     &TTAudioTreeView::swapItems,         mpAVItem, &TTAVItem::onSwapAudioItems);
+  connect(this,     &TTAudioTreeView::languageChanged,   mpAVItem, &TTAVItem::onAudioLanguageChanged);
+  connect(this,     &TTAudioTreeView::delayChanged,      mpAVItem, &TTAVItem::onAudioDelayChanged);
 
   onReloadList(mpAVItem);
 }
@@ -280,22 +280,22 @@ void TTAudioTreeView::createActions()
   itemNewAction = new QAction(tr("&Insert audiofile"), this);
   itemNewAction->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
   itemNewAction->setStatusTip(tr("Open a new audiofile and insert to list"));
-  connect(itemNewAction, SIGNAL(triggered()), SIGNAL(openFile()));
+  connect(itemNewAction, &QAction::triggered, this, &TTAudioTreeView::openFile);
 
   itemUpAction = new QAction(tr("Move &up"), this);
   itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
   itemUpAction->setStatusTip(tr("Move selected audiofile one position upward"));
-  connect(itemUpAction, SIGNAL(triggered()), SLOT(onItemUp()));
+  connect(itemUpAction, &QAction::triggered, this, &TTAudioTreeView::onItemUp);
 
   itemDeleteAction = new QAction(tr("&Delete"), this);
   itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
   itemDeleteAction->setStatusTip(tr("Remove selected audiofile from list"));
-  connect(itemDeleteAction, SIGNAL(triggered()), SLOT(onRemoveItem()));
+  connect(itemDeleteAction, &QAction::triggered, this, &TTAudioTreeView::onRemoveItem);
 
   itemDownAction = new QAction(tr("Move d&own"), this);
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected audiofile one position downward"));
-  connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+  connect(itemDownAction, &QAction::triggered, this, &TTAudioTreeView::onItemDown);
 }
 
 QComboBox* TTAudioTreeView::createLanguageCombo(const QString& currentLang)

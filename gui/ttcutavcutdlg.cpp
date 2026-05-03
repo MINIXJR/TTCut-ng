@@ -69,9 +69,9 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
 
   // signals and slot connection
   // ------------------------------------------------------------------
-  connect(btnDirOpen,   SIGNAL(clicked()),           SLOT(onDirectoryOpen()));
-  connect(okButton,     SIGNAL(clicked()),           SLOT( onDlgStart()));
-  connect(cancelButton, SIGNAL(clicked()),           SLOT( onDlgCancel()));
+  connect(btnDirOpen,   &QPushButton::clicked, this, &TTCutAVCutDlg::onDirectoryOpen);
+  connect(okButton,     &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgStart);
+  connect(cancelButton, &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgCancel);
 
   // set the tabs data
   // ------------------------------------------------------------------
@@ -81,15 +81,15 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
 
   // React to encoder codec changes (disable MPG row for H.264/H.265,
   // update muxer visibility).
-  connect(encodingPage, SIGNAL(codecChanged(int)),
-          muxingPage,   SLOT(onEncoderCodecChanged(int)));
+  connect(encodingPage, &TTCutSettingsEncoder::codecChanged,
+          muxingPage,   &TTCutSettingsMuxer::onEncoderCodecChanged);
 
   // Live filename updates: suffix toggle, codec change, container change.
   // Wired before the initial onEncoderCodecChanged() sync below so that
   // the very first container change (if any) propagates to the filename.
-  connect(cbAddSuffix,  SIGNAL(toggled(bool)),           SLOT(updateOutputFilename()));
-  connect(encodingPage, SIGNAL(codecChanged(int)),       SLOT(updateOutputFilename()));
-  connect(muxingPage,   SIGNAL(containerChanged(int)),   SLOT(updateOutputFilename()));
+  connect(cbAddSuffix,  &QCheckBox::toggled,                  this, &TTCutAVCutDlg::updateOutputFilename);
+  connect(encodingPage, &TTCutSettingsEncoder::codecChanged,  this, &TTCutAVCutDlg::updateOutputFilename);
+  connect(muxingPage,   &TTCutSettingsMuxer::containerChanged, this, &TTCutAVCutDlg::updateOutputFilename);
 
   // Initial sync based on current codec.
   muxingPage->onEncoderCodecChanged(TTCut::encoderCodec);

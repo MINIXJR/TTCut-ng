@@ -1055,8 +1055,8 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
 
   TTTranscodeProvider* transcode_prov = new TTTranscodeProvider(encParams);
 
-  connect(transcode_prov, SIGNAL(statusReport(int, const QString&, quint64)),
-          this,           SIGNAL(statusReport(int, const QString&, quint64)),
+  connect(transcode_prov, &TTTranscodeProvider::statusReport,
+          this,           &TTMpeg2VideoStream::statusReport,
           Qt::DirectConnection);
 
   qApp->processEvents();
@@ -1090,8 +1090,8 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   TTCut::readVideoIDD   = savReadVideoIDD;
   TTCut::createVideoIDD = savCreateVideoIDD;
 
-  disconnect(transcode_prov, SIGNAL(statusReport(int, const QString&, quint64)),
-  		       this,           SIGNAL(statusReport(int, const QString&, quint64)));
+  disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
+  		       this,           &TTMpeg2VideoStream::statusReport);
 
   delete transcode_prov;
   delete new_mpeg_stream;

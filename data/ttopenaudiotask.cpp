@@ -72,8 +72,8 @@ void TTOpenAudioTask::cleanUp()
   if (mpAudioType   != 0) delete mpAudioType;
   if (mpAudioStream == 0) return;
 
-	disconnect(mpAudioStream, SIGNAL(statusReport(int, const QString&, quint64)),
-			   	   this,          SLOT(onStatusReport(int, const QString&, quint64)));
+	disconnect(mpAudioStream, &TTAudioStream::statusReport,
+			   	   this,          qOverload<int, const QString&, quint64>(&TTOpenAudioTask::onStatusReport));
 }
 
 /**
@@ -96,8 +96,8 @@ void TTOpenAudioTask::operation()
 
 	mpAudioStream = (TTAudioStream*) mpAudioType->createAudioStream();
 
-  connect(mpAudioStream, SIGNAL(statusReport(int, const QString&, quint64)),
-				  this,          SLOT(onStatusReport(int, const QString&, quint64)));
+  connect(mpAudioStream, &TTAudioStream::statusReport,
+				  this,          qOverload<int, const QString&, quint64>(&TTOpenAudioTask::onStatusReport));
 
 	mpAudioStream->createHeaderList();
 

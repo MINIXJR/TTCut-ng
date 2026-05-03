@@ -40,7 +40,7 @@ TTCutAboutDlg::TTCutAboutDlg(QWidget* parent)
   
   // signals and slot connection
   // ------------------------------------------------------------------
-  connect( okButton, SIGNAL( clicked() ),  SLOT( onDlgClose() ) );
+  connect( okButton, &QPushButton::clicked,  this, &TTCutAboutDlg::onDlgClose );
 }
 
 TTCutAboutDlg::~TTCutAboutDlg()

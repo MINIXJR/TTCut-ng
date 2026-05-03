@@ -73,12 +73,12 @@ TTVideoTreeView::TTVideoTreeView(QWidget* parent)
   createActions();
 
   // signal and slot connections
-  connect(pbVideoFileOpen,  SIGNAL(clicked()),              SIGNAL(openFile()));
-  connect(pbEntryUp,        SIGNAL(clicked()),              SLOT(onItemUp()));
-  connect(pbEntryDown,      SIGNAL(clicked()),              SLOT(onItemDown()));
-  connect(pbEntryDelete,    SIGNAL(clicked()),              SLOT(onRemoveItem()));
-  connect(videoListView,    SIGNAL(itemSelectionChanged()), SLOT(onItemSelectionChanged()));
-  connect(videoListView,    SIGNAL(customContextMenuRequested(const QPoint&)), SLOT( onContextMenuRequest(const QPoint&)));
+  connect(pbVideoFileOpen,  &QPushButton::clicked, this, &TTVideoTreeView::openFile);
+  connect(pbEntryUp,        &QPushButton::clicked, this, &TTVideoTreeView::onItemUp);
+  connect(pbEntryDown,      &QPushButton::clicked, this, &TTVideoTreeView::onItemDown);
+  connect(pbEntryDelete,    &QPushButton::clicked, this, &TTVideoTreeView::onRemoveItem);
+  connect(videoListView,    &QTreeWidget::itemSelectionChanged,        this, &TTVideoTreeView::onItemSelectionChanged);
+  connect(videoListView,    &QTreeWidget::customContextMenuRequested,  this, &TTVideoTreeView::onContextMenuRequest);
 }
 
 //! Set the group box title string. This method is needed by designer.
@@ -93,26 +93,26 @@ void TTVideoTreeView::setAVData(TTAVData* avData)
 {
   mAVData = avData;
 
-  connect(mAVData, SIGNAL(avItemAppended(const TTAVItem&)), SLOT(onAppendItem(const TTAVItem&)));
-  connect(mAVData, SIGNAL(avItemRemoved(int)),              SLOT(onItemRemoved(int)));
-  connect(mAVData, SIGNAL(avItemsSwapped(int, int)),        SLOT(onItemsSwapped(int, int)));
-  connect(mAVData, SIGNAL(avDataReloaded()),                SLOT(onReloadList()));
+  connect(mAVData, &TTAVData::avItemAppended,    this, &TTVideoTreeView::onAppendItem);
+  connect(mAVData, &TTAVData::avItemRemoved,     this, &TTVideoTreeView::onItemRemoved);
+  connect(mAVData, &TTAVData::avItemsSwapped,    this, &TTVideoTreeView::onItemsSwapped);
+  connect(mAVData, &TTAVData::avDataReloaded,    this, &TTVideoTreeView::onReloadList);
 
-  connect(this,    SIGNAL(removeItem(int)),       mAVData, SLOT(onRemoveAVItem(int)));
-  connect(this,    SIGNAL(swapItems(int, int)),   mAVData, SLOT(onSwapAVItems(int, int)));
-  connect(this,    SIGNAL(selectionChanged(int)), mAVData, SLOT(onChangeCurrentAVItem(int)));
+  connect(this,    &TTVideoTreeView::removeItem,        mAVData, &TTAVData::onRemoveAVItem);
+  connect(this,    &TTVideoTreeView::swapItems,         mAVData, &TTAVData::onSwapAVItems);
+  connect(this,    &TTVideoTreeView::selectionChanged,  mAVData, qOverload<int>(&TTAVData::onChangeCurrentAVItem));
 }
 
 void TTVideoTreeView::clear()
 {
-  disconnect(mAVData, SIGNAL(avItemAppended(const TTAVItem&)), this, SLOT(onAppendItem(const TTAVItem&)));
-  disconnect(mAVData, SIGNAL(avItemRemoved(int)),              this, SLOT(onItemRemoved(int)));
-  disconnect(mAVData, SIGNAL(avItemsSwapped(int, int)),        this, SLOT(onItemsSwapped(int, int)));
-  disconnect(mAVData, SIGNAL(avDataReloaded()),                this, SLOT(onReloadList()));
+  disconnect(mAVData, &TTAVData::avItemAppended,    this, &TTVideoTreeView::onAppendItem);
+  disconnect(mAVData, &TTAVData::avItemRemoved,     this, &TTVideoTreeView::onItemRemoved);
+  disconnect(mAVData, &TTAVData::avItemsSwapped,    this, &TTVideoTreeView::onItemsSwapped);
+  disconnect(mAVData, &TTAVData::avDataReloaded,    this, &TTVideoTreeView::onReloadList);
 
-  disconnect(this,    SIGNAL(removeItem(int)),       mAVData, SLOT(onRemoveAVItem(int)));
-  disconnect(this,    SIGNAL(swapItems(int, int)),   mAVData, SLOT(onSwapAVItems(int, int)));
-  disconnect(this,    SIGNAL(selectionChanged(int)), mAVData, SLOT(onChangeCurrentAVItem(int)));
+  disconnect(this,    &TTVideoTreeView::removeItem,        mAVData, &TTAVData::onRemoveAVItem);
+  disconnect(this,    &TTVideoTreeView::swapItems,         mAVData, &TTAVData::onSwapAVItems);
+  disconnect(this,    &TTVideoTreeView::selectionChanged,  mAVData, qOverload<int>(&TTAVData::onChangeCurrentAVItem));
 
 	videoListView->clear();
 }
@@ -324,21 +324,21 @@ void TTVideoTreeView::createActions()
   itemNewAction = new QAction(tr("&Insert videofile"), this);
   itemNewAction->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
   itemNewAction->setStatusTip(tr("Open a new videofile and insert to list"));
-  connect(itemNewAction, SIGNAL(triggered()), SIGNAL(openFile()));
+  connect(itemNewAction, &QAction::triggered, this, &TTVideoTreeView::openFile);
 
   itemUpAction = new QAction(tr("Move &up"), this);
   itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
   itemUpAction->setStatusTip(tr("Move selected file one position upward"));
-  connect(itemUpAction, SIGNAL(triggered()), SLOT(onItemUp()));
+  connect(itemUpAction, &QAction::triggered, this, &TTVideoTreeView::onItemUp);
 
   itemDeleteAction = new QAction(tr("&Delete"), this);
   itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
   itemDeleteAction->setStatusTip(tr("Remove selected file from list"));
-  connect(itemDeleteAction, SIGNAL(triggered()), SLOT(onRemoveItem()));
+  connect(itemDeleteAction, &QAction::triggered, this, &TTVideoTreeView::onRemoveItem);
 
   itemDownAction = new QAction(tr("Move d&own"), this);
   itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
   itemDownAction->setStatusTip(tr("Move selected file one position downward"));
-  connect(itemDownAction, SIGNAL(triggered()), SLOT(onItemDown()));
+  connect(itemDownAction, &QAction::triggered, this, &TTVideoTreeView::onItemDown);
 }
 
