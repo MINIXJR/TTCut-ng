@@ -646,10 +646,10 @@ void TTCutProjectData::serializeSettings()
   addElement("CutAddSuffix",  TTCut::cutAddSuffix ? "true" : "false");
 
   // Muxing
-  addElement("OutputContainer",    QString::number(TTCut::outputContainer));
-  addElement("MkvCreateChapters",  TTCut::mkvCreateChapters ? "true" : "false");
-  addElement("MkvChapterInterval", QString::number(TTCut::mkvChapterInterval));
-  addElement("MuxDeleteES",        TTCut::muxDeleteES ? "true" : "false");
+  addElement("OutputContainer",    QString::number(TTSettings::instance()->outputContainer()));
+  addElement("MkvCreateChapters",  TTSettings::instance()->mkvCreateChapters() ? "true" : "false");
+  addElement("MkvChapterInterval", QString::number(TTSettings::instance()->mkvChapterInterval()));
+  addElement("MuxDeleteES",        TTSettings::instance()->muxDeleteES() ? "true" : "false");
 
   // Encoder (active codec values — transient working values, persisted here
   // because they live in TTSettings as in-memory only, not in QSettings)
@@ -702,10 +702,10 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
     }
     else if (name == "CutAddSuffix")       TTCut::cutAddSuffix = (value == "true");
     // Muxing
-    else if (name == "OutputContainer")    TTCut::outputContainer = value.toInt();
-    else if (name == "MkvCreateChapters")  TTCut::mkvCreateChapters = (value == "true");
-    else if (name == "MkvChapterInterval") TTCut::mkvChapterInterval = value.toInt();
-    else if (name == "MuxDeleteES")        TTCut::muxDeleteES = (value == "true");
+    else if (name == "OutputContainer")    TTSettings::instance()->setOutputContainer(value.toInt());
+    else if (name == "MkvCreateChapters")  TTSettings::instance()->setMkvCreateChapters(value == "true");
+    else if (name == "MkvChapterInterval") TTSettings::instance()->setMkvChapterInterval(value.toInt());
+    else if (name == "MuxDeleteES")        TTSettings::instance()->setMuxDeleteES(value == "true");
     // Encoder (transient working values — see serialiser comment above)
     else if (name == "EncoderPreset")      TTSettings::instance()->setEncoderPreset(value.toInt());
     else if (name == "EncoderCrf")         TTSettings::instance()->setEncoderCrf(value.toInt());

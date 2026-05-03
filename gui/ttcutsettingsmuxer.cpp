@@ -96,7 +96,7 @@ void TTCutSettingsMuxer::initMuxTargetList()
 
 void TTCutSettingsMuxer::setTabData()
 {
-  switch(TTCut::muxMode)
+  switch(TTSettings::instance()->muxMode())
   {
     case 0:
       rbMuxStreams->setChecked(true);
@@ -112,64 +112,64 @@ void TTCutSettingsMuxer::setTabData()
   }
 
   // Set muxer program based on outputContainer setting
-  cbMuxerProg->setCurrentIndex(indexForMuxerValue(TTCut::outputContainer));
+  cbMuxerProg->setCurrentIndex(indexForMuxerValue(TTSettings::instance()->outputContainer()));
   cbMuxTarget->setCurrentIndex(TTSettings::instance()->mpeg2Target());
   updateMuxerVisibility();
 
-  leOutputPath->setText(TTCut::muxOutputPath);
+  leOutputPath->setText(TTSettings::instance()->muxOutputPath());
 
-  if (TTCut::muxDeleteES)
+  if (TTSettings::instance()->muxDeleteES())
     cbDeleteES->setCheckState(Qt::Checked);
   else
     cbDeleteES->setCheckState(Qt::Unchecked);
 
-  if(TTCut::muxPause)
+  if(TTSettings::instance()->muxPause())
     cbPause->setCheckState(Qt::Checked);
   else
     cbPause->setCheckState(Qt::Unchecked);
 
   // MKV chapter settings
-  cbMkvCreateChapters->setChecked(TTCut::mkvCreateChapters);
-  sbMkvChapterInterval->setValue(TTCut::mkvChapterInterval);
-  sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
+  cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
+  sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
+  sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
 
   // Audio-only preset: re-select since the user may have changed it via this
   // tab and getData() is called when the dialog is reopened.
-  int aofIdx = cbAudioOnlyFormat->findData(TTCut::audioOnlyFormat);
+  int aofIdx = cbAudioOnlyFormat->findData(TTSettings::instance()->audioOnlyFormat());
   cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
-  sbAudioOnlyBitrate->setValue(TTCut::audioOnlyBitrateKbps);
+  sbAudioOnlyBitrate->setValue(TTSettings::instance()->audioOnlyBitrateKbps());
 }
 
 void TTCutSettingsMuxer::getTabData()
 {
   TTSettings::instance()->setMpeg2Target(cbMuxTarget->currentIndex());
-  TTCut::muxOutputPath = leOutputPath->text();
+  TTSettings::instance()->setMuxOutputPath(leOutputPath->text());
 
   // muxMode/muxDeleteES/muxPause were only being persisted via the per-widget
   // signal handlers (onCreateMuxStreams etc.). If callers ever reset the UI
   // and called getTabData() expecting the displayed state, those three were
   // stale. Persist them here too — symmetric with setTabData.
-  TTCut::muxMode      = rbMuxStreams->isChecked() ? 0 : 1;
-  TTCut::muxDeleteES  = cbDeleteES->isChecked();
-  TTCut::muxPause     = cbPause->isChecked();
+  TTSettings::instance()->setMuxMode(rbMuxStreams->isChecked() ? 0 : 1);
+  TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
+  TTSettings::instance()->setMuxPause(cbPause->isChecked());
 
   // MKV chapter settings
-  TTCut::mkvCreateChapters  = cbMkvCreateChapters->isChecked();
-  TTCut::mkvChapterInterval = sbMkvChapterInterval->value();
+  TTSettings::instance()->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
+  TTSettings::instance()->setMkvChapterInterval(sbMkvChapterInterval->value());
 
   // Audio-only preset
-  TTCut::audioOnlyFormat       = cbAudioOnlyFormat->currentData().toInt();
-  TTCut::audioOnlyBitrateKbps  = sbAudioOnlyBitrate->value();
+  TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
+  TTSettings::instance()->setAudioOnlyBitrateKbps(sbAudioOnlyBitrate->value());
 
-  QFileInfo fInfo(TTCut::muxOutputPath);
+  QFileInfo fInfo(TTSettings::instance()->muxOutputPath());
 
   if (!fInfo.exists())
-    TTCut::muxOutputPath = TTCut::cutDirPath;
+    TTSettings::instance()->setMuxOutputPath(TTCut::cutDirPath);
 }
 
 void TTCutSettingsMuxer::onCreateMuxStreams()
 {
-  TTCut::muxMode = 0;
+  TTSettings::instance()->setMuxMode(0);
 
   cbDeleteES->setEnabled(true);
   cbPause->setEnabled(true);
@@ -177,7 +177,7 @@ void TTCutSettingsMuxer::onCreateMuxStreams()
 
 void TTCutSettingsMuxer::onCreateMuxScript()
 {
-  TTCut::muxMode = 1;
+  TTSettings::instance()->setMuxMode(1);
 
   cbDeleteES->setEnabled(false);
   cbPause->setEnabled(false);
@@ -188,12 +188,12 @@ void TTCutSettingsMuxer::onOpenOutputPath()
   QString strDir = QFileDialog::getExistingDirectory(
       this,
       tr("Select directory for mplex result"),
-      TTCut::muxOutputPath,
+      TTSettings::instance()->muxOutputPath(),
       (QFileDialog::DontResolveSymlinks | QFileDialog::ShowDirsOnly));
 
   if (!strDir.isEmpty())
   {
-    TTCut::muxOutputPath = strDir;
+    TTSettings::instance()->setMuxOutputPath(strDir);
     leOutputPath->setText(strDir);
     qApp->processEvents();
   }
@@ -202,17 +202,17 @@ void TTCutSettingsMuxer::onOpenOutputPath()
 void TTCutSettingsMuxer::onStateDeleteES(int state)
 {
   if (state == Qt::Unchecked)
-    TTCut::muxDeleteES = false;
+    TTSettings::instance()->setMuxDeleteES(false);
   else
-    TTCut::muxDeleteES = true;
+    TTSettings::instance()->setMuxDeleteES(true);
 }
 
 void TTCutSettingsMuxer::onStatePause(int state)
 {
   if (state == Qt::Unchecked)
-    TTCut::muxPause = false;
+    TTSettings::instance()->setMuxPause(false);
   else
-    TTCut::muxPause = true;
+    TTSettings::instance()->setMuxPause(true);
 }
 
 void TTCutSettingsMuxer::initOutputContainerList()
@@ -242,7 +242,7 @@ void TTCutSettingsMuxer::updateMuxerVisibility()
 void TTCutSettingsMuxer::onMuxerProgChanged(int index)
 {
   int value = muxerValueAt(index);
-  TTCut::outputContainer = value;
+  TTSettings::instance()->setOutputContainer(value);
 
   // Save the muxer preference for the current codec
   TTSettings* s = TTSettings::instance();
@@ -271,8 +271,8 @@ int TTCutSettingsMuxer::indexForMuxerValue(int outputContainerValue) const
 
 void TTCutSettingsMuxer::onMkvChaptersChanged(int state)
 {
-  TTCut::mkvCreateChapters = (state == Qt::Checked);
-  sbMkvChapterInterval->setEnabled(TTCut::mkvCreateChapters);
+  TTSettings::instance()->setMkvCreateChapters(state == Qt::Checked);
+  sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
 }
 
 void TTCutSettingsMuxer::onEncoderCodecChanged(int codecIndex)
@@ -307,7 +307,7 @@ void TTCutSettingsMuxer::onEncoderCodecChanged(int codecIndex)
   // Defensive write: QComboBox suppresses currentIndexChanged when the new
   // index equals the current one. In that case onMuxerProgChanged does not
   // fire, so we must set outputContainer explicitly to keep it in sync.
-  TTCut::outputContainer = preferred;
+  TTSettings::instance()->setOutputContainer(preferred);
 
   // Update visibility (MPEG-2 Target only for mplex + MPEG-2)
   updateMuxerVisibility();

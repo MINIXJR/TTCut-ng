@@ -30,6 +30,8 @@
 
 #include "ttmplexprovider.h"
 
+#include "../common/ttsettings.h"
+
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -165,7 +167,7 @@ void TTMplexProvider::mplexPart(int index)
   log->debugMsg(__FILE__, __LINE__, QString("Mplex command string: %1").arg(mplexArgs.join(" ")));
 
   emit statusReport(
-      ((TTCut::muxPause) ? StatusReportArgs::ShowProcessFormBlocking : StatusReportArgs::ShowProcessForm), 
+      ((TTSettings::instance()->muxPause()) ? StatusReportArgs::ShowProcessFormBlocking : StatusReportArgs::ShowProcessForm),
       "Starting mplex", 0);
   qApp->processEvents();
   proc->start(mplexCmd, mplexArgs);
@@ -191,9 +193,9 @@ void TTMplexProvider::mplexPart(int index)
 QString TTMplexProvider::createOutputFilePath(const QString& videoFilePath)
 {
   QFileInfo outputFileInfo(videoFilePath);
-  QDir      outputDirectory((TTCut::muxOutputPath.isEmpty())
+  QDir      outputDirectory((TTSettings::instance()->muxOutputPath().isEmpty())
         ? outputFileInfo.absolutePath()
-        : TTCut::muxOutputPath);
+        : TTSettings::instance()->muxOutputPath());
 
   outputFileInfo.setFile(outputDirectory, outputFileInfo.fileName());
 
@@ -292,7 +294,7 @@ void TTMplexProvider::onProcStarted()
 void TTMplexProvider::onProcFinished(int, QProcess::ExitStatus exitStatus)
 {
   if (exitStatus != QProcess::NormalExit) return;
-  if (!TTCut::muxDeleteES)                return;
+  if (!TTSettings::instance()->muxDeleteES()) return;
 
   // Only delete ES files for the current mux item, not all items in the list
   deleteElementaryStreams(mpMuxList->videoFilePathAt(mCurrentMuxIndex),

@@ -56,7 +56,7 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   gbAudioOnly->setVisible(audioOnly);
   if (audioOnly) {
     TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
-    sbAudioOnlyBitrate->setValue(TTCut::audioOnlyBitrateKbps);
+    sbAudioOnlyBitrate->setValue(TTSettings::instance()->audioOnlyBitrateKbps());
     setWindowTitle(tr("Audio Cut Options"));
   }
 
@@ -116,8 +116,8 @@ void TTCutAVCutDlg::setGlobalData()
   muxingPage->getTabData();
 
   if (gbAudioOnly->isVisible()) {
-    TTCut::audioOnlyFormat       = cbAudioOnlyFormat->currentData().toInt();
-    TTCut::audioOnlyBitrateKbps  = sbAudioOnlyBitrate->value();
+    TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
+    TTSettings::instance()->setAudioOnlyBitrateKbps(sbAudioOnlyBitrate->value());
   }
 }
 
@@ -155,7 +155,7 @@ void TTCutAVCutDlg::onDirectoryOpen()
   if ( !str_dir.isEmpty() )
   {
     TTCut::cutDirPath    = str_dir;
-    TTCut::muxOutputPath = str_dir;
+    TTSettings::instance()->setMuxOutputPath(str_dir);
     leOutputPath->setText( TTCut::cutDirPath );
     qApp->processEvents();
   }
@@ -210,7 +210,7 @@ void TTCutAVCutDlg::getCommonData()
   // container extension here and re-attach the ES one.
   QFileInfo fi(displayName);
   QString base = fi.completeBaseName();
-  TTCut::cutVideoName = base + "." + expectedEsExtension(TTCut::outputContainer,
+  TTCut::cutVideoName = base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
                                                          TTSettings::instance()->encoderCodec());
 
   TTCut::cutWriteMaxBitrate = cbMaxBitrate->isChecked();
@@ -314,7 +314,7 @@ void TTCutAVCutDlg::updateOutputFilename()
   if      ( wantSuffix && !hasSuffix) base += QStringLiteral("_cut");
   else if (!wantSuffix &&  hasSuffix) base.chop(4);
 
-  QString ext = expectedContainerExtension(TTCut::outputContainer);
+  QString ext = expectedContainerExtension(TTSettings::instance()->outputContainer());
   QString newText = base + "." + ext;
 
   // Idempotency guard: setText() emits textChanged unconditionally.
