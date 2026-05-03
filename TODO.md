@@ -189,6 +189,12 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Ansatz 2: mpv als eingebettetes Widget (libmpv) statt externer Prozess
   - Ansatz 1 ist deutlich einfacher, Ansatz 2 ermöglicht langfristig mehr Kontrolle
 
+- **`TTCut::muxFileName` als Konstante deklarieren statt mutable static**
+  - Discovered während Phase B Singleton-Refactor (2026-05-03): das Feld ist mit `"muxscript.sh"` initialisiert und hat **null Schreibsiten** im gesamten Codebase
+  - Verwendet ausschließlich in `extern/ttmplexprovider.cpp:107` als feste Filename-Komponente für mplex-Mux-Scripts
+  - Ist effektiv eine Compile-Time-Konstante, nicht ein User-Setting — sollte `static constexpr const char*` (oder besser: `static const QString` an passender Stelle in TTMplexProvider) sein
+  - Phase B trägt es trotzdem als Pseudo-Setting weiter; eigene Cleanup-Pass danach
+
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen
   - Für manuelle Marker-Listen: Button der Marker-Paare in Cut-Einträge konvertiert
