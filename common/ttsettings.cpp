@@ -100,6 +100,59 @@ void TTSettings::setSearchAccuracy(int v)
   TTCut::searchAccuracy = v;
 }
 
+// ---- Navigation Steps group setters (Task 5) -------------------------------
+// Each setter early-outs on no-op assignment and mirrors the new value to the
+// legacy TTCut::xxx static so unmigrated call sites observe consistent state.
+
+void TTSettings::setStepSliderClick(int v)
+{
+  if (mStepSliderClick == v) return;
+  mStepSliderClick = v;
+  TTCut::stepSliderClick = v;
+}
+
+void TTSettings::setStepPgUpDown(int v)
+{
+  if (mStepPgUpDown == v) return;
+  mStepPgUpDown = v;
+  TTCut::stepPgUpDown = v;
+}
+
+void TTSettings::setStepArrowKeys(int v)
+{
+  if (mStepArrowKeys == v) return;
+  mStepArrowKeys = v;
+  TTCut::stepArrowKeys = v;
+}
+
+void TTSettings::setStepPlusAlt(int v)
+{
+  if (mStepPlusAlt == v) return;
+  mStepPlusAlt = v;
+  TTCut::stepPlusAlt = v;
+}
+
+void TTSettings::setStepPlusCtrl(int v)
+{
+  if (mStepPlusCtrl == v) return;
+  mStepPlusCtrl = v;
+  TTCut::stepPlusCtrl = v;
+}
+
+void TTSettings::setStepPlusShift(int v)
+{
+  if (mStepPlusShift == v) return;
+  mStepPlusShift = v;
+  TTCut::stepPlusShift = v;
+}
+
+void TTSettings::setStepMouseWheel(int v)
+{
+  if (mStepMouseWheel == v) return;
+  mStepMouseWheel = v;
+  TTCut::stepMouseWheel = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -116,9 +169,27 @@ void TTSettings::load()
 
   // ----- Common Options group (Task 4) ---------------------------------
   // fastSlider lives in /Settings/Navigation per legacy layout.
+  // ----- Navigation Steps group (Task 5) -------------------------------
+  // Step fields live in the same /Settings/Navigation sub-group; legacy code
+  // entered the group twice (once for steps, once for thresholds) but
+  // TTSettings consolidates to a single entry.
   settings.beginGroup("Navigation");
   mFastSlider = settings.value("FastSlider/", mFastSlider).toBool();
   TTCut::fastSlider = mFastSlider;
+  mStepSliderClick = settings.value("StepSliderClick/", mStepSliderClick).toInt();
+  TTCut::stepSliderClick = mStepSliderClick;
+  mStepPgUpDown    = settings.value("StepPgUpDown/",    mStepPgUpDown).toInt();
+  TTCut::stepPgUpDown    = mStepPgUpDown;
+  mStepArrowKeys   = settings.value("StepArrowKeys/",   mStepArrowKeys).toInt();
+  TTCut::stepArrowKeys   = mStepArrowKeys;
+  mStepPlusAlt     = settings.value("StepPlusAlt/",     mStepPlusAlt).toInt();
+  TTCut::stepPlusAlt     = mStepPlusAlt;
+  mStepPlusCtrl    = settings.value("StepPlusCtrl/",    mStepPlusCtrl).toInt();
+  TTCut::stepPlusCtrl    = mStepPlusCtrl;
+  mStepPlusShift   = settings.value("StepPlusShift/",   mStepPlusShift).toInt();
+  TTCut::stepPlusShift   = mStepPlusShift;
+  mStepMouseWheel  = settings.value("StepMouseWheel/",  mStepMouseWheel).toInt();
+  TTCut::stepMouseWheel  = mStepMouseWheel;
   settings.endGroup();
 
   settings.beginGroup("Common");
@@ -155,8 +226,16 @@ void TTSettings::save()
   // Per-group field saves added in tasks 4-13.
 
   // ----- Common Options group (Task 4) ---------------------------------
+  // ----- Navigation Steps group (Task 5) -------------------------------
   settings.beginGroup("Navigation");
-  settings.setValue("FastSlider/", mFastSlider);
+  settings.setValue("FastSlider/",      mFastSlider);
+  settings.setValue("StepSliderClick/", mStepSliderClick);
+  settings.setValue("StepPgUpDown/",    mStepPgUpDown);
+  settings.setValue("StepArrowKeys/",   mStepArrowKeys);
+  settings.setValue("StepPlusAlt/",     mStepPlusAlt);
+  settings.setValue("StepPlusCtrl/",    mStepPlusCtrl);
+  settings.setValue("StepPlusShift/",   mStepPlusShift);
+  settings.setValue("StepMouseWheel/",  mStepMouseWheel);
   settings.endGroup();
 
   settings.beginGroup("Common");

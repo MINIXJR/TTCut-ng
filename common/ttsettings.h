@@ -55,6 +55,30 @@ public:
   int     searchAccuracy() const     { return mSearchAccuracy; }
   void    setSearchAccuracy(int v);
 
+  // ----- Navigation Steps group (Task 5) ----------------------------------
+  // Setters mirror to legacy TTCut::xxx during the migration window so call
+  // sites that have not been migrated yet still observe consistent state.
+  int     stepSliderClick() const    { return mStepSliderClick; }
+  void    setStepSliderClick(int v);
+
+  int     stepPgUpDown() const       { return mStepPgUpDown; }
+  void    setStepPgUpDown(int v);
+
+  int     stepArrowKeys() const      { return mStepArrowKeys; }
+  void    setStepArrowKeys(int v);
+
+  int     stepPlusAlt() const        { return mStepPlusAlt; }
+  void    setStepPlusAlt(int v);
+
+  int     stepPlusCtrl() const       { return mStepPlusCtrl; }
+  void    setStepPlusCtrl(int v);
+
+  int     stepPlusShift() const      { return mStepPlusShift; }
+  void    setStepPlusShift(int v);
+
+  int     stepMouseWheel() const     { return mStepMouseWheel; }
+  void    setStepMouseWheel(int v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // No signals declared for the Common Options group; no UI dependents need
@@ -73,6 +97,16 @@ private:
   int     mPlaySkipFrames    = 0;
   int     mSearchLength      = 45;
   int     mSearchAccuracy    = 1;
+
+  // ----- Navigation Steps group (Task 5) -----------------------------------
+  // Defaults match common/ttcut.cpp lines 108-114 verbatim.
+  int     mStepSliderClick   =  40;
+  int     mStepPgUpDown      =  80;
+  int     mStepArrowKeys     =   1;
+  int     mStepPlusAlt       = 100;
+  int     mStepPlusCtrl      = 200;
+  int     mStepPlusShift     = 200;
+  int     mStepMouseWheel    = 120;
 };
 
 #endif
