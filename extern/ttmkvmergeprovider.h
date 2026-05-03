@@ -37,6 +37,10 @@
 #include <QObject>
 #include <QMap>
 
+// Libav forward decls — keep heavy headers out of this public header.
+struct AVFormatContext;
+struct AVPacket;
+
 // -----------------------------------------------------------------------------
 // TTMkvMergeProvider
 // MKV container output using libav matroska muxer (no external binary needed)
@@ -126,6 +130,55 @@ private:
         QString defaultDuration;
     };
     QMap<int, TrackOption> mTrackOptions;
+
+    // One input stream for the interleaved mux loop.
+    // Definition lives in the header so private member helpers can take it
+    // by reference. AVFormatContext/AVPacket are forward-declared above —
+    // libav headers stay out of clients of this header.
+    struct MuxInput {
+        AVFormatContext* fmtCtx;
+        int srcIdx;          // Stream index in source file
+        int outIdx;          // Stream index in output file
+        AVPacket* pkt;
+        bool eof;
+        int64_t syncMs;      // Sync offset in milliseconds
+        bool assignPts;      // True = assign PTS from frameCount (raw ES video)
+        int64_t frameDur;    // Frame duration in output time_base units
+        int64_t frameCount;  // Frame counter for PTS assignment
+        bool ownsCtx;        // True = this MuxInput owns the AVFormatContext
+        MuxInput()
+            : fmtCtx(nullptr), srcIdx(-1), outIdx(-1), pkt(nullptr), eof(false)
+            , syncMs(0), assignPts(false), frameDur(0), frameCount(0)
+            , ownsCtx(false) {}
+    };
+
+    // mux() implementation split — see docs/superpowers/specs/2026-05-03-mux-split-refactor.md
+    bool setupVideoInput(AVFormatContext* outCtx,
+                          AVFormatContext* videoInCtx,
+                          MuxInput& outVin,
+                          int64_t& videoDurationNs);
+
+    bool addAudioInputs(AVFormatContext* outCtx,
+                         const QStringList& audioFiles,
+                         const QStringList& languages,
+                         int& nextOutIdx,
+                         QList<MuxInput>& inputs,
+                         int audioSyncMs);
+
+    bool addSubtitleInputs(AVFormatContext* outCtx,
+                            const QStringList& subtitleFiles,
+                            int& nextOutIdx,
+                            QList<MuxInput>& inputs);
+
+    bool processPAFFFieldPair(MuxInput& in,
+                               int& activeLog2MaxFrameNum,
+                               int64_t totalPacketsWritten);
+
+    // Per-input read helper + normalized PTS calc (used by interleaved write loop).
+    // Not static so they can take MuxInput& without exposing the struct.
+    bool readNextPacket(MuxInput& in);
+    int64_t getNormalizedPts(const MuxInput& in,
+                              const AVFormatContext* outCtx) const;
 
     void setError(const QString& error);
 };
