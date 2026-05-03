@@ -1315,24 +1315,25 @@ void TTCutMainWindow::saveWidgetScreenshot(QWidget* widget, const QString& filen
     if (maxWidth > 0 && pixmap.width() > maxWidth) {
         pixmap = pixmap.scaledToWidth(maxWidth, Qt::SmoothTransformation);
     }
-    QString path = QDir(TTCut::screenshotDir).filePath(filename);
+    QString path = QDir(TTSettings::instance()->screenshotDir()).filePath(filename);
     pixmap.save(path, "PNG");
     qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
 }
 
 void TTCutMainWindow::runScreenshotMode()
 {
-    if (TTCut::screenshotProject.isEmpty()) {
+    const QString screenshotProject = TTSettings::instance()->screenshotProject();
+    if (screenshotProject.isEmpty()) {
         qDebug() << "Screenshot mode: no --project specified";
         QApplication::quit();
         return;
     }
 
-    QDir outDir(TTCut::screenshotDir);
+    QDir outDir(TTSettings::instance()->screenshotDir());
     if (!outDir.exists()) outDir.mkpath(".");
 
     // Load project
-    openProjectFile(TTCut::screenshotProject);
+    openProjectFile(screenshotProject);
 
     // Wait for project to load
     QElapsedTimer timer;

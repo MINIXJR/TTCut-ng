@@ -618,7 +618,8 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
     QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(fileIndex, audioExt);
 
     QList<int> targetAcmods;
-    if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+    if (normalizeAcmod && audioExt.toLower() == "ac3") {
       for (int s = 0; s < audioKeepList.size(); s++) {
         TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
             aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
@@ -628,7 +629,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
 
     TTFFmpegWrapper ffmpegAudio;
     if (ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
-                                    audioKeepList, TTCut::normalizeAcmod, targetAcmods)) {
+                                    audioKeepList, normalizeAcmod, targetAcmods)) {
       cutAudioFiles.append(cutAudioFile);
     }
   }

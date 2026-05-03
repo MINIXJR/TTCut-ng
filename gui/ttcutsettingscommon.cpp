@@ -172,20 +172,20 @@ void TTCutSettingsCommon::setTabData()
   leTempDirectory->setText( TTSettings::instance()->tempDirPath() );
 
   // Audio burst detection
-  sbBurstThreshold->setValue(TTCut::burstThresholdDb);
+  sbBurstThreshold->setValue(TTSettings::instance()->burstThresholdDb());
 
   // AC3 acmod normalization
-  cbNormalizeAcmod->setChecked(TTCut::normalizeAcmod);
+  cbNormalizeAcmod->setChecked(TTSettings::instance()->normalizeAcmod());
 
   // Zeitsprung
-  sbQuickJumpInterval->setValue(TTCut::quickJumpIntervalSec);
+  sbQuickJumpInterval->setValue(TTSettings::instance()->quickJumpIntervalSec());
 
   // Gruppierung defekter Frames
   sbClusterGap->setValue(TTCut::extraFrameClusterGapSec);
   sbClusterOffset->setValue(TTCut::extraFrameClusterOffsetSec);
 
   // Audio language preference
-  leAudioLangPref->setText(TTCut::audioLanguagePreference.join(","));
+  leAudioLangPref->setText(TTSettings::instance()->audioLanguagePreference().join(","));
 }
 
 // get the tab data and fill the global parameter
@@ -214,27 +214,30 @@ void TTCutSettingsCommon::getTabData()
     TTSettings::instance()->setTempDirPath(QDir::tempPath());
 
   // Audio burst detection
-  TTCut::burstThresholdDb = sbBurstThreshold->value();
+  TTSettings::instance()->setBurstThresholdDb(sbBurstThreshold->value());
 
   // AC3 acmod normalization
-  TTCut::normalizeAcmod = cbNormalizeAcmod->isChecked();
+  TTSettings::instance()->setNormalizeAcmod(cbNormalizeAcmod->isChecked());
 
   // Zeitsprung
-  TTCut::quickJumpIntervalSec = sbQuickJumpInterval->value();
+  TTSettings::instance()->setQuickJumpIntervalSec(sbQuickJumpInterval->value());
 
   // Gruppierung defekter Frames
   TTCut::extraFrameClusterGapSec    = sbClusterGap->value();
   TTCut::extraFrameClusterOffsetSec = sbClusterOffset->value();
 
   // Audio language preference — parse, normalize, drop empties/unknowns
-  TTCut::audioLanguagePreference.clear();
+  // Read-modify-write through the setter so audioLanguagePreferenceChanged
+  // fires once per dialog apply and the legacy mirror stays consistent.
+  QStringList newPrefs;
   QStringList rawEntries = leAudioLangPref->text().split(',', Qt::SkipEmptyParts);
   for (const QString& raw : rawEntries) {
     QString normalized = TTCut::normalizeLangCode(raw);
     if (!normalized.isEmpty()) {
-      TTCut::audioLanguagePreference.append(normalized);
+      newPrefs.append(normalized);
     }
   }
+  TTSettings::instance()->setAudioLanguagePreference(newPrefs);
 }
 
 

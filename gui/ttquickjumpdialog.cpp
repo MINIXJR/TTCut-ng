@@ -28,6 +28,7 @@
 #include <QDebug>
 
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 
 static const int THUMB_HEIGHT = 83;
 
@@ -78,7 +79,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
 
   // Apply anchor and interval from global settings
   mModel->setAnchorFrame(mCurrentPosition);
-  mModel->setIntervalSeconds(TTCut::quickJumpIntervalSec);
+  mModel->setIntervalSeconds(TTSettings::instance()->quickJumpIntervalSec());
 
   setupUI();
   calculateItemsPerPage();

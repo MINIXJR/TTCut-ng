@@ -29,6 +29,7 @@
 
 #include "../data/ttcutlist.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
@@ -780,7 +781,7 @@ void TTCutTreeView::updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
         tip += tr("Audio format change at end: %1 → %2")
             .arg(AC3ModeName[mainAcmod]).arg(AC3ModeName[lastAcmod]);
     }
-    if (TTCut::normalizeAcmod)
+    if (TTSettings::instance()->normalizeAcmod())
         tip += tr("\n(Will be normalized during cut)");
     if (!existingTip.isEmpty())
         tip = existingTip + "\n" + tip;

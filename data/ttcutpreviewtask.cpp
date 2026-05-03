@@ -230,7 +230,8 @@ void TTCutPreviewTask::operation()
           QString cutAudioFile = createPreviewFileName(i + 1, audioExt);
 
           QList<int> targetAcmods;
-          if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+          const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+          if (normalizeAcmod && audioExt.toLower() == "ac3") {
             for (int s = 0; s < audioKeepList.size(); s++) {
               TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
                   aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
@@ -240,7 +241,7 @@ void TTCutPreviewTask::operation()
 
           TTFFmpegWrapper ffmpegAudio;
           ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
-                                      audioKeepList, TTCut::normalizeAcmod, targetAcmods);
+                                      audioKeepList, normalizeAcmod, targetAcmods);
         }
 
         // Cut subtitle stream if available (use first subtitle stream)

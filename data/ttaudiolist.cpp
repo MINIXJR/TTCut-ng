@@ -31,6 +31,7 @@
 #include "ttavlist.h"
 #include "../avstream/ttavheader.h"
 #include "../common/ttcut.h"
+#include "../common/ttsettings.h"
 #include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
@@ -123,11 +124,12 @@ bool TTAudioItem::operator<(const TTAudioItem& item) const
   // - If empty: system locale language = priority 0, others = lowest
   // Not in list / no match = INT_MAX
   auto languagePriority = [](const QString& lang) -> int {
-    if (TTCut::audioLanguagePreference.isEmpty()) {
+    const QStringList& prefs = TTSettings::instance()->audioLanguagePreference();
+    if (prefs.isEmpty()) {
       QString localeLang = TTCut::iso639_1to2(QLocale::system().name().left(2));
       return (lang == localeLang) ? 0 : INT_MAX;
     }
-    int idx = TTCut::audioLanguagePreference.indexOf(lang);
+    int idx = prefs.indexOf(lang);
     return (idx >= 0) ? idx : INT_MAX;
   };
 

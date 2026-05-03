@@ -124,8 +124,8 @@ int main( int argc, char **argv )
 
     // Screenshot mode
     if (parser.isSet(screenshotOpt)) {
-      TTCut::screenshotDir = parser.value(screenshotOpt);
-      TTCut::screenshotProject = parser.value(projectOpt);
+      TTSettings::instance()->setScreenshotDir(parser.value(screenshotOpt));
+      TTSettings::instance()->setScreenshotProject(parser.value(projectOpt));
       QTimer::singleShot(500, mainWnd, &TTCutMainWindow::runScreenshotMode);
     } else {
       // Process positional arguments for video/project file

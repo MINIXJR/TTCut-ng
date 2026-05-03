@@ -1226,7 +1226,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     // Build per-segment target acmod list for AC3 normalization
     QList<int> targetAcmods;
     QString audioExt = QFileInfo(audioStream->filePath()).suffix().toLower();
-    if (TTCut::normalizeAcmod && audioExt == "ac3") {
+    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+    if (normalizeAcmod && audioExt == "ac3") {
       for (int s = 0; s < audioKeepList.size(); s++) {
         TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
             audioStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
@@ -1237,7 +1238,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     TTFFmpegWrapper ffmpegAudio;
     TTAudioItem audioItem = cutList->at(0).avDataItem()->audioListItemAt(i);
     if (ffmpegAudio.cutAudioStream(audioStream->filePath(), tgtAudioFilePath,
-                                     audioKeepList, TTCut::normalizeAcmod, targetAcmods)) {
+                                     audioKeepList, normalizeAcmod, targetAcmods)) {
       // Register audio file with mux list item so onCutFinished can mux it
       cutVideoTask->muxListItem()->appendAudioFile(tgtAudioFilePath, audioItem.getLanguage());
     } else {
@@ -1446,7 +1447,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
       // Build per-segment target acmod list for AC3 normalization
       QList<int> targetAcmods;
-      if (TTCut::normalizeAcmod && audioExt.toLower() == "ac3") {
+      const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+      if (normalizeAcmod && audioExt.toLower() == "ac3") {
         for (int s = 0; s < audioKeepList.size(); s++) {
           TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
               srcAudioFile, audioKeepList[s].first, audioKeepList[s].second);
@@ -1456,7 +1458,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
       // Use FFmpeg wrapper for audio cutting (stream-copy + optional acmod normalization)
       if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, audioKeepList,
-                                 TTCut::normalizeAcmod, targetAcmods)) {
+                                 normalizeAcmod, targetAcmods)) {
         cutAudioFiles.append(cutAudioFile);
         log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(cutAudioFile));
       } else {
@@ -1771,7 +1773,8 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
 
     QList<int> targetAcmods;
     QString audioExt = QFileInfo(audioStream->filePath()).suffix().toLower();
-    if (TTCut::normalizeAcmod && audioExt == "ac3") {
+    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+    if (normalizeAcmod && audioExt == "ac3") {
       for (int s = 0; s < plan.keepList.size(); s++) {
         TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
             audioStream->filePath(), plan.keepList[s].first, plan.keepList[s].second);
@@ -1781,7 +1784,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
 
     TTFFmpegWrapper ffmpegAudio;
     if (ffmpegAudio.cutAudioStream(audioStream->filePath(), tgtAudioFilePath,
-                                    plan.keepList, TTCut::normalizeAcmod, targetAcmods)) {
+                                    plan.keepList, normalizeAcmod, targetAcmods)) {
       trackFiles     << tgtAudioFilePath;
       trackLanguages << avItem->audioListItemAt(i).getLanguage();
       log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(tgtAudioFilePath));
@@ -1939,7 +1942,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   bool detected = TTFFmpegWrapper::detectAudioBurst(
       audioFile, cutOutTime, true, info.burstDb, info.contextDb);
 
-  int threshold = TTCut::burstThresholdDb;
+  int threshold = TTSettings::instance()->burstThresholdDb();
   if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
 
   info.present = detected;
@@ -2022,7 +2025,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
   bool detected = TTFFmpegWrapper::detectAudioBurst(
       audioFile, cutInTime, false, info.burstDb, info.contextDb);
 
-  int threshold = TTCut::burstThresholdDb;
+  int threshold = TTSettings::instance()->burstThresholdDb();
   if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
 
   info.present = detected;
