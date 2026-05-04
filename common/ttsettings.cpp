@@ -832,6 +832,28 @@ void TTSettings::load()
   mSpumuxChapter = settings.value("SpumuxChapter/", mSpumuxChapter).toBool();
   settings.endGroup();
 
+  // ----- Orphan-key cleanup --------------------------------------------
+  // Existing user configs may carry keys from removed/renamed fields.
+  // Verified zero readers in the codebase as of 2026-05-04: removing them
+  // here so the next save() writes a clean file. List is intentionally
+  // explicit (no wildcard) — accidental deletion of a future field would
+  // be silently destructive.
+  static const struct { const char* group; const char* key; } orphanKeys[] = {
+    { "CutOptions",   "VideoName/" },         // pre-Phase-B persisted cutVideoName
+    { "Navigation",   "StepQuickJump/" },     // replaced by Common\QuickJumpInterval/
+    { "StreamPoints", "DetectBlackFrames/" }, // black-frame detection moved to Navigation
+    { "StreamPoints", "DetectSceneChange/" }, // scene-change detection moved to Navigation
+    { "StreamPoints", "BlackThreshold/" },    // threshold moved to Navigation
+    { "StreamPoints", "BlackMinDuration/" },  // legacy
+    { "StreamPoints", "SceneThreshold/" },    // threshold moved to Navigation
+    { "StreamPoints", "MinDistance/" },       // legacy
+  };
+  for (const auto& o : orphanKeys) {
+    settings.beginGroup(o.group);
+    settings.remove(o.key);
+    settings.endGroup();
+  }
+
   settings.endGroup();
 }
 
