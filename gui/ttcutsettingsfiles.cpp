@@ -51,7 +51,7 @@ void TTCutSettingsFiles::setTabData()
   // IDD files
   cbCreateVideoIDD->setChecked( TTSettings::instance()->createVideoIDD() );
   cbCreateAudioIDD->setChecked( TTSettings::instance()->createAudioIDD() );
-  cbCreateCutIDD->setChecked( TTCut::createCutIDD );
+  cbCreateCutIDD->setChecked( TTSettings::instance()->createCutIDD() );
   cbReadVideoIDD->setChecked( TTSettings::instance()->readVideoIDD() );
   cbReadAudioIDD->setChecked( TTSettings::instance()->readAudioIDD() );
 
@@ -70,7 +70,7 @@ void TTCutSettingsFiles::getTabData()
   // IDD files
   TTSettings::instance()->setCreateVideoIDD( cbCreateVideoIDD->isChecked( ) );
   TTSettings::instance()->setCreateAudioIDD( cbCreateAudioIDD->isChecked( ) );
-  TTCut::createCutIDD      = cbCreateCutIDD->isChecked( );
+  TTSettings::instance()->setCreateCutIDD( cbCreateCutIDD->isChecked( ) );
   TTSettings::instance()->setReadVideoIDD( cbReadVideoIDD->isChecked( ) );
   TTSettings::instance()->setReadAudioIDD( cbReadAudioIDD->isChecked( ) );
 

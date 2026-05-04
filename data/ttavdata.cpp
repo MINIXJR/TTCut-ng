@@ -1058,7 +1058,7 @@ void TTAVData::onCutPreviewAborted()
 }
 
 /*!
- * createCutFileName — builds "<cutBase>_NNN.<ext>" inside TTCut::cutDirPath.
+ * createCutFileName — builds "<cutBase>_NNN.<ext>" inside TTSettings::cutDirPath().
  * Used for both per-track audio and subtitle output filenames.
  */
 QString TTAVData::createCutFileName(QString cutBaseFileName, QString sourceFileName, int index)
@@ -1068,7 +1068,7 @@ QString TTAVData::createCutFileName(QString cutBaseFileName, QString sourceFileN
     arg(index, 3, 10, QLatin1Char('0')).
     arg(QFileInfo(sourceFileName).suffix());
 
-  return QFileInfo(QDir(TTCut::cutDirPath), cutFileName).absoluteFilePath();
+  return QFileInfo(QDir(TTSettings::instance()->cutDirPath()), cutFileName).absoluteFilePath();
 }
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -1315,7 +1315,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   QString finalOutput = tgtFileName;
   if (!finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
     QFileInfo fi(finalOutput);
-    finalOutput = QFileInfo(QDir(TTCut::cutDirPath),
+    finalOutput = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
                            fi.completeBaseName() + ".mkv").absoluteFilePath();
   }
 
@@ -1387,7 +1387,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     }
 
     // Create temporary video output
-    QString tempVideoFile = QFileInfo(QDir(TTCut::cutDirPath),
+    QString tempVideoFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
         QFileInfo(sourceFile).completeBaseName() + "_cut." + QFileInfo(sourceFile).suffix()).absoluteFilePath();
 
     // Perform frame-accurate video cut
@@ -1432,7 +1432,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
       // Calculate audio cut times from video frame rate
       QString audioExt = QFileInfo(srcAudioFile).suffix();
-      QString cutAudioFile = QFileInfo(QDir(TTCut::cutDirPath),
+      QString cutAudioFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
           QFileInfo(sourceFile).completeBaseName() + QString("_audio%1.").arg(i+1) + audioExt).absoluteFilePath();
 
       // Build per-track audioKeepList from the (B-frame-adjusted) video keepList,
@@ -1524,7 +1524,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       if (totalDurationMs > 0) {
         mkvProvider.setTotalDurationMs(totalDurationMs);
         chapterFile = TTMkvMergeProvider::generateChapterFile(
-            totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTCut::cutDirPath);
+            totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTSettings::instance()->cutDirPath());
         if (!chapterFile.isEmpty()) {
           mkvProvider.setChapterFile(chapterFile);
         }
@@ -1560,9 +1560,9 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   mpMuxList->print();
 
   // Update cutVideoName with actual output filename for notification
-  TTCut::cutVideoName = QFileInfo(finalOutput).fileName();
+  TTSettings::instance()->setCutVideoName(QFileInfo(finalOutput).fileName());
 
-  qDebug() << "About to emit cutFinished() signal, cutVideoName =" << TTCut::cutVideoName;
+  qDebug() << "About to emit cutFinished() signal, cutVideoName =" << TTSettings::instance()->cutVideoName();
   emit cutFinished();
   qDebug() << "cutFinished() signal emitted";
 }
@@ -1624,7 +1624,7 @@ void TTAVData::onCutFinished()
 
         // Build MKV output filename
         QFileInfo videoInfo(muxItem.getVideoName());
-        QString mkvOutput = QFileInfo(QDir(TTCut::cutDirPath),
+        QString mkvOutput = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
                                        videoInfo.completeBaseName() + ".mkv").absoluteFilePath();
 
         // Generate chapters if enabled
@@ -1645,7 +1645,7 @@ void TTAVData::onCutFinished()
           if (totalDurationMs > 0) {
             mkvProvider->setTotalDurationMs(totalDurationMs);
             chapterFile = TTMkvMergeProvider::generateChapterFile(
-                totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTCut::cutDirPath);
+                totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTSettings::instance()->cutDirPath());
             if (!chapterFile.isEmpty()) {
               mkvProvider->setChapterFile(chapterFile);
             }
@@ -1819,7 +1819,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
     }
 
     case TTCut::AOF_OriginalMKA: {
-      QString mkaPath = QFileInfo(QDir(TTCut::cutDirPath),
+      QString mkaPath = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
                                   QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
       if (QFileInfo(mkaPath).exists()) QFile::remove(mkaPath);
 

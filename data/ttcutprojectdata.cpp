@@ -641,9 +641,9 @@ void TTCutProjectData::serializeSettings()
   };
 
   // Output
-  addElement("CutDirPath",    TTCut::cutDirPath);
-  addElement("CutVideoName",  TTCut::cutVideoName);
-  addElement("CutAddSuffix",  TTCut::cutAddSuffix ? "true" : "false");
+  addElement("CutDirPath",    TTSettings::instance()->cutDirPath());
+  addElement("CutVideoName",  TTSettings::instance()->cutVideoName());
+  addElement("CutAddSuffix",  TTSettings::instance()->cutAddSuffix() ? "true" : "false");
 
   // Muxing
   addElement("OutputContainer",    QString::number(TTSettings::instance()->outputContainer()));
@@ -688,7 +688,7 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
       // CutDirPath to the project file's directory — users put cut output
       // wherever they want — but we still require a sane absolute path.
       QString validated = resolveProjectPath(value, xmlFileInfo);
-      if (!validated.isEmpty()) TTCut::cutDirPath = validated;
+      if (!validated.isEmpty()) TTSettings::instance()->setCutDirPath(validated);
       else qWarning("parseSettingsSection: rejected unsafe CutDirPath '%s'",
                     qPrintable(value));
     }
@@ -696,11 +696,11 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
       // Filename only — must not contain '/' or control chars.
       bool ok = !value.contains('/') && !value.contains('\\');
       for (QChar c : value) if (c.unicode() < 0x20 || c.unicode() == 0x7F) ok = false;
-      if (ok) TTCut::cutVideoName = value;
+      if (ok) TTSettings::instance()->setCutVideoName(value);
       else qWarning("parseSettingsSection: rejected unsafe CutVideoName '%s'",
                     qPrintable(value));
     }
-    else if (name == "CutAddSuffix")       TTCut::cutAddSuffix = (value == "true");
+    else if (name == "CutAddSuffix")       TTSettings::instance()->setCutAddSuffix(value == "true");
     // Muxing
     else if (name == "OutputContainer")    TTSettings::instance()->setOutputContainer(value.toInt());
     else if (name == "MkvCreateChapters")  TTSettings::instance()->setMkvCreateChapters(value == "true");

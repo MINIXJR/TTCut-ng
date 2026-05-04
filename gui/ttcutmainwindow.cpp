@@ -720,7 +720,7 @@ void TTCutMainWindow::onReadVideoStream(QString fName)
   // session), keep the current name so project-defined custom names are
   // preserved.
   if (mpAVData->avCount() == 0) {
-    TTCut::cutVideoName = "";
+    TTSettings::instance()->setCutVideoName("");
   }
   mpAVData->openAVStreams(fName);
 }
@@ -1045,12 +1045,12 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
 
   // Set default video cut name from video file name if not already set
   // (project settings may have loaded a custom name)
-  if (TTCut::cutVideoName.isEmpty()) {
+  if (TTSettings::instance()->cutVideoName().isEmpty()) {
     QString baseName = QFileInfo(vStream->fileName()).completeBaseName();
-    if (TTCut::cutAddSuffix) {
-      TTCut::cutVideoName = QString("%1_cut").arg(baseName);
+    if (TTSettings::instance()->cutAddSuffix()) {
+      TTSettings::instance()->setCutVideoName(QString("%1_cut").arg(baseName));
     } else {
-      TTCut::cutVideoName = baseName;
+      TTSettings::instance()->setCutVideoName(baseName);
     }
   }
 
@@ -1072,7 +1072,7 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   bool connected = connect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
   qDebug() << "Connection result:" << connected;
 
-  mpAVData->onDoCut(QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath(), cutData, audioOnly);
+  mpAVData->onDoCut(QFileInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->cutVideoName()).absoluteFilePath(), cutData, audioOnly);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1090,7 +1090,7 @@ void TTCutMainWindow::onCutFinished()
     return;
   }
 
-  QString outputFile = QFileInfo(QDir(TTCut::cutDirPath), TTCut::cutVideoName).absoluteFilePath();
+  QString outputFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->cutVideoName()).absoluteFilePath();
   qDebug() << "Showing completion dialog for:" << outputFile;
 
   QMessageBox::information(this, tr("Cutting Complete"),
@@ -1151,7 +1151,7 @@ void TTCutMainWindow::closeProject()
   // Restore global settings from QSettings (discard project overrides)
   settings->readSettings();
   // Clear cut video name so next cut dialog derives it from video filename
-  TTCut::cutVideoName = "";
+  TTSettings::instance()->setCutVideoName("");
 
   setProjectModified(false);
 

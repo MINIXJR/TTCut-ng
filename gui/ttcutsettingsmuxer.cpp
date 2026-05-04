@@ -164,7 +164,7 @@ void TTCutSettingsMuxer::getTabData()
   QFileInfo fInfo(TTSettings::instance()->muxOutputPath());
 
   if (!fInfo.exists())
-    TTSettings::instance()->setMuxOutputPath(TTCut::cutDirPath);
+    TTSettings::instance()->setMuxOutputPath(TTSettings::instance()->cutDirPath());
 }
 
 void TTCutSettingsMuxer::onCreateMuxStreams()

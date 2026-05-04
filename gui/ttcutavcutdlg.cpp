@@ -148,15 +148,15 @@ void TTCutAVCutDlg::onDirectoryOpen()
 {
   QString str_dir = QFileDialog::getExistingDirectory( this,
       "Select cut-result directory",
-      TTCut::cutDirPath,
+      TTSettings::instance()->cutDirPath(),
       (QFileDialog::DontResolveSymlinks |
        QFileDialog::ShowDirsOnly) );
 
   if ( !str_dir.isEmpty() )
   {
-    TTCut::cutDirPath    = str_dir;
+    TTSettings::instance()->setCutDirPath(str_dir);
     TTSettings::instance()->setMuxOutputPath(str_dir);
-    leOutputPath->setText( TTCut::cutDirPath );
+    leOutputPath->setText( TTSettings::instance()->cutDirPath() );
     qApp->processEvents();
   }
 
@@ -168,22 +168,22 @@ void TTCutAVCutDlg::onDirectoryOpen()
  */
 void TTCutAVCutDlg::setCommonData()
 {
-  if ( !QDir(TTCut::cutDirPath).exists() )
-    TTCut::cutDirPath = QDir::currentPath();
+  if ( !QDir(TTSettings::instance()->cutDirPath()).exists() )
+    TTSettings::instance()->setCutDirPath(QDir::currentPath());
 
   // cut output filename and output path
-  leOutputFile->setText( TTCut::cutVideoName );
-  leOutputPath->setText( TTCut::cutDirPath );
+  leOutputFile->setText( TTSettings::instance()->cutVideoName() );
+  leOutputPath->setText( TTSettings::instance()->cutDirPath() );
 
   // add "_cut" suffix option
-  cbAddSuffix->setChecked(TTCut::cutAddSuffix);
+  cbAddSuffix->setChecked(TTSettings::instance()->cutAddSuffix());
 
   // cut options
   // write max bittrate tp first sequence
-  cbMaxBitrate->setChecked(TTCut::cutWriteMaxBitrate);
+  cbMaxBitrate->setChecked(TTSettings::instance()->cutWriteMaxBitrate());
 
   // write sequence end code
-  cbEndCode->setChecked(TTCut::cutWriteSeqEnd);
+  cbEndCode->setChecked(TTSettings::instance()->cutWriteSeqEnd());
 
   // Populate the field with suffix + extension from current state.
   updateOutputFilename();
@@ -197,24 +197,24 @@ void TTCutAVCutDlg::setCommonData()
 void TTCutAVCutDlg::getCommonData()
 {
   QString displayName  = leOutputFile->text();
-  TTCut::cutDirPath    = leOutputPath->text();
-  TTCut::cutAddSuffix  = cbAddSuffix->isChecked();
+  TTSettings::instance()->setCutDirPath(leOutputPath->text());
+  TTSettings::instance()->setCutAddSuffix(cbAddSuffix->isChecked());
 
-  if (!QDir(TTCut::cutDirPath).exists())
-    TTCut::cutDirPath = QDir::currentPath();
+  if (!QDir(TTSettings::instance()->cutDirPath()).exists())
+    TTSettings::instance()->setCutDirPath(QDir::currentPath());
 
   // The UI field holds the final container extension (.mkv or .mpg).
-  // The downstream cut pipeline uses TTCut::cutVideoName as the path
+  // The downstream cut pipeline uses TTSettings::cutVideoName() as the path
   // for the *intermediate* elementary-stream file, which needs a
   // codec-specific ES extension (.m2v / .h264 / .h265). Strip the UI
   // container extension here and re-attach the ES one.
   QFileInfo fi(displayName);
   QString base = fi.completeBaseName();
-  TTCut::cutVideoName = base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
-                                                         TTSettings::instance()->encoderCodec());
+  TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
+                                                         TTSettings::instance()->encoderCodec()));
 
-  TTCut::cutWriteMaxBitrate = cbMaxBitrate->isChecked();
-  TTCut::cutWriteSeqEnd     = cbEndCode->isChecked();
+  TTSettings::instance()->setCutWriteMaxBitrate(cbMaxBitrate->isChecked());
+  TTSettings::instance()->setCutWriteSeqEnd(cbEndCode->isChecked());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -223,7 +223,7 @@ void TTCutAVCutDlg::getCommonData()
 void TTCutAVCutDlg::getFreeDiskSpace()
 {
 	DfInfo rootFsInfo    = getDiskSpaceInfo("/");
-	DfInfo cutPathFsInfo = getDiskSpaceInfo(TTCut::cutDirPath);
+	DfInfo cutPathFsInfo = getDiskSpaceInfo(TTSettings::instance()->cutDirPath());
 
 	laPath1->setText(rootFsInfo.path);
 	laSize1->setText(QString("%1G").arg(rootFsInfo.size, 0, 'f', 0));
