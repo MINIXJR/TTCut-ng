@@ -115,8 +115,12 @@ int main( int argc, char **argv )
         "Capture all widget screenshots to <dir> and exit.", "dir");
     QCommandLineOption projectOpt("project",
         "Load project file <file>.", "file");
+    QCommandLineOption autoCutOpt("auto-cut",
+        "Load --project, perform A/V cut, write MKV to <out>, and exit. "
+        "For headless QC regression.", "out");
     parser.addOption(screenshotOpt);
     parser.addOption(projectOpt);
+    parser.addOption(autoCutOpt);
     parser.addPositionalArgument("file", "Video or project file to open.");
     parser.process(a);
 
@@ -125,6 +129,12 @@ int main( int argc, char **argv )
       TTSettings::instance()->setScreenshotDir(parser.value(screenshotOpt));
       TTSettings::instance()->setScreenshotProject(parser.value(projectOpt));
       QTimer::singleShot(500, mainWnd, &TTCutMainWindow::runScreenshotMode);
+    } else if (parser.isSet(autoCutOpt) && parser.isSet(projectOpt)) {
+      const QString prj = parser.value(projectOpt);
+      const QString out = parser.value(autoCutOpt);
+      QTimer::singleShot(500, mainWnd, [mainWnd, prj, out]() {
+        mainWnd->runAutoCutMode(prj, out);
+      });
     } else {
       // Process positional arguments for video/project file
       QString videoFile;

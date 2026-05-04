@@ -134,6 +134,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onOpenProjectFileFinished(const QString&);
     void onProjectModified();
     void runScreenshotMode();
+    void runAutoCutMode(QString projectFile, QString outputPath);
 
 		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
 

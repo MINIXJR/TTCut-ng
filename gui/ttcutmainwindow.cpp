@@ -1316,6 +1316,52 @@ void TTCutMainWindow::saveWidgetScreenshot(QWidget* widget, const QString& filen
     qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
 }
 
+void TTCutMainWindow::runAutoCutMode(QString projectFile, QString outputPath)
+{
+  qDebug() << "Auto-cut: loading project" << projectFile;
+  openProjectFile(projectFile);
+
+  QElapsedTimer timer;
+  timer.start();
+  while (mpAVData->avCount() == 0 && timer.elapsed() < 60000) {
+    QApplication::processEvents();
+    QThread::msleep(100);
+  }
+  if (mpAVData->avCount() == 0) {
+    qWarning() << "Auto-cut: project failed to load within 60s";
+    QApplication::quit();
+    return;
+  }
+
+  // Audio streams load asynchronously after the video stream — wait for them.
+  QThread::msleep(2000);
+  QApplication::processEvents();
+
+  TTCutList* cutData = mpAVData->cutList();
+  if (cutData == 0 || cutData->count() == 0) {
+    qWarning() << "Auto-cut: no cut entries in project";
+    QApplication::quit();
+    return;
+  }
+
+  QFileInfo outFI(outputPath);
+  TTSettings::instance()->setCutDirPath(outFI.absolutePath());
+  TTSettings::instance()->setCutVideoName(outFI.completeBaseName());
+
+  if (mpCurrentAVDataItem && mpCurrentAVDataItem->videoStream()) {
+    TTAVTypes::AVStreamType streamType = mpCurrentAVDataItem->videoStream()->streamType();
+    if (streamType == TTAVTypes::h264_video)      TTSettings::instance()->setEncoderCodec(1);
+    else if (streamType == TTAVTypes::h265_video) TTSettings::instance()->setEncoderCodec(2);
+    else                                          TTSettings::instance()->setEncoderCodec(0);
+  }
+
+  qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath;
+
+  connect(mpAVData, &TTAVData::cutFinished, &QApplication::quit);
+  mpAVData->onDoCut(QFileInfo(QDir(outFI.absolutePath()), outFI.completeBaseName()).absoluteFilePath(),
+                    cutData, false);
+}
+
 void TTCutMainWindow::runScreenshotMode()
 {
     const QString screenshotProject = TTSettings::instance()->screenshotProject();
