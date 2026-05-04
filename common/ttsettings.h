@@ -321,6 +321,60 @@ public:
   int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
   void    setAudioOnlyBitrateKbps(int v);
 
+  // ----- Cut Settings & Chapter group (Task 13) ---------------------------
+  // Eleven fields total. Nine round-trip through QSettings across two NEW
+  // sub-groups of /Settings:
+  //   - /Settings/CutOptions (8 fields): cutDirPath, cutAddSuffix,
+  //     cutWriteMaxBitrate, cutWriteSeqEnd, correctCutTimeCode,
+  //     correctCutBitRate, createCutIDD, readCutIDD
+  //   - /Settings/Chapter (1 field): spumuxChapter
+  // Two fields are NOT persisted in QSettings — the Strangler keeps them
+  // mirrored anyway so call sites observe consistent state:
+  //   - muxFileName: de-facto constant ("muxscript.sh"); zero write sites
+  //     in code, no load/save round-trip
+  //   - cutVideoName: per-project value, persisted in the .ttcut project
+  //     file via data/ttcutprojectdata.cpp, NOT in QSettings; no load/save
+  //     round-trip
+  // No signals — none of these fields have reactive UI dependents.
+  // Setters mirror to legacy TTCut::xxx during the migration window so
+  // unmigrated call sites continue to observe consistent state.
+  // load() additionally replicates the cutDirPath fallback-to-currentPath
+  // validation from gui/ttcutsettings.cpp:245-246.
+  // Ground truth for on-disk keys: gui/ttcutsettings.cpp lines 211-247
+  // (read) and 381-397 (write).
+  QString muxFileName() const                  { return mMuxFileName; }
+  void    setMuxFileName(const QString& v);
+
+  QString cutDirPath() const                   { return mCutDirPath; }
+  void    setCutDirPath(const QString& v);
+
+  QString cutVideoName() const                 { return mCutVideoName; }
+  void    setCutVideoName(const QString& v);
+
+  bool    cutAddSuffix() const                 { return mCutAddSuffix; }
+  void    setCutAddSuffix(bool v);
+
+  bool    cutWriteMaxBitrate() const           { return mCutWriteMaxBitrate; }
+  void    setCutWriteMaxBitrate(bool v);
+
+  bool    cutWriteSeqEnd() const               { return mCutWriteSeqEnd; }
+  void    setCutWriteSeqEnd(bool v);
+
+  bool    correctCutTimeCode() const           { return mCorrectCutTimeCode; }
+  void    setCorrectCutTimeCode(bool v);
+
+  bool    correctCutBitRate() const            { return mCorrectCutBitRate; }
+  void    setCorrectCutBitRate(bool v);
+
+  bool    createCutIDD() const                 { return mCreateCutIDD; }
+  void    setCreateCutIDD(bool v);
+
+  bool    readCutIDD() const                   { return mReadCutIDD; }
+  void    setReadCutIDD(bool v);
+
+  bool    spumuxChapter() const                { return mSpumuxChapter; }
+  void    setSpumuxChapter(bool v);
+
 signals:
   // Per-group selective change signals added in tasks 4-13.
   // Tasks 4-6 declare none (no UI dependents need change-notification).
@@ -470,6 +524,25 @@ private:
   int     mMkvChapterInterval  = 5;
   int     mAudioOnlyFormat;        // initialised to TTCut::AOF_OriginalES in ctor
   int     mAudioOnlyBitrateKbps = 0;  // 0 = match source bitrate
+
+  // ----- Cut Settings & Chapter group (Task 13) ----------------------------
+  // Defaults match common/ttcut.cpp lines 227 + 233-242 verbatim. mCutDirPath
+  // is initialised to QDir::currentPath() in the ctor (matches the
+  // runtime-dependent init pattern of mTempDirPath/mLastDirPath).
+  // mMuxFileName is a de-facto constant ("muxscript.sh"); mCutVideoName is
+  // per-project (persisted in .ttcut, not QSettings) — both have setters but
+  // no QSettings load/save round-trip.
+  bool    mCutAddSuffix         = true;
+  bool    mCutWriteMaxBitrate   = false;
+  bool    mCutWriteSeqEnd       = false;
+  bool    mCorrectCutTimeCode   = false;
+  bool    mCorrectCutBitRate    = false;
+  bool    mCreateCutIDD         = false;
+  bool    mReadCutIDD           = false;
+  bool    mSpumuxChapter        = false;
+  QString mMuxFileName          = "muxscript.sh";
+  QString mCutVideoName;           // empty by default
+  QString mCutDirPath;             // initialised to QDir::currentPath() in ctor
 };
 
 #endif

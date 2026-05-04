@@ -38,6 +38,13 @@ TTSettings::TTSettings(QObject* parent)
   // audioOnlyFormat default mirrors common/ttcut.cpp:220 (TTCut::AOF_OriginalES).
   mMuxOutputPath = QDir::homePath();
   mAudioOnlyFormat = TTCut::AOF_OriginalES;
+  // Task 13: cutDirPath default mirrors common/ttcut.cpp:234 (QDir::currentPath()).
+  mCutDirPath = QDir::currentPath();
+  // Mirror Task 13 runtime defaults to the legacy statics so first
+  // construction has consistent state before load() runs.
+  TTCut::cutDirPath   = mCutDirPath;
+  TTCut::muxFileName  = mMuxFileName;
+  TTCut::cutVideoName = mCutVideoName;
 }
 
 TTSettings::~TTSettings()
@@ -643,6 +650,90 @@ void TTSettings::setAudioOnlyBitrateKbps(int v)
   TTCut::audioOnlyBitrateKbps = v;
 }
 
+// ---- Cut Settings & Chapter group setters (Task 13) ------------------------
+// Eleven setters across two NEW QSettings sub-groups (CutOptions, Chapter)
+// plus two non-persisted in-memory fields (muxFileName, cutVideoName). Each
+// setter early-outs on no-op assignment and mirrors the new value to the
+// legacy TTCut::xxx static so unmigrated call sites observe consistent state.
+// No signals — none of these fields have reactive UI dependents.
+
+void TTSettings::setMuxFileName(const QString& v)
+{
+  if (mMuxFileName == v) return;
+  mMuxFileName = v;
+  TTCut::muxFileName = v;
+}
+
+void TTSettings::setCutDirPath(const QString& v)
+{
+  if (mCutDirPath == v) return;
+  mCutDirPath = v;
+  TTCut::cutDirPath = v;
+}
+
+void TTSettings::setCutVideoName(const QString& v)
+{
+  if (mCutVideoName == v) return;
+  mCutVideoName = v;
+  TTCut::cutVideoName = v;
+}
+
+void TTSettings::setCutAddSuffix(bool v)
+{
+  if (mCutAddSuffix == v) return;
+  mCutAddSuffix = v;
+  TTCut::cutAddSuffix = v;
+}
+
+void TTSettings::setCutWriteMaxBitrate(bool v)
+{
+  if (mCutWriteMaxBitrate == v) return;
+  mCutWriteMaxBitrate = v;
+  TTCut::cutWriteMaxBitrate = v;
+}
+
+void TTSettings::setCutWriteSeqEnd(bool v)
+{
+  if (mCutWriteSeqEnd == v) return;
+  mCutWriteSeqEnd = v;
+  TTCut::cutWriteSeqEnd = v;
+}
+
+void TTSettings::setCorrectCutTimeCode(bool v)
+{
+  if (mCorrectCutTimeCode == v) return;
+  mCorrectCutTimeCode = v;
+  TTCut::correctCutTimeCode = v;
+}
+
+void TTSettings::setCorrectCutBitRate(bool v)
+{
+  if (mCorrectCutBitRate == v) return;
+  mCorrectCutBitRate = v;
+  TTCut::correctCutBitRate = v;
+}
+
+void TTSettings::setCreateCutIDD(bool v)
+{
+  if (mCreateCutIDD == v) return;
+  mCreateCutIDD = v;
+  TTCut::createCutIDD = v;
+}
+
+void TTSettings::setReadCutIDD(bool v)
+{
+  if (mReadCutIDD == v) return;
+  mReadCutIDD = v;
+  TTCut::readCutIDD = v;
+}
+
+void TTSettings::setSpumuxChapter(bool v)
+{
+  if (mSpumuxChapter == v) return;
+  mSpumuxChapter = v;
+  TTCut::spumuxChapter = v;
+}
+
 void TTSettings::load()
 {
   // Match TTCutSettings persistence target (QSettings("TTCut-ng", "TTCut-ng"))
@@ -888,6 +979,43 @@ void TTSettings::load()
   TTCut::audioOnlyBitrateKbps = mAudioOnlyBitrateKbps;
   settings.endGroup();
 
+  // ----- Cut Options group (Task 13) -----------------------------------
+  // NEW sub-group of /Settings. Eight fields per the legacy
+  // gui/ttcutsettings.cpp:219-228 read block. NOTE: the on-disk key for
+  // correctCutBitRate is `CorrectBitrate/` (lowercase 'r') — preserved
+  // verbatim from the legacy code so already-installed user settings
+  // round-trip across the migration window.
+  // After reading the directory back from disk we replicate the
+  // gui/ttcutsettings.cpp:245-246 fallback validation: if the path no
+  // longer exists, fall back to QDir::currentPath() and re-mirror.
+  settings.beginGroup("CutOptions");
+  mCutDirPath          = settings.value("DirPath/",         mCutDirPath).toString();
+  mCutAddSuffix        = settings.value("AddSuffix/",       mCutAddSuffix).toBool();
+  mCutWriteMaxBitrate  = settings.value("WriteMaxBitrate/", mCutWriteMaxBitrate).toBool();
+  mCutWriteSeqEnd      = settings.value("WriteSeqEnd/",     mCutWriteSeqEnd).toBool();
+  mCorrectCutTimeCode  = settings.value("CorrectTimeCode/", mCorrectCutTimeCode).toBool();
+  mCorrectCutBitRate   = settings.value("CorrectBitrate/",  mCorrectCutBitRate).toBool();   // lowercase 'r'
+  mCreateCutIDD        = settings.value("CreateIDD/",       mCreateCutIDD).toBool();
+  mReadCutIDD          = settings.value("ReadIDD/",         mReadCutIDD).toBool();
+  if (!QDir(mCutDirPath).exists()) mCutDirPath = QDir::currentPath();
+  TTCut::cutDirPath         = mCutDirPath;
+  TTCut::cutAddSuffix       = mCutAddSuffix;
+  TTCut::cutWriteMaxBitrate = mCutWriteMaxBitrate;
+  TTCut::cutWriteSeqEnd     = mCutWriteSeqEnd;
+  TTCut::correctCutTimeCode = mCorrectCutTimeCode;
+  TTCut::correctCutBitRate  = mCorrectCutBitRate;
+  TTCut::createCutIDD       = mCreateCutIDD;
+  TTCut::readCutIDD         = mReadCutIDD;
+  settings.endGroup();
+
+  // ----- Chapter group (Task 13) ---------------------------------------
+  // NEW sub-group of /Settings. One field — spumuxChapter — per the
+  // legacy gui/ttcutsettings.cpp:213-215 read block.
+  settings.beginGroup("Chapter");
+  mSpumuxChapter = settings.value("SpumuxChapter/", mSpumuxChapter).toBool();
+  TTCut::spumuxChapter = mSpumuxChapter;
+  settings.endGroup();
+
   settings.endGroup();
 }
 
@@ -1021,6 +1149,24 @@ void TTSettings::save()
   settings.setValue("MkvChapterInterval/",  mMkvChapterInterval);
   settings.setValue("AudioOnlyFormat/",     mAudioOnlyFormat);
   settings.setValue("AudioOnlyBitrateKbps/", mAudioOnlyBitrateKbps);
+  settings.endGroup();
+
+  // ----- Cut Options group (Task 13) -----------------------------------
+  // CorrectBitrate/ key is lowercase 'r' — see load().
+  settings.beginGroup("CutOptions");
+  settings.setValue("DirPath/",         mCutDirPath);
+  settings.setValue("AddSuffix/",       mCutAddSuffix);
+  settings.setValue("WriteMaxBitrate/", mCutWriteMaxBitrate);
+  settings.setValue("WriteSeqEnd/",     mCutWriteSeqEnd);
+  settings.setValue("CorrectTimeCode/", mCorrectCutTimeCode);
+  settings.setValue("CorrectBitrate/",  mCorrectCutBitRate);   // lowercase 'r'
+  settings.setValue("CreateIDD/",       mCreateCutIDD);
+  settings.setValue("ReadIDD/",         mReadCutIDD);
+  settings.endGroup();
+
+  // ----- Chapter group (Task 13) ---------------------------------------
+  settings.beginGroup("Chapter");
+  settings.setValue("SpumuxChapter/", mSpumuxChapter);
   settings.endGroup();
 
   settings.endGroup();
