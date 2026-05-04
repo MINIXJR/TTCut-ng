@@ -555,16 +555,10 @@ void TTSettings::setAudioOnlyBitrateKbps(int v)
 }
 
 // ---- Cut Settings & Chapter group setters (Task 13) ------------------------
-// Eleven setters across two NEW QSettings sub-groups (CutOptions, Chapter)
-// plus two non-persisted in-memory fields (muxFileName, cutVideoName). Each
+// Ten setters across two QSettings sub-groups (CutOptions, Chapter) plus one
+// non-persisted in-memory field (cutVideoName, per-project in .ttcut). Each
 // setter early-outs on no-op assignment. No signals — none of these fields
 // have reactive UI dependents.
-
-void TTSettings::setMuxFileName(const QString& v)
-{
-  if (mMuxFileName == v) return;
-  mMuxFileName = v;
-}
 
 void TTSettings::setCutDirPath(const QString& v)
 {
@@ -765,6 +759,13 @@ void TTSettings::load()
   mH265Crf      = settings.value("H265Crf/",      mH265Crf).toInt();
   mH265Profile  = settings.value("H265Profile/",  mH265Profile).toInt();
   mH265Muxer    = settings.value("H265Muxer/",    mH265Muxer).toInt();
+  // Legacy migration: the MP4 option (value 2) was removed; remap any stale
+  // codec-specific Muxer values from existing user configs. Mirrors the
+  // sibling migrations in former gui/ttcutsettings.cpp:196-198 (the matching
+  // outputContainer migration is in the Muxer block below).
+  if (mMpeg2Muxer == 2) mMpeg2Muxer = 1;
+  if (mH264Muxer  == 2) mH264Muxer  = 1;
+  if (mH265Muxer  == 2) mH265Muxer  = 1;
   // Replicate legacy initialisation: copy codec-specific Preset/Crf/Profile
   // into the transient encoder* working values based on encoderCodec.
   // Without this the cut pipeline reads compile-time defaults instead of
@@ -795,9 +796,9 @@ void TTSettings::load()
   mMuxPause            = settings.value("MuxPause/",            mMuxPause).toBool();
   mOutputContainer     = settings.value("OutputContainer/",     mOutputContainer).toInt();
   // Legacy migration: the MP4 option (value 2) was removed; remap any
-  // stale persisted value of 2 to MKV (1). Mirrors the migration in
-  // gui/ttcutsettings.cpp:193-195. The sibling mpeg2/h264/h265 Muxer ==2
-  // migrations belong to Task 9 and are intentionally NOT replicated here.
+  // stale persisted value of 2 to MKV (1). Mirrors the migration in former
+  // gui/ttcutsettings.cpp:193-195. Sibling codec-Muxer migrations are in
+  // the Encoder block above.
   if (mOutputContainer == 2) mOutputContainer = 1;
   mMkvCreateChapters   = settings.value("MkvCreateChapters/",   mMkvCreateChapters).toBool();
   mMkvChapterInterval  = settings.value("MkvChapterInterval/",  mMkvChapterInterval).toInt();
