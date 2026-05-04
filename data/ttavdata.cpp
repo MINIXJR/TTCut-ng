@@ -1717,7 +1717,7 @@ void TTAVData::onCutAborted()
 
 // /////////////////////////////////////////////////////////////////////////////
 // Audio-only cut: extracts the audio track(s) for the kept segments without
-// touching video. Output format is selected by TTCut::audioOnlyFormat:
+// touching video. Output format is selected by TTSettings::audioOnlyFormat():
 //   AOF_OriginalES   — one ES file per track (.ac3, .mp2, ...)
 //   AOF_OriginalMKA  — one .mka with all tracks (stream-copy)
 //   AOF_MP3          — one .mp3 per track (re-encode, Stage 2)

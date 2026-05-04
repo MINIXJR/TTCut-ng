@@ -34,11 +34,10 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttcut.h"
+#include "ttsettings.h"
 
 #include <QWidget>
 #include <QComboBox>
-#include <QDir>
-#include <QCoreApplication>
 #include <QFileInfo>
 #include <QString>
 #include <QStringList>
@@ -86,160 +85,8 @@ QPixmap* TTCut::imgPFrame     = NULL;
 QPixmap* TTCut::imgBFrame     = NULL;
 
 
-// --------------------------------------------------------------
-// common settings
-// --------------------------------------------------------------
-
-// Options
-bool    TTCut::fastSlider      = false;
-QString TTCut::tempDirPath     = QDir::tempPath();
-QString TTCut::lastDirPath     = QDir::homePath();
-QString TTCut::projectFileName = "";
-
-// Preview
-int TTCut::cutPreviewSeconds   = 25;
-int TTCut::playSkipFrames      = 0;
-
-// Frame search
-int TTCut::searchLength   = 45;
-int TTCut::searchAccuracy = 1;
-
-// Navigation
-int TTCut::stepSliderClick =  40;
-int TTCut::stepPgUpDown    =  80;
-int TTCut::stepArrowKeys   =   1;
-int TTCut::stepPlusAlt     = 100;
-int TTCut::stepPlusCtrl    = 200;
-int TTCut::stepPlusShift   = 200;
-int TTCut::stepMouseWheel  = 120;
-
-// Index files
-bool TTCut::createVideoIDD = true;
-bool TTCut::createAudioIDD = true;
-bool TTCut::createPrevIDD  = false;
-bool TTCut::createD2V      = false;
-bool TTCut::readVideoIDD   = true;
-bool TTCut::readAudioIDD   = true;
-bool TTCut::readPrevIDD    = false;
-
- // Logfile
-bool TTCut::createLogFile     = true;
-bool TTCut::logModeConsole    = false;
-bool TTCut::logModeExtended   = true;
-bool TTCut::logVideoIndexInfo = false;
-bool TTCut::logAudioIndexInfo = false;
-
-// Recent files
-QStringList TTCut::recentFileList;
-
-// --------------------------------------------------------------
-// encoder settings
-// --------------------------------------------------------------
 // Version (APP_VERSION is defined in ttcut-ng.pro)
 QString TTCut::versionString = "TTCut-ng - " APP_VERSION;
-
-// Options
-bool TTCut::encoderMode = true;
-int  TTCut::encoderCodec = 0;      // Default to MPEG-2
-
-// Current working values (will be set from codec-specific values)
-int  TTCut::encoderPreset = 4;     // Default to 'fast'
-int  TTCut::encoderCrf = 2;        // Default qscale for MPEG-2
-int  TTCut::encoderProfile = 0;    // Default to Main Profile for MPEG-2
-
-// MPEG-2 specific defaults
-int  TTCut::mpeg2Preset = 4;       // fast
-int  TTCut::mpeg2Crf = 2;          // qscale for MPEG-2 (2-31, lower=better)
-int  TTCut::mpeg2Profile = 0;      // Main Profile
-int  TTCut::mpeg2Muxer = 0;        // mplex (TS/PS)
-
-// H.264 specific defaults
-int  TTCut::h264Preset = 4;        // fast
-int  TTCut::h264Crf = 18;          // CRF 18 (high quality for cut points)
-int  TTCut::h264Profile = 2;       // high profile
-int  TTCut::h264Muxer = 1;         // mkvmerge (MKV)
-
-// H.265 specific defaults
-int  TTCut::h265Preset = 4;        // fast
-int  TTCut::h265Crf = 20;          // CRF 20 (high quality for cut points)
-int  TTCut::h265Profile = 0;       // main profile
-int  TTCut::h265Muxer = 1;         // mkvmerge (MKV)
-
-// Preview settings
-int  TTCut::previewPreset = 0;     // ultrafast (preview speed over quality)
-
-// --- audio boundary detection ---
-int TTCut::burstThresholdDb = -30;
-bool TTCut::normalizeAcmod  = true;
-QStringList TTCut::audioLanguagePreference = QStringList();
-
-// --- Zeitsprung (Quick Jump) ---
-int TTCut::quickJumpIntervalSec = 30;
-
-// --- Screenshot mode ---
-QString TTCut::screenshotDir;
-QString TTCut::screenshotProject;
-
-// --- Navigation search thresholds ---
-float TTCut::navBlackThreshold  = 0.980f;
-float TTCut::navSceneThreshold  = 0.300f;
-float TTCut::navLogoThreshold   = 0.500f;
-
-// --- Stream Point detection ---
-bool  TTCut::spDetectSilence      = true;
-int   TTCut::spSilenceThresholdDb = -75;
-float TTCut::spSilenceMinDuration = 0.3f;
-bool  TTCut::spDetectAudioChange  = true;
-bool  TTCut::spDetectAspectChange = true;
-bool  TTCut::spDetectPillarbox    = true;
-int   TTCut::spPillarboxThreshold = 20;
-
-// --- Gruppierung defekter Frames ---
-int TTCut::extraFrameClusterGapSec    = 5;
-int TTCut::extraFrameClusterOffsetSec = 2;
-
-// --------------------------------------------------------------
-// muxer settings
-// --------------------------------------------------------------
-// Options
-int     TTCut::muxMode       = 0;
-int     TTCut::mpeg2Target   = 7;
-QString TTCut::muxProg       = "mplex";
-QString TTCut::muxProgPath   = "/usr/local/bin/";
-QString TTCut::muxProgCmd    = "-f 8";
-QString TTCut::muxOutputPath = QDir::homePath();
-bool    TTCut::muxDeleteES   = false;
-bool    TTCut::muxPause      = true;
-int     TTCut::outputContainer = 1;  // Default to MKV for modern codecs
-
-// MKV chapter settings
-bool    TTCut::mkvCreateChapters  = true;   // Create chapters by default
-int     TTCut::mkvChapterInterval = 5;      // Every 5 minutes
-
-// Audio-only cut output settings
-int     TTCut::audioOnlyFormat       = TTCut::AOF_OriginalES;
-int     TTCut::audioOnlyBitrateKbps  = 0;   // 0 = match source bitrate
-
-// --------------------------------------------------------------
-// chapter settings
-// --------------------------------------------------------------
-// Options
-bool TTCut::spumuxChapter = false;
-
-// --------------------------------------------------------------
-// Cut settings
-// --------------------------------------------------------------
-// cut option
-QString  TTCut::muxFileName        = "muxscript.sh";
-QString  TTCut::cutDirPath         = QDir::currentPath();
-QString  TTCut::cutVideoName       = "";
-bool     TTCut::cutAddSuffix       = true;
-bool     TTCut::cutWriteMaxBitrate = false;
-bool     TTCut::cutWriteSeqEnd     = false;
-bool     TTCut::correctCutTimeCode = false;
-bool     TTCut::correctCutBitRate  = false;
-bool     TTCut::createCutIDD       = false;
-bool     TTCut::readCutIDD         = false;
 
 // --------------------------------------------------------------
 // Global properties
@@ -286,7 +133,7 @@ void TTCut::populateAudioOnlyFormatCombo(QComboBox* combo)
   combo->addItem(QObject::tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
   combo->addItem(QObject::tr("MP3"),                        TTCut::AOF_MP3);
   combo->addItem(QObject::tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
-  int idx = combo->findData(TTCut::audioOnlyFormat);
+  int idx = combo->findData(TTSettings::instance()->audioOnlyFormat());
   combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 

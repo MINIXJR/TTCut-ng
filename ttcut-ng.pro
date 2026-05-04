@@ -135,7 +135,6 @@ HEADERS     = common/ttcut.h\
               extern/ttffmpegwrapper.h\
               extern/ttessmartcut.h\
               extern/ttmkvmergeprovider.h\
-              gui/ttcutsettings.h\
               gui/ttcutsettingsmuxer.h\
               gui/ttcutsettingsencoder.h\
               gui/ttcutsettingsfiles.h\
@@ -225,7 +224,6 @@ SOURCES     = common/ttcut.cpp\
               extern/ttffmpegwrapper.cpp\
               extern/ttessmartcut.cpp\
               extern/ttmkvmergeprovider.cpp\
-              gui/ttcutsettings.cpp\
               gui/ttcutsettingsmuxer.cpp\
               gui/ttcutsettingsencoder.cpp\
               gui/ttcutsettingsfiles.cpp\

@@ -60,9 +60,7 @@ int main( int argc, char **argv )
     a.setApplicationName("TTCut-ng");
 
     // Force the lazy TTSettings singleton to construct and run its first
-    // load() before any UI code reads a persisted value. The on-disk
-    // QSettings file is shared with the legacy TTCutSettings::readSettings()
-    // path (Strangler-pattern migration window).
+    // load() before any UI code reads a persisted value.
     (void)TTSettings::instance();
 
     // Centre QGroupBox titles application-wide. Most styles (including

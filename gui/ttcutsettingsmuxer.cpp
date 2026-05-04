@@ -69,7 +69,7 @@ void TTCutSettingsMuxer::initMuxProgList()
 {
   cbMuxerProg->clear();
   // Display order: MKV first (default/modern), MPG second.
-  // userData holds the internal TTCut::outputContainer value
+  // userData holds the internal outputContainer value
   // (0 = mplex, 1 = MKV) so the stored semantics stay stable.
   cbMuxerProg->insertItem(0, "MKV (libav)", 1);
   cbMuxerProg->insertItem(1, "MPG (mplex)", 0);
@@ -225,7 +225,7 @@ void TTCutSettingsMuxer::updateMuxerVisibility()
 {
   // Read the live combo selection (container value, not display index)
   // so this method is self-contained and does not depend on
-  // TTCut::outputContainer having been updated first.
+  // TTSettings::outputContainer() having been updated first.
   int current = muxerValueAt(cbMuxerProg->currentIndex());
 
   // MPEG-2 Target is only relevant when:

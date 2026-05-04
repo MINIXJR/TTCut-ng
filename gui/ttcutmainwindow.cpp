@@ -32,6 +32,7 @@
 #include <QPixmap>
 #include <QDebug>
 #include <QScreen>
+#include <QSettings>
 #include <QStyle>
 #include <QTimer>
 #include <QFileInfo>
@@ -159,14 +160,16 @@ TTCutMainWindow::TTCutMainWindow()
 
   // Settings
   TTSettings::instance()->setRecentFileList(QStringList{});
-  settings = new TTCutSettings();
-  settings->readSettings();
+  TTSettings::instance()->load();
 
   // Initialize navigation spinboxes from saved settings
   navigation->setThresholds(TTSettings::instance()->navBlackThreshold(), TTSettings::instance()->navSceneThreshold());
 
-  // Restore window geometry or default to 80% of screen
-  QByteArray savedGeometry = settings->value("MainWindow/geometry").toByteArray();
+  // Restore window geometry or default to 80% of screen.
+  // QSettings here is the per-window UI-state persistence — outside
+  // Phase B scope (TTSettings owns app settings, not window geometry).
+  QSettings geom("TTCut-ng", "TTCut-ng");
+  QByteArray savedGeometry = geom.value("MainWindow/geometry").toByteArray();
   bool restored = false;
   if (!savedGeometry.isEmpty()) {
     restoreGeometry(savedGeometry);
@@ -359,8 +362,6 @@ TTCutMainWindow::~TTCutMainWindow()
 {
   delete mpAVData;
   mpAVData = nullptr;
-  delete settings;
-  settings = nullptr;
   delete mLogoDetector;
   mLogoDetector = nullptr;
 }
@@ -589,15 +590,11 @@ void TTCutMainWindow::onFileExit()
  */
 void TTCutMainWindow::closeEvent(QCloseEvent* event)
 {
-  if (settings != 0) {
-    settings->setValue("MainWindow/geometry", saveGeometry());
-    settings->writeSettings();
-  }
+  // Window geometry persistence — outside Phase B scope (TTSettings owns
+  // app settings, not per-window UI state).
+  QSettings geom("TTCut-ng", "TTCut-ng");
+  geom.setValue("MainWindow/geometry", saveGeometry());
 
-  // Mirror the legacy save path through TTSettings during the Strangler
-  // migration window — TTSettings::save() is currently a no-op shell that
-  // tasks 4-13 will populate group-by-group with the SAME QSettings keys
-  // TTCutSettings already uses, so both paths end up writing the same file.
   TTSettings::instance()->save();
 
   if (mProjectModified) {
@@ -618,7 +615,7 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
 
   closeProject();
 
-  // Don't delete mpAVData / settings here — the destructor handles cleanup.
+  // Don't delete mpAVData here — the destructor handles cleanup.
   // Doing it twice (closeEvent then ~TTCutMainWindow) is a double-free.
 
   event->accept();
@@ -644,7 +641,7 @@ void TTCutMainWindow::onActionSettings()
   log->setLogModeConsole(TTSettings::instance()->logModeConsole());
   log->setLogModeExtended(TTSettings::instance()->logModeExtended());
 
-  if (settings != 0) settings->writeSettings();
+  TTSettings::instance()->save();
 
   delete settingsDlg;
 }
@@ -1028,8 +1025,7 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   if (mpAVData->avCount() == 0 || cutData->count() == 0 )
     return;
 
-  if (settings != 0)
-      settings->writeSettings();
+  TTSettings::instance()->save();
 
   // Detect source video codec and set encoder codec to match
   TTVideoStream* vStream = mpCurrentAVDataItem->videoStream();
@@ -1149,7 +1145,7 @@ void TTCutMainWindow::closeProject()
   mpCurrentAVDataItem = 0;  // AVItem was deleted by clear(), null the dangling pointer
 
   // Restore global settings from QSettings (discard project overrides)
-  settings->readSettings();
+  TTSettings::instance()->load();
   // Clear cut video name so next cut dialog derives it from video filename
   TTSettings::instance()->setCutVideoName("");
 
@@ -1591,8 +1587,7 @@ void TTCutMainWindow::onQuickJump()
 void TTCutMainWindow::insertRecentFile(const QString& fName)
 {
   // Read-modify-write through the setter so recentFilesChanged() fires
-  // exactly once and the legacy TTCut::recentFileList mirror stays
-  // consistent with the TTSettings field.
+  // exactly once.
   QStringList list = TTSettings::instance()->recentFileList();
   list.removeAll(fName);
   list.prepend(fName);

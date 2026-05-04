@@ -29,8 +29,6 @@ public:
   void resetToDefaults();   // re-initialise to compile-time defaults
 
   // ----- Common Options group (Task 4) -------------------------------------
-  // Setters mirror to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state.
   bool    fastSlider() const         { return mFastSlider; }
   void    setFastSlider(bool v);
 
@@ -56,8 +54,6 @@ public:
   void    setSearchAccuracy(int v);
 
   // ----- Navigation Steps group (Task 5) ----------------------------------
-  // Setters mirror to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state.
   int     stepSliderClick() const    { return mStepSliderClick; }
   void    setStepSliderClick(int v);
 
@@ -80,8 +76,6 @@ public:
   void    setStepMouseWheel(int v);
 
   // ----- Index Files & Logging group (Task 6) -----------------------------
-  // Setters mirror to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state.
   bool    createVideoIDD() const     { return mCreateVideoIDD; }
   void    setCreateVideoIDD(bool v);
 
@@ -119,16 +113,12 @@ public:
   void    setLogAudioIndexInfo(bool v);
 
   // ----- Recent Files group (Task 7) --------------------------------------
-  // Setter mirrors to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state,
-  // and additionally emits recentFilesChanged() so subscribed UI elements
+  // Setter emits recentFilesChanged() so subscribed UI elements
   // (recent-files menu) can refresh without ad-hoc refresh hooks.
   const QStringList& recentFileList() const { return mRecentFileList; }
   void    setRecentFileList(const QStringList& v);
 
   // ----- Encoder Generic group setters (Task 8) ---------------------------
-  // Setters mirror to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state.
   // setEncoderCodec also emits encoderCodecChanged(int) so non-dialog
   // subscribers can react to codec switches; the existing
   // TTCutSettingsEncoder::codecChanged signal continues to drive the
@@ -159,8 +149,6 @@ public:
   void    setPreviewPreset(int v);
 
   // ----- Encoder Codec-Specific group setters (Task 9) --------------------
-  // Setters mirror to legacy TTCut::xxx during the migration window so call
-  // sites that have not been migrated yet still observe consistent state.
   // No signals — the codec-switch UI in TTCutSettingsEncoder/Muxer reads
   // these fields synchronously after setEncoderCodec() emits
   // encoderCodecChanged(int) (Task 8); no further per-field notification
@@ -240,8 +228,6 @@ public:
   // carry no `Sec` suffix; preserved verbatim from gui/ttcutsettings.cpp
   // for round-trip compatibility with already-installed user settings.
   // No signals — none of the 12 fields have reactive UI dependents.
-  // Setters mirror to legacy TTCut::xxx during the migration window so
-  // unmigrated call sites continue to observe consistent state.
   float   navBlackThreshold() const  { return mNavBlackThreshold; }
   void    setNavBlackThreshold(float v);
 
@@ -280,11 +266,9 @@ public:
 
   // ----- Muxer group (Task 12) --------------------------------------------
   // Twelve fields extend the existing /Settings/Muxer block (Task 9 already
-  // populated mpeg2Target). Setters mirror to legacy TTCut::xxx during the
-  // migration window so call sites that have not been migrated yet still
-  // observe consistent state. setOutputContainer additionally emits
-  // outputContainerChanged(int) so non-dialog subscribers (e.g. cut-target
-  // file-extension logic) can react to container switches uniformly.
+  // populated mpeg2Target). setOutputContainer emits outputContainerChanged(int)
+  // so non-dialog subscribers (e.g. cut-target file-extension logic) can
+  // react to container switches uniformly.
   int     muxMode() const                  { return mMuxMode; }
   void    setMuxMode(int v);
 
@@ -336,12 +320,8 @@ public:
   //     file via data/ttcutprojectdata.cpp, NOT in QSettings; no load/save
   //     round-trip
   // No signals — none of these fields have reactive UI dependents.
-  // Setters mirror to legacy TTCut::xxx during the migration window so
-  // unmigrated call sites continue to observe consistent state.
-  // load() additionally replicates the cutDirPath fallback-to-currentPath
-  // validation from gui/ttcutsettings.cpp:245-246.
-  // Ground truth for on-disk keys: gui/ttcutsettings.cpp lines 211-247
-  // (read) and 381-397 (write).
+  // load() applies a cutDirPath fallback-to-currentPath validation if the
+  // persisted directory no longer exists.
   QString muxFileName() const                  { return mMuxFileName; }
   void    setMuxFileName(const QString& v);
 
@@ -441,8 +421,6 @@ private:
   bool    mLogAudioIndexInfo = false;
 
   // ----- Recent Files group (Task 7) ---------------------------------------
-  // Default matches common/ttcut.cpp line 133 (`QStringList TTCut::recentFileList;`
-  // — empty list, no initializer).
   QStringList mRecentFileList;
 
   // ----- Encoder Generic group (Task 8) ------------------------------------

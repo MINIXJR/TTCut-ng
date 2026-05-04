@@ -81,137 +81,8 @@ class TTCut
    static QPixmap* imgPFrame;
    static QPixmap* imgBFrame;
 
-
-   // --------------------------------------------------------------
-   // common settings
-   // --------------------------------------------------------------
    // Version
    static QString versionString;
-
-   // Options
-   static bool    fastSlider;
-   static QString tempDirPath;
-   static QString lastDirPath;
-   static QString projectFileName;
-
-   // Preview
-   static int cutPreviewSeconds;
-   static int playSkipFrames;
-
-   // Frame search
-   static int searchLength;
-   static int searchAccuracy;
-
-   // Navigation
-   static int stepSliderClick;
-   static int stepPgUpDown;
-   static int stepArrowKeys;
-   static int stepPlusAlt;
-   static int stepPlusCtrl;
-   static int stepPlusShift;
-   static int stepMouseWheel;
-
-   // Index files
-   static bool createVideoIDD;
-   static bool createAudioIDD;
-   static bool createPrevIDD;
-   static bool createD2V;
-   static bool readVideoIDD;
-   static bool readAudioIDD;
-   static bool readPrevIDD;
-
-   // Logfile
-   static bool createLogFile;
-   static bool logModeConsole;
-   static bool logModeExtended;
-   static bool logVideoIndexInfo;
-   static bool logAudioIndexInfo;
-
-   // Recent files
-   static QStringList recentFileList;
-
-   // --------------------------------------------------------------
-   // encoder settings
-   // --------------------------------------------------------------
-   // Options
-   static bool    encoderMode;
-   static int     encoderCodec;       // 0=MPEG-2, 1=H.264, 2=H.265
-
-   // Current working values (copied from codec-specific settings)
-   static int     encoderPreset;      // 0-8: ultrafast to veryslow
-   static int     encoderCrf;         // 0-51, quality factor (lower=better, 23 default)
-   static int     encoderProfile;     // Codec-specific profile
-
-   // MPEG-2 specific settings
-   static int     mpeg2Preset;        // Preset for MPEG-2
-   static int     mpeg2Crf;           // Quality for MPEG-2
-   static int     mpeg2Profile;       // Profile for MPEG-2
-   static int     mpeg2Muxer;         // Preferred muxer (0=mplex)
-
-   // H.264 specific settings
-   static int     h264Preset;         // Preset for H.264
-   static int     h264Crf;            // CRF for H.264 (default 18)
-   static int     h264Profile;        // Profile for H.264 (2=high)
-   static int     h264Muxer;          // Preferred muxer (1=mkvmerge)
-
-   // H.265 specific settings
-   static int     h265Preset;         // Preset for H.265
-   static int     h265Crf;            // CRF for H.265 (default 20)
-   static int     h265Profile;        // Profile for H.265 (0=main)
-   static int     h265Muxer;          // Preferred muxer (1=mkvmerge)
-
-   // Preview settings
-   static int     previewPreset;       // Encoder preset for preview (0=ultrafast, default)
-
-   // --- audio boundary detection ---
-   static int burstThresholdDb;      // dB RMS threshold for burst detection (-30 default, 0=disabled)
-   static bool normalizeAcmod;       // Re-encode AC3 frames at cuts when acmod changes (default: true)
-   static QStringList audioLanguagePreference;  // e.g. {"deu","eng"}, empty = use system locale
-
-   // --- Zeitsprung (Quick Jump) ---
-   static int quickJumpIntervalSec;  // Show keyframes every N seconds (default 30, 0=all)
-
-   // --- Screenshot mode ---
-   static QString screenshotDir;
-   static QString screenshotProject;
-
-   // --- Navigation search thresholds ---
-   static float  navBlackThreshold;     // Black frame detection threshold (default 0.980)
-   static float  navSceneThreshold;     // Scene change detection threshold (default 0.300)
-   static float  navLogoThreshold;     // Logo detection NCC threshold (default 0.500)
-
-   // --- Stream Point detection ---
-   static bool   spDetectSilence;
-   static int    spSilenceThresholdDb;
-   static float  spSilenceMinDuration;
-   static bool   spDetectAudioChange;
-   static bool   spDetectAspectChange;
-   static bool   spDetectPillarbox;
-   static int    spPillarboxThreshold;
-
-   // --- Gruppierung defekter Frames ---
-   static int extraFrameClusterGapSec;      // Cluster gap threshold (default 5s)
-   static int extraFrameClusterOffsetSec;   // Start offset before cluster (default 2s)
-
-   // --------------------------------------------------------------
-   // muxer settings
-   // --------------------------------------------------------------
-   // Options
-   static int     muxMode;
-   static int     mpeg2Target;
-   static QString muxProg;
-   static QString muxProgPath;
-   static QString muxProgCmd;
-   static QString muxOutputPath;
-   static bool    muxDeleteES;
-   static bool    muxPause;
-
-   // Output container type (0=mplex/TS, 1=MKV, 2=MP4, 3=Elementary)
-   static int     outputContainer;
-
-   // MKV chapter settings
-   static bool    mkvCreateChapters;   // Create chapters in MKV (default: true)
-   static int     mkvChapterInterval;  // Chapter interval in minutes (default: 5)
 
    // Audio-only cut output settings
    // Format: 0 = Original ES per track (stream-copy, multiple files)
@@ -219,29 +90,6 @@ class TTCut
    //         2 = MP3 (re-encode, one .mp3 per track)
    //         3 = AAC (re-encode, one .m4a per track)
    enum AudioOnlyFormat { AOF_OriginalES = 0, AOF_OriginalMKA = 1, AOF_MP3 = 2, AOF_AAC = 3 };
-   static int     audioOnlyFormat;     // AudioOnlyFormat preset (default 0)
-   static int     audioOnlyBitrateKbps; // 0 = match source bitrate (default 0)
-
-   // --------------------------------------------------------------
-   // chapter settings
-   // --------------------------------------------------------------
-   // Options
-   static bool    spumuxChapter;
-
-
-   // --------------------------------------------------------------
-   // Cut settings
-   // --------------------------------------------------------------
-   static QString muxFileName;
-   static QString cutDirPath;
-   static QString cutVideoName;
-   static bool    cutAddSuffix;        // Add "_cut" suffix to output filename
-   static bool    cutWriteMaxBitrate;
-   static bool    cutWriteSeqEnd;
-   static bool    correctCutTimeCode;
-   static bool    correctCutBitRate;
-   static bool    createCutIDD;
-   static bool    readCutIDD;
 
    // --------------------------------------------------------------
    // Global properties
@@ -270,11 +118,10 @@ class TTCut
    static void populateLanguageCombo(class QComboBox* combo, const QString& currentLang);
 
    // Populate a QComboBox with the audio-only output formats (Original ES,
-   // Matroska Audio, MP3, AAC) and select the entry matching
-   // TTCut::audioOnlyFormat. Used by TTCutAVCutDlg and TTCutSettingsMuxer.
+   // Matroska Audio, MP3, AAC) and select the entry matching the current
+   // TTSettings audioOnlyFormat. Used by TTCutAVCutDlg and TTCutSettingsMuxer.
    static void populateAudioOnlyFormatCombo(class QComboBox* combo);
 };
 
 
 #endif
-

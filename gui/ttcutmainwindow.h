@@ -46,7 +46,6 @@
 #include "../avstream/ttmpeg2videostream.h"
 
 #include "ttcutpreview.h"
-#include "ttcutsettings.h"
 #include "ttcutsettingsdlg.h"
 
 class TTAVData;
@@ -157,7 +156,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		TTAVData*        mpAVData;
 		TTAVItem*        mpCurrentAVDataItem;
 		TTProgressBar*   progressBar;
-		TTCutSettings*   settings;
 		TTCutList*       mpPreviewOriginalCutList;
 	bool             mPreviewSkipFirst;
 	bool             mPreviewSkipLast;
