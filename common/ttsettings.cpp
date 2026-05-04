@@ -765,6 +765,16 @@ void TTSettings::load()
   mH265Crf      = settings.value("H265Crf/",      mH265Crf).toInt();
   mH265Profile  = settings.value("H265Profile/",  mH265Profile).toInt();
   mH265Muxer    = settings.value("H265Muxer/",    mH265Muxer).toInt();
+  // Replicate legacy initialisation: copy codec-specific Preset/Crf/Profile
+  // into the transient encoder* working values based on encoderCodec.
+  // Without this the cut pipeline reads compile-time defaults instead of
+  // the user's codec-specific settings until the Settings dialog is opened.
+  // Mirrors the switch in former gui/ttcutsettings.cpp:168-184.
+  switch (mEncoderCodec) {
+    case 0:  mEncoderPreset = mMpeg2Preset; mEncoderCrf = mMpeg2Crf; mEncoderProfile = mMpeg2Profile; break;
+    case 1:  mEncoderPreset = mH264Preset;  mEncoderCrf = mH264Crf;  mEncoderProfile = mH264Profile;  break;
+    case 2:  mEncoderPreset = mH265Preset;  mEncoderCrf = mH265Crf;  mEncoderProfile = mH265Profile;  break;
+  }
   settings.endGroup();
 
   // ----- Muxer group (Tasks 9 + 12) ------------------------------------
