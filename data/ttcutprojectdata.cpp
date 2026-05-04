@@ -33,7 +33,6 @@
 #include "ttsubtitlelist.h"
 #include "ttstreampoint.h"
 #include "../avstream/ttavstream.h"
-#include "../avstream/ttsrtsubtitlestream.h"
 #include "../common/ttexception.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"

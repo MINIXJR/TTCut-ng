@@ -46,7 +46,6 @@
 #include "../avstream/ttmpeg2videostream.h"
 
 #include "ttcutpreview.h"
-#include "ttcutsettingsdlg.h"
 
 class TTAVData;
 class TTAVItem;

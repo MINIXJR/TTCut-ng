@@ -52,6 +52,7 @@
 #include "../data/ttstreampoint_audioworker.h"
 
 #include "ttcutavcutdlg.h"
+#include "ttcutsettingsdlg.h"
 #include "ttprogressbar.h"
 #include "ttcutaboutdlg.h"
 
