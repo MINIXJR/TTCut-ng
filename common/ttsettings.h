@@ -312,19 +312,13 @@ public:
   //     cutWriteMaxBitrate, cutWriteSeqEnd, correctCutTimeCode,
   //     correctCutBitRate, createCutIDD, readCutIDD
   //   - /Settings/Chapter (1 field): spumuxChapter
-  // Two fields are NOT persisted in QSettings — the Strangler keeps them
-  // mirrored anyway so call sites observe consistent state:
-  //   - muxFileName: de-facto constant ("muxscript.sh"); zero write sites
-  //     in code, no load/save round-trip
+  // One field is NOT persisted in QSettings:
   //   - cutVideoName: per-project value, persisted in the .ttcut project
   //     file via data/ttcutprojectdata.cpp, NOT in QSettings; no load/save
   //     round-trip
   // No signals — none of these fields have reactive UI dependents.
   // load() applies a cutDirPath fallback-to-currentPath validation if the
   // persisted directory no longer exists.
-  QString muxFileName() const                  { return mMuxFileName; }
-  void    setMuxFileName(const QString& v);
-
   QString cutDirPath() const                   { return mCutDirPath; }
   void    setCutDirPath(const QString& v);
 
@@ -504,12 +498,11 @@ private:
   int     mAudioOnlyBitrateKbps = 0;  // 0 = match source bitrate
 
   // ----- Cut Settings & Chapter group (Task 13) ----------------------------
-  // Defaults match common/ttcut.cpp lines 227 + 233-242 verbatim. mCutDirPath
+  // Defaults match common/ttcut.cpp lines 227 + 234-242 verbatim. mCutDirPath
   // is initialised to QDir::currentPath() in the ctor (matches the
   // runtime-dependent init pattern of mTempDirPath/mLastDirPath).
-  // mMuxFileName is a de-facto constant ("muxscript.sh"); mCutVideoName is
-  // per-project (persisted in .ttcut, not QSettings) — both have setters but
-  // no QSettings load/save round-trip.
+  // mCutVideoName is per-project (persisted in .ttcut, not QSettings); has a
+  // setter but no QSettings load/save round-trip.
   bool    mCutAddSuffix         = true;
   bool    mCutWriteMaxBitrate   = false;
   bool    mCutWriteSeqEnd       = false;
@@ -518,7 +511,6 @@ private:
   bool    mCreateCutIDD         = false;
   bool    mReadCutIDD           = false;
   bool    mSpumuxChapter        = false;
-  QString mMuxFileName          = "muxscript.sh";
   QString mCutVideoName;           // empty by default
   QString mCutDirPath;             // initialised to QDir::currentPath() in ctor
 };

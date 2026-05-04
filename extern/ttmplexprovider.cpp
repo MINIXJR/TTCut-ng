@@ -105,8 +105,10 @@ TTMplexProvider::~TTMplexProvider()
  */
 void TTMplexProvider::writeMuxScript()
 {
+  static const QString muxFileName = QStringLiteral("muxscript.sh");
+
   QStringList mplexCmd;
-  QFileInfo   muxInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->muxFileName());
+  QFileInfo   muxInfo(QDir(TTSettings::instance()->cutDirPath()), muxFileName);
   QFile       muxFile(muxInfo.absoluteFilePath());
 
   muxFile.remove();
