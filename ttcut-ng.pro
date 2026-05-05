@@ -90,6 +90,7 @@ HEADERS     = common/ttcut.h\
               data/ttstreampoint_audioworker.h\
               data/ttstreampoint_cutderivation.h\
               data/ttsearchtask.h\
+              data/ttsearchtask_blackframe.h\
               data/ttcutparameter.h\
               data/ttmuxlistdata.h\
               data/ttavdata.h\
@@ -182,6 +183,7 @@ SOURCES     = common/ttcut.cpp\
               data/ttstreampoint_audioworker.cpp\
               data/ttstreampoint_cutderivation.cpp\
               data/ttsearchtask.cpp\
+              data/ttsearchtask_blackframe.cpp\
               data/ttcutparameter.cpp\
               data/ttmuxlistdata.cpp\
               data/ttavdata.cpp\

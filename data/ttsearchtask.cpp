@@ -18,7 +18,8 @@ TTSearchTask::TTSearchTask(const QString& taskName,
                            TTAVTypes::AVStreamType streamType,
                            TTVideoIndexList* indexList,
                            TTVideoHeaderList* headerList,
-                           int startPos, int direction, int frameCount)
+                           int startPos, int direction, int frameCount,
+                           const QList<TTFrameInfo>& preBuiltFrameIndex)
   : TTThreadTask(taskName),
     mFilePath(videoFilePath),
     mStreamType(streamType),
@@ -26,7 +27,8 @@ TTSearchTask::TTSearchTask(const QString& taskName,
     mHeaderList(headerList),
     mStartPos(startPos),
     mDirection(direction),
-    mFrameCount(frameCount)
+    mFrameCount(frameCount),
+    mPreBuiltFrameIndex(preBuiltFrameIndex)
 {
 }
 
@@ -52,7 +54,10 @@ bool TTSearchTask::openDecoder()
       mFFmpegWrapper = nullptr;
       return false;
     }
-    mFFmpegWrapper->buildFrameIndex();   // ~200-500ms; spec-confirmed acceptable
+    if (!mPreBuiltFrameIndex.isEmpty())
+      mFFmpegWrapper->setFrameIndex(mPreBuiltFrameIndex);
+    else
+      mFFmpegWrapper->buildFrameIndex();
     return true;
   }
 
@@ -218,5 +223,8 @@ void TTSearchTask::operation()
 
 void TTSearchTask::cleanUp()
 {
-  closeDecoder();
+  // No-op: closeDecoder() runs only in the destructor (GUI thread via deleteLater).
+  // Calling it here from the worker thread races with the destructor on GUI thread
+  // — without a happens-before edge between the two, the destructor can re-read a
+  // stale non-null wrapper pointer and double-free.
 }

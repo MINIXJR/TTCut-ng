@@ -50,6 +50,8 @@
 #include "../data/ttstreampointmodel.h"
 #include "../data/ttstreampoint_videoworker.h"
 #include "../data/ttstreampoint_audioworker.h"
+#include "../data/ttsearchtask.h"
+#include "../data/ttsearchtask_blackframe.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttcutsettingsdlg.h"
@@ -213,7 +215,6 @@ TTCutMainWindow::TTCutMainWindow()
   connect(mpStreamPointTaskPool, &TTThreadTaskPool::statusReport,
           this, &TTCutMainWindow::onStatusReport);
   mStreamPointWorkersRunning = 0;
-  mBlackSearchAborted = false;
   mSceneSearchAborted = false;
   mLogoDetector = new TTLogoDetector();
   mLogoSearchAborted = false;
@@ -1659,7 +1660,7 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
  */
 void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float threshold)
 {
-  if (!mpCurrentAVDataItem) return;
+  if (!mpCurrentAVDataItem || mpRunningSearch) return;
 
   TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
   if (!vs) return;
@@ -1670,59 +1671,56 @@ void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float thre
   TTVideoIndexList* idxList = vs->indexList();
   if (!idxList) return;
 
-  const int pixelThreshold = 18;  // Y <= 17
+  mLastSearchStartPos = startPos;
 
-  mBlackSearchAborted = false;
+  // Reuse the GUI preview wrapper's frame index — avoids a costly rescan in the worker.
+  QList<TTFrameInfo> preBuiltIndex;
+  if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
+    preBuiltIndex = preview->frameIndex();
+
+  auto* task = new TTBlackFrameSearchTask(
+      vs->filePath(),
+      vs->streamType(),
+      idxList,
+      vs->headerList(),
+      startPos, direction, frameCount,
+      threshold,
+      preBuiltIndex);
+
+  connect(task, &TTSearchTask::progress, this,
+          [this](int n) {
+            statusBar()->showMessage(tr("Searching... %1 frames checked").arg(n));
+          });
+  connect(task, &TTSearchTask::found,
+          this, &TTCutMainWindow::onBlackSearchFinished);
+  connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
+
+  mpRunningSearch = task;
   navigation->setBlackSearchRunning(true);
-  QApplication::setOverrideCursor(Qt::WaitCursor);
-
-  QElapsedTimer timer;
-  timer.start();
-
-  int foundPos = -1;
-  int checked = 0;
-
-  // Jump directly between I-frames using the index list
-  int pos = (direction > 0)
-      ? idxList->moveToNextIndexPos(startPos, 1)
-      : idxList->moveToPrevIndexPos(startPos, 1);
-
-  while (pos >= 0 && pos < frameCount && !mBlackSearchAborted) {
-    if (currentFrame->videoWindow()->isBlackAt(pos, pixelThreshold, threshold)) {
-      foundPos = pos;
-      break;
-    }
-    checked++;
-
-    if (checked % 20 == 0)
-      QApplication::processEvents();
-
-    pos = (direction > 0)
-        ? idxList->moveToNextIndexPos(pos, 1)
-        : idxList->moveToPrevIndexPos(pos, 1);
-  }
-
-  qint64 elapsed = timer.elapsed();
-  qDebug() << "Black frame search:" << checked << "I-frames checked in"
-           << elapsed << "ms" << (checked > 0 ? QString("(%1 ms/frame)").arg(elapsed/checked) : "");
-
-  QApplication::restoreOverrideCursor();
-  navigation->setBlackSearchRunning(false);
-
-  if (mBlackSearchAborted) {
-    currentFrame->videoWindow()->showFrameAt(startPos);
-    statusBar()->showMessage(tr("Schwarzbild-Suche abgebrochen"), 3000);
-  } else if (foundPos >= 0) {
-    onVideoSliderChanged(foundPos);
-  } else {
-    currentFrame->videoWindow()->showFrameAt(startPos);
-    statusBar()->showMessage(tr("Kein Schwarzbild gefunden"), 3000);
-  }
+  statusBar()->showMessage(tr("Searching black frame from frame %1...").arg(startPos));
+  mpStreamPointTaskPool->start(task);
 }
 
 void TTCutMainWindow::onAbortBlackSearch()
 {
-  mBlackSearchAborted = true;
+  if (mpRunningSearch) mpRunningSearch->onUserAbort();
+}
+
+void TTCutMainWindow::onBlackSearchFinished(int foundPos, bool wasAborted)
+{
+  navigation->setBlackSearchRunning(false);
+  mpRunningSearch = nullptr;
+
+  if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+    statusBar()->clearMessage();
+  } else {
+    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
+    statusBar()->showMessage(
+        wasAborted ? tr("Black frame search aborted")
+                   : tr("No black frame found"),
+        3000);
+  }
 }
 
 /*!

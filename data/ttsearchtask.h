@@ -7,13 +7,14 @@
 
 #include "../common/ttthreadtask.h"
 #include "../avstream/ttavtypes.h"
+#include "../extern/ttffmpegwrapper.h"   // for TTFrameInfo
 
 #include <QImage>
+#include <QList>
 #include <QString>
 
 class TTVideoIndexList;
 class TTVideoHeaderList;
-class TTFFmpegWrapper;
 class TTMpeg2Decoder;
 
 class TTSearchTask : public TTThreadTask
@@ -28,7 +29,8 @@ public:
                TTVideoHeaderList* headerList,
                int startPos,
                int direction,    // +1 forward, -1 backward
-               int frameCount);
+               int frameCount,
+               const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
   ~TTSearchTask() override;
 
 signals:
@@ -68,6 +70,7 @@ private:
   int                       mStartPos;
   int                       mDirection;
   int                       mFrameCount;
+  QList<TTFrameInfo>        mPreBuiltFrameIndex;
 
   TTFFmpegWrapper*          mFFmpegWrapper = nullptr;
   TTMpeg2Decoder*           mMpeg2Decoder  = nullptr;
