@@ -121,6 +121,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 	void onBlackSearchFinished(int foundPos, bool wasAborted);
 	void onSearchSceneChange(int startPos, int direction, float threshold);
 	void onAbortSceneSearch();
+	void onSceneSearchFinished(int foundPos, bool wasAborted);
     void onSelectLogoROI();
     void onCancelLogoROI();
     void onLoadLogoFile();
@@ -170,7 +171,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
     QElapsedTimer        mDirectProgressTimer;
-    bool                 mSceneSearchAborted;
     TTSearchTask*        mpRunningSearch = nullptr;
     int                  mLastSearchStartPos = -1;
     TTLogoDetector*      mLogoDetector;
