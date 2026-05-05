@@ -53,6 +53,7 @@
 #include "../data/ttsearchtask.h"
 #include "../data/ttsearchtask_blackframe.h"
 #include "../data/ttsearchtask_scenechange.h"
+#include "../data/ttsearchtask_logo.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttcutsettingsdlg.h"
@@ -217,7 +218,6 @@ TTCutMainWindow::TTCutMainWindow()
           this, &TTCutMainWindow::onStatusReport);
   mStreamPointWorkersRunning = 0;
   mLogoDetector = new TTLogoDetector();
-  mLogoSearchAborted = false;
 
   // Add stream point widget below navigation in the Navigation GroupBox
   QGridLayout* navLayout = qobject_cast<QGridLayout*>(gbNavigation->layout());
@@ -1988,7 +1988,8 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
 
 void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
 {
-  if (!mpCurrentAVDataItem || !mLogoDetector->hasProfile()) return;
+  if (!mpCurrentAVDataItem || mpRunningSearch) return;
+  if (!mLogoDetector || !mLogoDetector->hasProfile()) return;
 
   TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
   if (!vs) return;
@@ -1999,102 +2000,54 @@ void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
   TTVideoIndexList* idxList = vs->indexList();
   if (!idxList) return;
 
-  mLogoSearchAborted = false;
+  mLastSearchStartPos = startPos;
+
+  QList<TTFrameInfo> preBuiltIndex;
+  if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
+    preBuiltIndex = preview->frameIndex();
+
+  auto* task = new TTLogoSearchTask(
+      vs->filePath(),
+      vs->streamType(),
+      idxList,
+      vs->headerList(),
+      startPos, direction, frameCount,
+      mLogoDetector,
+      threshold,
+      preBuiltIndex);
+
+  connect(task, &TTSearchTask::progress, this,
+          [this](int n) {
+            statusBar()->showMessage(tr("Searching... %1 frames checked").arg(n));
+          });
+  connect(task, &TTSearchTask::found,
+          this, &TTCutMainWindow::onLogoSearchFinished);
+  connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
+
+  mpRunningSearch = task;
   navigation->setLogoSearchRunning(true);
-  QApplication::setOverrideCursor(Qt::WaitCursor);
-
-  QElapsedTimer timer;
-  timer.start();
-
-  TTFFmpegWrapper* analysisWrapper = nullptr;
-  bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
-  if (useAnalysis) {
-    analysisWrapper = new TTFFmpegWrapper();
-    analysisWrapper->setAnalysisMode(true);
-    if (analysisWrapper->openFile(vs->filePath())) {
-      TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-      if (previewWrapper)
-        analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
-      else
-        analysisWrapper->buildFrameIndex();
-    } else {
-      delete analysisWrapper;
-      analysisWrapper = nullptr;
-      useAnalysis = false;
-    }
-  }
-
-  auto getScore = [&](int pos) -> float {
-    QImage frame;
-    if (useAnalysis && analysisWrapper) {
-      frame = analysisWrapper->decodeFrame(pos);
-    } else {
-      currentFrame->videoWindow()->moveToVideoFrame(pos);
-      frame = currentFrame->videoWindow()->grabFrameImage();
-    }
-    if (frame.isNull()) return 0.0f;
-    return mLogoDetector->matchScore(frame);
-  };
-
-  int foundPos = -1;
-  int checked = 0;
-
-  int pos = idxList->moveToIndexPos(startPos, 1);
-  if (pos < 0) pos = idxList->moveToNextIndexPos(startPos, 1);
-  if (pos < 0) goto cleanup;
-
-  {
-    float initialScore = getScore(pos);
-    bool initialLogoPresent = (initialScore >= threshold);
-
-    pos = (direction > 0)
-        ? idxList->moveToNextIndexPos(pos, 1)
-        : idxList->moveToPrevIndexPos(pos, 1);
-
-    while (pos >= 0 && pos < frameCount && !mLogoSearchAborted) {
-      float score = getScore(pos);
-      bool logoPresent = (score >= threshold);
-
-      if (logoPresent != initialLogoPresent) {
-        foundPos = pos;
-        break;
-      }
-      checked++;
-
-      if (checked % 20 == 0)
-        QApplication::processEvents();
-
-      pos = (direction > 0)
-          ? idxList->moveToNextIndexPos(pos, 1)
-          : idxList->moveToPrevIndexPos(pos, 1);
-    }
-  }
-
-cleanup:
-  if (analysisWrapper) {
-    analysisWrapper->closeFile();
-    delete analysisWrapper;
-  }
-
-  qint64 elapsed = timer.elapsed();
-  qDebug() << "Logo search:" << checked << "I-frames checked in"
-           << elapsed << "ms" << (checked > 0 ? QString("(%1 ms/frame)").arg(elapsed/checked) : "");
-
-  QApplication::restoreOverrideCursor();
-  navigation->setLogoSearchRunning(false);
-
-  if (mLogoSearchAborted) {
-    currentFrame->videoWindow()->showFrameAt(startPos);
-    statusBar()->showMessage(tr("Logo-Suche abgebrochen"), 3000);
-  } else if (foundPos >= 0) {
-    onVideoSliderChanged(foundPos);
-  } else {
-    currentFrame->videoWindow()->showFrameAt(startPos);
-    statusBar()->showMessage(tr("Keine Logo-Statusänderung gefunden"), 3000);
-  }
+  statusBar()->showMessage(tr("Searching logo change from frame %1...").arg(startPos));
+  mpStreamPointTaskPool->start(task);
 }
 
 void TTCutMainWindow::onAbortLogoSearch()
 {
-  mLogoSearchAborted = true;
+  if (mpRunningSearch) mpRunningSearch->onUserAbort();
+}
+
+void TTCutMainWindow::onLogoSearchFinished(int foundPos, bool wasAborted)
+{
+  navigation->setLogoSearchRunning(false);
+  mpRunningSearch = nullptr;
+
+  if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+    statusBar()->clearMessage();
+  } else {
+    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
+    statusBar()->showMessage(
+        wasAborted ? tr("Logo search aborted")
+                   : tr("No logo state change found"),
+        3000);
+  }
 }

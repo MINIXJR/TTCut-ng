@@ -92,6 +92,7 @@ HEADERS     = common/ttcut.h\
               data/ttsearchtask.h\
               data/ttsearchtask_blackframe.h\
               data/ttsearchtask_scenechange.h\
+              data/ttsearchtask_logo.h\
               data/ttcutparameter.h\
               data/ttmuxlistdata.h\
               data/ttavdata.h\
@@ -186,6 +187,7 @@ SOURCES     = common/ttcut.cpp\
               data/ttsearchtask.cpp\
               data/ttsearchtask_blackframe.cpp\
               data/ttsearchtask_scenechange.cpp\
+              data/ttsearchtask_logo.cpp\
               data/ttcutparameter.cpp\
               data/ttmuxlistdata.cpp\
               data/ttavdata.cpp\

@@ -129,6 +129,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onLogoROISelected(QRect imageCoords);
     void onSearchLogo(int startPos, int direction, float threshold);
     void onAbortLogoSearch();
+    void onLogoSearchFinished(int foundPos, bool wasAborted);
 
 		void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
@@ -174,7 +175,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTSearchTask*        mpRunningSearch = nullptr;
     int                  mLastSearchStartPos = -1;
     TTLogoDetector*      mLogoDetector;
-    bool                 mLogoSearchAborted;
 
     // Dirty tracking
     bool                 mProjectModified;
