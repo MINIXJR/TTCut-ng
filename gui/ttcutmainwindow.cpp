@@ -36,6 +36,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <QFileInfo>
+#include <QThreadPool>
 
 #include "ttcutmainwindow.h"
 #include "ttquickjumpdialog.h"
@@ -1129,6 +1130,16 @@ void TTCutMainWindow::updateWindowTitle()
  */
 void TTCutMainWindow::closeProject()
 {
+  // Abort any running search worker BEFORE stream teardown — the worker holds
+  // pointers to TTVideoIndexList / TTVideoHeaderList owned by the stream.
+  // Wait for the QThreadPool runnable to actually return before we let
+  // mpAVData->clear() free those lists.
+  if (mpRunningSearch) {
+    mpRunningSearch->onUserAbort();
+    QThreadPool::globalInstance()->waitForDone();
+    mpRunningSearch = nullptr;
+  }
+
 	disconnect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
   disconnect(mpAVData, &TTAVData::currentAVItemChanged,     this, &TTCutMainWindow::onAVItemChanged);
 
