@@ -203,6 +203,8 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
 	pbAddCut->setEnabled(enabled);
 	pbQuickJump->setEnabled(enabled);
 	pbSetMarker->setEnabled(enabled);
+	pbPrevBlackFrame->setEnabled(enabled);
+	pbNextBlackFrame->setEnabled(enabled);
 	pbPrevSceneChange->setEnabled(enabled);
 	pbNextSceneChange->setEnabled(enabled);
 	pbPrevLogo->setEnabled(enabled);
