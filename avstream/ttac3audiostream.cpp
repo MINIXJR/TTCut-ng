@@ -49,7 +49,6 @@
 
 #include "../common/istatusreporter.h"
 #include "../common/ttexception.h"
-#include "../data/ttcutlist.h"
 #include "../data/ttcutparameter.h"
 
 // /////////////////////////////////////////////////////////////////////////////
