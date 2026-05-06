@@ -88,6 +88,10 @@ struct TTFrameInfo {
     int gopIndex;           // Which GOP this frame belongs to
     int frameIndex;         // Sequential frame number
     bool isFieldCoded;      // true if merged from two PAFF field packets
+
+    // Internal scratch for buildFrameIndex's PAFF post-processing pass:
+    int  paffFrameNum  = -1;     // -1 = not a field; else frame_num for matching
+    bool isBottomField = false;  // valid only when isFieldCoded == true
 };
 
 // ----------------------------------------------------------------------------
@@ -278,6 +282,35 @@ private:
     };
     TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
     void parseH264SpsFromExtradata(const uint8_t* data, int size);
+    // Validate format ctx, clear mFrameIndex, seek to byte 0 (ES) or PTS 0
+    // (container), parse SPS extradata for H.264 PAFF detection. Returns
+    // false on validation/seek failure.
+    bool setupIndexingPass(int videoStreamIndex);
+
+    // Seek context back to the beginning of the stream after indexing.
+    // ES path: avio_seek + avformat_flush. Container path: av_seek_frame.
+    void rewindContext(int videoStreamIndex);
+
+    // For elementary streams whose first frame has no PTS: walk mFrameIndex and
+    // assign sequential PTS/DTS values from frame rate (read from .info file or
+    // stream metadata). Validates and falls back to 25 fps. Halves PAFF rate.
+    void assignPtsFromFrameRate(int videoStreamIndex);
+
+    // Outer av_read_frame loop. Appends one TTFrameInfo per video packet
+    // (top fields, bottom fields, and normal frames are all separate
+    // entries). Sets mIsPAFF = true when a field packet is found. Leaves
+    // gopIndex and frameIndex at -1 (filled in by finalizeFrameIndex).
+    // Emits progressChanged.
+    void scanPacketsIntoRawIndex(int videoStreamIndex);
+
+    // PAFF post-processing: walk mFrameIndex, collapse adjacent
+    // top+bottom field pairs (matching paffFrameNum) into a single entry
+    // (top's fields + summed packetSize). No-op if !mIsPAFF. In-place.
+    void mergePAFFFieldsInIndex();
+
+    // Walk mFrameIndex assigning gopIndex (incremented at each keyframe)
+    // and frameIndex (= position) to every entry.
+    void finalizeFrameIndex();
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;
