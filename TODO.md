@@ -27,6 +27,14 @@
   - `accessUnitPtr()` für Zero-Copy mmap Frame-Zugriff, Bulk-Write für ungepatche Segmente
   - **Noch zu testen:** Funktionale Verifikation + Performance-Messung mit echten Dateien
 
+- **Equal-Frame Search: H.264/H.265-Support fehlt**
+  - `TTFrameSearchTask` (data/ttframesearchtask.cpp:56,102) nutzt hardcoded `TTMpeg2Decoder` —
+    funktioniert nur für MPEG-2-Streams. Für H.264/H.265 stehen die Buttons im CutOutFrame-Widget
+    sichtbar zur Verfügung, der Search-Worker dekodiert aber kein Frame und liefert kein Ergebnis.
+  - Lösung: Codec-aware Decoder-Dispatch (TTMpeg2Decoder für MPEG-2, TTFFmpegWrapper für H.264/H.265),
+    analog zur Pattern-Lösung in TTSearchTask::openDecoder().
+  - Algorithmus bleibt YUV-byte-delta (oder optional SSIM/cross-correlation als separate Verbesserung).
+
 ## Medium Priority
 
 - **Bit-Stream API in extern/ vereinheitlichen**
