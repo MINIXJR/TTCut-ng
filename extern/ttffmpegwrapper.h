@@ -278,6 +278,9 @@ private:
     };
     TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
     void parseH264SpsFromExtradata(const uint8_t* data, int size);
+    // Debug-only: dump mFrameIndex as CSV to env-var TTCUT_DUMP_FRAMEINDEX.
+    // Removed at end of refactor (see plan 2026-05-06-buildframeindex-split).
+    void dumpFrameIndexCsv() const;
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;
