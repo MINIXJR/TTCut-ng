@@ -1799,22 +1799,37 @@ Ausgabedatei:
         <translation>Sekunden</translation>
     </message>
     <message>
+        <location filename="../ui/ttcutsettingscommon.ui" line="567"/>
+        <source>Search worker threads (0 = auto)</source>
+        <translation>Suche-Worker-Threads (0 = automatisch)</translation>
+    </message>
+    <message>
         <location filename="../ui/ttcutsettingscommon.ui" line="384"/>
         <source>Search / Play</source>
         <translation>Suche / Wiedergabe</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="523"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="446"/>
+        <source>threads</source>
+        <translation>Threads</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingscommon.ui" line="520"/>
+        <source>Number of parallel decoders during black-frame / scene-change / logo search. 0 = automatic (max 4 by default). Higher uses more RAM (~40 MB per worker for 1080p H.264/H.265).</source>
+        <translation>Anzahl paralleler Decoder bei Schwarzbild- / Szenenwechsel- / Logo-Suche. 0 = automatisch (max. 4 Standard). Höher braucht mehr RAM (~40 MB pro Worker bei 1080p H.264/H.265).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingscommon.ui" line="546"/>
         <source>Search CutOut Frame within</source>
         <translation>Cut-Out Frame suchen innerhalb</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="530"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="553"/>
         <source>Preview each Cut</source>
         <translation>Vorschau für jeden Schnitt</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="537"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="560"/>
         <source>Skip while playing</source>
         <translation>Überspringen bei Wiedergabe</translation>
     </message>
@@ -2410,13 +2425,13 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="686"/>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="766"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="687"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="767"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="859"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="860"/>
         <source>Indexed %1 frames</source>
         <translation>%1 Frames indiziert</translation>
     </message>
