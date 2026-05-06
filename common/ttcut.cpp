@@ -104,27 +104,34 @@ TTCut::~TTCut()
 }
 
 
-// ISO 639-2/B language codes typically used in DVB broadcasts
-QStringList TTCut::languageCodes()
+// ISO 639-2/B language codes typically used in DVB broadcasts.
+// Cached as function-local statics so each call returns the same list
+// (no per-call allocation) — important for normalizeLangCode in audio-sort
+// comparators.
+const QStringList& TTCut::languageCodes()
 {
-  return QStringList()
-    << "und" << "deu" << "eng" << "fra" << "ita" << "spa" << "por"
-    << "dut" << "pol" << "cze" << "hun" << "dan" << "swe" << "fin"
-    << "nor" << "rus" << "tur" << "gre" << "hrv" << "slo" << "rum"
-    << "bul" << "srp" << "slv" << "jpn" << "chi" << "kor" << "ara"
-    << "qks" << "mis";
+  static const QStringList codes = {
+    "und", "deu", "eng", "fra", "ita", "spa", "por",
+    "dut", "pol", "cze", "hun", "dan", "swe", "fin",
+    "nor", "rus", "tur", "gre", "hrv", "slo", "rum",
+    "bul", "srp", "slv", "jpn", "chi", "kor", "ara",
+    "qks", "mis"
+  };
+  return codes;
 }
 
-QStringList TTCut::languageNames()
+const QStringList& TTCut::languageNames()
 {
-  return QStringList()
-    << "Undetermined" << "Deutsch" << "English" << "Français" << "Italiano"
-    << "Español" << "Português" << "Nederlands" << "Polski" << "Čeština"
-    << "Magyar" << "Dansk" << "Svenska" << "Suomi" << "Norsk" << "Русский"
-    << "Türkçe" << "Ελληνικά" << "Hrvatski" << "Slovenčina" << "Română"
-    << "Български" << "Srpski" << "Slovenščina" << "日本語" << "中文"
-    << "한국어" << "العربية"
-    << "Klare Sprache" << "Hörfilm";
+  static const QStringList names = {
+    "Undetermined", "Deutsch", "English", "Français", "Italiano",
+    "Español", "Português", "Nederlands", "Polski", "Čeština",
+    "Magyar", "Dansk", "Svenska", "Suomi", "Norsk", "Русский",
+    "Türkçe", "Ελληνικά", "Hrvatski", "Slovenčina", "Română",
+    "Български", "Srpski", "Slovenščina", "日本語", "中文",
+    "한국어", "العربية",
+    "Klare Sprache", "Hörfilm"
+  };
+  return names;
 }
 
 void TTCut::populateAudioOnlyFormatCombo(QComboBox* combo)

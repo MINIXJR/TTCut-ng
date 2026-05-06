@@ -99,8 +99,8 @@ class TTCut
    // --------------------------------------------------------------
    // ISO 639 language support
    // --------------------------------------------------------------
-   static QStringList languageCodes();    // {"und","deu","eng","fra",...}
-   static QStringList languageNames();    // {"Undetermined","Deutsch","English",...}
+   static const QStringList& languageCodes();    // {"und","deu","eng","fra",...}
+   static const QStringList& languageNames();    // {"Undetermined","Deutsch","English",...}
    static QString iso639_1to2(const QString& code2);  // "de" → "deu"
    static QString normalizeLangCode(const QString& code);  // "de"/"ger"/"DEU" → "deu", unknown → ""
 
