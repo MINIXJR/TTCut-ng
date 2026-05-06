@@ -6,11 +6,15 @@
 
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttvideoheaderlist.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
-#include "../common/ttmessagelogger.h"
 
 #include <QDebug>
+#include <QSemaphore>
+#include <QThread>
+#include <QThreadPool>
 #include <cstring>
 
 TTSearchTask::TTSearchTask(const QString& taskName,
@@ -21,13 +25,13 @@ TTSearchTask::TTSearchTask(const QString& taskName,
                            int startPos, int direction, int frameCount,
                            const QList<TTFrameInfo>& preBuiltFrameIndex)
   : TTThreadTask(taskName),
-    mFilePath(videoFilePath),
-    mStreamType(streamType),
     mIndexList(indexList),
     mHeaderList(headerList),
     mStartPos(startPos),
     mDirection(direction),
     mFrameCount(frameCount),
+    mFilePath(videoFilePath),
+    mStreamType(streamType),
     mPreBuiltFrameIndex(preBuiltFrameIndex)
 {
 }
@@ -227,4 +231,84 @@ void TTSearchTask::cleanUp()
   // Calling it here from the worker thread races with the destructor on GUI thread
   // — without a happens-before edge between the two, the destructor can re-read a
   // stale non-null wrapper pointer and double-free.
+}
+
+bool TTSearchTask::setupWorkers()
+{
+  // Resolve worker count: 0 = auto (idealThreadCount/2 cap 4), clamp [1, 16].
+  int n = TTSettings::instance()->searchWorkerCount();
+  if (n <= 0) n = qBound(1, QThread::idealThreadCount() / 2, 4);
+  mWorkerCount = qBound(1, n, 16);
+
+  // MPEG-2: single decoder for now (libmpeg2 multi-decoder is future work).
+  if (mStreamType == TTAVTypes::mpeg2_demuxed_video ||
+      mStreamType == TTAVTypes::mpeg2_mplexed_video) {
+    mWorkerCount = 1;
+    if (!openDecoder()) return false;   // populates mMpeg2Decoder (existing path)
+    return true;
+  }
+
+  // H.264 / H.265: open N FFmpeg wrappers in parallel.
+  if (mStreamType != TTAVTypes::h264_video && mStreamType != TTAVTypes::h265_video) {
+    log->errorMsg(__FILE__, __LINE__,
+                  QString("TTSearchTask::setupWorkers: unsupported stream type %1")
+                      .arg((int)mStreamType));
+    return false;
+  }
+
+  mSubWrappers.reserve(mWorkerCount);
+  for (int i = 0; i < mWorkerCount; ++i) {
+    auto* w = new TTFFmpegWrapper();
+    w->setAnalysisMode(true);
+    w->setSearchMode(true);
+    if (!w->openFile(mFilePath)) {
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("TTSearchTask::setupWorkers: openFile failed for %1 (worker %2)")
+                        .arg(mFilePath).arg(i));
+      delete w;
+      teardownWorkers();   // delete previously-opened wrappers
+      return false;
+    }
+    if (!mPreBuiltFrameIndex.isEmpty())
+      w->setFrameIndex(mPreBuiltFrameIndex);
+    else
+      w->buildFrameIndex();
+    mSubWrappers.append(w);
+  }
+
+  mDecodePool = new QThreadPool();
+  mDecodePool->setMaxThreadCount(mWorkerCount);
+  return true;
+}
+
+void TTSearchTask::teardownWorkers()
+{
+  if (mDecodePool) {
+    mDecodePool->waitForDone();
+    delete mDecodePool;
+    mDecodePool = nullptr;
+  }
+  for (TTFFmpegWrapper* w : mSubWrappers) {
+    if (w) {
+      w->closeFile();
+      delete w;
+    }
+  }
+  mSubWrappers.clear();
+  // mMpeg2Decoder is freed by the existing closeDecoder() chain (~TTSearchTask).
+}
+
+QVector<int> TTSearchTask::collectNextBatch(int& currentPos)
+{
+  QVector<int> batch;
+  batch.reserve(mWorkerCount);
+  int p = currentPos;
+  while (batch.size() < mWorkerCount && p >= 0 && p < mFrameCount) {
+    batch.append(p);
+    p = (mDirection > 0)
+        ? mIndexList->moveToNextIndexPos(p, 1)
+        : mIndexList->moveToPrevIndexPos(p, 1);
+  }
+  currentPos = p;   // first position AFTER the batch (or -1 / out-of-range)
+  return batch;
 }

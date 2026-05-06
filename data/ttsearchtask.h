@@ -11,7 +11,11 @@
 
 #include <QImage>
 #include <QList>
+#include <QRunnable>
+#include <QSemaphore>
 #include <QString>
+#include <QThreadPool>
+#include <QVector>
 
 class TTVideoIndexList;
 class TTVideoHeaderList;
@@ -38,8 +42,9 @@ signals:
   void found(int foundPos, bool wasAborted);    // foundPos -1 = not-found, >=0 = position
 
 protected:
-  // Subclass implements the per-frame test.
-  virtual bool checkMatch(int pos) = 0;
+  // Subclass implements the per-frame test (used by base operation() only;
+  // subclasses that override operation() entirely may leave this unimplemented).
+  virtual bool checkMatch(int pos) { Q_UNUSED(pos); return false; }
   // Optional hook called once with the first iterated I-frame position.
   virtual void onSearchStart(int firstPos) { Q_UNUSED(firstPos); }
 
@@ -48,16 +53,74 @@ protected:
   bool   isFrameBlackAt(int pos, int pixelThreshold, float ratioThreshold);
   bool   buildHistogramAt(int pos, int hist[256], int& totalPixels);
 
+  // ---- Batched-parallel helpers (used by subclass operation() bodies) ----
+
+  // Open N TTFFmpegWrapper instances (or 1 TTMpeg2Decoder for MPEG-2),
+  // configure them with setAnalysisMode(true) + setSearchMode(true) and
+  // populate with the pre-built frame index. Sets mWorkerCount.
+  // Returns false if any open fails (and leaves mSubWrappers empty).
+  bool setupWorkers();
+
+  // Close + delete all sub-decoders, destroy mDecodePool. Idempotent.
+  void teardownWorkers();
+
+  // Collect up to mWorkerCount I-frame positions starting at and including
+  // currentPos, walking via mIndexList in mDirection. Updates currentPos to
+  // the position immediately after the last batch entry (so the caller can
+  // pass the same variable back next iteration). Returns empty when
+  // exhausted.
+  QVector<int> collectNextBatch(int& currentPos);
+
+  // Dispatch count lambdas to mDecodePool, one per worker index [0..count-1].
+  // Waits for all to complete via QSemaphore. Falls back to single-threaded
+  // inline execution when count==1 or mDecodePool is null.
+  template<class Func>
+  void parallelMap(int count, Func&& lambda)
+  {
+    if (count <= 0) return;
+    if (count == 1 || !mDecodePool) {
+      // Single-worker fallback (also used when mDecodePool not initialised).
+      if (!mIsAborted) lambda(0);
+      return;
+    }
+
+    QSemaphore done(0);
+    for (int i = 0; i < count; ++i) {
+      if (mIsAborted) {
+        done.release(count - i);   // keep acquire() count balanced
+        break;
+      }
+      auto* runnable = QRunnable::create([&, i]() {
+        lambda(i);
+        done.release(1);
+      });
+      runnable->setAutoDelete(true);
+      mDecodePool->start(runnable);
+    }
+    done.acquire(count);
+  }
+
   // TTThreadTask interface.
   void operation() override;
   void cleanUp() override;
+
+  // Read by closeProject() to recover stream type without dynamic_cast.
+  TTAVTypes::AVStreamType streamType() const { return mStreamType; }
 
 public slots:
   void onUserAbort() override;   // sets mIsAborted (inherited)
 
 protected:
-  // Read by closeProject() to recover stream type without dynamic_cast.
-  TTAVTypes::AVStreamType streamType() const { return mStreamType; }
+  // Accessible from subclass operation() bodies (declared in ctor-init order).
+  TTVideoIndexList*            mIndexList   = nullptr;
+  TTVideoHeaderList*           mHeaderList  = nullptr;
+  int                          mStartPos    = 0;
+  int                          mDirection   = 1;
+  int                          mFrameCount  = 0;
+
+  // Batched-parallel state (lifetime = setupWorkers .. teardownWorkers).
+  int                          mWorkerCount = 1;
+  QVector<TTFFmpegWrapper*>    mSubWrappers;           // N entries (H.264/H.265)
 
 private:
   bool openDecoder();
@@ -65,15 +128,12 @@ private:
 
   QString                   mFilePath;
   TTAVTypes::AVStreamType   mStreamType;
-  TTVideoIndexList*         mIndexList;
-  TTVideoHeaderList*        mHeaderList;
-  int                       mStartPos;
-  int                       mDirection;
-  int                       mFrameCount;
   QList<TTFrameInfo>        mPreBuiltFrameIndex;
 
   TTFFmpegWrapper*          mFFmpegWrapper = nullptr;
   TTMpeg2Decoder*           mMpeg2Decoder  = nullptr;
+
+  QThreadPool*              mDecodePool  = nullptr; // local pool sized to mWorkerCount
 };
 
 #endif // TTSEARCHTASK_H
