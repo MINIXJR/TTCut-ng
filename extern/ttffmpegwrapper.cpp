@@ -563,188 +563,11 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
     if (!setupIndexingPass(videoStreamIndex)) return false;
     if (videoStreamIndex < 0) videoStreamIndex = mVideoStreamIndex;
 
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) {
-        setError("Could not allocate packet");
-        return false;
-    }
-
-    int currentGOP = 0;
-    int frameIndex = 0;
-    int64_t lastProgress = -1;
-
-    // Get estimated frame count for progress
-    TTStreamInfo streamInfo = getStreamInfo(videoStreamIndex);
-    int64_t estimatedFrames = streamInfo.numFrames > 0 ? streamInfo.numFrames : 10000;
-
-    qDebug() << "Building frame index for stream" << videoStreamIndex;
-    qDebug() << "Estimated frames:" << estimatedFrames;
-
-    // PAFF field merging state
-    bool hasPendingTopField = false;
-    TTFrameInfo pendingTopFrame;
-    int pendingTopFrameNum = -1;
-
-    while (av_read_frame(mFormatCtx, packet) >= 0) {
-        if (packet->stream_index == videoStreamIndex) {
-            // Check for PAFF field packet (H.264 only)
-            AVCodecID cid = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
-            if (cid == AV_CODEC_ID_H264 && !mH264FrameMbsOnlyFlag) {
-                TTFieldInfo fieldInfo = parseH264FieldInfoFromPacket(packet->data, packet->size);
-                if (fieldInfo.isField) {
-                    mIsPAFF = true;
-
-                    if (!fieldInfo.isBottomField) {
-                        // Top field: buffer it
-                        if (hasPendingTopField) {
-                            // Orphaned top field — emit as standalone frame
-                            pendingTopFrame.isFieldCoded = true;
-                            pendingTopFrame.gopIndex = currentGOP;
-                            mFrameIndex.append(pendingTopFrame);
-                            frameIndex++;
-                        }
-                        pendingTopFrame = TTFrameInfo();
-                        pendingTopFrame.pts = packet->pts;
-                        pendingTopFrame.dts = packet->dts;
-                        pendingTopFrame.fileOffset = packet->pos;
-                        pendingTopFrame.packetSize = packet->size;
-                        pendingTopFrame.isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
-                        pendingTopFrame.frameIndex = frameIndex;
-                        pendingTopFrame.isFieldCoded = true;
-
-                        // Determine frame type for top field
-                        if (pendingTopFrame.isKeyframe) {
-                            pendingTopFrame.frameType = AV_PICTURE_TYPE_I;
-                        } else {
-                            int sliceType = TTNaluParser::parseH264SliceTypeFromPacket(
-                                packet->data, packet->size);
-                            if (sliceType == H264::SLICE_B)
-                                pendingTopFrame.frameType = AV_PICTURE_TYPE_B;
-                            else if (sliceType == H264::SLICE_I)
-                                pendingTopFrame.frameType = AV_PICTURE_TYPE_I;
-                            else
-                                pendingTopFrame.frameType = AV_PICTURE_TYPE_P;
-                        }
-
-                        pendingTopFrameNum = fieldInfo.frameNum;
-                        hasPendingTopField = true;
-                        av_packet_unref(packet);
-                        continue;
-                    } else {
-                        // Bottom field
-                        if (hasPendingTopField && fieldInfo.frameNum == pendingTopFrameNum) {
-                            // Merge: use top field's info, add bottom field's packet size
-                            pendingTopFrame.packetSize += packet->size;
-                            if (pendingTopFrame.isKeyframe) {
-                                if (frameIndex > 0) currentGOP++;
-                            }
-                            pendingTopFrame.gopIndex = currentGOP;
-                            mFrameIndex.append(pendingTopFrame);
-                            frameIndex++;
-
-                            int64_t progress = (frameIndex * 100) / estimatedFrames;
-                            if (progress != lastProgress && progress <= 100) {
-                                emit progressChanged(static_cast<int>(progress),
-                                    tr("Indexing frame %1...").arg(frameIndex));
-                                lastProgress = progress;
-                            }
-
-                            hasPendingTopField = false;
-                            pendingTopFrameNum = -1;
-                            av_packet_unref(packet);
-                            continue;
-                        }
-                        // Unmatched bottom field — fall through to normal handling
-                        if (hasPendingTopField) {
-                            // Emit orphaned top field first
-                            pendingTopFrame.gopIndex = currentGOP;
-                            mFrameIndex.append(pendingTopFrame);
-                            frameIndex++;
-                            hasPendingTopField = false;
-                            pendingTopFrameNum = -1;
-                        }
-                    }
-                } else if (hasPendingTopField) {
-                    // Non-field packet after a pending top field — emit orphaned top
-                    pendingTopFrame.gopIndex = currentGOP;
-                    mFrameIndex.append(pendingTopFrame);
-                    frameIndex++;
-                    hasPendingTopField = false;
-                    pendingTopFrameNum = -1;
-                }
-            }
-
-            TTFrameInfo frameInfo;
-            frameInfo.pts = packet->pts;
-            frameInfo.dts = packet->dts;
-            frameInfo.fileOffset = packet->pos;
-            frameInfo.packetSize = packet->size;
-            frameInfo.isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
-            frameInfo.frameIndex = frameIndex;
-            frameInfo.isFieldCoded = false;
-
-            // Determine frame type
-            if (frameInfo.isKeyframe) {
-                frameInfo.frameType = AV_PICTURE_TYPE_I;
-                // New GOP starts at keyframe
-                if (frameIndex > 0) {
-                    currentGOP++;
-                }
-            } else {
-                // Parse slice_type from packet data for B-frame detection
-                if (cid == AV_CODEC_ID_H264) {
-                    int sliceType = TTNaluParser::parseH264SliceTypeFromPacket(
-                        packet->data, packet->size);
-                    // H264: P=0, B=1, I=2
-                    if (sliceType == H264::SLICE_B)
-                        frameInfo.frameType = AV_PICTURE_TYPE_B;
-                    else if (sliceType == H264::SLICE_I)
-                        frameInfo.frameType = AV_PICTURE_TYPE_I;
-                    else
-                        frameInfo.frameType = AV_PICTURE_TYPE_P;
-                } else if (cid == AV_CODEC_ID_HEVC) {
-                    int sliceType = TTNaluParser::parseH265SliceTypeFromPacket(
-                        packet->data, packet->size);
-                    // H265: B=0, P=1, I=2
-                    if (sliceType == H265::SLICE_B)
-                        frameInfo.frameType = AV_PICTURE_TYPE_B;
-                    else if (sliceType == H265::SLICE_I)
-                        frameInfo.frameType = AV_PICTURE_TYPE_I;
-                    else
-                        frameInfo.frameType = AV_PICTURE_TYPE_P;
-                } else {
-                    frameInfo.frameType = AV_PICTURE_TYPE_P;
-                }
-            }
-
-            frameInfo.gopIndex = currentGOP;
-            mFrameIndex.append(frameInfo);
-            frameIndex++;
-
-            // Progress reporting
-            int64_t progress = (frameIndex * 100) / estimatedFrames;
-            if (progress != lastProgress && progress <= 100) {
-                emit progressChanged(static_cast<int>(progress),
-                    tr("Indexing frame %1...").arg(frameIndex));
-                lastProgress = progress;
-            }
-        }
-
-        av_packet_unref(packet);
-    }
-
-    // Flush any pending top field after loop
-    if (hasPendingTopField) {
-        pendingTopFrame.gopIndex = currentGOP;
-        mFrameIndex.append(pendingTopFrame);
-        frameIndex++;
-    }
-
-    av_packet_free(&packet);
-
+    scanPacketsIntoRawIndex(videoStreamIndex);
+    mergePAFFFieldsInIndex();
+    finalizeFrameIndex();
     rewindContext(videoStreamIndex);
 
-    // For elementary streams without PTS/DTS, calculate timestamps from frame rate
     if (!mFrameIndex.isEmpty() && mFrameIndex[0].pts == AV_NOPTS_VALUE) {
         assignPtsFromFrameRate(videoStreamIndex);
     }
@@ -2616,5 +2439,133 @@ void TTFFmpegWrapper::rewindContext(int videoStreamIndex)
     if (isES && !mFrameIndex.isEmpty()) {
         qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
                  << "packetSize:" << mFrameIndex[0].packetSize;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Scan: append one TTFrameInfo per video packet (raw — no field merging here)
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
+{
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) {
+        setError("Could not allocate packet");
+        return;
+    }
+
+    TTStreamInfo streamInfo = getStreamInfo(videoStreamIndex);
+    int64_t estimatedFrames = streamInfo.numFrames > 0 ? streamInfo.numFrames : 10000;
+    int64_t lastProgress = -1;
+    int rawCount = 0;
+
+    qDebug() << "Building frame index for stream" << videoStreamIndex;
+    qDebug() << "Estimated frames:" << estimatedFrames;
+
+    AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
+
+    while (av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == videoStreamIndex) {
+            TTFrameInfo info;
+            info.pts        = packet->pts;
+            info.dts        = packet->dts;
+            info.fileOffset = packet->pos;
+            info.packetSize = packet->size;
+            info.isKeyframe = (packet->flags & AV_PKT_FLAG_KEY) != 0;
+            info.frameIndex = -1;       // filled by finalizeFrameIndex
+            info.gopIndex   = -1;       // filled by finalizeFrameIndex
+            info.isFieldCoded = false;  // may be set true below
+
+            // Field detection (H.264 PAFF only)
+            if (codecId == AV_CODEC_ID_H264 && !mH264FrameMbsOnlyFlag) {
+                TTFieldInfo fi = parseH264FieldInfoFromPacket(packet->data, packet->size);
+                if (fi.isField) {
+                    mIsPAFF = true;
+                    info.isFieldCoded  = true;
+                    info.isBottomField = fi.isBottomField;
+                    info.paffFrameNum  = fi.frameNum;
+                }
+            }
+
+            // Frame type
+            if (info.isKeyframe) {
+                info.frameType = AV_PICTURE_TYPE_I;
+            } else if (codecId == AV_CODEC_ID_H264) {
+                int slice = TTNaluParser::parseH264SliceTypeFromPacket(packet->data, packet->size);
+                info.frameType = (slice == H264::SLICE_B) ? AV_PICTURE_TYPE_B
+                               : (slice == H264::SLICE_I) ? AV_PICTURE_TYPE_I
+                                                          : AV_PICTURE_TYPE_P;
+            } else if (codecId == AV_CODEC_ID_HEVC) {
+                int slice = TTNaluParser::parseH265SliceTypeFromPacket(packet->data, packet->size);
+                info.frameType = (slice == H265::SLICE_B) ? AV_PICTURE_TYPE_B
+                               : (slice == H265::SLICE_I) ? AV_PICTURE_TYPE_I
+                                                          : AV_PICTURE_TYPE_P;
+            } else {
+                info.frameType = AV_PICTURE_TYPE_P;
+            }
+
+            mFrameIndex.append(info);
+            rawCount++;
+
+            int64_t progress = (rawCount * 100) / estimatedFrames;
+            if (progress != lastProgress && progress <= 100) {
+                emit progressChanged(static_cast<int>(progress),
+                    tr("Indexing frame %1...").arg(rawCount));
+                lastProgress = progress;
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    av_packet_free(&packet);
+}
+
+// ----------------------------------------------------------------------------
+// PAFF post-processing: collapse adjacent top+bottom field pairs in-place
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::mergePAFFFieldsInIndex()
+{
+    if (!mIsPAFF) return;
+
+    int w = 0;  // write index
+    for (int r = 0; r < mFrameIndex.size(); ) {
+        const TTFrameInfo& cur = mFrameIndex[r];
+        bool merged = false;
+
+        if (cur.isFieldCoded && !cur.isBottomField && r + 1 < mFrameIndex.size()) {
+            const TTFrameInfo& next = mFrameIndex[r + 1];
+            if (next.isFieldCoded && next.isBottomField &&
+                next.paffFrameNum == cur.paffFrameNum)
+            {
+                // Merge: keep top's PTS/DTS/offset/type/keyframe, sum packetSize
+                TTFrameInfo merged_info = cur;
+                merged_info.packetSize += next.packetSize;
+                mFrameIndex[w] = merged_info;
+                w++;
+                r += 2;
+                merged = true;
+            }
+        }
+
+        if (!merged) {
+            if (w != r) mFrameIndex[w] = mFrameIndex[r];
+            w++;
+            r++;
+        }
+    }
+    while (mFrameIndex.size() > w) mFrameIndex.removeLast();
+}
+
+// ----------------------------------------------------------------------------
+// Assign gopIndex (increments at each keyframe) and frameIndex (= position)
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::finalizeFrameIndex()
+{
+    int currentGOP = 0;
+    for (int i = 0; i < mFrameIndex.size(); ++i) {
+        if (i > 0 && mFrameIndex[i].isKeyframe) {
+            currentGOP++;
+        }
+        mFrameIndex[i].gopIndex   = currentGOP;
+        mFrameIndex[i].frameIndex = i;
     }
 }
