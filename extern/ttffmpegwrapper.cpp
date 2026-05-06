@@ -938,9 +938,7 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     // with DPB prefill. This caused Open-GOP B-frames to decode differently
     // in the CutOut and CurrentFrame widgets for the same frame index.
     // The LRU frame cache mitigates the performance impact for repeated access.
-    bool needSeek = true;
-
-    if (needSeek) {
+    {
         int keyframeIndex = frameIndex;
         while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
             keyframeIndex--;
@@ -1688,7 +1686,12 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
 
         // Seek to just before start time using audio stream timebase
         int64_t seekTs = static_cast<int64_t>(startTime / av_q2d(inStream->time_base));
-        av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+        int seekRet = av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+        if (seekRet < 0) {
+            qDebug() << "cutAudioStream: av_seek_frame to" << seekTs
+                     << "failed:" << avErrorToString(seekRet)
+                     << "— audio segment may start past intended cut-in";
+        }
 
         bool segmentStarted = false;
         while (av_read_frame(inFmtCtx, pkt) >= 0) {
@@ -1793,11 +1796,24 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 if (decRet == 0) {
                     // Setup resampler on first use (channel layout conversion)
                     if (!swrCtx) {
-                        swr_alloc_set_opts2(&swrCtx,
+                        int swrRet = swr_alloc_set_opts2(&swrCtx,
                             &ac3EncCtx->ch_layout, ac3EncCtx->sample_fmt, ac3EncCtx->sample_rate,
                             &ac3Frame->ch_layout, (AVSampleFormat)ac3Frame->format, ac3Frame->sample_rate,
                             0, nullptr);
-                        swr_init(swrCtx);
+                        if (swrRet < 0 || !swrCtx) {
+                            qDebug() << "AC3 re-encode: swr_alloc_set_opts2 failed:"
+                                     << avErrorToString(swrRet);
+                            av_packet_unref(pkt);
+                            continue;
+                        }
+                        swrRet = swr_init(swrCtx);
+                        if (swrRet < 0) {
+                            qDebug() << "AC3 re-encode: swr_init failed:"
+                                     << avErrorToString(swrRet);
+                            swr_free(&swrCtx);
+                            av_packet_unref(pkt);
+                            continue;
+                        }
 
                         ac3ConvertedFrame = av_frame_alloc();
                         if (!ac3ConvertedFrame) { av_packet_unref(pkt); continue; }
@@ -1817,7 +1833,13 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                     ac3ConvertedFrame->pts = pkt->pts + ptsOffset;
 
                     // Re-encode with target channel layout
-                    avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
+                    int sendRet = avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
+                    if (sendRet < 0) {
+                        qDebug() << "AC3 re-encode: avcodec_send_frame failed:"
+                                 << avErrorToString(sendRet);
+                        av_packet_unref(pkt);
+                        continue;
+                    }
                     AVPacket* encPkt = av_packet_alloc();
                     if (encPkt && avcodec_receive_packet(ac3EncCtx, encPkt) == 0) {
                         encPkt->pts = pkt->pts + ptsOffset;
@@ -2122,7 +2144,7 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
         av_frame_free(&frame);
         avcodec_free_context(&decCtx);
         avformat_close_input(&fmtCtx);
-        return {};
+        return false;
     }
     QList<double> rmsValues;
 

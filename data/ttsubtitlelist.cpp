@@ -33,12 +33,10 @@
 #include "../avstream/ttavheader.h"
 #include "../avstream/ttsubtitleheaderlist.h"
 #include "../common/ttcut.h"
-#include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
 #include <QFileInfo>
 #include <QLocale>
-#include <QRegularExpression>
 #include <QString>
 #include <algorithm>
 

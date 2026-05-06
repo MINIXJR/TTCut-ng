@@ -122,8 +122,6 @@ TTESSmartCut::TTESSmartCut()
     , mSpsUnification(false)
     , mSpsUnificationOutFile(nullptr)
     , mEncoderPacketsWritten(0)
-    , mSyntheticPpsNeeded(false)
-    , mPpsReserveOffset(-1)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
@@ -374,8 +372,6 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     // ("Invalid NAL unit size" errors on all source keyframe AUs).
     // Seeking into the re-encode section still works because the decoder finds
     // the inline PPS when decoding from the nearest keyframe.
-    mSyntheticPpsNeeded = false;
-    mPpsReserveOffset = -1;
 
     // Detect B-frame reorder delay from parsed stream structure.
     // This is needed for SPS patching so the decoder pre-allocates its

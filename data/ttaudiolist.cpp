@@ -32,7 +32,6 @@
 #include "../avstream/ttavheader.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
-#include "../common/ttmessagelogger.h"
 #include "../avstream/ttavstream.h"
 
 #include <algorithm>
@@ -40,7 +39,6 @@
 
 #include <QFileInfo>
 #include <QLocale>
-#include <QRegularExpression>
 #include <QString>
 
 /* /////////////////////////////////////////////////////////////////////////////

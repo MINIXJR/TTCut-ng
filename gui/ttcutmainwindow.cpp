@@ -1211,7 +1211,7 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   setProjectModified(false);
 
   // Refresh cut list to update acmod icons (audio streams are now loaded)
-  emit mpAVData->cutDataReloaded();
+  mpAVData->emitCutDataReloaded();
 
   disconnect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
 }

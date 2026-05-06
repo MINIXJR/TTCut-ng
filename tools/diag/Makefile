@@ -3,9 +3,8 @@
 # obj/ttnaluparser.o produced by the main build, so a regular `make` must
 # have run at least once. Sources stay tracked, binaries are gitignored.
 
-QT_INC := -I/usr/include/x86_64-linux-gnu/qt5 \
-          -I/usr/include/x86_64-linux-gnu/qt5/QtCore
-QT_LIB := -lQt5Core
+QT_INC := $(shell pkg-config --cflags Qt5Core)
+QT_LIB := $(shell pkg-config --libs Qt5Core)
 
 NALU_OBJ := ../../obj/ttnaluparser.o
 
