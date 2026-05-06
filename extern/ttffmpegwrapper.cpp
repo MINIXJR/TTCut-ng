@@ -1791,11 +1791,24 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 if (decRet == 0) {
                     // Setup resampler on first use (channel layout conversion)
                     if (!swrCtx) {
-                        swr_alloc_set_opts2(&swrCtx,
+                        int swrRet = swr_alloc_set_opts2(&swrCtx,
                             &ac3EncCtx->ch_layout, ac3EncCtx->sample_fmt, ac3EncCtx->sample_rate,
                             &ac3Frame->ch_layout, (AVSampleFormat)ac3Frame->format, ac3Frame->sample_rate,
                             0, nullptr);
-                        swr_init(swrCtx);
+                        if (swrRet < 0 || !swrCtx) {
+                            qDebug() << "AC3 re-encode: swr_alloc_set_opts2 failed:"
+                                     << avErrorToString(swrRet);
+                            av_packet_unref(pkt);
+                            continue;
+                        }
+                        swrRet = swr_init(swrCtx);
+                        if (swrRet < 0) {
+                            qDebug() << "AC3 re-encode: swr_init failed:"
+                                     << avErrorToString(swrRet);
+                            swr_free(&swrCtx);
+                            av_packet_unref(pkt);
+                            continue;
+                        }
 
                         ac3ConvertedFrame = av_frame_alloc();
                         if (!ac3ConvertedFrame) { av_packet_unref(pkt); continue; }
