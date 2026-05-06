@@ -172,8 +172,6 @@ private:
     bool mSpsUnification;
     QFile* mSpsUnificationOutFile;  // output file for encoder PPS injection
     int mEncoderPacketsWritten;     // track encoder packets for PPS injection
-    bool mSyntheticPpsNeeded;       // need encoder PPS at ES start
-    qint64 mPpsReserveOffset;       // file offset of reserved PPS space
 
     // Encoder PTS counter (reset per segment in setupEncoder)
     int64_t mEncoderPts;
