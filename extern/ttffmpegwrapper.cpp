@@ -1686,7 +1686,12 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
 
         // Seek to just before start time using audio stream timebase
         int64_t seekTs = static_cast<int64_t>(startTime / av_q2d(inStream->time_base));
-        av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+        int seekRet = av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
+        if (seekRet < 0) {
+            qDebug() << "cutAudioStream: av_seek_frame to" << seekTs
+                     << "failed:" << avErrorToString(seekRet)
+                     << "— audio segment may start past intended cut-in";
+        }
 
         bool segmentStarted = false;
         while (av_read_frame(inFmtCtx, pkt) >= 0) {
