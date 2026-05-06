@@ -81,6 +81,7 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mDecoderDrained(false)
     , mIsElementaryStream(false)
     , mAnalysisMode(false)
+    , mSearchMode(false)
     , mIsPAFF(false)
     , mH264Log2MaxFrameNum(4)
     , mH264FrameMbsOnlyFlag(true)
@@ -1126,7 +1127,10 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     // frames from the previous GOP. This prevents Open-GOP B-frames at the start
     // of the target GOP from decoding incorrectly after a flush.
     int seekKeyframe = keyframeIndex;
-    if (keyframeIndex > 0) {
+    // Search-mode: skip the prev-keyframe DPB-prefill. Safe when the caller
+    // only asks for I-frames (intra-coded, self-decodable for their own pixels).
+    // Saves ~one full GOP of decode work per call.
+    if (!mSearchMode && keyframeIndex > 0) {
         int prevKey = keyframeIndex - 1;
         while (prevKey > 0 && !mFrameIndex[prevKey].isKeyframe) {
             prevKey--;
@@ -1303,6 +1307,10 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
             mFrameCache.remove(evict);
         }
     } else {
+        if (mSearchMode) {
+            qDebug() << "Search-mode decodeFrame: failure at frame" << frameIndex
+                     << "(possibly non-IDR I-slice with DPB inconsistency)";
+        }
         qDebug() << "decodeFrame: FAILED to decode frame" << frameIndex
                  << "and fallback (total_frames=" << mFrameIndex.size() << ")";
     }
@@ -1490,7 +1498,13 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
     }
 
     av_packet_free(&packet);
-    if (!decoded) return false;
+    if (!decoded) {
+        if (mSearchMode) {
+            qDebug() << "Search-mode isFrameBlack: decode failure at frame" << frameIndex
+                     << "(possibly non-IDR I-slice with DPB inconsistency)";
+        }
+        return false;
+    }
 
     mDecoderFrameIndex = frameIndex;
     mCurrentFrameIndex = frameIndex;
@@ -1580,7 +1594,13 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
     }
 
     av_packet_free(&packet);
-    if (!decoded) return false;
+    if (!decoded) {
+        if (mSearchMode) {
+            qDebug() << "Search-mode buildHistogram: decode failure at frame" << frameIndex
+                     << "(possibly non-IDR I-slice with DPB inconsistency)";
+        }
+        return false;
+    }
 
     mDecoderFrameIndex = frameIndex;
     mCurrentFrameIndex = frameIndex;
