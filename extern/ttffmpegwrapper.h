@@ -151,6 +151,7 @@ public:
 
     // Open/close media file
     void setAnalysisMode(bool enabled) { mAnalysisMode = enabled; }
+    void setSearchMode(bool enabled) { mSearchMode = enabled; }
     bool openFile(const QString& filePath);
     void closeFile();
     bool isOpen() const { return mFormatCtx != nullptr; }
@@ -263,6 +264,7 @@ private:
     bool mDecoderDrained;       // True if decoder was flushed for EOF drain
     bool mIsElementaryStream;   // Cached: true if file is raw ES (byte-seeking)
     bool mAnalysisMode;         // True: use multi-threaded decoding for analysis
+    bool mSearchMode;           // True: skip DPB prefill in seekToFrame (I-frame-only access)
 
     bool mIsPAFF;                       // PAFF stream detected
     int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing

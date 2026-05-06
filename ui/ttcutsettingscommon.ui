@@ -440,6 +440,13 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QLabel" name="laThreads" >
+          <property name="text" >
+           <string>threads</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item row="0" column="1" >
@@ -498,6 +505,22 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QSpinBox" name="sbSearchWorkerCount" >
+          <property name="minimum" >
+           <number>0</number>
+          </property>
+          <property name="maximum" >
+           <number>16</number>
+          </property>
+          <property name="singleStep" >
+           <number>1</number>
+          </property>
+          <property name="toolTip" >
+           <string>Number of parallel decoders during black-frame / scene-change / logo search. 0 = automatic (max 4 by default). Higher uses more RAM (~40 MB per worker for 1080p H.264/H.265).</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item row="0" column="0" >
@@ -535,6 +558,13 @@
          <widget class="QLabel" name="laSkip" >
           <property name="text" >
            <string>Skip while playing</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="laWorkerCount" >
+          <property name="text" >
+           <string>Search worker threads (0 = auto)</string>
           </property>
          </widget>
         </item>

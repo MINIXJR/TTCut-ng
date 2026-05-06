@@ -52,6 +52,7 @@ class TTAVItem;
 class TTCutList;
 class TTProgressBar;
 class TTThreadTask;
+class TTSearchTask;
 class TTLogoDetector;
 class TTStreamPointModel;
 class TTStreamPointWidget;
@@ -117,8 +118,10 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onQuickJump();
 		void onSearchBlackFrame(int startPos, int direction, float threshold);
 	void onAbortBlackSearch();
+	void onBlackSearchFinished(int foundPos, bool wasAborted);
 	void onSearchSceneChange(int startPos, int direction, float threshold);
 	void onAbortSceneSearch();
+	void onSceneSearchFinished(int foundPos, bool wasAborted);
     void onSelectLogoROI();
     void onCancelLogoROI();
     void onLoadLogoFile();
@@ -126,6 +129,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onLogoROISelected(QRect imageCoords);
     void onSearchLogo(int startPos, int direction, float threshold);
     void onAbortLogoSearch();
+    void onLogoSearchFinished(int foundPos, bool wasAborted);
 
 		void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
@@ -168,10 +172,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
     QElapsedTimer        mDirectProgressTimer;
-    bool                 mBlackSearchAborted;
-    bool                 mSceneSearchAborted;
+    TTSearchTask*        mpRunningSearch = nullptr;
+    int                  mLastSearchStartPos = -1;
     TTLogoDetector*      mLogoDetector;
-    bool                 mLogoSearchAborted;
 
     // Dirty tracking
     bool                 mProjectModified;

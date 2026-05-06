@@ -88,6 +88,12 @@ void TTSettings::setSearchLength(int v)
   mSearchLength = v;
 }
 
+void TTSettings::setSearchWorkerCount(int v)
+{
+  if (mSearchWorkerCount == v) return;
+  mSearchWorkerCount = v;
+}
+
 void TTSettings::setSearchAccuracy(int v)
 {
   if (mSearchAccuracy == v) return;
@@ -702,8 +708,9 @@ void TTSettings::load()
   settings.endGroup();
 
   settings.beginGroup("Search");
-  mSearchLength   = settings.value("Length/",   mSearchLength).toInt();
-  mSearchAccuracy = settings.value("Accuracy/", mSearchAccuracy).toInt();
+  mSearchLength      = settings.value("Length/",      mSearchLength).toInt();
+  mSearchWorkerCount = qBound(0, settings.value("WorkerCount/", 0).toInt(), 16);
+  mSearchAccuracy    = settings.value("Accuracy/",    mSearchAccuracy).toInt();
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------
@@ -919,8 +926,9 @@ void TTSettings::save()
   settings.endGroup();
 
   settings.beginGroup("Search");
-  settings.setValue("Length/",   mSearchLength);
-  settings.setValue("Accuracy/", mSearchAccuracy);
+  settings.setValue("Length/",      mSearchLength);
+  settings.setValue("WorkerCount/", mSearchWorkerCount);
+  settings.setValue("Accuracy/",    mSearchAccuracy);
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------

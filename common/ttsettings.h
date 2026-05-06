@@ -50,6 +50,9 @@ public:
   int     searchLength() const       { return mSearchLength; }
   void    setSearchLength(int v);
 
+  int     searchWorkerCount() const  { return mSearchWorkerCount; }
+  void    setSearchWorkerCount(int v);
+
   int     searchAccuracy() const     { return mSearchAccuracy; }
   void    setSearchAccuracy(int v);
 
@@ -387,6 +390,7 @@ private:
   int     mCutPreviewSeconds = 25;
   int     mPlaySkipFrames    = 0;
   int     mSearchLength      = 45;
+  int     mSearchWorkerCount = 0;   // 0 = auto (qBound(1, idealThreadCount/2, 4))
   int     mSearchAccuracy    = 1;
 
   // ----- Navigation Steps group (Task 5) -----------------------------------
