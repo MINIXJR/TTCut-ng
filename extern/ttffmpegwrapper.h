@@ -311,9 +311,6 @@ private:
     // Walk mFrameIndex assigning gopIndex (incremented at each keyframe)
     // and frameIndex (= position) to every entry.
     void finalizeFrameIndex();
-    // Debug-only: dump mFrameIndex as CSV to env-var TTCUT_DUMP_FRAMEINDEX.
-    // Removed at end of refactor (see plan 2026-05-06-buildframeindex-split).
-    void dumpFrameIndexCsv() const;
 
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;

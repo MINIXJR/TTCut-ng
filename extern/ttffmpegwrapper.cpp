@@ -41,7 +41,6 @@
 #include <QElapsedTimer>
 #include <QTime>
 
-#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
@@ -573,8 +572,6 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
     }
 
     emit progressChanged(100, tr("Indexed %1 frames").arg(mFrameIndex.size()));
-
-    dumpFrameIndexCsv();   // no-op unless TTCUT_DUMP_FRAMEINDEX is set
     return true;
 }
 
@@ -2331,37 +2328,6 @@ void TTFFmpegWrapper::assignPtsFromFrameRate(int videoStreamIndex)
     qDebug() << "Calculated timestamps for" << mFrameIndex.size() << "frames";
     qDebug() << "First PTS:" << mFrameIndex.first().pts
              << "Last PTS:" << mFrameIndex.last().pts;
-}
-
-// ----------------------------------------------------------------------------
-// Debug helper: dump mFrameIndex as CSV (refactor validation aid)
-// ----------------------------------------------------------------------------
-void TTFFmpegWrapper::dumpFrameIndexCsv() const
-{
-    QByteArray dumpEnv = qgetenv("TTCUT_DUMP_FRAMEINDEX");
-    if (dumpEnv.isEmpty() || mFrameIndex.isEmpty() || !mFormatCtx) return;
-
-    // Compose path: $TTCUT_DUMP_FRAMEINDEX/<source-stem>.csv
-    QString dumpDir = QString::fromUtf8(dumpEnv);
-    QFileInfo srcInfo(QString::fromUtf8(mFormatCtx->url));
-    QString outPath = QDir(dumpDir).filePath(srcInfo.completeBaseName() + ".csv");
-
-    QFile f(outPath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        qDebug() << "dumpFrameIndexCsv: cannot open" << outPath;
-        return;
-    }
-
-    QTextStream out(&f);
-    out << "frameIndex,pts,dts,fileOffset,packetSize,isKeyframe,frameType,gopIndex,isFieldCoded\n";
-    for (const TTFrameInfo& fi : mFrameIndex) {
-        out << fi.frameIndex << ',' << fi.pts << ',' << fi.dts << ','
-            << fi.fileOffset << ',' << fi.packetSize << ','
-            << (fi.isKeyframe ? 1 : 0) << ','
-            << fi.frameType << ',' << fi.gopIndex << ','
-            << (fi.isFieldCoded ? 1 : 0) << '\n';
-    }
-    qDebug() << "dumpFrameIndexCsv:" << mFrameIndex.size() << "rows ->" << outPath;
 }
 
 // ----------------------------------------------------------------------------
