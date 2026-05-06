@@ -938,9 +938,7 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     // with DPB prefill. This caused Open-GOP B-frames to decode differently
     // in the CutOut and CurrentFrame widgets for the same frame index.
     // The LRU frame cache mitigates the performance impact for repeated access.
-    bool needSeek = true;
-
-    if (needSeek) {
+    {
         int keyframeIndex = frameIndex;
         while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
             keyframeIndex--;
@@ -2122,7 +2120,7 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
         av_frame_free(&frame);
         avcodec_free_context(&decCtx);
         avformat_close_input(&fmtCtx);
-        return {};
+        return false;
     }
     QList<double> rmsValues;
 
