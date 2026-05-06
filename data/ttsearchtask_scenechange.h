@@ -20,8 +20,7 @@ public:
                           const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
 
 protected:
-  void onSearchStart(int firstPos) override;
-  bool checkMatch(int pos) override;
+  void operation() override;
 
 private:
   // Difference of normalized histograms in [0, 1]; >= mThreshold = match.

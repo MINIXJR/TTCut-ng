@@ -4,6 +4,12 @@
 
 #include "ttsearchtask_scenechange.h"
 
+#include "../avstream/ttvideoindexlist.h"
+#include "../extern/ttffmpegwrapper.h"
+#include "../mpeg2decoder/ttmpeg2decoder.h"
+
+#include <QDebug>
+#include <QElapsedTimer>
 #include <QtGlobal>
 #include <cstring>
 
@@ -22,38 +28,86 @@ TTSceneChangeSearchTask::TTSceneChangeSearchTask(const QString& videoFilePath,
   std::memset(mPrevHist, 0, sizeof(mPrevHist));
 }
 
-void TTSceneChangeSearchTask::onSearchStart(int firstPos)
+void TTSceneChangeSearchTask::operation()
 {
-  // Cache the histogram for the first iterated I-frame so the first
-  // checkMatch() compares it against the next I-frame.
-  if (buildHistogramAt(firstPos, mPrevHist, mPrevTotal))
-    mHasPrevHist = true;
-}
+  QElapsedTimer t; t.start();
 
-bool TTSceneChangeSearchTask::checkMatch(int pos)
-{
-  if (!mHasPrevHist) {
-    // onSearchStart failed to build histA; rebuild here as fallback.
-    if (!buildHistogramAt(pos, mPrevHist, mPrevTotal)) return false;
-    mHasPrevHist = true;
-    return false;
+  if (!setupWorkers()) {
+    emit found(-1, false);
+    return;
   }
 
-  int curHist[256];
-  int curTotal = 0;
-  if (!buildHistogramAt(pos, curHist, curTotal)) return false;
+  int firstPos = (mDirection > 0)
+               ? mIndexList->moveToNextIndexPos(mStartPos, 1)
+               : mIndexList->moveToPrevIndexPos(mStartPos, 1);
+  if (firstPos < 0) {
+    emit found(-1, false);
+    teardownWorkers();
+    return;
+  }
 
-  float diff = histogramDifference(mPrevHist, curHist, mPrevTotal, curTotal);
+  // Build initial histogram via worker 0 (or MPEG-2 base helper).
+  bool ok = (mSubWrappers.isEmpty())
+              ? buildHistogramAt(firstPos, mPrevHist, mPrevTotal)
+              : mSubWrappers[0]->buildHistogram(firstPos, mPrevHist, mPrevTotal);
+  if (!ok) {
+    qDebug() << "SceneChangeSearch: failed to build initial histogram at frame" << firstPos;
+    emit found(-1, false);
+    teardownWorkers();
+    return;
+  }
+  mHasPrevHist = true;
 
-  // Cache current histogram for next iteration (replacing the previous one).
-  std::memcpy(mPrevHist, curHist, sizeof(mPrevHist));
-  mPrevTotal = curTotal;
+  int pos = (mDirection > 0)
+          ? mIndexList->moveToNextIndexPos(firstPos, 1)
+          : mIndexList->moveToPrevIndexPos(firstPos, 1);
 
-  return diff > mThreshold;
+  struct HistResult { int hist[256]; int total; };
+
+  int checked = 0;
+  int foundPos = -1;
+
+  while (pos >= 0 && pos < mFrameCount && !mIsAborted) {
+    QVector<int> batch = collectNextBatch(pos);
+    if (batch.isEmpty()) break;
+
+    QVector<HistResult> hists(batch.size());
+    for (auto& h : hists) { std::memset(h.hist, 0, sizeof(h.hist)); h.total = 0; }
+
+    parallelMap(batch.size(), [&](int i) {
+      if (i < mSubWrappers.size() && mSubWrappers[i]) {
+        mSubWrappers[i]->buildHistogram(batch[i], hists[i].hist, hists[i].total);
+      } else {
+        buildHistogramAt(batch[i], hists[i].hist, hists[i].total);
+      }
+    });
+
+    if (mIsAborted) break;
+
+    // Sequential diff against mPrevHist.
+    for (int i = 0; i < batch.size(); ++i) {
+      if (hists[i].total <= 0) continue;
+      float d = histogramDifference(mPrevHist, hists[i].hist, mPrevTotal, hists[i].total);
+      if (d > mThreshold) { foundPos = batch[i]; break; }
+      std::memcpy(mPrevHist, hists[i].hist, sizeof(mPrevHist));
+      mPrevTotal = hists[i].total;
+    }
+    if (foundPos >= 0) break;
+
+    checked += batch.size();
+    if (checked % 20 < batch.size()) emit progress(checked);
+  }
+
+  qint64 ms = t.elapsed();
+  qDebug() << "SceneChangeSearch:" << checked << "I-frames in" << ms << "ms"
+           << (checked > 0
+                 ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
+                 : QString());
+
+  emit found(foundPos, mIsAborted);
+  teardownWorkers();
 }
 
-// Per-bin absolute difference of normalized histograms, summed and halved.
-// Result lies in [0, 1]; matches the legacy formula at master line 1801-1803.
 float TTSceneChangeSearchTask::histogramDifference(const int histA[256], const int histB[256],
                                                    int totalA, int totalB)
 {
