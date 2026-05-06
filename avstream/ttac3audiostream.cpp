@@ -118,12 +118,20 @@ void TTAC3AudioStream::searchNextSyncByte()
 //! Read audio header information from stream
 void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 {
-  quint8* daten = new quint8[6];
+  // AC3 frame layout up to and including the bytes we just read:
+  //   [2 bytes sync word][6 bytes header data]
+  // The 2-byte sync word is consumed in searchNextSyncByte() before this
+  // function runs; the 6 bytes of header are read below. The header offset
+  // points back to the start of the sync word.
+  static constexpr int kAC3SyncBytes   = 2;
+  static constexpr int kAC3HeaderBytes = 6;
+
+  quint8* daten = new quint8[kAC3HeaderBytes];
   quint16 stuff;
 
-  stream_buffer->readByte(daten, 6);
+  stream_buffer->readByte(daten, kAC3HeaderBytes);
 
-  audio_header->setHeaderOffset( stream_buffer->position() - 8 ); // +Syncwort
+  audio_header->setHeaderOffset( stream_buffer->position() - (kAC3SyncBytes + kAC3HeaderBytes) );
 
   audio_header->crc1            = daten[0]<<(8+daten[1]);
   audio_header->fscod           = (quint8)((daten[2]&0xc0)>>6);
