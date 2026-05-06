@@ -46,10 +46,11 @@ class QStringList;
 class TTCut
 {
  public:
-   TTCut();
-   ~TTCut();
+   // Static-only utility class — instances are not meaningful.
+   TTCut() = delete;
+   ~TTCut() = delete;
 
- public:
+
   // icons
    static QPixmap* imgDownArrow;
    static QPixmap* imgUpArrow;

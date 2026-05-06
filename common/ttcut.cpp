@@ -93,15 +93,6 @@ QString TTCut::versionString = "TTCut-ng - " APP_VERSION;
 // --------------------------------------------------------------
 QWidget* TTCut::mainWindow         = NULL;
 
-TTCut::TTCut()
-{
-
-}
-
-TTCut::~TTCut()
-{
-
-}
 
 
 // ISO 639-2/B language codes typically used in DVB broadcasts.
