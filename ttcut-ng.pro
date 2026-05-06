@@ -32,7 +32,7 @@ unix {
 
 OBJECTS_DIR = obj
 MOC_DIR     = moc
-UI_DIR      = ui_h 
+UI_DIR      = ui_h
 RCC_DIR     = res
 TRANSLATIONS = trans/ttcut-ng_de_DE.ts \
                trans/ttcut-ng_en_US.ts
@@ -113,8 +113,8 @@ HEADERS     = common/ttcut.h\
               avstream/ttavheader.h\
               avstream/ttavstream.h\
               avstream/ttavtypes.h\
-              avstream/ttfilebuffer.h\ 
-              avstream/ttheaderlist.h\ 
+              avstream/ttfilebuffer.h\
+              avstream/ttheaderlist.h\
               avstream/ttmpeg2videoheader.h\
               avstream/ttmpeg2videostream.h\
               avstream/tth26xvideostream.h\
@@ -170,7 +170,7 @@ HEADERS     = common/ttcut.h\
 SOURCES     = common/ttcut.cpp\
               common/ttsettings.cpp\
               common/ttthreadtask.cpp\
-              common/ttthreadtaskpool.cpp\  
+              common/ttthreadtaskpool.cpp\
               common/ttmessagelogger.cpp\
               common/ttmessagebox.cpp\
               common/ttexception.cpp\
@@ -192,7 +192,7 @@ SOURCES     = common/ttcut.cpp\
               data/ttmuxlistdata.cpp\
               data/ttavdata.cpp\
               data/ttavlist.cpp\
-              data/ttcutprojectdata.cpp\              
+              data/ttcutprojectdata.cpp\
               data/ttopenvideotask.cpp\
               data/ttopenaudiotask.cpp\
               data/ttopensubtitletask.cpp\
@@ -208,8 +208,8 @@ SOURCES     = common/ttcut.cpp\
               avstream/ttavheader.cpp\
               avstream/ttavstream.cpp\
               avstream/ttavtypes.cpp\
-              avstream/ttfilebuffer.cpp\ 
-              avstream/ttheaderlist.cpp\ 
+              avstream/ttfilebuffer.cpp\
+              avstream/ttheaderlist.cpp\
               avstream/ttmpeg2videoheader.cpp\
               avstream/ttmpeg2videostream.cpp\
               avstream/tth26xvideostream.cpp\
