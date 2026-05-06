@@ -278,6 +278,10 @@ private:
     };
     TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
     void parseH264SpsFromExtradata(const uint8_t* data, int size);
+    // For elementary streams whose first frame has no PTS: walk mFrameIndex and
+    // assign sequential PTS/DTS values from frame rate (read from .info file or
+    // stream metadata). Validates and falls back to 25 fps. Halves PAFF rate.
+    void assignPtsFromFrameRate(int videoStreamIndex);
     // Debug-only: dump mFrameIndex as CSV to env-var TTCUT_DUMP_FRAMEINDEX.
     // Removed at end of refactor (see plan 2026-05-06-buildframeindex-split).
     void dumpFrameIndexCsv() const;
