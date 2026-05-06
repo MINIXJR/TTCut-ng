@@ -141,8 +141,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
 
-		signals:
-
 	public:
 		// Called from main() to load a project given on the command line.
 		void openProjectFile(QString fName);
