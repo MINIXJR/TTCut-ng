@@ -1833,7 +1833,13 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                     ac3ConvertedFrame->pts = pkt->pts + ptsOffset;
 
                     // Re-encode with target channel layout
-                    avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
+                    int sendRet = avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
+                    if (sendRet < 0) {
+                        qDebug() << "AC3 re-encode: avcodec_send_frame failed:"
+                                 << avErrorToString(sendRet);
+                        av_packet_unref(pkt);
+                        continue;
+                    }
                     AVPacket* encPkt = av_packet_alloc();
                     if (encPkt && avcodec_receive_packet(ac3EncCtx, encPkt) == 0) {
                         encPkt->pts = pkt->pts + ptsOffset;
