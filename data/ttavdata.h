@@ -76,6 +76,12 @@ class TTAVData : public QObject
 
     void clear();
 
+    // Re-emit cutDataReloaded so external observers (e.g. cut list view) can
+    // refresh after a deferred state change (audio streams ready, marker
+    // imported). Replaces direct external `emit mpAVData->cutDataReloaded()`
+    // which is deprecated in Qt 5+.
+    void emitCutDataReloaded()  { emit cutDataReloaded(); }
+
     void      openAVStreams(const QString& videoFilePath);
     void      writeProjectFile(const QFileInfo& fInfo,
                                const QList<TTStreamPoint>& streamPoints = QList<TTStreamPoint>(),
