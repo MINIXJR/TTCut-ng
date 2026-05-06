@@ -195,36 +195,6 @@ bool TTSearchTask::buildHistogramAt(int pos, int hist[256], int& totalPixels)
   }
 }
 
-void TTSearchTask::operation()
-{
-  if (!openDecoder()) {
-    emit found(-1, false);
-    return;
-  }
-
-  int pos = (mDirection > 0)
-          ? mIndexList->moveToNextIndexPos(mStartPos, 1)
-          : mIndexList->moveToPrevIndexPos(mStartPos, 1);
-  if (pos < 0) {
-    emit found(-1, false);
-    return;
-  }
-
-  onSearchStart(pos);
-
-  int checked = 0;
-  int foundPos = -1;
-  while (pos >= 0 && pos < mFrameCount && !mIsAborted) {
-    if (checkMatch(pos)) { foundPos = pos; break; }
-    if (++checked % 20 == 0) emit progress(checked);
-    pos = (mDirection > 0)
-        ? mIndexList->moveToNextIndexPos(pos, 1)
-        : mIndexList->moveToPrevIndexPos(pos, 1);
-  }
-
-  emit found(foundPos, mIsAborted);
-}
-
 void TTSearchTask::cleanUp()
 {
   // No-op: closeDecoder() runs only in the destructor (GUI thread via deleteLater).

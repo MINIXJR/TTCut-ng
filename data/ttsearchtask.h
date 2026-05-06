@@ -42,13 +42,7 @@ signals:
   void found(int foundPos, bool wasAborted);    // foundPos -1 = not-found, >=0 = position
 
 protected:
-  // Subclass implements the per-frame test (used by base operation() only;
-  // subclasses that override operation() entirely may leave this unimplemented).
-  virtual bool checkMatch(int pos) { Q_UNUSED(pos); return false; }
-  // Optional hook called once with the first iterated I-frame position.
-  virtual void onSearchStart(int firstPos) { Q_UNUSED(firstPos); }
-
-  // Worker-thread decode helpers usable from checkMatch / onSearchStart.
+  // Worker-thread decode helpers usable from subclass operation() bodies.
   QImage decodeFrameAt(int pos);
   bool   isFrameBlackAt(int pos, int pixelThreshold, float ratioThreshold);
   bool   buildHistogramAt(int pos, int hist[256], int& totalPixels);
@@ -100,8 +94,8 @@ protected:
     done.acquire(count);
   }
 
-  // TTThreadTask interface.
-  void operation() override;
+  // TTThreadTask interface. Subclasses MUST override operation().
+  void operation() override = 0;
   void cleanUp() override;
 
   // Read by closeProject() to recover stream type without dynamic_cast.
