@@ -23,8 +23,7 @@ public:
                    const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
 
 protected:
-  void onSearchStart(int firstPos) override;
-  bool checkMatch(int pos) override;
+  void operation() override;
 
 private:
   const TTLogoDetector* mDetector;     // owned by main thread; const-only access
