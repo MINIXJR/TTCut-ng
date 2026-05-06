@@ -20,7 +20,7 @@ public:
                          const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
 
 protected:
-  bool checkMatch(int pos) override;
+  void operation() override;
 
 private:
   static constexpr int kPixelThreshold = 18;   // Y <= 17 counts as black, matches legacy
