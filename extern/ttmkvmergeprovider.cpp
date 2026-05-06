@@ -861,6 +861,16 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     // detection and frame merging corruption.
     int activeLog2MaxFrameNum = mH264Log2MaxFrameNum;
 
+    // PAFF mode requires a valid log2_max_frame_num for field-pair parsing.
+    // The default ctor value (4) only happens to work for encoder SPS; if the
+    // caller forgets to call setH264Log2MaxFrameNum, source SPS parsing will
+    // be wrong. Surface the misconfiguration here.
+    if (mIsPAFF && mH264Log2MaxFrameNum == 0) {
+        qWarning() << "MKV mux: PAFF stream but mH264Log2MaxFrameNum is 0 — "
+                      "caller forgot setH264Log2MaxFrameNum(); "
+                      "PAFF field detection will be wrong";
+    }
+
     qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
              << "inputs=" << inputs.size();
 
