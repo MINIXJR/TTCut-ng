@@ -81,10 +81,7 @@ bool ttDeleteFile( QString fName )
 // add file extension cExt to fName
 QString ttAddFileExt( QString fName, const char* cExt )
 {
-  QFile      file( fName );
-  QFileInfo  fInfo( file );
-  QString    sNewFileName;
-
+  QString sNewFileName;
   sNewFileName  = fName;
   sNewFileName += '.';
   sNewFileName += cExt;
