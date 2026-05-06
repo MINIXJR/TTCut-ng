@@ -278,6 +278,15 @@ private:
     };
     TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
     void parseH264SpsFromExtradata(const uint8_t* data, int size);
+    // Validate format ctx, clear mFrameIndex, seek to byte 0 (ES) or PTS 0
+    // (container), parse SPS extradata for H.264 PAFF detection. Returns
+    // false on validation/seek failure.
+    bool setupIndexingPass(int videoStreamIndex);
+
+    // Seek context back to the beginning of the stream after indexing.
+    // ES path: avio_seek + avformat_flush. Container path: av_seek_frame.
+    void rewindContext(int videoStreamIndex);
+
     // For elementary streams whose first frame has no PTS: walk mFrameIndex and
     // assign sequential PTS/DTS values from frame rate (read from .info file or
     // stream metadata). Validates and falls back to 25 fps. Halves PAFF rate.

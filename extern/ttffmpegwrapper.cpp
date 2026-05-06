@@ -560,38 +560,8 @@ TTFFmpegWrapper::TTFieldInfo TTFFmpegWrapper::parseH264FieldInfoFromPacket(const
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 {
-    if (!mFormatCtx) {
-        setError("No file open");
-        return false;
-    }
-
-    if (videoStreamIndex < 0) {
-        videoStreamIndex = mVideoStreamIndex;
-    }
-
-    if (videoStreamIndex < 0) {
-        setError("No video stream found");
-        return false;
-    }
-
-    mFrameIndex.clear();
-
-    // For raw ES files, seek to byte 0 instead of using av_seek_frame
-    // av_seek_frame doesn't work well with raw h264/hevc demuxers
-    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
-    bool isES = (suffix == "264" || suffix == "h264" ||
-                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-                 suffix == "m2v" || suffix == "mpv");
-
-    if (isES && mFormatCtx->pb) {
-        // For ES files, seek to byte 0 and flush
-        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
-        avformat_flush(mFormatCtx);
-        qDebug() << "ES file: seeked to byte 0";
-    } else {
-        // For container formats, use normal seek
-        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
-    }
+    if (!setupIndexingPass(videoStreamIndex)) return false;
+    if (videoStreamIndex < 0) videoStreamIndex = mVideoStreamIndex;
 
     AVPacket* packet = av_packet_alloc();
     if (!packet) {
@@ -609,16 +579,6 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 
     qDebug() << "Building frame index for stream" << videoStreamIndex;
     qDebug() << "Estimated frames:" << estimatedFrames;
-
-    // Parse SPS from extradata for PAFF detection (H.264 only)
-    AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
-    if (codecId == AV_CODEC_ID_H264) {
-        uint8_t* extradata = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata;
-        int extradataSize = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata_size;
-        if (extradata && extradataSize > 0) {
-            parseH264SpsFromExtradata(extradata, extradataSize);
-        }
-    }
 
     // PAFF field merging state
     bool hasPendingTopField = false;
@@ -782,23 +742,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
 
     av_packet_free(&packet);
 
-    // Seek back to beginning - use avio_seek for ES files
-    if (isES && mFormatCtx->pb) {
-        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
-        avformat_flush(mFormatCtx);
-        qDebug() << "ES file: seeked back to byte 0 after index build";
-    } else {
-        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
-    }
-
-    qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
-             << (currentGOP + 1) << "GOPs";
-
-    // Debug: Check first frame's fileOffset for ES files
-    if (isES && !mFrameIndex.isEmpty()) {
-        qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
-                 << "packetSize:" << mFrameIndex[0].packetSize;
-    }
+    rewindContext(videoStreamIndex);
 
     // For elementary streams without PTS/DTS, calculate timestamps from frame rate
     if (!mFrameIndex.isEmpty() && mFrameIndex[0].pts == AV_NOPTS_VALUE) {
@@ -2595,4 +2539,82 @@ void TTFFmpegWrapper::dumpFrameIndexCsv() const
             << (fi.isFieldCoded ? 1 : 0) << '\n';
     }
     qDebug() << "dumpFrameIndexCsv:" << mFrameIndex.size() << "rows ->" << outPath;
+}
+
+// ----------------------------------------------------------------------------
+// Validate + reset state + seek to start + parse SPS for PAFF detection
+// ----------------------------------------------------------------------------
+bool TTFFmpegWrapper::setupIndexingPass(int videoStreamIndex)
+{
+    if (!mFormatCtx) {
+        setError("No file open");
+        return false;
+    }
+
+    if (videoStreamIndex < 0) {
+        videoStreamIndex = mVideoStreamIndex;
+    }
+
+    if (videoStreamIndex < 0) {
+        setError("No video stream found");
+        return false;
+    }
+
+    mFrameIndex.clear();
+    mIsPAFF = false;
+
+    // For raw ES files, seek to byte 0 instead of using av_seek_frame.
+    // av_seek_frame doesn't work well with raw h264/hevc demuxers.
+    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
+
+    if (isES && mFormatCtx->pb) {
+        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
+        avformat_flush(mFormatCtx);
+        qDebug() << "ES file: seeked to byte 0";
+    } else {
+        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    }
+
+    // Parse SPS for PAFF detection (H.264 only)
+    AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
+    if (codecId == AV_CODEC_ID_H264) {
+        uint8_t* extradata = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata;
+        int extradataSize = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata_size;
+        if (extradata && extradataSize > 0) {
+            parseH264SpsFromExtradata(extradata, extradataSize);
+        }
+    }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Seek back to start of stream, log frame index summary
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::rewindContext(int videoStreamIndex)
+{
+    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
+    bool isES = (suffix == "264" || suffix == "h264" ||
+                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
+                 suffix == "m2v" || suffix == "mpv");
+
+    if (isES && mFormatCtx->pb) {
+        avio_seek(mFormatCtx->pb, 0, SEEK_SET);
+        avformat_flush(mFormatCtx);
+        qDebug() << "ES file: seeked back to byte 0 after index build";
+    } else {
+        av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+    }
+
+    qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
+             << (mFrameIndex.isEmpty() ? 0 : mFrameIndex.last().gopIndex + 1) << "GOPs";
+
+    // Debug: Check first frame's fileOffset for ES files
+    if (isES && !mFrameIndex.isEmpty()) {
+        qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
+                 << "packetSize:" << mFrameIndex[0].packetSize;
+    }
 }
