@@ -33,7 +33,6 @@
 
 #include "../data/ttsubtitlelist.h"
 #include "../data/ttavlist.h"
-#include "../avstream/ttavstream.h"
 
 #include <QAction>
 #include <QApplication>
