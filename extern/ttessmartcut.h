@@ -129,6 +129,8 @@ signals:
     void progressChanged(int percent, const QString& message);
 
 private:
+    struct ReencodeContext;  // forward; defined in ttessmartcut.cpp
+
     // State
     bool mIsInitialized;
     int mPresetOverride;     // -1 = use TTCut settings, 0-8 = override preset
@@ -223,6 +225,64 @@ private:
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                         int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr,
                         int* actualStartAU = nullptr);
+
+    // Compute decode range for re-encoding: decodeStart with runway extension,
+    // decodeEnd with pre-extension to next keyframe after streamCopyStartFrame.
+    bool computeDecodeRange(ReencodeContext& ctx);
+
+    // Reset decoder (flush) and recreate encoder for a new segment.
+    // libx264's lookahead can't be restarted after flush, hence the recreate.
+    bool resetDecoderForSegment(ReencodeContext& ctx);
+
+    // One-shot encoder init based on a probed decoded frame's parameters.
+    // Idempotent: returns true immediately if ctx.encoderInitialized is already true.
+    bool ensureEncoderInitialized(ReencodeContext& ctx, AVFrame* probeFrame);
+
+    // Decode all frames in [ctx.decodeStart, ctx.decodeEnd] plus drain on EOF,
+    // appending each decoded AVFrame* to ctx.allDecodedFrames. Calls
+    // ensureEncoderInitialized on the first received frame. Tracks
+    // mReorderDelay from decoder->has_b_frames.
+    bool decodeFramesIntoList(ReencodeContext& ctx);
+
+    // PAFF position-based frame selection from ctx.allDecodedFrames into
+    // ctx.framesToEncode. Sets ctx.realStartAU, ctx.streamCopyLimit, and
+    // *ctx.adjustedStreamCopyStart on overlap detection.
+    void selectFramesPAFF(ReencodeContext& ctx);
+
+    // Non-PAFF display-order to AU-index mapping. Sets ctx.framesToEncode,
+    // ctx.realStartAU, ctx.streamCopyLimit, *ctx.adjustedStreamCopyStart,
+    // *ctx.actualStartAU.
+    void selectFramesNonPAFF(ReencodeContext& ctx);
+
+    // One-shot parse of encoder's H.264 SPS from the first encoder packet.
+    // Idempotent: returns immediately if ctx.encoderSpsParsed. No-op for HEVC.
+    void parseEncoderSpsFromPacket(ReencodeContext& ctx, const QByteArray& rawData);
+
+    // Apply SPS Unification rewrite (H.264 + mSpsUnification + parsed) OR
+    // SPS Reorder Patch (H.264 + mReorderDelay > 0). HEVC and pre-parse:
+    // returns input unchanged.
+    QByteArray transformEncoderPacket(ReencodeContext& ctx, const QByteArray& rawData);
+
+    // Buffer the previous packet to outFile and store transformedData as the
+    // new pending packet. Increments ctx.packetsReceived and mEncoderPacketsWritten.
+    bool bufferAndWriteEncoderPacket(ReencodeContext& ctx, const QByteArray& transformedData);
+
+    // Iterate ctx.framesToEncode, send each to encoder, drain output packets.
+    // Calls parseEncoderSpsFromPacket + transformEncoderPacket +
+    // bufferAndWriteEncoderPacket per output packet.
+    bool runEncodePass(ReencodeContext& ctx);
+
+    // Send NULL frame to encoder, drain remaining packets via the same
+    // parse → transform → buffer-and-write chain as runEncodePass.
+    bool flushEncoder(ReencodeContext& ctx);
+
+    // POC domain mismatch fix: patch poc_lsb in ctx.pendingPacket to prevent
+    // PicOrderCntMsb wrap at the re-encode→stream-copy transition. Only
+    // applies to H.264 with poc_type=0 when stream-copy follows re-encode.
+    void applyPocDomainFix(ReencodeContext& ctx);
+
+    // Final flush: write the buffered last packet (post-poc-patch) to outFile.
+    bool writePendingPacket(ReencodeContext& ctx);
 
     // Helper: decode frame from NAL data
     bool decodeFrame(const QByteArray& nalData, AVFrame* frame);

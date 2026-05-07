@@ -96,6 +96,56 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
     int frameNumDelta, int maxFrameNum);
 
 // ----------------------------------------------------------------------------
+// ReencodeContext: per-call state for reencodeFrames
+// ----------------------------------------------------------------------------
+struct TTESSmartCut::ReencodeContext {
+    ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau)
+        : outFile(f), startFrame(sf), endFrame(ef), streamCopyStartFrame(scsf),
+          adjustedStreamCopyStart(assc), actualStartAU(asau) {}
+
+    // ---- Inputs (set by reencodeFrames before calling helpers) ----
+    QFile& outFile;
+    int    startFrame;
+    int    endFrame;
+    int    streamCopyStartFrame;
+
+    // ---- Outputs (raw pointers from caller; may be nullptr) ----
+    int*   adjustedStreamCopyStart;   // -1 = no adjustment
+    int*   actualStartAU;             // -1 = no adjustment
+
+    // ---- Decode-range phase ----
+    int    decodeStart       = 0;
+    int    decodeEnd         = 0;
+
+    // ---- Decode phase ----
+    QList<AVFrame*> allDecodedFrames;
+    bool   encoderInitialized = false;
+
+    // ---- Selection phase ----
+    QList<AVFrame*> framesToEncode;
+    int    realStartAU       = 0;
+    int    streamCopyLimit   = 0;
+
+    // ---- Encode phase ----
+    bool   encoderSpsParsed  = false;
+    bool   encPpsParsed      = false;
+    H264PpsInfo encPpsForRewrite{ true, false, true, false, false, 0, 0, 0, false };
+    bool   firstFrame        = true;
+    int    framesSent        = 0;
+    int    packetsReceived   = 0;
+    QByteArray pendingPacket;
+
+    // ---- RAII cleanup: free any AVFrames still in lists ----
+    ~ReencodeContext() {
+        for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
+        for (AVFrame* f : framesToEncode)   av_frame_free(&f);
+    }
+
+    ReencodeContext(const ReencodeContext&) = delete;
+    ReencodeContext& operator=(const ReencodeContext&) = delete;
+};
+
+// ----------------------------------------------------------------------------
 // Constructor
 // ----------------------------------------------------------------------------
 TTESSmartCut::TTESSmartCut()
@@ -1883,6 +1933,54 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     if (actualStartAU)
         *actualStartAU = -1;  // -1 = no adjustment (realStartAU == startFrame)
 
+    ReencodeContext ctx(outFile, startFrame, endFrame, streamCopyStartFrame,
+                        adjustedStreamCopyStart, actualStartAU);
+    ctx.realStartAU = startFrame;  // fallback if mapping fails
+
+    if (!computeDecodeRange(ctx)) return false;
+
+    if (!resetDecoderForSegment(ctx)) return false;
+
+    if (!decodeFramesIntoList(ctx)) return false;
+
+    // ---- Display-order to AU-index mapping ----
+    if (mParser.isPAFF()) selectFramesPAFF(ctx);
+    else                  selectFramesNonPAFF(ctx);
+
+    qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
+             << "(AU range" << startFrame << "-" << (ctx.streamCopyLimit - 1) << ")";
+
+    // Re-encode frames
+    // Buffer the last encoder packet so we can patch poc_lsb before writing it,
+    // preventing POC domain mismatch at the re-encode→stream-copy transition.
+
+    if (!runEncodePass(ctx)) return false;
+
+    if (!flushEncoder(ctx)) return false;
+
+    applyPocDomainFix(ctx);
+
+    if (!writePendingPacket(ctx)) return false;
+
+    qDebug() << "      Encoding complete: sent" << ctx.framesSent << "frames, received" << ctx.packetsReceived << "packets";
+    mFramesReencoded += ctx.packetsReceived;
+
+    if (mTotalFrames > 0) {
+        int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
+        emit progressChanged(qMin(percent, 99),
+            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
+    }
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Compute decode range: decodeStart (with runway extension if too close to
+// startFrame) and decodeEnd (with pre-extension to next keyframe after
+// streamCopyStartFrame for B-frame reorder coverage).
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::computeDecodeRange(ReencodeContext& ctx)
+{
     // Find the keyframe we need to decode from.
     // H.264/H.265 decoders with frame-threading have an initialization delay:
     // the first D display-order frames are consumed by the pipeline and never
@@ -1890,22 +1988,60 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // (within the delay window), the target frames may be "eaten" by this delay.
     // Solution: go back one additional keyframe if the runway is too short.
     // This adds ~1 GOP of extra decoding but ensures all target frames appear.
-    int decodeStart = mParser.findKeyframeBefore(startFrame);
-    if (decodeStart < 0) decodeStart = 0;
+    ctx.decodeStart = mParser.findKeyframeBefore(ctx.startFrame);
+    if (ctx.decodeStart < 0) ctx.decodeStart = 0;
 
     const int DECODER_RUNWAY = 10;  // safety margin for frame-threading delay
-    if (startFrame - decodeStart < DECODER_RUNWAY && decodeStart > 0) {
-        int prevKeyframe = mParser.findKeyframeBefore(decodeStart - 1);
+    if (ctx.startFrame - ctx.decodeStart < DECODER_RUNWAY && ctx.decodeStart > 0) {
+        int prevKeyframe = mParser.findKeyframeBefore(ctx.decodeStart - 1);
         if (prevKeyframe >= 0) {
-            qDebug() << "      Runway too short (" << (startFrame - decodeStart)
-                     << "frames), going back from keyframe" << decodeStart
+            qDebug() << "      Runway too short (" << (ctx.startFrame - ctx.decodeStart)
+                     << "frames), going back from keyframe" << ctx.decodeStart
                      << "to previous keyframe" << prevKeyframe;
-            decodeStart = prevKeyframe;
+            ctx.decodeStart = prevKeyframe;
         }
     }
 
-    qDebug() << "      Decoding from keyframe at frame" << decodeStart;
+    qDebug() << "      Decoding from keyframe at frame" << ctx.decodeStart;
 
+    // Extend decode range beyond endFrame to include forward reference frames.
+    // B-frames near endFrame need a P-frame beyond endFrame as reference.
+    // Decode up to the next keyframe (exclusive) so the decoder has all references.
+    // The HEVC decoder with frame-threading has an internal delay of ~7 frames
+    // that persists even through flush. By feeding extra AUs beyond endFrame,
+    // our target frames (startFrame..endFrame) are safely within the output
+    // range instead of stuck in the decoder's trailing buffer.
+    ctx.decodeEnd = qMin(ctx.endFrame + 20, frameCount() - 1);
+
+    // Pre-extend decode range to cover the next keyframe after streamCopyStartFrame.
+    // When B-frame reorder delay shifts the display-order CutIn past the stream-copy
+    // boundary, we need to re-encode up to the next keyframe. Decoding these frames
+    // upfront avoids having to reset the decoder from EOF state later.
+    if (ctx.streamCopyStartFrame >= 0) {
+        int potentialNextKF = mParser.findKeyframeAfter(ctx.streamCopyStartFrame + 1);
+        if (potentialNextKF > 0) {
+            int potentialExtEnd = qMin(potentialNextKF + 20, frameCount() - 1);
+            if (potentialExtEnd > ctx.decodeEnd) {
+                qDebug() << "      Pre-extending decode range to cover potential next keyframe"
+                         << potentialNextKF << "(decode end:" << potentialExtEnd << ")";
+                ctx.decodeEnd = potentialExtEnd;
+            }
+        }
+    }
+
+    qDebug() << "      Decode range:" << ctx.decodeStart << "->" << ctx.decodeEnd
+             << "(endFrame=" << ctx.endFrame << ", extra=" << (ctx.decodeEnd - ctx.endFrame) << ")";
+
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Reset decoder (flush after EOF state) and recreate encoder. Called once
+// per segment because libx264's lookahead thread can't be restarted after
+// a previous segment's flush.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::resetDecoderForSegment(ReencodeContext& /*ctx*/)
+{
     // Setup decoder if needed
     if (!mDecoder) {
         if (!setupDecoder()) {
@@ -1927,6 +2063,57 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         // encoderInitialized will be false, triggering setupEncoder() below
     }
 
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// One-shot encoder initialization based on a probed decoded frame's params.
+// Detects width/height/pixfmt and interlace flags, then calls setupEncoder().
+// Returns true if already initialized (idempotent), or after a successful
+// setupEncoder. Returns false if setupEncoder fails.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::ensureEncoderInitialized(ReencodeContext& ctx, AVFrame* probeFrame)
+{
+    if (ctx.encoderInitialized) return true;
+
+    qDebug() << "      First decoded frame: " << probeFrame->width << "x" << probeFrame->height
+             << " pix_fmt=" << probeFrame->format;
+
+    mDecodedWidth = probeFrame->width;
+    mDecodedHeight = probeFrame->height;
+    mDecodedPixFmt = static_cast<AVPixelFormat>(probeFrame->format);
+
+    // Detect interlaced content from first decoded frame
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 30, 0)
+    // FFmpeg 6.1+: interlace info via frame flags
+    mInterlaced = (probeFrame->flags & AV_FRAME_FLAG_INTERLACED);
+    mTopFieldFirst = (probeFrame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST);
+#else
+    mInterlaced = (probeFrame->interlaced_frame != 0);
+    mTopFieldFirst = (probeFrame->top_field_first != 0);
+#endif
+    if (mInterlaced) {
+        qDebug() << "      Interlaced source detected:"
+                 << (mTopFieldFirst ? "TFF" : "BFF");
+    }
+
+    // Encoder SPS is parsed later, after first avcodec_receive_packet()
+    // (x264 doesn't populate extradata until first packet is produced)
+    if (!setupEncoder()) {
+        return false;
+    }
+    ctx.encoderInitialized = true;
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Decode all frames in [ctx.decodeStart, ctx.decodeEnd] into
+// ctx.allDecodedFrames. Triggers one-shot encoder init on the first
+// received frame. Tracks mReorderDelay from decoder->has_b_frames.
+// Pre-condition: decoder is reset and ready (resetDecoderForSegment ran).
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
+{
     // Decode ALL frames from keyframe to endFrame using correct FFmpeg API pattern.
     // The decoder outputs frames in DISPLAY ORDER (reordered by PTS),
     // but we feed AUs in DECODE ORDER (file order). With B-frames these differ.
@@ -1935,11 +2122,9 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // Important: avcodec_receive_frame() can return multiple frames per send_packet,
     // and decodeFrame() only retrieves one. So we call avcodec_receive_frame() in a
     // loop after each send_packet to drain all available output.
-    QList<AVFrame*> allDecodedFrames;
-    bool encoderInitialized = (mEncoder != nullptr);
 
-    // Helper lambda: drain all available frames from decoder
-    auto drainDecoder = [&]() {
+    // Drain helper (was the drainDecoder lambda)
+    auto drainAvailable = [&]() -> bool {
         while (true) {
             AVFrame* frame = av_frame_alloc();
             if (!frame) break;
@@ -1949,42 +2134,12 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                 break;  // EAGAIN (need more input) or EOF
             }
 
-            // Initialize encoder after first successful decode
-            if (!encoderInitialized) {
-                qDebug() << "      First decoded frame: " << frame->width << "x" << frame->height
-                         << " pix_fmt=" << frame->format;
-
-                mDecodedWidth = frame->width;
-                mDecodedHeight = frame->height;
-                mDecodedPixFmt = static_cast<AVPixelFormat>(frame->format);
-
-                // Detect interlaced content from first decoded frame
-#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 30, 0)
-                // FFmpeg 6.1+: interlace info via frame flags
-                mInterlaced = (frame->flags & AV_FRAME_FLAG_INTERLACED);
-                mTopFieldFirst = (frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST);
-#else
-                mInterlaced = (frame->interlaced_frame != 0);
-                mTopFieldFirst = (frame->top_field_first != 0);
-#endif
-                if (mInterlaced) {
-                    qDebug() << "      Interlaced source detected:"
-                             << (mTopFieldFirst ? "TFF" : "BFF");
-                }
-
-                if (!setupEncoder()) {
-                    av_frame_free(&frame);
-                    for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
-                    allDecodedFrames.clear();
-                    return false;
-                }
-                encoderInitialized = true;
-
-                // Encoder SPS is parsed later, after first avcodec_receive_packet()
-                // (x264 doesn't populate extradata until first packet is produced)
+            if (!ensureEncoderInitialized(ctx, frame)) {
+                av_frame_free(&frame);
+                return false;
             }
 
-            allDecodedFrames.append(frame);
+            ctx.allDecodedFrames.append(frame);
 
             // Track B-frame reorder delay — the decoder updates has_b_frames
             // dynamically as it encounters B-frames. Source SPS may lack
@@ -1993,47 +2148,17 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             if (mReorderDelay == 0 && mDecoder->has_b_frames > 0) {
                 mReorderDelay = mDecoder->has_b_frames;
                 qDebug() << "      Decoder has_b_frames:" << mReorderDelay
-                         << "(detected after" << allDecodedFrames.size() << "frames)";
+                         << "(detected after" << ctx.allDecodedFrames.size() << "frames)";
             }
         }
         return true;
     };
 
-    // Extend decode range beyond endFrame to include forward reference frames.
-    // B-frames near endFrame need a P-frame beyond endFrame as reference.
-    // Decode up to the next keyframe (exclusive) so the decoder has all references.
-    // Extend decode range well beyond endFrame. The HEVC decoder with frame-threading
-    // has an internal delay of ~7 frames that persists even through flush. By feeding
-    // extra AUs beyond endFrame, our target frames (startFrame..endFrame) are safely
-    // within the output range instead of stuck in the decoder's trailing buffer.
-    // We also need the next keyframe as forward reference for B-frames near endFrame.
-    int decodeEnd = qMin(endFrame + 20, frameCount() - 1);
-
-    // Pre-extend decode range to cover the next keyframe after streamCopyStartFrame.
-    // When B-frame reorder delay shifts the display-order CutIn past the stream-copy
-    // boundary, we need to re-encode up to the next keyframe. Decoding these frames
-    // upfront avoids having to reset the decoder from EOF state later.
-    if (streamCopyStartFrame >= 0) {
-        int potentialNextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
-        if (potentialNextKF > 0) {
-            int potentialExtEnd = qMin(potentialNextKF + 20, frameCount() - 1);
-            if (potentialExtEnd > decodeEnd) {
-                qDebug() << "      Pre-extending decode range to cover potential next keyframe"
-                         << potentialNextKF << "(decode end:" << potentialExtEnd << ")";
-                decodeEnd = potentialExtEnd;
-            }
-        }
-    }
-
-    qDebug() << "      Decode range:" << decodeStart << "->" << decodeEnd
-             << "(endFrame=" << endFrame << ", extra=" << (decodeEnd - endFrame) << ")";
-
     // Feed all AUs from keyframe through extended range
-    for (int i = decodeStart; i <= decodeEnd; ++i) {
+    for (int i = ctx.decodeStart; i <= ctx.decodeEnd; ++i) {
         QByteArray auData = mParser.readAccessUnitData(i);
         if (auData.isEmpty()) {
             setError(QString("Failed to read frame %1 for decoding").arg(i));
-            for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
             return false;
         }
 
@@ -2043,14 +2168,11 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         if (av_new_packet(packet, auData.size()) < 0) {
             qDebug() << "av_new_packet failed";
             av_packet_free(&packet);
-            for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
             return false;
         }
         memcpy(packet->data, auData.constData(), auData.size());
 
         // Tag packet with AU index so we can identify frames in decoder output.
-        // The decoder preserves PTS from input to output, allowing us to map
-        // each decoded frame back to its AU (decode-order) index.
         packet->pts = i;
         packet->dts = i;
 
@@ -2059,7 +2181,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             if (ret == 0) break;  // accepted
             if (ret == AVERROR(EAGAIN)) {
                 // Decoder input full, drain output first then retry
-                if (!drainDecoder()) { av_packet_free(&packet); return false; }
+                if (!drainAvailable()) { av_packet_free(&packet); return false; }
                 continue;
             }
             // Other error, skip this AU
@@ -2069,13 +2191,13 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         av_packet_free(&packet);
 
         // Drain all available output frames
-        if (!drainDecoder()) return false;
+        if (!drainAvailable()) return false;
     }
 
     // Enter drain mode: send NULL once, then drain remaining buffered frames
     avcodec_send_packet(mDecoder, nullptr);
 
-    // Drain loop for flush - call receive_frame until EOF
+    // Drain loop for flush — call receive_frame until EOF
     while (true) {
         AVFrame* frame = av_frame_alloc();
         if (!frame) break;
@@ -2085,466 +2207,217 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
             break;
         }
 
-        // Initialize encoder if needed (for edge case where all frames come from flush)
-        if (!encoderInitialized) {
-            mDecodedWidth = frame->width;
-            mDecodedHeight = frame->height;
-            mDecodedPixFmt = static_cast<AVPixelFormat>(frame->format);
-            if (!setupEncoder()) {
-                av_frame_free(&frame);
-                for (AVFrame* f : allDecodedFrames) av_frame_free(&f);
-                return false;
-            }
-            encoderInitialized = true;
+        // Initialize encoder if needed (edge case: all frames come from flush)
+        if (!ensureEncoderInitialized(ctx, frame)) {
+            av_frame_free(&frame);
+            return false;
         }
 
-        allDecodedFrames.append(frame);
+        ctx.allDecodedFrames.append(frame);
     }
 
-    int lostFrames = (decodeEnd - decodeStart + 1) - allDecodedFrames.size();
-
-    qDebug() << "      Decoded" << allDecodedFrames.size() << "frames from"
-             << (decodeEnd - decodeStart + 1) << "input AUs"
+    int lostFrames = (ctx.decodeEnd - ctx.decodeStart + 1) - ctx.allDecodedFrames.size();
+    qDebug() << "      Decoded" << ctx.allDecodedFrames.size() << "frames from"
+             << (ctx.decodeEnd - ctx.decodeStart + 1) << "input AUs"
              << "(" << lostFrames << "lost to decoder delay)";
 
-    // ---- Display-order to AU-index mapping ----
-    QList<AVFrame*> framesToEncode;
-    int streamCopyLimit = (streamCopyStartFrame >= 0) ? streamCopyStartFrame : (endFrame + 1);
-    int realStartAU = startFrame;  // fallback if mapping fails
-
-    if (mParser.isPAFF()) {
-        // PAFF: Position-based frame selection counting from decodeStart.
-        // The navigation decoder (individual field packets) and this decoder
-        // (merged AUs) produce slightly different display-order sequences due
-        // to B-frame reorder buffering. This means position-based counting may
-        // select frames whose AU indices extend past streamCopyLimit, causing
-        // the re-encode to overlap with stream-copy.
-        //
-        // When overlap is detected, we extend the re-encode to the next
-        // keyframe (collecting all decoded frames in between) and adjust
-        // streamCopyStart accordingly. This prevents both frame repetitions
-        // (from overlap) and frame gaps (from jumping stream-copy forward
-        // without filling the re-encode).
-        int skipCount = startFrame - decodeStart;
-        int encodeCount = streamCopyLimit - startFrame;
-
-        qDebug() << "      PAFF frame selection: startFrame" << startFrame
-                 << "decodeStart" << decodeStart << "skipCount" << skipCount
-                 << "encodeCount" << encodeCount
-                 << "decoded" << allDecodedFrames.size() << "streamCopyLimit" << streamCopyLimit;
-
-        // First pass: collect encodeCount frames and track max AU
-        int collected = 0;
-        int maxSelectedAU = -1;
-        for (int i = 0; i < allDecodedFrames.size(); ++i) {
-            if (i < skipCount) continue;
-            if (collected >= encodeCount) break;
-            int au = static_cast<int>(allDecodedFrames[i]->pts);
-            if (au > maxSelectedAU) maxSelectedAU = au;
-            collected++;
-        }
-
-        // Check for overlap and determine extended limit if needed
-        int extendedStreamCopyLimit = streamCopyLimit;
-        if (maxSelectedAU >= streamCopyLimit && adjustedStreamCopyStart) {
-            int nextKF = mParser.findKeyframeAfter(streamCopyLimit + 1);
-            if (nextKF > 0) {
-                extendedStreamCopyLimit = nextKF;
-                *adjustedStreamCopyStart = nextKF;
-                qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
-                         << ">= streamCopyLimit" << streamCopyLimit
-                         << "-> extending re-encode to next keyframe" << nextKF;
-            }
-        }
-
-        // Second pass: collect frames — initial encodeCount + extension if needed
-        collected = 0;
-        for (int i = 0; i < allDecodedFrames.size(); ++i) {
-            if (i < skipCount) {
-                av_frame_free(&allDecodedFrames[i]);
-                continue;
-            }
-
-            int au = static_cast<int>(allDecodedFrames[i]->pts);
-
-            // Collect initial encodeCount frames (position-based)
-            // OR extension frames (AU-index-based, fill gap to next keyframe)
-            bool inInitialRange = (collected < encodeCount);
-            bool inExtension = (extendedStreamCopyLimit > streamCopyLimit
-                                && collected >= encodeCount
-                                && au >= streamCopyLimit
-                                && au < extendedStreamCopyLimit);
-
-            if (inInitialRange || inExtension) {
-                if (framesToEncode.isEmpty()) {
-                    realStartAU = au;
-                }
-                framesToEncode.append(allDecodedFrames[i]);
-                collected++;
-            } else {
-                av_frame_free(&allDecodedFrames[i]);
-            }
-        }
-        allDecodedFrames.clear();
-
-        qDebug() << "      PAFF: selected" << framesToEncode.size() << "frames,"
-                 << "realStartAU =" << realStartAU
-                 << "(requested:" << encodeCount
-                 << ", extended to:" << extendedStreamCopyLimit << ")";
-
-        // PAFF: Do NOT report actualStartAU.
-        // The video output has the full segment frame count (position-based
-        // counting matches the UI). Audio keepList must NOT be shortened.
-    } else {
-        // Non-PAFF: Display-order to AU-index mapping (tested and stable since v0.61.4-v0.61.6).
-        // TTCut-ng navigates by seeking to the nearest keyframe and counting decoded
-        // frames in display order. Due to B-frame reordering, the displayed content
-        // at "frame N" comes from a DIFFERENT AU than AU N. The frame number stored
-        // in the project file is the AU index, but the user selected content at the
-        // corresponding DISPLAY position.
-        //
-        // We replicate TTCut-ng's navigation: find the keyframe in our decoder output,
-        // count forward by displayOffset frames (skipping Open GOP B-frames from
-        // before the keyframe), and use the resulting AU index for frame selection.
-        // This is safe for all streams: without B-frames, displayOffset maps to the
-        // same AU index (no-op). With B-frames at CutIn=keyframe, displayOffset=0.
-        int uiKeyframe = mParser.findKeyframeBefore(startFrame);
-        int displayOffset = startFrame - uiKeyframe;
-
-        // Find the UI keyframe in our decoder output by PTS
-        int kfOutputIdx = -1;
-        for (int i = 0; i < allDecodedFrames.size(); ++i) {
-            if (allDecodedFrames[i]->pts == uiKeyframe) {
-                kfOutputIdx = i;
-                break;
-            }
-        }
-
-        if (kfOutputIdx >= 0) {
-            // Count displayOffset frames forward from keyframe in display order,
-            // skipping Open GOP B-frames from before the keyframe (these wouldn't
-            // be in TTCut-ng's decode since it starts fresh at the keyframe).
-            int count = 0;
-            for (int i = kfOutputIdx; i < allDecodedFrames.size(); ++i) {
-                int au = static_cast<int>(allDecodedFrames[i]->pts);
-                if (au < uiKeyframe) continue;  // Skip Open GOP B-frames
-                if (count == displayOffset) {
-                    realStartAU = au;
-                    break;
-                }
-                count++;
-            }
-            qDebug() << "      Display-order mapping: UI frame" << startFrame
-                     << "= keyframe" << uiKeyframe << "+" << displayOffset
-                     << "-> AU" << realStartAU
-                     << "(keyframe at decoded[" << kfOutputIdx << "])";
-        } else {
-            qDebug() << "      WARNING: keyframe AU" << uiKeyframe
-                     << "not found in decoder output, using AU index directly";
-        }
-
-        // Check if display-order mapping moved CutIn past the stream-copy boundary.
-        // This happens when the B-frame reorder delay shifts the real content to AUs
-        // at or after the stream-copy keyframe.
-        if (realStartAU >= streamCopyLimit) {
-            // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
-            // Extend re-encode to next keyframe so encoder produces IDR for clean
-            // DPB reset. Any POC domain mismatch at the transition is handled by
-            // poc_lsb patching below.
-            int nextKF = mParser.findKeyframeAfter(streamCopyStartFrame + 1);
-            if (nextKF < 0 || (endFrame >= 0 && nextKF > endFrame + 50)) {
-                nextKF = frameCount();
-            }
-            streamCopyLimit = nextKF;
-
-            qDebug() << "      CutIn AU" << realStartAU
-                     << ">= stream-copy start" << streamCopyStartFrame
-                     << "-> extending re-encode to next keyframe" << nextKF;
-
-            if (adjustedStreamCopyStart) {
-                *adjustedStreamCopyStart = nextKF;
-            }
-        }
-
-        // Report actual start AU if it differs from requested (B-frame reorder shift)
-        if (actualStartAU && realStartAU != startFrame) {
-            *actualStartAU = realStartAU;
-            qDebug() << "      Actual start AU:" << realStartAU
-                     << "(requested:" << startFrame << ", shift:" << (realStartAU - startFrame) << "frames)";
-        }
-
-        // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
-        // Open-GOP B-frames before realStartAU are ad content in display order
-        // and must be excluded from the output.
-        for (int i = 0; i < allDecodedFrames.size(); ++i) {
-            int auIndex = static_cast<int>(allDecodedFrames[i]->pts);
-            if (auIndex >= realStartAU && auIndex < streamCopyLimit) {
-                framesToEncode.append(allDecodedFrames[i]);
-            } else {
-                av_frame_free(&allDecodedFrames[i]);
-            }
-        }
-        allDecodedFrames.clear();
-    }
-
-    qDebug() << "      Selected" << framesToEncode.size() << "frames for encoding"
-             << "(AU range" << startFrame << "-" << (streamCopyLimit - 1) << ")";
-
-    // Re-encode frames
-    // Buffer the last encoder packet so we can patch poc_lsb before writing it,
-    // preventing POC domain mismatch at the re-encode→stream-copy transition.
-    bool firstFrame = true;
-    bool encoderSpsParsed = false;
-    int framesSent = 0;
-    int packetsReceived = 0;
-    QByteArray pendingPacket;  // buffered last encoder packet
-
-    // Encoder PPS info for SPS unification (parsed from first encoder packet)
-    H264PpsInfo encPpsForRewrite = { true, false, true, false, false, 0, 0, 0, false };
-    bool encPpsParsed = false;
-
-    // Helper: apply SPS reorder patch (or SPS unification rewrite) and buffer
-    auto writeEncoderPacket = [&](const QByteArray& rawData) -> bool {
-        QByteArray encodedData = rawData;
-
-        if (mSpsUnification && mParser.codecType() == NALU_CODEC_H264 && encoderSpsParsed) {
-            // SPS Unification: extract encoder PPS from first packet, rewrite all slices
-            if (!encPpsParsed) {
-                // Extract encoder PPS for slice header field layout.
-                // The PPS(id=1) is written INLINE before the first encoder slice
-                // (not at ES start — that corrupts MKV NAL parsing).
-                QByteArray encPpsNal = extractPpsFromPacket(rawData);
-                if (!encPpsNal.isEmpty()) {
-                    encPpsForRewrite = parseH264PpsInfo(encPpsNal);
-                    encPpsParsed = true;
-
-                    // PPS(id=1) is now kept inside each encoder packet
-                    // by rewriteEncoderPacketForSourceSps (patches pps_id inline).
-                    // No separate PPS write needed.
-                    qDebug() << "      SPS Unification: encoder PPS parsed, pps_id=1 kept inline";
-                }
-            }
-
-            // Rewrite encoder packet: strip SPS/PPS, rewrite slice NALs
-            if (encPpsParsed) {
-                encodedData = rewriteEncoderPacketForSourceSps(
-                    encodedData,
-                    mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly,
-                    mLog2MaxFrameNum, mLog2MaxPocLsb, mFrameMbsOnly,
-                    encPpsForRewrite, 1, mEncoderPacketsWritten);  // newPpsId=1
-            }
-        } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
-            // Standard path: just patch SPS reorder frames
-            QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay, mParser.isPAFF());
-            if (patched != encodedData)
-                encodedData = patched;
-        }
-
-        // Write previously buffered packet, buffer current one
-        if (!pendingPacket.isEmpty()) {
-            if (outFile.write(pendingPacket) != pendingPacket.size()) {
-                setError("Failed to write encoded data");
-                return false;
-            }
-        }
-        pendingPacket = encodedData;
-        packetsReceived++;
-        mEncoderPacketsWritten++;
-        return true;
-    };
-
-    for (AVFrame* frame : framesToEncode) {
-        if (firstFrame) {
-            frame->pict_type = AV_PICTURE_TYPE_I;
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 0, 0)
-            frame->key_frame = 1;
-#endif
-            firstFrame = false;
-        } else {
-            frame->pict_type = AV_PICTURE_TYPE_NONE;
-        }
-
-        frame->pts = framesSent;
-
-        int ret = avcodec_send_frame(mEncoder, frame);
-        if (ret < 0 && ret != AVERROR(EAGAIN)) {
-            QString errStr = avErrStr(ret);
-            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errStr;
-            setError(QString("Encoding failed: %1").arg(errStr));
-            for (AVFrame* f : framesToEncode) av_frame_free(&f);
-            return false;
-        }
-        framesSent++;
-
-        AVPacket* packet = av_packet_alloc();
-        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
-        while (true) {
-            ret = avcodec_receive_packet(mEncoder, packet);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                break;
-            if (ret < 0) {
-                qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
-                av_packet_free(&packet);
-                for (AVFrame* f : framesToEncode) av_frame_free(&f);
-                return false;
-            }
-            QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
-
-            // Parse encoder SPS from first packet's inline SPS NAL
-            // (without GLOBAL_HEADER, x264 puts SPS/PPS inline, not in extradata)
-            if (!encoderSpsParsed && mParser.codecType() == NALU_CODEC_H264) {
-                H264SpsInfo encSps;
-                if (findH264SpsInPacket(rawData, encSps)) {
-                    mEncoderLog2MaxFrameNum = encSps.log2MaxFrameNumMinus4 + 4;
-                    mEncoderLog2MaxPocLsb = (encSps.pocType == 0)
-                        ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
-                    mEncoderPocType = encSps.pocType;
-                    mEncoderFrameMbsOnly = encSps.frameMbsOnly;
-                    qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
-                             << "log2_poc=" << mEncoderLog2MaxPocLsb
-                             << "poc_type=" << mEncoderPocType;
-                    encoderSpsParsed = true;
-                }
-            }
-
-            if (!writeEncoderPacket(rawData)) {
-                av_packet_free(&packet);
-                for (AVFrame* f : framesToEncode) av_frame_free(&f);
-                return false;
-            }
-            av_packet_unref(packet);
-        }
-        av_packet_free(&packet);
-        av_frame_free(&frame);
-    }
-    framesToEncode.clear();
-
-    // Flush encoder
-    avcodec_send_frame(mEncoder, nullptr);
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) return false;
-    while (true) {
-        int ret = avcodec_receive_packet(mEncoder, packet);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            break;
-        if (ret < 0) {
-            qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << avErrStr(ret);
-            break;
-        }
-        QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
-
-        // Parse encoder SPS from first packet's inline SPS NAL (flush path)
-        if (!encoderSpsParsed && mParser.codecType() == NALU_CODEC_H264) {
-            H264SpsInfo encSps;
-            if (findH264SpsInPacket(rawData, encSps)) {
-                mEncoderLog2MaxFrameNum = encSps.log2MaxFrameNumMinus4 + 4;
-                mEncoderLog2MaxPocLsb = (encSps.pocType == 0)
-                    ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
-                mEncoderPocType = encSps.pocType;
-                mEncoderFrameMbsOnly = encSps.frameMbsOnly;
-                qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
-                         << "log2_poc=" << mEncoderLog2MaxPocLsb
-                         << "poc_type=" << mEncoderPocType;
-                encoderSpsParsed = true;
-            }
-        }
-
-        if (!writeEncoderPacket(rawData)) {
-            av_packet_free(&packet);
-            return false;
-        }
-        av_packet_unref(packet);
-    }
-    av_packet_free(&packet);
-
-    // POC domain mismatch fix: patch poc_lsb in the last encoder packet
-    // to prevent PicOrderCntMsb wrap at re-encode→stream-copy transition.
-    // Only needed for H.264 with poc_type=0 when stream-copy follows.
-    // With SPS Unification, poc_lsb is already widened to source domain,
-    // so we use source params for both reading and patching.
-    int actualScStart = (adjustedStreamCopyStart && *adjustedStreamCopyStart >= 0)
-        ? *adjustedStreamCopyStart : streamCopyStartFrame;
-
-    // Determine which params to use for the pending packet's poc_lsb
-    int pendingFnWidth = mSpsUnification ? mLog2MaxFrameNum : mEncoderLog2MaxFrameNum;
-    int pendingPocWidth = mSpsUnification ? mLog2MaxPocLsb : mEncoderLog2MaxPocLsb;
-    bool pendingFmOnly = mSpsUnification ? mFrameMbsOnly : mEncoderFrameMbsOnly;
-
-    if (!pendingPacket.isEmpty() && mEncoderPocType == 0 &&
-        pendingPocWidth > 0 && mLog2MaxPocLsb > 0 &&
-        actualScStart >= 0 && mParser.codecType() == NALU_CODEC_H264) {
-
-        // Read source's first stream-copy frame poc_lsb
-        QByteArray srcAU = mParser.readAccessUnitData(actualScStart);
-        int srcPocLsb = readPocLsbFromAU(srcAU, mLog2MaxFrameNum,
-                                          mLog2MaxPocLsb, mFrameMbsOnly);
-
-        // Read encoder's last slice poc_lsb (already in source domain if SPS unification)
-        int encPocLsb = readPocLsbFromAU(pendingPacket, pendingFnWidth,
-                                          pendingPocWidth, pendingFmOnly);
-
-        if (srcPocLsb >= 0 && encPocLsb >= 0) {
-            int srcMaxPocLsb = 1 << mLog2MaxPocLsb;
-            int diff = qAbs(srcPocLsb - encPocLsb);
-            if (diff > srcMaxPocLsb / 2) {
-                // Compute safe poc_lsb that avoids wrap
-                int patchMaxPocLsb = 1 << pendingPocWidth;
-                int target = srcPocLsb - srcMaxPocLsb / 2;
-                if (target < 0) target += srcMaxPocLsb;
-                int newPocLsb = target % patchMaxPocLsb;
-
-                // Post-patch validation
-                int newDiff = qAbs(srcPocLsb - newPocLsb);
-                if (newDiff > srcMaxPocLsb / 2) {
-                    int bestPocLsb = newPocLsb;
-                    int bestDiff = newDiff;
-                    for (int v = 0; v < patchMaxPocLsb; ++v) {
-                        int d = qAbs(srcPocLsb - v);
-                        if (d <= srcMaxPocLsb / 2 && d < bestDiff) {
-                            bestPocLsb = v;
-                            bestDiff = d;
-                        }
-                    }
-                    if (bestDiff <= srcMaxPocLsb / 2) {
-                        newPocLsb = bestPocLsb;
-                        qDebug() << "      POC domain fix: modulo re-wrap detected,"
-                                 << "using search result" << newPocLsb;
-                    } else {
-                        qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
-                                   << "found in range [0," << patchMaxPocLsb << ")";
-                    }
-                }
-
-                qDebug() << "      POC domain fix: encoder poc_lsb=" << encPocLsb
-                         << "source poc_lsb=" << srcPocLsb
-                         << "diff=" << diff << "> MaxPocLsb/2=" << srcMaxPocLsb / 2
-                         << "-> patching to" << newPocLsb;
-
-                pendingPacket = patchPocLsbInPacket(pendingPacket,
-                    pendingFnWidth, pendingPocWidth,
-                    pendingFmOnly, static_cast<uint32_t>(newPocLsb));
-            }
-        }
-    }
-
-    // Write the (possibly patched) last encoder packet
-    if (!pendingPacket.isEmpty()) {
-        if (outFile.write(pendingPacket) != pendingPacket.size()) {
-            setError("Failed to write last encoded packet");
-            return false;
-        }
-    }
-
-    qDebug() << "      Encoding complete: sent" << framesSent << "frames, received" << packetsReceived << "packets";
-    mFramesReencoded += packetsReceived;
-
-    if (mTotalFrames > 0) {
-        int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
-        emit progressChanged(qMin(percent, 99),
-            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
-    }
-
     return true;
+}
+
+// ----------------------------------------------------------------------------
+// PAFF position-based frame selection.
+//
+// The navigation decoder (individual field packets) and our segment decoder
+// (merged AUs) produce slightly different display-order sequences due to
+// B-frame reorder buffering. Position-based counting may select frames whose
+// AU indices extend past streamCopyLimit, causing the re-encode to overlap
+// with stream-copy. When overlap is detected, extend re-encode to the next
+// keyframe (collecting all decoded frames in between) and adjust
+// streamCopyStart accordingly. This prevents both frame repetitions (from
+// overlap) and frame gaps (from jumping stream-copy forward without filling
+// the re-encode).
+//
+// PAFF does NOT report actualStartAU. The video output has the full segment
+// frame count (position-based counting matches the UI). Audio keepList must
+// NOT be shortened.
+// ----------------------------------------------------------------------------
+void TTESSmartCut::selectFramesPAFF(ReencodeContext& ctx)
+{
+    ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
+                                                          : (ctx.endFrame + 1);
+
+    int skipCount = ctx.startFrame - ctx.decodeStart;
+    int encodeCount = ctx.streamCopyLimit - ctx.startFrame;
+
+    qDebug() << "      PAFF frame selection: startFrame" << ctx.startFrame
+             << "decodeStart" << ctx.decodeStart << "skipCount" << skipCount
+             << "encodeCount" << encodeCount
+             << "decoded" << ctx.allDecodedFrames.size()
+             << "streamCopyLimit" << ctx.streamCopyLimit;
+
+    // First pass: collect encodeCount frames and track max AU
+    int collected = 0;
+    int maxSelectedAU = -1;
+    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
+        if (i < skipCount) continue;
+        if (collected >= encodeCount) break;
+        int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+        if (au > maxSelectedAU) maxSelectedAU = au;
+        collected++;
+    }
+
+    // Check for overlap and determine extended limit if needed
+    int extendedStreamCopyLimit = ctx.streamCopyLimit;
+    if (maxSelectedAU >= ctx.streamCopyLimit && ctx.adjustedStreamCopyStart) {
+        int nextKF = mParser.findKeyframeAfter(ctx.streamCopyLimit + 1);
+        if (nextKF > 0) {
+            extendedStreamCopyLimit = nextKF;
+            *ctx.adjustedStreamCopyStart = nextKF;
+            qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
+                     << ">= streamCopyLimit" << ctx.streamCopyLimit
+                     << "-> extending re-encode to next keyframe" << nextKF;
+        }
+    }
+
+    // Second pass: collect frames — initial encodeCount + extension if needed
+    collected = 0;
+    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
+        if (i < skipCount) {
+            av_frame_free(&ctx.allDecodedFrames[i]);
+            continue;
+        }
+
+        int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+
+        // Collect initial encodeCount frames (position-based)
+        // OR extension frames (AU-index-based, fill gap to next keyframe)
+        bool inInitialRange = (collected < encodeCount);
+        bool inExtension = (extendedStreamCopyLimit > ctx.streamCopyLimit
+                            && collected >= encodeCount
+                            && au >= ctx.streamCopyLimit
+                            && au < extendedStreamCopyLimit);
+
+        if (inInitialRange || inExtension) {
+            if (ctx.framesToEncode.isEmpty()) {
+                ctx.realStartAU = au;
+            }
+            ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
+            collected++;
+        } else {
+            av_frame_free(&ctx.allDecodedFrames[i]);
+        }
+    }
+    ctx.allDecodedFrames.clear();
+
+    qDebug() << "      PAFF: selected" << ctx.framesToEncode.size() << "frames,"
+             << "realStartAU =" << ctx.realStartAU
+             << "(requested:" << encodeCount
+             << ", extended to:" << extendedStreamCopyLimit << ")";
+
+    // PAFF: Do NOT report actualStartAU.
+    // The video output has the full segment frame count (position-based
+    // counting matches the UI). Audio keepList must NOT be shortened.
+}
+
+// ----------------------------------------------------------------------------
+// Non-PAFF display-order to AU-index mapping.
+//
+// TTCut-ng navigates by seeking to the nearest keyframe and counting decoded
+// frames in display order. Due to B-frame reordering, the displayed content
+// at "frame N" comes from a DIFFERENT AU than AU N. The frame number stored
+// in the project file is the AU index, but the user selected content at the
+// corresponding DISPLAY position.
+//
+// We replicate TTCut-ng's navigation: find the keyframe in our decoder
+// output, count forward by displayOffset frames (skipping Open GOP B-frames
+// from before the keyframe), and use the resulting AU index for frame
+// selection. This is safe for all streams: without B-frames, displayOffset
+// maps to the same AU index (no-op). With B-frames at CutIn=keyframe,
+// displayOffset=0.
+// ----------------------------------------------------------------------------
+void TTESSmartCut::selectFramesNonPAFF(ReencodeContext& ctx)
+{
+    ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
+                                                          : (ctx.endFrame + 1);
+
+    int uiKeyframe = mParser.findKeyframeBefore(ctx.startFrame);
+    int displayOffset = ctx.startFrame - uiKeyframe;
+
+    // Find the UI keyframe in our decoder output by PTS
+    int kfOutputIdx = -1;
+    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
+        if (ctx.allDecodedFrames[i]->pts == uiKeyframe) {
+            kfOutputIdx = i;
+            break;
+        }
+    }
+
+    if (kfOutputIdx >= 0) {
+        // Count displayOffset frames forward from keyframe in display order,
+        // skipping Open GOP B-frames from before the keyframe (these wouldn't
+        // be in TTCut-ng's decode since it starts fresh at the keyframe).
+        int count = 0;
+        for (int i = kfOutputIdx; i < ctx.allDecodedFrames.size(); ++i) {
+            int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+            if (au < uiKeyframe) continue;  // Skip Open GOP B-frames
+            if (count == displayOffset) {
+                ctx.realStartAU = au;
+                break;
+            }
+            count++;
+        }
+        qDebug() << "      Display-order mapping: UI frame" << ctx.startFrame
+                 << "= keyframe" << uiKeyframe << "+" << displayOffset
+                 << "-> AU" << ctx.realStartAU
+                 << "(keyframe at decoded[" << kfOutputIdx << "])";
+    } else {
+        qDebug() << "      WARNING: keyframe AU" << uiKeyframe
+                 << "not found in decoder output, using AU index directly";
+    }
+
+    // Check if display-order mapping moved CutIn past the stream-copy boundary.
+    // This happens when the B-frame reorder delay shifts the real content to AUs
+    // at or after the stream-copy keyframe.
+    if (ctx.realStartAU >= ctx.streamCopyLimit) {
+        // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
+        // Extend re-encode to next keyframe so encoder produces IDR for clean
+        // DPB reset. Any POC domain mismatch at the transition is handled by
+        // poc_lsb patching below.
+        int nextKF = mParser.findKeyframeAfter(ctx.streamCopyStartFrame + 1);
+        if (nextKF < 0 || (ctx.endFrame >= 0 && nextKF > ctx.endFrame + 50)) {
+            nextKF = frameCount();
+        }
+        ctx.streamCopyLimit = nextKF;
+
+        qDebug() << "      CutIn AU" << ctx.realStartAU
+                 << ">= stream-copy start" << ctx.streamCopyStartFrame
+                 << "-> extending re-encode to next keyframe" << nextKF;
+
+        if (ctx.adjustedStreamCopyStart) {
+            *ctx.adjustedStreamCopyStart = nextKF;
+        }
+    }
+
+    // Report actual start AU if it differs from requested (B-frame reorder shift)
+    if (ctx.actualStartAU && ctx.realStartAU != ctx.startFrame) {
+        *ctx.actualStartAU = ctx.realStartAU;
+        qDebug() << "      Actual start AU:" << ctx.realStartAU
+                 << "(requested:" << ctx.startFrame
+                 << ", shift:" << (ctx.realStartAU - ctx.startFrame) << "frames)";
+    }
+
+    // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
+    // Open-GOP B-frames before realStartAU are ad content in display order
+    // and must be excluded from the output.
+    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
+        int auIndex = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+        if (auIndex >= ctx.realStartAU && auIndex < ctx.streamCopyLimit) {
+            ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
+        } else {
+            av_frame_free(&ctx.allDecodedFrames[i]);
+        }
+    }
+    ctx.allDecodedFrames.clear();
 }
 
 // ----------------------------------------------------------------------------
@@ -2827,6 +2700,281 @@ void TTESSmartCut::freeEncoder()
         avcodec_free_context(&mEncoder);
         mEncoder = nullptr;
     }
+}
+
+// ----------------------------------------------------------------------------
+// Parse encoder SPS from first packet's inline SPS NAL.
+// Without GLOBAL_HEADER, x264 puts SPS/PPS inline (not in extradata).
+// HEVC: no-op (mEncoderLog2* fields are H.264-specific).
+// Idempotent: returns immediately if already parsed.
+// ----------------------------------------------------------------------------
+void TTESSmartCut::parseEncoderSpsFromPacket(ReencodeContext& ctx, const QByteArray& rawData)
+{
+    if (ctx.encoderSpsParsed) return;
+    if (mParser.codecType() != NALU_CODEC_H264) return;
+
+    H264SpsInfo encSps;
+    if (findH264SpsInPacket(rawData, encSps)) {
+        mEncoderLog2MaxFrameNum = encSps.log2MaxFrameNumMinus4 + 4;
+        mEncoderLog2MaxPocLsb = (encSps.pocType == 0)
+            ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
+        mEncoderPocType = encSps.pocType;
+        mEncoderFrameMbsOnly = encSps.frameMbsOnly;
+        qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
+                 << "log2_poc=" << mEncoderLog2MaxPocLsb
+                 << "poc_type=" << mEncoderPocType;
+        ctx.encoderSpsParsed = true;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Apply SPS-related transforms to an encoder packet.
+// Path 1 (SPS Unification, H.264 only): rewrite slice headers to use source
+//   SPS parameters. PPS(id=1) is kept inline (patched by
+//   rewriteEncoderPacketForSourceSps).
+// Path 2 (Standard, H.264 only): patch SPS NALs in the access unit to add
+//   bitstream_restriction with max_num_reorder_frames.
+// Path 3 (HEVC or pre-parse): return input unchanged.
+// ----------------------------------------------------------------------------
+QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByteArray& rawData)
+{
+    QByteArray encodedData = rawData;
+
+    if (mSpsUnification && mParser.codecType() == NALU_CODEC_H264 && ctx.encoderSpsParsed) {
+        // SPS Unification: extract encoder PPS from first packet, rewrite all slices
+        if (!ctx.encPpsParsed) {
+            // Extract encoder PPS for slice header field layout.
+            // The PPS(id=1) is written INLINE before the first encoder slice
+            // (not at ES start — that corrupts MKV NAL parsing).
+            QByteArray encPpsNal = extractPpsFromPacket(rawData);
+            if (!encPpsNal.isEmpty()) {
+                ctx.encPpsForRewrite = parseH264PpsInfo(encPpsNal);
+                ctx.encPpsParsed = true;
+
+                // PPS(id=1) is now kept inside each encoder packet
+                // by rewriteEncoderPacketForSourceSps (patches pps_id inline).
+                // No separate PPS write needed.
+                qDebug() << "      SPS Unification: encoder PPS parsed, pps_id=1 kept inline";
+            }
+        }
+
+        // Rewrite encoder packet: strip SPS/PPS, rewrite slice NALs
+        if (ctx.encPpsParsed) {
+            encodedData = rewriteEncoderPacketForSourceSps(
+                encodedData,
+                mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly,
+                mLog2MaxFrameNum, mLog2MaxPocLsb, mFrameMbsOnly,
+                ctx.encPpsForRewrite, 1, mEncoderPacketsWritten);  // newPpsId=1
+        }
+    } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
+        // Standard path: just patch SPS reorder frames
+        QByteArray patched = patchSpsNalsInAccessUnit(encodedData, mReorderDelay, mParser.isPAFF());
+        if (patched != encodedData)
+            encodedData = patched;
+    }
+
+    return encodedData;
+}
+
+// ----------------------------------------------------------------------------
+// Pending-buffer write: flush the previously buffered packet to outFile,
+// then store the new transformedData as the pending packet. The last packet
+// stays in ctx.pendingPacket for applyPocDomainFix.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::bufferAndWriteEncoderPacket(ReencodeContext& ctx,
+                                                const QByteArray& transformedData)
+{
+    // Write previously buffered packet, buffer current one
+    if (!ctx.pendingPacket.isEmpty()) {
+        if (ctx.outFile.write(ctx.pendingPacket) != ctx.pendingPacket.size()) {
+            setError("Failed to write encoded data");
+            return false;
+        }
+    }
+    ctx.pendingPacket = transformedData;
+    ctx.packetsReceived++;
+    mEncoderPacketsWritten++;
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Main encode pass: iterate ctx.framesToEncode, send to encoder, drain
+// output packets. Each output packet flows through parseEncoderSpsFromPacket
+// (one-shot) -> transformEncoderPacket -> bufferAndWriteEncoderPacket.
+// Frees each input frame after submission to encoder. Marks the first frame
+// as a keyframe.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
+{
+    for (AVFrame* frame : ctx.framesToEncode) {
+        if (ctx.firstFrame) {
+            frame->pict_type = AV_PICTURE_TYPE_I;
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 0, 0)
+            frame->key_frame = 1;
+#endif
+            ctx.firstFrame = false;
+        } else {
+            frame->pict_type = AV_PICTURE_TYPE_NONE;
+        }
+
+        frame->pts = ctx.framesSent;
+
+        int ret = avcodec_send_frame(mEncoder, frame);
+        if (ret < 0 && ret != AVERROR(EAGAIN)) {
+            QString errStr = avErrStr(ret);
+            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errStr;
+            setError(QString("Encoding failed: %1").arg(errStr));
+            return false;
+        }
+        ctx.framesSent++;
+
+        AVPacket* packet = av_packet_alloc();
+        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
+        while (true) {
+            ret = avcodec_receive_packet(mEncoder, packet);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                break;
+            if (ret < 0) {
+                qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
+                av_packet_free(&packet);
+                return false;
+            }
+            QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
+
+            parseEncoderSpsFromPacket(ctx, rawData);
+            QByteArray transformed = transformEncoderPacket(ctx, rawData);
+            if (!bufferAndWriteEncoderPacket(ctx, transformed)) {
+                av_packet_free(&packet);
+                return false;
+            }
+            av_packet_unref(packet);
+        }
+        av_packet_free(&packet);
+        av_frame_free(&frame);
+    }
+    ctx.framesToEncode.clear();
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Encoder flush: send NULL frame, drain remaining packets. Each packet
+// flows through the same parseEncoderSpsFromPacket → transformEncoderPacket
+// → bufferAndWriteEncoderPacket chain as runEncodePass.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::flushEncoder(ReencodeContext& ctx)
+{
+    avcodec_send_frame(mEncoder, nullptr);
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) return false;
+    while (true) {
+        int ret = avcodec_receive_packet(mEncoder, packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            break;
+        if (ret < 0) {
+            qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << avErrStr(ret);
+            break;
+        }
+        QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
+
+        parseEncoderSpsFromPacket(ctx, rawData);
+        QByteArray transformed = transformEncoderPacket(ctx, rawData);
+        if (!bufferAndWriteEncoderPacket(ctx, transformed)) {
+            av_packet_free(&packet);
+            return false;
+        }
+        av_packet_unref(packet);
+    }
+    av_packet_free(&packet);
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// POC domain mismatch fix: patch poc_lsb in the last encoder packet to
+// prevent PicOrderCntMsb wrap at the re-encode→stream-copy transition.
+// Only needed for H.264 with poc_type=0 when stream-copy follows. With SPS
+// Unification, poc_lsb is already widened to source domain, so we use source
+// params for both reading and patching.
+// ----------------------------------------------------------------------------
+void TTESSmartCut::applyPocDomainFix(ReencodeContext& ctx)
+{
+    int actualScStart = (ctx.adjustedStreamCopyStart && *ctx.adjustedStreamCopyStart >= 0)
+        ? *ctx.adjustedStreamCopyStart : ctx.streamCopyStartFrame;
+
+    // Determine which params to use for the pending packet's poc_lsb
+    int pendingFnWidth = mSpsUnification ? mLog2MaxFrameNum : mEncoderLog2MaxFrameNum;
+    int pendingPocWidth = mSpsUnification ? mLog2MaxPocLsb : mEncoderLog2MaxPocLsb;
+    bool pendingFmOnly = mSpsUnification ? mFrameMbsOnly : mEncoderFrameMbsOnly;
+
+    if (ctx.pendingPacket.isEmpty() || mEncoderPocType != 0 ||
+        pendingPocWidth <= 0 || mLog2MaxPocLsb <= 0 ||
+        actualScStart < 0 || mParser.codecType() != NALU_CODEC_H264) {
+        return;
+    }
+
+    // Read source's first stream-copy frame poc_lsb
+    QByteArray srcAU = mParser.readAccessUnitData(actualScStart);
+    int srcPocLsb = readPocLsbFromAU(srcAU, mLog2MaxFrameNum,
+                                      mLog2MaxPocLsb, mFrameMbsOnly);
+
+    // Read encoder's last slice poc_lsb (already in source domain if SPS unification)
+    int encPocLsb = readPocLsbFromAU(ctx.pendingPacket, pendingFnWidth,
+                                      pendingPocWidth, pendingFmOnly);
+
+    if (srcPocLsb < 0 || encPocLsb < 0) return;
+
+    int srcMaxPocLsb = 1 << mLog2MaxPocLsb;
+    int diff = qAbs(srcPocLsb - encPocLsb);
+    if (diff <= srcMaxPocLsb / 2) return;
+
+    // Compute safe poc_lsb that avoids wrap
+    int patchMaxPocLsb = 1 << pendingPocWidth;
+    int target = srcPocLsb - srcMaxPocLsb / 2;
+    if (target < 0) target += srcMaxPocLsb;
+    int newPocLsb = target % patchMaxPocLsb;
+
+    // Post-patch validation
+    int newDiff = qAbs(srcPocLsb - newPocLsb);
+    if (newDiff > srcMaxPocLsb / 2) {
+        int bestPocLsb = newPocLsb;
+        int bestDiff = newDiff;
+        for (int v = 0; v < patchMaxPocLsb; ++v) {
+            int d = qAbs(srcPocLsb - v);
+            if (d <= srcMaxPocLsb / 2 && d < bestDiff) {
+                bestPocLsb = v;
+                bestDiff = d;
+            }
+        }
+        if (bestDiff <= srcMaxPocLsb / 2) {
+            newPocLsb = bestPocLsb;
+            qDebug() << "      POC domain fix: modulo re-wrap detected,"
+                     << "using search result" << newPocLsb;
+        } else {
+            qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
+                       << "found in range [0," << patchMaxPocLsb << ")";
+        }
+    }
+
+    qDebug() << "      POC domain fix: encoder poc_lsb=" << encPocLsb
+             << "source poc_lsb=" << srcPocLsb
+             << "diff=" << diff << "> MaxPocLsb/2=" << srcMaxPocLsb / 2
+             << "-> patching to" << newPocLsb;
+
+    ctx.pendingPacket = patchPocLsbInPacket(ctx.pendingPacket,
+        pendingFnWidth, pendingPocWidth,
+        pendingFmOnly, static_cast<uint32_t>(newPocLsb));
+}
+
+// ----------------------------------------------------------------------------
+// Final flush: write the buffered last packet (post-poc-patch) to outFile.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::writePendingPacket(ReencodeContext& ctx)
+{
+    if (ctx.pendingPacket.isEmpty()) return true;
+    if (ctx.outFile.write(ctx.pendingPacket) != ctx.pendingPacket.size()) {
+        setError("Failed to write last encoded packet");
+        return false;
+    }
+    return true;
 }
 
 // ----------------------------------------------------------------------------
