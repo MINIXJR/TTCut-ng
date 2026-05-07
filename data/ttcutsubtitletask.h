@@ -31,8 +31,8 @@
 #ifndef TTCUTSUBTITLETASK_H
 #define TTCUTSUBTITLETASK_H
 
-#include "common/ttthreadtask.h"
-#include "data/ttmuxlistdata.h"
+#include "../common/ttthreadtask.h"
+#include "ttmuxlistdata.h"
 
 class TTFileBuffer;
 class TTCutParameter;

@@ -33,7 +33,7 @@
 
 #include "ui_subtitlefilelistwidget.h"
 
-#include "common/ttcut.h"
+#include "../common/ttcut.h"
 
 class TTAVData;
 class TTAVItem;

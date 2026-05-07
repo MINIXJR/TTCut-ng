@@ -30,12 +30,12 @@
 
 #include "ttcutsubtitletask.h"
 
-#include "common/ttexception.h"
-#include "avstream/ttfilebuffer.h"
-#include "data/ttcutparameter.h"
-#include "data/ttcutlist.h"
-#include "data/ttavdata.h"
-#include "avstream/ttavstream.h"
+#include "../common/ttexception.h"
+#include "../avstream/ttfilebuffer.h"
+#include "ttcutparameter.h"
+#include "ttcutlist.h"
+#include "ttavdata.h"
+#include "../avstream/ttavstream.h"
 
 //! Cut subtitle stream task
 TTCutSubtitleTask::TTCutSubtitleTask() :
