@@ -238,11 +238,16 @@ generate_h264_1080i_paff() {
     local ELAPSED=$(( $(date +%s) - START ))
     echo "    JM encode finished in ${ELAPSED}s"
 
-    echo "    Step 3/3: verify PAFF output..."
+    echo "    Step 3/3: verify VUI + PAFF flags..."
     rm -f "$RAW"
-    if ! ffmpeg -v debug -i "${BASE}.264" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1 \
-        | grep -qE 'field_pic_flag.*1'; then
-        echo "    WARNING: JM output does not contain field_pic_flag=1 (not PAFF)" >&2
+    local trace
+    trace=$(ffmpeg -v debug -i "${BASE}.264" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1)
+    if ! grep -qE 'vui_parameters_present_flag.*= 1' <<<"$trace"; then
+        echo "    WARNING: JM output has no VUI (paff.cfg EnableVUISupport set?)" >&2
+        return 1
+    fi
+    if ! grep -qE 'field_pic_flag.*= 1' <<<"$trace"; then
+        echo "    WARNING: JM output is not PAFF (field_pic_flag missing)" >&2
         return 1
     fi
     write_ttcut_project "$BASE" "264" "ac3"
