@@ -71,6 +71,9 @@ testing/
 # Generated test media (tools/ttcut-screenshots.sh)
 tools/testdata/
 
+# Generated test videos (tools/test-videos/make_test_video.sh)
+tools/test-videos/cache/
+
 # Git worktrees
 .worktrees/
 .superpowers/
