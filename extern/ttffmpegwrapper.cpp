@@ -53,8 +53,19 @@ extern "C" {
 #include <libavcodec/bsf.h>
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
+}
+
+// Returns the bit depth of the luma component for the given AVPixelFormat.
+// Falls back to 8 for unknown / AV_PIX_FMT_NONE so callers using uint8_t* read
+// paths stay safe.
+static int yPlaneDepth(int avPixelFormat)
+{
+    const AVPixFmtDescriptor* desc =
+        av_pix_fmt_desc_get((AVPixelFormat)avPixelFormat);
+    return (desc && desc->nb_components > 0) ? desc->comp[0].depth : 8;
 }
 
 // Static initialization flag — std::call_once gives us thread-safe one-shot
@@ -1220,11 +1231,16 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
     mDecoderFrameIndex = frameIndex;
     mCurrentFrameIndex = frameIndex;
 
-    // Analyze Y-plane directly (YUV420P: data[0] = Y, linesize[0] = Y stride)
+    // Analyze Y-plane directly (YUV420P: data[0] = Y, linesize[0] = Y stride).
+    // For 10/12-bit content (HEVC Main 10/12), each sample is two bytes; cast
+    // to uint16_t and right-shift to compare against the 8-bit threshold.
     int w = mDecodedFrame->width, h = mDecodedFrame->height;
     uint8_t* yPlane = mDecodedFrame->data[0];
     int yStride = mDecodedFrame->linesize[0];
     if (!yPlane || w <= 0 || h <= 0) return false;
+
+    int depth = yPlaneDepth(mDecodedFrame->format);
+    int shift = (depth > 8) ? (depth - 8) : 0;
 
     int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
     const int step = 2;
@@ -1233,11 +1249,22 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
     int totalPixels = 0, blackPixels = 0;
 
     for (int row = y0; row < y1; row += step) {
-        uint8_t* line = yPlane + row * yStride;
-        for (int col = x0; col < x1; col += step) {
-            totalPixels++;
-            lumaSum += line[col];
-            if (line[col] < pixelThreshold) blackPixels++;
+        uint8_t* rowBase = yPlane + row * yStride;
+        if (shift == 0) {
+            for (int col = x0; col < x1; col += step) {
+                totalPixels++;
+                int y = rowBase[col];
+                lumaSum += y;
+                if (y < pixelThreshold) blackPixels++;
+            }
+        } else {
+            const uint16_t* line16 = (const uint16_t*)rowBase;
+            for (int col = x0; col < x1; col += step) {
+                totalPixels++;
+                int y = line16[col] >> shift;
+                lumaSum += y;
+                if (y < pixelThreshold) blackPixels++;
+            }
         }
         if (totalPixels >= earlyExitSamples) {
             float avgSoFar = (float)lumaSum / totalPixels;
@@ -1316,20 +1343,33 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
     mDecoderFrameIndex = frameIndex;
     mCurrentFrameIndex = frameIndex;
 
-    // Build histogram from Y-plane center 80%
+    // Build histogram from Y-plane center 80%. 10/12-bit samples are
+    // right-shifted to 8-bit so the 256-bucket layout and downstream
+    // histogramDifference math keep matching 8-bit-derived thresholds.
     int w = mDecodedFrame->width, h = mDecodedFrame->height;
     uint8_t* yPlane = mDecodedFrame->data[0];
     int yStride = mDecodedFrame->linesize[0];
     if (!yPlane || w <= 0 || h <= 0) return false;
 
+    int depth = yPlaneDepth(mDecodedFrame->format);
+    int shift = (depth > 8) ? (depth - 8) : 0;
+
     int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
     const int step = 2;
 
     for (int row = y0; row < y1; row += step) {
-        uint8_t* line = yPlane + row * yStride;
-        for (int col = x0; col < x1; col += step) {
-            hist[line[col]]++;
-            totalPixels++;
+        uint8_t* rowBase = yPlane + row * yStride;
+        if (shift == 0) {
+            for (int col = x0; col < x1; col += step) {
+                hist[rowBase[col]]++;
+                totalPixels++;
+            }
+        } else {
+            const uint16_t* line16 = (const uint16_t*)rowBase;
+            for (int col = x0; col < x1; col += step) {
+                hist[line16[col] >> shift]++;
+                totalPixels++;
+            }
         }
     }
     return totalPixels > 0;
