@@ -71,12 +71,16 @@ int main( int argc, char **argv )
     a.setStyleSheet(a.styleSheet() +
                     "\nQGroupBox::title { subcontrol-position: top center; }");
 
+    // Load qtbase translations (since Qt 5.x the per-module split replaced
+    // the legacy qt_<locale>.qm bundle; in modern installs that legacy file
+    // is an empty stub. qtbase_<locale>.qm carries QMessageBox button labels
+    // like Yes/No/OK/Cancel). Forward-compatible with Qt 6.
     QTranslator qtTranslator;
-    if (!qtTranslator.load("qt_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath))) {
+    if (!qtTranslator.load("qtbase_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath))) {
       TTMessageLogger* log = TTMessageLogger::getInstance();
       log->warningMsg(__FILE__, __LINE__,
                     QString("Qt translation file %1 for locale %2 could not be found!").
-                    arg("qt_" + QLocale::system().name()).
+                    arg("qtbase_" + QLocale::system().name()).
                     arg(QLocale::system().name()));
     }
 
