@@ -220,6 +220,12 @@ void TTSettings::setLogAudioIndexInfo(bool v)
   mLogAudioIndexInfo = v;
 }
 
+void TTSettings::setLogFFmpegDecoder(bool v)
+{
+  if (mLogFFmpegDecoder == v) return;
+  mLogFFmpegDecoder = v;
+}
+
 // ---- Recent Files group setter (Task 7) ------------------------------------
 // Emits a change-notification signal. Mutating call sites
 // (append/prepend/removeAll) must read-modify-write through this setter so
@@ -734,6 +740,7 @@ void TTSettings::load()
   mLogModeExtended   = settings.value("LogModeExtended/",   mLogModeExtended).toBool();
   mLogVideoIndexInfo = settings.value("LogVideoIndexInfo/", mLogVideoIndexInfo).toBool();
   mLogAudioIndexInfo = settings.value("LogAudioIndexInfo/", mLogAudioIndexInfo).toBool();
+  mLogFFmpegDecoder = settings.value("LogFFmpegDecoder/", mLogFFmpegDecoder).toBool();
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------
@@ -950,6 +957,7 @@ void TTSettings::save()
   settings.setValue("LogModeExtended/",   mLogModeExtended);
   settings.setValue("LogVideoIndexInfo/", mLogVideoIndexInfo);
   settings.setValue("LogAudioIndexInfo/", mLogAudioIndexInfo);
+  settings.setValue("LogFFmpegDecoder/", mLogFFmpegDecoder);
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------

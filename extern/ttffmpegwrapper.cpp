@@ -33,6 +33,8 @@
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttnaluparser.h"
 #include "../common/ttcut.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 
 #include <algorithm>
 #include <cmath>
@@ -121,7 +123,8 @@ void TTFFmpegWrapper::initializeFFmpeg()
         av_register_all();
 #endif
         sFFmpegInitialized = true;
-        qDebug() << "FFmpeg initialized, version:" << av_version_info();
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "FFmpeg initialized, version:" << av_version_info();
     });
 }
 
@@ -154,7 +157,8 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
         av_dict_set(&opts, "probesize", "50000000", 0);  // 50MB
         av_dict_set(&opts, "analyzeduration", "10000000", 0);  // 10 seconds
         inputFmt = esInputFormatForPath(filePath);
-        qDebug() << "Opening ES file with forced format:" << (inputFmt ? inputFmt->name : "auto");
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "Opening ES file with forced format:" << (inputFmt ? inputFmt->name : "auto");
     }
 
     int ret = avformat_open_input(&mFormatCtx, filePath.toUtf8().constData(),
@@ -193,7 +197,8 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
             if (mVideoCodecCtx) {
                 int p2cRet = avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
                 if (p2cRet < 0) {
-                    qDebug() << "Warning: avcodec_parameters_to_context failed:" << avErrorToString(p2cRet);
+                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                        QString("Warning: avcodec_parameters_to_context failed: %1").arg(avErrorToString(p2cRet)));
                     avcodec_free_context(&mVideoCodecCtx);
                     mVideoCodecCtx = nullptr;
                 } else {
@@ -207,7 +212,8 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
                     }
                     ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
                     if (ret < 0) {
-                        qDebug() << "Warning: Could not open video codec:" << avErrorToString(ret);
+                        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                            QString("Warning: Could not open video codec: %1").arg(avErrorToString(ret)));
                         avcodec_free_context(&mVideoCodecCtx);
                         mVideoCodecCtx = nullptr;
                     }
@@ -216,10 +222,14 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
         }
     }
 
-    qDebug() << "Opened file:" << filePath;
-    qDebug() << "  Streams:" << mFormatCtx->nb_streams;
-    qDebug() << "  Video stream:" << mVideoStreamIndex;
-    qDebug() << "  Audio stream:" << mAudioStreamIndex;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Opened file:" << filePath;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Streams:" << mFormatCtx->nb_streams;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Video stream:" << mVideoStreamIndex;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Audio stream:" << mAudioStreamIndex;
 
     return true;
 }
@@ -522,7 +532,8 @@ void TTFFmpegWrapper::parseH264SpsFromExtradata(const uint8_t* data, int size)
     mH264FrameMbsOnlyFlag = (TTNaluParser::readBits(sps, spsSize, bitPos, 1) == 1);
 
     if (!mH264FrameMbsOnlyFlag) {
-        qDebug() << "FFmpegWrapper SPS: frame_mbs_only_flag=0, log2_max_frame_num=" << mH264Log2MaxFrameNum;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "FFmpegWrapper SPS: frame_mbs_only_flag=0, log2_max_frame_num=" << mH264Log2MaxFrameNum;
     }
 }
 
@@ -634,7 +645,8 @@ bool TTFFmpegWrapper::buildGOPIndex()
         mGOPIndex.append(gopInfo);
     }
 
-    qDebug() << "GOP index built:" << mGOPIndex.size() << "GOPs";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "GOP index built:" << mGOPIndex.size() << "GOPs";
 
     return true;
 }
@@ -744,7 +756,8 @@ QString TTFFmpegWrapper::formatTimestamp(int64_t pts, int streamIndex) const
 void TTFFmpegWrapper::setError(const QString& error)
 {
     mLastError = error;
-    qDebug() << "TTFFmpegWrapper error:" << error;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("TTFFmpegWrapper error: %1").arg(error));
 }
 
 // ----------------------------------------------------------------------------
@@ -890,21 +903,25 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
                 }
                 if (byteOffset < 0) byteOffset = 0;  // Fallback to start
             }
-            qDebug() << "ES seek: fileOffset was -1, using" << byteOffset;
+            if (TTSettings::instance()->logFFmpegDecoder())
+                qDebug() << "ES seek: fileOffset was -1, using" << byteOffset;
         }
 
         ret = avio_seek(mFormatCtx->pb, byteOffset, SEEK_SET);
-        qDebug() << "ES seek to byte" << byteOffset << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex << "avio_seek result:" << ret;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "ES seek to byte" << byteOffset << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex << "avio_seek result:" << ret;
         if (ret >= 0) {
             avformat_flush(mFormatCtx);
             ret = 0;  // Success
         } else {
-            qDebug() << "avio_seek failed with:" << ret << avErrorToString(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avio_seek failed with: %1 %2").arg(ret).arg(avErrorToString(ret)));
         }
     } else {
         // For container formats, use timestamp-based seeking
         int64_t seekPts = mFrameIndex[seekKeyframe].pts;
-        qDebug() << "Container seek to PTS" << seekPts << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "Container seek to PTS" << seekPts << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex;
         ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
     }
 
@@ -931,11 +948,14 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
     // Bounds check — TTNaluParser and FFmpeg demuxer may count different frames
     if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
-        qDebug() << "decodeFrame: index" << frameIndex
-                 << "out of range (0 -" << mFrameIndex.size()-1 << ")";
+        if (TTSettings::instance()->logFFmpegDecoder()) {
+            qDebug() << "decodeFrame: index" << frameIndex
+                     << "out of range (0 -" << mFrameIndex.size()-1 << ")";
+        }
         if (frameIndex >= mFrameIndex.size() && mFrameIndex.size() > 0) {
             frameIndex = mFrameIndex.size() - 1;
-            qDebug() << "decodeFrame: clamped to last valid frame" << frameIndex;
+            if (TTSettings::instance()->logFFmpegDecoder())
+                qDebug() << "decodeFrame: clamped to last valid frame" << frameIndex;
         } else {
             return QImage();
         }
@@ -960,13 +980,16 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
             keyframeIndex--;
         }
-        qDebug() << "decodeFrame: seek target=" << frameIndex
-                 << "keyframe=" << keyframeIndex
-                 << "frames_to_decode=" << (frameIndex - keyframeIndex + 1)
-                 << "total_frames=" << mFrameIndex.size();
+        if (TTSettings::instance()->logFFmpegDecoder()) {
+            qDebug() << "decodeFrame: seek target=" << frameIndex
+                     << "keyframe=" << keyframeIndex
+                     << "frames_to_decode=" << (frameIndex - keyframeIndex + 1)
+                     << "total_frames=" << mFrameIndex.size();
+        }
 
         if (!seekToFrame(frameIndex)) {
-            qDebug() << "decodeFrame: seekToFrame failed for frame" << frameIndex;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrame: seekToFrame failed for frame %1").arg(frameIndex));
             return QImage();
         }
         mDecoderFrameIndex = mCurrentFrameIndex;
@@ -977,9 +1000,9 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         if (!skipCurrentFrame()) {
             // EOF drain exhausted during skip — break and try decodeCurrentFrame,
             // since the decoder may still have the target frame buffered
-            qDebug() << "decodeFrame: skip failed at" << mDecoderFrameIndex
-                     << "(target=" << frameIndex << ") drained=" << mDecoderDrained
-                     << "— trying decodeCurrentFrame directly";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrame: skip failed at %1 (target=%2) drained=%3 — trying decodeCurrentFrame directly")
+                    .arg(mDecoderFrameIndex).arg(frameIndex).arg(mDecoderDrained));
             break;
         }
         mDecoderFrameIndex++;
@@ -990,8 +1013,9 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 
     // Fallback: re-seek and retry if first attempt failed
     if (result.isNull()) {
-        qDebug() << "decodeFrame: first decode attempt failed for frame" << frameIndex
-                 << "— retrying with fresh seek";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrame: first decode attempt failed for frame %1 — retrying with fresh seek")
+                .arg(frameIndex));
 
         int keyframeIndex = frameIndex;
         while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
@@ -1013,7 +1037,8 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 
     // Fallback: try one frame earlier if target frame cannot be decoded
     if (result.isNull() && frameIndex > 0) {
-        qDebug() << "decodeFrame: retry failed — trying frame" << (frameIndex - 1);
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrame: retry failed — trying frame %1").arg(frameIndex - 1));
         // Recursive call with frameIndex-1 (will seek fresh)
         mDecoderDrained = true;  // Force seek in recursive call
         result = decodeFrame(frameIndex - 1);
@@ -1035,12 +1060,13 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
             mFrameCache.remove(evict);
         }
     } else {
-        if (mSearchMode) {
+        if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode decodeFrame: failure at frame" << frameIndex
                      << "(possibly non-IDR I-slice with DPB inconsistency)";
         }
-        qDebug() << "decodeFrame: FAILED to decode frame" << frameIndex
-                 << "and fallback (total_frames=" << mFrameIndex.size() << ")";
+        TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+            QString("decodeFrame: FAILED to decode frame %1 and fallback (total_frames=%2)")
+                .arg(frameIndex).arg(mFrameIndex.size()));
     }
     return result;
 }
@@ -1153,8 +1179,9 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
 
             mDecoderDrained = true;
         } else {
-            qDebug() << "decodeCurrentFrame: EOF drain failed"
-                     << "send_packet=" << ret << "receive_frame=" << recvRet;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeCurrentFrame: EOF drain failed send_packet=%1 receive_frame=%2")
+                    .arg(ret).arg(recvRet));
         }
     }
 
@@ -1227,7 +1254,7 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
 
     av_packet_free(&packet);
     if (!decoded) {
-        if (mSearchMode) {
+        if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode isFrameBlack: decode failure at frame" << frameIndex
                      << "(possibly non-IDR I-slice with DPB inconsistency)";
         }
@@ -1339,7 +1366,7 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
 
     av_packet_free(&packet);
     if (!decoded) {
-        if (mSearchMode) {
+        if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode buildHistogram: decode failure at frame" << frameIndex
                      << "(possibly non-IDR I-slice with DPB inconsistency)";
         }
@@ -1399,9 +1426,11 @@ bool TTFFmpegWrapper::isSceneChange(int indexA, int indexB, float threshold)
     }
     diff /= 2.0f;  // normalize to 0.0–1.0
 
-    qDebug() << "Scene FFmpeg: frames" << indexA << "->" << indexB
-             << "diff=" << diff << "threshold=" << threshold
-             << (diff > threshold ? "MATCH" : "");
+    if (TTSettings::instance()->logFFmpegDecoder()) {
+        qDebug() << "Scene FFmpeg: frames" << indexA << "->" << indexB
+                 << "diff=" << diff << "threshold=" << threshold
+                 << (diff > threshold ? "MATCH" : "");
+    }
     return diff > threshold;
 }
 
@@ -1451,8 +1480,10 @@ bool TTFFmpegWrapper::skipCurrentFrame()
             decoded = true;
             mDecoderDrained = true;
         } else {
-            qDebug() << "skipCurrentFrame: EOF drain exhausted"
-                     << "receive_frame=" << recvRet;
+            if (TTSettings::instance()->logFFmpegDecoder()) {
+                qDebug() << "skipCurrentFrame: EOF drain exhausted"
+                         << "receive_frame=" << recvRet;
+            }
         }
     }
 
@@ -1586,9 +1617,11 @@ TTFFmpegWrapper::AcmodInfo TTFFmpegWrapper::analyzeAcmod(const QString& audioFil
     info.cutInAcmod = firstAcmod;
     info.cutOutAcmod = lastAcmod;
 
-    qDebug() << "analyzeAcmod:" << QFileInfo(audioFile).fileName()
-             << "main=" << mainAcmod << "cutIn=" << firstAcmod << "cutOut=" << lastAcmod
-             << "frames=" << totalFrames;
+    if (TTSettings::instance()->logFFmpegDecoder()) {
+        qDebug() << "analyzeAcmod:" << QFileInfo(audioFile).fileName()
+                 << "main=" << mainAcmod << "cutIn=" << firstAcmod << "cutOut=" << lastAcmod
+                 << "frames=" << totalFrames;
+    }
 
     return info;
 }
@@ -1613,10 +1646,14 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutAudioStream: libav stream-copy";
-    qDebug() << "  Input:" << inputFile;
-    qDebug() << "  Output:" << outputFile;
-    qDebug() << "  Segments:" << cutList.size();
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "cutAudioStream: libav stream-copy";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Input:" << inputFile;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Output:" << outputFile;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Segments:" << cutList.size();
 
     // Open input
     AVFormatContext* inFmtCtx = nullptr;
@@ -1727,16 +1764,20 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
             segTargetAcmod = targetAcmods[segIdx];
         }
 
-        qDebug() << "  Segment" << segIdx << ":" << startTime << "->" << endTime
-                 << (segTargetAcmod >= 0 ? QString("targetAcmod=%1").arg(segTargetAcmod) : "");
+        if (TTSettings::instance()->logFFmpegDecoder()) {
+            qDebug() << "  Segment" << segIdx << ":" << startTime << "->" << endTime
+                     << (segTargetAcmod >= 0 ? QString("targetAcmod=%1").arg(segTargetAcmod) : "");
+        }
 
         // Seek to just before start time using audio stream timebase
         int64_t seekTs = static_cast<int64_t>(startTime / av_q2d(inStream->time_base));
         int seekRet = av_seek_frame(inFmtCtx, audioIdx, seekTs, AVSEEK_FLAG_BACKWARD);
         if (seekRet < 0) {
-            qDebug() << "cutAudioStream: av_seek_frame to" << seekTs
-                     << "failed:" << avErrorToString(seekRet)
-                     << "— audio segment may start past intended cut-in";
+            if (TTSettings::instance()->logFFmpegDecoder()) {
+                qDebug() << "cutAudioStream: av_seek_frame to" << seekTs
+                         << "failed:" << avErrorToString(seekRet)
+                         << "— audio segment may start past intended cut-in";
+            }
         }
 
         bool segmentStarted = false;
@@ -1847,15 +1888,15 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                             &ac3Frame->ch_layout, (AVSampleFormat)ac3Frame->format, ac3Frame->sample_rate,
                             0, nullptr);
                         if (swrRet < 0 || !swrCtx) {
-                            qDebug() << "AC3 re-encode: swr_alloc_set_opts2 failed:"
-                                     << avErrorToString(swrRet);
+                            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                                QString("AC3 re-encode: swr_alloc_set_opts2 failed: %1").arg(avErrorToString(swrRet)));
                             av_packet_unref(pkt);
                             continue;
                         }
                         swrRet = swr_init(swrCtx);
                         if (swrRet < 0) {
-                            qDebug() << "AC3 re-encode: swr_init failed:"
-                                     << avErrorToString(swrRet);
+                            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                                QString("AC3 re-encode: swr_init failed: %1").arg(avErrorToString(swrRet)));
                             swr_free(&swrCtx);
                             av_packet_unref(pkt);
                             continue;
@@ -1881,8 +1922,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                     // Re-encode with target channel layout
                     int sendRet = avcodec_send_frame(ac3EncCtx, ac3ConvertedFrame);
                     if (sendRet < 0) {
-                        qDebug() << "AC3 re-encode: avcodec_send_frame failed:"
-                                 << avErrorToString(sendRet);
+                        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                            QString("AC3 re-encode: avcodec_send_frame failed: %1").arg(avErrorToString(sendRet)));
                         av_packet_unref(pkt);
                         continue;
                     }
@@ -1910,7 +1951,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
 
                 ret = av_write_frame(outFmtCtx, pkt);
                 if (ret < 0) {
-                    qDebug() << "  Warning: av_write_frame failed at" << pktTime;
+                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                        QString("  Warning: av_write_frame failed at %1").arg(pktTime));
                 } else {
                     nextOutputPts = pkt->pts + frameDuration;
                 }
@@ -1926,7 +1968,7 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
     if (ac3DecCtx)          avcodec_free_context(&ac3DecCtx);
     if (ac3EncCtx)          avcodec_free_context(&ac3EncCtx);
     if (ac3Frame)           av_frame_free(&ac3Frame);
-    if (acmodReencoded > 0) {
+    if (acmodReencoded > 0 && TTSettings::instance()->logFFmpegDecoder()) {
         qDebug() << "  AC3 acmod normalization: re-encoded" << acmodReencoded << "frames";
     }
 
@@ -1946,7 +1988,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutAudioStream: Complete, output size:" << outInfo.size() << "bytes";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "cutAudioStream: Complete, output size:" << outInfo.size() << "bytes";
     return true;
 }
 
@@ -1963,9 +2006,12 @@ bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
         return false;
     }
 
-    qDebug() << "cutSrtSubtitle: Cutting SRT file";
-    qDebug() << "  Input:" << inputFile;
-    qDebug() << "  Output:" << outputFile;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "cutSrtSubtitle: Cutting SRT file";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Input:" << inputFile;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Output:" << outputFile;
 
     QFile inFile(inputFile);
     if (!inFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -2075,8 +2121,10 @@ bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
     inFile.close();
     outFile.close();
 
-    qDebug() << "cutSrtSubtitle: Complete";
-    qDebug() << "  Subtitles written:" << (outputIndex - 1);
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "cutSrtSubtitle: Complete";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "  Subtitles written:" << (outputIndex - 1);
 
     return true;
 }
@@ -2094,7 +2142,8 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
     AVFormatContext* fmtCtx = nullptr;
     int ret = avformat_open_input(&fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
     if (ret < 0) {
-        qDebug() << "detectAudioBurst: cannot open" << audioFile;
+        TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+            QString("detectAudioBurst: cannot open %1").arg(audioFile));
         return false;
     }
 
@@ -2303,8 +2352,9 @@ done_reading:
     avformat_close_input(&fmtCtx);
 
     if (rmsValues.size() < 3) {
-        qDebug() << "detectAudioBurst: only" << rmsValues.size()
-                 << "chunks at" << boundaryTime << "(need >=3)";
+        TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+            QString("detectAudioBurst: only %1 chunks at %2 (need >=3)")
+                .arg(rmsValues.size()).arg(boundaryTime));
         return false;
     }
 
@@ -2322,17 +2372,21 @@ done_reading:
         if (rmsValues[i] - median > 20.0 && rmsValues[i] > -40.0) {
             burstRmsDb = rmsValues[i];
             contextRmsDb = median;
-            qDebug() << "detectAudioBurst: BURST at" << boundaryTime
-                     << (isCutOut ? "CutOut" : "CutIn")
-                     << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
-                     << "(" << rmsValues.size() << "chunks)";
+            if (TTSettings::instance()->logFFmpegDecoder()) {
+                qDebug() << "detectAudioBurst: BURST at" << boundaryTime
+                         << (isCutOut ? "CutOut" : "CutIn")
+                         << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
+                         << "(" << rmsValues.size() << "chunks)";
+            }
             return true;
         }
     }
 
-    qDebug() << "detectAudioBurst: OK at" << boundaryTime
-             << (isCutOut ? "CutOut" : "CutIn")
-             << "median=" << median << "dB (" << rmsValues.size() << "chunks)";
+    if (TTSettings::instance()->logFFmpegDecoder()) {
+        qDebug() << "detectAudioBurst: OK at" << boundaryTime
+                 << (isCutOut ? "CutOut" : "CutIn")
+                 << "median=" << median << "dB (" << rmsValues.size() << "chunks)";
+    }
     return false;
 }
 
@@ -2341,7 +2395,8 @@ done_reading:
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::assignPtsFromFrameRate(int videoStreamIndex)
 {
-    qDebug() << "Elementary stream detected - calculating PTS/DTS from frame rate";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Elementary stream detected - calculating PTS/DTS from frame rate";
 
     // Get frame rate from .info file if available, otherwise from stream
     TTStreamInfo streamInfo = getStreamInfo(videoStreamIndex);
@@ -2353,19 +2408,22 @@ void TTFFmpegWrapper::assignPtsFromFrameRate(int videoStreamIndex)
         TTESInfo esInfo(infoFile);
         if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
             frameRate = esInfo.frameRate();
-            qDebug() << "Using frame rate from .info file:" << frameRate;
+            if (TTSettings::instance()->logFFmpegDecoder())
+                qDebug() << "Using frame rate from .info file:" << frameRate;
         }
     }
 
     // Validate frame rate
     if (frameRate <= 0 || frameRate > 120) {
         frameRate = 25.0; // Default fallback
-        qDebug() << "Invalid frame rate, using default:" << frameRate;
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Invalid frame rate, using default: %1").arg(frameRate));
     }
 
     // PAFF: field-rate reported as frame-rate, correct to actual frame-rate
     if (mIsPAFF && frameRate > 30) {
-        qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
         frameRate /= 2.0;
     }
 
@@ -2381,9 +2439,12 @@ void TTFFmpegWrapper::assignPtsFromFrameRate(int videoStreamIndex)
         frameDuration = av_rescale_q(1, av_make_q(1, 25), timeBase); // Fallback to 25fps
     }
 
-    qDebug() << "Time base:" << timeBase.num << "/" << timeBase.den;
-    qDebug() << "Frame rate:" << frameRate << "fps";
-    qDebug() << "Frame duration:" << frameDuration << "ticks";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Time base:" << timeBase.num << "/" << timeBase.den;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Frame rate:" << frameRate << "fps";
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Frame duration:" << frameDuration << "ticks";
 
     // Assign sequential PTS/DTS values
     int64_t currentPts = 0;
@@ -2393,9 +2454,12 @@ void TTFFmpegWrapper::assignPtsFromFrameRate(int videoStreamIndex)
         currentPts += frameDuration;
     }
 
-    qDebug() << "Calculated timestamps for" << mFrameIndex.size() << "frames";
-    qDebug() << "First PTS:" << mFrameIndex.first().pts
-             << "Last PTS:" << mFrameIndex.last().pts;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Calculated timestamps for" << mFrameIndex.size() << "frames";
+    if (TTSettings::instance()->logFFmpegDecoder()) {
+        qDebug() << "First PTS:" << mFrameIndex.first().pts
+                 << "Last PTS:" << mFrameIndex.last().pts;
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -2430,7 +2494,8 @@ bool TTFFmpegWrapper::setupIndexingPass(int videoStreamIndex)
     if (isES && mFormatCtx->pb) {
         avio_seek(mFormatCtx->pb, 0, SEEK_SET);
         avformat_flush(mFormatCtx);
-        qDebug() << "ES file: seeked to byte 0";
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "ES file: seeked to byte 0";
     } else {
         av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
     }
@@ -2461,19 +2526,25 @@ void TTFFmpegWrapper::rewindContext(int videoStreamIndex)
     if (isES && mFormatCtx->pb) {
         avio_seek(mFormatCtx->pb, 0, SEEK_SET);
         avformat_flush(mFormatCtx);
-        qDebug() << "ES file: seeked back to byte 0 after index build";
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "ES file: seeked back to byte 0 after index build";
     } else {
         av_seek_frame(mFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
     }
 
-    qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
-             << (mFrameIndex.isEmpty() ? 0 : mFrameIndex.last().gopIndex + 1) << "GOPs";
+    if (TTSettings::instance()->logFFmpegDecoder()) {
+        qDebug() << "Frame index built:" << mFrameIndex.size() << "frames in"
+                 << (mFrameIndex.isEmpty() ? 0 : mFrameIndex.last().gopIndex + 1) << "GOPs";
+    }
 
     // Debug: Check first frame's fileOffset for ES files
     if (isES && !mFrameIndex.isEmpty()) {
-        qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
-                 << "packetSize:" << mFrameIndex[0].packetSize;
+        if (TTSettings::instance()->logFFmpegDecoder()) {
+            qDebug() << "First frame fileOffset:" << mFrameIndex[0].fileOffset
+                     << "packetSize:" << mFrameIndex[0].packetSize;
+        }
     }
+
 }
 
 // ----------------------------------------------------------------------------
@@ -2492,8 +2563,10 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
     int64_t lastProgress = -1;
     int rawCount = 0;
 
-    qDebug() << "Building frame index for stream" << videoStreamIndex;
-    qDebug() << "Estimated frames:" << estimatedFrames;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Building frame index for stream" << videoStreamIndex;
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "Estimated frames:" << estimatedFrames;
 
     AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
 

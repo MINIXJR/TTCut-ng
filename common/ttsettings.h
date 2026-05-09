@@ -115,6 +115,9 @@ public:
   bool    logAudioIndexInfo() const  { return mLogAudioIndexInfo; }
   void    setLogAudioIndexInfo(bool v);
 
+  bool    logFFmpegDecoder() const   { return mLogFFmpegDecoder; }
+  void    setLogFFmpegDecoder(bool v);
+
   // ----- Recent Files group (Task 7) --------------------------------------
   // Setter emits recentFilesChanged() so subscribed UI elements
   // (recent-files menu) can refresh without ad-hoc refresh hooks.
@@ -417,6 +420,7 @@ private:
   bool    mLogModeExtended   = true;
   bool    mLogVideoIndexInfo = false;
   bool    mLogAudioIndexInfo = false;
+  bool    mLogFFmpegDecoder = false;
 
   // ----- Recent Files group (Task 7) ---------------------------------------
   QStringList mRecentFileList;
