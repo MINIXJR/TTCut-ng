@@ -2,6 +2,42 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.68.1 (2026-05-09)
+
+**Search correctness on HEVC 10-bit and raw H.264/H.265 elementary streams**
+
+### Fixed
+- Black-frame and scene-change search on HEVC 10-bit content (Main 10).
+  `TTFFmpegWrapper::isFrameBlack` and `buildHistogram` cast
+  `mDecodedFrame->data[0]` to `uint8_t*` and indexed by column, so for
+  yuv420p10le frames the byte-wise read aliased low/high bytes of
+  consecutive 10-bit samples and the early-exit threshold (avg byte ≈
+  32 for TV-range black Y=64) discarded every black frame. Both
+  functions now detect luma bit depth via `av_pix_fmt_desc_get` and
+  read 10/12-bit samples as `uint16_t` with right-shift to 8-bit space.
+  The 8-bit fast path is preserved unchanged for existing 8-bit
+  content (MBAFF, PAFF, MPEG-2).
+- Frame rate detection for raw H.264/H.265 elementary streams.
+  `TTFFmpegWrapper::getStreamInfo` preferred libav's `avg_frame_rate`,
+  which is computed from displayed-frames / duration and halves the
+  real rate on raw ES files (the first GOP loses `bframes` display
+  frames at the front to the B-frame reorder window). Now
+  `r_frame_rate` (from SPS VUI timing) is preferred. PAFF and MBAFF
+  streams stay at the same final progressive frame rate via the
+  existing `frame_rate>30` PAFF correction in
+  `tth26xvideostream.cpp:153`.
+
+### Tooling
+- New `tools/test-videos/` directory with `make_test_video.sh`, a
+  multi-codec generator that produces synthetic test files with known
+  black-frame, scene-change, and logo markers for search verification.
+  Six codec variants share a 120-second Tux timeline: HEVC 4K Main 10
+  (CRA-only Open-GOP), H.264 1080p progressive, H.264 1080i MBAFF,
+  H.264 1080i PAFF (via JM Reference Encoder), MPEG-2 PAL DVB-SD, and
+  MPEG-2 720p progressive. Outputs go to a gitignored `cache/`
+  subdirectory and are reused on subsequent runs unless the script
+  itself has been modified or `--force` is passed.
+
 ## v0.68.0 (2026-05-01)
 
 **Audio-only cut, audio-burst detection overhaul, cut-list/preview polish**
