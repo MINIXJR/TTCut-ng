@@ -305,11 +305,17 @@ TTStreamInfo TTFFmpegWrapper::getStreamInfo(int streamIndex) const
         info.profile = codecpar->profile;
         info.level = codecpar->level;
 
-        // Calculate frame rate
-        if (stream->avg_frame_rate.den > 0) {
-            info.frameRate = av_q2d(stream->avg_frame_rate);
-        } else if (stream->r_frame_rate.den > 0) {
+        // Calculate frame rate. Prefer r_frame_rate over avg_frame_rate:
+        // for raw H.264/H.265 ES files without container PTS, libav often
+        // returns half the real rate as avg (a B-frame reorder window quirk).
+        // r_frame_rate comes from the SPS/codec timing and is reliable.
+        // PAFF/MBAFF streams fall through the existing frame_rate>30 PAFF
+        // correction in tth26xvideostream.cpp, so doubling the input here
+        // does not double the final progressive frame rate.
+        if (stream->r_frame_rate.den > 0) {
             info.frameRate = av_q2d(stream->r_frame_rate);
+        } else if (stream->avg_frame_rate.den > 0) {
+            info.frameRate = av_q2d(stream->avg_frame_rate);
         }
 
         // Estimate frame count
