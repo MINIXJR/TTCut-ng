@@ -278,6 +278,12 @@ void TTFFmpegWrapper::closeFile()
     mYUVBufferWidth = 0;
     mYUVBufferHeight = 0;
 
+    // Free slow-path swscale context (used for 10-bit / non-YUV420P inputs)
+    if (mSwsCtxYUV) { sws_freeContext(mSwsCtxYUV); mSwsCtxYUV = nullptr; }
+    mSwsCtxYUVSrcFmt = -1;
+    mSwsCtxYUVWidth  = 0;
+    mSwsCtxYUVHeight = 0;
+
     mDecoderFrameIndex = -1;
     mDecoderDrained = false;
     mIsElementaryStream = false;
@@ -1182,20 +1188,13 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
     // After successful decode, advance the index
     mDecoderFrameIndex = frameIndex;
 
-    // Verify pixel format: only 8-bit YUV420P supported
-    if (mDecodedFrame->format != AV_PIX_FMT_YUV420P) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("decodeFrameYUV: unsupported pixel format %1 (only YUV420P/8-bit)")
-                .arg(mDecodedFrame->format));
-        return false;
-    }
-
+    int srcFmt = mDecodedFrame->format;
     int w = mDecodedFrame->width;
     int h = mDecodedFrame->height;
     int cw = w / 2;
     int ch = h / 2;
 
-    // Allocate / re-allocate tight-packed buffers if dimensions changed
+    // Allocate / re-allocate tight-packed output buffers on dimension change
     if (mYUVBufferWidth != w || mYUVBufferHeight != h) {
         delete[] mYBuffer;
         delete[] mUBuffer;
@@ -1207,19 +1206,56 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
         mYUVBufferHeight = h;
     }
 
-    // Tight-pack: copy each row, stripping libav stride padding
-    for (int row = 0; row < h; row++) {
-        memcpy(mYBuffer + row * w,
-               mDecodedFrame->data[0] + row * mDecodedFrame->linesize[0],
-               w);
-    }
-    for (int row = 0; row < ch; row++) {
-        memcpy(mUBuffer + row * cw,
-               mDecodedFrame->data[1] + row * mDecodedFrame->linesize[1],
-               cw);
-        memcpy(mVBuffer + row * cw,
-               mDecodedFrame->data[2] + row * mDecodedFrame->linesize[2],
-               cw);
+    if (srcFmt == AV_PIX_FMT_YUV420P) {
+        // Fast path: tight-pack memcpy from libav's strided 8-bit planes
+        for (int row = 0; row < h; row++) {
+            memcpy(mYBuffer + row * w,
+                   mDecodedFrame->data[0] + row * mDecodedFrame->linesize[0],
+                   w);
+        }
+        for (int row = 0; row < ch; row++) {
+            memcpy(mUBuffer + row * cw,
+                   mDecodedFrame->data[1] + row * mDecodedFrame->linesize[1],
+                   cw);
+            memcpy(mVBuffer + row * cw,
+                   mDecodedFrame->data[2] + row * mDecodedFrame->linesize[2],
+                   cw);
+        }
+    } else {
+        // Slow path: convert any other planar/interleaved YUV (10-bit Main 10,
+        // 4:2:2, 4:4:4, etc.) to 8-bit YUV420P via swscale, writing directly
+        // into our tight-packed output buffers.
+        if (!mSwsCtxYUV ||
+            mSwsCtxYUVSrcFmt != srcFmt ||
+            mSwsCtxYUVWidth  != w ||
+            mSwsCtxYUVHeight != h) {
+            if (mSwsCtxYUV) sws_freeContext(mSwsCtxYUV);
+            mSwsCtxYUV = sws_getContext(
+                w, h, (AVPixelFormat)srcFmt,
+                w, h, AV_PIX_FMT_YUV420P,
+                SWS_BILINEAR, nullptr, nullptr, nullptr);
+            if (!mSwsCtxYUV) {
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("decodeFrameYUV: sws_getContext failed for src fmt %1 -> YUV420P at %2x%3")
+                        .arg(srcFmt).arg(w).arg(h));
+                return false;
+            }
+            mSwsCtxYUVSrcFmt = srcFmt;
+            mSwsCtxYUVWidth  = w;
+            mSwsCtxYUVHeight = h;
+        }
+
+        uint8_t* dst[4]    = { mYBuffer, mUBuffer, mVBuffer, nullptr };
+        int      dstStride[4] = { w, cw, cw, 0 };
+        int swsRet = sws_scale(mSwsCtxYUV,
+                               mDecodedFrame->data, mDecodedFrame->linesize,
+                               0, h, dst, dstStride);
+        if (swsRet <= 0) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: sws_scale failed (ret=%1) for src fmt %2")
+                    .arg(swsRet).arg(srcFmt));
+            return false;
+        }
     }
 
     // Populate outInfo

@@ -297,6 +297,13 @@ private:
     quint8* mVBuffer = nullptr;       // size = (mYUVBufferWidth/2) * (mYUVBufferHeight/2)
     int     mYUVBufferWidth  = 0;     // Allocated buffer dimensions; re-alloc on change
     int     mYUVBufferHeight = 0;
+    // Slow-path swscale context for non-YUV420P inputs (e.g. YUV420P10LE
+    // from HEVC Main 10). Lazy-init on first non-YUV420P frame; rebuilt
+    // when source format or dimensions change.
+    SwsContext* mSwsCtxYUV = nullptr;
+    int         mSwsCtxYUVSrcFmt = -1;
+    int         mSwsCtxYUVWidth  = 0;
+    int         mSwsCtxYUVHeight = 0;
 
     bool mIsPAFF;                       // PAFF stream detected
     int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing
