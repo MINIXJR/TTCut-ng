@@ -165,6 +165,13 @@
            </property>
           </widget>
          </item>
+         <item row="4" column="0" >
+          <widget class="QCheckBox" name="cbLogPlusSmartCut" >
+           <property name="text" >
+            <string>Smart Cut engine information</string>
+           </property>
+          </widget>
+         </item>
          <item row="1" column="0" >
           <widget class="QCheckBox" name="cbLogExtended" >
            <property name="text" >

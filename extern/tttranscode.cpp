@@ -151,10 +151,12 @@ bool TTTranscodeProvider::setupEncoder()
     return false;
   }
 
-  qDebug() << "MPEG-2 encoder setup:" << mEncoder->width << "x" << mEncoder->height
-           << "qscale=" << TTSettings::instance()->mpeg2Crf() << "gop=" << gopSize
-           << "interlaced=" << enc_par.videoInterlaced()
-           << "bitrate_cap=" << bitrateKbit << "kbit/s";
+  if (TTSettings::instance()->logSmartCut()) {
+      qDebug() << "MPEG-2 encoder setup:" << mEncoder->width << "x" << mEncoder->height
+               << "qscale=" << TTSettings::instance()->mpeg2Crf() << "gop=" << gopSize
+               << "interlaced=" << enc_par.videoInterlaced()
+               << "bitrate_cap=" << bitrateKbit << "kbit/s";
+  }
 
   return true;
 }
@@ -301,8 +303,10 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
     av_packet_unref(packet);
   }
 
-  qDebug() << "MPEG-2 encoding complete: sent" << framesSent
-           << "frames, received" << packetsReceived << "packets";
+  if (TTSettings::instance()->logSmartCut()) {
+      qDebug() << "MPEG-2 encoding complete: sent" << framesSent
+               << "frames, received" << packetsReceived << "packets";
+  }
 
 cleanup:
   // Clear AVFrame data pointers before freeing (they point to decoder buffers)

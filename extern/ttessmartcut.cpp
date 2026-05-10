@@ -11,6 +11,7 @@
 #include "../avstream/ttesinfo.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
+#include "../common/ttmessagelogger.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -203,7 +204,8 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
             TTESInfo info(infoFile);
             if (info.isLoaded() && info.frameRate() > 0) {
                 frameRate = info.frameRate();
-                qDebug() << "TTESSmartCut: Using frame rate from .info:" << frameRate;
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "TTESSmartCut: Using frame rate from .info:" << frameRate;
             }
         }
     }
@@ -211,7 +213,8 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
     // Default to 25fps if still no frame rate
     if (frameRate <= 0) {
         frameRate = 25.0;
-        qDebug() << "TTESSmartCut: No frame rate found, using default:" << frameRate;
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "TTESSmartCut: No frame rate found, using default:" << frameRate;
     }
     mFrameRate = frameRate;
 
@@ -221,7 +224,8 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
         return false;
     }
 
-    qDebug() << "TTESSmartCut: Parsing ES file...";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Parsing ES file...";
     emit progressChanged(0, tr("Parsing ES file..."));
 
     if (!mParser.parseFile()) {
@@ -232,8 +236,10 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
 
     // Correct frame rate if PAFF detected with old .info file
     if (mParser.isPAFF() && mFrameRate > 30) {
-        qDebug() << "TTESSmartCut: PAFF detected, correcting frame rate from" << mFrameRate
-                 << "to" << mFrameRate / 2.0;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "TTESSmartCut: PAFF detected, correcting frame rate from" << mFrameRate
+                     << "to" << mFrameRate / 2.0;
+        }
         mFrameRate /= 2.0;
     }
 
@@ -246,20 +252,29 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
             mPocType = spsInfo.pocType;
             mLog2MaxPocLsb = (spsInfo.pocType == 0) ? spsInfo.log2MaxPocLsbMinus4 + 4 : 0;
             mFrameMbsOnly = spsInfo.frameMbsOnly;
-            qDebug() << "TTESSmartCut: Source SPS - log2_max_frame_num=" << mLog2MaxFrameNum
-                     << "poc_type=" << mPocType << "log2_max_poc_lsb=" << mLog2MaxPocLsb
-                     << "frame_mbs_only=" << mFrameMbsOnly;
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "TTESSmartCut: Source SPS - log2_max_frame_num=" << mLog2MaxFrameNum
+                         << "poc_type=" << mPocType << "log2_max_poc_lsb=" << mLog2MaxPocLsb
+                         << "frame_mbs_only=" << mFrameMbsOnly;
+            }
         } else {
-            qDebug() << "TTESSmartCut: WARNING - could not parse SPS";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("WARNING - could not parse SPS"));
         }
     }
 
-    qDebug() << "TTESSmartCut: Initialization complete";
-    qDebug() << "  File:" << esFile;
-    qDebug() << "  Codec:" << mParser.codecName();
-    qDebug() << "  Frames:" << mParser.accessUnitCount();
-    qDebug() << "  GOPs:" << mParser.gopCount();
-    qDebug() << "  Frame rate:" << mFrameRate << "fps";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Initialization complete";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  File:" << esFile;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Codec:" << mParser.codecName();
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Frames:" << mParser.accessUnitCount();
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  GOPs:" << mParser.gopCount();
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Frame rate:" << mFrameRate << "fps";
 
     mIsInitialized = true;
     return true;
@@ -376,10 +391,14 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         return false;
     }
 
-    qDebug() << "TTESSmartCut: Starting smart cut";
-    qDebug() << "  Input:" << mInputFile;
-    qDebug() << "  Output:" << outputFile;
-    qDebug() << "  Segments:" << cutFrames.size();
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Starting smart cut";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Input:" << mInputFile;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Output:" << outputFile;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Segments:" << cutFrames.size();
 
     // Reset statistics
     mFramesStreamCopied = 0;
@@ -399,8 +418,10 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     if (!segments.isEmpty() && segments[0].needsReencodeAtStart) {
         TTAccessUnit firstAU = mParser.accessUnitAt(segments[0].startFrame);
         if (firstAU.isKeyframe) {
-            qDebug() << "  First segment: overriding re-encode to pure stream-copy"
-                     << "(decoder starts fresh, no delayed_pic[] barrier needed)";
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "  First segment: overriding re-encode to pure stream-copy"
+                         << "(decoder starts fresh, no delayed_pic[] barrier needed)";
+            }
             segments[0].needsReencodeAtStart = false;
             segments[0].reencodeStartFrame = -1;
             segments[0].reencodeEndFrame = -1;
@@ -429,7 +450,8 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     if (mReorderDelay == 0) {
         mReorderDelay = mParser.computeReorderDelay();
         if (mReorderDelay > 0) {
-            qDebug() << "  B-frame reorder delay from stream analysis:" << mReorderDelay;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "  B-frame reorder delay from stream analysis:" << mReorderDelay;
         }
     }
 
@@ -450,15 +472,21 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         const TTCutSegmentInfo& seg = segments[i];
         mCurrentSegment = i + 1;
 
-        qDebug() << "  Processing segment" << i << ":"
-                 << "frames" << seg.startFrame << "->" << seg.endFrame;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "  Processing segment" << i << ":"
+                     << "frames" << seg.startFrame << "->" << seg.endFrame;
+        }
 
         if (seg.needsReencodeAtStart) {
-            qDebug() << "    Re-encode:" << seg.reencodeStartFrame
-                     << "->" << seg.reencodeEndFrame;
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "    Re-encode:" << seg.reencodeStartFrame
+                         << "->" << seg.reencodeEndFrame;
+            }
         }
-        qDebug() << "    Stream-copy:" << seg.streamCopyStartFrame
-                 << "->" << seg.streamCopyEndFrame;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "    Stream-copy:" << seg.streamCopyStartFrame
+                     << "->" << seg.streamCopyEndFrame;
+        }
 
         int segActualStart = -1;
         if (!processSegment(outFile, seg, cumulativeFrameNumDelta, &segActualStart)) {
@@ -479,7 +507,8 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
                 outFile.write(kEosNalH264, sizeof(kEosNalH264));
             }
             writeParameterSets(outFile, mReorderDelay);
-            qDebug() << "    Wrote EOS + SPS/PPS between segments" << i << "and" << i + 1;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Wrote EOS + SPS/PPS between segments" << i << "and" << i + 1;
 
             // Compute frame_num delta for next segment (H.264 only)
             if (mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264) {
@@ -514,13 +543,16 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
                     // New cumulative delta for next segment
                     cumulativeFrameNumDelta = (expectedNext - nextFirstFN + maxFrameNum) % maxFrameNum;
 
-                    qDebug() << "    frame_num: seg" << i << "lastRef=" << lastRefFN
-                             << "output=" << outputLastRefFN
-                             << ", seg" << (i+1) << "first=" << nextFirstFN
-                             << "-> delta=" << cumulativeFrameNumDelta;
+                    if (TTSettings::instance()->logSmartCut()) {
+                        qDebug() << "    frame_num: seg" << i << "lastRef=" << lastRefFN
+                                 << "output=" << outputLastRefFN
+                                 << ", seg" << (i+1) << "first=" << nextFirstFN
+                                 << "-> delta=" << cumulativeFrameNumDelta;
+                    }
                 } else {
-                    qDebug() << "    WARNING: Could not read frame_num (lastRef=" << lastRefFN
-                             << ", nextFirst=" << nextFirstFN << ") - skipping patching";
+                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                        QString("WARNING: Could not read frame_num (lastRef=%1, nextFirst=%2) - skipping patching")
+                            .arg(lastRefFN).arg(nextFirstFN));
                 }
             }
         }
@@ -533,10 +565,14 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
 
     emit progressChanged(100, tr("Cut complete"));
 
-    qDebug() << "TTESSmartCut: Complete";
-    qDebug() << "  Frames stream-copied:" << mFramesStreamCopied;
-    qDebug() << "  Frames re-encoded:" << mFramesReencoded;
-    qDebug() << "  Bytes written:" << mBytesWritten;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Complete";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Frames stream-copied:" << mFramesStreamCopied;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Frames re-encoded:" << mFramesReencoded;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Bytes written:" << mBytesWritten;
 
     return true;
 }
@@ -576,8 +612,10 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
         seg.needsReencodeAtStart = !isAtKeyframe || !isAtIDR;
 
         if (isAtKeyframe && !isAtIDR) {
-            qDebug() << "    Cut-in at non-IDR I-frame" << seg.startFrame
-                     << "- re-encode needed for IDR boundary";
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "    Cut-in at non-IDR I-frame" << seg.startFrame
+                         << "- re-encode needed for IDR boundary";
+            }
         }
 
         // Check if cut-out is at B-frame (optional re-encode)
@@ -603,7 +641,8 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
 
             if (nextKeyframe < 0 || nextKeyframe > seg.endFrame) {
                 // No keyframe in segment - must re-encode all
-                qDebug() << "    No keyframe in segment - re-encoding all";
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "    No keyframe in segment - re-encoding all";
                 seg.reencodeStartFrame = seg.startFrame;
                 seg.reencodeEndFrame = seg.endFrame;
                 seg.streamCopyStartFrame = -1;
@@ -614,13 +653,16 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
                 seg.reencodeEndFrame = nextKeyframe - 1;
                 seg.streamCopyStartFrame = nextKeyframe;
                 seg.streamCopyEndFrame = seg.endFrame;
-                qDebug() << "    Smart Cut: Re-encode" << seg.reencodeStartFrame << "->" << seg.reencodeEndFrame
-                         << ", Stream-copy from" << (usingIDR ? "IDR" : "I-slice") << nextKeyframe;
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "    Smart Cut: Re-encode" << seg.reencodeStartFrame << "->" << seg.reencodeEndFrame
+                             << ", Stream-copy from" << (usingIDR ? "IDR" : "I-slice") << nextKeyframe;
+                }
             }
         } else {
             // Cut-in is at keyframe - pure stream copy
             TTAccessUnit au = mParser.accessUnitAt(seg.startFrame);
-            qDebug() << "    Cut-in at" << (au.isIDR ? "IDR" : "I-slice") << "- pure stream copy";
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Cut-in at" << (au.isIDR ? "IDR" : "I-slice") << "- pure stream copy";
             seg.reencodeStartFrame = -1;
             seg.reencodeEndFrame = -1;
             seg.streamCopyStartFrame = seg.startFrame;
@@ -689,21 +731,25 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
     // If only stream-copy (no re-encoding), write directly
     if (segment.reencodeStartFrame < 0) {
-        qDebug() << "    Pure stream-copy segment";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    Pure stream-copy segment";
         return streamCopyFrames(outFile, segment.streamCopyStartFrame,
                                 segment.streamCopyEndFrame, mReorderDelay, frameNumDelta);
     }
 
     // If only re-encoding (no stream-copy), write directly
     if (segment.streamCopyStartFrame < 0) {
-        qDebug() << "    Pure re-encode segment";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    Pure re-encode segment";
         return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
                               -1, nullptr, actualStartAU);
     }
 
     // Mixed segment: Re-encode partial GOP + stream-copy from keyframe
-    qDebug() << "    Smart Cut: Re-encode" << segment.reencodeStartFrame << "->" << segment.reencodeEndFrame
-             << "then stream-copy" << segment.streamCopyStartFrame << "->" << segment.streamCopyEndFrame;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "    Smart Cut: Re-encode" << segment.reencodeStartFrame << "->" << segment.reencodeEndFrame
+                 << "then stream-copy" << segment.streamCopyStartFrame << "->" << segment.streamCopyEndFrame;
+    }
 
     // PAFF H.264: SPS Unification — rewrite encoder output to match source SPS.
     // This eliminates the MBAFF→PAFF mode switch at the transition, allowing
@@ -722,13 +768,18 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     bool useSpsUnification = (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264);
 
     if (useSpsUnification) {
-        qDebug() << "    PAFF SPS Unification: rewriting encoder output for source SPS";
-        qDebug() << "      Encoder: log2_fn=" << mEncoderLog2MaxFrameNum
-                 << "log2_poc=" << mEncoderLog2MaxPocLsb
-                 << "frame_mbs_only=" << mEncoderFrameMbsOnly;
-        qDebug() << "      Source:  log2_fn=" << mLog2MaxFrameNum
-                 << "log2_poc=" << mLog2MaxPocLsb
-                 << "frame_mbs_only=" << mFrameMbsOnly;
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    PAFF SPS Unification: rewriting encoder output for source SPS";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Encoder: log2_fn=" << mEncoderLog2MaxFrameNum
+                     << "log2_poc=" << mEncoderLog2MaxPocLsb
+                     << "frame_mbs_only=" << mEncoderFrameMbsOnly;
+        }
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Source:  log2_fn=" << mLog2MaxFrameNum
+                     << "log2_poc=" << mLog2MaxPocLsb
+                     << "frame_mbs_only=" << mFrameMbsOnly;
+        }
 
         // 1. Write source SPS/PPS (id=0) first — these are the "active" params
         writeParameterSets(outFile, mReorderDelay);
@@ -754,7 +805,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
-            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
             return true;
         }
 
@@ -767,7 +819,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // covers all frames up to the next keyframe, so no Open-GOP B-frames
         // need the flushed MBAFF references.
         outFile.write(kEosNalH264, sizeof(kEosNalH264));
-        qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
 
         // Do NOT write SPS/PPS here — the first stream-copy keyframe AU has
         // inline SPS/PPS which patchSpsNalsInAccessUnit will patch.
@@ -782,9 +835,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
             int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
             if (firstScFrameNum > 0) {
                 frameNumDelta = lastEncFrameNum - firstScFrameNum;
-                qDebug() << "    frameNumDelta:" << frameNumDelta
-                         << "(encoder last fn:" << lastEncFrameNum
-                         << ", stream-copy first fn:" << firstScFrameNum << ")";
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "    frameNumDelta:" << frameNumDelta
+                             << "(encoder last fn:" << lastEncFrameNum
+                             << ", stream-copy first fn:" << firstScFrameNum << ")";
+                }
             } else {
                 frameNumDelta = 0;
             }
@@ -800,7 +855,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     } else if (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264) {
         // PAFF fallback: SPS unification not possible (encoder SPS not yet parsed)
         // Use IDR injection as before
-        qDebug() << "    PAFF fallback: using IDR injection (encoder SPS not available)";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    PAFF fallback: using IDR injection (encoder SPS not available)";
 
         int adjustedStart = -1;
         if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
@@ -812,14 +868,16 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
-            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
             return true;
         }
 
         // EOS to flush MBAFF references from DPB before PAFF stream-copy
         {
             outFile.write(kEosNalH264, sizeof(kEosNalH264));
-            qDebug() << "    PAFF fallback: EOS before stream-copy at" << scStart;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    PAFF fallback: EOS before stream-copy at" << scStart;
         }
 
         H264PpsInfo ppsInfo = { true, false, true, false, false, 0, 0, 0, false };
@@ -873,16 +931,19 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
-            qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
             return true;
         }
         // Non-PAFF: use EOS to flush decoder DPB
         if (mParser.codecType() == NALU_CODEC_H264) {
             outFile.write(kEosNalH264, sizeof(kEosNalH264));
-            qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB at" << scStart;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB at" << scStart;
         } else if (mParser.codecType() == NALU_CODEC_H265) {
             outFile.write(kEosNalH265, sizeof(kEosNalH265));
-            qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB at" << scStart;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB at" << scStart;
         }
 
         // Write source parameter sets
@@ -902,9 +963,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
             int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
             if (firstScFrameNum >= 0) {
                 frameNumDelta = lastEncFrameNum - firstScFrameNum;
-                qDebug() << "    frameNumDelta recalculated:" << frameNumDelta
-                         << "(encoder last fn:" << lastEncFrameNum
-                         << ", stream-copy first fn:" << firstScFrameNum << ")";
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "    frameNumDelta recalculated:" << frameNumDelta
+                             << "(encoder last fn:" << lastEncFrameNum
+                             << ", stream-copy first fn:" << firstScFrameNum << ")";
+                }
             }
         }
 
@@ -1328,8 +1391,10 @@ static QByteArray patchPocLsbInPacket(const QByteArray& packetData,
     if (nalEnd < packetData.size())
         result.append(packetData.mid(nalEnd));
 
-    qDebug() << "      POC fix: patched encoder slice poc_lsb" << oldPocLsb
-             << "->" << newPocLsb;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      POC fix: patched encoder slice poc_lsb" << oldPocLsb
+                 << "->" << newPocLsb;
+    }
 
     return result;
 }
@@ -1799,9 +1864,11 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
         newResult.append(newNalBody);
         newResult.append(result.mid(nalEnd));
 
-        qDebug() << "    MMCO neutralized: slice_type=" << sliceType
-                 << mmcoBitsRemoved << "bits removed,"
-                 << "NAL" << nalBody.size() << "->" << newNalBody.size() << "bytes";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "    MMCO neutralized: slice_type=" << sliceType
+                     << mmcoBitsRemoved << "bits removed,"
+                     << "NAL" << nalBody.size() << "->" << newNalBody.size() << "bytes";
+        }
 
         result = newResult;
         // Continue scanning from after the replaced NAL
@@ -1820,13 +1887,17 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
                                      int patchReorderFrames, int frameNumDelta,
                                      int neutralizeMmcoFrames)
 {
-    qDebug() << "    Stream-copying frames" << startFrame << "->" << endFrame;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "    Stream-copying frames" << startFrame << "->" << endFrame;
     if (frameNumDelta != 0) {
-        qDebug() << "    frame_num delta:" << frameNumDelta
-                 << "(MaxFrameNum=" << (1 << mLog2MaxFrameNum) << ")";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "    frame_num delta:" << frameNumDelta
+                     << "(MaxFrameNum=" << (1 << mLog2MaxFrameNum) << ")";
+        }
     }
     if (neutralizeMmcoFrames > 0) {
-        qDebug() << "    MMCO neutralization for first" << neutralizeMmcoFrames << "frames";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    MMCO neutralization for first" << neutralizeMmcoFrames << "frames";
     }
 
     bool needsPatching = (patchReorderFrames > 0 && mParser.codecType() == NALU_CODEC_H264)
@@ -1842,8 +1913,10 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 
         if (startPtr && endPtr) {
             int64_t totalSize = (endPtr + endSize) - startPtr;
-            qDebug() << "    Bulk-write:" << (endFrame - startFrame + 1) << "frames,"
-                     << (totalSize / (1024*1024)) << "MB";
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "    Bulk-write:" << (endFrame - startFrame + 1) << "frames,"
+                         << (totalSize / (1024*1024)) << "MB";
+            }
 
             if (outFile.write(reinterpret_cast<const char*>(startPtr), totalSize) != totalSize) {
                 setError(QString("Bulk write failed for frames %1-%2").arg(startFrame).arg(endFrame));
@@ -1926,7 +1999,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                                   int streamCopyStartFrame, int* adjustedStreamCopyStart,
                                   int* actualStartAU)
 {
-    qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
 
     if (adjustedStreamCopyStart)
         *adjustedStreamCopyStart = -1;  // -1 = no adjustment needed
@@ -1947,8 +2021,10 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     if (mParser.isPAFF()) selectFramesPAFF(ctx);
     else                  selectFramesNonPAFF(ctx);
 
-    qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
-             << "(AU range" << startFrame << "-" << (ctx.streamCopyLimit - 1) << ")";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
+                 << "(AU range" << startFrame << "-" << (ctx.streamCopyLimit - 1) << ")";
+    }
 
     // Re-encode frames
     // Buffer the last encoder packet so we can patch poc_lsb before writing it,
@@ -1962,7 +2038,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
     if (!writePendingPacket(ctx)) return false;
 
-    qDebug() << "      Encoding complete: sent" << ctx.framesSent << "frames, received" << ctx.packetsReceived << "packets";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "      Encoding complete: sent" << ctx.framesSent << "frames, received" << ctx.packetsReceived << "packets";
     mFramesReencoded += ctx.packetsReceived;
 
     if (mTotalFrames > 0) {
@@ -1995,14 +2072,17 @@ bool TTESSmartCut::computeDecodeRange(ReencodeContext& ctx)
     if (ctx.startFrame - ctx.decodeStart < DECODER_RUNWAY && ctx.decodeStart > 0) {
         int prevKeyframe = mParser.findKeyframeBefore(ctx.decodeStart - 1);
         if (prevKeyframe >= 0) {
-            qDebug() << "      Runway too short (" << (ctx.startFrame - ctx.decodeStart)
-                     << "frames), going back from keyframe" << ctx.decodeStart
-                     << "to previous keyframe" << prevKeyframe;
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "      Runway too short (" << (ctx.startFrame - ctx.decodeStart)
+                         << "frames), going back from keyframe" << ctx.decodeStart
+                         << "to previous keyframe" << prevKeyframe;
+            }
             ctx.decodeStart = prevKeyframe;
         }
     }
 
-    qDebug() << "      Decoding from keyframe at frame" << ctx.decodeStart;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "      Decoding from keyframe at frame" << ctx.decodeStart;
 
     // Extend decode range beyond endFrame to include forward reference frames.
     // B-frames near endFrame need a P-frame beyond endFrame as reference.
@@ -2022,15 +2102,19 @@ bool TTESSmartCut::computeDecodeRange(ReencodeContext& ctx)
         if (potentialNextKF > 0) {
             int potentialExtEnd = qMin(potentialNextKF + 20, frameCount() - 1);
             if (potentialExtEnd > ctx.decodeEnd) {
-                qDebug() << "      Pre-extending decode range to cover potential next keyframe"
-                         << potentialNextKF << "(decode end:" << potentialExtEnd << ")";
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "      Pre-extending decode range to cover potential next keyframe"
+                             << potentialNextKF << "(decode end:" << potentialExtEnd << ")";
+                }
                 ctx.decodeEnd = potentialExtEnd;
             }
         }
     }
 
-    qDebug() << "      Decode range:" << ctx.decodeStart << "->" << ctx.decodeEnd
-             << "(endFrame=" << ctx.endFrame << ", extra=" << (ctx.decodeEnd - ctx.endFrame) << ")";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      Decode range:" << ctx.decodeStart << "->" << ctx.decodeEnd
+                 << "(endFrame=" << ctx.endFrame << ", extra=" << (ctx.decodeEnd - ctx.endFrame) << ")";
+    }
 
     return true;
 }
@@ -2052,13 +2136,15 @@ bool TTESSmartCut::resetDecoderForSegment(ReencodeContext& /*ctx*/)
         // After a previous segment's flush, decoder is in EOF state
         // avcodec_flush_buffers resets it to accept new input
         avcodec_flush_buffers(mDecoder);
-        qDebug() << "      Decoder reset for new segment";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "      Decoder reset for new segment";
     }
 
     // For multi-segment handling: libx264's lookahead thread can't be restarted
     // after flush, so we need to recreate the encoder for each segment
     if (mEncoder) {
-        qDebug() << "      Recreating encoder for new segment";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "      Recreating encoder for new segment";
         freeEncoder();
         // encoderInitialized will be false, triggering setupEncoder() below
     }
@@ -2076,8 +2162,10 @@ bool TTESSmartCut::ensureEncoderInitialized(ReencodeContext& ctx, AVFrame* probe
 {
     if (ctx.encoderInitialized) return true;
 
-    qDebug() << "      First decoded frame: " << probeFrame->width << "x" << probeFrame->height
-             << " pix_fmt=" << probeFrame->format;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      First decoded frame: " << probeFrame->width << "x" << probeFrame->height
+                 << " pix_fmt=" << probeFrame->format;
+    }
 
     mDecodedWidth = probeFrame->width;
     mDecodedHeight = probeFrame->height;
@@ -2093,8 +2181,10 @@ bool TTESSmartCut::ensureEncoderInitialized(ReencodeContext& ctx, AVFrame* probe
     mTopFieldFirst = (probeFrame->top_field_first != 0);
 #endif
     if (mInterlaced) {
-        qDebug() << "      Interlaced source detected:"
-                 << (mTopFieldFirst ? "TFF" : "BFF");
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Interlaced source detected:"
+                     << (mTopFieldFirst ? "TFF" : "BFF");
+        }
     }
 
     // Encoder SPS is parsed later, after first avcodec_receive_packet()
@@ -2147,8 +2237,10 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
             // only after actual B-frames are decoded.
             if (mReorderDelay == 0 && mDecoder->has_b_frames > 0) {
                 mReorderDelay = mDecoder->has_b_frames;
-                qDebug() << "      Decoder has_b_frames:" << mReorderDelay
-                         << "(detected after" << ctx.allDecodedFrames.size() << "frames)";
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "      Decoder has_b_frames:" << mReorderDelay
+                             << "(detected after" << ctx.allDecodedFrames.size() << "frames)";
+                }
             }
         }
         return true;
@@ -2164,9 +2256,14 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
 
         // Send packet to decoder, retry on EAGAIN
         AVPacket* packet = av_packet_alloc();
-        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
+        if (!packet) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("av_packet_alloc failed"));
+            break;
+        }
         if (av_new_packet(packet, auData.size()) < 0) {
-            qDebug() << "av_new_packet failed";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("av_new_packet failed"));
             av_packet_free(&packet);
             return false;
         }
@@ -2185,7 +2282,8 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
                 continue;
             }
             // Other error, skip this AU
-            qDebug() << "      send_packet error at frame" << i << ":" << avErrStr(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("send_packet error at frame %1: %2").arg(i).arg(avErrStr(ret)));
             break;
         }
         av_packet_free(&packet);
@@ -2217,9 +2315,11 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
     }
 
     int lostFrames = (ctx.decodeEnd - ctx.decodeStart + 1) - ctx.allDecodedFrames.size();
-    qDebug() << "      Decoded" << ctx.allDecodedFrames.size() << "frames from"
-             << (ctx.decodeEnd - ctx.decodeStart + 1) << "input AUs"
-             << "(" << lostFrames << "lost to decoder delay)";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      Decoded" << ctx.allDecodedFrames.size() << "frames from"
+                 << (ctx.decodeEnd - ctx.decodeStart + 1) << "input AUs"
+                 << "(" << lostFrames << "lost to decoder delay)";
+    }
 
     return true;
 }
@@ -2249,11 +2349,13 @@ void TTESSmartCut::selectFramesPAFF(ReencodeContext& ctx)
     int skipCount = ctx.startFrame - ctx.decodeStart;
     int encodeCount = ctx.streamCopyLimit - ctx.startFrame;
 
-    qDebug() << "      PAFF frame selection: startFrame" << ctx.startFrame
-             << "decodeStart" << ctx.decodeStart << "skipCount" << skipCount
-             << "encodeCount" << encodeCount
-             << "decoded" << ctx.allDecodedFrames.size()
-             << "streamCopyLimit" << ctx.streamCopyLimit;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      PAFF frame selection: startFrame" << ctx.startFrame
+                 << "decodeStart" << ctx.decodeStart << "skipCount" << skipCount
+                 << "encodeCount" << encodeCount
+                 << "decoded" << ctx.allDecodedFrames.size()
+                 << "streamCopyLimit" << ctx.streamCopyLimit;
+    }
 
     // First pass: collect encodeCount frames and track max AU
     int collected = 0;
@@ -2273,9 +2375,11 @@ void TTESSmartCut::selectFramesPAFF(ReencodeContext& ctx)
         if (nextKF > 0) {
             extendedStreamCopyLimit = nextKF;
             *ctx.adjustedStreamCopyStart = nextKF;
-            qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
-                     << ">= streamCopyLimit" << ctx.streamCopyLimit
-                     << "-> extending re-encode to next keyframe" << nextKF;
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
+                         << ">= streamCopyLimit" << ctx.streamCopyLimit
+                         << "-> extending re-encode to next keyframe" << nextKF;
+            }
         }
     }
 
@@ -2309,10 +2413,12 @@ void TTESSmartCut::selectFramesPAFF(ReencodeContext& ctx)
     }
     ctx.allDecodedFrames.clear();
 
-    qDebug() << "      PAFF: selected" << ctx.framesToEncode.size() << "frames,"
-             << "realStartAU =" << ctx.realStartAU
-             << "(requested:" << encodeCount
-             << ", extended to:" << extendedStreamCopyLimit << ")";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      PAFF: selected" << ctx.framesToEncode.size() << "frames,"
+                 << "realStartAU =" << ctx.realStartAU
+                 << "(requested:" << encodeCount
+                 << ", extended to:" << extendedStreamCopyLimit << ")";
+    }
 
     // PAFF: Do NOT report actualStartAU.
     // The video output has the full segment frame count (position-based
@@ -2366,13 +2472,16 @@ void TTESSmartCut::selectFramesNonPAFF(ReencodeContext& ctx)
             }
             count++;
         }
-        qDebug() << "      Display-order mapping: UI frame" << ctx.startFrame
-                 << "= keyframe" << uiKeyframe << "+" << displayOffset
-                 << "-> AU" << ctx.realStartAU
-                 << "(keyframe at decoded[" << kfOutputIdx << "])";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Display-order mapping: UI frame" << ctx.startFrame
+                     << "= keyframe" << uiKeyframe << "+" << displayOffset
+                     << "-> AU" << ctx.realStartAU
+                     << "(keyframe at decoded[" << kfOutputIdx << "])";
+        }
     } else {
-        qDebug() << "      WARNING: keyframe AU" << uiKeyframe
-                 << "not found in decoder output, using AU index directly";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("WARNING: keyframe AU %1 not found in decoder output, using AU index directly")
+                .arg(uiKeyframe));
     }
 
     // Check if display-order mapping moved CutIn past the stream-copy boundary.
@@ -2389,9 +2498,11 @@ void TTESSmartCut::selectFramesNonPAFF(ReencodeContext& ctx)
         }
         ctx.streamCopyLimit = nextKF;
 
-        qDebug() << "      CutIn AU" << ctx.realStartAU
-                 << ">= stream-copy start" << ctx.streamCopyStartFrame
-                 << "-> extending re-encode to next keyframe" << nextKF;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      CutIn AU" << ctx.realStartAU
+                     << ">= stream-copy start" << ctx.streamCopyStartFrame
+                     << "-> extending re-encode to next keyframe" << nextKF;
+        }
 
         if (ctx.adjustedStreamCopyStart) {
             *ctx.adjustedStreamCopyStart = nextKF;
@@ -2401,9 +2512,11 @@ void TTESSmartCut::selectFramesNonPAFF(ReencodeContext& ctx)
     // Report actual start AU if it differs from requested (B-frame reorder shift)
     if (ctx.actualStartAU && ctx.realStartAU != ctx.startFrame) {
         *ctx.actualStartAU = ctx.realStartAU;
-        qDebug() << "      Actual start AU:" << ctx.realStartAU
-                 << "(requested:" << ctx.startFrame
-                 << ", shift:" << (ctx.realStartAU - ctx.startFrame) << "frames)";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Actual start AU:" << ctx.realStartAU
+                     << "(requested:" << ctx.startFrame
+                     << ", shift:" << (ctx.realStartAU - ctx.startFrame) << "frames)";
+        }
     }
 
     // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
@@ -2486,7 +2599,8 @@ bool TTESSmartCut::setupDecoder()
         return false;
     }
 
-    qDebug() << "TTESSmartCut: Decoder setup complete";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Decoder setup complete";
     return true;
 }
 
@@ -2526,8 +2640,10 @@ bool TTESSmartCut::setupEncoder()
         mEncoder->width = mDecodedWidth;
         mEncoder->height = mDecodedHeight;
         mEncoder->pix_fmt = static_cast<AVPixelFormat>(mDecodedPixFmt);
-        qDebug() << "  Using decoded frame parameters:" << mDecodedWidth << "x" << mDecodedHeight
-                 << "pix_fmt=" << mDecodedPixFmt;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "  Using decoded frame parameters:" << mDecodedWidth << "x" << mDecodedHeight
+                     << "pix_fmt=" << mDecodedPixFmt;
+        }
     } else if (mDecoder) {
         // Fallback to decoder context (may not work if no frames decoded yet)
         mEncoder->width = mDecoder->width;
@@ -2549,9 +2665,11 @@ bool TTESSmartCut::setupEncoder()
         mEncoder->color_range         = mDecoder->color_range;
         mEncoder->profile             = mDecoder->profile;
         mEncoder->level               = mDecoder->level;
-        qDebug() << "  Copied from decoder: SAR=" << mDecoder->sample_aspect_ratio.num
-                 << "/" << mDecoder->sample_aspect_ratio.den
-                 << "profile=" << mDecoder->profile << "level=" << mDecoder->level;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "  Copied from decoder: SAR=" << mDecoder->sample_aspect_ratio.num
+                     << "/" << mDecoder->sample_aspect_ratio.den
+                     << "profile=" << mDecoder->profile << "level=" << mDecoder->level;
+        }
     }
 
     // Validate parameters
@@ -2578,7 +2696,8 @@ bool TTESSmartCut::setupEncoder()
     if (mInterlaced) {
         mEncoder->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
         mEncoder->field_order = mTopFieldFirst ? AV_FIELD_TT : AV_FIELD_BB;
-        qDebug() << "  Encoder: interlaced mode" << (mTopFieldFirst ? "TFF" : "BFF");
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "  Encoder: interlaced mode" << (mTopFieldFirst ? "TFF" : "BFF");
     }
 
     // Thread count
@@ -2612,7 +2731,8 @@ bool TTESSmartCut::setupEncoder()
             int bitDepth = desc->comp[0].depth;
             if (bitDepth >= 10 && profileIdx < 3) {
                 profileIdx = 3;  // high10
-                qDebug() << "TTESSmartCut: Auto-selected high10 profile for" << bitDepth << "bit source";
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "TTESSmartCut: Auto-selected high10 profile for" << bitDepth << "bit source";
             }
         }
 
@@ -2643,10 +2763,12 @@ bool TTESSmartCut::setupEncoder()
             int bitDepth = desc->comp[0].depth;
             if (bitDepth >= 12 && profileIdx < 2) {
                 profileIdx = 2;  // main12
-                qDebug() << "TTESSmartCut: Auto-selected main12 profile for" << bitDepth << "bit source";
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "TTESSmartCut: Auto-selected main12 profile for" << bitDepth << "bit source";
             } else if (bitDepth >= 10 && profileIdx < 1) {
                 profileIdx = 1;  // main10
-                qDebug() << "TTESSmartCut: Auto-selected main10 profile for" << bitDepth << "bit source";
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "TTESSmartCut: Auto-selected main10 profile for" << bitDepth << "bit source";
             }
         }
 
@@ -2656,13 +2778,15 @@ bool TTESSmartCut::setupEncoder()
     av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
 
-    qDebug() << "TTESSmartCut: Encoder settings -"
-             << "codec:" << (mParser.codecType() == NALU_CODEC_H264 ? "H.264" : "H.265")
-             << "preset:" << presetNames[presetIdx]
-             << "crf:" << crf
-             << "profile:" << profileIdx
-             << "decoder profile:" << (mDecoder ? mDecoder->profile : -1)
-             << "decoder level:" << (mDecoder ? mDecoder->level : -1);
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "TTESSmartCut: Encoder settings -"
+                 << "codec:" << (mParser.codecType() == NALU_CODEC_H264 ? "H.264" : "H.265")
+                 << "preset:" << presetNames[presetIdx]
+                 << "crf:" << crf
+                 << "profile:" << profileIdx
+                 << "decoder profile:" << (mDecoder ? mDecoder->profile : -1)
+                 << "decoder level:" << (mDecoder ? mDecoder->level : -1);
+    }
 
     int ret = avcodec_open2(mEncoder, codec, &opts);
     av_dict_free(&opts);
@@ -2673,9 +2797,12 @@ bool TTESSmartCut::setupEncoder()
         return false;
     }
 
-    qDebug() << "TTESSmartCut: Encoder setup complete";
-    qDebug() << "  Size:" << mEncoder->width << "x" << mEncoder->height;
-    qDebug() << "  No B-frames for clean transitions";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "TTESSmartCut: Encoder setup complete";
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  Size:" << mEncoder->width << "x" << mEncoder->height;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "  No B-frames for clean transitions";
 
     return true;
 }
@@ -2720,9 +2847,11 @@ void TTESSmartCut::parseEncoderSpsFromPacket(ReencodeContext& ctx, const QByteAr
             ? encSps.log2MaxPocLsbMinus4 + 4 : 0;
         mEncoderPocType = encSps.pocType;
         mEncoderFrameMbsOnly = encSps.frameMbsOnly;
-        qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
-                 << "log2_poc=" << mEncoderLog2MaxPocLsb
-                 << "poc_type=" << mEncoderPocType;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Encoder SPS: log2_fn=" << mEncoderLog2MaxFrameNum
+                     << "log2_poc=" << mEncoderLog2MaxPocLsb
+                     << "poc_type=" << mEncoderPocType;
+        }
         ctx.encoderSpsParsed = true;
     }
 }
@@ -2754,7 +2883,8 @@ QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByt
                 // PPS(id=1) is now kept inside each encoder packet
                 // by rewriteEncoderPacketForSourceSps (patches pps_id inline).
                 // No separate PPS write needed.
-                qDebug() << "      SPS Unification: encoder PPS parsed, pps_id=1 kept inline";
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "      SPS Unification: encoder PPS parsed, pps_id=1 kept inline";
             }
         }
 
@@ -2822,20 +2952,26 @@ bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
         int ret = avcodec_send_frame(mEncoder, frame);
         if (ret < 0 && ret != AVERROR(EAGAIN)) {
             QString errStr = avErrStr(ret);
-            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << errStr;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avcodec_send_frame failed: %1").arg(errStr));
             setError(QString("Encoding failed: %1").arg(errStr));
             return false;
         }
         ctx.framesSent++;
 
         AVPacket* packet = av_packet_alloc();
-        if (!packet) { qDebug() << "av_packet_alloc failed"; break; }
+        if (!packet) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("av_packet_alloc failed"));
+            break;
+        }
         while (true) {
             ret = avcodec_receive_packet(mEncoder, packet);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                 break;
             if (ret < 0) {
-                qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("avcodec_receive_packet failed: %1").arg(avErrStr(ret)));
                 av_packet_free(&packet);
                 return false;
             }
@@ -2871,7 +3007,8 @@ bool TTESSmartCut::flushEncoder(ReencodeContext& ctx)
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
         if (ret < 0) {
-            qDebug() << "TTESSmartCut: avcodec_receive_packet (flush) failed:" << avErrStr(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avcodec_receive_packet (flush) failed: %1").arg(avErrStr(ret)));
             break;
         }
         QByteArray rawData(reinterpret_cast<char*>(packet->data), packet->size);
@@ -2946,18 +3083,22 @@ void TTESSmartCut::applyPocDomainFix(ReencodeContext& ctx)
         }
         if (bestDiff <= srcMaxPocLsb / 2) {
             newPocLsb = bestPocLsb;
-            qDebug() << "      POC domain fix: modulo re-wrap detected,"
-                     << "using search result" << newPocLsb;
+            if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "      POC domain fix: modulo re-wrap detected,"
+                         << "using search result" << newPocLsb;
+            }
         } else {
             qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
                        << "found in range [0," << patchMaxPocLsb << ")";
         }
     }
 
-    qDebug() << "      POC domain fix: encoder poc_lsb=" << encPocLsb
-             << "source poc_lsb=" << srcPocLsb
-             << "diff=" << diff << "> MaxPocLsb/2=" << srcMaxPocLsb / 2
-             << "-> patching to" << newPocLsb;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      POC domain fix: encoder poc_lsb=" << encPocLsb
+                 << "source poc_lsb=" << srcPocLsb
+                 << "diff=" << diff << "> MaxPocLsb/2=" << srcMaxPocLsb / 2
+                 << "-> patching to" << newPocLsb;
+    }
 
     ctx.pendingPacket = patchPocLsbInPacket(ctx.pendingPacket,
         pendingFnWidth, pendingPocWidth,
@@ -3016,15 +3157,18 @@ bool TTESSmartCut::decodeFrame(const QByteArray& nalData, AVFrame* frame)
 QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
 {
     if (!mEncoder) {
-        qDebug() << "TTESSmartCut::encodeFrame: Encoder not initialized";
+        TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+            QString("encodeFrame: Encoder not initialized"));
         return QByteArray();
     }
 
     if (frame) {
         // Update encoder parameters if needed
         if (frame->width != mEncoder->width || frame->height != mEncoder->height) {
-            qDebug() << "TTESSmartCut: Frame size mismatch:" << frame->width << "x" << frame->height
-                     << "vs encoder" << mEncoder->width << "x" << mEncoder->height;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("Frame size mismatch: %1x%2 vs encoder %3x%4")
+                    .arg(frame->width).arg(frame->height)
+                    .arg(mEncoder->width).arg(mEncoder->height));
             freeEncoder();
             mEncoder = nullptr;
             return QByteArray();
@@ -3032,8 +3176,9 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
 
         // Check pixel format
         if (frame->format != mEncoder->pix_fmt) {
-            qDebug() << "TTESSmartCut: Frame pixel format mismatch:" << frame->format
-                     << "vs encoder" << mEncoder->pix_fmt;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("Frame pixel format mismatch: %1 vs encoder %2")
+                    .arg(frame->format).arg(mEncoder->pix_fmt));
             // Try to convert or just log warning and continue
         }
 
@@ -3052,14 +3197,16 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
 
         int ret = avcodec_send_frame(mEncoder, frame);
         if (ret < 0) {
-            qDebug() << "TTESSmartCut: avcodec_send_frame failed:" << avErrStr(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avcodec_send_frame failed: %1").arg(avErrStr(ret)));
             return QByteArray();
         }
     } else {
         // Flush
         int ret = avcodec_send_frame(mEncoder, nullptr);
         if (ret < 0 && ret != AVERROR_EOF) {
-            qDebug() << "TTESSmartCut: avcodec_send_frame (flush) failed:" << avErrStr(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avcodec_send_frame (flush) failed: %1").arg(avErrStr(ret)));
         }
     }
 
@@ -3075,7 +3222,8 @@ QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
             break;
         }
         if (ret < 0) {
-            qDebug() << "TTESSmartCut: avcodec_receive_packet failed:" << avErrStr(ret);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("avcodec_receive_packet failed: %1").arg(avErrStr(ret)));
             break;
         }
         result.append(reinterpret_cast<const char*>(packet->data), packet->size);
@@ -3877,8 +4025,10 @@ static H264PpsInfo parseH264PpsInfo(const QByteArray& ppsNal)
     uint32_t numSliceGroupsMinus1 = spsReadUE(data, dataSize, bitPos);
     if (numSliceGroupsMinus1 > 0) {
         // Complex slice group map — bail, use defaults (very rare in DVB)
-        qDebug() << "  PPS: num_slice_groups > 1 (" << numSliceGroupsMinus1+1
-                 << "), using default PPS flags for IDR conversion";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "  PPS: num_slice_groups > 1 (" << numSliceGroupsMinus1+1
+                     << "), using default PPS flags for IDR conversion";
+        }
         info.valid = true;
         return info;
     }
@@ -3894,11 +4044,13 @@ static H264PpsInfo parseH264PpsInfo(const QByteArray& ppsNal)
     info.redundantPicCntPresent = (spsReadBits(data, dataSize, bitPos, 1) != 0);
     info.valid = true;
 
-    qDebug() << "  PPS parsed: entropy=" << (info.entropyCodingModeFlag ? "CABAC" : "CAVLC")
-             << "deblocking=" << info.deblockingFilterControlPresent
-             << "redundant_pic_cnt=" << info.redundantPicCntPresent
-             << "weighted_pred=" << info.weightedPredFlag
-             << "bottomFieldPicOrder=" << info.bottomFieldPicOrderPresent;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "  PPS parsed: entropy=" << (info.entropyCodingModeFlag ? "CABAC" : "CAVLC")
+                 << "deblocking=" << info.deblockingFilterControlPresent
+                 << "redundant_pic_cnt=" << info.redundantPicCntPresent
+                 << "weighted_pred=" << info.weightedPredFlag
+                 << "bottomFieldPicOrder=" << info.bottomFieldPicOrderPresent;
+    }
     return info;
 }
 
@@ -3961,7 +4113,8 @@ static QByteArray convertSliceNalToIDR(
     // Verify this is an I-slice (type 2 or 7)
     uint32_t sliceTypeMod = sliceType % 5;
     if (sliceTypeMod != 2) {
-        qDebug() << "  convertSliceNalToIDR: not an I-slice (type=" << sliceType << "), skipping";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("convertSliceNalToIDR: not an I-slice (type=%1), skipping").arg(sliceType));
         return QByteArray();
     }
 
@@ -4091,8 +4244,10 @@ static QByteArray convertSliceNalToIDR(
 
     // Re-add emulation prevention bytes
     QByteArray result = addEmulationPrevention(newRbsp);
-    qDebug() << "    IDR conversion: NAL" << nalBody.size() << "→" << result.size()
-             << "bytes (RBSP" << oldSize << "→" << newRbsp.size() << ")";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "    IDR conversion: NAL" << nalBody.size() << "→" << result.size()
+                 << "bytes (RBSP" << oldSize << "→" << newRbsp.size() << ")";
+    }
     return result;
 }
 
@@ -4177,8 +4332,10 @@ static QByteArray convertAUToIDR(
                     QByteArray patchedNal = addEmulationPrevention(rbsp);
                     result.append(auData.mid(scStart, scLen));  // start code
                     result.append(patchedNal);
-                    qDebug() << "    IDR AU: patched companion field frame_num→0"
-                             << "(NAL type 1," << patchedNal.size() << "bytes)";
+                    if (TTSettings::instance()->logSmartCut()) {
+                        qDebug() << "    IDR AU: patched companion field frame_num→0"
+                                 << "(NAL type 1," << patchedNal.size() << "bytes)";
+                    }
                     converted = true;
                     pos = nalEnd;
                     continue;
@@ -4192,7 +4349,8 @@ static QByteArray convertAUToIDR(
     }
 
     if (converted) {
-        qDebug() << "    convertAUToIDR: AU" << auData.size() << "→" << result.size() << "bytes";
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    convertAUToIDR: AU" << auData.size() << "→" << result.size() << "bytes";
     }
     return converted ? result : auData;
 }
@@ -4328,7 +4486,8 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
 
     uint32_t vui_present = spsReadBits(data, dataSize, bitPos, 1);
     if (!vui_present) {
-        qDebug() << "  SPS patch: no VUI, cannot add bitstream_restriction";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("SPS patch: no VUI, cannot add bitstream_restriction"));
         return QByteArray();
     }
 
@@ -4429,7 +4588,8 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
         int bitIdx = 7 - (newMbAdaptivePos % 8);
         if (byteIdx < writeDataSize && !(writeData[byteIdx] & (1 << bitIdx))) {
             writeData[byteIdx] |= (1 << bitIdx);
-            qDebug() << "  SPS patched: mb_adaptive_frame_field_flag 0->1 (PAFF->MBAFF signaling)";
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "  SPS patched: mb_adaptive_frame_field_flag 0->1 (PAFF->MBAFF signaling)";
         }
     }
     // Refresh pointers (newRbsp may have been resized)
@@ -4471,9 +4631,11 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     result.append(spsNal.constData(), startCodeLen);
     result.append(patchedNal);
 
-    qDebug() << "  SPS patched: bitstream_restriction_flag=1, max_num_reorder_frames="
-             << maxReorderFrames << "max_dec_frame_buffering=" << maxDecBuf
-             << "(original" << rbsp.size() << "bytes, patched" << newRbsp.size() << "bytes)";
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "  SPS patched: bitstream_restriction_flag=1, max_num_reorder_frames="
+                 << maxReorderFrames << "max_dec_frame_buffering=" << maxDecBuf
+                 << "(original" << rbsp.size() << "bytes, patched" << newRbsp.size() << "bytes)";
+    }
 
     return result;
 }
@@ -4507,7 +4669,8 @@ bool TTESSmartCut::writeParameterSets(QFile& outFile, int patchReorderFrames)
                 if (!patched.isEmpty())
                     sps = patched;
                 else
-                    qDebug() << "  WARNING: SPS patch failed, using original SPS";
+                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                        QString("WARNING: SPS patch failed, using original SPS"));
             }
             if (outFile.write(sps) != sps.size()) {
                 setError("Failed to write SPS");
@@ -4536,5 +4699,6 @@ bool TTESSmartCut::writeParameterSets(QFile& outFile, int patchReorderFrames)
 void TTESSmartCut::setError(const QString& error)
 {
     mLastError = error;
-    qDebug() << "TTESSmartCut error:" << error;
+    TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+        QString("TTESSmartCut error: %1").arg(error));
 }
