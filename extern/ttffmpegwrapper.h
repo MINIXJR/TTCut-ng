@@ -39,6 +39,8 @@
 #include <QObject>
 #include <QImage>
 
+#include "../mpeg2decoder/ttmpeg2decoder.h"
+
 // Forward declarations for libav types (avoid including C headers in .h)
 struct AVFormatContext;
 struct AVCodecContext;
@@ -200,6 +202,25 @@ public:
     // Frame decoding for preview
     bool seekToFrame(int frameIndex);
     QImage decodeFrame(int frameIndex);
+
+    /**
+     * Decode a frame and expose its YUV420P planes via TFrameInfo.
+     *
+     * Sequential mode: monoton-forward calls (frameIndex+1 after frameIndex)
+     * skip Re-Seek+DPB-Prefill. The first call (or any non-N+1 jump)
+     * triggers full seek.
+     *
+     * Output TFrameInfo points to internal tight-packed buffers; valid
+     * until next decode or closeVideoFile().
+     *
+     * Returns false on decode error or unsupported pixel format
+     * (8-bit YUV420P only — 10-bit YUV420P10LE deferred).
+     *
+     * The Y/U/V plane pointers in outInfo are tightly packed
+     * (no stride padding), unlike the libav data[] pointers.
+     */
+    bool decodeFrameYUV(int frameIndex, TFrameInfo& outInfo);
+
     QImage decodeCurrentFrame();
     bool skipCurrentFrame();
 
@@ -269,6 +290,13 @@ private:
     bool mIsElementaryStream;   // Cached: true if file is raw ES (byte-seeking)
     bool mAnalysisMode;         // True: use multi-threaded decoding for analysis
     bool mSearchMode;           // True: skip DPB prefill in seekToFrame (I-frame-only access)
+
+    // YUV-plane tight-packed buffers for decodeFrameYUV()
+    quint8* mYBuffer = nullptr;       // size = mYUVBufferWidth * mYUVBufferHeight
+    quint8* mUBuffer = nullptr;       // size = (mYUVBufferWidth/2) * (mYUVBufferHeight/2)
+    quint8* mVBuffer = nullptr;       // size = (mYUVBufferWidth/2) * (mYUVBufferHeight/2)
+    int     mYUVBufferWidth  = 0;     // Allocated buffer dimensions; re-alloc on change
+    int     mYUVBufferHeight = 0;
 
     bool mIsPAFF;                       // PAFF stream detected
     int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing

@@ -270,6 +270,14 @@ void TTFFmpegWrapper::closeFile()
     mVideoStreamIndex = -1;
     mAudioStreamIndex = -1;
     mCurrentFrameIndex = -1;
+
+    // Free YUV-plane tight-packed buffers (re-allocated on next decodeFrameYUV)
+    delete[] mYBuffer; mYBuffer = nullptr;
+    delete[] mUBuffer; mUBuffer = nullptr;
+    delete[] mVBuffer; mVBuffer = nullptr;
+    mYUVBufferWidth = 0;
+    mYUVBufferHeight = 0;
+
     mDecoderFrameIndex = -1;
     mDecoderDrained = false;
     mIsElementaryStream = false;
@@ -1069,6 +1077,170 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
                 .arg(frameIndex).arg(mFrameIndex.size()));
     }
     return result;
+}
+
+// ----------------------------------------------------------------------------
+// Decode a frame and expose YUV420P planes via TFrameInfo
+// ----------------------------------------------------------------------------
+//! Sequential-decode optimization: when frameIndex == mDecoderFrameIndex+1,
+//! the next frame is decoded directly without re-seek (~6-10x faster on
+//! H.264/H.265). The first call after openFile/closeFile/seekToFrame
+//! triggers a full seek+DPB-prefill+skip-to-target.
+//!
+//! Pixel format: 8-bit YUV420P only. Returns false on other formats.
+bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
+{
+    if (!mFormatCtx || !mVideoCodecCtx) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrameYUV: not initialized"));
+        return false;
+    }
+    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrameYUV: index %1 out of range (0 - %2)")
+                .arg(frameIndex).arg(mFrameIndex.size()));
+        return false;
+    }
+
+    // Ensure mDecodedFrame is allocated
+    if (!mDecodedFrame) {
+        mDecodedFrame = av_frame_alloc();
+        if (!mDecodedFrame) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: could not allocate decoded frame"));
+            return false;
+        }
+    }
+
+    // Sequential-decode path: previous frame was frameIndex-1, decoder still valid
+    bool sequentialPath = (mDecoderFrameIndex == frameIndex - 1
+                           && !mDecoderDrained
+                           && mDecoderFrameIndex >= 0);
+
+    if (!sequentialPath) {
+        if (!seekToFrame(frameIndex)) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: seekToFrame failed for frame %1").arg(frameIndex));
+            return false;
+        }
+        mDecoderFrameIndex = mCurrentFrameIndex;
+
+        // Skip intermediate frames (post-keyframe, pre-target)
+        while (mDecoderFrameIndex < frameIndex) {
+            if (!skipCurrentFrame()) {
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("decodeFrameYUV: skip failed at %1 (target=%2)")
+                        .arg(mDecoderFrameIndex).arg(frameIndex));
+                return false;
+            }
+            mDecoderFrameIndex++;
+        }
+    }
+
+    // Decode the target frame into mDecodedFrame (no RGB conversion)
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrameYUV: could not allocate packet"));
+        return false;
+    }
+
+    bool gotFrame = false;
+    while (!gotFrame && av_read_frame(mFormatCtx, packet) >= 0) {
+        if (packet->stream_index == mVideoStreamIndex) {
+            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
+            if (ret < 0) {
+                av_packet_unref(packet);
+                continue;
+            }
+            ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+            if (ret == 0) {
+                gotFrame = true;
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    // EOF drain if no frame yet
+    if (!gotFrame) {
+        avcodec_send_packet(mVideoCodecCtx, nullptr);
+        int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+        if (recvRet == 0) {
+            gotFrame = true;
+            mDecoderDrained = true;
+        }
+    }
+
+    av_packet_free(&packet);
+
+    if (!gotFrame) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrameYUV: no frame decoded for index %1").arg(frameIndex));
+        return false;
+    }
+
+    // After successful decode, advance the index
+    mDecoderFrameIndex = frameIndex;
+
+    // Verify pixel format: only 8-bit YUV420P supported
+    if (mDecodedFrame->format != AV_PIX_FMT_YUV420P) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("decodeFrameYUV: unsupported pixel format %1 (only YUV420P/8-bit)")
+                .arg(mDecodedFrame->format));
+        return false;
+    }
+
+    int w = mDecodedFrame->width;
+    int h = mDecodedFrame->height;
+    int cw = w / 2;
+    int ch = h / 2;
+
+    // Allocate / re-allocate tight-packed buffers if dimensions changed
+    if (mYUVBufferWidth != w || mYUVBufferHeight != h) {
+        delete[] mYBuffer;
+        delete[] mUBuffer;
+        delete[] mVBuffer;
+        mYBuffer = new quint8[w * h];
+        mUBuffer = new quint8[cw * ch];
+        mVBuffer = new quint8[cw * ch];
+        mYUVBufferWidth = w;
+        mYUVBufferHeight = h;
+    }
+
+    // Tight-pack: copy each row, stripping libav stride padding
+    for (int row = 0; row < h; row++) {
+        memcpy(mYBuffer + row * w,
+               mDecodedFrame->data[0] + row * mDecodedFrame->linesize[0],
+               w);
+    }
+    for (int row = 0; row < ch; row++) {
+        memcpy(mUBuffer + row * cw,
+               mDecodedFrame->data[1] + row * mDecodedFrame->linesize[1],
+               cw);
+        memcpy(mVBuffer + row * cw,
+               mDecodedFrame->data[2] + row * mDecodedFrame->linesize[2],
+               cw);
+    }
+
+    // Populate outInfo
+    outInfo.Y = mYBuffer;
+    outInfo.U = mUBuffer;
+    outInfo.V = mVBuffer;
+    outInfo.width = w;
+    outInfo.height = h;
+    outInfo.size = w * h;
+    outInfo.chroma_width = cw;
+    outInfo.chroma_height = ch;
+    outInfo.chroma_size = cw * ch;
+    // Map libav pict_type to MPEG-2 type (I=1, P=2, B=3); unknown→0
+    switch (mDecodedFrame->pict_type) {
+        case AV_PICTURE_TYPE_I: outInfo.type = 1; break;
+        case AV_PICTURE_TYPE_P: outInfo.type = 2; break;
+        case AV_PICTURE_TYPE_B: outInfo.type = 3; break;
+        default:                outInfo.type = 0; break;
+    }
+
+    return true;
 }
 
 // ----------------------------------------------------------------------------

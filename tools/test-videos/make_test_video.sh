@@ -68,18 +68,21 @@ render_tux() {
 }
 
 # ---------- Audio generators ----------
+# Optional second arg: duration in seconds (default 120).
 gen_audio_ac3() {
     local out=$1
+    local duration=${2:-120}
     ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=120" \
+        -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=${duration}" \
         -ac 2 -c:a ac3 -b:a 192k \
         "$out"
 }
 
 gen_audio_mp2() {
     local out=$1
+    local duration=${2:-120}
     ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=120" \
+        -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=${duration}" \
         -ac 2 -c:a mp2 -b:a 192k \
         "$out"
 }
@@ -128,6 +131,43 @@ TUX_FILTERGRAPH="
 [4:v][7:v]overlay=x='150+(W-w-300)*t/29':y='(H-h)/2':format=auto[seg_e_main];
 [seg_e_main][8:v]overlay=x=W-w-80:y=80:format=auto[seg_e];
 [seg_a][1:v][seg_c][3:v][seg_e][5:v][6:v]concat=n=7:v=1:a=0[outv]
+"
+
+# ---------- Duplicate-segment timeline (30s) ----------
+# For Equal-Frame-Search testing (DVB ad-repeat use case).
+# Two identical 10-second Tux sequences separated by a 2-second black gap,
+# followed by 8 seconds of testsrc2 padding. The lavfi color+overlay filter
+# graph is fully deterministic: rendering the same Tux-on-blue sequence
+# twice with identical input parameters produces bit-identical YUV pixels.
+# After the lossy encoder pass, the two segments remain visually identical
+# and easily score below the equal-frame threshold (~10% per pixel).
+#
+#   0-10s   Tux moves L->R over BLUE        ← Sequence A (instance 1)
+#   10-12s  BLACK gap                       ← simulates ad-block
+#   12-22s  Tux moves L->R over BLUE        ← Sequence A (instance 2)
+#   22-30s  testsrc2 checkerboard           ← non-matching tail
+#
+# Inputs (5):
+#   [0]  blue 10s
+#   [1]  black 2s
+#   [2]  blue 10s (identical to [0])
+#   [3]  testsrc2 8s
+#   [4]  tux_main.png (overlay sprite)
+build_duplicate_timeline_args() {
+    local W=$1 H=$2 R=$3
+    cat <<EOF
+-f lavfi -i color=c=blue:s=${W}x${H}:r=${R}:d=10
+-f lavfi -i color=c=black:s=${W}x${H}:r=${R}:d=2
+-f lavfi -i color=c=blue:s=${W}x${H}:r=${R}:d=10
+-f lavfi -i testsrc2=s=${W}x${H}:r=${R}:d=8
+-i tux_main.png
+EOF
+}
+
+DUPLICATE_FILTERGRAPH="
+[0:v][4:v]overlay=x='150+(W-w-300)*t/10':y='(H-h)/2':format=auto[seg_a1];
+[2:v][4:v]overlay=x='150+(W-w-300)*t/10':y='(H-h)/2':format=auto[seg_a2];
+[seg_a1][1:v][seg_a2][3:v]concat=n=4:v=1:a=0[outv]
 "
 
 # ---------- HEVC 4K CRA-only Open-GOP ----------
@@ -299,6 +339,135 @@ generate_mpeg2_720p() {
     echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
 }
 
+# ============================================================================
+# Duplicate-segment generators (Equal-Frame-Search test fixtures, 30s each)
+# ============================================================================
+# Test pattern (per file):
+#   - Reference frame: index R within instance 1 of Sequence A
+#   - Search start:    index S = first frame of instance 2 of Sequence A
+#   - Expected match:  offset R from S (= same content position in A2)
+#
+# Frame indices per fps:
+#   25 fps:  A1=0..249, BLACK=250..299, A2=300..549, padding=550..749
+#            Suggested test: Ref=100 (in A1), Search=300, expect offset 100
+#   50 fps:  A1=0..499, BLACK=500..599, A2=600..1099, padding=1100..1499
+#            Suggested test: Ref=200 (in A1), Search=600, expect offset 200
+
+# ---------- HEVC 4K CRA-only Open-GOP, duplicate ----------
+generate_hevc4k_cra_duplicate() {
+    local BASE="tux_hevc4k_cra_duplicate"
+    if output_already_present "${BASE}.265"; then
+        echo "==> HEVC 4K duplicate already present: ${BASE}.265 (use --force to regenerate)"
+        write_ttcut_project "$BASE" "265" "ac3"
+        return 0
+    fi
+    echo "==> Generating HEVC 4K duplicate (Main 10, CRA-only Open-GOP, 30s)..."
+    render_tux
+    gen_audio_ac3 "${BASE}.ac3" 30
+    ffmpeg -y -hide_banner -loglevel warning -stats \
+        $(build_duplicate_timeline_args 3840 2160 50) \
+        -filter_complex "$DUPLICATE_FILTERGRAPH" \
+        -map "[outv]" \
+        -c:v libx265 -preset fast -pix_fmt yuv420p10le -profile:v main10 \
+        -x265-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=1:open-gop=1:scenecut=0:repeat-headers=1:log-level=error" \
+        -an "${BASE}.265"
+    write_ttcut_project "$BASE" "265" "ac3"
+    echo "    Done: ${BASE}.265 / ${BASE}.ac3 / ${BASE}.ttcut"
+}
+
+# ---------- H.264 1080p progressive, duplicate ----------
+generate_h264_1080p_progressive_duplicate() {
+    local BASE="tux_h264_1080p_progressive_duplicate"
+    if output_already_present "${BASE}.264"; then
+        echo "==> H.264 1080p progressive duplicate already present: ${BASE}.264 (use --force to regenerate)"
+        write_ttcut_project "$BASE" "264" "ac3"
+        return 0
+    fi
+    echo "==> Generating H.264 1080p progressive duplicate 50fps (High Profile, 30s)..."
+    render_tux
+    gen_audio_ac3 "${BASE}.ac3" 30
+    ffmpeg -y -hide_banner -loglevel warning -stats \
+        $(build_duplicate_timeline_args 1920 1080 50) \
+        -filter_complex "$DUPLICATE_FILTERGRAPH" \
+        -map "[outv]" \
+        -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
+        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1" \
+        -an "${BASE}.264"
+    write_ttcut_project "$BASE" "264" "ac3"
+    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+}
+
+# ---------- H.264 1080i MBAFF, duplicate ----------
+generate_h264_1080i_mbaff_duplicate() {
+    local BASE="tux_h264_1080i_mbaff_duplicate"
+    if output_already_present "${BASE}.264"; then
+        echo "==> H.264 1080i MBAFF duplicate already present: ${BASE}.264 (use --force to regenerate)"
+        write_ttcut_project "$BASE" "264" "ac3"
+        return 0
+    fi
+    echo "==> Generating H.264 1080i MBAFF duplicate 25fps (50 fields, 30s)..."
+    render_tux
+    gen_audio_ac3 "${BASE}.ac3" 30
+    ffmpeg -y -hide_banner -loglevel warning -stats \
+        $(build_duplicate_timeline_args 1920 1080 25) \
+        -filter_complex "$DUPLICATE_FILTERGRAPH" \
+        -map "[outv]" \
+        -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
+        -x264-params "keyint=25:min-keyint=25:bframes=4:b-pyramid=normal:scenecut=0:repeat-headers=1:interlaced=1:tff=1" \
+        -an "${BASE}.264"
+    write_ttcut_project "$BASE" "264" "ac3"
+    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+}
+
+# ---------- MPEG-2 PAL DVB-SD, duplicate ----------
+generate_mpeg2_576i_pal_duplicate() {
+    local BASE="tux_mpeg2_576i_pal_duplicate"
+    if output_already_present "${BASE}.m2v"; then
+        echo "==> MPEG-2 PAL DVB-SD duplicate already present: ${BASE}.m2v (use --force to regenerate)"
+        write_ttcut_project "$BASE" "m2v" "mp2"
+        return 0
+    fi
+    echo "==> Generating MPEG-2 PAL DVB-SD duplicate 720x576 25fps (30s)..."
+    render_tux
+    gen_audio_mp2 "${BASE}.mp2" 30
+    ffmpeg -y -hide_banner -loglevel warning -stats \
+        $(build_duplicate_timeline_args 720 576 25) \
+        -filter_complex "$DUPLICATE_FILTERGRAPH" \
+        -map "[outv]" \
+        -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 \
+        -flags +ilme+ildct -top 1 \
+        -b:v 5M -minrate 5M -maxrate 9M -bufsize 1835008 \
+        -force_key_frames "0,10,12,22" \
+        -g 12 \
+        -an "${BASE}.m2v"
+    write_ttcut_project "$BASE" "m2v" "mp2"
+    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+}
+
+# ---------- MPEG-2 720p progressive, duplicate ----------
+generate_mpeg2_720p_duplicate() {
+    local BASE="tux_mpeg2_720p_duplicate"
+    if output_already_present "${BASE}.m2v"; then
+        echo "==> MPEG-2 720p duplicate already present: ${BASE}.m2v (use --force to regenerate)"
+        write_ttcut_project "$BASE" "m2v" "mp2"
+        return 0
+    fi
+    echo "==> Generating MPEG-2 720p progressive duplicate 50fps (30s)..."
+    render_tux
+    gen_audio_mp2 "${BASE}.mp2" 30
+    ffmpeg -y -hide_banner -loglevel warning -stats \
+        $(build_duplicate_timeline_args 1280 720 50) \
+        -filter_complex "$DUPLICATE_FILTERGRAPH" \
+        -map "[outv]" \
+        -c:v mpeg2video -pix_fmt yuv420p -aspect 16:9 \
+        -b:v 8M -minrate 8M -maxrate 12M -bufsize 1835008 \
+        -force_key_frames "0,10,12,22" \
+        -g 50 \
+        -an "${BASE}.m2v"
+    write_ttcut_project "$BASE" "m2v" "mp2"
+    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+}
+
 # ---------- Dispatch ----------
 ARG="${1:-all}"
 case "$ARG" in
@@ -317,6 +486,14 @@ case "$ARG" in
     paff)
         generate_h264_1080i_paff
         ;;
+    duplicate)
+        # Equal-Frame-Search test fixtures (PAFF deferred — JM Reference too slow)
+        generate_hevc4k_cra_duplicate
+        generate_h264_1080p_progressive_duplicate
+        generate_h264_1080i_mbaff_duplicate
+        generate_mpeg2_576i_pal_duplicate
+        generate_mpeg2_720p_duplicate
+        ;;
     all)
         generate_hevc4k_cra
         generate_h264_1080p_progressive
@@ -324,10 +501,15 @@ case "$ARG" in
         generate_h264_1080i_paff
         generate_mpeg2_576i_pal
         generate_mpeg2_720p
+        generate_hevc4k_cra_duplicate
+        generate_h264_1080p_progressive_duplicate
+        generate_h264_1080i_mbaff_duplicate
+        generate_mpeg2_576i_pal_duplicate
+        generate_mpeg2_720p_duplicate
         ;;
     *)
         echo "Unknown argument: $ARG" >&2
-        echo "Usage: $0 [all|hevc4k|h264|mpeg2|paff]" >&2
+        echo "Usage: $0 [all|hevc4k|h264|mpeg2|paff|duplicate]" >&2
         exit 1
         ;;
 esac
