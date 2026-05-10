@@ -208,7 +208,7 @@ generate_h264_1080p_progressive() {
         -filter_complex "$TUX_FILTERGRAPH" \
         -map "[outv]" \
         -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1" \
+        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1" \
         -an "${BASE}.264"
     write_ttcut_project "$BASE" "264" "ac3"
     if ffmpeg -v debug -i "${BASE}.264" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1 \
@@ -391,7 +391,7 @@ generate_h264_1080p_progressive_duplicate() {
         -filter_complex "$DUPLICATE_FILTERGRAPH" \
         -map "[outv]" \
         -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1" \
+        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1" \
         -an "${BASE}.264"
     write_ttcut_project "$BASE" "264" "ac3"
     echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
