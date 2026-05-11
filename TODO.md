@@ -2,6 +2,17 @@
 
 ## High Priority
 
+- **TTCut-ng Cut-Pipeline A/V Drift bei Gap-Recordings** (2026-05-11)
+  - Symptom: Cut-Output (TTCut-ng "Cut"-Button) zeigt **~5.5s A/V-Drift** über 56min Recording = ~0.16% Rate-Mismatch. Audio läuft Video voraus, Drift wächst über die Zeit.
+  - Workaround: `mkvmerge` direkt auf `.m2v` + `.mp2` → A/V sync ✓
+  - Testfall: `/media/Daten/Video_Tmp/temp/Serien/MPEG/Audio_a_sync/2026-04-30.20.18.23-0.rec/` (101s combined A+V Packet-Loss)
+  - Vermutete Ursache: ttcut-demux's End-Padding fügt ~102s Silence am Audio-Ende an, um Audio-Dauer auf die Video-CONTAINER-Dauer (3359.5s aus PTS-Range) zu strecken. Die echte Video-CONTENT-Dauer ist aber nur 3257.76s (81444 Frames × 1/25). Das `audio_duration_ms=3359504` Feld vs `planAudioCut`-Berechnung führt vermutlich zur Drift-Akkumulation in der Cut-Pipeline.
+  - Voraussichtliche Fixes:
+    - End-Padding-Logic in ttcut-demux: Padding auf echte Video-CONTENT-Dauer (Frame-Count × Frame-Duration), nicht Container-PTS-Range
+    - Oder: TTCut-ng Cut-Audio rechnet drift-tolerant über audio_gap_indices (analog `countExtraFramesBefore` für mExtraFrameIndices, aber für Audio-Time-Korrektur)
+  - **Erst diagnostizieren** ob End-Padding der Übeltäter ist (audio_duration_ms-Feld auf Frame-Count-basierte Dauer setzen → Re-Test)
+  - Verlinkter Commit `a01f11e` fixt den Demux-Output, aber **NICHT** die Cut-Pipeline-Drift
+
 - ~~**Security Audit Findings beheben**~~ → **25/25 FIXED** (2026-03-28, commits aea1809 + 66eacb2)
   - Siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md) für alle Findings
 
