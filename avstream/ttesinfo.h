@@ -134,6 +134,11 @@ public:
     QList<int> esExtraFrames() const { return mEsExtraFrames; }
     int countExtraFramesBefore(int frameIndex) const;
 
+    // Audio gap frame indices (from ttcut-demux audio-gap detection).
+    // Used for marker visualization only — NOT for audio cut time correction.
+    QList<int> audioGapFrames() const { return mAudioGapFrames; }
+    int        audioGapFrameCount() const { return mAudioGapFrames.size(); }
+
     // Correct field rate to frame rate for PAFF streams (old .info files)
     void correctFrameRateForPAFF();
 
@@ -182,6 +187,9 @@ private:
 
     // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
     QList<int> mEsExtraFrames;  // sorted list of extra frame indices
+
+    // Audio gap frame indices (from ttcut-demux audio-gap detection)
+    QList<int> mAudioGapFrames;  // sorted list of frame indices spanning audio gaps
 };
 
 #endif // TTESINFO_H

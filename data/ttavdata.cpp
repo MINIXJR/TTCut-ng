@@ -371,44 +371,83 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
 
-      // Show clustering dialog if extra frames were detected (not on project reload)
-      if (!mExtraFrameIndices.isEmpty() && avItem) {
+      // Store audio gap frame indices (separate list \u2014 used for marker
+      // visualization only, NOT for audio cut time correction).
+      mAudioGapIndices = esInfo.audioGapFrames();
+      if (!mAudioGapIndices.isEmpty()) {
+        qDebug() << "Loaded" << mAudioGapIndices.size() << "audio gap frame indices";
+      }
+
+      // Show clustering dialog if extra frames OR audio gaps were detected
+      // (not on project reload). Both lists are clustered with the same
+      // settings (gap + offset) and emit TTStreamPoint with Error type;
+      // descriptions distinguish them ("Defekt:" vs "Audio-Gap:").
+      if ((!mExtraFrameIndices.isEmpty() || !mAudioGapIndices.isEmpty()) && avItem) {
         TTVideoStream* vs = avItem->videoStream();
         double frameRate = vs ? vs->frameRate() : 25.0;
         int gapFrames = TTSettings::instance()->extraFrameClusterGapSec() * frameRate;
         int offsetFrames = TTSettings::instance()->extraFrameClusterOffsetSec() * frameRate;
 
-        // Cluster extra frames by gap
         QList<TTStreamPoint> clusters;
-        int clusterStart = mExtraFrameIndices.first();
-        int clusterEnd = clusterStart;
-        int clusterCount = 1;
 
-        auto emitCluster = [&]() {
-            int pos = qMax(0, clusterStart - offsetFrames);
-            double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-            QString desc = QString("Defekt: %1\u2013%2 (%3 Frames, %4s)")
-                .arg(clusterStart).arg(clusterEnd)
-                .arg(clusterCount).arg(durSec, 0, 'f', 1);
-            clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
-        };
+        // Cluster pass 1: video defect frames (es_extra_frames)
+        if (!mExtraFrameIndices.isEmpty()) {
+            int clusterStart = mExtraFrameIndices.first();
+            int clusterEnd = clusterStart;
+            int clusterCount = 1;
 
-        for (int i = 1; i < mExtraFrameIndices.size(); ++i) {
-            if (mExtraFrameIndices[i] - clusterEnd <= gapFrames) {
-                clusterEnd = mExtraFrameIndices[i];
-                clusterCount++;
-            } else {
-                emitCluster();
-                clusterStart = mExtraFrameIndices[i];
-                clusterEnd = clusterStart;
-                clusterCount = 1;
+            auto emitCluster = [&]() {
+                int pos = qMax(0, clusterStart - offsetFrames);
+                double durSec = (clusterEnd - clusterStart + 1) / frameRate;
+                QString desc = QString("Defekt: %1\u2013%2 (%3 Frames, %4s)")
+                    .arg(clusterStart).arg(clusterEnd)
+                    .arg(clusterCount).arg(durSec, 0, 'f', 1);
+                clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+            };
+
+            for (int i = 1; i < mExtraFrameIndices.size(); ++i) {
+                if (mExtraFrameIndices[i] - clusterEnd <= gapFrames) {
+                    clusterEnd = mExtraFrameIndices[i];
+                    clusterCount++;
+                } else {
+                    emitCluster();
+                    clusterStart = mExtraFrameIndices[i];
+                    clusterEnd = clusterStart;
+                    clusterCount = 1;
+                }
             }
+            emitCluster();
         }
-        emitCluster();
 
-        // Show dialog with group listing
+        // Cluster pass 2: audio gap frames
+        if (!mAudioGapIndices.isEmpty()) {
+            int clusterStart = mAudioGapIndices.first();
+            int clusterEnd = clusterStart;
+
+            auto emitGapCluster = [&]() {
+                int pos = qMax(0, clusterStart - offsetFrames);
+                double durSec = (clusterEnd - clusterStart + 1) / frameRate;
+                QString desc = QString("Audio-Gap: %1\u2013%2 (%3s)")
+                    .arg(clusterStart).arg(clusterEnd).arg(durSec, 0, 'f', 1);
+                clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+            };
+
+            for (int i = 1; i < mAudioGapIndices.size(); ++i) {
+                if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
+                    clusterEnd = mAudioGapIndices[i];
+                } else {
+                    emitGapCluster();
+                    clusterStart = mAudioGapIndices[i];
+                    clusterEnd = clusterStart;
+                }
+            }
+            emitGapCluster();
+        }
+
+        // Show dialog with group listing (combined defect + gap totals)
+        int totalDefects = mExtraFrameIndices.size() + mAudioGapIndices.size();
         QString msg = tr("%1 defective frames in %2 groups detected.\n")
-            .arg(mExtraFrameIndices.size())
+            .arg(totalDefects)
             .arg(clusters.size());
 
         int showCount = qMin(clusters.size(), 10);

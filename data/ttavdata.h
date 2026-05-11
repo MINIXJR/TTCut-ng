@@ -252,6 +252,10 @@ class TTAVData : public QObject
     // Extra frame indices from PTS analysis (sorted, for audio time correction)
     QList<int> mExtraFrameIndices;
 
+    // Audio gap frame indices (sorted) — for marker visualization only.
+    // NOT used for audio cut time correction (separate from mExtraFrameIndices).
+    QList<int> mAudioGapIndices;
+
     // Pending language overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
     QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;

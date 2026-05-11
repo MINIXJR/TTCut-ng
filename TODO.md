@@ -37,6 +37,17 @@
 
 ## Medium Priority
 
+- **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
+  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1100 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
+  - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
+  - ttcut-demux blieb auf bash+CLI hängen.
+  - **Probleme**: stream-copy concat über libav-CLI ist fragil bei mp2/ac3 Splice-Punkten (Frame-Misalignment, Header-missing-Errors). Re-encode als Workaround funktioniert (siehe Audio-Gap-Fix 2026-05-10), aber libav-direkt wäre PTS-genauer und ohne Subprocess-Overhead.
+  - **Migration-Pfade**:
+    1. ttcut-demux nach C/C++ portieren (vollständiger Rewrite, nutzt libav direkt)
+    2. Audio-Gap-Detection + Repair in TTCut-ng integrieren (load-time statt demux-time)
+    3. Hybrid: bash-Skelett bleibt, kleine C-Helfer für PTS-Analyse + Audio-Splice via libav
+  - **Scope**: mehrtägig, separater Refactor.
+
 - **Bit-Stream API in extern/ vereinheitlichen**
   - `extern/ttessmartcut.cpp` hat eigene file-lokale Bit-Primitives (`spsReadBits`,
     `spsWriteBits`, `spsReadUE`, `spsWriteUE`, `spsReadSE`, `spsWriteSE`,

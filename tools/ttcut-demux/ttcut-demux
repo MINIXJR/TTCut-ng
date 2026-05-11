@@ -22,6 +22,12 @@ set -e
 # directories are removed recursively (via rm -rf inside the trap below).
 _CLEANUP_FILES=()
 _CLEANUP_DIRS=()
+
+# Audio-gap detection (Rev 1, existing function uses hardcoded 5.0; constant for documentation)
+readonly GAP_THRESHOLD_AUDIO=5.0
+# Video-gap detection (Rev 2)
+readonly GAP_THRESHOLD_VIDEO=1.0
+
 _cleanup_temps() {
     local rc=$?
     if [ ${#_CLEANUP_FILES[@]} -gt 0 ]; then
@@ -64,6 +70,240 @@ audio_ext_for_codec() {
         aac)     echo "aac" ;;
         *)       echo "$1" ;;
     esac
+}
+
+# Detect audio packet gaps in source TS via ffprobe.
+# Output format (one gap per line):
+#   <gap_start_pts_source> <gap_end_pts_source> <gap_size_ms>
+# All values are SOURCE PTS (relative to TS PCR, NOT first_video_pts).
+# Conversion to frame indices happens later when first_video_pts is known.
+#
+# Threshold: 5.0 seconds (anything smaller falls into the existing
+# end-padding bucket, which handles sub-5s drift cumulatively).
+detect_audio_gaps() {
+    local source_ts=$1 stream_index=$2 out_file=$3
+    : > "$out_file"
+    ffprobe -v error -select_streams "$stream_index" -show_packets \
+        -show_entries packet=pts_time "$source_ts" 2>/dev/null | \
+    awk -F= -v threshold=5.0 '
+        /^pts_time=/ {
+            curr = $2
+            if (prev != "" && curr - prev > threshold) {
+                gap_size_ms = (curr - prev) * 1000
+                printf "%.6f %.6f %.0f\n", prev, curr, gap_size_ms
+            }
+            prev = curr
+        }
+    ' >> "$out_file"
+}
+
+# Detect video packet gaps in source TS via ffprobe.
+# Outputs to $out_file: one line per gap, "prev_pts curr_pts gap_ms"
+# (all PTS values are source-PTS, NOT relative).
+#
+# Used by classify_audio_gap() to decide whether an audio gap is part of
+# a combined A+V transport-stream loss (in which case audio repair is skipped).
+#
+# Args:
+#   $1 = source TS file path
+#   $2 = output file path (will be truncated to empty if no gaps)
+detect_video_gaps() {
+    local source_ts=$1 out_file=$2
+    : > "$out_file"
+    ffprobe -v error -select_streams v:0 -show_packets \
+        -show_entries packet=pts_time "$source_ts" 2>/dev/null | \
+    awk -F= -v threshold="$GAP_THRESHOLD_VIDEO" '
+        /^pts_time=/ {
+            curr = $2
+            if (prev != "" && curr - prev > threshold) {
+                gap_size_ms = (curr - prev) * 1000
+                printf "%.6f %.6f %.0f\n", prev, curr, gap_size_ms
+            }
+            prev = curr
+        }
+    ' >> "$out_file"
+}
+
+# Compute how many milliseconds of silence to insert at an audio gap to keep
+# A/V sync after the gap. The silence amount equals the amount of audio content
+# missing that the video did NOT also lose.
+#
+# Algorithm:
+#   silence_ms = max(0, audio_gap_size_ms - lost_video_seconds_in_audio_gap_range * 1000)
+#   Where lost_video_seconds = sum of (overlap of each video-gap with the audio-gap range)
+#
+# Args:
+#   $1 = audio gap start (source-PTS)
+#   $2 = audio gap end   (source-PTS)
+#   $3 = video gaps file (output of detect_video_gaps)
+#   $4 = frame rate (decimal, e.g. "25" — only used for symmetry; not strictly needed here)
+#
+# Output (stdout): silence to insert in milliseconds, integer
+compute_audio_gap_silence_ms() {
+    local a_start=$1 a_end=$2 v_gaps_file=$3 _fps=$4
+    local audio_gap_ms lost_video_ms silence_ms
+
+    audio_gap_ms=$(awk "BEGIN {printf \"%.0f\", ($a_end - $a_start) * 1000}")
+
+    if [ ! -s "$v_gaps_file" ]; then
+        lost_video_ms=0
+    else
+        lost_video_ms=$(awk -v as="$a_start" -v ae="$a_end" '
+            {
+                v_start = $1
+                v_end   = $2
+                # Check if this video gap INTERSECTS with the audio gap range
+                # (overlap > 0 → intersects). If so, count the FULL video gap size,
+                # not just the overlap. The video stream loses (v_end - v_start) of
+                # content regardless of how it overlaps with audio gap range.
+                o_start = (v_start > as) ? v_start : as
+                o_end   = (v_end   < ae) ? v_end   : ae
+                if (o_end > o_start) lost += (v_end - v_start) * 1000
+            }
+            END { printf "%.0f", lost + 0 }
+        ' "$v_gaps_file")
+    fi
+
+    silence_ms=$(( audio_gap_ms - lost_video_ms ))
+    if [ "$silence_ms" -lt 0 ]; then
+        silence_ms=0
+    fi
+    echo "$silence_ms"
+}
+
+# Repair audio file by splitting at gap positions and inserting silence.
+# Multi-gap support: N gaps -> N+1 audio segments + N silence segments.
+#
+# Args:
+#   $1 = audio file path (will be replaced with repaired version)
+#   $2 = classified gap file (one line per gap: src_start src_end gap_ms silence_ms)
+#        silence_ms is the amount of silence to insert at the gap position.
+#        For combined A+V loss: silence_ms = audio_gap_ms - matching_video_gap_ms
+#        (often a small remainder like 256ms). For audio-only loss: silence_ms ≈ gap_ms.
+#        Gaps with silence_ms=0 are skipped (no audio insertion needed).
+#   $3 = first_audio_pts (the SOURCE PTS where this audio track starts;
+#        gap positions in the audio FILE = src_pts - first_audio_pts)
+#
+# Returns 0 on success, non-zero on failure (audio file untouched on error).
+repair_audio_with_silence_inserts() {
+    local audio_file=$1 gap_file=$2 first_audio_pts=$3
+    local audio_ext="${audio_file##*.}"
+    local work_dir
+    work_dir="$(dirname "$audio_file")/.gap_repair_$$"
+    mkdir -p "$work_dir"
+
+    # Probe original audio properties for silence generation
+    local codec sample_rate channels bitrate
+    codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
+    sample_rate=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate \
+        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
+    channels=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels \
+        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
+    bitrate=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate \
+        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
+
+    # Defaults if probe returned nothing
+    [[ "$sample_rate" =~ ^[0-9]+$ ]] || sample_rate=48000
+    [[ "$channels" =~ ^[0-9]+$ ]] || channels=2
+    case "$codec" in
+        mp2)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=192000 ;;
+        ac3)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=384000 ;;
+        aac)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=192000 ;;
+    esac
+
+    # Build segment list: pre_gap_1, silence_1, pre_gap_2, silence_2, ..., last_segment
+    # Build a single ffmpeg filter_complex command that:
+    #   1. Slices the original audio at gap positions via atrim
+    #   2. Generates anullsrc silence segments for each gap
+    #   3. Concatenates pre/silence/post via the concat audio filter
+    #   4. Re-encodes the result with the original codec parameters
+    #
+    # Re-encoding (vs stream-copy concat-demuxer) avoids MP2/AC3 frame
+    # misalignment at splice points. For mp2/ac3 the perceptual loss from
+    # one re-encode round-trip is inaudible; PCM fidelity loss < 1 LSB.
+    #
+    # Build a list of (audio_file_pos, gap_duration) tuples:
+    local -a gap_positions  # audio-file-time offsets where silence is inserted
+    local -a gap_durations  # corresponding gap sizes
+    local accumulated_collapse=0
+
+    while IFS=' ' read -r src_start src_end gap_ms silence_ms; do
+        [ -z "$src_start" ] && continue
+        # Skip gaps where no silence is needed (true 100% combined A+V loss)
+        if [ "${silence_ms:-0}" = "0" ]; then
+            # Still advance accumulated_collapse so subsequent gap positions are correct
+            accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + ($src_end - $src_start)}")
+            continue
+        fi
+        local pos dur source_gap
+        pos=$(awk "BEGIN {printf \"%.6f\", $src_start - $first_audio_pts - $accumulated_collapse}")
+        dur=$(awk "BEGIN {printf \"%.6f\", $silence_ms / 1000.0}")
+        source_gap=$(awk "BEGIN {printf \"%.6f\", $src_end - $src_start}")
+        gap_positions+=("$pos")
+        gap_durations+=("$dur")
+        accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + $source_gap}")
+    done < "$gap_file"
+
+    if [ ${#gap_positions[@]} -eq 0 ]; then
+        rm -rf "$work_dir"
+        return 0  # nothing to do
+    fi
+
+    # Build filter_complex: split original audio into N+1 segments at gap positions,
+    # generate N silence sources, concatenate all 2N+1 streams.
+    # Inputs: [0:a] is the original audio. anullsrc inputs follow.
+    local filter=""
+    local n=${#gap_positions[@]}
+    local prev_end=0
+    local seg_count=0
+
+    # atrim segments from original audio
+    for ((i = 0; i < n; i++)); do
+        local pos="${gap_positions[$i]}"
+        filter+="[0:a]atrim=${prev_end}:${pos},asetpts=PTS-STARTPTS[seg${seg_count}];"
+        seg_count=$((seg_count + 1))
+        prev_end="$pos"
+    done
+    # final segment: from last gap position to EOF
+    filter+="[0:a]atrim=${prev_end},asetpts=PTS-STARTPTS[seg${seg_count}];"
+    seg_count=$((seg_count + 1))
+
+    # Build concat input list interleaving original-segments with silence-segments
+    # Order: seg0, sil0, seg1, sil1, ..., seg(n-1), sil(n-1), seg(n)
+    local concat_inputs=""
+    local sil_input_idx=1  # input index 0 is original audio; silence inputs start at 1
+    for ((i = 0; i < n; i++)); do
+        concat_inputs+="[seg${i}][${sil_input_idx}:a]"
+        sil_input_idx=$((sil_input_idx + 1))
+    done
+    concat_inputs+="[seg${n}]"
+
+    local total_segments=$((2 * n + 1))
+    filter+="${concat_inputs}concat=n=${total_segments}:v=0:a=1[out]"
+
+    # Build silence -i arguments (one per gap)
+    local silence_args=""
+    for ((i = 0; i < n; i++)); do
+        local dur="${gap_durations[$i]}"
+        silence_args+=" -f lavfi -t ${dur} -i anullsrc=r=${sample_rate}:cl=${channels}c"
+    done
+
+    # Run the single-pass re-encode
+    local repaired="$work_dir/repaired.${audio_ext}"
+    # shellcheck disable=SC2086  # silence_args contains intentional word-splitting
+    ffmpeg -y -hide_banner -loglevel error \
+        -i "$audio_file" \
+        $silence_args \
+        -filter_complex "$filter" \
+        -map "[out]" \
+        -c:a "$codec" -b:a "$bitrate" -ac "$channels" -ar "$sample_rate" \
+        "$repaired" 2>>"$work_dir/repair.log" || return 1
+
+    # Replace original
+    mv "$repaired" "$audio_file"
+    rm -rf "$work_dir"
+    return 0
 }
 
 # Parse arguments
@@ -873,6 +1113,106 @@ with open('$OUTPUT_VIDEO','rb') as f:
             info "  Drift rate: ${AV_DRIFT_RATE}ms/min"
         fi
 
+        # === Audio-Gap Detection, Classification, and Mid-Stream Repair (Rev 2) ===
+        # Detect audio packet gaps per track. For each gap, compute how many ms of
+        # silence to insert to keep A/V sync: silence_ms = audio_gap_ms minus the
+        # video content that was also lost in the same PTS range.
+        # Video gaps are detected ONCE per recording (not per audio track).
+
+        VIDEO_GAPS_FILE="$OUTDIR/.video_gaps.txt"
+        _CLEANUP_FILES+=("$VIDEO_GAPS_FILE")
+        detect_video_gaps "$ORIGINAL_INPUT" "$VIDEO_GAPS_FILE"
+
+        # Parse frame rate to decimal for awk arithmetic
+        _FR_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
+        _FR_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
+        _FR_DEN="${_FR_DEN:-1}"
+        FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $_FR_NUM / $_FR_DEN}")
+
+        GAP_FILES=()
+        CLASSIFIED_FILES=()
+        HAS_ANY_SILENCE_NEEDED=false
+        AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end silence_ms"
+        for i in "${!AUDIO_FILES[@]}"; do
+            IFS=':' read -r idx _ _ <<< "${AUDIO_STREAMS[$i]}"
+            GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
+            CLASSIFIED_FILE="$OUTDIR/.classified_track_${i}.txt"
+            _CLEANUP_FILES+=("$GAP_FILE" "$CLASSIFIED_FILE")
+            detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE"
+            GAP_FILES[$i]="$GAP_FILE"
+            : > "$CLASSIFIED_FILE"
+            CLASSIFIED_FILES[$i]="$CLASSIFIED_FILE"
+
+            if [ -s "$GAP_FILE" ]; then
+                while IFS=' ' read -r gs ge gms; do
+                    silence_ms=$(compute_audio_gap_silence_ms "$gs" "$ge" "$VIDEO_GAPS_FILE" "$FRAME_RATE_DEC")
+                    echo "$gs $ge $gms $silence_ms" >> "$CLASSIFIED_FILE"
+                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$gs $ge $silence_ms")
+                    if [ "$silence_ms" -gt 0 ]; then
+                        HAS_ANY_SILENCE_NEEDED=true
+                    fi
+                done < "$GAP_FILE"
+            fi
+        done
+
+        if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
+            N_NO_SILENCE=0
+            N_WITH_SILENCE=0
+            for cf in "${CLASSIFIED_FILES[@]}"; do
+                [ -s "$cf" ] || continue
+                while IFS=' ' read -r _gs _ge _gms sms; do
+                    if [ "${sms:-0}" = "0" ]; then
+                        N_NO_SILENCE=$(( N_NO_SILENCE + 1 ))
+                    else
+                        N_WITH_SILENCE=$(( N_WITH_SILENCE + 1 ))
+                    fi
+                done < "$cf"
+            done
+            info "  Audio gaps detected across all tracks: $N_NO_SILENCE pure A+V, $N_WITH_SILENCE needing silence"
+        fi
+
+        if $HAS_ANY_SILENCE_NEEDED; then
+            info "  Inserting silence for gaps with audio loss exceeding video loss..."
+            for i in "${!AUDIO_FILES[@]}"; do
+                # Check if any gap in this track needs silence (silence_ms > 0)
+                NEEDS_REPAIR=false
+                while IFS=' ' read -r _gs _ge _gms sms; do
+                    if [ "${sms:-0}" != "0" ]; then
+                        NEEDS_REPAIR=true
+                        break
+                    fi
+                done < "${CLASSIFIED_FILES[$i]}"
+
+                if $NEEDS_REPAIR; then
+                    AUDIO_FILE="${AUDIO_FILES[$i]}"
+                    FIRST_AUDIO_PTS_TRACK="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
+                    EFFECTIVE_FIRST_AUDIO_PTS=$(awk "BEGIN {a=$FIRST_AUDIO_PTS_TRACK; v=${FIRST_VIDEO_PTS:-0}; printf \"%.6f\", (a > v) ? a : v}")
+                    if repair_audio_with_silence_inserts "$AUDIO_FILE" "${CLASSIFIED_FILES[$i]}" "$EFFECTIVE_FIRST_AUDIO_PTS"; then
+                        N_REPAIRED=0
+                        while IFS=' ' read -r _gs _ge _gms sms; do
+                            [ "${sms:-0}" != "0" ] && N_REPAIRED=$(( N_REPAIRED + 1 ))
+                        done < "${CLASSIFIED_FILES[$i]}"
+                        info "    $(basename "$AUDIO_FILE"): $N_REPAIRED silence-insertion(s) applied"
+                    else
+                        warn "    $(basename "$AUDIO_FILE"): silence-insert FAILED — leaving original"
+                    fi
+                fi
+            done
+
+            # Recalculate AV_DRIFT_MS after repair so the end-pad block below
+            # operates on the residual drift only.
+            FIRST_AUDIO="${AUDIO_FILES[0]}"
+            AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
+                -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+            AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
+            AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
+            info "  After silence-insertion: Audio=${AUDIO_DURATION_MS}ms, residual drift=${AV_DRIFT_MS}ms"
+        elif [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
+            info "  All audio gaps perfectly synchronized with video gaps — no silence insertion needed"
+        fi
+
+        # Cleanup gap detection files (handled by _CLEANUP_FILES on exit)
+
         # If video is longer than audio, pad audio with silence (like ProjectX does)
         # This ensures A/V sync throughout the file
         if [ "$AV_DRIFT_MS" -gt 20 ]; then
@@ -1182,11 +1522,45 @@ EOF
         echo "sub_${i}_file=$(basename "${SUBTITLE_FILES[$i]}")" >> "$OUTPUT_INFO"
     done
 
-    # Extra frame indices from PTS analysis
+    WARNINGS_HEADER_WRITTEN=false
+    write_warnings_header_if_needed() {
+        if ! $WARNINGS_HEADER_WRITTEN; then
+            echo "" >> "$OUTPUT_INFO"
+            echo "[warnings]" >> "$OUTPUT_INFO"
+            WARNINGS_HEADER_WRITTEN=true
+        fi
+    }
+
     if [ -n "$ES_EXTRA_FRAMES_CSV" ]; then
-        echo "" >> "$OUTPUT_INFO"
-        echo "[warnings]" >> "$OUTPUT_INFO"
+        write_warnings_header_if_needed
         echo "es_extra_frames=$ES_EXTRA_FRAMES_CSV" >> "$OUTPUT_INFO"
+    fi
+
+    # Emit audio_gap_frames= as comma-separated frame indices spanning each gap.
+    # Uses first_video_pts as reference (consistent with es_extra_frames mapping).
+    if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ] && [ -n "$FIRST_VIDEO_PTS" ]; then
+        FRAME_RATE_NUM_LOCAL=$(echo "$FRAME_RATE" | cut -d'/' -f1)
+        FRAME_RATE_DEN_LOCAL=$(echo "$FRAME_RATE" | cut -d'/' -f2)
+        FRAME_RATE_DEN_LOCAL="${FRAME_RATE_DEN_LOCAL:-1}"
+
+        ALL_GAP_FRAMES=()
+        for entry in "${AUDIO_GAP_FRAMES_SOURCE_PTS[@]}"; do
+            IFS=' ' read -r gs ge silence_ms <<< "$entry"
+            gs_frame=$(awk "BEGIN {printf \"%d\", ($gs - $FIRST_VIDEO_PTS) * $FRAME_RATE_NUM_LOCAL / $FRAME_RATE_DEN_LOCAL + 0.5}")
+            [ "$gs_frame" -lt 0 ] && gs_frame=0
+            # Compute end-frame from silence_ms (at least 1 frame for visibility)
+            silence_frames=$(awk "BEGIN {f = $silence_ms / 1000.0 * $FRAME_RATE_NUM_LOCAL / $FRAME_RATE_DEN_LOCAL; printf \"%d\", (f >= 1) ? f : 0}")
+            ge_frame=$(( gs_frame + silence_frames ))
+            for ((f = gs_frame; f <= ge_frame; f++)); do
+                ALL_GAP_FRAMES+=("$f")
+            done
+        done
+
+        GAP_FRAMES_SORTED=$(printf '%s\n' "${ALL_GAP_FRAMES[@]}" | sort -n -u | paste -sd,)
+        if [ -n "$GAP_FRAMES_SORTED" ]; then
+            write_warnings_header_if_needed
+            echo "audio_gap_frames=$GAP_FRAMES_SORTED" >> "$OUTPUT_INFO"
+        fi
     fi
 
     # Add VDR markers if found
