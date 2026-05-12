@@ -287,6 +287,22 @@ TTAVItem* TTAVData::createAVItem()
 	}
 }
 
+// Helper: if mExtraFrameIndices is empty and the video stream is MPEG-2,
+// fall back to the parser-detected field-picture extras. H.264/H.265
+// streams populate the list via .info file (esInfo.esExtraFrames()); for
+// MPEG-2 the detection lives in the bitstream parser (see spec
+// 2026-05-12-mpeg2-field-picture-fix-design.md, Variante 2A).
+static void loadMpeg2FieldExtras(QList<int>& target, TTVideoStream* vStream)
+{
+  if (!target.isEmpty() || vStream == nullptr) return;
+  TTMpeg2VideoStream* mpeg2 = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  if (mpeg2 == nullptr) return;
+  target = mpeg2->extraIndices();
+  if (!target.isEmpty()) {
+    qDebug() << "Loaded" << target.size() << "MPEG-2 field-picture extra indices";
+  }
+}
+
 /*!
  * openAVStreams
  * Open the video stream and all according audio and subtitle streams and add them to AVData
@@ -370,6 +386,7 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
       if (!mExtraFrameIndices.isEmpty()) {
         qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
+      loadMpeg2FieldExtras(mExtraFrameIndices, avItem->videoStream());
 
       // Store audio gap frame indices (separate list \u2014 used for marker
       // visualization only, NOT for audio cut time correction).
@@ -604,6 +621,7 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
         qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
     }
+    loadMpeg2FieldExtras(mExtraFrameIndices, vStream);
   }
 
   if (mpAVList == nullptr) return;
@@ -1209,6 +1227,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         mExtraFrameIndices = esInfo.esExtraFrames();
         qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction (cut path)";
       }
+      loadMpeg2FieldExtras(mExtraFrameIndices, firstStream);
     }
   }
 
