@@ -316,6 +316,26 @@ generate_mpeg2_576i_pal() {
     write_ttcut_project "$BASE" "m2v" "mp2"
     echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
 }
+# ---------- MPEG-2 576i field-picture variant ----------
+generate_mpeg2_576i_fieldpic() {
+    local BASE="tux_mpeg2_576i_fieldpic_test"
+    local SRC="tux_mpeg2_576i_pal_test.m2v"
+    if output_already_present "${BASE}.m2v"; then
+        echo "==> MPEG-2 576i field-picture already present: ${BASE}.m2v (use --force to regenerate)"
+        write_ttcut_project "$BASE" "m2v" "mp2"
+        return 0
+    fi
+    echo "==> Generating MPEG-2 576i field-picture variant (inject every 50 frames)..."
+    if [[ ! -s "$SRC" ]]; then
+        generate_mpeg2_576i_pal
+    fi
+    python3 "$SCRIPTDIR/inject_fieldpictures.py" "$SRC" "${BASE}.m2v" --every 50
+    if [[ ! -s "${BASE}.mp2" ]]; then
+        cp "tux_mpeg2_576i_pal_test.mp2" "${BASE}.mp2"
+    fi
+    write_ttcut_project "$BASE" "m2v" "mp2"
+    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+}
 generate_mpeg2_720p() {
     local BASE="tux_mpeg2_720p_test"
     if output_already_present "${BASE}.m2v"; then
@@ -444,6 +464,27 @@ generate_mpeg2_576i_pal_duplicate() {
     echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
 }
 
+# ---------- MPEG-2 576i field-picture variant, duplicate ----------
+generate_mpeg2_576i_fieldpic_duplicate() {
+    local BASE="tux_mpeg2_576i_fieldpic_duplicate"
+    local SRC="tux_mpeg2_576i_pal_duplicate.m2v"
+    if output_already_present "${BASE}.m2v"; then
+        echo "==> MPEG-2 576i field-picture duplicate already present: ${BASE}.m2v (use --force to regenerate)"
+        write_ttcut_project "$BASE" "m2v" "mp2"
+        return 0
+    fi
+    echo "==> Generating MPEG-2 576i field-picture duplicate (inject every 50 frames, 30s)..."
+    if [[ ! -s "$SRC" ]]; then
+        generate_mpeg2_576i_pal_duplicate
+    fi
+    python3 "$SCRIPTDIR/inject_fieldpictures.py" "$SRC" "${BASE}.m2v" --every 50
+    if [[ ! -s "${BASE}.mp2" ]]; then
+        cp "tux_mpeg2_576i_pal_duplicate.mp2" "${BASE}.mp2"
+    fi
+    write_ttcut_project "$BASE" "m2v" "mp2"
+    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+}
+
 # ---------- MPEG-2 720p progressive, duplicate ----------
 generate_mpeg2_720p_duplicate() {
     local BASE="tux_mpeg2_720p_duplicate"
@@ -482,6 +523,10 @@ case "$ARG" in
     mpeg2)
         generate_mpeg2_576i_pal
         generate_mpeg2_720p
+        generate_mpeg2_576i_fieldpic
+        ;;
+    mpeg2_576i_fieldpic)
+        generate_mpeg2_576i_fieldpic
         ;;
     paff)
         generate_h264_1080i_paff
@@ -492,6 +537,7 @@ case "$ARG" in
         generate_h264_1080p_progressive_duplicate
         generate_h264_1080i_mbaff_duplicate
         generate_mpeg2_576i_pal_duplicate
+        generate_mpeg2_576i_fieldpic_duplicate
         generate_mpeg2_720p_duplicate
         ;;
     all)
@@ -501,15 +547,17 @@ case "$ARG" in
         generate_h264_1080i_paff
         generate_mpeg2_576i_pal
         generate_mpeg2_720p
+        generate_mpeg2_576i_fieldpic
         generate_hevc4k_cra_duplicate
         generate_h264_1080p_progressive_duplicate
         generate_h264_1080i_mbaff_duplicate
         generate_mpeg2_576i_pal_duplicate
+        generate_mpeg2_576i_fieldpic_duplicate
         generate_mpeg2_720p_duplicate
         ;;
     *)
         echo "Unknown argument: $ARG" >&2
-        echo "Usage: $0 [all|hevc4k|h264|mpeg2|paff|duplicate]" >&2
+        echo "Usage: $0 [all|hevc4k|h264|mpeg2|mpeg2_576i_fieldpic|paff|duplicate]" >&2
         exit 1
         ;;
 esac
