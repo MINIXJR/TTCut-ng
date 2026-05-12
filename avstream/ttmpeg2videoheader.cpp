@@ -76,7 +76,8 @@ TTMpeg2VideoHeader::TTMpeg2VideoHeader()
  */
 TTSequenceHeader::TTSequenceHeader() : TTMpeg2VideoHeader()
 {
-  header_start_code = sequence_start_code;
+  header_start_code     = sequence_start_code;
+  progressive_sequence  = false;  // interlaced unless sequence_extension says otherwise
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -94,6 +95,43 @@ bool TTSequenceHeader::readHeader( TTFileBuffer* mpeg2_stream )
     // fill sequence header
     header_offset = mpeg2_stream->position() - 12;
     parseBasicData( header_data );
+
+    // Search for sequence_extension (extension_start_code 0xB5 with id 0x1 in
+    // upper nibble of first extension byte). Limit search to 1024 bytes to
+    // avoid scanning entire file on corrupt data. If no extension is found
+    // (e.g. MPEG-1 stream or truncated), progressive_sequence keeps its
+    // default value of false.
+    int count_zeros = 0;
+    int searchLimit = 1024;
+    quint8 value;
+    do
+    {
+      mpeg2_stream->readByte(value);
+      if ( value == 0x00 )
+      {
+        count_zeros++;
+      }
+      else if ( value != 1 )
+      {
+        count_zeros = 0;
+      }
+      if (--searchLimit <= 0) return true;  // no extension found — keep defaults
+    }
+    while ( value != 0x01 || count_zeros < 2 );
+
+    // value is 0x01, next byte is the start_code_identifier
+    quint8 identifier;
+    mpeg2_stream->readByte(identifier);
+    if (identifier != extension_start_code) return true;  // not extension — keep defaults
+
+    // Read 6 bytes of extension data (enough for progressive_sequence)
+    quint8 ext_data[6];
+    mpeg2_stream->readByte( ext_data, 6 );
+
+    // Check the extension_id nibble (upper 4 bits of byte 0)
+    if ((ext_data[0] & 0xF0) != 0x10) return true;  // not sequence_extension — keep defaults
+
+    parseExtensionData( ext_data );
   }
   catch (TTFileBufferException)
   {
@@ -127,6 +165,15 @@ void TTSequenceHeader::parseBasicData( quint8* data, int offset )
     frame_rate_code = 3;  // default: 25 fps (PAL)
   bit_rate_value               = (int)(((data[offset+4] << 10) + (data[offset+5] << 2)+((data[offset+6] & 0xC0) >> 6))*400);
   vbv_buffer_size_value        = ((data[offset+6] & 0x1F) << 5)+((data[offset+7] & 0xF8) >> 3);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Parse sequence_extension data. progressive_sequence is bit 3 of byte 1
+ * (per ISO/IEC 13818-2 section 6.2.2.3).
+ */
+void TTSequenceHeader::parseExtensionData( quint8* data, int offset )
+{
+  progressive_sequence = ((data[offset+1] & 0x08) == 0x08);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

@@ -120,6 +120,12 @@ class TTSequenceHeader : public TTMpeg2VideoHeader
   int      frame_rate_code;
   int      bit_rate_value;
   int      vbv_buffer_size_value;
+
+  // from sequence_extension [B5/01]
+  bool     progressive_sequence;
+
+ protected:
+  void parseExtensionData( quint8* data, int offset=0 );
 };
 
 /*! \brief SequenceEndHeader
