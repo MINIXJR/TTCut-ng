@@ -53,6 +53,7 @@
 #include "../common/ttmessagelogger.h"
 #include "../extern/tttranscode.h"
 
+#include <QList>
 #include <QString>
 #include <QFileInfo>
 #include <QStack>
@@ -77,6 +78,10 @@ class TTMpeg2VideoStream : public TTVideoStream
     virtual int createIndexList();
 
     virtual TTAVTypes::AVStreamType streamType() const;
+
+    // Field-picture extra indices: second field of each top/bottom pair.
+    // Empty for progressive sequences and frame-picture-only streams.
+    const QList<int>& extraIndices() const { return mExtraIndices; }
 
     virtual bool isCutInPoint( int pos );
     virtual bool isCutOutPoint( int pos );
@@ -105,6 +110,9 @@ class TTMpeg2VideoStream : public TTVideoStream
     void    readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVersion);
     quint64 getByteCount(TTVideoHeader* startObject, TTVideoHeader* endObject);
     // log is inherited from TTAVStream — do not redeclare here.
+
+  private:
+    QList<int> mExtraIndices;
 };
 
 #endif //TTMPEG2VIDEOSTREAM_H

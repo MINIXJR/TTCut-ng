@@ -150,6 +150,12 @@ int TTMpeg2VideoStream::createIndexList()
 
   index_list  = new TTVideoIndexList();
 
+  // Field-picture pair tracking for extra-index detection
+  // (per spec docs/superpowers/specs/2026-05-12-mpeg2-field-picture-fix-design.md)
+  mExtraIndices.clear();
+  bool prev_was_field = false;
+  bool seq_progressive = false;  // updated when a sequence_header is seen
+
   if (TTSettings::instance()->logVideoIndexInfo()) {
     log->infoMsg(__FILE__, __LINE__, "Create index list");
     log->infoMsg(__FILE__, __LINE__, "---------------------------------------------");
@@ -168,6 +174,15 @@ int TTMpeg2VideoStream::createIndexList()
 
     switch ( start_code )
     {
+      case TTMpeg2VideoHeader::sequence_start_code:
+        {
+          TTSequenceHeader* seq = (TTSequenceHeader*)header_list->at(index);
+          if (seq != NULL) {
+            seq_progressive = seq->progressive_sequence;
+          }
+        }
+        break;
+
       case TTMpeg2VideoHeader::group_start_code:
         base_number = current_pic_num;
         break;
@@ -184,6 +199,27 @@ int TTMpeg2VideoStream::createIndexList()
 
           index_list->add( video_index );
 
+          // Field-picture pair detection (Variante 2A per spec).
+          // When two consecutive field-pictures appear, the second one's
+          // index is marked as "extra" so countExtraFramesBefore() corrects
+          // audio cut times. Disabled for progressive sequences.
+          // Value 0 (reserved) treated defensively as frame_picture.
+          if (!seq_progressive) {
+            if (current_pic->picture_structure == 1 ||
+                current_pic->picture_structure == 2) {
+              // field_picture (top or bottom)
+              if (prev_was_field) {
+                mExtraIndices.append(current_pic_num);
+                prev_was_field = false;  // pair complete
+              } else {
+                prev_was_field = true;   // start of new pair
+              }
+            } else {
+              // frame_picture (3) or reserved (0): reset pair state
+              prev_was_field = false;
+            }
+          }
+
          if(TTSettings::instance()->logVideoIndexInfo()) {
             log->infoMsg(__FILE__, __LINE__,
                     QString("stream-order;%1;display-order;%2;frame-type;%3;offset;%4").
@@ -199,6 +235,8 @@ int TTMpeg2VideoStream::createIndexList()
 
   log->debugMsg(__FILE__, __LINE__, QString("time for creating index list %1ms").
       arg(time.elapsed()));
+  log->debugMsg(__FILE__, __LINE__, QString("MPEG-2 field-picture extras: %1 indices")
+      .arg(mExtraIndices.size()));
   return index_list->count();
 }
 
