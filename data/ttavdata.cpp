@@ -386,8 +386,6 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
       if (!mExtraFrameIndices.isEmpty()) {
         qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
-      loadMpeg2FieldExtras(mExtraFrameIndices, avItem->videoStream());
-
       // Store audio gap frame indices (separate list \u2014 used for marker
       // visualization only, NOT for audio cut time correction).
       mAudioGapIndices = esInfo.audioGapFrames();
