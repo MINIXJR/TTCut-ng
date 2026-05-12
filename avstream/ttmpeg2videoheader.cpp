@@ -358,7 +358,8 @@ void TTGOPHeader::parseBasicData( quint8* data, int offset )
 {
   header_start_code = picture_start_code;
 
-  vbv_delay = 0;
+  vbv_delay         = 0;
+  picture_structure = 3;  // default: frame_picture (overridden by parseExtensionData if present)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -431,6 +432,8 @@ void TTPicturesHeader::parseBasicData( quint8* data, int offset )
  */
 void TTPicturesHeader::parseExtensionData( quint8* data, int offset )
 {
+  // picture_structure: bits 1-0 of byte 2 (per ISO/IEC 13818-2 6.2.3.1)
+  picture_structure = data[offset+2] & 0x03;
   progressive_frame = ((data[offset+4] & 0x80) == 0x80);
   top_field_first   = ((data[offset+3] & 0x80) == 0x80);
 }

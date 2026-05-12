@@ -179,5 +179,7 @@ class TTPicturesHeader : public TTMpeg2VideoHeader
   int     vbv_delay;
   bool    progressive_frame;
   bool    top_field_first;
+  // from picture_coding_extension [B5/08]
+  int      picture_structure;  // 1=top, 2=bottom, 3=frame (default: 3)
 };
 #endif //TTMPEG2VIDEOHEADER_H
