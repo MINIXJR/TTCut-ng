@@ -438,7 +438,10 @@ if [ "$VDR_MULTIFILE" = true ]; then
     CONCAT_LIST_FILE="$OUTDIR/.concat_list_$$.txt"
     : > "$CONCAT_LIST_FILE"
     for seg in "${VDR_SEGMENTS[@]}"; do
-        printf "file '%s'\n" "$seg" >> "$CONCAT_LIST_FILE"
+        # realpath: list file paths must be absolute, otherwise ffmpeg's
+        # concat demuxer resolves them relative to the list file's own
+        # directory (OUTDIR), not the working directory of ttcut-demux.
+        printf "file '%s'\n" "$(realpath "$seg")" >> "$CONCAT_LIST_FILE"
     done
     _CLEANUP_FILES+=("$CONCAT_LIST_FILE")
     FFMPEG_INPUT_ARGS=(-f concat -safe 0 -i "$CONCAT_LIST_FILE")
