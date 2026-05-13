@@ -360,6 +360,13 @@ fi
 
 INPUT="$1"
 ORIGINAL_INPUT="$1"  # Save original path before any modifications
+
+# ffmpeg input expression as a bash array. Default for single-file recordings;
+# overridden by the VDR multi-file detection block below to use the concat
+# demuxer with a list file. ffprobe continues to use $INPUT directly.
+declare -a FFMPEG_INPUT_ARGS
+FFMPEG_INPUT_ARGS=(-i "$ORIGINAL_INPUT")
+
 # Handle different extensions
 BASENAME=$(basename "$INPUT")
 BASENAME="${BASENAME%.*}"  # Remove any extension
