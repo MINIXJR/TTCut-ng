@@ -674,7 +674,7 @@ fi
 # Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
 FFMPEG_LOG="$OUTDIR/.ffmpeg_repair.log"
 _CLEANUP_FILES+=("$FFMPEG_LOG")
-if ffmpeg -y -v warning -fflags +genpts+igndts -i "$INPUT" \
+if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     -c copy \
     -avoid_negative_ts make_zero \
     -map 0:v:0 -map 0:a? \
@@ -774,7 +774,6 @@ if $ES_MODE; then
     # 2. Prepare audio extraction parameters (before parallel extraction)
     AUDIO_FILES=()
     declare -A LANG_COUNT  # Track how many times each language appears
-    declare -a AUDIO_EXTRACT_INPUTS=()  # Input file for each audio extraction
     declare -a AUDIO_EXTRACT_SS=()      # -ss value (empty = no trim)
     declare -a AUDIO_EXTRACT_MAPS=()    # Stream map index
 
@@ -796,20 +795,18 @@ if $ES_MODE; then
 
             AUDIO_FILES+=("$OUTPUT_AUDIO")
 
-            # Build extraction command (will be run in parallel)
-            # Use ORIGINAL_INPUT for audio trimming (not the repaired TS).
-            # The repaired TS has shifted timestamps (audio may start at >1s),
-            # so relative -ss on it fails silently (seeks before audio start).
-            # CRITICAL: -ss MUST be AFTER -i for TS files with -c:a copy!
-            # -ss before -i does a byte-level input seek which has no effect
-            # on MPEG-TS audio extraction (produces identical output).
-            # -ss after -i discards packets before the seek point, which works.
+            # Build extraction command (will be run in parallel).
+            # All tracks use FFMPEG_INPUT_ARGS (which is -i $ORIGINAL_INPUT
+            # for single-file recordings and -f concat -safe 0 -i $LIST_FILE
+            # for VDR multi-file). The per-track variation is only -ss, used
+            # when the audio stream starts before the video and we want to
+            # trim the lead-in. -ss MUST be after -i for MPEG-TS audio
+            # extraction with -c:a copy (decoder-side seek; an input-side
+            # seek silently produces identical output here).
             TRACK_TRIM="${AUDIO_TRIM_SECS[$i]:-0}"
             if awk "BEGIN {exit !($TRACK_TRIM > 0.001)}"; then
-                AUDIO_EXTRACT_INPUTS+=("$ORIGINAL_INPUT")
                 AUDIO_EXTRACT_SS+=("$TRACK_TRIM")
             else
-                AUDIO_EXTRACT_INPUTS+=("$INPUT")
                 AUDIO_EXTRACT_SS+=("")
             fi
             AUDIO_EXTRACT_MAPS+=("$idx")
@@ -831,7 +828,7 @@ if $ES_MODE; then
     (
         case "$VIDEO_CODEC" in
             h264)
-                ffmpeg -y -i "$INPUT" \
+                ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
                     -bsf:v h264_mp4toannexb,filter_units=remove_types=12 \
@@ -839,7 +836,7 @@ if $ES_MODE; then
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
             hevc|h265)
-                ffmpeg -y -i "$INPUT" \
+                ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
                     -bsf:v hevc_mp4toannexb,filter_units=remove_types=38 \
@@ -851,14 +848,14 @@ if $ES_MODE; then
                 if [ "$VIDEO_START_TIME" != "0" ]; then
                     FFMPEG_ARGS+=("-ss" "$VIDEO_START_TIME")
                 fi
-                ffmpeg -y "${FFMPEG_ARGS[@]}" -i "$INPUT" \
+                ffmpeg -y "${FFMPEG_ARGS[@]}" "${FFMPEG_INPUT_ARGS[@]}" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
                     -f mpeg2video \
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
             *)
-                ffmpeg -y -i "$INPUT" \
+                ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
                     -map 0:$VIDEO_STREAM \
                     -c:v copy \
                     "$OUTPUT_VIDEO" 2>&1
@@ -869,17 +866,17 @@ if $ES_MODE; then
 
     # Start all audio extractions in parallel
     AUDIO_PIDS=()
-    for i in "${!AUDIO_EXTRACT_INPUTS[@]}"; do
+    for i in "${!AUDIO_STREAMS[@]}"; do
         IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
         info "  Audio $idx [$lang] -> $(basename "${AUDIO_FILES[$i]}")"
 
         # Run each audio extraction in background (direct invocation, no eval)
         if [ -n "${AUDIO_EXTRACT_SS[$i]}" ]; then
-            ffmpeg -y -i "${AUDIO_EXTRACT_INPUTS[$i]}" -ss "${AUDIO_EXTRACT_SS[$i]}" \
+            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -ss "${AUDIO_EXTRACT_SS[$i]}" \
                 -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
                 "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
         else
-            ffmpeg -y -i "${AUDIO_EXTRACT_INPUTS[$i]}" \
+            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
                 -map "0:${AUDIO_EXTRACT_MAPS[$i]}" -c:a copy \
                 "${AUDIO_FILES[$i]}" > "$EXTRACT_LOG_DIR/audio_$i.log" 2>&1 &
         fi
@@ -1408,13 +1405,13 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 dvb_subtitle|dvbsub)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
                     info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
-                    ffmpeg -y -i "$INPUT" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
                     ;;
                 *)
@@ -1660,14 +1657,14 @@ else
 
         # Start video extraction in background; capture stderr so we can
         # diagnose failures instead of silently feeding mkvmerge garbage.
-        ffmpeg -y -i "$INPUT" \
+        ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
             -map 0:$VIDEO_STREAM \
             -c copy \
             "$TEMP_VIDEO" > "$MKV_LOG_DIR/video.log" 2>&1 &
         VIDEO_PID=$!
 
         # Start audio extraction in background
-        ffmpeg -y -i "$INPUT" \
+        ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
             -map 0:$FIRST_AUDIO \
             -c copy \
             "$TEMP_AUDIO" > "$MKV_LOG_DIR/audio.log" 2>&1 &
@@ -1739,7 +1736,7 @@ else
             EXTRA_AUDIO_FILES+=("$OUTPUT_AUDIO")
 
             # Start extraction in background
-            ffmpeg -y -i "$INPUT" \
+            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
                 -map 0:$idx \
                 -c copy \
                 "$OUTPUT_AUDIO" 2>/dev/null &
@@ -1784,13 +1781,13 @@ else
                 dvb_subtitle|dvbsub)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
                     info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
-                    ffmpeg -y -i "$INPUT" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     [ -s "$OUTPUT_SUB" ] || rm -f "$OUTPUT_SUB"
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y -i "$INPUT" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     ;;
                 *)
                     warn "Subtitle stream $idx [$lang]: $codec - not supported"
