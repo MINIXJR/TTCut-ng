@@ -429,6 +429,21 @@ fi
 # Create output directory if needed
 mkdir -p "$OUTDIR"
 
+# Write concat-demuxer list file for VDR multi-file recordings. ffmpeg's
+# concat: protocol mishandles PTS resets at segment boundaries (audio
+# packets discarded when DTS appears to go backward); the concat demuxer
+# treats each segment as a separate input and stitches them logically,
+# surviving PTS resets.
+if [ "$VDR_MULTIFILE" = true ]; then
+    CONCAT_LIST_FILE="$OUTDIR/.concat_list_$$.txt"
+    : > "$CONCAT_LIST_FILE"
+    for seg in "${VDR_SEGMENTS[@]}"; do
+        printf "file '%s'\n" "$seg" >> "$CONCAT_LIST_FILE"
+    done
+    _CLEANUP_FILES+=("$CONCAT_LIST_FILE")
+    FFMPEG_INPUT_ARGS=(-f concat -safe 0 -i "$CONCAT_LIST_FILE")
+fi
+
 # Initialize cleanup flag for repaired temp file
 CLEANUP_REPAIRED=false
 
