@@ -1962,6 +1962,14 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
     int64_t ptsOffset = 0;
     int64_t nextOutputPts = 0;
 
+    // [DRIFT] tracking
+    int totalPacketsWritten = 0;
+    int64_t lastWrittenPtsTicks = 0;  // out time_base ticks
+    qDebug() << "[DRIFT] cutAudioStream start: input"
+             << inputFile << "segments" << cutList.size()
+             << "outTimeBase" << outFmtCtx->streams[0]->time_base.num
+             << "/" << outFmtCtx->streams[0]->time_base.den;
+
     for (int segIdx = 0; segIdx < cutList.size(); ++segIdx) {
         double startTime = cutList[segIdx].first;
         double endTime = cutList[segIdx].second;
@@ -2145,6 +2153,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                         if (ret >= 0) {
                             nextOutputPts = encPkt->pts + frameDuration;
                             acmodReencoded++;
+                            ++totalPacketsWritten;
+                            lastWrittenPtsTicks = encPkt->pts;
                         }
                     }
                     av_packet_free(&encPkt);
@@ -2163,6 +2173,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                         QString("  Warning: av_write_frame failed at %1").arg(pktTime));
                 } else {
                     nextOutputPts = pkt->pts + frameDuration;
+                    ++totalPacketsWritten;
+                    lastWrittenPtsTicks = pkt->pts;
                 }
 
                 av_packet_unref(pkt);
@@ -2183,6 +2195,9 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
     av_packet_free(&pkt);
     av_write_trailer(outFmtCtx);
 
+    // Capture out-stream time_base before context cleanup (used by [DRIFT] log)
+    AVRational outTimeBase = outFmtCtx->streams[0]->time_base;
+
     // Cleanup
     avformat_close_input(&inFmtCtx);
     if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE))
@@ -2198,6 +2213,16 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
 
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "cutAudioStream: Complete, output size:" << outInfo.size() << "bytes";
+
+    {
+        double lastSec = lastWrittenPtsTicks * av_q2d(outTimeBase);
+        qDebug() << "[DRIFT] cutAudioStream done: output" << outputFile
+                 << "totalPackets" << totalPacketsWritten
+                 << "lastWrittenPtsTicks" << lastWrittenPtsTicks
+                 << "outTimeBase" << outTimeBase.num << "/" << outTimeBase.den
+                 << "lastSec" << lastSec
+                 << "outputBytes" << outInfo.size();
+    }
     return true;
 }
 

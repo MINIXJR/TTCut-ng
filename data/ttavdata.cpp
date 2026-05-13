@@ -1265,12 +1265,20 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
     // Build video-domain keep list (extra-frame-corrected, no delay yet)
     QList<QPair<double, double>> videoKeepList;
+    qDebug() << "[DRIFT] Cut path 1, audio track" << i
+             << "frameRate" << frameRate << "delayMs" << delayMs
+             << "extras_total" << mExtraFrameIndices.size();
     for (int c = 0; c < cutList->count(); c++) {
       TTCutItem ci = cutList->at(c);
       int extraIn  = countExtraFramesBefore(ci.cutInIndex());
       int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
       double cutInTime  = (ci.cutInIndex()      - extraIn)  / frameRate;
       double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+      qDebug() << "[DRIFT] Cut" << c
+               << "cutInIndex" << ci.cutInIndex() << "extraIn" << extraIn
+               << "cutOutIndex" << ci.cutOutIndex() << "extraOut" << extraOut
+               << "cutInTime" << cutInTime << "cutOutTime" << cutOutTime
+               << "segMs" << ((cutOutTime - cutInTime) * 1000.0);
       videoKeepList.append(qMakePair(cutInTime, cutOutTime));
     }
     AudioCutPlan plan = planAudioCut(audioStream, videoKeepList, delayMs);
@@ -2034,6 +2042,9 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
   double delaySec = delayMs / 1000.0;
   double runningDriftMs = 0.0;                 // audio_so_far - video_so_far, in ms
 
+  qDebug() << "[DRIFT] planAudioCut start: audioFrameMs" << audioFrameMs
+           << "delayMs" << delayMs << "segments" << videoKeepList.size();
+
   for (int c = 0; c < videoKeepList.size(); c++) {
     double videoStartSec = qMax(0.0, videoKeepList[c].first  + delaySec);
     double videoEndSec   = qMax(videoStartSec, videoKeepList[c].second + delaySec);
@@ -2053,7 +2064,15 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
     double actualAudioMs = numFrames * audioFrameMs;
     double audioEndSec   = audioStartSec + actualAudioMs / 1000.0;
 
+    double snapMs = (videoStartSec - audioStartSec) * 1000.0;  // start-snap quantization
     runningDriftMs += actualAudioMs - videoSegMs;
+
+    qDebug() << "[DRIFT] planAudioCut seg" << c
+             << "videoStartSec" << videoStartSec << "videoEndSec" << videoEndSec
+             << "videoSegMs" << videoSegMs
+             << "audioStartSec" << audioStartSec << "audioEndSec" << audioEndSec
+             << "numFrames" << numFrames << "actualAudioMs" << actualAudioMs
+             << "snapMs" << snapMs << "runningDriftMs" << runningDriftMs;
 
     plan.keepList.append(qMakePair(audioStartSec, audioEndSec));
     plan.drifts.append(static_cast<float>(runningDriftMs));
