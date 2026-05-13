@@ -509,6 +509,87 @@ generate_mpeg2_720p_duplicate() {
     echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
 }
 
+# ---------- MPEG-2 576i synthetic multifile variant ----------
+# Wraps the PAL m2v + audio into a single .ts, then dd-splits it
+# at a TS-aligned (188-byte) offset into 00001.ts / 00002.ts under
+# a synthetic recording directory. Exercises ttcut-demux's VDR
+# multi-file detection and concat-demuxer extraction path on a
+# recording with continuous PCR/PTS (the regular 2 GB split case).
+
+generate_mpeg2_576i_multifile() {
+    local rec_dir="$OUTDIR/tux_mpeg2_576i_multifile_test.rec"
+    local seg1="$rec_dir/00001.ts"
+    local seg2="$rec_dir/00002.ts"
+    local marker="$rec_dir/info"
+
+    if output_already_present "$marker"; then
+        echo "[skip] $rec_dir/"
+        return 0
+    fi
+
+    # Ensure PAL variant prerequisites exist
+    local src_video="$OUTDIR/tux_mpeg2_576i_pal_test.m2v"
+    local src_audio_mp2="$OUTDIR/tux_mpeg2_576i_pal_test.mp2"
+    local src_audio_ac3="$OUTDIR/tux_mpeg2_576i_pal_test.ac3"
+    local src_audio=""
+    if [[ -s "$src_audio_mp2" ]]; then
+        src_audio="$src_audio_mp2"
+    elif [[ -s "$src_audio_ac3" ]]; then
+        src_audio="$src_audio_ac3"
+    fi
+    if [[ ! -s "$src_video" || -z "$src_audio" ]]; then
+        generate_mpeg2_576i_pal
+        if [[ -s "$src_audio_mp2" ]]; then
+            src_audio="$src_audio_mp2"
+        elif [[ -s "$src_audio_ac3" ]]; then
+            src_audio="$src_audio_ac3"
+        fi
+    fi
+
+    mkdir -p "$rec_dir"
+
+    local whole_ts="$rec_dir/.whole.ts"
+    echo "[gen]  $rec_dir/00001.ts + 00002.ts"
+
+    # Mux video + audio into one TS file.
+    # -fflags +genpts on the raw ES video input generates missing PTS values
+    # so the MPEG-TS muxer can assign PCR/PTS timestamps correctly.
+    ffmpeg -y -loglevel error \
+        -fflags +genpts -i "$src_video" -i "$src_audio" \
+        -c copy -f mpegts "$whole_ts"
+
+    # Split at half the file size, rounded down to a multiple of 188
+    # (TS packet size). dd writes 00001.ts and 00002.ts with byte
+    # boundaries that the MPEG-TS demuxer can resync from.
+    local total_size split_pkt_count
+    total_size=$(stat -c%s "$whole_ts")
+    split_pkt_count=$(( total_size / 2 / 188 ))
+
+    dd if="$whole_ts" of="$seg1" bs=188 count="$split_pkt_count" status=none
+    dd if="$whole_ts" of="$seg2" bs=188 skip="$split_pkt_count" status=none
+
+    rm -f "$whole_ts"
+
+    # Touch a minimal VDR-style info marker so output_already_present treats
+    # the directory as "generated" on subsequent runs.
+    echo "Synthetic multi-file test recording" > "$marker"
+
+    # Also write a .ttcut project file pointing at 00001.ts
+    local proj="$OUTDIR/tux_mpeg2_576i_multifile_test.ttcut"
+    cat > "$proj" <<TTCUT
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$seg1</Name>
+ </Video>
+</TTCut-Projectfile>
+TTCUT
+
+    echo "    Done: 00001.ts ($(du -h "$seg1" | cut -f1)) + 00002.ts ($(du -h "$seg2" | cut -f1))"
+}
+
 # ---------- Dispatch ----------
 ARG="${1:-all}"
 case "$ARG" in
@@ -524,9 +605,13 @@ case "$ARG" in
         generate_mpeg2_576i_pal
         generate_mpeg2_720p
         generate_mpeg2_576i_fieldpic
+        generate_mpeg2_576i_multifile
         ;;
     mpeg2_576i_fieldpic)
         generate_mpeg2_576i_fieldpic
+        ;;
+    mpeg2_576i_multifile)
+        generate_mpeg2_576i_multifile
         ;;
     paff)
         generate_h264_1080i_paff
@@ -548,6 +633,7 @@ case "$ARG" in
         generate_mpeg2_576i_pal
         generate_mpeg2_720p
         generate_mpeg2_576i_fieldpic
+        generate_mpeg2_576i_multifile
         generate_hevc4k_cra_duplicate
         generate_h264_1080p_progressive_duplicate
         generate_h264_1080i_mbaff_duplicate
@@ -557,7 +643,7 @@ case "$ARG" in
         ;;
     *)
         echo "Unknown argument: $ARG" >&2
-        echo "Usage: $0 [all|hevc4k|h264|mpeg2|mpeg2_576i_fieldpic|paff|duplicate]" >&2
+        echo "Usage: $0 [all|hevc4k|h264|mpeg2|mpeg2_576i_fieldpic|mpeg2_576i_multifile|paff|duplicate]" >&2
         exit 1
         ;;
 esac
