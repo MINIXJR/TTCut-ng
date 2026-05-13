@@ -692,8 +692,12 @@ if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
         info "Repaired video start time: ${NEW_VIDEO_PTS:-0}s"
         info "Repaired audio start time: ${NEW_AUDIO_PTS:-0}s"
 
-        # Use repaired file for demuxing
+        # Use repaired file for demuxing. Update both $INPUT (for ffprobe
+        # paths) and $FFMPEG_INPUT_ARGS (for ffmpeg paths) — the repaired
+        # file is a single TS with clean PTS, so the concat-demuxer setup
+        # for multi-file recordings is no longer needed past this point.
         INPUT="$REPAIRED_INPUT"
+        FFMPEG_INPUT_ARGS=(-i "$REPAIRED_INPUT")
         CLEANUP_REPAIRED=true
     else
         warn "Timestamp repair failed, using original file"
