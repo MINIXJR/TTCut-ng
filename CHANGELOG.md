@@ -2,41 +2,144 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## v0.68.1 (2026-05-09)
+## v0.69.0 (2026-05-14)
 
-**Search correctness on HEVC 10-bit and raw H.264/H.265 elementary streams**
+**Logging refactor, MPEG-2 A/V drift fix, ttcut-demux multi-file recovery, internal cleanup wave**
+
+### Features
+
+- **Logging subsystem toggles** — six TTSettings booleans gate `qDebug`
+  trace logging per subsystem (Files-Tab → "Erweiterte Logging-Optionen"):
+  `logFFmpegDecoder`, `logSmartCut`, `logMkvMux`, `logCutPipeline`,
+  `logAVStream`, `logUI`. All trace sites default off; failure paths are
+  rewritten as `TTMessageLogger::warningMsg` with `[warning][file:line]`
+  format so they remain visible regardless of toggle state. ~310 qDebug
+  sites across `extern/`, `data/`, `avstream/`, `gui/` and ~40 warnings
+  triaged. Bit-identical MKV output verified after each phase via
+  ffprobe show_packets diff on MBAFF synthetic test fixture.
+- **H.264/H.265 equal-frame search** — `TTFrameSearchTask` now routes
+  H.264 and H.265 streams through `TTFFmpegWrapper::decodeFrameYUV`
+  instead of falling back to MPEG-2 only. Equal-frame lookup in the
+  CutOut widget works on H.264/H.265 ES files.
+- **10-bit / non-YUV420P slow-path** in `TTFFmpegWrapper::decodeFrameYUV`
+  for HEVC Main 10 content that earlier returned a black image.
 
 ### Fixed
-- Black-frame and scene-change search on HEVC 10-bit content (Main 10).
-  `TTFFmpegWrapper::isFrameBlack` and `buildHistogram` cast
+
+- **MPEG-2 field-picture A/V drift in gap-recordings** (11.85 s drift on
+  affected files). `TTMpeg2VideoStream::createIndexList` now detects
+  field-picture pairs in the index, and `TTAVData` loads the extra
+  frame indices so audio cuts apply the correct per-segment offset via
+  `countExtraFramesBefore()`. Verified on real DVB recordings: A/V sync
+  perfect; the residual 104 ms end-PTS diff is a frame-duration
+  asymmetry artefact, not real drift.
+- **ttcut-demux multi-file VDR recordings**: audio extraction recovered
+  from 40.9 s to full duration (2981 s on Two_Part_File). Concat-demuxer
+  list file with absolute paths replaces the broken concat: protocol.
+  Per-segment-boundary silence-insertion (or audio truncation) corrects
+  the inhaltlicher A/V drift that surfaced after the audio-loss fix:
+  new `detect_segment_boundaries()` bash function emits 4-field entries
+  in the same CLASSIFIED_FILE format the existing audio-gap-fix uses;
+  `repair_audio_with_silence_inserts` extended with signed silence_ms
+  (positive = insert silence, negative = truncate audio).
+- **Latent for-loop-i leak** in `repair_audio_with_silence_inserts`
+  surfaced by the synthetic single-track multifile test. Three
+  `for ((i = 0; i < n; i++))` without `local i` leaked `i = n` to the
+  caller; the caller's outer `for i in "${!AUDIO_FILES[@]}"` then
+  indexed `${CLASSIFIED_FILES[$i]}` past array bounds and aborted
+  the script. Single-line `local i` fix.
+- **Black-frame and scene-change search on HEVC 10-bit content**
+  (Main 10). `TTFFmpegWrapper::isFrameBlack` and `buildHistogram` cast
   `mDecodedFrame->data[0]` to `uint8_t*` and indexed by column, so for
   yuv420p10le frames the byte-wise read aliased low/high bytes of
   consecutive 10-bit samples and the early-exit threshold (avg byte ≈
   32 for TV-range black Y=64) discarded every black frame. Both
   functions now detect luma bit depth via `av_pix_fmt_desc_get` and
   read 10/12-bit samples as `uint16_t` with right-shift to 8-bit space.
-  The 8-bit fast path is preserved unchanged for existing 8-bit
-  content (MBAFF, PAFF, MPEG-2).
-- Frame rate detection for raw H.264/H.265 elementary streams.
+- **Frame rate detection for raw H.264/H.265 elementary streams.**
   `TTFFmpegWrapper::getStreamInfo` preferred libav's `avg_frame_rate`,
-  which is computed from displayed-frames / duration and halves the
-  real rate on raw ES files (the first GOP loses `bframes` display
-  frames at the front to the B-frame reorder window). Now
-  `r_frame_rate` (from SPS VUI timing) is preferred. PAFF and MBAFF
-  streams stay at the same final progressive frame rate via the
-  existing `frame_rate>30` PAFF correction in
-  `tth26xvideostream.cpp:153`.
+  which on raw ES files reports real/2 because the first GOP loses
+  `bframes` display frames at the front to the B-frame reorder window.
+  Now `r_frame_rate` (from SPS VUI timing) is preferred. PAFF/MBAFF
+  streams keep their final progressive rate via the existing
+  `frame_rate>30` correction in `tth26xvideostream.cpp:153`.
+
+### Internal refactors
+
+- **TTSettings God-Singleton refactor (Phase A+B)**: 30 commits
+  (`6fa0e75..358cd32`). Six dead status vars deleted (Phase A); ~80
+  persistent settings + ~318 call sites in 26 files migrated through
+  TTSettings strangler-fig (Phase B). Legacy `gui/ttcutsettings.{h,cpp}`
+  (~410 lines) removed. TTCut shrunk 281→127h / 367→213cpp. New
+  `--auto-cut <out.mkv>` CLI flag enables headless QC regression.
+  Bit-identical verified vs pre-refactor master (MBAFF/PAFF/H.265).
+- **TTMessageLogger redesign**: lazy file open (constructor no longer
+  touches filesystem), XDG default path (`~/.cache/ttcut-ng/logfile.log`
+  instead of CWD), `enableLogFile(false)` honest (just suppresses file
+  writes instead of side-effecting `logLevel = NONE`), 1024-byte stack
+  buffer in eight overloads replaced with `QString` builders, thread-safe
+  `getInstance()` via `std::call_once`.
+- **reencodeFrames split** (`9f31ede`, squash-merged): 673-line function
+  → 48-line orchestrator + 13 focused helpers (`computeDecodeRange`,
+  `resetDecoderForSegment`, `selectFramesPAFF`/`selectFramesNonPAFF`,
+  `parseEncoderSpsFromPacket`, `transformEncoderPacket`, `applyPocDomainFix`,
+  …). Per-call state in `ReencodeContext` POD with RAII destructor.
+  Bit-identical encoder packet output verified on MBAFF/PAFF/HEVC.
+- **buildFrameIndex split** (`38bb6ea`): ~300 lines → ~15-line
+  orchestrator + 6 helpers. PAFF-merging moved from inline-while-scan
+  to post-process on raw index. Bit-identical CSV-validated.
+- **mux() refactor** (`bb218bd`): setup/PAFF helpers extracted; audio
+  input shared with `muxAudioOnly`; dead container-remux path removed.
+- **TTH26xVideoStream base class** (`c95cc19`): TTH264VideoStream and
+  TTH265VideoStream consolidated onto a common parent.
+- **GUI threading + search performance** (`d20a070`): TTSearchTask
+  base class moves black/scene/logo workers off the GUI thread.
+  `setSearchMode` flag enables direct keyframe-seek (~28× less decode
+  work). Coordinator + parallelMap with N sub-decoders
+  (`TTSettings::searchWorkerCount`, default 4). MBAFF search jumped
+  from ~1-2 fps to ~120 fps; HEVC 4K CRA-only sees modest improvement
+  bounded by memory bandwidth.
+
+### Security audit follow-up
+
+Twenty-two of 25 findings from the 2026-05-01 audit fixed across
+~30 commits (`eb04368..a01f11e`): path/list-size validation on
+project/info input, hardened stream-parser bounds, libav return-value
+checks on all media-IO paths, exception-by-value/catch-by-const-ref,
+plug RGB frame buffer leak, plug MPEG audio probe leak, fix
+searchTimeIndex precedence bug, guard cut/marker XML parsers, fix
+four GUI bugs (header guard, double-free, dead cleanup, null deref),
+drop broken-by-design `TTFileBuffer::readArray()`, route mux() error
+paths through cleanup label.
 
 ### Tooling
-- New `tools/test-videos/` directory with `make_test_video.sh`, a
-  multi-codec generator that produces synthetic test files with known
-  black-frame, scene-change, and logo markers for search verification.
-  Six codec variants share a 120-second Tux timeline: HEVC 4K Main 10
+
+- **Multi-codec test video generator** (`tools/test-videos/`):
+  `make_test_video.sh` produces synthetic test files with known
+  black-frame/scene-change/logo markers across HEVC 4K Main 10
   (CRA-only Open-GOP), H.264 1080p progressive, H.264 1080i MBAFF,
-  H.264 1080i PAFF (via JM Reference Encoder), MPEG-2 PAL DVB-SD, and
-  MPEG-2 720p progressive. Outputs go to a gitignored `cache/`
-  subdirectory and are reused on subsequent runs unless the script
-  itself has been modified or `--force` is passed.
+  H.264 1080i PAFF (via JM Reference Encoder), MPEG-2 PAL DVB-SD,
+  MPEG-2 720p progressive, and MPEG-2 576i field-picture. Plus
+  MPEG-2 576i multifile variant for VDR multi-file demux tests.
+- **ttcut-demux improvements**: FFMPEG_INPUT_ARGS array unifies
+  all ffmpeg invocations; A/V-sync-aware audio gap detection with
+  marker emission; centralised audio codec→extension mapping.
+- **`tools/vdr-demux-example.sh`**: decodes VFAT character escapes
+  (`#3A → :`, `#3F → ?`) in path components.
+- **`tools/test-videos/paff.cfg`** IDRPeriod tuned from 1500 to 25
+  (every I-slice is now an IDR). Matches real DVB-PAFF cadence
+  (Moon_Crash_(2022) IDR distribution analysis showed 1.2-1.3 s
+  IDR cadence as dominant mode). The original IDRPeriod=1500 made
+  the synthetic PAFF test file unusable for Smart Cut regression
+  (only 2 IDRs in 120s).
+
+### Tests
+
+- All 170+ commits in this release built and run-tested with
+  bit-identical MKV output verified at each major refactor checkpoint
+  (TTSettings refactor, reencodeFrames split, logging refactor phases
+  3-6). Smoke-tested on MBAFF synthetic, PAFF Moon_Crash_(2022), HEVC
+  Designermode, and multiple VDR multi-file recordings.
 
 ## v0.68.0 (2026-05-01)
 
