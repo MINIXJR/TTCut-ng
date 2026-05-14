@@ -212,32 +212,23 @@ repair_audio_with_silence_inserts() {
         aac)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=192000 ;;
     esac
 
-    # Build segment list: pre_gap_1, silence_1, pre_gap_2, silence_2, ..., last_segment
-    # Build a single ffmpeg filter_complex command that:
-    #   1. Slices the original audio at gap positions via atrim
-    #   2. Generates anullsrc silence segments for each gap
-    #   3. Concatenates pre/silence/post via the concat audio filter
-    #   4. Re-encodes the result with the original codec parameters
-    #
-    # Re-encoding (vs stream-copy concat-demuxer) avoids MP2/AC3 frame
-    # misalignment at splice points. For mp2/ac3 the perceptual loss from
-    # one re-encode round-trip is inaudible; PCM fidelity loss < 1 LSB.
-    #
-    # Build a list of (audio_file_pos, gap_duration) tuples:
-    local -a gap_positions  # audio-file-time offsets where silence is inserted
-    local -a gap_durations  # corresponding gap sizes
+    # Per-entry arrays. silence_dur is signed: positive = insert silence of
+    # that many seconds at pos; negative = truncate |dur| seconds from the
+    # after-part at pos.
+    local -a gap_positions
+    local -a gap_durations  # signed seconds
     local accumulated_collapse=0
 
     while IFS=' ' read -r src_start src_end gap_ms silence_ms; do
         [ -z "$src_start" ] && continue
-        # Skip gaps where no silence is needed (true 100% combined A+V loss)
+        # silence_ms exactly 0 means pure A+V loss (no patching needed)
         if [ "${silence_ms:-0}" = "0" ]; then
-            # Still advance accumulated_collapse so subsequent gap positions are correct
             accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + ($src_end - $src_start)}")
             continue
         fi
         local pos dur source_gap
         pos=$(awk "BEGIN {printf \"%.6f\", $src_start - $first_audio_pts - $accumulated_collapse}")
+        # silence_ms is signed; dur is signed in seconds
         dur=$(awk "BEGIN {printf \"%.6f\", $silence_ms / 1000.0}")
         source_gap=$(awk "BEGIN {printf \"%.6f\", $src_end - $src_start}")
         gap_positions+=("$pos")
@@ -250,43 +241,65 @@ repair_audio_with_silence_inserts() {
         return 0  # nothing to do
     fi
 
-    # Build filter_complex: split original audio into N+1 segments at gap positions,
-    # generate N silence sources, concatenate all 2N+1 streams.
-    # Inputs: [0:a] is the original audio. anullsrc inputs follow.
+    # Build filter_complex. For each entry decide insert vs truncate based on
+    # sign of gap_durations[$i].
+    #
+    # Insert (dur > 0): emit pre-segment, silence, advance prev_end to pos.
+    # Truncate (dur < 0): emit pre-segment, skip |dur| s from after-part by
+    #                     advancing prev_end to pos + |dur|.
     local filter=""
     local n=${#gap_positions[@]}
     local prev_end=0
     local seg_count=0
+    local sil_input_count=0
+    local -a sil_durs   # per-silence-source duration, ordered as concat sees them
+    local -a is_insert  # parallel to gap_positions: 1 = insert silence, 0 = truncate
 
-    # atrim segments from original audio
     for ((i = 0; i < n; i++)); do
         local pos="${gap_positions[$i]}"
+        local dur="${gap_durations[$i]}"
         filter+="[0:a]atrim=${prev_end}:${pos},asetpts=PTS-STARTPTS[seg${seg_count}];"
         seg_count=$((seg_count + 1))
-        prev_end="$pos"
+        # Decide based on sign
+        if awk "BEGIN {exit !($dur > 0)}"; then
+            is_insert+=(1)
+            sil_durs+=("$dur")
+            sil_input_count=$((sil_input_count + 1))
+            # After silence insertion, after-part still starts at pos
+            prev_end="$pos"
+        else
+            is_insert+=(0)
+            # Skip |dur| seconds: after-part starts at pos + |dur|
+            local abs_dur
+            abs_dur=$(awk "BEGIN {printf \"%.6f\", ($dur < 0) ? -$dur : $dur}")
+            prev_end=$(awk "BEGIN {printf \"%.6f\", $pos + $abs_dur}")
+        fi
     done
-    # final segment: from last gap position to EOF
+    # Final after-part from last prev_end to EOF
     filter+="[0:a]atrim=${prev_end},asetpts=PTS-STARTPTS[seg${seg_count}];"
     seg_count=$((seg_count + 1))
 
-    # Build concat input list interleaving original-segments with silence-segments
-    # Order: seg0, sil0, seg1, sil1, ..., seg(n-1), sil(n-1), seg(n)
+    # Build concat input list. Order: seg0, [sil0 if insert], seg1, [sil1 if
+    # insert], ..., seg(n-1), [sil(n-1) if insert], seg(n).
     local concat_inputs=""
-    local sil_input_idx=1  # input index 0 is original audio; silence inputs start at 1
+    local sil_input_idx=1  # input 0 is original audio; silence inputs start at 1
     for ((i = 0; i < n; i++)); do
-        concat_inputs+="[seg${i}][${sil_input_idx}:a]"
-        sil_input_idx=$((sil_input_idx + 1))
+        concat_inputs+="[seg${i}]"
+        if [ "${is_insert[$i]}" = "1" ]; then
+            concat_inputs+="[${sil_input_idx}:a]"
+            sil_input_idx=$((sil_input_idx + 1))
+        fi
     done
     concat_inputs+="[seg${n}]"
 
-    local total_segments=$((2 * n + 1))
+    local total_segments=$((n + 1 + sil_input_count))
     filter+="${concat_inputs}concat=n=${total_segments}:v=0:a=1[out]"
 
-    # Build silence -i arguments (one per gap)
+    # Build silence -i arguments (one per insert entry)
     local silence_args=""
-    for ((i = 0; i < n; i++)); do
-        local dur="${gap_durations[$i]}"
-        silence_args+=" -f lavfi -t ${dur} -i anullsrc=r=${sample_rate}:cl=${channels}c"
+    for ((i = 0; i < sil_input_count; i++)); do
+        local sdur="${sil_durs[$i]}"
+        silence_args+=" -f lavfi -t ${sdur} -i anullsrc=r=${sample_rate}:cl=${channels}c"
     done
 
     # Run the single-pass re-encode
