@@ -65,6 +65,7 @@ void TTCutSettingsFiles::setTabData()
   cbLogPlusMkvMux->setChecked( TTSettings::instance()->logMkvMux() );
   cbLogPlusCutPipeline->setChecked( TTSettings::instance()->logCutPipeline() );
   cbLogPlusAVStream->setChecked( TTSettings::instance()->logAVStream() );
+  cbLogPlusUI->setChecked( TTSettings::instance()->logUI() );
 
   gbLogfileOptions->setEnabled(TTSettings::instance()->createLogFile());
 }
@@ -89,6 +90,7 @@ void TTCutSettingsFiles::getTabData()
   TTSettings::instance()->setLogMkvMux( cbLogPlusMkvMux->isChecked( ) );
   TTSettings::instance()->setLogCutPipeline( cbLogPlusCutPipeline->isChecked( ) );
   TTSettings::instance()->setLogAVStream( cbLogPlusAVStream->isChecked( ) );
+  TTSettings::instance()->setLogUI( cbLogPlusUI->isChecked( ) );
 }
 
 void TTCutSettingsFiles::onCreateLogStateChanged(int state)

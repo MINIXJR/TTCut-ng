@@ -717,11 +717,12 @@ void TTCutTreeView::updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
     int firstAcmod = hFirst->acmod;
     int lastAcmod  = hLast->acmod;
 
-    qDebug() << "updateAcmodIcon: cutIn=" << item.cutInIndex() << "cutOut=" << item.cutOutIndex()
-             << "cutInMs=" << cutInTimeMs << "cutOutMs=" << cutOutTimeMs
-             << "startIdx=" << startIdx << "endIdx=" << endIdx
-             << "totalFrames=" << hdrList->count()
-             << "firstAcmod=" << firstAcmod << "lastAcmod=" << lastAcmod;
+    if (TTSettings::instance()->logUI())
+        qDebug() << "updateAcmodIcon: cutIn=" << item.cutInIndex() << "cutOut=" << item.cutOutIndex()
+                 << "cutInMs=" << cutInTimeMs << "cutOutMs=" << cutOutTimeMs
+                 << "startIdx=" << startIdx << "endIdx=" << endIdx
+                 << "totalFrames=" << hdrList->count()
+                 << "firstAcmod=" << firstAcmod << "lastAcmod=" << lastAcmod;
 
     // Sample first ~100 frames to determine majority acmod
     static const int SAMPLE = 100;

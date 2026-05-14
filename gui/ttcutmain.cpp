@@ -159,7 +159,8 @@ int main( int argc, char **argv )
 
       // Open file from command line after event loop starts
       if (!videoFile.isEmpty()) {
-        qDebug() << "Opening file from command line:" << videoFile;
+        if (TTSettings::instance()->logUI())
+            qDebug() << "Opening file from command line:" << videoFile;
         QTimer::singleShot(100, [mainWnd, videoFile]() {
           if (videoFile.endsWith(".prj", Qt::CaseInsensitive) ||
               videoFile.endsWith(".ttcut", Qt::CaseInsensitive)) {

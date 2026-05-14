@@ -1067,9 +1067,11 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   delete cutAVDlg;
 
   // Connect to cutFinished signal for notification
-  qDebug() << "Connecting cutFinished signal to onCutFinished slot";
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Connecting cutFinished signal to onCutFinished slot";
   bool connected = connect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
-  qDebug() << "Connection result:" << connected;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Connection result:" << connected;
 
   mpAVData->onDoCut(QFileInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->cutVideoName()).absoluteFilePath(), cutData, audioOnly);
 }
@@ -1079,7 +1081,8 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
  */
 void TTCutMainWindow::onCutFinished()
 {
-  qDebug() << "TTCutMainWindow::onCutFinished() called!";
+  if (TTSettings::instance()->logUI())
+      qDebug() << "TTCutMainWindow::onCutFinished() called!";
   disconnect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
 
   if (mpAVData->lastCutWasAudioOnly()) {
@@ -1090,7 +1093,8 @@ void TTCutMainWindow::onCutFinished()
   }
 
   QString outputFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->cutVideoName()).absoluteFilePath();
-  qDebug() << "Showing completion dialog for:" << outputFile;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Showing completion dialog for:" << outputFile;
 
   QMessageBox::information(this, tr("Cutting Complete"),
       tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile));
@@ -1326,12 +1330,14 @@ void TTCutMainWindow::saveWidgetScreenshot(QWidget* widget, const QString& filen
     }
     QString path = QDir(TTSettings::instance()->screenshotDir()).filePath(filename);
     pixmap.save(path, "PNG");
-    qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
+    if (TTSettings::instance()->logUI())
+        qDebug() << "Screenshot:" << path << pixmap.width() << "x" << pixmap.height();
 }
 
 void TTCutMainWindow::runAutoCutMode(QString projectFile, QString outputPath)
 {
-  qDebug() << "Auto-cut: loading project" << projectFile;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Auto-cut: loading project" << projectFile;
   openProjectFile(projectFile);
 
   QElapsedTimer timer;
@@ -1368,7 +1374,8 @@ void TTCutMainWindow::runAutoCutMode(QString projectFile, QString outputPath)
     else                                          TTSettings::instance()->setEncoderCodec(0);
   }
 
-  qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath;
 
   connect(mpAVData, &TTAVData::cutFinished, &QApplication::quit);
   mpAVData->onDoCut(QFileInfo(QDir(outFI.absolutePath()), outFI.completeBaseName()).absoluteFilePath(),
@@ -1379,7 +1386,8 @@ void TTCutMainWindow::runScreenshotMode()
 {
     const QString screenshotProject = TTSettings::instance()->screenshotProject();
     if (screenshotProject.isEmpty()) {
-        qDebug() << "Screenshot mode: no --project specified";
+        if (TTSettings::instance()->logUI())
+            qDebug() << "Screenshot mode: no --project specified";
         QApplication::quit();
         return;
     }
@@ -1401,7 +1409,8 @@ void TTCutMainWindow::runScreenshotMode()
     QThread::msleep(2000);
     QApplication::processEvents();
 
-    qDebug() << "Screenshot mode: project loaded, avCount=" << mpAVData->avCount();
+    if (TTSettings::instance()->logUI())
+        qDebug() << "Screenshot mode: project loaded, avCount=" << mpAVData->avCount();
 
     // 1. Main window
     saveWidgetScreenshot(this, "ttcutng-main.png", 1200);
@@ -1532,7 +1541,8 @@ void TTCutMainWindow::runScreenshotMode()
     QFile::remove(docsPath);
     QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);
 
-    qDebug() << "Screenshot mode complete:" << outDir.absolutePath();
+    if (TTSettings::instance()->logUI())
+        qDebug() << "Screenshot mode complete:" << outDir.absolutePath();
     QApplication::quit();
 }
 

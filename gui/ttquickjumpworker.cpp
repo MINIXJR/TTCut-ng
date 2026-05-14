@@ -7,6 +7,7 @@
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttvideoheaderlist.h"
+#include "../common/ttmessagelogger.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QDebug>
@@ -44,14 +45,16 @@ void TTQuickJumpWorker::operation()
     try {
       mpeg2Decoder = new TTMpeg2Decoder(mFilePath, mIndexList, mHeaderList, formatRGB32);
     } catch (TTMpeg2DecoderException) {
-      qDebug() << "QuickJump: Failed to create MPEG-2 decoder";
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("QuickJump: Failed to create MPEG-2 decoder"));
       return;
     }
   } else {
     // TTFFmpegWrapper is QObject-based -- MUST be created in worker thread (here)
     ffmpegWrapper = new TTFFmpegWrapper();
     if (!ffmpegWrapper->openFile(mFilePath)) {
-      qDebug() << "QuickJump: Failed to open file:" << ffmpegWrapper->lastError();
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("QuickJump: Failed to open file: %1").arg(ffmpegWrapper->lastError()));
       delete ffmpegWrapper;
       return;
     }
@@ -60,7 +63,8 @@ void TTQuickJumpWorker::operation()
       ffmpegWrapper->setFrameIndex(mPrebuiltFrameIndex);
     } else {
       if (!ffmpegWrapper->buildFrameIndex()) {
-        qDebug() << "QuickJump: Failed to build frame index:" << ffmpegWrapper->lastError();
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("QuickJump: Failed to build frame index: %1").arg(ffmpegWrapper->lastError()));
         delete ffmpegWrapper;
         return;
       }
@@ -82,7 +86,8 @@ void TTQuickJumpWorker::operation()
           thumb = img.scaled(mThumbSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         }
       } catch (TTMpeg2DecoderException) {
-        qDebug() << "QuickJump: MPEG-2 decode failed for frame" << frameIndex;
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("QuickJump: MPEG-2 decode failed for frame %1").arg(frameIndex));
       }
     } else {
       QImage img = ffmpegWrapper->decodeFrame(frameIndex);

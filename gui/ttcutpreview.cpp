@@ -29,6 +29,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "../common/ttexception.h"
+#include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "ttcutpreview.h"
 #include "../avstream/ttavstream.h"
@@ -441,9 +442,10 @@ void TTCutPreview::onBurstShift()
         } else {
           avItem->updateCutEntry(realItem, newIdx, realItem.cutOutIndex());
         }
-        qDebug() << "Burst shift: Updated REAL model cut" << i
-                 << (mBurstIsCutOut ? "CutOut" : "CutIn")
-                 << "Frame" << oldIdx << "->" << newIdx;
+        if (TTSettings::instance()->logUI())
+            qDebug() << "Burst shift: Updated REAL model cut" << i
+                     << (mBurstIsCutOut ? "CutOut" : "CutIn")
+                     << "Frame" << oldIdx << "->" << newIdx;
         break;
       }
     }
@@ -468,9 +470,10 @@ void TTCutPreview::onBurstShift()
   }
   mpCutList->update(previewItem, updatedPreview);
 
-  qDebug() << "Burst shift:" << (mBurstIsCutOut ? "CutOut" : "CutIn")
-           << "Frame" << oldIdx << "->" << newIdx
-           << "(original cut" << originalIdx << ")";
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Burst shift:" << (mBurstIsCutOut ? "CutOut" : "CutIn")
+               << "Frame" << oldIdx << "->" << newIdx
+               << "(original cut" << originalIdx << ")";
 
   // Show feedback
   QString label = mBurstIsCutOut ? "CutOut neu" : "CutIn neu";
@@ -551,7 +554,8 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
     regenerateSmartCutPreviewClip(fileIndex, &tmpCutList, &progress);
   }
 
-  qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
 
   // Reload clip in player
   current_video_file = outputFile;
@@ -658,7 +662,8 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
   } else {
     QFile::rename(videoFile, outputFile);
   }
-  qDebug() << "Regenerate MPEG-2 preview (MKV):" << outputFile;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Regenerate MPEG-2 preview (MKV):" << outputFile;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -694,7 +699,8 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   TTESSmartCut smartCut;
   smartCut.setPresetOverride(TTSettings::instance()->previewPreset());
   if (!smartCut.initialize(sourceFile, frameRate)) {
-    qDebug() << "Regenerate: Smart Cut init failed:" << smartCut.lastError();
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Regenerate: Smart Cut init failed: %1").arg(smartCut.lastError()));
     return;
   }
 
@@ -708,7 +714,8 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
       .arg(TTSettings::instance()->tempDirPath()).arg(suffix);
 
   if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
-    qDebug() << "Regenerate: Smart Cut failed:" << smartCut.lastError();
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Regenerate: Smart Cut failed: %1").arg(smartCut.lastError()));
     return;
   }
 

@@ -37,6 +37,7 @@
 #include "../avstream/ttesinfo.h"
 #include "../extern/ttmkvmergeprovider.h"
 #include "../common/ttcut.h"
+#include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 
 extern "C" {
@@ -485,14 +486,16 @@ void TTCurrentFrame::onPlayVideo()
     if (playbackPos >= 0) {
       // Use time position from mpv IPC - use floor to get the frame being displayed
       newFrame = static_cast<int>(playbackPos * frameRate);
-      qDebug() << "mpv time position:" << playbackPos << "s -> frame" << newFrame
-               << "(rate:" << frameRate << ")";
+      if (TTSettings::instance()->logUI())
+          qDebug() << "mpv time position:" << playbackPos << "s -> frame" << newFrame
+                   << "(rate:" << frameRate << ")";
     } else {
       // Fallback: use elapsed time (less accurate)
       qint64 elapsedMs = mPlayTimer.elapsed();
       int elapsedFrames = static_cast<int>((elapsedMs / 1000.0) * frameRate);
       newFrame = mPlayStartFrame + elapsedFrames;
-      qDebug() << "Fallback: elapsed" << elapsedMs << "ms -> frame" << newFrame;
+      if (TTSettings::instance()->logUI())
+          qDebug() << "Fallback: elapsed" << elapsedMs << "ms -> frame" << newFrame;
     }
 
     // Clamp to valid range
@@ -545,7 +548,8 @@ void TTCurrentFrame::onPlayVideo()
     QApplication::restoreOverrideCursor();
 
     if (tempMkv.isEmpty()) {
-      qDebug() << "Failed to create temp MKV for H.264/H.265 playback";
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Failed to create temp MKV for H.264/H.265 playback"));
       return;
     }
 
@@ -576,7 +580,8 @@ void TTCurrentFrame::onPlayVideo()
     args << videoStream->filePath();
   }
 
-  qDebug() << "Starting mpv:" << args;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Starting mpv:" << args;
 
   // Start timer just before starting mpv (after MKV creation)
   mPlayTimer.start();
@@ -589,7 +594,8 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
   if (!mTempPlaybackFile.isEmpty()) {
     if (QFile::exists(mTempPlaybackFile)) {
       QFile::remove(mTempPlaybackFile);
-      qDebug() << "Removed temp playback file:" << mTempPlaybackFile;
+      if (TTSettings::instance()->logUI())
+          qDebug() << "Removed temp playback file:" << mTempPlaybackFile;
     }
     mTempPlaybackFile.clear();
   }
@@ -608,7 +614,8 @@ double TTCurrentFrame::getMpvPlaybackPosition()
   socket.connectToServer(mMpvSocketPath);
 
   if (!socket.waitForConnected(500)) {
-    qDebug() << "Failed to connect to mpv IPC socket";
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Failed to connect to mpv IPC socket"));
     return -1.0;
   }
 
@@ -628,7 +635,8 @@ double TTCurrentFrame::getMpvPlaybackPosition()
   socket.flush();
 
   if (!socket.waitForReadyRead(500)) {
-    qDebug() << "mpv IPC timeout";
+    if (TTSettings::instance()->logUI())
+        qDebug() << "mpv IPC timeout";
     socket.disconnectFromServer();
     return -1.0;
   }
@@ -637,7 +645,8 @@ double TTCurrentFrame::getMpvPlaybackPosition()
 
   // Parse JSON response: {"data":123.456,"error":"success"}
   QString respStr = QString::fromUtf8(response);
-  qDebug() << "mpv time-pos response:" << respStr;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "mpv time-pos response:" << respStr;
 
   int dataIdx = respStr.indexOf("\"data\":");
   if (dataIdx < 0) {
@@ -662,7 +671,8 @@ double TTCurrentFrame::getMpvPlaybackPosition()
   socket.disconnectFromServer();
 
   if (!ok) {
-    qDebug() << "Failed to parse mpv position:" << numStr;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Failed to parse mpv position: %1").arg(numStr));
     return -1.0;
   }
 
@@ -690,7 +700,8 @@ QString TTCurrentFrame::createTempMkvForPlayback()
       }
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
         avOffsetMs = esInfo.avOffsetMs();
-        qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
+        if (TTSettings::instance()->logUI())
+            qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
       }
     }
   }
@@ -722,14 +733,17 @@ QString TTCurrentFrame::createTempMkvForPlayback()
     }
   }
 
-  qDebug() << "Creating temp MKV via libav:" << videoStream->filePath();
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Creating temp MKV via libav:" << videoStream->filePath();
 
   if (!mkvProvider.mux(tempMkv, videoStream->filePath(), audioFiles)) {
-    qDebug() << "Temp MKV creation failed:" << mkvProvider.lastError();
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Temp MKV creation failed: %1").arg(mkvProvider.lastError()));
     return QString();
   }
 
-  qDebug() << "Temp MKV created:" << tempMkv;
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Temp MKV created:" << tempMkv;
   return tempMkv;
 }
 

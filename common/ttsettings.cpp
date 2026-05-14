@@ -250,6 +250,12 @@ void TTSettings::setLogAVStream(bool v)
   mLogAVStream = v;
 }
 
+void TTSettings::setLogUI(bool v)
+{
+  if (mLogUI == v) return;
+  mLogUI = v;
+}
+
 // ---- Recent Files group setter (Task 7) ------------------------------------
 // Emits a change-notification signal. Mutating call sites
 // (append/prepend/removeAll) must read-modify-write through this setter so
@@ -769,6 +775,7 @@ void TTSettings::load()
   mLogMkvMux = settings.value("LogMkvMux/", mLogMkvMux).toBool();
   mLogCutPipeline = settings.value("LogCutPipeline/", mLogCutPipeline).toBool();
   mLogAVStream = settings.value("LogAVStream/", mLogAVStream).toBool();
+  mLogUI = settings.value("LogUI/", mLogUI).toBool();
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------
@@ -990,6 +997,7 @@ void TTSettings::save()
   settings.setValue("LogMkvMux/", mLogMkvMux);
   settings.setValue("LogCutPipeline/", mLogCutPipeline);
   settings.setValue("LogAVStream/", mLogAVStream);
+  settings.setValue("LogUI/", mLogUI);
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------
