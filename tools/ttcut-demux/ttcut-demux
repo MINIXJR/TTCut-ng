@@ -269,10 +269,13 @@ repair_audio_with_silence_inserts() {
             prev_end="$pos"
         else
             is_insert+=(0)
-            # Skip |dur| seconds: after-part starts at pos + |dur|
+            # Skip |dur| seconds: after-part starts at pos + |dur|.
+            # Pass dur as awk -v variable to avoid shell expansion of negative
+            # numbers producing double-minus syntax errors (e.g. -$dur with
+            # dur=-0.533 expands to "--0.533").
             local abs_dur
-            abs_dur=$(awk "BEGIN {printf \"%.6f\", ($dur < 0) ? -$dur : $dur}")
-            prev_end=$(awk "BEGIN {printf \"%.6f\", $pos + $abs_dur}")
+            abs_dur=$(awk -v d="$dur" 'BEGIN {printf "%.6f", (d < 0) ? -d : d}')
+            prev_end=$(awk -v p="$pos" -v a="$abs_dur" 'BEGIN {printf "%.6f", p + a}')
         fi
     done
     # Final after-part from last prev_end to EOF
