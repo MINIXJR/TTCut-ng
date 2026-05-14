@@ -186,6 +186,13 @@
            </property>
           </widget>
          </item>
+         <item row="7" column="0" >
+          <widget class="QCheckBox" name="cbLogPlusAVStream" >
+           <property name="text" >
+            <string>AV-stream parser information</string>
+           </property>
+          </widget>
+         </item>
          <item row="1" column="0" >
           <widget class="QCheckBox" name="cbLogExtended" >
            <property name="text" >

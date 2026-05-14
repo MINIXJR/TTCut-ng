@@ -9,6 +9,9 @@
 
 #include "ttnaluparser.h"
 
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
+
 #include <QDebug>
 #include <QFileInfo>
 #include <QSet>
@@ -60,9 +63,11 @@ bool TTNaluParser::openFile(const QString& filePath)
         return false;
     }
 
-    qDebug() << "TTNaluParser: Opened" << filePath;
-    qDebug() << "  File size:" << mFileSize << "bytes";
-    qDebug() << "  Codec:" << codecName();
+    if (TTSettings::instance()->logAVStream()) {
+        qDebug() << "TTNaluParser: Opened" << filePath;
+        qDebug() << "  File size:" << mFileSize << "bytes";
+        qDebug() << "  Codec:" << codecName();
+    }
 
     return true;
 }
@@ -187,7 +192,8 @@ bool TTNaluParser::parseFile()
     mPPSList.clear();
     mVPSList.clear();
 
-    qDebug() << "TTNaluParser: Parsing file...";
+    if (TTSettings::instance()->logAVStream())
+        qDebug() << "TTNaluParser: Parsing file...";
 
     // Find all NAL units
     mFile.seek(0);
@@ -241,7 +247,8 @@ bool TTNaluParser::parseFile()
 
             // Progress output
             if (nalCount % 10000 == 0) {
-                qDebug() << "  Parsed" << nalCount << "NAL units...";
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "  Parsed" << nalCount << "NAL units...";
             }
         }
 
@@ -255,17 +262,21 @@ bool TTNaluParser::parseFile()
         lastNal.dataSize = lastNal.size - (lastNal.dataOffset - lastNal.fileOffset);
     }
 
-    qDebug() << "  NAL units found:" << nalCount;
-    qDebug() << "  SPS:" << mSPSList.size() << ", PPS:" << mPPSList.size() << "(before dedup)";
+    if (TTSettings::instance()->logAVStream()) {
+        qDebug() << "  NAL units found:" << nalCount;
+        qDebug() << "  SPS:" << mSPSList.size() << ", PPS:" << mPPSList.size() << "(before dedup)";
+    }
 
     // Deduplicate parameter sets (now that all NAL sizes are set)
     deduplicateList(mSPSList);
     deduplicateList(mPPSList);
     deduplicateList(mVPSList);
 
-    qDebug() << "  SPS:" << mSPSList.size() << "(unique), PPS:" << mPPSList.size() << "(unique)";
+    if (TTSettings::instance()->logAVStream())
+        qDebug() << "  SPS:" << mSPSList.size() << "(unique), PPS:" << mPPSList.size() << "(unique)";
     if (mCodecType == NALU_CODEC_H265) {
-        qDebug() << "  VPS:" << mVPSList.size() << "(unique)";
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "  VPS:" << mVPSList.size() << "(unique)";
     }
 
     // Build access units (group NALs into frames)
@@ -274,9 +285,11 @@ bool TTNaluParser::parseFile()
     // Build GOP structure
     buildGOPs();
 
-    qDebug() << "TTNaluParser: Parsing complete";
-    qDebug() << "  Access Units (frames):" << mAccessUnits.size();
-    qDebug() << "  GOPs:" << mGops.size();
+    if (TTSettings::instance()->logAVStream()) {
+        qDebug() << "TTNaluParser: Parsing complete";
+        qDebug() << "  Access Units (frames):" << mAccessUnits.size();
+        qDebug() << "  GOPs:" << mGops.size();
+    }
 
     return true;
 }
@@ -293,7 +306,8 @@ int TTNaluParser::findNextStartCode(int64_t startPos, int64_t& codePos, int& cod
         mMappedFile = mFile.map(0, mFileSize);
 
         if (!mMappedFile) {
-            qDebug() << "Warning: Could not map entire file, falling back to chunk mode";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("Could not map entire file, falling back to chunk mode"));
             // Fallback to chunk-based reading
             mFile.seek(startPos);
             QByteArray buffer = mFile.read(qMin((int64_t)(64 * 1024 * 1024), mFileSize - startPos));
@@ -314,7 +328,8 @@ int TTNaluParser::findNextStartCode(int64_t startPos, int64_t& codePos, int& cod
             }
             return -1;
         }
-        qDebug() << "TTNaluParser: Mapped entire file to memory (" << (mFileSize / (1024*1024)) << "MB)";
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "TTNaluParser: Mapped entire file to memory (" << (mFileSize / (1024*1024)) << "MB)";
     }
 
     // Direct memory search - FAST!
@@ -574,8 +589,9 @@ void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
     mSpsInfoMap[spsId] = info;
 
     if (!frameMbsOnlyFlag) {
-        qDebug() << "  SPS" << spsId << ": frame_mbs_only_flag=0 (may contain field pictures)"
-                 << "log2_max_frame_num_minus4=" << log2MaxFrameNumMinus4;
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "  SPS" << spsId << ": frame_mbs_only_flag=0 (may contain field pictures)"
+                     << "log2_max_frame_num_minus4=" << log2MaxFrameNumMinus4;
     }
 }
 
@@ -885,7 +901,8 @@ void TTNaluParser::buildAccessUnits()
         mAccessUnits.append(currentAU);
     }
 
-    qDebug() << "  Built" << mAccessUnits.size() << "access units";
+    if (TTSettings::instance()->logAVStream())
+        qDebug() << "  Built" << mAccessUnits.size() << "access units";
 
     // Pass 2: Merge field pairs (PAFF)
     bool hasFieldSlices = false;
@@ -963,8 +980,9 @@ void TTNaluParser::buildAccessUnits()
                     mAccessUnits[j].decodeIndex = j;
                 }
                 mIsPAFF = true;
-                qDebug() << "  PAFF detected: merged" << mergeCount << "field pairs"
-                         << "-> " << mAccessUnits.size() << "frames";
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "  PAFF detected: merged" << mergeCount << "field pairs"
+                             << "-> " << mAccessUnits.size() << "frames";
             }
         }
     }
@@ -1016,7 +1034,8 @@ void TTNaluParser::buildGOPs()
     currentGop.frameCount = currentGop.endAU - currentGop.startAU + 1;
     mGops.append(currentGop);
 
-    qDebug() << "  Built" << mGops.size() << "GOPs";
+    if (TTSettings::instance()->logAVStream())
+        qDebug() << "  Built" << mGops.size() << "GOPs";
 }
 
 // ----------------------------------------------------------------------------
@@ -1297,8 +1316,9 @@ int TTNaluParser::computeReorderDelay() const
         }
     }
 
-    qDebug() << "TTNaluParser: max consecutive B-frames in first" << gopsChecked
-             << "GOPs:" << maxConsecutiveB << "-> reorder delay:" << maxConsecutiveB;
+    if (TTSettings::instance()->logAVStream())
+        qDebug() << "TTNaluParser: max consecutive B-frames in first" << gopsChecked
+                 << "GOPs:" << maxConsecutiveB << "-> reorder delay:" << maxConsecutiveB;
     return maxConsecutiveB;
 }
 
@@ -1371,7 +1391,8 @@ bool TTNaluParser::isSliceType(uint8_t type, TTNaluCodecType codec)
 void TTNaluParser::setError(const QString& error)
 {
     mLastError = error;
-    qDebug() << "TTNaluParser error:" << error;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("TTNaluParser error: %1").arg(error));
 }
 
 // ----------------------------------------------------------------------------

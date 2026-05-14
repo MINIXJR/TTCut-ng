@@ -127,6 +127,9 @@ public:
   bool    logCutPipeline() const     { return mLogCutPipeline; }
   void    setLogCutPipeline(bool v);
 
+  bool    logAVStream() const        { return mLogAVStream; }
+  void    setLogAVStream(bool v);
+
   // ----- Recent Files group (Task 7) --------------------------------------
   // Setter emits recentFilesChanged() so subscribed UI elements
   // (recent-files menu) can refresh without ad-hoc refresh hooks.
@@ -433,6 +436,7 @@ private:
   bool    mLogSmartCut = false;
   bool    mLogMkvMux = false;
   bool    mLogCutPipeline = false;
+  bool    mLogAVStream = false;
 
   // ----- Recent Files group (Task 7) ---------------------------------------
   QStringList mRecentFileList;

@@ -17,6 +17,9 @@
 
 #include <algorithm>
 
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
+
 // ----------------------------------------------------------------------------
 // TTMarkerInfo implementation
 // ----------------------------------------------------------------------------
@@ -138,11 +141,13 @@ bool TTESInfo::load(const QString& infoFilePath)
     file.close();
     mLoaded = true;
 
-    qDebug() << "Loaded ES info:" << infoFilePath;
-    qDebug() << "  Video:" << mVideoFile << mVideoCodec;
-    qDebug() << "  Resolution:" << mVideoWidth << "x" << mVideoHeight;
-    qDebug() << "  Frame rate:" << mFrameRateNum << "/" << mFrameRateDen << "=" << frameRate();
-    qDebug() << "  Audio tracks:" << mAudioTracks.size();
+    if (TTSettings::instance()->logAVStream()) {
+        qDebug() << "Loaded ES info:" << infoFilePath;
+        qDebug() << "  Video:" << mVideoFile << mVideoCodec;
+        qDebug() << "  Resolution:" << mVideoWidth << "x" << mVideoHeight;
+        qDebug() << "  Frame rate:" << mFrameRateNum << "/" << mFrameRateDen << "=" << frameRate();
+        qDebug() << "  Audio tracks:" << mAudioTracks.size();
+    }
 
     return true;
 }
@@ -201,7 +206,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         }
 
         if (!mMarkers.isEmpty()) {
-            qDebug() << "  VDR Markers:" << mMarkers.size();
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "  VDR Markers:" << mMarkers.size();
         }
     }
     else if (section == "timing") {
@@ -212,7 +218,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         mHasTimingInfo = true;
 
         if (mAvOffsetMs != 0) {
-            qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
         }
     }
     else if (section == "warnings") {
@@ -229,7 +236,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
                 if (ok) mEsExtraFrames.append(frameIdx);
             }
             if (!mEsExtraFrames.isEmpty())
-                qDebug() << "Loaded" << mEsExtraFrames.size() << "extra frame indices from .info";
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "Loaded" << mEsExtraFrames.size() << "extra frame indices from .info";
         }
 
         // Parse audio gap frame indices (analogous to es_extra_frames).
@@ -246,7 +254,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             }
             std::sort(mAudioGapFrames.begin(), mAudioGapFrames.end());
             if (!mAudioGapFrames.isEmpty())
-                qDebug() << "Loaded" << mAudioGapFrames.size() << "audio gap frame indices from .info";
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "Loaded" << mAudioGapFrames.size() << "audio gap frame indices from .info";
         }
 
         // Legacy format: decode error regions (from old ffmpeg -err_detect check).
@@ -274,8 +283,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         }
 
         if (mDecodeErrors > 0) {
-            qDebug() << "  Warnings:" << mDecodeErrors << "decode errors in"
-                     << mDecodeErrorRegions.size() << "regions";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("%1 decode errors in %2 regions").arg(mDecodeErrors).arg(mDecodeErrorRegions.size()));
         }
     }
 
@@ -423,8 +432,9 @@ void TTESInfo::correctFrameRateForPAFF()
     if (mFrameRateNum > 30 && mFrameRateDen == 1) {
         int oldRate = mFrameRateNum;
         mFrameRateNum /= 2;
-        qDebug() << "TTESInfo: PAFF frame rate correction:" << oldRate
-                 << "/" << mFrameRateDen << " -> " << mFrameRateNum << "/" << mFrameRateDen;
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "TTESInfo: PAFF frame rate correction:" << oldRate
+                     << "/" << mFrameRateDen << " -> " << mFrameRateNum << "/" << mFrameRateDen;
     }
 }
 
