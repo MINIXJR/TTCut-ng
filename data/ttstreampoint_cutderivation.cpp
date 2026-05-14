@@ -4,6 +4,7 @@
 
 #include "ttstreampoint_cutderivation.h"
 #include "../avstream/ttavstream.h"
+#include "../common/ttsettings.h"
 
 #include <QDebug>
 #include <algorithm>
@@ -25,7 +26,8 @@ QList<TTDerivedCutPair> TTStreamPointCutDerivation::deriveCutPairs(
   if (clusters.isEmpty())
     return result;
 
-  qDebug() << "CutDerivation:" << clusters.size() << "clusters from" << points.size() << "points";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "CutDerivation:" << clusters.size() << "clusters from" << points.size() << "points";
 
   // 2. Classify clusters using audio format direction
   //    5.1→2.0 = ad break start = Cut-Out
@@ -94,7 +96,8 @@ QList<TTDerivedCutPair> TTStreamPointCutDerivation::deriveCutPairs(
     }
   }
 
-  qDebug() << "CutDerivation:" << result.size() << "cut pairs derived";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "CutDerivation:" << result.size() << "cut pairs derived";
   return result;
 }
 

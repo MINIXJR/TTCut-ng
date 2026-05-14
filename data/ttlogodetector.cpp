@@ -3,6 +3,9 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttlogodetector.h"
+
+#include "../common/ttsettings.h"
+
 #include <QFile>
 #include <QtMath>
 #include <QDebug>
@@ -97,9 +100,10 @@ bool TTLogoDetector::loadMarkadLogo(const QString& pgmPath,
 
   mMarkadLogoPath = pgmPath;
 
-  qDebug() << "Loaded markad logo:" << pgmPath
-           << logoW << "x" << logoH << "corner" << corner
-           << "ROI" << mROI;
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Loaded markad logo:" << pgmPath
+               << logoW << "x" << logoH << "corner" << corner
+               << "ROI" << mROI;
 
   return true;
 }

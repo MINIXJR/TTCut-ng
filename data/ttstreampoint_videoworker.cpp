@@ -8,6 +8,8 @@
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
 #include "../common/ttcut.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../extern/ttffmpegwrapper.h"
 
@@ -45,7 +47,8 @@ void TTStreamPointVideoWorker::operation()
     onStatusReport(StatusReportArgs::Step, tr("Seitenverhältnis-Analyse..."), step);
     QList<TTStreamPoint> aspectPoints = detectAspectChanges();
     allPoints.append(aspectPoints);
-    qDebug() << "StreamPointVideo: Found" << aspectPoints.size() << "aspect ratio changes";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointVideo: Found" << aspectPoints.size() << "aspect ratio changes";
     step++;
   }
 
@@ -53,7 +56,8 @@ void TTStreamPointVideoWorker::operation()
     onStatusReport(StatusReportArgs::Step, tr("Pillarbox-Analyse..."), step);
     QList<TTStreamPoint> pillarboxPoints = detectPillarboxChanges();
     allPoints.append(pillarboxPoints);
-    qDebug() << "StreamPointVideo: Found" << pillarboxPoints.size() << "pillarbox changes";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointVideo: Found" << pillarboxPoints.size() << "pillarbox changes";
     step++;
   }
 
@@ -113,8 +117,9 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
                           (aspect == 3) ? "16:9" :
                           QString::number(aspect);
 
-        qDebug() << "detectAspectChanges:" << prevStr << "->" << newStr
-                 << "at picture" << pictureCount;
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "detectAspectChanges:" << prevStr << "->" << newStr
+                     << "at picture" << pictureCount;
 
         TTStreamPoint pt(pictureCount, StreamPointType::AspectChange,
           QString("%1 \u2192 %2").arg(prevStr, newStr),
@@ -125,8 +130,9 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
     }
   }
 
-  qDebug() << "detectAspectChanges:" << pictureCount << "pictures scanned,"
-           << results.size() << "changes found";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "detectAspectChanges:" << pictureCount << "pictures scanned,"
+               << results.size() << "changes found";
 
   return results;
 }
@@ -226,13 +232,15 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectPillarboxChanges()
       mpeg2 = new TTMpeg2Decoder(mVideoFilePath, mVideoIndexList,
                                   mVideoHeaderList, formatYV12);
     } catch (TTMpeg2DecoderException&) {
-      qDebug() << "detectPillarboxChanges: Failed to create MPEG-2 decoder";
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("detectPillarboxChanges: Failed to create MPEG-2 decoder"));
       return results;
     }
   } else {
     ffmpeg = new TTFFmpegWrapper();
     if (!ffmpeg->openFile(mVideoFilePath)) {
-      qDebug() << "detectPillarboxChanges: Failed to open file with FFmpeg";
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("detectPillarboxChanges: Failed to open file with FFmpeg"));
       delete ffmpeg;
       return results;
     }
@@ -302,7 +310,8 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectPillarboxChanges()
                          desc, 0.0f, 0.0f);
         results.append(pt);
 
-        qDebug() << "detectPillarboxChanges:" << desc << "at frame" << candidateFirstFrame;
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "detectPillarboxChanges:" << desc << "at frame" << candidateFirstFrame;
       }
     }
 
@@ -322,8 +331,9 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectPillarboxChanges()
     pos = nextPos;
   }
 
-  qDebug() << "detectPillarboxChanges:" << iframeCount << "I-frames analyzed,"
-           << results.size() << "changes found";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "detectPillarboxChanges:" << iframeCount << "I-frames analyzed,"
+               << results.size() << "changes found";
 
   // Cleanup
   delete mpeg2;

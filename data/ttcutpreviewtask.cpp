@@ -33,6 +33,7 @@
 #include <QFileInfo>
 
 #include "../common/ttexception.h"
+#include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/istatusreporter.h"
@@ -106,7 +107,8 @@ void TTCutPreviewTask::operation()
   for (const QFileInfo& fi : oldPreviewFiles) {
     QFile::remove(fi.absoluteFilePath());
   }
-  qDebug() << "Cleaned up" << oldPreviewFiles.count() << "old preview files";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Cleaned up" << oldPreviewFiles.count() << "old preview files";
 
   mpPreviewCutList = createPreviewCutList(mpCutList);
 
@@ -143,14 +145,16 @@ void TTCutPreviewTask::operation()
 		initTimer.start();
 		sharedSmartCut = new TTESSmartCut();
 		if (!sharedSmartCut->initialize(vStream->filePath(), frameRate)) {
-			qDebug() << "Preview: Shared Smart Cut init failed:" << sharedSmartCut->lastError();
+			TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+				QString("Preview: Shared Smart Cut init failed: %1").arg(sharedSmartCut->lastError()));
 			delete sharedSmartCut;
 			sharedSmartCut = nullptr;
 		} else {
 			const int previewPreset = TTSettings::instance()->previewPreset();
 			sharedSmartCut->setPresetOverride(previewPreset);
-			qDebug() << "Preview: Shared Smart Cut initialized in" << initTimer.elapsed() << "ms"
-			         << "(ES parsed once for all clips, preview preset:" << previewPreset << ")";
+			if (TTSettings::instance()->logCutPipeline())
+				qDebug() << "Preview: Shared Smart Cut initialized in" << initTimer.elapsed() << "ms"
+				         << "(ES parsed once for all clips, preview preset:" << previewPreset << ")";
 		}
 	}
 
@@ -258,7 +262,8 @@ void TTCutPreviewTask::operation()
           TTESInfo esInfo(infoFile);
           if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
             avOffsetMs = esInfo.avOffsetMs();
-            qDebug() << "MPEG-2 preview: A/V sync offset from .info:" << avOffsetMs << "ms";
+            if (TTSettings::instance()->logCutPipeline())
+                qDebug() << "MPEG-2 preview: A/V sync offset from .info:" << avOffsetMs << "ms";
           }
         }
 
@@ -286,18 +291,22 @@ void TTCutPreviewTask::operation()
           }
           if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
           mkvProv.mux(outputFile, videoFile, audioFiles, QStringList());
-          qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
+          if (TTSettings::instance()->logCutPipeline())
+              qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
         } else {
           // No audio — just rename video file to output
           QFile::rename(videoFile, outputFile);
-          qDebug() << "MPEG-2 preview (no audio):" << outputFile;
+          if (TTSettings::instance()->logCutPipeline())
+              qDebug() << "MPEG-2 preview (no audio):" << outputFile;
         }
       }
       catch (const TTException&)
       {
-        qDebug() << "catched exception from cutVideoTask!";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("catched exception from cutVideoTask!"));
         delete tmpCutList;
-        qDebug() << "redirect exception from cutVideoTask...";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "redirect exception from cutVideoTask...";
         throw;
       }
     }
@@ -309,7 +318,8 @@ void TTCutPreviewTask::operation()
 
   delete sharedSmartCut;
 
-  qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";
 
   // Report the cumulative A/V drift after each segment as produced by the
   // audio cut planner (audio-frame-aligned with feed-forward compensation).
@@ -374,38 +384,44 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     if (esInfo.isLoaded()) {
       if (frameRate <= 0 && esInfo.frameRate() > 0) {
         frameRate = esInfo.frameRate();
-        qDebug() << "Preview: ES frame rate from .info (fallback):" << frameRate << "fps";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Preview: ES frame rate from .info (fallback):" << frameRate << "fps";
       }
       if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
         avOffsetMs = esInfo.avOffsetMs();
-        qDebug() << "Preview: A/V sync offset from .info:" << avOffsetMs << "ms";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Preview: A/V sync offset from .info:" << avOffsetMs << "ms";
       }
     }
   }
 
-  qDebug() << "H.264 preview: source=" << sourceFile << "fps=" << frameRate
-           << "hasAudio=" << hasAudio;
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "H.264 preview: source=" << sourceFile << "fps=" << frameRate
+               << "hasAudio=" << hasAudio;
 
   // Build frame-based cut list
   QList<QPair<int, int>> cutFrames;
   for (int i = 0; i < cutList->count(); i++) {
     TTCutItem item = cutList->at(i);
     cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
-    qDebug() << "  Preview segment" << i+1 << ": frames" << item.cutInIndex() << "->" << item.cutOutIndex();
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "  Preview segment" << i+1 << ": frames" << item.cutInIndex() << "->" << item.cutOutIndex();
   }
 
   // --- Video Smart Cut (use shared instance or create local) ---
   QElapsedTimer clipTimer;
   clipTimer.start();
 
-  qDebug() << "Preview: Using Smart Cut (frame-accurate)";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Preview: Using Smart Cut (frame-accurate)";
 
   TTESSmartCut localSmartCut;
   TTESSmartCut* smartCut = sharedSmartCut;
   if (!smartCut) {
     localSmartCut.setPresetOverride(TTSettings::instance()->previewPreset());
     if (!localSmartCut.initialize(sourceFile, frameRate)) {
-      qDebug() << "Preview Smart Cut init failed:" << localSmartCut.lastError();
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Preview Smart Cut init failed: %1").arg(localSmartCut.lastError()));
       return;
     }
     smartCut = &localSmartCut;
@@ -418,14 +434,16 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
   // Perform frame-accurate video cut
   if (!smartCut->smartCutFrames(tempVideoFile, cutFrames)) {
-    qDebug() << "Preview Smart Cut failed:" << smartCut->lastError();
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Preview Smart Cut failed: %1").arg(smartCut->lastError()));
     return;
   }
 
   qint64 smartCutMs = clipTimer.elapsed();
-  qDebug() << "Preview Smart Cut complete in" << smartCutMs << "ms:"
-           << smartCut->framesReencoded() << "re-encoded,"
-           << smartCut->framesStreamCopied() << "stream-copied";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Preview Smart Cut complete in" << smartCutMs << "ms:"
+               << smartCut->framesReencoded() << "re-encoded,"
+               << smartCut->framesStreamCopied() << "stream-copied";
 
   // --- Cut audio (same approach as final cut in doH264Cut) ---
   int frameDurationNs = (int)(1000000000.0 / frameRate);
@@ -460,9 +478,11 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     TTFFmpegWrapper ffmpeg;
     if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
       cutAudioFiles.append(cutAudioFile);
-      qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
     } else {
-      qDebug() << "Preview audio cut failed";
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Preview audio cut failed"));
     }
   }
 
@@ -490,15 +510,19 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // so we do NOT add it again here via setAudioDelays.
 
   if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
-    qDebug() << "Preview mux complete in" << muxTimer.elapsed() << "ms:" << outputFile;
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "Preview mux complete in" << muxTimer.elapsed() << "ms:" << outputFile;
   } else {
-    qDebug() << "Preview mux failed:" << mkvProvider.lastError();
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Preview mux failed: %1").arg(mkvProvider.lastError()));
   }
 
-  qDebug() << "Preview clip total time:" << clipTimer.elapsed() << "ms";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Preview clip total time:" << clipTimer.elapsed() << "ms";
 
   // Clean up temp files (KEEP video for debugging)
-  qDebug() << "DEBUG: Keeping temp video file:" << tempVideoFile;
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "DEBUG: Keeping temp video file:" << tempVideoFile;
   //QFile::remove(tempVideoFile);
   for (const QString& f : cutAudioFiles) {
     QFile::remove(f);

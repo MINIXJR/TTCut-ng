@@ -299,7 +299,8 @@ static void loadMpeg2FieldExtras(QList<int>& target, TTVideoStream* vStream)
   if (mpeg2 == nullptr) return;
   target = mpeg2->extraIndices();
   if (!target.isEmpty()) {
-    qDebug() << "Loaded" << target.size() << "MPEG-2 field-picture extra indices";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "Loaded" << target.size() << "MPEG-2 field-picture extra indices";
   }
 }
 
@@ -353,7 +354,8 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
           QString lang = infoLangMap.value(af.fileName());
           if (!lang.isEmpty()) {
             setPendingAudioLanguage(avItem, audioOrder, lang);
-            qDebug() << "  Audio language from .info:" << af.fileName() << "=" << lang;
+            if (TTSettings::instance()->logCutPipeline())
+                qDebug() << "  Audio language from .info:" << af.fileName() << "=" << lang;
           }
           ++audioOrder;
         }
@@ -361,7 +363,8 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
 
       // Load VDR markers
       if (esInfo.hasMarkers()) {
-        qDebug() << "Found VDR markers in info file:" << esInfo.markerCount();
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Found VDR markers in info file:" << esInfo.markerCount();
 
         QList<QPair<int, int>> cutPairs;
         QList<TTMarkerInfo> markers = esInfo.markers();
@@ -372,7 +375,8 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
 
           if (cutIn > 0 && cutOut > cutIn) {
             cutPairs.append(qMakePair(cutIn, cutOut));
-            qDebug() << "  VDR cut pair:" << cutIn << "-" << cutOut;
+            if (TTSettings::instance()->logCutPipeline())
+                qDebug() << "  VDR cut pair:" << cutIn << "-" << cutOut;
           }
         }
 
@@ -384,13 +388,15 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
       // Store extra frame indices for audio time correction
       mExtraFrameIndices = esInfo.esExtraFrames();
       if (!mExtraFrameIndices.isEmpty()) {
-        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
       // Store audio gap frame indices (separate list \u2014 used for marker
       // visualization only, NOT for audio cut time correction).
       mAudioGapIndices = esInfo.audioGapFrames();
       if (!mAudioGapIndices.isEmpty()) {
-        qDebug() << "Loaded" << mAudioGapIndices.size() << "audio gap frame indices";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Loaded" << mAudioGapIndices.size() << "audio gap frame indices";
       }
 
       // Show clustering dialog if extra frames OR audio gaps were detected
@@ -616,7 +622,8 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
       TTESInfo esInfo(infoFile);
       if (esInfo.isLoaded() && !esInfo.esExtraFrames().isEmpty()) {
         mExtraFrameIndices = esInfo.esExtraFrames();
-        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
       }
     }
     loadMpeg2FieldExtras(mExtraFrameIndices, vStream);
@@ -644,10 +651,12 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
       }
     }
     if (markersAtFieldRate) {
-      qDebug() << "  VDR markers exceed frame count — halving for PAFF field-rate correction";
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "  VDR markers exceed frame count — halving for PAFF field-rate correction";
     }
 
-    qDebug() << "Adding" << cutPairs.size() << "VDR cut entries, video has" << frameCount << "frames";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "Adding" << cutPairs.size() << "VDR cut entries, video has" << frameCount << "frames";
 
     QList<TTStreamPoint> vdrPoints;
 
@@ -661,7 +670,8 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
       }
 
       if (cutIn >= 0 && cutOut > cutIn) {
-        qDebug() << "  Adding VDR cut:" << cutIn << "-" << cutOut;
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "  Adding VDR cut:" << cutIn << "-" << cutOut;
         avItem->appendCutEntry(cutIn, cutOut);
 
         // Also add individual markers for the Marker tab
@@ -692,7 +702,8 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
   if (!demuxedAudio.isEmpty()) {
     QFileInfo audioInfo(demuxedAudio);
     if (audioInfo.exists()) {
-      qDebug() << "Loading demuxed audio:" << demuxedAudio;
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Loading demuxed audio:" << demuxedAudio;
       doOpenAudioStream(avItem, demuxedAudio);
     }
   }
@@ -1035,7 +1046,8 @@ void TTAVData::onReadProjectFileFinished()
  */
 void TTAVData::onReadProjectFileAborted()
 {
-  qDebug() << "TAVData::onReadProjectFileAborted";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "TAVData::onReadProjectFileAborted";
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onReadProjectFileFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
@@ -1223,7 +1235,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       // Ensure extra frame indices are loaded for audio time correction
       if (mExtraFrameIndices.isEmpty() && !esInfo.esExtraFrames().isEmpty()) {
         mExtraFrameIndices = esInfo.esExtraFrames();
-        qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction (cut path)";
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction (cut path)";
       }
       loadMpeg2FieldExtras(mExtraFrameIndices, firstStream);
     }
@@ -1265,20 +1278,22 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
     // Build video-domain keep list (extra-frame-corrected, no delay yet)
     QList<QPair<double, double>> videoKeepList;
-    qDebug() << "[DRIFT] Cut path 1, audio track" << i
-             << "frameRate" << frameRate << "delayMs" << delayMs
-             << "extras_total" << mExtraFrameIndices.size();
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "[DRIFT] Cut path 1, audio track" << i
+                 << "frameRate" << frameRate << "delayMs" << delayMs
+                 << "extras_total" << mExtraFrameIndices.size();
     for (int c = 0; c < cutList->count(); c++) {
       TTCutItem ci = cutList->at(c);
       int extraIn  = countExtraFramesBefore(ci.cutInIndex());
       int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
       double cutInTime  = (ci.cutInIndex()      - extraIn)  / frameRate;
       double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
-      qDebug() << "[DRIFT] Cut" << c
-               << "cutInIndex" << ci.cutInIndex() << "extraIn" << extraIn
-               << "cutOutIndex" << ci.cutOutIndex() << "extraOut" << extraOut
-               << "cutInTime" << cutInTime << "cutOutTime" << cutOutTime
-               << "segMs" << ((cutOutTime - cutInTime) * 1000.0);
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "[DRIFT] Cut" << c
+                   << "cutInIndex" << ci.cutInIndex() << "extraIn" << extraIn
+                   << "cutOutIndex" << ci.cutOutIndex() << "extraOut" << extraOut
+                   << "cutInTime" << cutInTime << "cutOutTime" << cutOutTime
+                   << "segMs" << ((cutOutTime - cutInTime) * 1000.0);
       videoKeepList.append(qMakePair(cutInTime, cutOutTime));
     }
     AudioCutPlan plan = planAudioCut(audioStream, videoKeepList, delayMs);
@@ -1626,9 +1641,11 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   // Update cutVideoName with actual output filename for notification
   TTSettings::instance()->setCutVideoName(QFileInfo(finalOutput).fileName());
 
-  qDebug() << "About to emit cutFinished() signal, cutVideoName =" << TTSettings::instance()->cutVideoName();
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "About to emit cutFinished() signal, cutVideoName =" << TTSettings::instance()->cutVideoName();
   emit cutFinished();
-  qDebug() << "cutFinished() signal emitted";
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "cutFinished() signal emitted";
 }
 
 //! Audio video cut finished
@@ -1642,11 +1659,13 @@ void TTAVData::onCutFinished()
   int lastIdx = mpMuxList->count() - 1;
   TTMuxListDataItem& muxItem = mpMuxList->itemAt(lastIdx);
 
-  qDebug() << "onCutFinished: outputContainer =" << TTSettings::instance()->outputContainer();
-  qDebug() << "onCutFinished: muxMode =" << TTSettings::instance()->muxMode();
-  qDebug() << "onCutFinished: video =" << muxItem.getVideoName();
-  qDebug() << "onCutFinished: audio =" << muxItem.getAudioNames();
-  qDebug() << "onCutFinished: subtitle =" << muxItem.getSubtitleNames();
+  if (TTSettings::instance()->logCutPipeline()) {
+    qDebug() << "onCutFinished: outputContainer =" << TTSettings::instance()->outputContainer();
+    qDebug() << "onCutFinished: muxMode =" << TTSettings::instance()->muxMode();
+    qDebug() << "onCutFinished: video =" << muxItem.getVideoName();
+    qDebug() << "onCutFinished: audio =" << muxItem.getAudioNames();
+    qDebug() << "onCutFinished: subtitle =" << muxItem.getSubtitleNames();
+  }
 
   // Select muxer based on outputContainer setting
   // 0 = MPG (mplex)
@@ -1675,7 +1694,8 @@ void TTAVData::onCutFinished()
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {
           mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
-          qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
+          if (TTSettings::instance()->logCutPipeline())
+              qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
         }
 
         // Note: per-track audio delay is already baked into the audio cut files
@@ -1704,7 +1724,8 @@ void TTAVData::onCutFinished()
                                cutLength.msec();
           }
 
-          qDebug() << "Total cut duration:" << totalDurationMs << "ms";
+          if (TTSettings::instance()->logCutPipeline())
+              qDebug() << "Total cut duration:" << totalDurationMs << "ms";
 
           if (totalDurationMs > 0) {
             mkvProvider->setTotalDurationMs(totalDurationMs);
@@ -1716,7 +1737,8 @@ void TTAVData::onCutFinished()
           }
         }
 
-        qDebug() << "Muxing to MKV:" << mkvOutput;
+        if (TTSettings::instance()->logCutPipeline())
+            qDebug() << "Muxing to MKV:" << mkvOutput;
 
         bool muxSuccess = mkvProvider->mux(mkvOutput,
                              muxItem.getVideoName(),
@@ -1724,7 +1746,8 @@ void TTAVData::onCutFinished()
                              muxItem.getSubtitleNames());
 
         if (muxSuccess) {
-          qDebug() << "MKV muxing completed successfully";
+          if (TTSettings::instance()->logCutPipeline())
+              qDebug() << "MKV muxing completed successfully";
 
           // Delete elementary streams if option is set
           if (TTSettings::instance()->muxDeleteES()) {
@@ -1733,7 +1756,8 @@ void TTAVData::onCutFinished()
                                     muxItem.getSubtitleNames());
           }
         } else {
-          qDebug() << "MKV muxing failed:" << mkvProvider->lastError();
+          TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+              QString("MKV muxing failed: %1").arg(mkvProvider->lastError()));
         }
 
         // Clean up chapter file
@@ -1746,7 +1770,8 @@ void TTAVData::onCutFinished()
       break;
 
     case 3: // Elementary - no muxing
-      qDebug() << "Elementary output selected, skipping muxing";
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Elementary output selected, skipping muxing";
       break;
 
     case 0: // TS - use mplex (default, existing behavior)
@@ -2042,8 +2067,9 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
   double delaySec = delayMs / 1000.0;
   double runningDriftMs = 0.0;                 // audio_so_far - video_so_far, in ms
 
-  qDebug() << "[DRIFT] planAudioCut start: audioFrameMs" << audioFrameMs
-           << "delayMs" << delayMs << "segments" << videoKeepList.size();
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "[DRIFT] planAudioCut start: audioFrameMs" << audioFrameMs
+               << "delayMs" << delayMs << "segments" << videoKeepList.size();
 
   for (int c = 0; c < videoKeepList.size(); c++) {
     double videoStartSec = qMax(0.0, videoKeepList[c].first  + delaySec);
@@ -2067,12 +2093,13 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
     double snapMs = (videoStartSec - audioStartSec) * 1000.0;  // start-snap quantization
     runningDriftMs += actualAudioMs - videoSegMs;
 
-    qDebug() << "[DRIFT] planAudioCut seg" << c
-             << "videoStartSec" << videoStartSec << "videoEndSec" << videoEndSec
-             << "videoSegMs" << videoSegMs
-             << "audioStartSec" << audioStartSec << "audioEndSec" << audioEndSec
-             << "numFrames" << numFrames << "actualAudioMs" << actualAudioMs
-             << "snapMs" << snapMs << "runningDriftMs" << runningDriftMs;
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "[DRIFT] planAudioCut seg" << c
+                 << "videoStartSec" << videoStartSec << "videoEndSec" << videoEndSec
+                 << "videoSegMs" << videoSegMs
+                 << "audioStartSec" << audioStartSec << "audioEndSec" << audioEndSec
+                 << "numFrames" << numFrames << "actualAudioMs" << actualAudioMs
+                 << "snapMs" << snapMs << "runningDriftMs" << runningDriftMs;
 
     plan.keepList.append(qMakePair(audioStartSec, audioEndSec));
     plan.drifts.append(static_cast<float>(runningDriftMs));

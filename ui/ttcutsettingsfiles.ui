@@ -179,6 +179,13 @@
            </property>
           </widget>
          </item>
+         <item row="6" column="0" >
+          <widget class="QCheckBox" name="cbLogPlusCutPipeline" >
+           <property name="text" >
+            <string>Cut pipeline information</string>
+           </property>
+          </widget>
+         </item>
          <item row="1" column="0" >
           <widget class="QCheckBox" name="cbLogExtended" >
            <property name="text" >

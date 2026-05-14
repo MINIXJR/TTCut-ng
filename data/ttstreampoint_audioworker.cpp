@@ -6,6 +6,8 @@
 #include "../avstream/ttaudioheaderlist.h"
 #include "../avstream/ttac3audioheader.h"
 #include "../avstream/ttavtypes.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -47,20 +49,24 @@ void TTStreamPointAudioWorker::operation()
   onStatusReport(StatusReportArgs::Start, tr("Analyzing audio..."), 2);
 
   if (mDetectSilence && !mIsAborted) {
-    qDebug() << "StreamPointAudio: Detecting silence...";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointAudio: Detecting silence...";
     onStatusReport(StatusReportArgs::Step, tr("Stille-Erkennung..."), mStepCount);
     QList<TTStreamPoint> silencePoints = detectSilencePoints();
     allPoints.append(silencePoints);
-    qDebug() << "StreamPointAudio: Found" << silencePoints.size() << "silence regions";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointAudio: Found" << silencePoints.size() << "silence regions";
     mStepCount = 1;
   }
 
   if (mDetectAudioChange && !mIsAborted) {
-    qDebug() << "StreamPointAudio: Detecting audio format changes...";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointAudio: Detecting audio format changes...";
     onStatusReport(StatusReportArgs::Step, tr("Audioformat-Erkennung..."), mStepCount);
     QList<TTStreamPoint> changePoints = detectAudioChanges();
     allPoints.append(changePoints);
-    qDebug() << "StreamPointAudio: Found" << changePoints.size() << "format changes";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "StreamPointAudio: Found" << changePoints.size() << "format changes";
     mStepCount = 2;
   }
 
@@ -91,7 +97,8 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   AVFormatContext* fmtCtx = nullptr;
   if (avformat_open_input(&fmtCtx, mAudioFilePath.toUtf8().constData(),
                            nullptr, nullptr) < 0) {
-    qDebug() << "StreamPointAudio: Cannot open" << mAudioFilePath;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("StreamPointAudio: Cannot open %1").arg(mAudioFilePath));
     return results;
   }
   if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
@@ -144,7 +151,8 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
                                     srcArgs, nullptr, filterGraph) < 0 ||
       avfilter_graph_create_filter(&bufferSinkCtx, abufferSink, "out",
                                     nullptr, nullptr, filterGraph) < 0) {
-    qDebug() << "StreamPointAudio: Failed to create audio buffer src/sink";
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("StreamPointAudio: Failed to create audio buffer src/sink"));
     avfilter_graph_free(&filterGraph);
     avcodec_free_context(&codecCtx);
     avformat_close_input(&fmtCtx);
@@ -170,7 +178,8 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   if (avfilter_graph_parse_ptr(filterGraph, filterDescr.toUtf8().constData(),
                                 &inputs, &outputs, nullptr) < 0 ||
       avfilter_graph_config(filterGraph, nullptr) < 0) {
-    qDebug() << "StreamPointAudio: Failed to configure silencedetect filter";
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("StreamPointAudio: Failed to configure silencedetect filter"));
     avfilter_inout_free(&inputs);
     avfilter_inout_free(&outputs);
     avfilter_graph_free(&filterGraph);
@@ -256,7 +265,8 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
   while ((tag = av_dict_get(filtFrame->metadata, "lavfi.silence_", tag, AV_DICT_IGNORE_SUFFIX))) {
     QString key = QString::fromUtf8(tag->key);
     QString val = QString::fromUtf8(tag->value);
-    qDebug() << "  silencedetect metadata:" << key << "=" << val;
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "  silencedetect metadata:" << key << "=" << val;
   }
 
   // Check for silence_start → create point at start position

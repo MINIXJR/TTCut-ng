@@ -31,6 +31,7 @@
 #include "ttopensubtitletask.h"
 
 #include "../common/ttexception.h"
+#include "../common/ttsettings.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttavstream.h"
 #include "ttavlist.h"
@@ -59,7 +60,8 @@ void TTOpenSubtitleTask::onUserAbort()
 
   if (mpSubtitleStream != 0)
   {
-    qDebug() << "open subtitle stream abort; subtitleStream is not null";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "open subtitle stream abort; subtitleStream is not null";
     mpSubtitleStream->setAbort(true);
   }
 }

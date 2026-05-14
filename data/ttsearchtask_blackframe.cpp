@@ -5,6 +5,7 @@
 #include "ttsearchtask_blackframe.h"
 
 #include "../avstream/ttvideoindexlist.h"
+#include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
@@ -74,10 +75,11 @@ void TTBlackFrameSearchTask::operation()
   }
 
   qint64 ms = t.elapsed();
-  qDebug() << "BlackFrameSearch:" << checked << "I-frames in" << ms << "ms"
-           << (checked > 0
-                 ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
-                 : QString());
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "BlackFrameSearch:" << checked << "I-frames in" << ms << "ms"
+               << (checked > 0
+                     ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
+                     : QString());
 
   emit found(foundPos, mIsAborted);
   teardownWorkers();

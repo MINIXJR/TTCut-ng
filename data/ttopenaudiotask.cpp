@@ -30,8 +30,8 @@
 
 #include "ttopenaudiotask.h"
 
-#include "../common/ttmessagelogger.h"
 #include "../common/ttexception.h"
+#include "../common/ttsettings.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavlist.h"
@@ -59,7 +59,8 @@ void TTOpenAudioTask::onUserAbort()
   abort();
 
 	if (mpAudioStream != 0) {
-    qDebug() << "open audio stream abort; audioStream is not null";
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "open audio stream abort; audioStream is not null";
     mpAudioStream->setAbort(true);
   }
 }

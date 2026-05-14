@@ -5,6 +5,8 @@
 #include "ttsearchtask_scenechange.h"
 
 #include "../avstream/ttvideoindexlist.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
@@ -51,7 +53,8 @@ void TTSceneChangeSearchTask::operation()
               ? buildHistogramAt(firstPos, mPrevHist, mPrevTotal)
               : mSubWrappers[0]->buildHistogram(firstPos, mPrevHist, mPrevTotal);
   if (!ok) {
-    qDebug() << "SceneChangeSearch: failed to build initial histogram at frame" << firstPos;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("SceneChangeSearch: failed to build initial histogram at frame %1").arg(firstPos));
     emit found(-1, false);
     teardownWorkers();
     return;
@@ -99,10 +102,11 @@ void TTSceneChangeSearchTask::operation()
   }
 
   qint64 ms = t.elapsed();
-  qDebug() << "SceneChangeSearch:" << checked << "I-frames in" << ms << "ms"
-           << (checked > 0
-                 ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
-                 : QString());
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "SceneChangeSearch:" << checked << "I-frames in" << ms << "ms"
+               << (checked > 0
+                     ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
+                     : QString());
 
   emit found(foundPos, mIsAborted);
   teardownWorkers();

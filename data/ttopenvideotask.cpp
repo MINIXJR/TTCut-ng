@@ -32,6 +32,7 @@
 
 #include "../common/ttcut.h"
 #include "../common/ttexception.h"
+#include "../common/ttsettings.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videostream.h"
@@ -117,7 +118,8 @@ void TTOpenVideoTask::operation()
   mpVideoType = new TTVideoType(videoFilePath);
 
   TTAVTypes::AVStreamType streamType = mpVideoType->avStreamType();
-  qDebug() << "Video stream type:" << streamType;
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Video stream type:" << streamType;
 
   // Check for supported video types
   if (streamType != TTAVTypes::mpeg2_demuxed_video &&
@@ -136,7 +138,8 @@ void TTOpenVideoTask::operation()
         tr("failed to create video stream for %1").arg(fInfo.filePath()));
   }
 
-  qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
 
   connect(mpVideoStream, &TTVideoStream::statusReport,
           this,          qOverload<int, const QString&, quint64>(&TTOpenVideoTask::onStatusReport));
