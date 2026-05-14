@@ -306,6 +306,65 @@ repair_audio_with_silence_inserts() {
     return 0
 }
 
+# Detect audio/video duration mismatches at segment boundaries in a VDR
+# multi-file recording. For each internal segment transition, compute the
+# difference between cumulative audio duration (with first-segment trim) and
+# cumulative video duration. Emit one row per mismatched boundary in the same
+# 4-field format CLASSIFIED_FILES uses (src_start src_end gap_ms silence_ms),
+# so that the existing repair_audio_with_silence_inserts and audio_gap_frames=
+# emission paths consume the entries unmodified.
+#
+# Sign convention: silence_ms > 0 means audio shorter than video at boundary
+# (insert silence); silence_ms < 0 means audio longer than video (truncate).
+#
+# Arguments:
+#   $1 = stream specifier for audio track inside the source TS (e.g. "a:0", "1")
+#   $2 = audio_trim_sec for the first segment
+#   $3 = first_audio_pts (audio's first PTS in source coordinates)
+#   $4 = THRESHOLD_MS (mismatches below this absolute value are skipped; default 5)
+#
+# Output: rows on stdout, one per emitted boundary.
+detect_segment_boundaries() {
+    local stream_idx="$1"
+    local audio_trim_sec="$2"
+    local first_audio_pts="$3"
+    local threshold_ms="${4:-5}"
+
+    local cum_audio
+    cum_audio=$(awk "BEGIN {printf \"%.6f\", -$audio_trim_sec}")
+    local cum_video=0
+    local n=${#VDR_SEGMENTS[@]}
+    local i a_dur v_dur diff_ms src_start
+
+    for ((i = 0; i < n; i++)); do
+        local seg="${VDR_SEGMENTS[$i]}"
+        a_dur=$(ffprobe -v error -select_streams "$stream_idx" \
+            -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 \
+            "$seg" 2>/dev/null | head -1)
+        v_dur=$(ffprobe -v error -select_streams v:0 \
+            -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 \
+            "$seg" 2>/dev/null | head -1)
+        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ || ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            echo "detect_segment_boundaries: ffprobe failed on segment $i ($seg)" >&2
+            return 1
+        fi
+        cum_audio=$(awk "BEGIN {printf \"%.6f\", $cum_audio + $a_dur}")
+        cum_video=$(awk "BEGIN {printf \"%.6f\", $cum_video + $v_dur}")
+
+        if [ $i -lt $((n - 1)) ]; then
+            diff_ms=$(awk "BEGIN {printf \"%.0f\", ($cum_video - $cum_audio) * 1000}")
+            local abs_diff_ms
+            abs_diff_ms=${diff_ms#-}
+            if [ "$abs_diff_ms" -gt "$threshold_ms" ]; then
+                src_start=$(awk "BEGIN {printf \"%.6f\", $first_audio_pts + $cum_audio}")
+                echo "$src_start $src_start $abs_diff_ms $diff_ms"
+                cum_audio=$(awk "BEGIN {printf \"%.6f\", $cum_audio + ($diff_ms / 1000.0)}")
+            fi
+        fi
+    done
+    return 0
+}
+
 # Parse arguments
 ES_MODE=false
 AC3FIX=true
