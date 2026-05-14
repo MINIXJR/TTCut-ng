@@ -232,6 +232,12 @@ void TTSettings::setLogSmartCut(bool v)
   mLogSmartCut = v;
 }
 
+void TTSettings::setLogMkvMux(bool v)
+{
+  if (mLogMkvMux == v) return;
+  mLogMkvMux = v;
+}
+
 // ---- Recent Files group setter (Task 7) ------------------------------------
 // Emits a change-notification signal. Mutating call sites
 // (append/prepend/removeAll) must read-modify-write through this setter so
@@ -748,6 +754,7 @@ void TTSettings::load()
   mLogAudioIndexInfo = settings.value("LogAudioIndexInfo/", mLogAudioIndexInfo).toBool();
   mLogFFmpegDecoder = settings.value("LogFFmpegDecoder/", mLogFFmpegDecoder).toBool();
   mLogSmartCut = settings.value("LogSmartCut/", mLogSmartCut).toBool();
+  mLogMkvMux = settings.value("LogMkvMux/", mLogMkvMux).toBool();
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------
@@ -966,6 +973,7 @@ void TTSettings::save()
   settings.setValue("LogAudioIndexInfo/", mLogAudioIndexInfo);
   settings.setValue("LogFFmpegDecoder/", mLogFFmpegDecoder);
   settings.setValue("LogSmartCut/", mLogSmartCut);
+  settings.setValue("LogMkvMux/", mLogMkvMux);
   settings.endGroup();
 
   // ----- Recent Files group (Task 7) -----------------------------------

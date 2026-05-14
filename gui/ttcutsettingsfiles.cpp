@@ -62,6 +62,7 @@ void TTCutSettingsFiles::setTabData()
   cbLogPlusVideoIndex->setChecked( TTSettings::instance()->logVideoIndexInfo() );
   cbLogPlusFFmpegDecoder->setChecked( TTSettings::instance()->logFFmpegDecoder() );
   cbLogPlusSmartCut->setChecked( TTSettings::instance()->logSmartCut() );
+  cbLogPlusMkvMux->setChecked( TTSettings::instance()->logMkvMux() );
 
   gbLogfileOptions->setEnabled(TTSettings::instance()->createLogFile());
 }
@@ -83,6 +84,7 @@ void TTCutSettingsFiles::getTabData()
   TTSettings::instance()->setLogVideoIndexInfo( cbLogPlusVideoIndex->isChecked( ) );
   TTSettings::instance()->setLogFFmpegDecoder( cbLogPlusFFmpegDecoder->isChecked( ) );
   TTSettings::instance()->setLogSmartCut( cbLogPlusSmartCut->isChecked( ) );
+  TTSettings::instance()->setLogMkvMux( cbLogPlusMkvMux->isChecked( ) );
 }
 
 void TTCutSettingsFiles::onCreateLogStateChanged(int state)

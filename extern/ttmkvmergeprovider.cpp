@@ -31,6 +31,8 @@
 #include "ttmkvmergeprovider.h"
 #include "ttffmpegwrapper.h"
 #include "../avstream/ttnaluparser.h"
+#include "../common/ttmessagelogger.h"
+#include "../common/ttsettings.h"
 
 #include <QDebug>
 #include <QFile>
@@ -290,7 +292,8 @@ void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QStrin
 {
     int id = trackId.toInt();
     mTrackOptions[id].defaultDuration = duration;
-    qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
 }
 
 void TTMkvMergeProvider::setTrackName(int trackId, const QString& name)
@@ -331,14 +334,16 @@ void TTMkvMergeProvider::setAudioSyncOffset(int offsetMs)
 {
     mAudioSyncOffsetMs = offsetMs;
     if (offsetMs != 0)
-        qDebug() << "TTMkvMergeProvider: audio sync offset" << offsetMs << "ms";
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "TTMkvMergeProvider: audio sync offset" << offsetMs << "ms";
 }
 
 void TTMkvMergeProvider::setVideoSyncOffset(int offsetMs)
 {
     mVideoSyncOffsetMs = offsetMs;
     if (offsetMs != 0)
-        qDebug() << "TTMkvMergeProvider: video sync offset" << offsetMs << "ms";
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "TTMkvMergeProvider: video sync offset" << offsetMs << "ms";
 }
 
 // -----------------------------------------------------------------------------
@@ -399,7 +404,8 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
         outCtx->nb_chapters = i + 1;
     }
 
-    qDebug() << "Added" << chapters.size() << "chapters from" << chapterFile;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "Added" << chapters.size() << "chapters from" << chapterFile;
 }
 
 // -----------------------------------------------------------------------------
@@ -585,8 +591,9 @@ bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
         }
         inputs.append(ain);
 
-        qDebug() << "  Audio" << i << ":" << audioFiles[i]
-                 << "lang=" << lang << "outIdx=" << ain.outIdx;
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  Audio" << i << ":" << audioFiles[i]
+                     << "lang=" << lang << "outIdx=" << ain.outIdx;
     }
     return true;
 }
@@ -658,7 +665,8 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
         }
         inputs.append(sin);
 
-        qDebug() << "  Subtitle" << i << ":" << subtitleFiles[i];
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  Subtitle" << i << ":" << subtitleFiles[i];
     }
     return true;
 }
@@ -703,7 +711,8 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
             }
         }
         if (nextIsVcl) break;
-        qDebug() << "  MKV PAFF: skip non-VCL between fields, sz=" << nsz;
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  MKV PAFF: skip non-VCL between fields, sz=" << nsz;
         av_packet_unref(in.pkt);
         readNextPacket(in);
     }
@@ -726,10 +735,11 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
     in.pkt->duration = in.frameDur;
     in.frameCount++;
 
-    qDebug() << "  MKV PAFF: merged field pair pkt" << totalPacketsWritten
-             << "pts=" << in.pkt->pts << "fc=" << in.frameCount
-             << "sz=" << in.pkt->size
-             << "l2mfn=" << activeLog2MaxFrameNum;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "  MKV PAFF: merged field pair pkt" << totalPacketsWritten
+                 << "pts=" << in.pkt->pts << "fc=" << in.frameCount
+                 << "sz=" << in.pkt->size
+                 << "l2mfn=" << activeLog2MaxFrameNum;
     return true;
 }
 
@@ -748,14 +758,17 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         return false;
     }
 
-    qDebug() << "TTMkvMergeProvider::mux (libav matroska)";
-    qDebug() << "  Output:" << outputFile;
-    qDebug() << "  MKV mux: videoCodecId =" << avcodec_get_name(static_cast<AVCodecID>(mVideoCodecId));
-    qDebug() << "  Video:" << videoFile
-             << "size:" << QFileInfo(videoFile).size() << "bytes";
+    if (TTSettings::instance()->logMkvMux()) {
+        qDebug() << "TTMkvMergeProvider::mux (libav matroska)";
+        qDebug() << "  Output:" << outputFile;
+        qDebug() << "  MKV mux: videoCodecId =" << avcodec_get_name(static_cast<AVCodecID>(mVideoCodecId));
+        qDebug() << "  Video:" << videoFile
+                 << "size:" << QFileInfo(videoFile).size() << "bytes";
+    }
     for (int i = 0; i < audioFiles.size(); i++) {
-        qDebug() << "  Audio" << i << ":" << audioFiles[i]
-                 << "size:" << QFileInfo(audioFiles[i]).size() << "bytes";
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  Audio" << i << ":" << audioFiles[i]
+                     << "size:" << QFileInfo(audioFiles[i]).size() << "bytes";
     }
 
     int ret = 0;
@@ -800,7 +813,8 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         }
     };
 
-    qDebug() << "  Mode: ES mux";
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "  Mode: ES mux";
 
     int64_t videoDurationNs = 0;
     MuxInput vin;
@@ -844,10 +858,11 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         AVStream* videoOut = outCtx->streams[v.outIdx];
         v.frameDur = av_rescale_q(videoDurationNs,
             AVRational{1, 1000000000}, videoOut->time_base);
-        qDebug() << "  Video: frame duration" << videoDurationNs << "ns ="
-                 << v.frameDur << "tb-units (time_base"
-                 << videoOut->time_base.num << "/" << videoOut->time_base.den
-                 << "after write_header)";
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  Video: frame duration" << videoDurationNs << "ns ="
+                     << v.frameDur << "tb-units (time_base"
+                     << videoOut->time_base.num << "/" << videoOut->time_base.den
+                     << "after write_header)";
     }
 
     // Write packets — interleaved multi-input loop
@@ -871,16 +886,18 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                       "PAFF field detection will be wrong";
     }
 
-    qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
-             << "inputs=" << inputs.size();
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
+                 << "inputs=" << inputs.size();
 
     // Read first packet from each input
     for (int i = 0; i < inputs.size(); i++) {
         bool got = readNextPacket(inputs[i]);
-        qDebug() << "    Input" << i << ": first read ="
-                 << (got ? "OK" : "EOF")
-                 << "srcIdx=" << inputs[i].srcIdx
-                 << "assignPts=" << inputs[i].assignPts;
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "    Input" << i << ": first read ="
+                     << (got ? "OK" : "EOF")
+                     << "srcIdx=" << inputs[i].srcIdx
+                     << "assignPts=" << inputs[i].assignPts;
     }
 
     // Write packets in PTS order
@@ -918,9 +935,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 int newL2mfn = 0;
                 if (parseInlineSpsLog2MaxFrameNum(d, sz, newL2mfn)) {
                     if (newL2mfn != activeLog2MaxFrameNum) {
-                        qDebug() << "  MKV PAFF: SPS change log2_max_frame_num"
-                                 << activeLog2MaxFrameNum << "->" << newL2mfn
-                                 << "at packet" << totalPacketsWritten;
+                        if (TTSettings::instance()->logMkvMux())
+                            qDebug() << "  MKV PAFF: SPS change log2_max_frame_num"
+                                     << activeLog2MaxFrameNum << "->" << newL2mfn
+                                     << "at packet" << totalPacketsWritten;
                         activeLog2MaxFrameNum = newL2mfn;
                     }
                 }
@@ -977,9 +995,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             // These contain no video frames and must not increment frameCount,
             // otherwise PTS gets shifted by phantom frames.
             if (in.outIdx == 0 && !hasVclNal) {
-                qDebug() << "  MKV PAFF: skip non-VCL video packet"
-                         << totalPacketsWritten << "sz=" << in.pkt->size
-                         << "fc=" << in.frameCount;
+                if (TTSettings::instance()->logMkvMux())
+                    qDebug() << "  MKV PAFF: skip non-VCL video packet"
+                             << totalPacketsWritten << "sz=" << in.pkt->size
+                             << "fc=" << in.frameCount;
                 readNextPacket(in);
                 continue;
             }
@@ -997,11 +1016,12 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 in.frameCount++;
 
                 if (in.outIdx == 0) {
-                    qDebug() << "  MKV: frame pkt" << totalPacketsWritten
-                             << "pts=" << in.pkt->pts << "fc=" << in.frameCount
-                             << "sz=" << in.pkt->size
-                             << "field=" << isFieldPacket
-                             << "l2mfn=" << activeLog2MaxFrameNum;
+                    if (TTSettings::instance()->logMkvMux())
+                        qDebug() << "  MKV: frame pkt" << totalPacketsWritten
+                                 << "pts=" << in.pkt->pts << "fc=" << in.frameCount
+                                 << "sz=" << in.pkt->size
+                                 << "field=" << isFieldPacket
+                                 << "l2mfn=" << activeLog2MaxFrameNum;
                 }
             }
         } else {
@@ -1043,14 +1063,16 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         readNextPacket(in);
     }
 
-    qDebug() << "  ES mux: total packets written:" << totalPacketsWritten;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "  ES mux: total packets written:" << totalPacketsWritten;
 
     av_write_trailer(outCtx);
 
     cleanupAll();
 
-    qDebug() << "TTMkvMergeProvider::mux complete:" << outputFile
-             << "output size:" << QFileInfo(outputFile).size() << "bytes";
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "TTMkvMergeProvider::mux complete:" << outputFile
+                 << "output size:" << QFileInfo(outputFile).size() << "bytes";
     return true;
 }
 
@@ -1067,8 +1089,9 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
         return false;
     }
 
-    qDebug() << "TTMkvMergeProvider::muxAudioOnly:" << audioFiles.size()
-             << "tracks ->" << outputFile;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "TTMkvMergeProvider::muxAudioOnly:" << audioFiles.size()
+                 << "tracks ->" << outputFile;
 
     AVFormatContext* outCtx = nullptr;
     int ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
@@ -1158,8 +1181,9 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
     avformat_free_context(outCtx);
 
-    qDebug() << "muxAudioOnly complete:" << outputFile
-             << "size:" << QFileInfo(outputFile).size() << "bytes";
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "muxAudioOnly complete:" << outputFile
+                 << "size:" << QFileInfo(outputFile).size() << "bytes";
     return true;
 }
 
@@ -1169,7 +1193,8 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
 void TTMkvMergeProvider::setError(const QString& error)
 {
     mLastError = error;
-    qDebug() << "TTMkvMergeProvider error:" << error;
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("TTMkvMergeProvider error: %1").arg(error));
 }
 
 // -----------------------------------------------------------------------------
@@ -1180,7 +1205,8 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
                                                   const QString& outputDir)
 {
     if (durationMs <= 0 || intervalMinutes <= 0) {
-        qDebug() << "Invalid parameters for chapter generation";
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Invalid parameters for chapter generation"));
         return QString();
     }
 
@@ -1189,7 +1215,8 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
 
     QFile chapterFile(chapterFilePath);
     if (!chapterFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Failed to create chapter file:" << chapterFilePath;
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Failed to create chapter file: %1").arg(chapterFilePath));
         return QString();
     }
 
@@ -1219,7 +1246,8 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
 
     chapterFile.close();
 
-    qDebug() << "Generated chapter file with" << (chapterNum - 1) << "chapters:"
-             << chapterFilePath;
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "Generated chapter file with" << (chapterNum - 1) << "chapters:"
+                 << chapterFilePath;
     return chapterFilePath;
 }

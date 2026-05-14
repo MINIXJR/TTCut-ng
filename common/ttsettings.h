@@ -121,6 +121,9 @@ public:
   bool    logSmartCut() const        { return mLogSmartCut; }
   void    setLogSmartCut(bool v);
 
+  bool    logMkvMux() const          { return mLogMkvMux; }
+  void    setLogMkvMux(bool v);
+
   // ----- Recent Files group (Task 7) --------------------------------------
   // Setter emits recentFilesChanged() so subscribed UI elements
   // (recent-files menu) can refresh without ad-hoc refresh hooks.
@@ -425,6 +428,7 @@ private:
   bool    mLogAudioIndexInfo = false;
   bool    mLogFFmpegDecoder = false;
   bool    mLogSmartCut = false;
+  bool    mLogMkvMux = false;
 
   // ----- Recent Files group (Task 7) ---------------------------------------
   QStringList mRecentFileList;
