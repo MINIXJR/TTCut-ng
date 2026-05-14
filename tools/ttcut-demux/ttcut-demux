@@ -252,6 +252,7 @@ repair_audio_with_silence_inserts() {
     local prev_end=0
     local seg_count=0
     local sil_input_count=0
+    local i  # localize loop var so the three `for ((i...))` below don't leak to caller
     local -a sil_durs   # per-silence-source duration, ordered as concat sees them
     local -a is_insert  # parallel to gap_positions: 1 = insert silence, 0 = truncate
 
