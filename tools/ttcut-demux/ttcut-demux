@@ -1260,16 +1260,15 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # corresponding video segment) yields one row that the same
             # repair_audio_with_silence_inserts and audio_gap_frames= emission
             # paths handle alongside the audio-gap-fix entries above.
-            if $VDR_MULTIFILE; then
+            if [ "$VDR_MULTIFILE" = true ]; then
                 local_track_trim="${AUDIO_TRIM_SECS[$i]:-0}"
-                local_track_pts="${ORIG_AUDIO_PTS_ARR[$i]:-$FIRST_AUDIO_PTS}"
+                local_track_pts="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
                 while IFS=' ' read -r b_start b_end b_gap b_silence; do
                     [ -z "$b_start" ] && continue
+                    [ -z "$b_silence" ] && continue
                     echo "$b_start $b_end $b_gap $b_silence" >> "$CLASSIFIED_FILE"
                     AUDIO_GAP_FRAMES_SOURCE_PTS+=("$b_start $b_end $b_silence")
-                    if [ "$b_silence" -gt 0 ] 2>/dev/null; then
-                        HAS_ANY_SILENCE_NEEDED=true
-                    elif [ "$b_silence" -lt 0 ] 2>/dev/null; then
+                    if [ "$b_silence" -ne 0 ]; then
                         HAS_ANY_SILENCE_NEEDED=true
                     fi
                 done < <(detect_segment_boundaries "$idx" "$local_track_trim" "$local_track_pts" 5)
