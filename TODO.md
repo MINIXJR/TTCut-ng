@@ -130,10 +130,26 @@
 - Make the current frame position clickable (enter current frame position)
 - Prepare long term processes for user cancellation (abort button)
 
-- **Einstellungsdialog neu strukturieren**
-  - Der Allgemein-Tab wird zunehmend überladen (Navigation, Preview, Search, Audio, Language, Defect Grouping, ...)
-  - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
-  - Ziel: Bessere Übersicht, schnelleres Finden relevanter Einstellungen
+- **Einstellungsdialog neu strukturieren + Entsorgung obsoleter Features**
+  - **Settings-Reorganisation:**
+    - Allgemein-Tab überladen (Navigation, Preview, Search, Audio, Language, Defect Grouping, ...)
+    - Files-Tab seit Logging-Refactor v0.69 mit 6 Log-Toggle-Checkboxes ("Erweiterte Logging-Optionen") auch voll
+    - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs (z.B. eigener "Logging"-Tab)
+  - **Entsorgung obsoleter Features (vor Reorg — schafft Platz):**
+    - **MPEG2Schnitt IDD-File-Support** (`gbIDDFiles` GroupBox + 5 Checkboxes + 5 TTSettings-Bools):
+      - `cbCreateVideoIDD`/`cbReadVideoIDD`/`cbCreateAudioIDD`/`cbReadAudioIDD`/`cbCreateCutIDD`
+      - `TTMpeg2VideoStream::writeIDDFile()` + `readIDDHeader()`
+      - MPEG2Schnitt ist Windows-Tool aus früher 2000ern, nicht mehr aktiv
+      - ProjectX produziert auch .idd — Frage: noch User-Workflow oder weg?
+    - **mplex CLI external tool** (`extern/ttmplexprovider.{h,cpp}`):
+      - Nur noch für MPEG-2 PS/TS-Output, mkvmerge (libav) ersetzt für MKV
+      - Wenn niemand MPEG-2 PS/TS-Output mehr braucht: TTMplexProvider + `cbMuxerProg "MPG (mplex)"` weg
+    - **.prj-File-Loader** (`gui/ttcutmain.cpp:165`, `data/ttcutprojectdata.cpp`):
+      - Altes TTCut-Format, .ttcut seit v0.66.0 Standard
+      - Entscheidung: ganz weg oder als Read-Only-Importer behalten
+    - **Legacy stream points für Landezonen widget** (`ttcutprojectdata.cpp:293`):
+      - Old UI-Feature, evtl. ungenutzt
+  - Ziel: Bessere Übersicht, weniger Settings-Felder, weniger Code-Surface
 
 - **Custom MKV Chapter Editor**
   - Dialog mit Liste editierbarer Kapitel: Zeitstempel (hh:mm:ss.zzz), Name, Sprache
