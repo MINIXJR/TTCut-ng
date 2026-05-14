@@ -1254,6 +1254,26 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     fi
                 done < "$GAP_FILE"
             fi
+
+            # Add per-segment-boundary entries for VDR multi-file recordings.
+            # Each boundary mismatch (audio segment shorter or longer than
+            # corresponding video segment) yields one row that the same
+            # repair_audio_with_silence_inserts and audio_gap_frames= emission
+            # paths handle alongside the audio-gap-fix entries above.
+            if $VDR_MULTIFILE; then
+                local_track_trim="${AUDIO_TRIM_SECS[$i]:-0}"
+                local_track_pts="${ORIG_AUDIO_PTS_ARR[$i]:-$FIRST_AUDIO_PTS}"
+                while IFS=' ' read -r b_start b_end b_gap b_silence; do
+                    [ -z "$b_start" ] && continue
+                    echo "$b_start $b_end $b_gap $b_silence" >> "$CLASSIFIED_FILE"
+                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$b_start $b_end $b_silence")
+                    if [ "$b_silence" -gt 0 ] 2>/dev/null; then
+                        HAS_ANY_SILENCE_NEEDED=true
+                    elif [ "$b_silence" -lt 0 ] 2>/dev/null; then
+                        HAS_ANY_SILENCE_NEEDED=true
+                    fi
+                done < <(detect_segment_boundaries "$idx" "$local_track_trim" "$local_track_pts" 5)
+            fi
         done
 
         if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
