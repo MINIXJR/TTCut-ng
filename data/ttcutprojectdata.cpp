@@ -289,10 +289,6 @@ void TTCutProjectData::parseMarkerSection(QDomNodeList markerNodesList, TTAVItem
   //int type  = markerNodesList.at(2).toElement().text().toInt();
 
   avItem->appendMarker(pos, order);
-
-  // Also collect as legacy stream point for Landezonen widget
-  mParsedLegacyMarkers.append(TTStreamPoint(pos, StreamPointType::ManualMarker,
-    QString("Marker (manuell)")));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -463,33 +459,6 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
       points.append(TTStreamPoint(frame, TTStreamPoint::stringToType(type),
                                    desc, confidence, duration));
     }
-    // Legacy Marker elements at top level (convert to ManualMarker)
-    else if (elem.tagName() == "Marker") {
-      QDomNodeList children = elem.childNodes();
-      int pos = 0;
-      for (int j = 0; j < children.size(); j++) {
-        QDomElement child = children.at(j).toElement();
-        if (!child.isNull() && child.tagName() == "MarkerPos")
-          pos = child.text().toInt();
-      }
-      points.append(TTStreamPoint(pos, StreamPointType::ManualMarker,
-                                   QString("Marker (manuell)")));
-    }
-  }
-
-  // Include markers parsed from within <Video> sections ONLY if no StreamPoint
-  // elements exist (legacy project without Landezonen). Otherwise the markers
-  // would be duplicated on every project load since they are already saved
-  // as StreamPoints.
-  bool hasStreamPoints = false;
-  for (int i = 0; i < nodes.size(); i++) {
-    if (nodes.at(i).toElement().tagName() == "StreamPoint") {
-      hasStreamPoints = true;
-      break;
-    }
-  }
-  if (!hasStreamPoints) {
-    points.append(mParsedLegacyMarkers);
   }
 
   return points;

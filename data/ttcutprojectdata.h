@@ -100,7 +100,6 @@ class TTCutProjectData
     QDomDocument* xmlDocument;
     QDomElement*  xmlRoot;
     QDomNodeList* xmlNodeList;
-    QList<TTStreamPoint> mParsedLegacyMarkers;
 };
 
 #endif //TTCUTPROJECTDATA_H
