@@ -592,6 +592,13 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
       objectProcessed = (currentObject->headerOffset() < bufferStartOffset+bytesProcessed-watermark);
 
       if (!objectProcessed) {
+        // End-of-stream guard: if the entire remaining stream is in the buffer
+        // already (no more chunks to read), don't seekBackward — that creates
+        // an infinite loop where each iteration re-reads the same trailing
+        // bytes without making progress. Just process and exit the inner loop.
+        if (bytesProcessed >= static_cast<int>(bytesToWrite)) {
+          break;
+        }
         stream_buffer->seekBackward(watermark);
         bytesProcessed -= watermark;
         break;
