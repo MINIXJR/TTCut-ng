@@ -228,6 +228,11 @@ void TTMessageLogger::showFatalMsg(QString caller, int line, const char* msg, ..
 void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
                               QString msgString, bool show)
 {
+    // Serialize across threads: the new libav log callback runs on libav's
+    // own decode/encode worker threads, so concurrent writes to logfile and
+    // racey ensureLogFileOpen would otherwise interleave / double-init.
+    std::lock_guard<std::mutex> lock(mLogMutex);
+
     QString msgTypeStr;
     QFileInfo fInfo(caller);
     QString msgCaller = fInfo.baseName();
@@ -252,8 +257,14 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     // TODO: implement message window display
     (void)show;
 
-    if (logMode & CONSOLE || msgType == ERROR)
-        qDebug("%s", logMsgStr.toUtf8().data());
+    if (logMode & CONSOLE || msgType == ERROR) {
+        // Direct stderr write (not qDebug) — with the Qt message handler
+        // installed in main(), qDebug would re-enter ttQtMessageHandler →
+        // debugMsg → logMsg(DEBUG, ...), duplicating every ERROR entry as
+        // a [debug][ttmessagelogger:NNN] line in the file.
+        fprintf(stderr, "%s\n", logMsgStr.toUtf8().constData());
+        fflush(stderr);
+    }
 
     writeMsg(logMsgStr);
 }
@@ -266,8 +277,13 @@ void TTMessageLogger::ensureLogFileOpen()
     QFile* f = new QFile(mLogFilePath);
     // Truncate any previous run's file (matches pre-refactor behaviour).
     if (!f->open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        qDebug("TTMessageLogger: cannot open log file %s",
-               mLogFilePath.toUtf8().constData());
+        // Direct stderr (not qDebug) — we run under mLogMutex via logMsg →
+        // writeMsg → ensureLogFileOpen, and qDebug would re-enter
+        // ttQtMessageHandler → debugMsg → logMsg, deadlocking on the
+        // non-recursive mutex.
+        fprintf(stderr, "TTMessageLogger: cannot open log file %s\n",
+                mLogFilePath.toUtf8().constData());
+        fflush(stderr);
         delete f;
         return;
     }

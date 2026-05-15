@@ -144,7 +144,7 @@
          <item row="9" column="0" >
           <widget class="QCheckBox" name="cbLogPlusLibav" >
            <property name="text" >
-            <string>libav (Audio/Video-Decode)</string>
+            <string>libav decoder/muxer information</string>
            </property>
           </widget>
          </item>

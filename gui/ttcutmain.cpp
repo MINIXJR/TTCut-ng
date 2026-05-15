@@ -91,7 +91,9 @@ static void ttAvLogCallback(void* avcl, int level, const char* fmt, va_list vl)
   while (n && (buf[n-1] == '\n' || buf[n-1] == '\r')) buf[--n] = '\0';
   if (!n) return;
   TTMessageLogger* log = TTMessageLogger::getInstance();
-  QString qmsg = QString::fromLocal8Bit(buf);
+  // libav emits UTF-8; fromLocal8Bit would mangle non-ASCII codec/file
+  // names on non-UTF-8 locales.
+  QString qmsg = QString::fromUtf8(buf, static_cast<int>(n));
   if      (level <= AV_LOG_ERROR)   log->errorMsg("libav", 0, qmsg);
   else if (level <= AV_LOG_WARNING) log->warningMsg("libav", 0, qmsg);
   else if (level <= AV_LOG_INFO)    log->infoMsg("libav", 0, qmsg);

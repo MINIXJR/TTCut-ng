@@ -94,6 +94,9 @@ class TTMessageLogger
     QFile*  logfile;
     QString mLogFilePath;
     bool    mLogFileOpenAttempted;
+    std::mutex mLogMutex;            // serialize logMsg across threads
+                                     // (libav callback runs on libav's
+                                     // decode/encode worker threads)
     static TTMessageLogger* loggerInstance;
     bool   logEnabled;
     bool   logConsole;
