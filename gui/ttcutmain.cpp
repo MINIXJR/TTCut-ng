@@ -35,6 +35,7 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QTimer>
+#include <QtGlobal>
 
 // class declaration for the main window class
 #include "ttcutmainwindow.h"
@@ -46,6 +47,57 @@
 #include <QCommandLineParser>
 #include <QTimer>
 
+#include <cstdarg>
+#include <cstdlib>
+#include <cstring>
+
+extern "C" {
+#include <libavutil/log.h>
+}
+
+// ---------------------------------------------------------------------------
+// Qt message handler: route qDebug/qInfo/qWarning/qCritical/qFatal through
+// TTMessageLogger so the configured ~/.cache/ttcut-ng/logfile.log captures
+// the same messages a user would otherwise only see on the console.
+// ---------------------------------------------------------------------------
+static void ttQtMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg)
+{
+  TTMessageLogger* log = TTMessageLogger::getInstance();
+  const char* file = context.file ? context.file : "qt";
+  int line = context.line;
+  switch (type) {
+    case QtDebugMsg:    log->debugMsg(file, line, msg);   break;
+    case QtInfoMsg:     log->infoMsg(file, line, msg);    break;
+    case QtWarningMsg:  log->warningMsg(file, line, msg); break;
+    case QtCriticalMsg: log->errorMsg(file, line, msg);   break;
+    case QtFatalMsg:    log->errorMsg(file, line, msg);
+                        std::abort();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// libav log callback: gated on TTSettings::logLibav() (default off, since
+// libav is very chatty). When enabled, maps AV_LOG_ levels onto matching
+// TTMessageLogger severities and strips trailing newlines that libav emits.
+// ---------------------------------------------------------------------------
+static void ttAvLogCallback(void* avcl, int level, const char* fmt, va_list vl)
+{
+  if (!TTSettings::instance()->logLibav()) return;
+  if (level > av_log_get_level()) return;
+  char buf[1024];
+  int prefix = 0;
+  av_log_format_line(avcl, level, fmt, vl, buf, sizeof(buf), &prefix);
+  size_t n = std::strlen(buf);
+  while (n && (buf[n-1] == '\n' || buf[n-1] == '\r')) buf[--n] = '\0';
+  if (!n) return;
+  TTMessageLogger* log = TTMessageLogger::getInstance();
+  QString qmsg = QString::fromLocal8Bit(buf);
+  if      (level <= AV_LOG_ERROR)   log->errorMsg("libav", 0, qmsg);
+  else if (level <= AV_LOG_WARNING) log->warningMsg("libav", 0, qmsg);
+  else if (level <= AV_LOG_INFO)    log->infoMsg("libav", 0, qmsg);
+  else                              log->debugMsg("libav", 0, qmsg);
+}
+
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCut main
  */
@@ -54,6 +106,14 @@ int main( int argc, char **argv )
   try
   {
     QT_REQUIRE_VERSION(argc, argv, "5.0.0");
+
+    // Install Qt message handler + libav log callback BEFORE QApplication
+    // is constructed so the very first qDebug/qWarning from Qt-internal
+    // bootstrap and any libav probe-output get routed through
+    // TTMessageLogger. TTMessageLogger::getInstance() is lazy and the
+    // handlers degrade gracefully if invoked pre-singleton-init.
+    qInstallMessageHandler(ttQtMessageHandler);
+    av_log_set_callback(ttAvLogCallback);
 
     QApplication a( argc, argv );
 

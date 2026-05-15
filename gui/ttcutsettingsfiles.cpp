@@ -59,6 +59,7 @@ void TTCutSettingsFiles::setTabData()
   cbLogPlusCutPipeline->setChecked( TTSettings::instance()->logCutPipeline() );
   cbLogPlusAVStream->setChecked( TTSettings::instance()->logAVStream() );
   cbLogPlusUI->setChecked( TTSettings::instance()->logUI() );
+  cbLogPlusLibav->setChecked( TTSettings::instance()->logLibav() );
 
   gbLogfileOptions->setEnabled(TTSettings::instance()->createLogFile());
 }
@@ -77,6 +78,7 @@ void TTCutSettingsFiles::getTabData()
   TTSettings::instance()->setLogCutPipeline( cbLogPlusCutPipeline->isChecked( ) );
   TTSettings::instance()->setLogAVStream( cbLogPlusAVStream->isChecked( ) );
   TTSettings::instance()->setLogUI( cbLogPlusUI->isChecked( ) );
+  TTSettings::instance()->setLogLibav( cbLogPlusLibav->isChecked( ) );
 }
 
 void TTCutSettingsFiles::onCreateLogStateChanged(int state)

@@ -115,6 +115,9 @@ public:
   bool    logUI() const              { return mLogUI; }
   void    setLogUI(bool v);
 
+  bool    logLibav() const           { return mLogLibav; }
+  void    setLogLibav(bool v);
+
   // ----- Recent Files group (Task 7) --------------------------------------
   // Setter emits recentFilesChanged() so subscribed UI elements
   // (recent-files menu) can refresh without ad-hoc refresh hooks.
@@ -411,6 +414,7 @@ private:
   bool    mLogCutPipeline = false;
   bool    mLogAVStream = false;
   bool    mLogUI = false;
+  bool    mLogLibav = false;
 
   // ----- Recent Files group (Task 7) ---------------------------------------
   QStringList mRecentFileList;
