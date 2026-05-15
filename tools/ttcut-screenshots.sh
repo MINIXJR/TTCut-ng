@@ -19,7 +19,7 @@ OUTPUT_DIR="${1:-/usr/local/src/TTCut-ng.wiki/images}"
 # Paths for generated test media
 VIDEO_FILE="$TESTDATA_DIR/tux_test.264"
 AUDIO_FILE="$TESTDATA_DIR/tux_test.ac3"
-PRJ_FILE="$TESTDATA_DIR/tux_test.ttcut"
+PROJECT_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
 TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
 BINARY="$PROJECT_DIR/ttcut-ng"
@@ -137,7 +137,7 @@ fi
 echo "Creating project file..."
 sed -e "s|__VIDEO_PATH__|$VIDEO_FILE|g" \
     -e "s|__AUDIO_PATH__|$AUDIO_FILE|g" \
-    "$TEMPLATE_FILE" > "$PRJ_FILE"
+    "$TEMPLATE_FILE" > "$PROJECT_FILE"
 
 #-----------------------------------------------------------------------------
 # Run TTCut-ng in screenshot mode (generate to temp dir, then compare)
@@ -154,9 +154,9 @@ mkdir -p "$TMP_SCREENSHOTS"
 echo "Running TTCut-ng screenshot mode..."
 echo "  Temp:    $TMP_SCREENSHOTS"
 echo "  Output:  $OUTPUT_DIR"
-echo "  Project: $PRJ_FILE"
+echo "  Project: $PROJECT_FILE"
 
-QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PRJ_FILE" 2>&1 | \
+QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PROJECT_FILE" 2>&1 | \
     grep -E "Screenshot" || true
 
 #-----------------------------------------------------------------------------

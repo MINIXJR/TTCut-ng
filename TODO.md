@@ -137,7 +137,6 @@
   - Files-Tab seit Logging-Refactor v0.69 mit 6 Log-Toggle-Checkboxes auch voll
   - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
     (z.B. eigener "Logging"-Tab)
-  - Bezug: brainstormierter Plan unter `docs/superpowers/specs/2026-05-15-obsolete-feature-removal-design.md`
 
 - **Batch-Mux-Workflow per CLI für alle Codecs**
   - `TTMplexProvider::writeMuxScript()` ist heute nur via mplex/MPEG-2 erreichbar
