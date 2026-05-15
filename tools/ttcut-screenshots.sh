@@ -19,9 +19,9 @@ OUTPUT_DIR="${1:-/usr/local/src/TTCut-ng.wiki/images}"
 # Paths for generated test media
 VIDEO_FILE="$TESTDATA_DIR/tux_test.264"
 AUDIO_FILE="$TESTDATA_DIR/tux_test.ac3"
-PRJ_FILE="$TESTDATA_DIR/tux_test.prj"
+PRJ_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
-TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.prj"
+TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
 BINARY="$PROJECT_DIR/ttcut-ng"
 
 #-----------------------------------------------------------------------------
