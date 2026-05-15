@@ -48,13 +48,6 @@ void TTCutSettingsFiles::setTitle(__attribute__((unused))const QString& title)
 // set the tab data from the global parameter
 void TTCutSettingsFiles::setTabData()
 {
-  // IDD files
-  cbCreateVideoIDD->setChecked( TTSettings::instance()->createVideoIDD() );
-  cbCreateAudioIDD->setChecked( TTSettings::instance()->createAudioIDD() );
-  cbCreateCutIDD->setChecked( TTSettings::instance()->createCutIDD() );
-  cbReadVideoIDD->setChecked( TTSettings::instance()->readVideoIDD() );
-  cbReadAudioIDD->setChecked( TTSettings::instance()->readAudioIDD() );
-
   // Logfile
   cbCreateLog->setChecked( TTSettings::instance()->createLogFile() );
   cbLogConsole->setChecked( TTSettings::instance()->logModeConsole() );
@@ -73,13 +66,6 @@ void TTCutSettingsFiles::setTabData()
 // get the tab data and fill the global parameter
 void TTCutSettingsFiles::getTabData()
 {
-  // IDD files
-  TTSettings::instance()->setCreateVideoIDD( cbCreateVideoIDD->isChecked( ) );
-  TTSettings::instance()->setCreateAudioIDD( cbCreateAudioIDD->isChecked( ) );
-  TTSettings::instance()->setCreateCutIDD( cbCreateCutIDD->isChecked( ) );
-  TTSettings::instance()->setReadVideoIDD( cbReadVideoIDD->isChecked( ) );
-  TTSettings::instance()->setReadAudioIDD( cbReadAudioIDD->isChecked( ) );
-
   // logfile
   TTSettings::instance()->setCreateLogFile( cbCreateLog->isChecked( ) );
   TTSettings::instance()->setLogModeConsole( cbLogConsole->isChecked() );

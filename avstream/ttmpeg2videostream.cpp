@@ -96,30 +96,9 @@ void TTMpeg2VideoStream::makeSharedCopy( TTMpeg2VideoStream* v_stream )
  */
 int TTMpeg2VideoStream::createHeaderList()
 {
-  QString   iddStreamName;
-  QFileInfo iddStreamInfo;
-
   openStream();
 
   header_list = new TTVideoHeaderList( 2000 );
-
-  // read the header from IDD file
-  if (TTSettings::instance()->readVideoIDD())
-  {
-    iddStreamName = ttChangeFileExt(stream_info->filePath(), "idd");
-    iddStreamInfo.setFile(iddStreamName);
-
-    if (iddStreamInfo.exists())
-    {
-      TTFileBuffer* iddStreamBuffer = new TTFileBuffer(iddStreamName, QIODevice::ReadOnly);
-      createHeaderListFromIdd(iddStreamBuffer);
-
-      if (iddStreamBuffer != NULL) {
-        delete iddStreamBuffer;
-        iddStreamBuffer = NULL;
-      }
-    }
-  }
 
   // Read the header from mpeg2 stream
   if (header_list->count() == 0)
@@ -268,31 +247,6 @@ bool TTMpeg2VideoStream::closeStream()
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
- * Create the mpeg2 header-list from Mpeg2Schnitt idd-file
- */
-bool TTMpeg2VideoStream::createHeaderListFromIdd(TTFileBuffer* iddStream)
-{
-  quint8 buffer4[4];
-
-  iddStream->open();
-
-  if (!iddStream->readByte(buffer4, 4))
-    throw TTIOException(tr("Error reading IDD file in %1 at line %2!").arg(__FILE__).arg(__LINE__));
-
-  if (buffer4[0] != int('i') &&
-      buffer4[1] != int('d') &&
-      buffer4[2] != int('d')    ) {
-    throw TTDataFormatException(tr("No IDD file in %1 at line %2!").arg(__FILE__).arg(__LINE__));
-    }
-
-  readIDDHeader(iddStream, buffer4[3]);
-
-  iddStream->close();
-
-  return (header_list->count() > 0);
-}
-
-/*! ////////////////////////////////////////////////////////////////////////////
  * Create the mpeg2 header-list from mpeg2 stream
  */
 bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
@@ -372,182 +326,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
 
   emit statusReport(StatusReportArgs::Finished, tr("MPEG-2 header list created"), stream_buffer->size());
 
-  // write an idd file with the header information
-  if (header_list->count() > 0 && TTSettings::instance()->createVideoIDD() )
-    writeIDDFile();
-
   return (header_list->count() > 0);
-}
-
-/*! ////////////////////////////////////////////////////////////////////////////
- * Write MPEG2Schnit idd file
- */
-void TTMpeg2VideoStream::writeIDDFile( )
-{
-  QString           iddStreamName;
-  QFileInfo         iddStreamInfo;
-  TTPicturesHeader* currentPicture;
-  int               index = 0;
-  quint8            headerType;
-  quint64           offset;
-  quint16           tempRef;
-  quint8            codingType;
-  quint8            buffer[8];
-
-  // create Mpeg2Schnitt idd-stream name
-  iddStreamName = ttChangeFileExt(stream_info->filePath(), "idd");
-
-  // check for Mpeg2Schnitt idd-stream in current directory
-  iddStreamInfo.setFile(iddStreamName);
-
-  if (iddStreamInfo.exists())
-  {
-    QFile idd_file( iddStreamInfo.filePath() );
-    idd_file.remove();
-  }
-
-  log->debugMsg(__FILE__, __LINE__, QString("create IDD-file %1").arg(iddStreamInfo.filePath()));
-  emit statusReport(StatusReportArgs::Start, tr("Create Mpeg2Schnitt IDD-file"), header_list->count());
-
-  // create new idd-stream
-  TTFileBuffer* iddStream = new TTFileBuffer(iddStreamName, QIODevice::WriteOnly);
-
-  iddStream->open();
-
-  // IDD header data and version
-  buffer[0] = int('i');
-  buffer[1] = int('d');
-  buffer[2] = int('d');
-  buffer[3] = 2;
-
-  iddStream->directWrite(buffer, 4);
-
-  while (index < header_list->count())
-  {
-  	if (mAbort) {
-  		mAbort = false;
-  		throw TTAbortException("Writing IDD file aborted!");
-  	}
-
-    headerType = header_list->at(index)->headerType();
-    iddStream->directWrite(headerType);          // 1 Byte
-
-    offset      = header_list->at(index)->headerOffset();
-    iddStream->directWriteUInt64( offset );      // 8 Byte
-
-    // picture header
-    if ( headerType == TTMpeg2VideoHeader::picture_start_code )
-    {
-      currentPicture = (TTPicturesHeader*)header_list->at(index);
-      if ( currentPicture != NULL )
-      {
-        tempRef = currentPicture->temporal_reference;
-        iddStream->directWriteUInt16( tempRef ); // 2 Byte
-
-        codingType = currentPicture->picture_coding_type;
-        iddStream->directWrite(codingType);  // 1 Byte
-      }
-    }
-    index++;
-    emit statusReport(StatusReportArgs::Step, tr("Create Mpeg2Schnitt IDD-File"), index);
-  }
-
-  emit statusReport(StatusReportArgs::Finished, tr("IDD-File created"), header_list->count());
-
-  // write sequence end header type
-  buffer[0] = 0xB7;
-  iddStream->directWrite(buffer, 1);  // 1 Byte
-
-  // write last file offset
-  offset = header_list->at(index-1)->headerOffset();
-  iddStream->directWriteUInt64( offset );  // 8 Byte
-
-  iddStream->close();
-  delete iddStream;
-}
-
-/*! ////////////////////////////////////////////////////////////////////////////
- * Read MPEG2Schnitt *.idd file (also created by projectX)
- */
-void TTMpeg2VideoStream::readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVersion)
-{
-  quint8              pictureCodingType;
-  quint16             temporalReference;
-  quint8              headerType;
-  quint64             offset;
-  TTMpeg2VideoHeader* newHeader = NULL;
-
-  if (iddFileVersion < 2) {
-    throw TTDataFormatException(tr("IDD file version %1 not supported!").arg(iddFileVersion));
-  }
-
-  emit statusReport(StatusReportArgs::Start, tr("Read Mpeg2Schnitt IDD-file"), iddStream->size());
-
-  try
-  {
-    while(!iddStream->atEnd())
-    {
-    	if (mAbort) {
-    		mAbort = false;
-     		throw TTAbortException(tr("Read IDD header file aborted!"));
-    	}
-
-      iddStream->readByte(headerType);
-      iddStream->readUInt64(offset);
-
-      if (offset >= (quint64)stream_buffer->size()) {
-        log->warningMsg(__FILE__, __LINE__, "IDD offset %llu exceeds stream size, stopping", (unsigned long long)offset);
-        break;
-      }
-
-      // Reset on every iteration: a malformed IDD with an unknown headerType
-      // would otherwise leave newHeader pointing at the previous iteration's
-      // (already-owned-by-list) object, causing a double-add and double-free.
-      newHeader = NULL;
-
-      switch (headerType)
-      {
-        case TTMpeg2VideoHeader::sequence_start_code:
-          newHeader = new TTSequenceHeader();
-          newHeader->readHeader(stream_buffer, offset);
-          break;
-        case TTMpeg2VideoHeader::picture_start_code:
-          newHeader = new TTPicturesHeader();
-          iddStream->readUInt16(temporalReference);
-          iddStream->readByte(pictureCodingType);
-          ((TTPicturesHeader*)newHeader)->setHeaderOffset(offset);
-          ((TTPicturesHeader*)newHeader)->temporal_reference  = temporalReference;
-          ((TTPicturesHeader*)newHeader)->picture_coding_type = pictureCodingType;
-
-          //do we realy need the vbv delay???
-          newHeader->readHeader(stream_buffer, offset);
-
-            break;
-        case TTMpeg2VideoHeader::group_start_code:
-          newHeader = new TTGOPHeader();
-          newHeader->readHeader(stream_buffer, offset);
-          break;
-        case TTMpeg2VideoHeader::sequence_end_code:
-          newHeader = new TTSequenceEndHeader();
-          newHeader->readHeader(stream_buffer, offset);
-          break;
-        default:
-          log->warningMsg(__FILE__, __LINE__,
-              "Unknown IDD header type 0x%02X at offset %llu, skipping",
-              (unsigned)headerType, (unsigned long long)offset);
-          continue;
-      }
-
-      header_list->add( newHeader );
-
-      emit statusReport(StatusReportArgs::Step, tr("Read Mpeg2Schnitt IDD-file"), iddStream->position());
-    }
-    emit statusReport(StatusReportArgs::Finished, tr("Finish reading IDD-file"), iddStream->size());
-  }
-  catch (...)
-  {
-    log->debugMsg(__FILE__, __LINE__, "catch block called!");
-  }
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -1056,14 +835,10 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   // save current cut parameter
   bool savIsWriteMaxBitrate  = cr->getIsWriteMaxBitrate();
   bool savIsWriteSequenceEnd = cr->getIsWriteSequenceEnd();
-  bool savCreateVideoIDD     = TTSettings::instance()->createVideoIDD();
-  bool savReadVideoIDD       = TTSettings::instance()->readVideoIDD();
 
   // no sequence end code
   cr->setIsWriteSequenceEnd(false);
   cr->setIsWriteMaxBitrate(false);
-  TTSettings::instance()->setCreateVideoIDD(false);
-  TTSettings::instance()->setReadVideoIDD(false);
 
   log->debugMsg(__FILE__, __LINE__, QString("enocdePart start %1 / end %2").arg(start).arg(end));
 
@@ -1126,8 +901,6 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
 
   cr->setIsWriteMaxBitrate(savIsWriteMaxBitrate);
   cr->setIsWriteSequenceEnd(savIsWriteSequenceEnd);
-  TTSettings::instance()->setReadVideoIDD(savReadVideoIDD);
-  TTSettings::instance()->setCreateVideoIDD(savCreateVideoIDD);
 
   disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
   		       this,           &TTMpeg2VideoStream::statusReport);

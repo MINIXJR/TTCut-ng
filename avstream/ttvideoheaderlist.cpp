@@ -210,32 +210,6 @@ int TTVideoHeaderList::headerIndex( TTVideoHeader* current )
   return indexOf( (TTAVHeader*)current );
 }
 
-// -----------------------------------------------------------------------------
-// IDD-Index file operations
-// -----------------------------------------------------------------------------
-// Aufbau der Indexdatei Video:
-// -----------------------------------------------------------------------------
-//
-//   3 Byte Zeichenkette 'idd' (Indexdatei)
-//   1 Byte Versionsnummer
-//
-//   Wiederholen bis Dateiende
-//   -------------------------------------------------------------
-//     1 Byte Headertype       ($B3-Sequenzheader,
-//                              $B8-Gruppenheader,
-//                              $00-Bildheader)
-//     8 Byte (Int64) Adresse des Headers in der Datei
-//                    (inclusive 4 Byte Startcode $00 00 01 xx)
-//     >> Wenn Bildheader dann
-//        2 Byte (Wort) temporaere Referenz
-//        1 Byte        Bildtype (1-IFrame, 2-PFrame, 3-BFrame)
-//   -------------------------------------------------------------
-//   Wiederholen Ende
-//
-//   1 Byte HeaderType         ($B7-Sequenzendcode)
-//   8 Byte Adresse            (wird zum kopieren des letzten Bildes gebraucht)
-// -----------------------------------------------------------------------------
-
 /*! ///////////////////////////////////////////////////////////////////////////
  * Sort the header list by header offset
  */

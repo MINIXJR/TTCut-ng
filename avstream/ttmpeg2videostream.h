@@ -105,9 +105,6 @@ class TTMpeg2VideoStream : public TTVideoStream
   protected:
     bool    openStream();
     bool    closeStream();
-    bool    createHeaderListFromIdd(TTFileBuffer* iddStream);
-    void    writeIDDFile( );
-    void    readIDDHeader(TTFileBuffer* iddStream, quint8 iddFileVersion);
     quint64 getByteCount(TTVideoHeader* startObject, TTVideoHeader* endObject);
     // log is inherited from TTAVStream — do not redeclare here.
 

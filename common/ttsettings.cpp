@@ -148,46 +148,10 @@ void TTSettings::setStepMouseWheel(int v)
 // ---- Index Files & Logging group setters (Task 6) --------------------------
 // Each setter early-outs on no-op assignment.
 
-void TTSettings::setCreateVideoIDD(bool v)
-{
-  if (mCreateVideoIDD == v) return;
-  mCreateVideoIDD = v;
-}
-
-void TTSettings::setCreateAudioIDD(bool v)
-{
-  if (mCreateAudioIDD == v) return;
-  mCreateAudioIDD = v;
-}
-
-void TTSettings::setCreatePrevIDD(bool v)
-{
-  if (mCreatePrevIDD == v) return;
-  mCreatePrevIDD = v;
-}
-
 void TTSettings::setCreateD2V(bool v)
 {
   if (mCreateD2V == v) return;
   mCreateD2V = v;
-}
-
-void TTSettings::setReadVideoIDD(bool v)
-{
-  if (mReadVideoIDD == v) return;
-  mReadVideoIDD = v;
-}
-
-void TTSettings::setReadAudioIDD(bool v)
-{
-  if (mReadAudioIDD == v) return;
-  mReadAudioIDD = v;
-}
-
-void TTSettings::setReadPrevIDD(bool v)
-{
-  if (mReadPrevIDD == v) return;
-  mReadPrevIDD = v;
 }
 
 void TTSettings::setCreateLogFile(bool v)
@@ -644,18 +608,6 @@ void TTSettings::setCorrectCutBitRate(bool v)
   mCorrectCutBitRate = v;
 }
 
-void TTSettings::setCreateCutIDD(bool v)
-{
-  if (mCreateCutIDD == v) return;
-  mCreateCutIDD = v;
-}
-
-void TTSettings::setReadCutIDD(bool v)
-{
-  if (mReadCutIDD == v) return;
-  mReadCutIDD = v;
-}
-
 void TTSettings::setSpumuxChapter(bool v)
 {
   if (mSpumuxChapter == v) return;
@@ -750,17 +702,8 @@ void TTSettings::load()
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------
-  // NOTE: ReadAudioIDD has NO trailing slash — pre-existing legacy quirk
-  // preserved verbatim from the Task 1 inventory to keep already-installed
-  // user settings round-tripping. The 6 sibling keys all carry a slash.
   settings.beginGroup("IndexFiles");
-  mCreateVideoIDD = settings.value("CreateVideoIDD/", mCreateVideoIDD).toBool();
-  mCreateAudioIDD = settings.value("CreateAudioIDD/", mCreateAudioIDD).toBool();
-  mCreatePrevIDD  = settings.value("CreatePrevIDD/",  mCreatePrevIDD).toBool();
   mCreateD2V      = settings.value("CreateD2V/",      mCreateD2V).toBool();
-  mReadVideoIDD   = settings.value("ReadVideoIDD/",   mReadVideoIDD).toBool();
-  mReadAudioIDD   = settings.value("ReadAudioIDD",    mReadAudioIDD).toBool();   // NO slash
-  mReadPrevIDD    = settings.value("ReadPrevIDD/",    mReadPrevIDD).toBool();
   settings.endGroup();
 
   // ----- Logging group (Task 6) ----------------------------------------
@@ -869,8 +812,6 @@ void TTSettings::load()
   mCutWriteSeqEnd      = settings.value("WriteSeqEnd/",     mCutWriteSeqEnd).toBool();
   mCorrectCutTimeCode  = settings.value("CorrectTimeCode/", mCorrectCutTimeCode).toBool();
   mCorrectCutBitRate   = settings.value("CorrectBitrate/",  mCorrectCutBitRate).toBool();   // lowercase 'r'
-  mCreateCutIDD        = settings.value("CreateIDD/",       mCreateCutIDD).toBool();
-  mReadCutIDD          = settings.value("ReadIDD/",         mReadCutIDD).toBool();
   if (!QDir(mCutDirPath).exists()) mCutDirPath = QDir::currentPath();
   settings.endGroup();
 
@@ -896,6 +837,14 @@ void TTSettings::load()
     { "StreamPoints", "BlackMinDuration/" },  // legacy
     { "StreamPoints", "SceneThreshold/" },    // threshold moved to Navigation
     { "StreamPoints", "MinDistance/" },       // legacy
+    { "IndexFiles",   "CreateVideoIDD/" },    // MPEG2Schnitt IDD-Files removed
+    { "IndexFiles",   "CreateAudioIDD/" },
+    { "IndexFiles",   "CreatePrevIDD/"  },
+    { "IndexFiles",   "ReadVideoIDD/"   },
+    { "IndexFiles",   "ReadAudioIDD"    },    // historical inconsistency: no trailing slash
+    { "IndexFiles",   "ReadPrevIDD/"    },
+    { "CutOptions",   "CreateIDD/"      },
+    { "CutOptions",   "ReadIDD/"        },
   };
   for (const auto& o : orphanKeys) {
     settings.beginGroup(o.group);
@@ -974,15 +923,8 @@ void TTSettings::save()
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------
-  // ReadAudioIDD intentionally has NO trailing slash — see load().
   settings.beginGroup("IndexFiles");
-  settings.setValue("CreateVideoIDD/", mCreateVideoIDD);
-  settings.setValue("CreateAudioIDD/", mCreateAudioIDD);
-  settings.setValue("CreatePrevIDD/",  mCreatePrevIDD);
   settings.setValue("CreateD2V/",      mCreateD2V);
-  settings.setValue("ReadVideoIDD/",   mReadVideoIDD);
-  settings.setValue("ReadAudioIDD",    mReadAudioIDD);   // NO slash
-  settings.setValue("ReadPrevIDD/",    mReadPrevIDD);
   settings.endGroup();
 
   // ----- Logging group (Task 6) ----------------------------------------
@@ -1054,8 +996,6 @@ void TTSettings::save()
   settings.setValue("WriteSeqEnd/",     mCutWriteSeqEnd);
   settings.setValue("CorrectTimeCode/", mCorrectCutTimeCode);
   settings.setValue("CorrectBitrate/",  mCorrectCutBitRate);   // lowercase 'r'
-  settings.setValue("CreateIDD/",       mCreateCutIDD);
-  settings.setValue("ReadIDD/",         mReadCutIDD);
   settings.endGroup();
 
   // ----- Chapter group (Task 13) ---------------------------------------

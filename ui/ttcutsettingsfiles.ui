@@ -31,65 +31,6 @@
    <property name="verticalSpacing" >
     <number>6</number>
    </property>
-   <item row="0" column="0" >
-    <widget class="QGroupBox" name="gbIDDFiles" >
-     <property name="title" >
-      <string>MPEG2Schnitt Index Files (*.idd)</string>
-     </property>
-     <layout class="QVBoxLayout" >
-      <property name="spacing" >
-       <number>6</number>
-      </property>
-      <property name="leftMargin" >
-       <number>9</number>
-      </property>
-      <property name="topMargin" >
-       <number>9</number>
-      </property>
-      <property name="rightMargin" >
-       <number>9</number>
-      </property>
-      <property name="bottomMargin" >
-       <number>9</number>
-      </property>
-      <item>
-       <widget class="QCheckBox" name="cbCreateVideoIDD" >
-        <property name="text" >
-         <string>Create video index file</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="cbReadVideoIDD" >
-        <property name="text" >
-         <string>Read video index file</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="cbCreateAudioIDD" >
-        <property name="text" >
-         <string>Create audio index file</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="cbReadAudioIDD" >
-        <property name="text" >
-         <string>Read audio index file</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="cbCreateCutIDD" >
-        <property name="text" >
-         <string>Create cut video index file</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
    <item row="1" column="0" >
     <spacer>
      <property name="orientation" >
@@ -103,7 +44,7 @@
      </property>
     </spacer>
    </item>
-   <item row="0" column="1" >
+   <item row="0" column="0" >
     <widget class="QGroupBox" name="gbLogfile" >
      <property name="title" >
       <string>Logfile</string>

@@ -79,26 +79,8 @@ public:
   void    setStepMouseWheel(int v);
 
   // ----- Index Files & Logging group (Task 6) -----------------------------
-  bool    createVideoIDD() const     { return mCreateVideoIDD; }
-  void    setCreateVideoIDD(bool v);
-
-  bool    createAudioIDD() const     { return mCreateAudioIDD; }
-  void    setCreateAudioIDD(bool v);
-
-  bool    createPrevIDD() const      { return mCreatePrevIDD; }
-  void    setCreatePrevIDD(bool v);
-
   bool    createD2V() const          { return mCreateD2V; }
   void    setCreateD2V(bool v);
-
-  bool    readVideoIDD() const       { return mReadVideoIDD; }
-  void    setReadVideoIDD(bool v);
-
-  bool    readAudioIDD() const       { return mReadAudioIDD; }
-  void    setReadAudioIDD(bool v);
-
-  bool    readPrevIDD() const        { return mReadPrevIDD; }
-  void    setReadPrevIDD(bool v);
 
   bool    createLogFile() const      { return mCreateLogFile; }
   void    setCreateLogFile(bool v);
@@ -327,11 +309,11 @@ public:
   void    setAudioOnlyBitrateKbps(int v);
 
   // ----- Cut Settings & Chapter group (Task 13) ---------------------------
-  // Eleven fields total. Nine round-trip through QSettings across two NEW
+  // Nine fields total. Seven round-trip through QSettings across two NEW
   // sub-groups of /Settings:
-  //   - /Settings/CutOptions (8 fields): cutDirPath, cutAddSuffix,
+  //   - /Settings/CutOptions (6 fields): cutDirPath, cutAddSuffix,
   //     cutWriteMaxBitrate, cutWriteSeqEnd, correctCutTimeCode,
-  //     correctCutBitRate, createCutIDD, readCutIDD
+  //     correctCutBitRate
   //   - /Settings/Chapter (1 field): spumuxChapter
   // One field is NOT persisted in QSettings:
   //   - cutVideoName: per-project value, persisted in the .ttcut project
@@ -360,12 +342,6 @@ public:
 
   bool    correctCutBitRate() const            { return mCorrectCutBitRate; }
   void    setCorrectCutBitRate(bool v);
-
-  bool    createCutIDD() const                 { return mCreateCutIDD; }
-  void    setCreateCutIDD(bool v);
-
-  bool    readCutIDD() const                   { return mReadCutIDD; }
-  void    setReadCutIDD(bool v);
 
   bool    spumuxChapter() const                { return mSpumuxChapter; }
   void    setSpumuxChapter(bool v);
@@ -423,13 +399,7 @@ private:
 
   // ----- Index Files & Logging group (Task 6) ------------------------------
   // Defaults match common/ttcut.cpp lines 117-130 verbatim.
-  bool    mCreateVideoIDD    = true;
-  bool    mCreateAudioIDD    = true;
-  bool    mCreatePrevIDD     = false;
   bool    mCreateD2V         = false;
-  bool    mReadVideoIDD      = true;
-  bool    mReadAudioIDD      = true;
-  bool    mReadPrevIDD       = false;
   bool    mCreateLogFile     = true;
   bool    mLogModeConsole    = false;
   bool    mLogModeExtended   = true;
@@ -536,8 +506,6 @@ private:
   bool    mCutWriteSeqEnd       = false;
   bool    mCorrectCutTimeCode   = false;
   bool    mCorrectCutBitRate    = false;
-  bool    mCreateCutIDD         = false;
-  bool    mReadCutIDD           = false;
   bool    mSpumuxChapter        = false;
   QString mCutVideoName;           // empty by default
   QString mCutDirPath;             // initialised to QDir::currentPath() in ctor
