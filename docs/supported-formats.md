@@ -146,7 +146,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 | Extension | Purpose | Created By |
 |-----------|---------|------------|
 | **.info** | Frame rate, resolution, audio tracks, A/V offset, VDR markers | `ttcut-demux` |
-| **.idd** | TTCut frame index cache | TTCut |
 | **.ttcut** | TTCut-ng project file (XML) | TTCut-ng (`.prj` still supported) |
 
 ---

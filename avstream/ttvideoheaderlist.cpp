@@ -52,8 +52,6 @@
 
 bool videoHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
 
-const char c_name[] = "TTVideoHeaderList";
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Constructor
  */

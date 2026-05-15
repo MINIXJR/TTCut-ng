@@ -309,7 +309,7 @@ public:
   void    setAudioOnlyBitrateKbps(int v);
 
   // ----- Cut Settings & Chapter group (Task 13) ---------------------------
-  // Nine fields total. Seven round-trip through QSettings across two NEW
+  // Eight fields total. Seven round-trip through QSettings across two NEW
   // sub-groups of /Settings:
   //   - /Settings/CutOptions (6 fields): cutDirPath, cutAddSuffix,
   //     cutWriteMaxBitrate, cutWriteSeqEnd, correctCutTimeCode,
