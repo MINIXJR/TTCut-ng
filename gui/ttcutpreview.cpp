@@ -539,8 +539,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   TTAVItem* avItem = firstItem.avDataItem();
   TTVideoStream* vStream = avItem->videoStream();
   TTAVTypes::AVStreamType streamType = vStream->streamType();
-  bool isMpeg2 = (streamType == TTAVTypes::mpeg2_demuxed_video ||
-                  streamType == TTAVTypes::mpeg2_mplexed_video);
+  bool isMpeg2 = (streamType == TTAVTypes::mpeg2_demuxed_video);
 
   // File index must match onCutSelectionChanged()'s lookup, including
   // mClipOffset (1 in transitionsOnly mode), or the regen overwrites

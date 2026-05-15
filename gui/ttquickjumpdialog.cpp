@@ -35,8 +35,7 @@ static const int THUMB_HEIGHT = 83;
 static int computeThumbWidth(TTVideoStream* vs)
 {
   int type = vs->streamType();
-  bool isMpeg2 = (type == TTAVTypes::mpeg2_demuxed_video ||
-                   type == TTAVTypes::mpeg2_mplexed_video);
+  bool isMpeg2 = (type == TTAVTypes::mpeg2_demuxed_video);
 
   if (isMpeg2) {
     // MPEG-2 SD uses non-square pixels — need Display AR from sequence header

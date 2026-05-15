@@ -89,8 +89,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
     return results;
 
   // MPEG-2 only — sequence headers contain aspect_ratio_information
-  if (mStreamType != TTAVTypes::mpeg2_demuxed_video &&
-      mStreamType != TTAVTypes::mpeg2_mplexed_video)
+  if (mStreamType != TTAVTypes::mpeg2_demuxed_video)
     return results;
 
   int prevAspect = -1;
@@ -215,8 +214,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectPillarboxChanges()
   if (!mVideoIndexList || mVideoIndexList->count() == 0)
     return results;
 
-  bool useMpeg2 = (mStreamType == TTAVTypes::mpeg2_demuxed_video ||
-                   mStreamType == TTAVTypes::mpeg2_mplexed_video);
+  bool useMpeg2 = (mStreamType == TTAVTypes::mpeg2_demuxed_video);
   bool useFFmpeg = (mStreamType == TTAVTypes::h264_video ||
                     mStreamType == TTAVTypes::h265_video);
 

@@ -65,8 +65,7 @@ bool TTSearchTask::openDecoder()
     return true;
   }
 
-  if (mStreamType == TTAVTypes::mpeg2_demuxed_video ||
-      mStreamType == TTAVTypes::mpeg2_mplexed_video) {
+  if (mStreamType == TTAVTypes::mpeg2_demuxed_video) {
     try {
       mMpeg2Decoder = new TTMpeg2Decoder(mFilePath, mIndexList, mHeaderList, formatRGB32);
       return true;
@@ -211,8 +210,7 @@ bool TTSearchTask::setupWorkers()
   mWorkerCount = qBound(1, n, 16);
 
   // MPEG-2: single decoder for now (libmpeg2 multi-decoder is future work).
-  if (mStreamType == TTAVTypes::mpeg2_demuxed_video ||
-      mStreamType == TTAVTypes::mpeg2_mplexed_video) {
+  if (mStreamType == TTAVTypes::mpeg2_demuxed_video) {
     mWorkerCount = 1;
     if (!openDecoder()) return false;   // populates mMpeg2Decoder (existing path)
     return true;

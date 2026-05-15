@@ -34,8 +34,7 @@ void TTQuickJumpWorker::operation()
   mTotalSteps = mFrameIndices.size();
   onStatusReport(StatusReportArgs::Start, tr("Decoding thumbnails"), mTotalSteps);
 
-  bool isMpeg2 = (mStreamType == TTAVTypes::mpeg2_demuxed_video ||
-                   mStreamType == TTAVTypes::mpeg2_mplexed_video);
+  bool isMpeg2 = (mStreamType == TTAVTypes::mpeg2_demuxed_video);
 
   // Create decoder ONCE for all frames (thread-safe: own instance per worker)
   TTMpeg2Decoder* mpeg2Decoder = 0;

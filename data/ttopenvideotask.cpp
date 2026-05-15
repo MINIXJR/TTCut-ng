@@ -123,7 +123,6 @@ void TTOpenVideoTask::operation()
 
   // Check for supported video types
   if (streamType != TTAVTypes::mpeg2_demuxed_video &&
-      streamType != TTAVTypes::mpeg2_mplexed_video &&
       streamType != TTAVTypes::h264_video &&
       streamType != TTAVTypes::h265_video) {
     throw TTDataFormatException(__FILE__, __LINE__,

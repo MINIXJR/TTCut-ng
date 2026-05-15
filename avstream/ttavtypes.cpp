@@ -304,7 +304,6 @@ TTVideoStream* TTVideoType::createVideoStream()
 
   switch (av_stream_type) {
     case mpeg2_demuxed_video:
-    case mpeg2_mplexed_video:
       return new TTMpeg2VideoStream(*av_stream_info);
 
     case h264_video:

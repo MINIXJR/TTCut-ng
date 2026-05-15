@@ -276,7 +276,7 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 		throw TTInvalidOperationException(tr("Video files to cut must have the same codec type!"));
 
 	// MPEG-2 specific checks using sequence headers
-	if (type1 == TTAVTypes::mpeg2_demuxed_video || type1 == TTAVTypes::mpeg2_mplexed_video) {
+	if (type1 == TTAVTypes::mpeg2_demuxed_video) {
 		TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
 		TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
 
