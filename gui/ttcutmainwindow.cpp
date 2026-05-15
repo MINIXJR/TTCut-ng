@@ -496,7 +496,7 @@ void TTCutMainWindow::onFileSave()
     QString chosen = QFileDialog::getSaveFileName(this,
         tr("Save project-file"),
         prjFileInfo.absoluteFilePath(),
-        "TTCut Project (*.ttcut);;Legacy Project (*.prj)");
+        "TTCut Project (*.ttcut)");
     TTSettings::instance()->setProjectFileName(chosen);
 
     if (TTSettings::instance()->projectFileName().isEmpty()) return;
@@ -551,7 +551,7 @@ void TTCutMainWindow::onFileSaveAs()
   TTSettings::instance()->setProjectFileName(QFileDialog::getSaveFileName( this,
       tr("Save project-file as"),
       prjFileInfo.absoluteFilePath(),
-      "TTCut Project (*.ttcut);;Legacy Project (*.prj)" ));
+      "TTCut Project (*.ttcut)" ));
 
   if (!TTSettings::instance()->projectFileName().isEmpty())
   {
