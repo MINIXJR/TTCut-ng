@@ -39,11 +39,8 @@
 TTCutParameter::TTCutParameter(TTFileBuffer* fBuffer)
 {
   targetStreamBuffer     = fBuffer;
-  isWriteSequenceEnd     = false;
-  isWriteMaxBitrate      = false;
   isDVDCompliantStream   = false;
   numPicturesWritten     = 0;
-  maxBitrateValue        = 0;
   dvdCompliantMaxBitrate = 0.0;
   dvdCompliantMaxFrames  = 0;
 }
@@ -60,16 +57,10 @@ TTCutParameter::~TTCutParameter()
  */
 TTFileBuffer* TTCutParameter::getTargetStreamBuffer() { return targetStreamBuffer; }
 
-bool TTCutParameter::getIsWriteSequenceEnd()             { return isWriteSequenceEnd; }
-void TTCutParameter::setIsWriteSequenceEnd(bool value)   { isWriteSequenceEnd = value; }
-bool TTCutParameter::getIsWriteMaxBitrate()              { return isWriteMaxBitrate; }
-void TTCutParameter::setIsWriteMaxBitrate(bool value)    { isWriteMaxBitrate = value; }
 bool TTCutParameter::getIsDVDCompliantStream()           { return isDVDCompliantStream; }
 void TTCutParameter::setIsDVDCompliantStream(bool value) { isDVDCompliantStream = value; }
 int  TTCutParameter::getNumPicturesWritten()             { return numPicturesWritten; }
 void TTCutParameter::setNumPicturesWritten(int value)    { numPicturesWritten = value; }
-int  TTCutParameter::getMaxBitrate() 								     { return maxBitrateValue; }
-void TTCutParameter::setMaxBitrate(int value)            { maxBitrateValue = value; }
 int  TTCutParameter::getCutInIndex()                     { return cutInIndex; }
 void TTCutParameter::setCutInIndex(int value)            { cutInIndex = value; }
 int  TTCutParameter::getCutOutIndex()                    { return cutOutIndex; }
@@ -87,8 +78,7 @@ void TTCutParameter::firstCall()
  */
 void TTCutParameter::lastCall()
 {
-  if(isWriteSequenceEnd)
-    writeSequenceEndHeader();
+  writeSequenceEndHeader();
 }
 
 /*!

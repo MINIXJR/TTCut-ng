@@ -168,9 +168,7 @@ void TTMplexProvider::mplexPart(int index)
 
   log->debugMsg(__FILE__, __LINE__, QString("Mplex command string: %1").arg(mplexArgs.join(" ")));
 
-  emit statusReport(
-      ((TTSettings::instance()->muxPause()) ? StatusReportArgs::ShowProcessFormBlocking : StatusReportArgs::ShowProcessForm),
-      "Starting mplex", 0);
+  emit statusReport(StatusReportArgs::ShowProcessForm, "Starting mplex", 0);
   qApp->processEvents();
   proc->start(mplexCmd, mplexArgs);
 

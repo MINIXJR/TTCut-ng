@@ -434,13 +434,6 @@
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="laFrame6" >
-          <property name="text" >
-           <string>frames</string>
-          </property>
-         </widget>
-        </item>
-        <item>
          <widget class="QLabel" name="laThreads" >
           <property name="text" >
            <string>threads</string>
@@ -481,19 +474,6 @@
         </item>
         <item>
          <widget class="QSpinBox" name="spPreviewLength" >
-          <property name="minimum" >
-           <number>5</number>
-          </property>
-          <property name="maximum" >
-           <number>200</number>
-          </property>
-          <property name="singleStep" >
-           <number>5</number>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="sbSkipFrames" >
           <property name="minimum" >
            <number>5</number>
           </property>
@@ -551,13 +531,6 @@
          <widget class="QLabel" name="laPreview" >
           <property name="text" >
            <string>Preview each Cut</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="laSkip" >
-          <property name="text" >
-           <string>Skip while playing</string>
           </property>
          </widget>
         </item>

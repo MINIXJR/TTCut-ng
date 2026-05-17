@@ -30,6 +30,7 @@
 #include "ttstreamnavigator.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavlist.h"
+#include "../common/ttsettings.h"
 
 TTStreamNavigator::TTStreamNavigator(QWidget* parent)
   :QWidget(parent)
@@ -38,6 +39,10 @@ TTStreamNavigator::TTStreamNavigator(QWidget* parent)
 
   connect(videoSlider, &QAbstractSlider::valueChanged, this, &TTStreamNavigator::onNewSliderValue);
   connect(videoSlider, &QAbstractSlider::sliderMoved,  this, &TTStreamNavigator::onSliderMoved);
+
+  videoSlider->setPageStep(TTSettings::instance()->stepSliderClick());
+  connect(TTSettings::instance(), &TTSettings::stepSliderClickChanged,
+          this, [this](int v) { videoSlider->setPageStep(v); });
 }
 
 void TTStreamNavigator::setTitle(const QString&)

@@ -138,6 +138,15 @@
   - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
     (z.B. eigener "Logging"-Tab)
 
+- **FastForward-Player-Feature**
+  - `playSkipFrames` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
+  - Reanimieren benötigt Player-Refactor (TTMpv-Wrapper)
+
+- **MP3/AAC re-encoding für Audio-Only-Output**
+  - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
+  - Code-Stelle `data/ttavdata.cpp:1934` warnt "not implemented yet"
+  - Bei Implementation: `sbAudioOnlyBitrate`-UI wieder einblenden
+
 - **Batch-Mux-Workflow per CLI für alle Codecs**
   - `TTMplexProvider::writeMuxScript()` ist heute nur via mplex/MPEG-2 erreichbar
   - Erweitern auf MKV (libav matroska muxer) — z.B. via `--auto-cut`-CLI-Flag

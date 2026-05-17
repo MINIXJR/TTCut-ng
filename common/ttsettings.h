@@ -53,8 +53,6 @@ public:
   int     searchWorkerCount() const  { return mSearchWorkerCount; }
   void    setSearchWorkerCount(int v);
 
-  int     searchAccuracy() const     { return mSearchAccuracy; }
-  void    setSearchAccuracy(int v);
 
   // ----- Navigation Steps group (Task 5) ----------------------------------
   int     stepSliderClick() const    { return mStepSliderClick; }
@@ -94,8 +92,6 @@ public:
   bool    logVideoIndexInfo() const  { return mLogVideoIndexInfo; }
   void    setLogVideoIndexInfo(bool v);
 
-  bool    logAudioIndexInfo() const  { return mLogAudioIndexInfo; }
-  void    setLogAudioIndexInfo(bool v);
 
   bool    logFFmpegDecoder() const   { return mLogFFmpegDecoder; }
   void    setLogFFmpegDecoder(bool v);
@@ -278,14 +274,6 @@ public:
   int     muxMode() const                  { return mMuxMode; }
   void    setMuxMode(int v);
 
-  QString muxProg() const                  { return mMuxProg; }
-  void    setMuxProg(const QString& v);
-
-  QString muxProgPath() const              { return mMuxProgPath; }
-  void    setMuxProgPath(const QString& v);
-
-  QString muxProgCmd() const               { return mMuxProgCmd; }
-  void    setMuxProgCmd(const QString& v);
 
   QString muxOutputPath() const            { return mMuxOutputPath; }
   void    setMuxOutputPath(const QString& v);
@@ -293,8 +281,6 @@ public:
   bool    muxDeleteES() const              { return mMuxDeleteES; }
   void    setMuxDeleteES(bool v);
 
-  bool    muxPause() const                 { return mMuxPause; }
-  void    setMuxPause(bool v);
 
   int     outputContainer() const          { return mOutputContainer; }
   void    setOutputContainer(int v);
@@ -311,17 +297,9 @@ public:
   int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
   void    setAudioOnlyBitrateKbps(int v);
 
-  // ----- Cut Settings & Chapter group (Task 13) ---------------------------
-  // Eight fields total. Seven round-trip through QSettings across two NEW
-  // sub-groups of /Settings:
-  //   - /Settings/CutOptions (6 fields): cutDirPath, cutAddSuffix,
-  //     cutWriteMaxBitrate, cutWriteSeqEnd, correctCutTimeCode,
-  //     correctCutBitRate
-  //   - /Settings/Chapter (1 field): spumuxChapter
-  // One field is NOT persisted in QSettings:
-  //   - cutVideoName: per-project value, persisted in the .ttcut project
-  //     file via data/ttcutprojectdata.cpp, NOT in QSettings; no load/save
-  //     round-trip
+  // ----- Cut Settings group (Task 13, reduced in v0.70.0) -------------------
+  // Two fields persist in /Settings/CutOptions: cutDirPath, cutAddSuffix.
+  // cutVideoName is NOT persisted in QSettings (per-project, .ttcut only).
   // No signals — none of these fields have reactive UI dependents.
   // load() applies a cutDirPath fallback-to-currentPath validation if the
   // persisted directory no longer exists.
@@ -334,20 +312,6 @@ public:
   bool    cutAddSuffix() const                 { return mCutAddSuffix; }
   void    setCutAddSuffix(bool v);
 
-  bool    cutWriteMaxBitrate() const           { return mCutWriteMaxBitrate; }
-  void    setCutWriteMaxBitrate(bool v);
-
-  bool    cutWriteSeqEnd() const               { return mCutWriteSeqEnd; }
-  void    setCutWriteSeqEnd(bool v);
-
-  bool    correctCutTimeCode() const           { return mCorrectCutTimeCode; }
-  void    setCorrectCutTimeCode(bool v);
-
-  bool    correctCutBitRate() const            { return mCorrectCutBitRate; }
-  void    setCorrectCutBitRate(bool v);
-
-  bool    spumuxChapter() const                { return mSpumuxChapter; }
-  void    setSpumuxChapter(bool v);
 
 signals:
   // Per-group selective change signals added in tasks 4-13.
@@ -355,6 +319,10 @@ signals:
   // Task 7 adds the first signal: the recent-files menu is the canonical
   // subscriber, but follow-up commits will wire that up.
   void recentFilesChanged(const QStringList& list);
+
+  // stepSliderClick: emitted when the setting changes so live-connected
+  // QSlider::setPageStep() calls can react without a dialog re-open.
+  void stepSliderClickChanged(int v);
 
   // Task 8: emitted by setEncoderCodec so non-dialog subscribers (e.g.
   // muxer settings page, project-load handlers) can react to codec
@@ -388,7 +356,6 @@ private:
   int     mPlaySkipFrames    = 0;
   int     mSearchLength      = 45;
   int     mSearchWorkerCount = 0;   // 0 = auto (qBound(1, idealThreadCount/2, 4))
-  int     mSearchAccuracy    = 1;
 
   // ----- Navigation Steps group (Task 5) -----------------------------------
   // Defaults match common/ttcut.cpp lines 108-114 verbatim.
@@ -407,7 +374,6 @@ private:
   bool    mLogModeConsole    = false;
   bool    mLogModeExtended   = true;
   bool    mLogVideoIndexInfo = false;
-  bool    mLogAudioIndexInfo = false;
   bool    mLogFFmpegDecoder = false;
   bool    mLogSmartCut = false;
   bool    mLogMkvMux = false;
@@ -487,12 +453,8 @@ private:
   // the runtime-dependent init pattern of mTempDirPath/mLastDirPath).
   // mMpeg2Target (Task 9) already lives in /Settings/Muxer above.
   int     mMuxMode             = 0;
-  QString mMuxProg             = "mplex";
-  QString mMuxProgPath         = "/usr/local/bin/";
-  QString mMuxProgCmd          = "-f 8";
   QString mMuxOutputPath;          // initialised to QDir::homePath() in ctor
   bool    mMuxDeleteES         = false;
-  bool    mMuxPause            = true;
   int     mOutputContainer     = 1;   // 1=MKV (default for modern codecs)
   bool    mMkvCreateChapters   = true;
   int     mMkvChapterInterval  = 5;
@@ -506,11 +468,6 @@ private:
   // mCutVideoName is per-project (persisted in .ttcut, not QSettings); has a
   // setter but no QSettings load/save round-trip.
   bool    mCutAddSuffix         = true;
-  bool    mCutWriteMaxBitrate   = false;
-  bool    mCutWriteSeqEnd       = false;
-  bool    mCorrectCutTimeCode   = false;
-  bool    mCorrectCutBitRate    = false;
-  bool    mSpumuxChapter        = false;
   QString mCutVideoName;           // empty by default
   QString mCutDirPath;             // initialised to QDir::currentPath() in ctor
 };

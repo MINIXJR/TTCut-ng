@@ -65,7 +65,6 @@ class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
     void onCreateMuxStreams();
     void onOpenOutputPath();
     void onStateDeleteES(int state);
-    void onStatePause(int state);
     void onMuxerProgChanged(int index);
     void onMkvChaptersChanged(int state);
 };

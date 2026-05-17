@@ -100,7 +100,6 @@ void TTCutVideoTask::operation()
  	mpTgtStream = new TTFileBuffer(mTgtFilePath, QIODevice::WriteOnly);
   mpCutParams = new TTCutParameter(mpTgtStream);
 
-	mpCutParams->setIsWriteSequenceEnd(true);
 	mpTgtStream->open();
 
   onStatusReport(this, StatusReportArgs::Start, tr("Cut 1 of %1").arg(mpCutList->count()), mpCutList->count());

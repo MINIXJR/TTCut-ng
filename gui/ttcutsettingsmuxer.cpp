@@ -56,7 +56,6 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   connect(rbMuxStreams,        &QRadioButton::clicked,   this, &TTCutSettingsMuxer::onCreateMuxStreams);
   connect(btnOutputPath,       &QPushButton::clicked,    this, &TTCutSettingsMuxer::onOpenOutputPath);
   connect(cbDeleteES,          &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStateDeleteES);
-  connect(cbPause,             &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStatePause);
   connect(cbMuxerProg,         qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutSettingsMuxer::onMuxerProgChanged);
   connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
 }
@@ -101,13 +100,11 @@ void TTCutSettingsMuxer::setTabData()
     case 0:
       rbMuxStreams->setChecked(true);
       cbDeleteES->setEnabled(true);
-      cbPause->setEnabled(true);
       break;
 
     case 1:
       rbCreateMuxScript->setChecked(true);
       cbDeleteES->setEnabled(false);
-      cbPause->setEnabled(false);
       break;
   }
 
@@ -123,11 +120,6 @@ void TTCutSettingsMuxer::setTabData()
   else
     cbDeleteES->setCheckState(Qt::Unchecked);
 
-  if(TTSettings::instance()->muxPause())
-    cbPause->setCheckState(Qt::Checked);
-  else
-    cbPause->setCheckState(Qt::Unchecked);
-
   // MKV chapter settings
   cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
   sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
@@ -137,7 +129,6 @@ void TTCutSettingsMuxer::setTabData()
   // tab and getData() is called when the dialog is reopened.
   int aofIdx = cbAudioOnlyFormat->findData(TTSettings::instance()->audioOnlyFormat());
   cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
-  sbAudioOnlyBitrate->setValue(TTSettings::instance()->audioOnlyBitrateKbps());
 }
 
 void TTCutSettingsMuxer::getTabData()
@@ -145,13 +136,11 @@ void TTCutSettingsMuxer::getTabData()
   TTSettings::instance()->setMpeg2Target(cbMuxTarget->currentIndex());
   TTSettings::instance()->setMuxOutputPath(leOutputPath->text());
 
-  // muxMode/muxDeleteES/muxPause were only being persisted via the per-widget
-  // signal handlers (onCreateMuxStreams etc.). If callers ever reset the UI
-  // and called getTabData() expecting the displayed state, those three were
-  // stale. Persist them here too — symmetric with setTabData.
+  // muxMode/muxDeleteES were only being persisted via the per-widget
+  // signal handlers (onCreateMuxStreams etc.). Persist them here too
+  // — symmetric with setTabData.
   TTSettings::instance()->setMuxMode(rbMuxStreams->isChecked() ? 0 : 1);
   TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
-  TTSettings::instance()->setMuxPause(cbPause->isChecked());
 
   // MKV chapter settings
   TTSettings::instance()->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
@@ -159,7 +148,6 @@ void TTCutSettingsMuxer::getTabData()
 
   // Audio-only preset
   TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
-  TTSettings::instance()->setAudioOnlyBitrateKbps(sbAudioOnlyBitrate->value());
 
   QFileInfo fInfo(TTSettings::instance()->muxOutputPath());
 
@@ -172,7 +160,6 @@ void TTCutSettingsMuxer::onCreateMuxStreams()
   TTSettings::instance()->setMuxMode(0);
 
   cbDeleteES->setEnabled(true);
-  cbPause->setEnabled(true);
 }
 
 void TTCutSettingsMuxer::onCreateMuxScript()
@@ -180,7 +167,6 @@ void TTCutSettingsMuxer::onCreateMuxScript()
   TTSettings::instance()->setMuxMode(1);
 
   cbDeleteES->setEnabled(false);
-  cbPause->setEnabled(false);
 }
 
 void TTCutSettingsMuxer::onOpenOutputPath()
@@ -205,14 +191,6 @@ void TTCutSettingsMuxer::onStateDeleteES(int state)
     TTSettings::instance()->setMuxDeleteES(false);
   else
     TTSettings::instance()->setMuxDeleteES(true);
-}
-
-void TTCutSettingsMuxer::onStatePause(int state)
-{
-  if (state == Qt::Unchecked)
-    TTSettings::instance()->setMuxPause(false);
-  else
-    TTSettings::instance()->setMuxPause(true);
 }
 
 void TTCutSettingsMuxer::initOutputContainerList()

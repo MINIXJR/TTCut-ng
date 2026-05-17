@@ -56,7 +56,6 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   gbAudioOnly->setVisible(audioOnly);
   if (audioOnly) {
     TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
-    sbAudioOnlyBitrate->setValue(TTSettings::instance()->audioOnlyBitrateKbps());
     setWindowTitle(tr("Audio Cut Options"));
   }
 
@@ -117,7 +116,6 @@ void TTCutAVCutDlg::setGlobalData()
 
   if (gbAudioOnly->isVisible()) {
     TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
-    TTSettings::instance()->setAudioOnlyBitrateKbps(sbAudioOnlyBitrate->value());
   }
 }
 
@@ -178,13 +176,6 @@ void TTCutAVCutDlg::setCommonData()
   // add "_cut" suffix option
   cbAddSuffix->setChecked(TTSettings::instance()->cutAddSuffix());
 
-  // cut options
-  // write max bittrate tp first sequence
-  cbMaxBitrate->setChecked(TTSettings::instance()->cutWriteMaxBitrate());
-
-  // write sequence end code
-  cbEndCode->setChecked(TTSettings::instance()->cutWriteSeqEnd());
-
   // Populate the field with suffix + extension from current state.
   updateOutputFilename();
 
@@ -213,8 +204,6 @@ void TTCutAVCutDlg::getCommonData()
   TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
                                                          TTSettings::instance()->encoderCodec()));
 
-  TTSettings::instance()->setCutWriteMaxBitrate(cbMaxBitrate->isChecked());
-  TTSettings::instance()->setCutWriteSeqEnd(cbEndCode->isChecked());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

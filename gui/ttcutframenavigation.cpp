@@ -251,9 +251,9 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 		case Qt::ShiftModifier:
 			steps -= TTSettings::instance()->stepPlusShift();
 			break;
-			// backward one frame
+			// backward stepArrowKeys frames
 		default:
-			steps -= 1;
+			steps -= TTSettings::instance()->stepArrowKeys();
 			break;
 		}
 
@@ -277,9 +277,9 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
 		case Qt::ShiftModifier:
 			steps += TTSettings::instance()->stepPlusShift();
 			break;
-			// forward one frame
+			// forward stepArrowKeys frames
 		default:
-			steps += 1;
+			steps += TTSettings::instance()->stepArrowKeys();
 			break;
 		}
 

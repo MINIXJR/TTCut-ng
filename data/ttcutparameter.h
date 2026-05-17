@@ -49,16 +49,10 @@ class TTCutParameter
     ~TTCutParameter();
 
     TTFileBuffer* getTargetStreamBuffer();
-    bool getIsWriteSequenceEnd();
-    void setIsWriteSequenceEnd(bool value);
-    bool getIsWriteMaxBitrate();
-    void setIsWriteMaxBitrate(bool value);
     bool getIsDVDCompliantStream();
     void setIsDVDCompliantStream(bool value);
     int  getNumPicturesWritten();
     void setNumPicturesWritten(int value);
-    int  getMaxBitrate();
-    void setMaxBitrate(int value);
     int  getCutInIndex();
     void setCutInIndex(int value);
     int  getCutOutIndex();
@@ -70,13 +64,10 @@ class TTCutParameter
     void writeSequenceEndHeader();
 
     TTFileBuffer*        targetStreamBuffer;
-    bool                 isWriteSequenceEnd;
     bool                 isDVDCompliantStream;
-    bool                 isWriteMaxBitrate;
     int                  cutInIndex;
     int                  cutOutIndex;
     int                  numPicturesWritten;
-    int                  maxBitrateValue;
     float                dvdCompliantMaxBitrate;
     int                  dvdCompliantMaxFrames;
 };

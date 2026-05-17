@@ -165,7 +165,6 @@ void TTCutSettingsCommon::setTabData()
 
   // Frame search
   sbSearchIntervall->setValue( TTSettings::instance()->searchLength() );
-  sbSkipFrames->setValue( TTSettings::instance()->playSkipFrames() );
   sbSearchWorkerCount->setValue( TTSettings::instance()->searchWorkerCount() );
 
   // Options, directories
@@ -205,7 +204,6 @@ void TTCutSettingsCommon::getTabData()
 
   // Frame search
   TTSettings::instance()->setSearchLength(sbSearchIntervall->value( ));
-  TTSettings::instance()->setPlaySkipFrames(sbSkipFrames->value( ));
   TTSettings::instance()->setSearchWorkerCount( sbSearchWorkerCount->value() );
 
   // Options, directories

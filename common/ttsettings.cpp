@@ -94,12 +94,6 @@ void TTSettings::setSearchWorkerCount(int v)
   mSearchWorkerCount = v;
 }
 
-void TTSettings::setSearchAccuracy(int v)
-{
-  if (mSearchAccuracy == v) return;
-  mSearchAccuracy = v;
-}
-
 // ---- Navigation Steps group setters (Task 5) -------------------------------
 // Each setter early-outs on no-op assignment.
 
@@ -107,6 +101,7 @@ void TTSettings::setStepSliderClick(int v)
 {
   if (mStepSliderClick == v) return;
   mStepSliderClick = v;
+  emit stepSliderClickChanged(v);
 }
 
 void TTSettings::setStepPgUpDown(int v)
@@ -176,12 +171,6 @@ void TTSettings::setLogVideoIndexInfo(bool v)
 {
   if (mLogVideoIndexInfo == v) return;
   mLogVideoIndexInfo = v;
-}
-
-void TTSettings::setLogAudioIndexInfo(bool v)
-{
-  if (mLogAudioIndexInfo == v) return;
-  mLogAudioIndexInfo = v;
 }
 
 void TTSettings::setLogFFmpegDecoder(bool v)
@@ -499,24 +488,6 @@ void TTSettings::setMuxMode(int v)
   mMuxMode = v;
 }
 
-void TTSettings::setMuxProg(const QString& v)
-{
-  if (mMuxProg == v) return;
-  mMuxProg = v;
-}
-
-void TTSettings::setMuxProgPath(const QString& v)
-{
-  if (mMuxProgPath == v) return;
-  mMuxProgPath = v;
-}
-
-void TTSettings::setMuxProgCmd(const QString& v)
-{
-  if (mMuxProgCmd == v) return;
-  mMuxProgCmd = v;
-}
-
 void TTSettings::setMuxOutputPath(const QString& v)
 {
   if (mMuxOutputPath == v) return;
@@ -527,12 +498,6 @@ void TTSettings::setMuxDeleteES(bool v)
 {
   if (mMuxDeleteES == v) return;
   mMuxDeleteES = v;
-}
-
-void TTSettings::setMuxPause(bool v)
-{
-  if (mMuxPause == v) return;
-  mMuxPause = v;
 }
 
 void TTSettings::setOutputContainer(int v)
@@ -590,35 +555,7 @@ void TTSettings::setCutAddSuffix(bool v)
   mCutAddSuffix = v;
 }
 
-void TTSettings::setCutWriteMaxBitrate(bool v)
-{
-  if (mCutWriteMaxBitrate == v) return;
-  mCutWriteMaxBitrate = v;
-}
 
-void TTSettings::setCutWriteSeqEnd(bool v)
-{
-  if (mCutWriteSeqEnd == v) return;
-  mCutWriteSeqEnd = v;
-}
-
-void TTSettings::setCorrectCutTimeCode(bool v)
-{
-  if (mCorrectCutTimeCode == v) return;
-  mCorrectCutTimeCode = v;
-}
-
-void TTSettings::setCorrectCutBitRate(bool v)
-{
-  if (mCorrectCutBitRate == v) return;
-  mCorrectCutBitRate = v;
-}
-
-void TTSettings::setSpumuxChapter(bool v)
-{
-  if (mSpumuxChapter == v) return;
-  mSpumuxChapter = v;
-}
 
 void TTSettings::load()
 {
@@ -704,7 +641,6 @@ void TTSettings::load()
   settings.beginGroup("Search");
   mSearchLength      = settings.value("Length/",      mSearchLength).toInt();
   mSearchWorkerCount = qBound(0, settings.value("WorkerCount/", 0).toInt(), 16);
-  mSearchAccuracy    = settings.value("Accuracy/",    mSearchAccuracy).toInt();
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------
@@ -718,7 +654,6 @@ void TTSettings::load()
   mLogModeConsole    = settings.value("LogModeConsole/",    mLogModeConsole).toBool();
   mLogModeExtended   = settings.value("LogModeExtended/",   mLogModeExtended).toBool();
   mLogVideoIndexInfo = settings.value("LogVideoIndexInfo/", mLogVideoIndexInfo).toBool();
-  mLogAudioIndexInfo = settings.value("LogAudioIndexInfo/", mLogAudioIndexInfo).toBool();
   mLogFFmpegDecoder = settings.value("LogFFmpegDecoder/", mLogFFmpegDecoder).toBool();
   mLogSmartCut = settings.value("LogSmartCut/", mLogSmartCut).toBool();
   mLogMkvMux = settings.value("LogMkvMux/", mLogMkvMux).toBool();
@@ -787,12 +722,8 @@ void TTSettings::load()
   settings.beginGroup("Muxer");
   mMpeg2Target = settings.value("Mpeg2Target/", mMpeg2Target).toInt();
   mMuxMode             = settings.value("MuxMode/",             mMuxMode).toInt();
-  mMuxProg             = settings.value("MuxProg/",             mMuxProg).toString();
-  mMuxProgPath         = settings.value("MuxProgPath/",         mMuxProgPath).toString();
-  mMuxProgCmd          = settings.value("MuxProgCmd/",          mMuxProgCmd).toString();
   mMuxOutputPath       = settings.value("MuxOutputDir/",        mMuxOutputPath).toString();   // key is "MuxOutputDir/"
   mMuxDeleteES         = settings.value("MuxDeleteES/",         mMuxDeleteES).toBool();
-  mMuxPause            = settings.value("MuxPause/",            mMuxPause).toBool();
   mOutputContainer     = settings.value("OutputContainer/",     mOutputContainer).toInt();
   // Legacy migration: the MP4 option (value 2) was removed; remap any
   // stale persisted value of 2 to MKV (1). Mirrors the migration in former
@@ -815,18 +746,7 @@ void TTSettings::load()
   settings.beginGroup("CutOptions");
   mCutDirPath          = settings.value("DirPath/",         mCutDirPath).toString();
   mCutAddSuffix        = settings.value("AddSuffix/",       mCutAddSuffix).toBool();
-  mCutWriteMaxBitrate  = settings.value("WriteMaxBitrate/", mCutWriteMaxBitrate).toBool();
-  mCutWriteSeqEnd      = settings.value("WriteSeqEnd/",     mCutWriteSeqEnd).toBool();
-  mCorrectCutTimeCode  = settings.value("CorrectTimeCode/", mCorrectCutTimeCode).toBool();
-  mCorrectCutBitRate   = settings.value("CorrectBitrate/",  mCorrectCutBitRate).toBool();   // lowercase 'r'
   if (!QDir(mCutDirPath).exists()) mCutDirPath = QDir::currentPath();
-  settings.endGroup();
-
-  // ----- Chapter group (Task 13) ---------------------------------------
-  // NEW sub-group of /Settings. One field — spumuxChapter — per the
-  // legacy gui/ttcutsettings.cpp:213-215 read block.
-  settings.beginGroup("Chapter");
-  mSpumuxChapter = settings.value("SpumuxChapter/", mSpumuxChapter).toBool();
   settings.endGroup();
 
   // ----- Orphan-key cleanup --------------------------------------------
@@ -852,6 +772,18 @@ void TTSettings::load()
     { "IndexFiles",   "ReadPrevIDD/"    },
     { "CutOptions",   "CreateIDD/"      },
     { "CutOptions",   "ReadIDD/"        },
+    // v0.70.0: 11 dead settings removed
+    { "Search",       "Accuracy/"           },   // searchAccuracy
+    { "LogFile",      "LogAudioIndexInfo/"  },   // logAudioIndexInfo
+    { "Muxer",        "MuxProg/"            },   // muxProg
+    { "Muxer",        "MuxProgPath/"        },   // muxProgPath
+    { "Muxer",        "MuxProgCmd/"         },   // muxProgCmd
+    { "Muxer",        "MuxPause/"           },   // muxPause
+    { "CutOptions",   "WriteMaxBitrate/"    },   // cutWriteMaxBitrate
+    { "CutOptions",   "WriteSeqEnd/"        },   // cutWriteSeqEnd
+    { "CutOptions",   "CorrectTimeCode/"    },   // correctCutTimeCode
+    { "CutOptions",   "CorrectBitrate/"     },   // correctCutBitRate (lowercase 'r')
+    { "Chapter",      "SpumuxChapter/"      },   // spumuxChapter (DVD legacy)
   };
   for (const auto& o : orphanKeys) {
     settings.beginGroup(o.group);
@@ -926,7 +858,6 @@ void TTSettings::save()
   settings.beginGroup("Search");
   settings.setValue("Length/",      mSearchLength);
   settings.setValue("WorkerCount/", mSearchWorkerCount);
-  settings.setValue("Accuracy/",    mSearchAccuracy);
   settings.endGroup();
 
   // ----- Index Files group (Task 6) ------------------------------------
@@ -940,7 +871,6 @@ void TTSettings::save()
   settings.setValue("LogModeConsole/",    mLogModeConsole);
   settings.setValue("LogModeExtended/",   mLogModeExtended);
   settings.setValue("LogVideoIndexInfo/", mLogVideoIndexInfo);
-  settings.setValue("LogAudioIndexInfo/", mLogAudioIndexInfo);
   settings.setValue("LogFFmpegDecoder/", mLogFFmpegDecoder);
   settings.setValue("LogSmartCut/", mLogSmartCut);
   settings.setValue("LogMkvMux/", mLogMkvMux);
@@ -982,12 +912,8 @@ void TTSettings::save()
   settings.beginGroup("Muxer");
   settings.setValue("Mpeg2Target/",         mMpeg2Target);
   settings.setValue("MuxMode/",             mMuxMode);
-  settings.setValue("MuxProg/",             mMuxProg);
-  settings.setValue("MuxProgPath/",         mMuxProgPath);
-  settings.setValue("MuxProgCmd/",          mMuxProgCmd);
   settings.setValue("MuxOutputDir/",        mMuxOutputPath);   // key is "MuxOutputDir/"
   settings.setValue("MuxDeleteES/",         mMuxDeleteES);
-  settings.setValue("MuxPause/",            mMuxPause);
   settings.setValue("OutputContainer/",     mOutputContainer);
   settings.setValue("MkvCreateChapters/",   mMkvCreateChapters);
   settings.setValue("MkvChapterInterval/",  mMkvChapterInterval);
@@ -995,20 +921,10 @@ void TTSettings::save()
   settings.setValue("AudioOnlyBitrateKbps/", mAudioOnlyBitrateKbps);
   settings.endGroup();
 
-  // ----- Cut Options group (Task 13) -----------------------------------
-  // CorrectBitrate/ key is lowercase 'r' — see load().
+  // ----- Cut Options group (Task 13, reduced in v0.70.0) ---------------
   settings.beginGroup("CutOptions");
   settings.setValue("DirPath/",         mCutDirPath);
   settings.setValue("AddSuffix/",       mCutAddSuffix);
-  settings.setValue("WriteMaxBitrate/", mCutWriteMaxBitrate);
-  settings.setValue("WriteSeqEnd/",     mCutWriteSeqEnd);
-  settings.setValue("CorrectTimeCode/", mCorrectCutTimeCode);
-  settings.setValue("CorrectBitrate/",  mCorrectCutBitRate);   // lowercase 'r'
-  settings.endGroup();
-
-  // ----- Chapter group (Task 13) ---------------------------------------
-  settings.beginGroup("Chapter");
-  settings.setValue("SpumuxChapter/", mSpumuxChapter);
   settings.endGroup();
 
   settings.endGroup();

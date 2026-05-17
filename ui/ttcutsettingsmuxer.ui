@@ -217,29 +217,6 @@
        <widget class="QComboBox" name="cbAudioOnlyFormat" />
       </item>
       <item>
-       <widget class="QLabel" name="lblAudioOnlyBitrate" >
-        <property name="text" >
-         <string>Bitrate:</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QSpinBox" name="sbAudioOnlyBitrate" >
-        <property name="minimum" >
-         <number>0</number>
-        </property>
-        <property name="maximum" >
-         <number>512</number>
-        </property>
-        <property name="suffix" >
-         <string> kbps</string>
-        </property>
-        <property name="specialValueText" >
-         <string>match source</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <spacer>
         <property name="orientation" >
          <enum>Qt::Horizontal</enum>
@@ -265,13 +242,6 @@
        <widget class="QCheckBox" name="cbDeleteES" >
         <property name="text" >
          <string>Delete elemtary streams</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0" >
-       <widget class="QCheckBox" name="cbPause" >
-        <property name="text" >
-         <string>Pause</string>
         </property>
        </widget>
       </item>

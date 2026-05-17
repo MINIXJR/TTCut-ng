@@ -461,9 +461,6 @@ TTVideoHeader* TTMpeg2VideoStream::checkIFrameSequence(int iFramePos, TTCutParam
   // the nearest sequence header up to the GOP header)
   copySegment(cutParams->getTargetStreamBuffer(), seqHeader->headerOffset(), gopHeader->headerOffset()-1);
 
-  if (cutParams->getMaxBitrate() < seqHeader->bit_rate_value)
-    cutParams->setMaxBitrate(seqHeader->bit_rate_value);
-
   log->infoMsg(__FILE__, __LINE__, QString("Injected missing sequence header from offset %1 for I-Frame at index %2")
       .arg(seqHeader->headerOffset()).arg(iFramePos));
 
@@ -637,9 +634,6 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
       switch(currentObject->headerType())
       {
         case TTMpeg2VideoHeader::sequence_start_code:
-          // Maximale Bitrate ermitteln
-          if (cr->getMaxBitrate() < ((TTSequenceHeader*)currentObject)->bit_rate_value)
-            cr->setMaxBitrate(((TTSequenceHeader*)currentObject)->bit_rate_value);
            break;
 
         case TTMpeg2VideoHeader::sequence_end_code: {
@@ -838,14 +832,6 @@ void TTMpeg2VideoStream::rewriteTempRefData(quint8* buffer, TTPicturesHeader* cu
  */
 void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
 {
-  // save current cut parameter
-  bool savIsWriteMaxBitrate  = cr->getIsWriteMaxBitrate();
-  bool savIsWriteSequenceEnd = cr->getIsWriteSequenceEnd();
-
-  // no sequence end code
-  cr->setIsWriteSequenceEnd(false);
-  cr->setIsWriteMaxBitrate(false);
-
   log->debugMsg(__FILE__, __LINE__, QString("enocdePart start %1 / end %2").arg(start).arg(end));
 
   // use the sequence header according to current picture for information about
@@ -904,9 +890,6 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   QStringList encodeFiles = encodeDir.entryList(QStringList() << "encode.*", QDir::Files);
   for (const QString& f : encodeFiles)
     encodeDir.remove(f);
-
-  cr->setIsWriteMaxBitrate(savIsWriteMaxBitrate);
-  cr->setIsWriteSequenceEnd(savIsWriteSequenceEnd);
 
   disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
   		       this,           &TTMpeg2VideoStream::statusReport);
