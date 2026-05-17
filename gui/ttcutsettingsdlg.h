@@ -4,7 +4,6 @@
 #include "ui_ttsettingsdialog.h"
 #include <QDialog>
 
-class TTCutSettingsGeneral;
 class TTCutSettingsNavigation;
 class TTCutSettingsSearch;
 class TTCutSettingsAudio;
@@ -25,7 +24,6 @@ public slots:
     void accept() override;
 
 private:
-    TTCutSettingsGeneral*    pageGeneral;
     TTCutSettingsNavigation* pageNavigation;
     TTCutSettingsSearch*     pageSearch;
     TTCutSettingsAudio*      pageAudio;

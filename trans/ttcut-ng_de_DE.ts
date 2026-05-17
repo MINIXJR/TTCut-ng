@@ -2297,23 +2297,20 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsGeneral</name>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="8"/>
         <source>Allgemein</source>
-        <translation>Allgemein</translation>
+        <translation type="vanished">Allgemein</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="13"/>
         <source>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</source>
-        <translation>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</translation>
+        <translation type="vanished">Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</translation>
     </message>
     <message>
         <source>Tmp-Verzeichnis:</source>
         <translation type="vanished">Tmp-Verzeichnis:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="12"/>
         <source>Schnellsuche aktivieren</source>
-        <translation>Schnellsuche aktivieren</translation>
+        <translation type="vanished">Schnellsuche aktivieren</translation>
     </message>
     <message>
         <source>Tmp-Verzeichnis wählen</source>
@@ -2520,112 +2517,124 @@ Ausgabedatei:
         <translation>Multiplexen-Standards</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="21"/>
         <source>Container-Standards</source>
-        <translation>Container-Standards</translation>
+        <translation type="vanished">Container-Standards</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="27"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="21"/>
+        <source>Container je Codec</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="63"/>
+        <source>Container-Optionen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="69"/>
         <source>MKV (libav)</source>
         <translation>MKV (libav)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="31"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
         <source>Kapitel erstellen alle</source>
         <translation>Kapitel erstellen alle</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="33"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="75"/>
         <source>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</source>
         <translation>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="41"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="83"/>
         <source> Minuten</source>
         <translation> Minuten</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="42"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="84"/>
         <source>Zusätzliche Auto-Kapitel alle X Minuten.</source>
         <translation>Zusätzliche Auto-Kapitel alle X Minuten.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="58"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
         <source>MPG (mplex)</source>
         <translation>MPG (mplex)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="62"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="104"/>
         <source>Mux-Ziel:</source>
         <translation>Mux-Ziel:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="63"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="68"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="105"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="110"/>
         <source>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</source>
         <translation>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="115"/>
         <source>Mux-Modus:</source>
         <translation>Mux-Modus:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="74"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="79"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="116"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="121"/>
         <source>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</source>
         <translation>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="93"/>
-        <source>Allgemein</source>
-        <translation>Allgemein</translation>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="135"/>
+        <source>Nach dem Multiplexen</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="97"/>
+        <source>Allgemein</source>
+        <translation type="vanished">Allgemein</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="139"/>
         <source>ES-Files nach Mux löschen</source>
         <translation>ES-Files nach Mux löschen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="98"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="140"/>
         <source>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</source>
         <translation>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="108"/>
         <source>Per-Codec Standard-Container</source>
-        <translation>Per-Codec Standard-Container</translation>
+        <translation type="vanished">Per-Codec Standard-Container</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="112"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="25"/>
         <source>MPEG-2:</source>
         <translation>MPEG-2:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="113"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="118"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="26"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="31"/>
         <source>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</source>
         <translation>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="123"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="36"/>
         <source>H.264:</source>
         <translation>H.264:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="124"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="129"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="37"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="42"/>
         <source>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</source>
         <translation>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="134"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="47"/>
         <source>H.265:</source>
         <translation>H.265:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="135"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="140"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="48"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="53"/>
         <source>Standard-Container für H.265-Output. Nur MKV verfügbar.</source>
         <translation>Standard-Container für H.265-Output. Nur MKV verfügbar.</translation>
     </message>
@@ -2763,6 +2772,21 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsnavigation.ui" line="109"/>
         <source>Intervall für den QuickJump-Dialog in Sekunden.</source>
         <translation>Intervall für den QuickJump-Dialog in Sekunden.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="117"/>
+        <source>Position-Slider</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="121"/>
+        <source>Beim Ziehen nur zu I-Frames springen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="122"/>
+        <source>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3789,32 +3813,31 @@ Unterstützte Formate:
         <translation type="vanished">Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="50"/>
         <source>Allgemein</source>
-        <translation>Allgemein</translation>
+        <translation type="vanished">Allgemein</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="53"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="48"/>
         <source>Navigation</source>
         <translation>Navigation</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="56"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="51"/>
         <source>Suche &amp; Preview</source>
         <translation>Suche &amp; Preview</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="59"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="54"/>
         <source>Audio &amp; Sprache</source>
         <translation>Audio &amp; Sprache</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="62"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="57"/>
         <source>Encoder-Standards</source>
         <translation>Encoder-Standards</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="65"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="60"/>
         <source>Multiplexen-Standards</source>
         <translation>Multiplexen-Standards</translation>
     </message>
@@ -3827,12 +3850,12 @@ Unterstützte Formate:
         <translation type="vanished">Multiplexen-Defaults</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="68"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="63"/>
         <source>Pfade</source>
         <translation>Pfade</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="71"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="66"/>
         <source>Logging</source>
         <translation>Logging</translation>
     </message>

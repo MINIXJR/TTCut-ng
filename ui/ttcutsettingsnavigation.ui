@@ -113,6 +113,19 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="gbSliderDrag">
+     <property name="title"><string>Position-Slider</string></property>
+     <layout class="QVBoxLayout">
+      <item>
+       <widget class="QCheckBox" name="cbQuickSearch">
+        <property name="text"><string>Beim Ziehen nur zu I-Frames springen</string></property>
+        <property name="toolTip"><string>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
    </item>
   </layout>

@@ -1,5 +1,4 @@
 #include "ttcutsettingsdlg.h"
-#include "ttcutsettingsgeneral.h"
 #include "ttcutsettingsnavigation.h"
 #include "ttcutsettingssearch.h"
 #include "ttcutsettingsaudio.h"
@@ -21,7 +20,6 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
 {
   setupUi(this);
 
-  pageGeneral    = new TTCutSettingsGeneral(this);
   pageNavigation = new TTCutSettingsNavigation(this);
   pageSearch     = new TTCutSettingsSearch(this);
   pageAudio      = new TTCutSettingsAudio(this);
@@ -31,7 +29,6 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   pageLogging    = new TTCutSettingsLogging(this);
 
   // Load data into all pages
-  pageGeneral->setTabData();
   pageNavigation->setTabData();
   pageSearch->setTabData();
   pageAudio->setTabData();
@@ -40,16 +37,14 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   pagePaths->setTabData();
   pageLogging->setTabData();
 
-  // Populate sidebar list and stacked pages
+  // Populate sidebar list and stacked pages — order: UI interaction →
+  // processing → output → system. Bedienung first, Logging last.
   QStyle* s = QApplication::style();
   auto addCat = [this](const QString& title, const QIcon& icon, QWidget* page) {
     new QListWidgetItem(icon, title, categoryList);
     stackedPages->addWidget(page);
   };
 
-  addCat(tr("Allgemein"),
-         QIcon::fromTheme("preferences-system", s->standardIcon(QStyle::SP_ComputerIcon)),
-         pageGeneral);
   addCat(tr("Navigation"),
          QIcon::fromTheme("go-jump", s->standardIcon(QStyle::SP_ArrowRight)),
          pageNavigation);
@@ -93,7 +88,6 @@ TTSettingsDialog::~TTSettingsDialog()
 void TTSettingsDialog::accept()
 {
   // Order: Encoder before Muxer (codec-dependent container logic)
-  pageGeneral->saveTabData();
   pageNavigation->saveTabData();
   pageSearch->saveTabData();
   pageAudio->saveTabData();

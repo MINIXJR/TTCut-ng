@@ -61,7 +61,6 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/ttcutsettingsencoder.ui\
               ui/ttcutsettingsencoderdefaults.ui\
               ui/ttsettingsdialog.ui\
-              ui/ttcutsettingsgeneral.ui\
               ui/ttcutsettingsnavigation.ui\
               ui/ttcutsettingssearch.ui\
               ui/ttcutsettingsaudio.ui\
@@ -147,7 +146,6 @@ HEADERS     = common/ttcut.h\
               gui/ttcutsettingsencoder.h\
               gui/ttcutsettingsencoderdefaults.h\
               gui/ttcutsettingsdlg.h\
-              gui/ttcutsettingsgeneral.h\
               gui/ttcutsettingsnavigation.h\
               gui/ttcutsettingssearch.h\
               gui/ttcutsettingsaudio.h\
@@ -245,7 +243,6 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutsettingsencoder.cpp\
               gui/ttcutsettingsencoderdefaults.cpp\
               gui/ttcutsettingsdlg.cpp\
-              gui/ttcutsettingsgeneral.cpp\
               gui/ttcutsettingsnavigation.cpp\
               gui/ttcutsettingssearch.cpp\
               gui/ttcutsettingsaudio.cpp\
