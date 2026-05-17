@@ -2,80 +2,68 @@
 /* COPYRIGHT: TriTime (c) 2003/2008 / ttcut.tritime.org                       */
 /*----------------------------------------------------------------------------*/
 /* PROJEKT  : TTCUT 2005                                                      */
-/* FILE     : ttcutsettingsfiles.cpp                                          */
-/*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 02/26/2006 */
-/*----------------------------------------------------------------------------*/
-
-// ----------------------------------------------------------------------------
-// *** TTCUTSETTINGSFILES
-// ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
+/* FILE     : ttcutsettingsmuxer.cpp                                          */
 /*----------------------------------------------------------------------------*/
 
 #include "ttcutsettingsmuxer.h"
 
-#include "../common/ttcut.h"
 #include "../common/ttsettings.h"
+
+#include <QStandardItemModel>
 
 
 TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
-:QWidget(parent)
+    : QGroupBox(parent)
 {
   setupUi(this);
-
-  connect(cbDeleteES,          &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStateDeleteES);
+  populateCodecMuxers();
   connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
 }
 
-void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
+void TTCutSettingsMuxer::populateCodecMuxers()
 {
+  for (QComboBox* cb : { cbMpeg2Muxer, cbH264Muxer, cbH265Muxer }) {
+    cb->clear();
+    cb->insertItem(0, "MKV (libav)", 1);
+    cb->insertItem(1, "MPG (mplex)", 0);
+  }
+  // H.264/H.265 do not support MPG: disable 2nd item
+  for (QComboBox* cb : { cbH264Muxer, cbH265Muxer }) {
+    QStandardItemModel* m = qobject_cast<QStandardItemModel*>(cb->model());
+    if (m && m->item(1)) m->item(1)->setEnabled(false);
+  }
 }
 
 void TTCutSettingsMuxer::setTabData()
 {
-  if (TTSettings::instance()->muxDeleteES())
-    cbDeleteES->setCheckState(Qt::Checked);
-  else
-    cbDeleteES->setCheckState(Qt::Unchecked);
-
-  // MKV chapter settings
   cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
   sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
   sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
+  cbDeleteES->setChecked(TTSettings::instance()->muxDeleteES());
+
+  int m2idx = cbMpeg2Muxer->findData(TTSettings::instance()->mpeg2Muxer());
+  int h4idx = cbH264Muxer->findData(TTSettings::instance()->h264Muxer());
+  int h5idx = cbH265Muxer->findData(TTSettings::instance()->h265Muxer());
+  cbMpeg2Muxer->setCurrentIndex(m2idx >= 0 ? m2idx : 0);
+  cbH264Muxer->setCurrentIndex(h4idx >= 0 ? h4idx : 0);
+  cbH265Muxer->setCurrentIndex(h5idx >= 0 ? h5idx : 0);
 }
 
-void TTCutSettingsMuxer::getTabData()
+void TTCutSettingsMuxer::saveTabData()
 {
-  // muxDeleteES was only being persisted via the per-widget
-  // signal handlers. Persist them here too — symmetric with setTabData.
-  TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
-
-  // MKV chapter settings
   TTSettings::instance()->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
   TTSettings::instance()->setMkvChapterInterval(sbMkvChapterInterval->value());
+  TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
+  TTSettings::instance()->setMpeg2Muxer(cbMpeg2Muxer->currentData().toInt());
+  TTSettings::instance()->setH264Muxer(cbH264Muxer->currentData().toInt());
+  TTSettings::instance()->setH265Muxer(cbH265Muxer->currentData().toInt());
 }
 
-void TTCutSettingsMuxer::onStateDeleteES(int state)
+void TTCutSettingsMuxer::setMode(Mode m)
 {
-  if (state == Qt::Unchecked)
-    TTSettings::instance()->setMuxDeleteES(false);
-  else
-    TTSettings::instance()->setMuxDeleteES(true);
+  // Defaults mode: all widgets visible.
+  // Override mode no longer used — no-op.
+  Q_UNUSED(m);
 }
 
 void TTCutSettingsMuxer::onMkvChaptersChanged(int state)

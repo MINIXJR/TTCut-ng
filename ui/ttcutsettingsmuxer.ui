@@ -1,56 +1,57 @@
-<ui version="4.0" >
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
  <class>TTCutSettingsMuxer</class>
- <widget class="QWidget" name="TTCutSettingsMuxer" >
-  <property name="geometry" >
+ <widget class="QGroupBox" name="TTCutSettingsMuxer">
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>598</width>
-    <height>200</height>
+    <width>500</width>
+    <height>280</height>
    </rect>
   </property>
-  <property name="windowTitle" >
-   <string>Form2</string>
+  <property name="title">
+   <string>Multiplexen-Defaults</string>
   </property>
-  <layout class="QVBoxLayout" >
+  <layout class="QVBoxLayout">
    <item>
-    <widget class="QGroupBox" name="gbMkvChapters" >
-     <property name="title" >
+    <widget class="QGroupBox" name="gbMkvChapters">
+     <property name="title">
       <string>MKV Chapter Settings</string>
      </property>
-     <layout class="QHBoxLayout" >
+     <layout class="QHBoxLayout">
       <item>
-       <widget class="QCheckBox" name="cbMkvCreateChapters" >
-        <property name="text" >
-         <string>Create chapters every</string>
+       <widget class="QCheckBox" name="cbMkvCreateChapters">
+        <property name="text">
+         <string>Kapitel erstellen alle</string>
         </property>
-        <property name="checked" >
+        <property name="checked">
          <bool>true</bool>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QSpinBox" name="sbMkvChapterInterval" >
-        <property name="minimum" >
+       <widget class="QSpinBox" name="sbMkvChapterInterval">
+        <property name="minimum">
          <number>1</number>
         </property>
-        <property name="maximum" >
+        <property name="maximum">
          <number>60</number>
         </property>
-        <property name="value" >
+        <property name="value">
          <number>5</number>
         </property>
-        <property name="suffix" >
-         <string> minutes</string>
+        <property name="suffix">
+         <string> Minuten</string>
         </property>
        </widget>
       </item>
       <item>
        <spacer>
-        <property name="orientation" >
+        <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
-        <property name="sizeHint" stdset="0" >
+        <property name="sizeHint" stdset="0">
          <size>
           <width>40</width>
           <height>20</height>
@@ -62,15 +63,15 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="groupBox_2" >
-     <property name="title" >
-      <string>Action after multiplexing</string>
+    <widget class="QGroupBox" name="gbMuxDefaults">
+     <property name="title">
+      <string>Multiplexen-Defaults</string>
      </property>
-     <layout class="QGridLayout" >
-      <item row="1" column="0" >
-       <widget class="QCheckBox" name="cbDeleteES" >
-        <property name="text" >
-         <string>Delete elemtary streams</string>
+     <layout class="QFormLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="cbDeleteES">
+        <property name="text">
+         <string>ES-Files nach Mux löschen</string>
         </property>
        </widget>
       </item>
@@ -78,25 +79,59 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="gbCodecMuxer">
+     <property name="title">
+      <string>Per-Codec Standard-Container</string>
+     </property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laMpeg2Muxer">
+        <property name="text">
+         <string>MPEG-2:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbMpeg2Muxer"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laH264Muxer">
+        <property name="text">
+         <string>H.264:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="cbH264Muxer"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="laH265Muxer">
+        <property name="text">
+         <string>H.265:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="cbH265Muxer"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <spacer>
-     <property name="orientation" >
+     <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
-     <property name="sizeType" >
-      <enum>QSizePolicy::Expanding</enum>
-     </property>
-     <property name="sizeHint" stdset="0" >
+     <property name="sizeHint" stdset="0">
       <size>
-       <width>574</width>
-       <height>100</height>
+       <width>20</width>
+       <height>40</height>
       </size>
      </property>
     </spacer>
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="ttcutsettingsmuxer.qrc" />
- </resources>
+ <resources/>
  <connections/>
 </ui>

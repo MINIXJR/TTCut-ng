@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TTCutSettingsSearch</class>
+ <widget class="QGroupBox" name="TTCutSettingsSearch">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>500</width><height>320</height></rect>
+  </property>
+  <property name="title"><string>Suche &amp;&amp; Preview</string></property>
+  <layout class="QVBoxLayout">
+   <item>
+    <widget class="QGroupBox" name="gbSearch">
+     <property name="title"><string>Suche</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0"><widget class="QLabel" name="laSearchLen"><property name="text"><string>Suchbereich (Sekunden):</string></property></widget></item>
+      <item row="0" column="1"><widget class="QSpinBox" name="sbSearchIntervall"><property name="minimum"><number>1</number></property><property name="maximum"><number>600</number></property></widget></item>
+      <item row="1" column="0"><widget class="QLabel" name="laWorkers"><property name="text"><string>Such-Worker-Threads (0 = auto):</string></property></widget></item>
+      <item row="1" column="1"><widget class="QSpinBox" name="sbSearchWorkerCount"><property name="minimum"><number>0</number></property><property name="maximum"><number>16</number></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gbPreview">
+     <property name="title"><string>Preview</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0"><widget class="QLabel" name="laPreviewLen"><property name="text"><string>Vorschau-Länge (Sekunden):</string></property></widget></item>
+      <item row="0" column="1"><widget class="QSpinBox" name="spPreviewLength"><property name="minimum"><number>1</number></property><property name="maximum"><number>600</number></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gbCluster">
+     <property name="title"><string>Defective Frame Grouping</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0"><widget class="QLabel" name="laClusterGap"><property name="text"><string>Gruppierungsabstand (Sekunden):</string></property></widget></item>
+      <item row="0" column="1"><widget class="QSpinBox" name="sbClusterGap"><property name="minimum"><number>1</number></property><property name="maximum"><number>30</number></property></widget></item>
+      <item row="1" column="0"><widget class="QLabel" name="laClusterOffset"><property name="text"><string>Start-Offset (Sekunden):</string></property></widget></item>
+      <item row="1" column="1"><widget class="QSpinBox" name="sbClusterOffset"><property name="minimum"><number>0</number></property><property name="maximum"><number>10</number></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

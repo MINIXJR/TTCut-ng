@@ -83,6 +83,9 @@ public:
   bool    createLogFile() const      { return mCreateLogFile; }
   void    setCreateLogFile(bool v);
 
+  QString logFilePath() const        { return mLogFilePath; }
+  void    setLogFilePath(const QString& v);
+
   bool    logModeConsole() const     { return mLogModeConsole; }
   void    setLogModeConsole(bool v);
 
@@ -371,6 +374,7 @@ private:
   // Defaults match common/ttcut.cpp lines 117-130 verbatim.
   bool    mCreateD2V         = false;
   bool    mCreateLogFile     = true;
+  QString mLogFilePath;           // empty = use TTMessageLogger default
   bool    mLogModeConsole    = false;
   bool    mLogModeExtended   = true;
   bool    mLogVideoIndexInfo = false;

@@ -1459,20 +1459,22 @@ void TTCutMainWindow::runScreenshotMode()
         zeitsprungDlg.close();
     }
 
-    // 10. Settings dialog — one screenshot per tab
+    // 10. Settings dialog — one screenshot per category
     {
         TTCutSettingsDlg settingsDlg(this);
         settingsDlg.show();
         QApplication::processEvents();
 
-        QTabWidget* settingsTab = settingsDlg.findChild<QTabWidget*>("settingsTab");
-        if (settingsTab) {
-            QStringList tabNames = {"common", "files", "encoding", "muxing"};
-            for (int i = 0; i < settingsTab->count() && i < tabNames.size(); ++i) {
-                settingsTab->setCurrentIndex(i);
+        QListWidget* catList = settingsDlg.findChild<QListWidget*>("categoryList");
+        QStackedWidget* pages = settingsDlg.findChild<QStackedWidget*>("stackedPages");
+        if (catList && pages) {
+            QStringList catNames = {"general", "navigation", "search", "audio",
+                                    "encoder", "muxer", "paths", "logging"};
+            for (int i = 0; i < catList->count() && i < catNames.size(); ++i) {
+                catList->setCurrentRow(i);
                 QApplication::processEvents();
                 saveWidgetScreenshot(&settingsDlg,
-                    QString("ttcutng-settings-%1.png").arg(tabNames[i]), 0);
+                    QString("ttcutng-settings-%1.png").arg(catNames[i]), 0);
             }
         } else {
             saveWidgetScreenshot(&settingsDlg, "ttcutng-settings.png", 0);

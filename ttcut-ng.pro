@@ -43,7 +43,6 @@ RESOURCES   = ui/audiofilelistwidget.qrc\
               ui/currentframewidget.qrc\
               ui/ttcutframenavigationwidget.qrc \
               ui/cutlistwidget.qrc\
-              ui/ttcutsettingscommon.qrc\
               ui/ttcutsettingsmuxer.qrc\
               ui/ttsettingsdialog.qrc\
               ui/previewwidget.qrc\
@@ -60,9 +59,13 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/cutlistwidget.ui\
               ui/ttcutsettingsmuxer.ui\
               ui/ttcutsettingsencoder.ui\
-              ui/ttcutsettingsfiles.ui\
-              ui/ttcutsettingscommon.ui\
               ui/ttsettingsdialog.ui\
+              ui/ttcutsettingsgeneral.ui\
+              ui/ttcutsettingsnavigation.ui\
+              ui/ttcutsettingssearch.ui\
+              ui/ttcutsettingsaudio.ui\
+              ui/ttcutsettingspaths.ui\
+              ui/ttcutsettingslogging.ui\
               ui/mplexparamdlg.ui\
               ui/previewwidget.ui\
               ui/processviewwidget.ui\
@@ -141,9 +144,13 @@ HEADERS     = common/ttcut.h\
               extern/ttmkvmergeprovider.h\
               gui/ttcutsettingsmuxer.h\
               gui/ttcutsettingsencoder.h\
-              gui/ttcutsettingsfiles.h\
-              gui/ttcutsettingscommon.h\
               gui/ttcutsettingsdlg.h\
+              gui/ttcutsettingsgeneral.h\
+              gui/ttcutsettingsnavigation.h\
+              gui/ttcutsettingssearch.h\
+              gui/ttcutsettingsaudio.h\
+              gui/ttcutsettingspaths.h\
+              gui/ttcutsettingslogging.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
               gui/ttsubtitletreeview.h\
@@ -234,9 +241,13 @@ SOURCES     = common/ttcut.cpp\
               extern/ttmkvmergeprovider.cpp\
               gui/ttcutsettingsmuxer.cpp\
               gui/ttcutsettingsencoder.cpp\
-              gui/ttcutsettingsfiles.cpp\
-              gui/ttcutsettingscommon.cpp\
               gui/ttcutsettingsdlg.cpp\
+              gui/ttcutsettingsgeneral.cpp\
+              gui/ttcutsettingsnavigation.cpp\
+              gui/ttcutsettingssearch.cpp\
+              gui/ttcutsettingsaudio.cpp\
+              gui/ttcutsettingspaths.cpp\
+              gui/ttcutsettingslogging.cpp\
               gui/ttaudiotreeview.cpp\
               gui/ttvideotreeview.cpp\
               gui/ttsubtitletreeview.cpp\

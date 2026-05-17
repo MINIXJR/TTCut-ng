@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TTCutSettingsLogging</class>
+ <widget class="QGroupBox" name="TTCutSettingsLogging">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>500</width><height>400</height></rect>
+  </property>
+  <property name="title"><string>Logging</string></property>
+  <layout class="QVBoxLayout">
+   <item>
+    <widget class="QGroupBox" name="gbLogBase">
+     <property name="title"><string>Basis-Logging</string></property>
+     <layout class="QVBoxLayout">
+      <item><widget class="QCheckBox" name="cbCreateLog"><property name="text"><string>Logfile erstellen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogConsole"><property name="text"><string>Ausgabe auf Konsole</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogExtended"><property name="text"><string>Erweiterte Meldungen</string></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gbLogPlus">
+     <property name="title"><string>Erweiterte Logging-Optionen</string></property>
+     <layout class="QVBoxLayout">
+      <item><widget class="QCheckBox" name="cbLogPlusVideoIndex"><property name="text"><string>Video-Index-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusFFmpegDecoder"><property name="text"><string>FFmpeg-Decoder-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusSmartCut"><property name="text"><string>Smart-Cut-Engine-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusMkvMux"><property name="text"><string>MKV-Mux-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusCutPipeline"><property name="text"><string>Cut-Pipeline-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusAVStream"><property name="text"><string>AV-Stream-Parser-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusUI"><property name="text"><string>UI-Ereignis-Informationen</string></property></widget></item>
+      <item><widget class="QCheckBox" name="cbLogPlusLibav"><property name="text"><string>libav-Decoder/Muxer-Informationen</string></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

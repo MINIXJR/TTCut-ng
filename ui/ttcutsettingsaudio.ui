@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TTCutSettingsAudio</class>
+ <widget class="QGroupBox" name="TTCutSettingsAudio">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>500</width><height>250</height></rect>
+  </property>
+  <property name="title"><string>Audio &amp;&amp; Sprache</string></property>
+  <layout class="QVBoxLayout">
+   <item>
+    <widget class="QGroupBox" name="gbAudioLang">
+     <property name="title"><string>Sprach-Präferenz</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0"><widget class="QLabel" name="laLangPref"><property name="text"><string>Sprachreihenfolge (z.B. deu,eng):</string></property></widget></item>
+      <item row="0" column="1"><widget class="QLineEdit" name="leAudioLangPref"><property name="placeholderText"><string>z.B. deu,eng,fra</string></property></widget></item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gbAudioOptions">
+     <property name="title"><string>Audio-Optionen</string></property>
+     <layout class="QVBoxLayout">
+      <item><widget class="QCheckBox" name="cbNormalizeAcmod"><property name="text"><string>AC3 Kanalformat an Schnitten normalisieren</string></property></widget></item>
+      <item>
+       <layout class="QFormLayout">
+        <item row="0" column="0"><widget class="QLabel" name="laBurst"><property name="text"><string>Audio-Burst-Schwellwert (dB, 0=aus):</string></property></widget></item>
+        <item row="0" column="1"><widget class="QSpinBox" name="sbBurstThreshold"><property name="minimum"><number>-60</number></property><property name="maximum"><number>0</number></property><property name="suffix"><string> dB</string></property></widget></item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

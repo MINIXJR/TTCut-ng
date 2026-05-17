@@ -278,6 +278,13 @@ void TTCutAVCutDlg::onMuxerProgChanged(int /*index*/)
 {
   int value = cbMuxerProg->currentData().toInt();
   TTSettings::instance()->setOutputContainer(value);
+  // Also write per-codec preference so it persists across sessions
+  switch (TTSettings::instance()->encoderCodec()) {
+    case 0: TTSettings::instance()->setMpeg2Muxer(value); break;
+    case 1: TTSettings::instance()->setH264Muxer(value);  break;
+    case 2: TTSettings::instance()->setH265Muxer(value);  break;
+    default: break;
+  }
   updateMuxerVisibility();
   updateOutputFilename();
 }

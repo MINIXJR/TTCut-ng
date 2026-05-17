@@ -1,83 +1,108 @@
-/*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2008 / ttcut.tritime.org                       */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2005                                                      */
-/* FILE     : ttcutsettingsdlg.cpp                                            */
-/*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 02/26/2006 */
-/*----------------------------------------------------------------------------*/
-
-// ----------------------------------------------------------------------------
-// *** TTCUTSETTINGSDLG
-// ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
-/*----------------------------------------------------------------------------*/
-
 #include "ttcutsettingsdlg.h"
-
-#include "../common/ttcut.h"
+#include "ttcutsettingsgeneral.h"
+#include "ttcutsettingsnavigation.h"
+#include "ttcutsettingssearch.h"
+#include "ttcutsettingsaudio.h"
+#include "ttcutsettingsencoder.h"
+#include "ttcutsettingsmuxer.h"
+#include "ttcutsettingspaths.h"
+#include "ttcutsettingslogging.h"
 #include "../common/ttsettings.h"
 
-  
-TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
-:QDialog(parent)
+#include <QListWidgetItem>
+#include <QIcon>
+#include <QSettings>
+#include <QStyle>
+#include <QApplication>
+
+
+TTSettingsDialog::TTSettingsDialog(QWidget* parent)
+    : QDialog(parent)
 {
   setupUi(this);
 
-  // set the tabs data
-  // ------------------------------------------------------------------
-  commonPage->setTabData();
-  filesPage->setTabData();
-  encodingPage->setTabData();
-  muxingPage->setTabData();
+  pageGeneral    = new TTCutSettingsGeneral(this);
+  pageNavigation = new TTCutSettingsNavigation(this);
+  pageSearch     = new TTCutSettingsSearch(this);
+  pageAudio      = new TTCutSettingsAudio(this);
+  pageEncoder    = new TTCutSettingsEncoder(this);
+  pageMuxer      = new TTCutSettingsMuxer(this);
+  pagePaths      = new TTCutSettingsPaths(this);
+  pageLogging    = new TTCutSettingsLogging(this);
 
-  // signal and slot connections
-  connect(okButton,     &QPushButton::clicked, this, &TTCutSettingsDlg::onDlgOk);
-  connect(cancelButton, &QPushButton::clicked, this, &TTCutSettingsDlg::onDlgCancel);
+  pageEncoder->setMode(TTCutSettingsEncoder::Defaults);
 
-  // Note: codec-dependent muxer visibility is handled per-dialog in 1c
-  // The muxer settings tab in the Settings Dialog is simplified in Phase 1b.
+  // Load data into all pages
+  pageGeneral->setTabData();
+  pageNavigation->setTabData();
+  pageSearch->setTabData();
+  pageAudio->setTabData();
+  pageEncoder->setTabData();
+  pageMuxer->setTabData();
+  pagePaths->setTabData();
+  pageLogging->setTabData();
+
+  // Populate sidebar list and stacked pages
+  QStyle* s = QApplication::style();
+  auto addCat = [this, s](const QString& title, const QIcon& icon, QWidget* page) {
+    new QListWidgetItem(icon, title, categoryList);
+    stackedPages->addWidget(page);
+  };
+
+  addCat(tr("Allgemein"),
+         QIcon::fromTheme("preferences-system", s->standardIcon(QStyle::SP_ComputerIcon)),
+         pageGeneral);
+  addCat(tr("Navigation"),
+         QIcon::fromTheme("go-jump", s->standardIcon(QStyle::SP_ArrowRight)),
+         pageNavigation);
+  addCat(tr("Suche && Preview"),
+         QIcon::fromTheme("system-search", s->standardIcon(QStyle::SP_FileDialogContentsView)),
+         pageSearch);
+  addCat(tr("Audio && Sprache"),
+         QIcon::fromTheme("audio-x-generic", s->standardIcon(QStyle::SP_MediaVolume)),
+         pageAudio);
+  addCat(tr("Encoder-Defaults"),
+         QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveCDIcon)),
+         pageEncoder);
+  addCat(tr("Multiplexen-Defaults"),
+         QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveHDIcon)),
+         pageMuxer);
+  addCat(tr("Pfade"),
+         QIcon::fromTheme("folder", s->standardIcon(QStyle::SP_DirIcon)),
+         pagePaths);
+  addCat(tr("Logging"),
+         QIcon::fromTheme("utilities-log-viewer", s->standardIcon(QStyle::SP_FileIcon)),
+         pageLogging);
+
+  connect(categoryList, &QListWidget::currentRowChanged,
+          stackedPages, &QStackedWidget::setCurrentIndex);
+
+  // Restore last-used category
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  int lastRow = settings.value("SettingsDialog/lastCategory", 0).toInt();
+  if (lastRow >= 0 && lastRow < categoryList->count())
+    categoryList->setCurrentRow(lastRow);
+  else
+    categoryList->setCurrentRow(0);
 }
 
-// save the tabs data
-void TTCutSettingsDlg::setGlobalData()
+TTSettingsDialog::~TTSettingsDialog()
 {
-    commonPage->getTabData();
-    filesPage->getTabData();
-    encodingPage->getTabData();
-    muxingPage->getTabData();
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  settings.setValue("SettingsDialog/lastCategory", categoryList->currentRow());
 }
 
-
-// exit, saving changes
-void TTCutSettingsDlg::onDlgOk()
+void TTSettingsDialog::accept()
 {
-   setGlobalData();
+  // Order: Encoder before Muxer (codec-dependent container logic)
+  pageGeneral->saveTabData();
+  pageNavigation->saveTabData();
+  pageSearch->saveTabData();
+  pageAudio->saveTabData();
+  pageEncoder->saveTabData();
+  pageMuxer->saveTabData();
+  pagePaths->saveTabData();
+  pageLogging->saveTabData();
 
-   done( 0 );
+  QDialog::accept();
 }
-
-
-// exit, discard changes
-void TTCutSettingsDlg::onDlgCancel()
-{
-   done( 1 );
-}
-
-
-
-

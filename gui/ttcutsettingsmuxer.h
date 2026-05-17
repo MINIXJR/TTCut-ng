@@ -4,50 +4,30 @@
 /* PROJEKT  : TTCUT 2005                                                      */
 /* FILE     : ttcutsettingsmuxer.h                                            */
 /*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 02/26/2006 */
-/*----------------------------------------------------------------------------*/
-
-// ----------------------------------------------------------------------------
-// *** TTCUTSETTINGSMUXER
-// ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
-/*----------------------------------------------------------------------------*/
 
 #ifndef TTCUTSETTINGSMUXER_H
 #define TTCUTSETTINGSMUXER_H
 
 #include "ui_ttcutsettingsmuxer.h"
+#include <QGroupBox>
 
-#include "../common/ttcut.h"
-
-
-class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
+class TTCutSettingsMuxer : public QGroupBox, private Ui_TTCutSettingsMuxer
 {
   Q_OBJECT
 
   public:
-    TTCutSettingsMuxer(QWidget* parent=0);
+    enum Mode { Defaults, Override };
 
-    void setTitle( const QString& title );
+    explicit TTCutSettingsMuxer(QWidget* parent = nullptr);
+
     void setTabData();
-    void getTabData();
+    void saveTabData();
+    void setMode(Mode m);
+
+  private:
+    void populateCodecMuxers();
 
   protected slots:
-    void onStateDeleteES(int state);
     void onMkvChaptersChanged(int state);
 };
 

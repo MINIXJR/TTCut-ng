@@ -4,6 +4,7 @@
 
 #include "ttsettings.h"
 #include "ttcut.h"
+#include "ttmessagelogger.h"
 
 #include <QDir>
 #include <QSettings>
@@ -153,6 +154,11 @@ void TTSettings::setCreateLogFile(bool v)
 {
   if (mCreateLogFile == v) return;
   mCreateLogFile = v;
+}
+
+void TTSettings::setLogFilePath(const QString& v)
+{
+  mLogFilePath = v;
 }
 
 void TTSettings::setLogModeConsole(bool v)
@@ -651,6 +657,7 @@ void TTSettings::load()
   // ----- Logging group (Task 6) ----------------------------------------
   settings.beginGroup("LogFile");
   mCreateLogFile     = settings.value("CreateLogFile/",     mCreateLogFile).toBool();
+  mLogFilePath       = settings.value("LogFilePath/",       mLogFilePath).toString();
   mLogModeConsole    = settings.value("LogModeConsole/",    mLogModeConsole).toBool();
   mLogModeExtended   = settings.value("LogModeExtended/",   mLogModeExtended).toBool();
   mLogVideoIndexInfo = settings.value("LogVideoIndexInfo/", mLogVideoIndexInfo).toBool();
@@ -792,6 +799,10 @@ void TTSettings::load()
   }
 
   settings.endGroup();
+
+  // Apply persisted log file path to TTMessageLogger singleton.
+  // Empty string restores the XDG default (see TTMessageLogger::defaultLogPath()).
+  TTMessageLogger::getInstance()->setLogFilePath(mLogFilePath);
 }
 
 void TTSettings::save()
@@ -868,6 +879,7 @@ void TTSettings::save()
   // ----- Logging group (Task 6) ----------------------------------------
   settings.beginGroup("LogFile");
   settings.setValue("CreateLogFile/",     mCreateLogFile);
+  settings.setValue("LogFilePath/",       mLogFilePath);
   settings.setValue("LogModeConsole/",    mLogModeConsole);
   settings.setValue("LogModeExtended/",   mLogModeExtended);
   settings.setValue("LogVideoIndexInfo/", mLogVideoIndexInfo);
