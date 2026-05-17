@@ -42,7 +42,7 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
 
   // Populate sidebar list and stacked pages
   QStyle* s = QApplication::style();
-  auto addCat = [this, s](const QString& title, const QIcon& icon, QWidget* page) {
+  auto addCat = [this](const QString& title, const QIcon& icon, QWidget* page) {
     new QListWidgetItem(icon, title, categoryList);
     stackedPages->addWidget(page);
   };

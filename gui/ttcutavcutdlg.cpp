@@ -81,10 +81,10 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   int muxMode = TTSettings::instance()->muxMode();
   rbCreateMuxScript->setChecked(muxMode == 1);
   rbMuxStreams->setChecked(muxMode == 0);
-  connect(rbCreateMuxScript, &QRadioButton::clicked, this, [this](bool c) {
+  connect(rbCreateMuxScript, &QRadioButton::clicked, this, [](bool c) {
     if (c) TTSettings::instance()->setMuxMode(1);
   });
-  connect(rbMuxStreams, &QRadioButton::clicked, this, [this](bool c) {
+  connect(rbMuxStreams, &QRadioButton::clicked, this, [](bool c) {
     if (c) TTSettings::instance()->setMuxMode(0);
   });
 
