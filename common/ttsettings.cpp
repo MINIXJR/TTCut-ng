@@ -158,6 +158,7 @@ void TTSettings::setCreateLogFile(bool v)
 
 void TTSettings::setLogFilePath(const QString& v)
 {
+  if (mLogFilePath == v) return;
   mLogFilePath = v;
 }
 
@@ -944,5 +945,8 @@ void TTSettings::save()
 
 void TTSettings::resetToDefaults()
 {
-  // Per-group field resets added in tasks 4-13. For now this is a no-op.
+  // No-op: TTSettings reset to ctor-defaults requires re-running the full member
+  // initializer list, which is not currently exposed. When this becomes needed,
+  // move the per-field defaults into a private resetFields() helper called from
+  // both the ctor and here.
 }

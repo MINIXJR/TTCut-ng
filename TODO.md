@@ -241,6 +241,28 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Implement plugin interface for external tools (encoders, muxers, players)
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
+## Entwicklungs-Workflow
+
+- **Verification-Test-Policy: Tux-Videos bevorzugen**
+  - Bei Cut-Verification + Pipeline-Validation IMMER zuerst die Tux-Test-Videos verwenden
+    (`tools/test-videos/cache/tux_*`). Kompakt (8-85 MB), reproduzierbar, im Repo.
+  - Original-User-Videos nur bei neuen Problemen, die kein Tux-Test-Video reproduziert.
+    Bei jedem solchen Fall ein neues Tux-Test-Video erzeugen (via `make_test_video.sh` o.ä.).
+  - **Offen:** Tux-`.ttcut`-Files haben aktuell keine Cut-Entries — `--auto-cut`-Verification
+    erfordert dass Cuts via Skript hinzugefügt werden. Helper-Script `make_tux_with_cuts.sh` wäre
+    nützlich.
+
+- **Subagent-Driven Development: Build-Permissions für Subagents**
+  - Subagents im superpowers:subagent-driven-development Skill haben standardmäßig keine
+    Bash-Permission für `make`, `qmake`, `bear`. Sie melden BLOCKED auf Build-Verification,
+    der Controller muss manuell `make` ausführen und committen — ineffizient bei Multi-Phase-Refactors.
+  - Workaround heute: nach jedem Implementer-Run macht der Controller `qmake && bear -- make`
+    und den finalen `git commit` mit der vom Plan-Schritt vorgegebenen Message.
+  - Verbesserung: `.claude/settings.local.json` um `Bash(make:*)`, `Bash(qmake:*)`, `Bash(bear:*)`,
+    `Bash(make clean:*)` Permissions erweitern, sodass Subagents Build-Verification selbst durchführen.
+  - Beobachtet während v0.70 Settings/Cut-Dialog Reorg (2026-05-17): jeder der 3 Sub-Phasen-Implementer
+    musste Controller einbeziehen für Build-Commit.
+
 ## Completed
 
 - [x] H.264/H.265 Smart Cut support (TTESSmartCut)
