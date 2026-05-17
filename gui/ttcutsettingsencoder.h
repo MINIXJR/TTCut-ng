@@ -40,11 +40,14 @@ class TTCutSettingsEncoder : public QWidget, Ui::TTCutSettingsEncoder
   Q_OBJECT
 
   public:
+    enum Mode { Defaults, Override };
+
     TTCutSettingsEncoder(QWidget* parent=0);
 
     void setTitle( const QString& title );
     void setTabData();
     void getTabData();
+    void setMode(Mode m);   // NEU
 
   private:
     void initCodecList();

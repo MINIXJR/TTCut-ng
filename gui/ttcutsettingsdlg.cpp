@@ -49,12 +49,8 @@ TTCutSettingsDlg::TTCutSettingsDlg(QWidget* parent)
   connect(okButton,     &QPushButton::clicked, this, &TTCutSettingsDlg::onDlgOk);
   connect(cancelButton, &QPushButton::clicked, this, &TTCutSettingsDlg::onDlgCancel);
 
-  // Connect encoder codec change to muxer visibility update
-  connect(encodingPage, &TTCutSettingsEncoder::codecChanged,
-          muxingPage,   &TTCutSettingsMuxer::onEncoderCodecChanged);
-
-  // Initial sync of muxer visibility based on current codec
-  muxingPage->onEncoderCodecChanged(TTSettings::instance()->encoderCodec());
+  // Note: codec-dependent muxer visibility is handled per-dialog in 1c
+  // The muxer settings tab in the Settings Dialog is simplified in Phase 1b.
 }
 
 // save the tabs data

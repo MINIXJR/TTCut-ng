@@ -39,16 +39,6 @@
 
 class QString;
 
-class DfInfo {
-	 public:
-		 DfInfo() {};
-		 QString path;
-		 double  size;
-		 double  free;
-		 double  used;
-		 double  percentUsed;
- };
-
 // -----------------------------------------------------------------------------
 // TTCut A/V cut dialog;
 // -----------------------------------------------------------------------------
@@ -69,18 +59,21 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
     void onDlgCancel();
     void onDirectoryOpen();
 
+  private slots:
+    void updateOutputFilename();
+    void onMuxerProgChanged(int index);
+    void onCodecChangedForVisibility(int codecIndex);
+
   private:
-    void   getFreeDiskSpace();
-    DfInfo getDiskSpaceInfo(QString path);
+    void populateMuxerProg();
+    void populateMuxTarget();
+    void updateMuxerVisibility();
+    void updateFreeSpaceLine();
     static QString expectedContainerExtension(int container);
     static QString expectedEsExtension(int container, int codec);
 
-  private slots:
-    void updateOutputFilename();
-
- private:
+  private:
     TTMessageLogger* log;
-
 };
 
 #endif // TTCUTAVCUTDLG_H

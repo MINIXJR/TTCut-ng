@@ -27,7 +27,7 @@
 /* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
 /*----------------------------------------------------------------------------*/
 
-#ifndef TTCUTSETTINGSMUXER_H 
+#ifndef TTCUTSETTINGSMUXER_H
 #define TTCUTSETTINGSMUXER_H
 
 #include "ui_ttcutsettingsmuxer.h"
@@ -46,26 +46,8 @@ class TTCutSettingsMuxer : public QWidget, Ui::TTCutSettingsMuxer
     void setTabData();
     void getTabData();
 
-  public slots:
-    void onEncoderCodecChanged(int codecIndex);
-
-  signals:
-    void containerChanged(int containerValue);
-
-  private:
-    void initMuxProgList();
-    void initMuxTargetList();
-    void initOutputContainerList();
-    void updateMuxerVisibility();
-    int  muxerValueAt(int displayIndex) const;
-    int  indexForMuxerValue(int outputContainerValue) const;
-
   protected slots:
-    void onCreateMuxScript();
-    void onCreateMuxStreams();
-    void onOpenOutputPath();
     void onStateDeleteES(int state);
-    void onMuxerProgChanged(int index);
     void onMkvChaptersChanged(int state);
 };
 

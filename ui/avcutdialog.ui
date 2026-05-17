@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>686</width>
-    <height>387</height>
+    <height>440</height>
    </rect>
   </property>
   <property name="windowTitle" >
@@ -27,6 +27,16 @@
      <property name="margin" >
       <number>0</number>
      </property>
+     <item>
+      <widget class="QLabel" name="laFreeSpace" >
+       <property name="text" >
+        <string/>
+       </property>
+       <property name="textFormat" >
+        <enum>Qt::RichText</enum>
+       </property>
+      </widget>
+     </item>
      <item>
       <spacer>
        <property name="orientation" >
@@ -62,239 +72,24 @@
       <bool>true</bool>
      </property>
      <property name="currentIndex" >
-      <number>2</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tabCommon" >
       <attribute name="title" >
-       <string>Common</string>
+       <string>Schnitt</string>
       </attribute>
       <attribute name="icon" >
        <iconset resource="avcutdialog.qrc" >
         <normaloff>:/pixmaps/pixmaps/settings_18.xpm</normaloff>:/pixmaps/pixmaps/settings_18.xpm</iconset>
       </attribute>
-      <layout class="QGridLayout" >
+      <layout class="QVBoxLayout" >
        <property name="margin" >
         <number>9</number>
        </property>
        <property name="spacing" >
         <number>6</number>
        </property>
-       <item row="1" column="0" >
-        <widget class="QGroupBox" name="gbFreeDriveSpace" >
-         <property name="sizePolicy" >
-          <sizepolicy vsizetype="Preferred" hsizetype="Preferred" >
-           <horstretch>0</horstretch>
-           <verstretch>4</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="title" >
-          <string>Free Drive Space</string>
-         </property>
-         <layout class="QGridLayout" name="gridLayout_2" >
-          <item row="0" column="0" >
-           <widget class="QLabel" name="label" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize" >
-             <size>
-              <width>190</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="text" >
-             <string>Path</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1" >
-           <widget class="QLabel" name="label_2" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize" >
-             <size>
-              <width>110</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="text" >
-             <string>Size</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="2" >
-           <widget class="QLabel" name="label_3" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize" >
-             <size>
-              <width>110</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="text" >
-             <string>Used</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="3" >
-           <widget class="QLabel" name="label_4" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize" >
-             <size>
-              <width>110</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="text" >
-             <string>Free</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="4" >
-           <widget class="QLabel" name="label_5" >
-            <property name="text" >
-             <string>Used %</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0" >
-           <widget class="QLabel" name="laPath1" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text" >
-             <string>Path</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1" >
-           <widget class="QLabel" name="laSize1" >
-            <property name="text" >
-             <string>Size</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="2" >
-           <widget class="QLabel" name="laUsed1" >
-            <property name="text" >
-             <string>Used</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="3" >
-           <widget class="QLabel" name="laFree1" >
-            <property name="text" >
-             <string>Free</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="4" >
-           <widget class="QLabel" name="laUsedPercent1" >
-            <property name="text" >
-             <string>Free</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0" >
-           <widget class="QLabel" name="laPath2" >
-            <property name="sizePolicy" >
-             <sizepolicy vsizetype="Preferred" hsizetype="Fixed" >
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text" >
-             <string>Path</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1" >
-           <widget class="QLabel" name="laSize2" >
-            <property name="text" >
-             <string>Size</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="2" >
-           <widget class="QLabel" name="laUsed2" >
-            <property name="text" >
-             <string>Used</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="3" >
-           <widget class="QLabel" name="laFree2" >
-            <property name="text" >
-             <string>Free</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="4" >
-           <widget class="QLabel" name="laUsedPercent2" >
-            <property name="text" >
-             <string>Free</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item row="3" column="0" >
-        <widget class="QGroupBox" name="gbAudioOnly" >
-         <property name="title" >
-          <string>Audio-Only Output</string>
-         </property>
-         <property name="visible" >
-          <bool>false</bool>
-         </property>
-         <layout class="QHBoxLayout" >
-          <item>
-           <widget class="QLabel" name="laAudioOnlyFormat" >
-            <property name="text" >
-             <string>Format:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="cbAudioOnlyFormat" />
-          </item>
-          <item>
-           <spacer>
-            <property name="orientation" >
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0" >
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item row="0" column="0" >
+       <item>
         <widget class="QGroupBox" name="gbOutput" >
          <property name="minimumSize" >
           <size>
@@ -369,18 +164,6 @@
               <height>32</height>
              </size>
             </property>
-            <property name="sizeIncrement" >
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="baseSize" >
-             <size>
-              <width>0</width>
-              <height>0</height>
-             </size>
-            </property>
             <property name="font" >
              <font>
               <pointsize>11</pointsize>
@@ -402,13 +185,172 @@
             </property>
            </widget>
           </item>
+          <item row="3" column="0" >
+           <widget class="QLabel" name="laMuxerProg" >
+            <property name="text" >
+             <string>Container:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1" colspan="2" >
+           <widget class="QComboBox" name="cbMuxerProg" />
+          </item>
+          <item row="4" column="0" >
+           <widget class="QLabel" name="laMuxTarget" >
+            <property name="text" >
+             <string>MPEG-2 Target:</string>
+            </property>
+            <property name="visible" >
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1" colspan="2" >
+           <widget class="QComboBox" name="cbMuxTarget" >
+            <property name="visible" >
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="3" >
+           <widget class="QGroupBox" name="gbMuxMode" >
+            <property name="title" >
+             <string>Multiplexer-Modus</string>
+            </property>
+            <property name="visible" >
+             <bool>false</bool>
+            </property>
+            <layout class="QVBoxLayout" >
+             <item>
+              <widget class="QRadioButton" name="rbCreateMuxScript" >
+               <property name="text" >
+                <string>Mux-Script erstellen</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QRadioButton" name="rbMuxStreams" >
+               <property name="text" >
+                <string>Streams direkt muxen</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
          </layout>
-         <zorder>leOutputPath</zorder>
-         <zorder>laOutputPath</zorder>
-         <zorder>leOutputFile</zorder>
-         <zorder>laOutputFile</zorder>
-         <zorder>btnDirOpen</zorder>
         </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="gbAudioOnly" >
+         <property name="title" >
+          <string>Audio-Only Output</string>
+         </property>
+         <property name="visible" >
+          <bool>false</bool>
+         </property>
+         <layout class="QHBoxLayout" >
+          <item>
+           <widget class="QLabel" name="laAudioOnlyFormat" >
+            <property name="text" >
+             <string>Format:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="cbAudioOnlyFormat" />
+          </item>
+          <item>
+           <spacer>
+            <property name="orientation" >
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0" >
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="gbMuxOptions" >
+         <property name="title" >
+          <string>Multiplexen-Optionen</string>
+         </property>
+         <layout class="QVBoxLayout" >
+          <item>
+           <layout class="QHBoxLayout" >
+            <item>
+             <widget class="QCheckBox" name="cbMkvCreateChapters" >
+              <property name="text" >
+               <string>MKV-Kapitel erstellen</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="laMkvInterval" >
+              <property name="text" >
+               <string>Intervall (Min):</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="sbMkvChapterInterval" >
+              <property name="minimum" >
+               <number>1</number>
+              </property>
+              <property name="maximum" >
+               <number>60</number>
+              </property>
+              <property name="value" >
+               <number>5</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer>
+              <property name="orientation" >
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0" >
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="cbDeleteES" >
+            <property name="text" >
+             <string>ES-Dateien nach Mux löschen</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer>
+         <property name="orientation" >
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType" >
+          <enum>QSizePolicy::Expanding</enum>
+         </property>
+         <property name="sizeHint" stdset="0" >
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
        </item>
       </layout>
      </widget>
@@ -436,44 +378,11 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="tabMuxing" >
-      <property name="enabled" >
-       <bool>true</bool>
-      </property>
-      <attribute name="title" >
-       <string>Muxing</string>
-      </attribute>
-      <attribute name="icon" >
-       <iconset resource="avcutdialog.qrc" >
-        <normaloff>:/pixmaps/pixmaps/filter.png</normaloff>:/pixmaps/pixmaps/filter.png</iconset>
-      </attribute>
-      <layout class="QGridLayout" >
-       <property name="margin" >
-        <number>9</number>
-       </property>
-       <property name="spacing" >
-        <number>6</number>
-       </property>
-       <item row="0" column="0" >
-        <widget class="TTCutSettingsMuxer" name="muxingPage" >
-         <property name="title" >
-          <string>GroupBox</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
     </widget>
    </item>
   </layout>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>TTCutSettingsMuxer</class>
-   <extends>QGroupBox</extends>
-   <header>../gui/ttcutsettingsmuxer.h</header>
-   <container>1</container>
-  </customwidget>
   <customwidget>
    <class>TTCutSettingsEncoder</class>
    <extends>QGroupBox</extends>

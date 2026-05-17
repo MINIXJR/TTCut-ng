@@ -495,135 +495,160 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>TTCut-ng - Schnitt-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="46"/>
+        <location filename="../ui/avcutdialog.ui" line="56"/>
         <source>Start</source>
         <translation>Starten</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="53"/>
+        <location filename="../ui/avcutdialog.ui" line="63"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="69"/>
         <source>Common</source>
-        <translation>Allgemein</translation>
+        <translation type="vanished">Allgemein</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="91"/>
         <source>Free Drive Space</source>
-        <translation>Freier Speicherplatz</translation>
+        <translation type="vanished">Freier Speicherplatz</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="109"/>
-        <location filename="../ui/avcutdialog.ui" line="186"/>
-        <location filename="../ui/avcutdialog.ui" line="227"/>
         <source>Path</source>
-        <translation>Pfad</translation>
+        <translation type="vanished">Pfad</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="128"/>
-        <location filename="../ui/avcutdialog.ui" line="193"/>
-        <location filename="../ui/avcutdialog.ui" line="234"/>
         <source>Size</source>
-        <translation>Größe</translation>
+        <translation type="vanished">Größe</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="147"/>
-        <location filename="../ui/avcutdialog.ui" line="200"/>
-        <location filename="../ui/avcutdialog.ui" line="241"/>
         <source>Used</source>
-        <translation>Belegt</translation>
+        <translation type="vanished">Belegt</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="166"/>
-        <location filename="../ui/avcutdialog.ui" line="207"/>
-        <location filename="../ui/avcutdialog.ui" line="214"/>
-        <location filename="../ui/avcutdialog.ui" line="248"/>
-        <location filename="../ui/avcutdialog.ui" line="255"/>
         <source>Free</source>
-        <translation>Frei</translation>
+        <translation type="vanished">Frei</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="173"/>
         <source>Used %</source>
-        <translation>Belegt %</translation>
+        <translation type="vanished">Belegt %</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="265"/>
+        <location filename="../ui/avcutdialog.ui" line="247"/>
         <source>Audio-Only Output</source>
         <translation>Nur-Audio-Ausgabe</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="274"/>
+        <location filename="../ui/avcutdialog.ui" line="256"/>
         <source>Format:</source>
         <translation>Format:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="284"/>
         <source>Bitrate:</source>
-        <translation>Bitrate:</translation>
+        <translation type="vanished">Bitrate:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="297"/>
         <source> kbps</source>
-        <translation> kbps</translation>
+        <translation type="vanished"> kbps</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="300"/>
         <source>match source</source>
-        <translation>wie Quelle</translation>
+        <translation type="vanished">wie Quelle</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="323"/>
         <source>Cut Options</source>
-        <translation>Schnitt-Optionen</translation>
+        <translation type="vanished">Schnitt-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="338"/>
         <source>Write Sequence End Code</source>
-        <translation>Sequenz-Ende-Code schreiben</translation>
+        <translation type="vanished">Sequenz-Ende-Code schreiben</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="348"/>
         <source>Write max bitrate to first sequence</source>
-        <translation>Max. Bitrate in erste Sequenz schreiben</translation>
+        <translation type="vanished">Max. Bitrate in erste Sequenz schreiben</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="364"/>
+        <location filename="../ui/avcutdialog.ui" line="79"/>
+        <source>Schnitt</source>
+        <translation>Schnitt</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="101"/>
         <source>Cut Output Options</source>
         <translation>Ausgabe-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="373"/>
+        <location filename="../ui/avcutdialog.ui" line="110"/>
         <source>Output file</source>
         <translation>Ausgabedatei</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="390"/>
+        <location filename="../ui/avcutdialog.ui" line="127"/>
         <source>Output path</source>
         <translation>Ausgabepfad</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="459"/>
+        <location filename="../ui/avcutdialog.ui" line="184"/>
         <source>Add &quot;_cut&quot; suffix to output filename</source>
         <translation>Suffix „_cut&quot; an Dateinamen anhängen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="475"/>
+        <location filename="../ui/avcutdialog.ui" line="191"/>
+        <source>Container:</source>
+        <translation>Container:</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="201"/>
+        <source>MPEG-2 Target:</source>
+        <translation>MPEG-2 Ziel:</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="218"/>
+        <source>Multiplexer-Modus</source>
+        <translation>Multiplexer-Modus</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="227"/>
+        <source>Mux-Script erstellen</source>
+        <translation>Mux-Skript erstellen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="234"/>
+        <source>Streams direkt muxen</source>
+        <translation>Streams direkt multiplexen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="282"/>
+        <source>Multiplexen-Optionen</source>
+        <translation>Multiplexen-Optionen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="290"/>
+        <source>MKV-Kapitel erstellen</source>
+        <translation>MKV-Kapitel erstellen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="297"/>
+        <source>Intervall (Min):</source>
+        <translation>Intervall (Min):</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="332"/>
+        <source>ES-Dateien nach Mux löschen</source>
+        <translation>ES-Dateien nach Mux löschen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="359"/>
         <source>Encoding</source>
         <translation>Encodieren</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="491"/>
-        <location filename="../ui/avcutdialog.ui" line="518"/>
+        <location filename="../ui/avcutdialog.ui" line="375"/>
         <source>GroupBox</source>
         <translation>GroupBox</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="502"/>
         <source>Muxing</source>
-        <translation>Multiplexen</translation>
+        <translation type="vanished">Multiplexen</translation>
     </message>
     <message>
         <source>Chapters</source>
@@ -646,7 +671,7 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">AAC (.m4a)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutavcutdlg.cpp" line="60"/>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="58"/>
         <source>Audio Cut Options</source>
         <translation>Audio-Schnitt-Optionen</translation>
     </message>
@@ -1645,7 +1670,7 @@ Ausgabedatei:
         <location filename="../gui/ttcutpreview.cpp" line="258"/>
         <location filename="../gui/ttcutpreview.cpp" line="275"/>
         <location filename="../gui/ttcutpreview.cpp" line="293"/>
-        <location filename="../gui/ttcutpreview.cpp" line="563"/>
+        <location filename="../gui/ttcutpreview.cpp" line="562"/>
         <source>Play</source>
         <translation>Start</translation>
     </message>
@@ -1668,24 +1693,24 @@ Ausgabedatei:
         <translation>Vorschau wird neu generiert...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="597"/>
+        <location filename="../gui/ttcutpreview.cpp" line="596"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>MPEG-2 Video schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="610"/>
-        <location filename="../gui/ttcutpreview.cpp" line="722"/>
+        <location filename="../gui/ttcutpreview.cpp" line="609"/>
+        <location filename="../gui/ttcutpreview.cpp" line="729"/>
         <source>Cutting audio...</source>
         <translation>Audio schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="641"/>
-        <location filename="../gui/ttcutpreview.cpp" line="749"/>
+        <location filename="../gui/ttcutpreview.cpp" line="648"/>
+        <location filename="../gui/ttcutpreview.cpp" line="756"/>
         <source>Creating MKV...</source>
         <translation>MKV erstellen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="695"/>
+        <location filename="../gui/ttcutpreview.cpp" line="702"/>
         <source>Video Smart Cut...</source>
         <translation>Video Smart Cut...</translation>
     </message>
@@ -1788,7 +1813,6 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingscommon.ui" line="358"/>
         <location filename="../ui/ttcutsettingscommon.ui" line="365"/>
         <location filename="../ui/ttcutsettingscommon.ui" line="372"/>
-        <location filename="../ui/ttcutsettingscommon.ui" line="439"/>
         <source>frames</source>
         <translation>Frames</translation>
     </message>
@@ -1799,7 +1823,7 @@ Ausgabedatei:
         <translation>Sekunden</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="567"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="540"/>
         <source>Search worker threads (0 = auto)</source>
         <translation>Suche-Worker-Threads (0 = automatisch)</translation>
     </message>
@@ -1809,29 +1833,28 @@ Ausgabedatei:
         <translation>Suche / Wiedergabe</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="446"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="439"/>
         <source>threads</source>
         <translation>Threads</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="520"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="500"/>
         <source>Number of parallel decoders during black-frame / scene-change / logo search. 0 = automatic (max 4 by default). Higher uses more RAM (~40 MB per worker for 1080p H.264/H.265).</source>
         <translation>Anzahl paralleler Decoder bei Schwarzbild- / Szenenwechsel- / Logo-Suche. 0 = automatisch (max. 4 Standard). Höher braucht mehr RAM (~40 MB pro Worker bei 1080p H.264/H.265).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="546"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="526"/>
         <source>Search CutOut Frame within</source>
         <translation>Cut-Out Frame suchen innerhalb</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="553"/>
+        <location filename="../ui/ttcutsettingscommon.ui" line="533"/>
         <source>Preview each Cut</source>
         <translation>Vorschau für jeden Schnitt</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingscommon.ui" line="560"/>
         <source>Skip while playing</source>
-        <translation>Überspringen bei Wiedergabe</translation>
+        <translation type="vanished">Überspringen bei Wiedergabe</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingscommon.cpp" line="50"/>
@@ -2016,92 +2039,91 @@ Ausgabedatei:
         <translation>Form</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="37"/>
         <source>MPEG2Schnitt Index Files (*.idd)</source>
-        <translation>MPEG2Schnitt Index Files (*.idd)</translation>
+        <translation type="vanished">MPEG2Schnitt Index Files (*.idd)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="58"/>
         <source>Create video index file</source>
-        <translation>Video-Indexdatei erstellen</translation>
+        <translation type="vanished">Video-Indexdatei erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="65"/>
         <source>Read video index file</source>
-        <translation>Video-Indexdatei lesen</translation>
+        <translation type="vanished">Video-Indexdatei lesen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="72"/>
         <source>Create audio index file</source>
-        <translation>Audio-Indexdatei erstellen</translation>
+        <translation type="vanished">Audio-Indexdatei erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="79"/>
         <source>Read audio index file</source>
-        <translation>Audio-Indexdatei lesen</translation>
+        <translation type="vanished">Audio-Indexdatei lesen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="86"/>
         <source>Create cut video index file</source>
-        <translation>Schnitt-Video-Indexdatei erstellen</translation>
+        <translation type="vanished">Schnitt-Video-Indexdatei erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="109"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="50"/>
         <source>Logfile</source>
         <translation>Logdatei</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="133"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="74"/>
         <source>Logfile Options</source>
         <translation>Logdatei-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="157"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="98"/>
         <source>Video index information</source>
         <translation>Video-Index-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="164"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="105"/>
         <source>FFmpeg decoder information</source>
         <translation>FFmpeg-Decoder Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="171"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="112"/>
         <source>Smart Cut engine information</source>
         <translation>Smart-Cut-Engine Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="178"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="119"/>
         <source>MKV mux information</source>
         <translation>MKV-Mux Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="185"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="126"/>
         <source>Cut pipeline information</source>
         <translation>Schnitt-Pipeline Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="192"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="133"/>
         <source>AV-stream parser information</source>
         <translation>AV-Stream-Parser Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="199"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="140"/>
         <source>UI events information</source>
         <translation>UI-Ereignisse Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="206"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="147"/>
+        <source>libav decoder/muxer information</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="154"/>
         <source>Extended messages and informations</source>
         <translation>Erweiterte Meldungen und Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="213"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="161"/>
         <source>Write to console</source>
         <translation>In Konsole ausgeben</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsfiles.ui" line="223"/>
+        <location filename="../ui/ttcutsettingsfiles.ui" line="171"/>
         <source>Create logfile</source>
         <translation>Logdatei erstellen</translation>
     </message>
@@ -2125,9 +2147,8 @@ Ausgabedatei:
         <translation type="vanished">AAC (.m4a)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsmuxer.cpp" line="190"/>
         <source>Select directory for mplex result</source>
-        <translation>Verzeichnis für mplex-Ausgabe wählen</translation>
+        <translation type="vanished">Verzeichnis für mplex-Ausgabe wählen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="13"/>
@@ -2135,98 +2156,85 @@ Ausgabedatei:
         <translation>Form2</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="35"/>
         <source>Muxer Settings</source>
-        <translation>Muxer-Einstellungen</translation>
+        <translation type="vanished">Muxer-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="89"/>
         <source>Output path</source>
-        <translation>Ausgabepfad</translation>
+        <translation type="vanished">Ausgabepfad</translation>
     </message>
     <message>
         <source>configure...</source>
         <translation type="vanished">Konfigurieren...</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="118"/>
         <source>Used muxer</source>
-        <translation>Verwendeter Muxer</translation>
+        <translation type="vanished">Verwendeter Muxer</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="125"/>
         <source>MPEG-2 target</source>
-        <translation>MPEG-2 target</translation>
+        <translation type="vanished">MPEG-2 target</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="135"/>
         <source>Multiplex Options</source>
-        <translation>Multiplex-Optionen</translation>
+        <translation type="vanished">Multiplex-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="141"/>
         <source>Create mux script for batch muxing</source>
-        <translation>Mux-Skript für Stapelverarbeitung erstellen</translation>
+        <translation type="vanished">Mux-Skript für Stapelverarbeitung erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="148"/>
         <source>Finally mux result streams</source>
-        <translation>Ergebnis-Streams abschließend muxen</translation>
+        <translation type="vanished">Ergebnis-Streams abschließend muxen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="158"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="19"/>
         <source>MKV Chapter Settings</source>
         <translation>MKV-Kapitel-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="164"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="25"/>
         <source>Create chapters every</source>
         <translation>Kapitel erstellen alle</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="183"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="44"/>
         <source> minutes</source>
         <translation> Minuten</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="206"/>
         <source>Audio-Only Cut (default preset)</source>
-        <translation>Nur-Audio-Schnitt (Standard-Voreinstellung)</translation>
+        <translation type="vanished">Nur-Audio-Schnitt (Standard-Voreinstellung)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="212"/>
         <source>Format:</source>
-        <translation>Format:</translation>
+        <translation type="vanished">Format:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="222"/>
         <source>Bitrate:</source>
-        <translation>Bitrate:</translation>
+        <translation type="vanished">Bitrate:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="235"/>
         <source> kbps</source>
-        <translation> kbps</translation>
+        <translation type="vanished"> kbps</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="238"/>
         <source>match source</source>
-        <translation>wie Quelle</translation>
+        <translation type="vanished">wie Quelle</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="261"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="67"/>
         <source>Action after multiplexing</source>
         <translation>Aktion nach dem Multiplexen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="267"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
         <source>Delete elemtary streams</source>
         <translation>Elementary Streams löschen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="274"/>
         <source>Pause</source>
-        <translation>Pause</translation>
+        <translation type="vanished">Pause</translation>
     </message>
 </context>
 <context>
@@ -2240,7 +2248,7 @@ Ausgabedatei:
 <context>
     <name>TTCutTask</name>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="195"/>
+        <location filename="../data/ttcutvideotask.cpp" line="194"/>
         <source>No cut stream specified!</source>
         <translation>Kein Schnitt-Stream angegeben!</translation>
     </message>
@@ -2418,17 +2426,17 @@ Ausgabedatei:
         <translation>Kein Zielpfad für den Videoschnitt angegeben!</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="106"/>
+        <location filename="../data/ttcutvideotask.cpp" line="105"/>
         <source>Cut 1 of %1</source>
         <translation>Schnitt 1 von %1</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="136"/>
+        <location filename="../data/ttcutvideotask.cpp" line="135"/>
         <source>Cut %1 of %2</source>
         <translation>Schnitt %1 von %2</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="111"/>
+        <location filename="../data/ttcutvideotask.cpp" line="110"/>
         <source>Operation aborted!</source>
         <translation>Vorgang abgebrochen!</translation>
     </message>
@@ -2641,109 +2649,99 @@ Ausgabedatei:
 <context>
     <name>TTMpeg2VideoStream</name>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="170"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="148"/>
         <source>Index list creation aborted!</source>
         <translation>Indexerstellung abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="280"/>
         <source>Error reading IDD file in %1 at line %2!</source>
-        <translation>Fehler beim Lesen der IDD-Datei in %1 bei Zeile %2!</translation>
+        <translation type="vanished">Fehler beim Lesen der IDD-Datei in %1 bei Zeile %2!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="285"/>
         <source>No IDD file in %1 at line %2!</source>
-        <translation>Keine IDD-Datei in %1 bei Zeile %2!</translation>
+        <translation type="vanished">Keine IDD-Datei in %1 bei Zeile %2!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="312"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="265"/>
         <source>Creating MPEG-2 header list</source>
         <translation>MPEG-2 Headerliste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="318"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="271"/>
         <source>Headerlist creation aborted by user!</source>
         <translation>Headerliste-Erstellung vom Benutzer abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="361"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="314"/>
         <source>Found %1 headers</source>
         <translation>%1 Header gefunden</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="373"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="326"/>
         <source>MPEG-2 header list created</source>
         <translation>MPEG-2 Headerliste erstellt</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="410"/>
         <source>Create Mpeg2Schnitt IDD-file</source>
-        <translation>Erstelle Mpeg2Schnitt IDD-Datei</translation>
+        <translation type="vanished">Erstelle Mpeg2Schnitt IDD-Datei</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="452"/>
         <source>Create Mpeg2Schnitt IDD-File</source>
-        <translation>Erstelle Mpeg2Schnitt IDD-Datei</translation>
+        <translation type="vanished">Erstelle Mpeg2Schnitt IDD-Datei</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="455"/>
         <source>IDD-File created</source>
-        <translation>IDD-Datei erstellt</translation>
+        <translation type="vanished">IDD-Datei erstellt</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="481"/>
         <source>IDD file version %1 not supported!</source>
-        <translation>IDD-Dateiversion %1 nicht unterstützt!</translation>
+        <translation type="vanished">IDD-Dateiversion %1 nicht unterstützt!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="484"/>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="543"/>
         <source>Read Mpeg2Schnitt IDD-file</source>
-        <translation>Lese Mpeg2Schnitt IDD-Datei</translation>
+        <translation type="vanished">Lese Mpeg2Schnitt IDD-Datei</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="492"/>
         <source>Read IDD header file aborted!</source>
-        <translation>Lesen der IDD-Headerdatei abgebrochen!</translation>
+        <translation type="vanished">Lesen der IDD-Headerdatei abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="545"/>
         <source>Finish reading IDD-file</source>
-        <translation>Lesen der IDD-Datei abgeschlossen</translation>
+        <translation type="vanished">Lesen der IDD-Datei abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="673"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="451"/>
         <source>No sequence header for I-Frame at index %1</source>
         <translation>Kein Sequenz-Header für I-Frame bei Index %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="680"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="458"/>
         <source>No GOP Header found for I-Frame at index %1</source>
         <translation>Kein GOP-Header für I-Frame bei Index %1 gefunden</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="709"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="484"/>
         <source>No I- or P-Frame found at cut out position: %1</source>
         <translation>Kein I- oder P-Frame an Cut-Out Position gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="787"/>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="935"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="562"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="714"/>
         <source>Transfer objects</source>
         <translation>Übertrage Objekte</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="797"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="572"/>
         <source>%1 bytes from stream buffer read</source>
         <translation>%1 Bytes aus Stream-Puffer gelesen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="803"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="578"/>
         <source>Transfer cut objects aborted!</source>
         <translation>Übertragung der Schnittobjekte abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="940"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="719"/>
         <source>Transfer complete</source>
         <translation>Übertragung abgeschlossen</translation>
     </message>
@@ -2834,12 +2832,12 @@ Ausgabedatei:
 <context>
     <name>TTMplexProvider</name>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="189"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="187"/>
         <source>Mplex finished</source>
         <translation>Mplex abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="290"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="288"/>
         <source>Starting mplex process</source>
         <translation>Mplex-Prozess gestartet</translation>
     </message>
@@ -2899,22 +2897,22 @@ Unterstützte Formate:
   Untertitel: .srt</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="130"/>
+        <location filename="../data/ttopenvideotask.cpp" line="129"/>
         <source>unsupported video type %1</source>
         <translation>Nicht unterstütztes Videoformat %1</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="138"/>
+        <location filename="../data/ttopenvideotask.cpp" line="137"/>
         <source>failed to create video stream for %1</source>
         <translation>Videostream für %1 konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="150"/>
+        <location filename="../data/ttopenvideotask.cpp" line="149"/>
         <source>Failed to parse video stream headers: %1</source>
         <translation>Video-Stream-Header konnten nicht geparst werden: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttopenvideotask.cpp" line="156"/>
+        <location filename="../data/ttopenvideotask.cpp" line="155"/>
         <source>Failed to create video index: %1</source>
         <translation>Video-Index konnte nicht erstellt werden: %1</translation>
     </message>
@@ -3016,42 +3014,42 @@ Unterstützte Formate:
 <context>
     <name>TTQuickJumpDialog</name>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="73"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="72"/>
         <source>Zeitsprung — Keyframes</source>
         <translation>Zeitsprung — Keyframes</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="139"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="138"/>
         <source>Back</source>
         <translation>Zurück</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="143"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="142"/>
         <source>Forward</source>
         <translation>Vorwärts</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="146"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="145"/>
         <source>Interval:</source>
         <translation>Intervall:</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="150"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="149"/>
         <source>All</source>
         <translation>Alle</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="152"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="151"/>
         <source>Show keyframes every N seconds (0=all)</source>
         <translation>Keyframes alle N Sekunden anzeigen (0=alle)</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="169"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="168"/>
         <source>Double-click thumbnail to jump to frame</source>
         <translation>Doppelklick auf Vorschaubild um zum Frame zu springen</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="223"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="222"/>
         <source>Page %1 / %2</source>
         <translation>Seite %1 / %2</translation>
     </message>
@@ -3064,7 +3062,7 @@ Unterstützte Formate:
         <translation>Vorschaubilder werden dekodiert</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpworker.cpp" line="113"/>
+        <location filename="../gui/ttquickjumpworker.cpp" line="112"/>
         <source>Thumbnails complete</source>
         <translation>Vorschaubilder fertig</translation>
     </message>
@@ -3203,7 +3201,7 @@ Unterstützte Formate:
         <translation>Videoanalyse abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="323"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="321"/>
         <source>Pillarbox: %1 I-frames analyzed, %2 changes</source>
         <translation>Pillarbox: %1 I-Frames analysiert, %2 Änderungen</translation>
     </message>

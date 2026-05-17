@@ -32,31 +32,13 @@
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 
-#include <QFileDialog>
-#include <QStandardItemModel>
 
 TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
 :QWidget(parent)
 {
   setupUi(this);
 
-  // Initialize combo boxes
-  initMuxProgList();
-  initMuxTargetList();
-  initOutputContainerList();
-
-  // Audio-only format presets (helper also selects the current saved value)
-  TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
-
-  // Enable muxer selection now that we have multiple options
-  cbMuxerProg->setEnabled(true);
-  cbMuxTarget->setEnabled(true);
-
-  connect(rbCreateMuxScript,   &QRadioButton::clicked,   this, &TTCutSettingsMuxer::onCreateMuxScript);
-  connect(rbMuxStreams,        &QRadioButton::clicked,   this, &TTCutSettingsMuxer::onCreateMuxStreams);
-  connect(btnOutputPath,       &QPushButton::clicked,    this, &TTCutSettingsMuxer::onOpenOutputPath);
   connect(cbDeleteES,          &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onStateDeleteES);
-  connect(cbMuxerProg,         qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutSettingsMuxer::onMuxerProgChanged);
   connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
 }
 
@@ -64,57 +46,8 @@ void TTCutSettingsMuxer::setTitle(__attribute__((unused))const QString& title)
 {
 }
 
-void TTCutSettingsMuxer::initMuxProgList()
-{
-  cbMuxerProg->clear();
-  // Display order: MKV first (default/modern), MPG second.
-  // userData holds the internal outputContainer value
-  // (0 = mplex, 1 = MKV) so the stored semantics stay stable.
-  cbMuxerProg->insertItem(0, "MKV (libav)", 1);
-  cbMuxerProg->insertItem(1, "MPG (mplex)", 0);
-
-  // Initial selection: MKV. This is overwritten by setTabData() from
-  // the stored preference as soon as the tab is populated.
-  cbMuxerProg->setCurrentIndex(indexForMuxerValue(1));
-}
-
-void TTCutSettingsMuxer::initMuxTargetList()
-{
-  cbMuxTarget->insertItem(0, "Generic MPEG1 (f0)");
-  cbMuxTarget->insertItem(1, "VCD (f1)");
-  cbMuxTarget->insertItem(2, "user-rate VCD (f2)");
-  cbMuxTarget->insertItem(3, "Generic MPEG2 (f3)");
-  cbMuxTarget->insertItem(4, "SVCD (f4)");
-  cbMuxTarget->insertItem(5, "user-rate SVCD (f5)");
-  cbMuxTarget->insertItem(6, "VCD Stills (f6)");
-  cbMuxTarget->insertItem(7, "DVD with NAV sectors (f8)");
-  cbMuxTarget->insertItem(8, "DVD (f9)");
-
-  cbMuxTarget->setCurrentIndex(7);
-}
-
 void TTCutSettingsMuxer::setTabData()
 {
-  switch(TTSettings::instance()->muxMode())
-  {
-    case 0:
-      rbMuxStreams->setChecked(true);
-      cbDeleteES->setEnabled(true);
-      break;
-
-    case 1:
-      rbCreateMuxScript->setChecked(true);
-      cbDeleteES->setEnabled(false);
-      break;
-  }
-
-  // Set muxer program based on outputContainer setting
-  cbMuxerProg->setCurrentIndex(indexForMuxerValue(TTSettings::instance()->outputContainer()));
-  cbMuxTarget->setCurrentIndex(TTSettings::instance()->mpeg2Target());
-  updateMuxerVisibility();
-
-  leOutputPath->setText(TTSettings::instance()->muxOutputPath());
-
   if (TTSettings::instance()->muxDeleteES())
     cbDeleteES->setCheckState(Qt::Checked);
   else
@@ -124,65 +57,17 @@ void TTCutSettingsMuxer::setTabData()
   cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
   sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
   sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
-
-  // Audio-only preset: re-select since the user may have changed it via this
-  // tab and getData() is called when the dialog is reopened.
-  int aofIdx = cbAudioOnlyFormat->findData(TTSettings::instance()->audioOnlyFormat());
-  cbAudioOnlyFormat->setCurrentIndex(aofIdx >= 0 ? aofIdx : 0);
 }
 
 void TTCutSettingsMuxer::getTabData()
 {
-  TTSettings::instance()->setMpeg2Target(cbMuxTarget->currentIndex());
-  TTSettings::instance()->setMuxOutputPath(leOutputPath->text());
-
-  // muxMode/muxDeleteES were only being persisted via the per-widget
-  // signal handlers (onCreateMuxStreams etc.). Persist them here too
-  // — symmetric with setTabData.
-  TTSettings::instance()->setMuxMode(rbMuxStreams->isChecked() ? 0 : 1);
+  // muxDeleteES was only being persisted via the per-widget
+  // signal handlers. Persist them here too — symmetric with setTabData.
   TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
 
   // MKV chapter settings
   TTSettings::instance()->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
   TTSettings::instance()->setMkvChapterInterval(sbMkvChapterInterval->value());
-
-  // Audio-only preset
-  TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
-
-  QFileInfo fInfo(TTSettings::instance()->muxOutputPath());
-
-  if (!fInfo.exists())
-    TTSettings::instance()->setMuxOutputPath(TTSettings::instance()->cutDirPath());
-}
-
-void TTCutSettingsMuxer::onCreateMuxStreams()
-{
-  TTSettings::instance()->setMuxMode(0);
-
-  cbDeleteES->setEnabled(true);
-}
-
-void TTCutSettingsMuxer::onCreateMuxScript()
-{
-  TTSettings::instance()->setMuxMode(1);
-
-  cbDeleteES->setEnabled(false);
-}
-
-void TTCutSettingsMuxer::onOpenOutputPath()
-{
-  QString strDir = QFileDialog::getExistingDirectory(
-      this,
-      tr("Select directory for mplex result"),
-      TTSettings::instance()->muxOutputPath(),
-      (QFileDialog::DontResolveSymlinks | QFileDialog::ShowDirsOnly));
-
-  if (!strDir.isEmpty())
-  {
-    TTSettings::instance()->setMuxOutputPath(strDir);
-    leOutputPath->setText(strDir);
-    qApp->processEvents();
-  }
 }
 
 void TTCutSettingsMuxer::onStateDeleteES(int state)
@@ -193,100 +78,8 @@ void TTCutSettingsMuxer::onStateDeleteES(int state)
     TTSettings::instance()->setMuxDeleteES(true);
 }
 
-void TTCutSettingsMuxer::initOutputContainerList()
-{
-  // This function is for future use when we add a separate output container combo box
-  // For now, the muxer program selection determines the output format
-}
-
-void TTCutSettingsMuxer::updateMuxerVisibility()
-{
-  // Read the live combo selection (container value, not display index)
-  // so this method is self-contained and does not depend on
-  // TTSettings::outputContainer() having been updated first.
-  int current = muxerValueAt(cbMuxerProg->currentIndex());
-
-  // MPEG-2 Target is only relevant when:
-  // 1. Using mplex (current == 0)
-  // 2. Encoder codec is MPEG-2 (encoderCodec == 0)
-  bool enableMpeg2Target = (current == 0 && TTSettings::instance()->encoderCodec() == 0);
-  cbMuxTarget->setEnabled(enableMpeg2Target);
-
-  // MKV chapter settings only visible when using MKV (current == 1)
-  bool enableMkvChapters = (current == 1);
-  gbMkvChapters->setVisible(enableMkvChapters);
-}
-
-void TTCutSettingsMuxer::onMuxerProgChanged(int index)
-{
-  int value = muxerValueAt(index);
-  TTSettings::instance()->setOutputContainer(value);
-
-  // Save the muxer preference for the current codec
-  TTSettings* s = TTSettings::instance();
-  switch (s->encoderCodec()) {
-    case 0:  s->setMpeg2Muxer(value); break;
-    case 1:  s->setH264Muxer(value);  break;
-    case 2:  s->setH265Muxer(value);  break;
-  }
-
-  updateMuxerVisibility();
-  emit containerChanged(value);
-}
-
-int TTCutSettingsMuxer::muxerValueAt(int displayIndex) const
-{
-  return cbMuxerProg->itemData(displayIndex).toInt();
-}
-
-int TTCutSettingsMuxer::indexForMuxerValue(int outputContainerValue) const
-{
-  for (int i = 0; i < cbMuxerProg->count(); ++i) {
-    if (cbMuxerProg->itemData(i).toInt() == outputContainerValue) return i;
-  }
-  return 0;  // fall back to first row (MKV)
-}
-
 void TTCutSettingsMuxer::onMkvChaptersChanged(int state)
 {
   TTSettings::instance()->setMkvCreateChapters(state == Qt::Checked);
   sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
-}
-
-void TTCutSettingsMuxer::onEncoderCodecChanged(int codecIndex)
-{
-  // Disable the MPG (mplex) row for H.264/H.265; enable it for MPEG-2.
-  bool mpgSupported = (codecIndex == 0);
-  QStandardItemModel* model = qobject_cast<QStandardItemModel*>(cbMuxerProg->model());
-  if (model) {
-    int mpgRow = indexForMuxerValue(0);  // 0 = mplex
-    QStandardItem* mpgItem = model->item(mpgRow);
-    if (mpgItem) {
-      Qt::ItemFlags f = mpgItem->flags();
-      mpgItem->setFlags(mpgSupported ? (f |  Qt::ItemIsEnabled)
-                                     : (f & ~Qt::ItemIsEnabled));
-    }
-  }
-
-  // Fetch stored preference for this codec.
-  TTSettings* s = TTSettings::instance();
-  int preferred;
-  switch (codecIndex) {
-    case 0:  preferred = s->mpeg2Muxer(); break;
-    case 1:  preferred = s->h264Muxer();  break;
-    case 2:  preferred = s->h265Muxer();  break;
-    default: preferred = 1;  // MKV
-  }
-  if (!mpgSupported && preferred == 0) {
-    preferred = 1;  // MPG invalid for this codec → fall back to MKV
-  }
-
-  cbMuxerProg->setCurrentIndex(indexForMuxerValue(preferred));
-  // Defensive write: QComboBox suppresses currentIndexChanged when the new
-  // index equals the current one. In that case onMuxerProgChanged does not
-  // fire, so we must set outputContainer explicitly to keep it in sync.
-  TTSettings::instance()->setOutputContainer(preferred);
-
-  // Update visibility (MPEG-2 Target only for mplex + MPEG-2)
-  updateMuxerVisibility();
 }

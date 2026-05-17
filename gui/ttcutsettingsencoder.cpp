@@ -298,3 +298,11 @@ void TTCutSettingsEncoder::onEncodingModeChanged(int state)
 {
   gbCodecSettings->setEnabled(state == Qt::Checked);
 }
+
+void TTCutSettingsEncoder::setMode(Mode m)
+{
+  bool isOverride = (m == Override);
+  cbCodec->setEnabled(!isOverride);
+  cbPreviewPreset->setVisible(!isOverride);
+  lblPreviewPreset->setVisible(!isOverride);
+}

@@ -36,11 +36,11 @@
 #include "../common/ttsettings.h"
 
 #include <sys/statvfs.h>
-#include <math.h>
 #include <QApplication>
 #include <QDir>
 #include <QFileDialog>
 #include <QIcon>
+#include <QStandardItemModel>
 #include <QStyle>
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -51,8 +51,7 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
 {
   setupUi(this);
 
-  // Audio-only mode: hide encoder/muxer tabs (irrelevant for audio extraction)
-  // and show the audio-format selector. Default values come from QSettings.
+  // Audio-only mode: show the audio-format selector.
   gbAudioOnly->setVisible(audioOnly);
   if (audioOnly) {
     TTCut::populateAudioOnlyFormatCombo(cbAudioOnlyFormat);
@@ -74,26 +73,64 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   connect(okButton,     &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgStart);
   connect(cancelButton, &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgCancel);
 
+  // Populate container and mux-target combos
+  populateMuxerProg();
+  populateMuxTarget();
+
+  // rbCreateMuxScript / rbMuxStreams
+  int muxMode = TTSettings::instance()->muxMode();
+  rbCreateMuxScript->setChecked(muxMode == 1);
+  rbMuxStreams->setChecked(muxMode == 0);
+  connect(rbCreateMuxScript, &QRadioButton::clicked, this, [this](bool c) {
+    if (c) TTSettings::instance()->setMuxMode(1);
+  });
+  connect(rbMuxStreams, &QRadioButton::clicked, this, [this](bool c) {
+    if (c) TTSettings::instance()->setMuxMode(0);
+  });
+
+  // gbMuxOptions: MKV chapters + delete ES
+  cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
+  sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
+  connect(cbMkvCreateChapters, &QCheckBox::toggled, this, [](bool c) {
+    TTSettings::instance()->setMkvCreateChapters(c);
+  });
+  connect(sbMkvChapterInterval, qOverload<int>(&QSpinBox::valueChanged), this, [](int v) {
+    TTSettings::instance()->setMkvChapterInterval(v);
+  });
+
+  cbDeleteES->setChecked(TTSettings::instance()->muxDeleteES());
+  connect(cbDeleteES, &QCheckBox::toggled, this, [](bool c) {
+    TTSettings::instance()->setMuxDeleteES(c);
+  });
+
+  // cbMuxTarget persistence
+  connect(cbMuxTarget, qOverload<int>(&QComboBox::currentIndexChanged), this, [](int idx) {
+    TTSettings::instance()->setMpeg2Target(idx);
+  });
+
+  // Connect encoder codec changes to cut-dialog visibility logic
+  connect(encodingPage, &TTCutSettingsEncoder::codecChanged, this,
+          &TTCutAVCutDlg::onCodecChangedForVisibility);
+  connect(cbMuxerProg, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          &TTCutAVCutDlg::onMuxerProgChanged);
+
+  // Live filename updates: suffix toggle and codec change.
+  connect(cbAddSuffix,  &QCheckBox::toggled,                 this, &TTCutAVCutDlg::updateOutputFilename);
+  connect(encodingPage, &TTCutSettingsEncoder::codecChanged, this, &TTCutAVCutDlg::updateOutputFilename);
+
+  // Set encoder to Override-mode (codec selector disabled, preview-preset hidden)
+  encodingPage->setMode(TTCutSettingsEncoder::Override);
+
   // set the tabs data
   // ------------------------------------------------------------------
   setCommonData();
   encodingPage->setTabData();
-  muxingPage->setTabData();
 
-  // React to encoder codec changes (disable MPG row for H.264/H.265,
-  // update muxer visibility).
-  connect(encodingPage, &TTCutSettingsEncoder::codecChanged,
-          muxingPage,   &TTCutSettingsMuxer::onEncoderCodecChanged);
+  // Initial: codec-dependent visibility
+  onCodecChangedForVisibility(TTSettings::instance()->encoderCodec());
 
-  // Live filename updates: suffix toggle, codec change, container change.
-  // Wired before the initial onEncoderCodecChanged() sync below so that
-  // the very first container change (if any) propagates to the filename.
-  connect(cbAddSuffix,  &QCheckBox::toggled,                  this, &TTCutAVCutDlg::updateOutputFilename);
-  connect(encodingPage, &TTCutSettingsEncoder::codecChanged,  this, &TTCutAVCutDlg::updateOutputFilename);
-  connect(muxingPage,   &TTCutSettingsMuxer::containerChanged, this, &TTCutAVCutDlg::updateOutputFilename);
-
-  // Initial sync based on current codec.
-  muxingPage->onEncoderCodecChanged(TTSettings::instance()->encoderCodec());
+  // Free-space footer (one-shot)
+  updateFreeSpaceLine();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -112,7 +149,6 @@ void TTCutAVCutDlg::setGlobalData()
 {
   getCommonData();
   encodingPage->getTabData();
-  muxingPage->getTabData();
 
   if (gbAudioOnly->isVisible()) {
     TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
@@ -158,7 +194,7 @@ void TTCutAVCutDlg::onDirectoryOpen()
     qApp->processEvents();
   }
 
-  getFreeDiskSpace();
+  updateFreeSpaceLine();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -178,9 +214,7 @@ void TTCutAVCutDlg::setCommonData()
 
   // Populate the field with suffix + extension from current state.
   updateOutputFilename();
-
-  getFreeDiskSpace();
- }
+}
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Get tab data and set global parameter
@@ -203,60 +237,140 @@ void TTCutAVCutDlg::getCommonData()
   QString base = fi.completeBaseName();
   TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
                                                          TTSettings::instance()->encoderCodec()));
-
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Calculate the available diskspace
+ * Populate cbMuxerProg combo (MKV/MPG)
  */
-void TTCutAVCutDlg::getFreeDiskSpace()
+void TTCutAVCutDlg::populateMuxerProg()
 {
-	DfInfo rootFsInfo    = getDiskSpaceInfo("/");
-	DfInfo cutPathFsInfo = getDiskSpaceInfo(TTSettings::instance()->cutDirPath());
-
-	laPath1->setText(rootFsInfo.path);
-	laSize1->setText(QString("%1G").arg(rootFsInfo.size, 0, 'f', 0));
-	laUsed1->setText(QString("%1G").arg(rootFsInfo.used, 0, 'f', 0));
-	laFree1->setText(QString("%1G").arg(rootFsInfo.free, 0, 'f', 0));
-	laUsedPercent1->setText(QString("%1%").arg(rootFsInfo.percentUsed, 0, 'f', 0));
-
-	laPath2->setText(cutPathFsInfo.path);
-	laSize2->setText(QString("%1G").arg(cutPathFsInfo.size, 0, 'f', 0));
-	laUsed2->setText(QString("%1G").arg(cutPathFsInfo.used, 0, 'f', 0));
-	laFree2->setText(QString("%1G").arg(cutPathFsInfo.free, 0, 'f', 0));
-	laUsedPercent2->setText(QString("%1%").arg(cutPathFsInfo.percentUsed, 0, 'f', 0));
+  cbMuxerProg->blockSignals(true);
+  cbMuxerProg->clear();
+  cbMuxerProg->insertItem(0, "MKV (libav)", 1);
+  cbMuxerProg->insertItem(1, "MPG (mplex)", 0);
+  int idx = cbMuxerProg->findData(TTSettings::instance()->outputContainer());
+  cbMuxerProg->setCurrentIndex(idx >= 0 ? idx : 0);
+  cbMuxerProg->blockSignals(false);
 }
 
-DfInfo TTCutAVCutDlg::getDiskSpaceInfo(QString path)
+/* /////////////////////////////////////////////////////////////////////////////
+ * Populate cbMuxTarget combo (MPEG-2 mplex targets)
+ */
+void TTCutAVCutDlg::populateMuxTarget()
 {
-	struct statvfs fsInfo;
-	DfInfo dfInfo;
+  cbMuxTarget->clear();
+  cbMuxTarget->insertItem(0, "Generic MPEG1 (f0)");
+  cbMuxTarget->insertItem(1, "VCD (f1)");
+  cbMuxTarget->insertItem(2, "user-rate VCD (f2)");
+  cbMuxTarget->insertItem(3, "Generic MPEG2 (f3)");
+  cbMuxTarget->insertItem(4, "SVCD (f4)");
+  cbMuxTarget->insertItem(5, "user-rate SVCD (f5)");
+  cbMuxTarget->insertItem(6, "VCD Stills (f6)");
+  cbMuxTarget->insertItem(7, "DVD with NAV sectors (f8)");
+  cbMuxTarget->insertItem(8, "DVD (f9)");
+  cbMuxTarget->setCurrentIndex(TTSettings::instance()->mpeg2Target());
+}
 
-	dfInfo.path        = path;
-	dfInfo.size        = 0.0;
-	dfInfo.free        = 0.0;
-	dfInfo.used        = 0.0;
-	dfInfo.percentUsed = 0.0;
+/* /////////////////////////////////////////////////////////////////////////////
+ * Slot: cbMuxerProg selection changed
+ */
+void TTCutAVCutDlg::onMuxerProgChanged(int /*index*/)
+{
+  int value = cbMuxerProg->currentData().toInt();
+  TTSettings::instance()->setOutputContainer(value);
+  updateMuxerVisibility();
+  updateOutputFilename();
+}
 
-	if (statvfs(path.toLocal8Bit().constData(), &fsInfo) == -1) {
-		QString msg = QString("could not stat free disk space for %1!").arg(path);
-		log->errorMsg(__FILE__, __LINE__, msg);
-		return dfInfo;
-	}
+/* /////////////////////////////////////////////////////////////////////////////
+ * Slot: encoder codec changed — update MPG availability + visibility
+ */
+void TTCutAVCutDlg::onCodecChangedForVisibility(int codecIndex)
+{
+  // Disable MPG row for H.264/H.265
+  bool mpgSupported = (codecIndex == 0);
+  QStandardItemModel* model = qobject_cast<QStandardItemModel*>(cbMuxerProg->model());
+  if (model) {
+    QStandardItem* mpgItem = nullptr;
+    for (int i = 0; i < cbMuxerProg->count(); ++i) {
+      if (cbMuxerProg->itemData(i).toInt() == 0) {
+        mpgItem = model->item(i);
+        break;
+      }
+    }
+    if (mpgItem) {
+      Qt::ItemFlags f = mpgItem->flags();
+      mpgItem->setFlags(mpgSupported ? (f | Qt::ItemIsEnabled) : (f & ~Qt::ItemIsEnabled));
+    }
+  }
 
-	double kBlockSize   = 1024.0 / fsInfo.f_frsize;
-	double kSpace       = fsInfo.f_blocks / kBlockSize / 1024.0 / 1024.0;
-	double kFreeNonRoot = fsInfo.f_bavail / kBlockSize / 1024.0 / 1024.0;
-	double kFreeTotal   = fsInfo.f_bfree  / kBlockSize / 1024.0 / 1024.0;
-	double kUsed        = kSpace - kFreeTotal;
-	double percentUsed  = round(kUsed / kSpace * 100.0);
+  // Fall back to MKV if current container is MPG but codec doesn't support it
+  if (!mpgSupported && cbMuxerProg->currentData().toInt() == 0) {
+    int mkvIdx = cbMuxerProg->findData(1);
+    if (mkvIdx >= 0) cbMuxerProg->setCurrentIndex(mkvIdx);
+  }
 
-	dfInfo.size  = kSpace;
-	dfInfo.free  = kFreeNonRoot;
-	dfInfo.used  = kUsed;
-	dfInfo.percentUsed = percentUsed;
+  updateMuxerVisibility();
+}
 
-	return dfInfo;
+/* /////////////////////////////////////////////////////////////////////////////
+ * Update muxer-related widget visibility based on current container + codec
+ */
+void TTCutAVCutDlg::updateMuxerVisibility()
+{
+  int container = cbMuxerProg->currentData().toInt();
+  bool isMpg = (container == 0);
+  bool isMkv = (container == 1);
+
+  cbMuxTarget->setVisible(isMpg);
+  laMuxTarget->setVisible(isMpg);
+  gbMuxMode->setVisible(isMpg);
+
+  cbMkvCreateChapters->setVisible(isMkv);
+  sbMkvChapterInterval->setVisible(isMkv);
+  laMkvInterval->setVisible(isMkv);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Update footer free-space line (called once at constructor + after path change)
+ */
+void TTCutAVCutDlg::updateFreeSpaceLine()
+{
+  auto formatBytes = [](quint64 b) -> QString {
+    if (b >= (1ULL<<30)) return QString::number(b / double(1ULL<<30), 'f', 0) + "G";
+    if (b >= (1ULL<<20)) return QString::number(b / double(1ULL<<20), 'f', 0) + "M";
+    return QString::number(b / double(1ULL<<10), 'f', 0) + "K";
+  };
+
+  auto colorFor = [](double pctUsed) -> QString {
+    if (pctUsed >= 90.0) return "red";
+    if (pctUsed >= 70.0) return "orange";
+    return "green";
+  };
+
+  auto driveInfo = [&](const QString& path) -> QString {
+    struct statvfs sv;
+    if (statvfs(path.toLocal8Bit().constData(), &sv) != 0) return QString();
+    quint64 total = quint64(sv.f_blocks) * sv.f_frsize;
+    quint64 free  = quint64(sv.f_bavail) * sv.f_frsize;
+    if (total == 0) return QString();
+    double pctUsed = 100.0 * (1.0 - double(free) / double(total));
+    return QString("<span style='color:%1'>&#x25CF;</span> %2: %3 frei (%4%)")
+             .arg(colorFor(pctUsed))
+             .arg(QDir(path).dirName().isEmpty() ? path : QDir(path).dirName())
+             .arg(formatBytes(free))
+             .arg(int(pctUsed));
+  };
+
+  QStringList parts;
+  const QString root = "/";
+  const QString cutDir = TTSettings::instance()->cutDirPath();
+  parts << driveInfo(root);
+  if (!cutDir.isEmpty() && cutDir != root) parts << driveInfo(cutDir);
+  // Remove empty entries (statvfs failure)
+  parts.removeAll(QString());
+
+  laFreeSpace->setText(parts.join(" &nbsp;&middot;&nbsp; "));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -307,8 +421,6 @@ void TTCutAVCutDlg::updateOutputFilename()
   QString newText = base + "." + ext;
 
   // Idempotency guard: setText() emits textChanged unconditionally.
-  // If anything connects to that signal in the future, this prevents
-  // re-entrant loops.
   if (leOutputFile->text() != newText) {
     leOutputFile->setText(newText);
   }
