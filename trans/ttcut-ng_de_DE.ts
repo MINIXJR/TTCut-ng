@@ -1742,43 +1742,60 @@ Ausgabedatei:
     <name>TTCutSettingsAudio</name>
     <message>
         <location filename="../ui/ttcutsettingsaudio.ui" line="8"/>
-        <source>Audio &amp;&amp; Sprache</source>
-        <translation type="unfinished"></translation>
+        <source>Audio &amp; Sprache</source>
+        <translation>Audio &amp; Sprache</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsaudio.ui" line="12"/>
         <source>Sprach-Präferenz</source>
-        <translation type="unfinished"></translation>
+        <translation>Sprach-Präferenz</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsaudio.ui" line="14"/>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="16"/>
         <source>Sprachreihenfolge (z.B. deu,eng):</source>
-        <translation type="unfinished"></translation>
+        <translation>Sprachreihenfolge (z.B. deu,eng):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsaudio.ui" line="15"/>
-        <source>z.B. deu,eng,fra</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingsaudio.ui" line="21"/>
-        <source>Audio-Optionen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="17"/>
         <location filename="../ui/ttcutsettingsaudio.ui" line="23"/>
+        <source>Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</source>
+        <translation>Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="22"/>
+        <source>z.B. deu,eng,fra</source>
+        <translation>z.B. deu,eng,fra</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="31"/>
+        <source>Audio-Optionen</source>
+        <translation>Audio-Optionen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="35"/>
         <source>AC3 Kanalformat an Schnitten normalisieren</source>
-        <translation type="unfinished"></translation>
+        <translation>AC3 Kanalformat an Schnitten normalisieren</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsaudio.ui" line="26"/>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="36"/>
+        <source>AC3-Kanalformat (acmod) an Cut-Punkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</source>
+        <translation>AC3-Kanalformat (acmod) an Cut-Punkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="43"/>
         <source>Audio-Burst-Schwellwert (dB, 0=aus):</source>
-        <translation type="unfinished"></translation>
+        <translation>Audio-Burst-Schwellwert (dB, 0=aus):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsaudio.ui" line="27"/>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="44"/>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="52"/>
+        <source>Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</source>
+        <translation>Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="51"/>
         <source> dB</source>
-        <translation type="unfinished"></translation>
+        <translation> dB</translation>
     </message>
 </context>
 <context>
@@ -1930,9 +1947,13 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsEncoder</name>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="13"/>
         <source>Encoder Settings</source>
-        <translation>Encoder-Einstellungen</translation>
+        <translation type="vanished">Encoder-Einstellungen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="13"/>
+        <source>Encoder-Standards</source>
+        <translation>Encoder-Standards</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="19"/>
@@ -1945,54 +1966,88 @@ Ausgabedatei:
         <translation>Encoder-Modus verwenden (Neu-Enkodierung an Schnittpunkten)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="35"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="28"/>
+        <source>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
+        <translation>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="38"/>
         <source>Codec Settings</source>
         <translation>Codec-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="41"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="44"/>
         <source>Codec:</source>
         <translation>Codec:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="71"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="47"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="60"/>
+        <source>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</source>
+        <translation>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="80"/>
         <source>Preset:</source>
         <translation>Voreinstellung:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="88"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="83"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="96"/>
+        <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
+        <translation>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="103"/>
         <source>Profile:</source>
         <translation>Profil:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="105"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="106"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="119"/>
+        <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
+        <translation>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="126"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="139"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="150"/>
         <source>Quality (CRF):</source>
         <translation>Qualität (CRF):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="145"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="129"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="163"/>
+        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</source>
+        <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="172"/>
         <source>Lower CRF = better quality, larger file. Typical values: 18-28</source>
         <translation>Niedriger CRF = bessere Qualität, größere Datei. Typische Werte: 18-28</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="158"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="185"/>
         <source>Preview Settings</source>
         <translation>Vorschau-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="164"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="191"/>
         <source>Preview Preset:</source>
         <translation>Vorschau-Voreinstellung:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="177"/>
-        <source>Encoder preset for preview generation (faster = less quality but quicker preview)</source>
-        <translation>Encoder-Voreinstellung für Vorschau-Generierung (schneller = weniger Qualität, aber schnellere Vorschau)</translation>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="194"/>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="207"/>
+        <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
+        <translation>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoder.ui" line="197"/>
+        <source>Encoder preset for preview generation (faster = less quality but quicker preview)</source>
+        <translation type="vanished">Encoder-Voreinstellung für Vorschau-Generierung (schneller = weniger Qualität, aber schnellere Vorschau)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoder.ui" line="227"/>
         <source>Faster preset = quicker preview generation. Quality only affects re-encoded frames at cut points.</source>
         <translation>Schnellere Voreinstellung = schnellere Vorschau-Generierung. Qualität betrifft nur neu encodierte Frames an Schnittpunkten.</translation>
     </message>
@@ -2033,6 +2088,131 @@ Ausgabedatei:
         <location filename="../gui/ttcutsettingsencoder.cpp" line="157"/>
         <source>H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality</source>
         <translation>H.265 CRF: 0 = verlustfrei, 20 = Standard (visuell verlustfrei), 51 = schlechteste Qualität</translation>
+    </message>
+</context>
+<context>
+    <name>TTCutSettingsEncoderDefaults</name>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="8"/>
+        <source>Encoder-Standards</source>
+        <translation>Encoder-Standards</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="14"/>
+        <source>Encoder Mode</source>
+        <translation>Encoder-Modus</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="18"/>
+        <source>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</source>
+        <translation>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="19"/>
+        <source>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
+        <translation>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="29"/>
+        <source>MPEG-2</source>
+        <translation>MPEG-2</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="33"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="80"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="127"/>
+        <source>Preset:</source>
+        <translation>Voreinstellung:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="34"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="40"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="81"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="87"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="128"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="134"/>
+        <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
+        <translation>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="45"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="92"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="139"/>
+        <source>Profile:</source>
+        <translation>Profil:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="46"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="52"/>
+        <source>Encoder-Profile (Kompatibilität).</source>
+        <translation>Encoder-Profile (Kompatibilität).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="57"/>
+        <source>Quality (qscale):</source>
+        <translation>Qualität (qscale):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="58"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="66"/>
+        <source>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</source>
+        <translation>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="76"/>
+        <source>H.264 / AVC</source>
+        <translation>H.264 / AVC</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="93"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="99"/>
+        <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
+        <translation>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="104"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="151"/>
+        <source>Quality (CRF):</source>
+        <translation>Qualität (CRF):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="105"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
+        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</source>
+        <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="123"/>
+        <source>H.265 / HEVC</source>
+        <translation>H.265 / HEVC</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="140"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="146"/>
+        <source>Encoder-Profile. main = Standard, main10 = 10-Bit.</source>
+        <translation>Encoder-Profile. main = Standard, main10 = 10-Bit.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="152"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="160"/>
+        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</source>
+        <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="170"/>
+        <source>Preview</source>
+        <translation>Vorschau</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="174"/>
+        <source>Preview-Preset:</source>
+        <translation>Preview-Preset:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="175"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="181"/>
+        <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
+        <translation>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
     </message>
 </context>
 <context>
@@ -2122,29 +2302,22 @@ Ausgabedatei:
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="12"/>
-        <source>Verzeichnisse</source>
-        <translation type="unfinished"></translation>
+        <location filename="../ui/ttcutsettingsgeneral.ui" line="13"/>
+        <source>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</source>
+        <translation>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="14"/>
         <source>Tmp-Verzeichnis:</source>
-        <translation>Tmp-Verzeichnis:</translation>
+        <translation type="vanished">Tmp-Verzeichnis:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="18"/>
-        <source>…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingsgeneral.ui" line="24"/>
+        <location filename="../ui/ttcutsettingsgeneral.ui" line="12"/>
         <source>Schnellsuche aktivieren</source>
         <translation>Schnellsuche aktivieren</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsgeneral.cpp" line="31"/>
         <source>Tmp-Verzeichnis wählen</source>
-        <translation>Tmp-Verzeichnis wählen</translation>
+        <translation type="vanished">Tmp-Verzeichnis wählen</translation>
     </message>
 </context>
 <context>
@@ -2160,64 +2333,119 @@ Ausgabedatei:
         <translation>Basis-Logging</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="14"/>
-        <source>Logfile erstellen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="15"/>
-        <source>Ausgabe auf Konsole</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingslogging.ui" line="16"/>
-        <source>Erweiterte Meldungen</source>
-        <translation type="unfinished"></translation>
+        <source>Logfile erstellen</source>
+        <translation>Logfile erstellen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="17"/>
+        <source>Logfile schreiben (Pfad in &apos;Pfade&apos;-Kategorie).</source>
+        <translation>Logfile schreiben (Pfad in &apos;Pfade&apos;-Kategorie).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingslogging.ui" line="22"/>
+        <source>Ausgabe auf Konsole</source>
+        <translation>Ausgabe auf Konsole</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="23"/>
+        <source>Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</source>
+        <translation>Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="28"/>
+        <source>Erweiterte Meldungen</source>
+        <translation>Erweiterte Meldungen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="29"/>
+        <source>Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</source>
+        <translation>Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="37"/>
         <source>Erweiterte Logging-Optionen</source>
         <translation>Erweiterte Logging-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="24"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="41"/>
         <source>Video-Index-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>Video-Index-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="25"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="42"/>
+        <source>Detaillierte Meldungen beim Aufbau des Video-Index.</source>
+        <translation>Detaillierte Meldungen beim Aufbau des Video-Index.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="47"/>
         <source>FFmpeg-Decoder-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>FFmpeg-Decoder-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="26"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="48"/>
+        <source>FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</source>
+        <translation>FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="53"/>
         <source>Smart-Cut-Engine-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>Smart-Cut-Engine-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="27"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="54"/>
+        <source>Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</source>
+        <translation>Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="59"/>
         <source>MKV-Mux-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>MKV-Mux-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="28"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="60"/>
+        <source>MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</source>
+        <translation>MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="65"/>
         <source>Cut-Pipeline-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>Cut-Pipeline-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="29"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="66"/>
+        <source>Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</source>
+        <translation>Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="71"/>
         <source>AV-Stream-Parser-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>AV-Stream-Parser-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="30"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="72"/>
+        <source>AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</source>
+        <translation>AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="77"/>
         <source>UI-Ereignis-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>UI-Ereignis-Informationen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingslogging.ui" line="31"/>
+        <location filename="../ui/ttcutsettingslogging.ui" line="78"/>
+        <source>GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</source>
+        <translation>GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="83"/>
         <source>libav-Decoder/Muxer-Informationen</source>
-        <translation type="unfinished"></translation>
+        <translation>libav-Decoder/Muxer-Informationen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="84"/>
+        <source>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</source>
+        <translation>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</translation>
     </message>
 </context>
 <context>
@@ -2279,50 +2507,127 @@ Ausgabedatei:
         <translation type="vanished">Ergebnis-Streams abschließend muxen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="68"/>
         <source>Multiplexen-Defaults</source>
-        <translation>Multiplexen-Defaults</translation>
+        <translation type="vanished">Multiplexen-Defaults</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="20"/>
         <source>MKV Chapter Settings</source>
-        <translation>MKV-Kapitel-Einstellungen</translation>
+        <translation type="vanished">MKV-Kapitel-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="26"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
+        <source>Multiplexen-Standards</source>
+        <translation>Multiplexen-Standards</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="21"/>
+        <source>Container-Standards</source>
+        <translation>Container-Standards</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="27"/>
+        <source>MKV (libav)</source>
+        <translation>MKV (libav)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="31"/>
         <source>Kapitel erstellen alle</source>
-        <translation type="unfinished"></translation>
+        <translation>Kapitel erstellen alle</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="45"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="33"/>
+        <source>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</source>
+        <translation>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="41"/>
         <source> Minuten</source>
-        <translation type="unfinished"></translation>
+        <translation> Minuten</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="42"/>
+        <source>Zusätzliche Auto-Kapitel alle X Minuten.</source>
+        <translation>Zusätzliche Auto-Kapitel alle X Minuten.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="58"/>
+        <source>MPG (mplex)</source>
+        <translation>MPG (mplex)</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="62"/>
+        <source>Mux-Ziel:</source>
+        <translation>Mux-Ziel:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="63"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="68"/>
+        <source>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</source>
+        <translation>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
+        <source>Mux-Modus:</source>
+        <translation>Mux-Modus:</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="74"/>
-        <source>ES-Files nach Mux löschen</source>
-        <translation type="unfinished"></translation>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="79"/>
+        <source>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</source>
+        <translation>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="84"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="93"/>
+        <source>Allgemein</source>
+        <translation>Allgemein</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="97"/>
+        <source>ES-Files nach Mux löschen</source>
+        <translation>ES-Files nach Mux löschen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="98"/>
+        <source>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</source>
+        <translation>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="108"/>
         <source>Per-Codec Standard-Container</source>
         <translation>Per-Codec Standard-Container</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="90"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="112"/>
         <source>MPEG-2:</source>
-        <translation type="unfinished"></translation>
+        <translation>MPEG-2:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="113"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="118"/>
+        <source>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</source>
+        <translation>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="123"/>
         <source>H.264:</source>
-        <translation type="unfinished"></translation>
+        <translation>H.264:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="110"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="124"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="129"/>
+        <source>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</source>
+        <translation>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="134"/>
         <source>H.265:</source>
-        <translation type="unfinished"></translation>
+        <translation>H.265:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="135"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="140"/>
+        <source>Standard-Container für H.265-Output. Nur MKV verfügbar.</source>
+        <translation>Standard-Container für H.265-Output. Nur MKV verfügbar.</translation>
     </message>
     <message>
         <source>Create chapters every</source>
@@ -2370,52 +2675,94 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="8"/>
         <source>Navigation</source>
-        <translation type="unfinished">Navigation</translation>
+        <translation>Navigation</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="12"/>
         <source>Schrittweiten (Frames)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="14"/>
-        <source>Pfeiltasten:</source>
-        <translation type="unfinished"></translation>
+        <translation>Schrittweiten (Frames)</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="16"/>
-        <source>Slider-Klick:</source>
-        <translation type="unfinished"></translation>
+        <source>Pfeiltasten:</source>
+        <translation>Pfeiltasten:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="18"/>
-        <source>Bild auf/ab:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="20"/>
-        <source>Alt-Taste:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="22"/>
-        <source>Strg-Taste:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="17"/>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="24"/>
+        <source>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</source>
+        <translation>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="29"/>
+        <source>Slider-Klick:</source>
+        <translation>Slider-Klick:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="30"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="37"/>
+        <source>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</source>
+        <translation>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="42"/>
+        <source>Bild auf/ab:</source>
+        <translation>Bild auf/ab:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="43"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="50"/>
+        <source>Anzahl Frames bei Bild auf/ab Taste.</source>
+        <translation>Anzahl Frames bei Bild auf/ab Taste.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="55"/>
+        <source>Alt-Taste:</source>
+        <translation>Alt-Taste:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="56"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="63"/>
+        <source>Anzahl Frames bei Alt+Pfeil.</source>
+        <translation>Anzahl Frames bei Alt+Pfeil.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="68"/>
+        <source>Strg-Taste:</source>
+        <translation>Strg-Taste:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="69"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="76"/>
+        <source>Anzahl Frames bei Strg+Pfeil.</source>
+        <translation>Anzahl Frames bei Strg+Pfeil.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="81"/>
         <source>Mausrad:</source>
-        <translation type="unfinished"></translation>
+        <translation>Mausrad:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="31"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="82"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="89"/>
+        <source>Anzahl Frames pro Mausrad-Tick.</source>
+        <translation>Anzahl Frames pro Mausrad-Tick.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="97"/>
         <source>Schnellsprung</source>
-        <translation type="unfinished"></translation>
+        <translation>Schnellsprung</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="33"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="101"/>
         <source>Intervall (Sekunden, 0=alle):</source>
-        <translation type="unfinished"></translation>
+        <translation>Intervall (Sekunden, 0=alle):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="102"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="109"/>
+        <source>Intervall für den QuickJump-Dialog in Sekunden.</source>
+        <translation>Intervall für den QuickJump-Dialog in Sekunden.</translation>
     </message>
 </context>
 <context>
@@ -2427,81 +2774,139 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="12"/>
-        <source>Logfile</source>
-        <translation type="unfinished">Logdatei</translation>
+        <source>Temporäres Verzeichnis</source>
+        <translation>Temporäres Verzeichnis</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingspaths.ui" line="14"/>
-        <source>Logfile-Pfad:</source>
-        <translation type="unfinished"></translation>
+        <location filename="../ui/ttcutsettingspaths.ui" line="16"/>
+        <source>Tmp-Verzeichnis:</source>
+        <translation>Tmp-Verzeichnis:</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="17"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="24"/>
+        <source>Verzeichnis für temporäre Files während Cut/Mux (audio.mp2, video.m2v, etc.).</source>
+        <translation>Verzeichnis für temporäre Files während Cut/Mux (audio.mp2, video.m2v, etc.).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="39"/>
+        <source>Logfile</source>
+        <translation>Logdatei</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="43"/>
+        <source>Logfile-Pfad:</source>
+        <translation>Logfile-Pfad:</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="44"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="52"/>
+        <source>Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</source>
+        <translation>Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="51"/>
         <source>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</source>
-        <translation type="unfinished"></translation>
+        <translation>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingspaths.ui" line="18"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="29"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="57"/>
         <source>…</source>
-        <translation type="unfinished"></translation>
+        <translation>…</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingspaths.cpp" line="34"/>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="37"/>
+        <source>Tmp-Verzeichnis wählen</source>
+        <translation>Tmp-Verzeichnis wählen</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="44"/>
         <source>Logfile wählen</source>
-        <translation type="unfinished"></translation>
+        <translation>Logfile wählen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingspaths.cpp" line="36"/>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="46"/>
         <source>Log-Dateien (*.log);;Alle Dateien (*)</source>
-        <translation type="unfinished"></translation>
+        <translation>Log-Dateien (*.log);;Alle Dateien (*)</translation>
     </message>
 </context>
 <context>
     <name>TTCutSettingsSearch</name>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="8"/>
-        <source>Suche &amp;&amp; Preview</source>
-        <translation type="unfinished"></translation>
+        <source>Suche &amp; Preview</source>
+        <translation>Suche &amp; Preview</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="12"/>
         <source>Suche</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="14"/>
-        <source>Suchbereich (Sekunden):</source>
-        <translation type="unfinished"></translation>
+        <translation>Suche</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="16"/>
+        <source>Suchbereich (Sekunden):</source>
+        <translation>Suchbereich (Sekunden):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="17"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="24"/>
+        <source>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</source>
+        <translation>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="29"/>
         <source>Such-Worker-Threads (0 = auto):</source>
-        <translation type="unfinished"></translation>
+        <translation>Such-Worker-Threads (0 = auto):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="23"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="30"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="37"/>
+        <source>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</source>
+        <translation>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="45"/>
         <source>Preview</source>
-        <translation type="unfinished">Vorschau</translation>
+        <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="25"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="49"/>
         <source>Vorschau-Länge (Sekunden):</source>
-        <translation type="unfinished"></translation>
+        <translation>Vorschau-Länge (Sekunden):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="32"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="50"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="57"/>
+        <source>Länge der Preview-Clips um Cut-Punkte in Sekunden.</source>
+        <translation>Länge der Preview-Clips um Cut-Punkte in Sekunden.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="65"/>
         <source>Defective Frame Grouping</source>
-        <translation type="unfinished">Gruppierung defekter Frames</translation>
+        <translation>Gruppierung defekter Frames</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="34"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="69"/>
         <source>Gruppierungsabstand (Sekunden):</source>
-        <translation type="unfinished"></translation>
+        <translation>Gruppierungsabstand (Sekunden):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="36"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="70"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="77"/>
+        <source>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</source>
+        <translation>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="82"/>
         <source>Start-Offset (Sekunden):</source>
-        <translation type="unfinished"></translation>
+        <translation>Start-Offset (Sekunden):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="83"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="90"/>
+        <source>Zeitlicher Offset für Cluster-Detection in Sekunden.</source>
+        <translation>Zeitlicher Offset für Cluster-Detection in Sekunden.</translation>
     </message>
 </context>
 <context>
@@ -3367,7 +3772,7 @@ Unterstützte Formate:
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="6"/>
         <source>TTCut-ng — Einstellungen</source>
-        <translation type="unfinished"></translation>
+        <translation>TTCut-ng — Einstellungen</translation>
     </message>
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="22"/>
@@ -3377,49 +3782,57 @@ Unterstützte Formate:
     <message>
         <location filename="../ui/ttsettingsdialog.ui" line="23"/>
         <source>Abbrechen</source>
-        <translation type="unfinished">Abbrechen</translation>
+        <translation>Abbrechen</translation>
     </message>
     <message>
         <source>Cancel</source>
         <translation type="vanished">Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="52"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="50"/>
         <source>Allgemein</source>
         <translation>Allgemein</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="55"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="53"/>
         <source>Navigation</source>
-        <translation type="unfinished">Navigation</translation>
+        <translation>Navigation</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="58"/>
-        <source>Suche &amp;&amp; Preview</source>
-        <translation type="unfinished"></translation>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="56"/>
+        <source>Suche &amp; Preview</source>
+        <translation>Suche &amp; Preview</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="61"/>
-        <source>Audio &amp;&amp; Sprache</source>
-        <translation type="unfinished"></translation>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="59"/>
+        <source>Audio &amp; Sprache</source>
+        <translation>Audio &amp; Sprache</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="64"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="62"/>
+        <source>Encoder-Standards</source>
+        <translation>Encoder-Standards</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="65"/>
+        <source>Multiplexen-Standards</source>
+        <translation>Multiplexen-Standards</translation>
+    </message>
+    <message>
         <source>Encoder-Defaults</source>
-        <translation>Encoder-Defaults</translation>
+        <translation type="vanished">Encoder-Defaults</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="67"/>
         <source>Multiplexen-Defaults</source>
-        <translation>Multiplexen-Defaults</translation>
+        <translation type="vanished">Multiplexen-Defaults</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="70"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="68"/>
         <source>Pfade</source>
         <translation>Pfade</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="73"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="71"/>
         <source>Logging</source>
         <translation>Logging</translation>
     </message>

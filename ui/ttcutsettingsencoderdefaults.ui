@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TTCutSettingsEncoderDefaults</class>
+ <widget class="QGroupBox" name="TTCutSettingsEncoderDefaults">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>500</width><height>560</height></rect>
+  </property>
+  <property name="title"><string>Encoder-Standards</string></property>
+  <layout class="QVBoxLayout">
+
+   <!-- Encoder Mode -->
+   <item>
+    <widget class="QGroupBox" name="gbEncoderMode">
+     <property name="title"><string>Encoder Mode</string></property>
+     <layout class="QVBoxLayout">
+      <item>
+       <widget class="QCheckBox" name="cbEncodingMode">
+        <property name="text"><string>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</string></property>
+        <property name="toolTip"><string>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- MPEG-2 -->
+   <item>
+    <widget class="QGroupBox" name="gbMpeg2">
+     <property name="title"><string>MPEG-2</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laMpeg2Preset">
+        <property name="text"><string>Preset:</string></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbMpeg2Preset">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laMpeg2Profile">
+        <property name="text"><string>Profile:</string></property>
+        <property name="toolTip"><string>Encoder-Profile (Kompatibilität).</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="cbMpeg2Profile">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Profile (Kompatibilität).</string></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="laMpeg2Crf">
+        <property name="text"><string>Quality (qscale):</string></property>
+        <property name="toolTip"><string>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="sbMpeg2Crf">
+        <property name="minimum"><number>2</number></property>
+        <property name="maximum"><number>31</number></property>
+        <property name="value"><number>2</number></property>
+        <property name="toolTip"><string>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- H.264 -->
+   <item>
+    <widget class="QGroupBox" name="gbH264">
+     <property name="title"><string>H.264 / AVC</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laH264Preset">
+        <property name="text"><string>Preset:</string></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbH264Preset">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laH264Profile">
+        <property name="text"><string>Profile:</string></property>
+        <property name="toolTip"><string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="cbH264Profile">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="laH264Crf">
+        <property name="text"><string>Quality (CRF):</string></property>
+        <property name="toolTip"><string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="sbH264Crf">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>51</number></property>
+        <property name="value"><number>18</number></property>
+        <property name="toolTip"><string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- H.265 -->
+   <item>
+    <widget class="QGroupBox" name="gbH265">
+     <property name="title"><string>H.265 / HEVC</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laH265Preset">
+        <property name="text"><string>Preset:</string></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbH265Preset">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laH265Profile">
+        <property name="text"><string>Profile:</string></property>
+        <property name="toolTip"><string>Encoder-Profile. main = Standard, main10 = 10-Bit.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="cbH265Profile">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Profile. main = Standard, main10 = 10-Bit.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="laH265Crf">
+        <property name="text"><string>Quality (CRF):</string></property>
+        <property name="toolTip"><string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="sbH265Crf">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>51</number></property>
+        <property name="value"><number>20</number></property>
+        <property name="toolTip"><string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Preview Preset -->
+   <item>
+    <widget class="QGroupBox" name="gbPreview">
+     <property name="title"><string>Preview</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laPreviewPreset">
+        <property name="text"><string>Preview-Preset:</string></property>
+        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbPreviewPreset">
+        <property name="minimumContentsLength"><number>12</number></property>
+        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <item>
+    <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
+   </item>
+
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

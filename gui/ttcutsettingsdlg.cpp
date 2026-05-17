@@ -3,7 +3,7 @@
 #include "ttcutsettingsnavigation.h"
 #include "ttcutsettingssearch.h"
 #include "ttcutsettingsaudio.h"
-#include "ttcutsettingsencoder.h"
+#include "ttcutsettingsencoderdefaults.h"
 #include "ttcutsettingsmuxer.h"
 #include "ttcutsettingspaths.h"
 #include "ttcutsettingslogging.h"
@@ -25,12 +25,10 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   pageNavigation = new TTCutSettingsNavigation(this);
   pageSearch     = new TTCutSettingsSearch(this);
   pageAudio      = new TTCutSettingsAudio(this);
-  pageEncoder    = new TTCutSettingsEncoder(this);
+  pageEncoder    = new TTCutSettingsEncoderDefaults(this);
   pageMuxer      = new TTCutSettingsMuxer(this);
   pagePaths      = new TTCutSettingsPaths(this);
   pageLogging    = new TTCutSettingsLogging(this);
-
-  pageEncoder->setMode(TTCutSettingsEncoder::Defaults);
 
   // Load data into all pages
   pageGeneral->setTabData();
@@ -55,16 +53,16 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   addCat(tr("Navigation"),
          QIcon::fromTheme("go-jump", s->standardIcon(QStyle::SP_ArrowRight)),
          pageNavigation);
-  addCat(tr("Suche && Preview"),
+  addCat(tr("Suche & Preview"),
          QIcon::fromTheme("system-search", s->standardIcon(QStyle::SP_FileDialogContentsView)),
          pageSearch);
-  addCat(tr("Audio && Sprache"),
+  addCat(tr("Audio & Sprache"),
          QIcon::fromTheme("audio-x-generic", s->standardIcon(QStyle::SP_MediaVolume)),
          pageAudio);
-  addCat(tr("Encoder-Defaults"),
+  addCat(tr("Encoder-Standards"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveCDIcon)),
          pageEncoder);
-  addCat(tr("Multiplexen-Defaults"),
+  addCat(tr("Multiplexen-Standards"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveHDIcon)),
          pageMuxer);
   addCat(tr("Pfade"),

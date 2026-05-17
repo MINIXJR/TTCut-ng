@@ -14,9 +14,6 @@ public:
 
     void setTabData();
     void saveTabData();
-
-private slots:
-    void onDirectoryOpen();
 };
 
 #endif

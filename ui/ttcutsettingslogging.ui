@@ -11,9 +11,24 @@
     <widget class="QGroupBox" name="gbLogBase">
      <property name="title"><string>Basis-Logging</string></property>
      <layout class="QVBoxLayout">
-      <item><widget class="QCheckBox" name="cbCreateLog"><property name="text"><string>Logfile erstellen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogConsole"><property name="text"><string>Ausgabe auf Konsole</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogExtended"><property name="text"><string>Erweiterte Meldungen</string></property></widget></item>
+      <item>
+       <widget class="QCheckBox" name="cbCreateLog">
+        <property name="text"><string>Logfile erstellen</string></property>
+        <property name="toolTip"><string>Logfile schreiben (Pfad in 'Pfade'-Kategorie).</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogConsole">
+        <property name="text"><string>Ausgabe auf Konsole</string></property>
+        <property name="toolTip"><string>Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogExtended">
+        <property name="text"><string>Erweiterte Meldungen</string></property>
+        <property name="toolTip"><string>Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -21,14 +36,54 @@
     <widget class="QGroupBox" name="gbLogPlus">
      <property name="title"><string>Erweiterte Logging-Optionen</string></property>
      <layout class="QVBoxLayout">
-      <item><widget class="QCheckBox" name="cbLogPlusVideoIndex"><property name="text"><string>Video-Index-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusFFmpegDecoder"><property name="text"><string>FFmpeg-Decoder-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusSmartCut"><property name="text"><string>Smart-Cut-Engine-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusMkvMux"><property name="text"><string>MKV-Mux-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusCutPipeline"><property name="text"><string>Cut-Pipeline-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusAVStream"><property name="text"><string>AV-Stream-Parser-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusUI"><property name="text"><string>UI-Ereignis-Informationen</string></property></widget></item>
-      <item><widget class="QCheckBox" name="cbLogPlusLibav"><property name="text"><string>libav-Decoder/Muxer-Informationen</string></property></widget></item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusVideoIndex">
+        <property name="text"><string>Video-Index-Informationen</string></property>
+        <property name="toolTip"><string>Detaillierte Meldungen beim Aufbau des Video-Index.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusFFmpegDecoder">
+        <property name="text"><string>FFmpeg-Decoder-Informationen</string></property>
+        <property name="toolTip"><string>FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusSmartCut">
+        <property name="text"><string>Smart-Cut-Engine-Informationen</string></property>
+        <property name="toolTip"><string>Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusMkvMux">
+        <property name="text"><string>MKV-Mux-Informationen</string></property>
+        <property name="toolTip"><string>MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusCutPipeline">
+        <property name="text"><string>Cut-Pipeline-Informationen</string></property>
+        <property name="toolTip"><string>Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusAVStream">
+        <property name="text"><string>AV-Stream-Parser-Informationen</string></property>
+        <property name="toolTip"><string>AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusUI">
+        <property name="text"><string>UI-Ereignis-Informationen</string></property>
+        <property name="toolTip"><string>GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="cbLogPlusLibav">
+        <property name="text"><string>libav-Decoder/Muxer-Informationen</string></property>
+        <property name="toolTip"><string>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

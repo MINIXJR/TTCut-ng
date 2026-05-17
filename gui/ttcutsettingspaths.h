@@ -14,6 +14,7 @@ public:
     void saveTabData();
 
 private slots:
+    void onTmpDirectoryOpen();
     void onLogfileOpen();
 };
 

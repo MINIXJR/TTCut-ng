@@ -11,18 +11,84 @@
     <widget class="QGroupBox" name="gbNavigation">
      <property name="title"><string>Schrittweiten (Frames)</string></property>
      <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laArrow"><property name="text"><string>Pfeiltasten:</string></property></widget></item>
-      <item row="0" column="1"><widget class="QSpinBox" name="sbArrowKeyPlacement"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
-      <item row="1" column="0"><widget class="QLabel" name="laSlider"><property name="text"><string>Slider-Klick:</string></property></widget></item>
-      <item row="1" column="1"><widget class="QSpinBox" name="sbSliderClickPlacement"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
-      <item row="2" column="0"><widget class="QLabel" name="laPgUpDown"><property name="text"><string>Bild auf/ab:</string></property></widget></item>
-      <item row="2" column="1"><widget class="QSpinBox" name="sbPgUpDown"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
-      <item row="3" column="0"><widget class="QLabel" name="laAlt"><property name="text"><string>Alt-Taste:</string></property></widget></item>
-      <item row="3" column="1"><widget class="QSpinBox" name="sbAltDistance"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
-      <item row="4" column="0"><widget class="QLabel" name="laCtrl"><property name="text"><string>Strg-Taste:</string></property></widget></item>
-      <item row="4" column="1"><widget class="QSpinBox" name="sbCtrlDistance"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
-      <item row="5" column="0"><widget class="QLabel" name="laMouseWheel"><property name="text"><string>Mausrad:</string></property></widget></item>
-      <item row="5" column="1"><widget class="QSpinBox" name="sbMouseWheel"><property name="minimum"><number>1</number></property><property name="maximum"><number>1000</number></property></widget></item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="laArrow">
+        <property name="text"><string>Pfeiltasten:</string></property>
+        <property name="toolTip"><string>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="sbArrowKeyPlacement">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laSlider">
+        <property name="text"><string>Slider-Klick:</string></property>
+        <property name="toolTip"><string>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="sbSliderClickPlacement">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</string></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="laPgUpDown">
+        <property name="text"><string>Bild auf/ab:</string></property>
+        <property name="toolTip"><string>Anzahl Frames bei Bild auf/ab Taste.</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="sbPgUpDown">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Anzahl Frames bei Bild auf/ab Taste.</string></property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="laAlt">
+        <property name="text"><string>Alt-Taste:</string></property>
+        <property name="toolTip"><string>Anzahl Frames bei Alt+Pfeil.</string></property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSpinBox" name="sbAltDistance">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Anzahl Frames bei Alt+Pfeil.</string></property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="laCtrl">
+        <property name="text"><string>Strg-Taste:</string></property>
+        <property name="toolTip"><string>Anzahl Frames bei Strg+Pfeil.</string></property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QSpinBox" name="sbCtrlDistance">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Anzahl Frames bei Strg+Pfeil.</string></property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="laMouseWheel">
+        <property name="text"><string>Mausrad:</string></property>
+        <property name="toolTip"><string>Anzahl Frames pro Mausrad-Tick.</string></property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QSpinBox" name="sbMouseWheel">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>1000</number></property>
+        <property name="toolTip"><string>Anzahl Frames pro Mausrad-Tick.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -30,8 +96,19 @@
     <widget class="QGroupBox" name="gbQuickJump">
      <property name="title"><string>Schnellsprung</string></property>
      <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laQJInterval"><property name="text"><string>Intervall (Sekunden, 0=alle):</string></property></widget></item>
-      <item row="0" column="1"><widget class="QSpinBox" name="sbQuickJumpInterval"><property name="minimum"><number>0</number></property><property name="maximum"><number>600</number></property></widget></item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="laQJInterval">
+        <property name="text"><string>Intervall (Sekunden, 0=alle):</string></property>
+        <property name="toolTip"><string>Intervall für den QuickJump-Dialog in Sekunden.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="sbQuickJumpInterval">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>600</number></property>
+        <property name="toolTip"><string>Intervall für den QuickJump-Dialog in Sekunden.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

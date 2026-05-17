@@ -8,7 +8,7 @@ class TTCutSettingsGeneral;
 class TTCutSettingsNavigation;
 class TTCutSettingsSearch;
 class TTCutSettingsAudio;
-class TTCutSettingsEncoder;
+class TTCutSettingsEncoderDefaults;
 class TTCutSettingsMuxer;
 class TTCutSettingsPaths;
 class TTCutSettingsLogging;
@@ -29,7 +29,7 @@ private:
     TTCutSettingsNavigation* pageNavigation;
     TTCutSettingsSearch*     pageSearch;
     TTCutSettingsAudio*      pageAudio;
-    TTCutSettingsEncoder*    pageEncoder;
+    TTCutSettingsEncoderDefaults* pageEncoder;
     TTCutSettingsMuxer*      pageMuxer;
     TTCutSettingsPaths*      pagePaths;
     TTCutSettingsLogging*    pageLogging;

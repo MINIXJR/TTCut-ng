@@ -7,129 +7,150 @@
     <x>0</x>
     <y>0</y>
     <width>500</width>
-    <height>280</height>
+    <height>380</height>
    </rect>
   </property>
   <property name="title">
-   <string>Multiplexen-Defaults</string>
+   <string>Multiplexen-Standards</string>
   </property>
   <layout class="QVBoxLayout">
+
+   <!-- Container-specific defaults -->
    <item>
-    <widget class="QGroupBox" name="gbMkvChapters">
-     <property name="title">
-      <string>MKV Chapter Settings</string>
-     </property>
-     <layout class="QHBoxLayout">
+    <widget class="QGroupBox" name="gbContainerDefaults">
+     <property name="title"><string>Container-Standards</string></property>
+     <layout class="QVBoxLayout">
+
+      <!-- MKV sub-group -->
       <item>
-       <widget class="QCheckBox" name="cbMkvCreateChapters">
-        <property name="text">
-         <string>Kapitel erstellen alle</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
+       <widget class="QGroupBox" name="gbMkv">
+        <property name="title"><string>MKV (libav)</string></property>
+        <layout class="QHBoxLayout">
+         <item>
+          <widget class="QCheckBox" name="cbMkvCreateChapters">
+           <property name="text"><string>Kapitel erstellen alle</string></property>
+           <property name="checked"><bool>true</bool></property>
+           <property name="toolTip"><string>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="sbMkvChapterInterval">
+           <property name="minimum"><number>1</number></property>
+           <property name="maximum"><number>60</number></property>
+           <property name="value"><number>5</number></property>
+           <property name="suffix"><string> Minuten</string></property>
+           <property name="toolTip"><string>Zusätzliche Auto-Kapitel alle X Minuten.</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer>
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+          </spacer>
+         </item>
+        </layout>
        </widget>
       </item>
+
+      <!-- MPG sub-group -->
       <item>
-       <widget class="QSpinBox" name="sbMkvChapterInterval">
-        <property name="minimum">
-         <number>1</number>
-        </property>
-        <property name="maximum">
-         <number>60</number>
-        </property>
-        <property name="value">
-         <number>5</number>
-        </property>
-        <property name="suffix">
-         <string> Minuten</string>
-        </property>
+       <widget class="QGroupBox" name="gbMpg">
+        <property name="title"><string>MPG (mplex)</string></property>
+        <layout class="QFormLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="laMpgTarget">
+           <property name="text"><string>Mux-Ziel:</string></property>
+           <property name="toolTip"><string>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QComboBox" name="cbMpgTarget">
+           <property name="toolTip"><string>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</string></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="laMpgMode">
+           <property name="text"><string>Mux-Modus:</string></property>
+           <property name="toolTip"><string>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="cbMpgMode">
+           <property name="toolTip"><string>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</string></property>
+          </widget>
+         </item>
+        </layout>
        </widget>
       </item>
-      <item>
-       <spacer>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
+
      </layout>
     </widget>
    </item>
+
+   <!-- Common settings -->
    <item>
-    <widget class="QGroupBox" name="gbMuxDefaults">
-     <property name="title">
-      <string>Multiplexen-Defaults</string>
-     </property>
-     <layout class="QFormLayout">
-      <item row="0" column="0" colspan="2">
+    <widget class="QGroupBox" name="gbCommon">
+     <property name="title"><string>Allgemein</string></property>
+     <layout class="QVBoxLayout">
+      <item>
        <widget class="QCheckBox" name="cbDeleteES">
-        <property name="text">
-         <string>ES-Files nach Mux löschen</string>
-        </property>
+        <property name="text"><string>ES-Files nach Mux löschen</string></property>
+        <property name="toolTip"><string>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</string></property>
        </widget>
       </item>
      </layout>
     </widget>
    </item>
+
+   <!-- Per-Codec default container -->
    <item>
     <widget class="QGroupBox" name="gbCodecMuxer">
-     <property name="title">
-      <string>Per-Codec Standard-Container</string>
-     </property>
+     <property name="title"><string>Per-Codec Standard-Container</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laMpeg2Muxer">
-        <property name="text">
-         <string>MPEG-2:</string>
-        </property>
+        <property name="text"><string>MPEG-2:</string></property>
+        <property name="toolTip"><string>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="cbMpeg2Muxer"/>
+       <widget class="QComboBox" name="cbMpeg2Muxer">
+        <property name="toolTip"><string>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</string></property>
+       </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laH264Muxer">
-        <property name="text">
-         <string>H.264:</string>
-        </property>
+        <property name="text"><string>H.264:</string></property>
+        <property name="toolTip"><string>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</string></property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QComboBox" name="cbH264Muxer"/>
+       <widget class="QComboBox" name="cbH264Muxer">
+        <property name="toolTip"><string>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</string></property>
+       </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="laH265Muxer">
-        <property name="text">
-         <string>H.265:</string>
-        </property>
+        <property name="text"><string>H.265:</string></property>
+        <property name="toolTip"><string>Standard-Container für H.265-Output. Nur MKV verfügbar.</string></property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QComboBox" name="cbH265Muxer"/>
+       <widget class="QComboBox" name="cbH265Muxer">
+        <property name="toolTip"><string>Standard-Container für H.265-Output. Nur MKV verfügbar.</string></property>
+       </widget>
       </item>
      </layout>
     </widget>
    </item>
+
    <item>
     <spacer>
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
     </spacer>
    </item>
+
   </layout>
  </widget>
  <resources/>

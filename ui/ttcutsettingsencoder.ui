@@ -10,7 +10,7 @@
    </rect>
   </property>
   <property name="windowTitle" >
-   <string>Encoder Settings</string>
+   <string>Encoder-Standards</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -23,6 +23,9 @@
        <widget class="QCheckBox" name="cbEncodingMode" >
         <property name="text" >
          <string>Use encoding mode (re-encode at cut points)</string>
+        </property>
+        <property name="toolTip">
+         <string>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</string>
         </property>
        </widget>
       </item>
@@ -40,6 +43,9 @@
         <property name="text">
          <string>Codec:</string>
         </property>
+        <property name="toolTip">
+         <string>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</string>
+        </property>
        </widget>
       </item>
       <item row="0" column="1">
@@ -49,6 +55,9 @@
           <width>150</width>
           <height>0</height>
          </size>
+        </property>
+        <property name="toolTip">
+         <string>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</string>
         </property>
        </widget>
       </item>
@@ -70,6 +79,9 @@
         <property name="text">
          <string>Preset:</string>
         </property>
+        <property name="toolTip">
+         <string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string>
+        </property>
        </widget>
       </item>
       <item row="1" column="1">
@@ -80,12 +92,18 @@
           <height>0</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string>
+        </property>
        </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="lblProfile">
         <property name="text">
          <string>Profile:</string>
+        </property>
+        <property name="toolTip">
+         <string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string>
         </property>
        </widget>
       </item>
@@ -97,12 +115,18 @@
           <height>0</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string>
+        </property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="lblCrf">
         <property name="text">
          <string>Quality (CRF):</string>
+        </property>
+        <property name="toolTip">
+         <string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</string>
         </property>
        </widget>
       </item>
@@ -135,6 +159,9 @@
           <property name="value">
            <number>23</number>
           </property>
+          <property name="toolTip">
+           <string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</string>
+          </property>
          </widget>
         </item>
        </layout>
@@ -163,6 +190,9 @@
         <property name="text">
          <string>Preview Preset:</string>
         </property>
+        <property name="toolTip">
+         <string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string>
+        </property>
        </widget>
       </item>
       <item row="0" column="1">
@@ -174,7 +204,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Encoder preset for preview generation (faster = less quality but quicker preview)</string>
+         <string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string>
         </property>
        </widget>
       </item>

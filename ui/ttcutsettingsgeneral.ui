@@ -3,25 +3,16 @@
  <class>TTCutSettingsGeneral</class>
  <widget class="QGroupBox" name="TTCutSettingsGeneral">
   <property name="geometry">
-   <rect><x>0</x><y>0</y><width>500</width><height>200</height></rect>
+   <rect><x>0</x><y>0</y><width>500</width><height>120</height></rect>
   </property>
   <property name="title"><string>Allgemein</string></property>
   <layout class="QVBoxLayout">
    <item>
-    <widget class="QGroupBox" name="gbGeneral">
-     <property name="title"><string>Verzeichnisse</string></property>
-     <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laTmpDir"><property name="text"><string>Tmp-Verzeichnis:</string></property></widget></item>
-      <item row="0" column="1">
-       <layout class="QHBoxLayout">
-        <item><widget class="QLineEdit" name="leTempDirectory"/></item>
-        <item><widget class="QPushButton" name="btnDirOpen"><property name="text"><string>…</string></property></widget></item>
-       </layout>
-      </item>
-     </layout>
+    <widget class="QCheckBox" name="cbQuickSearch">
+     <property name="text"><string>Schnellsuche aktivieren</string></property>
+     <property name="toolTip"><string>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</string></property>
     </widget>
    </item>
-   <item><widget class="QCheckBox" name="cbQuickSearch"><property name="text"><string>Schnellsuche aktivieren</string></property></widget></item>
    <item>
     <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>
    </item>

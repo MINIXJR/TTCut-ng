@@ -5,16 +5,38 @@
   <property name="geometry">
    <rect><x>0</x><y>0</y><width>500</width><height>320</height></rect>
   </property>
-  <property name="title"><string>Suche &amp;&amp; Preview</string></property>
+  <property name="title"><string>Suche &amp; Preview</string></property>
   <layout class="QVBoxLayout">
    <item>
     <widget class="QGroupBox" name="gbSearch">
      <property name="title"><string>Suche</string></property>
      <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laSearchLen"><property name="text"><string>Suchbereich (Sekunden):</string></property></widget></item>
-      <item row="0" column="1"><widget class="QSpinBox" name="sbSearchIntervall"><property name="minimum"><number>1</number></property><property name="maximum"><number>600</number></property></widget></item>
-      <item row="1" column="0"><widget class="QLabel" name="laWorkers"><property name="text"><string>Such-Worker-Threads (0 = auto):</string></property></widget></item>
-      <item row="1" column="1"><widget class="QSpinBox" name="sbSearchWorkerCount"><property name="minimum"><number>0</number></property><property name="maximum"><number>16</number></property></widget></item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="laSearchLen">
+        <property name="text"><string>Suchbereich (Sekunden):</string></property>
+        <property name="toolTip"><string>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="sbSearchIntervall">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>600</number></property>
+        <property name="toolTip"><string>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laWorkers">
+        <property name="text"><string>Such-Worker-Threads (0 = auto):</string></property>
+        <property name="toolTip"><string>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="sbSearchWorkerCount">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>16</number></property>
+        <property name="toolTip"><string>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -22,8 +44,19 @@
     <widget class="QGroupBox" name="gbPreview">
      <property name="title"><string>Preview</string></property>
      <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laPreviewLen"><property name="text"><string>Vorschau-Länge (Sekunden):</string></property></widget></item>
-      <item row="0" column="1"><widget class="QSpinBox" name="spPreviewLength"><property name="minimum"><number>1</number></property><property name="maximum"><number>600</number></property></widget></item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="laPreviewLen">
+        <property name="text"><string>Vorschau-Länge (Sekunden):</string></property>
+        <property name="toolTip"><string>Länge der Preview-Clips um Cut-Punkte in Sekunden.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="spPreviewLength">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>600</number></property>
+        <property name="toolTip"><string>Länge der Preview-Clips um Cut-Punkte in Sekunden.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -31,10 +64,32 @@
     <widget class="QGroupBox" name="gbCluster">
      <property name="title"><string>Defective Frame Grouping</string></property>
      <layout class="QFormLayout">
-      <item row="0" column="0"><widget class="QLabel" name="laClusterGap"><property name="text"><string>Gruppierungsabstand (Sekunden):</string></property></widget></item>
-      <item row="0" column="1"><widget class="QSpinBox" name="sbClusterGap"><property name="minimum"><number>1</number></property><property name="maximum"><number>30</number></property></widget></item>
-      <item row="1" column="0"><widget class="QLabel" name="laClusterOffset"><property name="text"><string>Start-Offset (Sekunden):</string></property></widget></item>
-      <item row="1" column="1"><widget class="QSpinBox" name="sbClusterOffset"><property name="minimum"><number>0</number></property><property name="maximum"><number>10</number></property></widget></item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="laClusterGap">
+        <property name="text"><string>Gruppierungsabstand (Sekunden):</string></property>
+        <property name="toolTip"><string>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="sbClusterGap">
+        <property name="minimum"><number>1</number></property>
+        <property name="maximum"><number>30</number></property>
+        <property name="toolTip"><string>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laClusterOffset">
+        <property name="text"><string>Start-Offset (Sekunden):</string></property>
+        <property name="toolTip"><string>Zeitlicher Offset für Cluster-Detection in Sekunden.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="sbClusterOffset">
+        <property name="minimum"><number>0</number></property>
+        <property name="maximum"><number>10</number></property>
+        <property name="toolTip"><string>Zeitlicher Offset für Cluster-Detection in Sekunden.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

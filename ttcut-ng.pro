@@ -59,6 +59,7 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/cutlistwidget.ui\
               ui/ttcutsettingsmuxer.ui\
               ui/ttcutsettingsencoder.ui\
+              ui/ttcutsettingsencoderdefaults.ui\
               ui/ttsettingsdialog.ui\
               ui/ttcutsettingsgeneral.ui\
               ui/ttcutsettingsnavigation.ui\
@@ -144,6 +145,7 @@ HEADERS     = common/ttcut.h\
               extern/ttmkvmergeprovider.h\
               gui/ttcutsettingsmuxer.h\
               gui/ttcutsettingsencoder.h\
+              gui/ttcutsettingsencoderdefaults.h\
               gui/ttcutsettingsdlg.h\
               gui/ttcutsettingsgeneral.h\
               gui/ttcutsettingsnavigation.h\
@@ -241,6 +243,7 @@ SOURCES     = common/ttcut.cpp\
               extern/ttmkvmergeprovider.cpp\
               gui/ttcutsettingsmuxer.cpp\
               gui/ttcutsettingsencoder.cpp\
+              gui/ttcutsettingsencoderdefaults.cpp\
               gui/ttcutsettingsdlg.cpp\
               gui/ttcutsettingsgeneral.cpp\
               gui/ttcutsettingsnavigation.cpp\

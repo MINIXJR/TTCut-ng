@@ -26,6 +26,8 @@ class TTCutSettingsMuxer : public QGroupBox, private Ui_TTCutSettingsMuxer
 
   private:
     void populateCodecMuxers();
+    void populateMpgTarget();
+    void populateMpgMode();
 
   protected slots:
     void onMkvChaptersChanged(int state);

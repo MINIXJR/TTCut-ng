@@ -17,6 +17,8 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
 {
   setupUi(this);
   populateCodecMuxers();
+  populateMpgTarget();
+  populateMpgMode();
   connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
 }
 
@@ -34,16 +36,43 @@ void TTCutSettingsMuxer::populateCodecMuxers()
   }
 }
 
+void TTCutSettingsMuxer::populateMpgTarget()
+{
+  cbMpgTarget->clear();
+  cbMpgTarget->insertItem(0, "Generic MPEG1 (f0)");
+  cbMpgTarget->insertItem(1, "VCD (f1)");
+  cbMpgTarget->insertItem(2, "user-rate VCD (f2)");
+  cbMpgTarget->insertItem(3, "Generic MPEG2 (f3)");
+  cbMpgTarget->insertItem(4, "SVCD (f4)");
+  cbMpgTarget->insertItem(5, "user-rate SVCD (f5)");
+  cbMpgTarget->insertItem(6, "VCD Stills (f6)");
+  cbMpgTarget->insertItem(7, "DVD mit NAV-Sektoren (f8)");
+  cbMpgTarget->insertItem(8, "DVD (f9)");
+}
+
+void TTCutSettingsMuxer::populateMpgMode()
+{
+  cbMpgMode->clear();
+  cbMpgMode->insertItem(0, "Direkt muxen");
+  cbMpgMode->insertItem(1, "Mux-Skript erstellen");
+}
+
 void TTCutSettingsMuxer::setTabData()
 {
-  cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
-  sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
-  sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
-  cbDeleteES->setChecked(TTSettings::instance()->muxDeleteES());
+  TTSettings* s = TTSettings::instance();
 
-  int m2idx = cbMpeg2Muxer->findData(TTSettings::instance()->mpeg2Muxer());
-  int h4idx = cbH264Muxer->findData(TTSettings::instance()->h264Muxer());
-  int h5idx = cbH265Muxer->findData(TTSettings::instance()->h265Muxer());
+  cbMkvCreateChapters->setChecked(s->mkvCreateChapters());
+  sbMkvChapterInterval->setValue(s->mkvChapterInterval());
+  sbMkvChapterInterval->setEnabled(s->mkvCreateChapters());
+
+  cbMpgTarget->setCurrentIndex(qBound(0, s->mpeg2Target(), cbMpgTarget->count() - 1));
+  cbMpgMode->setCurrentIndex(qBound(0, s->muxMode(), cbMpgMode->count() - 1));
+
+  cbDeleteES->setChecked(s->muxDeleteES());
+
+  int m2idx = cbMpeg2Muxer->findData(s->mpeg2Muxer());
+  int h4idx = cbH264Muxer->findData(s->h264Muxer());
+  int h5idx = cbH265Muxer->findData(s->h265Muxer());
   cbMpeg2Muxer->setCurrentIndex(m2idx >= 0 ? m2idx : 0);
   cbH264Muxer->setCurrentIndex(h4idx >= 0 ? h4idx : 0);
   cbH265Muxer->setCurrentIndex(h5idx >= 0 ? h5idx : 0);
@@ -51,12 +80,18 @@ void TTCutSettingsMuxer::setTabData()
 
 void TTCutSettingsMuxer::saveTabData()
 {
-  TTSettings::instance()->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
-  TTSettings::instance()->setMkvChapterInterval(sbMkvChapterInterval->value());
-  TTSettings::instance()->setMuxDeleteES(cbDeleteES->isChecked());
-  TTSettings::instance()->setMpeg2Muxer(cbMpeg2Muxer->currentData().toInt());
-  TTSettings::instance()->setH264Muxer(cbH264Muxer->currentData().toInt());
-  TTSettings::instance()->setH265Muxer(cbH265Muxer->currentData().toInt());
+  TTSettings* s = TTSettings::instance();
+
+  s->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
+  s->setMkvChapterInterval(sbMkvChapterInterval->value());
+
+  s->setMpeg2Target(cbMpgTarget->currentIndex());
+  s->setMuxMode(cbMpgMode->currentIndex());
+
+  s->setMuxDeleteES(cbDeleteES->isChecked());
+  s->setMpeg2Muxer(cbMpeg2Muxer->currentData().toInt());
+  s->setH264Muxer(cbH264Muxer->currentData().toInt());
+  s->setH265Muxer(cbH265Muxer->currentData().toInt());
 }
 
 void TTCutSettingsMuxer::setMode(Mode m)
