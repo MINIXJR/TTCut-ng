@@ -611,15 +611,19 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
 
     TTAudioStream* aStream = avItem->audioStreamAt(0);
     double fps = vStream->frameRate();
-    QList<QPair<double, double>> audioKeepList;
+    int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
+
+    QList<QPair<double, double>> videoKeepList;
     for (int c = 0; c < tmpCutList->count(); c++) {
       TTCutItem ci = tmpCutList->at(c);
       int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
       int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
       double cutIn  = (ci.cutInIndex()      - extraIn)  / fps;
       double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
-      audioKeepList.append(qMakePair(cutIn, cutOut));
+      videoKeepList.append(qMakePair(cutIn, cutOut));
     }
+    TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
+    QList<QPair<double, double>> audioKeepList = plan.keepList;
 
     QString audioExt = QFileInfo(aStream->filePath()).suffix();
     QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(fileIndex, audioExt);
