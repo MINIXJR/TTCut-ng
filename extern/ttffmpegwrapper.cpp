@@ -2609,7 +2609,8 @@ done_reading:
                 qDebug() << "detectAudioBurst: BURST at" << boundaryTime
                          << (isCutOut ? "CutOut" : "CutIn")
                          << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
-                         << "(" << rmsValues.size() << "chunks)";
+                         << "(" << rmsValues.size() << "chunks)"
+                         << "file=" << QFileInfo(audioFile).fileName();
             }
             return true;
         }
@@ -2618,7 +2619,8 @@ done_reading:
     if (TTSettings::instance()->logFFmpegDecoder()) {
         qDebug() << "detectAudioBurst: OK at" << boundaryTime
                  << (isCutOut ? "CutOut" : "CutIn")
-                 << "median=" << median << "dB (" << rmsValues.size() << "chunks)";
+                 << "median=" << median << "dB (" << rmsValues.size() << "chunks)"
+                 << "file=" << QFileInfo(audioFile).fileName();
     }
     return false;
 }

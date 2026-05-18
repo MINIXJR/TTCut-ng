@@ -746,6 +746,17 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
       avItem->onAudioDelayChanged(idx, delayMs);
     }
   }
+
+  // Re-sort the audio list now that language is set — TTAudioItem::operator<
+  // priorisiert AC3 > audioLanguagePreference > Discovery-Order. Ohne diese
+  // Sortierung würde audioStreamAt(0) bis zum onThreadPoolExit (= Ende aller
+  // Tasks) noch auf den falschen Track zeigen, was die Burst-Detection beim
+  // initialen VDR-Cut-Add auf der falschen Sprachspur laufen ließe
+  // (z.B. eng.mp2 statt deu.mp2 bei deu/eng-Quellen + audioLanguagePreference="deu").
+  TTAudioList* audioList = avItem->audioDataList();
+  if (audioList && audioList->count() > 1) {
+    audioList->sortByOrder();
+  }
 }
 
 /*!
