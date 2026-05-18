@@ -38,8 +38,10 @@
 #include <sys/statvfs.h>
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QIcon>
+#include <QMessageBox>
 #include <QStandardItemModel>
 #include <QStyle>
 
@@ -161,9 +163,22 @@ void TTCutAVCutDlg::setGlobalData()
  */
 void TTCutAVCutDlg::onDlgStart()
 {
-  setGlobalData();
+  // Existiert die Ausgabedatei bereits? UI-Pfad + UI-Dateiname mit der
+  // sichtbaren Container-Extension (.mkv/.mpg). Falls ja: explizit fragen.
+  QString outputFile = QDir(leOutputPath->text()).absoluteFilePath(leOutputFile->text());
+  if (QFile::exists(outputFile)) {
+    QMessageBox::StandardButton ret = QMessageBox::question(this,
+        tr("Datei existiert"),
+        tr("Die Datei\n\n  %1\n\nexistiert bereits. Überschreiben?").arg(outputFile),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (ret != QMessageBox::Yes) {
+      return;  // Dialog bleibt offen, User kann Pfad/Namen anpassen
+    }
+  }
 
-  done( 0 );
+  setGlobalData();
+  done(QDialog::Accepted);
 }
 
 
@@ -172,7 +187,7 @@ void TTCutAVCutDlg::onDlgStart()
  */
 void TTCutAVCutDlg::onDlgCancel()
 {
-  done( 1 );
+  done(QDialog::Rejected);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

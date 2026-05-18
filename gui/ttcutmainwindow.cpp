@@ -1056,8 +1056,8 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   // start dialog for cut options
   TTCutAVCutDlg* cutAVDlg = new TTCutAVCutDlg(this, audioOnly);
 
-  // user cancel; exit
-  if ( cutAVDlg->exec() == 1 )
+  // Cancel (button), X (window-close) or ESC → don't start the cut.
+  if ( cutAVDlg->exec() != QDialog::Accepted )
   {
     delete cutAVDlg;
     return;

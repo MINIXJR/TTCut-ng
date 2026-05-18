@@ -671,9 +671,23 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">AAC (.m4a)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutavcutdlg.cpp" line="58"/>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="60"/>
         <source>Audio Cut Options</source>
         <translation>Audio-Schnitt-Optionen</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="171"/>
+        <source>Datei existiert</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="172"/>
+        <source>Die Datei
+
+  %1
+
+existiert bereits. Überschreiben?</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
