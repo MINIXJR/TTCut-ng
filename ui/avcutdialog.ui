@@ -393,38 +393,9 @@
  <resources>
   <include location="avcutdialog.qrc" />
  </resources>
- <connections>
-  <connection>
-   <sender>okButton</sender>
-   <signal>clicked()</signal>
-   <receiver>TTCutAVCutDlg</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel" >
-     <x>278</x>
-     <y>253</y>
-    </hint>
-    <hint type="destinationlabel" >
-     <x>96</x>
-     <y>254</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>cancelButton</sender>
-   <signal>clicked()</signal>
-   <receiver>TTCutAVCutDlg</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel" >
-     <x>369</x>
-     <y>253</y>
-    </hint>
-    <hint type="destinationlabel" >
-     <x>179</x>
-     <y>282</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <!-- okButton/cancelButton-Connections leben im TTCutAVCutDlg-Konstruktor.
+      Hier KEINE Anbindung an accept()/reject() — sonst feuert beim OK-Klick
+      sowohl onDlgStart (mit Overwrite-Check) ALS AUCH accept() parallel,
+      und der Dialog schließt mit Accepted obwohl der User "Nein" gewählt hat. -->
+ <connections/>
 </ui>
