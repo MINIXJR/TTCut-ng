@@ -303,6 +303,8 @@ void TTCutSettingsEncoder::setMode(Mode m)
 {
   bool isOverride = (m == Override);
   cbCodec->setEnabled(!isOverride);
-  cbPreviewPreset->setVisible(!isOverride);
-  lblPreviewPreset->setVisible(!isOverride);
+  // Preview-Preset ist eine App-Default-Entscheidung — irrelevant per cut.
+  // Komplette GroupBox verstecken, sonst zeigt der Cut-Dialog einen leeren
+  // Block mit nur erklärendem Text.
+  gbPreviewSettings->setVisible(!isOverride);
 }
