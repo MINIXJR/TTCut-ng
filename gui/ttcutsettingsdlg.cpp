@@ -54,10 +54,10 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   addCat(tr("Audio & Sprache"),
          QIcon::fromTheme("audio-x-generic", s->standardIcon(QStyle::SP_MediaVolume)),
          pageAudio);
-  addCat(tr("Encoder-Standards"),
+  addCat(tr("Encoder"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveCDIcon)),
          pageEncoder);
-  addCat(tr("Multiplexen-Standards"),
+  addCat(tr("Multiplexen"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveHDIcon)),
          pageMuxer);
   addCat(tr("Pfade"),

@@ -2093,124 +2093,133 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsEncoderDefaults</name>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="8"/>
         <source>Encoder-Standards</source>
-        <translation>Encoder-Standards</translation>
+        <translation type="vanished">Encoder-Standards</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="8"/>
+        <source>Encoder</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="14"/>
+        <source>Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="23"/>
         <source>Encoder Mode</source>
         <translation>Encoder-Modus</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="18"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="27"/>
         <source>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</source>
         <translation>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="19"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="28"/>
         <source>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
         <translation>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="29"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="38"/>
         <source>MPEG-2</source>
         <translation>MPEG-2</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="33"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="80"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="127"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="42"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="89"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="136"/>
         <source>Preset:</source>
         <translation>Voreinstellung:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="34"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="40"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="81"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="87"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="128"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="134"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="43"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="49"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="90"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="96"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="137"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="143"/>
         <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
         <translation>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="45"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="92"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="139"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="54"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="101"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="148"/>
         <source>Profile:</source>
         <translation>Profil:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="46"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="52"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="55"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="61"/>
         <source>Encoder-Profile (Kompatibilität).</source>
         <translation>Encoder-Profile (Kompatibilität).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="57"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="66"/>
         <source>Quality (qscale):</source>
         <translation>Qualität (qscale):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="58"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="66"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="67"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="75"/>
         <source>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</source>
         <translation>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="76"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="85"/>
         <source>H.264 / AVC</source>
         <translation>H.264 / AVC</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="93"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="99"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="102"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="108"/>
         <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
         <translation>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="104"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="151"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="160"/>
         <source>Quality (CRF):</source>
         <translation>Qualität (CRF):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="105"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="114"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="122"/>
         <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</source>
         <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="123"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="132"/>
         <source>H.265 / HEVC</source>
         <translation>H.265 / HEVC</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="140"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="146"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="149"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="155"/>
         <source>Encoder-Profile. main = Standard, main10 = 10-Bit.</source>
         <translation>Encoder-Profile. main = Standard, main10 = 10-Bit.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="152"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="160"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="161"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="169"/>
         <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</source>
         <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="170"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="179"/>
         <source>Preview</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="174"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="183"/>
         <source>Preview-Preset:</source>
         <translation>Preview-Preset:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="175"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="181"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="184"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="190"/>
         <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
         <translation>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
     </message>
@@ -2512,9 +2521,8 @@ Ausgabedatei:
         <translation type="vanished">MKV-Kapitel-Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
         <source>Multiplexen-Standards</source>
-        <translation>Multiplexen-Standards</translation>
+        <translation type="vanished">Multiplexen-Standards</translation>
     </message>
     <message>
         <source>Container-Standards</source>
@@ -2531,54 +2539,59 @@ Ausgabedatei:
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="69"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
         <source>MKV (libav)</source>
         <translation>MKV (libav)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="104"/>
         <source>Kapitel erstellen alle</source>
         <translation>Kapitel erstellen alle</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="75"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="106"/>
         <source>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</source>
         <translation>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="83"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="114"/>
         <source> Minuten</source>
         <translation> Minuten</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="84"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="115"/>
         <source>Zusätzliche Auto-Kapitel alle X Minuten.</source>
         <translation>Zusätzliche Auto-Kapitel alle X Minuten.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="69"/>
         <source>MPG (mplex)</source>
         <translation>MPG (mplex)</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="104"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
+        <source>Multiplexen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
         <source>Mux-Ziel:</source>
         <translation>Mux-Ziel:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="105"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="110"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="74"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="79"/>
         <source>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</source>
         <translation>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="115"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="84"/>
         <source>Mux-Modus:</source>
         <translation>Mux-Modus:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="116"/>
-        <location filename="../ui/ttcutsettingsmuxer.ui" line="121"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="85"/>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="90"/>
         <source>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</source>
         <translation>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</translation>
     </message>
@@ -3833,13 +3846,21 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../gui/ttcutsettingsdlg.cpp" line="57"/>
-        <source>Encoder-Standards</source>
-        <translation>Encoder-Standards</translation>
+        <source>Encoder</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsdlg.cpp" line="60"/>
+        <source>Multiplexen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Encoder-Standards</source>
+        <translation type="vanished">Encoder-Standards</translation>
+    </message>
+    <message>
         <source>Multiplexen-Standards</source>
-        <translation>Multiplexen-Standards</translation>
+        <translation type="vanished">Multiplexen-Standards</translation>
     </message>
     <message>
         <source>Encoder-Defaults</source>

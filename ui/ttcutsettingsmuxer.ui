@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="title">
-   <string>Multiplexen-Standards</string>
+   <string>Multiplexen</string>
   </property>
   <layout class="QVBoxLayout">
 
@@ -63,38 +63,7 @@
      <property name="title"><string>Container-Optionen</string></property>
      <layout class="QVBoxLayout">
 
-      <!-- MKV sub-group -->
-      <item>
-       <widget class="QGroupBox" name="gbMkv">
-        <property name="title"><string>MKV (libav)</string></property>
-        <layout class="QHBoxLayout">
-         <item>
-          <widget class="QCheckBox" name="cbMkvCreateChapters">
-           <property name="text"><string>Kapitel erstellen alle</string></property>
-           <property name="checked"><bool>true</bool></property>
-           <property name="toolTip"><string>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</string></property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSpinBox" name="sbMkvChapterInterval">
-           <property name="minimum"><number>1</number></property>
-           <property name="maximum"><number>60</number></property>
-           <property name="value"><number>5</number></property>
-           <property name="suffix"><string> Minuten</string></property>
-           <property name="toolTip"><string>Zusätzliche Auto-Kapitel alle X Minuten.</string></property>
-          </widget>
-         </item>
-         <item>
-          <spacer>
-           <property name="orientation"><enum>Qt::Horizontal</enum></property>
-           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
-          </spacer>
-         </item>
-        </layout>
-       </widget>
-      </item>
-
-      <!-- MPG sub-group -->
+      <!-- MPG sub-group (zuerst — älterer Container, MPEG-2-spezifisch) -->
       <item>
        <widget class="QGroupBox" name="gbMpg">
         <property name="title"><string>MPG (mplex)</string></property>
@@ -120,6 +89,37 @@
           <widget class="QComboBox" name="cbMpgMode">
            <property name="toolTip"><string>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</string></property>
           </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+
+      <!-- MKV sub-group (zweite — neuerer/häufiger Container) -->
+      <item>
+       <widget class="QGroupBox" name="gbMkv">
+        <property name="title"><string>MKV (libav)</string></property>
+        <layout class="QHBoxLayout">
+         <item>
+          <widget class="QCheckBox" name="cbMkvCreateChapters">
+           <property name="text"><string>Kapitel erstellen alle</string></property>
+           <property name="checked"><bool>true</bool></property>
+           <property name="toolTip"><string>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="sbMkvChapterInterval">
+           <property name="minimum"><number>1</number></property>
+           <property name="maximum"><number>60</number></property>
+           <property name="value"><number>5</number></property>
+           <property name="suffix"><string> Minuten</string></property>
+           <property name="toolTip"><string>Zusätzliche Auto-Kapitel alle X Minuten.</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer>
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+          </spacer>
          </item>
         </layout>
        </widget>
