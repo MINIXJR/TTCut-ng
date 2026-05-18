@@ -13,7 +13,7 @@
     <widget class="QLabel" name="laEncoderDescription">
      <property name="text"><string>Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</string></property>
      <property name="wordWrap"><bool>true</bool></property>
-     <property name="styleSheet"><string notr="true">color: palette(mid); font-style: italic;</string></property>
+     <property name="styleSheet"><string notr="true">QLabel { color: palette(window-text); font-style: italic; background-color: palette(alternate-base); padding: 8px; border-radius: 4px; }</string></property>
     </widget>
    </item>
 

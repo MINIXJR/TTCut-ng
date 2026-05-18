@@ -35,6 +35,33 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="gbCutOutput">
+     <property name="title"><string>Ausgabe-Verzeichnis (Standard)</string></property>
+     <layout class="QFormLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="laCutDir">
+        <property name="text"><string>Ausgabepfad:</string></property>
+        <property name="toolTip"><string>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout">
+        <item>
+         <widget class="QLineEdit" name="leCutDir">
+          <property name="toolTip"><string>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnCutDirOpen">
+          <property name="text"><string>…</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="gbLogPath">
      <property name="title"><string>Logfile</string></property>
      <layout class="QFormLayout">

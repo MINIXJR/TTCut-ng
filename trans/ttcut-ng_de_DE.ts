@@ -2827,43 +2827,65 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="39"/>
+        <source>Ausgabe-Verzeichnis (Standard)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="43"/>
+        <source>Ausgabepfad:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="44"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="51"/>
+        <source>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingspaths.ui" line="66"/>
         <source>Logfile</source>
         <translation>Logdatei</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingspaths.ui" line="43"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="70"/>
         <source>Logfile-Pfad:</source>
         <translation>Logfile-Pfad:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingspaths.ui" line="44"/>
-        <location filename="../ui/ttcutsettingspaths.ui" line="52"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="71"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="79"/>
         <source>Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</source>
         <translation>Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingspaths.ui" line="51"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="78"/>
         <source>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</source>
         <translation>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="29"/>
-        <location filename="../ui/ttcutsettingspaths.ui" line="57"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="56"/>
+        <location filename="../ui/ttcutsettingspaths.ui" line="84"/>
         <source>…</source>
         <translation>…</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingspaths.cpp" line="37"/>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="41"/>
         <source>Tmp-Verzeichnis wählen</source>
         <translation>Tmp-Verzeichnis wählen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingspaths.cpp" line="44"/>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="48"/>
+        <source>Standard-Ausgabeverzeichnis wählen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="55"/>
         <source>Logfile wählen</source>
         <translation>Logfile wählen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingspaths.cpp" line="46"/>
+        <location filename="../gui/ttcutsettingspaths.cpp" line="57"/>
         <source>Log-Dateien (*.log);;Alle Dateien (*)</source>
         <translation>Log-Dateien (*.log);;Alle Dateien (*)</translation>
     </message>

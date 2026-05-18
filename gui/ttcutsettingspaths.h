@@ -15,6 +15,7 @@ public:
 
 private slots:
     void onTmpDirectoryOpen();
+    void onCutDirOpen();
     void onLogfileOpen();
 };
 
