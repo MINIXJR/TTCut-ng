@@ -1583,7 +1583,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
     // Add chapters in first mux pass (no second container remux needed)
     QString chapterFile;
-    if (TTSettings::instance()->mkvCreateChapters() && TTSettings::instance()->mkvChapterInterval() > 0 &&
+    if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0 &&
         finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
 
       qint64 totalDurationMs = 0;
@@ -1600,7 +1600,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       if (totalDurationMs > 0) {
         mkvProvider.setTotalDurationMs(totalDurationMs);
         chapterFile = TTMkvMergeProvider::generateChapterFile(
-            totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTSettings::instance()->cutDirPath());
+            totalDurationMs, TTSettings::instance()->workingMkvChapterInterval(), TTSettings::instance()->cutDirPath());
         if (!chapterFile.isEmpty()) {
           mkvProvider.setChapterFile(chapterFile);
         }
@@ -1657,19 +1657,19 @@ void TTAVData::onCutFinished()
   TTMuxListDataItem& muxItem = mpMuxList->itemAt(lastIdx);
 
   if (TTSettings::instance()->logCutPipeline()) {
-    qDebug() << "onCutFinished: outputContainer =" << TTSettings::instance()->outputContainer();
-    qDebug() << "onCutFinished: muxMode =" << TTSettings::instance()->muxMode();
+    qDebug() << "onCutFinished: workingOutputContainer =" << TTSettings::instance()->workingOutputContainer();
+    qDebug() << "onCutFinished: workingMuxMode =" << TTSettings::instance()->workingMuxMode();
     qDebug() << "onCutFinished: video =" << muxItem.getVideoName();
     qDebug() << "onCutFinished: audio =" << muxItem.getAudioNames();
     qDebug() << "onCutFinished: subtitle =" << muxItem.getSubtitleNames();
   }
 
-  // Select muxer based on outputContainer setting
+  // Select muxer based on working container (transient, per-cut/per-project)
   // 0 = MPG (mplex)
   // 1 = MKV (libav matroska muxer)
   // 3 = Elementary (no muxing; not reachable from UI, kept as defensive default)
 
-  switch (TTSettings::instance()->outputContainer()) {
+  switch (TTSettings::instance()->workingOutputContainer()) {
     case 1: // MKV - use mkvmerge
       {
         TTMkvMergeProvider* mkvProvider = new TTMkvMergeProvider();
@@ -1710,7 +1710,7 @@ void TTAVData::onCutFinished()
 
         // Generate chapters if enabled
         QString chapterFile;
-        if (TTSettings::instance()->mkvCreateChapters() && TTSettings::instance()->mkvChapterInterval() > 0) {
+        if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0) {
           // Calculate total duration from cut list
           qint64 totalDurationMs = 0;
           for (int i = 0; i < mpCutList->count(); i++) {
@@ -1727,7 +1727,7 @@ void TTAVData::onCutFinished()
           if (totalDurationMs > 0) {
             mkvProvider->setTotalDurationMs(totalDurationMs);
             chapterFile = TTMkvMergeProvider::generateChapterFile(
-                totalDurationMs, TTSettings::instance()->mkvChapterInterval(), TTSettings::instance()->cutDirPath());
+                totalDurationMs, TTSettings::instance()->workingMkvChapterInterval(), TTSettings::instance()->cutDirPath());
             if (!chapterFile.isEmpty()) {
               mkvProvider->setChapterFile(chapterFile);
             }
@@ -1747,7 +1747,7 @@ void TTAVData::onCutFinished()
               qDebug() << "MKV muxing completed successfully";
 
           // Delete elementary streams if option is set
-          if (TTSettings::instance()->muxDeleteES()) {
+          if (TTSettings::instance()->workingMuxDeleteES()) {
             deleteElementaryStreams(muxItem.getVideoName(),
                                     muxItem.getAudioNames(),
                                     muxItem.getSubtitleNames());
@@ -1784,7 +1784,7 @@ void TTAVData::onCutFinished()
         connect(mplexProvider, &TTMplexProvider::statusReport,
                 this,          &TTAVData::onStatusReport);
 
-        if (TTSettings::instance()->muxMode() == 1)
+        if (TTSettings::instance()->workingMuxMode() == 1)
           mplexProvider->writeMuxScript();
         else
           mplexProvider->mplexPart(lastIdx);
@@ -1893,8 +1893,8 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
     return;
   }
 
-  // Dispatch by chosen output format
-  switch (TTSettings::instance()->audioOnlyFormat()) {
+  // Dispatch by chosen output format (working set, per-cut/per-project)
+  switch (TTSettings::instance()->workingAudioOnlyFormat()) {
     case TTCut::AOF_OriginalES: {
       QString dir = QFileInfo(trackFiles.first()).absolutePath();
       log->infoMsg(__FILE__, __LINE__,

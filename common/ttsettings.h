@@ -297,6 +297,28 @@ public:
   int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
   void    setAudioOnlyBitrateKbps(int v);
 
+  // ----- Mux/Audio Working Set (Phase 2b, transient per-cut/per-project) ----
+  // Same pattern as encoderCrf/Preset/Profile: working values are kept in
+  // sync with the persistent App-Defaults by load() and setEncoderCodec(),
+  // overwritten by .ttcut project load (deserializeSettings), and read by
+  // the cut pipeline. The persistent App-Defaults (above) only change via
+  // the Settings dialog — Cut-Dialog overrides do NOT touch them.
+  // No QSettings round-trip; no signals.
+  bool    workingMkvCreateChapters() const    { return mWorkingMkvCreateChapters; }
+  void    setWorkingMkvCreateChapters(bool v) { mWorkingMkvCreateChapters = v; }
+  int     workingMkvChapterInterval() const   { return mWorkingMkvChapterInterval; }
+  void    setWorkingMkvChapterInterval(int v) { mWorkingMkvChapterInterval = v; }
+  bool    workingMuxDeleteES() const          { return mWorkingMuxDeleteES; }
+  void    setWorkingMuxDeleteES(bool v)       { mWorkingMuxDeleteES = v; }
+  int     workingMpeg2Target() const          { return mWorkingMpeg2Target; }
+  void    setWorkingMpeg2Target(int v)        { mWorkingMpeg2Target = v; }
+  int     workingMuxMode() const              { return mWorkingMuxMode; }
+  void    setWorkingMuxMode(int v)            { mWorkingMuxMode = v; }
+  int     workingAudioOnlyFormat() const      { return mWorkingAudioOnlyFormat; }
+  void    setWorkingAudioOnlyFormat(int v)    { mWorkingAudioOnlyFormat = v; }
+  int     workingOutputContainer() const      { return mWorkingOutputContainer; }
+  void    setWorkingOutputContainer(int v)    { mWorkingOutputContainer = v; }
+
   // ----- Cut Settings group (Task 13, reduced in v0.70.0) -------------------
   // Two fields persist in /Settings/CutOptions: cutDirPath, cutAddSuffix.
   // cutVideoName is NOT persisted in QSettings (per-project, .ttcut only).
@@ -462,6 +484,18 @@ private:
   int     mMkvChapterInterval  = 5;
   int     mAudioOnlyFormat;        // initialised to TTCut::AOF_OriginalES in ctor
   int     mAudioOnlyBitrateKbps = 0;  // 0 = match source bitrate
+
+  // ----- Mux/Audio Working Set (Phase 2b transient mirror) ----------------
+  // Initialised from the App-Defaults above by load(); overwritten by .ttcut
+  // project load (deserializeSettings) and by Cut-Dialog OK (setGlobalData).
+  // Read by the cut pipeline. Not persisted in QSettings.
+  bool    mWorkingMkvCreateChapters    = true;
+  int     mWorkingMkvChapterInterval   = 5;
+  bool    mWorkingMuxDeleteES          = false;
+  int     mWorkingMpeg2Target          = 7;
+  int     mWorkingMuxMode              = 0;
+  int     mWorkingAudioOnlyFormat      = 0;  // mirrors mAudioOnlyFormat ctor init
+  int     mWorkingOutputContainer      = 1;  // 1=MKV
 
   // ----- Cut Settings & Chapter group (Task 13) ----------------------------
   // Defaults match common/ttcut.cpp lines 227 + 234-242 verbatim. mCutDirPath

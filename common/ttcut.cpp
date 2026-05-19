@@ -131,7 +131,9 @@ void TTCut::populateAudioOnlyFormatCombo(QComboBox* combo)
   combo->addItem(QObject::tr("Matroska Audio (.mka)"),      TTCut::AOF_OriginalMKA);
   combo->addItem(QObject::tr("MP3"),                        TTCut::AOF_MP3);
   combo->addItem(QObject::tr("AAC (.m4a)"),                 TTCut::AOF_AAC);
-  int idx = combo->findData(TTSettings::instance()->audioOnlyFormat());
+  // Cut-Dialog combo — preselect the working value (initialised from the
+  // App-Default by load(), overwritten by .ttcut on project load).
+  int idx = combo->findData(TTSettings::instance()->workingAudioOnlyFormat());
   combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 

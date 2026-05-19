@@ -37,6 +37,7 @@ TTSettings::TTSettings(QObject* parent)
   mProjectFileName = QString();
   mMuxOutputPath = QDir::homePath();
   mAudioOnlyFormat = TTCut::AOF_OriginalES;
+  mWorkingAudioOnlyFormat = TTCut::AOF_OriginalES;
   mCutDirPath = QDir::currentPath();
 }
 
@@ -260,16 +261,19 @@ void TTSettings::setEncoderCodec(int v)
   switch (v) {
     case 0:  // MPEG-2: only Crf is wired (no preset/profile in encoder)
       mEncoderCrf = mMpeg2Crf;
+      mWorkingOutputContainer = mMpeg2Muxer;
       break;
     case 1:
       mEncoderPreset  = mH264Preset;
       mEncoderCrf     = mH264Crf;
       mEncoderProfile = mH264Profile;
+      mWorkingOutputContainer = mH264Muxer;
       break;
     case 2:
       mEncoderPreset  = mH265Preset;
       mEncoderCrf     = mH265Crf;
       mEncoderProfile = mH265Profile;
+      mWorkingOutputContainer = mH265Muxer;
       break;
   }
   emit encoderCodecChanged(v);
@@ -755,6 +759,17 @@ void TTSettings::load()
   mAudioOnlyFormat     = settings.value("AudioOnlyFormat/",     mAudioOnlyFormat).toInt();
   mAudioOnlyBitrateKbps = settings.value("AudioOnlyBitrateKbps/", mAudioOnlyBitrateKbps).toInt();
   settings.endGroup();
+
+  // Sync Mux/Audio working set from the persistent App-Defaults so an
+  // App-Start without a project loaded still gives the cut pipeline correct
+  // values. Project-Load overwrites them in deserializeSettings().
+  mWorkingMkvCreateChapters  = mMkvCreateChapters;
+  mWorkingMkvChapterInterval = mMkvChapterInterval;
+  mWorkingMuxDeleteES        = mMuxDeleteES;
+  mWorkingMpeg2Target        = mMpeg2Target;
+  mWorkingMuxMode            = mMuxMode;
+  mWorkingAudioOnlyFormat    = mAudioOnlyFormat;
+  mWorkingOutputContainer    = mOutputContainer;
 
   // ----- Cut Options group (Task 13) -----------------------------------
   // Sub-group of /Settings. Eight fields. NOTE: the on-disk key for

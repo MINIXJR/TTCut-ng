@@ -613,18 +613,21 @@ void TTCutProjectData::serializeSettings()
   addElement("CutVideoName",  TTSettings::instance()->cutVideoName());
   addElement("CutAddSuffix",  TTSettings::instance()->cutAddSuffix() ? "true" : "false");
 
-  // Muxing
-  addElement("OutputContainer",    QString::number(TTSettings::instance()->outputContainer()));
-  addElement("MkvCreateChapters",  TTSettings::instance()->mkvCreateChapters() ? "true" : "false");
-  addElement("MkvChapterInterval", QString::number(TTSettings::instance()->mkvChapterInterval()));
-  addElement("MuxDeleteES",        TTSettings::instance()->muxDeleteES() ? "true" : "false");
-  addElement("MuxMode",            QString::number(TTSettings::instance()->muxMode()));
-  addElement("Mpeg2Target",        QString::number(TTSettings::instance()->mpeg2Target()));
-  addElement("AudioOnlyFormat",    QString::number(TTSettings::instance()->audioOnlyFormat()));
+  // Muxing — read from the working set (transient, per-cut/per-project).
+  // The persistent App-Defaults (Settings dialog) deliberately do NOT round-
+  // trip through .ttcut: a project carries the cut-time choice, the user's
+  // App-Defaults stay sacrosanct.
+  TTSettings* s = TTSettings::instance();
+  addElement("OutputContainer",    QString::number(s->workingOutputContainer()));
+  addElement("MkvCreateChapters",  s->workingMkvCreateChapters() ? "true" : "false");
+  addElement("MkvChapterInterval", QString::number(s->workingMkvChapterInterval()));
+  addElement("MuxDeleteES",        s->workingMuxDeleteES() ? "true" : "false");
+  addElement("MuxMode",            QString::number(s->workingMuxMode()));
+  addElement("Mpeg2Target",        QString::number(s->workingMpeg2Target()));
+  addElement("AudioOnlyFormat",    QString::number(s->workingAudioOnlyFormat()));
 
   // Encoder (active codec values — transient working values, persisted here
   // because they live in TTSettings as in-memory only, not in QSettings)
-  TTSettings* s = TTSettings::instance();
   addElement("EncoderPreset",  QString::number(s->encoderPreset()));
   addElement("EncoderCrf",     QString::number(s->encoderCrf()));
   addElement("EncoderProfile", QString::number(s->encoderProfile()));
@@ -673,13 +676,16 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
     }
     else if (name == "CutAddSuffix")       TTSettings::instance()->setCutAddSuffix(value == "true");
     // Muxing
-    else if (name == "OutputContainer")    TTSettings::instance()->setOutputContainer(value.toInt());
-    else if (name == "MkvCreateChapters")  TTSettings::instance()->setMkvCreateChapters(value == "true");
-    else if (name == "MkvChapterInterval") TTSettings::instance()->setMkvChapterInterval(value.toInt());
-    else if (name == "MuxDeleteES")        TTSettings::instance()->setMuxDeleteES(value == "true");
-    else if (name == "MuxMode")            TTSettings::instance()->setMuxMode(value.toInt());
-    else if (name == "Mpeg2Target")        TTSettings::instance()->setMpeg2Target(value.toInt());
-    else if (name == "AudioOnlyFormat")    TTSettings::instance()->setAudioOnlyFormat(value.toInt());
+    // Mux/Audio — load into the working set (transient). The persistent
+    // App-Defaults stay untouched: a project must not silently rewrite the
+    // user's settings dialog values.
+    else if (name == "OutputContainer")    TTSettings::instance()->setWorkingOutputContainer(value.toInt());
+    else if (name == "MkvCreateChapters")  TTSettings::instance()->setWorkingMkvCreateChapters(value == "true");
+    else if (name == "MkvChapterInterval") TTSettings::instance()->setWorkingMkvChapterInterval(value.toInt());
+    else if (name == "MuxDeleteES")        TTSettings::instance()->setWorkingMuxDeleteES(value == "true");
+    else if (name == "MuxMode")            TTSettings::instance()->setWorkingMuxMode(value.toInt());
+    else if (name == "Mpeg2Target")        TTSettings::instance()->setWorkingMpeg2Target(value.toInt());
+    else if (name == "AudioOnlyFormat")    TTSettings::instance()->setWorkingAudioOnlyFormat(value.toInt());
     // Encoder (transient working values — see serialiser comment above)
     else if (name == "EncoderPreset")      TTSettings::instance()->setEncoderPreset(value.toInt());
     else if (name == "EncoderCrf")         TTSettings::instance()->setEncoderCrf(value.toInt());

@@ -79,19 +79,19 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   populateMuxerProg();
   populateMuxTarget();
 
-  // rbCreateMuxScript / rbMuxStreams — load UI from App-Default; persisting
-  // happens in setGlobalData() on OK, so a Cancel/X discard leaves the
-  // persistent App-Default untouched.
-  int muxMode = TTSettings::instance()->muxMode();
+  // rbCreateMuxScript / rbMuxStreams — load UI from working set (transient,
+  // initialised from App-Default by load() and overwritten by .ttcut on
+  // project load). Persisting happens in setGlobalData() on OK.
+  int muxMode = TTSettings::instance()->workingMuxMode();
   rbCreateMuxScript->setChecked(muxMode == 1);
   rbMuxStreams->setChecked(muxMode == 0);
 
-  // gbMuxOptions: MKV chapters + delete ES — load only, persist on OK.
-  cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
-  sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
-  cbDeleteES->setChecked(TTSettings::instance()->muxDeleteES());
+  // gbMuxOptions: MKV chapters + delete ES — load from working set.
+  cbMkvCreateChapters->setChecked(TTSettings::instance()->workingMkvCreateChapters());
+  sbMkvChapterInterval->setValue(TTSettings::instance()->workingMkvChapterInterval());
+  cbDeleteES->setChecked(TTSettings::instance()->workingMuxDeleteES());
 
-  // cbMuxTarget — load only, persist on OK.
+  // cbMuxTarget — load from working set.
 
   // Connect encoder codec changes to cut-dialog visibility logic
   connect(encodingPage, &TTCutSettingsEncoder::codecChanged, this,
@@ -137,18 +137,22 @@ void TTCutAVCutDlg::setGlobalData()
 
   TTSettings* s = TTSettings::instance();
 
-  // Mux options — persist UI values ONLY on OK. The previous live-write
-  // lambdas leaked Cancel/X-dismissed changes into the App-Defaults.
-  s->setMuxMode(rbCreateMuxScript->isChecked() ? 1 : 0);
-  s->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
-  s->setMkvChapterInterval(sbMkvChapterInterval->value());
-  s->setMuxDeleteES(cbDeleteES->isChecked());
-  s->setMpeg2Target(cbMuxTarget->currentIndex());
+  // Mux/Audio options write to the WORKING set (transient, per-cut and
+  // per-project). The persistent App-Defaults are only updated via the
+  // Settings dialog — Cut-Dialog overrides leave them untouched, so a user's
+  // dialog defaults stay sacrosanct across cuts and project loads.
+  s->setWorkingMuxMode(rbCreateMuxScript->isChecked() ? 1 : 0);
+  s->setWorkingMkvCreateChapters(cbMkvCreateChapters->isChecked());
+  s->setWorkingMkvChapterInterval(sbMkvChapterInterval->value());
+  s->setWorkingMuxDeleteES(cbDeleteES->isChecked());
+  s->setWorkingMpeg2Target(cbMuxTarget->currentIndex());
 
-  // Output container + per-codec sticky preference (the per-codec sticky is
-  // intentional — Phase 3 follow-up clarifies if it should stay).
+  // Output container: working set + per-codec sticky App-Default. The
+  // per-codec sticky (mpeg2Muxer/h264Muxer/h265Muxer) is App-level — a
+  // deliberate cross-cut preference (e.g. 'H.264 → MKV') — so it lives in
+  // the persistent App-Defaults and IS updated on OK.
   int container = cbMuxerProg->currentData().toInt();
-  s->setOutputContainer(container);
+  s->setWorkingOutputContainer(container);
   switch (s->encoderCodec()) {
     case 0: s->setMpeg2Muxer(container); break;
     case 1: s->setH264Muxer(container);  break;
@@ -157,7 +161,7 @@ void TTCutAVCutDlg::setGlobalData()
   }
 
   if (gbAudioOnly->isVisible()) {
-    s->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
+    s->setWorkingAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
   }
 }
 
@@ -269,16 +273,12 @@ void TTCutAVCutDlg::populateMuxerProg()
   cbMuxerProg->clear();
   cbMuxerProg->insertItem(0, "MKV (libav)", 1);
   cbMuxerProg->insertItem(1, "MPG (mplex)", 0);
-  // Read the per-codec preferred container so users can have
-  // 'MPEG-2 → MPG, H.264 → MKV' sticky preferences across cuts.
-  TTSettings* s = TTSettings::instance();
-  int container;
-  switch (s->encoderCodec()) {
-    case 0:  container = s->mpeg2Muxer(); break;
-    case 1:  container = s->h264Muxer();  break;
-    case 2:  container = s->h265Muxer();  break;
-    default: container = s->outputContainer(); break;
-  }
+  // Read workingOutputContainer. TTSettings::setEncoderCodec() initialises
+  // this from the per-codec App-Default (mpeg2Muxer/h264Muxer/h265Muxer),
+  // and .ttcut project load overwrites it via deserializeSettings(). So
+  // the per-codec sticky preference and per-project override both reach
+  // the UI through the same working slot.
+  int container = TTSettings::instance()->workingOutputContainer();
   int idx = cbMuxerProg->findData(container);
   cbMuxerProg->setCurrentIndex(idx >= 0 ? idx : 0);
   cbMuxerProg->blockSignals(false);
@@ -299,7 +299,7 @@ void TTCutAVCutDlg::populateMuxTarget()
   cbMuxTarget->insertItem(6, "VCD Stills (f6)");
   cbMuxTarget->insertItem(7, "DVD with NAV sectors (f8)");
   cbMuxTarget->insertItem(8, "DVD (f9)");
-  cbMuxTarget->setCurrentIndex(TTSettings::instance()->mpeg2Target());
+  cbMuxTarget->setCurrentIndex(TTSettings::instance()->workingMpeg2Target());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
