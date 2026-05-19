@@ -130,14 +130,6 @@
 - Make the current frame position clickable (enter current frame position)
 - Prepare long term processes for user cancellation (abort button)
 
-- **Settings-Dialog + Cut-Dialog Reorganisation**
-  - Settings-Dialog (`gui/ttcutsettingsdlg.{h,cpp}`) und Cut-Dialog (`gui/ttcutavcutdlg.{h,cpp}`)
-    teilen sich Tabs (`TTCutSettingsEncoder`, `TTCutSettingsMuxer`) — gemeinsam betrachten.
-  - Allgemein-Tab überladen (Navigation, Preview, Search, Audio, Language, Defect Grouping, ...)
-  - Files-Tab seit Logging-Refactor v0.69 mit 6 Log-Toggle-Checkboxes auch voll
-  - Logische Gruppierung in Unter-Sektionen (GroupBoxes) oder mehrere Tabs
-    (z.B. eigener "Logging"-Tab)
-
 - **FastForward-Player-Feature**
   - `playSkipFrames` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
   - Reanimieren benötigt Player-Refactor (TTMpv-Wrapper)
@@ -252,16 +244,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     erfordert dass Cuts via Skript hinzugefügt werden. Helper-Script `make_tux_with_cuts.sh` wäre
     nützlich.
 
-- **Subagent-Driven Development: Build-Permissions für Subagents**
-  - Subagents im superpowers:subagent-driven-development Skill haben standardmäßig keine
-    Bash-Permission für `make`, `qmake`, `bear`. Sie melden BLOCKED auf Build-Verification,
-    der Controller muss manuell `make` ausführen und committen — ineffizient bei Multi-Phase-Refactors.
-  - Workaround heute: nach jedem Implementer-Run macht der Controller `qmake && bear -- make`
-    und den finalen `git commit` mit der vom Plan-Schritt vorgegebenen Message.
-  - Verbesserung: `.claude/settings.local.json` um `Bash(make:*)`, `Bash(qmake:*)`, `Bash(bear:*)`,
-    `Bash(make clean:*)` Permissions erweitern, sodass Subagents Build-Verification selbst durchführen.
-  - Beobachtet während v0.70 Settings/Cut-Dialog Reorg (2026-05-17): jeder der 3 Sub-Phasen-Implementer
-    musste Controller einbeziehen für Build-Commit.
+- ~~**Subagent-Driven Development: Build-Permissions für Subagents**~~ → **Konfiguriert 2026-05-19**
+  - `.claude/settings.local.json` (lokal, gitignored) erweitert um `Bash(make:*)`,
+    `Bash(make clean:*)`, `Bash(qmake:*)`, `Bash(bear -- make:*)`, `Bash(lrelease:*)`.
+  - `Bash(bear:*)` und `Bash(lupdate:*)` waren bereits drin.
+  - Bei nächstem Subagent-Driven-Run verifizieren ob ausreichend.
 
 ## Completed
 
@@ -329,6 +316,10 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Replace deprecated qSort() with std::sort() in TTSubtitleHeaderList
 - [x] Suffix-Checkbox im Cut-Dialog reagiert live auf Toggle (updateOutputFilename slot)
 - [x] Remove inactive UI elements: Chapters tabs (spumux-legacy), Configure Muxer button, hidden videoFileInfo widget
+- [x] Settings-Dialog Sidebar (7 Kategorien: Navigation, Suche & Preview, Audio & Sprache, Encoder, Multiplexen, Pfade, Logging) — Allgemein-Tab und Files-Tab aufgeteilt (v0.70.0)
+- [x] Cut-Dialog 2-Tab Reorg (Schnitt + Encoder), Container-Wahl in gbOutput (v0.70.0)
+- [x] Persistent/transient Trennung für Encoder + Mux/Audio: Cut-Dialog überschreibt App-Defaults nicht mehr; working* Variants für 7 Mux/Audio-Settings; .ttcut serialisiert working set (v0.70.0)
+- [x] 'Reset to defaults' Buttons in 6 Settings-Tabs + Cut-Dialog (v0.70.0)
 
 ## Known Limitations
 

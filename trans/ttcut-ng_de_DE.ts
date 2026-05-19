@@ -688,7 +688,7 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     <message>
         <location filename="../gui/ttcutavcutdlg.cpp" line="240"/>
         <source>Datei existiert</source>
-        <translation type="unfinished"></translation>
+        <translation>Datei existiert</translation>
     </message>
     <message>
         <location filename="../gui/ttcutavcutdlg.cpp" line="241"/>
@@ -697,7 +697,11 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
   %1
 
 existiert bereits. Überschreiben?</source>
-        <translation type="unfinished"></translation>
+        <translation>Die Datei
+
+  %1
+
+existiert bereits. Überschreiben?</translation>
     </message>
 </context>
 <context>
@@ -2133,12 +2137,12 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="8"/>
         <source>Encoder</source>
-        <translation type="unfinished"></translation>
+        <translation>Encoder</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="14"/>
         <source>Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="23"/>
@@ -2575,12 +2579,12 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="21"/>
         <source>Container je Codec</source>
-        <translation type="unfinished"></translation>
+        <translation>Container je Codec</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="63"/>
         <source>Container-Optionen</source>
-        <translation type="unfinished"></translation>
+        <translation>Container-Optionen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
@@ -2625,7 +2629,7 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
         <source>Multiplexen</source>
-        <translation type="unfinished"></translation>
+        <translation>Multiplexen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="73"/>
@@ -2652,7 +2656,7 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="135"/>
         <source>Nach dem Multiplexen</source>
-        <translation type="unfinished"></translation>
+        <translation>Nach dem Multiplexen</translation>
     </message>
     <message>
         <source>Allgemein</source>
@@ -2843,17 +2847,17 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="117"/>
         <source>Position-Slider</source>
-        <translation type="unfinished"></translation>
+        <translation>Position-Slider</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="121"/>
         <source>Beim Ziehen nur zu I-Frames springen</source>
-        <translation type="unfinished"></translation>
+        <translation>Beim Ziehen nur zu I-Frames springen</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="122"/>
         <source>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</source>
-        <translation type="unfinished"></translation>
+        <translation>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="136"/>
@@ -2892,18 +2896,18 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="39"/>
         <source>Ausgabe-Verzeichnis (Standard)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgabe-Verzeichnis (Standard)</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="43"/>
         <source>Ausgabepfad:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ausgabepfad:</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="44"/>
         <location filename="../ui/ttcutsettingspaths.ui" line="51"/>
         <source>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</source>
-        <translation type="unfinished"></translation>
+        <translation>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="66"/>
@@ -2941,7 +2945,7 @@ Ausgabedatei:
     <message>
         <location filename="../gui/ttcutsettingspaths.cpp" line="48"/>
         <source>Standard-Ausgabeverzeichnis wählen</source>
-        <translation type="unfinished"></translation>
+        <translation>Standard-Ausgabeverzeichnis wählen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingspaths.cpp" line="55"/>
@@ -3007,13 +3011,13 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="62"/>
         <source>Encoder-Preset (nur H.264 / H.265):</source>
-        <translation type="unfinished"></translation>
+        <translation>Encoder-Preset (nur H.264 / H.265):</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="63"/>
         <location filename="../ui/ttcutsettingssearch.ui" line="68"/>
         <source>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</source>
-        <translation type="unfinished"></translation>
+        <translation>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="76"/>
@@ -3954,12 +3958,12 @@ Unterstützte Formate:
     <message>
         <location filename="../gui/ttcutsettingsdlg.cpp" line="57"/>
         <source>Encoder</source>
-        <translation type="unfinished"></translation>
+        <translation>Encoder</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingsdlg.cpp" line="60"/>
         <source>Multiplexen</source>
-        <translation type="unfinished"></translation>
+        <translation>Multiplexen</translation>
     </message>
     <message>
         <source>Encoder-Standards</source>
