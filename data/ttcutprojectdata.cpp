@@ -618,6 +618,9 @@ void TTCutProjectData::serializeSettings()
   addElement("MkvCreateChapters",  TTSettings::instance()->mkvCreateChapters() ? "true" : "false");
   addElement("MkvChapterInterval", QString::number(TTSettings::instance()->mkvChapterInterval()));
   addElement("MuxDeleteES",        TTSettings::instance()->muxDeleteES() ? "true" : "false");
+  addElement("MuxMode",            QString::number(TTSettings::instance()->muxMode()));
+  addElement("Mpeg2Target",        QString::number(TTSettings::instance()->mpeg2Target()));
+  addElement("AudioOnlyFormat",    QString::number(TTSettings::instance()->audioOnlyFormat()));
 
   // Encoder (active codec values — transient working values, persisted here
   // because they live in TTSettings as in-memory only, not in QSettings)
@@ -674,6 +677,9 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
     else if (name == "MkvCreateChapters")  TTSettings::instance()->setMkvCreateChapters(value == "true");
     else if (name == "MkvChapterInterval") TTSettings::instance()->setMkvChapterInterval(value.toInt());
     else if (name == "MuxDeleteES")        TTSettings::instance()->setMuxDeleteES(value == "true");
+    else if (name == "MuxMode")            TTSettings::instance()->setMuxMode(value.toInt());
+    else if (name == "Mpeg2Target")        TTSettings::instance()->setMpeg2Target(value.toInt());
+    else if (name == "AudioOnlyFormat")    TTSettings::instance()->setAudioOnlyFormat(value.toInt());
     // Encoder (transient working values — see serialiser comment above)
     else if (name == "EncoderPreset")      TTSettings::instance()->setEncoderPreset(value.toInt());
     else if (name == "EncoderCrf")         TTSettings::instance()->setEncoderCrf(value.toInt());

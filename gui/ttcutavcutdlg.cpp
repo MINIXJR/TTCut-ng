@@ -79,36 +79,19 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   populateMuxerProg();
   populateMuxTarget();
 
-  // rbCreateMuxScript / rbMuxStreams
+  // rbCreateMuxScript / rbMuxStreams — load UI from App-Default; persisting
+  // happens in setGlobalData() on OK, so a Cancel/X discard leaves the
+  // persistent App-Default untouched.
   int muxMode = TTSettings::instance()->muxMode();
   rbCreateMuxScript->setChecked(muxMode == 1);
   rbMuxStreams->setChecked(muxMode == 0);
-  connect(rbCreateMuxScript, &QRadioButton::clicked, this, [](bool c) {
-    if (c) TTSettings::instance()->setMuxMode(1);
-  });
-  connect(rbMuxStreams, &QRadioButton::clicked, this, [](bool c) {
-    if (c) TTSettings::instance()->setMuxMode(0);
-  });
 
-  // gbMuxOptions: MKV chapters + delete ES
+  // gbMuxOptions: MKV chapters + delete ES — load only, persist on OK.
   cbMkvCreateChapters->setChecked(TTSettings::instance()->mkvCreateChapters());
   sbMkvChapterInterval->setValue(TTSettings::instance()->mkvChapterInterval());
-  connect(cbMkvCreateChapters, &QCheckBox::toggled, this, [](bool c) {
-    TTSettings::instance()->setMkvCreateChapters(c);
-  });
-  connect(sbMkvChapterInterval, qOverload<int>(&QSpinBox::valueChanged), this, [](int v) {
-    TTSettings::instance()->setMkvChapterInterval(v);
-  });
-
   cbDeleteES->setChecked(TTSettings::instance()->muxDeleteES());
-  connect(cbDeleteES, &QCheckBox::toggled, this, [](bool c) {
-    TTSettings::instance()->setMuxDeleteES(c);
-  });
 
-  // cbMuxTarget persistence
-  connect(cbMuxTarget, qOverload<int>(&QComboBox::currentIndexChanged), this, [](int idx) {
-    TTSettings::instance()->setMpeg2Target(idx);
-  });
+  // cbMuxTarget — load only, persist on OK.
 
   // Connect encoder codec changes to cut-dialog visibility logic
   connect(encodingPage, &TTCutSettingsEncoder::codecChanged, this,
@@ -152,8 +135,29 @@ void TTCutAVCutDlg::setGlobalData()
   getCommonData();
   encodingPage->getTabData();
 
+  TTSettings* s = TTSettings::instance();
+
+  // Mux options — persist UI values ONLY on OK. The previous live-write
+  // lambdas leaked Cancel/X-dismissed changes into the App-Defaults.
+  s->setMuxMode(rbCreateMuxScript->isChecked() ? 1 : 0);
+  s->setMkvCreateChapters(cbMkvCreateChapters->isChecked());
+  s->setMkvChapterInterval(sbMkvChapterInterval->value());
+  s->setMuxDeleteES(cbDeleteES->isChecked());
+  s->setMpeg2Target(cbMuxTarget->currentIndex());
+
+  // Output container + per-codec sticky preference (the per-codec sticky is
+  // intentional — Phase 3 follow-up clarifies if it should stay).
+  int container = cbMuxerProg->currentData().toInt();
+  s->setOutputContainer(container);
+  switch (s->encoderCodec()) {
+    case 0: s->setMpeg2Muxer(container); break;
+    case 1: s->setH264Muxer(container);  break;
+    case 2: s->setH265Muxer(container);  break;
+    default: break;
+  }
+
   if (gbAudioOnly->isVisible()) {
-    TTSettings::instance()->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
+    s->setAudioOnlyFormat(cbAudioOnlyFormat->currentData().toInt());
   }
 }
 
@@ -247,10 +251,12 @@ void TTCutAVCutDlg::getCommonData()
   // The downstream cut pipeline uses TTSettings::cutVideoName() as the path
   // for the *intermediate* elementary-stream file, which needs a
   // codec-specific ES extension (.m2v / .h264 / .h265). Strip the UI
-  // container extension here and re-attach the ES one.
+  // container extension here and re-attach the ES one. Read the container
+  // from the live UI (setOutputContainer happens in setGlobalData() below).
   QFileInfo fi(displayName);
   QString base = fi.completeBaseName();
-  TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(TTSettings::instance()->outputContainer(),
+  int container = cbMuxerProg->currentData().toInt();
+  TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(container,
                                                          TTSettings::instance()->encoderCodec()));
 }
 
@@ -263,7 +269,17 @@ void TTCutAVCutDlg::populateMuxerProg()
   cbMuxerProg->clear();
   cbMuxerProg->insertItem(0, "MKV (libav)", 1);
   cbMuxerProg->insertItem(1, "MPG (mplex)", 0);
-  int idx = cbMuxerProg->findData(TTSettings::instance()->outputContainer());
+  // Read the per-codec preferred container so users can have
+  // 'MPEG-2 → MPG, H.264 → MKV' sticky preferences across cuts.
+  TTSettings* s = TTSettings::instance();
+  int container;
+  switch (s->encoderCodec()) {
+    case 0:  container = s->mpeg2Muxer(); break;
+    case 1:  container = s->h264Muxer();  break;
+    case 2:  container = s->h265Muxer();  break;
+    default: container = s->outputContainer(); break;
+  }
+  int idx = cbMuxerProg->findData(container);
   cbMuxerProg->setCurrentIndex(idx >= 0 ? idx : 0);
   cbMuxerProg->blockSignals(false);
 }
@@ -291,15 +307,9 @@ void TTCutAVCutDlg::populateMuxTarget()
  */
 void TTCutAVCutDlg::onMuxerProgChanged(int /*index*/)
 {
-  int value = cbMuxerProg->currentData().toInt();
-  TTSettings::instance()->setOutputContainer(value);
-  // Also write per-codec preference so it persists across sessions
-  switch (TTSettings::instance()->encoderCodec()) {
-    case 0: TTSettings::instance()->setMpeg2Muxer(value); break;
-    case 1: TTSettings::instance()->setH264Muxer(value);  break;
-    case 2: TTSettings::instance()->setH265Muxer(value);  break;
-    default: break;
-  }
+  // Live UI feedback only — persisting the container (and the per-codec
+  // sticky preference) happens in setGlobalData() on OK, so a Cancel/X
+  // discard leaves the App-Default unchanged.
   updateMuxerVisibility();
   updateOutputFilename();
 }
@@ -326,7 +336,27 @@ void TTCutAVCutDlg::onCodecChangedForVisibility(int codecIndex)
     }
   }
 
-  // Fall back to MKV if current container is MPG but codec doesn't support it
+  // Switch container to the codec's per-codec sticky preference (so a
+  // user-codec-switch in the dialog re-picks the right preferred container,
+  // e.g. MPEG-2 → MPG, H.264 → MKV).
+  TTSettings* s = TTSettings::instance();
+  int desired;
+  switch (codecIndex) {
+    case 0:  desired = s->mpeg2Muxer(); break;
+    case 1:  desired = s->h264Muxer();  break;
+    case 2:  desired = s->h265Muxer();  break;
+    default: desired = s->outputContainer(); break;
+  }
+  // Fall back to MKV if the preferred container is MPG but the codec
+  // doesn't support it (H.264/H.265 with MPG is not a valid combination).
+  if (!mpgSupported && desired == 0) desired = 1;
+  int desiredIdx = cbMuxerProg->findData(desired);
+  if (desiredIdx >= 0 && desiredIdx != cbMuxerProg->currentIndex()) {
+    cbMuxerProg->setCurrentIndex(desiredIdx);
+  }
+
+  // Belt-and-braces: even if the per-codec pref was MKV but UI somehow holds
+  // MPG, force it back when the codec doesn't support MPG.
   if (!mpgSupported && cbMuxerProg->currentData().toInt() == 0) {
     int mkvIdx = cbMuxerProg->findData(1);
     if (mkvIdx >= 0) cbMuxerProg->setCurrentIndex(mkvIdx);
@@ -439,7 +469,10 @@ void TTCutAVCutDlg::updateOutputFilename()
   if      ( wantSuffix && !hasSuffix) base += QStringLiteral("_cut");
   else if (!wantSuffix &&  hasSuffix) base.chop(4);
 
-  QString ext = expectedContainerExtension(TTSettings::instance()->outputContainer());
+  // Read container from the live UI value, not from the persistent
+  // App-Default — the App-Default is only updated on OK (setGlobalData).
+  int container = cbMuxerProg->currentData().toInt();
+  QString ext = expectedContainerExtension(container);
   QString newText = base + "." + ext;
 
   // Idempotency guard: setText() emits textChanged unconditionally.
