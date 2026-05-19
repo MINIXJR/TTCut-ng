@@ -26,6 +26,9 @@ public:
     void setTabData();
     void saveTabData();
 
+private slots:
+    void resetToDefaults();
+
 private:
     void populatePresetCombo(QComboBox* cb);
     void populateMpeg2Profiles();

@@ -31,6 +31,9 @@ class TTCutSettingsMuxer : public QGroupBox, private Ui_TTCutSettingsMuxer
 
   protected slots:
     void onMkvChaptersChanged(int state);
+
+  private slots:
+    void resetToDefaults();
 };
 
 #endif

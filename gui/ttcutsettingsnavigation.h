@@ -12,6 +12,11 @@ public:
     ~TTCutSettingsNavigation();
     void setTabData();
     void saveTabData();
+
+private slots:
+    // UI-only reset to compile-time defaults. Persistent App-Defaults are
+    // only mutated when the user clicks OK (saveTabData()).
+    void resetToDefaults();
 };
 
 #endif

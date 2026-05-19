@@ -496,11 +496,21 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="56"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="59"/>
+        <source>Reset all override values in this dialog to the App-Defaults from the Settings dialog. The dialog stays open; click Start to apply, or Cancel to discard.</source>
+        <translation>Setzt alle Override-Werte in diesem Dialog auf die App-Defaults aus dem Einstellungen-Dialog zurück. Der Dialog bleibt offen; klicke auf Start zum Übernehmen oder auf Abbrechen zum Verwerfen.</translation>
+    </message>
+    <message>
+        <location filename="../ui/avcutdialog.ui" line="66"/>
         <source>Start</source>
         <translation>Starten</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="63"/>
+        <location filename="../ui/avcutdialog.ui" line="73"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
@@ -533,12 +543,12 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Belegt %</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="247"/>
+        <location filename="../ui/avcutdialog.ui" line="257"/>
         <source>Audio-Only Output</source>
         <translation>Nur-Audio-Ausgabe</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="256"/>
+        <location filename="../ui/avcutdialog.ui" line="266"/>
         <source>Format:</source>
         <translation>Format:</translation>
     </message>
@@ -567,82 +577,82 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Max. Bitrate in erste Sequenz schreiben</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="79"/>
+        <location filename="../ui/avcutdialog.ui" line="89"/>
         <source>Schnitt</source>
         <translation>Schnitt</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="101"/>
+        <location filename="../ui/avcutdialog.ui" line="111"/>
         <source>Cut Output Options</source>
         <translation>Ausgabe-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="110"/>
+        <location filename="../ui/avcutdialog.ui" line="120"/>
         <source>Output file</source>
         <translation>Ausgabedatei</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="127"/>
+        <location filename="../ui/avcutdialog.ui" line="137"/>
         <source>Output path</source>
         <translation>Ausgabepfad</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="184"/>
+        <location filename="../ui/avcutdialog.ui" line="194"/>
         <source>Add &quot;_cut&quot; suffix to output filename</source>
         <translation>Suffix „_cut&quot; an Dateinamen anhängen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="191"/>
+        <location filename="../ui/avcutdialog.ui" line="201"/>
         <source>Container:</source>
         <translation>Container:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="201"/>
+        <location filename="../ui/avcutdialog.ui" line="211"/>
         <source>MPEG-2 Target:</source>
         <translation>MPEG-2 Ziel:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="218"/>
+        <location filename="../ui/avcutdialog.ui" line="228"/>
         <source>Multiplexer-Modus</source>
         <translation>Multiplexer-Modus</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="227"/>
+        <location filename="../ui/avcutdialog.ui" line="237"/>
         <source>Mux-Script erstellen</source>
         <translation>Mux-Skript erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="234"/>
+        <location filename="../ui/avcutdialog.ui" line="244"/>
         <source>Streams direkt muxen</source>
         <translation>Streams direkt multiplexen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="282"/>
+        <location filename="../ui/avcutdialog.ui" line="292"/>
         <source>Multiplexen-Optionen</source>
         <translation>Multiplexen-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="290"/>
+        <location filename="../ui/avcutdialog.ui" line="300"/>
         <source>MKV-Kapitel erstellen</source>
         <translation>MKV-Kapitel erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="297"/>
+        <location filename="../ui/avcutdialog.ui" line="307"/>
         <source>Intervall (Min):</source>
         <translation>Intervall (Min):</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="332"/>
+        <location filename="../ui/avcutdialog.ui" line="342"/>
         <source>ES-Dateien nach Mux löschen</source>
         <translation>ES-Dateien nach Mux löschen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="359"/>
+        <location filename="../ui/avcutdialog.ui" line="369"/>
         <source>Encoding</source>
         <translation>Encodieren</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="375"/>
+        <location filename="../ui/avcutdialog.ui" line="385"/>
         <source>GroupBox</source>
         <translation>GroupBox</translation>
     </message>
@@ -676,12 +686,12 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Audio-Schnitt-Optionen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutavcutdlg.cpp" line="171"/>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="240"/>
         <source>Datei existiert</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../gui/ttcutavcutdlg.cpp" line="172"/>
+        <location filename="../gui/ttcutavcutdlg.cpp" line="241"/>
         <source>Die Datei
 
   %1
@@ -1276,66 +1286,66 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1715"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1782"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2044"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1726"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1793"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2055"/>
         <source>Searching... %1 frames checked</source>
         <translation>Suche... %1 Frames geprüft</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1723"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1734"/>
         <source>Searching black frame from frame %1...</source>
         <translation>Suche Schwarzbild ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1743"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1754"/>
         <source>Black frame search aborted</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1744"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1755"/>
         <source>No black frame found</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1790"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1801"/>
         <source>Searching scene change from frame %1...</source>
         <translation>Suche Szenenwechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1810"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1821"/>
         <source>Scene change search aborted</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1811"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1822"/>
         <source>No scene change found</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1852"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1863"/>
         <source>Lade Logo-Profil...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2052"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2063"/>
         <source>Searching logo change from frame %1...</source>
         <translation>Suche Logo-Wechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2072"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2083"/>
         <source>Logo search aborted</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2073"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2084"/>
         <source>No logo state change found</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1297"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1858"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1924"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1308"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1869"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1935"/>
         <source>Logo-Profil geladen: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
@@ -1359,18 +1369,18 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1288"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1299"/>
         <source>Lade Logo-Profil (%1/%2 Frames)...</source>
         <translation>Lade Logo-Profil (%1/%2 Frames)...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1299"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1860"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1310"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1871"/>
         <source>Logo-Profil konnte nicht verifiziert werden</source>
         <translation>Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1517"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1528"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
@@ -1381,28 +1391,28 @@ Dieser MPEG-2 Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1521"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1532"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1522"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1523"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1524"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1525"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1526"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1527"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1528"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1533"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1534"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1535"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1536"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1537"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1538"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1539"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1531"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1542"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1533"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1544"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
@@ -1423,42 +1433,42 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation type="vanished">Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1823"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1834"/>
         <source>Logo-Bereich im Videobild auswählen...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1837"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1848"/>
         <source>Logo-Datei laden</source>
         <translation>Logo-Datei laden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1837"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1848"/>
         <source>PGM Logo (*.pgm)</source>
         <translation>PGM Logo (*.pgm)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1873"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1884"/>
         <source>Logo-Profil entfernt</source>
         <translation>Logo-Profil entfernt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1887"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1898"/>
         <source>Logo-Datei nicht gefunden: %1</source>
         <translation>Logo-Datei nicht gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1974"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1985"/>
         <source>Erstelle Logo-Profil (%1/%2 Frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2003"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2014"/>
         <source>Logo-Profil erstellt (%1 Frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2006"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2017"/>
         <source>Logo-Profil konnte nicht erstellt werden</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
@@ -1487,7 +1497,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1622"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1633"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -1810,6 +1820,16 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsaudio.ui" line="51"/>
         <source> dB</source>
         <translation> dB</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="68"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsaudio.ui" line="69"/>
+        <source>Reset audio burst threshold and AC3 normalisation to their factory defaults. The language preference is left unchanged. Changes are applied only when you click OK.</source>
+        <translation>Setzt Audio-Burst-Schwellwert und AC3-Normalisierung auf Werkseinstellungen zurück. Die Sprach-Präferenz bleibt unverändert. Änderungen werden erst beim Klick auf OK angewendet.</translation>
     </message>
 </context>
 <context>
@@ -2161,6 +2181,16 @@ Ausgabedatei:
         <translation>Profil:</translation>
     </message>
     <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="165"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="166"/>
+        <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
+        <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
+    </message>
+    <message>
         <source>Encoder-Profile (Kompatibilität).</source>
         <translation type="vanished">Encoder-Profile (Kompatibilität).</translation>
     </message>
@@ -2457,6 +2487,16 @@ Ausgabedatei:
         <source>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</source>
         <translation>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</translation>
     </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="98"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingslogging.ui" line="99"/>
+        <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
+        <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
+    </message>
 </context>
 <context>
     <name>TTCutSettingsMuxer</name>
@@ -2566,6 +2606,16 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsmuxer.ui" line="115"/>
         <source>Zusätzliche Auto-Kapitel alle X Minuten.</source>
         <translation>Zusätzliche Auto-Kapitel alle X Minuten.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="159"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsmuxer.ui" line="160"/>
+        <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
+        <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="69"/>
@@ -2805,6 +2855,16 @@ Ausgabedatei:
         <source>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="136"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="137"/>
+        <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
+        <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
+    </message>
 </context>
 <context>
     <name>TTCutSettingsPaths</name>
@@ -2981,6 +3041,16 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingssearch.ui" line="101"/>
         <source>Zeitlicher Offset für Cluster-Detection in Sekunden.</source>
         <translation>Zeitlicher Offset für Cluster-Detection in Sekunden.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="115"/>
+        <source>Reset to defaults</source>
+        <translation>Auf Standard zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="116"/>
+        <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
+        <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
     </message>
 </context>
 <context>
@@ -4217,17 +4287,17 @@ Unterstützte Formate:
 <context>
     <name>TTTranscodeProvider</name>
     <message>
-        <location filename="../extern/tttranscode.cpp" line="330"/>
+        <location filename="../extern/tttranscode.cpp" line="332"/>
         <source>Encoding</source>
         <translation>Encoding</translation>
     </message>
     <message>
-        <location filename="../extern/tttranscode.cpp" line="334"/>
+        <location filename="../extern/tttranscode.cpp" line="336"/>
         <source>Encoding failed - encoder setup</source>
         <translation>Encoding fehlgeschlagen - Encoder-Setup</translation>
     </message>
     <message>
-        <location filename="../extern/tttranscode.cpp" line="342"/>
+        <location filename="../extern/tttranscode.cpp" line="344"/>
         <source>Encoding finished</source>
         <translation>Encoding abgeschlossen</translation>
     </message>

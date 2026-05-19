@@ -22,6 +22,22 @@ TTCutSettingsEncoderDefaults::TTCutSettingsEncoderDefaults(QWidget* parent)
 
   populateH264Profiles();
   populateH265Profiles();
+
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsEncoderDefaults::resetToDefaults);
+}
+
+void TTCutSettingsEncoderDefaults::resetToDefaults()
+{
+  // Compile-time defaults — must match common/ttsettings.h
+  // (mEncoderMode, mMpeg2Crf, mH264Preset/Crf/Profile, mH265Preset/Crf/Profile).
+  cbEncodingMode->setChecked(true);
+  sbMpeg2Crf->setValue(2);
+  cbH264Preset->setCurrentIndex(4);   // fast
+  sbH264Crf->setValue(18);
+  cbH264Profile->setCurrentIndex(2);  // high
+  cbH265Preset->setCurrentIndex(4);   // fast
+  sbH265Crf->setValue(20);
+  cbH265Profile->setCurrentIndex(0);  // main
 }
 
 TTCutSettingsEncoderDefaults::~TTCutSettingsEncoderDefaults() {}

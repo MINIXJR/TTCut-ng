@@ -15,6 +15,7 @@ public:
 
 private slots:
     void onCreateLogStateChanged(int state);
+    void resetToDefaults();
 };
 
 #endif

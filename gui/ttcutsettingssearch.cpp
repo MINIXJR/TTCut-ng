@@ -20,9 +20,24 @@ TTCutSettingsSearch::TTCutSettingsSearch(QWidget* parent)
   cbPreviewPreset->clear();
   for (int i = 0; i < kPreviewPresetCount; ++i)
     cbPreviewPreset->insertItem(i, QString::fromLatin1(kPreviewPresets[i]));
+
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsSearch::resetToDefaults);
 }
 
 TTCutSettingsSearch::~TTCutSettingsSearch() {}
+
+void TTCutSettingsSearch::resetToDefaults()
+{
+  // Compile-time defaults — must match common/ttsettings.h
+  // (mSearchLength/mSearchWorkerCount/mCutPreviewSeconds/mPreviewPreset/
+  // mExtraFrameClusterGapSec/mExtraFrameClusterOffsetSec).
+  sbSearchIntervall->setValue(45);
+  sbSearchWorkerCount->setValue(0);
+  spPreviewLength->setValue(25);
+  cbPreviewPreset->setCurrentIndex(0);   // ultrafast
+  sbClusterGap->setValue(5);
+  sbClusterOffset->setValue(2);
+}
 
 void TTCutSettingsSearch::setTabData()
 {

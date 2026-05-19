@@ -6,6 +6,27 @@ TTCutSettingsLogging::TTCutSettingsLogging(QWidget* parent)
 {
   setupUi(this);
   connect(cbCreateLog, &QCheckBox::stateChanged, this, &TTCutSettingsLogging::onCreateLogStateChanged);
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsLogging::resetToDefaults);
+}
+
+void TTCutSettingsLogging::resetToDefaults()
+{
+  // Compile-time defaults — must match common/ttsettings.h
+  // (mCreateLogFile, mLogModeConsole, mLogModeExtended, mLogVideoIndexInfo,
+  //  mLogFFmpegDecoder, mLogSmartCut, mLogMkvMux, mLogCutPipeline,
+  //  mLogAVStream, mLogUI, mLogLibav).
+  cbCreateLog->setChecked(true);
+  cbLogConsole->setChecked(false);
+  cbLogExtended->setChecked(true);
+  cbLogPlusVideoIndex->setChecked(false);
+  cbLogPlusFFmpegDecoder->setChecked(false);
+  cbLogPlusSmartCut->setChecked(false);
+  cbLogPlusMkvMux->setChecked(false);
+  cbLogPlusCutPipeline->setChecked(false);
+  cbLogPlusAVStream->setChecked(false);
+  cbLogPlusUI->setChecked(false);
+  cbLogPlusLibav->setChecked(false);
+  gbLogPlus->setEnabled(true);
 }
 
 TTCutSettingsLogging::~TTCutSettingsLogging() {}

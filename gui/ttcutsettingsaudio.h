@@ -12,6 +12,9 @@ public:
     ~TTCutSettingsAudio();
     void setTabData();
     void saveTabData();
+
+private slots:
+    void resetToDefaults();
 };
 
 #endif

@@ -51,6 +51,16 @@
       </spacer>
      </item>
      <item>
+      <widget class="QPushButton" name="btnResetDefaults" >
+       <property name="text" >
+        <string>Reset to defaults</string>
+       </property>
+       <property name="toolTip" >
+        <string>Reset all override values in this dialog to the App-Defaults from the Settings dialog. The dialog stays open; click Start to apply, or Cancel to discard.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="okButton" >
        <property name="text" >
         <string>Start</string>

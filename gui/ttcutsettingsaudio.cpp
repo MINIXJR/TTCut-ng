@@ -6,9 +6,20 @@ TTCutSettingsAudio::TTCutSettingsAudio(QWidget* parent)
     : QGroupBox(parent)
 {
   setupUi(this);
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsAudio::resetToDefaults);
 }
 
 TTCutSettingsAudio::~TTCutSettingsAudio() {}
+
+void TTCutSettingsAudio::resetToDefaults()
+{
+  // Compile-time defaults — must match common/ttsettings.h
+  // (mNormalizeAcmod, mBurstThresholdDb). Audio language preference is
+  // intentionally left unchanged — user-curated setting that survives
+  // factory resets.
+  cbNormalizeAcmod->setChecked(true);
+  sbBurstThreshold->setValue(-30);
+}
 
 void TTCutSettingsAudio::setTabData()
 {

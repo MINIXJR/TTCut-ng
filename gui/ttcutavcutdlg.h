@@ -63,6 +63,10 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
     void updateOutputFilename();
     void onMuxerProgChanged(int index);
     void onCodecChangedForVisibility(int codecIndex);
+    // Reset the working set (Mux/Audio + Encoder) back to the App-Defaults
+    // from the Settings dialog, then reload the UI. Does not close the
+    // dialog — user can still Cancel or change values before clicking Start.
+    void onResetDefaults();
 
   private:
     void populateMuxerProg();

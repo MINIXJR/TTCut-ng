@@ -71,9 +71,10 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
 
   // signals and slot connection
   // ------------------------------------------------------------------
-  connect(btnDirOpen,   &QPushButton::clicked, this, &TTCutAVCutDlg::onDirectoryOpen);
-  connect(okButton,     &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgStart);
-  connect(cancelButton, &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgCancel);
+  connect(btnDirOpen,       &QPushButton::clicked, this, &TTCutAVCutDlg::onDirectoryOpen);
+  connect(okButton,         &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgStart);
+  connect(cancelButton,     &QPushButton::clicked, this, &TTCutAVCutDlg::onDlgCancel);
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutAVCutDlg::onResetDefaults);
 
   // Populate container and mux-target combos
   populateMuxerProg();
@@ -169,6 +170,66 @@ void TTCutAVCutDlg::setGlobalData()
 /* /////////////////////////////////////////////////////////////////////////////
  * Exit, saving changes; start A/V cut
  */
+void TTCutAVCutDlg::onResetDefaults()
+{
+  // Reset the working set to mirror the App-Defaults from the Settings
+  // dialog. This is the same sync that TTSettings::load() and
+  // setEncoderCodec() perform — we replay it here on user request so an
+  // override that drifted (Cut-Dialog edits, .ttcut project values) can be
+  // wiped without a project reload.
+  TTSettings* s = TTSettings::instance();
+
+  // Encoder transient: codec-specific App-Default.
+  switch (s->encoderCodec()) {
+    case 0:
+      s->setEncoderCrf(s->mpeg2Crf());
+      break;
+    case 1:
+      s->setEncoderPreset(s->h264Preset());
+      s->setEncoderCrf(s->h264Crf());
+      s->setEncoderProfile(s->h264Profile());
+      break;
+    case 2:
+      s->setEncoderPreset(s->h265Preset());
+      s->setEncoderCrf(s->h265Crf());
+      s->setEncoderProfile(s->h265Profile());
+      break;
+  }
+
+  // Mux/Audio working set: persistent App-Defaults.
+  s->setWorkingMkvCreateChapters(s->mkvCreateChapters());
+  s->setWorkingMkvChapterInterval(s->mkvChapterInterval());
+  s->setWorkingMuxDeleteES(s->muxDeleteES());
+  s->setWorkingMpeg2Target(s->mpeg2Target());
+  s->setWorkingMuxMode(s->muxMode());
+  s->setWorkingAudioOnlyFormat(s->audioOnlyFormat());
+  // Container: codec-specific App-Default sticky.
+  switch (s->encoderCodec()) {
+    case 0: s->setWorkingOutputContainer(s->mpeg2Muxer()); break;
+    case 1: s->setWorkingOutputContainer(s->h264Muxer());  break;
+    case 2: s->setWorkingOutputContainer(s->h265Muxer());  break;
+    default: s->setWorkingOutputContainer(s->outputContainer()); break;
+  }
+
+  // Reload the UI from the freshly reset working set.
+  int muxMode = s->workingMuxMode();
+  rbCreateMuxScript->setChecked(muxMode == 1);
+  rbMuxStreams->setChecked(muxMode == 0);
+  cbMkvCreateChapters->setChecked(s->workingMkvCreateChapters());
+  sbMkvChapterInterval->setValue(s->workingMkvChapterInterval());
+  cbDeleteES->setChecked(s->workingMuxDeleteES());
+  cbMuxTarget->setCurrentIndex(s->workingMpeg2Target());
+  int containerIdx = cbMuxerProg->findData(s->workingOutputContainer());
+  if (containerIdx >= 0) cbMuxerProg->setCurrentIndex(containerIdx);
+  if (gbAudioOnly->isVisible()) {
+    int aoIdx = cbAudioOnlyFormat->findData(s->workingAudioOnlyFormat());
+    if (aoIdx >= 0) cbAudioOnlyFormat->setCurrentIndex(aoIdx);
+  }
+  encodingPage->setTabData();
+  updateMuxerVisibility();
+  updateOutputFilename();
+}
+
 void TTCutAVCutDlg::onDlgStart()
 {
   // Existiert die Ausgabedatei bereits? UI-Pfad + UI-Dateiname mit der

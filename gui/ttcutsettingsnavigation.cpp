@@ -5,9 +5,24 @@ TTCutSettingsNavigation::TTCutSettingsNavigation(QWidget* parent)
     : QGroupBox(parent)
 {
   setupUi(this);
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsNavigation::resetToDefaults);
 }
 
 TTCutSettingsNavigation::~TTCutSettingsNavigation() {}
+
+void TTCutSettingsNavigation::resetToDefaults()
+{
+  // Compile-time defaults — must match the member initialisers in
+  // common/ttsettings.h (mStep*, mFastSlider, mQuickJumpIntervalSec).
+  sbArrowKeyPlacement->setValue(1);
+  sbSliderClickPlacement->setValue(40);
+  sbPgUpDown->setValue(80);
+  sbAltDistance->setValue(100);
+  sbCtrlDistance->setValue(200);
+  sbMouseWheel->setValue(120);
+  sbQuickJumpInterval->setValue(30);
+  cbQuickSearch->setChecked(false);
+}
 
 void TTCutSettingsNavigation::setTabData()
 {

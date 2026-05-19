@@ -20,6 +20,29 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   populateMpgTarget();
   populateMpgMode();
   connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
+  connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsMuxer::resetToDefaults);
+}
+
+void TTCutSettingsMuxer::resetToDefaults()
+{
+  // Compile-time defaults — must match common/ttsettings.h
+  // (mMkvCreateChapters/mMkvChapterInterval, mMuxDeleteES, mMpeg2Target,
+  // mMuxMode, mMpeg2Muxer/mH264Muxer/mH265Muxer).
+  cbMkvCreateChapters->setChecked(true);
+  sbMkvChapterInterval->setValue(5);
+  sbMkvChapterInterval->setEnabled(true);
+  cbDeleteES->setChecked(false);
+  cbMpgTarget->setCurrentIndex(7);   // DVD with NAV sectors
+  cbMpgMode->setCurrentIndex(0);     // Direkt muxen
+  // Container je Codec: MPEG-2 → MPG (0=mplex), H.264 → MKV (1=libav),
+  // H.265 → MKV (1=libav). Header default mMpeg2Muxer=0 entspricht 'MPG'
+  // hier (combo item 1, data 0).
+  int mpgIdx = cbMpeg2Muxer->findData(0);
+  if (mpgIdx >= 0) cbMpeg2Muxer->setCurrentIndex(mpgIdx);
+  int mkvIdxH264 = cbH264Muxer->findData(1);
+  if (mkvIdxH264 >= 0) cbH264Muxer->setCurrentIndex(mkvIdxH264);
+  int mkvIdxH265 = cbH265Muxer->findData(1);
+  if (mkvIdxH265 >= 0) cbH265Muxer->setCurrentIndex(mkvIdxH265);
 }
 
 void TTCutSettingsMuxer::populateCodecMuxers()

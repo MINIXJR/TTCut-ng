@@ -151,6 +151,18 @@
     </spacer>
    </item>
 
+   <item>
+    <layout class="QHBoxLayout">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnResetDefaults">
+       <property name="text"><string>Reset to defaults</string></property>
+       <property name="toolTip"><string>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
   </layout>
  </widget>
  <resources/>
