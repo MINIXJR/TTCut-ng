@@ -19,6 +19,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QStandardPaths>
+#include <QProcess>
 
 #include <cstdarg>
 #include <cstdio>
@@ -89,11 +90,16 @@ TTMessageLogger* TTMessageLogger::getInstance(int mode)
 // -----------------------------------------------------------------------------
 void TTMessageLogger::setLogFilePath(const QString& path)
 {
-    if (path == mLogFilePath) return;
+    // Empty → fall back to XDG default, THEN compare. Ohne diese Konvertierung
+    // VOR dem Idempotenz-Check würde z.B. TTSettings::load() (das pro App-Start
+    // dreimal mit "" aufruft, wenn der User keinen Pfad gesetzt hat) jedes Mal
+    // mLogFileOpenAttempted zurücksetzen und damit eine erneute Logrotation
+    // bei der nächsten writeMsg auslösen — Resultat: pro App-Start mehrere
+    // .log.N-Backups einer einzigen Session.
+    QString newPath = path.isEmpty() ? defaultLogPath() : path;
+    if (newPath == mLogFilePath) return;
 
-    // If the file is already open, close it; the next write reopens at the
-    // new path. If the user passes an empty string, fall back to default.
-    mLogFilePath = path.isEmpty() ? defaultLogPath() : path;
+    mLogFilePath = newPath;
     if (logfile) {
         logfile->close();
         delete logfile;
@@ -269,10 +275,65 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     writeMsg(logMsgStr);
 }
 
+static void rotateLogFile(const QString& path)
+{
+    // Logrotate-Style: behält die letzten Sessions in derselben Verzeichnis.
+    //   <path>          (neu, Text)            ← current run
+    //   <path>.1        (vorherige Session, Text)
+    //   <path>.2.gz     (älter, gzip-komprimiert)
+    //   …
+    //   <path>.kMaxBackups.gz (ältester)
+    // Älter als kMaxBackups wird verworfen.
+    if (path.isEmpty()) return;
+    constexpr int kMaxBackups = 10;
+
+    // 1) Ältesten Backup wegwerfen wenn voll
+    QFile::remove(QString("%1.%2.gz").arg(path).arg(kMaxBackups));
+
+    // 2) Komprimierte Backups durchschieben: .N.gz → .(N+1).gz, von oben nach unten
+    for (int n = kMaxBackups - 1; n >= 2; --n) {
+        QString from = QString("%1.%2.gz").arg(path).arg(n);
+        QString to   = QString("%1.%2.gz").arg(path).arg(n + 1);
+        if (QFile::exists(from)) {
+            QFile::remove(to);
+            QFile::rename(from, to);
+        }
+    }
+
+    // 3) <path>.1 (Text der vorletzten Session) → <path>.2.gz (komprimieren)
+    const QString lvl1   = path + ".1";
+    const QString lvl2gz = path + ".2.gz";
+    if (QFile::exists(lvl1)) {
+        QFile::remove(lvl2gz);
+        QProcess gz;
+        gz.setStandardOutputFile(lvl2gz, QIODevice::Truncate);
+        gz.start("gzip", QStringList() << "-c" << lvl1);
+        gz.waitForFinished(30000);
+        if (gz.exitStatus() == QProcess::NormalExit && gz.exitCode() == 0) {
+            QFile::remove(lvl1);
+        } else {
+            // gzip schiefgegangen: rohes Move statt komprimiertes Backup,
+            // damit die History nicht verloren geht.
+            QFile::remove(lvl2gz);
+            QFile::rename(lvl1, lvl2gz + ".uncompressed");
+        }
+    }
+
+    // 4) <path> (Text der letzten Session) → <path>.1
+    if (QFile::exists(path)) {
+        QFile::remove(lvl1);
+        QFile::rename(path, lvl1);
+    }
+}
+
 void TTMessageLogger::ensureLogFileOpen()
 {
     if (mLogFileOpenAttempted) return;
     mLogFileOpenAttempted = true;
+
+    // Logrotate vor jedem App-Start: aktuell + .1 als Text,
+    // ältere komprimiert als .2.gz … .10.gz, danach verworfen.
+    rotateLogFile(mLogFilePath);
 
     QFile* f = new QFile(mLogFilePath);
     // Truncate any previous run's file (matches pre-refactor behaviour).

@@ -57,6 +57,17 @@
         <property name="toolTip"><string>Länge der Preview-Clips um Cut-Punkte in Sekunden.</string></property>
        </widget>
       </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laPreviewPreset">
+        <property name="text"><string>Encoder-Preset (nur H.264 / H.265):</string></property>
+        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="cbPreviewPreset">
+        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

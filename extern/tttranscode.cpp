@@ -93,9 +93,11 @@ bool TTTranscodeProvider::setupEncoder()
   mEncoder->time_base = (AVRational){1001, static_cast<int>(fps * 1001 + 0.5)};
   mEncoder->framerate = (AVRational){static_cast<int>(fps * 1000 + 0.5), 1000};
 
-  // Quality: qscale mode using mpeg2Crf setting (2-31)
+  // Quality: qscale mode using transient encoderCrf (2-31). Cut-Dialog
+  // override fills encoderCrf for the current cut; otherwise it mirrors
+  // mpeg2Crf App-Default (synced in TTSettings::setEncoderCodec).
   mEncoder->flags |= AV_CODEC_FLAG_QSCALE;
-  mEncoder->global_quality = FF_QP2LAMBDA * TTSettings::instance()->mpeg2Crf();
+  mEncoder->global_quality = FF_QP2LAMBDA * TTSettings::instance()->encoderCrf();
 
   // GOP size based on frame rate (PAL=15, NTSC=18)
   int gopSize = 15;
@@ -153,7 +155,7 @@ bool TTTranscodeProvider::setupEncoder()
 
   if (TTSettings::instance()->logSmartCut()) {
       qDebug() << "MPEG-2 encoder setup:" << mEncoder->width << "x" << mEncoder->height
-               << "qscale=" << TTSettings::instance()->mpeg2Crf() << "gop=" << gopSize
+               << "qscale=" << TTSettings::instance()->encoderCrf() << "gop=" << gopSize
                << "interlaced=" << enc_par.videoInterlaced()
                << "bitrate_cap=" << bitrateKbit << "kbit/s";
   }

@@ -1021,30 +1021,16 @@ void TTAVData::onReadProjectFileFinished()
     emit logoDataLoaded(logoData);
   }
 
-  // Restore global settings from project file
+  // Restore global settings from project file. Das setzt die transient
+  // encoderPreset/Crf/Profile-Werte (TTSettings) auf das, was in .ttcut steht.
+  // Der frühere Code mappte diese transient Werte ANSCHLIEßEND auf die
+  // codec-spezifischen App-Defaults (setMpeg2Profile etc.) — das hatte den
+  // Nebeneffekt dass jedes Project-Load die User-Defaults im Settings-Dialog
+  // überschrieb (z.B. <EncoderProfile>2</EncoderProfile> aus alter Session
+  // zwingt mpeg2Profile auf 2 bei jedem Reload). Dieser auto-merge ist
+  // entfernt: die transient Values werden für DIESE Cut-Session verwendet,
+  // die App-Defaults bleiben unter User-Kontrolle.
   mpProjectData->deserializeSettings();
-
-  // Map generic encoder values to codec-specific fields based on video type
-  if (avCount() > 0 && avItemAt(0)->videoStream()) {
-    TTSettings* s = TTSettings::instance();
-    const int preset  = s->encoderPreset();
-    const int crf     = s->encoderCrf();
-    const int profile = s->encoderProfile();
-    TTAVTypes::AVStreamType st = avItemAt(0)->videoStream()->streamType();
-    if (st == TTAVTypes::mpeg2_demuxed_video) {
-      s->setMpeg2Preset(preset);
-      s->setMpeg2Crf(crf);
-      s->setMpeg2Profile(profile);
-    } else if (st == TTAVTypes::h264_video) {
-      s->setH264Preset(preset);
-      s->setH264Crf(crf);
-      s->setH264Profile(profile);
-    } else if (st == TTAVTypes::h265_video) {
-      s->setH265Preset(preset);
-      s->setH265Crf(crf);
-      s->setH265Profile(profile);
-    }
-  }
 
   emit readProjectFileFinished(mpProjectData->filePath());
 

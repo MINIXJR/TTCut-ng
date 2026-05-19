@@ -88,12 +88,18 @@ void TTCutSettingsEncoder::updateProfileList()
   int codec = cbCodec->currentIndex();
   cbProfile->clear();
 
+  // Bei MPEG-2 sind Preset und Profile nicht wirksam (libavcodec mpeg2video
+  // kennt kein Preset; Profile auto-detected). Komplette Zeilen verstecken,
+  // damit der Override-Modus im Cut-Dialog nicht suggeriert dass etwas
+  // wählbar wäre was nichts bewirkt.
+  bool isMpeg2 = (codec == 0);
+  cbPreset->setVisible(!isMpeg2);
+  lblPreset->setVisible(!isMpeg2);
+  cbProfile->setVisible(!isMpeg2);
+  lblProfile->setVisible(!isMpeg2);
+
   switch (codec) {
-    case 0:  // MPEG-2
-      cbProfile->insertItem(0, "Main Profile");
-      cbProfile->insertItem(1, "Simple Profile");
-      cbProfile->insertItem(2, "High Profile");
-      cbProfile->setEnabled(false);  // MPEG-2 profile is auto-detected
+    case 0:  // MPEG-2 — keine Items nötig (versteckt)
       break;
 
     case 1:  // H.264
@@ -191,43 +197,30 @@ void TTCutSettingsEncoder::getTabData()
   s->setEncoderMode(cbEncodingMode->isChecked());
   s->setEncoderCodec(cbCodec->currentIndex());
 
-  // Save current UI values to the current codec's settings
+  // Save current UI values into the transient working set ONLY. The
+  // codec-specific App-Defaults (Mpeg2Crf, H264Preset/Crf/Profile,
+  // H265Preset/Crf/Profile) live in the Settings dialog and must not be
+  // mutated by a per-cut override.
   saveCurrentCodecSettings(cbCodec->currentIndex());
 
-  // Preview preset
-  s->setPreviewPreset(cbPreviewPreset->currentIndex());
+  // Preview-Preset is an App-Default (lives in Settings → Suche & Preview).
+  // The cut dialog hides gbPreviewSettings in Override mode, so any value
+  // read from cbPreviewPreset here is meaningless and used to corrupt the
+  // App-Default with the default index.
 }
 
-// Save the encoder UI's current preset/crf/profile values into the per-codec
-// TTCut fields for the codec passed in. Pass cbCodec->currentIndex() to save
-// under the codec the user is editing right now; pass the previous codec
-// from onCodecChanged() to save under the codec the user is leaving.
-void TTCutSettingsEncoder::saveCurrentCodecSettings(int codec)
+// Per-cut override: copy the encoder UI's preset/crf/profile values into the
+// transient working set (encoderPreset/Crf/Profile). The codec-specific
+// App-Defaults are deliberately NOT written — they belong to the Settings
+// dialog. The `codec` parameter is unused for transient writes (kept for
+// signature compatibility with onCodecChanged callers).
+void TTCutSettingsEncoder::saveCurrentCodecSettings(int /*codec*/)
 {
   int preset = cbPreset->currentIndex();
   int crf = sbCrf->value();
   int profile = cbProfile->currentIndex();
 
   TTSettings* s = TTSettings::instance();
-  switch (codec) {
-    case 0:  // MPEG-2
-      s->setMpeg2Preset(preset);
-      s->setMpeg2Crf(crf);
-      s->setMpeg2Profile(profile);
-      break;
-    case 1:  // H.264
-      s->setH264Preset(preset);
-      s->setH264Crf(crf);
-      s->setH264Profile(profile);
-      break;
-    case 2:  // H.265
-      s->setH265Preset(preset);
-      s->setH265Crf(crf);
-      s->setH265Profile(profile);
-      break;
-  }
-
-  // Also update the current working values
   s->setEncoderPreset(preset);
   s->setEncoderCrf(crf);
   s->setEncoderProfile(profile);
@@ -239,10 +232,10 @@ void TTCutSettingsEncoder::loadCodecSettings(int codec)
 
   TTSettings* s = TTSettings::instance();
   switch (codec) {
-    case 0:  // MPEG-2
-      preset  = s->mpeg2Preset();
+    case 0:  // MPEG-2: Preset/Profile entfallen — Defaults für UI-Konsistenz
+      preset  = 4;  // "fast" (UI shows preset list aber wirkt nicht für MPEG-2)
       crf     = s->mpeg2Crf();
-      profile = s->mpeg2Profile();
+      profile = 0;  // "Main Profile" (auto-detected im Cut)
       break;
     case 1:  // H.264
       preset  = s->h264Preset();

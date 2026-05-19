@@ -32,42 +32,19 @@
     </widget>
    </item>
 
-   <!-- MPEG-2 -->
+   <!-- MPEG-2: nur Qualität wirkt (libavcodec mpeg2video kennt kein Preset;
+        Profile ist auto-detected). Siehe TODO "Dead Encoder Settings". -->
    <item>
     <widget class="QGroupBox" name="gbMpeg2">
      <property name="title"><string>MPEG-2</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
-       <widget class="QLabel" name="laMpeg2Preset">
-        <property name="text"><string>Preset:</string></property>
-        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="cbMpeg2Preset">
-        <property name="minimumContentsLength"><number>12</number></property>
-        <property name="toolTip"><string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string></property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="laMpeg2Profile">
-        <property name="text"><string>Profile:</string></property>
-        <property name="toolTip"><string>Encoder-Profile (Kompatibilität).</string></property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QComboBox" name="cbMpeg2Profile">
-        <property name="minimumContentsLength"><number>12</number></property>
-        <property name="toolTip"><string>Encoder-Profile (Kompatibilität).</string></property>
-       </widget>
-      </item>
-      <item row="2" column="0">
        <widget class="QLabel" name="laMpeg2Crf">
         <property name="text"><string>Quality (qscale):</string></property>
         <property name="toolTip"><string>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</string></property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="0" column="1">
        <widget class="QSpinBox" name="sbMpeg2Crf">
         <property name="minimum"><number>2</number></property>
         <property name="maximum"><number>31</number></property>
@@ -173,26 +150,9 @@
     </widget>
    </item>
 
-   <!-- Preview Preset -->
-   <item>
-    <widget class="QGroupBox" name="gbPreview">
-     <property name="title"><string>Preview</string></property>
-     <layout class="QFormLayout">
-      <item row="0" column="0">
-       <widget class="QLabel" name="laPreviewPreset">
-        <property name="text"><string>Preview-Preset:</string></property>
-        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string></property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="cbPreviewPreset">
-        <property name="minimumContentsLength"><number>12</number></property>
-        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string></property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
+   <!-- Preview-Preset wurde nach Sidebar-Kategorie "Suche & Preview"
+        verschoben (gehört konzeptionell zum Preview-Workflow, nicht zum
+        Encoder-Default). -->
 
    <item>
     <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer>

@@ -2703,8 +2703,11 @@ bool TTESSmartCut::setupEncoder()
     // Thread count
     mEncoder->thread_count = 0;  // Auto
 
-    // Use codec-specific settings directly (not the generic encoderCrf/encoderPreset
-    // which may still hold MPEG-2 values if encoderCodec was not updated)
+    // Read transient working values (encoderCrf/Preset/Profile). These are
+    // kept in sync with the codec-specific App-Defaults by
+    // TTSettings::setEncoderCodec() and overwritten by Cut-Dialog overrides
+    // or .ttcut project load. The generic profile range differs per codec,
+    // so we still clamp against the codec-specific upper bound below.
     int crf, presetIdx, profileIdx;
 
     static const char* presetNames[] = {
@@ -2716,10 +2719,10 @@ bool TTESSmartCut::setupEncoder()
 
     if (mParser.codecType() == NALU_CODEC_H264) {
         TTSettings* s = TTSettings::instance();
-        crf        = s->h264Crf();
+        crf        = s->encoderCrf();
         presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, s->h264Preset(), 8);
-        profileIdx = qBound(0, s->h264Profile(), 5);
+                                            : qBound(0, s->encoderPreset(), 8);
+        profileIdx = qBound(0, s->encoderProfile(), 5);
 
         static const char* h264Profiles[] = {
             "baseline", "main", "high", "high10", "high422", "high444"
@@ -2748,10 +2751,10 @@ bool TTESSmartCut::setupEncoder()
     } else {
         // H.265
         TTSettings* s = TTSettings::instance();
-        crf        = s->h265Crf();
+        crf        = s->encoderCrf();
         presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, s->h265Preset(), 8);
-        profileIdx = qBound(0, s->h265Profile(), 4);
+                                            : qBound(0, s->encoderPreset(), 8);
+        profileIdx = qBound(0, s->encoderProfile(), 4);
 
         static const char* h265Profiles[] = {
             "main", "main10", "main12", "main422-10", "main444-10"

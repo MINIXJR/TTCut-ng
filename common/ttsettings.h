@@ -158,14 +158,11 @@ public:
   // these fields synchronously after setEncoderCodec() emits
   // encoderCodecChanged(int) (Task 8); no further per-field notification
   // is needed.
-  int     mpeg2Preset() const        { return mMpeg2Preset; }
-  void    setMpeg2Preset(int v);
-
+  // MPEG-2 hat nur Qualität (qscale) als wirksamen Encoder-Knob.
+  // Preset (libx264-Konzept) und Profile (auto-detected) wurden entfernt
+  // — siehe TODO "Dead Encoder Settings" für Hintergrund.
   int     mpeg2Crf() const           { return mMpeg2Crf; }
   void    setMpeg2Crf(int v);
-
-  int     mpeg2Profile() const       { return mMpeg2Profile; }
-  void    setMpeg2Profile(int v);
 
   int     mpeg2Muxer() const         { return mMpeg2Muxer; }
   void    setMpeg2Muxer(int v);
@@ -402,9 +399,10 @@ private:
 
   // ----- Encoder Codec-Specific group (Task 9) -----------------------------
   // Defaults match common/ttcut.cpp lines 151-166 (Encoder) and 206 (Muxer).
-  int     mMpeg2Preset  = 4;     // fast
+  // MPEG-2 hat nur Qualität (qscale) als wirksamen Knob — Preset und Profile
+  // wurden entfernt (libavcodec mpeg2video kennt kein Preset; Profile ist
+  // auto-detected). Siehe TODO "Dead Encoder Settings".
   int     mMpeg2Crf     = 2;     // qscale for MPEG-2 (2-31, lower=better)
-  int     mMpeg2Profile = 0;     // Main Profile
   int     mMpeg2Muxer   = 0;     // mplex (TS/PS)
   int     mH264Preset   = 4;     // fast
   int     mH264Crf      = 18;    // CRF 18 (high quality for cut points)

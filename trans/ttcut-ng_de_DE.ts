@@ -118,30 +118,30 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Defekte Frames erkannt</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="883"/>
+        <location filename="../data/ttavdata.cpp" line="894"/>
         <source>starting thread pool</source>
         <translation>Starte Thread-Pool</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="896"/>
+        <location filename="../data/ttavdata.cpp" line="907"/>
         <source>exiting thread pool</source>
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1160"/>
-        <location filename="../data/ttavdata.cpp" line="1194"/>
+        <location filename="../data/ttavdata.cpp" line="1157"/>
+        <location filename="../data/ttavdata.cpp" line="1191"/>
         <source>Schnitt %1: Audio-Burst am Ende (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1163"/>
-        <location filename="../data/ttavdata.cpp" line="1199"/>
+        <location filename="../data/ttavdata.cpp" line="1160"/>
+        <location filename="../data/ttavdata.cpp" line="1196"/>
         <source>Schnitt %1: Audio-Burst am Anfang (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Anfang (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1167"/>
-        <location filename="../data/ttavdata.cpp" line="1205"/>
+        <location filename="../data/ttavdata.cpp" line="1164"/>
+        <location filename="../data/ttavdata.cpp" line="1202"/>
         <source>The following cuts have detected audio bursts:
 
 </source>
@@ -150,8 +150,8 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1169"/>
-        <location filename="../data/ttavdata.cpp" line="1207"/>
+        <location filename="../data/ttavdata.cpp" line="1166"/>
+        <location filename="../data/ttavdata.cpp" line="1204"/>
         <source>
 
 Use preview to check if shift is needed.</source>
@@ -160,127 +160,127 @@ Use preview to check if shift is needed.</source>
 Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1170"/>
-        <location filename="../data/ttavdata.cpp" line="1209"/>
+        <location filename="../data/ttavdata.cpp" line="1167"/>
+        <location filename="../data/ttavdata.cpp" line="1206"/>
         <source>Audio Burst Warning</source>
         <translation>Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1171"/>
-        <location filename="../data/ttavdata.cpp" line="1210"/>
+        <location filename="../data/ttavdata.cpp" line="1168"/>
+        <location filename="../data/ttavdata.cpp" line="1207"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1171"/>
-        <location filename="../data/ttavdata.cpp" line="1210"/>
+        <location filename="../data/ttavdata.cpp" line="1168"/>
+        <location filename="../data/ttavdata.cpp" line="1207"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1173"/>
-        <location filename="../data/ttavdata.cpp" line="1212"/>
+        <location filename="../data/ttavdata.cpp" line="1170"/>
+        <location filename="../data/ttavdata.cpp" line="1209"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1267"/>
+        <location filename="../data/ttavdata.cpp" line="1264"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1339"/>
+        <location filename="../data/ttavdata.cpp" line="1336"/>
         <source>deleting existing subtitle cut file: %1</source>
         <translation>Lösche vorhandene Untertitel-Schnittdatei: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1389"/>
+        <location filename="../data/ttavdata.cpp" line="1386"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1391"/>
+        <location filename="../data/ttavdata.cpp" line="1388"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1444"/>
+        <location filename="../data/ttavdata.cpp" line="1441"/>
         <source>Cutting failed - could not initialize</source>
         <translation>Schneiden fehlgeschlagen - Initialisierung nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1473"/>
+        <location filename="../data/ttavdata.cpp" line="1470"/>
         <source>Cutting video (Smart Cut)...</source>
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1477"/>
+        <location filename="../data/ttavdata.cpp" line="1474"/>
         <source>Cutting failed</source>
         <translation>Schneiden fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1509"/>
+        <location filename="../data/ttavdata.cpp" line="1506"/>
         <source>Cutting audio track %1...</source>
         <translation>Schneide Audiospur %1...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1561"/>
+        <location filename="../data/ttavdata.cpp" line="1558"/>
         <source>Muxing video and audio...</source>
         <translation>Multiplexe Video und Audio...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1624"/>
+        <location filename="../data/ttavdata.cpp" line="1621"/>
         <source>Muxing failed</source>
         <translation>Multiplexen fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1632"/>
+        <location filename="../data/ttavdata.cpp" line="1629"/>
         <source>H.264/H.265 cutting complete</source>
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1827"/>
+        <location filename="../data/ttavdata.cpp" line="1824"/>
         <source>Initializing audio cut...</source>
         <translation>Audio-Schnitt initialisieren...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1841"/>
+        <location filename="../data/ttavdata.cpp" line="1838"/>
         <source>Cutting audio tracks...</source>
         <translation>Audiospuren werden geschnitten...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1884"/>
+        <location filename="../data/ttavdata.cpp" line="1881"/>
         <source>Audio track %1 done</source>
         <translation>Audiospur %1 fertig</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1893"/>
-        <location filename="../data/ttavdata.cpp" line="1894"/>
+        <location filename="../data/ttavdata.cpp" line="1890"/>
+        <location filename="../data/ttavdata.cpp" line="1891"/>
         <source>Audio cut failed</source>
         <translation>Audio-Schnitt fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1906"/>
+        <location filename="../data/ttavdata.cpp" line="1903"/>
         <source>%1 audio file(s) in %2</source>
         <translation>%1 Audiodatei(en) in %2</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1915"/>
+        <location filename="../data/ttavdata.cpp" line="1912"/>
         <source>Muxing audio tracks into MKA...</source>
         <translation>Audiospuren werden in MKA gemuxt...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1922"/>
+        <location filename="../data/ttavdata.cpp" line="1919"/>
         <source>MKA mux failed: %1</source>
         <translation>MKA-Mux fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1936"/>
+        <location filename="../data/ttavdata.cpp" line="1933"/>
         <source>MP3/AAC re-encoding not implemented yet — original ES files in %1</source>
         <translation>MP3/AAC-Neukodierung noch nicht implementiert — Original-ES-Dateien in %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1941"/>
+        <location filename="../data/ttavdata.cpp" line="1938"/>
         <source>Audio cut complete</source>
         <translation>Audio-Schnitt abgeschlossen</translation>
     </message>
@@ -2024,8 +2024,8 @@ Ausgabedatei:
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="126"/>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="139"/>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="150"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="145"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="156"/>
         <source>Quality (CRF):</source>
         <translation>Qualität (CRF):</translation>
     </message>
@@ -2066,40 +2066,40 @@ Ausgabedatei:
         <translation>Schnellere Voreinstellung = schnellere Vorschau-Generierung. Qualität betrifft nur neu encodierte Frames an Schnittpunkten.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="128"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="134"/>
         <source>Quality (qscale):</source>
         <translation>Qualität (qscale):</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="133"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="139"/>
         <source>MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6, default: 2</source>
         <translation>MPEG-2 Qualität: 2-31 (niedriger = bessere Qualität, größere Datei). Typisch: 2-6, Standard: 2</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="134"/>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="135"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="140"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="141"/>
         <source>MPEG-2 qscale: 2 = best quality (default), 31 = worst quality</source>
         <translation>MPEG-2 qscale: 2 = beste Qualität (Standard), 31 = schlechteste Qualität</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="144"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="150"/>
         <source>H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 18</source>
         <translation>H.264 CRF: 0-51 (niedriger = bessere Qualität, größere Datei). Typisch: 18-28, Standard: 18</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="145"/>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="146"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="151"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="152"/>
         <source>H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality</source>
         <translation>H.264 CRF: 0 = verlustfrei, 18 = Standard (visuell verlustfrei), 51 = schlechteste Qualität</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="155"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="161"/>
         <source>H.265 CRF: 0-51 (lower = better quality). Typical: 20-34, default: 20</source>
         <translation>H.265 CRF: 0-51 (niedriger = bessere Qualität). Typisch: 20-34, Standard: 20</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="156"/>
-        <location filename="../gui/ttcutsettingsencoder.cpp" line="157"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="162"/>
+        <location filename="../gui/ttcutsettingsencoder.cpp" line="163"/>
         <source>H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality</source>
         <translation>H.265 CRF: 0 = verlustfrei, 20 = Standard (visuell verlustfrei), 51 = schlechteste Qualität</translation>
     </message>
@@ -2136,106 +2136,96 @@ Ausgabedatei:
         <translation>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="38"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="39"/>
         <source>MPEG-2</source>
         <translation>MPEG-2</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="42"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="89"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="136"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="66"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
         <source>Preset:</source>
         <translation>Voreinstellung:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="43"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="49"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="90"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="96"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="137"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="143"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="67"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="73"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="114"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="120"/>
         <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
         <translation>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="54"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="101"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="148"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="78"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="125"/>
         <source>Profile:</source>
         <translation>Profil:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="55"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="61"/>
         <source>Encoder-Profile (Kompatibilität).</source>
-        <translation>Encoder-Profile (Kompatibilität).</translation>
+        <translation type="vanished">Encoder-Profile (Kompatibilität).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="66"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="43"/>
         <source>Quality (qscale):</source>
         <translation>Qualität (qscale):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="67"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="75"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="44"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="52"/>
         <source>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</source>
         <translation>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="85"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="62"/>
         <source>H.264 / AVC</source>
         <translation>H.264 / AVC</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="102"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="108"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="79"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="85"/>
         <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
         <translation>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="160"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="90"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="137"/>
         <source>Quality (CRF):</source>
         <translation>Qualität (CRF):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="114"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="122"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="91"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="99"/>
         <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</source>
         <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="132"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="109"/>
         <source>H.265 / HEVC</source>
         <translation>H.265 / HEVC</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="149"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="155"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="126"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="132"/>
         <source>Encoder-Profile. main = Standard, main10 = 10-Bit.</source>
         <translation>Encoder-Profile. main = Standard, main10 = 10-Bit.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="161"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="169"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="138"/>
+        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="146"/>
         <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</source>
         <translation>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="179"/>
         <source>Preview</source>
-        <translation>Vorschau</translation>
+        <translation type="vanished">Vorschau</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="183"/>
         <source>Preview-Preset:</source>
-        <translation>Preview-Preset:</translation>
+        <translation type="vanished">Preview-Preset:</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="184"/>
-        <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="190"/>
         <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
-        <translation>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
+        <translation type="vanished">Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
     </message>
 </context>
 <context>
@@ -2955,29 +2945,40 @@ Ausgabedatei:
         <translation>Länge der Preview-Clips um Cut-Punkte in Sekunden.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="65"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="62"/>
+        <source>Encoder-Preset (nur H.264 / H.265):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="63"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="68"/>
+        <source>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingssearch.ui" line="76"/>
         <source>Defective Frame Grouping</source>
         <translation>Gruppierung defekter Frames</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="69"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="80"/>
         <source>Gruppierungsabstand (Sekunden):</source>
         <translation>Gruppierungsabstand (Sekunden):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="70"/>
-        <location filename="../ui/ttcutsettingssearch.ui" line="77"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="81"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="88"/>
         <source>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</source>
         <translation>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="82"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="93"/>
         <source>Start-Offset (Sekunden):</source>
         <translation>Start-Offset (Sekunden):</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingssearch.ui" line="83"/>
-        <location filename="../ui/ttcutsettingssearch.ui" line="90"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="94"/>
+        <location filename="../ui/ttcutsettingssearch.ui" line="101"/>
         <source>Zeitlicher Offset für Cluster-Detection in Sekunden.</source>
         <translation>Zeitlicher Offset für Cluster-Detection in Sekunden.</translation>
     </message>
@@ -3208,7 +3209,7 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="2852"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="2854"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>

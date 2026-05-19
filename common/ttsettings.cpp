@@ -251,6 +251,27 @@ void TTSettings::setEncoderCodec(int v)
 {
   if (mEncoderCodec == v) return;
   mEncoderCodec = v;
+  // Sync transient working values to codec-specific App-Defaults so the
+  // cut pipeline reads sensible values for the new codec. Project-Load
+  // overwrites these AFTER this call: onReadProjectFileFinished emits
+  // currentAVItemChanged() (which triggers this setter from the main
+  // window) BEFORE it calls deserializeSettings(), so the .ttcut transient
+  // values land last and win.
+  switch (v) {
+    case 0:  // MPEG-2: only Crf is wired (no preset/profile in encoder)
+      mEncoderCrf = mMpeg2Crf;
+      break;
+    case 1:
+      mEncoderPreset  = mH264Preset;
+      mEncoderCrf     = mH264Crf;
+      mEncoderProfile = mH264Profile;
+      break;
+    case 2:
+      mEncoderPreset  = mH265Preset;
+      mEncoderCrf     = mH265Crf;
+      mEncoderProfile = mH265Profile;
+      break;
+  }
   emit encoderCodecChanged(v);
 }
 
@@ -283,22 +304,10 @@ void TTSettings::setPreviewPreset(int v)
 // No signals — codec-switch UI reads these synchronously after Task 8's
 // encoderCodecChanged(int).
 
-void TTSettings::setMpeg2Preset(int v)
-{
-  if (mMpeg2Preset == v) return;
-  mMpeg2Preset = v;
-}
-
 void TTSettings::setMpeg2Crf(int v)
 {
   if (mMpeg2Crf == v) return;
   mMpeg2Crf = v;
-}
-
-void TTSettings::setMpeg2Profile(int v)
-{
-  if (mMpeg2Profile == v) return;
-  mMpeg2Profile = v;
 }
 
 void TTSettings::setMpeg2Muxer(int v)
@@ -689,10 +698,12 @@ void TTSettings::load()
   // ----- Encoder Codec-Specific group (Task 9) -------------------------
   // 12 codec-specific fields share /Settings/Encoder with the Task 8
   // generic fields. mpeg2Target lives in /Settings/Muxer (block below).
-  mMpeg2Preset  = settings.value("Mpeg2Preset/",  mMpeg2Preset).toInt();
   mMpeg2Crf     = settings.value("Mpeg2Crf/",     mMpeg2Crf).toInt();
-  mMpeg2Profile = settings.value("Mpeg2Profile/", mMpeg2Profile).toInt();
   mMpeg2Muxer   = settings.value("Mpeg2Muxer/",   mMpeg2Muxer).toInt();
+  // Orphan-Cleanup für entfernte MPEG-2 Encoder-Settings (v0.70.0):
+  // mpeg2video hat kein Preset-Konzept, Profile ist auto-detected.
+  settings.remove("Mpeg2Preset/");
+  settings.remove("Mpeg2Profile/");
   mH264Preset   = settings.value("H264Preset/",   mH264Preset).toInt();
   mH264Crf      = settings.value("H264Crf/",      mH264Crf).toInt();
   mH264Profile  = settings.value("H264Profile/",  mH264Profile).toInt();
@@ -714,7 +725,8 @@ void TTSettings::load()
   // the user's codec-specific settings until the Settings dialog is opened.
   // Mirrors the switch in former gui/ttcutsettings.cpp:168-184.
   switch (mEncoderCodec) {
-    case 0:  mEncoderPreset = mMpeg2Preset; mEncoderCrf = mMpeg2Crf; mEncoderProfile = mMpeg2Profile; break;
+    case 0:  /* MPEG-2: nur Crf wirksam — Preset/Profile entfallen */
+             mEncoderCrf = mMpeg2Crf; break;
     case 1:  mEncoderPreset = mH264Preset;  mEncoderCrf = mH264Crf;  mEncoderProfile = mH264Profile;  break;
     case 2:  mEncoderPreset = mH265Preset;  mEncoderCrf = mH265Crf;  mEncoderProfile = mH265Profile;  break;
   }
@@ -905,9 +917,7 @@ void TTSettings::save()
   settings.setValue("EncoderCodec/",  mEncoderCodec);
   settings.setValue("PreviewPreset/", mPreviewPreset);
   // ----- Encoder Codec-Specific group (Task 9) -------------------------
-  settings.setValue("Mpeg2Preset/",  mMpeg2Preset);
   settings.setValue("Mpeg2Crf/",     mMpeg2Crf);
-  settings.setValue("Mpeg2Profile/", mMpeg2Profile);
   settings.setValue("Mpeg2Muxer/",   mMpeg2Muxer);
   settings.setValue("H264Preset/",   mH264Preset);
   settings.setValue("H264Crf/",      mH264Crf);

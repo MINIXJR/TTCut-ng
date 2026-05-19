@@ -1234,6 +1234,17 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   // Update stream point model frame rate for time display
   if (avItem->videoStream()) {
     mpStreamPointModel->setFrameRate(avItem->videoStream()->frameRate());
+
+    // Sync encoderCodec + transient working values from the stream's codec.
+    // setEncoderCodec() also resets encoderCrf/Preset/Profile to the
+    // codec-specific App-Defaults so the cut pipeline reads correct values.
+    // Project-Load fires deserializeSettings() AFTER this signal, so the
+    // .ttcut transient values overwrite App-Defaults last — see
+    // TTAVData::onReadProjectFileFinished().
+    TTAVTypes::AVStreamType streamType = avItem->videoStream()->streamType();
+    if (streamType == TTAVTypes::h264_video)      TTSettings::instance()->setEncoderCodec(1);
+    else if (streamType == TTAVTypes::h265_video) TTSettings::instance()->setEncoderCodec(2);
+    else                                          TTSettings::instance()->setEncoderCodec(0);
   }
 
   currentFrame->onAVDataChanged(avItem);

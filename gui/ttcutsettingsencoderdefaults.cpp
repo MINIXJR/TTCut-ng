@@ -14,11 +14,12 @@ TTCutSettingsEncoderDefaults::TTCutSettingsEncoderDefaults(QWidget* parent)
 {
   setupUi(this);
 
-  // Populate all preset combos
-  for (QComboBox* cb : { cbMpeg2Preset, cbH264Preset, cbH265Preset, cbPreviewPreset })
+  // Populate preset combos (MPEG-2 hat kein Preset-Konzept — libavcodec
+  // mpeg2video kennt nur global_quality = qscale; Preview-Preset wurde
+  // nach Settings/Suche & Preview verschoben).
+  for (QComboBox* cb : { cbH264Preset, cbH265Preset })
     populatePresetCombo(cb);
 
-  populateMpeg2Profiles();
   populateH264Profiles();
   populateH265Profiles();
 }
@@ -32,26 +33,29 @@ void TTCutSettingsEncoderDefaults::populatePresetCombo(QComboBox* cb)
     cb->insertItem(i, QString::fromLatin1(kPresets[i]));
 }
 
-void TTCutSettingsEncoderDefaults::populateMpeg2Profiles()
-{
-  cbMpeg2Profile->clear();
-  cbMpeg2Profile->insertItem(0, "main");
-  cbMpeg2Profile->insertItem(1, "simple");
-}
-
 void TTCutSettingsEncoderDefaults::populateH264Profiles()
 {
+  // Reihenfolge muss exakt zur Tabelle in extern/ttessmartcut.cpp h264Profiles[]
+  // passen — Index wird direkt als profile-Option an libx264 weitergereicht.
   cbH264Profile->clear();
   cbH264Profile->insertItem(0, "baseline");
   cbH264Profile->insertItem(1, "main");
   cbH264Profile->insertItem(2, "high");
+  cbH264Profile->insertItem(3, "high10");
+  cbH264Profile->insertItem(4, "high422");
+  cbH264Profile->insertItem(5, "high444");
 }
 
 void TTCutSettingsEncoderDefaults::populateH265Profiles()
 {
+  // Reihenfolge muss exakt zur Tabelle in extern/ttessmartcut.cpp h265Profiles[]
+  // passen — Index wird direkt als profile-Option an libx265 weitergereicht.
   cbH265Profile->clear();
   cbH265Profile->insertItem(0, "main");
   cbH265Profile->insertItem(1, "main10");
+  cbH265Profile->insertItem(2, "main12");
+  cbH265Profile->insertItem(3, "main422-10");
+  cbH265Profile->insertItem(4, "main444-10");
 }
 
 void TTCutSettingsEncoderDefaults::setTabData()
@@ -60,10 +64,8 @@ void TTCutSettingsEncoderDefaults::setTabData()
 
   cbEncodingMode->setChecked(s->encoderMode());
 
-  // MPEG-2
-  cbMpeg2Preset->setCurrentIndex(qBound(0, s->mpeg2Preset(), kPresetCount - 1));
+  // MPEG-2: nur Qualität (qscale 2-31) — Preset+Profile wirken nicht
   sbMpeg2Crf->setValue(qBound(sbMpeg2Crf->minimum(), s->mpeg2Crf(), sbMpeg2Crf->maximum()));
-  cbMpeg2Profile->setCurrentIndex(qBound(0, s->mpeg2Profile(), cbMpeg2Profile->count() - 1));
 
   // H.264
   cbH264Preset->setCurrentIndex(qBound(0, s->h264Preset(), kPresetCount - 1));
@@ -74,9 +76,6 @@ void TTCutSettingsEncoderDefaults::setTabData()
   cbH265Preset->setCurrentIndex(qBound(0, s->h265Preset(), kPresetCount - 1));
   sbH265Crf->setValue(qBound(sbH265Crf->minimum(), s->h265Crf(), sbH265Crf->maximum()));
   cbH265Profile->setCurrentIndex(qBound(0, s->h265Profile(), cbH265Profile->count() - 1));
-
-  // Preview
-  cbPreviewPreset->setCurrentIndex(qBound(0, s->previewPreset(), kPresetCount - 1));
 }
 
 void TTCutSettingsEncoderDefaults::saveTabData()
@@ -85,10 +84,8 @@ void TTCutSettingsEncoderDefaults::saveTabData()
 
   s->setEncoderMode(cbEncodingMode->isChecked());
 
-  // MPEG-2
-  s->setMpeg2Preset(cbMpeg2Preset->currentIndex());
+  // MPEG-2: nur Crf — Preset+Profile entfallen
   s->setMpeg2Crf(sbMpeg2Crf->value());
-  s->setMpeg2Profile(cbMpeg2Profile->currentIndex());
 
   // H.264
   s->setH264Preset(cbH264Preset->currentIndex());
@@ -99,7 +96,4 @@ void TTCutSettingsEncoderDefaults::saveTabData()
   s->setH265Preset(cbH265Preset->currentIndex());
   s->setH265Crf(sbH265Crf->value());
   s->setH265Profile(cbH265Profile->currentIndex());
-
-  // Preview
-  s->setPreviewPreset(cbPreviewPreset->currentIndex());
 }
