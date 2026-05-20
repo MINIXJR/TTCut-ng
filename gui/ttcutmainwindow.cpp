@@ -1479,8 +1479,9 @@ void TTCutMainWindow::runScreenshotMode()
         QListWidget* catList = settingsDlg.findChild<QListWidget*>("categoryList");
         QStackedWidget* pages = settingsDlg.findChild<QStackedWidget*>("stackedPages");
         if (catList && pages) {
-            QStringList catNames = {"general", "navigation", "search", "audio",
-                                    "encoder", "muxer", "paths", "logging"};
+            // Must match the category order in TTCutSettingsDlg::TTCutSettingsDlg
+            QStringList catNames = {"navigation", "search", "audio", "encoder",
+                                    "muxer", "paths", "logging"};
             for (int i = 0; i < catList->count() && i < catNames.size(); ++i) {
                 catList->setCurrentRow(i);
                 QApplication::processEvents();
@@ -1501,7 +1502,7 @@ void TTCutMainWindow::runScreenshotMode()
 
         QTabWidget* cutTab = cutDlg.findChild<QTabWidget*>("tabWidget");
         if (cutTab) {
-            QStringList tabNames = {"common", "encoding", "muxing"};
+            QStringList tabNames = {"common", "encoding"};
             for (int i = 0; i < cutTab->count() && i < tabNames.size(); ++i) {
                 cutTab->setCurrentIndex(i);
                 QApplication::processEvents();
