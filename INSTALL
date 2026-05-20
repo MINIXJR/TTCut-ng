@@ -17,19 +17,18 @@ libswscale          (ffmpeg/libav)
 
 Debian/Ubuntu:
   apt install qtbase5-dev libmpeg2-4-dev libavformat-dev libavcodec-dev \
-              libavutil-dev libswscale-dev
+              libavutil-dev libswscale-dev libavfilter-dev libswresample-dev
 
 
 2. Benoetigte Hilfsprogramme
 ----------------------------
 
-ffmpeg        fuer frame-genauen Schnitt (MPEG-2)
-mpv           fuer die Schnitt-Vorschau
-mkvmerge      fuer MKV-Ausgabe mit Kapitelmarken (optional)
+mpv           fuer die Schnitt-Vorschau (optional)
+ffmpeg        fuer das MP4-Ausgabecontainer-Muxing (optional)
 mplex         fuer MPEG-Multiplexing (optional)
 
 Debian/Ubuntu:
-  apt install ffmpeg mpv mkvtoolnix mjpegtools
+  apt install ffmpeg mpv mjpegtools
 
 
 3. Uebersetzen

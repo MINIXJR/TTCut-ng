@@ -1,6 +1,6 @@
 # TTCut-ng
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](COPYING)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/tag/MINIXJR/TTCut-ng?label=version&color=green)](https://github.com/MINIXJR/TTCut-ng/tags)
 [![Vibe Coded with Claude](https://img.shields.io/badge/Vibe_Coded_with-Claude-D97757?logo=claude&logoColor=fff)](https://claude.ai/code)
 [![Status](https://img.shields.io/badge/status-beta-yellow.svg)]()
@@ -36,7 +36,8 @@ bereitstellt.
 ```bash
 # Build + erforderliche Laufzeit-Bibliotheken
 sudo apt install qt5-qmake qtbase5-dev libmpeg2-4-dev \
-  libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+  libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
+  libavfilter-dev libswresample-dev
 
 # Optional: Video-Vorschau (empfohlen), MP4-Output, MPEG-2 Multiplexing
 sudo apt install mpv ffmpeg mjpegtools
@@ -82,4 +83,4 @@ Ursprünglich basierend auf TTCut von B. Altendorf (2005-2008).
 
 ## Lizenz
 
-GPLv3+ — siehe [COPYING](COPYING).
+GPLv3+ — siehe [LICENSE](LICENSE).

@@ -108,9 +108,9 @@ With the encoder enabled (default), cutting at any frame position is possible by
 | **AC3 (Dolby Digital)** | .ac3 | `0x0B77` | Fully supported |
 
 **Not yet implemented** (see TODO.md for status):
-- AAC (ADTS) — listed in file dialog but no parser implemented
-- EAC3 (Dolby Digital Plus)
-- DTS
+- AAC (ADTS) — selectable in the file dialog (.aac, .m4a) but no parser implemented
+- EAC3 (Dolby Digital Plus) — selectable in the file dialog (.eac3) but no parser implemented
+- DTS — selectable in the file dialog (.dts) but no parser implemented
 
 ### Audio Handling
 
@@ -146,7 +146,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 | Extension | Purpose | Created By |
 |-----------|---------|------------|
 | **.info** | Frame rate, resolution, audio tracks, A/V offset, VDR markers | `ttcut-demux` |
-| **.ttcut** | TTCut-ng project file (XML) | TTCut-ng (`.prj` still supported) |
+| **.ttcut** | TTCut-ng project file (XML) | TTCut-ng (`.prj` legacy format, read-only) |
 
 ---
 
@@ -203,11 +203,3 @@ Pillarbox detection analyzes I-frames only and is a sub-option under the aspect 
 |-----------|--------|
 | .mp2, .mpa | MPEG Audio Layer 2 |
 | .ac3 | Dolby Digital AC-3 |
-
----
-
-## Version Information
-
-This documentation applies to TTCut-ng version 0.61.4.
-
-Last updated: March 2026
