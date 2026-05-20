@@ -9,24 +9,24 @@
   <layout class="QVBoxLayout">
    <item>
     <widget class="QGroupBox" name="gbLogBase">
-     <property name="title"><string>Basis-Logging</string></property>
+     <property name="title"><string>Basic Logging</string></property>
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbCreateLog">
-        <property name="text"><string>Logfile erstellen</string></property>
-        <property name="toolTip"><string>Logfile schreiben (Pfad in 'Pfade'-Kategorie).</string></property>
+        <property name="text"><string>Create log file</string></property>
+        <property name="toolTip"><string>Write a log file (path set in the 'Paths' category).</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogConsole">
-        <property name="text"><string>Ausgabe auf Konsole</string></property>
-        <property name="toolTip"><string>Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</string></property>
+        <property name="text"><string>Output to console</string></property>
+        <property name="toolTip"><string>Log output to the console/terminal in addition to the file.</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogExtended">
-        <property name="text"><string>Erweiterte Meldungen</string></property>
-        <property name="toolTip"><string>Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</string></property>
+        <property name="text"><string>Extended messages</string></property>
+        <property name="toolTip"><string>Also write INFO and DEBUG messages to the log instead of only warnings and errors. Sets logLevel = ALL instead of MINIMAL.</string></property>
        </widget>
       </item>
      </layout>
@@ -34,54 +34,54 @@
    </item>
    <item>
     <widget class="QGroupBox" name="gbLogPlus">
-     <property name="title"><string>Erweiterte Logging-Optionen</string></property>
+     <property name="title"><string>Advanced Logging Options</string></property>
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbLogPlusVideoIndex">
-        <property name="text"><string>Video-Index-Informationen</string></property>
-        <property name="toolTip"><string>Detaillierte Meldungen beim Aufbau des Video-Index.</string></property>
+        <property name="text"><string>Video index information</string></property>
+        <property name="toolTip"><string>Detailed messages while building the video index.</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusFFmpegDecoder">
-        <property name="text"><string>FFmpeg-Decoder-Informationen</string></property>
-        <property name="toolTip"><string>FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</string></property>
+        <property name="text"><string>FFmpeg decoder information</string></property>
+        <property name="toolTip"><string>Log FFmpeg decoder operations (seek, decode, flush) in detail.</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusSmartCut">
-        <property name="text"><string>Smart-Cut-Engine-Informationen</string></property>
-        <property name="toolTip"><string>Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</string></property>
+        <property name="text"><string>Smart Cut engine information</string></property>
+        <property name="toolTip"><string>Log Smart Cut pipeline details (re-encode decisions, GOP analysis, NAL patching).</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusMkvMux">
-        <property name="text"><string>MKV-Mux-Informationen</string></property>
-        <property name="toolTip"><string>MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</string></property>
+        <property name="text"><string>MKV mux information</string></property>
+        <property name="toolTip"><string>Log MKV muxing operations (stream setup, block writing).</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusCutPipeline">
-        <property name="text"><string>Cut-Pipeline-Informationen</string></property>
-        <property name="toolTip"><string>Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</string></property>
+        <property name="text"><string>Cut pipeline information</string></property>
+        <property name="toolTip"><string>Log the cut pipeline main path (data/ classes) in detail.</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusAVStream">
-        <property name="text"><string>AV-Stream-Parser-Informationen</string></property>
-        <property name="toolTip"><string>AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</string></property>
+        <property name="text"><string>AV stream parser information</string></property>
+        <property name="toolTip"><string>Log AV stream parser operations (NAL detection, frame index building).</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusUI">
-        <property name="text"><string>UI-Ereignis-Informationen</string></property>
-        <property name="toolTip"><string>GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</string></property>
+        <property name="text"><string>UI event information</string></property>
+        <property name="toolTip"><string>Log GUI action details (button clicks, position changes).</string></property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="cbLogPlusLibav">
-        <property name="text"><string>libav-Decoder/Muxer-Informationen</string></property>
-        <property name="toolTip"><string>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</string></property>
+        <property name="text"><string>libav decoder/muxer information</string></property>
+        <property name="toolTip"><string>Pass through libav decoder/muxer internals (very verbose).</string></property>
        </widget>
       </item>
      </layout>

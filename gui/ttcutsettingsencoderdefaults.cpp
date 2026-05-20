@@ -16,7 +16,7 @@ TTCutSettingsEncoderDefaults::TTCutSettingsEncoderDefaults(QWidget* parent)
 
   // Populate preset combos (MPEG-2 hat kein Preset-Konzept — libavcodec
   // mpeg2video kennt nur global_quality = qscale; Preview-Preset wurde
-  // nach Settings/Suche & Preview verschoben).
+  // nach Settings/Suche & Vorschau verschoben).
   for (QComboBox* cb : { cbH264Preset, cbH265Preset })
     populatePresetCombo(cb);
 

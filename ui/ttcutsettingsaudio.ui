@@ -5,22 +5,22 @@
   <property name="geometry">
    <rect><x>0</x><y>0</y><width>500</width><height>250</height></rect>
   </property>
-  <property name="title"><string>Audio &amp; Sprache</string></property>
+  <property name="title"><string>Audio &amp;&amp; Language</string></property>
   <layout class="QVBoxLayout">
    <item>
     <widget class="QGroupBox" name="gbAudioLang">
-     <property name="title"><string>Sprach-Präferenz</string></property>
+     <property name="title"><string>Language Preference</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laLangPref">
-        <property name="text"><string>Sprachreihenfolge (z.B. deu,eng):</string></property>
-        <property name="toolTip"><string>Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</string></property>
+        <property name="text"><string>Language order (e.g. deu,eng):</string></property>
+        <property name="toolTip"><string>Comma-separated list of preferred audio languages (ISO 639-2 codes, e.g. deu,eng,fra). Controls the order of the audio tracks in the cut dialog.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QLineEdit" name="leAudioLangPref">
-        <property name="placeholderText"><string>z.B. deu,eng,fra</string></property>
-        <property name="toolTip"><string>Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</string></property>
+        <property name="placeholderText"><string>e.g. deu,eng,fra</string></property>
+        <property name="toolTip"><string>Comma-separated list of preferred audio languages (ISO 639-2 codes, e.g. deu,eng,fra). Controls the order of the audio tracks in the cut dialog.</string></property>
        </widget>
       </item>
      </layout>
@@ -28,20 +28,20 @@
    </item>
    <item>
     <widget class="QGroupBox" name="gbAudioOptions">
-     <property name="title"><string>Audio-Optionen</string></property>
+     <property name="title"><string>Audio Options</string></property>
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbNormalizeAcmod">
-        <property name="text"><string>AC3 Kanalformat an Schnitten normalisieren</string></property>
-        <property name="toolTip"><string>AC3-Kanalformat (acmod) an Cut-Punkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</string></property>
+        <property name="text"><string>Normalise AC3 channel format at cut points</string></property>
+        <property name="toolTip"><string>Normalise the AC3 channel format (acmod) at cut points. Prevents audio artefacts when the broadcaster changes within the stream (e.g. one segment is 5.1 and the next is 2.0).</string></property>
        </widget>
       </item>
       <item>
        <layout class="QFormLayout">
         <item row="0" column="0">
          <widget class="QLabel" name="laBurst">
-          <property name="text"><string>Audio-Burst-Schwellwert (dB, 0=aus):</string></property>
-          <property name="toolTip"><string>Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</string></property>
+          <property name="text"><string>Audio burst threshold (dB, 0=off):</string></property>
+          <property name="toolTip"><string>Threshold for audio burst detection, in dB below the audio median. Advert audio that starts before the advert video is detected from this threshold and reported in the cut dialog.</string></property>
          </widget>
         </item>
         <item row="0" column="1">
@@ -49,7 +49,7 @@
           <property name="minimum"><number>-60</number></property>
           <property name="maximum"><number>0</number></property>
           <property name="suffix"><string> dB</string></property>
-          <property name="toolTip"><string>Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</string></property>
+          <property name="toolTip"><string>Threshold for audio burst detection, in dB below the audio median. Advert audio that starts before the advert video is detected from this threshold and reported in the cut dialog.</string></property>
          </widget>
         </item>
        </layout>

@@ -11,46 +11,46 @@
    </rect>
   </property>
   <property name="title">
-   <string>Multiplexen</string>
+   <string>Multiplexing</string>
   </property>
   <layout class="QVBoxLayout">
 
    <!-- 1. Container je Codec — die Hauptentscheidung zuerst -->
    <item>
     <widget class="QGroupBox" name="gbCodecMuxer">
-     <property name="title"><string>Container je Codec</string></property>
+     <property name="title"><string>Container per Codec</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laMpeg2Muxer">
         <property name="text"><string>MPEG-2:</string></property>
-        <property name="toolTip"><string>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</string></property>
+        <property name="toolTip"><string>Default container for MPEG-2 output. MKV (libav) is the default, MPG (mplex) for DVD/SVCD compatibility.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QComboBox" name="cbMpeg2Muxer">
-        <property name="toolTip"><string>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</string></property>
+        <property name="toolTip"><string>Default container for MPEG-2 output. MKV (libav) is the default, MPG (mplex) for DVD/SVCD compatibility.</string></property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laH264Muxer">
         <property name="text"><string>H.264:</string></property>
-        <property name="toolTip"><string>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</string></property>
+        <property name="toolTip"><string>Default container for H.264 output. Only MKV available (mplex does not support H.264).</string></property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QComboBox" name="cbH264Muxer">
-        <property name="toolTip"><string>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</string></property>
+        <property name="toolTip"><string>Default container for H.264 output. Only MKV available (mplex does not support H.264).</string></property>
        </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="laH265Muxer">
         <property name="text"><string>H.265:</string></property>
-        <property name="toolTip"><string>Standard-Container für H.265-Output. Nur MKV verfügbar.</string></property>
+        <property name="toolTip"><string>Default container for H.265 output. Only MKV available.</string></property>
        </widget>
       </item>
       <item row="2" column="1">
        <widget class="QComboBox" name="cbH265Muxer">
-        <property name="toolTip"><string>Standard-Container für H.265-Output. Nur MKV verfügbar.</string></property>
+        <property name="toolTip"><string>Default container for H.265 output. Only MKV available.</string></property>
        </widget>
       </item>
      </layout>
@@ -60,7 +60,7 @@
    <!-- 2. Container-Optionen — Detail-Settings für die gewählten Container -->
    <item>
     <widget class="QGroupBox" name="gbContainerDefaults">
-     <property name="title"><string>Container-Optionen</string></property>
+     <property name="title"><string>Container Options</string></property>
      <layout class="QVBoxLayout">
 
       <!-- MPG sub-group (zuerst — älterer Container, MPEG-2-spezifisch) -->
@@ -70,24 +70,24 @@
         <layout class="QFormLayout">
          <item row="0" column="0">
           <widget class="QLabel" name="laMpgTarget">
-           <property name="text"><string>Mux-Ziel:</string></property>
-           <property name="toolTip"><string>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</string></property>
+           <property name="text"><string>Mux target:</string></property>
+           <property name="toolTip"><string>mplex target format (DVD, VCD, SVCD etc.). Set as the app default; can be overridden in the cut dialog.</string></property>
           </widget>
          </item>
          <item row="0" column="1">
           <widget class="QComboBox" name="cbMpgTarget">
-           <property name="toolTip"><string>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</string></property>
+           <property name="toolTip"><string>mplex target format (DVD, VCD, SVCD etc.). Set as the app default; can be overridden in the cut dialog.</string></property>
           </widget>
          </item>
          <item row="1" column="0">
           <widget class="QLabel" name="laMpgMode">
-           <property name="text"><string>Mux-Modus:</string></property>
-           <property name="toolTip"><string>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</string></property>
+           <property name="text"><string>Mux mode:</string></property>
+           <property name="toolTip"><string>Mux directly = run mplex immediately. Create mux script = write a shell script instead of calling directly.</string></property>
           </widget>
          </item>
          <item row="1" column="1">
           <widget class="QComboBox" name="cbMpgMode">
-           <property name="toolTip"><string>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</string></property>
+           <property name="toolTip"><string>Mux directly = run mplex immediately. Create mux script = write a shell script instead of calling directly.</string></property>
           </widget>
          </item>
         </layout>
@@ -101,9 +101,9 @@
         <layout class="QHBoxLayout">
          <item>
           <widget class="QCheckBox" name="cbMkvCreateChapters">
-           <property name="text"><string>Kapitel erstellen alle</string></property>
+           <property name="text"><string>Create chapters every</string></property>
            <property name="checked"><bool>true</bool></property>
-           <property name="toolTip"><string>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</string></property>
+           <property name="toolTip"><string>For MKV output, create chapter marks from cut points.</string></property>
           </widget>
          </item>
          <item>
@@ -111,8 +111,8 @@
            <property name="minimum"><number>1</number></property>
            <property name="maximum"><number>60</number></property>
            <property name="value"><number>5</number></property>
-           <property name="suffix"><string> Minuten</string></property>
-           <property name="toolTip"><string>Zusätzliche Auto-Kapitel alle X Minuten.</string></property>
+           <property name="suffix"><string> minutes</string></property>
+           <property name="toolTip"><string>Additional automatic chapters every X minutes.</string></property>
           </widget>
          </item>
          <item>
@@ -132,12 +132,12 @@
    <!-- 3. Nach dem Multiplexen — Aufräum-Workflow -->
    <item>
     <widget class="QGroupBox" name="gbCommon">
-     <property name="title"><string>Nach dem Multiplexen</string></property>
+     <property name="title"><string>After Multiplexing</string></property>
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbDeleteES">
-        <property name="text"><string>ES-Files nach Mux löschen</string></property>
-        <property name="toolTip"><string>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</string></property>
+        <property name="text"><string>Delete ES files after muxing</string></property>
+        <property name="toolTip"><string>After a successful mux, automatically delete the intermediate ES files (.m2v/.mp2/.ac3/.264/.265).</string></property>
        </widget>
       </item>
      </layout>

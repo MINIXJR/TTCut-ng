@@ -237,8 +237,8 @@ void TTCutAVCutDlg::onDlgStart()
   QString outputFile = QDir(leOutputPath->text()).absoluteFilePath(leOutputFile->text());
   if (QFile::exists(outputFile)) {
     QMessageBox::StandardButton ret = QMessageBox::question(this,
-        tr("Datei existiert"),
-        tr("Die Datei\n\n  %1\n\nexistiert bereits. Überschreiben?").arg(outputFile),
+        tr("File exists"),
+        tr("The file\n\n  %1\n\nalready exists. Overwrite?").arg(outputFile),
         QMessageBox::Yes | QMessageBox::No,
         QMessageBox::No);
     if (ret != QMessageBox::Yes) {

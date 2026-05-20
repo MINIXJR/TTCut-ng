@@ -48,19 +48,19 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   addCat(tr("Navigation"),
          QIcon::fromTheme("go-jump", s->standardIcon(QStyle::SP_ArrowRight)),
          pageNavigation);
-  addCat(tr("Suche & Preview"),
+  addCat(tr("Search & Preview"),
          QIcon::fromTheme("system-search", s->standardIcon(QStyle::SP_FileDialogContentsView)),
          pageSearch);
-  addCat(tr("Audio & Sprache"),
+  addCat(tr("Audio & Language"),
          QIcon::fromTheme("audio-x-generic", s->standardIcon(QStyle::SP_MediaVolume)),
          pageAudio);
   addCat(tr("Encoder"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveCDIcon)),
          pageEncoder);
-  addCat(tr("Multiplexen"),
+  addCat(tr("Multiplexing"),
          QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveHDIcon)),
          pageMuxer);
-  addCat(tr("Pfade"),
+  addCat(tr("Paths"),
          QIcon::fromTheme("folder", s->standardIcon(QStyle::SP_DirIcon)),
          pagePaths);
   addCat(tr("Logging"),

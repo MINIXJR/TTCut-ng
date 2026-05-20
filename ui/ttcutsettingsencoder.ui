@@ -10,7 +10,7 @@
    </rect>
   </property>
   <property name="windowTitle" >
-   <string>Encoder-Standards</string>
+   <string>Encoder Defaults</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -25,7 +25,7 @@
          <string>Use encoding mode (re-encode at cut points)</string>
         </property>
         <property name="toolTip">
-         <string>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</string>
+         <string>Enables encoding mode: re-encode at cut points instead of stream-copy. Required for frame-accurate cuts without keyframe alignment.</string>
         </property>
        </widget>
       </item>
@@ -44,7 +44,7 @@
          <string>Codec:</string>
         </property>
         <property name="toolTip">
-         <string>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</string>
+         <string>Codec selection (automatically set to the source codec in the cut dialog; here in Settings only to choose which codec defaults to edit).</string>
         </property>
        </widget>
       </item>
@@ -57,7 +57,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</string>
+         <string>Codec selection (automatically set to the source codec in the cut dialog; here in Settings only to choose which codec defaults to edit).</string>
         </property>
        </widget>
       </item>
@@ -80,7 +80,7 @@
          <string>Preset:</string>
         </property>
         <property name="toolTip">
-         <string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string>
+         <string>Encoder preset (speed vs. compression). Faster presets = larger file at the same quality.</string>
         </property>
        </widget>
       </item>
@@ -93,7 +93,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</string>
+         <string>Encoder preset (speed vs. compression). Faster presets = larger file at the same quality.</string>
         </property>
        </widget>
       </item>
@@ -103,7 +103,7 @@
          <string>Profile:</string>
         </property>
         <property name="toolTip">
-         <string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string>
+         <string>Encoder profile (compatibility). High = best quality, Main/Baseline = broader compatibility with old decoders.</string>
         </property>
        </widget>
       </item>
@@ -116,7 +116,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</string>
+         <string>Encoder profile (compatibility). High = best quality, Main/Baseline = broader compatibility with old decoders.</string>
         </property>
        </widget>
       </item>
@@ -126,7 +126,7 @@
          <string>Quality (CRF):</string>
         </property>
         <property name="toolTip">
-         <string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</string>
+         <string>Quality value (CRF). Lower = better quality + larger file. Recommended: 18-28.</string>
         </property>
        </widget>
       </item>
@@ -160,7 +160,7 @@
            <number>23</number>
           </property>
           <property name="toolTip">
-           <string>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</string>
+           <string>Quality value (CRF). Lower = better quality + larger file. Recommended: 18-28.</string>
           </property>
          </widget>
         </item>
@@ -191,7 +191,7 @@
          <string>Preview Preset:</string>
         </property>
         <property name="toolTip">
-         <string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string>
+         <string>Encoder preset for preview generation. Faster presets = faster preview, slightly reduced quality of the re-encoded frames at cut points.</string>
         </property>
        </widget>
       </item>
@@ -204,7 +204,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</string>
+         <string>Encoder preset for preview generation. Faster presets = faster preview, slightly reduced quality of the re-encoded frames at cut points.</string>
         </property>
        </widget>
       </item>

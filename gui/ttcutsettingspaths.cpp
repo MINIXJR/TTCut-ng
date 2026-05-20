@@ -38,22 +38,22 @@ void TTCutSettingsPaths::saveTabData()
 
 void TTCutSettingsPaths::onTmpDirectoryOpen()
 {
-  QString dir = QFileDialog::getExistingDirectory(this, tr("Tmp-Verzeichnis wählen"),
+  QString dir = QFileDialog::getExistingDirectory(this, tr("Select temporary directory"),
                                                   leTempDirectory->text());
   if (!dir.isEmpty()) leTempDirectory->setText(dir);
 }
 
 void TTCutSettingsPaths::onCutDirOpen()
 {
-  QString dir = QFileDialog::getExistingDirectory(this, tr("Standard-Ausgabeverzeichnis wählen"),
+  QString dir = QFileDialog::getExistingDirectory(this, tr("Select default output directory"),
                                                   leCutDir->text());
   if (!dir.isEmpty()) leCutDir->setText(dir);
 }
 
 void TTCutSettingsPaths::onLogfileOpen()
 {
-  QString file = QFileDialog::getSaveFileName(this, tr("Logfile wählen"),
+  QString file = QFileDialog::getSaveFileName(this, tr("Select log file"),
                                               leLogfile->text(),
-                                              tr("Log-Dateien (*.log);;Alle Dateien (*)"));
+                                              tr("Log files (*.log);;All files (*)"));
   if (!file.isEmpty()) leLogfile->setText(file);
 }

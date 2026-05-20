@@ -86,7 +86,7 @@
      </property>
      <widget class="QWidget" name="tabCommon" >
       <attribute name="title" >
-       <string>Schnitt</string>
+       <string>Cut</string>
       </attribute>
       <attribute name="icon" >
        <iconset resource="avcutdialog.qrc" >
@@ -225,7 +225,7 @@
           <item row="5" column="0" colspan="3" >
            <widget class="QGroupBox" name="gbMuxMode" >
             <property name="title" >
-             <string>Multiplexer-Modus</string>
+             <string>Multiplexer Mode</string>
             </property>
             <property name="visible" >
              <bool>false</bool>
@@ -234,14 +234,14 @@
              <item>
               <widget class="QRadioButton" name="rbCreateMuxScript" >
                <property name="text" >
-                <string>Mux-Script erstellen</string>
+                <string>Create mux script</string>
                </property>
               </widget>
              </item>
              <item>
               <widget class="QRadioButton" name="rbMuxStreams" >
                <property name="text" >
-                <string>Streams direkt muxen</string>
+                <string>Mux streams directly</string>
                </property>
               </widget>
              </item>
@@ -289,7 +289,7 @@
        <item>
         <widget class="QGroupBox" name="gbMuxOptions" >
          <property name="title" >
-          <string>Multiplexen-Optionen</string>
+          <string>Multiplexing Options</string>
          </property>
          <layout class="QVBoxLayout" >
           <item>
@@ -297,14 +297,14 @@
             <item>
              <widget class="QCheckBox" name="cbMkvCreateChapters" >
               <property name="text" >
-               <string>MKV-Kapitel erstellen</string>
+               <string>Create MKV chapters</string>
               </property>
              </widget>
             </item>
             <item>
              <widget class="QLabel" name="laMkvInterval" >
               <property name="text" >
-               <string>Intervall (Min):</string>
+               <string>Interval (min):</string>
               </property>
              </widget>
             </item>
@@ -339,7 +339,7 @@
           <item>
            <widget class="QCheckBox" name="cbDeleteES" >
             <property name="text" >
-             <string>ES-Dateien nach Mux löschen</string>
+             <string>Delete ES files after muxing</string>
             </property>
            </widget>
           </item>

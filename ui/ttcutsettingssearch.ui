@@ -5,36 +5,36 @@
   <property name="geometry">
    <rect><x>0</x><y>0</y><width>500</width><height>320</height></rect>
   </property>
-  <property name="title"><string>Suche &amp; Preview</string></property>
+  <property name="title"><string>Search &amp;&amp; Preview</string></property>
   <layout class="QVBoxLayout">
    <item>
     <widget class="QGroupBox" name="gbSearch">
-     <property name="title"><string>Suche</string></property>
+     <property name="title"><string>Search</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laSearchLen">
-        <property name="text"><string>Suchbereich (Sekunden):</string></property>
-        <property name="toolTip"><string>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</string></property>
+        <property name="text"><string>Search range (seconds):</string></property>
+        <property name="toolTip"><string>Search range around the cut point for black-frame / scene-change detection (seconds).</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QSpinBox" name="sbSearchIntervall">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>600</number></property>
-        <property name="toolTip"><string>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</string></property>
+        <property name="toolTip"><string>Search range around the cut point for black-frame / scene-change detection (seconds).</string></property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laWorkers">
-        <property name="text"><string>Such-Worker-Threads (0 = auto):</string></property>
-        <property name="toolTip"><string>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</string></property>
+        <property name="text"><string>Search worker threads (0 = auto):</string></property>
+        <property name="toolTip"><string>Parallel worker threads for frame search. 0 = automatic (max. 4). Beyond 4 threads HEVC sees little speedup due to cache saturation.</string></property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QSpinBox" name="sbSearchWorkerCount">
         <property name="minimum"><number>0</number></property>
         <property name="maximum"><number>16</number></property>
-        <property name="toolTip"><string>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</string></property>
+        <property name="toolTip"><string>Parallel worker threads for frame search. 0 = automatic (max. 4). Beyond 4 threads HEVC sees little speedup due to cache saturation.</string></property>
        </widget>
       </item>
      </layout>
@@ -46,26 +46,26 @@
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laPreviewLen">
-        <property name="text"><string>Vorschau-Länge (Sekunden):</string></property>
-        <property name="toolTip"><string>Länge der Preview-Clips um Cut-Punkte in Sekunden.</string></property>
+        <property name="text"><string>Preview length (seconds):</string></property>
+        <property name="toolTip"><string>Length of the preview clips around cut points, in seconds.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QSpinBox" name="spPreviewLength">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>600</number></property>
-        <property name="toolTip"><string>Länge der Preview-Clips um Cut-Punkte in Sekunden.</string></property>
+        <property name="toolTip"><string>Length of the preview clips around cut points, in seconds.</string></property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laPreviewPreset">
-        <property name="text"><string>Encoder-Preset (nur H.264 / H.265):</string></property>
-        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</string></property>
+        <property name="text"><string>Encoder preset (H.264 / H.265 only):</string></property>
+        <property name="toolTip"><string>Encoder preset for preview generation in H.264/H.265 Smart Cut. Faster presets = faster preview, slightly reduced quality of the re-encoded frames at cut points. No effect for MPEG-2 (mpeg2video has no preset concept; the regular encoder quality setting applies).</string></property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QComboBox" name="cbPreviewPreset">
-        <property name="toolTip"><string>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</string></property>
+        <property name="toolTip"><string>Encoder preset for preview generation in H.264/H.265 Smart Cut. Faster presets = faster preview, slightly reduced quality of the re-encoded frames at cut points. No effect for MPEG-2 (mpeg2video has no preset concept; the regular encoder quality setting applies).</string></property>
        </widget>
       </item>
      </layout>
@@ -77,28 +77,28 @@
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laClusterGap">
-        <property name="text"><string>Gruppierungsabstand (Sekunden):</string></property>
-        <property name="toolTip"><string>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</string></property>
+        <property name="text"><string>Grouping gap (seconds):</string></property>
+        <property name="toolTip"><string>Minimum time gap between extra-frame clusters (MPEG-2 field picture), in seconds.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QSpinBox" name="sbClusterGap">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>30</number></property>
-        <property name="toolTip"><string>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</string></property>
+        <property name="toolTip"><string>Minimum time gap between extra-frame clusters (MPEG-2 field picture), in seconds.</string></property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laClusterOffset">
-        <property name="text"><string>Start-Offset (Sekunden):</string></property>
-        <property name="toolTip"><string>Zeitlicher Offset für Cluster-Detection in Sekunden.</string></property>
+        <property name="text"><string>Start offset (seconds):</string></property>
+        <property name="toolTip"><string>Time offset for cluster detection, in seconds.</string></property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QSpinBox" name="sbClusterOffset">
         <property name="minimum"><number>0</number></property>
         <property name="maximum"><number>10</number></property>
-        <property name="toolTip"><string>Zeitlicher Offset für Cluster-Detection in Sekunden.</string></property>
+        <property name="toolTip"><string>Time offset for cluster detection, in seconds.</string></property>
        </widget>
       </item>
      </layout>

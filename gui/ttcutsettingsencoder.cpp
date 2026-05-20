@@ -203,7 +203,7 @@ void TTCutSettingsEncoder::getTabData()
   // mutated by a per-cut override.
   saveCurrentCodecSettings(cbCodec->currentIndex());
 
-  // Preview-Preset is an App-Default (lives in Settings → Suche & Preview).
+  // Preview-Preset is an App-Default (lives in Settings → Suche & Vorschau).
   // The cut dialog hides gbPreviewSettings in Override mode, so any value
   // read from cbPreviewPreset here is meaningless and used to corrupt the
   // App-Default with the default index.

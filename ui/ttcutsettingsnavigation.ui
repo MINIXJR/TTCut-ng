@@ -9,84 +9,84 @@
   <layout class="QVBoxLayout">
    <item>
     <widget class="QGroupBox" name="gbNavigation">
-     <property name="title"><string>Schrittweiten (Frames)</string></property>
+     <property name="title"><string>Step Sizes (Frames)</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laArrow">
-        <property name="text"><string>Pfeiltasten:</string></property>
-        <property name="toolTip"><string>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</string></property>
+        <property name="text"><string>Arrow keys:</string></property>
+        <property name="toolTip"><string>Number of frames per arrow key press (right/left, without modifier).</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QSpinBox" name="sbArrowKeyPlacement">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</string></property>
+        <property name="toolTip"><string>Number of frames per arrow key press (right/left, without modifier).</string></property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="laSlider">
-        <property name="text"><string>Slider-Klick:</string></property>
-        <property name="toolTip"><string>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</string></property>
+        <property name="text"><string>Slider click:</string></property>
+        <property name="toolTip"><string>How far the position slider jumps when clicked next to the handle (in frames).</string></property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QSpinBox" name="sbSliderClickPlacement">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</string></property>
+        <property name="toolTip"><string>How far the position slider jumps when clicked next to the handle (in frames).</string></property>
        </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="laPgUpDown">
-        <property name="text"><string>Bild auf/ab:</string></property>
-        <property name="toolTip"><string>Anzahl Frames bei Bild auf/ab Taste.</string></property>
+        <property name="text"><string>Page up/down:</string></property>
+        <property name="toolTip"><string>Number of frames for the Page Up/Down key.</string></property>
        </widget>
       </item>
       <item row="2" column="1">
        <widget class="QSpinBox" name="sbPgUpDown">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Anzahl Frames bei Bild auf/ab Taste.</string></property>
+        <property name="toolTip"><string>Number of frames for the Page Up/Down key.</string></property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="laAlt">
-        <property name="text"><string>Alt-Taste:</string></property>
-        <property name="toolTip"><string>Anzahl Frames bei Alt+Pfeil.</string></property>
+        <property name="text"><string>Alt key:</string></property>
+        <property name="toolTip"><string>Number of frames for Alt+Arrow.</string></property>
        </widget>
       </item>
       <item row="3" column="1">
        <widget class="QSpinBox" name="sbAltDistance">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Anzahl Frames bei Alt+Pfeil.</string></property>
+        <property name="toolTip"><string>Number of frames for Alt+Arrow.</string></property>
        </widget>
       </item>
       <item row="4" column="0">
        <widget class="QLabel" name="laCtrl">
-        <property name="text"><string>Strg-Taste:</string></property>
-        <property name="toolTip"><string>Anzahl Frames bei Strg+Pfeil.</string></property>
+        <property name="text"><string>Ctrl key:</string></property>
+        <property name="toolTip"><string>Number of frames for Ctrl+Arrow.</string></property>
        </widget>
       </item>
       <item row="4" column="1">
        <widget class="QSpinBox" name="sbCtrlDistance">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Anzahl Frames bei Strg+Pfeil.</string></property>
+        <property name="toolTip"><string>Number of frames for Ctrl+Arrow.</string></property>
        </widget>
       </item>
       <item row="5" column="0">
        <widget class="QLabel" name="laMouseWheel">
-        <property name="text"><string>Mausrad:</string></property>
-        <property name="toolTip"><string>Anzahl Frames pro Mausrad-Tick.</string></property>
+        <property name="text"><string>Mouse wheel:</string></property>
+        <property name="toolTip"><string>Number of frames per mouse wheel tick.</string></property>
        </widget>
       </item>
       <item row="5" column="1">
        <widget class="QSpinBox" name="sbMouseWheel">
         <property name="minimum"><number>1</number></property>
         <property name="maximum"><number>1000</number></property>
-        <property name="toolTip"><string>Anzahl Frames pro Mausrad-Tick.</string></property>
+        <property name="toolTip"><string>Number of frames per mouse wheel tick.</string></property>
        </widget>
       </item>
      </layout>
@@ -94,19 +94,19 @@
    </item>
    <item>
     <widget class="QGroupBox" name="gbQuickJump">
-     <property name="title"><string>Schnellsprung</string></property>
+     <property name="title"><string>Time Jump</string></property>
      <layout class="QFormLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="laQJInterval">
-        <property name="text"><string>Intervall (Sekunden, 0=alle):</string></property>
-        <property name="toolTip"><string>Intervall für den QuickJump-Dialog in Sekunden.</string></property>
+        <property name="text"><string>Interval (seconds, 0=all):</string></property>
+        <property name="toolTip"><string>Interval for the Time Jump dialog, in seconds.</string></property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="QSpinBox" name="sbQuickJumpInterval">
         <property name="minimum"><number>0</number></property>
         <property name="maximum"><number>600</number></property>
-        <property name="toolTip"><string>Intervall für den QuickJump-Dialog in Sekunden.</string></property>
+        <property name="toolTip"><string>Interval for the Time Jump dialog, in seconds.</string></property>
        </widget>
       </item>
      </layout>
@@ -114,12 +114,12 @@
    </item>
    <item>
     <widget class="QGroupBox" name="gbSliderDrag">
-     <property name="title"><string>Position-Slider</string></property>
+     <property name="title"><string>Position Slider</string></property>
      <layout class="QVBoxLayout">
       <item>
        <widget class="QCheckBox" name="cbQuickSearch">
-        <property name="text"><string>Beim Ziehen nur zu I-Frames springen</string></property>
-        <property name="toolTip"><string>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</string></property>
+        <property name="text"><string>Snap to I-frames only while dragging</string></property>
+        <property name="toolTip"><string>While dragging the position slider in the main window, snap only to the nearest I-frame (faster) instead of the exact frame position (frame-accurate, but slower while dragging).</string></property>
        </widget>
       </item>
      </layout>
