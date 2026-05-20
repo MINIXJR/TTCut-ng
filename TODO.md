@@ -233,6 +233,12 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Implement plugin interface for external tools (encoders, muxers, players)
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
+- **ttcut-ng-Kommandozeilenoptionen im Wiki dokumentieren**
+  - Die CLI-Optionen der Hauptanwendung sind im Wiki nirgends beschrieben (nur `ttcut-demux` hat eine eigene Seite)
+  - Optionen aus `gui/ttcutmain.cpp` (QCommandLineParser): `--help`, `--project <file>`, das positionale Video-/Projektdatei-Argument sowie die Entwickler-/QC-Flags `--screenshots <dir>` und `--auto-cut <out>`
+  - Kein `--version` vorhanden (`addVersionOption()` wird nicht aufgerufen)
+  - Platzierung offen: eigene Wiki-Seite »Kommandozeile« (parallel zu `ttcut-demux.md`, in `_Sidebar.md` verlinken) oder Abschnitt in `Quickstart.md`/`Installation.md`
+
 ## Entwicklungs-Workflow
 
 - **Verification-Test-Policy: Tux-Videos bevorzugen**
