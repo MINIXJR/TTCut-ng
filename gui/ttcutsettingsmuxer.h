@@ -1,8 +1,11 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2008 / ttcut.tritime.org                       */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2005                                                      */
-/* FILE     : ttcutsettingsmuxer.h                                            */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/* Originally TTCut (c) 2003-2010 B. Altendorf / TriTime                      */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 #ifndef TTCUTSETTINGSMUXER_H

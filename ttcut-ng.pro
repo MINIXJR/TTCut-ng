@@ -1,15 +1,13 @@
-#/*----------------------------------------------------------------------------*/
-#/*  COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                              */
-#/*  Originally: TriTime (c) 2003-2010 / www.tritime.org                       */
-#/*----------------------------------------------------------------------------*/
-#/*  FILE:   QMake Projektfile for ttcut                                        */
-#/*-----------------------------------------------------------------------------*/
-#/*  ABOUT:                                                                     */
-#/*-----------------------------------------------------------------------------*/
-#/*  AUTHOR:    b. altendorf (ttcut@tritime.org)              DATE: 02/18/2006  */
-#/*-----------------------------------------------------------------------------*/
+#-------------------------------------------------------------------------------
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
+# TTCut-ng - frame-accurate video cutter
+# Copyright (c) 2024-2026 MINIXJR
+# Originally TTCut (c) 2003-2010 B. Altendorf / TriTime
 #
+# Free software under the GNU GPL v3 or later - see the LICENSE file.
+#-------------------------------------------------------------------------------
+
 PROJECT     = TTCut-ng
 VERSION     = 0.70.0
 CONFIG      += qt warn_on debug c++17

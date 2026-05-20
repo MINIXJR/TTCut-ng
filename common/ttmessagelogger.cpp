@@ -1,18 +1,12 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                               */
-/* Originally: TriTime (c) 2003-2010 / www.tritime.org                        */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/* Originally TTCut (c) 2003-2010 B. Altendorf / TriTime                      */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2008                                                      */
-/* FILE     : ttmessagelogger.cpp                                             */
-/*----------------------------------------------------------------------------*/
-
-/*!
- * The TTMessageLogger class provides runtime logging.  The first
- * getInstance() call creates the (singleton) object but does NOT open
- * the log file yet — the file is opened lazily on the first writeMsg
- * call so that QCoreApplication / main() has had a chance to set the
- * working directory and configure the path via setLogFilePath().
- */
 
 #include "ttmessagelogger.h"
 

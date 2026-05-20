@@ -1,32 +1,16 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                               */
-/* Originally: TriTime (c) 2003-2010 / www.tritime.org                        */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2008                                                      */
-/* FILE     : ttmpeg2window.cpp                                               */
-/*----------------------------------------------------------------------------*/
-/* AUTHOR  : b. altendorf (E-Mail: b.altendorf@tritime.de)   DATE: 16/12/2008 */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/* Originally TTCut (c) 2003-2010 B. Altendorf / TriTime                      */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
 // TTMPEG2WINDOW
 // ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*                                                                            */
-/* This program is distributed in the hope that it will be useful, but WITHOUT*/
-/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or      */
-/* FITNESS FOR A PARTICULAR PURPOSE.                                          */
-/* See the GNU General Public License for more details.                       */
-/*                                                                            */
-/* You should have received a copy of the GNU General Public License along    */
-/* with this program; if not, write to the Free Software Foundation,          */
-/* Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.              */
-/*----------------------------------------------------------------------------*/
 
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"

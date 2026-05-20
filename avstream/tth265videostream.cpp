@@ -1,8 +1,10 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                               */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2024                                                      */
-/* FILE     : tth265videostream.cpp                                           */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
@@ -10,13 +12,6 @@
 // H.265/HEVC Video Stream — codec-specific bits only. Common ffmpeg / GOP /
 // header-list flow lives in TTH26xVideoStream.
 // ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*----------------------------------------------------------------------------*/
 
 #include "tth265videostream.h"
 

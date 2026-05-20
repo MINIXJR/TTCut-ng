@@ -1,8 +1,10 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                                */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2024                                                      */
-/* FILE     : tth26xvideostream.h                                             */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 // ----------------------------------------------------------------------------
@@ -13,13 +15,6 @@
 // (typed SPS, typed access units, RAP-vs-IDR semantics, PAFF correction)
 // are implemented by the derived classes via protected hooks.
 // ----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*----------------------------------------------------------------------------*/
 
 #ifndef TTH26XVIDEOSTREAM_H
 #define TTH26XVIDEOSTREAM_H

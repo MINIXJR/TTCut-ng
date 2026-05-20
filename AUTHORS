@@ -1,0 +1,19 @@
+TTCut-ng Authors
+================
+
+TTCut-ng is developed and maintained by MINIXJR.
+  https://github.com/MINIXJR/TTCut-ng
+
+It builds on the following earlier work, whose copyright notices are
+kept intact in the source files derived from it:
+
+  TTCut - the original MPEG-2 elementary stream video cutter
+    Copyright (c) 2003-2010 B. Altendorf / TriTime
+    https://www.tritime.org
+
+  SRT subtitle support (contributed as a pull request to TTCut)
+    Copyright (c) 2019 Minei3oat
+    https://github.com/Minei3oat
+
+TTCut-ng is free software under the GNU GPL v3 or later; see the
+LICENSE file for the full license text.

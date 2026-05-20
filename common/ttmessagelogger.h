@@ -1,21 +1,16 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: MINIXJR (c) 2024-2026 / TTCut-ng                               */
-/* Originally: TriTime (c) 2003-2010 / www.tritime.org                        */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2006                                                      */
-/* FILE     : ttmessagelogger.h                                               */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/* Originally TTCut (c) 2003-2010 B. Altendorf / TriTime                      */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 // -----------------------------------------------------------------------------
 // TTMESSAGELOGGER
 // -----------------------------------------------------------------------------
-
-/*----------------------------------------------------------------------------*/
-/* This program is free software; you can redistribute it and/or modify it    */
-/* under the terms of the GNU General Public License as published by the Free */
-/* Software Foundation;                                                       */
-/* either version 3 of the License, or (at your option) any later version.    */
-/*----------------------------------------------------------------------------*/
 
 
 #ifndef TTMESSAGELOGGER_H
