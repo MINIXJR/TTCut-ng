@@ -2,6 +2,65 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.70.0 (2026-05-20)
+
+**Settings dialog and Cut-Dialog overhaul, persistent/transient settings split, English UI source strings**
+
+### Features
+
+- **Settings dialog redesign** — the former 4-tab dialog is now a
+  7-category sidebar: Navigation, Search & Preview, Audio & Language,
+  Encoder, Multiplexing, Paths, Logging. Sidebar labels and tooltips
+  reworked, the last-used category is restored on reopen.
+- **Reset-to-defaults buttons** in each Settings category and in the
+  Cut-Dialog. Each button restores the compile-time defaults for its
+  own page only.
+- **Persistent/transient settings split** — the encoder pipeline now
+  reads transient working values (`encoderXxx()`), so a one-off change
+  in the Cut-Dialog no longer overwrites the app-wide codec defaults.
+  Seven `working*` variants added for mux/audio settings.
+- **Cut-Dialog** reduced from 3 tabs to 2; the output group box gained
+  a per-codec container choice, persisted in the `.ttcut` project file
+  (`MuxMode`, `Mpeg2Target`, `AudioOnlyFormat`).
+- **Configurable default output directory** in the Paths category.
+- **libav log routing** — `qDebug`/`qWarning` and libav's own log
+  output are routed through `TTMessageLogger`, gated by a `logLibav`
+  toggle.
+
+### Fixes
+
+- **Burst detection** ran on the wrong audio track when a project was
+  loaded; it now targets the first audio track consistently.
+- **Cut-Dialog dialog semantics** — closing via the window X now
+  cancels instead of silently accepting, an overwrite confirmation was
+  added for existing output files, and the spurious UI auto-connect
+  `okButton → accept()` was removed so cancel paths are honoured.
+- **Cut-Dialog Encoder tab** hides the empty preview-settings group box
+  instead of showing a blank frame.
+- **MPEG-2 preview clip regeneration** applies `planAudioCut` for
+  parity with the full preview path, and applies the field-picture
+  extras correction so the regenerated clip matches the full cut.
+- **Infinite loop** in `transferCutObjects` at end-of-stream fixed with
+  an end-of-stream guard.
+- **TTMessageLogger** made thread-safe; a `qDebug` recursion via the
+  installed message handler fixed.
+
+### Changes
+
+- **English UI source strings** — the Settings dialog (7 category
+  widgets) and the Cut-Dialog are fully converted to English source
+  strings, with German translations in `trans/ttcut-ng_de_DE.ts`. The
+  unused, 96%-empty `ttcut-ng_en_US.ts` stub was removed.
+- **`.prj` → `.ttcut` migration** — legacy `.prj` projects are migrated
+  read-only to `.ttcut` on save. Old `.prj` files still load.
+- **Dead code removal** — legacy `<Marker>` stream-point
+  reconstruction, obsolete MPEG2Schnitt IDD-Files support, the unused
+  `mpeg2_mplexed_video` stream-type enum value, and 11 dead settings
+  removed; `stepArrowKeys` and `stepSliderClick` reanimated.
+- Sidebar reordered (UI interaction → processing → output → system),
+  the "Allgemein" category dropped, the fast-slider setting moved to
+  the Navigation category.
+
 ## v0.69.0 (2026-05-14)
 
 **Logging refactor, MPEG-2 A/V drift fix, ttcut-demux multi-file recovery, internal cleanup wave**
