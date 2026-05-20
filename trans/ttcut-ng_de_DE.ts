@@ -515,34 +515,6 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <source>Common</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <source>Free Drive Space</source>
-        <translation type="vanished">Freier Speicherplatz</translation>
-    </message>
-    <message>
-        <source>Path</source>
-        <translation type="vanished">Pfad</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="vanished">Größe</translation>
-    </message>
-    <message>
-        <source>Used</source>
-        <translation type="vanished">Belegt</translation>
-    </message>
-    <message>
-        <source>Free</source>
-        <translation type="vanished">Frei</translation>
-    </message>
-    <message>
-        <source>Used %</source>
-        <translation type="vanished">Belegt %</translation>
-    </message>
-    <message>
         <location filename="../ui/avcutdialog.ui" line="257"/>
         <source>Audio-Only Output</source>
         <translation>Nur-Audio-Ausgabe</translation>
@@ -551,34 +523,6 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <location filename="../ui/avcutdialog.ui" line="266"/>
         <source>Format:</source>
         <translation>Format:</translation>
-    </message>
-    <message>
-        <source>Bitrate:</source>
-        <translation type="vanished">Bitrate:</translation>
-    </message>
-    <message>
-        <source> kbps</source>
-        <translation type="vanished"> kbps</translation>
-    </message>
-    <message>
-        <source>match source</source>
-        <translation type="vanished">wie Quelle</translation>
-    </message>
-    <message>
-        <source>Cut Options</source>
-        <translation type="vanished">Schnitt-Optionen</translation>
-    </message>
-    <message>
-        <source>Write Sequence End Code</source>
-        <translation type="vanished">Sequenz-Ende-Code schreiben</translation>
-    </message>
-    <message>
-        <source>Write max bitrate to first sequence</source>
-        <translation type="vanished">Max. Bitrate in erste Sequenz schreiben</translation>
-    </message>
-    <message>
-        <source>Schnitt</source>
-        <translation type="vanished">Schnitt</translation>
     </message>
     <message>
         <location filename="../ui/avcutdialog.ui" line="89"/>
@@ -651,34 +595,6 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>ES-Dateien nach Mux löschen</translation>
     </message>
     <message>
-        <source>Multiplexer-Modus</source>
-        <translation type="vanished">Multiplexer-Modus</translation>
-    </message>
-    <message>
-        <source>Mux-Script erstellen</source>
-        <translation type="vanished">Mux-Skript erstellen</translation>
-    </message>
-    <message>
-        <source>Streams direkt muxen</source>
-        <translation type="vanished">Streams direkt multiplexen</translation>
-    </message>
-    <message>
-        <source>Multiplexen-Optionen</source>
-        <translation type="vanished">Multiplexen-Optionen</translation>
-    </message>
-    <message>
-        <source>MKV-Kapitel erstellen</source>
-        <translation type="vanished">MKV-Kapitel erstellen</translation>
-    </message>
-    <message>
-        <source>Intervall (Min):</source>
-        <translation type="vanished">Intervall (Min):</translation>
-    </message>
-    <message>
-        <source>ES-Dateien nach Mux löschen</source>
-        <translation type="vanished">ES-Dateien nach Mux löschen</translation>
-    </message>
-    <message>
         <location filename="../ui/avcutdialog.ui" line="369"/>
         <source>Encoding</source>
         <translation>Encodieren</translation>
@@ -687,30 +603,6 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <location filename="../ui/avcutdialog.ui" line="385"/>
         <source>GroupBox</source>
         <translation>GroupBox</translation>
-    </message>
-    <message>
-        <source>Muxing</source>
-        <translation type="vanished">Multiplexen</translation>
-    </message>
-    <message>
-        <source>Chapters</source>
-        <translation type="vanished">Kapitel</translation>
-    </message>
-    <message>
-        <source>Original codec (per track)</source>
-        <translation type="vanished">Original-Codec (pro Spur)</translation>
-    </message>
-    <message>
-        <source>Matroska Audio (.mka)</source>
-        <translation type="vanished">Matroska Audio (.mka)</translation>
-    </message>
-    <message>
-        <source>MP3</source>
-        <translation type="vanished">MP3</translation>
-    </message>
-    <message>
-        <source>AAC (.m4a)</source>
-        <translation type="vanished">AAC (.m4a)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutavcutdlg.cpp" line="60"/>
@@ -730,22 +622,6 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
 
 already exists. Overwrite?</source>
         <translation>Die Datei
-
-  %1
-
-existiert bereits. Überschreiben?</translation>
-    </message>
-    <message>
-        <source>Datei existiert</source>
-        <translation type="vanished">Datei existiert</translation>
-    </message>
-    <message>
-        <source>Die Datei
-
-  %1
-
-existiert bereits. Überschreiben?</source>
-        <translation type="vanished">Die Datei
 
   %1
 
@@ -831,13 +707,6 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;- Martin Dienert (Mpeg2Schnitt) for mpeg stream analysis&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;- Tobias Arnold (Cuttermaran) for UI inspiration&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;- Minei3oat for SRT subtitle support&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
-    </message>
-</context>
-<context>
-    <name>TTCutAudioTask</name>
-    <message>
-        <source>No target file path given for audio cut!</source>
-        <translation type="vanished">Kein Zielpfad für den Audioschnitt angegeben!</translation>
     </message>
 </context>
 <context>
@@ -1185,10 +1054,6 @@ p, li { white-space: pre-wrap; }
         <translation>Audio-Drift</translation>
     </message>
     <message>
-        <source>Audiooffset</source>
-        <translation type="vanished">Audio-Versatz</translation>
-    </message>
-    <message>
         <location filename="../ui/cutlistwidget.ui" line="276"/>
         <source>Notice</source>
         <translation>Hinweis</translation>
@@ -1213,18 +1078,6 @@ p, li { white-space: pre-wrap; }
         <location filename="../ui/cutlistwidget.ui" line="413"/>
         <source>Audio Cut</source>
         <translation>Audio schneiden</translation>
-    </message>
-    <message>
-        <source>Cut Audio/Video</source>
-        <translation type="vanished">Audio/Video schneiden</translation>
-    </message>
-    <message>
-        <source>Cut Selected</source>
-        <translation type="vanished">Auswahl schneiden</translation>
-    </message>
-    <message>
-        <source>Cut Audio only</source>
-        <translation type="vanished">Nur Audio schneiden</translation>
     </message>
 </context>
 <context>
@@ -1469,22 +1322,6 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <source>Schwarzbild-Suche abgebrochen</source>
-        <translation type="vanished">Schwarzbild-Suche abgebrochen</translation>
-    </message>
-    <message>
-        <source>Kein Schwarzbild gefunden</source>
-        <translation type="vanished">Kein Schwarzbild gefunden</translation>
-    </message>
-    <message>
-        <source>Szenenwechsel-Suche abgebrochen</source>
-        <translation type="vanished">Szenenwechsel-Suche abgebrochen</translation>
-    </message>
-    <message>
-        <source>Kein Szenenwechsel gefunden</source>
-        <translation type="vanished">Kein Szenenwechsel gefunden</translation>
-    </message>
-    <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1834"/>
         <source>Logo-Bereich im Videobild auswählen...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
@@ -1523,14 +1360,6 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <location filename="../gui/ttcutmainwindow.cpp" line="2017"/>
         <source>Logo-Profil konnte nicht erstellt werden</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
-    </message>
-    <message>
-        <source>Logo-Suche abgebrochen</source>
-        <translation type="vanished">Logo-Suche abgebrochen</translation>
-    </message>
-    <message>
-        <source>Keine Logo-Statusänderung gefunden</source>
-        <translation type="vanished">Keine Logo-Statusänderung gefunden</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1099"/>
@@ -1817,54 +1646,6 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsAudio</name>
     <message>
-        <source>Audio &amp; Sprache</source>
-        <translation type="vanished">Audio &amp; Sprache</translation>
-    </message>
-    <message>
-        <source>Audio &amp;&amp; Sprache</source>
-        <translation type="vanished">Audio &amp;&amp; Sprache</translation>
-    </message>
-    <message>
-        <source>Sprach-Präferenz</source>
-        <translation type="vanished">Sprach-Präferenz</translation>
-    </message>
-    <message>
-        <source>Sprachreihenfolge (z.B. deu,eng):</source>
-        <translation type="vanished">Sprachreihenfolge (z.B. deu,eng):</translation>
-    </message>
-    <message>
-        <source>Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</source>
-        <translation type="vanished">Komma-getrennte Liste der bevorzugten Audio-Sprachen (ISO 639-2 Codes, z.B. deu,eng,fra). Steuert die Reihenfolge der Audio-Tracks im Cut-Dialog.</translation>
-    </message>
-    <message>
-        <source>z.B. deu,eng,fra</source>
-        <translation type="vanished">z.B. deu,eng,fra</translation>
-    </message>
-    <message>
-        <source>Audio-Optionen</source>
-        <translation type="vanished">Audio-Optionen</translation>
-    </message>
-    <message>
-        <source>AC3 Kanalformat an Schnitten normalisieren</source>
-        <translation type="vanished">AC3 Kanalformat an Schnitten normalisieren</translation>
-    </message>
-    <message>
-        <source>AC3-Kanalformat (acmod) an Schnittpunkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</source>
-        <translation type="vanished">AC3-Kanalformat (acmod) an Schnittpunkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</translation>
-    </message>
-    <message>
-        <source>AC3-Kanalformat (acmod) an Cut-Punkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</source>
-        <translation type="vanished">AC3-Kanalformat (acmod) an Cut-Punkten normalisieren. Verhindert Audio-Artefakte bei Sender-Wechseln im Stream (z.B. wenn ein Segment 5.1 und das nächste 2.0 ist).</translation>
-    </message>
-    <message>
-        <source>Audio-Burst-Schwellwert (dB, 0=aus):</source>
-        <translation type="vanished">Audio-Burst-Schwellwert (dB, 0=aus):</translation>
-    </message>
-    <message>
-        <source>Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</source>
-        <translation type="vanished">Schwellwert für Audio-Burst-Detection in dB unter dem Audio-Median. Werbe-Audio das vor dem Werbe-Video startet wird ab diesem Threshold erkannt und im Cut-Dialog gemeldet.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsaudio.ui" line="8"/>
         <source>Audio &amp;&amp; Language</source>
         <translation>Audio &amp;&amp; Sprache</translation>
@@ -1933,161 +1714,7 @@ Ausgabedatei:
     </message>
 </context>
 <context>
-    <name>TTCutSettingsChapter</name>
-    <message>
-        <source>Form3</source>
-        <translation type="vanished">Form3</translation>
-    </message>
-    <message>
-        <source>Write spumux (XML) chapter-list</source>
-        <translation type="vanished">Spumux (XML) Kapitelliste schreiben</translation>
-    </message>
-</context>
-<context>
-    <name>TTCutSettingsCommon</name>
-    <message>
-        <source>Common</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <source>Files / Directories</source>
-        <translation type="vanished">Dateien / Verzeichnisse</translation>
-    </message>
-    <message>
-        <source>Temp directory</source>
-        <translation type="vanished">Temporäres Verzeichnis</translation>
-    </message>
-    <message>
-        <source>Navigation</source>
-        <translation type="vanished">Navigation</translation>
-    </message>
-    <message>
-        <source>Use quick seek (slider positioned only on I-Frames)</source>
-        <translation type="vanished">Schnellpositionierung</translation>
-    </message>
-    <message>
-        <source>Slider click placement</source>
-        <translation type="vanished">Schieberegler-Klicksprung</translation>
-    </message>
-    <message>
-        <source>Page up/down placement</source>
-        <translation type="vanished">Bild auf/ab-Sprung</translation>
-    </message>
-    <message>
-        <source>Arrow keys placement</source>
-        <translation type="vanished">Pfeiltasten-Sprung</translation>
-    </message>
-    <message>
-        <source>&apos;Alt&apos; key jump distance</source>
-        <translation type="vanished">Alt-Taste Sprungweite</translation>
-    </message>
-    <message>
-        <source>&apos;Ctrl&apos; key jump distance</source>
-        <translation type="vanished">Strg-Taste Sprungweite</translation>
-    </message>
-    <message>
-        <source>Mouse wheel distance</source>
-        <translation type="vanished">Mausrad-Sprungweite</translation>
-    </message>
-    <message>
-        <source>frames</source>
-        <translation type="vanished">Frames</translation>
-    </message>
-    <message>
-        <source>seconds</source>
-        <translation type="vanished">Sekunden</translation>
-    </message>
-    <message>
-        <source>Search worker threads (0 = auto)</source>
-        <translation type="vanished">Suche-Worker-Threads (0 = automatisch)</translation>
-    </message>
-    <message>
-        <source>Search / Play</source>
-        <translation type="vanished">Suche / Wiedergabe</translation>
-    </message>
-    <message>
-        <source>threads</source>
-        <translation type="vanished">Threads</translation>
-    </message>
-    <message>
-        <source>Number of parallel decoders during black-frame / scene-change / logo search. 0 = automatic (max 4 by default). Higher uses more RAM (~40 MB per worker for 1080p H.264/H.265).</source>
-        <translation type="vanished">Anzahl paralleler Decoder bei Schwarzbild- / Szenenwechsel- / Logo-Suche. 0 = automatisch (max. 4 Standard). Höher braucht mehr RAM (~40 MB pro Worker bei 1080p H.264/H.265).</translation>
-    </message>
-    <message>
-        <source>Search CutOut Frame within</source>
-        <translation type="vanished">Cut-Out Frame suchen innerhalb</translation>
-    </message>
-    <message>
-        <source>Preview each Cut</source>
-        <translation type="vanished">Vorschau für jeden Schnitt</translation>
-    </message>
-    <message>
-        <source>Skip while playing</source>
-        <translation type="vanished">Überspringen bei Wiedergabe</translation>
-    </message>
-    <message>
-        <source>Audio-Burst Threshold (dB, 0=off)</source>
-        <translation type="vanished">Audio-Burst Schwellwert (dB, 0=aus)</translation>
-    </message>
-    <message>
-        <source>All keyframes</source>
-        <translation type="vanished">Alle Keyframes</translation>
-    </message>
-    <message>
-        <source>Zeitsprung interval (0=all)</source>
-        <translation type="vanished">Zeitsprung-Intervall (0=alle)</translation>
-    </message>
-    <message>
-        <source>Normalize AC3 channel format at cuts</source>
-        <translation type="vanished">AC3-Kanalformat am Schnitt normalisieren</translation>
-    </message>
-    <message>
-        <source>Re-encode AC3 frames at cut boundaries when channel format changes (e.g. stereo/5.1)</source>
-        <translation type="vanished">AC3-Frames am Schnittrand re-encoden wenn sich das Kanalformat ändert (z.B. Stereo/5.1)</translation>
-    </message>
-    <message>
-        <source>e.g. deu,eng,fra</source>
-        <translation type="vanished">z.B. deu,eng,fra</translation>
-    </message>
-    <message>
-        <source>Comma-separated audio language codes (2- or 3-letter). Empty = use system locale. Unknown codes are silently dropped.</source>
-        <translation type="vanished">Kommaseparierte Audio-Sprachcodes (2- oder 3-Buchstaben). Leer = System-Locale. Unbekannte Codes werden verworfen.</translation>
-    </message>
-    <message>
-        <source>Audio language preference</source>
-        <translation type="vanished">Audio-Sprachpräferenz</translation>
-    </message>
-    <message>
-        <source>Defective Frame Grouping</source>
-        <translation type="vanished">Gruppierung defekter Frames</translation>
-    </message>
-    <message>
-        <source> seconds</source>
-        <translation type="vanished"> Sekunden</translation>
-    </message>
-    <message>
-        <source>Group size</source>
-        <translation type="vanished">Gruppengröße</translation>
-    </message>
-    <message>
-        <source>Start offset</source>
-        <translation type="vanished">Start-Offset</translation>
-    </message>
-    <message>
-        <source>Preview starts at an I-frame for each cut.</source>
-        <translation type="vanished">Die Vorschau beginnt für jeden Schnitt bei einem I-Frame.</translation>
-    </message>
-</context>
-<context>
     <name>TTCutSettingsEncoder</name>
-    <message>
-        <source>Encoder Settings</source>
-        <translation type="vanished">Encoder-Einstellungen</translation>
-    </message>
-    <message>
-        <source>Encoder-Standards</source>
-        <translation type="vanished">Encoder-Standards</translation>
-    </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="19"/>
         <source>Encoder Mode</source>
@@ -2097,14 +1724,6 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsencoder.ui" line="25"/>
         <source>Use encoding mode (re-encode at cut points)</source>
         <translation>Encoder-Modus verwenden (Neu-Enkodierung an Schnittpunkten)</translation>
-    </message>
-    <message>
-        <source>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
-        <translation type="vanished">Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
-    </message>
-    <message>
-        <source>Aktiviert Encoding-Mode: an Schnittpunkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
-        <translation type="vanished">Aktiviert Encoding-Mode: an Schnittpunkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="38"/>
@@ -2117,17 +1736,9 @@ Ausgabedatei:
         <translation>Codec:</translation>
     </message>
     <message>
-        <source>Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</source>
-        <translation type="vanished">Codec-Auswahl (wird im Cut-Dialog automatisch auf den Quell-Codec gesetzt; hier in Settings nur zur Auswahl welche Codec-Defaults editiert werden).</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="80"/>
         <source>Preset:</source>
         <translation>Voreinstellung:</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
-        <translation type="vanished">Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="103"/>
@@ -2135,19 +1746,11 @@ Ausgabedatei:
         <translation>Profil:</translation>
     </message>
     <message>
-        <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
-        <translation type="vanished">Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="126"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="145"/>
         <location filename="../gui/ttcutsettingsencoder.cpp" line="156"/>
         <source>Quality (CRF):</source>
         <translation>Qualität (CRF):</translation>
-    </message>
-    <message>
-        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</source>
-        <translation type="vanished">Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. Empfohlen: 18-28.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="13"/>
@@ -2205,18 +1808,6 @@ Ausgabedatei:
         <translation>Encoder-Preset für Vorschau-Generierung. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Schnittpunkten.</translation>
     </message>
     <message>
-        <source>Encoder-Preset für Vorschau-Generierung. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Schnittpunkten.</source>
-        <translation type="vanished">Encoder-Preset für Vorschau-Generierung. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Schnittpunkten.</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
-        <translation type="vanished">Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
-    </message>
-    <message>
-        <source>Encoder preset for preview generation (faster = less quality but quicker preview)</source>
-        <translation type="vanished">Encoder-Voreinstellung für Vorschau-Generierung (schneller = weniger Qualität, aber schnellere Vorschau)</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoder.ui" line="227"/>
         <source>Faster preset = quicker preview generation. Quality only affects re-encoded frames at cut points.</source>
         <translation>Schnellere Voreinstellung = schnellere Vorschau-Generierung. Qualität betrifft nur neu encodierte Frames an Schnittpunkten.</translation>
@@ -2263,30 +1854,14 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsEncoderDefaults</name>
     <message>
-        <source>Encoder-Standards</source>
-        <translation type="vanished">Encoder-Standards</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="8"/>
         <source>Encoder</source>
         <translation>Encoder</translation>
     </message>
     <message>
-        <source>Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</source>
-        <translation type="vanished">Re-Encoder-Parameter beim Re-Encoding an Cut-Punkten. Alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="23"/>
         <source>Encoder Mode</source>
         <translation>Encoder-Modus</translation>
-    </message>
-    <message>
-        <source>Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</source>
-        <translation type="vanished">Encoding-Mode verwenden (an Cut-Punkten neu encodieren)</translation>
-    </message>
-    <message>
-        <source>Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
-        <translation type="vanished">Aktiviert Encoding-Mode: an Cut-Punkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="39"/>
@@ -2298,10 +1873,6 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="113"/>
         <source>Preset:</source>
         <translation>Voreinstellung:</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</source>
-        <translation type="vanished">Encoder-Preset (Speed vs. Compression). Schnellere Presets = größere Datei bei gleicher Qualität.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="14"/>
@@ -2373,38 +1944,14 @@ Ausgabedatei:
         <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
     </message>
     <message>
-        <source>Encoder-Profile (Kompatibilität).</source>
-        <translation type="vanished">Encoder-Profile (Kompatibilität).</translation>
-    </message>
-    <message>
-        <source>Parameter beim Re-Encoding an Schnittpunkten: alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</source>
-        <translation type="vanished">Parameter beim Re-Encoding an Schnittpunkten: alle Codecs nutzen libavcodec (mpeg2video, libx264, libx265), unabhängig vom späteren Container-Format (MKV oder MPG).</translation>
-    </message>
-    <message>
-        <source>Encoding-Mode verwenden (an Schnittpunkten neu encodieren)</source>
-        <translation type="vanished">Encoding-Mode verwenden (an Schnittpunkten neu encodieren)</translation>
-    </message>
-    <message>
-        <source>Aktiviert Encoding-Mode: an Schnittpunkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</source>
-        <translation type="vanished">Aktiviert Encoding-Mode: an Schnittpunkten neu encodieren statt stream-copy. Notwendig für Frame-genaue Cuts ohne Keyframe-Alignment.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="43"/>
         <source>Quality (qscale):</source>
         <translation>Qualität (qscale):</translation>
     </message>
     <message>
-        <source>Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</source>
-        <translation type="vanished">Quality-Wert (qscale). Niedriger = bessere Qualität + größere Datei. MPEG-2: 2-31, Empfohlen: 2-6.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="62"/>
         <source>H.264 / AVC</source>
         <translation>H.264 / AVC</translation>
-    </message>
-    <message>
-        <source>Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</source>
-        <translation type="vanished">Encoder-Profile (Kompatibilität). High = beste Qualität, Main/Baseline = breitere Kompatibilität mit alten Decodern.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="90"/>
@@ -2413,135 +1960,9 @@ Ausgabedatei:
         <translation>Qualität (CRF):</translation>
     </message>
     <message>
-        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</source>
-        <translation type="vanished">Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.264: 0-51, Empfohlen: 18-28.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsencoderdefaults.ui" line="109"/>
         <source>H.265 / HEVC</source>
         <translation>H.265 / HEVC</translation>
-    </message>
-    <message>
-        <source>Encoder-Profile. main = Standard, main10 = 10-Bit.</source>
-        <translation type="vanished">Encoder-Profile. main = Standard, main10 = 10-Bit.</translation>
-    </message>
-    <message>
-        <source>Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</source>
-        <translation type="vanished">Quality-Wert (CRF). Niedriger = bessere Qualität + größere Datei. H.265: 0-51, Empfohlen: 20-34.</translation>
-    </message>
-    <message>
-        <source>Preview</source>
-        <translation type="vanished">Vorschau</translation>
-    </message>
-    <message>
-        <source>Preview-Preset:</source>
-        <translation type="vanished">Preview-Preset:</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</source>
-        <translation type="vanished">Encoder-Preset für Preview-Generierung. Schnellere Presets = schnellere Preview, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten.</translation>
-    </message>
-</context>
-<context>
-    <name>TTCutSettingsFiles</name>
-    <message>
-        <source>Form</source>
-        <translation type="vanished">Form</translation>
-    </message>
-    <message>
-        <source>MPEG2Schnitt Index Files (*.idd)</source>
-        <translation type="vanished">MPEG2Schnitt Index Files (*.idd)</translation>
-    </message>
-    <message>
-        <source>Create video index file</source>
-        <translation type="vanished">Video-Indexdatei erstellen</translation>
-    </message>
-    <message>
-        <source>Read video index file</source>
-        <translation type="vanished">Video-Indexdatei lesen</translation>
-    </message>
-    <message>
-        <source>Create audio index file</source>
-        <translation type="vanished">Audio-Indexdatei erstellen</translation>
-    </message>
-    <message>
-        <source>Read audio index file</source>
-        <translation type="vanished">Audio-Indexdatei lesen</translation>
-    </message>
-    <message>
-        <source>Create cut video index file</source>
-        <translation type="vanished">Schnitt-Video-Indexdatei erstellen</translation>
-    </message>
-    <message>
-        <source>Logfile</source>
-        <translation type="vanished">Logdatei</translation>
-    </message>
-    <message>
-        <source>Logfile Options</source>
-        <translation type="vanished">Logdatei-Optionen</translation>
-    </message>
-    <message>
-        <source>Video index information</source>
-        <translation type="vanished">Video-Index-Informationen</translation>
-    </message>
-    <message>
-        <source>FFmpeg decoder information</source>
-        <translation type="vanished">FFmpeg-Decoder Informationen</translation>
-    </message>
-    <message>
-        <source>Smart Cut engine information</source>
-        <translation type="vanished">Smart-Cut-Engine Informationen</translation>
-    </message>
-    <message>
-        <source>MKV mux information</source>
-        <translation type="vanished">MKV-Mux Informationen</translation>
-    </message>
-    <message>
-        <source>Cut pipeline information</source>
-        <translation type="vanished">Schnitt-Pipeline Informationen</translation>
-    </message>
-    <message>
-        <source>AV-stream parser information</source>
-        <translation type="vanished">AV-Stream-Parser Informationen</translation>
-    </message>
-    <message>
-        <source>UI events information</source>
-        <translation type="vanished">UI-Ereignisse Informationen</translation>
-    </message>
-    <message>
-        <source>Extended messages and informations</source>
-        <translation type="vanished">Erweiterte Meldungen und Informationen</translation>
-    </message>
-    <message>
-        <source>Write to console</source>
-        <translation type="vanished">In Konsole ausgeben</translation>
-    </message>
-    <message>
-        <source>Create logfile</source>
-        <translation type="vanished">Logdatei erstellen</translation>
-    </message>
-</context>
-<context>
-    <name>TTCutSettingsGeneral</name>
-    <message>
-        <source>Allgemein</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <source>Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</source>
-        <translation type="vanished">Beim Slider-Drag direkt zum nächsten Keyframe springen statt jede Frame-Position exakt zu dekodieren — schneller, aber sichtbare Frame-Sprünge beim Ziehen.</translation>
-    </message>
-    <message>
-        <source>Tmp-Verzeichnis:</source>
-        <translation type="vanished">Tmp-Verzeichnis:</translation>
-    </message>
-    <message>
-        <source>Schnellsuche aktivieren</source>
-        <translation type="vanished">Schnellsuche aktivieren</translation>
-    </message>
-    <message>
-        <source>Tmp-Verzeichnis wählen</source>
-        <translation type="vanished">Tmp-Verzeichnis wählen</translation>
     </message>
 </context>
 <context>
@@ -2550,102 +1971,6 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingslogging.ui" line="8"/>
         <source>Logging</source>
         <translation>Logging</translation>
-    </message>
-    <message>
-        <source>Basis-Logging</source>
-        <translation type="vanished">Basis-Logging</translation>
-    </message>
-    <message>
-        <source>Logfile erstellen</source>
-        <translation type="vanished">Logfile erstellen</translation>
-    </message>
-    <message>
-        <source>Logfile schreiben (Pfad in &apos;Pfade&apos;-Kategorie).</source>
-        <translation type="vanished">Logfile schreiben (Pfad in &apos;Pfade&apos;-Kategorie).</translation>
-    </message>
-    <message>
-        <source>Ausgabe auf Konsole</source>
-        <translation type="vanished">Ausgabe auf Konsole</translation>
-    </message>
-    <message>
-        <source>Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</source>
-        <translation type="vanished">Log-Ausgabe zusätzlich zur Datei auf die Konsole/Terminal.</translation>
-    </message>
-    <message>
-        <source>Erweiterte Meldungen</source>
-        <translation type="vanished">Erweiterte Meldungen</translation>
-    </message>
-    <message>
-        <source>Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</source>
-        <translation type="vanished">Auch INFO- und DEBUG-Meldungen ins Log schreiben statt nur Warnungen und Fehler. Setzt logLevel = ALL statt MINIMAL.</translation>
-    </message>
-    <message>
-        <source>Erweiterte Logging-Optionen</source>
-        <translation type="vanished">Erweiterte Logging-Optionen</translation>
-    </message>
-    <message>
-        <source>Video-Index-Informationen</source>
-        <translation type="vanished">Video-Index-Informationen</translation>
-    </message>
-    <message>
-        <source>Detaillierte Meldungen beim Aufbau des Video-Index.</source>
-        <translation type="vanished">Detaillierte Meldungen beim Aufbau des Video-Index.</translation>
-    </message>
-    <message>
-        <source>FFmpeg-Decoder-Informationen</source>
-        <translation type="vanished">FFmpeg-Decoder-Informationen</translation>
-    </message>
-    <message>
-        <source>FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</source>
-        <translation type="vanished">FFmpeg-Decoder-Operationen (Seek, Decode, Flush) detailliert loggen.</translation>
-    </message>
-    <message>
-        <source>Smart-Cut-Engine-Informationen</source>
-        <translation type="vanished">Smart-Cut-Engine-Informationen</translation>
-    </message>
-    <message>
-        <source>Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</source>
-        <translation type="vanished">Smart-Cut-Pipeline-Details (Re-Encode-Entscheidungen, GOP-Analyse, NAL-Patching) loggen.</translation>
-    </message>
-    <message>
-        <source>MKV-Mux-Informationen</source>
-        <translation type="vanished">MKV-Mux-Informationen</translation>
-    </message>
-    <message>
-        <source>MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</source>
-        <translation type="vanished">MKV-Muxing-Operationen (Stream-Setup, Block-Schreiben) loggen.</translation>
-    </message>
-    <message>
-        <source>Cut-Pipeline-Informationen</source>
-        <translation type="vanished">Cut-Pipeline-Informationen</translation>
-    </message>
-    <message>
-        <source>Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</source>
-        <translation type="vanished">Cut-Pipeline-Hauptpfad (data/ Klassen) detailliert loggen.</translation>
-    </message>
-    <message>
-        <source>AV-Stream-Parser-Informationen</source>
-        <translation type="vanished">AV-Stream-Parser-Informationen</translation>
-    </message>
-    <message>
-        <source>AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</source>
-        <translation type="vanished">AV-Stream-Parser-Operationen (NAL-Detection, Frame-Index-Aufbau) loggen.</translation>
-    </message>
-    <message>
-        <source>UI-Ereignis-Informationen</source>
-        <translation type="vanished">UI-Ereignis-Informationen</translation>
-    </message>
-    <message>
-        <source>GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</source>
-        <translation type="vanished">GUI-Action-Details (Button-Klicks, Position-Änderungen) loggen.</translation>
-    </message>
-    <message>
-        <source>libav-Decoder/Muxer-Informationen</source>
-        <translation type="vanished">libav-Decoder/Muxer-Informationen</translation>
-    </message>
-    <message>
-        <source>libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</source>
-        <translation type="vanished">libav-Decoder/-Muxer-Interna durchreichen (sehr verbose).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingslogging.ui" line="12"/>
@@ -2781,105 +2106,9 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsMuxer</name>
     <message>
-        <source>Original codec (per track)</source>
-        <translation type="vanished">Original-Codec (pro Spur)</translation>
-    </message>
-    <message>
-        <source>Matroska Audio (.mka)</source>
-        <translation type="vanished">Matroska Audio (.mka)</translation>
-    </message>
-    <message>
-        <source>MP3</source>
-        <translation type="vanished">MP3</translation>
-    </message>
-    <message>
-        <source>AAC (.m4a)</source>
-        <translation type="vanished">AAC (.m4a)</translation>
-    </message>
-    <message>
-        <source>Select directory for mplex result</source>
-        <translation type="vanished">Verzeichnis für mplex-Ausgabe wählen</translation>
-    </message>
-    <message>
-        <source>Form2</source>
-        <translation type="vanished">Form2</translation>
-    </message>
-    <message>
-        <source>Muxer Settings</source>
-        <translation type="vanished">Muxer-Einstellungen</translation>
-    </message>
-    <message>
-        <source>Output path</source>
-        <translation type="vanished">Ausgabepfad</translation>
-    </message>
-    <message>
-        <source>configure...</source>
-        <translation type="vanished">Konfigurieren...</translation>
-    </message>
-    <message>
-        <source>Used muxer</source>
-        <translation type="vanished">Verwendeter Muxer</translation>
-    </message>
-    <message>
-        <source>MPEG-2 target</source>
-        <translation type="vanished">MPEG-2 target</translation>
-    </message>
-    <message>
-        <source>Multiplex Options</source>
-        <translation type="vanished">Multiplex-Optionen</translation>
-    </message>
-    <message>
-        <source>Create mux script for batch muxing</source>
-        <translation type="vanished">Mux-Skript für Stapelverarbeitung erstellen</translation>
-    </message>
-    <message>
-        <source>Finally mux result streams</source>
-        <translation type="vanished">Ergebnis-Streams abschließend muxen</translation>
-    </message>
-    <message>
-        <source>Multiplexen-Defaults</source>
-        <translation type="vanished">Multiplexen-Defaults</translation>
-    </message>
-    <message>
-        <source>MKV Chapter Settings</source>
-        <translation type="vanished">MKV-Kapitel-Einstellungen</translation>
-    </message>
-    <message>
-        <source>Multiplexen-Standards</source>
-        <translation type="vanished">Multiplexen-Standards</translation>
-    </message>
-    <message>
-        <source>Container-Standards</source>
-        <translation type="vanished">Container-Standards</translation>
-    </message>
-    <message>
-        <source>Container je Codec</source>
-        <translation type="vanished">Container je Codec</translation>
-    </message>
-    <message>
-        <source>Container-Optionen</source>
-        <translation type="vanished">Container-Optionen</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="100"/>
         <source>MKV (libav)</source>
         <translation>MKV (libav)</translation>
-    </message>
-    <message>
-        <source>Kapitel erstellen alle</source>
-        <translation type="vanished">Kapitel erstellen alle</translation>
-    </message>
-    <message>
-        <source>Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</source>
-        <translation type="vanished">Bei MKV-Output Kapitelmarken aus Cut-Punkten erzeugen.</translation>
-    </message>
-    <message>
-        <source> Minuten</source>
-        <translation type="vanished"> Minuten</translation>
-    </message>
-    <message>
-        <source>Zusätzliche Auto-Kapitel alle X Minuten.</source>
-        <translation type="vanished">Zusätzliche Auto-Kapitel alle X Minuten.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="14"/>
@@ -2977,57 +2206,9 @@ Ausgabedatei:
         <translation>MPG (mplex)</translation>
     </message>
     <message>
-        <source>Multiplexen</source>
-        <translation type="vanished">Multiplexen</translation>
-    </message>
-    <message>
-        <source>Mux-Ziel:</source>
-        <translation type="vanished">Mux-Ziel:</translation>
-    </message>
-    <message>
-        <source>mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</source>
-        <translation type="vanished">mplex Zielformat (DVD, VCD, SVCD etc.). Wird als App-Default gesetzt; im Cut-Dialog überschreibbar.</translation>
-    </message>
-    <message>
-        <source>Mux-Modus:</source>
-        <translation type="vanished">Mux-Modus:</translation>
-    </message>
-    <message>
-        <source>Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</source>
-        <translation type="vanished">Direkt muxen = mplex sofort ausführen. Mux-Skript erstellen = Shell-Skript statt direktem Aufruf.</translation>
-    </message>
-    <message>
-        <source>Bei MKV-Output Kapitelmarken aus Schnittpunkten erzeugen.</source>
-        <translation type="vanished">Bei MKV-Output Kapitelmarken aus Schnittpunkten erzeugen.</translation>
-    </message>
-    <message>
-        <source>Nach dem Multiplexen</source>
-        <translation type="vanished">Nach dem Multiplexen</translation>
-    </message>
-    <message>
-        <source>Allgemein</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <source>ES-Files nach Mux löschen</source>
-        <translation type="vanished">ES-Files nach Mux löschen</translation>
-    </message>
-    <message>
-        <source>Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</source>
-        <translation type="vanished">Nach erfolgreichem Mux die intermediate ES-Files (.m2v/.mp2/.ac3/.264/.265) automatisch löschen.</translation>
-    </message>
-    <message>
-        <source>Per-Codec Standard-Container</source>
-        <translation type="vanished">Per-Codec Standard-Container</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="25"/>
         <source>MPEG-2:</source>
         <translation>MPEG-2:</translation>
-    </message>
-    <message>
-        <source>Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</source>
-        <translation type="vanished">Standard-Container für MPEG-2-Output. MKV (libav) ist Default, MPG (mplex) für DVD/SVCD-Kompatibilität.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="36"/>
@@ -3035,17 +2216,9 @@ Ausgabedatei:
         <translation>H.264:</translation>
     </message>
     <message>
-        <source>Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</source>
-        <translation type="vanished">Standard-Container für H.264-Output. Nur MKV verfügbar (mplex unterstützt kein H.264).</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="47"/>
         <source>H.265:</source>
         <translation>H.265:</translation>
-    </message>
-    <message>
-        <source>Standard-Container für H.265-Output. Nur MKV verfügbar.</source>
-        <translation type="vanished">Standard-Container für H.265-Output. Nur MKV verfügbar.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsmuxer.ui" line="104"/>
@@ -3057,38 +2230,6 @@ Ausgabedatei:
         <source> minutes</source>
         <translation> Minuten</translation>
     </message>
-    <message>
-        <source>Audio-Only Cut (default preset)</source>
-        <translation type="vanished">Nur-Audio-Schnitt (Standard-Voreinstellung)</translation>
-    </message>
-    <message>
-        <source>Format:</source>
-        <translation type="vanished">Format:</translation>
-    </message>
-    <message>
-        <source>Bitrate:</source>
-        <translation type="vanished">Bitrate:</translation>
-    </message>
-    <message>
-        <source> kbps</source>
-        <translation type="vanished"> kbps</translation>
-    </message>
-    <message>
-        <source>match source</source>
-        <translation type="vanished">wie Quelle</translation>
-    </message>
-    <message>
-        <source>Action after multiplexing</source>
-        <translation type="vanished">Aktion nach dem Multiplexen</translation>
-    </message>
-    <message>
-        <source>Delete elemtary streams</source>
-        <translation type="vanished">Elementary Streams löschen</translation>
-    </message>
-    <message>
-        <source>Pause</source>
-        <translation type="vanished">Pause</translation>
-    </message>
 </context>
 <context>
     <name>TTCutSettingsNavigation</name>
@@ -3096,90 +2237,6 @@ Ausgabedatei:
         <location filename="../ui/ttcutsettingsnavigation.ui" line="8"/>
         <source>Navigation</source>
         <translation>Navigation</translation>
-    </message>
-    <message>
-        <source>Schrittweiten (Frames)</source>
-        <translation type="vanished">Schrittweiten (Frames)</translation>
-    </message>
-    <message>
-        <source>Pfeiltasten:</source>
-        <translation type="vanished">Pfeiltasten:</translation>
-    </message>
-    <message>
-        <source>Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</source>
-        <translation type="vanished">Anzahl Frames pro Pfeiltastendruck (rechts/links, ohne Modifier).</translation>
-    </message>
-    <message>
-        <source>Slider-Klick:</source>
-        <translation type="vanished">Slider-Klick:</translation>
-    </message>
-    <message>
-        <source>Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</source>
-        <translation type="vanished">Wie weit der Position-Slider beim Klick neben den Daumen springt (in Frames).</translation>
-    </message>
-    <message>
-        <source>Bild auf/ab:</source>
-        <translation type="vanished">Bild auf/ab:</translation>
-    </message>
-    <message>
-        <source>Anzahl Frames bei Bild auf/ab Taste.</source>
-        <translation type="vanished">Anzahl Frames bei Bild auf/ab Taste.</translation>
-    </message>
-    <message>
-        <source>Alt-Taste:</source>
-        <translation type="vanished">Alt-Taste:</translation>
-    </message>
-    <message>
-        <source>Anzahl Frames bei Alt+Pfeil.</source>
-        <translation type="vanished">Anzahl Frames bei Alt+Pfeil.</translation>
-    </message>
-    <message>
-        <source>Strg-Taste:</source>
-        <translation type="vanished">Strg-Taste:</translation>
-    </message>
-    <message>
-        <source>Anzahl Frames bei Strg+Pfeil.</source>
-        <translation type="vanished">Anzahl Frames bei Strg+Pfeil.</translation>
-    </message>
-    <message>
-        <source>Mausrad:</source>
-        <translation type="vanished">Mausrad:</translation>
-    </message>
-    <message>
-        <source>Anzahl Frames pro Mausrad-Tick.</source>
-        <translation type="vanished">Anzahl Frames pro Mausrad-Tick.</translation>
-    </message>
-    <message>
-        <source>Zeitsprung</source>
-        <translation type="vanished">Zeitsprung</translation>
-    </message>
-    <message>
-        <source>Intervall für den Zeitsprung-Dialog in Sekunden.</source>
-        <translation type="vanished">Intervall für den Zeitsprung-Dialog in Sekunden.</translation>
-    </message>
-    <message>
-        <source>Schnellsprung</source>
-        <translation type="vanished">Schnellsprung</translation>
-    </message>
-    <message>
-        <source>Intervall (Sekunden, 0=alle):</source>
-        <translation type="vanished">Intervall (Sekunden, 0=alle):</translation>
-    </message>
-    <message>
-        <source>Intervall für den QuickJump-Dialog in Sekunden.</source>
-        <translation type="vanished">Intervall für den QuickJump-Dialog in Sekunden.</translation>
-    </message>
-    <message>
-        <source>Position-Slider</source>
-        <translation type="vanished">Position-Slider</translation>
-    </message>
-    <message>
-        <source>Beim Ziehen nur zu I-Frames springen</source>
-        <translation type="vanished">Beim Ziehen nur zu I-Frames springen</translation>
-    </message>
-    <message>
-        <source>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</source>
-        <translation type="vanished">Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsnavigation.ui" line="12"/>
@@ -3297,34 +2354,6 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsPaths</name>
     <message>
-        <source>Pfade</source>
-        <translation type="vanished">Pfade</translation>
-    </message>
-    <message>
-        <source>Temporäres Verzeichnis</source>
-        <translation type="vanished">Temporäres Verzeichnis</translation>
-    </message>
-    <message>
-        <source>Tmp-Verzeichnis:</source>
-        <translation type="vanished">Tmp-Verzeichnis:</translation>
-    </message>
-    <message>
-        <source>Verzeichnis für temporäre Files während Cut/Mux (audio.mp2, video.m2v, etc.).</source>
-        <translation type="vanished">Verzeichnis für temporäre Files während Cut/Mux (audio.mp2, video.m2v, etc.).</translation>
-    </message>
-    <message>
-        <source>Ausgabe-Verzeichnis (Standard)</source>
-        <translation type="vanished">Ausgabe-Verzeichnis (Standard)</translation>
-    </message>
-    <message>
-        <source>Ausgabepfad:</source>
-        <translation type="vanished">Ausgabepfad:</translation>
-    </message>
-    <message>
-        <source>Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</source>
-        <translation type="vanished">Standard-Verzeichnis für Cut-Ausgaben. Im Cut-Dialog pro Projekt überschreibbar; der Projekt-Pfad wird in der .ttcut-Datei gespeichert.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="8"/>
         <source>Paths</source>
         <translation>Pfade</translation>
@@ -3383,39 +2412,11 @@ Ausgabedatei:
         <translation>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</translation>
     </message>
     <message>
-        <source>Logfile-Pfad:</source>
-        <translation type="vanished">Logfile-Pfad:</translation>
-    </message>
-    <message>
-        <source>Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</source>
-        <translation type="vanished">Pfad zur Logdatei. Leer = Standard (~/.cache/ttcut-ng/logfile.log).</translation>
-    </message>
-    <message>
-        <source>Leer = Standard (~/.cache/ttcut-ng/logfile.log)</source>
-        <translation type="vanished">Leer = Standard (~/.cache/ttcut-ng/logfile.log)</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingspaths.ui" line="29"/>
         <location filename="../ui/ttcutsettingspaths.ui" line="56"/>
         <location filename="../ui/ttcutsettingspaths.ui" line="84"/>
         <source>…</source>
         <translation>…</translation>
-    </message>
-    <message>
-        <source>Tmp-Verzeichnis wählen</source>
-        <translation type="vanished">Tmp-Verzeichnis wählen</translation>
-    </message>
-    <message>
-        <source>Standard-Ausgabeverzeichnis wählen</source>
-        <translation type="vanished">Standard-Ausgabeverzeichnis wählen</translation>
-    </message>
-    <message>
-        <source>Logfile wählen</source>
-        <translation type="vanished">Logfile wählen</translation>
-    </message>
-    <message>
-        <source>Log-Dateien (*.log);;Alle Dateien (*)</source>
-        <translation type="vanished">Log-Dateien (*.log);;Alle Dateien (*)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutsettingspaths.cpp" line="41"/>
@@ -3441,90 +2442,14 @@ Ausgabedatei:
 <context>
     <name>TTCutSettingsSearch</name>
     <message>
-        <source>Suche &amp; Preview</source>
-        <translation type="vanished">Suche &amp; Preview</translation>
-    </message>
-    <message>
-        <source>Suche</source>
-        <translation type="vanished">Suche</translation>
-    </message>
-    <message>
-        <source>Suchbereich (Sekunden):</source>
-        <translation type="vanished">Suchbereich (Sekunden):</translation>
-    </message>
-    <message>
-        <source>Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</source>
-        <translation type="vanished">Suchbereich um den Cut-Punkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</translation>
-    </message>
-    <message>
-        <source>Such-Worker-Threads (0 = auto):</source>
-        <translation type="vanished">Such-Worker-Threads (0 = auto):</translation>
-    </message>
-    <message>
-        <source>Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</source>
-        <translation type="vanished">Parallele Worker-Threads für Frame-Search. 0 = automatisch (max. 4). Ab 4 Threads bei HEVC kaum noch Speedup wegen Cache-Saturation.</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="45"/>
         <source>Preview</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <source>Vorschau-Länge (Sekunden):</source>
-        <translation type="vanished">Vorschau-Länge (Sekunden):</translation>
-    </message>
-    <message>
-        <source>Länge der Preview-Clips um Cut-Punkte in Sekunden.</source>
-        <translation type="vanished">Länge der Preview-Clips um Cut-Punkte in Sekunden.</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset (nur H.264 / H.265):</source>
-        <translation type="vanished">Encoder-Preset (nur H.264 / H.265):</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</source>
-        <translation type="vanished">Encoder-Preset für Preview-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Cut-Punkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</translation>
-    </message>
-    <message>
-        <source>Suche &amp;&amp; Vorschau</source>
-        <translation type="vanished">Suche &amp;&amp; Vorschau</translation>
-    </message>
-    <message>
-        <source>Suchbereich um den Schnittpunkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</source>
-        <translation type="vanished">Suchbereich um den Schnittpunkt für Schwarzbild-/Szenenwechsel-Suche (Sekunden).</translation>
-    </message>
-    <message>
-        <source>Vorschau</source>
-        <translation type="vanished">Vorschau</translation>
-    </message>
-    <message>
-        <source>Länge der Vorschau-Clips um Schnittpunkte in Sekunden.</source>
-        <translation type="vanished">Länge der Vorschau-Clips um Schnittpunkte in Sekunden.</translation>
-    </message>
-    <message>
-        <source>Encoder-Preset für Vorschau-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Schnittpunkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</source>
-        <translation type="vanished">Encoder-Preset für Vorschau-Generierung bei H.264/H.265 Smart Cut. Schnellere Presets = schnellere Vorschau, leicht reduzierte Qualität der re-encoded Frames an Schnittpunkten. Bei MPEG-2 wirkungslos (mpeg2video kennt kein Preset; das normale Encoder-Qualitäts-Setting greift).</translation>
-    </message>
-    <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="76"/>
         <source>Defective Frame Grouping</source>
         <translation>Gruppierung defekter Frames</translation>
-    </message>
-    <message>
-        <source>Gruppierungsabstand (Sekunden):</source>
-        <translation type="vanished">Gruppierungsabstand (Sekunden):</translation>
-    </message>
-    <message>
-        <source>Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</source>
-        <translation type="vanished">Min. zeitlicher Abstand zwischen Extra-Frame-Clustern (MPEG-2 field-picture) in Sekunden.</translation>
-    </message>
-    <message>
-        <source>Start-Offset (Sekunden):</source>
-        <translation type="vanished">Start-Offset (Sekunden):</translation>
-    </message>
-    <message>
-        <source>Zeitlicher Offset für Cluster-Detection in Sekunden.</source>
-        <translation type="vanished">Zeitlicher Offset für Cluster-Detection in Sekunden.</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingssearch.ui" line="8"/>
@@ -3780,21 +2705,6 @@ Ausgabedatei:
     </message>
 </context>
 <context>
-    <name>TTCutVideoInfoWidget</name>
-    <message>
-        <source>Form</source>
-        <translation type="vanished">Form</translation>
-    </message>
-    <message>
-        <source>---</source>
-        <translation type="vanished">---</translation>
-    </message>
-    <message>
-        <source>0/0</source>
-        <translation type="vanished">0/0</translation>
-    </message>
-</context>
-<context>
     <name>TTCutVideoTask</name>
     <message>
         <location filename="../data/ttcutvideotask.cpp" line="98"/>
@@ -3866,84 +2776,6 @@ Ausgabedatei:
         <location filename="../data/ttframesearchtask.cpp" line="288"/>
         <source>Frame found</source>
         <translation>Frame gefunden</translation>
-    </message>
-</context>
-<context>
-    <name>TTH264VideoStream</name>
-    <message>
-        <source>Opening H.264 stream...</source>
-        <translation type="vanished">Öffne H.264 Stream...</translation>
-    </message>
-    <message>
-        <source>Failed to open H.264 stream</source>
-        <translation type="vanished">H.264 Stream konnte nicht geöffnet werden</translation>
-    </message>
-    <message>
-        <source>Creating H.264 header list...</source>
-        <translation type="vanished">Erstelle H.264-Headerliste...</translation>
-    </message>
-    <message>
-        <source>No video stream found</source>
-        <translation type="vanished">Kein Videostream gefunden</translation>
-    </message>
-    <message>
-        <source>Building frame index...</source>
-        <translation type="vanished">Erstelle Frame-Index...</translation>
-    </message>
-    <message>
-        <source>Failed to build frame index</source>
-        <translation type="vanished">Frame-Index konnte nicht erstellt werden</translation>
-    </message>
-    <message>
-        <source>Building GOP index...</source>
-        <translation type="vanished">Erstelle GOP-Index...</translation>
-    </message>
-    <message>
-        <source>Processing frames...</source>
-        <translation type="vanished">Verarbeite Frames...</translation>
-    </message>
-    <message>
-        <source>H.264 header list created</source>
-        <translation type="vanished">H.264-Headerliste erstellt</translation>
-    </message>
-</context>
-<context>
-    <name>TTH265VideoStream</name>
-    <message>
-        <source>Opening H.265 stream...</source>
-        <translation type="vanished">H.265 Stream öffnen...</translation>
-    </message>
-    <message>
-        <source>Building frame index...</source>
-        <translation type="vanished">Frame-Index erstellen...</translation>
-    </message>
-    <message>
-        <source>Failed to open H.265 stream</source>
-        <translation type="vanished">H.265 Stream konnte nicht geöffnet werden</translation>
-    </message>
-    <message>
-        <source>Creating H.265 header list...</source>
-        <translation type="vanished">H.265 Header-Liste erstellen...</translation>
-    </message>
-    <message>
-        <source>Failed to build frame index</source>
-        <translation type="vanished">Frame-Index konnte nicht erstellt werden</translation>
-    </message>
-    <message>
-        <source>Building GOP index...</source>
-        <translation type="vanished">GOP-Index erstellen...</translation>
-    </message>
-    <message>
-        <source>Failed to build GOP index</source>
-        <translation type="vanished">GOP-Index konnte nicht erstellt werden</translation>
-    </message>
-    <message>
-        <source>Processing frames...</source>
-        <translation type="vanished">Frames verarbeiten...</translation>
-    </message>
-    <message>
-        <source>H.265 header list created</source>
-        <translation type="vanished">H.265 Header-Liste erstellt</translation>
     </message>
 </context>
 <context>
@@ -4030,14 +2862,6 @@ Ausgabedatei:
         <translation>Indexerstellung abgebrochen!</translation>
     </message>
     <message>
-        <source>Error reading IDD file in %1 at line %2!</source>
-        <translation type="vanished">Fehler beim Lesen der IDD-Datei in %1 bei Zeile %2!</translation>
-    </message>
-    <message>
-        <source>No IDD file in %1 at line %2!</source>
-        <translation type="vanished">Keine IDD-Datei in %1 bei Zeile %2!</translation>
-    </message>
-    <message>
         <location filename="../avstream/ttmpeg2videostream.cpp" line="265"/>
         <source>Creating MPEG-2 header list</source>
         <translation>MPEG-2 Headerliste erstellen</translation>
@@ -4056,34 +2880,6 @@ Ausgabedatei:
         <location filename="../avstream/ttmpeg2videostream.cpp" line="326"/>
         <source>MPEG-2 header list created</source>
         <translation>MPEG-2 Headerliste erstellt</translation>
-    </message>
-    <message>
-        <source>Create Mpeg2Schnitt IDD-file</source>
-        <translation type="vanished">Erstelle Mpeg2Schnitt IDD-Datei</translation>
-    </message>
-    <message>
-        <source>Create Mpeg2Schnitt IDD-File</source>
-        <translation type="vanished">Erstelle Mpeg2Schnitt IDD-Datei</translation>
-    </message>
-    <message>
-        <source>IDD-File created</source>
-        <translation type="vanished">IDD-Datei erstellt</translation>
-    </message>
-    <message>
-        <source>IDD file version %1 not supported!</source>
-        <translation type="vanished">IDD-Dateiversion %1 nicht unterstützt!</translation>
-    </message>
-    <message>
-        <source>Read Mpeg2Schnitt IDD-file</source>
-        <translation type="vanished">Lese Mpeg2Schnitt IDD-Datei</translation>
-    </message>
-    <message>
-        <source>Read IDD header file aborted!</source>
-        <translation type="vanished">Lesen der IDD-Headerdatei abgebrochen!</translation>
-    </message>
-    <message>
-        <source>Finish reading IDD-file</source>
-        <translation type="vanished">Lesen der IDD-Datei abgeschlossen</translation>
     </message>
     <message>
         <location filename="../avstream/ttmpeg2videostream.cpp" line="451"/>
@@ -4446,34 +3242,6 @@ Unterstützte Formate:
 <context>
     <name>TTSettingsDialog</name>
     <message>
-        <source>TTCut - Settings</source>
-        <translation type="vanished">TTCut-ng - Einstellungen</translation>
-    </message>
-    <message>
-        <source>Common</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <source>GroupBox</source>
-        <translation type="vanished">GroupBox</translation>
-    </message>
-    <message>
-        <source>Files</source>
-        <translation type="vanished">Dateien</translation>
-    </message>
-    <message>
-        <source>Encoding</source>
-        <translation type="vanished">Encodieren</translation>
-    </message>
-    <message>
-        <source>Muxing</source>
-        <translation type="vanished">Multiplexen</translation>
-    </message>
-    <message>
-        <source>Chapters</source>
-        <translation type="vanished">Kapitel</translation>
-    </message>
-    <message>
         <location filename="../ui/ttsettingsdialog.ui" line="6"/>
         <source>TTCut-ng — Einstellungen</source>
         <translation>TTCut-ng — Einstellungen</translation>
@@ -4489,81 +3257,37 @@ Unterstützte Formate:
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <source>Cancel</source>
-        <translation type="vanished">Abbrechen</translation>
-    </message>
-    <message>
-        <source>Allgemein</source>
-        <translation type="vanished">Allgemein</translation>
-    </message>
-    <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="48"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="47"/>
         <source>Navigation</source>
         <translation>Navigation</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="51"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="50"/>
         <source>Search &amp; Preview</source>
         <translation>Suche &amp; Vorschau</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="54"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="53"/>
         <source>Audio &amp; Language</source>
         <translation>Audio &amp; Sprache</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="60"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="59"/>
         <source>Multiplexing</source>
         <translation>Multiplexen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="63"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="62"/>
         <source>Paths</source>
         <translation>Pfade</translation>
     </message>
     <message>
-        <source>Suche &amp; Preview</source>
-        <translation type="vanished">Suche &amp; Preview</translation>
-    </message>
-    <message>
-        <source>Suche &amp; Vorschau</source>
-        <translation type="vanished">Suche &amp; Vorschau</translation>
-    </message>
-    <message>
-        <source>Audio &amp; Sprache</source>
-        <translation type="vanished">Audio &amp; Sprache</translation>
-    </message>
-    <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="57"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="56"/>
         <source>Encoder</source>
         <translation>Encoder</translation>
     </message>
     <message>
-        <source>Multiplexen</source>
-        <translation type="vanished">Multiplexen</translation>
-    </message>
-    <message>
-        <source>Encoder-Standards</source>
-        <translation type="vanished">Encoder-Standards</translation>
-    </message>
-    <message>
-        <source>Multiplexen-Standards</source>
-        <translation type="vanished">Multiplexen-Standards</translation>
-    </message>
-    <message>
-        <source>Encoder-Defaults</source>
-        <translation type="vanished">Encoder-Defaults</translation>
-    </message>
-    <message>
-        <source>Multiplexen-Defaults</source>
-        <translation type="vanished">Multiplexen-Defaults</translation>
-    </message>
-    <message>
-        <source>Pfade</source>
-        <translation type="vanished">Pfade</translation>
-    </message>
-    <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="66"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="65"/>
         <source>Logging</source>
         <translation>Logging</translation>
     </message>

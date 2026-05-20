@@ -6,7 +6,6 @@
 #include "ttcutsettingsmuxer.h"
 #include "ttcutsettingspaths.h"
 #include "ttcutsettingslogging.h"
-#include "../common/ttsettings.h"
 
 #include <QListWidgetItem>
 #include <QIcon>
