@@ -1,0 +1,13 @@
+# TTCut-ng is a Linux-only project: enforce LF line endings for every
+# text file, in the repository and in the working tree. Git auto-detects
+# binary files via its NUL-byte heuristic and leaves them untouched; the
+# explicit binary entries below are belt-and-braces for common formats.
+
+* text=auto eol=lf
+
+*.qm   binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
