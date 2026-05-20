@@ -132,6 +132,42 @@ else
 fi
 
 #-----------------------------------------------------------------------------
+# Create .info metadata file (mimics ttcut-demux output)
+#
+# The test video is a raw H.264 elementary stream without container timing.
+# For such streams libav reports r_frame_rate as 2x the real frame rate
+# (a documented quirk), so TTCut-ng would detect 50fps instead of 25. Real
+# recordings always carry a .info file written by ttcut-demux that overrides
+# the libav guess; the test fixture reproduces that here. Values mirror the
+# ffmpeg generation parameters above (720x576, 25fps, libx264).
+# See reference_libav_h264_framerate.md.
+#-----------------------------------------------------------------------------
+INFO_FILE="$TESTDATA_DIR/tux_test.info"
+echo "Creating .info file..."
+cat > "$INFO_FILE" << EOF
+# TTCut Elementary Stream Info File
+# Generated: $(date -Iseconds)
+# Source: synthetic Tux test video (tools/ttcut-screenshots.sh)
+
+[video]
+file=tux_test.264
+codec=h264
+width=720
+height=576
+frame_rate=25/1
+start_pts=0.000000
+filler_stripped=false
+
+[audio]
+count=1
+audio_0_file=tux_test.ac3
+audio_0_codec=ac3
+audio_0_lang=deu
+audio_0_first_pts=0.000000
+audio_0_trimmed_ms=0
+EOF
+
+#-----------------------------------------------------------------------------
 # Create project file from template (replace placeholders with absolute paths)
 #-----------------------------------------------------------------------------
 echo "Creating project file..."
