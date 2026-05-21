@@ -58,7 +58,7 @@
      <item>
       <widget class="QPushButton" name="pbPrevCut" >
        <property name="text" >
-        <string>Zurück</string>
+        <string>Back</string>
        </property>
        <property name="toolTip" >
         <string>Previous cut (and play)</string>
@@ -79,7 +79,7 @@
      <item>
       <widget class="QPushButton" name="pbNextCut" >
        <property name="text" >
-        <string>Vor</string>
+        <string>Forward</string>
        </property>
        <property name="toolTip" >
         <string>Next cut (and play)</string>
@@ -102,7 +102,7 @@
      <item>
       <widget class="QPushButton" name="pbExit" >
        <property name="text" >
-        <string>Beenden</string>
+        <string>Close</string>
        </property>
        <property name="icon" >
         <iconset resource="previewwidget.qrc" >

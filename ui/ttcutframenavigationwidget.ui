@@ -416,7 +416,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Vorheriges Schwarzbild suchen</string>
+        <string>Search previous black frame</string>
        </property>
        <property name="text" >
         <string>&lt;</string>
@@ -448,7 +448,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Nächstes Schwarzbild suchen</string>
+        <string>Search next black frame</string>
        </property>
        <property name="text" >
         <string>&gt;</string>
@@ -493,7 +493,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Schwarzbild-Suche abbrechen</string>
+        <string>Cancel black frame search</string>
        </property>
        <property name="text" >
         <string>✕</string>
@@ -521,7 +521,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Schwellwert für Schwarzbild-Erkennung</string>
+        <string>Black frame detection threshold</string>
        </property>
        <property name="minimum" >
         <double>0.800</double>
@@ -569,7 +569,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Vorherigen Szenenwechsel suchen</string>
+        <string>Search previous scene change</string>
        </property>
        <property name="text" >
         <string/>
@@ -597,7 +597,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Nächsten Szenenwechsel suchen</string>
+        <string>Search next scene change</string>
        </property>
        <property name="text" >
         <string/>
@@ -638,7 +638,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Szenenwechsel-Suche abbrechen</string>
+        <string>Cancel scene change search</string>
        </property>
        <property name="text" >
         <string>✕</string>
@@ -666,7 +666,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Schwellwert für Szenenwechsel-Erkennung</string>
+        <string>Scene change detection threshold</string>
        </property>
        <property name="minimum" >
         <double>0.100</double>
@@ -714,7 +714,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Vorherige Logo-Statusänderung suchen</string>
+        <string>Search previous logo change</string>
        </property>
        <property name="text" >
         <string/>
@@ -745,7 +745,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Nächste Logo-Statusänderung suchen</string>
+        <string>Search next logo change</string>
        </property>
        <property name="text" >
         <string/>
@@ -776,7 +776,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Senderlogo-Bereich auswählen. Das Referenzprofil wird aus 10 aufeinanderfolgenden I-Frames gemittelt — achten Sie darauf, dass alle Frames das Logo enthalten.</string>
+        <string>Select the station logo area. The reference profile is averaged from 10 consecutive I-frames — make sure all frames contain the logo.</string>
        </property>
        <property name="text" >
         <string>⌖</string>
@@ -820,7 +820,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Logo-Suche abbrechen</string>
+        <string>Cancel logo search</string>
        </property>
        <property name="text" >
         <string>✕</string>
@@ -848,7 +848,7 @@
         </size>
        </property>
        <property name="toolTip" >
-        <string>Schwellwert für Logo-Erkennung (NCC)</string>
+        <string>Logo detection threshold</string>
        </property>
        <property name="minimum" >
         <double>0.100</double>
@@ -1093,7 +1093,7 @@
         <string>Jump to a specific frame or time</string>
        </property>
        <property name="text" >
-        <string>Zeitsprung ...</string>
+        <string>Time warp...</string>
        </property>
       </widget>
      </item>
