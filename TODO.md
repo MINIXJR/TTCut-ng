@@ -154,7 +154,12 @@
   - Persistenz in `.ttcut`-Projektdatei
   - Die Intervall-basierte Auto-Generierung (`cbMkvCreateChapters` + `leChapterInterval`) im Muxer-Tab bleibt als einfacher Default bestehen
 - Internationalisation (i18n) - translate UI to other languages
-  - **de_DE: DONE** (v0.62.0) — alle 165 Strings übersetzt, Q_OBJECT/English source texts standardisiert
+  - **English source + de_DE: DONE** — die App ist vollständig auf englische
+    Source-Strings konvertiert, deutsche Übersetzung in `trans/ttcut-ng_de_DE.ts`
+    (660 Einträge). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
+    (`51e798b`..`7b3eec5`).
+  - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen, in
+    `TRANSLATIONS` (`ttcut-ng.pro`) eintragen, mit `lupdate`/`lrelease` pflegen.
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
 
