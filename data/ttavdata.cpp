@@ -1138,10 +1138,10 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       for (int i = 0; i < cutList->count(); i++) {
         TTCutItem item = cutList->at(i);
         CutBurstInfo bout = detectCutOutBurst(item);
-        if (bout.present) burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
+        if (bout.present) burstWarnings << tr("Cut %1: audio burst at the end (%2 dB)")
                                           .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
         CutBurstInfo bin = detectCutInBurst(item);
-        if (bin.present) burstWarnings << tr("Schnitt %1: Audio-Burst am Anfang (%2 dB)")
+        if (bin.present) burstWarnings << tr("Cut %1: audio burst at the start (%2 dB)")
                                           .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
       }
       if (!burstWarnings.isEmpty()) {
@@ -1172,12 +1172,12 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       TTCutItem item = cutList->at(i);
       CutBurstInfo bout = detectCutOutBurst(item);
       if (bout.present) {
-        burstWarnings << tr("Schnitt %1: Audio-Burst am Ende (%2 dB)")
+        burstWarnings << tr("Cut %1: audio burst at the end (%2 dB)")
                          .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
       }
       CutBurstInfo bin = detectCutInBurst(item);
       if (bin.present) {
-        burstWarnings << tr("Schnitt %1: Audio-Burst am Anfang (%2 dB)")
+        burstWarnings << tr("Cut %1: audio burst at the start (%2 dB)")
                          .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
       }
     }

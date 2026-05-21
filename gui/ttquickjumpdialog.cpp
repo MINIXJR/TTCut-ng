@@ -74,7 +74,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
   mResizeTimer->setSingleShot(true);
   mResizeTimer->setInterval(200);
   connect(mResizeTimer, &QTimer::timeout, this, &TTQuickJumpDialog::onResizeDebounced);
-  setWindowTitle(tr("Zeitsprung — Keyframes"));
+  setWindowTitle(tr("Time warp — keyframes"));
   setWindowModality(Qt::WindowModal);
 
   int thumbWidth = computeThumbWidth(videoStream);
