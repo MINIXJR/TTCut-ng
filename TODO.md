@@ -27,19 +27,20 @@
   - RASL-Bilder (ähnlich Open-GOP B-Frames) könnten DPB-Probleme verursachen wie bei H.264 Non-IDR
   - Verifizieren: Smart Cut ausführen → MKV erzeugen → mpv abspielen → keine Stutter/Artefakte an Segmentgrenzen
   - `ffprobe -v debug`: Keine "backward timestamps" oder "co located POCs" Meldungen
-  - Code-Pfad: `ttnaluparser.cpp:495` (CRA nicht isIDR) → `ttessmartcut.cpp:407` (Re-Encode Trigger)
+  - Code-Pfad vorhanden und korrekt: `ttnaluparser.cpp:706-709` (CRA bewusst nicht als isIDR markiert)
+    → `ttessmartcut.cpp:604-612` (`isAtIDR` false → `needsReencodeAtStart` true → Re-Encode).
+    Offen ist nur der reale Verifikationslauf, nicht der Code.
 
 - ~~**Smart Cut Performance: mmap statt QFile für Stream-Copy**~~ → **IMPLEMENTIERT** (2026-03-28, commits d80b918 + 2f3bb69)
   - `accessUnitPtr()` für Zero-Copy mmap Frame-Zugriff, Bulk-Write für ungepatche Segmente
-  - **Noch zu testen:** Funktionale Verifikation + Performance-Messung mit echten Dateien
+  - Funktionale Verifikation de-facto erledigt: nachfolgende Smart-Cut-Refactors (reencodeFrames-Split
+    9f31ede, buildFrameIndex-Split 38bb6ea) wurden bit-identisch via `ffprobe show_packets` verifiziert —
+    der mmap-Pfad ist dabei mit abgedeckt. Offen bleibt nur eine optionale dedizierte Performance-Messung.
 
-- **Equal-Frame Search: H.264/H.265-Support fehlt**
-  - `TTFrameSearchTask` (data/ttframesearchtask.cpp:56,102) nutzt hardcoded `TTMpeg2Decoder` —
-    funktioniert nur für MPEG-2-Streams. Für H.264/H.265 stehen die Buttons im CutOutFrame-Widget
-    sichtbar zur Verfügung, der Search-Worker dekodiert aber kein Frame und liefert kein Ergebnis.
-  - Lösung: Codec-aware Decoder-Dispatch (TTMpeg2Decoder für MPEG-2, TTFFmpegWrapper für H.264/H.265),
-    analog zur Pattern-Lösung in TTSearchTask::openDecoder().
-  - Algorithmus bleibt YUV-byte-delta (oder optional SSIM/cross-correlation als separate Verbesserung).
+- ~~**Equal-Frame Search: H.264/H.265-Support fehlt**~~ → **DONE** (commit 24562c0)
+  - `TTFrameSearchTask::decoderKindFor()` dispatcht codec-aware: `TTFFmpegWrapper` (YUV-API)
+    für H.264/H.265, `TTMpeg2Decoder` für MPEG-2 — für Reference- und Search-Stream.
+  - Algorithmus bleibt YUV-byte-delta (SSIM/cross-correlation wäre separate Verbesserung).
 
 ## Medium Priority
 
@@ -80,16 +81,17 @@
   - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`
 
 - **CLI Interface for batch Smart Cut (headless mode)**
-  - Standalone CLI tool based on `tools/test_prj_smartcut` architecture
-  - Reads `.ttcut` project file, performs Smart Cut + audio cut + MKV mux
-  - No X11/Wayland/Qt GUI dependency — runs on servers and in scripts
-  - Use case: Automated cutting pipeline (VDR → demux → TTCut-ng CLI → archive)
+  - Teilweise abgedeckt: `ttcut-ng --project <file> --auto-cut <out.mkv>` lädt ein `.ttcut`-Projekt
+    und führt Smart Cut + Audio + MKV-Mux headless aus (für QC-Regression). Es bleibt aber die
+    Qt-GUI-Anwendung — echte X11/Wayland-Freiheit fehlt, und modale Dialoge (Burst-Warnung) können
+    den headless Lauf blockieren (siehe `reference_auto_cut_modal_dialogs`).
+  - Offen: echtes Qt-freies Standalone-Tool, das `.ttcut` liest und ohne GUI-Event-Loop schneidet —
+    läuft dann auch auf reinen Servern. Use case: VDR → demux → TTCut-ng CLI → archive
 
-- **Parallele Dekodierung mit mehreren FFmpegWrapper-Instanzen**
-  - Schwarzbild- und Szenenwechsel-Suche: N Worker-Threads mit je eigenem FFmpegWrapper
-  - Jeder Worker prüft andere I-Frames gleichzeitig → ~Nx Speedup
-  - Hauptgewinn bei HEVC (I-Frame-Decode ~12-15ms bei 1080p, Seek+Flush ~4ms)
-  - Erfordert: Thread-Pool, Ergebnis-Aggregation, Abbruch-Koordination
+- ~~**Parallele Dekodierung mit mehreren FFmpegWrapper-Instanzen**~~ → **DONE** (Search-Performance-Refactor, gemerged d20a070)
+  - `TTSearchTask` ist Coordinator mit lokalem `QThreadPool` + `parallelMap`; N Sub-Decoder
+    (`TTSettings::searchWorkerCount`, Default 4) für Black-/Scene-/Logo-Suche
+  - Scaling-Investigation: Sweet Spot 4-8 Worker, siehe `project_hevc_search_perf_investigation.md`
 
 - ~~**Projektdatei: Fehlende Einstellungen speichern**~~ → **DONE** (v0.66.0)
   - Ausgabepfad, Dateiname, Suffix-Option, Mux-Settings, Encoder-Settings werden
@@ -128,7 +130,9 @@
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)
-- Prepare long term processes for user cancellation (abort button)
+- ~~Prepare long term processes for user cancellation (abort button)~~ → **DONE**
+  - `TTProgressBar` hat Cancel-Button → `TTAVData::onUserAbortRequest()` → `TTThreadTaskPool`;
+    Cut-, Search- und QuickJump-Tasks werfen `TTAbortException` bei `onUserAbort()`
 
 - **FastForward-Player-Feature**
   - `playSkipFrames` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
@@ -218,10 +222,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 - **Live-Timecode bei mpv-Wiedergabe**
   - Im "Aktueller Frame" Widget den Timecode/Frame-Counter während der mpv-Wiedergabe mitlaufen lassen
-  - mpv läuft als externer QProcess — kein direkter Zugriff auf die aktuelle Position
-  - Ansatz 1: mpv IPC via JSON-Socket (`--input-ipc-server=`) + QTimer-Poll für `playback-time`
-  - Ansatz 2: mpv als eingebettetes Widget (libmpv) statt externer Prozess
-  - Ansatz 1 ist deutlich einfacher, Ansatz 2 ermöglicht langfristig mehr Kontrolle
+  - Infrastruktur teilweise vorhanden: mpv wird bereits mit `--input-ipc-server=` gestartet und
+    `ttcurrentframe.cpp` verbindet sich per `QLocalSocket` (aktuell nur für Steuer-Kommandos).
+    Es fehlt nur der QTimer-Poll auf `playback-time`/`time-pos`.
+  - Alternative: mpv als eingebettetes libmpv-Widget statt externem Prozess — mehr Kontrolle,
+    aber deutlich aufwändiger
 
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen
