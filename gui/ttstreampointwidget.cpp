@@ -42,11 +42,11 @@ TTStreamPointWidget::TTStreamPointWidget(TTStreamPointModel* model, QWidget* par
 
   QWidget* landezonenTab = new QWidget();
   setupLandezonenTab(landezonenTab);
-  mTabWidget->addTab(landezonenTab, tr("Landezonen"));
+  mTabWidget->addTab(landezonenTab, tr("Stream Points"));
 
   QWidget* settingsTab = new QWidget();
   setupSettingsTab(settingsTab);
-  mTabWidget->addTab(settingsTab, tr("Einstellungen"));
+  mTabWidget->addTab(settingsTab, tr("Settings"));
 
   mainLayout->addWidget(mTabWidget);
 
@@ -87,7 +87,7 @@ void TTStreamPointWidget::setupLandezonenTab(QWidget* tab)
   QHBoxLayout* btnLayout = new QHBoxLayout();
   btnLayout->setSpacing(4);
 
-  mBtnAnalyze = new QPushButton(tr("Analyse starten"), tab);
+  mBtnAnalyze = new QPushButton(tr("Start analysis"), tab);
   connect(mBtnAnalyze, &QPushButton::clicked, this, &TTStreamPointWidget::onAnalyzeClicked);
   btnLayout->addWidget(mBtnAnalyze);
 
@@ -106,18 +106,18 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   int row = 0;
 
   // Silence detection
-  mCbSilence = new QCheckBox(tr("Stille"), tab);
+  mCbSilence = new QCheckBox(tr("Silence"), tab);
   gl->addWidget(mCbSilence, row, 0, 1, 2);
   row++;
 
-  gl->addWidget(new QLabel(tr("Schwellwert (dB):"), tab), row, 0);
+  gl->addWidget(new QLabel(tr("Threshold (dB):"), tab), row, 0);
   mSbSilenceThreshold = new QSpinBox(tab);
   mSbSilenceThreshold->setRange(-80, -20);
   mSbSilenceThreshold->setSuffix(" dB");
   gl->addWidget(mSbSilenceThreshold, row, 1);
   row++;
 
-  gl->addWidget(new QLabel(tr("Mindestdauer (s):"), tab), row, 0);
+  gl->addWidget(new QLabel(tr("Minimum duration (s):"), tab), row, 0);
   mSbSilenceMinDuration = new QDoubleSpinBox(tab);
   mSbSilenceMinDuration->setRange(0.1, 5.0);
   mSbSilenceMinDuration->setSingleStep(0.1);
@@ -127,7 +127,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // Audio change detection
-  mCbAudioChange = new QCheckBox(tr("Audioformatwechsel"), tab);
+  mCbAudioChange = new QCheckBox(tr("Audio format change"), tab);
   gl->addWidget(mCbAudioChange, row, 0, 1, 2);
   row++;
 
@@ -137,12 +137,12 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // Pillarbox detection (sub-option of aspect ratio)
-  mCbPillarbox = new QCheckBox(tr("Pillarbox-Erkennung (4:3 in 16:9)"), tab);
+  mCbPillarbox = new QCheckBox(tr("Pillarbox detection (4:3 in 16:9)"), tab);
   mCbPillarbox->setStyleSheet("QCheckBox { padding-left: 20px; }");
   gl->addWidget(mCbPillarbox, row, 0, 1, 2);
   row++;
 
-  QLabel* lblPillarboxThreshold = new QLabel(tr("Schwellwert (Luminanz):"), tab);
+  QLabel* lblPillarboxThreshold = new QLabel(tr("Threshold (luminance):"), tab);
   lblPillarboxThreshold->setStyleSheet("QLabel { padding-left: 20px; }");
   gl->addWidget(lblPillarboxThreshold, row, 0);
   mSbPillarboxThreshold = new QSpinBox(tab);
@@ -190,12 +190,12 @@ void TTStreamPointWidget::setAnalysisRunning(bool running)
 
   if (running) {
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    mBtnAnalyze->setText(tr("Abbrechen"));
-    mLblStatus->setText(tr("Analyse l\303\244uft..."));
+    mBtnAnalyze->setText(tr("Cancel"));
+    mLblStatus->setText(tr("Analysis running..."));
     mLblStatus->show();
   } else {
     QApplication::restoreOverrideCursor();
-    mBtnAnalyze->setText(tr("Analyse starten"));
+    mBtnAnalyze->setText(tr("Start analysis"));
     int count = mModel->rowCount();
     if (count > 0) {
       mLblStatus->setText(tr("%1 stream points detected").arg(count));

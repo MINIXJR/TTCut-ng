@@ -49,7 +49,7 @@ void TTStreamPointVideoWorker::operation()
   int step = 0;
 
   if (mDetectAspectChange && !mIsAborted) {
-    onStatusReport(StatusReportArgs::Step, tr("Seitenverhältnis-Analyse..."), step);
+    onStatusReport(StatusReportArgs::Step, tr("Aspect ratio analysis..."), step);
     QList<TTStreamPoint> aspectPoints = detectAspectChanges();
     allPoints.append(aspectPoints);
     if (TTSettings::instance()->logCutPipeline())
@@ -58,7 +58,7 @@ void TTStreamPointVideoWorker::operation()
   }
 
   if (mDetectPillarbox && !mIsAborted) {
-    onStatusReport(StatusReportArgs::Step, tr("Pillarbox-Analyse..."), step);
+    onStatusReport(StatusReportArgs::Step, tr("Pillarbox analysis..."), step);
     QList<TTStreamPoint> pillarboxPoints = detectPillarboxChanges();
     allPoints.append(pillarboxPoints);
     if (TTSettings::instance()->logCutPipeline())
