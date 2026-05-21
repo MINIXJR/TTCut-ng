@@ -1281,7 +1281,7 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
           QApplication::setOverrideCursor(Qt::WaitCursor);
 
           auto progressFn = [this](int current, int total) {
-            statusBar()->showMessage(tr("Lade Logo-Profil (%1/%2 Frames)...").arg(current).arg(total), 0);
+            statusBar()->showMessage(tr("Loading logo profile (%1/%2 frames)...").arg(current).arg(total), 0);
             QApplication::processEvents();
           };
 
@@ -1290,9 +1290,9 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
           if (mLogoDetector->loadMarkadLogo(logoPath, decodeFn, nextIFn, 0, progressFn)) {
             currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
             navigation->setLogoSearchEnabled(true);
-            statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(QFileInfo(logoPath).fileName()), 3000);
+            statusBar()->showMessage(tr("Logo profile loaded: %1").arg(QFileInfo(logoPath).fileName()), 3000);
           } else {
-            statusBar()->showMessage(tr("Logo-Profil konnte nicht verifiziert werden"), 3000);
+            statusBar()->showMessage(tr("Logo profile could not be verified"), 3000);
           }
 
           QApplication::restoreOverrideCursor();
@@ -1817,7 +1817,7 @@ void TTCutMainWindow::onSelectLogoROI()
 {
   if (!mpCurrentAVDataItem) return;
   currentFrame->videoWindow()->setLogoSelectionMode(true);
-  statusBar()->showMessage(tr("Logo-Bereich im Videobild auswählen..."), 0);
+  statusBar()->showMessage(tr("Select the logo area in the video frame..."), 0);
 }
 
 void TTCutMainWindow::onLoadLogoFile()
@@ -1831,7 +1831,7 @@ void TTCutMainWindow::onLoadLogoFile()
   QString startDir = QFileInfo(vs->filePath()).absolutePath();
 
   QString pgmPath = QFileDialog::getOpenFileName(this,
-    tr("Logo-Datei laden"), startDir, tr("PGM Logo (*.pgm)"));
+    tr("Load logo file"), startDir, tr("PGM Logo (*.pgm)"));
 
   if (pgmPath.isEmpty()) return;
 
@@ -1846,15 +1846,15 @@ void TTCutMainWindow::onLoadLogoFile()
   };
 
   QApplication::setOverrideCursor(Qt::WaitCursor);
-  statusBar()->showMessage(tr("Lade Logo-Profil..."), 0);
+  statusBar()->showMessage(tr("Loading logo profile..."), 0);
   QApplication::processEvents();
 
   if (mLogoDetector->loadMarkadLogo(pgmPath, decodeFn, nextIFn, 0)) {
     currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
     navigation->setLogoSearchEnabled(true);
-    statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(QFileInfo(pgmPath).fileName()), 3000);
+    statusBar()->showMessage(tr("Logo profile loaded: %1").arg(QFileInfo(pgmPath).fileName()), 3000);
   } else {
-    statusBar()->showMessage(tr("Logo-Profil konnte nicht verifiziert werden"), 3000);
+    statusBar()->showMessage(tr("Logo profile could not be verified"), 3000);
   }
 
   QApplication::restoreOverrideCursor();
@@ -1867,7 +1867,7 @@ void TTCutMainWindow::onCancelLogoROI()
   mLogoDetector->clearProfile();
   currentFrame->videoWindow()->clearLogoROIOverlay();
   navigation->setLogoSearchEnabled(false);
-  statusBar()->showMessage(tr("Logo-Profil entfernt"), 3000);
+  statusBar()->showMessage(tr("Logo profile removed"), 3000);
 }
 
 void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
@@ -1881,7 +1881,7 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
     // Reload markad PGM file
     QFileInfo fi(logoData.markadPath);
     if (!fi.exists()) {
-      statusBar()->showMessage(tr("Logo-Datei nicht gefunden: %1").arg(logoData.markadPath), 5000);
+      statusBar()->showMessage(tr("Logo file not found: %1").arg(logoData.markadPath), 5000);
       return;
     }
 
@@ -1918,7 +1918,7 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
     if (mLogoDetector->loadMarkadLogo(logoData.markadPath, decodeFn, nextIFn, 0)) {
       currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
       navigation->setLogoSearchEnabled(true);
-      statusBar()->showMessage(tr("Logo-Profil geladen: %1").arg(fi.fileName()), 3000);
+      statusBar()->showMessage(tr("Logo profile loaded: %1").arg(fi.fileName()), 3000);
     }
 
     if (analysisWrapper) {
@@ -1968,7 +1968,7 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
   int collected = 0;
 
   while (pos >= 0 && pos < vs->frameCount() && collected < profileFrames) {
-    statusBar()->showMessage(tr("Erstelle Logo-Profil (%1/%2 Frames)")
+    statusBar()->showMessage(tr("Creating logo profile (%1/%2 frames)")
       .arg(collected + 1).arg(profileFrames));
     QApplication::processEvents();
 
@@ -1997,10 +1997,10 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
     mLogoDetector->finalizeProfile();
     currentFrame->videoWindow()->setLogoROIOverlay(imageCoords);
     navigation->setLogoSearchEnabled(true);
-    statusBar()->showMessage(tr("Logo-Profil erstellt (%1 Frames)").arg(collected), 3000);
+    statusBar()->showMessage(tr("Logo profile created (%1 frames)").arg(collected), 3000);
   } else {
     mLogoDetector->clearProfile();
-    statusBar()->showMessage(tr("Logo-Profil konnte nicht erstellt werden"), 3000);
+    statusBar()->showMessage(tr("Logo profile could not be created"), 3000);
   }
 
   currentFrame->videoWindow()->showFrameAt(vs->currentIndex());

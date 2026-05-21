@@ -615,6 +615,6 @@ void TTCutFrameNavigation::onLogoThresholdChanged(double value)
 void TTCutFrameNavigation::onLogoContextMenu(const QPoint& pos)
 {
   QMenu menu(this);
-  menu.addAction(tr("Logo-Datei laden..."), this, &TTCutFrameNavigation::loadLogoFile);
+  menu.addAction(tr("Load logo file..."), this, &TTCutFrameNavigation::loadLogoFile);
   menu.exec(pbSelectLogoROI->mapToGlobal(pos));
 }
