@@ -466,7 +466,8 @@ void TTCurrentFrame::onPlayVideo()
   if (mPlayer == nullptr) {
     mPlayer = new TTMpvWrapper(this);
     mPlayer->setRenderTarget(mpegWindow);
-    connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCurrentFrame::onPlaybackFinished);
+    connect(mPlayer, &TTMpvWrapper::playerFinished,       this, &TTCurrentFrame::onPlaybackFinished);
+    connect(mPlayer, &TTMpvWrapper::positionChanged,      this, &TTCurrentFrame::onPlaybackPositionChanged);
     connect(mPlayer, &TTMpvWrapper::playerError, this, [this](const QString& msg) {
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Playback error: %1").arg(msg));
@@ -517,6 +518,28 @@ void TTCurrentFrame::onPlayVideo()
     setPlayingButtonState(true);
     mPlayer->load(videoStream->filePath(), startSec, audioFile);
   }
+}
+
+//! Called repeatedly by TTMpvWrapper with the current playback position in seconds.
+//! Updates the timecode / frame-position display without moving the decoded-frame stream
+//! or triggering any decode work — mpv is drawing into mpegWindow via --wid.
+void TTCurrentFrame::onPlaybackPositionChanged(double seconds)
+{
+  if (videoStream == nullptr) return;
+
+  float frameRate = videoStream->frameRate();
+  if (frameRate <= 0.0f) return;
+
+  int framePos = static_cast<int>(std::floor(seconds * static_cast<double>(frameRate)));
+  if (framePos < 0) framePos = 0;
+  if (framePos >= static_cast<int>(videoStream->frameCount()))
+    framePos = static_cast<int>(videoStream->frameCount()) - 1;
+
+  // updateCurrentPosition(pos) with an explicit index only reads metadata
+  // (frameType / frameTime) — no stream seek, no decode, no cut-position write.
+  // It emits newFramePosition which advances the slider and stores the integer
+  // in TTAVData; both are safe to call at playback rate (~25 Hz).
+  updateCurrentPosition(framePos);
 }
 
 //! Called by TTMpvWrapper when playback finishes (natural end or stop())
