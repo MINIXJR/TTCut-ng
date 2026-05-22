@@ -20,12 +20,9 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavstream.h"
 
-#include <QProcess>
-#include <QElapsedTimer>
-#include <QLocalSocket>
-
 class TTAVItem;
 class TTCutItem;
+class TTMpvWrapper;
 class TTSubtitleStream;
 
 class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
@@ -76,10 +73,12 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void updateCurrentPosition(int pos = -1);
 		QString createTempMkvForPlayback();
 		void cleanupTempPlaybackFile();
-		double getMpvPlaybackPosition();  // Query mpv's current position via IPC
 
 	private:
 		void                clearCutContext();
+
+	private slots:
+		void                onPlaybackFinished();
 
 	private:
 		bool                isControlEnabled;
@@ -88,11 +87,8 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		TTAVItem*           currentCutAVItem;
 		int                 currentCutItemIndex;
 		int                 currentCutPosition;
-		QProcess*           mPlayerProc;
-		int                 mPlayStartFrame;
-		QElapsedTimer       mPlayTimer;
+		TTMpvWrapper*       mPlayer = nullptr;
 		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback
-		QString             mMpvSocketPath;     // IPC socket for mpv communication
 };
 
 #endif //TTCURRENTFRAME_H

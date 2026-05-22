@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcurrentframe.h"
+#include "ttmpvwrapper.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
 #include "../avstream/ttavstream.h"
@@ -33,11 +34,9 @@ extern "C" {
 #include <QDir>
 #include <QFile>
 #include <QIcon>
-#include <QLocalSocket>
-#include <QProcess>
 #include <QStyle>
-#include <QThread>
 #include <QWheelEvent>
+#include <cmath>
 
 //! Default constructor
 TTCurrentFrame::TTCurrentFrame(QWidget* parent)
@@ -47,8 +46,6 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
 
   videoStream         = 0;
   mAVItem             = 0;
-  mPlayerProc         = 0;
-  mPlayStartFrame     = 0;
   isControlEnabled    = true;
   currentCutAVItem    = 0;
   currentCutItemIndex = -1;
@@ -93,10 +90,8 @@ void TTCurrentFrame::clearCutContext()
 void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 {
 	// Stop any running playback and clean up temp file
-	if (mPlayerProc != 0 && mPlayerProc->state() != QProcess::NotRunning) {
-		mPlayerProc->terminate();
-		mPlayerProc->waitForFinished(2000);
-	}
+	if (mPlayer && mPlayer->isPlaying())
+		mPlayer->stop();
 	cleanupTempPlaybackFile();
 	clearCutContext();
 
@@ -135,10 +130,8 @@ int TTCurrentFrame::currentFramePos()
 void TTCurrentFrame::closeVideoStream()
 {
   // Stop any running playback and clean up temp file
-  if (mPlayerProc != 0 && mPlayerProc->state() != QProcess::NotRunning) {
-    mPlayerProc->terminate();
-    mPlayerProc->waitForFinished(2000);
-  }
+  if (mPlayer && mPlayer->isPlaying())
+    mPlayer->stop();
   cleanupTempPlaybackFile();
 
   mpegWindow->closeVideoStream();
@@ -445,88 +438,29 @@ void TTCurrentFrame::onPlayVideo()
 {
   if (videoStream == 0 || mAVItem == 0) return;
 
-  // Stop any existing playback
-  if (mPlayerProc != 0 && mPlayerProc->state() != QProcess::NotRunning) {
-    // Query mpv's current playback position via IPC before terminating
-    double playbackPos = getMpvPlaybackPosition();
-
-    mPlayerProc->terminate();
-    mPlayerProc->waitForFinished(2000);
-
-    // Clean up temp file and socket
-    cleanupTempPlaybackFile();
-    if (!mMpvSocketPath.isEmpty()) {
-      QFile::remove(mMpvSocketPath);
-      mMpvSocketPath.clear();
-    }
-
-    // Invalidate display cache so frame is re-decoded after mpv overlay
-    mpegWindow->invalidateDisplay();
-
-    // Calculate new frame position
-    int newFrame;
-    double frameRate = videoStream->frameRate();
-
-    if (playbackPos >= 0) {
-      // Use time position from mpv IPC - use floor to get the frame being displayed
-      newFrame = static_cast<int>(playbackPos * frameRate);
-      if (TTSettings::instance()->logUI())
-          qDebug() << "mpv time position:" << playbackPos << "s -> frame" << newFrame
-                   << "(rate:" << frameRate << ")";
-    } else {
-      // Fallback: use elapsed time (less accurate)
-      qint64 elapsedMs = mPlayTimer.elapsed();
-      int elapsedFrames = static_cast<int>((elapsedMs / 1000.0) * frameRate);
-      newFrame = mPlayStartFrame + elapsedFrames;
-      if (TTSettings::instance()->logUI())
-          qDebug() << "Fallback: elapsed" << elapsedMs << "ms -> frame" << newFrame;
-    }
-
-    // Clamp to valid range
-    if (newFrame < 0) newFrame = 0;
-    if (newFrame >= static_cast<int>(videoStream->frameCount()))
-      newFrame = videoStream->frameCount() - 1;
-
-    // Navigate to the new position
-    onGotoFrame(newFrame);
+  // Toggle: stop if already playing
+  if (mPlayer && mPlayer->isPlaying()) {
+    mPlayer->stop();
     return;
   }
 
-  // Create process if needed
-  if (mPlayerProc == 0) {
-    mPlayerProc = new QProcess(this);
+  // Lazily create the wrapper
+  if (mPlayer == nullptr) {
+    mPlayer = new TTMpvWrapper(this);
+    mPlayer->setRenderTarget(mpegWindow);
+    connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCurrentFrame::onPlaybackFinished);
   }
 
-  // Store start position (timer starts later, after MKV creation for H.264/H.265)
-  mPlayStartFrame = videoStream->currentIndex();
-
-  // Check stream type for H.264/H.265 which need special handling
   TTAVTypes::AVStreamType stype = videoStream->streamType();
   bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
 
-  // Build mpv command
-  QStringList args;
-
-  // Create IPC socket for querying playback position
-  mMpvSocketPath = QDir(TTSettings::instance()->tempDirPath()).filePath("mpv-ipc.sock");
-  QFile::remove(mMpvSocketPath);  // Remove stale socket
-
-  // Embed mpv into mpegWindow
-  // Use x11 first (xv has port conflicts), fall back to xv
-  args << "--vo=x11,xv"
-       << QString("--wid=%1").arg(mpegWindow->winId())
-       << "--no-osc"
-       << "--no-input-default-bindings"
-       << "--keep-open=no"
-       << "--hr-seek=yes"           // Precise seeking (not just keyframes)
-       << "--hr-seek-framedrop=no"  // Don't skip frames during seek
-       << QString("--input-ipc-server=%1").arg(mMpvSocketPath);
+  // Compute start position in seconds from the current frame time
+  QTime frameTime = videoStream->currentFrameTime();
+  double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0
+                    + frameTime.second() + frameTime.msec() / 1000.0;
 
   if (isH264orH265) {
-    // For H.264/H.265: Create a temporary MKV file with A/V muxed together
-    // ES files have no timestamps, so we must mux them first for proper playback
-
-    // Show wait cursor during MKV creation
+    // ES files have no timestamps: mux into a temp MKV first
     QApplication::setOverrideCursor(Qt::WaitCursor);
     QString tempMkv = createTempMkvForPlayback();
     QApplication::restoreOverrideCursor();
@@ -536,40 +470,42 @@ void TTCurrentFrame::onPlayVideo()
           QString("Failed to create temp MKV for H.264/H.265 playback"));
       return;
     }
-
-    // Store temp file path for cleanup
     mTempPlaybackFile = tempMkv;
 
-    // Now we can seek in the muxed file
-    QTime frameTime = videoStream->currentFrameTime();
-    double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0 +
-                      frameTime.second() + frameTime.msec() / 1000.0;
-    args << QString("--start=%1").arg(startSec, 0, 'f', 3);
-    args << tempMkv;
+    // Audio is already muxed into the temp MKV — no separate audio file needed
+    mPlayer->load(tempMkv, startSec);
   } else {
-    // MPEG-2: Can seek to current position directly
-    QTime frameTime = videoStream->currentFrameTime();
-    double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0 +
-                      frameTime.second() + frameTime.msec() / 1000.0;
-    args << QString("--start=%1").arg(startSec, 0, 'f', 3);
-
-    // Add audio file if available
+    // MPEG-2: seek directly in the ES; pass first audio track separately if present
+    QString audioFile;
     if (mAVItem->audioCount() > 0) {
       TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
-      if (audioStream != 0) {
-        args << QString("--audio-file=%1").arg(audioStream->filePath());
-      }
+      if (audioStream != 0)
+        audioFile = audioStream->filePath();
     }
-    // Add video file
-    args << videoStream->filePath();
+    mPlayer->load(videoStream->filePath(), startSec, audioFile);
   }
+}
+
+//! Called by TTMpvWrapper when playback finishes (natural end or stop())
+void TTCurrentFrame::onPlaybackFinished()
+{
+  double playbackPos = mPlayer->playbackPosition();
+  double frameRate   = videoStream->frameRate();
+
+  int newFrame = static_cast<int>(std::floor(playbackPos * frameRate));
+  if (newFrame < 0) newFrame = 0;
+  if (newFrame >= static_cast<int>(videoStream->frameCount()))
+    newFrame = videoStream->frameCount() - 1;
 
   if (TTSettings::instance()->logUI())
-      qDebug() << "Starting mpv:" << args;
+    qDebug() << "Playback finished: pos" << playbackPos << "s -> frame" << newFrame
+             << "(rate:" << frameRate << ")";
 
-  // Start timer just before starting mpv (after MKV creation)
-  mPlayTimer.start();
-  mPlayerProc->start("mpv", args);
+  videoStream->moveToIndexPos(newFrame);
+  mpegWindow->showFrameAt(newFrame);
+  mpegWindow->invalidateDisplay();
+
+  cleanupTempPlaybackFile();
 }
 
 //! Clean up temporary playback file
@@ -583,84 +519,6 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
     }
     mTempPlaybackFile.clear();
   }
-}
-
-//! Query mpv's current playback position via IPC socket
-//! Returns the position in seconds, or -1 on error
-//! First pauses mpv to get the exact displayed frame position
-double TTCurrentFrame::getMpvPlaybackPosition()
-{
-  if (mMpvSocketPath.isEmpty()) {
-    return -1.0;
-  }
-
-  QLocalSocket socket;
-  socket.connectToServer(mMpvSocketPath);
-
-  if (!socket.waitForConnected(500)) {
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("Failed to connect to mpv IPC socket"));
-    return -1.0;
-  }
-
-  // First pause mpv to freeze the current frame
-  QByteArray cmdPause = "{ \"command\": [\"set_property\", \"pause\", true] }\n";
-  socket.write(cmdPause);
-  socket.flush();
-  socket.waitForReadyRead(200);
-  socket.readAll();  // Discard pause response
-
-  // Small delay to ensure pause is processed
-  QThread::msleep(50);
-
-  // Now get time-pos for the paused frame
-  QByteArray cmdTime = "{ \"command\": [\"get_property\", \"time-pos\"] }\n";
-  socket.write(cmdTime);
-  socket.flush();
-
-  if (!socket.waitForReadyRead(500)) {
-    if (TTSettings::instance()->logUI())
-        qDebug() << "mpv IPC timeout";
-    socket.disconnectFromServer();
-    return -1.0;
-  }
-
-  QByteArray response = socket.readAll();
-
-  // Parse JSON response: {"data":123.456,"error":"success"}
-  QString respStr = QString::fromUtf8(response);
-  if (TTSettings::instance()->logUI())
-      qDebug() << "mpv time-pos response:" << respStr;
-
-  int dataIdx = respStr.indexOf("\"data\":");
-  if (dataIdx < 0) {
-    socket.disconnectFromServer();
-    return -1.0;
-  }
-
-  int numStart = dataIdx + 7;
-  int numEnd = respStr.indexOf(',', numStart);
-  if (numEnd < 0) {
-    numEnd = respStr.indexOf('}', numStart);
-  }
-  if (numEnd < 0) {
-    socket.disconnectFromServer();
-    return -1.0;
-  }
-
-  QString numStr = respStr.mid(numStart, numEnd - numStart).trimmed();
-  bool ok;
-  double pos = numStr.toDouble(&ok);
-
-  socket.disconnectFromServer();
-
-  if (!ok) {
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("Failed to parse mpv position: %1").arg(numStr));
-    return -1.0;
-  }
-
-  return pos;
 }
 
 //! Create a temporary MKV file for H.264/H.265 playback
