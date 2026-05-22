@@ -62,6 +62,7 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   pbNextFrame->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_MediaSkipForward)));
   pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
   pbPlayVideo->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
+  pbStopVideo->setIcon(QIcon::fromTheme("media-playback-stop", style->standardIcon(QStyle::SP_MediaStop)));
 
   connect(pbPrevFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetPrevFrame);
   connect(pbNextFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetNextFrame);

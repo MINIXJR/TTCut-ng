@@ -17,6 +17,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
+#include <QThread>
 #include <QTimer>
 #include <QWidget>
 
@@ -206,13 +207,19 @@ void TTMpvProcessBackend::connectIpcSocket()
   connect(mSocket, &QLocalSocket::readyRead,
           this, &TTMpvProcessBackend::onSocketReadyRead);
 
-  // mpv may not have created the socket file yet — try up to ~500 ms
-  const int maxRetries = 10;
+  // mpv needs ~100 ms to create the socket file. connectToServer() fails
+  // instantly while the file is still absent (ENOENT), and waitForConnected()
+  // does NOT block in that case — so a real sleep between retries is required,
+  // otherwise the loop races through in microseconds and always fails.
+  const int maxRetries = 40;          // 40 × 50 ms = 2 s budget
   for (int i = 0; i < maxRetries; ++i) {
     mSocket->connectToServer(mSocketPath);
-    if (mSocket->waitForConnected(50))
+    if (mSocket->waitForConnected(50)) {
+      emit connected();
       return;   // success
+    }
     mSocket->abort();
+    QThread::msleep(50);
   }
 
   TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,

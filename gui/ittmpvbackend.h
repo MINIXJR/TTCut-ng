@@ -41,6 +41,7 @@ public:
 
 signals:
   void propertyChanged(const QString& name, const QVariant& value);
+  void connected();        // IPC connection established — safe to send commands
   void fileLoaded();
   void playbackFinished();
   void mpvError(const QString& message);

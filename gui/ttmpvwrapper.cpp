@@ -21,8 +21,8 @@ TTMpvWrapper::TTMpvWrapper(QObject* parent)
 
   connect(mBackend, &ITTMpvBackend::propertyChanged,
           this,     &TTMpvWrapper::onPropertyChanged);
-  connect(mBackend, &ITTMpvBackend::fileLoaded,
-          this,     &TTMpvWrapper::onBackendFileLoaded);
+  connect(mBackend, &ITTMpvBackend::connected,
+          this,     &TTMpvWrapper::onBackendConnected);
   connect(mBackend, &ITTMpvBackend::playbackFinished,
           this,     &TTMpvWrapper::onBackendPlaybackFinished);
   connect(mBackend, &ITTMpvBackend::mpvError,
@@ -45,13 +45,25 @@ void TTMpvWrapper::setRenderTarget(QWidget* target)
 void TTMpvWrapper::load(const QString& file, double startSec,
                         const QString& audioFile)
 {
-  mPlaying          = false;   // cleared until the new file is loaded (onBackendFileLoaded)
-  mPendingStartSec  = startSec;
-  mPendingAudioFile = audioFile;
+  // We are playing from now until stop()/playbackFinished — do not wait for a
+  // (potentially missed) IPC "file-loaded" event to establish this.
+  mPlaying = true;
 
   if (mTarget) mBackend->attachToWidget(mTarget);
   mBackend->start();
-  mBackend->command(QStringList{"loadfile", file});
+
+  // Start position, extra audio track and subtitle file are passed as mpv CLI
+  // options. mpv applies them when it loads the file — race-free, independent
+  // of when the IPC socket connects.
+  QStringList loadArgs;
+  loadArgs << QStringLiteral("loadfile") << file;
+  if (startSec > 0.0)
+    loadArgs << QString("--start=%1").arg(startSec, 0, 'f', 3);
+  if (!audioFile.isEmpty())
+    loadArgs << QString("--audio-file=%1").arg(audioFile);
+  if (!mSubtitleFile.isEmpty())
+    loadArgs << QString("--sub-file=%1").arg(mSubtitleFile);
+  mBackend->command(loadArgs);
 }
 
 void TTMpvWrapper::stop()
@@ -95,22 +107,12 @@ void TTMpvWrapper::onPropertyChanged(const QString& name, const QVariant& value)
   }
 }
 
-void TTMpvWrapper::onBackendFileLoaded()
+void TTMpvWrapper::onBackendConnected()
 {
-  mPlaying = true;
-
+  // IPC socket is up — register the time-pos observer that drives the live
+  // timecode. Start position / audio / subtitle were already passed as CLI
+  // options in load(), so nothing else is needed here.
   mBackend->observeProperty("time-pos");
-
-  // 0.0 means "from the start" — no seek needed
-  if (mPendingStartSec > 0.0)
-    mBackend->setProperty("time-pos", mPendingStartSec);
-
-  if (!mPendingAudioFile.isEmpty())
-    mBackend->command(QStringList{"audio-add", mPendingAudioFile});
-
-  if (!mSubtitleFile.isEmpty())
-    mBackend->command(QStringList{"sub-add", mSubtitleFile});
-
   emit playerPlaying();
 }
 

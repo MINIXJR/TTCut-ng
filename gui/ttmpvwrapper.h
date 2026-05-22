@@ -46,7 +46,7 @@ signals:
 
 private slots:
   void onPropertyChanged(const QString& name, const QVariant& value);
-  void onBackendFileLoaded();
+  void onBackendConnected();
   void onBackendPlaybackFinished();
 
 private:
@@ -55,8 +55,6 @@ private:
   QString        mSubtitleFile;
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;
-  double         mPendingStartSec  = 0.0;
-  QString        mPendingAudioFile;
 };
 
 #endif // TTMPVWRAPPER_H
