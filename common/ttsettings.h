@@ -49,9 +49,6 @@ public:
   int     cutPreviewSeconds() const  { return mCutPreviewSeconds; }
   void    setCutPreviewSeconds(int v);
 
-  int     playSkipFrames() const     { return mPlaySkipFrames; }
-  void    setPlaySkipFrames(int v);
-
   int     searchLength() const       { return mSearchLength; }
   void    setSearchLength(int v);
 
@@ -380,7 +377,6 @@ private:
   QString mLastDirPath;          // initialised to QDir::homePath() in ctor
   QString mProjectFileName;      // empty by default
   int     mCutPreviewSeconds = 25;
-  int     mPlaySkipFrames    = 0;
   int     mSearchLength      = 45;
   int     mSearchWorkerCount = 0;   // 0 = auto (qBound(1, idealThreadCount/2, 4))
 

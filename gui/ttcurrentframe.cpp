@@ -37,6 +37,11 @@ extern "C" {
 #include <QStyle>
 #include <QWheelEvent>
 #include <cmath>
+#include <iterator>
+
+// Speed step table: index 2 is 1× (normal forward playback)
+static const double kSpeedSteps[] = { -4.0, -2.0, 1.0, 2.0, 4.0 };
+static constexpr int kSpeedStepNormal = 2;  // index of 1× in kSpeedSteps
 
 //! Default constructor
 TTCurrentFrame::TTCurrentFrame(QWidget* parent)
@@ -62,6 +67,12 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   connect(pbNextFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetNextFrame);
   connect(pbSetMarker,  &QPushButton::clicked, this, &TTCurrentFrame::onSetMarker);
   connect(pbPlayVideo,  &QPushButton::clicked, this, &TTCurrentFrame::onPlayVideo);
+  connect(pbStopVideo,  &QPushButton::clicked, this, &TTCurrentFrame::onStopVideo);
+  connect(pbPlaySlower, &QPushButton::clicked, this, &TTCurrentFrame::onPlaySlower);
+  connect(pbPlayFaster, &QPushButton::clicked, this, &TTCurrentFrame::onPlayFaster);
+
+  // Initial stopped state: Stop and speed buttons disabled
+  setPlayingButtonState(false);
 }
 
 //! Needeb by Qt Designer
@@ -77,6 +88,10 @@ void TTCurrentFrame::controlEnabled( bool enabled )
   pbNextFrame->setEnabled(enabled);
   pbSetMarker->setEnabled(enabled);
   pbPlayVideo->setEnabled(enabled);
+  // Stop and speed buttons are only enabled while playing; keep them off here
+  pbStopVideo->setEnabled(false);
+  pbPlaySlower->setEnabled(false);
+  pbPlayFaster->setEnabled(false);
 }
 
 
@@ -85,6 +100,15 @@ void TTCurrentFrame::clearCutContext()
   currentCutAVItem    = 0;
   currentCutItemIndex = -1;
   currentCutPosition  = -1;
+}
+
+//! Set play/stop/speed button state: playing=true enables Stop+speed, disables Play
+void TTCurrentFrame::setPlayingButtonState(bool playing)
+{
+  pbPlayVideo->setEnabled(!playing);
+  pbStopVideo->setEnabled(playing);
+  pbPlaySlower->setEnabled(playing);
+  pbPlayFaster->setEnabled(playing);
 }
 
 void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
@@ -438,22 +462,23 @@ void TTCurrentFrame::onPlayVideo()
 {
   if (videoStream == 0 || mAVItem == 0) return;
 
-  // Toggle: stop if already playing
-  if (mPlayer && mPlayer->isPlaying()) {
-    mPlayer->stop();
-    return;
-  }
-
   // Lazily create the wrapper
   if (mPlayer == nullptr) {
     mPlayer = new TTMpvWrapper(this);
     mPlayer->setRenderTarget(mpegWindow);
     connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCurrentFrame::onPlaybackFinished);
-    connect(mPlayer, &TTMpvWrapper::playerError, this, [](const QString& msg) {
+    connect(mPlayer, &TTMpvWrapper::playerError, this, [this](const QString& msg) {
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Playback error: %1").arg(msg));
+      mSpeedStep = kSpeedStepNormal;
+      laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
+      setPlayingButtonState(false);
     });
   }
+
+  // Reset speed to 1× on every fresh play
+  mSpeedStep = kSpeedStepNormal;
+  laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
 
   TTAVTypes::AVStreamType stype = videoStream->streamType();
   bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
@@ -476,6 +501,8 @@ void TTCurrentFrame::onPlayVideo()
     }
     mTempPlaybackFile = tempMkv;
 
+    // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
+    setPlayingButtonState(true);
     // Audio is already muxed into the temp MKV — no separate audio file needed
     mPlayer->load(tempMkv, startSec);
   } else {
@@ -486,6 +513,8 @@ void TTCurrentFrame::onPlayVideo()
       if (audioStream != 0)
         audioFile = audioStream->filePath();
     }
+    // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
+    setPlayingButtonState(true);
     mPlayer->load(videoStream->filePath(), startSec, audioFile);
   }
 }
@@ -512,6 +541,11 @@ void TTCurrentFrame::onPlaybackFinished()
   mpegWindow->invalidateDisplay();
   updateCurrentPosition(newFrame);
 
+  // Reset speed display and restore stopped button state
+  mSpeedStep = kSpeedStepNormal;
+  laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
+  setPlayingButtonState(false);
+
   cleanupTempPlaybackFile();
 }
 
@@ -526,6 +560,43 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
     }
     mTempPlaybackFile.clear();
   }
+}
+
+//! Stop playback immediately
+void TTCurrentFrame::onStopVideo()
+{
+  if (mPlayer && mPlayer->isPlaying())
+    mPlayer->stop();
+}
+
+//! Decrease playback speed by one step
+void TTCurrentFrame::onPlaySlower()
+{
+  if (mSpeedStep > 0) {
+    --mSpeedStep;
+    applySpeedStep();
+  }
+}
+
+//! Increase playback speed by one step
+void TTCurrentFrame::onPlayFaster()
+{
+  if (mSpeedStep < static_cast<int>(std::size(kSpeedSteps)) - 1) {
+    ++mSpeedStep;
+    applySpeedStep();
+  }
+}
+
+//! Apply current speed step to the player and update the label
+void TTCurrentFrame::applySpeedStep()
+{
+  double f = kSpeedSteps[mSpeedStep];
+  if (mPlayer)
+    mPlayer->setSpeed(f);
+
+  // Format: -4×, -2×, 1×, 2×, 4×  (U+00D7 = ×, UTF-8: 0xC3 0x97)
+  long fi = static_cast<long>(f);
+  laPlaySpeed->setText(QString("%1\xC3\x97").arg(fi));
 }
 
 //! Create a temporary MKV file for H.264/H.265 playback

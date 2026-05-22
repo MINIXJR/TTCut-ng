@@ -83,12 +83,6 @@ void TTSettings::setCutPreviewSeconds(int v)
   mCutPreviewSeconds = v;
 }
 
-void TTSettings::setPlaySkipFrames(int v)
-{
-  if (mPlaySkipFrames == v) return;
-  mPlaySkipFrames = v;
-}
-
 void TTSettings::setSearchLength(int v)
 {
   if (mSearchLength == v) return;
@@ -660,7 +654,6 @@ void TTSettings::load()
 
   settings.beginGroup("Preview");
   mCutPreviewSeconds = settings.value("PreviewSeconds/", mCutPreviewSeconds).toInt();
-  mPlaySkipFrames    = settings.value("SkipFrames/",     mPlaySkipFrames).toInt();
   settings.endGroup();
 
   settings.beginGroup("Search");
@@ -896,7 +889,6 @@ void TTSettings::save()
 
   settings.beginGroup("Preview");
   settings.setValue("PreviewSeconds/", mCutPreviewSeconds);
-  settings.setValue("SkipFrames/",     mPlaySkipFrames);
   settings.endGroup();
 
   settings.beginGroup("Search");

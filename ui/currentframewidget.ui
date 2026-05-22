@@ -102,6 +102,28 @@
          <enum>QLayout::SetFixedSize</enum>
         </property>
         <item>
+         <widget class="QPushButton" name="pbPlaySlower">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>30</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>30</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="text">
+           <string notr="true">◀◀</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="pbPlayVideo">
           <property name="enabled">
            <bool>true</bool>
@@ -130,6 +152,66 @@
           <property name="icon">
            <iconset resource="currentframewidget.qrc">
             <normaloff>:/pixmaps/pixmaps/play_18.xpm</normaloff>:/pixmaps/pixmaps/play_18.xpm</iconset>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbStopVideo">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>40</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>40</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Stop</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbPlayFaster">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>30</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>30</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="text">
+           <string notr="true">▶▶</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="laPlaySpeed">
+          <property name="minimumSize">
+           <size>
+            <width>28</width>
+            <height>24</height>
+           </size>
+          </property>
+          <property name="text">
+           <string notr="true">1×</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>

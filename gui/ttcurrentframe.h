@@ -76,9 +76,16 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 	private:
 		void                clearCutContext();
+		void                setPlayingButtonState(bool playing);
 
 	private slots:
 		void                onPlaybackFinished();
+		void                onStopVideo();
+		void                onPlaySlower();
+		void                onPlayFaster();
+
+	private:
+		void                applySpeedStep();
 
 	private:
 		bool                isControlEnabled;
@@ -89,6 +96,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		int                 currentCutPosition;
 		TTMpvWrapper*       mPlayer = nullptr;
 		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback
+		int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
 };
 
 #endif //TTCURRENTFRAME_H
