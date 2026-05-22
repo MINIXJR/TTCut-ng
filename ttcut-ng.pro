@@ -148,6 +148,7 @@ HEADERS     = common/ttcut.h\
               gui/ttcutsettingsaudio.h\
               gui/ttcutsettingspaths.h\
               gui/ttcutsettingslogging.h\
+              gui/ittmpvbackend.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
               gui/ttsubtitletreeview.h\
