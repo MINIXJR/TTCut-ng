@@ -80,6 +80,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 
   connect(mPlayer, &TTMpvWrapper::playerPlaying,  this, &TTCutPreview::onPlayerPlaying);
   connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCutPreview::onPlayerFinished);
+  connect(mPlayer, &TTMpvWrapper::playerError,    this, &TTCutPreview::onPlayerError);
   connect(cbCutPreview, qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutPreview::onCutSelectionChanged);
   connect(pbPlay,       &QPushButton::clicked, this, &TTCutPreview::onPlayPreview);
   connect(pbExit,       &QPushButton::clicked, this, &TTCutPreview::onExitPreview);
@@ -271,6 +272,14 @@ void TTCutPreview::onPlayerPlaying()
 
 void TTCutPreview::onPlayerFinished()
 {
+  pbPlay->setText(tr("Play"));
+  pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+}
+
+void TTCutPreview::onPlayerError(const QString& message)
+{
+  TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+      QString("Preview player error: %1").arg(message));
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 }

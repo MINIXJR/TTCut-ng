@@ -449,6 +449,10 @@ void TTCurrentFrame::onPlayVideo()
     mPlayer = new TTMpvWrapper(this);
     mPlayer->setRenderTarget(mpegWindow);
     connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCurrentFrame::onPlaybackFinished);
+    connect(mPlayer, &TTMpvWrapper::playerError, this, [](const QString& msg) {
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Playback error: %1").arg(msg));
+    });
   }
 
   TTAVTypes::AVStreamType stype = videoStream->streamType();
@@ -489,6 +493,8 @@ void TTCurrentFrame::onPlayVideo()
 //! Called by TTMpvWrapper when playback finishes (natural end or stop())
 void TTCurrentFrame::onPlaybackFinished()
 {
+  if (videoStream == nullptr) return;
+
   double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
 
@@ -504,6 +510,7 @@ void TTCurrentFrame::onPlaybackFinished()
   videoStream->moveToIndexPos(newFrame);
   mpegWindow->showFrameAt(newFrame);
   mpegWindow->invalidateDisplay();
+  updateCurrentPosition(newFrame);
 
   cleanupTempPlaybackFile();
 }

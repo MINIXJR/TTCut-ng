@@ -17,8 +17,6 @@
 
 #include "ui_previewwidget.h"
 
-#include <QThread>
-#include <QProcess>
 #include <QCloseEvent>
 #include <QLabel>
 
@@ -58,6 +56,7 @@ protected:
 protected slots:
   void onPlayerPlaying();
 	void onPlayerFinished();
+	void onPlayerError(const QString& message);
 	void onCutSelectionChanged(int iCut);
 	void onPlayPreview();
 	void onExitPreview();
@@ -71,7 +70,6 @@ private:
 	int            previewWidth;
 	int            previewHeight;
 	QString        current_video_file;
-	QString        current_audio_file;
 
     // Burst warning
     QLabel*      lblBurstWarning;
