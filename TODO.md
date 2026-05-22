@@ -134,9 +134,9 @@
   - `TTProgressBar` hat Cancel-Button → `TTAVData::onUserAbortRequest()` → `TTThreadTaskPool`;
     Cut-, Search- und QuickJump-Tasks werfen `TTAbortException` bei `onUserAbort()`
 
-- **FastForward-Player-Feature**
-  - `playSkipFrames` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
-  - Reanimieren benötigt Player-Refactor (TTMpv-Wrapper)
+- ~~**FastForward-Player-Feature**~~ → **DONE** (TTMpv-Wrapper-Refactor)
+  - Geschwindigkeits-Stufen −4×…1×…4× via mpv `speed`/`play-dir`, ◀◀/▶▶-Buttons +
+    Tempo-Label im "Aktueller Frame"-Widget. Verwaistes `playSkipFrames`-Setting entfernt.
 
 - **MP3/AAC re-encoding für Audio-Only-Output**
   - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
@@ -225,13 +225,19 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   - Diagnose: `QT_DEBUG_PLUGINS=1 QT_LOGGING_RULES="qt.qpa.*=true" ./ttcut-ng` unter Wayland starten, Output analysieren
   - Ziel: Root Cause finden, ggf. beheben, XCB-Krücke aus `ttcut.sh`/`ttcut.desktop`/README/INSTALL entfernen
 
-- **Live-Timecode bei mpv-Wiedergabe**
-  - Im "Aktueller Frame" Widget den Timecode/Frame-Counter während der mpv-Wiedergabe mitlaufen lassen
-  - Infrastruktur teilweise vorhanden: mpv wird bereits mit `--input-ipc-server=` gestartet und
-    `ttcurrentframe.cpp` verbindet sich per `QLocalSocket` (aktuell nur für Steuer-Kommandos).
-    Es fehlt nur der QTimer-Poll auf `playback-time`/`time-pos`.
-  - Alternative: mpv als eingebettetes libmpv-Widget statt externem Prozess — mehr Kontrolle,
-    aber deutlich aufwändiger
+- ~~**Live-Timecode bei mpv-Wiedergabe**~~ → **DONE** (TTMpv-Wrapper-Refactor)
+  - `TTMpvWrapper::positionChanged` (aus `observeProperty("time-pos")`) → der Timecode
+    im "Aktueller Frame"-Widget läuft während der mpv-Wiedergabe live mit.
+
+- **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
+  - `TTMpvWrapper::stop()` ist „best-effort": der gestoppte Frame kann ~1 Frame ungenau
+    sein (kein synchrones Warten auf das eingefrorene `time-pos`). Frame-genau wäre ein
+    synchrones `getProperty` im `ITTMpvBackend`-Interface (bewusst weggelassen) oder ein
+    kurzes Warten auf das `time-pos`-Event nach `pause` in `stop()`.
+  - `createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
+    `frameRate==0` (Division → UB), Temp-Dateiname `playback_temp.mkv` nicht
+    prozess-eindeutig, kein Destruktor-Cleanup (Temp-MKV bleibt liegen, wenn das Fenster
+    während H.264/H.265-Wiedergabe geschlossen wird).
 
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen
