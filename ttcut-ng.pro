@@ -149,6 +149,7 @@ HEADERS     = common/ttcut.h\
               gui/ttcutsettingspaths.h\
               gui/ttcutsettingslogging.h\
               gui/ittmpvbackend.h\
+              gui/ttmpvprocessbackend.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
               gui/ttsubtitletreeview.h\
@@ -246,6 +247,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutsettingsaudio.cpp\
               gui/ttcutsettingspaths.cpp\
               gui/ttcutsettingslogging.cpp\
+              gui/ttmpvprocessbackend.cpp\
               gui/ttaudiotreeview.cpp\
               gui/ttvideotreeview.cpp\
               gui/ttsubtitletreeview.cpp\
