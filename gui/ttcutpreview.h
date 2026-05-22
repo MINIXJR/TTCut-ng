@@ -19,7 +19,6 @@
 
 #include <QThread>
 #include <QProcess>
-#include <QResizeEvent>
 #include <QCloseEvent>
 #include <QLabel>
 
@@ -35,7 +34,8 @@ class QSpacerItem;
 class QComboBox;
 class QPushButton;
 class QFrame;
-class TTVideoPlayer;
+class QWidget;
+class TTMpvWrapper;
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Class TTCutPreview
@@ -48,7 +48,6 @@ public:
 	TTCutPreview(QWidget* parent = 0, int prevW = 640, int prevH = 480);
 	~TTCutPreview();
 
-	void resizeEvent(QResizeEvent* event);
 	void initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData = nullptr, bool skipFirst = false, bool skipLast = false);
 	void createPreview();
 
@@ -57,7 +56,6 @@ protected:
 	void cleanUp();
 
 protected slots:
-  void onOptimalSizeChanged();
   void onPlayerPlaying();
 	void onPlayerFinished();
 	void onCutSelectionChanged(int iCut);
@@ -68,7 +66,8 @@ protected slots:
 	void onBurstShift();
 
 private:
-  TTVideoPlayer* videoPlayer;
+  TTMpvWrapper*  mPlayer;
+  QWidget*       mPlayerWidget;
 	int            previewWidth;
 	int            previewHeight;
 	QString        current_video_file;

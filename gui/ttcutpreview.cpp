@@ -31,7 +31,7 @@
 extern "C" {
 #include <libavcodec/codec_id.h>
 }
-#include "ttmplayerwidget.h"
+#include "ttmpvwrapper.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -50,7 +50,16 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 {
   setupUi(this);
 
-  videoPlayer = new TTMplayerWidget(videoFrame);
+  // Create a plain widget as the mpv render target and add it to videoFrame's
+  // existing QGridLayout (2 px margin set in the .ui file).
+  mPlayerWidget = new QWidget(videoFrame);
+  mPlayerWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  if (QLayout* fl = videoFrame->layout()) {
+    fl->addWidget(mPlayerWidget);
+  }
+
+  mPlayer = new TTMpvWrapper(this);
+  mPlayer->setRenderTarget(mPlayerWidget);
 
   setObjectName("TTCutPreview");
 
@@ -69,9 +78,8 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   pbPrevCut->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_ArrowBack)));
   pbNextCut->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_ArrowForward)));
 
-  connect(videoPlayer,  &TTVideoPlayer::optimalSizeChanged, this, &TTCutPreview::onOptimalSizeChanged);
-  connect(videoPlayer,  &TTVideoPlayer::playerPlaying,      this, &TTCutPreview::onPlayerPlaying);
-  connect(videoPlayer,  &TTVideoPlayer::playerFinished,     this, &TTCutPreview::onPlayerFinished);
+  connect(mPlayer, &TTMpvWrapper::playerPlaying,  this, &TTCutPreview::onPlayerPlaying);
+  connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCutPreview::onPlayerFinished);
   connect(cbCutPreview, qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutPreview::onCutSelectionChanged);
   connect(pbPlay,       &QPushButton::clicked, this, &TTCutPreview::onPlayPreview);
   connect(pbExit,       &QPushButton::clicked, this, &TTCutPreview::onExitPreview);
@@ -114,18 +122,6 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
  * Destroys the object and frees any allocated resources
  */
 TTCutPreview::~TTCutPreview()
-{
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * resizeEvent
- */
-void TTCutPreview::resizeEvent(QResizeEvent*)
-{
-	videoPlayer->resize(videoFrame->width()-2, videoFrame->height()-2);
-}
-
-void TTCutPreview::onOptimalSizeChanged()
 {
 }
 
@@ -232,13 +228,13 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   preview_subtitle_name = QString("preview_%1.srt").arg(fileIndex, 3, 10, QChar('0'));
   preview_subtitle_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_subtitle_name );
   if (preview_subtitle_info.exists()) {
-    videoPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
+    mPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
   } else {
-    videoPlayer->clearSubtitleFile();
+    mPlayer->clearSubtitleFile();
   }
 
   qDebug("load preview %s", qPrintable(current_video_file));
-  videoPlayer->load(current_video_file);
+  mPlayer->load(current_video_file);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 
@@ -254,8 +250,8 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
  */
 void TTCutPreview::onPlayPreview()
 {
-  if (videoPlayer->isPlaying()) {
-    videoPlayer->stop();
+  if (mPlayer->isPlaying()) {
+    mPlayer->stop();
     pbPlay->setText(tr("Play"));
     pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
     return;
@@ -263,17 +259,18 @@ void TTCutPreview::onPlayPreview()
 
   pbPlay->setText(tr("Stop"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
-  videoPlayer->play();
+  // TTMpvWrapper has no separate play(); load() starts playback directly.
+  mPlayer->load(current_video_file);
 }
 
 void TTCutPreview::onPlayerPlaying()
 {
-  onPlayPreview();
+  pbPlay->setText(tr("Stop"));
+  pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
 }
 
 void TTCutPreview::onPlayerFinished()
 {
-  videoPlayer->load(current_video_file);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 }
@@ -293,13 +290,8 @@ void TTCutPreview::onPrevCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex > 0) {
+    // setCurrentIndex triggers onCutSelectionChanged which calls mPlayer->load() → auto-play
     cbCutPreview->setCurrentIndex(currentIndex - 1);
-    // Auto-play after selection change
-    if (!videoPlayer->isPlaying()) {
-      videoPlayer->play();
-      pbPlay->setText(tr("Stop"));
-      pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
-    }
   }
 }
 
@@ -310,13 +302,8 @@ void TTCutPreview::onNextCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex < cbCutPreview->count() - 1) {
+    // setCurrentIndex triggers onCutSelectionChanged which calls mPlayer->load() → auto-play
     cbCutPreview->setCurrentIndex(currentIndex + 1);
-    // Auto-play after selection change
-    if (!videoPlayer->isPlaying()) {
-      videoPlayer->play();
-      pbPlay->setText(tr("Stop"));
-      pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
-    }
   }
 }
 
@@ -482,8 +469,8 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   if (iCut < 0 || iCut >= numPreview) return;
 
   // Stop player if running
-  if (videoPlayer->isPlaying()) {
-    videoPlayer->stop();
+  if (mPlayer->isPlaying()) {
+    mPlayer->stop();
   }
 
   // Show progress dialog — repaint() forces synchronous painting before blocking work
@@ -542,7 +529,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
 
   // Reload clip in player
   current_video_file = outputFile;
-  videoPlayer->load(current_video_file);
+  mPlayer->load(current_video_file);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
       QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
@@ -773,7 +760,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
  */
 void TTCutPreview::cleanUp()
 {
-  videoPlayer->cleanUp();
+  mPlayer->stop();
 
   // Clean up all preview* files in temp directory
   QDir tempDir(TTSettings::instance()->tempDirPath());
