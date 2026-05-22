@@ -45,6 +45,7 @@ void TTMpvWrapper::setRenderTarget(QWidget* target)
 void TTMpvWrapper::load(const QString& file, double startSec,
                         const QString& audioFile)
 {
+  mPlaying          = false;   // cleared until the new file is loaded (onBackendFileLoaded)
   mPendingStartSec  = startSec;
   mPendingAudioFile = audioFile;
 
