@@ -165,8 +165,6 @@ HEADERS     = common/ttcut.h\
               gui/ttprocessform.h\
               gui/tttaskprogress.h\
               gui/ttcutpreview.h\
-              gui/ttvideoplayer.h\
-              gui/ttmplayerwidget.h\
               gui/ttcutaboutdlg.h\
               gui/ttcutavcutdlg.h\
               gui/ttcutmainwindow.h\
@@ -264,8 +262,6 @@ SOURCES     = common/ttcut.cpp\
               gui/tttaskprogress.cpp\
               gui/ttprocessform.cpp\
               gui/ttcutpreview.cpp\
-              gui/ttvideoplayer.cpp\
-              gui/ttmplayerwidget.cpp\
               gui/ttcutaboutdlg.cpp\
               gui/ttcutavcutdlg.cpp\
               gui/ttcutmainwindow.cpp\
