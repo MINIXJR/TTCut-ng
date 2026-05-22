@@ -61,14 +61,12 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   pbPrevFrame->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_MediaSkipBackward)));
   pbNextFrame->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_MediaSkipForward)));
   pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
-  pbPlayVideo->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
-  pbStopVideo->setIcon(QIcon::fromTheme("media-playback-stop", style->standardIcon(QStyle::SP_MediaStop)));
+  // pbPlayVideo icon is managed by setPlayingButtonState() — Play (▶) ↔ Stop (⏹)
 
   connect(pbPrevFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetPrevFrame);
   connect(pbNextFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetNextFrame);
   connect(pbSetMarker,  &QPushButton::clicked, this, &TTCurrentFrame::onSetMarker);
   connect(pbPlayVideo,  &QPushButton::clicked, this, &TTCurrentFrame::onPlayVideo);
-  connect(pbStopVideo,  &QPushButton::clicked, this, &TTCurrentFrame::onStopVideo);
   connect(pbPlaySlower, &QPushButton::clicked, this, &TTCurrentFrame::onPlaySlower);
   connect(pbPlayFaster, &QPushButton::clicked, this, &TTCurrentFrame::onPlayFaster);
 
@@ -89,8 +87,7 @@ void TTCurrentFrame::controlEnabled( bool enabled )
   pbNextFrame->setEnabled(enabled);
   pbSetMarker->setEnabled(enabled);
   pbPlayVideo->setEnabled(enabled);
-  // Stop and speed buttons are only enabled while playing; keep them off here
-  pbStopVideo->setEnabled(false);
+  // Speed buttons are only enabled while playing; keep them off here
   pbPlaySlower->setEnabled(false);
   pbPlayFaster->setEnabled(false);
 }
@@ -103,11 +100,14 @@ void TTCurrentFrame::clearCutContext()
   currentCutPosition  = -1;
 }
 
-//! Set play/stop/speed button state: playing=true enables Stop+speed, disables Play
+//! Reflect playback state: pbPlayVideo toggles its icon between Play (▶) and
+//! Stop (⏹); the speed buttons are enabled only while playing.
 void TTCurrentFrame::setPlayingButtonState(bool playing)
 {
-  pbPlayVideo->setEnabled(!playing);
-  pbStopVideo->setEnabled(playing);
+  QStyle* style = QApplication::style();
+  pbPlayVideo->setIcon(playing
+      ? QIcon::fromTheme("media-playback-stop",  style->standardIcon(QStyle::SP_MediaStop))
+      : QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
   pbPlaySlower->setEnabled(playing);
   pbPlayFaster->setEnabled(playing);
 }
@@ -463,6 +463,12 @@ void TTCurrentFrame::onPlayVideo()
 {
   if (videoStream == 0 || mAVItem == 0) return;
 
+  // Combined Play/Stop button — while playing, a click stops.
+  if (mPlayer && mPlayer->isPlaying()) {
+    mPlayer->stop();
+    return;
+  }
+
   // Lazily create the wrapper
   if (mPlayer == nullptr) {
     mPlayer = new TTMpvWrapper(this);
@@ -584,13 +590,6 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
     }
     mTempPlaybackFile.clear();
   }
-}
-
-//! Stop playback immediately
-void TTCurrentFrame::onStopVideo()
-{
-  if (mPlayer && mPlayer->isPlaying())
-    mPlayer->stop();
 }
 
 //! Decrease playback speed by one step

@@ -81,7 +81,6 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 	private slots:
 		void                onPlaybackFinished();
 		void                onPlaybackPositionChanged(double seconds);
-		void                onStopVideo();
 		void                onPlaySlower();
 		void                onPlayFaster();
 

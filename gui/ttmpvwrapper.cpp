@@ -83,6 +83,8 @@ void TTMpvWrapper::setSpeed(double factor)
     mBackend->setProperty("play-dir", QString("backward"));
     mBackend->setProperty("speed", -factor);
   }
+  // Mute audio at any non-normal speed (fast forward / reverse)
+  mBackend->setProperty("mute", factor != 1.0);
 }
 
 void TTMpvWrapper::setSubtitleFile(const QString& path)
