@@ -98,7 +98,8 @@ void TTMpvLibBackend::shutdown()
   //    erzeugt) wird im GL-Thread freigegeben (Task 6).
   if (mWidget) {
     mWidget->destroyRenderContext();
-    mWidget->deleteLater();
+    if (!mWidget->parent())
+      mWidget->deleteLater();
     mWidget = nullptr;
   }
 
