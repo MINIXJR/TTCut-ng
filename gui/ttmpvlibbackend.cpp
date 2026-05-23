@@ -205,7 +205,79 @@ QWidget* TTMpvLibBackend::renderWidget()
 
 void TTMpvLibBackend::drainEvents()
 {
-  // wird in Task 8 implementiert
+  if (!mMpv) return;
+
+  while (true) {
+    mpv_event* ev = mpv_wait_event(mMpv, 0.0);
+    if (!ev || ev->event_id == MPV_EVENT_NONE)
+      break;
+
+    switch (ev->event_id) {
+      case MPV_EVENT_PROPERTY_CHANGE: {
+        auto* p = static_cast<mpv_event_property*>(ev->data);
+        if (!p || !p->name) break;
+        QVariant value;
+        if (p->format == MPV_FORMAT_NODE && p->data) {
+          mpv_node* node = static_cast<mpv_node*>(p->data);
+          switch (node->format) {
+            case MPV_FORMAT_DOUBLE: value = node->u.double_; break;
+            case MPV_FORMAT_INT64:  value = QVariant::fromValue<qint64>(node->u.int64); break;
+            case MPV_FORMAT_FLAG:   value = (node->u.flag != 0);  break;
+            case MPV_FORMAT_STRING: value = QString::fromUtf8(node->u.string); break;
+            default:                value = QVariant();           break;
+          }
+        }
+        emit propertyChanged(QString::fromUtf8(p->name), value);
+        break;
+      }
+
+      case MPV_EVENT_FILE_LOADED:
+        emit fileLoaded();
+        break;
+
+      case MPV_EVENT_END_FILE: {
+        auto* e = static_cast<mpv_event_end_file*>(ev->data);
+        if (e && e->reason == MPV_END_FILE_REASON_ERROR) {
+          emit mpvError(QString("end-file error: %1")
+                          .arg(mpv_error_string(e->error)));
+        }
+        if (e && e->reason == MPV_END_FILE_REASON_QUIT) {
+          // Wir terminieren kontrolliert via mpv_terminate_destroy —
+          // kein Signal nötig
+          break;
+        }
+        if (!mPlaybackEndedEmitted) {
+          mPlaybackEndedEmitted = true;
+          emit playbackFinished();
+        }
+        break;
+      }
+
+      case MPV_EVENT_LOG_MESSAGE: {
+        auto* m = static_cast<mpv_event_log_message*>(ev->data);
+        if (m && m->text)
+          emit mpvError(QString("[mpv:%1] %2")
+                          .arg(m->prefix ? m->prefix : "?")
+                          .arg(QString::fromUtf8(m->text).trimmed()));
+        break;
+      }
+
+      case MPV_EVENT_COMMAND_REPLY:
+      case MPV_EVENT_SET_PROPERTY_REPLY:
+        if (ev->error < 0)
+          emit mpvError(QString("mpv reply error: %1")
+                          .arg(mpv_error_string(ev->error)));
+        break;
+
+      case MPV_EVENT_START_FILE:
+        // Beim Start eines neuen Files den End-Guard wieder freigeben
+        mPlaybackEndedEmitted = false;
+        break;
+
+      default:
+        break;
+    }
+  }
 }
 
 void TTMpvLibBackend::wakeupCallback(void* ctx)
