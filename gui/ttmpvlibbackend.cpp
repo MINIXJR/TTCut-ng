@@ -114,19 +114,88 @@ void TTMpvLibBackend::shutdown()
   mNextObserveId = 1;
 }
 
-void TTMpvLibBackend::command(const QStringList& /*args*/)
+void TTMpvLibBackend::command(const QStringList& args)
 {
-  // wird in Task 7 implementiert
+  if (!mMpv || args.isEmpty()) return;
+
+  // argv-Array für mpv_command_async aufbauen: jeweils const char*
+  // aus QByteArray (utf8). Pointer-Lebensdauer = die Funktion.
+  QList<QByteArray> utf8Holder;
+  utf8Holder.reserve(args.size());
+  for (const QString& s : args)
+    utf8Holder.append(s.toUtf8());
+
+  QVector<const char*> argv;
+  argv.reserve(utf8Holder.size() + 1);
+  for (const QByteArray& b : utf8Holder)
+    argv.append(b.constData());
+  argv.append(nullptr);
+
+  int rc = mpv_command_async(mMpv, /*reply_userdata*/0, argv.data());
+  if (rc < 0) {
+    emit mpvError(QString("mpv_command_async(%1) failed: %2")
+                    .arg(args.join(QLatin1Char(' ')))
+                    .arg(mpv_error_string(rc)));
+  }
 }
 
-void TTMpvLibBackend::setProperty(const QString& /*name*/, const QVariant& /*value*/)
+void TTMpvLibBackend::setProperty(const QString& name, const QVariant& value)
 {
-  // wird in Task 7 implementiert
+  if (!mMpv) return;
+
+  const QByteArray nameUtf8 = name.toUtf8();
+  int rc = -1;
+
+  switch (static_cast<int>(value.type())) {
+    case QMetaType::Bool: {
+      int flag = value.toBool() ? 1 : 0;
+      rc = mpv_set_property_async(mMpv, 0, nameUtf8.constData(),
+                                  MPV_FORMAT_FLAG, &flag);
+      break;
+    }
+    case QMetaType::Double:
+    case QMetaType::Float: {
+      double d = value.toDouble();
+      rc = mpv_set_property_async(mMpv, 0, nameUtf8.constData(),
+                                  MPV_FORMAT_DOUBLE, &d);
+      break;
+    }
+    case QMetaType::Int:
+    case QMetaType::LongLong:
+    case QMetaType::UInt:
+    case QMetaType::ULongLong: {
+      int64_t i = value.toLongLong();
+      rc = mpv_set_property_async(mMpv, 0, nameUtf8.constData(),
+                                  MPV_FORMAT_INT64, &i);
+      break;
+    }
+    default: {
+      // Fallback: als String. mpv parsed selber wenn nötig.
+      const QByteArray valUtf8 = value.toString().toUtf8();
+      const char* p = valUtf8.constData();
+      rc = mpv_set_property_async(mMpv, 0, nameUtf8.constData(),
+                                  MPV_FORMAT_STRING, &p);
+      break;
+    }
+  }
+
+  if (rc < 0) {
+    emit mpvError(QString("mpv_set_property_async(%1) failed: %2")
+                    .arg(name).arg(mpv_error_string(rc)));
+  }
 }
 
-void TTMpvLibBackend::observeProperty(const QString& /*name*/)
+void TTMpvLibBackend::observeProperty(const QString& name)
 {
-  // wird in Task 7 implementiert
+  if (!mMpv) return;
+  const QByteArray nameUtf8 = name.toUtf8();
+  int rc = mpv_observe_property(mMpv, mNextObserveId++,
+                                nameUtf8.constData(),
+                                MPV_FORMAT_NODE);
+  if (rc < 0) {
+    emit mpvError(QString("mpv_observe_property(%1) failed: %2")
+                    .arg(name).arg(mpv_error_string(rc)));
+  }
 }
 
 QWidget* TTMpvLibBackend::renderWidget()
