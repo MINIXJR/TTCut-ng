@@ -27,6 +27,8 @@ public:
   ~TTMpvWrapper() override;
 
   void   setRenderTarget(QWidget* target);
+  QWidget* renderWidget();  // Returns backend's widget (libmpv) or nullptr (process)
+
   void   load(const QString& file, double startSec = 0.0,
               const QString& audioFile = QString(),
               bool autoPlay = true);

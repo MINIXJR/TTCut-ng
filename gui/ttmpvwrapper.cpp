@@ -42,6 +42,22 @@ void TTMpvWrapper::setRenderTarget(QWidget* target)
   mBackend->attachToWidget(target);
 }
 
+QWidget* TTMpvWrapper::renderWidget()
+{
+  // Backend liefert sein eigenes Widget (libmpv) oder nullptr (Process).
+  // Lazy start: das libmpv-Backend muss start() gelaufen sein, damit
+  // mWidget existiert. Wenn der Caller renderWidget() vor load() ruft,
+  // ziehen wir start() hier vor.
+  if (mBackend) {
+    if (QWidget* w = mBackend->renderWidget())
+      return w;
+    // Backend kennt noch keinen Widget → start() lazy aufrufen
+    mBackend->start();
+    return mBackend->renderWidget();
+  }
+  return nullptr;
+}
+
 void TTMpvWrapper::load(const QString& file, double startSec,
                         const QString& audioFile, bool autoPlay)
 {
