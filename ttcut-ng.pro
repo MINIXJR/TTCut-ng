@@ -11,7 +11,7 @@
 PROJECT     = TTCut-ng
 VERSION     = 0.70.0
 CONFIG      += qt warn_on debug c++17
-QT          += core widgets gui xml network
+QT          += core widgets gui xml network opengl
 DEFINES     += _FILE_OFFSET_BITS=64
 DEFINES     += APP_VERSION=\\\"$$VERSION\\\"
 DIST        = ttcut-ng
@@ -21,7 +21,7 @@ LIBS        = -lmpeg2 -lmpeg2convert
 # libav/ffmpeg libraries for H.264/H.265 support
 unix {
   CONFIG += link_pkgconfig
-  PKGCONFIG += libavformat libavcodec libavutil libswscale libavfilter libswresample
+  PKGCONFIG += libavformat libavcodec libavutil libswscale libavfilter libswresample mpv
 }
 
 unix {
