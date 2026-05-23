@@ -235,7 +235,8 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   }
 
   qDebug("load preview %s", qPrintable(current_video_file));
-  mPlayer->load(current_video_file);
+  // Preload paused: mpv shows the first frame, user has to press Play.
+  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 
@@ -252,16 +253,15 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
 void TTCutPreview::onPlayPreview()
 {
   if (mPlayer->isPlaying()) {
-    mPlayer->stop();
+    // Pause without tearing mpv down — current frame stays visible.
+    mPlayer->pause();
     pbPlay->setText(tr("Play"));
     pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
     return;
   }
 
-  pbPlay->setText(tr("Stop"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
-  // TTMpvWrapper has no separate play(); load() starts playback directly.
-  mPlayer->load(current_video_file);
+  // Resume (or start, after onPlayerFinished reloaded the file in pause mode).
+  mPlayer->play();
 }
 
 void TTCutPreview::onPlayerPlaying()
@@ -272,6 +272,9 @@ void TTCutPreview::onPlayerPlaying()
 
 void TTCutPreview::onPlayerFinished()
 {
+  // Reload the file in paused state so the next Play click can resume from
+  // the start without re-launching mpv on demand.
+  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 }
@@ -293,25 +296,23 @@ void TTCutPreview::onExitPreview()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to previous cut in the list and play
+ * Go to previous cut in the list (preloads it; user presses Play to start)
  */
 void TTCutPreview::onPrevCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex > 0) {
-    // setCurrentIndex triggers onCutSelectionChanged which calls mPlayer->load() → auto-play
     cbCutPreview->setCurrentIndex(currentIndex - 1);
   }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to next cut in the list and play
+ * Go to next cut in the list (preloads it; user presses Play to start)
  */
 void TTCutPreview::onNextCut()
 {
   int currentIndex = cbCutPreview->currentIndex();
   if (currentIndex < cbCutPreview->count() - 1) {
-    // setCurrentIndex triggers onCutSelectionChanged which calls mPlayer->load() → auto-play
     cbCutPreview->setCurrentIndex(currentIndex + 1);
   }
 }
@@ -398,6 +399,20 @@ void TTCutPreview::onBurstShift()
 
   TTCutItem copyItem = mpOriginalCutList->at(originalIdx);
 
+  // updateCutEntry() emits a signal chain that ends in
+  // TTCutOutFrame::onCutOutChanged → videoStream->moveToIndexPos(cutOut),
+  // moving the shared videoStream off the UI's current frame. Save the
+  // stream index up front and restore it after the whole burst-shift
+  // operation (including the preview regen) is done — otherwise Play in
+  // TTCurrentFrame would start at the cut-out instead of the visible frame.
+  TTVideoStream* savedStreamForBurst = nullptr;
+  int savedStreamIndexForBurst = -1;
+  if (TTAVItem* burstAVItem = copyItem.avDataItem()) {
+    savedStreamForBurst = burstAVItem->videoStream();
+    if (savedStreamForBurst)
+      savedStreamIndexForBurst = savedStreamForBurst->currentIndex();
+  }
+
   int oldIdx, newIdx;
   if (mBurstIsCutOut) {
     oldIdx = copyItem.cutOutIndex();
@@ -465,6 +480,11 @@ void TTCutPreview::onBurstShift()
   // Regenerate the current preview clip
   int iCut = cbCutPreview->currentIndex();
   regeneratePreviewClip(iCut);
+
+  // Restore the shared videoStream's index to whatever the UI was showing
+  // before the cut got updated — see save above.
+  if (savedStreamForBurst && savedStreamIndexForBurst >= 0)
+    savedStreamForBurst->moveToIndexPos(savedStreamIndexForBurst);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -527,18 +547,25 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   int fileIndex = iCut + 1 + mClipOffset;
   QString outputFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "mkv");
 
+  // The cut/regen pipeline shares this videoStream with TTCurrentFrame and
+  // will leave its currentIndex on the last cut frame. Save and restore so
+  // the main UI's "play from current frame" position is not silently moved.
+  const int savedStreamIndex = vStream->currentIndex();
+
   if (isMpeg2) {
     regenerateMpeg2PreviewClip(fileIndex, &tmpCutList, &progress);
   } else {
     regenerateSmartCutPreviewClip(fileIndex, &tmpCutList, &progress);
   }
 
+  vStream->moveToIndexPos(savedStreamIndex);
+
   if (TTSettings::instance()->logUI())
       qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
 
-  // Reload clip in player
+  // Reload clip in player, preloaded paused — user has to press Play.
   current_video_file = outputFile;
-  mPlayer->load(current_video_file);
+  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
       QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));

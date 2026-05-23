@@ -28,8 +28,11 @@ public:
 
   void   setRenderTarget(QWidget* target);
   void   load(const QString& file, double startSec = 0.0,
-              const QString& audioFile = QString());
-  void   stop();
+              const QString& audioFile = QString(),
+              bool autoPlay = true);
+  void   play();    // resume from pause (file must already be loaded)
+  void   pause();   // pause without tearing mpv down
+  void   stop();    // hard shutdown: terminates mpv process
   bool   isPlaying() const                  { return mPlaying; }
 
   void   setSpeed(double factor);            // ±-Faktor; <0 → play-dir=backward

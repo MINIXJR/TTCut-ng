@@ -10,6 +10,7 @@
 
 #include "ttmpvprocessbackend.h"
 
+#include <QAtomicInt>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -23,6 +24,14 @@
 
 #include "../common/ttsettings.h"
 #include "../common/ttmessagelogger.h"
+
+namespace {
+// Global counter for unique IPC socket paths across all backend instances.
+// Sharing the same socket path (e.g. via app PID) would let the second
+// backend's mpv events bleed into the first backend's still-connected socket
+// listener — visible as the preview moving the Current Frame slider.
+QAtomicInt gBackendInstanceCounter(0);
+}
 
 // ---------------------------------------------------------------------------
 // Construction / destruction
@@ -50,9 +59,14 @@ bool TTMpvProcessBackend::start()
   // Tear down any pre-existing state so start() is safe to call repeatedly
   shutdown();
 
-  // Per-process unique socket path to avoid collisions between instances
+  // Per-backend-instance unique socket path. PID alone is not enough: a single
+  // TTCut-ng process holds multiple backends (Current Frame + Preview), and a
+  // shared socket lets late events from one backend leak into the other.
+  const int instanceId = gBackendInstanceCounter.fetchAndAddRelaxed(1);
   mSocketPath = QDir(TTSettings::instance()->tempDirPath()).filePath(
-      QString("mpv-ipc-%1.sock").arg(QCoreApplication::applicationPid()));
+      QString("mpv-ipc-%1-%2.sock")
+          .arg(QCoreApplication::applicationPid())
+          .arg(instanceId));
   QFile::remove(mSocketPath);   // remove stale socket from a previous run
 
   mProcess = new QProcess(this);
@@ -73,23 +87,30 @@ bool TTMpvProcessBackend::start()
 }
 
 //! Shut down mpv and the IPC socket cleanly.
+//!
+//! Uses deleteLater() instead of delete because shutdown() may be called from
+//! within a slot of mProcess (e.g. via onProcessFinished → playbackFinished →
+//! caller reloads → start() → shutdown()). Deleting a QObject while one of its
+//! signal handlers is still on the stack is a use-after-free; deleteLater()
+//! defers it until the event loop unwinds.
 void TTMpvProcessBackend::shutdown()
 {
   if (mSocket) {
     mSocket->disconnect(this);
     mSocket->close();
-    delete mSocket;
+    mSocket->deleteLater();
     mSocket = nullptr;
   }
 
   if (mProcess) {
+    mProcess->disconnect(this);
     if (mProcess->state() == QProcess::Running) {
       mProcess->terminate();
       if (!mProcess->waitForFinished(2000))
         mProcess->kill();
       mProcess->waitForFinished(1000);
     }
-    delete mProcess;
+    mProcess->deleteLater();
     mProcess = nullptr;
   }
 
