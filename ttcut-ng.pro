@@ -151,6 +151,7 @@ HEADERS     = common/ttcut.h\
               gui/ittmpvbackend.h\
               gui/ttmpvprocessbackend.h\
               gui/ttmpvrenderwidget.h\
+              gui/ttmpvlibbackend.h\
               gui/ttmpvwrapper.h\
               gui/ttaudiotreeview.h\
               gui/ttvideotreeview.h\
@@ -249,6 +250,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutsettingslogging.cpp\
               gui/ttmpvprocessbackend.cpp\
               gui/ttmpvrenderwidget.cpp\
+              gui/ttmpvlibbackend.cpp\
               gui/ttmpvwrapper.cpp\
               gui/ttaudiotreeview.cpp\
               gui/ttvideotreeview.cpp\
