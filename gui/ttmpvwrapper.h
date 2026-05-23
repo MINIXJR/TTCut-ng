@@ -27,7 +27,11 @@ public:
   ~TTMpvWrapper() override;
 
   void   setRenderTarget(QWidget* target);
-  QWidget* renderWidget();  // Returns backend's widget (libmpv) or nullptr (process)
+  // Liefert das Render-Widget des Backends (libmpv-Pfad), oder nullptr
+  // wenn das Backend per attachToWidget arbeitet (Process-Pfad).
+  // Migration: solange beide Pfade existieren, wählt der Caller je
+  // nach Rückgabewert.
+  QWidget* renderWidget();
 
   void   load(const QString& file, double startSec = 0.0,
               const QString& audioFile = QString(),
