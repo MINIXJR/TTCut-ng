@@ -32,6 +32,7 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
+#include <clocale>
 
 extern "C" {
 #include <libavutil/log.h>
@@ -100,6 +101,14 @@ int main( int argc, char **argv )
     av_log_set_callback(ttAvLogCallback);
 
     QApplication a( argc, argv );
+
+    // libmpv (und libavfilter, std::stod, ...) verlangen LC_NUMERIC=C —
+    // sonst returnt mpv_create() NULL und Filtergraph-Strings mit "0.5"
+    // werden unter de_DE als ungültig abgelehnt. QApplication ruft
+    // setlocale(LC_ALL, "") und aktiviert damit die System-Locale; den
+    // numerischen Anteil korrigieren wir direkt im Anschluss. Qt's UI-
+    // Formatierung läuft über QLocale und bleibt davon unberührt.
+    std::setlocale(LC_NUMERIC, "C");
 
     a.setApplicationName("TTCut-ng");
 
