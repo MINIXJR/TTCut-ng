@@ -32,8 +32,15 @@ TTMpvLibBackend::~TTMpvLibBackend()
 
 bool TTMpvLibBackend::start()
 {
-  // Idempotent: voriges Backend sauber abreissen
-  shutdown();
+  // Echte Idempotenz: ist mpv schon initialisiert, sind wir fertig.
+  // Spec §"Initialisierung (einmal pro Backend-Instanz, in start())".
+  // Wichtig fürs Wrapper-Pattern: renderWidget() ruft start() lazy
+  // einmal (damit mWidget existiert und ins Layout gehängt werden kann),
+  // load() ruft start() nochmal. Im Process-Backend war das
+  // Tear-down-Rebuild; im libmpv-Pfad würde der zweite Aufruf den
+  // bereits sichtbaren mWidget vom mpv_handle entkoppeln und ein neues,
+  // unsichtbares Widget erzeugen (-> Schwarzbild im Preview).
+  if (mMpv) return true;
 
   mMpv = mpv_create();
   if (!mMpv) {
@@ -118,11 +125,46 @@ void TTMpvLibBackend::command(const QStringList& args)
 {
   if (!mMpv || args.isEmpty()) return;
 
+  // Sonderfall: loadfile bekommt vom Wrapper Per-File-Optionen im CLI-Format
+  // ("--start=10.5", "--pause=yes", "--audio-file=...", "--sub-file=..."). Das
+  // ist der Phase-1-Vertrag: der Process-Backend reichte sie als mpv-CLI-Args
+  // an den startenden mpv-Prozess durch. libmpv's loadfile-Command will sie
+  // hingegen als
+  //     loadfile <url> [<flag>] [<index>] [<options key=value,key=value>]
+  // ("mpv --input-cmdlist" zeigt die Signatur). Wir transformieren alle
+  // "--key=value"-Args zur options-Liste und ergänzen den Default-flag
+  // "replace" wenn er fehlt.
+  QStringList workArgs = args;
+  if (workArgs.size() >= 3 && workArgs[0] == QLatin1String("loadfile")) {
+    QStringList optsKv;
+    QStringList rest;
+    rest << workArgs[0] << workArgs[1];   // "loadfile" + url
+    for (int i = 2; i < workArgs.size(); ++i) {
+      const QString& a = workArgs[i];
+      if (a.startsWith(QLatin1String("--")))
+        optsKv << a.mid(2);              // "--key=val" → "key=val"
+      else
+        rest << a;                       // flag/index/durchreichen
+    }
+    if (!optsKv.isEmpty()) {
+      // Signatur: loadfile <url> [<flag>] [<index>] [<options>].
+      // Wenn options gesetzt werden sollen, müssen flag und index als
+      // positional args explizit dastehen — sonst versucht mpv den
+      // options-String als index zu parsen ("must be an integer").
+      if (rest.size() == 2)              // flag fehlt
+        rest << QStringLiteral("replace");
+      if (rest.size() == 3)              // index fehlt (irrelevant bei replace, aber positional erforderlich)
+        rest << QStringLiteral("0");
+      rest << optsKv.join(QLatin1Char(','));
+    }
+    workArgs = rest;
+  }
+
   // argv-Array für mpv_command_async aufbauen: jeweils const char*
   // aus QByteArray (utf8). Pointer-Lebensdauer = die Funktion.
   QList<QByteArray> utf8Holder;
-  utf8Holder.reserve(args.size());
-  for (const QString& s : args)
+  utf8Holder.reserve(workArgs.size());
+  for (const QString& s : workArgs)
     utf8Holder.append(s.toUtf8());
 
   QVector<const char*> argv;
@@ -134,7 +176,7 @@ void TTMpvLibBackend::command(const QStringList& args)
   int rc = mpv_command_async(mMpv, /*reply_userdata*/0, argv.data());
   if (rc < 0) {
     emit mpvError(QString("mpv_command_async(%1) failed: %2")
-                    .arg(args.join(QLatin1Char(' ')))
+                    .arg(workArgs.join(QLatin1Char(' ')))
                     .arg(mpv_error_string(rc)));
   }
 }
