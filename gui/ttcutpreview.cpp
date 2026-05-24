@@ -50,16 +50,12 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 {
   setupUi(this);
 
-  // Create a plain widget as the mpv render target and add it to videoFrame's
-  // existing QGridLayout (2 px margin set in the .ui file).
-  mPlayerWidget = new QWidget(videoFrame);
-  mPlayerWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-  if (QLayout* fl = videoFrame->layout()) {
-    fl->addWidget(mPlayerWidget);
-  }
-
   mPlayer = new TTMpvWrapper(this);
-  mPlayer->setRenderTarget(mPlayerWidget);
+  if (QWidget* rw = mPlayer->renderWidget()) {
+    rw->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    if (QLayout* fl = videoFrame->layout())
+      fl->addWidget(rw);
+  }
 
   setObjectName("TTCutPreview");
 

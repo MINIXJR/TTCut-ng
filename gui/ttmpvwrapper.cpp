@@ -10,14 +10,14 @@
 
 #include "ttmpvwrapper.h"
 #include "ittmpvbackend.h"
-#include "ttmpvprocessbackend.h"
+#include "ttmpvlibbackend.h"
 #include <QVariant>
 #include <QStringList>
 
 TTMpvWrapper::TTMpvWrapper(QObject* parent)
   : QObject(parent)
 {
-  mBackend = new TTMpvProcessBackend(this);
+  mBackend = new TTMpvLibBackend(this);
 
   connect(mBackend, &ITTMpvBackend::propertyChanged,
           this,     &TTMpvWrapper::onPropertyChanged);
