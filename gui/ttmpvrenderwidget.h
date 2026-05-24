@@ -16,9 +16,10 @@ struct mpv_handle;
 struct mpv_render_context;
 
 // QOpenGLWidget-Host für die libmpv-MPV_RENDER_API. Das Widget besitzt
-// keinen mpv_handle (der gehört zum Backend) — es bekommt ihn nur per
-// ctor übergeben, damit es beim ersten initializeGL den Render-Context
-// erzeugen kann.
+// keinen mpv_handle (der gehört zum Backend) — es bekommt ihn per
+// ctor oder setMpv() übergeben und baut beim nächsten paintGL den
+// Render-Context auf. Der Widget-Lifecycle ist vom mpv-Handle-Lifecycle
+// entkoppelt: ein Backend-Restart darf das Widget wiederverwenden.
 class TTMpvRenderWidget : public QOpenGLWidget
 {
   Q_OBJECT
@@ -29,6 +30,15 @@ public:
   // Vom Backend gerufen, wenn shutdown() den Render-Context im
   // GL-Thread freigeben muss. Synchronous, blockierend.
   void destroyRenderContext();
+
+  // Render-Context wegwerfen und mpv-Handle abkoppeln. Widget bleibt
+  // bestehen (zeigt schwarz bis ein neuer Handle per setMpv() kommt).
+  void detachFromMpv();
+
+  // Neuen mpv-Handle zuweisen. Existierender Render-Context wird vorher
+  // freigegeben (war an den alten Handle gebunden); der nächste paintGL
+  // baut für den neuen Handle einen frischen Context auf.
+  void setMpv(mpv_handle* mpv);
 
 protected:
   void initializeGL() override;
@@ -48,6 +58,11 @@ private:
   // Helfer für mpv_opengl_init_params: holt OpenGL-Funktionspointer
   // aus dem aktuellen QOpenGLContext.
   static void* getProcAddress(void* ctx, const char* name);
+
+  // Idempotent: wenn mRenderCtx schon existiert oder mMpv null ist,
+  // wird nichts gemacht. Sonst Render-Context bauen. Muss im GL-Thread
+  // laufen (initializeGL oder paintGL).
+  bool ensureRenderContext();
 
   mpv_handle*         mMpv          = nullptr;
   mpv_render_context* mRenderCtx    = nullptr;

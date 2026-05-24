@@ -60,13 +60,10 @@ void TTMpvRenderWidget::destroyRenderContext()
   mRenderCtx = nullptr;
 }
 
-void TTMpvRenderWidget::initializeGL()
+bool TTMpvRenderWidget::ensureRenderContext()
 {
-  if (!mMpv) {
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-      QStringLiteral("TTMpvRenderWidget::initializeGL: mpv handle is null"));
-    return;
-  }
+  if (mRenderCtx) return true;
+  if (!mMpv)     return false;
 
   mpv_opengl_init_params glInit{};
   glInit.get_proc_address     = &TTMpvRenderWidget::getProcAddress;
@@ -86,17 +83,42 @@ void TTMpvRenderWidget::initializeGL()
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__, msg);
     emit renderContextFailed(msg);
     mRenderCtx = nullptr;
-    return;
+    return false;
   }
 
   mpv_render_context_set_update_callback(mRenderCtx,
                                           &TTMpvRenderWidget::onUpdateCallback,
                                           this);
+  return true;
+}
+
+void TTMpvRenderWidget::detachFromMpv()
+{
+  destroyRenderContext();
+  mMpv = nullptr;
+  update();   // paintGL malt jetzt schwarz
+}
+
+void TTMpvRenderWidget::setMpv(mpv_handle* mpv)
+{
+  // Alten Render-Context wegwerfen — der war an den alten Handle gebunden.
+  // Nächster paintGL baut für den neuen Handle einen frischen Context.
+  destroyRenderContext();
+  mMpv = mpv;
+  update();
+}
+
+void TTMpvRenderWidget::initializeGL()
+{
+  // Erstmaliges Setup nach Show. Wenn mMpv noch nicht da ist (Widget wurde
+  // im Backend-Restart-Zyklus mit setMpv() refurbisht), übernimmt paintGL
+  // die Lazy-Init.
+  ensureRenderContext();
 }
 
 void TTMpvRenderWidget::paintGL()
 {
-  if (!mRenderCtx) {
+  if (!ensureRenderContext()) {
     // Fallback: schwarz, damit kein Müll-Frame stehenbleibt
     QOpenGLFunctions* f = QOpenGLContext::currentContext()->functions();
     f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

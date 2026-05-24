@@ -28,6 +28,13 @@ TTMpvLibBackend::TTMpvLibBackend(QObject* parent)
 TTMpvLibBackend::~TTMpvLibBackend()
 {
   shutdown();
+  // Widget gehört Phase-2-konzeptuell dem Layout-Caller. Wenn niemand es
+  // adoptiert hat (kein parent), löschen wir es hier. Sonst übernimmt das
+  // der Layout-Owner (z.B. QStackedLayout im TTCurrentFrame).
+  if (mWidget && !mWidget->parent()) {
+    mWidget->deleteLater();
+  }
+  mWidget = nullptr;
 }
 
 bool TTMpvLibBackend::start()
@@ -83,9 +90,15 @@ bool TTMpvLibBackend::start()
   // Wakeup-Callback hängen
   mpv_set_wakeup_callback(mMpv, &TTMpvLibBackend::wakeupCallback, this);
 
-  // Render-Widget anlegen; OpenGL-Context-Init passiert beim ersten
-  // initializeGL (sobald das Widget einem Layout sichtbar hängt).
-  mWidget = new TTMpvRenderWidget(mMpv, nullptr);
+  // Render-Widget anlegen oder reusen. Bei Backend-Restart (z.B. nach
+  // Wrapper::stop()) lebt das Widget noch im Layout des Callers; wir
+  // hängen ihm nur den neuen mpv_handle an. Beim ersten start() gibt es
+  // noch keins → frisch anlegen.
+  if (mWidget) {
+    mWidget->setMpv(mMpv);
+  } else {
+    mWidget = new TTMpvRenderWidget(mMpv, nullptr);
+  }
 
   // connected() asynchron emittieren, damit der Wrapper sich auch
   // dann anhängen kann, wenn er erst direkt nach start() den Slot
@@ -101,14 +114,14 @@ void TTMpvLibBackend::shutdown()
   if (mMpv)
     mpv_set_wakeup_callback(mMpv, nullptr, nullptr);
 
-  // 2. Render-Widget abbauen — der mpv_render_context (falls schon
-  //    erzeugt) wird im GL-Thread freigegeben (Task 6).
-  if (mWidget) {
-    mWidget->destroyRenderContext();
-    if (!mWidget->parent())
-      mWidget->deleteLater();
-    mWidget = nullptr;
-  }
+  // 2. Render-Context im Widget freigeben und vom mpv-Handle entkoppeln.
+  //    Widget BLEIBT bestehen — es gehört Phase-2-konzeptuell dem
+  //    Layout-Caller (QStackedLayout im TTCurrentFrame, videoFrame im
+  //    TTCutPreview) und darf bei einem späteren start() per setMpv()
+  //    den neuen Handle bekommen. Erst der dtor löscht es, und auch nur,
+  //    wenn es niemand adoptiert hat.
+  if (mWidget)
+    mWidget->detachFromMpv();
 
   // 3. mpv-Handle terminieren (blockierend, sicher; emittiert keine
   //    Qt-Signals → kein use-after-free wie im Process-Backend)
