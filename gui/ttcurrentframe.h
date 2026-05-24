@@ -20,6 +20,7 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavstream.h"
 
+class QStackedLayout;
 class TTAVItem;
 class TTCutItem;
 class TTMpvWrapper;
@@ -97,6 +98,8 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		TTMpvWrapper*       mPlayer = nullptr;
 		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback
 		int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
+		QWidget*            mFrameStackContainer = nullptr;
+		QStackedLayout*     mFrameStack = nullptr;
 };
 
 #endif //TTCURRENTFRAME_H

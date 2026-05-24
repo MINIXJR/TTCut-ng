@@ -33,7 +33,9 @@ extern "C" {
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QGridLayout>
 #include <QIcon>
+#include <QStackedLayout>
 #include <QStyle>
 #include <QWheelEvent>
 #include <cmath>
@@ -48,6 +50,27 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   :QWidget(parent)
 {
   setupUi( this );
+
+  // mpegWindow steckt heute direkt im gbCurrentFrame-Grid. Wir kapseln es in
+  // einen Stack-Container, sodass das libmpv-Render-Widget bei Playback
+  // temporär an seine Stelle treten kann.
+  {
+    QGridLayout* gbLayout = qobject_cast<QGridLayout*>(gbCurrentFrame->layout());
+    if (gbLayout) {
+      const int row = 0, col = 0; // mpegWindow liegt heute auf (0,0)
+      gbLayout->removeWidget(mpegWindow);
+
+      mFrameStackContainer = new QWidget(gbCurrentFrame);
+      mFrameStack = new QStackedLayout(mFrameStackContainer);
+      mFrameStack->setContentsMargins(0, 0, 0, 0);
+      mFrameStack->setSpacing(0);
+      mFrameStack->addWidget(mpegWindow);  // Index 0 (default)
+      // Index 1 wird im onPlayVideo gefüllt, sobald der Player existiert.
+
+      mFrameStackContainer->setSizePolicy(mpegWindow->sizePolicy());
+      gbLayout->addWidget(mFrameStackContainer, row, col);
+    }
+  }
 
   videoStream         = 0;
   mAVItem             = 0;
@@ -472,7 +495,11 @@ void TTCurrentFrame::onPlayVideo()
   // Lazily create the wrapper
   if (mPlayer == nullptr) {
     mPlayer = new TTMpvWrapper(this);
-    mPlayer->setRenderTarget(mpegWindow);
+    if (QWidget* rw = mPlayer->renderWidget()) {
+      // libmpv-Pfad: Widget in den Frame-Stack als Index 1 einreihen
+      if (mFrameStack && mFrameStack->indexOf(rw) < 0)
+        mFrameStack->addWidget(rw);
+    }
     connect(mPlayer, &TTMpvWrapper::playerFinished,       this, &TTCurrentFrame::onPlaybackFinished);
     connect(mPlayer, &TTMpvWrapper::positionChanged,      this, &TTCurrentFrame::onPlaybackPositionChanged);
     connect(mPlayer, &TTMpvWrapper::playerError, this, [this](const QString& msg) {
@@ -482,6 +509,12 @@ void TTCurrentFrame::onPlayVideo()
       laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
       setPlayingButtonState(false);
     });
+  }
+
+  // Stack auf Render-Widget umschalten, bevor mpv geladen wird
+  if (mFrameStack && mPlayer) {
+    if (QWidget* rw = mPlayer->renderWidget())
+      mFrameStack->setCurrentWidget(rw);
   }
 
   // Reset speed to 1× on every fresh play
@@ -553,6 +586,9 @@ void TTCurrentFrame::onPlaybackPositionChanged(double seconds)
 void TTCurrentFrame::onPlaybackFinished()
 {
   if (videoStream == nullptr) return;
+
+  if (mFrameStack && mpegWindow)
+    mFrameStack->setCurrentWidget(mpegWindow);
 
   double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
