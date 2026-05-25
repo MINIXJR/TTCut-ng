@@ -46,14 +46,24 @@ TTMpvRenderWidget::TTMpvRenderWidget(mpv_handle* mpv, QWidget* parent)
 
 TTMpvRenderWidget::~TTMpvRenderWidget()
 {
-  // Aus Live-Set entfernen — synchron unter Mutex, dadurch wartet ein
-  // gleichzeitiger update-callback auf den Lock und sieht uns dann nicht
-  // mehr im Set. Kein invokeMethod auf dangling pointer mehr möglich.
-  QMutexLocker l(&sLiveMutex);
-  sLiveWidgets.remove(this);
-  // mRenderCtx muss vorher per destroyRenderContext() aus dem GL-Thread
-  // freigegeben worden sein; wenn das Backend das vergisst, ist der
-  // d'tor zu spät dran. Leak-Schutz: nichts tun.
+  // 1. Aus Live-Set entfernen — synchron unter Mutex, dadurch wartet ein
+  //    gleichzeitiger update-callback auf den Lock und sieht uns dann
+  //    nicht mehr im Set. Kein invokeMethod auf dangling pointer mehr.
+  {
+    QMutexLocker l(&sLiveMutex);
+    sLiveWidgets.remove(this);
+  }
+  // 2. Render-Context selbst freigeben. Im Standardfall (Backend.shutdown
+  //    rief vorher detachFromMpv) ist das idempotent — mRenderCtx ist
+  //    null und destroyRenderContext returnt sofort.
+  //    ABER: bei Qt-Cascade-Delete des Vorschau-Dialogs zerstört Qt
+  //    erst videoFrame (mit uns als Grandchild), dann mPlayer/Backend.
+  //    Backend.shutdown findet dann mWidget (QPointer) bereits null,
+  //    überspringt detachFromMpv — render-ctx bleibt unhandled, und
+  //    mpv_terminate_destroy aborts wegen Inkonsistenz. Hier freien wir
+  //    rechtzeitig — wir laufen VOR QOpenGLWidget-dtor, GL-Context noch
+  //    valid.
+  destroyRenderContext();
 }
 
 void TTMpvRenderWidget::destroyRenderContext()
