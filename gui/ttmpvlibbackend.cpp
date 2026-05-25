@@ -14,6 +14,7 @@
 #include <QVariant>
 #include <QTimer>
 #include <QCoreApplication>
+#include <cstdlib>
 
 extern "C" {
 #include <mpv/client.h>
@@ -56,7 +57,15 @@ bool TTMpvLibBackend::start()
     return false;
   }
 
-  // Optionen VOR mpv_initialize setzen
+  // Optionen VOR mpv_initialize setzen. hwdec via ENV-Variable
+  // MPV_HWDEC überschreibbar — z.B. "vaapi"/"vulkan"/"cuda" für
+  // spezifische Backends, "auto-safe" für mpv-Auto-Wahl.
+  // Default "no" (CPU-Decode): User-verifiziert dass auto-safe/vaapi/
+  // vulkan auf manchen H.264-Patterns aus Smart-Cut Macroblock-Garbage
+  // produzieren (vermutlich libva/mesa-Bug). CPU-Decode ist bei
+  // 1080p25 problemlos und Bug-frei.
+  const char* hwdecEnv = std::getenv("MPV_HWDEC");
+  const char* hwdecVal = (hwdecEnv && *hwdecEnv) ? hwdecEnv : "no";
   struct OptPair { const char* name; const char* value; };
   const OptPair opts[] = {
     { "osc",                      "no"        },
@@ -65,7 +74,7 @@ bool TTMpvLibBackend::start()
     { "hr-seek",                  "yes"       },
     { "hr-seek-framedrop",        "no"        },
     { "vo",                       "libmpv"    },
-    { "hwdec",                    "auto-safe" },
+    { "hwdec",                    hwdecVal    },
     { "idle",                     "yes"       },
   };
   for (const auto& o : opts) {
