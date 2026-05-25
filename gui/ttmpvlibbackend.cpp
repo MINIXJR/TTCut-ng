@@ -13,6 +13,7 @@
 #include <QStringList>
 #include <QVariant>
 #include <QTimer>
+#include <QCoreApplication>
 
 extern "C" {
 #include <mpv/client.h>
@@ -129,6 +130,18 @@ void TTMpvLibBackend::shutdown()
     mpv_terminate_destroy(mMpv);
     mMpv = nullptr;
   }
+
+  // 4. Bereits in der Qt-Event-Queue stehende drainEvents-/onMpvUpdate-Calls
+  //    purgen. Schritt 1 (wakeup-disconnect) und destroyRenderContext
+  //    (update-callback-disconnect) verhindern nur NEUE Posts; ein im
+  //    Bruchteil einer Mikrosekunde zwischen mpv-Worker-Tick und unserem
+  //    Disconnect bereits gequeueter invokeMethod-Call würde sonst nach
+  //    der Backend/Widget-Destruktion auf eine dangling vtable feuern
+  //    (verifiziert via core-dump: QApplicationPrivate::notify_helper
+  //    SEGV mit *receiver = unzugängliche Adresse).
+  QCoreApplication::removePostedEvents(this);
+  if (mWidget)
+    QCoreApplication::removePostedEvents(mWidget);
 
   mPlaybackEndedEmitted = false;
   mNextObserveId = 1;

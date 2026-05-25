@@ -11,6 +11,7 @@
 #define TTMPVLIBBACKEND_H
 
 #include "ittmpvbackend.h"
+#include <QPointer>
 
 struct mpv_handle;
 class TTMpvRenderWidget;
@@ -42,10 +43,14 @@ private:
   // libmpv-Wakeup-Callback (läuft in einem libmpv-Thread!).
   static void wakeupCallback(void* ctx);
 
-  mpv_handle*        mMpv                  = nullptr;
-  TTMpvRenderWidget* mWidget               = nullptr;
-  int                mNextObserveId        = 1;
-  bool               mPlaybackEndedEmitted = false;
+  mpv_handle*                 mMpv                  = nullptr;
+  // QPointer statt raw: das Widget gehört dem Layout-Caller und wird im
+  // Dialog-Cascade-Delete (videoFrame zuerst, dann Wrapper/Backend) freed.
+  // QPointer nullt sich automatisch nach der Widget-Destruktion, sodass
+  // shutdown()-Aufrufe im Backend-dtor nicht in dangling memory greifen.
+  QPointer<TTMpvRenderWidget> mWidget;
+  int                         mNextObserveId        = 1;
+  bool                        mPlaybackEndedEmitted = false;
 };
 
 #endif // TTMPVLIBBACKEND_H
