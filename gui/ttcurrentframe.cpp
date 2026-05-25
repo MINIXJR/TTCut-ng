@@ -504,12 +504,14 @@ void TTCurrentFrame::onPlayVideo()
     }
     connect(mPlayer, &TTMpvWrapper::playerFinished,       this, &TTCurrentFrame::onPlaybackFinished);
     connect(mPlayer, &TTMpvWrapper::positionChanged,      this, &TTCurrentFrame::onPlaybackPositionChanged);
-    connect(mPlayer, &TTMpvWrapper::playerError, this, [this](const QString& msg) {
+    connect(mPlayer, &TTMpvWrapper::playerError, this, [](const QString& msg) {
+      // Nur loggen, NICHT setPlayingButtonState(false). mpv klassifiziert
+      // viele non-fatale Decoder-Warnings (h264 mmco, reference-frame-
+      // exceeds-max bei mid-stream-seek auf MBAFF/PAFF, etc.) als "error"-
+      // Level. Wenn mpv wirklich abnormal terminiert, kommt playerFinished
+      // → onPlaybackFinished resetet die UI sauber.
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Playback error: %1").arg(msg));
-      mSpeedStep = kSpeedStepNormal;
-      laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
-      setPlayingButtonState(false);
     });
   }
 
