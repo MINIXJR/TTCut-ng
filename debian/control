@@ -5,13 +5,15 @@ Maintainer: MINIXJR <35893755+MINIXJR@users.noreply.github.com>
 Build-Depends: debhelper (>= 11),
                qt5-qmake,
                qtbase5-dev,
+               libqt5opengl5-dev,
                libmpeg2-4-dev,
                libavformat-dev,
                libavcodec-dev,
                libavutil-dev,
                libswscale-dev,
                libavfilter-dev,
-               libswresample-dev
+               libswresample-dev,
+               libmpv-dev
 Standards-Version: 4.5.0
 Homepage: https://github.com/MINIXJR/TTCut-ng
 
