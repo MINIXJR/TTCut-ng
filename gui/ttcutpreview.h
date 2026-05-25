@@ -66,7 +66,6 @@ protected slots:
 
 private:
   TTMpvWrapper*  mPlayer;
-  QWidget*       mPlayerWidget;
 	int            previewWidth;
 	int            previewHeight;
 	QString        current_video_file;

@@ -36,22 +36,14 @@ TTMpvWrapper::~TTMpvWrapper()
   // mBackend is parented to this — Qt deletes it
 }
 
-void TTMpvWrapper::setRenderTarget(QWidget* target)
-{
-  mTarget = target;
-  mBackend->attachToWidget(target);
-}
-
 QWidget* TTMpvWrapper::renderWidget()
 {
-  // Backend liefert sein eigenes Widget (libmpv) oder nullptr (Process).
-  // Lazy start: das libmpv-Backend muss start() gelaufen sein, damit
-  // mWidget existiert. Wenn der Caller renderWidget() vor load() ruft,
-  // ziehen wir start() hier vor.
+  // Backend liefert sein eigenes Widget (libmpv). Lazy start: damit das
+  // mWidget existiert, muss Backend.start() gelaufen sein. Wenn der
+  // Caller renderWidget() vor load() ruft, ziehen wir start() hier vor.
   if (mBackend) {
     if (QWidget* w = mBackend->renderWidget())
       return w;
-    // Backend kennt noch keinen Widget → start() lazy aufrufen
     mBackend->start();
     return mBackend->renderWidget();
   }
@@ -65,7 +57,6 @@ void TTMpvWrapper::load(const QString& file, double startSec,
   // mpv is launched paused (still shows first frame), so we are not playing.
   mPlaying = autoPlay;
 
-  if (mTarget) mBackend->attachToWidget(mTarget);
   mBackend->start();
 
   // Start position, extra audio track, subtitle file and pause state are
@@ -89,11 +80,6 @@ void TTMpvWrapper::play()
   // Resume from pause without tearing mpv down. The file must already be
   // loaded via load(); calling play() without a prior load() is a no-op.
   mBackend->setProperty("pause", false);
-  // mpv quirk: when started with --pause=yes and then resumed via pause=no,
-  // the video renderer can freeze on the first frame while audio plays. An
-  // exact 0-offset seek forces a refresh and wakes the renderer up.
-  mBackend->command(QStringList{ QStringLiteral("seek"), QStringLiteral("0"),
-                                  QStringLiteral("relative+exact") });
   mPlaying = true;
   emit playerPlaying();
 }

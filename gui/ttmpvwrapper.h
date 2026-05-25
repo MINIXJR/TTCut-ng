@@ -26,11 +26,8 @@ public:
   explicit TTMpvWrapper(QObject* parent = nullptr);
   ~TTMpvWrapper() override;
 
-  void   setRenderTarget(QWidget* target);
-  // Liefert das Render-Widget des Backends (libmpv-Pfad), oder nullptr
-  // wenn das Backend per attachToWidget arbeitet (Process-Pfad).
-  // Migration: solange beide Pfade existieren, wählt der Caller je
-  // nach Rückgabewert.
+  // Liefert das Render-Widget des Backends (libmpv). Nach der Phase-2-
+  // Migration ist renderWidget() immer nicht-nullptr.
   QWidget* renderWidget();
 
   void   load(const QString& file, double startSec = 0.0,
@@ -60,7 +57,6 @@ private slots:
 
 private:
   ITTMpvBackend* mBackend          = nullptr;
-  QWidget*       mTarget           = nullptr;
   QString        mSubtitleFile;
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;

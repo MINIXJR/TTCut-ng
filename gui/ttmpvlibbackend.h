@@ -28,8 +28,6 @@ public:
 
   bool start() override;
   void shutdown() override;
-  void attachToWidget(QWidget* /*target*/) override {}   // No-op: wir nutzen renderWidget()
-  void detach() override {}                              // No-op
   void command(const QStringList& args) override;
   void setProperty(const QString& name, const QVariant& value) override;
   void observeProperty(const QString& name) override;

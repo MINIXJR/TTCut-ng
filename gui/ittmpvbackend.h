@@ -30,20 +30,16 @@ public:
   virtual bool start()    = 0;   // Backend hochfahren
   virtual void shutdown() = 0;   // sauber beenden
 
-  // Render-Ziel
-  virtual void attachToWidget(QWidget* target) = 0;
-  virtual void detach()                        = 0;
-
   // mpv-Steuermodell
   virtual void command(const QStringList& args)                     = 0;
   virtual void setProperty(const QString& name, const QVariant& v)  = 0;
   virtual void observeProperty(const QString& name)                 = 0;
 
-  // Render-Widget des Backends (libmpv-Backend liefert ein QOpenGLWidget;
-  // Process-Backend bleibt bei nullptr und nutzt weiterhin attachToWidget).
-  // Phase 2: dieser Default-Body fällt im finalen Cleanup weg, dann ist
-  // die Methode pure-virtual.
-  virtual QWidget* renderWidget() { return nullptr; }
+  // Render-Widget des Backends. Phase-2-Vertrag: jeder Backend MUSS ein
+  // (QOpenGL-)Widget liefern, das vom Caller ins eigene Layout gehängt
+  // wird. Lebenszeit des Widgets ist vom mpv-Handle entkoppelt — siehe
+  // TTMpvRenderWidget::setMpv / detachFromMpv.
+  virtual QWidget* renderWidget() = 0;
 
 signals:
   void propertyChanged(const QString& name, const QVariant& value);
