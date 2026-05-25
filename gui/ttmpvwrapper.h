@@ -47,6 +47,7 @@ public:
 signals:
   void playerPlaying();
   void playerFinished();
+  void fileLoaded();   // mpv hat das File geladen, Decoder bereit (1. Frame im Anflug)
   void positionChanged(double seconds);
   void playerError(const QString& message);
 

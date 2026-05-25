@@ -9,8 +9,11 @@
 
 #include "ttmpvrenderwidget.h"
 
+#include <QMutex>
+#include <QMutexLocker>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QSet>
 #include <QThread>
 
 extern "C" {
@@ -21,13 +24,33 @@ extern "C" {
 
 #include "../common/ttmessagelogger.h"
 
+namespace {
+// Set aller lebenden TTMpvRenderWidget-Instanzen, mit Mutex synchronisiert.
+// libmpv's render-Update-Callback kann aus einem mpv-Worker-Thread feuern,
+// auch noch NACHDEM set_update_callback(null) gerufen wurde (mpv-Doku:
+// "Setting the update callback to NULL does not guarantee no further calls").
+// Wenn das Widget zwischenzeitlich zerstört wurde, hätten wir ein
+// use-after-free im invokeMethod-Call. Die Live-Set + Mutex-Guard
+// stellt sicher, dass der Callback einen schon-zerstörten Receiver
+// erkennt und still abbricht.
+static QMutex                          sLiveMutex;
+static QSet<TTMpvRenderWidget*>        sLiveWidgets;
+}
+
 TTMpvRenderWidget::TTMpvRenderWidget(mpv_handle* mpv, QWidget* parent)
   : QOpenGLWidget(parent), mMpv(mpv)
 {
+  QMutexLocker l(&sLiveMutex);
+  sLiveWidgets.insert(this);
 }
 
 TTMpvRenderWidget::~TTMpvRenderWidget()
 {
+  // Aus Live-Set entfernen — synchron unter Mutex, dadurch wartet ein
+  // gleichzeitiger update-callback auf den Lock und sieht uns dann nicht
+  // mehr im Set. Kein invokeMethod auf dangling pointer mehr möglich.
+  QMutexLocker l(&sLiveMutex);
+  sLiveWidgets.remove(this);
   // mRenderCtx muss vorher per destroyRenderContext() aus dem GL-Thread
   // freigegeben worden sein; wenn das Backend das vergisst, ist der
   // d'tor zu spät dran. Leak-Schutz: nichts tun.
@@ -102,9 +125,21 @@ void TTMpvRenderWidget::detachFromMpv()
 void TTMpvRenderWidget::setMpv(mpv_handle* mpv)
 {
   // Alten Render-Context wegwerfen — der war an den alten Handle gebunden.
-  // Nächster paintGL baut für den neuen Handle einen frischen Context.
   destroyRenderContext();
   mMpv = mpv;
+
+  // Falls das Widget bereits einen QOpenGLContext hat (= initializeGL
+  // lief mindestens einmal, z.B. beim ersten Play), den mpv-render-context
+  // sofort SYNCHRON für den neuen Handle aufbauen. Sonst kommt der
+  // erste loadfile-Command vom Wrapper an mpv durch, bevor paintGL
+  // (queued via update()) ensureRenderContext gerufen hat → mpv hat
+  // kein Render-Ziel, markiert vo/libmpv als kaputt, Wiedergabe bleibt
+  // schwarz für den ganzen Replay-Zyklus.
+  if (mpv && context()) {
+    makeCurrent();
+    ensureRenderContext();
+    doneCurrent();
+  }
   update();
 }
 
@@ -156,8 +191,15 @@ void TTMpvRenderWidget::onMpvUpdate()
 
 void TTMpvRenderWidget::onUpdateCallback(void* ctx)
 {
-  // libmpv-Thread → in den Qt-Thread queuen
+  // libmpv-Thread → in den Qt-Thread queuen.
+  // Guard: ctx könnte ein bereits zerstörtes Widget sein, weil
+  // set_update_callback(null) NICHT garantiert dass mpv wartet bis
+  // alle laufenden Callbacks fertig sind. Über sLiveWidgets prüfen,
+  // unter sLiveMutex, der vom Widget-dtor gehalten wird.
   auto* self = static_cast<TTMpvRenderWidget*>(ctx);
+  QMutexLocker l(&sLiveMutex);
+  if (!sLiveWidgets.contains(self))
+    return;   // Widget bereits zerstört, callback verwerfen
   QMetaObject::invokeMethod(self, "onMpvUpdate", Qt::QueuedConnection);
 }
 

@@ -25,6 +25,8 @@ TTMpvWrapper::TTMpvWrapper(QObject* parent)
           this,     &TTMpvWrapper::onBackendConnected);
   connect(mBackend, &ITTMpvBackend::playbackFinished,
           this,     &TTMpvWrapper::onBackendPlaybackFinished);
+  connect(mBackend, &ITTMpvBackend::fileLoaded,
+          this,     &TTMpvWrapper::fileLoaded);
   connect(mBackend, &ITTMpvBackend::mpvError,
           this,     &TTMpvWrapper::playerError);
 }

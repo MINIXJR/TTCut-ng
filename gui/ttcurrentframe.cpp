@@ -494,6 +494,7 @@ void TTCurrentFrame::onPlayVideo()
   }
 
   // Lazily create the wrapper
+  const bool isFirstPlay = (mPlayer == nullptr);
   if (mPlayer == nullptr) {
     mPlayer = new TTMpvWrapper(this);
     if (QWidget* rw = mPlayer->renderWidget()) {
@@ -512,10 +513,32 @@ void TTCurrentFrame::onPlayVideo()
     });
   }
 
-  // Stack auf Render-Widget umschalten, bevor mpv geladen wird
+  // Stack-Switch zu renderWidget:
+  //  - Beim ALLERERSTEN Play (Widget war nie sichtbar): sofort umschalten,
+  //    damit initializeGL läuft und der QOpenGLContext entsteht. Sonst
+  //    skippt der setMpv-Sync-Pfad mangels context() den render-context
+  //    create, mpv markiert vo/libmpv als kaputt und bleibt schwarz.
+  //    Kurzes Aufblitzen ist hier unvermeidlich — kein vorheriges Bild
+  //    zum Stehenlassen.
+  //  - Bei NACHFOLGENDEN Plays: verzögern bis mpv fileLoaded sendet,
+  //    sodass mpegWindow den letzten Standbild-Frame bis zum ersten
+  //    decoded Frame zeigt — kein Schwarz-Flicker.
+  //  shared_ptr-Trick für single-shot connection (Qt::SingleShotConnection
+  //  gibt's erst ab Qt6).
   if (mFrameStack && mPlayer) {
-    if (QWidget* rw = mPlayer->renderWidget())
-      mFrameStack->setCurrentWidget(rw);
+    if (QWidget* rw = mPlayer->renderWidget()) {
+      if (isFirstPlay) {
+        mFrameStack->setCurrentWidget(rw);
+      } else {
+        auto conn = std::make_shared<QMetaObject::Connection>();
+        *conn = connect(mPlayer, &TTMpvWrapper::fileLoaded, this,
+                        [this, rw, conn]() {
+          if (mFrameStack)
+            mFrameStack->setCurrentWidget(rw);
+          QObject::disconnect(*conn);
+        });
+      }
+    }
   }
 
   // Reset speed to 1× on every fresh play
