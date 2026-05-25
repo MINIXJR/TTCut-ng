@@ -13,7 +13,9 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcurrentframe.h"
+#include "ttcutmainwindow.h"
 #include "ttmpvwrapper.h"
+#include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
 #include "../avstream/ttavstream.h"
@@ -593,7 +595,26 @@ void TTCurrentFrame::onPlaybackFinished()
   double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
 
-  int newFrame = static_cast<int>(std::round(playbackPos * frameRate));
+  // MPEG-2-Korrektur: videoStream zählt field-pictures als eigene Frames,
+  // mpv's time-pos respektiert nur Display-Frames. Die Konversion lautet:
+  //     time = (frame - countExtraFramesBefore(frame)) / fps
+  // Wir lösen das nach `frame` per Fixpunkt-Iteration: starten mit dem
+  // naiven round(time*fps) und addieren so lange extras_before(frame),
+  // bis das Ergebnis stabil ist. Konvergiert nach 1-2 Iterationen.
+  TTAVData* avData = nullptr;
+  if (auto mw = qobject_cast<TTCutMainWindow*>(TTCut::mainWindow))
+    avData = mw->avData();
+
+  int baseFrame = static_cast<int>(std::round(playbackPos * frameRate));
+  int newFrame  = baseFrame;
+  if (avData) {
+    for (int it = 0; it < 5; ++it) {
+      int extras    = avData->countExtraFramesBefore(newFrame);
+      int corrected = baseFrame + extras;
+      if (corrected == newFrame) break;
+      newFrame = corrected;
+    }
+  }
   if (newFrame < 0) newFrame = 0;
   if (newFrame >= static_cast<int>(videoStream->frameCount()))
     newFrame = videoStream->frameCount() - 1;
