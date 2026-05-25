@@ -593,7 +593,7 @@ void TTCurrentFrame::onPlaybackFinished()
   double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
 
-  int newFrame = static_cast<int>(std::floor(playbackPos * frameRate));
+  int newFrame = static_cast<int>(std::round(playbackPos * frameRate));
   if (newFrame < 0) newFrame = 0;
   if (newFrame >= static_cast<int>(videoStream->frameCount()))
     newFrame = videoStream->frameCount() - 1;

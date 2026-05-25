@@ -115,7 +115,20 @@ void TTMpvLibBackend::shutdown()
   if (mMpv)
     mpv_set_wakeup_callback(mMpv, nullptr, nullptr);
 
-  // 2. Render-Context im Widget freigeben und vom mpv-Handle entkoppeln.
+  // 2. Letzte time-pos noch synchron abfragen und propagieren, BEVOR der
+  //    Handle terminiert. Der observe-property-Stream wird nur ~10×/sec
+  //    emittiert; ohne dieses Sync-Update lägen die letzten bis zu ~100ms
+  //    Wiedergabe für Caller wie TTCurrentFrame::onPlaybackFinished bei
+  //    der mpegWindow-Frame-Anzeige im Dunkeln (sichtbarer Rückwärts-
+  //    Sprung von wenigen Frames beim Stop). DirectConnection sorgt
+  //    dafür, dass der Wrapper sein mPlaybackPosition synchron aktualisiert.
+  if (mMpv) {
+    double pos = 0.0;
+    if (mpv_get_property(mMpv, "time-pos", MPV_FORMAT_DOUBLE, &pos) >= 0)
+      emit propertyChanged(QStringLiteral("time-pos"), pos);
+  }
+
+  // 3. Render-Context im Widget freigeben und vom mpv-Handle entkoppeln.
   //    Widget BLEIBT bestehen — es gehört Phase-2-konzeptuell dem
   //    Layout-Caller (QStackedLayout im TTCurrentFrame, videoFrame im
   //    TTCutPreview) und darf bei einem späteren start() per setMpv()
@@ -124,7 +137,7 @@ void TTMpvLibBackend::shutdown()
   if (mWidget)
     mWidget->detachFromMpv();
 
-  // 3. mpv-Handle terminieren (blockierend, sicher; emittiert keine
+  // 4. mpv-Handle terminieren (blockierend, sicher; emittiert keine
   //    Qt-Signals → kein use-after-free wie im Process-Backend)
   if (mMpv) {
     mpv_terminate_destroy(mMpv);
