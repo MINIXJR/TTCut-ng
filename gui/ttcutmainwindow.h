@@ -54,11 +54,6 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		void keyPressEvent(QKeyEvent* e);
 
-		// Accessor für TTAVData — Phase-2-Bedarf: TTCurrentFrame braucht
-		// countExtraFramesBefore() für die mpv-time-pos → videoStream-Frame-
-		// Konversion beim Stop (MPEG-2 field-picture-Korrektur).
-		TTAVData* avData() const { return mpAVData; }
-
 	public slots:
     void onOpenVideoFile();
     void onOpenAudioFile();
