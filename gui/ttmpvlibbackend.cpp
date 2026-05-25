@@ -123,6 +123,13 @@ void TTMpvLibBackend::shutdown()
   //    Sprung von wenigen Frames beim Stop). DirectConnection sorgt
   //    dafür, dass der Wrapper sein mPlaybackPosition synchron aktualisiert.
   if (mMpv) {
+    // SYNC pause: friert mpv ein, damit die folgende time-pos-Lesung
+    // stabil dem zuletzt gerenderten Frame entspricht. mpv_set_property
+    // (sync) wartet bis pause angewendet ist; ohne hätte mpv im Hintergrund
+    // weitergespielt.
+    int paused = 1;
+    mpv_set_property(mMpv, "pause", MPV_FORMAT_FLAG, &paused);
+
     double pos = 0.0;
     if (mpv_get_property(mMpv, "time-pos", MPV_FORMAT_DOUBLE, &pos) >= 0)
       emit propertyChanged(QStringLiteral("time-pos"), pos);

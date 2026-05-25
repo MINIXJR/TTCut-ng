@@ -13,9 +13,8 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcurrentframe.h"
-#include "ttcutmainwindow.h"
 #include "ttmpvwrapper.h"
-#include "../data/ttavdata.h"
+#include "../avstream/ttmpeg2videostream.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
 #include "../avstream/ttavstream.h"
@@ -526,10 +525,30 @@ void TTCurrentFrame::onPlayVideo()
   TTAVTypes::AVStreamType stype = videoStream->streamType();
   bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
 
-  // Compute start position in seconds from the current frame time
+  // Compute start position in seconds from the current frame time.
+  // Default: naive currentIndex / frameRate.
   QTime frameTime = videoStream->currentFrameTime();
   double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0
                     + frameTime.second() + frameTime.msec() / 1000.0;
+
+  // MPEG-2 field-picture-Korrektur: bei interlaced Stream enthält der
+  // videoStream-Index einen Eintrag pro Picture (frame_picture ODER
+  // jeweils ein top/bottom field_picture). Display-Frames = Index minus
+  // extras. mpv positioniert per echter Stream-Sekunde, also umrechnen.
+  if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
+    const QList<int>& extras = mpeg2vs->extraIndices();
+    if (!extras.isEmpty()) {
+      int idx = videoStream->currentIndex();
+      int lo = 0, hi = extras.size();
+      while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (extras[mid] < idx) lo = mid + 1;
+        else hi = mid;
+      }
+      int displayIdx = idx - lo;
+      startSec = static_cast<double>(displayIdx) / static_cast<double>(videoStream->frameRate());
+    }
+  }
 
   if (isH264orH265) {
     // ES files have no timestamps: mux into a temp MKV first
@@ -595,24 +614,30 @@ void TTCurrentFrame::onPlaybackFinished()
   double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
 
-  // MPEG-2-Korrektur: videoStream zählt field-pictures als eigene Frames,
-  // mpv's time-pos respektiert nur Display-Frames. Die Konversion lautet:
-  //     time = (frame - countExtraFramesBefore(frame)) / fps
-  // Wir lösen das nach `frame` per Fixpunkt-Iteration: starten mit dem
-  // naiven round(time*fps) und addieren so lange extras_before(frame),
-  // bis das Ergebnis stabil ist. Konvergiert nach 1-2 Iterationen.
-  TTAVData* avData = nullptr;
-  if (auto mw = qobject_cast<TTCutMainWindow*>(TTCut::mainWindow))
-    avData = mw->avData();
-
+  // MPEG-2-Korrektur: videoStream zählt field-pictures als eigene Index-
+  // Einträge, mpv's time-pos respektiert nur Display-Frames. Die Konversion:
+  //     time = (rawIndex - extras_before(rawIndex)) / fps
+  // Wir lösen nach `rawIndex` per Fixpunkt: starten mit baseFrame=round(time*fps)
+  // und addieren extras_before bis stabil. Quelle der extras ist der Bitstream-
+  // Parser (TTMpeg2VideoStream::extraIndices), NICHT das .info-File (das ist
+  // für unsere Recordings oft leer; TTAVData::countExtraFramesBefore wäre dann 0).
   int baseFrame = static_cast<int>(std::round(playbackPos * frameRate));
   int newFrame  = baseFrame;
-  if (avData) {
-    for (int it = 0; it < 5; ++it) {
-      int extras    = avData->countExtraFramesBefore(newFrame);
-      int corrected = baseFrame + extras;
-      if (corrected == newFrame) break;
-      newFrame = corrected;
+  if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
+    const QList<int>& extras = mpeg2vs->extraIndices();
+    if (!extras.isEmpty()) {
+      for (int it = 0; it < 5; ++it) {
+        // count extras strictly less than newFrame
+        int lo = 0, hi = extras.size();
+        while (lo < hi) {
+          int mid = (lo + hi) / 2;
+          if (extras[mid] < newFrame) lo = mid + 1;
+          else hi = mid;
+        }
+        int corrected = baseFrame + lo;
+        if (corrected == newFrame) break;
+        newFrame = corrected;
+      }
     }
   }
   if (newFrame < 0) newFrame = 0;

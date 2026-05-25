@@ -97,7 +97,11 @@ void TTMpvWrapper::stop()
   // Hard shutdown: terminates the mpv process. Used by TTCurrentFrame's
   // Play/Stop toggle, where stopping returns control to the frame navigator.
   // For pause-style stopping that keeps the frame visible, use pause().
-  mBackend->setProperty("pause", true);
+  //
+  // NOTE: we deliberately do NOT pause() here. The backend's shutdown()
+  // synchronously reads the last video position before tearing down, and
+  // mpv's video-pts/time-pos properties read after a pause are reset/stale.
+  // mpv_terminate_destroy halts playback cleanly without needing pause first.
   mBackend->shutdown();
   // Emit playerFinished explicitly: shutdown() disconnects mProcess to avoid
   // use-after-free, so onProcessFinished → playbackFinished can no longer
