@@ -535,6 +535,8 @@ void TTCurrentFrame::onPlayVideo()
   // videoStream-Index einen Eintrag pro Picture (frame_picture ODER
   // jeweils ein top/bottom field_picture). Display-Frames = Index minus
   // extras. mpv positioniert per echter Stream-Sekunde, also umrechnen.
+  // Für H.264 PAFF / H.265 ist analoger Bug latent — siehe Followup im
+  // Memory project_libmpv_render_backend.md.
   if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
     const QList<int>& extras = mpeg2vs->extraIndices();
     if (!extras.isEmpty()) {
