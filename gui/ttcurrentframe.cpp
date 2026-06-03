@@ -14,6 +14,7 @@
 
 #include "ttcurrentframe.h"
 #include "ttmpvwrapper.h"
+#include "ttmpvrenderwidget.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
@@ -35,6 +36,7 @@ extern "C" {
 #include <QDir>
 #include <QFile>
 #include <QGridLayout>
+#include <QTimer>
 #include <QIcon>
 #include <QStackedLayout>
 #include <QStyle>
@@ -65,6 +67,15 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
       mFrameStack = new QStackedLayout(mFrameStackContainer);
       mFrameStack->setContentsMargins(0, 0, 0, 0);
       mFrameStack->setSpacing(0);
+      // StackAll statt des Default StackOne: ALLE Stack-Widgets bleiben sichtbar,
+      // das aktuelle wird nur nach vorn gehoben. Nötig, weil das libmpv-
+      // renderWidget im Hintergrund rendern können MUSS, bevor es nach vorn
+      // geschaltet wird — ein verstecktes QOpenGLWidget bekommt kein paintGL,
+      // sonst entstünde ein Deadlock (Switch wartet auf den ersten echten
+      // Frame, der Frame braucht aber Sichtbarkeit). Das opake mpegWindow
+      // verdeckt das hinten rendernde renderWidget vollständig, sodass dessen
+      // erster (stale) Frame nie sichtbar wird.
+      mFrameStack->setStackingMode(QStackedLayout::StackAll);
       mFrameStack->addWidget(mpegWindow);  // Index 0 (default)
       // Index 1 wird im onPlayVideo gefüllt, sobald der Player existiert.
 
@@ -157,6 +168,11 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 
 	mpegWindow->openVideoStream(videoStream);
 	mpegWindow->showFrameAt(videoStream->currentIndex());
+
+	// Player + renderWidget jetzt erzeugen und GL/Render-Context initialisieren,
+	// damit er lange vor dem ersten PLAY bereitsteht (sonst scheitert der erste
+	// Play an "No render context set"; siehe ensurePlayerCreated).
+	ensurePlayerCreated();
 
 	updateCurrentPosition();
 }
@@ -483,6 +499,48 @@ void TTCurrentFrame::saveCurrentFrame()
 }
 
 //! Play video with audio from current position using mpv
+//! Create the mpv player + render widget once and initialize its GL/render
+//! context. Called at stream-open (onAVDataChanged) so the context exists long
+//! before the first PLAY. Idempotent — does nothing if the player already exists.
+void TTCurrentFrame::ensurePlayerCreated()
+{
+  if (mPlayer != nullptr) return;
+
+  mPlayer = new TTMpvWrapper(this);
+  if (QWidget* rw = mPlayer->renderWidget()) {
+    // libmpv-Pfad: Widget in den Frame-Stack als Index 1 einreihen
+    if (mFrameStack && mFrameStack->indexOf(rw) < 0) {
+      mFrameStack->addWidget(rw);
+      // GL-Context EINMAL realisieren: das renderWidget kurz nach vorn schalten
+      // erzwingt show→initializeGL und damit einen voll initialisierten
+      // QOpenGLContext (makeCurrent allein reicht bei einem versteckten
+      // QOpenGLWidget NICHT — mpv_render_context_create scheitert sonst mit
+      // "Can't load OpenGL functions"). Danach baut prepareRenderContext den
+      // mpv-Render-Context auf und wir schalten sofort zurück auf mpegWindow.
+      // Im StackAll-Modus bleibt mpegWindow vorne (Standbild), bis firstFrame
+      // Ready beim Play umschaltet.
+      mFrameStack->setCurrentWidget(rw);
+      if (auto* mrw = qobject_cast<TTMpvRenderWidget*>(rw)) {
+        if (!mrw->prepareRenderContext())
+          TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("ensurePlayerCreated: prepareRenderContext failed"));
+      }
+      mFrameStack->setCurrentWidget(mpegWindow);
+    }
+  }
+  connect(mPlayer, &TTMpvWrapper::playerFinished,  this, &TTCurrentFrame::onPlaybackFinished);
+  connect(mPlayer, &TTMpvWrapper::positionChanged, this, &TTCurrentFrame::onPlaybackPositionChanged);
+  connect(mPlayer, &TTMpvWrapper::playerError, this, [](const QString& msg) {
+    // Nur loggen, NICHT setPlayingButtonState(false). mpv klassifiziert viele
+    // non-fatale Decoder-Warnings (h264 mmco, reference-frame-exceeds-max bei
+    // mid-stream-seek auf MBAFF/PAFF, etc.) als "error"-Level. Wenn mpv wirklich
+    // abnormal terminiert, kommt playerFinished → onPlaybackFinished resetet die
+    // UI sauber.
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Playback error: %1").arg(msg));
+  });
+}
+
 void TTCurrentFrame::onPlayVideo()
 {
   if (videoStream == 0 || mAVItem == 0) return;
@@ -493,53 +551,28 @@ void TTCurrentFrame::onPlayVideo()
     return;
   }
 
-  // Lazily create the wrapper
-  const bool isFirstPlay = (mPlayer == nullptr);
-  if (mPlayer == nullptr) {
-    mPlayer = new TTMpvWrapper(this);
-    if (QWidget* rw = mPlayer->renderWidget()) {
-      // libmpv-Pfad: Widget in den Frame-Stack als Index 1 einreihen
-      if (mFrameStack && mFrameStack->indexOf(rw) < 0)
-        mFrameStack->addWidget(rw);
-    }
-    connect(mPlayer, &TTMpvWrapper::playerFinished,       this, &TTCurrentFrame::onPlaybackFinished);
-    connect(mPlayer, &TTMpvWrapper::positionChanged,      this, &TTCurrentFrame::onPlaybackPositionChanged);
-    connect(mPlayer, &TTMpvWrapper::playerError, this, [](const QString& msg) {
-      // Nur loggen, NICHT setPlayingButtonState(false). mpv klassifiziert
-      // viele non-fatale Decoder-Warnings (h264 mmco, reference-frame-
-      // exceeds-max bei mid-stream-seek auf MBAFF/PAFF, etc.) als "error"-
-      // Level. Wenn mpv wirklich abnormal terminiert, kommt playerFinished
-      // → onPlaybackFinished resetet die UI sauber.
-      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-          QString("Playback error: %1").arg(msg));
-    });
-  }
+  // Player + renderWidget werden beim Stream-Open (ensurePlayerCreated, via
+  // onAVDataChanged) erzeugt und ihr GL-Context dort initialisiert. Als Netz
+  // hier nochmal sicherstellen, falls onPlayVideo ohne vorheriges Open läuft.
+  ensurePlayerCreated();
 
-  // Stack-Switch zu renderWidget:
-  //  - Beim ALLERERSTEN Play (Widget war nie sichtbar): sofort umschalten,
-  //    damit initializeGL läuft und der QOpenGLContext entsteht. Sonst
-  //    skippt der setMpv-Sync-Pfad mangels context() den render-context
-  //    create, mpv markiert vo/libmpv als kaputt und bleibt schwarz.
-  //    Kurzes Aufblitzen ist hier unvermeidlich — kein vorheriges Bild
-  //    zum Stehenlassen.
-  //  - Bei NACHFOLGENDEN Plays: verzögern bis mpv fileLoaded sendet,
-  //    sodass mpegWindow den letzten Standbild-Frame bis zum ersten
-  //    decoded Frame zeigt — kein Schwarz-Flicker.
-  //  shared_ptr-Trick für single-shot connection (Qt::SingleShotConnection
-  //  gibt's erst ab Qt6).
+  // Stack-Switch zu renderWidget erst, wenn das Widget seinen ZWEITEN echten
+  // mpv-Frame gerendert hat (firstFrameReady). Per Log belegt: mpv liefert nach
+  // dem Lade-Seek den ersten Frame stale — den GOP-Keyframe vor dem Ziel, bei
+  // einem Cut-In nach Werbung also einen Werbe-Frame; er trägt zwar die korrekte
+  // time-pos, aber den falschen Bildinhalt. Erst ab dem zweiten Render stimmt
+  // der Inhalt. Bis dahin bleibt das mpegWindow mit dem gewählten Standbild
+  // vorne. Würden wir schon bei PLAYBACK_RESTART umschalten, würde dieser
+  // stale erste Frame für einen Moment sichtbar. Gilt für alle Codecs.
   if (mFrameStack && mPlayer) {
-    if (QWidget* rw = mPlayer->renderWidget()) {
-      if (isFirstPlay) {
-        mFrameStack->setCurrentWidget(rw);
-      } else {
-        auto conn = std::make_shared<QMetaObject::Connection>();
-        *conn = connect(mPlayer, &TTMpvWrapper::fileLoaded, this,
-                        [this, rw, conn]() {
-          if (mFrameStack)
-            mFrameStack->setCurrentWidget(rw);
-          QObject::disconnect(*conn);
-        });
-      }
+    if (auto* rw = qobject_cast<TTMpvRenderWidget*>(mPlayer->renderWidget())) {
+      auto conn = std::make_shared<QMetaObject::Connection>();
+      *conn = connect(rw, &TTMpvRenderWidget::firstFrameReady, this,
+                      [this, rw, conn]() {
+        if (mFrameStack)
+          mFrameStack->setCurrentWidget(rw);
+        QObject::disconnect(*conn);
+      });
     }
   }
 
@@ -560,8 +593,6 @@ void TTCurrentFrame::onPlayVideo()
   // videoStream-Index einen Eintrag pro Picture (frame_picture ODER
   // jeweils ein top/bottom field_picture). Display-Frames = Index minus
   // extras. mpv positioniert per echter Stream-Sekunde, also umrechnen.
-  // Für H.264 PAFF / H.265 ist analoger Bug latent — siehe Followup im
-  // Memory project_libmpv_render_backend.md.
   if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
     const QList<int>& extras = mpeg2vs->extraIndices();
     if (!extras.isEmpty()) {
@@ -574,6 +605,29 @@ void TTCurrentFrame::onPlayVideo()
       }
       int displayIdx = idx - lo;
       startSec = static_cast<double>(displayIdx) / static_cast<double>(videoStream->frameRate());
+    }
+  }
+
+  // H.264/H.265 decode-order vs display-order correction. The app frame index is
+  // decode order, but mpv seeks by display time. decodeFrame() records the true
+  // decode-order index of the frame it delivers for the current (decode-order)
+  // position in TTFrameInfo::deliveredDecodeIndex. The temp playback MKV assigns
+  // PTS in decode order (pts = frameCount * frameDur), so the displayed frame's
+  // time is deliveredDecodeIndex / frameRate. Without this, mpv lands on a
+  // different frame than the still shown in mpegWindow (e.g. the GOP keyframe
+  // before the cut-in). Read from mpegWindow's wrapper — the one that decoded
+  // the visible still. Falls back to currentIndex on -1 (frame never decoded).
+  if (isH264orH265 && mpegWindow && mpegWindow->ffmpegWrapper()) {
+    int idx     = videoStream->currentIndex();
+    int decIdx  = mpegWindow->ffmpegWrapper()->frameAt(idx).deliveredDecodeIndex;
+    float fr    = videoStream->frameRate();
+    if (decIdx >= 0 && fr > 0.0f) {
+      startSec = static_cast<double>(decIdx) / static_cast<double>(fr);
+    } else {
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("onPlayVideo: deliveredDecodeIndex unavailable for frame %1 "
+                "(decIdx=%2), falling back to currentIndex/frameRate")
+          .arg(idx).arg(decIdx));
     }
   }
 
@@ -638,8 +692,22 @@ void TTCurrentFrame::onPlaybackFinished()
   if (mFrameStack && mpegWindow)
     mFrameStack->setCurrentWidget(mpegWindow);
 
-  double playbackPos = mPlayer->playbackPosition();
   double frameRate   = videoStream->frameRate();
+
+  // Stop-Position aus dem ZULETZT GERENDERTEN Frame, nicht aus time-pos.
+  // Bei vo=libmpv hängt die Anzeige der internen mpv-Clock um eine feste
+  // Pipeline-Tiefe (~16 Frames) hinterher: time-pos meldet bereits Frame N,
+  // während das renderWidget noch Frame N-16 zeigt. Würden wir time-pos
+  // nehmen, spränge das Standbild beim Stop sichtbar nach vorn. lastRendered
+  // TimePos ist die time-pos, die paintGL beim zuletzt tatsächlich gemalten
+  // Frame gelesen hat — also genau das, was der Nutzer beim Stop SAH. Fallback
+  // auf playbackPosition(), falls noch nichts gerendert wurde.
+  double playbackPos = mPlayer->playbackPosition();
+  if (auto* mrw = qobject_cast<TTMpvRenderWidget*>(mPlayer->renderWidget())) {
+    double lr = mrw->lastRenderedTimePos();
+    if (lr >= 0.0)
+      playbackPos = lr;
+  }
 
   // MPEG-2-Korrektur: videoStream zählt field-pictures als eigene Index-
   // Einträge, mpv's time-pos respektiert nur Display-Frames. Die Konversion:

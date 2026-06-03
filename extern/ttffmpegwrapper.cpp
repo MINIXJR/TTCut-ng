@@ -991,6 +991,10 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
             return QImage();
         }
         mDecoderFrameIndex = mCurrentFrameIndex;
+        // Tag counter starts at the seek keyframe's decode-order position. The
+        // packets sent below carry ascending decode-order indices; the delivered
+        // (display-order) frame carries its decode-order index in pts.
+        mDecodeOrderTag = mCurrentFrameIndex;
     }
 
     // Skip intermediate frames (decode without RGB conversion)
@@ -1008,6 +1012,16 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 
     // Decode final target frame with full RGB conversion
     QImage result = decodeCurrentFrame();
+
+    // Record the true decode-order index of the frame actually delivered for this
+    // (decode-order) position. mDecodedFrame->pts carries the tag set when the
+    // packet was sent (skip/decodeCurrentFrame). With B-frame reorder this differs
+    // from frameIndex. Lazily cached so playback can seek mpv to the displayed
+    // frame's time even on later LRU cache hits.
+    if (!result.isNull() && frameIndex >= 0 && frameIndex < mFrameIndex.size()) {
+        mFrameIndex[frameIndex].deliveredDecodeIndex =
+            static_cast<int>(mDecodedFrame->pts);
+    }
 
     // Fallback: re-seek and retry if first attempt failed
     if (result.isNull()) {
@@ -1326,6 +1340,7 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
     // Read packets until we get a complete frame
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == mVideoStreamIndex) {
+            packet->pts = decodeOrderTagForPacket(packet);
             int ret = avcodec_send_packet(mVideoCodecCtx, packet);
             if (ret < 0) {
                 av_packet_unref(packet);
@@ -1627,6 +1642,37 @@ bool TTFFmpegWrapper::isSceneChange(int indexA, int indexB, float threshold)
 }
 
 // ----------------------------------------------------------------------------
+// Decode-order tag for a packet about to be sent to the decoder.
+// Returns the current tag, then advances it for the NEXT frame. The tag must
+// count FRAMES, not packets: with PAFF, two field packets (top + bottom) form
+// one frame, so the bottom field must NOT advance the tag — both fields carry
+// the same frame-level decode index. This keeps deliveredDecodeIndex in frame
+// units, matching the temp playback MKV which merges field pairs into one frame
+// (pts = frameCount * frameDur). For progressive/MBAFF (1 packet = 1 frame)
+// every packet advances the tag.
+// ----------------------------------------------------------------------------
+int64_t TTFFmpegWrapper::decodeOrderTagForPacket(const AVPacket* packet)
+{
+    int64_t tag = mDecodeOrderTag;
+
+    bool advance = true;
+    if (mIsPAFF && packet && packet->data && packet->size > 0) {
+        TTFieldInfo fi = parseH264FieldInfoFromPacket(packet->data, packet->size);
+        // Top field starts a frame but does not complete it — the following
+        // bottom field shares the same frame-level decode index. So the TOP
+        // field must NOT advance the tag (both fields return the same tag);
+        // the bottom field (or any non-field packet) completes the frame and
+        // advances the tag for the next frame.
+        if (fi.isField && !fi.isBottomField)
+            advance = false;
+    }
+    if (advance)
+        mDecodeOrderTag++;
+
+    return tag;
+}
+
+// ----------------------------------------------------------------------------
 // Skip current frame (decode for reference chain but skip RGB conversion)
 // Used by decodeFrame() to efficiently skip intermediate frames
 // ----------------------------------------------------------------------------
@@ -1649,6 +1695,7 @@ bool TTFFmpegWrapper::skipCurrentFrame()
     // For progressive: 1 packet = 1 frame.
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == mVideoStreamIndex) {
+            packet->pts = decodeOrderTagForPacket(packet);
             int ret = avcodec_send_packet(mVideoCodecCtx, packet);
             av_packet_unref(packet);
             if (ret < 0) continue;

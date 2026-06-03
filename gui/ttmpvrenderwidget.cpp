@@ -129,6 +129,19 @@ void TTMpvRenderWidget::detachFromMpv()
 {
   destroyRenderContext();
   mMpv = nullptr;
+
+  // FBO sofort schwarz löschen. Sonst behält der QOpenGLWidget-Framebuffer
+  // den letzten gerenderten Frame dieses Play-Zyklus. Beim nächsten Play
+  // wird das renderWidget sichtbar geschaltet, BEVOR mpvs erstes paintGL
+  // den neuen Frame eingemalt hat — der Compositor zeigt dann für einen
+  // Moment den alten FBO-Inhalt (= stehengebliebenes Bild vom letzten Play).
+  if (context() && isValid()) {
+    makeCurrent();
+    QOpenGLFunctions* f = QOpenGLContext::currentContext()->functions();
+    f->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    f->glClear(GL_COLOR_BUFFER_BIT);
+    doneCurrent();
+  }
   update();   // paintGL malt jetzt schwarz
 }
 
@@ -137,6 +150,8 @@ void TTMpvRenderWidget::setMpv(mpv_handle* mpv)
   // Alten Render-Context wegwerfen — der war an den alten Handle gebunden.
   destroyRenderContext();
   mMpv = mpv;
+  mRenderedFrames = 0;   // firstFrameReady für neuen Play-Zyklus scharf
+  mLastRenderedTimePos = -1.0;
 
   // Falls das Widget bereits einen QOpenGLContext hat (= initializeGL
   // lief mindestens einmal, z.B. beim ersten Play), den mpv-render-context
@@ -151,6 +166,20 @@ void TTMpvRenderWidget::setMpv(mpv_handle* mpv)
     doneCurrent();
   }
   update();
+}
+
+bool TTMpvRenderWidget::prepareRenderContext()
+{
+  if (!mMpv) return false;
+  // makeCurrent() realisiert ein noch nicht gezeigtes QOpenGLWidget und
+  // erzeugt seinen GL-Context (löst bei Bedarf initializeGL aus). Danach steht
+  // der GL-Context bereit, sodass ensureRenderContext den mpv-Render-Context
+  // synchron aufbauen kann — VOR dem ersten loadfile, das sonst auf "No render
+  // context set" liefe.
+  makeCurrent();
+  bool ok = ensureRenderContext();
+  doneCurrent();
+  return ok;
 }
 
 void TTMpvRenderWidget::initializeGL()
@@ -171,6 +200,18 @@ void TTMpvRenderWidget::paintGL()
     return;
   }
 
+  // libmpv Render-API-konform (render.h §258-261): mpv_render_context_render
+  // NUR aufrufen, wenn der Core wirklich einen neuen Frame bereit hat
+  // (MPV_RENDER_UPDATE_FRAME). Qt ruft paintGL auch bei show/switch/resize OHNE
+  // neuen Frame; ein blinder render-Aufruf gibt dann einen Zwischen-/Altframe
+  // aus — bei Play 2 den GOP-Keyframe vor dem Cut-In, also die Werbung. Ohne
+  // neuen Frame behalten wir den bestehenden FBO-Inhalt und kehren zurück.
+  uint64_t updFlags = mpv_render_context_update(mRenderCtx);
+  bool hasNewFrame = (updFlags & MPV_RENDER_UPDATE_FRAME) != 0;
+
+  if (!hasNewFrame)
+    return;   // kein neuer Frame → FBO behält letzten Inhalt, kein Altframe
+
   const qreal dpr = devicePixelRatioF();
   mpv_opengl_fbo fbo{};
   fbo.fbo = static_cast<int>(defaultFramebufferObject());
@@ -185,6 +226,26 @@ void TTMpvRenderWidget::paintGL()
     { MPV_RENDER_PARAM_INVALID,    nullptr },
   };
   mpv_render_context_render(mRenderCtx, params);
+
+  // time-pos des GERADE gerenderten Frames merken. Bei vo=libmpv hängt die
+  // sichtbare Anzeige der mpv-Clock um eine feste Pipeline-Tiefe hinterher;
+  // dieser Wert ist die Zeit, die zum zuletzt tatsächlich gemalten Frame
+  // gehört. TTCurrentFrame::onPlaybackFinished nutzt ihn als Stop-Position,
+  // damit das Standbild dort stehen bleibt, wo der Nutzer es beim Stop sah
+  // (statt zur voreilenden time-pos zu springen).
+  if (mMpv) {
+    double tp = -1.0;
+    if (mpv_get_property(mMpv, "time-pos", MPV_FORMAT_DOUBLE, &tp) >= 0)
+      mLastRenderedTimePos = tp;
+  }
+
+  // Erst der ZWEITE echte Render trägt garantiert korrekten Inhalt: mpv liefert
+  // nach dem Lade-Seek den ersten Frame stale (Werbe-Keyframe vor dem Ziel).
+  // Sobald wir ihn haben, einmalig signalisieren — der Caller schaltet dann
+  // vom mpegWindow-Standbild auf dieses Widget um.
+  ++mRenderedFrames;
+  if (mRenderedFrames == 2)
+    emit firstFrameReady();
 }
 
 void TTMpvRenderWidget::resizeGL(int /*w*/, int /*h*/)

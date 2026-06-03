@@ -45,6 +45,12 @@ signals:
   void propertyChanged(const QString& name, const QVariant& value);
   void connected();        // IPC connection established — safe to send commands
   void fileLoaded();
+  // Feuert nach jedem abgeschlossenen Seek, sobald der erste Frame an der
+  // Zielposition dekodiert und anzeigebereit ist (mpv PLAYBACK_RESTART).
+  // Wird genutzt, um nach dem initialen --start-Seek erst dann zu entpausen,
+  // wenn der gewählte Frame steht — sonst blitzt der Lande-Keyframe (vor dem
+  // Cut-In, also Werbung) für einen Frame auf.
+  void playbackRestarted();
   void playbackFinished();
   void mpvError(const QString& message);
 };

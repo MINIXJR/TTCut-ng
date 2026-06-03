@@ -48,6 +48,9 @@ signals:
   void playerPlaying();
   void playerFinished();
   void fileLoaded();   // mpv hat das File geladen, Decoder bereit (1. Frame im Anflug)
+  // mpv hat den initialen --start-Seek abgeschlossen, der Zielframe ist
+  // dekodiert/anzeigebereit. Caller schaltet erst jetzt auf das renderWidget.
+  void playbackRestarted();
   void positionChanged(double seconds);
   void playerError(const QString& message);
 
@@ -55,12 +58,16 @@ private slots:
   void onPropertyChanged(const QString& name, const QVariant& value);
   void onBackendConnected();
   void onBackendPlaybackFinished();
+  void onPlaybackRestarted();
 
 private:
   ITTMpvBackend* mBackend          = nullptr;
   QString        mSubtitleFile;
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;
+  // Einmal-Flag: nach dem initialen --start-Seek (PLAYBACK_RESTART) entpausen.
+  // Verhindert das Aufblitzen des Lande-Keyframes vor dem gewählten Frame.
+  bool           mPendingAutoPlay  = false;
 };
 
 #endif // TTMPVWRAPPER_H

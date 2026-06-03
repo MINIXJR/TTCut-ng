@@ -74,6 +74,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void updateCurrentPosition(int pos = -1);
 		QString createTempMkvForPlayback();
 		void cleanupTempPlaybackFile();
+		void ensurePlayerCreated();
 
 	private:
 		void                clearCutContext();

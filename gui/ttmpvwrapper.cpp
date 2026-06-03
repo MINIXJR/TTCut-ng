@@ -27,6 +27,8 @@ TTMpvWrapper::TTMpvWrapper(QObject* parent)
           this,     &TTMpvWrapper::onBackendPlaybackFinished);
   connect(mBackend, &ITTMpvBackend::fileLoaded,
           this,     &TTMpvWrapper::fileLoaded);
+  connect(mBackend, &ITTMpvBackend::playbackRestarted,
+          this,     &TTMpvWrapper::onPlaybackRestarted);
   connect(mBackend, &ITTMpvBackend::mpvError,
           this,     &TTMpvWrapper::playerError);
 }
@@ -57,7 +59,8 @@ void TTMpvWrapper::load(const QString& file, double startSec,
 {
   // mPlaying tracks "is mpv actively rendering frames". With autoPlay=false
   // mpv is launched paused (still shows first frame), so we are not playing.
-  mPlaying = autoPlay;
+  mPlaying         = autoPlay;
+  mPendingAutoPlay = autoPlay;
 
   mBackend->start();
 
@@ -72,8 +75,12 @@ void TTMpvWrapper::load(const QString& file, double startSec,
     loadArgs << QString("--audio-file=%1").arg(audioFile);
   if (!mSubtitleFile.isEmpty())
     loadArgs << QString("--sub-file=%1").arg(mSubtitleFile);
-  if (!autoPlay)
-    loadArgs << QStringLiteral("--pause=yes");
+  // IMMER pausiert laden. mpv führt den --start-Seek beim Laden aus und bleibt
+  // auf dem Zielframe stehen. Bei sofortigem Abspielen rendert die Render-API
+  // während des Seeks kurz den Lande-Keyframe (= Frame vor dem Cut-In, also
+  // Werbung). Wir entpausen erst in onPlaybackRestarted(), wenn der gewählte
+  // Frame dekodiert und anzeigebereit ist.
+  loadArgs << QStringLiteral("--pause=yes");
   mBackend->command(loadArgs);
 }
 
@@ -90,6 +97,7 @@ void TTMpvWrapper::pause()
 {
   // Pause without shutting mpv down — the current frame stays on screen and
   // play() can resume in place.
+  mPendingAutoPlay = false;   // expliziter Pause schlägt den verzögerten Unpause
   mBackend->setProperty("pause", true);
   mPlaying = false;
 }
@@ -104,6 +112,7 @@ void TTMpvWrapper::stop()
   // synchronously reads the last video position before tearing down, and
   // mpv's video-pts/time-pos properties read after a pause are reset/stale.
   // mpv_terminate_destroy halts playback cleanly without needing pause first.
+  mPendingAutoPlay = false;
   mBackend->shutdown();
   // Emit playerFinished explicitly: shutdown() disconnects mProcess to avoid
   // use-after-free, so onProcessFinished → playbackFinished can no longer
@@ -167,4 +176,24 @@ void TTMpvWrapper::onBackendPlaybackFinished()
 {
   mPlaying = false;
   emit playerFinished();
+}
+
+//! mpv hat den initialen --start-Seek abgeschlossen und zeigt den Zielframe.
+//! Jetzt — und erst jetzt — entpausen, falls die Wiedergabe gewünscht war.
+//! So ist der erste sichtbare Frame garantiert der gewählte, nie der
+//! Lande-Keyframe davor.
+void TTMpvWrapper::onPlaybackRestarted()
+{
+  // mpv hat den initialen --start-Seek abgeschlossen, der Zielframe ist
+  // dekodiert und anzeigebereit. ZUERST das Signal weiterreichen, damit der
+  // Caller (TTCurrentFrame) jetzt — und nicht früher — auf das renderWidget
+  // umschaltet. DANN entpausen. Würden wir vor dem Stack-Switch entpausen,
+  // liefe die Wiedergabe kurz hinter dem noch sichtbaren mpegWindow.
+  emit playbackRestarted();
+
+  if (mPendingAutoPlay) {
+    mPendingAutoPlay = false;
+    if (mBackend)
+      mBackend->setProperty(QStringLiteral("pause"), false);
+  }
 }

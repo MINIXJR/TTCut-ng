@@ -28,7 +28,13 @@ TTMPEG2Window2::TTMPEG2Window2(QWidget *parent )
 
   this->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
   this->setAutoFillBackground(true);
-  this->setStyleSheet("QLabel { background-color: black }");
+  // Rahmen MUSS im Stylesheet entfernt werden: sobald ein QWidget ein Stylesheet
+  // hat, übernimmt der Stylesheet-Mechanismus das Rahmen-Rendering und ignoriert
+  // setFrameShape(). Der ~2px helle Default-QFrame-Rand blieb deshalb trotz
+  // QFrame::NoFrame sichtbar. Das libmpv-renderWidget im selben Stack hat keinen
+  // Rahmen — beim Umschalten Standbild↔Video erschien/verschwand der Rand als
+  // sichtbares "Zucken". `border: none` macht beide Darstellungen deckungsgleich.
+  this->setStyleSheet("QLabel { background-color: black; border: none; }");
 
   mpVideoStream    = 0;
   mpSubtitleStream = 0;

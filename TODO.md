@@ -234,6 +234,18 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     sein (kein synchrones Warten auf das eingefrorene `time-pos`). Frame-genau wäre ein
     synchrones `getProperty` im `ITTMpvBackend`-Interface (bewusst weggelassen) oder ein
     kurzes Warten auf das `time-pos`-Event nach `pause` in `stop()`.
+  - **Stop-Rest-Versatz ~5 Frames (Known Issue, tiefere Analyse offen)** — siehe
+    Abschnitt „Known Limitations". Bei `vo=libmpv` hängt das in die FBO gerenderte Bild
+    der mpv-Clock um eine feste Pipeline-Tiefe (~16 Frames) hinterher. Der eingebaute
+    Fix (`TTMpvRenderWidget::lastRenderedTimePos()`, von `onPlaybackFinished` als
+    Stop-Position genutzt statt `time-pos`) reduziert den sichtbaren Sprung beim STOP
+    von ~16 auf ~5 Frames. Die letzten ~5 Frames sind mpvs interne Frame-Queue-Tiefe
+    und nur über einen tiefen Render-Thread-Umbau eliminierbar. **Verworfene Versuche
+    (gemessen):** `report_swap` an `frameSwapped` → 0 zusätzlicher Effekt;
+    `MPV_RENDER_PARAM_ADVANCED_CONTROL` → blockiert den Stop-Pfad (`mpv_terminate_destroy`
+    hängt, Play/Stop-Button toggelt nicht mehr, render.h §93-94) → nicht gangbar ohne
+    separaten Render-Thread. Tiefere Lösung Prio low: ggf. mit künftiger libmpv-Version
+    (echte „angezeigter-Frame"-Property) oder Render-Thread-Architektur erneut bewerten.
   - `createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
     `frameRate==0` (Division → UB), Temp-Dateiname `playback_temp.mkv` nicht
     prozess-eindeutig, kein Destruktor-Cleanup (Temp-MKV bleibt liegen, wenn das Fenster
@@ -348,3 +360,5 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - **Multi-frame audio burst at cut boundaries**: DVB advertising audio can bleed 2-3+ audio frames before the video transition. The current burst detection checks only the last 2 audio frames at the CutOut boundary and offers single-frame shift (-1). For multi-frame bursts, the user must shift multiple times. Additionally, isolated burst frames can appear in the silence region between segments (mid-transition), which are not detected by the edge-based algorithm.
 
 - **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected). When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of ≤ reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
+
+- **Stop still-frame offset ~5 frames (mpv playback)**: When stopping playback in the "Current Frame" widget, the displayed still jumps ~5 frames (~200 ms) relative to the image visible when STOP was clicked. Cause: with `vo=libmpv` (in-process rendering for native Wayland support) mpv does not display frames itself but hands them to our `paintGL`. The mpv clock (`time-pos`) runs ahead of the frame actually rendered into the FBO by a fixed pipeline depth. A built-in fix (`lastRenderedTimePos` instead of `time-pos` as stop position) reduces the jump from ~16 to ~5 frames. Playback itself is smooth; only the frozen still is affected, the cut position is unaffected. The old `vo=x11` backend did not have this because mpv displayed frames itself (clock = visible frame). Deeper fix see TODO (Low Priority, "TTMpv-Wrapper: Folge-Verbesserungen"): requires a separate render thread or a future libmpv extension; `report_swap` and `ADVANCED_CONTROL` were tested and rejected (no effect / blocks the stop path).

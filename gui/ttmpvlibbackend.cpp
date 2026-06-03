@@ -332,6 +332,11 @@ void TTMpvLibBackend::drainEvents()
         emit fileLoaded();
         break;
 
+      case MPV_EVENT_PLAYBACK_RESTART:
+        // Seek abgeschlossen, erster Frame an Zielposition steht.
+        emit playbackRestarted();
+        break;
+
       case MPV_EVENT_END_FILE: {
         auto* e = static_cast<mpv_event_end_file*>(ev->data);
         if (e && e->reason == MPV_END_FILE_REASON_ERROR) {

@@ -74,6 +74,11 @@ struct TTFrameInfo {
     int gopIndex;           // Which GOP this frame belongs to
     int frameIndex;         // Sequential frame number
     bool isFieldCoded;      // true if merged from two PAFF field packets
+    // True decode-order index of the frame that decodeFrame() delivers for this
+    // (decode-order) position. Differs from frameIndex when B-frame reorder
+    // shifts decode vs display order. Lazily filled on first decode; -1 = unknown.
+    // Used by playback to seek mpv to the actually-displayed frame's time.
+    int deliveredDecodeIndex = -1;
 
     // Internal scratch for buildFrameIndex's PAFF post-processing pass:
     int  paffFrameNum  = -1;     // -1 = not a field; else frame_num for matching
@@ -271,6 +276,12 @@ private:
     int mCurrentFrameIndex;
     int mDecoderFrameIndex;     // Actual decoder position (last decoded frame)
     bool mDecoderDrained;       // True if decoder was flushed for EOF drain
+    // Decode-order tag counter for decodeFrame(): each sent packet is tagged with
+    // pts = mDecodeOrderTag++ (decode order from the seek keyframe). Since
+    // avcodec_receive_frame() delivers in display order, the delivered frame
+    // carries its decode-order index in mDecodedFrame->pts. Used to fill
+    // TTFrameInfo::deliveredDecodeIndex.
+    int64_t mDecodeOrderTag = 0;
     bool mIsElementaryStream;   // Cached: true if file is raw ES (byte-seeking)
     bool mAnalysisMode;         // True: use multi-threaded decoding for analysis
     bool mSearchMode;           // True: skip DPB prefill in seekToFrame (I-frame-only access)
@@ -300,6 +311,9 @@ private:
         int frameNum;        // frame_num from slice header
     };
     TTFieldInfo parseH264FieldInfoFromPacket(const uint8_t* data, int size);
+
+    // Decode-order tag for a packet (frame units, PAFF-aware). See .cpp.
+    int64_t decodeOrderTagForPacket(const AVPacket* packet);
     void parseH264SpsFromExtradata(const uint8_t* data, int size);
     // Validate format ctx, clear mFrameIndex, seek to byte 0 (ES) or PTS 0
     // (container), parse SPS extradata for H.264 PAFF detection. Returns

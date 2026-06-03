@@ -40,16 +40,36 @@ public:
   // baut für den neuen Handle einen frischen Context auf.
   void setMpv(mpv_handle* mpv);
 
+  // time-pos des zuletzt tatsächlich in paintGL gerenderten Frames (-1 = keiner).
+  double lastRenderedTimePos() const { return mLastRenderedTimePos; }
+
+  // Erzwingt GL- und mpv-Render-Context VOR dem ersten paintGL — auch wenn das
+  // Widget (noch) nicht sichtbar ist. Muss vom Caller VOR dem mpv-loadfile
+  // gerufen werden: Im StackAll-Modus bekommt ein verstecktes QOpenGLWidget
+  // beim ersten Play kein initializeGL/paintGL, sodass mpv das File ohne
+  // Render-Ziel lädt ("No render context set" → Video-Output tot). makeCurrent()
+  // realisiert das Widget bei Bedarf und triggert die GL-Initialisierung.
+  // Liefert true, wenn der Render-Context steht.
+  bool prepareRenderContext();
+
 protected:
   void initializeGL() override;
   void paintGL() override;
   void resizeGL(int w, int h) override;
 
 private slots:
-  void onMpvUpdate();   // queued vom mpv-Update-Callback ausgelöst
+  void onMpvUpdate();      // queued vom mpv-Update-Callback ausgelöst
 
 signals:
   void renderContextFailed(const QString& message);
+  // Feuert genau einmal pro Play-Zyklus, sobald das Widget seinen ZWEITEN
+  // echten mpv-Frame gerendert hat. Hintergrund (per Log belegt): mpv liefert
+  // nach einem Lade-Seek den ersten Frame stale (GOP-Keyframe vor dem Ziel =
+  // Werbe-Frame bei Cut-In nach Werbung), erst ab dem zweiten Render stimmt
+  // der Inhalt. Der Caller schaltet erst auf dieses Widget um, wenn ein
+  // nachweislich korrekter Frame drinsteht — bis dahin bleibt das mpegWindow-
+  // Standbild sichtbar. Zähler wird in setMpv() je Play-Zyklus genullt.
+  void firstFrameReady();
 
 private:
   // libmpv-Update-Callback (läuft in einem libmpv-Thread!).
@@ -66,6 +86,12 @@ private:
 
   mpv_handle*         mMpv          = nullptr;
   mpv_render_context* mRenderCtx    = nullptr;
+  // Zähler echter mpv-Renders seit dem letzten setMpv (Play-Zyklus).
+  // firstFrameReady feuert genau einmal, sobald er 2 erreicht.
+  int                 mRenderedFrames = 0;
+  // time-pos des zuletzt in paintGL gerenderten Frames (Stop-Position bei
+  // vo=libmpv, siehe paintGL/onPlaybackFinished).
+  double              mLastRenderedTimePos = -1.0;
 };
 
 #endif // TTMPVRENDERWIDGET_H
