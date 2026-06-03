@@ -632,22 +632,34 @@ void TTCurrentFrame::onPlayVideo()
   }
 
   if (isH264orH265) {
-    // ES files have no timestamps: mux into a temp MKV first
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    QString tempMkv = createTempMkvForPlayback();
-    QApplication::restoreOverrideCursor();
+    // ES files have no timestamps: mux into a temp MKV first. The temp MKV is
+    // cached across STOP→PLAY cycles — re-muxing the whole ES (~5 s) is only
+    // needed when the source (video/audio path) changed. STOP no longer deletes
+    // it (see onPlaybackFinished); the fingerprint guards reuse.
+    QString fp = playbackSourceFingerprint();
+    bool cacheValid = !mTempPlaybackFile.isEmpty()
+                      && fp == mCachedPlaybackFingerprint
+                      && QFile::exists(mTempPlaybackFile);
 
-    if (tempMkv.isEmpty()) {
-      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-          QString("Failed to create temp MKV for H.264/H.265 playback"));
-      return;
+    if (!cacheValid) {
+      cleanupTempPlaybackFile();   // drop a stale cache (e.g. source changed)
+      QApplication::setOverrideCursor(Qt::WaitCursor);
+      QString tempMkv = createTempMkvForPlayback();
+      QApplication::restoreOverrideCursor();
+
+      if (tempMkv.isEmpty()) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Failed to create temp MKV for H.264/H.265 playback"));
+        return;
+      }
+      mTempPlaybackFile = tempMkv;
+      mCachedPlaybackFingerprint = fp;
     }
-    mTempPlaybackFile = tempMkv;
 
     // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
     setPlayingButtonState(true);
     // Audio is already muxed into the temp MKV — no separate audio file needed
-    mPlayer->load(tempMkv, startSec);
+    mPlayer->load(mTempPlaybackFile, startSec);
   } else {
     // MPEG-2: seek directly in the ES; pass first audio track separately if present
     QString audioFile;
@@ -753,7 +765,10 @@ void TTCurrentFrame::onPlaybackFinished()
   laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
   setPlayingButtonState(false);
 
-  cleanupTempPlaybackFile();
+  // NOTE: the temp playback MKV is deliberately NOT deleted here. It is cached
+  // so a subsequent PLAY of the same source reuses it instead of re-muxing the
+  // whole ES (~5 s). It is dropped on source change / close (onAVDataChanged,
+  // closeVideoStream) and invalidated via fingerprint in onPlayVideo.
 }
 
 //! Clean up temporary playback file
@@ -767,6 +782,26 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
     }
     mTempPlaybackFile.clear();
   }
+  mCachedPlaybackFingerprint.clear();
+}
+
+//! Fingerprint of everything that determines the playback temp MKV's content.
+//! Used to decide whether a cached temp MKV can be reused on a subsequent PLAY
+//! instead of re-muxing the whole ES (~5 s). Covers exactly what
+//! createTempMkvForPlayback() feeds into the muxer: the video file path and the
+//! first audio track's path. startSec (mpv --start), subtitles (mpegWindow
+//! overlay only) and the UI audio delay (final cut only) deliberately do NOT
+//! enter the MKV and are therefore excluded.
+QString TTCurrentFrame::playbackSourceFingerprint() const
+{
+  if (videoStream == nullptr) return QString();
+  QString fp = videoStream->filePath();
+  if (mAVItem != nullptr && mAVItem->audioCount() > 0) {
+    TTAudioStream* a0 = mAVItem->audioStreamAt(0);
+    if (a0 != nullptr)
+      fp += QLatin1Char('|') + a0->filePath();
+  }
+  return fp;
 }
 
 //! Decrease playback speed by one step
@@ -803,7 +838,7 @@ void TTCurrentFrame::applySpeedStep()
 //! This muxes the ES video and audio so mpv can seek and sync properly
 QString TTCurrentFrame::createTempMkvForPlayback()
 {
-  QString tempMkv = QDir(TTSettings::instance()->tempDirPath()).filePath("playback_temp.mkv");
+  QString tempMkv = QDir(TTSettings::instance()->tempDirPath()).filePath("ttcut-ng_playback_temp.mkv");
 
   // Remove old temp file if exists
   QFile::remove(tempMkv);

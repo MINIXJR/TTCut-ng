@@ -74,6 +74,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void updateCurrentPosition(int pos = -1);
 		QString createTempMkvForPlayback();
 		void cleanupTempPlaybackFile();
+		QString playbackSourceFingerprint() const;
 		void ensurePlayerCreated();
 
 	private:
@@ -97,7 +98,8 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		int                 currentCutItemIndex;
 		int                 currentCutPosition;
 		TTMpvWrapper*       mPlayer = nullptr;
-		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback
+		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback (cached across STOP→PLAY)
+		QString             mCachedPlaybackFingerprint;  // source fingerprint of the cached temp MKV
 		int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
 		QWidget*            mFrameStackContainer = nullptr;
 		QStackedLayout*     mFrameStack = nullptr;
