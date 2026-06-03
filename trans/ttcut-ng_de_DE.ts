@@ -482,7 +482,7 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Aktuelles Bild</translation>
     </message>
     <message>
-        <location filename="../ui/currentframewidget.ui" line="173"/>
+        <location filename="../ui/currentframewidget.ui" line="233"/>
         <source>00:00:00,000 (000000)</source>
         <translation>00:00:00,000 (000000)</translation>
     </message>
@@ -1566,56 +1566,55 @@ Ausgabedatei:
 <context>
     <name>TTCutPreview</name>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="86"/>
-        <location filename="../gui/ttcutpreview.cpp" line="333"/>
+        <location filename="../gui/ttcutpreview.cpp" line="91"/>
+        <location filename="../gui/ttcutpreview.cpp" line="326"/>
         <source>Shift -1 Frame</source>
         <translation>Shift -1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="242"/>
-        <location filename="../gui/ttcutpreview.cpp" line="259"/>
-        <location filename="../gui/ttcutpreview.cpp" line="277"/>
-        <location filename="../gui/ttcutpreview.cpp" line="546"/>
+        <location filename="../gui/ttcutpreview.cpp" line="236"/>
+        <location filename="../gui/ttcutpreview.cpp" line="254"/>
+        <location filename="../gui/ttcutpreview.cpp" line="274"/>
+        <location filename="../gui/ttcutpreview.cpp" line="282"/>
+        <location filename="../gui/ttcutpreview.cpp" line="565"/>
         <source>Play</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="264"/>
-        <location filename="../gui/ttcutpreview.cpp" line="300"/>
-        <location filename="../gui/ttcutpreview.cpp" line="317"/>
+        <location filename="../gui/ttcutpreview.cpp" line="265"/>
         <source>Stop</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="350"/>
-        <location filename="../gui/ttcutpreview.cpp" line="383"/>
+        <location filename="../gui/ttcutpreview.cpp" line="343"/>
+        <location filename="../gui/ttcutpreview.cpp" line="376"/>
         <source>Shift +1 Frame</source>
         <translation>Shift +1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="490"/>
+        <location filename="../gui/ttcutpreview.cpp" line="502"/>
         <source>Regenerating preview...</source>
         <translation>Vorschau wird neu generiert...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="580"/>
+        <location filename="../gui/ttcutpreview.cpp" line="599"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>MPEG-2 Video schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="593"/>
-        <location filename="../gui/ttcutpreview.cpp" line="713"/>
+        <location filename="../gui/ttcutpreview.cpp" line="612"/>
+        <location filename="../gui/ttcutpreview.cpp" line="732"/>
         <source>Cutting audio...</source>
         <translation>Audio schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="632"/>
-        <location filename="../gui/ttcutpreview.cpp" line="740"/>
+        <location filename="../gui/ttcutpreview.cpp" line="651"/>
+        <location filename="../gui/ttcutpreview.cpp" line="759"/>
         <source>Creating MKV...</source>
         <translation>MKV erstellen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="686"/>
+        <location filename="../gui/ttcutpreview.cpp" line="705"/>
         <source>Video Smart Cut...</source>
         <translation>Video Smart Cut...</translation>
     </message>
@@ -2749,7 +2748,7 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="2838"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="2885"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>

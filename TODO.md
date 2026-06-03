@@ -218,12 +218,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
-- **Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**
-  - Ohne die Env-Variable startet TTCut-ng unter Wayland nicht sauber (bestätigt 2026-04-19)
-  - Historischer Grund (`QGLWidget`) ist seit Migration zu QImage/QPixmap weg; trotzdem weiter nötig
-  - Grep im Source zeigt keinen expliziten XCB-Zwang → Problem liegt in Qt-Wayland-Plugin, mpv-Embedding oder Widget-Interaktion
-  - Diagnose: `QT_DEBUG_PLUGINS=1 QT_LOGGING_RULES="qt.qpa.*=true" ./ttcut-ng` unter Wayland starten, Output analysieren
-  - Ziel: Root Cause finden, ggf. beheben, XCB-Krücke aus `ttcut.sh`/`ttcut.desktop`/README/INSTALL entfernen
+- ~~**Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**~~ → **DONE** (v0.71.0, libmpv-Render-Backend)
+  - Root Cause war das mpv-`--wid`-Embedding des alten Process-Backends. Mit dem
+    libmpv-in-process-Render-Backend (vo=libmpv, `TTMpvRenderWidget` als
+    `QOpenGLWidget`) entfällt das Fremdfenster-Embedding; TTCut-ng läuft nativ
+    unter Wayland ohne `QT_QPA_PLATFORM=xcb`.
 
 - ~~**Live-Timecode bei mpv-Wiedergabe**~~ → **DONE** (TTMpv-Wrapper-Refactor)
   - `TTMpvWrapper::positionChanged` (aus `observeProperty("time-pos")`) → der Timecode
@@ -247,9 +246,14 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     separaten Render-Thread. Tiefere Lösung Prio low: ggf. mit künftiger libmpv-Version
     (echte „angezeigter-Frame"-Property) oder Render-Thread-Architektur erneut bewerten.
   - `createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
-    `frameRate==0` (Division → UB), Temp-Dateiname `playback_temp.mkv` nicht
-    prozess-eindeutig, kein Destruktor-Cleanup (Temp-MKV bleibt liegen, wenn das Fenster
-    während H.264/H.265-Wiedergabe geschlossen wird).
+    `frameRate==0` (Division → UB); kein Destruktor-Cleanup (Temp-MKV bleibt liegen,
+    wenn das Fenster während H.264/H.265-Wiedergabe geschlossen wird).
+    (Temp-Dateiname ist seit v0.71.0 eindeutig: `ttcut-ng_playback_temp.mkv`.)
+  - **Erster PLAY pro Quelle ~5 s** (H.264/H.265): die ganze ES wird vor der
+    Wiedergabe in eine temp-MKV gemuxt. Seit v0.71.0 wird die MKV über
+    STOP→PLAY gecacht (Re-PLAY sofort), aber der erste Mux bleibt. Hebel:
+    nur den abgespielten Bereich muxen, oder mpv die ES mit erzwungener
+    Framerate direkt füttern. Prio low.
 
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen

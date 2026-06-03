@@ -2,6 +2,60 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.71.0 (2026-06-03)
+
+**libmpv in-process render backend (native Wayland), new playback player, H.264/H.265 playback fixes**
+
+### Features
+
+- **libmpv in-process render backend** — playback now renders through
+  the MPV_RENDER_API (OpenGL) inside a `QOpenGLWidget` instead of
+  launching mpv as a child process embedded via `--wid`. TTCut-ng runs
+  natively on Wayland without the `QT_QPA_PLATFORM=xcb` workaround. The
+  IPC-socket path is gone entirely. New classes: `ITTMpvBackend`,
+  `TTMpvLibBackend`, `TTMpvRenderWidget`, `TTMpvWrapper`; the old
+  `TTVideoPlayer`/`TTMplayerWidget` were removed.
+- **Playback controls** — combined Play/Stop toggle button, fast
+  forward / reverse (±2×/±4×) with auto-mute above 1×, and a live
+  timecode that runs with the mpv clock during playback.
+- **Faster re-play** — the temporary playback MKV (H.264/H.265 ES has no
+  timestamps, so it is muxed into an MKV before playback) is now cached
+  across STOP→PLAY cycles. Re-playing the same source starts instantly
+  instead of re-muxing the whole stream (~5 s). The cache is invalidated
+  by a source fingerprint (video + audio path) and cleared on source
+  change / close. The temp file is now uniquely named
+  `ttcut-ng_playback_temp.mkv`.
+
+### Fixes
+
+- **Advertising flash on PLAY** (H.264/H.265) — the app frame index is
+  decode-order while mpv seeks by display time; PLAY landed on the GOP
+  keyframe before the cut-in (typically an ad frame). The display
+  position is now derived from the frame actually decoded, so playback
+  starts on the selected frame.
+- **First PLAY no longer fails** — the render context is created at
+  stream open so the very first PLAY no longer hit "No render context
+  set" and stayed black.
+- **PAFF playback jump** — the decode-order tag now counts per frame
+  instead of per packet (PAFF has two field packets per frame), removing
+  a large position jump on PAFF streams.
+- **Frame "flicker" on play↔still switch** — the still-frame widget lost
+  its stray ~2 px white frame border (a stylesheet overrode
+  `setFrameShape(NoFrame)`), so the still and the mpv frame are now
+  pixel-congruent.
+- **MPEG-2 field-picture stop position** — play/stop position drift
+  corrected via field-picture index correction.
+
+### Changes
+
+- The still-frame on STOP is taken from the last actually rendered mpv
+  frame instead of the (ahead-running) playback clock, reducing the
+  stop jump from ~16 to ~5 frames. The ~5-frame remainder is an inherent
+  `vo=libmpv` pipeline depth (documented in TODO.md / Known Limitations).
+- `hwdec` defaults to `no` (env-overridable via `MPV_HWDEC`) to avoid a
+  Mesa/RDNA4 VA-API decode bug; CPU decode is fine at 1080p25.
+- Build dependencies: `libmpv-dev`, `libqt5opengl5-dev`.
+
 ## v0.70.0 (2026-05-20)
 
 **Settings dialog and Cut-Dialog overhaul, persistent/transient settings split, English UI source strings**
