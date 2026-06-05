@@ -55,8 +55,24 @@ public:
     int getGOPStart(int gopIndex);
     int getGOPEnd(int gopIndex);
 
-    // Frame index forwarding
+    // --- Canonical frame-index owner ("Owner A") ---
+    // This stream builds the FFmpeg frame index ONCE at stream-open
+    // (createHeaderList). Other wrappers of the same file should adopt it instead
+    // of rescanning themselves (~2 s/scan). Consumers:
+    //   - Quickjump (ttquickjumpdialog.cpp) pulls directly via ffmpegFrameIndex().
+    //   - mpegWindow (ttmpeg2window2.cpp) adopts via provideFrameIndexTo();
+    //     Black/Scene/Logo search + analysisWrapper pull transitively from there.
+    //   - framesearch (ttframesearchtask.cpp) adopts via provideFrameIndexTo().
+    // See spec docs/superpowers/specs/2026-06-05-frame-index-unification-design.md
     const QList<TTFrameInfo>& ffmpegFrameIndex() const;
+
+    // Hands this stream's already-built index (Owner A) to `consumer`, which has
+    // opened the SAME file. File identity is guaranteed by the caller through
+    // object identity (it holds this stream object).
+    //   true  = adopted → consumer needs NO buildFrameIndex().
+    //   false = index still empty/not built → caller must call
+    //           consumer->buildFrameIndex() itself.
+    bool provideFrameIndexTo(TTFFmpegWrapper* consumer) const;
 
 protected:
     // ffmpeg lifecycle (called from createHeaderList)
