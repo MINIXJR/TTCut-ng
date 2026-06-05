@@ -14,6 +14,7 @@
 
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
+#include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
 #include <QFile>            // TEMP-VERIFY: CSV index dump (Task 2, remove in Task 6)
 #include <QTextStream>      // TEMP-VERIFY
 
@@ -310,13 +311,26 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
       return;
     }
 
-    // Build frame index for seeking/decoding
-    qDebug() << "Building frame index for preview...";
-    if (!mpFFmpegWrapper->buildFrameIndex()) {
-      log->errorMsg(__FILE__, __LINE__,
-          QString("Failed to build frame index: %1").arg(mpFFmpegWrapper->lastError()));
+    // Index sharing (spec 2026-06-05): Owner A (vStream->mFFmpeg) already built
+    // the frame index at stream-open. Instead of running an identical second scan
+    // of the same file here (~2 s), we adopt Owner A's index (Qt COW, cheap).
+    // Consumers that in turn pull from THIS wrapper (Black/Scene/Logo search,
+    // analysisWrapper) thus transitively get Owner A's index too. Falls back to
+    // building our own if vStream is not an H.26x stream or its index is not
+    // available yet.
+    bool indexAdopted = false;
+    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+      indexAdopted = h26x->provideFrameIndexTo(mpFFmpegWrapper);
     }
-    qDebug() << "Frame index built:" << mpFFmpegWrapper->frameCount() << "frames"
+    if (!indexAdopted) {
+      qDebug() << "Building frame index for preview...";
+      if (!mpFFmpegWrapper->buildFrameIndex()) {
+        log->errorMsg(__FILE__, __LINE__,
+            QString("Failed to build frame index: %1").arg(mpFFmpegWrapper->lastError()));
+      }
+    }
+    qDebug() << (indexAdopted ? "Frame index adopted:" : "Frame index built:")
+             << mpFFmpegWrapper->frameCount() << "frames"
              << "(videoStream:" << vStream->frameCount() << "headers)";
 
     // TEMP-VERIFY (Task 2, remove in Task 6)
