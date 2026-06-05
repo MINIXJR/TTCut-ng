@@ -1693,7 +1693,9 @@ void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float thre
 
   mLastSearchStartPos = startPos;
 
-  // Reuse the GUI preview wrapper's frame index — avoids a costly rescan in the worker.
+  // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
+  // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
+  // scan in the search worker.
   QList<TTFrameInfo> preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
     preBuiltIndex = preview->frameIndex();
@@ -1761,6 +1763,9 @@ void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float thr
 
   mLastSearchStartPos = startPos;
 
+  // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
+  // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
+  // scan in the search worker.
   QList<TTFrameInfo> preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
     preBuiltIndex = preview->frameIndex();
@@ -2022,6 +2027,9 @@ void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
 
   mLastSearchStartPos = startPos;
 
+  // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
+  // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
+  // scan in the search worker.
   QList<TTFrameInfo> preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
     preBuiltIndex = preview->frameIndex();
