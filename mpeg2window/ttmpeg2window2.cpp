@@ -15,8 +15,6 @@
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
-#include <QFile>            // TEMP-VERIFY: CSV index dump (Task 2, remove in Task 6)
-#include <QTextStream>      // TEMP-VERIFY
 
 #include <QDebug>
 #include <QMouseEvent>
@@ -264,21 +262,6 @@ void TTMPEG2Window2::openVideoFile( QString fName, TTVideoIndexList* viIndex, TT
   }
 }
 
-// TEMP-VERIFY (Task 2, remove in Task 6): dumps the frame index as CSV for
-// bit-identical adopt-vs-build verification.
-static void ttTempDumpFrameIndexCsv(const QList<TTFrameInfo>& idx, const QString& path)
-{
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
-        return;
-    QTextStream out(&f);
-    out << "fileOffset,packetSize,frameType,isKeyframe,gopIndex,frameIndex,isFieldCoded\n";
-    for (const TTFrameInfo& fi : idx)
-        out << fi.fileOffset << ',' << fi.packetSize << ',' << fi.frameType << ','
-            << (fi.isKeyframe ? 1 : 0) << ',' << fi.gopIndex << ',' << fi.frameIndex
-            << ',' << (fi.isFieldCoded ? 1 : 0) << '\n';
-}
-
 /*!
  * openVideoStream - supports MPEG-2, H.264, and H.265
  */
@@ -332,10 +315,6 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
     qDebug() << (indexAdopted ? "Frame index adopted:" : "Frame index built:")
              << mpFFmpegWrapper->frameCount() << "frames"
              << "(videoStream:" << vStream->frameCount() << "headers)";
-
-    // TEMP-VERIFY (Task 2, remove in Task 6)
-    ttTempDumpFrameIndexCsv(mpFFmpegWrapper->frameIndex(),
-        "/usr/local/src/CLAUDE_TMP/TTCut-ng/idx_dump.csv");
 
     qDebug() << "Opened H.264/H.265 stream with FFmpeg decoder";
   } else {
