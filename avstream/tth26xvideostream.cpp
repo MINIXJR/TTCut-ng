@@ -275,3 +275,18 @@ const QList<TTFrameInfo>& TTH26xVideoStream::ffmpegFrameIndex() const
 {
     return mFFmpeg->frameIndex();
 }
+
+// See header doc + spec 2026-06-05. QList<TTFrameInfo> is Qt copy-on-write:
+// setFrameIndex only copies the COW header here; a later lazy
+// deliveredDecodeIndex write in the consumer detaches its own copy → no data
+// races between parallel wrappers.
+bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
+{
+    if (!consumer)
+        return false;
+    const QList<TTFrameInfo>& idx = ffmpegFrameIndex();
+    if (idx.isEmpty())
+        return false;                 // not built yet → caller builds itself
+    consumer->setFrameIndex(idx);
+    return true;
+}

@@ -253,7 +253,8 @@ void TTQuickJumpDialog::startThumbnailWorker()
 
   int streamType = mVideoStream->streamType();
 
-  // Reuse existing frame index for H.264/H.265 (avoids 6s rebuild)
+  // Index sharing (spec 2026-06-05): pulls the frame index directly from Owner A
+  // (videoStream->ffmpegFrameIndex()) to avoid another ~2 s scan in the worker.
   QList<TTFrameInfo> prebuiltIndex;
   if (streamType == TTAVTypes::h264_video) {
     TTH264VideoStream* h264 = static_cast<TTH264VideoStream*>(mVideoStream);

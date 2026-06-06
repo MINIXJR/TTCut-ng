@@ -24,6 +24,7 @@
 #include "../extern/ttffmpegwrapper.h"
 #include "../avstream/tth264videostream.h"
 #include "../avstream/tth265videostream.h"
+#include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
 
 //! Search for an equal frame
 TTFrameSearchTask::TTFrameSearchTask(TTVideoStream* referenceStream, int referenceIndex,
@@ -81,7 +82,15 @@ void TTFrameSearchTask::initFrameSearch()
       delete refWrapper;
       throw TTAbortException("TTFrameSearchTask: could not open reference stream for FFmpeg decode");
     }
-    if (!refWrapper->buildFrameIndex()) {
+    // Index sharing (spec 2026-06-05): if the reference stream is an H.26x stream
+    // with an already-built index, adopt it instead of rescanning.
+    // mpReferenceStream IS the source stream object; refWrapper opened its
+    // filePath() → file identity guaranteed by object identity.
+    bool refIndexAdopted = false;
+    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpReferenceStream)) {
+      refIndexAdopted = h26x->provideFrameIndexTo(refWrapper);
+    }
+    if (!refIndexAdopted && !refWrapper->buildFrameIndex()) {
       refWrapper->closeFile();
       delete refWrapper;
       throw TTAbortException("TTFrameSearchTask: buildFrameIndex failed for reference stream");
