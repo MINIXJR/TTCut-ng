@@ -73,6 +73,7 @@ rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
          --exclude='moc/' --exclude='obj/' --exclude='ui_h/' --exclude='res/' \
          --exclude='/Makefile' --exclude='*.pro.user' \
          --exclude='/tools/test-videos/cache/' \
+         --exclude='/docs/' \
          "$SOURCE_DIR/" "$BUILD_DIR/"
 
 cd "$BUILD_DIR"
