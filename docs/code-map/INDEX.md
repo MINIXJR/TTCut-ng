@@ -8,7 +8,7 @@ data-flow question, check here first.**
 
 | Map | Subsystem | base_commit | Status |
 |---|---|---|---|
-| [frame-order.md](frame-order.md) | Frame-order pipeline: still-image display vs cut-set vs smart-cut execution; decode-order vs display-order semantics | `eff8dfa` | fresh (run `code-map check` to verify) |
+| [frame-order.md](frame-order.md) | Frame-order pipeline: still-image display vs cut-set vs smart-cut execution; decode-order vs display-order semantics. **Root cause of the Cut-In preview bug: display↔cut index-interpretation asymmetry** (display shows display-frame n; cut's `selectFramesNonPAFF` applies a display-order mapping → lands ~2 frames later at a B-frame Cut-In). | `ccd06b8` | fresh (corrected 2026-06-07, empirically verified) |
 
 ## Project module overview
 

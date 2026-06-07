@@ -1,5 +1,5 @@
 ---
-base_commit: eff8dfa26bbd3c6d6a1147db6029fe15c7bd8f50
+base_commit: ccd06b816f8f58ec4b5c51ae3b0c2ce4a07221bc
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -76,7 +76,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTVideoIndexList::moveToNextIndexPos(pos, type)` → TTVideoStream | next list position ≥ pos+1 matching frame type | **DECODE order** for H.26x (list built frame-by-frame from `mFrameIndex`, no POC sort); **display order** for MPEG-2 (list is sorted by `display_order` via `sortDisplayOrder()`) |
 | `TTCurrentFrame` → `TTMPEG2Window2::showFrameAt(newFramePos)` | integer `newFramePos` — the return value of the `moveTo*` call | **DECODE order** (H.26x); **display order** (MPEG-2) |
 | `TTMPEG2Window2::moveToVideoFrame(iFramePos)` → `TTFFmpegWrapper::decodeFrame(iFramePos)` | integer `iFramePos` interpreted as index into `mFrameIndex` (Owner B) | **DECODE order** — `mFrameIndex` was built by scanning packets sequentially (decode order) |
-| `TTFFmpegWrapper::decodeFrame(n)` → caller | `QImage` of the frame that libav's decoder delivers when stepping through decode positions up to n; **NOT necessarily the frame whose display-time equals n/fps** | **Frame delivered is at DECODE position n** — under B-frame reorder this is DISPLAY frame n+delay (or n-delay depending on direction) |
+| `TTFFmpegWrapper::decodeFrame(n)` → caller | `QImage` shown in the still-image widget | **DISPLAY frame n (empirically verified)** — the app's ad→programme transition matches ffmpeg's display transition exactly. (An earlier guess that this returns decode-position n was DISPROVEN by measurement. The internal mechanism by which a decode-order-looking index yields a display-accurate frame is the open knot, see bug section.) |
 | `TTFFmpegWrapper::decodeFrame(n)` → `mFrameIndex[n].deliveredDecodeIndex` | true decode-order index of the picture actually emitted by `avcodec_receive_frame`; differs from n when B-frame reorder applies | DECODE order tag set at packet-send time; maps packet-send-order → delivered-display-frame |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCutItem::mCutInIndex` (via `appendCutEntry`) | `currentPosition` as plain `int` | **DECODE order** (same value that TTCurrentFrame received from `moveTo*`) |
 | `TTCutItem::cutInIndex()` → `TTCutPreviewTask::createH264PreviewClip` | `mCutInIndex` | **DECODE order** |
@@ -104,31 +104,39 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 
 - **`TTCutFrameNavigation::checkCutPosition(avData, pos)`** — receives an explicit `pos` parameter (the same value returned by `moveToXxx` in TTCurrentFrame) and stores it as `currentPosition`. The fix in v0.61.2 ensures this value is never re-read from the shared `videoStream->currentIndex()` after a signal cascade. `onSetCutIn()` emits `setCutIn(cutInPosition)` where `cutInPosition` equals the `currentPosition` set by the last `checkCutPosition` call.
 
-## Order-domain summary per path
+## Order-domain summary per path (CORRECTED 2026-06-07, empirically verified)
 
-| Path | Which frames are accessed | Index domain | Consistent? |
-|---|---|---|---|
-| **Still-image display** (H.26x) | `decodeFrame(n)` delivers frame at decode position n; with B-frame reorder this is NOT display-frame n | DECODE order throughout | Internal: yes. Vs user expectation (display frame n): **NO** — shows decode-position n, not display-position n |
-| **Still-image display** (MPEG-2) | `TTVideoIndexList` sorted by display order; index positions ARE display-frame numbers | DISPLAY order throughout | Yes |
-| **Cut-point setting** (H.26x and MPEG-2) | Stores the integer returned by `moveToXxx` in `mCutInIndex`/`mCutOutIndex` | DECODE order (H.26x); DISPLAY order (MPEG-2) | Internally consistent per codec; mirrors the same integer that the display path used |
-| **Smart Cut execution** (H.26x) | `TTNaluParser::mAccessUnits[index]` indexed by `mCutInIndex` from TTCutItem | DECODE order | Yes — TTNaluParser is also decode-order; cut and parser agree |
+> An earlier version of this map claimed the **display** was decode-order-offset and
+> the **cut** was correct. Empirical measurement (ffmpeg display-frame ground truth +
+> headless mini-cut + NaluParser AU dump on MBAFF.264 around frame 36384) proved the
+> **opposite**. The corrected findings:
 
-## The B-frame display bug
+**Verified facts (MBAFF.264, around the 36384/36386 ad→programme transition):**
+- ffmpeg display-frame ground truth: Display-36384/36385 = advertising, Display-36386 = programme (I-frame).
+- **Still-image display**: App index 36384 → advertising, 36386 → programme. The app's ad→programme transition (36385→36386) is **identical** to ffmpeg's display transition → the still-image shows **display-frame n, frame-accurately**.
+- **Raw index systems are identical**: NaluParser `mAccessUnits` and FFmpeg `mFrameIndex` both have 36384=B, 36386=I(keyframe). **No off-by-N between the two index systems.**
+- **Smart Cut execution**: a mini-cut with Cut-In=36384 produced an output that **starts at display-36386 (programme)** — i.e. ~2 display-frames LATER than what the still-image at 36384 shows.
 
-The still-image preview bug (Cut-In shows the wrong frame) is a consequence of the
-display path using decode-order indices with a libav decoder that delivers in display
-order:
+| Path | What index N maps to | Consistent with display? |
+|---|---|---|
+| **Still-image display** (H.26x) | display-frame N (frame-accurate vs ffmpeg) | — (this is the reference) |
+| **Smart Cut execution** (H.26x) | `selectFramesNonPAFF` applies a *display-order mapping* (keyframe + displayOffset, skipping Open-GOP B-frames) → `realStartAU`; Cut-In 36384 → realStartAU 36388 → output from display-36386 | **NO** — cut starts ~2 display-frames after the shown frame |
+| **Both** (MPEG-2) | `TTVideoIndexList` is `sortDisplayOrder()`-sorted; display path and cut agree | Yes (no bug) |
 
-1. User navigates to a B-frame that appears at display-position D.
-2. Under B-frame reorder, that B-frame was encoded at decode-position D-k (k = reorder delay).
-3. `moveToNextFrame()` returns decode-position D, stored as `current_index`.
-4. `decodeFrame(D)` seeks to the keyframe before decode-position D and steps forward, delivering the display-order frame that libav emits at decode step D. This is NOT display-frame D; it is the frame that would be displayed at position D if PTS were assigned in decode order — which for B-frames is a different picture than the one whose POC == D.
-5. The still-image widget shows this "wrong" picture.
-6. `mCutInIndex` is set to decode-position D. The Smart Cut engine also uses decode-position D as its start frame in TTNaluParser — so the **cut itself** happens at the correct byte boundary in the stream (decode-order D is the correct NAL offset). The still-image is misleading but the cut is correct.
+## The real bug: display ↔ cut index-interpretation asymmetry
 
-**In short:** the display is decode-order indexed, the decoder delivers display-order frames, and B-frame reorder causes a position mismatch. The cut execution does not have this bug (it works entirely in decode order via TTNaluParser). The bug is purely in the still-image presentation.
+The still-image preview and the cut interpret the **same** Cut-In index differently:
 
-For MPEG-2 the bug does not occur because the index list is sorted to display order before any navigation, so `current_index` IS display-frame n.
+1. **Display** (`showFrameAt(n)` → `decodeFrame(n)`) shows display-frame n, frame-accurately (verified vs ffmpeg).
+2. **Cut** (`TTESSmartCut::selectFramesNonPAFF`, ttessmartcut.cpp:2444) does **not** take the index raw. It computes `displayOffset = startFrame − findKeyframeBefore(startFrame)` and counts `displayOffset` frames forward from the keyframe **skipping Open-GOP B-frames** (`if (au < uiKeyframe) continue;`) → `realStartAU`. For Cut-In 36384 (a B-frame, keyframe 36378, offset 6) this yields realStartAU 36388 and the output begins at display-36386.
+
+So at a B-frame Cut-In the cut lands ~2 display-frames later than the still-image shows → "I can't see where it will actually cut".
+
+**History:** the cut-side mapping (`0dd20c0`, Feb 2026) is old and unchanged; the H.26x display index (`createIndexList`, `c95cc19`, May 2026) is newer. This matches the user's observation "nothing changed in SmartCut".
+
+**Open knot (NOT yet resolved — needed for the fix direction):** `createIndexList` sets `setDisplayOrder(i)` as a plain sequential (decode-order-looking) counter, yet the display empirically shows display-order frames. *Why* `decodeFrame(n)` ends up display-accurate while the index looks decode-order is not fully traced. This must be understood before deciding whether to (a) make the display apply the same mapping the cut uses, or (b) fix/remove the cut's display-order mapping. Do not assume a direction.
+
+For MPEG-2 the bug does not occur (`sortDisplayOrder()` aligns both paths).
 
 ## Redundancy / consolidation candidates
 
