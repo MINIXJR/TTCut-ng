@@ -51,6 +51,8 @@ The generated executable is `ttcut-ng` in the project root.
 
 ## Architecture
 
+> **Data-flow maps:** For detailed, maintained subsystem data-flow maps (decode-vs-display order, edge semantics, redundancy), see `docs/code-map/` (start at `INDEX.md`). Created and kept fresh via the `code-map` skill — check there before re-searching for architecture/data-flow answers.
+
 ### Stream Hierarchy
 
 The codebase uses a class hierarchy for AV streams (defined in avstream/):
@@ -219,7 +221,7 @@ Demux tool for H.264/H.265 TS files:
 
 **Known limitations:**
 
-1. **Video playback delay**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer). This causes a brief delay before playback starts. This is necessary because H.264/H.265 elementary streams lack timestamps required for seeking and A/V synchronization. MPEG-2 playback does not have this limitation.
+1. **Video playback delay (first play only)**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer), because H.264/H.265 elementary streams lack the timestamps required for seeking and A/V synchronization. This causes a brief delay before playback starts. Since v0.71.0 the temp MKV is cached (fingerprint-based) across STOP→PLAY, so the delay only occurs on the first play (and after the source changes), not on every play. MPEG-2 playback does not have this limitation.
 
 **PAFF Smart Cut implementation notes:**
 - x264 produces MBAFF output while the source stream is PAFF. An EOS NAL flushes the decoder DPB at the re-encode→stream-copy transition.
