@@ -235,21 +235,27 @@ Demux tool for H.264/H.265 TS files:
 
 The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
 
-## Running on Wayland
+## Running
 
-TTCut-ng requires XCB platform on Wayland systems.
-
-**Running TTCut-ng:**
+Since v0.71.0 (libmpv in-process render backend) TTCut-ng runs natively on
+Wayland — no `QT_QPA_PLATFORM=xcb` override is required. Start it directly:
 
 ```bash
-# Run with XCB backend (required for Wayland)
-QT_QPA_PLATFORM=xcb ./ttcut-ng
+# Native (Wayland or X11)
+./ttcut-ng
 
 # With logging
-QT_QPA_PLATFORM=xcb ./ttcut-ng 2>&1 | tee /path/to/logfile.log
+./ttcut-ng 2>&1 | tee /path/to/logfile.log
 ```
 
 The executable name is `ttcut-ng`.
+
+**Notes:**
+- `QT_QPA_PLATFORM=xcb ./ttcut-ng` still works as a fallback if a Wayland
+  compositor misbehaves, but is no longer the default.
+- Hardware decoding defaults to off (`hwdec=no`) due to a Mesa + AMD RDNA4
+  VA-API issue; override with the `MPV_HWDEC` environment variable if your
+  GPU/driver combination supports it.
 
 ## Future Improvements
 
