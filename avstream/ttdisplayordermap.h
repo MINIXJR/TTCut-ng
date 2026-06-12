@@ -20,6 +20,7 @@
 
 #include <QVector>
 #include <QString>
+#include <cstdint>
 
 struct TTPocEntry {
     int  poc   = 0;
@@ -58,6 +59,40 @@ public:
 private:
     QVector<int> mDecodeToDisplay;
     QVector<int> mDisplayToDecode;
+};
+
+// Forward-declare libav struct types so the header stays independent of the
+// libav includes (the .cpp pulls them in via extern "C").
+struct AVCodecParserContext;
+struct AVCodecContext;
+
+// Feeds ES packets through libav's codec parser and collects one TTPocEntry
+// per emitted access unit. Parser emissions lag the input by one packet, so
+// POC is collected emission-side while IDR is detected input-side (packet
+// data scan) — both end up aligned per decode-order position.
+class TTPocCollector
+{
+public:
+    explicit TTPocCollector(int avCodecId);     // AV_CODEC_ID_H264 / _HEVC
+    ~TTPocCollector();
+
+    bool isOpen() const { return mParser != nullptr; }
+
+    // Feed one complete demuxed packet; appends 0..n POC values internally.
+    void feedPacket(const uint8_t* data, int size);
+    // Flush the parser; call once after the last packet.
+    void finish();
+
+    // Decode-order POC per emitted AU.
+    const QVector<int>& pocs() const { return mPocs; }
+
+    // IDR detection on raw packet data (input-side, exact per-packet pairing).
+    static bool packetIsIDR(const uint8_t* data, int size, int avCodecId);
+
+private:
+    AVCodecParserContext* mParser = nullptr;
+    AVCodecContext*       mCtx    = nullptr;
+    QVector<int>          mPocs;
 };
 
 #endif // TTDISPLAYORDERMAP_H

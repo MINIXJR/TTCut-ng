@@ -12,7 +12,9 @@ DISPMAP_OBJS  := ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o
 CXXFLAGS ?= -O2 -Wall -fPIC -std=gnu++17 -I../.. $(QT_INC)
 LDLIBS   := $(QT_LIB) -lpthread
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap
+AVLIBS   := -lavformat -lavcodec -lavutil
+
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map
 
 .PHONY: all clean
 all: $(TOOLS)
@@ -21,7 +23,10 @@ check_idr test_nalu_parser test_au_types: %: %.cpp $(NALU_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_OBJ) $(LDLIBS)
 
 test_displayordermap: test_displayordermap.cpp $(DISPMAP_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
+
+test_wrapper_map: test_wrapper_map.cpp $(DISPMAP_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
 
 $(NALU_OBJ):
 	@echo "Missing $(NALU_OBJ) — run \`make\` in the repo root first." >&2
