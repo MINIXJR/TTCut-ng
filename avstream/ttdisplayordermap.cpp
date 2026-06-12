@@ -1,3 +1,12 @@
+/*----------------------------------------------------------------------------*/
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2026 MINIXJR                                                 */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
+/*----------------------------------------------------------------------------*/
+
 #include "ttdisplayordermap.h"
 
 #include "../common/ttmessagelogger.h"
@@ -55,6 +64,13 @@ void TTDisplayOrderMap::buildFromRanks(const QVector<int>& decodeToDisplay)
             mDisplayToDecode.clear();
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
                 QString("display-order map rejected: rank %1 out of range").arg(rank));
+            return;
+        }
+        if (mDisplayToDecode[rank] != -1) {  // duplicate rank
+            mDecodeToDisplay.clear();
+            mDisplayToDecode.clear();
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("display-order map rejected: duplicate rank %1").arg(rank));
             return;
         }
         mDisplayToDecode[rank] = i;

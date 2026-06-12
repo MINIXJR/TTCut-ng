@@ -1,10 +1,10 @@
 /*----------------------------------------------------------------------------*/
-/* COPYRIGHT: TriTime (c) 2003/2026 / ttcut.tritime.org                       */
-/*----------------------------------------------------------------------------*/
-/* PROJEKT  : TTCUT 2026                                                      */
-/* FILE     : ttdisplayordermap.h                                             */
-/*----------------------------------------------------------------------------*/
-/* AUTHOR  : MINIXJR                                          DATE: 06/12/2026 */
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2026 MINIXJR                                                 */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
 // TTDISPLAYORDERMAP

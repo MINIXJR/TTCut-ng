@@ -4,8 +4,8 @@
 // Build:
 //   g++ -O2 -std=gnu++17 -fPIC -I../.. $(pkg-config --cflags Qt5Core) \
 //       -o test_displayordermap test_displayordermap.cpp \
-//       ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o ../../obj/moc_ttmessagelogger.o \
-//       $(pkg-config --libs Qt5Core) $(pkg-config --libs libavformat libavcodec libavutil)
+//       ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o \
+//       $(pkg-config --libs Qt5Core) -lpthread
 
 #include <cstdio>
 #include "../../avstream/ttdisplayordermap.h"
@@ -100,6 +100,17 @@ int main()
                && map.displayToDecode(1) == 2;
         if (ok) printf("PASS  build/inverse\n");
         else { failures++; printf("FAIL  build/inverse\n"); }
+    }
+
+    // Case 7: buildFromRanks rejects malformed input (duplicate + OOB rank)
+    {
+        TTDisplayOrderMap dup;
+        dup.buildFromRanks({0, 0, 2, 3});
+        TTDisplayOrderMap oob;
+        oob.buildFromRanks({0, 1, 4, 3});
+        if (!dup.isValid() && !oob.isValid())
+            printf("PASS  buildFromRanks/reject\n");
+        else { failures++; printf("FAIL  buildFromRanks/reject\n"); }
     }
 
     printf(failures == 0 ? "\nALL PASS\n" : "\n%d FAILURES\n", failures);
