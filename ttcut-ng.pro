@@ -127,6 +127,7 @@ HEADERS     = common/ttcut.h\
               avstream/ttvideoheaderlist.h\
               avstream/ttesinfo.h\
               avstream/ttnaluparser.h\
+              avstream/ttdisplayordermap.h\
               avstream/ttsrtsubtitlestream.h\
               avstream/ttsubtitleheaderlist.h\
               avstream/ttvideoindexlist.h\
@@ -228,6 +229,7 @@ SOURCES     = common/ttcut.cpp\
               avstream/ttvideoheaderlist.cpp\
               avstream/ttesinfo.cpp\
               avstream/ttnaluparser.cpp\
+              avstream/ttdisplayordermap.cpp\
               avstream/ttsrtsubtitlestream.cpp\
               avstream/ttsubtitleheaderlist.cpp\
               avstream/ttvideoindexlist.cpp\
