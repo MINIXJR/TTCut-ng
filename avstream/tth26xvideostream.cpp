@@ -192,7 +192,11 @@ int TTH26xVideoStream::createIndexList()
     int n = accessUnitCount();
     for (int i = 0; i < n; ++i) {
         TTVideoIndex* vidIndex = new TTVideoIndex();
-        vidIndex->setDisplayOrder(i);
+        // Real display rank from the POC map (identity for streams without
+        // B-reorder, and for MPEG-2). sortDisplayOrder() at open then makes
+        // list position == display position, and headerListIndex(pos) ==
+        // decode-order AU — the same semantics MPEG-2 has via temporal_reference.
+        vidIndex->setDisplayOrder(decodeToDisplayIndex(i));
         vidIndex->setHeaderListIndex(i);
         vidIndex->setPictureCodingType(accessUnitToCodingType(i));
         index_list->add(vidIndex);
@@ -243,6 +247,16 @@ int TTH26xVideoStream::findIDRBefore(int frameIndex)
         if (accessUnitIsIDR(i)) return i;
     }
     return -1;
+}
+
+int TTH26xVideoStream::decodeToDisplayIndex(int index) const
+{
+    return mFFmpeg ? mFFmpeg->displayOrderMap().decodeToDisplay(index) : index;
+}
+
+int TTH26xVideoStream::displayToDecodeIndex(int index) const
+{
+    return mFFmpeg ? mFFmpeg->displayOrderMap().displayToDecode(index) : index;
 }
 
 int TTH26xVideoStream::gopCount() const

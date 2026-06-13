@@ -49,6 +49,9 @@ public:
 
     int findIDRBefore(int frameIndex) override;
 
+    int decodeToDisplayIndex(int index) const override;
+    int displayToDecodeIndex(int index) const override;
+
     // GOP forwarding — both H.264 and H.265 just delegate
     int gopCount() const;
     int findGOPForFrame(int frameIndex);

@@ -176,6 +176,13 @@ class TTVideoStream : public TTAVStream
   // H.264/H.265: overridden to find true IDR frames
   virtual int findIDRBefore(int frameIndex);
 
+  // Display-order <-> decode-order index conversion. Navigation indices are
+  // display positions for ALL codecs (MPEG-2 via temporal_reference sort,
+  // H.26x via the POC display-order map). Default: identity (MPEG-2 list
+  // positions are already display positions after sortDisplayOrder()).
+  virtual int decodeToDisplayIndex(int index) const { return index; }
+  virtual int displayToDecodeIndex(int index) const { return index; }
+
 protected:
   // List-objects
   TTVideoHeaderList* header_list;

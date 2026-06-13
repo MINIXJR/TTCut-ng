@@ -941,6 +941,12 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     return true;
 }
 
+// decodeFrame(n): n is a DISPLAY position. The skip-loop counts decoder
+// output (display order) from the seek keyframe, so the delivered frame is
+// the display-rank-n frame. This was verified bit-exact against the POC
+// display-order map (test_parser_poc: 0 mismatches over 162,530 frames,
+// 2026-06-12) — decodeFrame and TTDisplayOrderMap derive from the same
+// decoder output order. Do NOT "fix" this to decode-order indexing.
 // ----------------------------------------------------------------------------
 // Decode frame at specific index and return as QImage
 // ----------------------------------------------------------------------------
