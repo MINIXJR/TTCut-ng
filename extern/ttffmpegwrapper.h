@@ -16,12 +16,15 @@
 #ifndef TTFFMPEGWRAPPER_H
 #define TTFFMPEGWRAPPER_H
 
+#include <climits>
 #include <QString>
 #include <QFileInfo>
 #include <QList>
 #include <QMap>
 #include <QObject>
 #include <QImage>
+
+#include "../avstream/ttdisplayordermap.h"
 
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
@@ -79,6 +82,11 @@ struct TTFrameInfo {
     // shifts decode vs display order. Lazily filled on first decode; -1 = unknown.
     // Used by playback to seek mpv to the actually-displayed frame's time.
     int deliveredDecodeIndex = -1;
+
+    // Display-order support (H.26x): POC from libav's codec parser, IDR flag
+    // from packet NAL scan. INT_MIN poc == "not collected" (identity map).
+    int  poc   = INT_MIN;
+    bool isIDR = false;
 
     // Internal scratch for buildFrameIndex's PAFF post-processing pass:
     int  paffFrameNum  = -1;     // -1 = not a field; else frame_num for matching
@@ -168,7 +176,8 @@ public:
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
-    void setFrameIndex(const QList<TTFrameInfo>& index) { mFrameIndex = index; }
+    void setFrameIndex(const QList<TTFrameInfo>& index);   // rebuilds display map
+    const TTDisplayOrderMap& displayOrderMap() const { return mDisplayOrderMap; }
     int frameCount() const { return mFrameIndex.size(); }
     bool isPAFF() const { return mIsPAFF; }
     int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
@@ -348,6 +357,12 @@ private:
     // Frame and GOP indices
     QList<TTFrameInfo> mFrameIndex;
     QList<TTGOPInfo> mGOPIndex;
+    TTDisplayOrderMap mDisplayOrderMap;
+
+    // Derive the display-order map from the poc/isIDR fields of mFrameIndex.
+    // Falls back to the identity map (with a warning) when POC data is
+    // missing or degenerate — identical to pre-map behavior.
+    void buildDisplayOrderMap();
 
     // LRU frame cache
     QMap<int, QImage> mFrameCache;

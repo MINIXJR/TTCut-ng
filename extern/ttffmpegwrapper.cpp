@@ -14,6 +14,7 @@
 
 #include "ttffmpegwrapper.h"
 #include "ttessmartcut.h"
+#include "../avstream/ttdisplayordermap.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttnaluparser.h"
 #include "../common/ttcut.h"
@@ -591,6 +592,7 @@ bool TTFFmpegWrapper::buildFrameIndex(int videoStreamIndex)
     scanPacketsIntoRawIndex(videoStreamIndex);
     mergePAFFFieldsInIndex();
     finalizeFrameIndex();
+    buildDisplayOrderMap();
     rewindContext(videoStreamIndex);
 
     if (!mFrameIndex.isEmpty() && mFrameIndex[0].pts == AV_NOPTS_VALUE) {
@@ -2836,6 +2838,11 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
 
     AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
 
+    // POC collection for the display-order map (H.26x only). POC arrives
+    // emission-side (parser lags one packet); IDR is detected input-side.
+    const bool collectPoc = (codecId == AV_CODEC_ID_H264 || codecId == AV_CODEC_ID_HEVC);
+    TTPocCollector pocCollector(collectPoc ? codecId : AV_CODEC_ID_NONE);
+
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == videoStreamIndex) {
             TTFrameInfo info;
@@ -2847,6 +2854,11 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
             info.frameIndex = -1;       // filled by finalizeFrameIndex
             info.gopIndex   = -1;       // filled by finalizeFrameIndex
             info.isFieldCoded = false;  // may be set true below
+
+            if (collectPoc) {
+                info.isIDR = TTPocCollector::packetIsIDR(packet->data, packet->size, codecId);
+                pocCollector.feedPacket(packet->data, packet->size);
+            }
 
             // Field detection (H.264 PAFF only)
             if (codecId == AV_CODEC_ID_H264 && !mH264FrameMbsOnlyFlag) {
@@ -2889,6 +2901,20 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
         av_packet_unref(packet);
     }
 
+    if (collectPoc) {
+        pocCollector.finish();
+        const QVector<int>& pocs = pocCollector.pocs();
+        if (pocs.size() == mFrameIndex.size()) {
+            for (int i = 0; i < pocs.size(); ++i)
+                mFrameIndex[i].poc = pocs[i];
+        } else {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("POC collection mismatch: %1 emissions for %2 packets "
+                        "- display map falls back to identity")
+                    .arg(pocs.size()).arg(mFrameIndex.size()));
+        }
+    }
+
     av_packet_free(&packet);
 }
 
@@ -2909,7 +2935,7 @@ void TTFFmpegWrapper::mergePAFFFieldsInIndex()
             if (next.isFieldCoded && next.isBottomField &&
                 next.paffFrameNum == cur.paffFrameNum)
             {
-                // Merge: keep top's PTS/DTS/offset/type/keyframe, sum packetSize
+                // Merge: keep top's PTS/DTS/offset/type/keyframe/POC, sum packetSize
                 TTFrameInfo merged_info = cur;
                 merged_info.packetSize += next.packetSize;
                 mFrameIndex[w] = merged_info;
@@ -2941,4 +2967,40 @@ void TTFFmpegWrapper::finalizeFrameIndex()
         mFrameIndex[i].gopIndex   = currentGOP;
         mFrameIndex[i].frameIndex = i;
     }
+}
+
+// ----------------------------------------------------------------------------
+// Derive the display-order map from poc/isIDR collected during the scan
+// ----------------------------------------------------------------------------
+void TTFFmpegWrapper::buildDisplayOrderMap()
+{
+    // Identity fallback covers: MPEG-2 (.m2v via wrapper), missing POC data,
+    // degenerate parser output. Identity == pre-map behavior.
+    auto identity = [this](const char* reason) {
+        QVector<int> ranks(mFrameIndex.size());
+        for (int i = 0; i < ranks.size(); ++i) ranks[i] = i;
+        mDisplayOrderMap.buildFromRanks(ranks);
+        if (reason && TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "display-order map: identity fallback -" << reason;
+    };
+
+    if (mFrameIndex.isEmpty()) { mDisplayOrderMap = TTDisplayOrderMap(); return; }
+    if (mFrameIndex[0].poc == INT_MIN) { identity("no POC collected"); return; }
+
+    QVector<TTPocEntry> entries(mFrameIndex.size());
+    bool allSame = true;
+    for (int i = 0; i < mFrameIndex.size(); ++i) {
+        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR};
+        if (mFrameIndex[i].poc != mFrameIndex[0].poc) allSame = false;
+    }
+    if (allSame && mFrameIndex.size() > 1) { identity("constant POC"); return; }
+
+    mDisplayOrderMap.build(entries);
+    if (!mDisplayOrderMap.isValid()) identity("rank validation failed");
+}
+
+void TTFFmpegWrapper::setFrameIndex(const QList<TTFrameInfo>& index)
+{
+    mFrameIndex = index;
+    buildDisplayOrderMap();   // poc/isIDR travel inside TTFrameInfo entries
 }

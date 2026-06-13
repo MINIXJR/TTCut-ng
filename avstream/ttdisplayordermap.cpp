@@ -97,7 +97,8 @@ int TTDisplayOrderMap::displayToDecode(int displayPos) const
 // ----------------------------------------------------------------------------
 // TTPocCollector
 // ----------------------------------------------------------------------------
-TTPocCollector::TTPocCollector(int avCodecId)
+TTPocCollector::TTPocCollector(int avCodecId, bool trackIDR)
+    : mTrackIDR(trackIDR)
 {
     const AVCodec* codec = avcodec_find_decoder(static_cast<AVCodecID>(avCodecId));
     if (!codec) return;
@@ -116,19 +117,40 @@ TTPocCollector::~TTPocCollector()
     if (mCtx)    avcodec_free_context(&mCtx);
 }
 
-void TTPocCollector::feedPacket(const uint8_t* data, int size)
+void TTPocCollector::feedPacket(const uint8_t* data, int size, bool isIDR)
 {
     if (!mParser) return;
+    if (mTrackIDR) mIdrQueue.append(isIDR);
+
     while (size > 0) {
         uint8_t* outData = nullptr;
         int outSize = 0;
         int used = av_parser_parse2(mParser, mCtx, &outData, &outSize,
                                     data, size,
                                     AV_NOPTS_VALUE, AV_NOPTS_VALUE, -1);
-        if (used <= 0) return;  // <= 0: error (<0) or stall (=0); both must break the loop
+        if (used < 0) return;  // error
+        if (outSize > 0) onEmit();
+        if (used == 0) {
+            // Parser emitted output without consuming input (e.g. MBAFF alternating
+            // pattern: packet N+1 triggers emission of packet N's AU with used=0).
+            // If emission happened (outSize>0), loop again to try consuming the
+            // same data. If no emission either (true stall), break to avoid infinite loop.
+            if (outSize == 0) return;
+            // outSize > 0 was already collected above; continue to consume the data
+            continue;
+        }
         data += used;
         size -= used;
-        if (outSize > 0) mPocs.append(mParser->output_picture_number);
+    }
+}
+
+void TTPocCollector::onEmit()
+{
+    const int poc = mParser->output_picture_number;
+    mPocs.append(poc);
+    if (mTrackIDR) {
+        const bool idr = mIdrQueue.isEmpty() ? false : mIdrQueue.takeFirst();
+        mEntries.append({poc, idr});
     }
 }
 
@@ -139,7 +161,7 @@ void TTPocCollector::finish()
     int outSize = 0;
     av_parser_parse2(mParser, mCtx, &outData, &outSize, nullptr, 0,
                      AV_NOPTS_VALUE, AV_NOPTS_VALUE, -1);
-    if (outSize > 0) mPocs.append(mParser->output_picture_number);
+    if (outSize > 0) onEmit();
 }
 
 bool TTPocCollector::packetIsIDR(const uint8_t* data, int size, int avCodecId)
@@ -202,8 +224,10 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
         return map;
     }
 
-    TTPocCollector collector(codecId);
-    QVector<bool> idrFlags;
+    // Mode 1 (trackIDR=true): IDR flag queued per packet, dequeued at emission.
+    // trackIDR MUST be true from construction so that pre-IDR packets are queued
+    // correctly (activating mid-stream would misassign IDR flags).
+    TTPocCollector collector(codecId, /*trackIDR=*/true);
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -214,8 +238,8 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
 
     while (av_read_frame(fmt, pkt) >= 0) {
         if (pkt->stream_index == vIdx) {
-            idrFlags.append(TTPocCollector::packetIsIDR(pkt->data, pkt->size, codecId));
-            collector.feedPacket(pkt->data, pkt->size);
+            const bool isIDR = TTPocCollector::packetIsIDR(pkt->data, pkt->size, codecId);
+            collector.feedPacket(pkt->data, pkt->size, isIDR);
         }
         av_packet_unref(pkt);
     }
@@ -223,16 +247,13 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     av_packet_free(&pkt);
     avformat_close_input(&fmt);
 
-    if (collector.pocs().size() != idrFlags.size()) {
+    const QVector<TTPocEntry>& entries = collector.entries();
+    if (entries.isEmpty()) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("display-order map: POC/packet count mismatch (%1 vs %2) for %3")
-                .arg(collector.pocs().size()).arg(idrFlags.size()).arg(filePath));
+            QString("display-order map: no entries collected for %1").arg(filePath));
         return map;
     }
 
-    QVector<TTPocEntry> entries(idrFlags.size());
-    for (int i = 0; i < idrFlags.size(); ++i)
-        entries[i] = {collector.pocs()[i], idrFlags[i]};
     map.build(entries);
     return map;
 }

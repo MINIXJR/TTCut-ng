@@ -67,32 +67,54 @@ struct AVCodecParserContext;
 struct AVCodecContext;
 
 // Feeds ES packets through libav's codec parser and collects one TTPocEntry
-// per emitted access unit. Parser emissions lag the input by one packet, so
-// POC is collected emission-side while IDR is detected input-side (packet
-// data scan) — both end up aligned per decode-order position.
+// per emitted access unit. Parser emissions lag the input by 0..N packets;
+// IDR is detected input-side and queued so it stays aligned with the emission
+// it corresponds to. Both paths (MBAFF with 2-packet AUs and standard 1-packet
+// AUs) produce one entry per emitted access unit.
+//
+// Two usage modes:
+//   1. feedPacket(data, size, isIDR) — IDR queued with each packet,
+//      dequeued on emission. Used by buildFromFile.
+//   2. feedPacket(data, size) + packetIsIDR() called separately — used by
+//      TTFFmpegWrapper where IDR is stored per-TTFrameInfo at scan time.
 class TTPocCollector
 {
 public:
-    explicit TTPocCollector(int avCodecId);     // AV_CODEC_ID_H264 / _HEVC
+    // avCodecId: AV_CODEC_ID_H264 / _HEVC (AV_CODEC_ID_NONE → isOpen() false, all no-ops).
+    // trackIDR: if true, activates mode 1 — IDR flags passed to feedPacket are
+    //   queued and dequeued at emission time, populating entries() in addition to pocs().
+    //   Must be true from construction if IDR tracking is needed (late activation
+    //   would misassign IDR flags to wrong emissions).
+    explicit TTPocCollector(int avCodecId, bool trackIDR = false);
     ~TTPocCollector();
 
     bool isOpen() const { return mParser != nullptr; }
 
-    // Feed one complete demuxed packet; appends 0..n POC values internally.
-    void feedPacket(const uint8_t* data, int size);
+    // Feed one complete demuxed packet.
+    // In mode 1 (trackIDR=true), isIDR is queued and matched to the emitted AU.
+    // In mode 2 (trackIDR=false), isIDR is ignored and only pocs() is populated.
+    void feedPacket(const uint8_t* data, int size, bool isIDR = false);
     // Flush the parser; call once after the last packet.
     void finish();
 
-    // Decode-order POC per emitted AU.
+    // Decode-order POC per emitted AU (both modes).
     const QVector<int>& pocs() const { return mPocs; }
+
+    // Decode-order TTPocEntry per emitted AU (mode 1 only; empty in mode 2).
+    const QVector<TTPocEntry>& entries() const { return mEntries; }
 
     // IDR detection on raw packet data (input-side, exact per-packet pairing).
     static bool packetIsIDR(const uint8_t* data, int size, int avCodecId);
 
 private:
-    AVCodecParserContext* mParser = nullptr;
-    AVCodecContext*       mCtx    = nullptr;
+    AVCodecParserContext* mParser   = nullptr;
+    AVCodecContext*       mCtx      = nullptr;
     QVector<int>          mPocs;
+    QVector<TTPocEntry>   mEntries;    // populated only in mode 1
+    QVector<bool>         mIdrQueue;   // pending IDR flags (mode 1), dequeued on emission
+    bool                  mTrackIDR;   // set at construction
+
+    void onEmit();  // called when parser emits an AU; records poc + dequeued IDR
 };
 
 #endif // TTDISPLAYORDERMAP_H

@@ -3,16 +3,22 @@
 # obj/ttnaluparser.o produced by the main build, so a regular `make` must
 # have run at least once. Sources stay tracked, binaries are gitignored.
 
-QT_INC := $(shell pkg-config --cflags Qt5Core)
-QT_LIB := $(shell pkg-config --libs Qt5Core)
+QT_INC := $(shell pkg-config --cflags Qt5Core Qt5Gui)
+QT_LIB := $(shell pkg-config --libs Qt5Core Qt5Gui)
 
 NALU_OBJ      := ../../obj/ttnaluparser.o
 DISPMAP_OBJS  := ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o
 
+# Objects needed for the TTFFmpegWrapper integration test (Part 2)
+WRAPPER_OBJS  := $(DISPMAP_OBJS) \
+                 ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
+                 ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
+                 ../../obj/ttesinfo.o ../../obj/ttnaluparser.o
+
 CXXFLAGS ?= -O2 -Wall -fPIC -std=gnu++17 -I../.. $(QT_INC)
 LDLIBS   := $(QT_LIB) -lpthread
 
-AVLIBS   := -lavformat -lavcodec -lavutil
+AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
 TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map
 
@@ -25,8 +31,8 @@ check_idr test_nalu_parser test_au_types: %: %.cpp $(NALU_OBJ)
 test_displayordermap: test_displayordermap.cpp $(DISPMAP_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
 
-test_wrapper_map: test_wrapper_map.cpp $(DISPMAP_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
+test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
 $(NALU_OBJ):
 	@echo "Missing $(NALU_OBJ) — run \`make\` in the repo root first." >&2
