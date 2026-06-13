@@ -1471,11 +1471,17 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (actualRanges.size() == keepList.size()) {
       for (int i = 0; i < keepList.size(); i++) {
         double origStart = keepList[i].first;
-        double newStart = actualRanges[i].first / frameRate;
+        // actualRanges[i].first is a decode-order AU index; the keepList is in
+        // display space. Map AU -> display (identity for MPEG-2 / no-B streams)
+        // so the comparison is space-consistent. After the display-order fix the
+        // video starts exactly at the requested display cut-in, so this is
+        // normally a no-op; the guard remains defensive.
+        int actualStartDisplay = vStream->decodeToDisplayIndex(actualRanges[i].first);
+        double newStart = actualStartDisplay / frameRate;
         if (qAbs(newStart - origStart) > 0.001) {
           log->infoMsg(__FILE__, __LINE__, QString("Audio segment %1: adjusting start %2 -> %3 (B-frame reorder shift: %4 frames)")
               .arg(i+1).arg(origStart, 0, 'f', 3).arg(newStart, 0, 'f', 3)
-              .arg(actualRanges[i].first - cutFrames[i].first));
+              .arg(actualStartDisplay - cutFrames[i].first));
           keepList[i].first = newStart;
         }
       }
