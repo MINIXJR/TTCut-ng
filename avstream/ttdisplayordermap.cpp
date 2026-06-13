@@ -125,7 +125,7 @@ void TTPocCollector::feedPacket(const uint8_t* data, int size)
         int used = av_parser_parse2(mParser, mCtx, &outData, &outSize,
                                     data, size,
                                     AV_NOPTS_VALUE, AV_NOPTS_VALUE, -1);
-        if (used < 0) return;
+        if (used <= 0) return;  // <= 0: error (<0) or stall (=0); both must break the loop
         data += used;
         size -= used;
         if (outSize > 0) mPocs.append(mParser->output_picture_number);
@@ -172,22 +172,32 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     TTDisplayOrderMap map;
 
     AVFormatContext* fmt = nullptr;
-    if (avformat_open_input(&fmt, filePath.toUtf8().constData(), nullptr, nullptr) < 0)
+    if (avformat_open_input(&fmt, filePath.toUtf8().constData(), nullptr, nullptr) < 0) {
+        // avformat_open_input already freed fmt on failure; do NOT call avformat_close_input.
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: cannot open %1").arg(filePath));
         return map;
+    }
 
     if (avformat_find_stream_info(fmt, nullptr) < 0) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: cannot read stream info for %1").arg(filePath));
         avformat_close_input(&fmt);
         return map;
     }
 
     const int vIdx = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     if (vIdx < 0) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: no video stream in %1").arg(filePath));
         avformat_close_input(&fmt);
         return map;
     }
 
     const AVCodecID codecId = fmt->streams[vIdx]->codecpar->codec_id;
     if (codecId != AV_CODEC_ID_H264 && codecId != AV_CODEC_ID_HEVC) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: unsupported codec for %1").arg(filePath));
         avformat_close_input(&fmt);
         return map;
     }
@@ -196,6 +206,8 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     QVector<bool> idrFlags;
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: packet alloc failed"));
         avformat_close_input(&fmt);
         return map;
     }
