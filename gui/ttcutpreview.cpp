@@ -26,6 +26,7 @@
 #include "../extern/ttmkvmergeprovider.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttavtypes.h"
+#include "../avstream/tth26xvideostream.h"
 #include "../common/ttthreadtaskpool.h"
 
 extern "C" {
@@ -712,6 +713,14 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("Regenerate: Smart Cut init failed: %1").arg(smartCut.lastError()));
     return;
+  }
+
+  // Inject frame-granularity display-order map (PAFF-safe).
+  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+    smartCut.setDisplayOrderMap(h26x->displayOrderMap());
+    if (TTSettings::instance()->logUI())
+        qDebug() << "Regenerate: Injected display-order map ("
+                 << h26x->displayOrderMap().count() << "entries)";
   }
 
   QList<QPair<int, int>> cutFrames;

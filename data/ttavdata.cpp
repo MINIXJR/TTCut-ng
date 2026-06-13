@@ -36,6 +36,7 @@
 #include "../avstream/ttavheader.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../extern/ttessmartcut.h"
+#include "../avstream/tth26xvideostream.h"
 
 #include "ttopenvideotask.h"
 #include "ttopenaudiotask.h"
@@ -1424,6 +1425,16 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut init failed: %1").arg(smartCut.lastError()));
       emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed - could not initialize"), 0);
       return;
+    }
+
+    // Inject frame-granularity display-order map from the open stream's wrapper.
+    // Required for PAFF: buildFromFile fallback is field-granularity and would
+    // mismatch the parser's frame count, aborting smartCutFrames.
+    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+      smartCut.setDisplayOrderMap(h26x->displayOrderMap());
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "doH264Cut: Injected display-order map ("
+                   << h26x->displayOrderMap().count() << "entries)";
     }
 
     // SPS boundary check (H.264/H.265 only)

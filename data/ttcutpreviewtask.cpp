@@ -38,6 +38,7 @@ extern "C" {
 #include "../extern/ttessmartcut.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../avstream/ttesinfo.h"
+#include "../avstream/tth26xvideostream.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -136,6 +137,13 @@ void TTCutPreviewTask::operation()
 		} else {
 			const int previewPreset = TTSettings::instance()->previewPreset();
 			sharedSmartCut->setPresetOverride(previewPreset);
+			// Inject frame-granularity display-order map (PAFF-safe).
+			if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+				sharedSmartCut->setDisplayOrderMap(h26x->displayOrderMap());
+				if (TTSettings::instance()->logCutPipeline())
+					qDebug() << "Preview shared: Injected display-order map ("
+					         << h26x->displayOrderMap().count() << "entries)";
+			}
 			if (TTSettings::instance()->logCutPipeline())
 				qDebug() << "Preview: Shared Smart Cut initialized in" << initTimer.elapsed() << "ms"
 				         << "(ES parsed once for all clips, preview preset:" << previewPreset << ")";
@@ -407,6 +415,13 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Preview Smart Cut init failed: %1").arg(localSmartCut.lastError()));
       return;
+    }
+    // Inject frame-granularity display-order map (PAFF-safe).
+    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+      localSmartCut.setDisplayOrderMap(h26x->displayOrderMap());
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Preview local: Injected display-order map ("
+                   << h26x->displayOrderMap().count() << "entries)";
     }
     smartCut = &localSmartCut;
   }

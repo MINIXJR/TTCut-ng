@@ -301,6 +301,12 @@ int TTH26xVideoStream::getGOPEnd(int gopIndex)
     return -1;
 }
 
+const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
+{
+    static const TTDisplayOrderMap empty;
+    return mFFmpeg ? mFFmpeg->displayOrderMap() : empty;
+}
+
 const QList<TTFrameInfo>& TTH26xVideoStream::ffmpegFrameIndex() const
 {
     return mFFmpeg->frameIndex();

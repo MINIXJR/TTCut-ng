@@ -58,6 +58,12 @@ public:
     int getGOPStart(int gopIndex);
     int getGOPEnd(int gopIndex);
 
+    // Display-order map (POC-based, frame granularity) from the open stream's
+    // wrapper. Used to inject into TTESSmartCut so cut positions map display->AU
+    // consistently (esp. PAFF, where buildFromFile's field-granularity fallback
+    // would mismatch the parser's frame count).
+    const TTDisplayOrderMap& displayOrderMap() const;
+
     // --- Canonical frame-index owner ("Owner A") ---
     // This stream builds the FFmpeg frame index ONCE at stream-open
     // (createHeaderList). Other wrappers of the same file should adopt it instead
