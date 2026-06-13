@@ -15,6 +15,12 @@ WRAPPER_OBJS  := $(DISPMAP_OBJS) \
                  ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
                  ../../obj/ttesinfo.o ../../obj/ttnaluparser.o
 
+# Objects needed for the smart-cut still-frame acceptance test (Task 5)
+STILLFRAME_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
+                   ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
+                   ../../obj/ttesinfo.o ../../obj/ttnaluparser.o \
+                   ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o
+
 CXXFLAGS ?= -O2 -Wall -fPIC -std=gnu++17 -I../.. $(QT_INC)
 LDLIBS   := $(QT_LIB) -lpthread
 
@@ -33,6 +39,9 @@ test_displayordermap: test_displayordermap.cpp $(DISPMAP_OBJS)
 
 test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
+test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 
 $(NALU_OBJ):
 	@echo "Missing $(NALU_OBJ) — run \`make\` in the repo root first." >&2

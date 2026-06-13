@@ -1,6 +1,10 @@
-// Temporary diagnostic: drive TTESSmartCut::smartCutFrames on a single short
-// keep-range to trigger selectFramesNonPAFF and its STILLFRAME-DEBUG dump.
-// Build via the one-off g++ command in the session notes; remove after diagnosis.
+// Diagnostic + acceptance harness: drive TTESSmartCut::smartCutFrames on a
+// single short keep-range and assert the selected start AU (Direction A).
+// Build via `make test_stillframe` in tools/diag (run a root `make` first so
+// the object files exist). Link line (kept in sync in the Makefile):
+//   obj/ttessmartcut.o obj/moc_ttessmartcut.o obj/ttsettings.o
+//   obj/moc_ttsettings.o obj/ttesinfo.o obj/ttnaluparser.o
+//   obj/ttdisplayordermap.o obj/ttmessagelogger.o  + Qt5 + libav
 #include <QCoreApplication>
 #include <QString>
 #include <cstdio>
@@ -35,5 +39,19 @@ int main(int argc, char** argv)
             ok ? "OK" : "FAIL", qPrintable(sc.lastError()));
     for (const auto& r : sc.actualOutputFrameRanges())
         fprintf(stderr, "actualOutputRange: %d..%d\n", r.first, r.second);
+
+    // The selected start AU is the first element of the first actual output
+    // range. Pre-fix the mixed-index walk reported 36388; the fix must report
+    // the AU that DISPLAYS at the cut-in display position.
+    int firstSelectedAU = sc.actualOutputFrameRanges().isEmpty()
+        ? -1 : sc.actualOutputFrameRanges().first().first;
+
+    // Acceptance (Direction A): cut-in display 36384 must select AU 36385
+    // (the frame that DISPLAYS at 36384), NOT 36388 (old mixed-index walk).
+    if (firstSelectedAU != 36385) {
+        printf("FAIL: first selected AU = %d, expected 36385\n", firstSelectedAU);
+        return 1;
+    }
+    printf("PASS: first selected AU = 36385\n");
     return ok ? 0 : 1;
 }

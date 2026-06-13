@@ -100,15 +100,16 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
 // ReencodeContext: per-call state for reencodeFrames
 // ----------------------------------------------------------------------------
 struct TTESSmartCut::ReencodeContext {
-    ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau)
+    ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau, int sd)
         : outFile(f), startFrame(sf), endFrame(ef), streamCopyStartFrame(scsf),
-          adjustedStreamCopyStart(assc), actualStartAU(asau) {}
+          adjustedStreamCopyStart(assc), actualStartAU(asau), startDisplay(sd) {}
 
     // ---- Inputs (set by reencodeFrames before calling helpers) ----
     QFile& outFile;
     int    startFrame;
     int    endFrame;
     int    streamCopyStartFrame;
+    int    startDisplay = -1;     // UI cut-in display position (Direction A anchor)
 
     // ---- Outputs (raw pointers from caller; may be nullptr) ----
     int*   adjustedStreamCopyStart;   // -1 = no adjustment
@@ -409,6 +410,18 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mTotalSegments = 0;
     mActualOutputRanges.clear();
 
+    // ---- Display -> AU conversion (single source of truth) ----
+    // UI/cut-list indices are display positions (Direction A). Below this point
+    // everything works in decode-order AU indices. Build the map if not injected.
+    if (!mDisplayMap.isValid())
+        mDisplayMap = TTDisplayOrderMap::buildFromFile(mInputFile);
+    if (!mDisplayMap.isValid() || mDisplayMap.count() != frameCount()) {
+        setError(QString("display-order map unavailable or misaligned "
+                         "(map %1 vs %2 AUs) - cannot cut accurately")
+                     .arg(mDisplayMap.count()).arg(frameCount()));
+        return false;
+    }
+
     // Analyze cut points
     QList<TTCutSegmentInfo> segments = analyzeCutPoints(cutFrames);
 
@@ -587,12 +600,22 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
 
     for (const auto& cut : cutFrames) {
         TTCutSegmentInfo seg;
-        seg.startFrame = qBound(0, cut.first, frameCount() - 1);
-        seg.endFrame = qBound(0, cut.second, frameCount() - 1);
+        seg.startDisplay = qBound(0, cut.first,  frameCount() - 1);
+        seg.endDisplay   = qBound(0, cut.second, frameCount() - 1);
 
-        if (seg.startFrame >= seg.endFrame) {
+        if (seg.startDisplay >= seg.endDisplay) {
             continue;  // Skip empty segments
         }
+
+        // AU of the frame DISPLAYED at the cut-in (Direction A anchor):
+        seg.startFrame = mDisplayMap.displayToDecode(seg.startDisplay);
+
+        // Last kept AU: a frame displaying <= endDisplay can sit at a later AU
+        // (B-frame reorder). Take the max AU over the trailing reorder window.
+        int endAU = mDisplayMap.displayToDecode(seg.endDisplay);
+        for (int d = seg.endDisplay; d >= 0 && d > seg.endDisplay - 32; --d)
+            endAU = qMax(endAU, mDisplayMap.displayToDecode(d));
+        seg.endFrame = endAU;
 
         // Find GOPs
         seg.cutInGOP = mParser.findGopForAU(seg.startFrame);
@@ -742,7 +765,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    Pure re-encode segment";
         return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                              -1, nullptr, actualStartAU);
+                              -1, nullptr, actualStartAU, segment.startDisplay);
     }
 
     // Mixed segment: Re-encode partial GOP + stream-copy from keyframe
@@ -793,7 +816,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
         int adjustedStart = -1;
         if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU,
+                            segment.startDisplay)) {
             mSpsUnification = false;
             mSpsUnificationOutFile = nullptr;
             return false;
@@ -860,7 +884,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
         int adjustedStart = -1;
         if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU,
+                            segment.startDisplay)) {
             return false;
         }
 
@@ -923,7 +948,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
 
         int adjustedStart = -1;
         if (!reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU)) {
+                            segment.streamCopyStartFrame, &adjustedStart, actualStartAU,
+                            segment.startDisplay)) {
             return false;
         }
 
@@ -1997,7 +2023,7 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                                   int streamCopyStartFrame, int* adjustedStreamCopyStart,
-                                  int* actualStartAU)
+                                  int* actualStartAU, int startDisplay)
 {
     if (TTSettings::instance()->logSmartCut())
         qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
@@ -2008,7 +2034,7 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         *actualStartAU = -1;  // -1 = no adjustment (realStartAU == startFrame)
 
     ReencodeContext ctx(outFile, startFrame, endFrame, streamCopyStartFrame,
-                        adjustedStreamCopyStart, actualStartAU);
+                        adjustedStreamCopyStart, actualStartAU, startDisplay);
     ctx.realStartAU = startFrame;  // fallback if mapping fails
 
     if (!computeDecodeRange(ctx)) return false;
@@ -2017,9 +2043,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
     if (!decodeFramesIntoList(ctx)) return false;
 
-    // ---- Display-order to AU-index mapping ----
-    if (mParser.isPAFF()) selectFramesPAFF(ctx);
-    else                  selectFramesNonPAFF(ctx);
+    // ---- Display-order to AU-index mapping (unified PAFF + non-PAFF) ----
+    selectFramesByDisplayOrder(ctx);
 
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
@@ -2325,212 +2350,68 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
 }
 
 // ----------------------------------------------------------------------------
-// PAFF position-based frame selection.
+// Frame selection for re-encode, display-order based (PAFF and non-PAFF).
 //
-// The navigation decoder (individual field packets) and our segment decoder
-// (merged AUs) produce slightly different display-order sequences due to
-// B-frame reorder buffering. Position-based counting may select frames whose
-// AU indices extend past streamCopyLimit, causing the re-encode to overlap
-// with stream-copy. When overlap is detected, extend re-encode to the next
-// keyframe (collecting all decoded frames in between) and adjust
-// streamCopyStart accordingly. This prevents both frame repetitions (from
-// overlap) and frame gaps (from jumping stream-copy forward without filling
-// the re-encode).
-//
-// PAFF does NOT report actualStartAU. The video output has the full segment
-// frame count (position-based counting matches the UI). Audio keepList must
-// NOT be shortened.
+// allDecodedFrames is display-ordered; each frame's ->pts carries its AU index.
+// The kept set is defined in DISPLAY space (Direction A): every frame whose
+// display position >= ctx.startDisplay, up to the stream-copy AU boundary. The
+// display predicate is exact even where the kept set is NOT contiguous in AU
+// space (e.g. MBAFF: AU 36385 displays at 36384 = keep; AU 36384 displays at
+// 36385... ). Open-GOP B-frames before the cut-in are excluded automatically
+// (their display position < startDisplay).
 // ----------------------------------------------------------------------------
-void TTESSmartCut::selectFramesPAFF(ReencodeContext& ctx)
+void TTESSmartCut::selectFramesByDisplayOrder(ReencodeContext& ctx)
 {
     ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
                                                           : (ctx.endFrame + 1);
 
-    int skipCount = ctx.startFrame - ctx.decodeStart;
-    int encodeCount = ctx.streamCopyLimit - ctx.startFrame;
+    ctx.realStartAU = mDisplayMap.displayToDecode(ctx.startDisplay);
 
     if (TTSettings::instance()->logSmartCut()) {
-        qDebug() << "      PAFF frame selection: startFrame" << ctx.startFrame
-                 << "decodeStart" << ctx.decodeStart << "skipCount" << skipCount
-                 << "encodeCount" << encodeCount
-                 << "decoded" << ctx.allDecodedFrames.size()
-                 << "streamCopyLimit" << ctx.streamCopyLimit;
+        qDebug() << "      Display-order mapping: display" << ctx.startDisplay
+                 << "-> AU" << ctx.realStartAU
+                 << "(streamCopyLimit" << ctx.streamCopyLimit << ")";
     }
 
-    // First pass: collect encodeCount frames and track max AU
-    int collected = 0;
-    int maxSelectedAU = -1;
-    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
-        if (i < skipCount) continue;
-        if (collected >= encodeCount) break;
-        int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
-        if (au > maxSelectedAU) maxSelectedAU = au;
-        collected++;
-    }
-
-    // Check for overlap and determine extended limit if needed
-    int extendedStreamCopyLimit = ctx.streamCopyLimit;
-    if (maxSelectedAU >= ctx.streamCopyLimit && ctx.adjustedStreamCopyStart) {
-        int nextKF = mParser.findKeyframeAfter(ctx.streamCopyLimit + 1);
-        if (nextKF > 0) {
-            extendedStreamCopyLimit = nextKF;
-            *ctx.adjustedStreamCopyStart = nextKF;
-            if (TTSettings::instance()->logSmartCut()) {
-                qDebug() << "      PAFF overlap: maxSelectedAU" << maxSelectedAU
-                         << ">= streamCopyLimit" << ctx.streamCopyLimit
-                         << "-> extending re-encode to next keyframe" << nextKF;
-            }
-        }
-    }
-
-    // Second pass: collect frames — initial encodeCount + extension if needed
-    collected = 0;
-    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
-        if (i < skipCount) {
-            av_frame_free(&ctx.allDecodedFrames[i]);
-            continue;
-        }
-
-        int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
-
-        // Collect initial encodeCount frames (position-based)
-        // OR extension frames (AU-index-based, fill gap to next keyframe)
-        bool inInitialRange = (collected < encodeCount);
-        bool inExtension = (extendedStreamCopyLimit > ctx.streamCopyLimit
-                            && collected >= encodeCount
-                            && au >= ctx.streamCopyLimit
-                            && au < extendedStreamCopyLimit);
-
-        if (inInitialRange || inExtension) {
-            if (ctx.framesToEncode.isEmpty()) {
-                ctx.realStartAU = au;
-            }
-            ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
-            collected++;
-        } else {
-            av_frame_free(&ctx.allDecodedFrames[i]);
-        }
-    }
-    ctx.allDecodedFrames.clear();
-
-    if (TTSettings::instance()->logSmartCut()) {
-        qDebug() << "      PAFF: selected" << ctx.framesToEncode.size() << "frames,"
-                 << "realStartAU =" << ctx.realStartAU
-                 << "(requested:" << encodeCount
-                 << ", extended to:" << extendedStreamCopyLimit << ")";
-    }
-
-    // PAFF: Do NOT report actualStartAU.
-    // The video output has the full segment frame count (position-based
-    // counting matches the UI). Audio keepList must NOT be shortened.
-}
-
-// ----------------------------------------------------------------------------
-// Non-PAFF display-order to AU-index mapping.
-//
-// TTCut-ng navigates by seeking to the nearest keyframe and counting decoded
-// frames in display order. Due to B-frame reordering, the displayed content
-// at "frame N" comes from a DIFFERENT AU than AU N. The frame number stored
-// in the project file is the AU index, but the user selected content at the
-// corresponding DISPLAY position.
-//
-// We replicate TTCut-ng's navigation: find the keyframe in our decoder
-// output, count forward by displayOffset frames (skipping Open GOP B-frames
-// from before the keyframe), and use the resulting AU index for frame
-// selection. This is safe for all streams: without B-frames, displayOffset
-// maps to the same AU index (no-op). With B-frames at CutIn=keyframe,
-// displayOffset=0.
-// ----------------------------------------------------------------------------
-void TTESSmartCut::selectFramesNonPAFF(ReencodeContext& ctx)
-{
-    ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
-                                                          : (ctx.endFrame + 1);
-
-    int uiKeyframe = mParser.findKeyframeBefore(ctx.startFrame);
-    int displayOffset = ctx.startFrame - uiKeyframe;
-
-    // Find the UI keyframe in our decoder output by PTS
-    int kfOutputIdx = -1;
-    for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
-        if (ctx.allDecodedFrames[i]->pts == uiKeyframe) {
-            kfOutputIdx = i;
-            break;
-        }
-    }
-
-    if (kfOutputIdx >= 0) {
-        // Count displayOffset frames forward from keyframe in display order,
-        // skipping Open GOP B-frames from before the keyframe (these wouldn't
-        // be in TTCut-ng's decode since it starts fresh at the keyframe).
-        int count = 0;
-        for (int i = kfOutputIdx; i < ctx.allDecodedFrames.size(); ++i) {
-            int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
-            if (au < uiKeyframe) continue;  // Skip Open GOP B-frames
-            if (count == displayOffset) {
-                ctx.realStartAU = au;
-                break;
-            }
-            count++;
-        }
-        if (TTSettings::instance()->logSmartCut()) {
-            qDebug() << "      Display-order mapping: UI frame" << ctx.startFrame
-                     << "= keyframe" << uiKeyframe << "+" << displayOffset
-                     << "-> AU" << ctx.realStartAU
-                     << "(keyframe at decoded[" << kfOutputIdx << "])";
-        }
-    } else {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("WARNING: keyframe AU %1 not found in decoder output, using AU index directly")
-                .arg(uiKeyframe));
-    }
-
-    // Check if display-order mapping moved CutIn past the stream-copy boundary.
-    // This happens when the B-frame reorder delay shifts the real content to AUs
-    // at or after the stream-copy keyframe.
-    if (ctx.realStartAU >= ctx.streamCopyLimit) {
-        // B-frame reorder delay moved CutIn AU at or past stream-copy boundary.
-        // Extend re-encode to next keyframe so encoder produces IDR for clean
-        // DPB reset. Any POC domain mismatch at the transition is handled by
-        // poc_lsb patching below.
+    // Boundary crossing (old Case A/B): pre-cut display content can hide inside
+    // the stream-copy GOP as frames that DISPLAY before the cut-in. Exact with
+    // the map: if any AU in [streamCopyLimit, nextKF) displays before
+    // startDisplay, extend the re-encode to the next keyframe.
+    if (ctx.streamCopyStartFrame >= 0) {
         int nextKF = mParser.findKeyframeAfter(ctx.streamCopyStartFrame + 1);
-        if (nextKF < 0 || (ctx.endFrame >= 0 && nextKF > ctx.endFrame + 50)) {
-            nextKF = frameCount();
+        if (nextKF < 0) nextKF = frameCount();
+        bool crossing = false;
+        for (int au = ctx.streamCopyLimit; au < nextKF; ++au) {
+            if (mDisplayMap.decodeToDisplay(au) < ctx.startDisplay) { crossing = true; break; }
         }
-        ctx.streamCopyLimit = nextKF;
-
-        if (TTSettings::instance()->logSmartCut()) {
-            qDebug() << "      CutIn AU" << ctx.realStartAU
-                     << ">= stream-copy start" << ctx.streamCopyStartFrame
-                     << "-> extending re-encode to next keyframe" << nextKF;
-        }
-
-        if (ctx.adjustedStreamCopyStart) {
-            *ctx.adjustedStreamCopyStart = nextKF;
+        if (crossing) {
+            ctx.streamCopyLimit = nextKF;
+            if (ctx.adjustedStreamCopyStart) *ctx.adjustedStreamCopyStart = nextKF;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "      Boundary crossing: pre-cut display content inside"
+                         << "stream-copy GOP -> extending re-encode to keyframe" << nextKF;
         }
     }
 
-    // Report actual start AU if it differs from requested (B-frame reorder shift)
-    if (ctx.actualStartAU && ctx.realStartAU != ctx.startFrame) {
-        *ctx.actualStartAU = ctx.realStartAU;
-        if (TTSettings::instance()->logSmartCut()) {
-            qDebug() << "      Actual start AU:" << ctx.realStartAU
-                     << "(requested:" << ctx.startFrame
-                     << ", shift:" << (ctx.realStartAU - ctx.startFrame) << "frames)";
-        }
-    }
-
-    // Select frames by corrected AU index range [realStartAU, streamCopyLimit)
-    // Open-GOP B-frames before realStartAU are ad content in display order
-    // and must be excluded from the output.
+    // Selection: display predicate + AU stream-copy bound.
     for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
-        int auIndex = static_cast<int>(ctx.allDecodedFrames[i]->pts);
-        if (auIndex >= ctx.realStartAU && auIndex < ctx.streamCopyLimit) {
-            ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
-        } else {
-            av_frame_free(&ctx.allDecodedFrames[i]);
-        }
+        const int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+        const bool keep = mDisplayMap.decodeToDisplay(au) >= ctx.startDisplay
+                       && au < ctx.streamCopyLimit;
+        if (keep) ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
+        else      av_frame_free(&ctx.allDecodedFrames[i]);
     }
     ctx.allDecodedFrames.clear();
+
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "      Selected" << ctx.framesToEncode.size()
+                 << "frames for re-encode (display >=" << ctx.startDisplay
+                 << ", AU <" << ctx.streamCopyLimit << ")";
+    }
+
+    // actualStartAU stays -1 (the old reporting compensated the mixed-index
+    // walk's deviation, which no longer exists). The video now starts exactly
+    // at the user-chosen display frame, so the audio keepList needs no shift.
 }
 
 // ----------------------------------------------------------------------------

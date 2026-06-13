@@ -23,6 +23,7 @@
 #include <QObject>
 
 #include "../avstream/ttnaluparser.h"
+#include "../avstream/ttdisplayordermap.h"
 
 // Forward declarations for libav types
 struct AVFormatContext;
@@ -35,8 +36,10 @@ struct SwsContext;
 // Cut segment information
 // ----------------------------------------------------------------------------
 struct TTCutSegmentInfo {
-    int startFrame;              // First frame to keep (display order)
-    int endFrame;                // Last frame to keep (display order)
+    int startFrame;     // First AU to keep (decode order; = displayToDecode(startDisplay))
+    int endFrame;       // Last AU to keep (decode order)
+    int startDisplay;   // First display position to keep (UI cut-in, Direction A)
+    int endDisplay;     // Last display position to keep (UI cut-out)
 
     // Analyzed info
     int cutInGOP;                // GOP containing cut-in point
@@ -64,6 +67,10 @@ public:
 
     // Override encoder preset (0-8, -1 = use TTCut settings)
     void setPresetOverride(int presetIndex) { mPresetOverride = presetIndex; }
+
+    // Inject the display-order <-> decode-order (AU) map. When set (Task 6),
+    // smartCutFrames uses it instead of building its own from the input file.
+    void setDisplayOrderMap(const TTDisplayOrderMap& map) { mDisplayMap = map; }
 
     // Initialize with ES file
     bool initialize(const QString& esFile, double frameRate = -1);
@@ -123,6 +130,10 @@ private:
 
     // NAL parser
     TTNaluParser mParser;
+
+    // Display-order <-> decode-order (AU) map. Injected via setDisplayOrderMap
+    // (Task 6) or built standalone from mInputFile in smartCutFrames.
+    TTDisplayOrderMap mDisplayMap;
 
     // Libav contexts for decode/encode
     AVCodecContext* mDecoder;
@@ -208,7 +219,7 @@ private:
     //   due to B-frame display-order mapping). -1 if unchanged.
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                         int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr,
-                        int* actualStartAU = nullptr);
+                        int* actualStartAU = nullptr, int startDisplay = -1);
 
     // Compute decode range for re-encoding: decodeStart with runway extension,
     // decodeEnd with pre-extension to next keyframe after streamCopyStartFrame.
@@ -228,15 +239,11 @@ private:
     // mReorderDelay from decoder->has_b_frames.
     bool decodeFramesIntoList(ReencodeContext& ctx);
 
-    // PAFF position-based frame selection from ctx.allDecodedFrames into
-    // ctx.framesToEncode. Sets ctx.realStartAU, ctx.streamCopyLimit, and
-    // *ctx.adjustedStreamCopyStart on overlap detection.
-    void selectFramesPAFF(ReencodeContext& ctx);
-
-    // Non-PAFF display-order to AU-index mapping. Sets ctx.framesToEncode,
-    // ctx.realStartAU, ctx.streamCopyLimit, *ctx.adjustedStreamCopyStart,
-    // *ctx.actualStartAU.
-    void selectFramesNonPAFF(ReencodeContext& ctx);
+    // Display-order based frame selection (PAFF and non-PAFF, unified).
+    // Selects every decoded frame whose DISPLAY position >= ctx.startDisplay,
+    // up to the stream-copy AU boundary. Sets ctx.framesToEncode,
+    // ctx.realStartAU, ctx.streamCopyLimit, *ctx.adjustedStreamCopyStart.
+    void selectFramesByDisplayOrder(ReencodeContext& ctx);
 
     // One-shot parse of encoder's H.264 SPS from the first encoder packet.
     // Idempotent: returns immediately if ctx.encoderSpsParsed. No-op for HEVC.
