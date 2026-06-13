@@ -222,29 +222,39 @@ bool TTH26xVideoStream::isCutInPoint(int pos)
 {
     if (TTSettings::instance()->encoderMode()) return true;
 
+    // `index` is a DISPLAY position (navigation is display-order since 7f494e0).
+    // The AU array is indexed in DECODE order, so convert before the lookup.
     int index = (pos < 0) ? currentIndex() : pos;
     if (index < 0 || index >= accessUnitCount()) return false;
 
-    return accessUnitIsRAP(index);
+    return accessUnitIsRAP(displayToDecodeIndex(index));
 }
 
 bool TTH26xVideoStream::isCutOutPoint(int pos)
 {
     if (TTSettings::instance()->encoderMode()) return true;
 
+    // `index` is a DISPLAY position (navigation is display-order since 7f494e0).
+    // The AU array is indexed in DECODE order, so convert before each AU lookup.
+    // The end-of-stream check (index == n-1) stays in DISPLAY space — the last
+    // displayed frame is always a valid cut-out regardless of decode order.
     int index = (pos < 0) ? currentIndex() : pos;
     int n = accessUnitCount();
     if (index < 0 || index >= n) return false;
 
     if (index == n - 1) return true;
-    if (index + 1 < n && accessUnitIsRAP(index + 1)) return true;
+    if (index + 1 < n && accessUnitIsRAP(displayToDecodeIndex(index + 1))) return true;
     return false;
 }
 
 int TTH26xVideoStream::findIDRBefore(int frameIndex)
 {
-    for (int i = frameIndex; i >= 0; --i) {
-        if (accessUnitIsIDR(i)) return i;
+    // `frameIndex` is a DISPLAY position (caller in ttcutpreviewtask.cpp supplies
+    // cutOutIndex(), which is stored in display space since 7f494e0).
+    // The AU array is decode-ordered, so convert on the way in and on the way out.
+    int decodeStart = displayToDecodeIndex(frameIndex);
+    for (int i = decodeStart; i >= 0; --i) {
+        if (accessUnitIsIDR(i)) return decodeToDisplayIndex(i);
     }
     return -1;
 }
@@ -264,6 +274,12 @@ int TTH26xVideoStream::gopCount() const
     return mFFmpeg ? mFFmpeg->gopCount() : 0;
 }
 
+// NOTE (index-space trap): findGOPForFrame, getGOPStart, and getGOPEnd all
+// operate in DECODE-order AU index space — they delegate to mFFmpeg->frameIndex()
+// and mFFmpeg->gopIndex() which are built in decode order.  A caller holding a
+// DISPLAY position MUST convert via displayToDecodeIndex() before calling these,
+// and convert the returned frame index back via decodeToDisplayIndex() if it will
+// be used as a display position.
 int TTH26xVideoStream::findGOPForFrame(int frameIndex)
 {
     return mFFmpeg ? mFFmpeg->findGOPForFrame(frameIndex) : -1;
