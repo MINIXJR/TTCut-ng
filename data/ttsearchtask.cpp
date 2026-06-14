@@ -271,6 +271,15 @@ void TTSearchTask::teardownWorkers()
   // mMpeg2Decoder is freed by the existing closeDecoder() chain (~TTSearchTask).
 }
 
+// Index-space note (display-order unification): batch positions come from
+// moveToNextIndexPos/moveToPrevIndexPos, i.e. positions in the (display-order
+// sorted) index list — DISPLAY positions for all codecs. They are passed to
+// isFrameBlack()/decodeFrameYUV(), which interpret their argument as a display
+// position (the seek+skip-loop counts decoder output, which is display order),
+// and the resulting hit is emitted as a display position consumed by
+// navigation (onVideoSliderChanged). The whole search path is therefore
+// display-order consistent end to end; do NOT convert these to decode/AU
+// indices.
 QVector<int> TTSearchTask::collectNextBatch(int& currentPos)
 {
   QVector<int> batch;
