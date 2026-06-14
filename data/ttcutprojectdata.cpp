@@ -147,6 +147,9 @@ void TTCutProjectData::createDocumentStructure()
   QDomElement version = xmlDocument->createElement("Version");
   xmlRoot->appendChild(version);
 
+  // Stays "1.0" deliberately after the display-order unification: the file
+  // format and the meaning of stored cut positions are unchanged (see the
+  // note in parseCutSection). No migration distinguishes old from new files.
   version.appendChild(xmlDocument->createTextNode("1.0"));
 }
 
@@ -255,6 +258,14 @@ void TTCutProjectData::parseCutSection(QDomNodeList cutNodesList, TTAVItem* avIt
   int cutIn       = cutNodesList.at(1).toElement().text().toInt();
   int cutOut      = cutNodesList.at(2).toElement().text().toInt();
 
+  // NOTE (display-order unification): do NOT convert these positions for
+  // H.26x projects. Cut positions were always chosen against the frame shown
+  // at that navigation position, and decodeFrame() shows the display-rank
+  // frame per position in both old and new builds (its behaviour is
+  // unchanged). The stored number therefore already denotes a display
+  // position; the engine now cuts exactly at the displayed frame (the old
+  // engine cut ~B-frame-reorder frames off — that was the bug). A decode->
+  // display conversion here would double-shift and break legacy projects.
   avItem->appendCutEntry(cutIn, cutOut, order);
 }
 
