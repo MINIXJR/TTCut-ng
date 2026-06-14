@@ -102,7 +102,7 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
 struct TTESSmartCut::ReencodeContext {
     ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau, int sd)
         : outFile(f), startFrame(sf), endFrame(ef), streamCopyStartFrame(scsf),
-          adjustedStreamCopyStart(assc), actualStartAU(asau), startDisplay(sd) {}
+          startDisplay(sd), adjustedStreamCopyStart(assc), actualStartAU(asau) {}
 
     // ---- Inputs (set by reencodeFrames before calling helpers) ----
     QFile& outFile;
