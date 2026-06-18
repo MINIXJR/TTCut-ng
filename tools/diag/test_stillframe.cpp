@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "extern/ttessmartcut.h"
+#include "../../avstream/ttnaluparser.h"
 
 int main(int argc, char** argv)
 {
@@ -53,5 +54,28 @@ int main(int argc, char** argv)
         return 1;
     }
     printf("PASS: first selected AU = 36385\n");
+
+    // Acceptance (cut-out frame-accuracy): the output must contain exactly
+    // cutOut - cutIn + 1 displayed frames. Open the output file and verify
+    // the frame count via TTNaluParser.
+    TTNaluParser parser;
+    if (!parser.openFile(out)) {
+        printf("FAIL: could not open output file %s\n", qPrintable(out));
+        return 1;
+    }
+    if (!parser.parseFile()) {
+        printf("FAIL: could not parse output file %s\n", qPrintable(out));
+        return 1;
+    }
+
+    int expected = cutOut - cutIn + 1;
+    int actualCount = parser.accessUnitCount();
+    if (actualCount != expected) {
+        printf("FAIL: output has %d frames, expected %d (cutOut-cutIn+1)\n",
+               actualCount, expected);
+        return 1;
+    }
+    printf("PASS: output frame count = %d (== cutOut-cutIn+1)\n", actualCount);
+
     return ok ? 0 : 1;
 }
