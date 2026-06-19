@@ -224,7 +224,8 @@ private:
     //   due to B-frame display-order mapping). -1 if unchanged.
     bool reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                         int streamCopyStartFrame, int* adjustedStreamCopyStart = nullptr,
-                        int* actualStartAU = nullptr, int startDisplay = -1);
+                        int* actualStartAU = nullptr, int startDisplay = -1,
+                        int endDisplay = -1, bool tailMode = false);
 
     // Compute decode range for re-encoding: decodeStart with runway extension,
     // decodeEnd with pre-extension to next keyframe after streamCopyStartFrame.

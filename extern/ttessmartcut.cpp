@@ -100,9 +100,11 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
 // ReencodeContext: per-call state for reencodeFrames
 // ----------------------------------------------------------------------------
 struct TTESSmartCut::ReencodeContext {
-    ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau, int sd)
+    ReencodeContext(QFile& f, int sf, int ef, int scsf, int* assc, int* asau, int sd,
+                    int ed = -1, bool tm = false)
         : outFile(f), startFrame(sf), endFrame(ef), streamCopyStartFrame(scsf),
-          startDisplay(sd), adjustedStreamCopyStart(assc), actualStartAU(asau) {}
+          startDisplay(sd), adjustedStreamCopyStart(assc), actualStartAU(asau),
+          endDisplay(ed), tailMode(tm) {}
 
     // ---- Inputs (set by reencodeFrames before calling helpers) ----
     QFile& outFile;
@@ -136,6 +138,10 @@ struct TTESSmartCut::ReencodeContext {
     int    framesSent        = 0;
     int    packetsReceived   = 0;
     QByteArray pendingPacket;
+
+    // ---- Frame-accurate cut-OUT (tail / pure-reencode display upper bound) ----
+    int    endDisplay = -1;     // cut-out display position (upper bound for selection)
+    bool   tailMode   = false;  // true: tail re-encode (au >= startFrame, display <= endDisplay)
 
     // ---- RAII cleanup: free any AVFrames still in lists ----
     ~ReencodeContext() {
@@ -818,7 +824,8 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    Pure re-encode segment";
         return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
-                              -1, nullptr, actualStartAU, segment.startDisplay);
+                              -1, nullptr, actualStartAU, segment.startDisplay,
+                              segment.endDisplay /*, tailMode=false default */);
     }
 
     // Mixed segment: Re-encode partial GOP + stream-copy from keyframe
@@ -2076,7 +2083,8 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
                                   int streamCopyStartFrame, int* adjustedStreamCopyStart,
-                                  int* actualStartAU, int startDisplay)
+                                  int* actualStartAU, int startDisplay,
+                                  int endDisplay, bool tailMode)
 {
     if (TTSettings::instance()->logSmartCut())
         qDebug() << "    Re-encoding frames" << startFrame << "->" << endFrame;
@@ -2087,7 +2095,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         *actualStartAU = -1;  // -1 = no adjustment (realStartAU == startFrame)
 
     ReencodeContext ctx(outFile, startFrame, endFrame, streamCopyStartFrame,
-                        adjustedStreamCopyStart, actualStartAU, startDisplay);
+                        adjustedStreamCopyStart, actualStartAU, startDisplay,
+                        endDisplay, tailMode);
     ctx.realStartAU = startFrame;  // fallback if mapping fails
 
     if (!computeDecodeRange(ctx)) return false;
@@ -2415,42 +2424,64 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
 // ----------------------------------------------------------------------------
 void TTESSmartCut::selectFramesByDisplayOrder(ReencodeContext& ctx)
 {
-    ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
-                                                          : (ctx.endFrame + 1);
+    if (ctx.tailMode) {
+        // Tail re-encode: start at the tail GOP keyframe (ctx.startFrame) and
+        // keep frames displaying <= endDisplay. There is no following stream-copy,
+        // so streamCopyLimit is unused; the boundary-crossing logic (cut-in
+        // specific) does not apply.
+        ctx.realStartAU     = ctx.startFrame;
+        ctx.streamCopyLimit = frameCount();
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "      Tail selection: startFrame" << ctx.startFrame
+                     << "endDisplay" << ctx.endDisplay;
+    } else {
+        ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
+                                                              : (ctx.endFrame + 1);
 
-    ctx.realStartAU = mDisplayMap.displayToDecode(ctx.startDisplay);
+        ctx.realStartAU = mDisplayMap.displayToDecode(ctx.startDisplay);
 
-    if (TTSettings::instance()->logSmartCut()) {
-        qDebug() << "      Display-order mapping: display" << ctx.startDisplay
-                 << "-> AU" << ctx.realStartAU
-                 << "(streamCopyLimit" << ctx.streamCopyLimit << ")";
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      Display-order mapping: display" << ctx.startDisplay
+                     << "-> AU" << ctx.realStartAU
+                     << "(streamCopyLimit" << ctx.streamCopyLimit << ")";
+        }
+
+        // Boundary crossing (old Case A/B): pre-cut display content can hide inside
+        // the stream-copy GOP as frames that DISPLAY before the cut-in. Exact with
+        // the map: if any AU in [streamCopyLimit, nextKF) displays before
+        // startDisplay, extend the re-encode to the next keyframe.
+        if (ctx.streamCopyStartFrame >= 0) {
+            int nextKF = mParser.findKeyframeAfter(ctx.streamCopyStartFrame + 1);
+            if (nextKF < 0) nextKF = frameCount();
+            bool crossing = false;
+            for (int au = ctx.streamCopyLimit; au < nextKF; ++au) {
+                if (mDisplayMap.decodeToDisplay(au) < ctx.startDisplay) { crossing = true; break; }
+            }
+            if (crossing) {
+                ctx.streamCopyLimit = nextKF;
+                if (ctx.adjustedStreamCopyStart) *ctx.adjustedStreamCopyStart = nextKF;
+                if (TTSettings::instance()->logSmartCut())
+                    qDebug() << "      Boundary crossing: pre-cut display content inside"
+                             << "stream-copy GOP -> extending re-encode to keyframe" << nextKF;
+            }
+        }
     }
 
-    // Boundary crossing (old Case A/B): pre-cut display content can hide inside
-    // the stream-copy GOP as frames that DISPLAY before the cut-in. Exact with
-    // the map: if any AU in [streamCopyLimit, nextKF) displays before
-    // startDisplay, extend the re-encode to the next keyframe.
-    if (ctx.streamCopyStartFrame >= 0) {
-        int nextKF = mParser.findKeyframeAfter(ctx.streamCopyStartFrame + 1);
-        if (nextKF < 0) nextKF = frameCount();
-        bool crossing = false;
-        for (int au = ctx.streamCopyLimit; au < nextKF; ++au) {
-            if (mDisplayMap.decodeToDisplay(au) < ctx.startDisplay) { crossing = true; break; }
-        }
-        if (crossing) {
-            ctx.streamCopyLimit = nextKF;
-            if (ctx.adjustedStreamCopyStart) *ctx.adjustedStreamCopyStart = nextKF;
-            if (TTSettings::instance()->logSmartCut())
-                qDebug() << "      Boundary crossing: pre-cut display content inside"
-                         << "stream-copy GOP -> extending re-encode to keyframe" << nextKF;
-        }
-    }
-
-    // Selection: display predicate + AU stream-copy bound.
+    // Selection: mode-aware predicate (head / pure-re-encode / tail).
     for (int i = 0; i < ctx.allDecodedFrames.size(); ++i) {
-        const int au = static_cast<int>(ctx.allDecodedFrames[i]->pts);
-        const bool keep = mDisplayMap.decodeToDisplay(au) >= ctx.startDisplay
-                       && au < ctx.streamCopyLimit;
+        const int au   = static_cast<int>(ctx.allDecodedFrames[i]->pts);
+        const int disp = mDisplayMap.decodeToDisplay(au);
+        bool keep;
+        if (ctx.tailMode) {
+            // Tail: AU lower bound (tail GOP start), display upper bound.
+            keep = (au >= ctx.startFrame) && (disp <= ctx.endDisplay);
+        } else if (ctx.streamCopyStartFrame < 0 && ctx.endDisplay >= 0) {
+            // Pure re-encode (short segment): both display bounds.
+            keep = (disp >= ctx.startDisplay) && (disp <= ctx.endDisplay);
+        } else {
+            // Head re-encode (mixed): display lower bound + AU stream-copy bound.
+            keep = (disp >= ctx.startDisplay) && (au < ctx.streamCopyLimit);
+        }
         if (keep) ctx.framesToEncode.append(ctx.allDecodedFrames[i]);
         else      av_frame_free(&ctx.allDecodedFrames[i]);
     }
@@ -2458,8 +2489,10 @@ void TTESSmartCut::selectFramesByDisplayOrder(ReencodeContext& ctx)
 
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "      Selected" << ctx.framesToEncode.size()
-                 << "frames for re-encode (display >=" << ctx.startDisplay
-                 << ", AU <" << ctx.streamCopyLimit << ")";
+                 << "frames for re-encode (tailMode" << ctx.tailMode
+                 << "startDisplay" << ctx.startDisplay
+                 << "endDisplay" << ctx.endDisplay
+                 << "streamCopyLimit" << ctx.streamCopyLimit << ")";
     }
 
     // actualStartAU stays -1 (the old reporting compensated the mixed-index
