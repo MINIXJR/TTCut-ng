@@ -913,10 +913,12 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
+            // Do NOT return: the boundary-crossing extension can consume the whole
+            // stream-copy range (scStart == tailStart) while a cut-out tail GOP is
+            // still pending. Fall through to the tail re-encode epilogue.
             if (TTSettings::instance()->logSmartCut())
                 qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
-            return true;
-        }
+        } else {
 
         // 3. EOS to flush DPB before stream-copy.
         // The re-encode produces MBAFF frames (x264 can't do PAFF). Without
@@ -959,6 +961,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         if (!streamCopyFrames(outFile, scStart, scEnd,
                               mReorderDelay, frameNumDelta, mmcoNeutralizeCount))
             return false;
+        }   // end: stream-copy middle present (scStart <= scEnd)
 
     } else if (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264) {
         // PAFF fallback: SPS unification not possible (encoder SPS not yet parsed)
@@ -977,10 +980,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
+            // Do NOT return: fall through to the tail re-encode epilogue (a pending
+            // cut-out tail GOP must still be written).
             if (TTSettings::instance()->logSmartCut())
                 qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
-            return true;
-        }
+        } else {
 
         // EOS to flush MBAFF references from DPB before PAFF stream-copy
         {
@@ -1026,6 +1030,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                                   mReorderDelay, frameNumDelta))
                 return false;
         }
+        }   // end: stream-copy middle present (scStart <= scEnd)
     } else {
         // Standard path: re-encode + EOS + stream-copy
         mEncoderPacketsWritten = 0;
@@ -1041,10 +1046,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         int scEnd = segment.streamCopyEndFrame;
 
         if (scStart > scEnd) {
+            // Do NOT return: fall through to the tail re-encode epilogue (a pending
+            // cut-out tail GOP must still be written).
             if (TTSettings::instance()->logSmartCut())
                 qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
-            return true;
-        }
+        } else {
         // Non-PAFF: use EOS to flush decoder DPB
         if (mParser.codecType() == NALU_CODEC_H264) {
             outFile.write(kEosNalH264, sizeof(kEosNalH264));
@@ -1086,6 +1092,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                               mReorderDelay, frameNumDelta)) {
             return false;
         }
+        }   // end: stream-copy middle present (scStart <= scEnd)
     }
     }   // end mixed-segment else
 
