@@ -227,6 +227,10 @@ private:
                         int* actualStartAU = nullptr, int startDisplay = -1,
                         int endDisplay = -1, bool tailMode = false);
 
+    // Re-encode the tail GOP [tailStartFrame ..] keeping only frames displaying
+    // <= endDisplay; forced-IDR closed sub-segment (frame-accurate cut-out).
+    bool reencodeTail(QFile& outFile, int tailStartFrame, int endDisplay);
+
     // Compute decode range for re-encoding: decodeStart with runway extension,
     // decodeEnd with pre-extension to next keyframe after streamCopyStartFrame.
     bool computeDecodeRange(ReencodeContext& ctx);

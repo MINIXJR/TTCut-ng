@@ -2139,12 +2139,46 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 }
 
 // ----------------------------------------------------------------------------
+// Re-encode the tail GOP [tailStartFrame ..] keeping only frames that display
+// <= endDisplay. Produces a forced-IDR closed sub-segment (the segment end).
+// The preceding stream-copy -> tail-IDR transition is clean by IDR flush, so
+// this needs none of the head->stream-copy machinery (frameNumDelta / MMCO /
+// SPS-unification). startDisplay is unused (tailMode bounds by au>=tailStart).
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::reencodeTail(QFile& outFile, int tailStartFrame, int endDisplay)
+{
+    int endAU = mDisplayMap.displayToDecode(endDisplay);
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "    Tail re-encode: tailStart" << tailStartFrame
+                 << "endDisplay" << endDisplay << "(endAU" << endAU << ")";
+    return reencodeFrames(outFile, tailStartFrame, endAU,
+                          -1, nullptr, nullptr,
+                          /*startDisplay*/ -1, endDisplay, /*tailMode*/ true);
+}
+
+// ----------------------------------------------------------------------------
 // Compute decode range: decodeStart (with runway extension if too close to
 // startFrame) and decodeEnd (with pre-extension to next keyframe after
 // streamCopyStartFrame for B-frame reorder coverage).
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::computeDecodeRange(ReencodeContext& ctx)
 {
+    if (ctx.tailMode) {
+        // Tail re-encode: ctx.startFrame is the tail GOP keyframe, so decode
+        // starts there directly (no runway extension — the smart-cut decoder is
+        // single-threaded, so a full drain recovers every frame). Extend the
+        // decode end to the next keyframe after the cut-out AU so B-frames that
+        // display <= endDisplay get their forward references; cap at stream end.
+        ctx.decodeStart = ctx.startFrame;
+        int afterEnd = mParser.findKeyframeAfter(ctx.endFrame + 1);
+        if (afterEnd < 0) afterEnd = frameCount() - 1;
+        ctx.decodeEnd = qMin(afterEnd + 20, frameCount() - 1);
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "      Tail decode range:" << ctx.decodeStart << "->" << ctx.decodeEnd
+                     << "(endFrame=" << ctx.endFrame << ")";
+        return true;
+    }
+
     // Find the keyframe we need to decode from.
     // H.264/H.265 decoders with frame-threading have an initialization delay:
     // the first D display-order frames are consumed by the pipeline and never
