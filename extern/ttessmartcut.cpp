@@ -445,7 +445,17 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
             segments[0].reencodeStartFrame = -1;
             segments[0].reencodeEndFrame = -1;
             segments[0].streamCopyStartFrame = segments[0].startFrame;
-            segments[0].streamCopyEndFrame = segments[0].endFrame;
+            // Preserve the frame-accurate cut-OUT decision from analyzeCutPoints:
+            // when a tail re-encode is needed, stream-copy still ends at
+            // tailStartFrame-1 (whole GOPs) and the tail GOP is re-encoded to drop
+            // frames displaying after the cut-out. Resetting to endFrame here would
+            // re-include the display-late frames AND duplicate the tail GOP. In the
+            // override case tailStartFrame > startFrame always (the re-encode path
+            // placed the stream-copy start at the next keyframe).
+            segments[0].streamCopyEndFrame =
+                (segments[0].needsReencodeAtEnd && segments[0].tailStartFrame > segments[0].startFrame)
+                    ? segments[0].tailStartFrame - 1
+                    : segments[0].endFrame;
         }
     }
 
@@ -731,11 +741,19 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
                 // Tail must not start before stream-copy start; if it would, the
                 // whole copy region is the tail GOP -- handled below.
                 if (tailStart <= seg.streamCopyStartFrame) {
-                    // Entire stream-copy region folds into the tail re-encode.
-                    seg.tailStartFrame      = seg.streamCopyStartFrame;
-                    seg.needsReencodeAtEnd  = true;
-                    seg.streamCopyStartFrame = -1;  // no stream-copy middle
+                    // No stream-copy middle: the head GOP (if any) and the tail GOP
+                    // are adjacent, so there is no whole GOP to copy between them.
+                    // Collapse the whole segment into a single pure re-encode bounded
+                    // by BOTH display limits (startDisplay..endDisplay): the display
+                    // upper bound drops the display-late frames, so no separate tail
+                    // pass is needed. reencodeEndFrame must span to seg.endFrame so the
+                    // decode range covers every kept frame (incl. reorder-late AUs).
+                    seg.reencodeStartFrame   = seg.startFrame;
+                    seg.reencodeEndFrame     = seg.endFrame;
+                    seg.streamCopyStartFrame = -1;
                     seg.streamCopyEndFrame   = -1;
+                    seg.needsReencodeAtEnd   = false;  // handled by the display bound
+                    seg.tailStartFrame       = -1;
                 } else {
                     seg.tailStartFrame     = tailStart;
                     seg.needsReencodeAtEnd = true;
@@ -811,23 +829,24 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     if (actualStartAU)
         *actualStartAU = -1;  // -1 = no adjustment
 
-    // If only stream-copy (no re-encoding), write directly
+    // If only stream-copy (no re-encoding), write it, then fall through to the
+    // frame-accurate cut-OUT tail re-encode below (the cut-out may still need it).
     if (segment.reencodeStartFrame < 0) {
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    Pure stream-copy segment";
-        return streamCopyFrames(outFile, segment.streamCopyStartFrame,
-                                segment.streamCopyEndFrame, mReorderDelay, frameNumDelta);
-    }
-
-    // If only re-encoding (no stream-copy), write directly
-    if (segment.streamCopyStartFrame < 0) {
+        if (!streamCopyFrames(outFile, segment.streamCopyStartFrame,
+                              segment.streamCopyEndFrame, mReorderDelay, frameNumDelta))
+            return false;
+        // fall through to the tail re-encode below (do NOT return)
+    } else if (segment.streamCopyStartFrame < 0) {
+        // Pure re-encode (short segment): selection already bounds display <=
+        // endDisplay, so the cut-out is frame-accurate without a separate tail.
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    Pure re-encode segment";
         return reencodeFrames(outFile, segment.reencodeStartFrame, segment.reencodeEndFrame,
                               -1, nullptr, actualStartAU, segment.startDisplay,
                               segment.endDisplay /*, tailMode=false default */);
-    }
-
+    } else {
     // Mixed segment: Re-encode partial GOP + stream-copy from keyframe
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "    Smart Cut: Re-encode" << segment.reencodeStartFrame << "->" << segment.reencodeEndFrame
@@ -1062,6 +1081,26 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                               mReorderDelay, frameNumDelta)) {
             return false;
         }
+    }
+    }   // end mixed-segment else
+
+    // ---- Frame-accurate cut-OUT: re-encode the tail GOP if needed ----
+    // Runs for pure-stream-copy and mixed segments (the pure-re-encode path
+    // returned above, already display-bounded). The stream-copy -> tail-IDR
+    // transition is clean by IDR flush: the tail's first frame is a forced IDR
+    // (PrevRefFrameNum reset), so no frameNumDelta/MMCO/SPS-unification bridging
+    // is needed across this boundary (unlike the head -> stream-copy boundary).
+    if (segment.needsReencodeAtEnd && segment.tailStartFrame >= 0) {
+        // EOS to flush the stream-copy DPB before the tail IDR (clean reset).
+        if (mParser.codecType() == NALU_CODEC_H265)
+            outFile.write(kEosNalH265, sizeof(kEosNalH265));
+        else
+            outFile.write(kEosNalH264, sizeof(kEosNalH264));
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    Cut-OUT: EOS before tail re-encode at" << segment.tailStartFrame;
+
+        if (!reencodeTail(outFile, segment.tailStartFrame, segment.endDisplay))
+            return false;
     }
 
     return true;
@@ -2164,18 +2203,22 @@ bool TTESSmartCut::reencodeTail(QFile& outFile, int tailStartFrame, int endDispl
 bool TTESSmartCut::computeDecodeRange(ReencodeContext& ctx)
 {
     if (ctx.tailMode) {
-        // Tail re-encode: ctx.startFrame is the tail GOP keyframe, so decode
-        // starts there directly (no runway extension — the smart-cut decoder is
-        // single-threaded, so a full drain recovers every frame). Extend the
-        // decode end to the next keyframe after the cut-out AU so B-frames that
-        // display <= endDisplay get their forward references; cap at stream end.
+        // Tail re-encode: ctx.startFrame is the tail GOP keyframe. Decode from one
+        // keyframe BEFORE it (DPB/runway prefill) so the decoder's reorder/init
+        // delay consumes the prefill GOP instead of the first kept tail frames.
+        // The selection predicate (au >= ctx.startFrame) excludes the prefill
+        // frames, so only the tail GOP is encoded. Extend the decode end past the
+        // cut-out (next keyframe after endFrame) so B-frames displaying <=
+        // endDisplay get their forward references; cap at stream end.
         ctx.decodeStart = ctx.startFrame;
+        int prevKF = mParser.findKeyframeBefore(ctx.startFrame - 1);
+        if (prevKF >= 0) ctx.decodeStart = prevKF;
         int afterEnd = mParser.findKeyframeAfter(ctx.endFrame + 1);
         if (afterEnd < 0) afterEnd = frameCount() - 1;
         ctx.decodeEnd = qMin(afterEnd + 20, frameCount() - 1);
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "      Tail decode range:" << ctx.decodeStart << "->" << ctx.decodeEnd
-                     << "(endFrame=" << ctx.endFrame << ")";
+                     << "(tailStart=" << ctx.startFrame << " endFrame=" << ctx.endFrame << ")";
         return true;
     }
 

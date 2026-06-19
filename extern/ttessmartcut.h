@@ -249,10 +249,15 @@ private:
     // mReorderDelay from decoder->has_b_frames.
     bool decodeFramesIntoList(ReencodeContext& ctx);
 
-    // Display-order based frame selection (PAFF and non-PAFF, unified).
-    // Selects every decoded frame whose DISPLAY position >= ctx.startDisplay,
-    // up to the stream-copy AU boundary. Sets ctx.framesToEncode,
-    // ctx.realStartAU, ctx.streamCopyLimit, *ctx.adjustedStreamCopyStart.
+    // Display-order based frame selection (PAFF and non-PAFF, unified), with
+    // three modes:
+    //   head/mixed: DISPLAY >= ctx.startDisplay && AU < stream-copy boundary
+    //   pure re-encode (streamCopyStartFrame<0, endDisplay>=0):
+    //               ctx.startDisplay <= DISPLAY <= ctx.endDisplay
+    //   tail (ctx.tailMode): AU >= ctx.startFrame && DISPLAY <= ctx.endDisplay
+    // Sets ctx.framesToEncode, ctx.realStartAU, ctx.streamCopyLimit,
+    // *ctx.adjustedStreamCopyStart. The cut-in boundary-crossing extension
+    // applies only to head/mixed mode.
     void selectFramesByDisplayOrder(ReencodeContext& ctx);
 
     // One-shot parse of encoder's H.264 SPS from the first encoder packet.
