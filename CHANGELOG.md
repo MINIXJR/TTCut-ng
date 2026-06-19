@@ -2,6 +2,28 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**Frame-accurate H.264/H.265 smart cutting (cut-in and cut-out)**
+
+### Fixes
+
+- **Frame-accurate cut-out** — H.264/H.265 smart cut used to include frames
+  that *display* after the cut-out point (B-frame reorder leaked them into the
+  contiguous decode-order stream-copy), causing extra trailing frames at
+  segment ends (e.g. a stray advertising frame at a film→ad boundary) and
+  accumulating A/V drift. The cut-out is now frame-accurate via a tail-GOP
+  re-encode (forced-IDR), symmetric to the frame-accurate cut-in. Each segment
+  outputs exactly `cutOut − cutIn + 1` display frames, so A/V sync is automatic.
+  Verified: MBAFF full cut frame-exact with ~1-frame end A/V; PAFF A/V drift
+  reduced (376 → 232 ms vs the prior baseline).
+- **Frame-accurate cut-in** — cut positions are now display positions end to
+  end, converted to access-unit (decode) indices through an authoritative
+  display↔decode map (`TTDisplayOrderMap`, built from the libav parser's
+  `output_picture_number`, no decode pass). This removes the prior mixed-index
+  cut-in offset where a cut started a few display frames late inside the
+  programme.
+
 ## v0.71.0 (2026-06-03)
 
 **libmpv in-process render backend (native Wayland), new playback player, H.264/H.265 playback fixes**

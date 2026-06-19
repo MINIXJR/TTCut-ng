@@ -1,6 +1,6 @@
 ---
-base_commit: f55b303
-last_verified: 2026-06-08  # root cause + knot resolved via two-harness measurement
+base_commit: 6571d22
+last_verified: 2026-06-19  # cut-IN (display map) + cut-OUT (tail re-encode) both frame-accurate
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -81,7 +81,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTFFmpegWrapper::decodeFrame(n)` → `mFrameIndex[n].deliveredDecodeIndex` | true decode-order index of the picture actually emitted by `avcodec_receive_frame`; differs from n when B-frame reorder applies | DECODE order tag set at packet-send time; maps packet-send-order → delivered-display-frame |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCutItem::mCutInIndex` (via `appendCutEntry`) | `currentPosition` as plain `int` | **DECODE order** (same value that TTCurrentFrame received from `moveTo*`) |
 | `TTCutItem::cutInIndex()` → `TTCutPreviewTask::createH264PreviewClip` | `mCutInIndex` | **DECODE order** |
-| `TTCutPreviewTask` → `TTESSmartCut::smartCutFrames(cutFrames)` | `QList<QPair<int,int>>` of (cutIn, cutOut) integer positions | **DECODE order** — passed directly as `seg.startFrame` / `seg.endFrame` |
+| `TTCutPreviewTask` → `TTESSmartCut::smartCutFrames(cutFrames)` | `QList<QPair<int,int>>` of (cutIn, cutOut) integer positions | **DISPLAY order (since v0.72.0)** — `analyzeCutPoints` converts to AU via `mDisplayMap.displayToDecode()`; `seg.startDisplay/endDisplay` hold the display positions, `seg.startFrame/endFrame` the derived AUs. (Rows below describing nav/cut indices as "DECODE order" are pre-v0.72.0; superseded by the RESOLVED note under the table.) |
 | `TTESSmartCut::analyzeCutPoints` → `TTNaluParser::accessUnitAt(index)` | `index` into `mAccessUnits` | **DECODE order** — TTNaluParser builds its AU list in bitstream order (no POC reordering); `TTAccessUnit::index` is a sequential counter, not a POC-sorted display position |
 | `TTNaluParser::accessUnitPtr(index, size)` → Smart Cut write path | byte offset + size of NAL units at decode position `index` | **DECODE order** → byte position in file (correct for stream-copy) |
 | `TTCutFrameNavigation::checkCutPosition(avData, pos)` ← `TTCutMainWindow::onNewFramePos(pos)` | explicit `pos` parameter; stored as `currentPosition` | **DECODE order** (same pos returned by `moveToXxx` in TTCurrentFrame) |
@@ -137,8 +137,33 @@ seek/DPB-prefill delay accounting does not always match the cut's `decodeFramesI
 | Path | What index N maps to | Consistent with display? |
 |---|---|---|
 | **Still-image display** (H.26x) | shows display-rank frame for decode-index N (= the reference the user sees) | — (reference) |
-| **Smart Cut** (H.26x) | mixed-space `displayOffset` walk → realStartAU; Cut-In 36384 → 36388 | **NO** — ~4 display-frames late |
+| **Smart Cut** (H.26x) | display→AU via `TTDisplayOrderMap`; Cut-In 36384 → AU 36385 | **Yes** (fixed v0.72.0; cut-in + cut-out frame-accurate) |
 | **Both** (MPEG-2) | `TTVideoIndexList` `sortDisplayOrder()`-sorted (via `temporal_reference`); paths agree | Yes (no bug) |
+
+> **RESOLVED (cut-IN v0.72.0, cut-OUT 2026-06-19).** The mixed-index bug above is
+> fixed. Cut positions are now **display positions** end to end, converted to AU via
+> `TTDisplayOrderMap` (`avstream/ttdisplayordermap.{h,cpp}`), built from the libav
+> parser's `output_picture_number` (no decode pass). `selectFramesByDisplayOrder`
+> (renamed from `selectFramesNonPAFF`) selects by display position; the historical
+> "Root cause & knot" analysis below is a point-in-time record, superseded by this.
+>
+> **Cut-OUT (frame-accurate, 2026-06-19) — `TTESSmartCut` tail re-encode:**
+> `streamCopyFrames` copies a contiguous **decode-order** AU range, so B-frames that
+> *display* after the cut-out but decode within the range used to leak in (extra
+> trailing frames + accumulating A/V drift). `analyzeCutPoints` now pulls the
+> stream-copy back to the last keyframe before the first display-late AU
+> (`tailStartFrame`) and `processSegment` appends a **tail GOP re-encode**
+> (`reencodeTail`, forced-IDR) that keeps only `display ≤ cutOutDisplay`. Partition
+> per kept display position (exactly once): head re-encode `display ≥ startDisplay &&
+> au < streamCopyLimit`; stream-copy `au < tailStart`; tail `au ≥ tailStart &&
+> display ≤ endDisplay`; short segments fold to one pure re-encode bounded by both
+> display limits. The stream-copy→tail-IDR transition is clean by IDR flush (no
+> frameNumDelta/MMCO/SPS-unification needed). Each segment outputs exactly
+> `cutOut − cutIn + 1` display frames; the audio keepList already expects that, so
+> A/V sync is automatic (no audio change). Optimization: tail re-encode is skipped
+> when the contiguous stream-copy is already frame-accurate. Verified: MBAFF full cut
+> frame-exact (140411) + A/V 42 ms; PAFF improved vs baseline (deficit 7→3, A/V
+> 376→232 ms; residual −3 = pre-existing seg-0 stream-start cut-IN, not the cut-out).
 
 **Fix direction (decided 2026-06-08):** A — the cut must land on the frame the still shows.
 Chosen approach: architectural single-source-of-truth via an authoritative display↔decode(AU) map.
