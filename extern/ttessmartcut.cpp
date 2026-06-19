@@ -434,7 +434,12 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     // First segment override: The decoder starts with an empty delayed_pic[]
     // reorder buffer, so no IDR barrier is needed. Force pure stream-copy
     // to avoid unnecessary re-encoding at non-IDR I-frame cut-ins.
-    if (!segments.isEmpty() && segments[0].needsReencodeAtStart) {
+    // Skip when the segment was folded to a pure re-encode by the cut-OUT logic
+    // (streamCopyStartFrame < 0): un-folding it to full stream-copy would
+    // re-include the display-late frames the fold exists to drop. The folded
+    // pure re-encode is already frame-accurate at both ends.
+    if (!segments.isEmpty() && segments[0].needsReencodeAtStart
+            && segments[0].streamCopyStartFrame >= 0) {
         TTAccessUnit firstAU = mParser.accessUnitAt(segments[0].startFrame);
         if (firstAU.isKeyframe) {
             if (TTSettings::instance()->logSmartCut()) {
