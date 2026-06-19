@@ -52,6 +52,11 @@ struct TTCutSegmentInfo {
     int reencodeEndFrame;        // Last frame to re-encode (-1 if none)
     int streamCopyStartFrame;    // First frame to stream-copy
     int streamCopyEndFrame;      // Last frame to stream-copy
+
+    // Frame-accurate cut-OUT (tail re-encode). When needsReencodeAtEnd is true,
+    // stream-copy ends at streamCopyEndFrame (= tailStartFrame-1) and the tail
+    // GOP [tailStartFrame .. ] is re-encoded keeping only display <= endDisplay.
+    int tailStartFrame;          // AU/decode index: keyframe starting the re-encoded tail (-1 if none)
 };
 
 // ----------------------------------------------------------------------------

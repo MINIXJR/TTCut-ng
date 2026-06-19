@@ -692,6 +692,59 @@ QList<TTCutSegmentInfo> TTESSmartCut::analyzeCutPoints(
             seg.streamCopyEndFrame = seg.endFrame;
         }
 
+        // ---- Frame-accurate cut-OUT: decide tail re-encode ----
+        // Default: no tail re-encode.
+        seg.needsReencodeAtEnd = false;
+        seg.tailStartFrame     = -1;
+
+        if (seg.streamCopyStartFrame >= 0 && seg.streamCopyEndFrame >= 0) {
+            // Find the earliest (decode-order) AU within the stream-copy range
+            // that displays AFTER the cut-out, OR a kept frame (display<=endDisplay)
+            // sitting beyond streamCopyEndFrame. If neither exists, the contiguous
+            // stream-copy is already frame-accurate (optimization -> no tail).
+            int firstLateAU = -1;
+            for (int au = seg.streamCopyStartFrame; au <= seg.streamCopyEndFrame; ++au) {
+                if (mDisplayMap.decodeToDisplay(au) > seg.endDisplay) { firstLateAU = au; break; }
+            }
+            // Also: a kept frame may sit just past streamCopyEndFrame (display<=endDisplay
+            // at au>endFrame). Search a reorder-window beyond the boundary.
+            int maxKeptAU = seg.streamCopyEndFrame;
+            for (int au = seg.streamCopyEndFrame + 1;
+                 au <= qMin(seg.streamCopyEndFrame + 64, frameCount() - 1); ++au) {
+                if (mDisplayMap.decodeToDisplay(au) <= seg.endDisplay) maxKeptAU = au;
+            }
+
+            if (firstLateAU >= 0 || maxKeptAU > seg.streamCopyEndFrame) {
+                // Tail re-encode needed. tailStart = last keyframe at/before the
+                // earliest problem AU. Use firstLateAU if present, else the GOP of
+                // the boundary. findKeyframeBefore accepts IDR/CRA/I-slice.
+                int probe = (firstLateAU >= 0) ? firstLateAU : seg.streamCopyEndFrame;
+                int tailStart = mParser.findKeyframeBefore(probe);
+                if (tailStart < 0) tailStart = seg.streamCopyStartFrame;
+
+                // Tail must not start before stream-copy start; if it would, the
+                // whole copy region is the tail GOP -- handled below.
+                if (tailStart <= seg.streamCopyStartFrame) {
+                    // Entire stream-copy region folds into the tail re-encode.
+                    seg.tailStartFrame      = seg.streamCopyStartFrame;
+                    seg.needsReencodeAtEnd  = true;
+                    seg.streamCopyStartFrame = -1;  // no stream-copy middle
+                    seg.streamCopyEndFrame   = -1;
+                } else {
+                    seg.tailStartFrame     = tailStart;
+                    seg.needsReencodeAtEnd = true;
+                    seg.streamCopyEndFrame = tailStart - 1;  // copy whole GOPs only
+                }
+                if (TTSettings::instance()->logSmartCut()) {
+                    qDebug() << "    Cut-OUT needs tail re-encode: tailStart" << seg.tailStartFrame
+                             << "endDisplay" << seg.endDisplay
+                             << "(firstLateAU" << firstLateAU << "maxKeptAU" << maxKeptAU << ")";
+                }
+            } else if (TTSettings::instance()->logSmartCut()) {
+                qDebug() << "    Cut-OUT already frame-accurate (no tail re-encode)";
+            }
+        }
+
         segments.append(seg);
     }
 
