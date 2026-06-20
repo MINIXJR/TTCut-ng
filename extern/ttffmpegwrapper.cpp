@@ -1288,6 +1288,41 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
 // ----------------------------------------------------------------------------
 // Decode current frame and return as QImage
 // ----------------------------------------------------------------------------
+// Convert the already-decoded mDecodedFrame to a QImage. Lazy-inits the RGB
+// frame + scaler. No packet read/decode — operates on whatever is currently in
+// mDecodedFrame. Shared by decodeCurrentFrame() and decodeFrame().
+QImage TTFFmpegWrapper::convertDecodedFrameToImage()
+{
+    if (!mVideoCodecCtx || !mDecodedFrame) return QImage();
+
+    if (!mRgbFrame) {
+        mRgbFrame = av_frame_alloc();
+        if (!mRgbFrame) { setError("Could not allocate RGB frame"); return QImage(); }
+        // Ref-counted buffer: av_frame_free will release it via AVBufferRef.
+        mRgbFrame->format = AV_PIX_FMT_RGB24;
+        mRgbFrame->width  = mVideoCodecCtx->width;
+        mRgbFrame->height = mVideoCodecCtx->height;
+        if (av_frame_get_buffer(mRgbFrame, 1) < 0) {
+            setError("Could not allocate RGB frame buffer");
+            av_frame_free(&mRgbFrame);
+            return QImage();
+        }
+    }
+    if (!mSwsCtx) {
+        mSwsCtx = sws_getContext(
+            mVideoCodecCtx->width, mVideoCodecCtx->height, mVideoCodecCtx->pix_fmt,
+            mVideoCodecCtx->width, mVideoCodecCtx->height, AV_PIX_FMT_RGB24,
+            SWS_BILINEAR, nullptr, nullptr, nullptr);
+        if (!mSwsCtx) { setError("Could not create scaler context"); return QImage(); }
+    }
+    sws_scale(mSwsCtx, mDecodedFrame->data, mDecodedFrame->linesize,
+              0, mVideoCodecCtx->height, mRgbFrame->data, mRgbFrame->linesize);
+    return QImage(mRgbFrame->data[0],
+                  mVideoCodecCtx->width, mVideoCodecCtx->height,
+                  mRgbFrame->linesize[0],
+                  QImage::Format_RGB888).copy();
+}
+
 QImage TTFFmpegWrapper::decodeCurrentFrame()
 {
     if (!mFormatCtx || !mVideoCodecCtx) {
@@ -1300,39 +1335,6 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
         mDecodedFrame = av_frame_alloc();
         if (!mDecodedFrame) {
             setError("Could not allocate decoded frame");
-            return QImage();
-        }
-    }
-
-    if (!mRgbFrame) {
-        mRgbFrame = av_frame_alloc();
-        if (!mRgbFrame) {
-            setError("Could not allocate RGB frame");
-            return QImage();
-        }
-
-        // Ref-counted buffer: av_frame_free will release it via AVBufferRef.
-        // (av_image_fill_arrays + av_malloc would leak since no buf[0] is set.)
-        mRgbFrame->format = AV_PIX_FMT_RGB24;
-        mRgbFrame->width  = mVideoCodecCtx->width;
-        mRgbFrame->height = mVideoCodecCtx->height;
-        int bufRet = av_frame_get_buffer(mRgbFrame, 1);
-        if (bufRet < 0) {
-            setError("Could not allocate RGB frame buffer");
-            av_frame_free(&mRgbFrame);
-            return QImage();
-        }
-    }
-
-    // Initialize scaler if needed
-    if (!mSwsCtx) {
-        mSwsCtx = sws_getContext(
-            mVideoCodecCtx->width, mVideoCodecCtx->height, mVideoCodecCtx->pix_fmt,
-            mVideoCodecCtx->width, mVideoCodecCtx->height, AV_PIX_FMT_RGB24,
-            SWS_BILINEAR, nullptr, nullptr, nullptr);
-
-        if (!mSwsCtx) {
-            setError("Could not create scaler context");
             return QImage();
         }
     }
@@ -1357,18 +1359,7 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
 
             ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
             if (ret == 0) {
-                // Convert to RGB
-                sws_scale(mSwsCtx,
-                    mDecodedFrame->data, mDecodedFrame->linesize,
-                    0, mVideoCodecCtx->height,
-                    mRgbFrame->data, mRgbFrame->linesize);
-
-                // Create QImage from RGB data
-                result = QImage(mRgbFrame->data[0],
-                    mVideoCodecCtx->width, mVideoCodecCtx->height,
-                    mRgbFrame->linesize[0],
-                    QImage::Format_RGB888).copy();
-
+                result = convertDecodedFrameToImage();
                 av_packet_unref(packet);
                 break;
             }
@@ -1381,17 +1372,7 @@ QImage TTFFmpegWrapper::decodeCurrentFrame()
         int ret = avcodec_send_packet(mVideoCodecCtx, nullptr);
         int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
         if (recvRet == 0) {
-            // Convert to RGB
-            sws_scale(mSwsCtx,
-                mDecodedFrame->data, mDecodedFrame->linesize,
-                0, mVideoCodecCtx->height,
-                mRgbFrame->data, mRgbFrame->linesize);
-
-            result = QImage(mRgbFrame->data[0],
-                mVideoCodecCtx->width, mVideoCodecCtx->height,
-                mRgbFrame->linesize[0],
-                QImage::Format_RGB888).copy();
-
+            result = convertDecodedFrameToImage();
             mDecoderDrained = true;
         } else {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,

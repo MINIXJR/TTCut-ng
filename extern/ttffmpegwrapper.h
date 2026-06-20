@@ -220,6 +220,9 @@ public:
     bool decodeFrameYUV(int frameIndex, TFrameInfo& outInfo);
 
     QImage decodeCurrentFrame();
+    // Convert the already-decoded mDecodedFrame to a QImage (lazy-inits
+    // mRgbFrame/mSwsCtx + sws_scale). Does NOT read or decode a packet.
+    QImage convertDecodedFrameToImage();
     bool skipCurrentFrame();
 
     // Lightweight black frame check (no RGB conversion, no QImage)
