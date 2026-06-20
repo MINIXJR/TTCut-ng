@@ -975,85 +975,56 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         return mFrameCache[frameIndex];
     }
 
-    // Always seek to ensure consistent DPB state across decoder instances.
-    // The sequential optimization (reusing decoder position without seeking)
-    // was disabled because it produces a different DPB state than a fresh seek
-    // with DPB prefill. This caused Open-GOP B-frames to decode differently
-    // in the CutOut and CurrentFrame widgets for the same frame index.
-    // The LRU frame cache mitigates the performance impact for repeated access.
-    {
-        int keyframeIndex = frameIndex;
-        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
-            keyframeIndex--;
-        }
-        if (TTSettings::instance()->logFFmpegDecoder()) {
-            qDebug() << "decodeFrame: seek target=" << frameIndex
-                     << "keyframe=" << keyframeIndex
-                     << "frames_to_decode=" << (frameIndex - keyframeIndex + 1)
-                     << "total_frames=" << mFrameIndex.size();
-        }
+    // Map the DISPLAY position to the decode-order AU to deliver. This is the
+    // SAME map the smart cut uses (displayOrderMap), so the still-image shows
+    // exactly the frame the cut starts with for cut-in N (WYSIWYG). The old code
+    // counted (frameIndex - seekKeyframe) decoder outputs, which yields the
+    // display-RANK frame — off by the local B-frame reorder amount.
+    int targetAU = frameIndex;
+    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.count())
+        targetAU = mDisplayOrderMap.displayToDecode(frameIndex);
 
-        if (!seekToFrame(frameIndex)) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeFrame: seekToFrame failed for frame %1").arg(frameIndex));
-            return QImage();
-        }
-        mDecoderFrameIndex = mCurrentFrameIndex;
-        // Tag counter starts at the seek keyframe's decode-order position. The
-        // packets sent below carry ascending decode-order indices; the delivered
-        // (display-order) frame carries its decode-order index in pts.
-        mDecodeOrderTag = mCurrentFrameIndex;
-    }
+    if (TTSettings::instance()->logFFmpegDecoder())
+        qDebug() << "decodeFrame: display" << frameIndex << "-> targetAU" << targetAU
+                 << "total_frames=" << mFrameIndex.size();
 
-    // Skip intermediate frames (decode without RGB conversion)
-    while (mDecoderFrameIndex < frameIndex) {
-        if (!skipCurrentFrame()) {
-            // EOF drain exhausted during skip — break and try decodeCurrentFrame,
-            // since the decoder may still have the target frame buffered
+    // Always seek (consistent DPB state across decoder instances; the LRU cache
+    // mitigates the cost). Decoder emits frames in DISPLAY order, each tagged
+    // with its decode-order AU in pts; decode until the output whose pts ==
+    // targetAU, then convert THAT frame. Same decode work as the old skip; only
+    // the stop condition changed (deliver the mapped AU, not the Nth output).
+    QImage result;
+    for (int attempt = 0; attempt < 2 && result.isNull(); ++attempt) {
+        if (!seekToFrame(targetAU)) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeFrame: skip failed at %1 (target=%2) drained=%3 — trying decodeCurrentFrame directly")
-                    .arg(mDecoderFrameIndex).arg(frameIndex).arg(mDecoderDrained));
+                QString("decodeFrame: seekToFrame failed for AU %1 (display %2)")
+                    .arg(targetAU).arg(frameIndex));
             break;
         }
-        mDecoderFrameIndex++;
-    }
+        mDecoderFrameIndex = mCurrentFrameIndex;
+        mDecodeOrderTag    = mCurrentFrameIndex;
 
-    // Decode final target frame with full RGB conversion
-    QImage result = decodeCurrentFrame();
-
-    // Record the true decode-order index of the frame actually delivered for this
-    // (decode-order) position. mDecodedFrame->pts carries the tag set when the
-    // packet was sent (skip/decodeCurrentFrame). With B-frame reorder this differs
-    // from frameIndex. Lazily cached so playback can seek mpv to the displayed
-    // frame's time even on later LRU cache hits.
-    if (!result.isNull() && frameIndex >= 0 && frameIndex < mFrameIndex.size()) {
-        mFrameIndex[frameIndex].deliveredDecodeIndex =
-            static_cast<int>(mDecodedFrame->pts);
-    }
-
-    // Fallback: re-seek and retry if first attempt failed
-    if (result.isNull()) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("decodeFrame: first decode attempt failed for frame %1 — retrying with fresh seek")
-                .arg(frameIndex));
-
-        int keyframeIndex = frameIndex;
-        while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
-            keyframeIndex--;
-        }
-
-        if (seekToFrame(frameIndex)) {
-            mDecoderFrameIndex = mCurrentFrameIndex;
-
-            // Skip to target again
-            while (mDecoderFrameIndex < frameIndex) {
-                if (!skipCurrentFrame()) break;
-                mDecoderFrameIndex++;
+        int guard = 0;
+        const int guardMax = mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000;
+        while (guard++ < guardMax) {
+            if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
+            if (static_cast<int>(mDecodedFrame->pts) == targetAU) {
+                result = convertDecodedFrameToImage();
+                break;
             }
-
-            result = decodeCurrentFrame();
+        }
+        if (result.isNull() && attempt == 0) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrame: targetAU %1 (display %2) not delivered — retrying with fresh seek")
+                    .arg(targetAU).arg(frameIndex));
+            mDecoderDrained = true;  // force a clean re-seek on the retry
         }
     }
+
+    // deliveredDecodeIndex is now exact: the delivered frame's decode AU == targetAU.
+    // Used by the playback seek path (onPlayVideo) to land mpv on the shown frame.
+    if (!result.isNull() && frameIndex >= 0 && frameIndex < mFrameIndex.size())
+        mFrameIndex[frameIndex].deliveredDecodeIndex = targetAU;
 
     // Fallback: try one frame earlier if target frame cannot be decoded
     if (result.isNull() && frameIndex > 0) {
