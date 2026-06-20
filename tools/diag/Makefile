@@ -26,7 +26,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay
 
 .PHONY: all clean
 all: $(TOOLS)
@@ -38,6 +38,9 @@ test_displayordermap: test_displayordermap.cpp $(DISPMAP_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
 
 test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
+test_stilldisplay: test_stilldisplay.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
 test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
