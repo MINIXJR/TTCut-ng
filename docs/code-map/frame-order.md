@@ -172,6 +172,46 @@ vs. a decode-pass ground-truth vs. hybrid) is the open design decision. MPEG-2 a
 (temporal_reference) — the codecs stay separate; only the index *semantic* (nav index = display position)
 would be aligned. See `memory/project_stillframe_cut_offset.md`.
 
+## HEVC RASL leading-pic alignment — RESOLVED 2026-06-21
+
+The display↔decode map (`TTDisplayOrderMap`, POC-based, built since v0.72.0) was
+ffmpeg/playback-aligned for H.264/MPEG-2 but **off by a constant for HEVC** (+7 on
+`Ausdrucksstarke_Designermode.265`). Root cause: the first CRA (NAL 21) has
+`NoRaslOutputFlag=1`, so its **RASL leading pictures** (NAL 8/9 — POC < CRA, decoded
+after it) are dropped by every conforming decoder. The map still ranked them, putting
+them at display 0..k-1 and shifting the CRA (the first actually-displayed frame) to
+display k. ffmpeg/mpv drop them → map-display N == ffmpeg-display (N−k).
+
+**Fix (Ansatz A — raw decode dimension kept, display dimension compacted):**
+- `TTLeadingPicClassifier` (avstream/ttdisplayordermap.cpp) — stateful per-AU NAL-walk
+  implementing the HEVC `NoRaslOutputFlag` rule (first IRAP / post-EOS NAL 36 / BLA
+  16-18). HEVC-only; H.264/MPEG-2 → always false. The dropped count is detected
+  dynamically, never hardcoded.
+- `displayRanksFromPoc` skips entries flagged `isDroppedLeading` → `decodeToDisplay[i]=-1`
+  (dropped AUs keep their raw decode slot but get no display position).
+- `buildFromRanks` allows -1 holes; `displayCount()` (m = decodable frames) is exposed
+  alongside `count()` (n = raw decode AUs). `displayToDecode` returns the **raw** decode
+  AU, so the decode-tag match (`pts==targetAU`) in the decoders is unchanged.
+- `decodeFrame` (still) and `decodeFrameYUV` (search) both map display→raw-AU via
+  `displayToDecode` and bound on `displayCount()`. `createIndexList` skips AUs with
+  `decodeToDisplayIndex(i)<0`, so `frameCount()` == m == the player frame count.
+  `isCutInPoint`/`isCutOutPoint` bound on `frameCount()` (display space), not
+  `accessUnitCount()` (raw n).
+
+**Result:** still, search, the cut (`mDisplayMap.displayToDecode` in `selectFramesByDisplayOrder`),
+and the navigable count all agree with ffmpeg/mpv display order. Verified: `decodeFrame(N)`/
+search vs ffmpeg-display-N Pearson r≈1.0 (N=0 is the CRA); full HEVC cut output frame 0 ==
+ffmpeg source display(cut-in) r=1.0, vs the old +k position r≈0.03. Gate:
+`tools/diag/gate_hevc_align.sh`.
+
+> **Supersedes** these earlier "Assumptions" bullets (pre-display-map era): "decodeFrame(n)
+> returns display-frame n+reorderDelay" (now returns true display frame N via the map);
+> "displayOrder(i)==i always for H.26x / setDisplayOrder(i)" (now `setDisplayOrder(disp)` from
+> the map, dropped AUs excluded); "POC is NOT computed" (the map derives display ranks from
+> libav parser POC). The `deliveredDecodeIndex` value being a raw decode AU used as a
+> presentation-order seek time in `onPlayVideo()` is a separate latent item (pre-existing,
+> H.264-correct where display==decode), tracked outside this change.
+
 ## Redundancy / consolidation candidates
 
 - **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `mFFmpeg->buildFrameIndex()`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Both previously scanned the entire file. Resolved in v0.72.0 by Owner A → Owner B index sharing via `provideFrameIndexTo()` (Qt COW, O(1)). Owner C (search sub-decoders) also adopts via the same mechanism. No longer redundant.

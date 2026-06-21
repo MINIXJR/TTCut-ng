@@ -18,11 +18,15 @@ int main(int argc, char** argv)
     if (!w.buildFrameIndex(vs)) { fprintf(stderr, "buildFrameIndex failed\n"); return 1; }
     fprintf(stderr, "frames=%d\n", w.frameCount());
     int lo = atoi(argv[2]), hi = atoi(argv[3]);
+    bool save = (argc > 4 && QString(argv[4]) == "save");
+    QString outDir = (argc > 5) ? argv[5] : ".";
     for (int n = lo; n <= hi; ++n) {
         QImage img = w.decodeFrame(n);        // lazily fills deliveredDecodeIndex
         TTFrameInfo fi = w.frameAt(n);
         fprintf(stderr, "display %6d -> AU(delivered)=%6d  isKeyframe=%d frameType=%d null=%d\n",
                 n, fi.deliveredDecodeIndex, fi.isKeyframe ? 1 : 0, fi.frameType, img.isNull() ? 1 : 0);
+        if (save && !img.isNull())
+            img.save(QString("%1/dm_%2.png").arg(outDir).arg(n));
     }
     return 0;
 }

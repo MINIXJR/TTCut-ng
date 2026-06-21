@@ -8,6 +8,19 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **HEVC frame numbers now match the decoder/player** — the display-order map
+  ranked the first CRA's RASL leading pictures, which every conforming decoder
+  (ffmpeg, mpv) drops because they reference frames before the random-access
+  point. That inflated the HEVC frame count and shifted every frame number by a
+  constant (e.g. +7 on a reference DVB stream) relative to playback. These
+  undecodable leading pictures are now dropped from the display dimension, so
+  the still image, frame search, the cut, and the navigable frame count all
+  agree with ffmpeg/mpv display order. Detection is dynamic (NAL type +
+  HEVC `NoRaslOutputFlag` rule: first IRAP / post-EOS / BLA); the count is never
+  assumed. H.264 and MPEG-2 are unaffected (no RASL NAL types). Verified end to
+  end: `decodeFrame(N)`/search/cut all land on ffmpeg display frame N
+  (Pearson r ≈ 1.0), and a full HEVC cut starts exactly at the selected
+  display frame (no leading advertising/logo frames).
 - **Frame-accurate cut-out** — H.264/H.265 smart cut used to include frames
   that *display* after the cut-out point (B-frame reorder leaked them into the
   contiguous decode-order stream-copy), causing extra trailing frames at
