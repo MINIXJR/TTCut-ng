@@ -2985,5 +2985,5 @@ void TTFFmpegWrapper::buildDisplayOrderMap()
 void TTFFmpegWrapper::setFrameIndex(const QList<TTFrameInfo>& index)
 {
     mFrameIndex = index;
-    buildDisplayOrderMap();   // poc/isIDR travel inside TTFrameInfo entries
+    buildDisplayOrderMap();   // poc/isIDR/isDroppedLeading travel inside TTFrameInfo entries
 }

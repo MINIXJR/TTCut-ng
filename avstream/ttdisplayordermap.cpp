@@ -271,6 +271,13 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     if (droppedPerPacket.size() == entries.size()) {
         for (int i = 0; i < entries.size(); ++i)
             entries[i].isDroppedLeading = droppedPerPacket[i];
+    } else {
+        // Size divergence would silently revert HEVC to the +k RASL misalignment.
+        // Surface it instead of dropping the flags unnoticed.
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("display-order map: drop-flag count %1 != entry count %2 for %3 "
+                    "- RASL leading pics NOT excluded (map may be display-misaligned)")
+                .arg(droppedPerPacket.size()).arg(entries.size()).arg(filePath));
     }
 
     map.build(entries);
