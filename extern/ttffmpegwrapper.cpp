@@ -1085,12 +1085,22 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
             QString("decodeFrameYUV: not initialized"));
         return false;
     }
-    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+    // Bounds check — frameIndex is a DISPLAY position (see data/ttsearchtask.cpp:274-282).
+    // When the display-order map is valid the visible range is [0, displayCount()); otherwise
+    // fall back to the raw decode dimension (H.264/MPEG-2 maps are strict permutations).
+    const int displayCount = mDisplayOrderMap.isValid()
+                           ? mDisplayOrderMap.displayCount() : mFrameIndex.size();
+    if (frameIndex < 0 || frameIndex >= displayCount) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
             QString("decodeFrameYUV: index %1 out of range (0 - %2)")
-                .arg(frameIndex).arg(mFrameIndex.size()));
+                .arg(frameIndex).arg(displayCount - 1));
         return false;
     }
+
+    // Display position -> raw decode AU (identity if no map).
+    int targetAU = frameIndex;
+    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.displayCount())
+        targetAU = mDisplayOrderMap.displayToDecode(frameIndex);
 
     // Ensure mDecodedFrame is allocated
     if (!mDecodedFrame) {
@@ -1102,75 +1112,81 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
         }
     }
 
-    // Sequential-decode path: previous frame was frameIndex-1, decoder still valid
+    // Sequential-decode path: previous call delivered the immediately preceding display
+    // position; the decoder is still positioned to emit the next output.
     bool sequentialPath = (mDecoderFrameIndex == frameIndex - 1
                            && !mDecoderDrained
                            && mDecoderFrameIndex >= 0);
 
     if (!sequentialPath) {
-        if (!seekToFrame(frameIndex)) {
+        // Non-sequential path: seek by raw decode AU, then skip until the decoder
+        // emits the output whose pts tag == targetAU (mirrors decodeFrame exactly).
+        if (!seekToFrame(targetAU)) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeFrameYUV: seekToFrame failed for frame %1").arg(frameIndex));
+                QString("decodeFrameYUV: seekToFrame failed for AU %1 (display %2)")
+                    .arg(targetAU).arg(frameIndex));
             return false;
         }
         mDecoderFrameIndex = mCurrentFrameIndex;
+        mDecodeOrderTag    = mCurrentFrameIndex;
 
-        // Skip intermediate frames (post-keyframe, pre-target)
-        while (mDecoderFrameIndex < frameIndex) {
-            if (!skipCurrentFrame()) {
-                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                    QString("decodeFrameYUV: skip failed at %1 (target=%2)")
-                        .arg(mDecoderFrameIndex).arg(frameIndex));
-                return false;
-            }
-            mDecoderFrameIndex++;
+        const int guardMax = mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000;
+        int guard = 0;
+        bool reached = false;
+        while (guard++ < guardMax) {
+            if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
+            if (static_cast<int>(mDecodedFrame->pts) == targetAU) { reached = true; break; }
         }
+        if (!reached) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: could not reach AU %1 (display %2)")
+                    .arg(targetAU).arg(frameIndex));
+            return false;
+        }
+        // Target frame is now in mDecodedFrame — fall through to YUV conversion below.
+        mDecoderFrameIndex = frameIndex;
     }
 
-    // Decode the target frame into mDecodedFrame (no RGB conversion)
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("decodeFrameYUV: could not allocate packet"));
-        return false;
-    }
+    // For the sequential path: decode the next output from the stream into mDecodedFrame.
+    // For the non-sequential path: mDecodedFrame already holds the target frame (set above).
+    bool gotFrame = !sequentialPath;
 
-    bool gotFrame = false;
-    while (!gotFrame && av_read_frame(mFormatCtx, packet) >= 0) {
-        if (packet->stream_index == mVideoStreamIndex) {
-            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
-            if (ret < 0) {
-                av_packet_unref(packet);
-                continue;
+    if (sequentialPath) {
+        AVPacket* packet = av_packet_alloc();
+        if (!packet) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: could not allocate packet"));
+            return false;
+        }
+        while (!gotFrame && av_read_frame(mFormatCtx, packet) >= 0) {
+            if (packet->stream_index == mVideoStreamIndex) {
+                int ret = avcodec_send_packet(mVideoCodecCtx, packet);
+                if (ret < 0) {
+                    av_packet_unref(packet);
+                    continue;
+                }
+                ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+                if (ret == 0)
+                    gotFrame = true;
             }
-            ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
-            if (ret == 0) {
+            av_packet_unref(packet);
+        }
+        // EOF drain if no frame yet
+        if (!gotFrame) {
+            avcodec_send_packet(mVideoCodecCtx, nullptr);
+            if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
                 gotFrame = true;
+                mDecoderDrained = true;
             }
         }
-        av_packet_unref(packet);
-    }
-
-    // EOF drain if no frame yet
-    if (!gotFrame) {
-        avcodec_send_packet(mVideoCodecCtx, nullptr);
-        int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
-        if (recvRet == 0) {
-            gotFrame = true;
-            mDecoderDrained = true;
+        av_packet_free(&packet);
+        if (!gotFrame) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("decodeFrameYUV: no frame decoded for display %1").arg(frameIndex));
+            return false;
         }
+        mDecoderFrameIndex = frameIndex;
     }
-
-    av_packet_free(&packet);
-
-    if (!gotFrame) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("decodeFrameYUV: no frame decoded for index %1").arg(frameIndex));
-        return false;
-    }
-
-    // After successful decode, advance the index
-    mDecoderFrameIndex = frameIndex;
 
     int srcFmt = mDecodedFrame->format;
     int w = mDecodedFrame->width;
