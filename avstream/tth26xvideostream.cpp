@@ -191,12 +191,17 @@ int TTH26xVideoStream::createIndexList()
 
     int n = accessUnitCount();
     for (int i = 0; i < n; ++i) {
+        const int disp = decodeToDisplayIndex(i);
+        // Dropped RASL leading pics (NoRaslOutputFlag, HEVC) have no display
+        // position and are not output by any decoder -> not navigable/cuttable.
+        // Excluding them makes frameCount() == the decoder/playback frame count.
+        if (disp < 0) continue;
         TTVideoIndex* vidIndex = new TTVideoIndex();
         // Real display rank from the POC map (identity for streams without
         // B-reorder, and for MPEG-2). sortDisplayOrder() at open then makes
         // list position == display position, and headerListIndex(pos) ==
         // decode-order AU — the same semantics MPEG-2 has via temporal_reference.
-        vidIndex->setDisplayOrder(decodeToDisplayIndex(i));
+        vidIndex->setDisplayOrder(disp);
         vidIndex->setHeaderListIndex(i);
         vidIndex->setPictureCodingType(accessUnitToCodingType(i));
         index_list->add(vidIndex);
@@ -223,9 +228,11 @@ bool TTH26xVideoStream::isCutInPoint(int pos)
     if (TTSettings::instance()->encoderMode()) return true;
 
     // `index` is a DISPLAY position (navigation is display-order since 7f494e0).
-    // The AU array is indexed in DECODE order, so convert before the lookup.
+    // Bound in DISPLAY space: frameCount() (== index_list count) excludes dropped
+    // HEVC RASL leading pics; accessUnitCount() (raw decode AUs) would admit
+    // phantom positions. The AU array is decode-ordered, so convert before lookup.
     int index = (pos < 0) ? currentIndex() : pos;
-    if (index < 0 || index >= accessUnitCount()) return false;
+    if (index < 0 || index >= frameCount()) return false;
 
     return accessUnitIsRAP(displayToDecodeIndex(index));
 }
@@ -238,8 +245,11 @@ bool TTH26xVideoStream::isCutOutPoint(int pos)
     // The AU array is indexed in DECODE order, so convert before each AU lookup.
     // The end-of-stream check (index == n-1) stays in DISPLAY space — the last
     // displayed frame is always a valid cut-out regardless of decode order.
+    // n is the DISPLAY-space count (frameCount() == index_list count), which for
+    // HEVC excludes dropped RASL leading pics; using accessUnitCount() (raw n)
+    // here would miss the EOS shortcut for the true last displayed frame.
     int index = (pos < 0) ? currentIndex() : pos;
-    int n = accessUnitCount();
+    int n = frameCount();
     if (index < 0 || index >= n) return false;
 
     if (index == n - 1) return true;
