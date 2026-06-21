@@ -26,13 +26,18 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass
+
+NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
 .PHONY: all clean
 all: $(TOOLS)
 
-check_idr test_nalu_parser test_au_types: %: %.cpp $(NALU_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_OBJ) $(LDLIBS)
+check_idr test_nalu_parser test_au_types: %: %.cpp $(NALU_FULL_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_FULL_OBJS) $(LDLIBS)
+
+test_leadingclass: test_leadingclass.cpp $(DISPMAP_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)
 
 test_displayordermap: test_displayordermap.cpp $(DISPMAP_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(DISPMAP_OBJS) $(LDLIBS) $(AVLIBS)

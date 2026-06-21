@@ -121,4 +121,26 @@ private:
     void onEmit();  // called when parser emits an AU; records poc + dequeued IDR
 };
 
+// Stateful per-AU classifier for HEVC RASL leading pictures that a conforming
+// decoder drops: the RASL pics associated with a NoRaslOutputFlag IRAP (the
+// first IRAP in the bitstream, any IRAP after an EOS, and every BLA). Single
+// source of truth for the drop rule, shared by TTFFmpegWrapper's index scan and
+// TTDisplayOrderMap::buildFromFile. Non-HEVC codecs: classifyPacket() is a no-op
+// returning false (H.264/MPEG-2 have no RASL NAL types).
+class TTLeadingPicClassifier
+{
+public:
+    explicit TTLeadingPicClassifier(int avCodecId);   // AV_CODEC_ID_HEVC -> active
+
+    // Feed one complete demuxed AU packet (Annex-B). Returns true iff this AU is
+    // a RASL leading pic of a NoRaslOutputFlag IRAP (i.e. dropped, no display pos).
+    bool classifyPacket(const uint8_t* data, int size);
+
+private:
+    bool mIsHevc        = false;
+    bool mSeenFirstIrap = false;   // for the "first IRAP in bitstream" rule
+    bool mPrevWasEos    = false;   // an EOS/EOB NAL was seen -> next IRAP is NoRaslOutput
+    bool mInNoRaslLeading = false; // inside the leading sequence of a NoRaslOutput IRAP
+};
+
 #endif // TTDISPLAYORDERMAP_H

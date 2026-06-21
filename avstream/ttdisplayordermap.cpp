@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttdisplayordermap.h"
+#include "ttnaluparser.h"
 
 #include "../common/ttmessagelogger.h"
 
@@ -266,4 +267,59 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
 
     map.build(entries);
     return map;
+}
+
+// ----------------------------------------------------------------------------
+// TTLeadingPicClassifier
+// ----------------------------------------------------------------------------
+TTLeadingPicClassifier::TTLeadingPicClassifier(int avCodecId)
+    : mIsHevc(avCodecId == AV_CODEC_ID_HEVC)
+{}
+
+bool TTLeadingPicClassifier::classifyPacket(const uint8_t* data, int size)
+{
+    if (!mIsHevc || !data || size < 4) return false;
+
+    // Walk Annex-B start codes; find this AU's first VCL slice NAL type and
+    // note any EOS/EOB NAL. HEVC NAL type = (header_byte >> 1) & 0x3F.
+    int  vclType = -1;
+    bool sawEos  = false;
+    for (int i = 0; i + 2 < size; ++i) {
+        if (data[i] == 0 && data[i + 1] == 0 &&
+            (data[i + 2] == 1 ||
+             (data[i + 2] == 0 && i + 3 < size && data[i + 3] == 1))) {
+            const int hdr = (data[i + 2] == 1) ? i + 3 : i + 4;
+            if (hdr >= size) break;
+            const int t = (data[hdr] >> 1) & 0x3F;
+            if (t == H265::NAL_EOS || t == H265::NAL_EOB) sawEos = true;
+            else if (t <= 31 && vclType < 0) vclType = t;   // first VCL slice (0..31)
+            i = hdr;   // resume after this NAL header (mirrors TTPocCollector::packetIsIDR);
+                       // the next start code lies well past hdr+1 on Annex-B AU data
+        }
+    }
+
+    if (sawEos) mPrevWasEos = true;
+    if (vclType < 0) return false;   // non-VCL AU (standalone EOS / param sets)
+
+    auto isIrap = [](int t){ return t >= H265::NAL_BLA_W_LP && t <= H265::NAL_CRA_NUT; };
+    auto isBla  = [](int t){ return t >= H265::NAL_BLA_W_LP && t <= H265::NAL_BLA_N_LP; };
+    auto isIdr  = [](int t){ return t == H265::NAL_IDR_W_RADL || t == H265::NAL_IDR_N_LP; };
+
+    if (isIrap(vclType)) {
+        // NoRaslOutputFlag == 1 for: the first IRAP in the bitstream, any IRAP
+        // after an EOS, every BLA, and (per HEVC 7.4.2.4) every IDR. Conformant
+        // streams never emit RASL after IDR, so arming for IDR is defensive only.
+        const bool noRasl = (!mSeenFirstIrap) || mPrevWasEos
+                          || isBla(vclType) || isIdr(vclType);
+        mSeenFirstIrap   = true;
+        mPrevWasEos      = false;
+        mInNoRaslLeading = noRasl;     // arm/disarm dropping for this IRAP's leading pics
+        return false;                  // the IRAP itself is always displayed
+    }
+    if (vclType == H265::NAL_RASL_N || vclType == H265::NAL_RASL_R)
+        return mInNoRaslLeading;       // dropped iff inside a NoRaslOutput leading seq
+    if (vclType == H265::NAL_RADL_N || vclType == H265::NAL_RADL_R)
+        return false;                  // RADL displayed; stays in the leading sequence
+    mInNoRaslLeading = false;          // first trailing pic ends the leading sequence
+    return false;
 }
