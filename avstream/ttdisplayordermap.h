@@ -23,8 +23,9 @@
 #include <cstdint>
 
 struct TTPocEntry {
-    int  poc   = 0;
-    bool isIDR = false;
+    int  poc             = 0;
+    bool isIDR           = false;
+    bool isDroppedLeading = false;   // RASL leading pic of a NoRaslOutputFlag IRAP
 };
 
 class TTDisplayOrderMap
@@ -33,7 +34,9 @@ public:
     TTDisplayOrderMap() = default;
 
     // Pure algorithm: decode-ordered POC entries -> display rank per decode
-    // position. Returned vector is a permutation of 0..n-1.
+    // position. Returns a vector of size n: -1 for dropped leading pictures
+    // (RASL of a NoRaslOutputFlag IRAP, flagged isDroppedLeading), and 0..m-1
+    // for the m decodable entries (m == count of non-dropped entries).
     static QVector<int> displayRanksFromPoc(const QVector<TTPocEntry>& entries);
 
     // Build both directions from decode-ordered entries.
@@ -48,8 +51,9 @@ public:
     // Returns an invalid map on failure.
     static TTDisplayOrderMap buildFromFile(const QString& filePath);
 
-    bool isValid() const { return !mDecodeToDisplay.isEmpty(); }
-    int  count() const   { return mDecodeToDisplay.size(); }
+    bool isValid() const        { return !mDecodeToDisplay.isEmpty(); }
+    int  count() const        { return mDecodeToDisplay.size(); }   // raw decode dimension (n)
+    int  displayCount() const { return mDisplayToDecode.size(); }   // decodable/navigable frames (m)
 
     // Out-of-range indices return the input (identity) — callers at stream
     // edges stay safe.

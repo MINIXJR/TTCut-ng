@@ -39,6 +39,9 @@ QVector<int> TTDisplayOrderMap::displayRanksFromPoc(const QVector<TTPocEntry>& e
     };
 
     for (int i = 0; i < n; ++i) {
+        // Dropped leading pictures (RASL of a NoRaslOutputFlag IRAP) are never
+        // output by a conforming decoder: no display rank, never enter the DPB.
+        if (entries[i].isDroppedLeading) continue;   // decodeToDisplay[i] stays -1
         // IDR: nothing after it (decode order) displays before it, and POC
         // restarts — flush the reorder buffer first. Non-IDR I (open GOP/CRA)
         // does NOT flush: its leading B/RASL pictures display before it.
@@ -61,17 +64,24 @@ void TTDisplayOrderMap::build(const QVector<TTPocEntry>& entries)
 void TTDisplayOrderMap::buildFromRanks(const QVector<int>& decodeToDisplay)
 {
     mDecodeToDisplay = decodeToDisplay;
-    mDisplayToDecode = QVector<int>(decodeToDisplay.size(), -1);
+
+    // Count decodable (non-dropped) entries -> display dimension size m.
+    int m = 0;
+    for (int rank : decodeToDisplay)
+        if (rank >= 0) ++m;
+
+    mDisplayToDecode = QVector<int>(m, -1);
     for (int i = 0; i < decodeToDisplay.size(); ++i) {
         const int rank = decodeToDisplay[i];
-        if (rank < 0 || rank >= mDisplayToDecode.size()) {  // not a permutation
+        if (rank < 0) continue;                 // dropped leading pic — no display slot
+        if (rank >= m) {                        // not a permutation of 0..m-1
             mDecodeToDisplay.clear();
             mDisplayToDecode.clear();
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("display-order map rejected: rank %1 out of range").arg(rank));
+                QString("display-order map rejected: rank %1 out of range (m=%2)").arg(rank).arg(m));
             return;
         }
-        if (mDisplayToDecode[rank] != -1) {  // duplicate rank
+        if (mDisplayToDecode[rank] != -1) {     // duplicate rank
             mDecodeToDisplay.clear();
             mDisplayToDecode.clear();
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,

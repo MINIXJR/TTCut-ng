@@ -12,6 +12,25 @@
 
 static int failures = 0;
 
+static void checkMap(const char* name, const QVector<TTPocEntry>& e,
+                     const QVector<int>& expRanks,
+                     int expCount, int expDisplayCount)
+{
+    QVector<int> ranks = TTDisplayOrderMap::displayRanksFromPoc(e);
+    TTDisplayOrderMap m;
+    m.buildFromRanks(ranks);
+    bool ok = (ranks == expRanks)
+           && m.count() == expCount
+           && m.displayCount() == expDisplayCount;
+    printf("%s  %s (count=%d displayCount=%d)\n",
+           ok ? "PASS" : "FAIL", name, m.count(), m.displayCount());
+    if (!ok) { failures++;
+        printf("  ranks got:      "); for (int v : ranks) printf("%d ", v);
+        printf("\n  ranks expected: "); for (int v : expRanks) printf("%d ", v);
+        printf("\n  expected count=%d displayCount=%d\n", expCount, expDisplayCount);
+    }
+}
+
 static void check(const char* name, const QVector<int>& got, const QVector<int>& expected)
 {
     if (got == expected) { printf("PASS  %s\n", name); return; }
@@ -111,6 +130,31 @@ int main()
         if (!dup.isValid() && !oob.isValid())
             printf("PASS  buildFromRanks/reject\n");
         else { failures++; printf("FAIL  buildFromRanks/reject\n"); }
+    }
+
+    // Case: first-CRA RASL leading pics dropped (mirrors real HEVC start).
+    // decode: CRA(100) RASL(97,drop) RASL(98,drop) TRAIL(101) TRAIL(102)
+    // CRA ranks 0, TRAIL 101->1, 102->2; dropped slots stay -1.
+    {
+        QVector<TTPocEntry> e = {
+            {100, false, false},
+            {97,  false, true},
+            {98,  false, true},
+            {101, false, false},
+            {102, false, false},
+        };
+        checkMap("drop_first_cra_rasl", e, {0, -1, -1, 1, 2},
+                 /*count*/5, /*displayCount*/3);
+    }
+
+    // Case: no drops -> strict permutation, count==displayCount (regression guard).
+    {
+        QVector<TTPocEntry> e = {
+            {0, true, false}, {6, false, false}, {2, false, false},
+            {4, false, false}, {12, false, false}, {8, false, false},
+            {10, false, false},
+        };
+        checkMap("no_drop_permutation", e, {0, 3, 1, 2, 6, 4, 5}, 7, 7);
     }
 
     printf(failures == 0 ? "\nALL PASS\n" : "\n%d FAILURES\n", failures);
