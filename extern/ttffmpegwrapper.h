@@ -87,6 +87,7 @@ struct TTFrameInfo {
     // from packet NAL scan. INT_MIN poc == "not collected" (identity map).
     int  poc   = INT_MIN;
     bool isIDR = false;
+    bool isDroppedLeading = false;   // HEVC RASL leading pic of a NoRaslOutputFlag IRAP
 
     // Internal scratch for buildFrameIndex's PAFF post-processing pass:
     int  paffFrameNum  = -1;     // -1 = not a field; else frame_num for matching

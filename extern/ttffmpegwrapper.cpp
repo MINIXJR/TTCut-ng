@@ -952,14 +952,21 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
 // ----------------------------------------------------------------------------
 QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
-    // Bounds check — TTNaluParser and FFmpeg demuxer may count different frames
-    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+    // Bounds check — frameIndex is a DISPLAY position. When the display-order
+    // map is valid the visible range is [0, displayCount()) (= n minus dropped
+    // RASL leading pics for HEVC); otherwise it is the raw decode dimension.
+    // Both this guard and the map lookup below must agree on the upper bound.
+    const int frameUpperBound =
+        (mDisplayOrderMap.isValid() && mDisplayOrderMap.displayCount() > 0)
+        ? mDisplayOrderMap.displayCount()
+        : mFrameIndex.size();
+    if (frameIndex < 0 || frameIndex >= frameUpperBound) {
         if (TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "decodeFrame: index" << frameIndex
-                     << "out of range (0 -" << mFrameIndex.size()-1 << ")";
+                     << "out of range (0 -" << frameUpperBound-1 << ")";
         }
-        if (frameIndex >= mFrameIndex.size() && mFrameIndex.size() > 0) {
-            frameIndex = mFrameIndex.size() - 1;
+        if (frameIndex >= frameUpperBound && frameUpperBound > 0) {
+            frameIndex = frameUpperBound - 1;
             if (TTSettings::instance()->logFFmpegDecoder())
                 qDebug() << "decodeFrame: clamped to last valid frame" << frameIndex;
         } else {
@@ -981,7 +988,7 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     // counted (frameIndex - seekKeyframe) decoder outputs, which yields the
     // display-RANK frame — off by the local B-frame reorder amount.
     int targetAU = frameIndex;
-    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.count())
+    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.displayCount())
         targetAU = mDisplayOrderMap.displayToDecode(frameIndex);
 
     if (TTSettings::instance()->logFFmpegDecoder())
@@ -2800,6 +2807,7 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
     // emission-side (parser lags one packet); IDR is detected input-side.
     const bool collectPoc = (codecId == AV_CODEC_ID_H264 || codecId == AV_CODEC_ID_HEVC);
     TTPocCollector pocCollector(collectPoc ? codecId : AV_CODEC_ID_NONE);
+    TTLeadingPicClassifier leadingClassifier(collectPoc ? codecId : AV_CODEC_ID_NONE);
 
     while (av_read_frame(mFormatCtx, packet) >= 0) {
         if (packet->stream_index == videoStreamIndex) {
@@ -2815,6 +2823,7 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
 
             if (collectPoc) {
                 info.isIDR = TTPocCollector::packetIsIDR(packet->data, packet->size, codecId);
+                info.isDroppedLeading = leadingClassifier.classifyPacket(packet->data, packet->size);
                 pocCollector.feedPacket(packet->data, packet->size);
             }
 
@@ -2948,7 +2957,7 @@ void TTFFmpegWrapper::buildDisplayOrderMap()
     QVector<TTPocEntry> entries(mFrameIndex.size());
     bool allSame = true;
     for (int i = 0; i < mFrameIndex.size(); ++i) {
-        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR};
+        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR, mFrameIndex[i].isDroppedLeading};
         if (mFrameIndex[i].poc != mFrameIndex[0].poc) allSame = false;
     }
     if (allSame && mFrameIndex.size() > 1) { identity("constant POC"); return; }

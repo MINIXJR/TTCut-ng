@@ -239,6 +239,8 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     // trackIDR MUST be true from construction so that pre-IDR packets are queued
     // correctly (activating mid-stream would misassign IDR flags).
     TTPocCollector collector(codecId, /*trackIDR=*/true);
+    TTLeadingPicClassifier leadingClassifier(codecId);
+    QVector<bool> droppedPerPacket;   // one entry per video packet (== per AU for HEVC)
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -250,6 +252,7 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     while (av_read_frame(fmt, pkt) >= 0) {
         if (pkt->stream_index == vIdx) {
             const bool isIDR = TTPocCollector::packetIsIDR(pkt->data, pkt->size, codecId);
+            droppedPerPacket.append(leadingClassifier.classifyPacket(pkt->data, pkt->size));
             collector.feedPacket(pkt->data, pkt->size, isIDR);
         }
         av_packet_unref(pkt);
@@ -258,11 +261,16 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     av_packet_free(&pkt);
     avformat_close_input(&fmt);
 
-    const QVector<TTPocEntry>& entries = collector.entries();
+    QVector<TTPocEntry> entries = collector.entries();   // copy (mutable)
     if (entries.isEmpty()) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
             QString("display-order map: no entries collected for %1").arg(filePath));
         return map;
+    }
+    // Per-AU emission is 1:1 with video packets for HEVC; pair drop flags by index.
+    if (droppedPerPacket.size() == entries.size()) {
+        for (int i = 0; i < entries.size(); ++i)
+            entries[i].isDroppedLeading = droppedPerPacket[i];
     }
 
     map.build(entries);
