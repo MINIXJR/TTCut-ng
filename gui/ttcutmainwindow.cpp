@@ -1142,7 +1142,6 @@ void TTCutMainWindow::closeProject()
   currentFrame->clearSubtitleStream();
   cutOutFrame->onAVDataChanged(0);
 
-  TTSettings::instance()->setProjectFileName("");
   navigationEnabled(false);
 
   mpStreamPointModel->clear();
@@ -1151,6 +1150,10 @@ void TTCutMainWindow::closeProject()
 
   // Restore global settings from QSettings (discard project overrides)
   TTSettings::instance()->load();
+  // Clear the project identity AFTER load() — load() must never be able to
+  // resurrect the closed project's file name (would let the next save silently
+  // overwrite it). This clear is the last word on project identity.
+  TTSettings::instance()->setProjectFileName("");
   // Clear cut video name so next cut dialog derives it from video filename
   TTSettings::instance()->setCutVideoName("");
 

@@ -624,7 +624,10 @@ void TTSettings::load()
   settings.beginGroup("Common");
   mTempDirPath     = settings.value("TempDirPath/",     mTempDirPath).toString();
   mLastDirPath     = settings.value("LastDirPath/",     mLastDirPath).toString();
-  mProjectFileName = settings.value("ProjectFileName/", mProjectFileName).toString();
+  // ProjectFileName is a transient per-project value (identity of the open
+  // project), NOT a persistent global setting. It must never be resurrected
+  // from disk — doing so let "New Project" inherit the previous project's
+  // file name and silently overwrite it. Managed in-memory only.
   // ----- Audio/QuickJump fields (Task 10) -----------------------------
   // Four fields extend the Common block. screenshotDir/Project live in
   // their own Screenshot block (below) per the Task 1 inventory.
@@ -870,7 +873,7 @@ void TTSettings::save()
   settings.beginGroup("Common");
   settings.setValue("TempDirPath/",     mTempDirPath);
   settings.setValue("LastDirPath/",     mLastDirPath);
-  settings.setValue("ProjectFileName/", mProjectFileName);
+  // ProjectFileName intentionally NOT persisted — transient per-project value.
   // ----- Audio/QuickJump fields (Task 10) -----------------------------
   settings.setValue("BurstMinDeltaDb/",         mBurstMinDeltaDb);
   settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
