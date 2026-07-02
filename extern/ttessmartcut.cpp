@@ -441,7 +441,33 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     if (!segments.isEmpty() && segments[0].needsReencodeAtStart
             && segments[0].streamCopyStartFrame >= 0) {
         TTAccessUnit firstAU = mParser.accessUnitAt(segments[0].startFrame);
+        // The cut-in keyframe may carry leading pictures: AUs that follow it
+        // in decode order but display BEFORE the requested cut-in (open-GOP
+        // B-frames, HEVC RASL). A pure stream-copy would include them — they
+        // are undecodable at the segment start (their references precede the
+        // cut) AND they stretch the muxer's AU-counted timeline by the
+        // reorder depth, shifting A/V sync for the whole segment. Take the
+        // shortcut only when no such AU exists; otherwise keep the
+        // display-exact re-encode path from analyzeCutPoints.
+        // decodeToDisplay() returns -1 for dropped (non-navigable) leading
+        // pictures, which correctly counts as "displays before the cut-in".
+        bool hasLeadingPics = false;
         if (firstAU.isKeyframe) {
+            const int cutInDisplay = cutFrames.first().first;
+            const int scanEnd = qMin(frameCount() - 1, segments[0].startFrame + 16);
+            for (int au = segments[0].startFrame + 1; au <= scanEnd; ++au) {
+                if (mDisplayMap.decodeToDisplay(au) < cutInDisplay) {
+                    hasLeadingPics = true;
+                    break;
+                }
+            }
+        }
+        if (firstAU.isKeyframe && hasLeadingPics
+                && TTSettings::instance()->logSmartCut()) {
+            qDebug() << "  First segment: cut-in keyframe has leading pictures"
+                     << "- keeping display-exact re-encode (no stream-copy override)";
+        }
+        if (firstAU.isKeyframe && !hasLeadingPics) {
             if (TTSettings::instance()->logSmartCut()) {
                 qDebug() << "  First segment: overriding re-encode to pure stream-copy"
                          << "(decoder starts fresh, no delayed_pic[] barrier needed)";
