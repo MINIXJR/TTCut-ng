@@ -80,12 +80,14 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     const QByteArray& nalBody,
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
-    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex);
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
+    int pocLsbBase);
 static QByteArray rewriteEncoderPacketForSourceSps(
     const QByteArray& packetData,
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
-    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex);
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
+    int pocLsbBase);
 static QByteArray extractPpsFromPacket(const QByteArray& packetData);
 static QByteArray patchPpsId(const QByteArray& ppsNal, uint32_t newPpsId);
 
@@ -95,6 +97,27 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
     const H264PpsInfo& pps);
 static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWidth,
     int frameNumDelta, int maxFrameNum);
+
+// libx264 with bf=0 emits SPS with log2_max_pic_order_cnt_lsb_minus4 = 0.
+// The per-segment SPS-unification decision runs BEFORE the encoder produces
+// its first packet, so it relies on this constant; parseEncoderSpsFromPacket
+// verifies it afterwards and warns on mismatch.
+static constexpr int kExpectedEncoderLog2PocLsb = 4;
+
+// True when some poc_lsb value representable in patchLog2PocLsb bits keeps
+// the decoder's PicOrderCntMsb continuous into srcPocLsb — the same linear
+// distance rule (|src - v| <= srcMax/2) that applyPocDomainFix's post-patch
+// search uses. When false, no patch value exists ("no safe poc_lsb"): the
+// first stream-copied GOP would be discarded as out-of-order after the EOS,
+// so the caller must widen the encoder POC domain via SPS unification.
+static bool pocDomainBridgeable(int srcPocLsb, int patchLog2PocLsb, int srcLog2PocLsb)
+{
+    if (srcPocLsb < 0 || patchLog2PocLsb <= 0 || srcLog2PocLsb <= 0)
+        return true;  // cannot judge — applyPocDomainFix's warning is the backstop
+    int patchMax = 1 << patchLog2PocLsb;
+    int srcHalf  = (1 << srcLog2PocLsb) / 2;
+    return srcPocLsb <= srcHalf + patchMax - 1;
+}
 
 // ----------------------------------------------------------------------------
 // ReencodeContext: per-call state for reencodeFrames
@@ -179,6 +202,8 @@ TTESSmartCut::TTESSmartCut()
     , mEncoderFrameMbsOnly(true)
     , mSpsUnification(false)
     , mSpsUnificationOutFile(nullptr)
+    , mSpsUnificationPocAnchor(-1)
+    , mSpsUnificationPocBase(-1)
     , mEncoderPacketsWritten(0)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
@@ -308,6 +333,8 @@ void TTESSmartCut::cleanup()
     mEncoderLog2MaxPocLsb = 0;
     mSpsUnification = false;
     mSpsUnificationOutFile = nullptr;
+    mSpsUnificationPocAnchor = -1;
+    mSpsUnificationPocBase = -1;
     mEncoderPacketsWritten = 0;
     mEncoderPocType = -1;
     mEncoderFrameMbsOnly = true;
@@ -893,12 +920,35 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     //   3. Rewrite encoder slice NALs to use source SPS params + pps_id=1
     //   4. At transition: no IDR, no EOS — just continue with stream-copy
     //   5. Stream-copy frames use source PPS (id=0) naturally
-    // SPS Unification is only needed for PAFF (separated fields).
-    // MBAFF (frame-based interlacing) also has frame_mbs_only=0 but does NOT
-    // need SPS unification — the encoder produces MBAFF output that is compatible
-    // with the source MBAFF stream. Only PAFF has the MBAFF→PAFF mode mismatch.
-    // Force SPS Unification path for all PAFF segments (test: skip fallback)
-    bool useSpsUnification = (mParser.isPAFF() && mParser.codecType() == NALU_CODEC_H264);
+    // SPS Unification is required for PAFF (separated fields: the encoder's
+    // MBAFF output needs source-SPS signaling). For non-PAFF the encoder's
+    // slice FORMAT is compatible with the source — but its POC domain is not
+    // always: libx264 emits log2_max_poc_lsb=4 (16 values) while sources
+    // typically use 6 (64 values). When the stream-copy start POC lies
+    // outside the encoder-representable bridge window, applyPocDomainFix has
+    // no safe patch value ("no safe poc_lsb") and the decoder discards the
+    // first copied GOP as out-of-order after the EOS. For exactly those
+    // seams, unification (slices rewritten into the source POC domain) makes
+    // the bridge always possible; benign seams keep the unchanged fast path
+    // (byte-identical output).
+    bool pocBridgeable = true;
+    int unificationSrcPocLsb = -1;
+    if (mParser.codecType() == NALU_CODEC_H264 && !mParser.isPAFF()
+            && segment.streamCopyStartFrame >= 0 && mLog2MaxPocLsb > 0) {
+        QByteArray scAU = mParser.readAccessUnitData(segment.streamCopyStartFrame);
+        int srcPocLsb = readPocLsbFromAU(scAU, mLog2MaxFrameNum,
+                                          mLog2MaxPocLsb, mFrameMbsOnly);
+        unificationSrcPocLsb = srcPocLsb;
+        pocBridgeable = pocDomainBridgeable(srcPocLsb, kExpectedEncoderLog2PocLsb,
+                                            mLog2MaxPocLsb);
+        if (!pocBridgeable && TTSettings::instance()->logSmartCut()) {
+            qDebug() << "    POC domain not bridgeable (source poc_lsb" << srcPocLsb
+                     << "at copy start" << segment.streamCopyStartFrame
+                     << ") - enabling SPS unification for this segment";
+        }
+    }
+    bool useSpsUnification = (mParser.codecType() == NALU_CODEC_H264)
+        && (mParser.isPAFF() || !pocBridgeable);
 
     if (useSpsUnification) {
         if (TTSettings::instance()->logSmartCut())
@@ -922,6 +972,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         //    The encoder PPS (id=1) is written after extraction from first packet.
         mSpsUnification = true;
         mSpsUnificationOutFile = &outFile;
+        // Non-PAFF POC seam: anchor the rewritten encoder POCs to the source
+        // value at the copy start so they join monotonically (PAFF keeps the
+        // legacy linear numbering: anchor stays -1).
+        mSpsUnificationPocAnchor = mParser.isPAFF() ? -1 : unificationSrcPocLsb;
+        mSpsUnificationPocBase = -1;
         mEncoderPacketsWritten = 0;
 
         int adjustedStart = -1;
@@ -930,10 +985,14 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                             segment.startDisplay)) {
             mSpsUnification = false;
             mSpsUnificationOutFile = nullptr;
+            mSpsUnificationPocAnchor = -1;
+            mSpsUnificationPocBase = -1;
             return false;
         }
         mSpsUnification = false;
         mSpsUnificationOutFile = nullptr;
+        mSpsUnificationPocAnchor = -1;
+        mSpsUnificationPocBase = -1;
 
         int scStart = (adjustedStart >= 0) ? adjustedStart : segment.streamCopyStartFrame;
         int scEnd = segment.streamCopyEndFrame;
@@ -963,11 +1022,24 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // Writing duplicate SPS/PPS causes the h264 parser to combine them
         // with the first AU into one oversized packet → "Invalid NAL unit size".
 
-        // frameNumDelta bridges re-encoded frame_nums (0..N) to stream-copy
+        // frameNumDelta bridges re-encoded frame_nums (0..N-1) to stream-copy
         // frame_nums (original values from source ES).
         QByteArray firstAU = mParser.readAccessUnitData(scStart);
         {
-            int lastEncFrameNum = mEncoderPacketsWritten;  // encoder fn goes 0..N-1
+            // Same wrap correction as the standard path: the last frame_num
+            // actually in the bitstream is (N-1) mod EncMaxFrameNum, not N-1.
+            // With SPS unification (always on in this PAFF path) the encoder
+            // slices carry the SOURCE fn width. Equal to the raw packet count
+            // for N <= EncMaxFrameNum (all short re-encodes: unchanged).
+            // This block only runs in the SPS-unification branch: the encoder
+            // slices were REWRITTEN into the source fn width (mSpsUnification is
+            // already reset back to false at this point, so do not consult it).
+            int encLog2Fn = mLog2MaxFrameNum;
+            int lastEncFrameNum = mEncoderPacketsWritten;
+            if (encLog2Fn > 0 && mEncoderPacketsWritten > 0) {
+                int encMaxFrameNum = 1 << encLog2Fn;
+                lastEncFrameNum = ((mEncoderPacketsWritten - 1) % encMaxFrameNum) + 1;
+            }
             int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
             if (firstScFrameNum > 0) {
                 frameNumDelta = lastEncFrameNum - firstScFrameNum;
@@ -1101,7 +1173,25 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // frame_nums continue seamlessly — same approach as the PAFF path.
         if (mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264) {
             QByteArray firstAU = mParser.readAccessUnitData(scStart);
+            // Desired first frame_num after the encoder section = last frame_num
+            // actually written to the bitstream + 1. The encoder's frame_num
+            // wraps at ITS OWN MaxFrameNum (encoder SPS; source SPS when SPS
+            // unification rewrote the slices) — with N packets the last
+            // bitstream fn is (N-1) mod EncMaxFrameNum, NOT N-1. Using the raw
+            // packet count leaves a frame_num gap at the copy start once
+            // N > EncMaxFrameNum (long re-encodes, e.g. keyframe cut-ins);
+            // the decoder then floods the DPB with dummy references and
+            // temporal-direct B-frames lose their co-located picture
+            // ("co located POCs unavailable" -> first copied GOP dropped).
+            // For N <= EncMaxFrameNum this equals the old value (N).
+            // This block only runs in the non-unification branch: the encoder
+            // slices carry the ENCODER SPS fn width.
+            int encLog2Fn = mEncoderLog2MaxFrameNum;
             int lastEncFrameNum = mEncoderPacketsWritten;
+            if (encLog2Fn > 0 && mEncoderPacketsWritten > 0) {
+                int encMaxFrameNum = 1 << encLog2Fn;
+                lastEncFrameNum = ((mEncoderPacketsWritten - 1) % encMaxFrameNum) + 1;
+            }
             int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
             if (firstScFrameNum >= 0) {
                 frameNumDelta = lastEncFrameNum - firstScFrameNum;
@@ -2185,6 +2275,24 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // ---- Display-order to AU-index mapping (unified PAFF + non-PAFF) ----
     selectFramesByDisplayOrder(ctx);
 
+    // POC anchoring (non-PAFF unification): number the rewritten encoder POCs
+    // so the LAST encoded frame lands directly below the copy-start POC —
+    // base = anchor - 2*N (mod srcMax). The decoder's output order then runs
+    // monotonically across the EOS into the stream-copy, instead of ending
+    // ABOVE the copy-start POC and getting the first copied AU discarded as
+    // out-of-order.
+    if (mSpsUnification && mSpsUnificationPocAnchor >= 0 && mLog2MaxPocLsb > 0) {
+        int srcMaxPocLsb = 1 << mLog2MaxPocLsb;
+        int n = ctx.framesToEncode.size();
+        int base = (mSpsUnificationPocAnchor - 2 * n) % srcMaxPocLsb;
+        if (base < 0) base += srcMaxPocLsb;
+        mSpsUnificationPocBase = base;
+        if (TTSettings::instance()->logSmartCut()) {
+            qDebug() << "      POC anchoring: copy-start poc_lsb" << mSpsUnificationPocAnchor
+                     << "- encoding" << n << "frames from poc_lsb base" << base;
+        }
+    }
+
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
                  << "(AU range" << startFrame << "-" << (ctx.streamCopyLimit - 1) << ")";
@@ -2937,6 +3045,15 @@ void TTESSmartCut::parseEncoderSpsFromPacket(ReencodeContext& ctx, const QByteAr
                      << "log2_poc=" << mEncoderLog2MaxPocLsb
                      << "poc_type=" << mEncoderPocType;
         }
+        // The per-segment unification decision assumed this width before the
+        // encoder existed — a mismatch means benign seams may have been
+        // misclassified; surface it loudly instead of degrading silently.
+        if (mEncoderPocType == 0 && mEncoderLog2MaxPocLsb != kExpectedEncoderLog2PocLsb) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("Encoder log2_max_poc_lsb %1 differs from expected %2 - "
+                        "POC-domain bridge decision may be wrong")
+                    .arg(mEncoderLog2MaxPocLsb).arg(kExpectedEncoderLog2PocLsb));
+        }
         ctx.encoderSpsParsed = true;
     }
 }
@@ -2979,7 +3096,8 @@ QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByt
                 encodedData,
                 mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly,
                 mLog2MaxFrameNum, mLog2MaxPocLsb, mFrameMbsOnly,
-                ctx.encPpsForRewrite, 1, mEncoderPacketsWritten);  // newPpsId=1
+                ctx.encPpsForRewrite, 1, mEncoderPacketsWritten,  // newPpsId=1
+                mSpsUnificationPocBase);
         }
     } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
         // Standard path: just patch SPS reorder frames
@@ -3173,8 +3291,18 @@ void TTESSmartCut::applyPocDomainFix(ReencodeContext& ctx)
                          << "using search result" << newPocLsb;
             }
         } else {
+            // Must never happen anymore: the per-segment unification decision
+            // (pocDomainBridgeable) routes exactly these seams through SPS
+            // unification, where the patch domain equals the source domain.
+            // Escalate as a real logger warning so diag gates treat it as FAIL
+            // instead of degrading silently (first copied GOP would be lost).
             qWarning() << "      POC domain fix: WARNING no safe poc_lsb"
                        << "found in range [0," << patchMaxPocLsb << ")";
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("POC domain fix: no safe poc_lsb in range [0,%1) - "
+                        "seam misclassified as bridgeable, first copied GOP will "
+                        "be dropped by the decoder")
+                    .arg(patchMaxPocLsb));
         }
     }
 
@@ -3554,7 +3682,8 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     const QByteArray& nalBody,
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
-    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex)
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
+    int pocLsbBase)
 {
     if (nalBody.isEmpty()) return QByteArray();
 
@@ -3663,7 +3792,12 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     if (encLog2MaxPocLsb > 0 && srcLog2MaxPocLsb > 0) {
         spsReadBits(oldData, oldSize, readPos, encLog2MaxPocLsb);  // skip old
         int srcMaxPocLsb = 1 << srcLog2MaxPocLsb;
-        uint32_t newPocLsb = (static_cast<uint32_t>(frameIndex) * 2) % srcMaxPocLsb;
+        // pocLsbBase >= 0: anchored numbering (non-PAFF POC seam) so the last
+        // encoded frame lands directly below the copy-start POC. Otherwise
+        // legacy linear numbering from 0 (PAFF path, byte-identical output).
+        uint32_t newPocLsb = (pocLsbBase >= 0)
+            ? static_cast<uint32_t>((pocLsbBase + 2 * frameIndex) % srcMaxPocLsb)
+            : (static_cast<uint32_t>(frameIndex) * 2) % srcMaxPocLsb;
         spsWriteBits(newData, newSize, writePos, newPocLsb, srcLog2MaxPocLsb);
 
         // delta_pic_order_cnt_bottom (if PPS flag && !field_pic_flag) — copy
@@ -3994,7 +4128,8 @@ static QByteArray rewriteEncoderPacketForSourceSps(
     const QByteArray& packetData,
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
-    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex)
+    const H264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
+    int pocLsbBase)
 {
     QByteArray result;
     result.reserve(packetData.size() + 128);
@@ -4056,7 +4191,7 @@ static QByteArray rewriteEncoderPacketForSourceSps(
                 QByteArray rewritten = rewriteEncoderSliceForSourceSps(
                     nalBody, encLog2MaxFN, encLog2MaxPocLsb, encFrameMbsOnly,
                     srcLog2MaxFN, srcLog2MaxPocLsb, srcFrameMbsOnly,
-                    encPps, newPpsId, frameIndex);
+                    encPps, newPpsId, frameIndex, pocLsbBase);
                 if (!rewritten.isEmpty()) {
                     result.append(packetData.mid(scStart, scLen));  // start code
                     result.append(rewritten);

@@ -173,6 +173,11 @@ private:
     // Set by processSegment() for PAFF H.264, checked in reencodeFrames()
     bool mSpsUnification;
     QFile* mSpsUnificationOutFile;  // output file for encoder PPS injection
+    // poc_lsb of the stream-copy start AU when unification runs for a
+    // non-bridgeable POC seam; -1 otherwise (PAFF keeps the legacy linear
+    // POC numbering for byte-identical output).
+    int mSpsUnificationPocAnchor;   // source poc_lsb at copy start, or -1
+    int mSpsUnificationPocBase;     // poc_lsb for encoder frameIndex 0, or -1
     int mEncoderPacketsWritten;     // track encoder packets for PPS injection
 
     // Encoder PTS counter (reset per segment in setupEncoder)
