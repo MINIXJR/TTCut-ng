@@ -448,34 +448,47 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   int frameDurationNs = (int)(1000000000.0 / frameRate);
   QStringList cutAudioFiles;
   if (hasAudio && !audioFile.isEmpty()) {
-    // Note: B-frame reorder delay correction was removed.
-    // With correctly trimmed audio (ttcut-demux aligns audio start to first display frame),
-    // the keepList times frame/fps already match the audio ES positions exactly.
-
     // Apply per-track audio delay for the first audio track.
     // Preview only uses a single audio track (track 0), so we only need
     // the delay for that track. Multi-track preview is not supported.
+    TTAudioStream* aStream = avItem->audioStreamAt(0);
     int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
-    double audioDelaySec = audioDelayMs / 1000.0;
 
-    QList<QPair<double, double>> keepList;
+    // Build video-domain keep list (no delay baked in) and let planAudioCut
+    // align to audio frame boundaries with feed-forward drift compensation —
+    // same as the MPEG-2 preview path and the final cut. A raw keep list
+    // snaps each segment independently (~32 ms per AC3 frame boundary) and
+    // the error accumulates across segments.
+    QList<QPair<double, double>> videoKeepList;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
-      double cutInTime  = item.cutInIndex() / frameRate + audioDelaySec;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate + audioDelaySec;
-      if (cutInTime < 0.0) cutInTime = 0.0;
-      if (cutOutTime < 0.0) cutOutTime = 0.0;
-      keepList.append(qMakePair(cutInTime, cutOutTime));
+      double cutInTime  = item.cutInIndex() / frameRate;
+      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+      videoKeepList.append(qMakePair(cutInTime, cutOutTime));
     }
+    TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
+    QList<QPair<double, double>> audioKeepList = plan.keepList;
 
+    QString audioExt = QFileInfo(audioFile).suffix();
     QString cutAudioFile = QString("%1/preview_audio_temp.%2")
         .arg(TTSettings::instance()->tempDirPath())
-        .arg(QFileInfo(audioFile).suffix());
+        .arg(audioExt);
+
+    QList<int> targetAcmods;
+    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+    if (normalizeAcmod && audioExt.toLower() == "ac3") {
+      for (int s = 0; s < audioKeepList.size(); s++) {
+        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+            audioFile, audioKeepList[s].first, audioKeepList[s].second);
+        targetAcmods.append(aInfo.mainAcmod);
+      }
+    }
 
     QElapsedTimer audioTimer;
     audioTimer.start();
     TTFFmpegWrapper ffmpeg;
-    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, audioKeepList,
+                              normalizeAcmod, targetAcmods)) {
       cutAudioFiles.append(cutAudioFile);
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
