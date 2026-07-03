@@ -1004,15 +1004,40 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     int unificationSrcPocLsb = -1;
     if (mParser.codecType() == NALU_CODEC_H264 && !mParser.isPAFF()
             && segment.streamCopyStartFrame >= 0 && mLog2MaxPocLsb > 0) {
+        // Anchor on the MINIMUM display-POC of the first stream-copy GOP, not
+        // on the copy-start AU itself: the copy keyframe's leading B pictures
+        // (decode after, display before it) carry SMALLER POCs. The rewritten
+        // encoder POCs must end below the first DISPLAYED copy frame, or the
+        // decoder's output buffer interleaves the seam (visible stutter).
+        int anchorAu = segment.streamCopyStartFrame;
+        int minDisp = mDisplayMap.decodeToDisplay(anchorAu);
+        int nextKF = mParser.findKeyframeAfter(segment.streamCopyStartFrame + 1);
+        if (nextKF < 0) nextKF = frameCount();
+        int scanEnd = qMin(segment.streamCopyStartFrame + 16, nextKF);
+        for (int au = segment.streamCopyStartFrame + 1; au < scanEnd; ++au) {
+            int d = mDisplayMap.decodeToDisplay(au);
+            if (d >= 0 && d < minDisp) { minDisp = d; anchorAu = au; }
+        }
+        // Anchor value: POC of the first DISPLAYED copy frame (min-display AU).
+        QByteArray anchorAuData = mParser.readAccessUnitData(anchorAu);
+        int anchorPocLsb = readPocLsbFromAU(anchorAuData, mLog2MaxFrameNum,
+                                            mLog2MaxPocLsb, mFrameMbsOnly);
+        unificationSrcPocLsb = anchorPocLsb;
+        // Classification: unchanged semantics - the copy-start AU's POC (the
+        // value applyPocDomainFix bridges towards on the standard path).
+        // Deliberately NOT extended to the min-display POC: leading-B POCs
+        // wrap below the keyframe's and would flag seams the standard path
+        // demonstrably bridges fine (2026-07-03 full-scan: 0 violations);
+        // widening the check would swap the proven path on benign seams.
         QByteArray scAU = mParser.readAccessUnitData(segment.streamCopyStartFrame);
-        int srcPocLsb = readPocLsbFromAU(scAU, mLog2MaxFrameNum,
-                                          mLog2MaxPocLsb, mFrameMbsOnly);
-        unificationSrcPocLsb = srcPocLsb;
-        pocBridgeable = pocDomainBridgeable(srcPocLsb, kExpectedEncoderLog2PocLsb,
+        int scPocLsb = readPocLsbFromAU(scAU, mLog2MaxFrameNum,
+                                         mLog2MaxPocLsb, mFrameMbsOnly);
+        pocBridgeable = pocDomainBridgeable(scPocLsb, kExpectedEncoderLog2PocLsb,
                                             mLog2MaxPocLsb);
         if (!pocBridgeable && TTSettings::instance()->logSmartCut()) {
-            qDebug() << "    POC domain not bridgeable (source poc_lsb" << srcPocLsb
-                     << "at copy start" << segment.streamCopyStartFrame
+            qDebug() << "    POC domain not bridgeable (copy-start poc_lsb" << scPocLsb
+                     << ", first-display poc_lsb" << anchorPocLsb
+                     << "at AU" << anchorAu
                      << ") - enabling SPS unification for this segment";
         }
     }
