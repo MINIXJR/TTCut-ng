@@ -1570,6 +1570,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
                       ? AV_CODEC_ID_HEVC
                       : AV_CODEC_ID_H264;
     mkvProvider.setVideoCodecId(codecId);
+    // Display-PTS: SmartCut-supplied output order (empty = legacy linear PTS)
+    mkvProvider.setVideoDisplayOrder(smartCut.outputDisplayOrder());
 
     // Apply A/V sync offset if present
     if (avOffsetMs != 0) {

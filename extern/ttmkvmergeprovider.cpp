@@ -488,6 +488,21 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
                 outVin.assignPts = true;
                 videoOut->r_frame_rate = av_make_q(1000000000, (int)videoDurationNs);
                 videoOut->avg_frame_rate = videoOut->r_frame_rate;
+
+                // Display-PTS mode: per-packet display positions supplied by
+                // TTESSmartCut. reorderOffset lowers DTS (never lifts PTS -
+                // lifting would shift video against untouched audio).
+                if (!mVideoDisplayOrder.isEmpty()) {
+                    outVin.displayOrder = mVideoDisplayOrder;
+                    int maxLead = 0;
+                    for (int i = 0; i < outVin.displayOrder.size(); ++i)
+                        maxLead = qMax(maxLead, i - outVin.displayOrder[i]);
+                    outVin.reorderOffset = maxLead;
+                    if (TTSettings::instance()->logMkvMux())
+                        qDebug() << "  Video: display-PTS mode,"
+                                 << outVin.displayOrder.size() << "entries,"
+                                 << "reorderOffset" << outVin.reorderOffset;
+                }
             }
         }
     }
@@ -664,6 +679,35 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
 // On return, in.pkt holds the merged packet with PTS/DTS/duration set,
 // frameCount has been incremented, and the caller writes via
 // av_interleaved_write_frame.
+// ----------------------------------------------------------------------------
+// Timestamp assignment for raw-ES video packets (one call per output FRAME;
+// PAFF field pairs are merged before this point). Display-PTS mode uses the
+// SmartCut-supplied display order: pts = display*dur (true display time,
+// keeps A/V relation), dts = (i - reorderOffset)*dur (lowered so pts >= dts;
+// a negative start is normalized by avoid_negative_ts for ALL streams
+// together). On index overrun: one-shot warning, fall back to linear.
+// ----------------------------------------------------------------------------
+void TTMkvMergeProvider::assignEsTimestamps(MuxInput& in)
+{
+    int64_t linear = in.frameCount * in.frameDur;
+    in.pkt->pts = linear;
+    in.pkt->dts = linear;
+    if (!in.displayOrder.isEmpty()) {
+        if (in.frameCount < in.displayOrder.size()) {
+            in.pkt->pts = (int64_t)in.displayOrder[(int)in.frameCount] * in.frameDur;
+            in.pkt->dts = (in.frameCount - in.reorderOffset) * in.frameDur;
+        } else if (!in.displayOrderWarned) {
+            in.displayOrderWarned = true;
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("display-PTS list exhausted at packet %1 of %2 - "
+                        "falling back to linear PTS for remaining packets")
+                    .arg(in.frameCount).arg(in.displayOrder.size()));
+        }
+    }
+    in.pkt->duration = in.frameDur;
+    in.frameCount++;
+}
+
 bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
                                                int& activeLog2MaxFrameNum,
                                                int64_t totalPacketsWritten)
@@ -714,10 +758,7 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
     memcpy(in.pkt->data, merged.constData(), merged.size());
     in.pkt->flags = firstFlags;  // restore keyframe flag
 
-    in.pkt->pts = in.frameCount * in.frameDur;
-    in.pkt->dts = in.pkt->pts;
-    in.pkt->duration = in.frameDur;
-    in.frameCount++;
+    assignEsTimestamps(in);
 
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "  MKV PAFF: merged field pair pkt" << totalPacketsWritten
@@ -994,10 +1035,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 }
             } else {
                 // Frame packet (progressive or MBAFF re-encoded): 1 packet = 1 frame
-                in.pkt->pts = in.frameCount * in.frameDur;
-                in.pkt->dts = in.pkt->pts;
-                in.pkt->duration = in.frameDur;
-                in.frameCount++;
+                assignEsTimestamps(in);
 
                 if (in.outIdx == 0) {
                     if (TTSettings::instance()->logMkvMux())
@@ -1049,6 +1087,20 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "  ES mux: total packets written:" << totalPacketsWritten;
+
+    // Display-PTS self-check: the list must cover the video packets exactly.
+    // A shortfall was already warned per-packet; a surplus means the list and
+    // the packetization disagree (gates treat this warning as FAIL).
+    for (const MuxInput& in : inputs) {
+        if (in.assignPts && !in.displayOrder.isEmpty()
+                && in.frameCount != in.displayOrder.size()
+                && !in.displayOrderWarned) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("display-PTS list size %1 does not match %2 written "
+                        "video packets")
+                    .arg(in.displayOrder.size()).arg(in.frameCount));
+        }
+    }
 
     av_write_trailer(outCtx);
 

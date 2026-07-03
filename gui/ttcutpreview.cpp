@@ -784,6 +784,8 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
     }
     mkvProvider.setVideoCodecId(codecId);
   }
+  // Display-PTS: SmartCut-supplied output order (empty = legacy linear PTS)
+  mkvProvider.setVideoDisplayOrder(smartCut.outputDisplayOrder());
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }

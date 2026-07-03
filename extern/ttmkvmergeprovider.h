@@ -16,6 +16,7 @@
 #define TTMKVMERGEPROVIDER_H
 
 #include <QString>
+#include <QVector>
 #include <QStringList>
 #include <QList>
 #include <QObject>
@@ -84,6 +85,10 @@ public:
     // out of this public header.
     void setVideoCodecId(int codecId) { mVideoCodecId = codecId; }
 
+    // Display order of the video ES packets (from TTESSmartCut::
+    // outputDisplayOrder()). Empty list = legacy linear PTS assignment.
+    void setVideoDisplayOrder(const QVector<int>& order) { mVideoDisplayOrder = order; }
+
     // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();
@@ -104,7 +109,8 @@ private:
     qint64 mTotalDurationMs;
     bool mIsPAFF;
     int mH264Log2MaxFrameNum;
-    int mVideoCodecId;   // AVCodecID value (from libavcodec/codec_id.h)
+    int mVideoCodecId;
+    QVector<int> mVideoDisplayOrder;  // display-PTS order for video ES (may be empty)   // AVCodecID value (from libavcodec/codec_id.h)
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
 
@@ -130,13 +136,21 @@ private:
         int64_t frameDur;    // Frame duration in output time_base units
         int64_t frameCount;  // Frame counter for PTS assignment
         bool ownsCtx;        // True = this MuxInput owns the AVFormatContext
+        // Display position per packet (frame units, from TTESSmartCut).
+        // Empty = legacy linear PTS. reorderOffset = max(i - displayOrder[i])
+        // lowers DTS so pts >= dts holds without shifting PTS against audio.
+        QVector<int> displayOrder;
+        int reorderOffset;
+        bool displayOrderWarned;  // one-shot mismatch warning latch
         MuxInput()
             : fmtCtx(nullptr), srcIdx(-1), outIdx(-1), pkt(nullptr), eof(false)
             , syncMs(0), assignPts(false), frameDur(0), frameCount(0)
-            , ownsCtx(false) {}
+            , ownsCtx(false), reorderOffset(0), displayOrderWarned(false) {}
     };
 
     // mux() implementation split — see docs/superpowers/specs/2026-05-03-mux-split-refactor.md
+    void assignEsTimestamps(MuxInput& in);
+
     bool setupVideoInput(AVFormatContext* outCtx,
                           AVFormatContext* videoInCtx,
                           MuxInput& outVin,
