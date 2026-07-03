@@ -118,6 +118,11 @@ public:
     // so actual start frames can differ from the requested cut-in frames.
     QList<QPair<int, int>> actualOutputFrameRanges() const { return mActualOutputRanges; }
 
+    // Display position (frame units, output-local) of each mux packet in the
+    // written ES, in write order. Empty when tracking was invalidated (any
+    // anomaly) — callers then keep the muxer's legacy linear PTS behavior.
+    QVector<int> outputDisplayOrder() const;
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -179,6 +184,15 @@ private:
     int mSpsUnificationPocAnchor;   // source poc_lsb at copy start, or -1
     int mSpsUnificationPocBase;     // poc_lsb for encoder frameIndex 0, or -1
     int mEncoderPacketsWritten;     // track encoder packets for PPS injection
+
+    // Output display-order tracking for the MKV muxer. One entry per written
+    // parser AU (= one frame; TTNaluParser merges PAFF field pairs), in write
+    // order, holding the SOURCE display index; outputDisplayOrder() converts
+    // to output-local rank. Invalidated on any anomaly — muxer then falls
+    // back to legacy linear PTS.
+    QVector<int> mOutputDisplayOrder;
+    bool mOutputDisplayOrderValid;
+    void appendOutputDisplay(int mapDisplayIndex, int srcAuIndex);
 
     // Encoder PTS counter (reset per segment in setupEncoder)
     int64_t mEncoderPts;

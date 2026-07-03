@@ -14,6 +14,7 @@
 #include "../common/ttmessagelogger.h"
 
 #include <QDebug>
+#include <algorithm>
 #include <QFileInfo>
 
 // Include libav headers
@@ -154,6 +155,12 @@ struct TTESSmartCut::ReencodeContext {
     int    streamCopyLimit   = 0;
 
     // ---- Encode phase ----
+    // Source AU index per submitted frame, in submission order. Survives
+    // runEncodePass (framesToEncode is freed there) so delayed encoder
+    // packets (x264 lookahead: most arrive in flushEncoder) can still be
+    // mapped to their display position: with bf=0 packets arrive 1:1 in
+    // submission order.
+    QVector<int> encodeAuOrder;
     bool   encoderSpsParsed  = false;
     bool   encPpsParsed      = false;
     H264PpsInfo encPpsForRewrite{ true, false, true, false, false, 0, 0, 0, false };
@@ -205,6 +212,7 @@ TTESSmartCut::TTESSmartCut()
     , mSpsUnificationPocAnchor(-1)
     , mSpsUnificationPocBase(-1)
     , mEncoderPacketsWritten(0)
+    , mOutputDisplayOrderValid(true)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
     , mFramesReencoded(0)
@@ -355,6 +363,65 @@ TTNaluCodecType TTESSmartCut::codecType() const
 // ----------------------------------------------------------------------------
 // Get frame count
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Output display-order tracking (for MKV muxer display-PTS assignment).
+// appendOutputDisplay records one written parser AU (= one frame; TTNaluParser
+// merges PAFF field pairs). Any anomaly invalidates tracking; the muxer then
+// keeps its legacy linear PTS (fallback by design, never worse than status quo).
+// ----------------------------------------------------------------------------
+void TTESSmartCut::appendOutputDisplay(int mapDisplayIndex, int srcAuIndex)
+{
+    if (!mOutputDisplayOrderValid) return;
+    if (mapDisplayIndex < 0) {
+        // e.g. HEVC dropped-RASL slot (decodeToDisplay == -1): no defined
+        // display position -> whole list unusable for this run.
+        mOutputDisplayOrderValid = false;
+        mOutputDisplayOrder.clear();
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("output display-order tracking invalidated (negative "
+                    "display index at source AU %1) - MKV muxer will use "
+                    "legacy linear PTS").arg(srcAuIndex));
+        return;
+    }
+    mOutputDisplayOrder.append(mapDisplayIndex);
+}
+
+// Returns the display position (frame units, output-local, 0-based) of each
+// mux packet in write order; empty when tracking was invalidated.
+// Entries are SOURCE display indices (one per parser AU = one per frame;
+// TTNaluParser merges PAFF field pairs, and the MKV muxer does the same on
+// read - counts match). Segments leave gaps in source display numbering, so
+// the output-local position is the RANK of each source display index in the
+// sorted set of all written ones: compact, gap-free, order-preserving.
+// Duplicate source displays would make ranks ambiguous -> fallback.
+QVector<int> TTESSmartCut::outputDisplayOrder() const
+{
+    if (!mOutputDisplayOrderValid || mOutputDisplayOrder.isEmpty())
+        return QVector<int>();
+
+    QVector<int> sorted = mOutputDisplayOrder;
+    std::sort(sorted.begin(), sorted.end());
+    QHash<int, int> rank;
+    rank.reserve(sorted.size());
+    for (int i = 0; i < sorted.size(); ++i) {
+        if (i > 0 && sorted[i] == sorted[i - 1]) {
+            // Duplicate source display index -> ranks ambiguous. Loud fallback:
+            // gates treat this warning as FAIL (silent degradation is a bug).
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("output display-order has duplicate source display "
+                        "index %1 - falling back to legacy linear PTS")
+                    .arg(sorted[i]));
+            return QVector<int>();
+        }
+        rank.insert(sorted[i], i);
+    }
+
+    QVector<int> result;
+    result.reserve(mOutputDisplayOrder.size());
+    for (int d : mOutputDisplayOrder) result.append(rank.value(d));
+    return result;
+}
+
 int TTESSmartCut::frameCount() const
 {
     return mParser.accessUnitCount();
@@ -442,6 +509,8 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mCurrentSegment = 0;
     mTotalSegments = 0;
     mActualOutputRanges.clear();
+    mOutputDisplayOrder.clear();
+    mOutputDisplayOrderValid = true;
 
     // ---- Display -> AU conversion (single source of truth) ----
     // UI/cut-list indices are display positions (Direction A). Below this point
@@ -1120,6 +1189,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
             setError("Failed to write IDR AU");
             return false;
         }
+        appendOutputDisplay(mDisplayMap.decodeToDisplay(scStart), scStart);
         mFramesStreamCopied++;
 
         frameNumDelta = (origFrameNum > 0) ? -origFrameNum : 0;
@@ -2176,6 +2246,9 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
                 return false;
             }
 
+            for (int au = startFrame; au <= endFrame && mOutputDisplayOrderValid; ++au)
+                appendOutputDisplay(mDisplayMap.decodeToDisplay(au), au);
+
             mFramesStreamCopied += (endFrame - startFrame + 1);
             return true;
         }
@@ -2232,6 +2305,8 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
             return false;
         }
 
+        appendOutputDisplay(mDisplayMap.decodeToDisplay(i), i);
+
         mFramesStreamCopied++;
 
         // Granular progress update (every 50 frames to avoid signal overhead)
@@ -2274,6 +2349,12 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
 
     // ---- Display-order to AU-index mapping (unified PAFF + non-PAFF) ----
     selectFramesByDisplayOrder(ctx);
+
+    // Preserve the submitted AU order for display tracking (framesToEncode
+    // is consumed and cleared by runEncodePass; packets may arrive later).
+    ctx.encodeAuOrder.reserve(ctx.framesToEncode.size());
+    for (AVFrame* f : ctx.framesToEncode)
+        ctx.encodeAuOrder.append(static_cast<int>(f->pts));
 
     // POC anchoring (non-PAFF unification): number the rewritten encoder POCs
     // so the LAST encoded frame lands directly below the copy-start POC —
@@ -3125,6 +3206,26 @@ bool TTESSmartCut::bufferAndWriteEncoderPacket(ReencodeContext& ctx,
         }
     }
     ctx.pendingPacket = transformedData;
+
+    // Display-order tracking: with bf=0 the encoder emits packets 1:1 in
+    // submission order, so packet k belongs to ctx.framesToEncode[k] (whose
+    // AVFrame::pts carries the source AU index). The pending-packet buffer
+    // only delays writes by one packet - the write ORDER stays FIFO, so
+    // recording at receive time matches write order.
+    if (mOutputDisplayOrderValid) {
+        if (ctx.packetsReceived < ctx.encodeAuOrder.size()) {
+            const int au = ctx.encodeAuOrder[ctx.packetsReceived];
+            appendOutputDisplay(mDisplayMap.decodeToDisplay(au), au);
+        } else {
+            // Encoder produced more packets than frames submitted - cannot map.
+            mOutputDisplayOrderValid = false;
+            mOutputDisplayOrder.clear();
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                "output display-order tracking invalidated (encoder packet "
+                "count exceeds submitted frames)");
+        }
+    }
+
     ctx.packetsReceived++;
     mEncoderPacketsWritten++;
     return true;
