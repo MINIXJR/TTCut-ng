@@ -16,6 +16,7 @@
 #include "ttmpvwrapper.h"
 #include "ttmpvrenderwidget.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/tth26xvideostream.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
 #include "../avstream/ttavstream.h"
@@ -617,19 +618,9 @@ void TTCurrentFrame::onPlayVideo()
   // different frame than the still shown in mpegWindow (e.g. the GOP keyframe
   // before the cut-in). Read from mpegWindow's wrapper — the one that decoded
   // the visible still. Falls back to currentIndex on -1 (frame never decoded).
-  if (isH264orH265 && mpegWindow && mpegWindow->ffmpegWrapper()) {
-    int idx     = videoStream->currentIndex();
-    int decIdx  = mpegWindow->ffmpegWrapper()->frameAt(idx).deliveredDecodeIndex;
-    float fr    = videoStream->frameRate();
-    if (decIdx >= 0 && fr > 0.0f) {
-      startSec = static_cast<double>(decIdx) / static_cast<double>(fr);
-    } else {
-      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("onPlayVideo: deliveredDecodeIndex unavailable for frame %1 "
-                "(decIdx=%2), falling back to currentIndex/frameRate")
-          .arg(idx).arg(decIdx));
-    }
-  }
+  // NOTE: must run AFTER the temp-MKV cache decision below sets
+  // mTempPlaybackHasDisplayPts - moved accordingly (see startSec assignment
+  // after cache handling).
 
   if (isH264orH265) {
     // ES files have no timestamps: mux into a temp MKV first. The temp MKV is
@@ -655,6 +646,10 @@ void TTCurrentFrame::onPlayVideo()
       mTempPlaybackFile = tempMkv;
       mCachedPlaybackFingerprint = fp;
     }
+
+    // Display/decode-aware start time - computed AFTER the cache block so
+    // mTempPlaybackHasDisplayPts reflects the MKV actually being played.
+    startSec = playbackSecondsForCurrentStill();
 
     // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
     setPlayingButtonState(true);
@@ -783,6 +778,7 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
     mTempPlaybackFile.clear();
   }
   mCachedPlaybackFingerprint.clear();
+  mTempPlaybackHasDisplayPts = false;
 }
 
 //! Fingerprint of everything that determines the playback temp MKV's content.
@@ -795,13 +791,56 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
 QString TTCurrentFrame::playbackSourceFingerprint() const
 {
   if (videoStream == nullptr) return QString();
-  QString fp = videoStream->filePath();
+  QString fp = QLatin1String("dpts1|") + videoStream->filePath();
   if (mAVItem != nullptr && mAVItem->audioCount() > 0) {
     TTAudioStream* a0 = mAVItem->audioStreamAt(0);
     if (a0 != nullptr)
       fp += QLatin1Char('|') + a0->filePath();
   }
   return fp;
+}
+
+//! Playback start time for the currently shown still frame.
+//! Display-PTS mode: the true display time of the delivered frame.
+//! Linear fallback: deliveredDecodeIndex / fps (the temp MKV's linear scale).
+double TTCurrentFrame::playbackSecondsForCurrentStill() const
+{
+  if (videoStream == nullptr) return 0.0;
+  float fr = videoStream->frameRate();
+  if (fr <= 0.0f) return 0.0;
+
+  int idx = videoStream->currentIndex();
+  int decIdx = -1;
+  if (mpegWindow && mpegWindow->ffmpegWrapper())
+    decIdx = mpegWindow->ffmpegWrapper()->frameAt(idx).deliveredDecodeIndex;
+  if (decIdx < 0) {
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+      QString("playbackSecondsForCurrentStill: deliveredDecodeIndex unavailable "
+              "for frame %1, falling back to currentIndex/frameRate").arg(idx));
+    return static_cast<double>(idx) / static_cast<double>(fr);
+  }
+
+  if (mTempPlaybackHasDisplayPts) {
+    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
+      int disp = h26x->displayOrderMap().decodeToDisplay(decIdx);
+      if (disp >= 0)
+        return static_cast<double>(disp) / static_cast<double>(fr);
+    }
+  }
+  return static_cast<double>(decIdx) / static_cast<double>(fr);
+}
+
+//! Map a playback time slot (floor/round(t*fps), i.e. the MKV's PTS scale)
+//! back to the app's decode-order stream index for UI updates.
+int TTCurrentFrame::streamIndexForPlaybackSlot(int slot) const
+{
+  if (mTempPlaybackHasDisplayPts && videoStream != nullptr) {
+    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
+      int dec = h26x->displayOrderMap().displayToDecode(slot);
+      if (dec >= 0) return dec;
+    }
+  }
+  return slot;  // linear scale: slot IS the decode index
 }
 
 //! Decrease playback speed by one step
@@ -888,8 +927,44 @@ QString TTCurrentFrame::createTempMkvForPlayback()
     }
   }
 
+  // Display-PTS: pass the source display-order map so B-frames get true
+  // display timestamps (uncut stream -> indices are already compact 0..N-1).
+  // Any negative entry (HEVC dropped-RASL slot) -> loud linear fallback;
+  // mTempPlaybackHasDisplayPts keys ALL time<->index conversions (D2/D3).
+  mTempPlaybackHasDisplayPts = false;
+  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
+    const TTDisplayOrderMap& dmap = h26x->displayOrderMap();
+    if (dmap.isValid() && dmap.count() > 0) {
+      // Dropped slots (decodeToDisplay == -1, e.g. RASL after the stream's
+      // first CRA - the NORMAL case for HEVC CRA material): the decoder
+      // discards those AUs during playback, their PTS never renders. Give
+      // them unique slots BEHIND the last real display slot so every real
+      // frame keeps pts == its display index (no offset in any time math)
+      // and no PTS collides.
+      const int n = dmap.count();
+      int maxReal = -1;
+      for (int i = 0; i < n; ++i)
+        maxReal = qMax(maxReal, dmap.decodeToDisplay(i));
+      if (maxReal >= 0) {
+        QVector<int> order;
+        order.reserve(n);
+        int nextDropped = maxReal + 1;
+        for (int i = 0; i < n; ++i) {
+          int d = dmap.decodeToDisplay(i);
+          order.append(d >= 0 ? d : nextDropped++);
+        }
+        mkvProvider.setVideoDisplayOrder(order);
+        mTempPlaybackHasDisplayPts = true;
+        if (nextDropped > maxReal + 1 && TTSettings::instance()->logUI())
+          qDebug() << "Playback: display map has" << (nextDropped - maxReal - 1)
+                   << "dropped slots - parked behind last real slot" << maxReal;
+      }
+    }
+  }
+
   if (TTSettings::instance()->logUI())
-      qDebug() << "Creating temp MKV via libav:" << videoStream->filePath();
+      qDebug() << "Creating temp MKV via libav:" << videoStream->filePath()
+               << "displayPts=" << mTempPlaybackHasDisplayPts;
 
   if (!mkvProvider.mux(tempMkv, videoStream->filePath(), audioFiles)) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,

@@ -75,6 +75,9 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		QString createTempMkvForPlayback();
 		void cleanupTempPlaybackFile();
 		QString playbackSourceFingerprint() const;
+		// Playback time<->index conversion authority (display-PTS aware).
+		double playbackSecondsForCurrentStill() const;
+		int    streamIndexForPlaybackSlot(int slot) const;
 		void ensurePlayerCreated();
 
 	private:
@@ -100,6 +103,10 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		TTMpvWrapper*       mPlayer = nullptr;
 		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback (cached across STOP→PLAY)
 		QString             mCachedPlaybackFingerprint;  // source fingerprint of the cached temp MKV
+		// True when the cached temp MKV carries real display PTS (source
+		// display-order map was passed to the muxer). ALL playback time<->index
+		// conversions key off this flag - no mixed-scale states possible.
+		bool                mTempPlaybackHasDisplayPts = false;
 		int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
 		QWidget*            mFrameStackContainer = nullptr;
 		QStackedLayout*     mFrameStack = nullptr;
