@@ -1124,6 +1124,48 @@ QString TTAVData::createCutFileName(QString cutBaseFileName, QString sourceFileN
 // Audio and video cut
 //
 //! Do the audio and video cut for given cut-list
+
+// ----------------------------------------------------------------------------
+// Burst confirmation before the final cut (shared by the audio-only and the
+// normal path). Returns false when the user cancels. In non-interactive mode
+// (--auto-cut) there is nobody to click the modal dialog - log the warnings
+// and proceed (the "Cut anyway" semantics).
+// ----------------------------------------------------------------------------
+bool TTAVData::confirmBurstWarnings(TTCutList* cutList)
+{
+  if (cutList->count() == 0 || cutList->at(0).avDataItem()->audioCount() == 0)
+    return true;
+
+  QStringList burstWarnings;
+  for (int i = 0; i < cutList->count(); i++) {
+    TTCutItem item = cutList->at(i);
+    CutBurstInfo bout = detectCutOutBurst(item);
+    if (bout.present) burstWarnings << tr("Cut %1: audio burst at the end (%2 dB)")
+                                      .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
+    CutBurstInfo bin = detectCutInBurst(item);
+    if (bin.present) burstWarnings << tr("Cut %1: audio burst at the start (%2 dB)")
+                                     .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
+  }
+  if (burstWarnings.isEmpty()) return true;
+
+  if (mNonInteractive) {
+    TTMessageLogger* mlog = TTMessageLogger::getInstance();
+    for (const QString& w : burstWarnings)
+      mlog->warningMsg(__FILE__, __LINE__, w);
+    mlog->warningMsg(__FILE__, __LINE__,
+        QString("audio bursts detected at %1 cut boundarie(s) - proceeding (auto-cut)")
+            .arg(burstWarnings.size()));
+    return true;
+  }
+
+  QString msg = tr("The following cuts have detected audio bursts:\n\n")
+              + burstWarnings.join("\n")
+              + tr("\n\nUse preview to check if shift is needed.");
+  int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
+                                 msg, tr("Cut anyway"), tr("Cancel"));
+  return (ret != 1);
+}
+
 void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 {
   if (cutList == 0) cutList = mpCutList;
@@ -1134,28 +1176,9 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
   if (audioOnly) {
     // Burst warning still useful, dispatch the rest to the audio-only pipeline.
-    if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
-      QStringList burstWarnings;
-      for (int i = 0; i < cutList->count(); i++) {
-        TTCutItem item = cutList->at(i);
-        CutBurstInfo bout = detectCutOutBurst(item);
-        if (bout.present) burstWarnings << tr("Cut %1: audio burst at the end (%2 dB)")
-                                          .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
-        CutBurstInfo bin = detectCutInBurst(item);
-        if (bin.present) burstWarnings << tr("Cut %1: audio burst at the start (%2 dB)")
-                                          .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
-      }
-      if (!burstWarnings.isEmpty()) {
-        QString msg = tr("The following cuts have detected audio bursts:\n\n")
-                    + burstWarnings.join("\n")
-                    + tr("\n\nUse preview to check if shift is needed.");
-        int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
-                                       msg, tr("Cut anyway"), tr("Cancel"));
-        if (ret == 1) {
-          emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
-          return;
-        }
-      }
+    if (!confirmBurstWarnings(cutList)) {
+      emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
+      return;
     }
     doAudioOnlyCut(tgtFileName, cutList);
     return;
@@ -1167,34 +1190,9 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   bool isH264H265 = (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video);
 
   // Check for unresolved audio bursts
-  if (cutList->count() > 0 && cutList->at(0).avDataItem()->audioCount() > 0) {
-    QStringList burstWarnings;
-    for (int i = 0; i < cutList->count(); i++) {
-      TTCutItem item = cutList->at(i);
-      CutBurstInfo bout = detectCutOutBurst(item);
-      if (bout.present) {
-        burstWarnings << tr("Cut %1: audio burst at the end (%2 dB)")
-                         .arg(i + 1).arg(bout.burstDb, 0, 'f', 1);
-      }
-      CutBurstInfo bin = detectCutInBurst(item);
-      if (bin.present) {
-        burstWarnings << tr("Cut %1: audio burst at the start (%2 dB)")
-                         .arg(i + 1).arg(bin.burstDb, 0, 'f', 1);
-      }
-    }
-
-    if (!burstWarnings.isEmpty()) {
-      QString msg = tr("The following cuts have detected audio bursts:\n\n")
-                  + burstWarnings.join("\n")
-                  + tr("\n\nUse preview to check if shift is needed.");
-
-      int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
-                    msg, tr("Cut anyway"), tr("Cancel"));
-      if (ret == 1) {
-        emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
-        return;
-      }
-    }
+  if (!confirmBurstWarnings(cutList)) {
+    emit statusReport(StatusReportArgs::Finished, tr("Cut cancelled"), 0);
+    return;
   }
 
   if (isH264H265) {

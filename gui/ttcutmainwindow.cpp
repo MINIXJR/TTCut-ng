@@ -1340,6 +1340,8 @@ void TTCutMainWindow::runAutoCutMode(QString projectFile, QString outputPath)
 {
   if (TTSettings::instance()->logUI())
       qDebug() << "Auto-cut: loading project" << projectFile;
+  // Headless: no modal dialogs (burst warning would block forever)
+  mpAVData->setNonInteractive(true);
   openProjectFile(projectFile);
 
   QElapsedTimer timer;

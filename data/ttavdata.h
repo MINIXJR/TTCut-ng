@@ -111,6 +111,10 @@ class TTAVData : public QObject
     //TODO: just for testing purpose
     TTThreadTaskPool* threadTaskPool() const;
     TTCutList*        cutList() const;
+    // Headless mode (--auto-cut): suppress interactive confirmation dialogs;
+    // warnings go to TTMessageLogger and the cut proceeds ("Cut anyway").
+    void setNonInteractive(bool v) { mNonInteractive = v; }
+
 
 
 
@@ -215,6 +219,7 @@ class TTAVData : public QObject
     TTAVItem*         mpCurrentAVItem;
     TTAVList*         mpAVList;
     TTCutList*        mpCutList;
+    bool mNonInteractive = false;  // --auto-cut: no modal dialogs
     TTMarkerList*     mpMarkerList;
     TTMuxListData*    mpMuxList;
     TTOpenVideoTask*    openVideoTask;
@@ -264,6 +269,8 @@ class TTAVData : public QObject
     };
     // Detect audio bursts at cut boundaries using extra-frame-corrected probe times.
     CutBurstInfo detectCutOutBurst(const TTCutItem& item) const;
+    bool confirmBurstWarnings(TTCutList* cutList);
+
     CutBurstInfo detectCutInBurst(const TTCutItem& item)  const;
 
     // Audio-cut plan with audio-frame-boundary snapping and feed-forward drift
