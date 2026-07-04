@@ -89,6 +89,13 @@ public:
     // outputDisplayOrder()). Empty list = legacy linear PTS assignment.
     void setVideoDisplayOrder(const QVector<int>& order) { mVideoDisplayOrder = order; }
 
+    // MPEG-2: derive the display order directly from the ES bitstream
+    // (temporal_reference per picture header, GOP-relative). Returns an
+    // empty list on any inconsistency (per-GOP permutation check fails,
+    // no pictures found) - callers then keep legacy linear PTS. Static
+    // and side-effect-free so the fallback path is unit-testable.
+    static QVector<int> buildMpeg2DisplayOrder(const QString& filePath);
+
     // Compatibility stubs (always available — libav is built-in)
     static bool isMkvMergeInstalled();
     static QString mkvMergeVersion();

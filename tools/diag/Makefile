@@ -67,3 +67,9 @@ $(DISPMAP_OBJS):
 
 clean:
 	rm -f $(TOOLS)
+
+MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider.o \
+    ../../obj/ttcut.o $(WRAPPER_OBJS)
+
+test_mpeg2order: test_mpeg2order.cpp $(MKVORDER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(MKVORDER_OBJS) $(LDLIBS) -lQt5Widgets $(AVLIBS)

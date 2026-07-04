@@ -19,6 +19,7 @@
 #include "../common/ttsettings.h"
 
 #include <QDebug>
+#include <algorithm>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -773,6 +774,80 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
 // The container-remux branch was removed as dead code (no caller passes a
 // container as videoFile, TTCut-ng cannot demux MKV input).
 // -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// MPEG-2 display order from the ES bitstream. temporal_reference (10 bits
+// right after the picture_start_code) is the display position within the
+// GOP; group_start_code delimits GOPs. display = gopBase + temporal_ref,
+// gopBase advancing by the picture count of each finished GOP. Self-check:
+// the temporal_reference values of every GOP must form a gap-free
+// permutation 0..n-1 - anything else (broken GOP, unexpected structure,
+// field-coded pictures diverging from libav's frame packetization) returns
+// an empty list and the muxer keeps its legacy linear PTS.
+// ----------------------------------------------------------------------------
+QVector<int> TTMkvMergeProvider::buildMpeg2DisplayOrder(const QString& filePath)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return QVector<int>();
+
+    QVector<int> order;
+    QVector<int> gopRefs;          // temporal_references of the current GOP
+    int gopBase = 0;
+    bool bad = false;
+
+    auto flushGop = [&]() {
+        if (gopRefs.isEmpty()) return;
+        // permutation check: sorted refs must be exactly 0..n-1
+        QVector<int> sorted = gopRefs;
+        std::sort(sorted.begin(), sorted.end());
+        for (int i = 0; i < sorted.size(); ++i) {
+            if (sorted[i] != i) { bad = true; return; }
+        }
+        for (int r : gopRefs) order.append(gopBase + r);
+        gopBase += gopRefs.size();
+        gopRefs.clear();
+    };
+
+    const qint64 CHUNK = 1 << 20;
+    QByteArray buf;
+    qint64 filePos = 0;
+    QByteArray carry;              // overlap so start codes crossing chunk borders are seen
+
+    while (!bad && !(buf = f.read(CHUNK)).isEmpty()) {
+        QByteArray scan = carry + buf;
+        const uchar* d = reinterpret_cast<const uchar*>(scan.constData());
+        int n = scan.size();
+        // stop 5 bytes short: a start code + 2 payload bytes must fit
+        for (int i = 0; i + 5 < n; ++i) {
+            if (d[i] != 0 || d[i+1] != 0 || d[i+2] != 1) continue;
+            uchar code = d[i+3];
+            if (code == 0x00) {
+                // picture_start_code: temporal_reference = next 10 bits
+                int tref = (d[i+4] << 2) | (d[i+5] >> 6);
+                gopRefs.append(tref);
+                i += 5;
+            } else if (code == 0xB8) {
+                flushGop();
+                if (bad) break;
+                i += 3;
+            }
+        }
+        // keep the last 5 bytes as overlap for the next chunk
+        carry = scan.right(qMin(5, scan.size()));
+        filePos += buf.size();
+    }
+    Q_UNUSED(filePos);
+    if (!bad) flushGop();
+
+    if (bad || order.isEmpty()) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("MPEG-2 display-order scan of %1 failed permutation "
+                    "check - keeping legacy linear PTS")
+                .arg(QFileInfo(filePath).fileName()));
+        return QVector<int>();
+    }
+    return order;
+}
+
 bool TTMkvMergeProvider::mux(const QString& outputFile,
                               const QString& videoFile,
                               const QStringList& audioFiles,
@@ -781,6 +856,18 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     if (videoFile.isEmpty() || !QFile::exists(videoFile)) {
         setError(QString("Video file not found: %1").arg(videoFile));
         return false;
+    }
+
+    // MPEG-2 ES: no smart-cut supplied display order exists (the MPEG-2 cut
+    // path predates it) - derive it from the bitstream's temporal_reference
+    // so B-frames get true display PTS like the H.26x paths. Empty result
+    // (self-check failed) keeps the legacy linear assignment.
+    if (mVideoDisplayOrder.isEmpty()
+            && mVideoCodecId == AV_CODEC_ID_MPEG2VIDEO) {
+        mVideoDisplayOrder = buildMpeg2DisplayOrder(videoFile);
+        if (!mVideoDisplayOrder.isEmpty() && TTSettings::instance()->logMkvMux())
+            qDebug() << "  MPEG-2 display order derived from temporal_reference:"
+                     << mVideoDisplayOrder.size() << "pictures";
     }
 
     if (TTSettings::instance()->logMkvMux()) {
