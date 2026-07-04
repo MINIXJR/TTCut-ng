@@ -1,20 +1,25 @@
 ---
-base_commit: 6571d22
-last_verified: 2026-06-19  # cut-IN (display map) + cut-OUT (tail re-encode) both frame-accurate
+base_commit: 3c499e712d89289a8db0166fba77fe863780310e
+last_verified: 2026-07-04  # ES-mux display-PTS (TTMkvMergeProvider) + POC-domain seam anchoring
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
   - gui/ttcutoutframe.cpp
   - gui/ttcutframenavigation.cpp
+  - gui/ttcutpreview.cpp
   - mpeg2window/ttmpeg2window2.cpp
   - mpeg2window/ttmpeg2window2.h
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
   - extern/ttessmartcut.cpp
+  - extern/ttessmartcut.h
+  - extern/ttmkvmergeprovider.cpp
+  - extern/ttmkvmergeprovider.h
   - avstream/ttavstream.cpp
   - avstream/ttvideoindexlist.cpp
   - avstream/ttvideoindexlist.h
   - avstream/ttavheader.h
+  - avstream/ttdisplayordermap.h
   - avstream/tth26xvideostream.cpp
   - avstream/tth26xvideostream.h
   - avstream/tth264videostream.cpp
@@ -23,6 +28,7 @@ sources:
   - data/ttcutlist.h
   - data/ttcutlist.cpp
   - data/ttcutpreviewtask.cpp
+  - data/ttavdata.cpp
 ---
 
 # Code Map: Frame-Order Pipeline
@@ -51,7 +57,9 @@ flowchart TD
     M["TTCutPreviewTask::createH264PreviewClip\n(data/ttcutpreviewtask.cpp)\ncutFrames = { cutInIndex(), cutOutIndex() }"]
     N["TTESSmartCut::smartCutFrames\n(extern/ttessmartcut.cpp)\nanalyzeCutPoints(cutFrames)"]
     O["TTNaluParser\n(avstream/ttnaluparser.cpp)\nmAccessUnits — DECODE order list\naccessUnitAt(index), findKeyframeBefore(index)"]
-    P["Smart Cut output\nstream-copy or re-encode\nby NAL byte offset"]
+    P["Smart Cut output ES\nstream-copy or re-encode\nby NAL byte offset\n+ TTESSmartCut::mOutputDisplayOrder\n(one entry per written frame,\nsource display index)"]
+    Q["Cut/preview caller\n(data/ttavdata.cpp doH264Cut,\ndata/ttcutpreviewtask.cpp createH264PreviewClip,\ngui/ttcutpreview.cpp regenerateSmartCutPreviewClip)\nsmartCut->outputDisplayOrder() → mkvProvider.setVideoDisplayOrder()"]
+    R["TTMkvMergeProvider::mux() → assignEsTimestamps()\n(extern/ttmkvmergeprovider.cpp)\npts = displayOrder[i] × frameDur (DISPLAY time)\ndts = (i − reorderOffset) × frameDur"]
 
     A --> B --> C
     C --> D --> E
@@ -59,11 +67,14 @@ flowchart TD
     F --> G --> H --> I
     C --> J --> K --> L
     L --> M --> N --> O --> P
+    N --> Q --> R
+    P --> R
 
     style I fill:#e8f4f8,stroke:#2980b9
     style L fill:#fef9e7,stroke:#f39c12
     style G fill:#fdecea,stroke:#c0392b
     style O fill:#fdecea,stroke:#c0392b
+    style R fill:#fdecea,stroke:#c0392b
 ```
 
 ## Edge semantics
@@ -86,6 +97,9 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTNaluParser::accessUnitPtr(index, size)` → Smart Cut write path | byte offset + size of NAL units at decode position `index` | **DECODE order** → byte position in file (correct for stream-copy) |
 | `TTCutFrameNavigation::checkCutPosition(avData, pos)` ← `TTCutMainWindow::onNewFramePos(pos)` | explicit `pos` parameter; stored as `currentPosition` | **DECODE order** (same pos returned by `moveToXxx` in TTCurrentFrame) |
 | `TTCurrentFrame::onPlayVideo()` → `mPlayer->load(…, startSec)` | `startSec` corrected via `deliveredDecodeIndex / frameRate` for H.26x | **DISPLAY order** — `deliveredDecodeIndex` is the decode tag of the frame actually shown, mapping it to its correct display-time in the temp MKV |
+| `TTESSmartCut::processSegment/streamCopyFrames/reencodeFrames/bufferAndWriteEncoderPacket` → `TTESSmartCut::mOutputDisplayOrder` (`appendOutputDisplay`, ttessmartcut.cpp:372) | one `mDisplayMap.decodeToDisplay(au)` value appended per written frame, in ES write order (call sites: ttessmartcut.cpp:1217 IDR, :2274/:2333 stream-copy, :3243 encoder packet via `ctx.encodeAuOrder`) | **DISPLAY order** (source-domain, absolute) — `ctx.encodeAuOrder` (ttessmartcut.cpp:2380-2382) captures each submitted frame's source AU (`AVFrame::pts`) at submission time so it survives `runEncodePass()` freeing `framesToEncode`; with `bf=0` the encoder returns packets 1:1 in submission order, so `ctx.packetsReceived` indexes `encodeAuOrder` correctly even though most x264 packets only arrive during `flushEncoder()` |
+| `TTESSmartCut::outputDisplayOrder()` (ttessmartcut.cpp:397) → caller → `TTMkvMergeProvider::setVideoDisplayOrder()` | `QVector<int>` — source display indices re-numbered to a compact, gap-free, order-preserving RANK (sort + `QHash` rank lookup) | **DISPLAY order**, output-local (segments leave gaps in source display numbering, so the absolute source index is not usable as a packet-count-based array index in the muxer) — returns an **empty** `QVector` (fallback) on: a negative `decodeToDisplay()` result (HEVC dropped-RASL slot, ttessmartcut.cpp:378), an encoder-packet/submitted-frame-count mismatch (ttessmartcut.cpp:3246), or a duplicate source display index (ttessmartcut.cpp:407-413) — all three warn loudly via `TTMessageLogger` |
+| `TTMkvMergeProvider::assignEsTimestamps(in)` (ttmkvmergeprovider.cpp:690) | `pkt->pts = displayOrder[frameCount] × frameDur`; `pkt->dts = (frameCount − reorderOffset) × frameDur` | **PTS: DISPLAY order (true display time); DTS: approximated decode order** — `reorderOffset = max(i − displayOrder[i])` over the whole list (computed once in `setupVideoInput`, ttmkvmergeprovider.cpp:496-500) so `dts ≤ pts` always holds by lowering DTS, never raising PTS (raising PTS would shift video against the untouched audio streams); a resulting negative start DTS is normalized by `avoid_negative_ts` across **all** muxed streams together, not just video. Called once per output **frame** (`in.frameCount`) — PAFF field pairs are merged into one call by `processPAFFFieldPair()` first, matching `TTNaluParser`'s own field-pair merge 1:1 in count. Empty `displayOrder` (MPEG-2 task path: `data/ttavdata.cpp` MPEG-2 branch never calls `setVideoDisplayOrder`; playback temp MKV: `gui/ttcurrentframe.cpp:866` `TTMkvMergeProvider` instance also never does; or any invalidated H.26x run) falls back line-for-line to the pre-existing `pts = dts = frameCount × frameDur` linear stamping |
 
 ## Assumptions, contracts & pitfalls
 
@@ -211,6 +225,91 @@ ffmpeg source display(cut-in) r=1.0, vs the old +k position r≈0.03. Gate:
 > libav parser POC). The `deliveredDecodeIndex` value being a raw decode AU used as a
 > presentation-order seek time in `onPlayVideo()` is a separate latent item (pre-existing,
 > H.264-correct where display==decode), tracked outside this change.
+
+## Output-ES POC continuity & MKV display-PTS — done 2026-07-02/03
+
+Two related fixes for decode-vs-display confusion downstream of the cut itself:
+in the WRITTEN ES bitstream's own POC field (consumed by any external playback
+decoder, not TTCut-ng's own index systems), and in the MKV muxer's packet
+timestamps.
+
+**1. Muxer PTS was decode-order, not display-order (pre-`b4f3ada`).**
+`TTMkvMergeProvider::mux()` / `processPAFFFieldPair()` stamped every video
+packet `pts = dts = frameCount × frameDur` — a purely linear, write-order
+timestamp (`frameCount` counts output frames as written, not display
+positions). That is correct for TTCut's own re-encoded segments (`bf=0`, no
+reorder) but WRONG for stream-copied original GOPs that still contain
+B-frames: their true display time differs from their write-order position.
+Gate evidence (spec `docs/superpowers/specs/2026-07-03-es-mux-display-pts-design.md`,
+gate G2): the legacy linear stamping produced 69262 PTS-monotonicity
+violations on a 140419-frame MBAFF file; the fixed version produces 0 (frame
+counts unchanged — G1 confirms the ES bytes themselves are bit-identical,
+only the muxed timestamps change).
+
+**Fix:** `TTESSmartCut::appendOutputDisplay()` (ttessmartcut.cpp:372, added in
+`09cc8e5`) records the SOURCE display index (`mDisplayMap.decodeToDisplay(au)`)
+of every frame written to the ES, in write order, at all four write sites
+(IDR at ttessmartcut.cpp:1217, stream-copy bulk/per-AU at :2274/:2333, and
+encoder packets at :3243 via `ctx.encodeAuOrder` — the latter captures each
+submitted frame's source AU at *submission* time, ttessmartcut.cpp:2380-2382,
+because `runEncodePass()` frees `ctx.framesToEncode` before most x264 packets
+actually arrive in `flushEncoder()`; with `bf=0` packets return 1:1 in
+submission order so `ctx.packetsReceived` still indexes correctly).
+`outputDisplayOrder()` (ttessmartcut.cpp:397, `b4f3ada`) compacts the
+recorded source indices into gap-free output-local ranks (segments leave
+gaps in source display numbering). `TTMkvMergeProvider::assignEsTimestamps()`
+(ttmkvmergeprovider.cpp:690) then sets `pts = displayOrder[i] × frameDur`
+(true display time) and `dts = (i − reorderOffset) × frameDur`, where
+`reorderOffset = max(i − displayOrder[i])` (ttmkvmergeprovider.cpp:496-500)
+lowers DTS just enough that `pts ≥ dts` always holds — PTS is never raised,
+since that would shift video against the untouched (unaltered) audio
+streams; a resulting negative start DTS is normalized by `avoid_negative_ts`
+across all muxed streams together. Any anomaly (negative display index from
+a dropped HEVC RASL slot, an encoder-packet/frame-count mismatch, a
+duplicate source display index, or a plain empty list — MPEG-2 task path,
+playback temp MKV) falls back line-for-line to the pre-existing linear
+stamping; all fallbacks warn loudly via `TTMessageLogger` except the
+plain-empty-list case, which is normal/expected on those two paths.
+
+**2. Rewritten encoder POC anchoring was wrong at the seam (`466497a`,
+corrected by `88445b3`).** `TTESSmartCut::processSegment()`
+(ttessmartcut.cpp:1003-1045) decides per-segment — not just for PAFF as
+before — whether the H.264 non-PAFF stream-copy start POC is reachable from
+the encoder's 4-bit POC domain (`pocDomainBridgeable()`,
+ttessmartcut.cpp:114-121: same linear-distance rule `applyPocDomainFix()`
+already used for its post-hoc patch search) and enables per-segment SPS
+unification when it is not. When unification runs for such a seam,
+`reencodeFrames()` (ttessmartcut.cpp:2390-2400) anchors the rewritten
+encoder POCs on `mSpsUnificationPocAnchor`, computed by scanning
+`[streamCopyStartFrame, min(+16, nextKeyframe))` in DECODE order for the AU
+with the MINIMUM `mDisplayMap.decodeToDisplay()` value (ttessmartcut.cpp:1012-1020)
+— i.e. the first frame the copy GOP actually *displays*, which is a leading
+B-picture of the copy-start keyframe, not the keyframe itself (the keyframe's
+own leading B-pictures decode after it but display before it and carry
+SMALLER POCs). `base = (anchor − 2×N) mod srcMaxPocLsb` (ttessmartcut.cpp:2393)
+then makes the encoder's LAST rewritten POC land directly below that anchor,
+so a standards-compliant playback decoder's own output-reordering runs
+monotonically across the seam instead of interleaving it (the original bug,
+anchoring on the copy-start/keyframe POC directly, let the encoder's last
+POCs land above/collide with the leading Bs — confirmed via `h264_analyze`
+in spec `docs/superpowers/specs/2026-07-03-poc-anchor-min-display-design.md`,
+which also documents that the EOS NAL preceding the copy-start AU is observed
+to be packetized together with (swallowed into) the following copy-I packet
+by the playback-side demuxer, so its DPB-flush has no effect there — making
+correct POC *values* across the seam necessary regardless of the EOS).
+The bridgeability CLASSIFICATION deliberately stays on the copy-start
+(keyframe) AU's own POC only (ttessmartcut.cpp:1026-1031) — widening it to
+the min-display POC would flag benign leading-B seams that the standard
+(non-unification) path already bridges correctly (full-scan gate: 0
+output-order violations, per the `88445b3` commit message). PAFF keeps the
+pre-existing linear POC numbering (`mSpsUnificationPocAnchor = -1`) —
+byte-identical output, unaffected by this fix.
+
+> Both fixes address the same class of decode-vs-display divergence this map
+> otherwise tracks for TTCut-ng's own navigation/cut-index systems
+> (`TTDisplayOrderMap`, `mFrameIndex`, `mAccessUnits`) — here the affected
+> "decoder" is an external playback decoder consuming the WRITTEN ES/MKV, but
+> the mechanism (a decode-first AU is not the display-first AU) is identical.
 
 ## Redundancy / consolidation candidates
 
