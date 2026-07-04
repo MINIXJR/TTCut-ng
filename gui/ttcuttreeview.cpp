@@ -663,10 +663,10 @@ void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
 
         QString tip;
         if (bout.present)
-            tip += QString("Audio-Burst am Ende: %1 dB (Context: %2 dB)").arg(bout.burstDb, 0, 'f', 1).arg(bout.contextDb, 0, 'f', 1);
+            tip += tr("Audio burst at end: %1 dB (context: %2 dB)").arg(bout.burstDb, 0, 'f', 1).arg(bout.contextDb, 0, 'f', 1);
         if (bin.present) {
             if (!tip.isEmpty()) tip += "\n";
-            tip += QString("Audio-Burst am Anfang: %1 dB (Context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
+            tip += tr("Audio burst at start: %1 dB (context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
         }
         treeItem->setToolTip(5, tip);
     } else {

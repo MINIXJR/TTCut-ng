@@ -1586,15 +1586,50 @@ Ausgabedatei:
         <translation>Stop</translation>
     </message>
     <message>
+        <location filename="../gui/ttcutpreview.cpp" line="341"/>
+        <source>⚠ Audio burst at start of cut 1 (%1 dB)</source>
+        <translation>⚠ Audio-Burst am Anfang von Schnitt 1 (%1 dB)</translation>
+    </message>
+    <message>
         <location filename="../gui/ttcutpreview.cpp" line="344"/>
         <location filename="../gui/ttcutpreview.cpp" line="377"/>
         <source>Shift +1 Frame</source>
         <translation>Shift +1 Frame</translation>
     </message>
     <message>
+        <location filename="../gui/ttcutpreview.cpp" line="360"/>
+        <source>⚠ Audio burst at end of cut %1 (%2 dB)</source>
+        <translation>⚠ Audio-Burst am Ende von Schnitt %1 (%2 dB)</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="374"/>
+        <source>⚠ Audio burst at start of cut %1 (%2 dB)</source>
+        <translation>⚠ Audio-Burst am Anfang von Schnitt %1 (%2 dB)</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="471"/>
+        <source>CutOut updated</source>
+        <translation>CutOut neu</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="471"/>
+        <source>CutIn updated</source>
+        <translation>CutIn neu</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="473"/>
+        <source>✓ %1 (frame %2 → %3)</source>
+        <translation>✓ %1 (Frame %2 → %3)</translation>
+    </message>
+    <message>
         <location filename="../gui/ttcutpreview.cpp" line="503"/>
         <source>Regenerating preview...</source>
         <translation>Vorschau wird neu generiert...</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="576"/>
+        <source>✓ Burst resolved</source>
+        <translation>✓ Burst behoben</translation>
     </message>
     <message>
         <location filename="../gui/ttcutpreview.cpp" line="600"/>
@@ -2587,6 +2622,16 @@ Ausgabedatei:
         <location filename="../gui/ttcuttreeview.cpp" line="661"/>
         <source>Burst start</source>
         <translation>Burst Anfang</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcuttreeview.cpp" line="666"/>
+        <source>Audio burst at end: %1 dB (context: %2 dB)</source>
+        <translation>Audio-Burst am Ende: %1 dB (Kontext: %2 dB)</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcuttreeview.cpp" line="669"/>
+        <source>Audio burst at start: %1 dB (context: %2 dB)</source>
+        <translation>Audio-Burst am Anfang: %1 dB (Kontext: %2 dB)</translation>
     </message>
     <message>
         <location filename="../gui/ttcuttreeview.cpp" line="765"/>
