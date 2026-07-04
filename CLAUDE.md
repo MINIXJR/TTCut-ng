@@ -52,6 +52,8 @@ The generated executable is `ttcut-ng` in the project root.
 ## Architecture
 
 > **Data-flow maps:** For detailed, maintained subsystem data-flow maps (decode-vs-display order, edge semantics, redundancy), see `docs/code-map/` (start at `INDEX.md`). Created and kept fresh via the `code-map` skill — check there before re-searching for architecture/data-flow answers.
+>
+> **Map maintenance / model choice:** staleness `check` is mechanical (any model or script). After fixing a bug yourself, update the affected map sections immediately in the main session (context is fresh — delegating loses information). For accumulated drift, dispatch a Sonnet subagent with a precise briefing (commit list + what changed semantically, verify-every-claim-in-code instruction, unverified claims reported instead of written) and review the result. Creating NEW maps of complex subsystems stays in the main session (Fable/Opus): edge semantics are the value of a map, and confidently wrong edges in a trust base are worse than no map.
 
 ### Stream Hierarchy
 
