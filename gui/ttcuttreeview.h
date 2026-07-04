@@ -78,6 +78,13 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
     void createActions();
     void updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
+
+  public:
+    // Re-evaluate the burst icons (column 5) of all entries — call after the
+    // burst filter setting changed so the list matches without cut edits.
+    void refreshBurstIcons();
+
+  private:
     void updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
 
   private:

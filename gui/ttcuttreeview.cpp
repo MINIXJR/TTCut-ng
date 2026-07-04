@@ -621,6 +621,21 @@ void TTCutTreeView::onContextMenuRequest( const QPoint& point)
 }
 
 /*!
+ * refreshBurstIcons
+ * Re-evaluate column 5 for all entries (tree order == cut list order).
+ * Call after the burst filter setting changed so the list matches without
+ * requiring cut edits.
+ */
+void TTCutTreeView::refreshBurstIcons()
+{
+    if (!mAVData || !mAVData->cutList()) return;
+    TTCutList* list = mAVData->cutList();
+    int n = qMin(videoCutList->topLevelItemCount(), list->count());
+    for (int i = 0; i < n; i++)
+        updateBurstIcon(videoCutList->topLevelItem(i), list->at(i));
+}
+
+/*!
  * updateBurstIcon
  * Detect audio burst near cut boundaries and show warning icon
  */

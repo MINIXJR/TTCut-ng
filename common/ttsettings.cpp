@@ -380,10 +380,10 @@ void TTSettings::setMpeg2Target(int v)
 // audio-list sort comparator can re-sort reactively. The other 5 setters
 // use the standard pattern.
 
-void TTSettings::setBurstThresholdDb(int v)
+void TTSettings::setBurstMinDeltaDb(int v)
 {
-  if (mBurstThresholdDb == v) return;
-  mBurstThresholdDb = v;
+  if (mBurstMinDeltaDb == v) return;
+  mBurstMinDeltaDb = v;
 }
 
 void TTSettings::setNormalizeAcmod(bool v)
@@ -628,7 +628,7 @@ void TTSettings::load()
   // ----- Audio/QuickJump fields (Task 10) -----------------------------
   // Four fields extend the Common block. screenshotDir/Project live in
   // their own Screenshot block (below) per the Task 1 inventory.
-  mBurstThresholdDb       = settings.value("BurstThresholdDb/",       mBurstThresholdDb).toInt();
+  mBurstMinDeltaDb        = settings.value("BurstMinDeltaDb/",        mBurstMinDeltaDb).toInt();
   mNormalizeAcmod         = settings.value("NormalizeAcmod/",         mNormalizeAcmod).toBool();
   mAudioLanguagePreference = settings.value("AudioLanguagePreference/", QStringList{}).toStringList();
   mQuickJumpIntervalSec   = settings.value("QuickJumpInterval/",      mQuickJumpIntervalSec).toInt();
@@ -798,6 +798,7 @@ void TTSettings::load()
     { "StreamPoints", "SceneThreshold/" },    // threshold moved to Navigation
     { "StreamPoints", "MinDistance/" },       // legacy
     { "IndexFiles",   "CreateVideoIDD/" },    // MPEG2Schnitt IDD-Files removed
+    { "Common",       "BurstThresholdDb/" },  // replaced by context-relative BurstMinDeltaDb
     { "IndexFiles",   "CreateAudioIDD/" },
     { "IndexFiles",   "CreatePrevIDD/"  },
     { "IndexFiles",   "ReadVideoIDD/"   },
@@ -871,7 +872,7 @@ void TTSettings::save()
   settings.setValue("LastDirPath/",     mLastDirPath);
   settings.setValue("ProjectFileName/", mProjectFileName);
   // ----- Audio/QuickJump fields (Task 10) -----------------------------
-  settings.setValue("BurstThresholdDb/",        mBurstThresholdDb);
+  settings.setValue("BurstMinDeltaDb/",         mBurstMinDeltaDb);
   settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
   settings.setValue("AudioLanguagePreference/", mAudioLanguagePreference);
   settings.setValue("QuickJumpInterval/",       mQuickJumpIntervalSec);

@@ -23,18 +23,18 @@ TTCutSettingsAudio::~TTCutSettingsAudio() {}
 void TTCutSettingsAudio::resetToDefaults()
 {
   // Compile-time defaults — must match common/ttsettings.h
-  // (mNormalizeAcmod, mBurstThresholdDb). Audio language preference is
+  // (mNormalizeAcmod, mBurstMinDeltaDb). Audio language preference is
   // intentionally left unchanged — user-curated setting that survives
   // factory resets.
   cbNormalizeAcmod->setChecked(true);
-  sbBurstThreshold->setValue(-30);
+  sbBurstMinDelta->setValue(20);
 }
 
 void TTCutSettingsAudio::setTabData()
 {
   leAudioLangPref->setText(TTSettings::instance()->audioLanguagePreference().join(","));
   cbNormalizeAcmod->setChecked(TTSettings::instance()->normalizeAcmod());
-  sbBurstThreshold->setValue(TTSettings::instance()->burstThresholdDb());
+  sbBurstMinDelta->setValue(TTSettings::instance()->burstMinDeltaDb());
 }
 
 void TTCutSettingsAudio::saveTabData()
@@ -49,5 +49,5 @@ void TTCutSettingsAudio::saveTabData()
   }
   TTSettings::instance()->setAudioLanguagePreference(newPrefs);
   TTSettings::instance()->setNormalizeAcmod(cbNormalizeAcmod->isChecked());
-  TTSettings::instance()->setBurstThresholdDb(sbBurstThreshold->value());
+  TTSettings::instance()->setBurstMinDeltaDb(sbBurstMinDelta->value());
 }

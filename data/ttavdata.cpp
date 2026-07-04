@@ -2012,6 +2012,21 @@ int TTAVData::countExtraFramesBefore(int frameIndex) const
 // the extra-frame correction; otherwise threshold checks land on different
 // audio frames and produce inconsistent warnings.
 // *****************************************************************************
+// ----------------------------------------------------------------------------
+// Burst post-filter: context-RELATIVE. A burst counts when it sticks out at
+// least burstMinDeltaDb above the surrounding level (0 = filter off, keep
+// the detector's own decision). Replaces the old absolute threshold, which
+// discarded real DVB ad bursts (-37 dB burst vs -85 dB context) whenever the
+// programme material was quiet.
+// ----------------------------------------------------------------------------
+static bool applyBurstDeltaFilter(bool detected, const TTAVData::CutBurstInfo& info)
+{
+  int minDelta = TTSettings::instance()->burstMinDeltaDb();
+  if (detected && minDelta != 0 && (info.burstDb - info.contextDb) < minDelta)
+    return false;
+  return detected;
+}
+
 TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
 {
   CutBurstInfo info;
@@ -2031,8 +2046,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   bool detected = TTFFmpegWrapper::detectAudioBurst(
       audioFile, cutOutTime, true, info.burstDb, info.contextDb);
 
-  int threshold = TTSettings::instance()->burstThresholdDb();
-  if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
+  detected = applyBurstDeltaFilter(detected, info);
 
   info.present = detected;
   return info;
@@ -2127,8 +2141,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
   bool detected = TTFFmpegWrapper::detectAudioBurst(
       audioFile, cutInTime, false, info.burstDb, info.contextDb);
 
-  int threshold = TTSettings::instance()->burstThresholdDb();
-  if (detected && threshold != 0 && info.burstDb < threshold) detected = false;
+  detected = applyBurstDeltaFilter(detected, info);
 
   info.present = detected;
   return info;

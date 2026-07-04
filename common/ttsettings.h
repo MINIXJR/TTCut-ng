@@ -205,8 +205,8 @@ public:
   // setAudioLanguagePreference emits audioLanguagePreferenceChanged so the
   // audio-list sort comparator can re-sort reactively when the user edits
   // the preference list. The other 5 setters use the standard pattern.
-  int     burstThresholdDb() const   { return mBurstThresholdDb; }
-  void    setBurstThresholdDb(int v);
+  int     burstMinDeltaDb() const    { return mBurstMinDeltaDb; }
+  void    setBurstMinDeltaDb(int v);
 
   bool    normalizeAcmod() const     { return mNormalizeAcmod; }
   void    setNormalizeAcmod(bool v);
@@ -441,12 +441,14 @@ private:
 
   // ----- Audio/QuickJump/Screenshot group (Task 10) -----------------------
   // Defaults match common/ttcut.cpp lines 172-181 verbatim.
-  // burstThresholdDb/normalizeAcmod/audioLanguagePreference/
+  // burstMinDeltaDb/normalizeAcmod/audioLanguagePreference/
   // quickJumpIntervalSec extend /Settings/Common (Task 4).
   // screenshotDir/screenshotProject open a NEW /Settings/Screenshot block
   // — they are newly persisted, were non-persistent statics before per the
   // Task 1 inventory recommendation.
-  int         mBurstThresholdDb     = -30;
+  // Minimum dB jump of a burst above its surrounding level (0 = filter off,
+  // detector decision only). Replaces the old ABSOLUTE BurstThresholdDb.
+  int         mBurstMinDeltaDb      = 20;
   bool        mNormalizeAcmod       = true;
   QStringList mAudioLanguagePreference;     // empty = use system locale
   int         mQuickJumpIntervalSec = 30;

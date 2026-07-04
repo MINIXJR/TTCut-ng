@@ -631,6 +631,9 @@ void TTCutMainWindow::onActionSettings()
 
   TTSettings::instance()->save();
 
+  // Burst filter setting may have changed - re-evaluate cut list icons
+  cutList->refreshBurstIcons();
+
   delete settingsDlg;
 }
 
