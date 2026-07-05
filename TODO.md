@@ -126,6 +126,38 @@
   - Audio-Only-Pfad in `TTAVData::doAudioOnlyCut` daraus echte Step-Updates emittieren
   - Auch dem MP3/AAC-Re-Encode-Pfad (Stage 2) gleich mitgeben
 
+- **LipSync-Prüfdialog: A/V-Versatz objektiv messen und übernehmen** (Idee 2026-07-05)
+  - Ziel: den Audio/Video-Versatz einer Aufnahme objektiv bestimmen und als
+    Per-Track-Audio-Delay (bestehendes `mAudioDelayMs`, v0.66.0) übernehmen —
+    statt ihn per Gehör am Regler zu schätzen. Belegt 2026-07-05: an
+    Sprecherszenen ist der Höreindruck selbst bei 400 ms Versatz unzuverlässig.
+  - UI: bevorzugt den **bestehenden Zeitsprung-Dialog erweitern** statt einen
+    neuen Dialog zu bauen — er ist bereits der Thumbnail-Szenen-Browser, den man
+    zum Szenenfinden braucht. Idee: ein „LipSync hier messen"-Aktion/Knopf am
+    ausgewählten Thumbnail. Workflow mit Anleitung: geeignete Szene finden →
+    messen → gemessenen Versatz in den Audio-Delay der Spur übernehmen.
+    (Detail-Entscheidung — eigener Dialog vs. Zeitsprung-Erweiterung — beim
+    echten Design klären.)
+  - Messmethode (2026-07-05 erarbeitet, siehe Memory `reference_lipsync_measurement`):
+    Lippenabstand pro Frame (innere Ober-/Unterlippe) gegen den Tonverlauf.
+    **WICHTIGE Lektion:** Voll-Signal-Kreuzkorrelation über Dauer-Sprache
+    konvergiert NICHT — nur der ereignisbasierte Abgleich EINES sauberen
+    Verschluss-Ereignisses (Mund komplett zu ↔ Ton-Delle, bilabiales b/p/m)
+    liefert einen belastbaren Wert. Der Dialog muss den Nutzer gezielt zu so
+    einer Stelle führen.
+  - Anleitung zur Szenenwahl (in den Dialog): Sprecher-Nahaufnahme mit klarem
+    Sprechbeginn nach Pause; UNGEEIGNET sind Geräte-Bedien-Szenen (das gefilmte
+    Gerät reagiert selbst verzögert → falscher Anker) und ruhige Halbprofil-
+    Szenen ohne klares audiovisuelles Ereignis.
+  - Offene Abhängigkeitsfrage: der Prototyp nutzt mediapipe (Python/pip, NICHT
+    in Debian) + rhubarb. Für ein auslieferbares Feature bräuchte es entweder
+    eine C++/libav-native Lippendetektion, ein gebündeltes Modell, oder das
+    Feature bleibt optional (nur aktiv, wenn die Tools vorhanden sind).
+    Prototyp-Werkzeuge unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/`
+    (`lip_landmark.py`, `venv-mp/`, `lip_final.png`).
+  - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
+    Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
+
 - **Dead-Code-Audit (Medium Priority)**
   - Systematische Suche nach toten Klassen/Funktionen/Includes (Beispiel:
     `TTCutAudioTask` blieb seit der v0.60.0-libav-Migration jahrelang stehen)
