@@ -2973,10 +2973,16 @@ void TTFFmpegWrapper::buildDisplayOrderMap()
     QVector<TTPocEntry> entries(mFrameIndex.size());
     bool allSame = true;
     for (int i = 0; i < mFrameIndex.size(); ++i) {
-        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR, mFrameIndex[i].isDroppedLeading};
+        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR,
+                      mFrameIndex[i].isDroppedLeading, mFrameIndex[i].isKeyframe};
         if (mFrameIndex[i].poc != mFrameIndex[0].poc) allSame = false;
     }
     if (allSame && mFrameIndex.size() > 1) { identity("constant POC"); return; }
+
+    // H.264 open-GOP cold start: mark leading pics libav drops (mirrors the HEVC
+    // RASL handling done input-side via TTLeadingPicClassifier). No-op otherwise.
+    const AVCodecID codecId = mVideoCodecCtx ? mVideoCodecCtx->codec_id : AV_CODEC_ID_NONE;
+    TTDisplayOrderMap::markH264ColdStartLeadingPics(entries, codecId);
 
     mDisplayOrderMap.build(entries);
     if (!mDisplayOrderMap.isValid()) identity("rank validation failed");

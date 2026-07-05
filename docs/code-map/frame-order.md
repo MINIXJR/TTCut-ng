@@ -1,6 +1,6 @@
 ---
 base_commit: 95da7f34506e684b4c90b5d720863635e4c62033
-last_verified: 2026-07-04  # + playback temp MKV display-PTS (95da7f3): last linear-PTS consumer fixed
+last_verified: 2026-07-05  # + H.264 open-GOP cold-start leading-pic drop (v0.72.1); see section below
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -225,6 +225,40 @@ ffmpeg source display(cut-in) r=1.0, vs the old +k position r≈0.03. Gate:
 > libav parser POC). The `deliveredDecodeIndex` value being a raw decode AU used as a
 > presentation-order seek time in `onPlayVideo()` is a separate latent item (pre-existing,
 > H.264-correct where display==decode), tracked outside this change.
+
+## H.264 open-GOP cold-start leading-pic alignment — RESOLVED 2026-07-05 (v0.72.1)
+
+The RASL fix above dropped HEVC leading pics but `TTLeadingPicClassifier` is
+**HEVC-only** (`H.264/MPEG-2 → always false`). A demuxed H.264 elementary stream
+whose first coded picture is a **non-IDR open-GOP I-frame with leading pictures**
+(`I B B B P …`, the leading Bs display before the I and reference a GOP before it
+that does not exist at cold start) therefore mis-ranked those leading pics as
+display 0..k-1. libav **drops** them (undecodable at stream start), so
+`decodeFrame(display 0)` targeted an AU the decoder never emits → drained the whole
+file to EOF (~11 min on 3.4 GB), then retried forever. **v0.72.0 regression** (the
+pre-map `decodeFrame` counted decoder outputs and showed the first output = the I,
+so it never hung). Real-world reach: any ZDF-neo / Das-Erste-HD 720p50 open-GOP
+recording (measured 3 and 7 dropped pics respectively).
+
+**Fix (POC-analytic, mirrors the HEVC drop but H.264 has no RASL NAL type):**
+`TTDisplayOrderMap::markH264ColdStartLeadingPics(entries, codecId)`
+(ttdisplayordermap.cpp) marks, for H.264 only and only at the first keyframe (cold
+start), the contiguous run of AUs after it with `poc < keyframePoc` as
+`isDroppedLeading`. Guards: no-op for non-H.264, for an IDR cold start (DPB-flushing,
+self-contained → 0 drops), and for streams whose first trailing pic (`poc >=
+keyframePoc`) immediately follows (→ 0 drops). Needs a keyframe anchor, so `TTPocEntry`
+gained `bool key`, populated from `AV_PKT_FLAG_KEY` (buildFromFile) /
+`TTFrameInfo::isKeyframe` (wrapper). Called in **both** build paths before `build()`:
+`TTFFmpegWrapper::buildDisplayOrderMap()` (ttffmpegwrapper.cpp) and
+`TTDisplayOrderMap::buildFromFile()` — so still/search/nav and the cut path get the
+same map. All downstream machinery (`displayRanksFromPoc` skips `isDroppedLeading`,
+`displayCount()`, `createIndexList`, `decodeFrame`/`decodeFrameYUV`,
+`selectFramesByDisplayOrder`) was already codec-agnostic and unchanged.
+
+**Result:** `decodeFrame(0)` maps display 0 → AU 0 (the I), returns in ~8 s incl.
+index build on the 3.4 GB file (was an 11-min hang). Gate `tools/diag/test_h264_leading`
+(built map vs decoder ground truth): open-GOP 3 drops + 0 mismatches; 720p50 7 drops;
+MBAFF 0 drops; Tux (IDR) 0 drops; HEVC RASL 7 drops (unchanged) — all aligned.
 
 ## Output-ES POC continuity & MKV display-PTS — done 2026-07-02/03
 

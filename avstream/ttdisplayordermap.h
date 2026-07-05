@@ -26,6 +26,7 @@ struct TTPocEntry {
     int  poc             = 0;
     bool isIDR           = false;
     bool isDroppedLeading = false;   // RASL leading pic of a NoRaslOutputFlag IRAP
+    bool key             = false;    // keyframe (I) — cold-start anchor for H.264 detection
 };
 
 class TTDisplayOrderMap
@@ -38,6 +39,17 @@ public:
     // (RASL of a NoRaslOutputFlag IRAP, flagged isDroppedLeading), and 0..m-1
     // for the m decodable entries (m == count of non-dropped entries).
     static QVector<int> displayRanksFromPoc(const QVector<TTPocEntry>& entries);
+
+    // Mark H.264 open-GOP cold-start leading pictures as isDroppedLeading.
+    // At stream start a non-IDR I-frame's leading pictures (display before it,
+    // reference a GOP before it that does not exist yet) are dropped by every
+    // conforming decoder — libav emits count() minus these many frames. HEVC
+    // handles its RASL equivalent via TTLeadingPicClassifier (NAL types); H.264
+    // has no such NAL flag, so we detect them from POC: the contiguous run after
+    // the first keyframe with POC < keyframe-POC. No-op for non-H.264 codecs, for
+    // an IDR cold start (self-contained), and for streams without leading pics.
+    // Idempotent. Both build paths call this before build()/displayRanksFromPoc.
+    static void markH264ColdStartLeadingPics(QVector<TTPocEntry>& entries, int avCodecId);
 
     // Build both directions from decode-ordered entries.
     void build(const QVector<TTPocEntry>& entries);

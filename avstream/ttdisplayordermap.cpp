@@ -57,6 +57,35 @@ QVector<int> TTDisplayOrderMap::displayRanksFromPoc(const QVector<TTPocEntry>& e
     return decodeToDisplay;
 }
 
+void TTDisplayOrderMap::markH264ColdStartLeadingPics(QVector<TTPocEntry>& entries,
+                                                     int avCodecId)
+{
+    // HEVC uses TTLeadingPicClassifier (RASL/RADL NAL types); MPEG-2 n/a.
+    if (avCodecId != AV_CODEC_ID_H264) return;
+
+    // Cold-start anchor: the first keyframe. For a demuxed ES this is entry 0.
+    int kf = -1;
+    for (int i = 0; i < entries.size(); ++i)
+        if (entries[i].key) { kf = i; break; }
+    if (kf < 0) return;
+
+    // An IDR flushes the DPB and is self-contained: nothing decoded after it
+    // references anything before it, so libav drops nothing at an IDR cold start.
+    if (entries[kf].isIDR) return;
+
+    // Leading pictures decode right after the keyframe but display before it
+    // (POC < keyframe POC). They form a contiguous run in decode order; the
+    // first trailing picture (POC >= keyframe POC) ends it. No POC wrap within
+    // one GOP.
+    const int keyPoc = entries[kf].poc;
+    for (int i = kf + 1; i < entries.size(); ++i) {
+        if (entries[i].poc < keyPoc)
+            entries[i].isDroppedLeading = true;
+        else
+            break;
+    }
+}
+
 void TTDisplayOrderMap::build(const QVector<TTPocEntry>& entries)
 {
     buildFromRanks(displayRanksFromPoc(entries));
@@ -241,6 +270,7 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
     TTPocCollector collector(codecId, /*trackIDR=*/true);
     TTLeadingPicClassifier leadingClassifier(codecId);
     QVector<bool> droppedPerPacket;   // one entry per video packet (== per AU for HEVC)
+    QVector<bool> keyPerPacket;       // keyframe flag per video packet (H.264 anchor)
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -253,6 +283,7 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
         if (pkt->stream_index == vIdx) {
             const bool isIDR = TTPocCollector::packetIsIDR(pkt->data, pkt->size, codecId);
             droppedPerPacket.append(leadingClassifier.classifyPacket(pkt->data, pkt->size));
+            keyPerPacket.append((pkt->flags & AV_PKT_FLAG_KEY) != 0);
             collector.feedPacket(pkt->data, pkt->size, isIDR);
         }
         av_packet_unref(pkt);
@@ -267,7 +298,9 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
             QString("display-order map: no entries collected for %1").arg(filePath));
         return map;
     }
-    // Per-AU emission is 1:1 with video packets for HEVC; pair drop flags by index.
+    // Per-AU emission is 1:1 with video packets for HEVC and non-PAFF H.264;
+    // pair drop/key flags by index. (PAFF H.264 has 2 packets per AU → sizes
+    // diverge → flags skipped, leaving the pre-existing conservative behavior.)
     if (droppedPerPacket.size() == entries.size()) {
         for (int i = 0; i < entries.size(); ++i)
             entries[i].isDroppedLeading = droppedPerPacket[i];
@@ -278,6 +311,11 @@ TTDisplayOrderMap TTDisplayOrderMap::buildFromFile(const QString& filePath)
             QString("display-order map: drop-flag count %1 != entry count %2 for %3 "
                     "- RASL leading pics NOT excluded (map may be display-misaligned)")
                 .arg(droppedPerPacket.size()).arg(entries.size()).arg(filePath));
+    }
+    if (keyPerPacket.size() == entries.size()) {
+        for (int i = 0; i < entries.size(); ++i)
+            entries[i].key = keyPerPacket[i];
+        markH264ColdStartLeadingPics(entries, codecId);
     }
 
     map.build(entries);
