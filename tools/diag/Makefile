@@ -76,3 +76,6 @@ MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider
 
 test_mpeg2order: test_mpeg2order.cpp $(MKVORDER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(MKVORDER_OBJS) $(LDLIBS) -lQt5Widgets $(AVLIBS)
+
+test_cutprogress: test_cutprogress.cpp $(STILLFRAME_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
