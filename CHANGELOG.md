@@ -2,6 +2,25 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.72.1 (2026-07-05)
+
+**Fix: H.264 open-GOP streams no longer hang on load**
+
+### Fixes
+
+- **H.264 open-GOP cold-start leading pictures** — a demuxed H.264 elementary
+  stream whose first coded picture is a non-IDR open-GOP I-frame with leading
+  pictures (`I B B B P …`) hung TTCut-ng at load ("Frames werden verarbeitet…
+  99 %"). The leading B-frames display *before* the first I and reference a GOP
+  before it that does not exist at stream start, so a conforming decoder drops
+  them — but the display-order map still ranked them, so `decodeFrame(display 0)`
+  waited for a frame the decoder never emits and drained the entire file to EOF,
+  retrying forever. The map now marks these cold-start leading pictures as
+  dropped (POC-based, mirroring the existing HEVC RASL handling), so loading,
+  navigation, search, and the frame-accurate cut all agree with the decoder.
+  Affects e.g. ZDF-neo and Das-Erste-HD 720p50 recordings. Regression introduced
+  in v0.72.0.
+
 ## v0.72.0 (2026-07-05)
 
 **Frame-accurate H.264/H.265 smart cutting, display-order correctness, and correct playback/output timestamps**

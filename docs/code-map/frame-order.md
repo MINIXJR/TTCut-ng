@@ -1,5 +1,5 @@
 ---
-base_commit: 95da7f34506e684b4c90b5d720863635e4c62033
+base_commit: 04614e2
 last_verified: 2026-07-05  # + H.264 open-GOP cold-start leading-pic drop (v0.72.1); see section below
 sources:
   - gui/ttcurrentframe.cpp
