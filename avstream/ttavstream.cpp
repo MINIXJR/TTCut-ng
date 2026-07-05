@@ -500,7 +500,15 @@ int TTVideoStream::moveToNextPIFrame()
   int pos_i_frame = index_list->moveToNextIndexPos(current_index, 1);
   int pos_p_frame = index_list->moveToNextIndexPos(current_index, 2);
 
-  int index = (pos_i_frame <= pos_p_frame) ? pos_i_frame : pos_p_frame;
+  // Pick the nearer of the two hits, but only among valid (>=0) results.
+  // moveToNextIndexPos() returns -1 when no such frame follows; a plain
+  // minimum would let that -1 win and leave the position stuck. This is
+  // exactly the last-I-frame case: no further I exists (pos_i_frame == -1)
+  // while P-frames still do, so the P button did nothing.
+  int index;
+  if (pos_i_frame < 0)      index = pos_p_frame;
+  else if (pos_p_frame < 0) index = pos_i_frame;
+  else                      index = (pos_i_frame < pos_p_frame) ? pos_i_frame : pos_p_frame;
 
   return (index >= 0) ? current_index=index : current_index;
 }
@@ -512,7 +520,14 @@ int TTVideoStream::moveToPrevPIFrame()
   int pos_i_frame = index_list->moveToPrevIndexPos(current_index, 1);
   int pos_p_frame = index_list->moveToPrevIndexPos(current_index, 2);
 
-  int index = (pos_i_frame >= pos_p_frame) ? pos_i_frame : pos_p_frame;
+  // Pick the nearer (largest index) of the two hits, only among valid
+  // (>=0) results. The plain maximum happens to work here because -1 loses
+  // a max comparison, but make the -1 handling explicit and symmetric with
+  // moveToNextPIFrame() so the intent is unambiguous.
+  int index;
+  if (pos_i_frame < 0)      index = pos_p_frame;
+  else if (pos_p_frame < 0) index = pos_i_frame;
+  else                      index = (pos_i_frame > pos_p_frame) ? pos_i_frame : pos_p_frame;
 
   return (index >= 0) ? current_index=index : current_index;
 }
