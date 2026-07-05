@@ -2,9 +2,27 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.72.0 (2026-07-05)
 
-**Frame-accurate H.264/H.265 smart cutting (cut-in and cut-out)**
+**Frame-accurate H.264/H.265 smart cutting, display-order correctness, and correct playback/output timestamps**
+
+### Features
+
+- **Context-relative audio-burst detection** — the burst filter now compares
+  each candidate against its local surroundings (RMS median of the neighbourhood)
+  instead of a fixed absolute dBFS threshold. This catches the quieter
+  real-world advertising bursts that the old absolute filter silently missed,
+  without flagging normal loud passages. A new setting *"Minimum burst jump
+  above surroundings (dB, 0 = off)"* (default 20) in the audio settings tab
+  controls the sensitivity, and the cut list's burst icons now refresh
+  immediately when settings are saved — no preview run required.
+- **Single frame-index scan** — the reference video stream now builds the frame
+  index once and shares it with the still-image window and frame search
+  (`TTH26xVideoStream::provideFrameIndexTo`), instead of each consumer
+  re-scanning the stream. Fewer redundant passes, one authoritative index.
+- **`--auto-cut` runs unattended on burst-containing projects** — the burst
+  warning at the final cut is logged instead of blocking on a modal dialog when
+  running headless, so batch cuts no longer hang waiting for a click.
 
 ### Fixes
 
@@ -36,6 +54,41 @@ All notable changes to TTCut-ng are documented in this file.
   `output_picture_number`, no decode pass). This removes the prior mixed-index
   cut-in offset where a cut started a few display frames late inside the
   programme.
+- **Correct frame timestamps in the output MKV (display-PTS)** — smart-cut
+  elementary-stream video was muxed with decode-order timestamps, so the
+  resulting MKV carried non-monotonic display timing. The muxer now assigns
+  display-order PTS for H.264/H.265 (preview and final cut) and for MPEG-2
+  (derived from `temporal_reference`), while DTS stays in decode order. Players
+  and downstream tools now see the correct frame timing.
+- **Smoother H.264/H.265 playback (no ±140 ms jitter)** — the temporary
+  playback MKV was muxed with decode-order PTS, so the current-frame player
+  re-timed video against the correct audio clock and frames appeared up to
+  ±140 ms early/late in a B-pyramid pattern. The temp MKV now carries
+  display-order PTS, and the play-start / timecode / stop-position conversions
+  are coupled to it. A/V sync verified objectively (lip-closure ↔ audio dip
+  alignment: 0 ms).
+- **POC-domain seam at re-encode → stream-copy transitions** — per-segment SPS
+  unification plus POC anchoring on the minimum display-POC of the first
+  stream-copy GOP removes the picture-order-count mismatch that could interleave
+  frames at a segment seam.
+- **First-segment stream-copy no longer leaks leading pictures** — the
+  first-segment override could include display-order pictures from before the
+  cut-in; it is now skipped when the segment is folded into a re-encode.
+- **H.264/H.265 preview audio drift** — preview audio is now routed through the
+  same `planAudioCut` path as the final cut, so preview A/V matches the result.
+- **New Project no longer silently overwrites the previous project file** — a
+  fresh project could reuse the previous file path and overwrite it without
+  warning.
+
+### Changes
+
+- The absolute burst threshold setting (`burstThresholdDb`) is replaced by the
+  context-relative `burstMinDeltaDb` (see Features). The obsolete key is cleaned
+  up automatically on load.
+- Burst UI strings converted to English source with a German translation, in
+  line with the project-wide i18n convention.
+- New maintained data-flow maps under `docs/code-map/` (frame-order,
+  burst-detection); `docs/` is excluded from the Debian package build.
 
 ## v0.71.0 (2026-06-03)
 

@@ -9,7 +9,7 @@ data-flow question, check here first.**
 | Map | Subsystem | base_commit | Status |
 |---|---|---|---|
 | [frame-order.md](frame-order.md) | Frame-order pipeline: still-image display vs cut-set vs smart-cut execution; decode-order vs display-order semantics. **Root cause of the Cut-In preview bug: display↔cut index-interpretation asymmetry** (display shows display-frame n; cut's `selectFramesNonPAFF` applies a display-order mapping → lands ~2 frames later at a B-frame Cut-In). | `95da7f3` | fresh (updated 2026-07-04: ES-mux display-PTS + POC anchoring + playback temp MKV display-PTS) |
-| [burst-detection.md](burst-detection.md) | Audio-Burst-Erkennung: kontextrelativer Detektor (Quell-AC3) → kontextrelativer Delta-Filter (`burstMinDeltaDb`, seit `48cf828`) → drei Konsumenten (CutList-Spalte 5 mit Settings-Refresh, Preview-Warnung, Final-Warndialog). Historische Pitfalls des absoluten Filters dokumentiert. | `8008128` | fresh (2026-07-04) |
+| [burst-detection.md](burst-detection.md) | Audio-Burst-Erkennung: kontextrelativer Detektor (Quell-AC3) → kontextrelativer Delta-Filter (`burstMinDeltaDb`, seit `48cf828`) → drei Konsumenten (CutList-Spalte 5 mit Settings-Refresh, Preview-Warnung, konsolidierter Final-Warndialog `confirmBurstWarnings` mit GUI/headless-Zweig). Historische Pitfalls des absoluten Filters dokumentiert. | `4a767d0` | fresh (updated 2026-07-05: headless burst-dialog consolidation) |
 
 ## Project module overview
 

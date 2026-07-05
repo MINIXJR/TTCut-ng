@@ -21,15 +21,20 @@
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
-- **HEVC CRA-only Stream: Smart Cut Verifikation**
+- ~~**HEVC CRA-only Stream: Smart Cut Verifikation**~~ → **DONE** (v0.72.0)
   - Testfall: `Ausdrucksstarke_Designermode.265` (HEVC 4K 3840x2160, 50fps, CRA-only, has_b_frames=5)
-  - CRA (Clean Random Access, NAL Typ 21) wird korrekt NICHT als IDR markiert → `analyzeCutPoints()` triggert Re-Encode
-  - RASL-Bilder (ähnlich Open-GOP B-Frames) könnten DPB-Probleme verursachen wie bei H.264 Non-IDR
-  - Verifizieren: Smart Cut ausführen → MKV erzeugen → mpv abspielen → keine Stutter/Artefakte an Segmentgrenzen
-  - `ffprobe -v debug`: Keine "backward timestamps" oder "co located POCs" Meldungen
-  - Code-Pfad vorhanden und korrekt: `ttnaluparser.cpp:706-709` (CRA bewusst nicht als isIDR markiert)
-    → `ttessmartcut.cpp:604-612` (`isAtIDR` false → `needsReencodeAtStart` true → Re-Encode).
-    Offen ist nur der reale Verifikationslauf, nicht der Code.
+  - Der reale Verifikationslauf im Zuge der Display-Order-Map-/RASL-Arbeit deckte
+    zusätzlich einen echten Bug auf: die Display-Order-Map rankte die RASL-Leading-
+    Pictures des ersten CRA, die jeder konforme Decoder (ffmpeg/mpv) verwirft →
+    HEVC-Framezahl inflationiert, jede Framenummer um eine Konstante (+7 auf dem
+    Referenz-DVB-Stream) verschoben. Fix: `TTLeadingPicClassifier` erkennt
+    verworfene RASL dynamisch (NAL-Typ + `NoRaslOutputFlag`), sie werden aus der
+    Display-Dimension gedroppt (`f85d659`, `455f9f3`, `6dc0ccf`).
+  - Verifiziert end-to-end: `decodeFrame(N)`/Suche/Cut landen auf ffmpeg-Display-
+    Frame N (Pearson r ≈ 1.0); voller HEVC-Cut startet exakt beim gewählten
+    Display-Frame (keine Werbe-/Logo-Frames am Anfang); keine "backward
+    timestamps"/"co located POCs". CRA korrekt nicht als IDR → Re-Encode
+    (`ttnaluparser.cpp` / `ttessmartcut.cpp`).
 
 - ~~**Smart Cut Performance: mmap statt QFile für Stream-Copy**~~ → **IMPLEMENTIERT** (2026-03-28, commits d80b918 + 2f3bb69)
   - `accessUnitPtr()` für Zero-Copy mmap Frame-Zugriff, Bulk-Write für ungepatche Segmente
@@ -83,8 +88,9 @@
 - **CLI Interface for batch Smart Cut (headless mode)**
   - Teilweise abgedeckt: `ttcut-ng --project <file> --auto-cut <out.mkv>` lädt ein `.ttcut`-Projekt
     und führt Smart Cut + Audio + MKV-Mux headless aus (für QC-Regression). Es bleibt aber die
-    Qt-GUI-Anwendung — echte X11/Wayland-Freiheit fehlt, und modale Dialoge (Burst-Warnung) können
-    den headless Lauf blockieren (siehe `reference_auto_cut_modal_dialogs`).
+    Qt-GUI-Anwendung — echte X11/Wayland-Freiheit fehlt.
+  - Burst-Warndialog-Blocker BEHOBEN (v0.72.0, `27f8f29`): der modale Burst-Warndialog am finalen
+    Schnitt wird im headless `--auto-cut`-Modus geloggt statt zu blockieren (`setNonInteractive`).
   - Offen: echtes Qt-freies Standalone-Tool, das `.ttcut` liest und ohne GUI-Event-Loop schneidet —
     läuft dann auch auf reinen Servern. Use case: VDR → demux → TTCut-ng CLI → archive
 
@@ -290,6 +296,10 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Completed
 
+- [x] Frame-accurate H.264/H.265 cut-in and cut-out (TTDisplayOrderMap display↔decode, tail-GOP re-encode) (v0.72.0)
+- [x] HEVC RASL leading-picture alignment: frame count/numbers match ffmpeg/mpv decoder (v0.72.0)
+- [x] Display-PTS for smart-cut output MKV (H.264/H.265 + MPEG-2 temporal_reference) and playback temp MKV (v0.72.0)
+- [x] Context-relative audio-burst detection with configurable threshold (burstMinDeltaDb) + cut-list refresh (v0.72.0)
 - [x] H.264/H.265 Smart Cut support (TTESSmartCut)
 - [x] SRT subtitle support
 - [x] Replace mplayer with mpv for preview

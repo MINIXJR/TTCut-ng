@@ -1,14 +1,15 @@
 ---
-base_commit: 80081284c8e774ba507c3ba8703d8f316b20784a
+base_commit: 4a767d0854ffce5bc02bdb4886dca8e1d398358c
 sources:
   - extern/ttffmpegwrapper.cpp
   - data/ttavdata.cpp
+  - data/ttavdata.h
   - gui/ttcuttreeview.cpp
   - gui/ttcutpreview.cpp
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttsettings.cpp
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 ---
 
 # Burst-Erkennung: Detektor → Threshold-Filter → zwei UI-Konsumenten
@@ -32,7 +33,8 @@ graph TD
     PREV["TTCutPreview::checkBurstForCurrentCut (:320)\nWarnlabel + Shift-Button"]
     SEL["Clip-Auswahl im Preview-Dialog (:244)"]
     REFRESH["onActionSettings nach save()\n-> TTCutTreeView::refreshBurstIcons()"]
-    FINAL["TTAVData Final-Cut-Warndialog\n(:1141/:1174, verbleibende Bursts)"]
+    FINAL["TTAVData::confirmBurstWarnings (:~1136)\nEIN Helper (beide Cut-Pfade);\nGUI: Warndialog, headless: Log"]
+    NONINT["setNonInteractive(true)\nvon runAutoCutMode (--auto-cut)"]
 
     SRC --> DET
     DET --> AVD_IN --> THR
@@ -44,6 +46,7 @@ graph TD
     APPEND --> LIST
     REFRESH --> LIST
     SEL --> PREV
+    NONINT --> FINAL
 ```
 
 ## Edge-Semantik
@@ -56,6 +59,7 @@ graph TD
 | onAppendItem/onUpdateItem → updateBurstIcon | Läuft bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). |
 | onActionSettings → refreshBurstIcons | Seit `48cf828`: nach Settings-OK (`save()`) werden ALLE Spalte-5-Icons neu bewertet (Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`). |
 | Clip-Auswahl → checkBurstForCurrentCut | Pro **ausgewähltem** Clip: iCut==0 → nur CutIn Schnitt 1; sonst CutOut Schnitt iCut (Priorität, return) dann CutIn Schnitt iCut+1. Kein globaler Überblick im Dialog. |
+| setNonInteractive → confirmBurstWarnings | Seit `27f8f29`: `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive=true`. Bei verbleibenden Bursts wird dann jede Warnung via `TTMessageLogger::warningMsg` geloggt + eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"); GUI-Pfad (`false`) zeigt weiter den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen headless. |
 
 ## Annahmen & Verträge
 
@@ -91,3 +95,7 @@ graph TD
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
+- **[BEHOBEN `27f8f29`]** Der Final-Warndialog existierte doppelt (audio-only-
+  Pfad `:~1136` + Normalpfad `:~1169`, nahezu identisch); beide sind jetzt in
+  `confirmBurstWarnings()` konsolidiert — plus GUI/headless-Verzweigung über
+  `mNonInteractive`. Rest-Duplikat also nur noch die zwei Detektor-Wrapper.
