@@ -560,6 +560,14 @@ bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
         }
         audioOut->time_base = audioCtx->streams[audioIdx]->time_base;
 
+        // Flag every audio track as a default track. avcodec_parameters_copy()
+        // does not carry the stream disposition, so without this the matroska
+        // muxer marks only the first audio track as default and any later track
+        // (e.g. an AC3 track after an MP2 track) ends up without the default
+        // flag. Setting it on all audio tracks lets the player pick a track
+        // according to its own language/codec preferences.
+        audioOut->disposition |= AV_DISPOSITION_DEFAULT;
+
         // Language metadata: explicit list first, regex fallback if list empty/short
         QString lang;
         if (i < languages.size() && !languages[i].isEmpty()) {
