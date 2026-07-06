@@ -1,6 +1,6 @@
 ---
-base_commit: 04614e2
-last_verified: 2026-07-05  # + H.264 open-GOP cold-start leading-pic drop (v0.72.1); see section below
+base_commit: ab76afe
+last_verified: 2026-07-06  # + P/I-navigation -1-sentinel fix (v0.72.2); see moveToNextPIFrame pitfall below
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -118,6 +118,8 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 - **`deliveredDecodeIndex`** — lazily filled on first `decodeFrame()` call; -1 until decoded. The `onPlayVideo()` path falls back to `currentIndex/frameRate` if -1, which points to the wrong time when B-frames are present.
 
 - **`TTCutFrameNavigation::checkCutPosition(avData, pos)`** — receives an explicit `pos` parameter (the same value returned by `moveToXxx` in TTCurrentFrame) and stores it as `currentPosition`. The fix in v0.61.2 ensures this value is never re-read from the shared `videoStream->currentIndex()` after a signal cascade. `onSetCutIn()` emits `setCutIn(cutInPosition)` where `cutInPosition` equals the `currentPosition` set by the last `checkCutPosition` call.
+
+- **`TTVideoStream::moveToNextPIFrame()` / `moveToPrevPIFrame()`** (avstream/ttavstream.cpp) — the P button (labelled "P/I") jumps to whichever of the next I- and next P-frame comes first. Each is obtained via a separate `moveToNextIndexPos`/`moveToPrevIndexPos` call (type I=1, type P=2), which returns **`-1` when no frame of that type follows/precedes**. The nearer hit is selected as the min (next) / max (prev) **only among valid (`>= 0`) positions**. Pitfall (pre-v0.72.2): a plain `min` let the `-1` sentinel win every comparison, so standing on the **last I-frame** (no further I → `pos_i == -1`) yielded `-1`, and the return guard `(index >= 0) ? … : current_index` left the position unchanged — the P button did nothing even though P-frames still followed. `moveToPrevPIFrame`'s `max` was already immune (−1 loses a max) but was made explicit for symmetry. Note: this is a stream-boundary/sentinel concern only; it does **not** affect the decode-vs-display order domain of the returned index (see edge-semantics rows for `moveToXxx`).
 
 ## Root cause & knot — RESOLVED 2026-06-08 (two-harness empirical proof)
 

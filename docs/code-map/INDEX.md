@@ -8,8 +8,8 @@ data-flow question, check here first.**
 
 | Map | Subsystem | base_commit | Status |
 |---|---|---|---|
-| [frame-order.md](frame-order.md) | Frame-order pipeline: still-image display vs cut-set vs smart-cut execution; decode-order vs display-order semantics. **Root cause of the Cut-In preview bug: display↔cut index-interpretation asymmetry** (display shows display-frame n; cut's `selectFramesNonPAFF` applies a display-order mapping → lands ~2 frames later at a B-frame Cut-In). | `04614e2` | fresh (updated 2026-07-05: H.264 open-GOP cold-start leading-pic drop, v0.72.1) |
-| [burst-detection.md](burst-detection.md) | Audio-Burst-Erkennung: kontextrelativer Detektor (Quell-AC3) → kontextrelativer Delta-Filter (`burstMinDeltaDb`, seit `48cf828`) → drei Konsumenten (CutList-Spalte 5 mit Settings-Refresh, Preview-Warnung, konsolidierter Final-Warndialog `confirmBurstWarnings` mit GUI/headless-Zweig). Historische Pitfalls des absoluten Filters dokumentiert. | `4a767d0` | fresh (updated 2026-07-05: headless burst-dialog consolidation) |
+| [frame-order.md](frame-order.md) | Frame-order pipeline: still-image display vs cut-set vs smart-cut execution; decode-order vs display-order semantics. **Root cause of the Cut-In preview bug: display↔cut index-interpretation asymmetry** (display shows display-frame n; cut's `selectFramesNonPAFF` applies a display-order mapping → lands ~2 frames later at a B-frame Cut-In). | `ab76afe` | fresh (updated 2026-07-06: P/I-navigation −1-sentinel fix, v0.72.2) |
+| [burst-detection.md](burst-detection.md) | Audio-Burst-Erkennung: kontextrelativer Detektor (Quell-AC3) → kontextrelativer Delta-Filter (`burstMinDeltaDb`, seit `48cf828`) → drei Konsumenten (CutList-Spalte 5 mit Settings-Refresh, Preview-Warnung, konsolidierter Final-Warndialog `confirmBurstWarnings` mit GUI/headless-Zweig). Historische Pitfalls des absoluten Filters dokumentiert. | `ab76afe` | fresh (updated 2026-07-06: stamp bump; ttffmpegwrapper drift is buildDisplayOrderMap/v0.72.1, not burst-related) |
 
 ## Project module overview
 

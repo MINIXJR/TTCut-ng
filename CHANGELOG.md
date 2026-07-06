@@ -2,6 +2,29 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.72.2 (2026-07-06)
+
+**Fixes: default audio track flag and P-frame navigation**
+
+### Fixes
+
+- **AC3 audio track not marked as default in the output MKV** — `addAudioInputs()`
+  copied only the codec parameters (`avcodec_parameters_copy()` does not carry the
+  stream disposition), so all audio output streams were muxed with an empty
+  disposition. The libav matroska muxer then marked *no* audio track as default,
+  leaving e.g. an AC3 track (or any track after the first) without the default
+  flag. Every audio track now gets `AV_DISPOSITION_DEFAULT`, so the player selects
+  a track according to its own language/codec preferences. Applies to both the ES
+  cut and the audio-only mux via the shared helper.
+
+- **P-button navigation stuck at the last I-frame** — jumping to the last I-frame
+  and then pressing the P (next P/I frame) button did nothing. `moveToNextPIFrame()`
+  chose the nearer of the next I- and P-frame with a plain minimum, but the index
+  search returns `-1` when no such frame follows, and `-1` won every comparison —
+  so with no further I-frame the result was `-1` and the position stayed put even
+  though P-frames still followed. The nearer frame is now selected only among valid
+  positions; `moveToPrevPIFrame()` was made symmetric for clarity.
+
 ## v0.72.1 (2026-07-05)
 
 **Fix: H.264 open-GOP streams no longer hang on load**

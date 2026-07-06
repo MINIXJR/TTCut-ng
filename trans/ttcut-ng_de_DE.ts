@@ -2894,7 +2894,7 @@ Ausgabedatei:
 <context>
     <name>TTMkvMergeProvider</name>
     <message>
-        <location filename="../extern/ttmkvmergeprovider.cpp" line="1168"/>
+        <location filename="../extern/ttmkvmergeprovider.cpp" line="1176"/>
         <source>Muxing...</source>
         <translation>Multiplexe...</translation>
     </message>
