@@ -2527,19 +2527,28 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
                 goto done_reading;
             }
 
+            // Actual channel count of THIS frame. An AC3 stream can change
+            // acmod per frame (e.g. 5.1 -> 2.0), so the decoder context reports
+            // the maximum layout (channels) while an individual frame may carry
+            // fewer planes. For planar formats frame->data[ch] is then NULL for
+            // the missing channels; for interleaved formats a constant stride
+            // would over-read past the frame. Use the frame's own count.
+            int frameChannels = frame->ch_layout.nb_channels;
+            if (frameChannels <= 0) frameChannels = channels;
+
             // Calculate RMS from decoded samples
             double sumSq = 0.0;
-            int totalSamples = frame->nb_samples * channels;
+            int totalSamples = frame->nb_samples * frameChannels;
 
             if (totalSamples > 0) {
                 // Handle different sample formats
                 switch (decCtx->sample_fmt) {
                 case AV_SAMPLE_FMT_FLT:
                 case AV_SAMPLE_FMT_FLTP: {
-                    for (int ch = 0; ch < channels; ch++) {
+                    for (int ch = 0; ch < frameChannels; ch++) {
                         const float* data = (const float*)frame->data[
                             decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 1 : channels;
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 1 : frameChannels;
                         int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 0 : ch;
                         for (int s = 0; s < frame->nb_samples; s++) {
                             double v = data[s * stride + offset];
@@ -2551,10 +2560,10 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
                 case AV_SAMPLE_FMT_S16:
                 case AV_SAMPLE_FMT_S16P: {
                     const double scale = 1.0 / 32768.0;
-                    for (int ch = 0; ch < channels; ch++) {
+                    for (int ch = 0; ch < frameChannels; ch++) {
                         const int16_t* data = (const int16_t*)frame->data[
                             decCtx->sample_fmt == AV_SAMPLE_FMT_S16P ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 1 : channels;
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 1 : frameChannels;
                         int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 0 : ch;
                         for (int s = 0; s < frame->nb_samples; s++) {
                             double v = data[s * stride + offset] * scale;
@@ -2566,10 +2575,10 @@ bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundary
                 case AV_SAMPLE_FMT_S32:
                 case AV_SAMPLE_FMT_S32P: {
                     const double scale = 1.0 / 2147483648.0;
-                    for (int ch = 0; ch < channels; ch++) {
+                    for (int ch = 0; ch < frameChannels; ch++) {
                         const int32_t* data = (const int32_t*)frame->data[
                             decCtx->sample_fmt == AV_SAMPLE_FMT_S32P ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 1 : channels;
+                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 1 : frameChannels;
                         int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 0 : ch;
                         for (int s = 0; s < frame->nb_samples; s++) {
                             double v = data[s * stride + offset] * scale;
