@@ -49,6 +49,47 @@
 
 ## Medium Priority
 
+- **Vorschau: am letzten Frame stehenbleiben statt zum ersten Frame zurückspringen**
+  - Aktuell springt die Vorschau am Ende der Wiedergabe zurück zum ersten Frame:
+    `TTCutPreview::onPlayerFinished()` (`gui/ttcutpreview.cpp:270`) lädt die (bereits
+    fertige) Preview-MKV via `mPlayer->load(current_video_file, 0.0, …, autoPlay=false)`
+    neu — pausiert an Position 0. Grund ist nur, mpv nach EOF ohne Neustart in einen
+    bespielbaren Startzustand zu bringen (kein MKV-Neubau — die Datei wird vorab von
+    `TTCutPreviewTask` erstellt).
+  - Gewünscht: am letzten Frame pausiert stehenbleiben.
+  - Machbar und isolierbar: die Preview hat eine **eigene** mpv-Instanz
+    (`ttcutpreview.cpp:54`), getrennt von der „Aktueller Frame"-Wiedergabe
+    (`ttcurrentframe.cpp:510`) — eine Umstellung betrifft die Hauptwiedergabe nicht.
+  - **Nötige Änderungen** (~3):
+    1. `keep-open=yes` nur für die Preview-mpv-Instanz (Default ist `no`,
+       `ttmpvlibbackend.cpp:73`) — mpv pausiert dann am letzten Frame statt auszulaufen.
+    2. EOF-Erkennung umstellen: mit `keep-open=yes` entfällt `MPV_EVENT_END_FILE`/
+       `playerFinished()` — stattdessen auf mpvs `eof-reached`-Property lauschen, um
+       den Play/Stop-Button-Zustand zu setzen.
+    3. `onPlayPreview()`: bei `eof-reached` vor dem Abspielen erst auf Position 0 seeken.
+  - **Offene UX-Frage**: soll „Play" am Ende automatisch von vorne starten, oder erst
+    nach einem expliziten zweiten Klick? → vor Umsetzung per brainstorming klären.
+
+- **Schnittdialog: Button-Leiste überarbeiten + alle Dialoge auf einheitliches Design prüfen**
+  - Im Schnittdialog („Schnitt-Optionen", `ui/avcutdialog.ui`, unteres H-Layout Z. 30–77)
+    ist die Button-Reihenfolge `[Auf Standard zurücksetzen] [Starten] [Abbrechen]`, und
+    **kein** Button hat `default=true` → Qt macht den ersten (`btnResetDefaults`) zum
+    Default-Button (wird bei Enter ausgelöst, ist hervorgehoben). Unglücklich: die
+    primäre Aktion (Starten) sollte der Default sein, nicht „Auf Standard zurücksetzen".
+  - **Gewünschtes Layout (KDE-Konvention, mit User abgestimmt):** Reset links abgesetzt,
+    rechts `[Abbrechen] [✓ Starten]`; Starten ganz rechts und als Default.
+    - Layout-Reihenfolge: `laFreeSpace`, Spacer, `btnResetDefaults`, Spacer (neu),
+      `cancelButton`, `okButton`.
+    - `okButton`: `default=true` / `autoDefault=true`; `btnResetDefaults` + `cancelButton`:
+      `autoDefault=false` (damit Enter zuverlässig Starten auslöst).
+    - Keine Signal/Slot- oder Übersetzungsänderung nötig; vorher prüfen, ob der
+      `gui/ttcutavcutdlg.cpp`-Konstruktor bereits einen Default-Button setzt.
+  - **Ausweiten auf alle Dialoge — einheitliches Design:** übrige Dialoge (Einstellungen,
+    Vorschau, About, QuickJump, …) auf konsistente Button-Leisten prüfen — primäre Aktion
+    = Default-Button, einheitliche Reihenfolge/Aufteilung (Reset/sekundär links,
+    Abbrechen + OK/primär rechts). Ziel: durchgängig gleiches Button-Layout im ganzen
+    Programm.
+
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1100 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
