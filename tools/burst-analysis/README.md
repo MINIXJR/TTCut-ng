@@ -38,12 +38,19 @@ Chunk-Dump um Schnittgrenzen (Frame-Indizes, nicht Sekunden):
 Ganzen Stream nach Kandidatenstellen für die Verifikations-Gates absuchen:
 
 ```bash
-# Stellen, an denen die untere Reglerhaelfte (10..20 dB) greifen muss
+# Stellen, an denen die untere Reglerhaelfte (10..20 dB) greifen muss.
+# Nur Kandidaten mit Peak ueber dem Gate werden gelistet -- darunter liefert
+# der Detektor present=0 aus dem falschen Grund und der Test bewiese nichts.
 ./burst_analysis.py scan recording_deu.ac3 --gate-lo 10 --gate-hi 20
 
-# Stellen, die das absolute Gate abweisen soll (laut, aber unhoerbar leise)
-./burst_analysis.py scan recording_deu.ac3 --gate-hi 20 --floor -50
+# Stellen, die das absolute Gate abweisen soll (relativ auffaellig, absolut unhoerbar)
+./burst_analysis.py scan recording_deu.ac3 --gate-hi 20 --floor -40
 ```
+
+`--floor` entspricht `kBurstAbsoluteFloorDb` im Detektor (Default −40 dB).
+Kandidaten nahe dem Streambeginn meiden: Dort umfasst das Analysefenster unter
+Umständen weniger als drei Chunks, und der Detektor liefert `false` wegen
+`need >= 3` statt wegen der Schwelle.
 
 Für MP2 statt AC3 die Framedauer angeben: `--frame-dur 0.024`.
 

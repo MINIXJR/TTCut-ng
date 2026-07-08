@@ -173,9 +173,12 @@ def main():
 
     s = sub.add_parser("scan", help="ganzen Stream nach Gate-Kandidaten absuchen")
     s.add_argument("audio")
-    s.add_argument("--gate-lo", type=float, default=10.0)
-    s.add_argument("--gate-hi", type=float, default=20.0)
-    s.add_argument("--floor", type=float, default=-50.0)
+    s.add_argument("--gate-lo", type=float, default=10.0,
+                   help="untere Delta-Grenze fuer Kandidatensuche")
+    s.add_argument("--gate-hi", type=float, default=20.0,
+                   help="obere Delta-Grenze; zugleich Schwelle fuer den Gate-Test")
+    s.add_argument("--floor", type=float, default=-40.0,
+                   help="absolutes Gate des Detektors (kBurstAbsoluteFloorDb)")
     s.add_argument("--limit", type=int, default=8)
     s.set_defaults(func=cmd_scan)
 
