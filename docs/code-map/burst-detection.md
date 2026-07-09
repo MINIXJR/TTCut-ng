@@ -1,5 +1,5 @@
 ---
-base_commit: a7d1c0e
+base_commit: a7d1c0eb1b615e0f9fdbfc4dec497232765f4f4c
 sources:
   - extern/ttffmpegwrapper.cpp
   - data/ttavdata.cpp
@@ -24,27 +24,23 @@ Preview-Dialog).
 ```mermaid
 flowchart LR
     SRC["Quell-Audio-ES (.ac3)<br/>(NICHT der geschnittene Output)"]
-    DET["TTFFmpegWrapper::detectAudioBurst<br/>(ttffmpegwrapper.cpp:~2560)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
-    AVD_IN["TTAVData::detectCutInBurst (:2118)<br/>Frühausstieg bei minDelta &lt;= 0"]
-    AVD_OUT["TTAVData::detectCutOutBurst (:2020)<br/>Frühausstieg bei minDelta &lt;= 0"]
+    DET["TTFFmpegWrapper::detectAudioBurst<br/>(ttffmpegwrapper.cpp:2403)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
+    AVD["TTAVData::detectCutInBurst (:2116)<br/>TTAVData::detectCutOutBurst (:2016)<br/>Frühausstieg bei minDelta &lt;= 0"]
     SET["TTSettings::burstMinDeltaDb<br/>Default 20 dB, 0 = Erkennung aus<br/>Settings-Dialog Audio-Tab"]
-    LIST["TTCutTreeView::updateBurstIcon (:627)<br/>Spalte 5: Icon+Text+Tooltip"]
-    APPEND["onAppendItem (:206) /<br/>onUpdateItem (:240)"]
+    LIST["TTCutTreeView::updateBurstIcon (:642)<br/>Spalte 5: Icon+Text+Tooltip"]
+    APPEND["onAppendItem (:194) /<br/>onUpdateItem (:224)"]
     PREV["TTCutPreview::checkBurstForCurrentCut (:320)<br/>Warnlabel + Shift-Button"]
     SEL["Clip-Auswahl im Preview-Dialog (:244)"]
-    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons()"]
-    FINAL["TTAVData::confirmBurstWarnings (:~1136)<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
+    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons() (:629)"]
+    FINAL["TTAVData::confirmBurstWarnings (:1134)<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
     NONINT["setNonInteractive(true)<br/>von runAutoCutMode (--auto-cut)"]
 
     SRC --> DET
-    SET --> AVD_IN --> DET
-    SET --> AVD_OUT --> DET
-    AVD_IN --> LIST
-    AVD_IN --> PREV
-    AVD_IN --> FINAL
-    AVD_OUT --> LIST
-    AVD_OUT --> PREV
-    AVD_OUT --> FINAL
+    SET --> AVD
+    AVD --> DET
+    AVD --> LIST
+    AVD --> PREV
+    AVD --> FINAL
     APPEND --> LIST
     REFRESH --> LIST
     SEL --> PREV
@@ -96,7 +92,7 @@ flowchart LR
   als Parameter im Detektor, Filter entfällt.
 - `detectCutInBurst` und `detectCutOutBurst` sind bis auf
   boundaryTime-Berechnung und `isCutOut`-Flag identisch (Rest-Duplikat:
-  Rahmencode der beiden Wrapper inkl. `minDelta &lt;= 0`-Frühausstieg).
+  Rahmencode der beiden Wrapper inkl. `minDelta <= 0`-Frühausstieg).
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
