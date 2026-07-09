@@ -2013,24 +2013,17 @@ int TTAVData::countExtraFramesBefore(int frameIndex) const
 // the extra-frame correction; otherwise threshold checks land on different
 // audio frames and produce inconsistent warnings.
 // *****************************************************************************
-// ----------------------------------------------------------------------------
-// Burst post-filter: context-RELATIVE. A burst counts when it sticks out at
-// least burstMinDeltaDb above the surrounding level (0 = filter off, keep
-// the detector's own decision). Replaces the old absolute threshold, which
-// discarded real DVB ad bursts (-37 dB burst vs -85 dB context) whenever the
-// programme material was quiet.
-// ----------------------------------------------------------------------------
-static bool applyBurstDeltaFilter(bool detected, const TTAVData::CutBurstInfo& info)
-{
-  int minDelta = TTSettings::instance()->burstMinDeltaDb();
-  if (detected && minDelta != 0 && (info.burstDb - info.contextDb) < minDelta)
-    return false;
-  return detected;
-}
-
 TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
 {
   CutBurstInfo info;
+
+  // burstMinDeltaDb == 0 disables burst detection entirely. Bail out before
+  // touching the audio file: detectAudioBurst() would otherwise open and decode
+  // it only for the result to be discarded. Read fresh on every call -- the
+  // settings dialog triggers refreshBurstIcons(), which re-evaluates all cuts.
+  const int minDelta = TTSettings::instance()->burstMinDeltaDb();
+  if (minDelta <= 0) return info;
+
   TTAVItem* avItem = item.avDataItem();
   if (!avItem || avItem->audioCount() == 0) return info;
 
@@ -2044,12 +2037,9 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   int extraOut = countExtraFramesBefore(item.cutOutIndex() + 1);
   double cutOutTime = (item.cutOutIndex() + 1 - extraOut) / frameRate;
 
-  bool detected = TTFFmpegWrapper::detectAudioBurst(
-      audioFile, cutOutTime, true, info.burstDb, info.contextDb);
+  info.present = TTFFmpegWrapper::detectAudioBurst(
+      audioFile, cutOutTime, true, minDelta, info.burstDb, info.contextDb);
 
-  detected = applyBurstDeltaFilter(detected, info);
-
-  info.present = detected;
   return info;
 }
 
@@ -2126,6 +2116,11 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
 TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
 {
   CutBurstInfo info;
+
+  // See detectCutOutBurst(): 0 means detection off, short-circuit before I/O.
+  const int minDelta = TTSettings::instance()->burstMinDeltaDb();
+  if (minDelta <= 0) return info;
+
   TTAVItem* avItem = item.avDataItem();
   if (!avItem || avItem->audioCount() == 0) return info;
 
@@ -2139,11 +2134,8 @@ TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
   int extraIn = countExtraFramesBefore(item.cutInIndex());
   double cutInTime = (item.cutInIndex() - extraIn) / frameRate;
 
-  bool detected = TTFFmpegWrapper::detectAudioBurst(
-      audioFile, cutInTime, false, info.burstDb, info.contextDb);
+  info.present = TTFFmpegWrapper::detectAudioBurst(
+      audioFile, cutInTime, false, minDelta, info.burstDb, info.contextDb);
 
-  detected = applyBurstDeltaFilter(detected, info);
-
-  info.present = detected;
   return info;
 }

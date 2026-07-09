@@ -249,10 +249,16 @@ public:
                         bool normalizeAcmod = false,
                         const QList<int>& targetAcmods = QList<int>());
 
-    // Detect audio burst near a boundary (returns true if burst found)
-    // Sets burstRmsDb and contextRmsDb if burst detected
+    // Detect audio burst near a boundary (returns true if burst found).
+    // A burst is reported when the PEAK of the boundary chunks exceeds the
+    // surrounding level by at least minDeltaDb and clears the absolute
+    // audibility floor. minDeltaDb comes from TTSettings::burstMinDeltaDb();
+    // callers must not pass <= 0 (that means "detection off" and is handled
+    // before the file is opened).
+    // Sets burstRmsDb (peak) and contextRmsDb (median) only if a burst is found.
     static bool detectAudioBurst(const QString& audioFile, double boundaryTime,
-                                  bool isCutOut, double& burstRmsDb, double& contextRmsDb);
+                                  bool isCutOut, int minDeltaDb,
+                                  double& burstRmsDb, double& contextRmsDb);
 
     // AC3 acmod analysis - detect channel format changes at cut boundaries
     struct AcmodInfo {

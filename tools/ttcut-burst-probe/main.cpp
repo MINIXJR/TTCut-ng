@@ -30,6 +30,12 @@ int main(int argc, char* argv[])
 
     QCommandLineOption cutInOpt("cutin", "Use CutIn window semantics (default: CutOut)");
     parser.addOption(cutInOpt);
+
+    QCommandLineOption minDeltaOpt(
+        QStringList() << "min-delta",
+        "Minimum jump above surrounding level in dB (0 = detection off)",
+        "dB", "20");
+    parser.addOption(minDeltaOpt);
     parser.process(app);
 
     const QStringList args = parser.positionalArguments();
@@ -44,12 +50,19 @@ int main(int argc, char* argv[])
         return 2;
     }
 
+    bool deltaOk = false;
+    const int minDelta = parser.value(minDeltaOpt).toInt(&deltaOk);
+    if (!deltaOk) {
+        QTextStream(stderr) << "invalid --min-delta: " << parser.value(minDeltaOpt) << "\n";
+        return 2;
+    }
+
     // detectAudioBurst only assigns these on a positive detection.
     double burstDb = 0.0;
     double contextDb = 0.0;
 
     const bool present = TTFFmpegWrapper::detectAudioBurst(
-        args.at(0), boundary, !parser.isSet(cutInOpt), burstDb, contextDb);
+        args.at(0), boundary, !parser.isSet(cutInOpt), minDelta, burstDb, contextDb);
 
     QTextStream out(stdout);
     if (present) {

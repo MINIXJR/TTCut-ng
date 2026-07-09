@@ -2382,9 +2382,32 @@ bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
 // and checks if boundary frames are significantly louder than context.
 // Returns true if a sudden loudness burst (>20dB above median) is detected.
 // ----------------------------------------------------------------------------
+// Absolute audibility floor: a chunk this quiet is inaudible in practice, however far
+// it sticks out of a near-silent context. Without it, noise in digital silence
+// (context ~-80 dB) would trigger on every cut -- on the reference recording 766
+// positions clear a 20 dB delta while peaking below this floor.
+//
+// The value stays at -40 dB. Measured on DVB material (ServusTV, 2022-10-25):
+// advertising-burst peaks land at -26..-34 dB, i.e. 6..14 dB of headroom, once the
+// detector evaluates the PEAK of the tested chunks instead of the first one above the
+// threshold. The onset ramp climbs 38..51 dB within a single 32 ms frame, so first-hit
+// logic sampled a random point on that ramp -- that, not the floor's value, was the bug.
+//
+// Lowering the floor to -50 dB was considered and rejected: it would admit 709 further
+// positions (the floor rejects 766 at -40 dB, only 57 at -50 dB) to buy headroom the
+// peak evaluation already provides.
+//
+// Known risk: a broadcaster whose burst peaks below -40 dB is missed silently. Not
+// observed on the reference material; revisit if such a case appears.
+static constexpr double kBurstAbsoluteFloorDb = -40.0;
+
 bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundaryTime,
-                                        bool isCutOut, double& burstRmsDb, double& contextRmsDb)
+                                        bool isCutOut, int minDeltaDb,
+                                        double& burstRmsDb, double& contextRmsDb)
 {
+    // Callers short-circuit on <= 0 before opening the file; guard anyway.
+    if (minDeltaDb <= 0) return false;
+
     // Open audio file
     AVFormatContext* fmtCtx = nullptr;
     int ret = avformat_open_input(&fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
@@ -2619,24 +2642,30 @@ done_reading:
     std::sort(sorted.begin(), sorted.end());
     double median = sorted[sorted.size() / 2];
 
-    // Check for burst: boundary chunks >20dB above median and above -40dB absolute
+    // Check for burst: the PEAK of the boundary chunks must exceed the surrounding
+    // level by at least minDeltaDb and clear the absolute audibility floor.
+    // Taking the peak rather than the first chunk above the threshold keeps the
+    // decision independent of where the audio frame raster happens to fall on the
+    // burst's onset ramp, which climbs 38..51 dB within a single 32 ms frame.
     // For CutOut: check last 2 chunks; for CutIn: check first 2 chunks
     int checkStart = isCutOut ? qMax(0, rmsValues.size() - 2) : 0;
     int checkEnd   = isCutOut ? rmsValues.size() : qMin(2, rmsValues.size());
 
-    for (int i = checkStart; i < checkEnd; i++) {
-        if (rmsValues[i] - median > 20.0 && rmsValues[i] > -40.0) {
-            burstRmsDb = rmsValues[i];
-            contextRmsDb = median;
-            if (TTSettings::instance()->logFFmpegDecoder()) {
-                qDebug() << "detectAudioBurst: BURST at" << boundaryTime
-                         << (isCutOut ? "CutOut" : "CutIn")
-                         << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
-                         << "(" << rmsValues.size() << "chunks)"
-                         << "file=" << QFileInfo(audioFile).fileName();
-            }
-            return true;
+    double peak = -120.0;   // same floor rmsDb uses for silent chunks
+    for (int i = checkStart; i < checkEnd; i++)
+        peak = qMax(peak, rmsValues[i]);
+
+    if (peak - median >= minDeltaDb && peak > kBurstAbsoluteFloorDb) {
+        burstRmsDb = peak;
+        contextRmsDb = median;
+        if (TTSettings::instance()->logFFmpegDecoder()) {
+            qDebug() << "detectAudioBurst: BURST at" << boundaryTime
+                     << (isCutOut ? "CutOut" : "CutIn")
+                     << "burst=" << burstRmsDb << "dB, context=" << median << "dB"
+                     << "(" << rmsValues.size() << "chunks)"
+                     << "file=" << QFileInfo(audioFile).fileName();
         }
+        return true;
     }
 
     if (TTSettings::instance()->logFFmpegDecoder()) {
