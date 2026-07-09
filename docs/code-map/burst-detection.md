@@ -24,15 +24,15 @@ Preview-Dialog).
 ```mermaid
 flowchart LR
     SRC["Quell-Audio-ES (.ac3)<br/>(NICHT der geschnittene Output)"]
-    DET["TTFFmpegWrapper::detectAudioBurst<br/>(ttffmpegwrapper.cpp:2403)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
-    AVD["TTAVData::detectCutInBurst (:2116)<br/>TTAVData::detectCutOutBurst (:2016)<br/>Frühausstieg bei minDelta &lt;= 0"]
+    DET["TTFFmpegWrapper::detectAudioBurst<br/>(extern/ttffmpegwrapper.cpp)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
+    AVD["TTAVData::detectCutInBurst<br/>TTAVData::detectCutOutBurst<br/>(data/ttavdata.cpp)<br/>Frühausstieg bei minDelta &lt;= 0"]
     SET["TTSettings::burstMinDeltaDb<br/>Default 20 dB, 0 = Erkennung aus<br/>Settings-Dialog Audio-Tab"]
-    LIST["TTCutTreeView::updateBurstIcon (:642)<br/>Spalte 5: Icon+Text+Tooltip"]
-    APPEND["onAppendItem (:194) /<br/>onUpdateItem (:224)"]
-    PREV["TTCutPreview::checkBurstForCurrentCut (:320)<br/>Warnlabel + Shift-Button"]
-    SEL["Clip-Auswahl im Preview-Dialog (:244)"]
-    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons() (:629)"]
-    FINAL["TTAVData::confirmBurstWarnings (:1134)<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
+    LIST["TTCutTreeView::updateBurstIcon<br/>Spalte 5: Icon+Text+Tooltip"]
+    APPEND["TTCutTreeView::onAppendItem /<br/>TTCutTreeView::onUpdateItem"]
+    PREV["TTCutPreview::checkBurstForCurrentCut<br/>Warnlabel + Shift-Button"]
+    SEL["Clip-Auswahl im Preview-Dialog<br/>(TTCutPreview)"]
+    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons()"]
+    FINAL["TTAVData::confirmBurstWarnings<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
     NONINT["setNonInteractive(true)<br/>von runAutoCutMode (--auto-cut)"]
 
     SRC --> DET
@@ -97,6 +97,6 @@ flowchart LR
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
 - **[BEHOBEN `27f8f29`]** Der Final-Warndialog existierte doppelt (audio-only-
-  Pfad `:~1136` + Normalpfad `:~1169`, nahezu identisch); beide sind jetzt in
+  Pfad + Normalpfad, nahezu identisch — Stand vor `27f8f29`); beide sind jetzt in
   `confirmBurstWarnings()` konsolidiert — plus GUI/headless-Verzweigung über
   `mNonInteractive`. Rest-Duplikat also nur noch die zwei Detektor-Wrapper.
