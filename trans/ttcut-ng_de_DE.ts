@@ -1721,8 +1721,8 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsaudio.ui" line="44"/>
         <location filename="../ui/ttcutsettingsaudio.ui" line="52"/>
-        <source>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables the filter (detector decision only).</source>
-        <translation>Ein Burst wird gemeldet, wenn sein Pegel die Umgebung um mindestens diesen dB-Wert übersteigt. Höher = unempfindlicher; 0 deaktiviert den Filter (nur Detektor-Entscheidung).</translation>
+        <source>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables burst detection.</source>
+        <translation>Ein Burst wird gemeldet, wenn sein Pegel den umgebenden Ton um mindestens so viele dB übersteigt. Höher = unempfindlicher; 0 schaltet die Burst-Erkennung ab.</translation>
     </message>
     <message>
         <source>Audio burst threshold (dB, 0=off):</source>
@@ -2794,7 +2794,7 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="2880"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="2918"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>

@@ -41,7 +41,7 @@
         <item row="0" column="0">
          <widget class="QLabel" name="laBurst">
           <property name="text"><string>Minimum burst jump above surroundings (dB, 0=off):</string></property>
-          <property name="toolTip"><string>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables the filter (detector decision only).</string></property>
+          <property name="toolTip"><string>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables burst detection.</string></property>
          </widget>
         </item>
         <item row="0" column="1">
@@ -49,7 +49,7 @@
           <property name="minimum"><number>0</number></property>
           <property name="maximum"><number>60</number></property>
           <property name="suffix"><string> dB</string></property>
-          <property name="toolTip"><string>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables the filter (detector decision only).</string></property>
+          <property name="toolTip"><string>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables burst detection.</string></property>
          </widget>
         </item>
        </layout>
