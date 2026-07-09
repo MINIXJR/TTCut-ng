@@ -1,5 +1,5 @@
 ---
-base_commit: a7d1c0eb1b615e0f9fdbfc4dec497232765f4f4c
+base_commit: 966dd619b4914309e7485c22b61eb497e9480f16
 sources:
   - extern/ttffmpegwrapper.cpp
   - data/ttavdata.cpp
@@ -9,7 +9,7 @@ sources:
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttsettings.cpp
-last_verified: 2026-07-09
+last_verified: 2026-07-09  # Detektor-Kriterium, Floor, Default, Frühausstieg u. GUI/headless-Verzweigung gegen den Code gelesen
 ---
 
 # Burst-Erkennung: Detektor → zwei UI-Konsumenten
@@ -51,7 +51,7 @@ flowchart LR
 
 | Kante | Daten / Ordnung / Invariante |
 |---|---|
-| CutItem → detectCut{In,Out}Burst | **Video-Frame-Index** → Zeit `index/frameRate`; CutIn korrigiert um `countExtraFramesBefore` (MPEG-2-Field-Extras). Analysiert wird immer das **Quell**-AC3 — unabhängig von Smart-Cut-/Mux-/PTS-Pfaden. |
+| CutItem → detectCut{In,Out}Burst | **Video-Frame-Index** → Zeit `index/frameRate`. **Beide** Pfade korrigieren um `countExtraFramesBefore` (MPEG-2-Field-Extras): CutIn rechnet `(cutInIndex − extraIn)/frameRate`, CutOut `(cutOutIndex + 1 − extraOut)/frameRate` — das `+1` legt die Grenze hinter den letzten behaltenen Frame. Analysiert wird immer das **Quell**-AC3 — unabhängig von Smart-Cut-/Mux-/PTS-Pfaden. |
 | detectAudioBurst → Wrapper | `bool` + `burstRmsDb`/`contextRmsDb` (nur bei Treffer gesetzt). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). `minDeltaDb` kommt als Parameter aus `TTSettings::burstMinDeltaDb()`. Peak statt First-Hit, weil die Burst-Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms → `present` invariant); der Erkennungs-Fix ist die Schwellen-Vereinheitlichung. |
 | Wrapper → Konsument (`present`) | Detektor-Ergebnis direkt (kein Nachfilter mehr, `a7d1c0e`). `burstMinDeltaDb <= 0` → Frühausstieg in `detectCutIn/OutBurst`, **ohne** die Audiodatei zu öffnen (verifiziert: 0 `openat`). Werte 1–19 wirken seit `a7d1c0e` erstmals (vorher blockierte die hartcodierte 20 dB die untere Reglerhälfte). |
 | onAppendItem/onUpdateItem → updateBurstIcon | Läuft bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). |
@@ -64,6 +64,15 @@ flowchart LR
 - Detektor: Quell-Audio Track 0; boundaryTime in Sekunden der Quell-Zeitachse
   (Audio-Start = Video-Frame 0, ttcut-demux-Trim).
 - `burstMinDeltaDb == 0` schaltet die **Erkennung** ab (Frühausstieg vor dem Dateizugriff; im Settings-Tooltip dokumentiert). Früher (vor `a7d1c0e`) übersprang 0 nur den Nachfilter und wirkte damit wie 20.
+- Der `minDeltaDb <= 0`-Ausstieg steht **zweimal**: in beiden Wrappern (spart den
+  Dateizugriff) und als Guard gleich am Anfang von `detectAudioBurst` selbst
+  (Kommentar dort: „Callers short-circuit on <= 0 before opening the file; guard
+  anyway"). Der Guard greift für Direktaufrufer, die an den Wrappern vorbeigehen —
+  `tools/ttcut-burst-probe` ruft `detectAudioBurst` unmittelbar auf.
+- Der Detektor braucht **mindestens 3 RMS-Chunks**, sonst `false` + Warnung. Der
+  „Median" ist `sorted[size/2]`, bei gerader Chunk-Zahl also das obere der beiden
+  mittleren Elemente — für die Kontextschätzung unerheblich, beim Nachrechnen von
+  `contextRmsDb` gegen eigene Messungen aber zu beachten.
 - Preview-Dialog und Schnittliste zeigen IMMER dieselbe `present`-Entscheidung
   (gemeinsame Wrapper) — Diskrepanzen zwischen beiden UIs sind ausgeschlossen;
   „Icon fehlt" und „Warnung fehlt" haben zwangsläufig dieselbe Ursache.
