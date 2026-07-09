@@ -451,9 +451,33 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
      window around the boundary but tests only the outermost two chunks
      (`checkStart = rmsValues.size() - 2` for CutOut, the first two for CutIn). A
      multi-frame burst that *reaches* the boundary **is** detected — it overlaps those two
-     frames. What is **not** detected are isolated burst frames sitting in the silence
-     region between segments (mid-transition): the analysis window
-     (`boundaryTime - 0.200` … `boundaryTime + ½ audio frame`) never covers them.
+     frames. What is **not** detected is an isolated transient sitting further inside the
+     kept material, e.g. 100–200 ms from the cut: it *is* inside the analysis window, but
+     only the outermost two chunks are ever tested. Worse, such a transient raises the
+     context median and thereby makes the edge chunks *less* likely to trip the threshold.
+     Only beyond ~200 ms does it leave the window entirely.
+     (Corrected 2026-07-09 — the earlier wording claimed the window "never covers them"
+     and located them in a "silence region between segments". Both were wrong.)
+
+     **Open design question, not yet a defect with a repro.** The median-over-~7-chunks
+     criterion answers "is this chunk louder than its surroundings overall". To find a
+     *short* outlier (1–3 audio frames) the better question is whether the chunk is loud
+     while the 1–3 chunks **before and after** it are quiet — a local neighbourhood
+     contrast rather than a window median. That distinction also separates a genuine
+     isolated transient from an advertising onset, where the level jumps and then *stays*
+     high (measured: a 55 dB step at 624.128 s in `TEST_deu.ac3`). The median criterion
+     cannot tell the two apart; a neighbourhood criterion can. A false-positive rate for
+     any widened test range is unmeasured — normal programme audio (door slams, musical
+     accents) would also qualify.
+
+     **Blocked on material.** The suspected trigger — a level spike caused by an AC3
+     format switch (5.1↔2.0) shortly before/after the cut — could not be reproduced.
+     `TEST_deu.ac3` has exactly two acmod changes (83.808 s 2/0→3/2, 624.128 s 3/2→2/0);
+     at *neither* does the level spike upwards, in RMS **or** in sample peak (the latter
+     checked specifically because a few-millisecond transient would be averaged away by
+     the 32 ms RMS). At 83.808 s the level even dips by 11 dB. `ServusTV_HD_deu.ac3` has
+     zero acmod changes across 6501 s. Do not design a widened window until a recording
+     that actually exhibits the artefact exists.
   2. **Correction is single-step.** The preview offers only `Shift -1 Frame` /
      `Shift +1 Frame` (`TTCutPreview::onBurstShift()`), so a 2-3 frame burst needs
      repeated clicks. Note the shift moves the cut by one *video* frame (40 ms @ 25 fps)
