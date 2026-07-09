@@ -445,6 +445,37 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Known Limitations
 
+- **Audio burst detection is approximate — treat it as a hint, not a verdict.** It
+  reliably flags the case it was built for (a loud advertising burst reaching the cut
+  boundary over quiet programme material: 3 of 3 on the ServusTV reference). Outside that
+  case its resolution is limited by design, and the limits below are measured, not
+  assumed. Deciding whether a cut is clean still requires listening to the preview.
+  - **Time resolution is one audio frame (32 ms for AC3).** The detector computes RMS per
+    decoded audio frame. A transient of a few milliseconds — a click, a switching artefact
+    — is averaged away and can stay invisible even when its sample peak reaches 0 dBFS.
+    Verified 2026-07-09: at both AC3 acmod changes in `TEST_deu.ac3` neither RMS *nor*
+    sample peak shows an upward excursion.
+  - **Only the outermost two chunks are tested (~64 ms).** The analysis window spans
+    200 ms, but everything further inside contributes to the context median only. See the
+    multi-frame entry below.
+  - **An untested transient makes detection *worse*.** A loud chunk inside the window but
+    outside the tested range raises the context median, which raises the bar the edge
+    chunks must clear. The detector is thus least sensitive exactly when something loud is
+    nearby.
+  - **The criterion cannot separate an isolated outlier from a level step.** `peak − median`
+    fires the same way for a short click and for an advertising onset that jumps and then
+    stays loud (measured: a 55 dB step at 624.128 s in `TEST_deu.ac3`).
+  - **The absolute audibility gate silently drops quiet bursts.** `kBurstAbsoluteFloorDb`
+    (−40 dB) rejects anything below it regardless of how far it sticks out. Real
+    advertising bursts on the reference recording peak at −37.5 / −27.3 / −36.5 dB, i.e.
+    two of three clear the gate by under 4 dB. A quieter broadcaster is missed without
+    notice. The gate cannot simply be lowered: at −50 dB it would admit 709 further
+    positions on that same recording.
+  - **RMS is broadband, unweighted.** Inaudible content (infrasound, >16 kHz) counts
+    toward the level. Practically irrelevant for DVB programme audio; K-weighting
+    (ITU BS.1770) noted as a follow-up in
+    `docs/superpowers/specs/2026-07-04-burst-context-filter-design.md`.
+
 - **Multi-frame audio burst at cut boundaries**: DVB advertising audio can bleed 2-3+
   audio frames before the video transition. Two *distinct* gaps, easily conflated:
   1. **Detection is edge-only.** `TTFFmpegWrapper::detectAudioBurst()` analyses a 200 ms
