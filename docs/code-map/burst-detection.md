@@ -22,19 +22,19 @@ Preview-Dialog).
 ## Datenfluss
 
 ```mermaid
-graph TD
-    SRC["Quell-Audio-ES (.ac3)\n(NICHT der geschnittene Output)"]
-    DET["TTFFmpegWrapper::detectAudioBurst\n(ttffmpegwrapper.cpp:~2560)\nRMS-Chunks um boundaryTime,\nPEAK der Randchunks vs. Median,\nminDeltaDb als Parameter"]
-    AVD_IN["TTAVData::detectCutInBurst (:2118)\nFrühausstieg bei minDelta<=0"]
-    AVD_OUT["TTAVData::detectCutOutBurst (:2020)\nFrühausstieg bei minDelta<=0"]
-    SET["TTSettings::burstMinDeltaDb\nDefault 20 dB, 0 = Erkennung aus\nSettings-Dialog Audio-Tab"]
-    LIST["TTCutTreeView::updateBurstIcon (:627)\nSpalte 5: Icon+Text+Tooltip"]
-    APPEND["onAppendItem (:206) /\nonUpdateItem (:240)"]
-    PREV["TTCutPreview::checkBurstForCurrentCut (:320)\nWarnlabel + Shift-Button"]
+flowchart LR
+    SRC["Quell-Audio-ES (.ac3)<br/>(NICHT der geschnittene Output)"]
+    DET["TTFFmpegWrapper::detectAudioBurst<br/>(ttffmpegwrapper.cpp:~2560)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
+    AVD_IN["TTAVData::detectCutInBurst (:2118)<br/>Frühausstieg bei minDelta &lt;= 0"]
+    AVD_OUT["TTAVData::detectCutOutBurst (:2020)<br/>Frühausstieg bei minDelta &lt;= 0"]
+    SET["TTSettings::burstMinDeltaDb<br/>Default 20 dB, 0 = Erkennung aus<br/>Settings-Dialog Audio-Tab"]
+    LIST["TTCutTreeView::updateBurstIcon (:627)<br/>Spalte 5: Icon+Text+Tooltip"]
+    APPEND["onAppendItem (:206) /<br/>onUpdateItem (:240)"]
+    PREV["TTCutPreview::checkBurstForCurrentCut (:320)<br/>Warnlabel + Shift-Button"]
     SEL["Clip-Auswahl im Preview-Dialog (:244)"]
-    REFRESH["onActionSettings nach save()\n-> TTCutTreeView::refreshBurstIcons()"]
-    FINAL["TTAVData::confirmBurstWarnings (:~1136)\nEIN Helper (beide Cut-Pfade);\nGUI: Warndialog, headless: Log"]
-    NONINT["setNonInteractive(true)\nvon runAutoCutMode (--auto-cut)"]
+    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons()"]
+    FINAL["TTAVData::confirmBurstWarnings (:~1136)<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
+    NONINT["setNonInteractive(true)<br/>von runAutoCutMode (--auto-cut)"]
 
     SRC --> DET
     SET --> AVD_IN --> DET
@@ -96,7 +96,7 @@ graph TD
   als Parameter im Detektor, Filter entfällt.
 - `detectCutInBurst` und `detectCutOutBurst` sind bis auf
   boundaryTime-Berechnung und `isCutOut`-Flag identisch (Rest-Duplikat:
-  Rahmencode der beiden Wrapper inkl. `minDelta<=0`-Frühausstieg).
+  Rahmencode der beiden Wrapper inkl. `minDelta &lt;= 0`-Frühausstieg).
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
