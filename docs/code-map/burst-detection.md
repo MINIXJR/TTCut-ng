@@ -1,5 +1,5 @@
 ---
-base_commit: ab76afe58f3ba01343c4c469b38ef480d17d4c30
+base_commit: a7d1c0e
 sources:
   - extern/ttffmpegwrapper.cpp
   - data/ttavdata.cpp
@@ -9,25 +9,25 @@ sources:
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttsettings.cpp
-last_verified: 2026-07-05
+last_verified: 2026-07-09
 ---
 
-# Burst-Erkennung: Detektor → Threshold-Filter → zwei UI-Konsumenten
+# Burst-Erkennung: Detektor → zwei UI-Konsumenten
 
 Audio-Burst = Werbe-Knall unmittelbar an einer Schnittgrenze (DVB: Werbung
-startet ~1 Frame vor/nach dem Content-Übergang). Ein Detektor, ein
-Nachfilter, zwei Anzeigen (Schnittliste + Preview-Dialog).
+startet ~1 Frame vor/nach dem Content-Übergang). Ein Detektor (Schwelle als
+Parameter, kein separater Nachfilter mehr), zwei Anzeigen (Schnittliste +
+Preview-Dialog).
 
 ## Datenfluss
 
 ```mermaid
 graph TD
     SRC["Quell-Audio-ES (.ac3)\n(NICHT der geschnittene Output)"]
-    DET["TTFFmpegWrapper::detectAudioBurst\n(ttffmpegwrapper.cpp:~2560)\nRMS-Chunks um boundaryTime,\nKontext-Median vs. Burst-Chunk"]
-    AVD_IN["TTAVData::detectCutInBurst (:2118)"]
-    AVD_OUT["TTAVData::detectCutOutBurst (:2020)"]
-    THR["applyBurstDeltaFilter (kontextrelativ)\nburstDb - contextDb < minDelta -> present=false\n(gemeinsamer Helper, ttavdata.cpp)"]
-    SET["TTSettings::burstMinDeltaDb\nDefault 20 dB, 0 = Filter aus\nSettings-Dialog Audio-Tab"]
+    DET["TTFFmpegWrapper::detectAudioBurst\n(ttffmpegwrapper.cpp:~2560)\nRMS-Chunks um boundaryTime,\nPEAK der Randchunks vs. Median,\nminDeltaDb als Parameter"]
+    AVD_IN["TTAVData::detectCutInBurst (:2118)\nFrühausstieg bei minDelta<=0"]
+    AVD_OUT["TTAVData::detectCutOutBurst (:2020)\nFrühausstieg bei minDelta<=0"]
+    SET["TTSettings::burstMinDeltaDb\nDefault 20 dB, 0 = Erkennung aus\nSettings-Dialog Audio-Tab"]
     LIST["TTCutTreeView::updateBurstIcon (:627)\nSpalte 5: Icon+Text+Tooltip"]
     APPEND["onAppendItem (:206) /\nonUpdateItem (:240)"]
     PREV["TTCutPreview::checkBurstForCurrentCut (:320)\nWarnlabel + Shift-Button"]
@@ -37,12 +37,14 @@ graph TD
     NONINT["setNonInteractive(true)\nvon runAutoCutMode (--auto-cut)"]
 
     SRC --> DET
-    DET --> AVD_IN --> THR
-    DET --> AVD_OUT --> THR
-    SET --> THR
-    THR --> LIST
-    THR --> PREV
-    THR --> FINAL
+    SET --> AVD_IN --> DET
+    SET --> AVD_OUT --> DET
+    AVD_IN --> LIST
+    AVD_IN --> PREV
+    AVD_IN --> FINAL
+    AVD_OUT --> LIST
+    AVD_OUT --> PREV
+    AVD_OUT --> FINAL
     APPEND --> LIST
     REFRESH --> LIST
     SEL --> PREV
@@ -54,8 +56,8 @@ graph TD
 | Kante | Daten / Ordnung / Invariante |
 |---|---|
 | CutItem → detectCut{In,Out}Burst | **Video-Frame-Index** → Zeit `index/frameRate`; CutIn korrigiert um `countExtraFramesBefore` (MPEG-2-Field-Extras). Analysiert wird immer das **Quell**-AC3 — unabhängig von Smart-Cut-/Mux-/PTS-Pfaden. |
-| detectAudioBurst → Wrapper | `bool` + `burstRmsDb`/`contextRmsDb`. Kriterium detektorintern **kontextrelativ** (Chunk sticht aus Umgebungs-Median heraus). |
-| Wrapper → Konsument (`present`) | Detektor-Ergebnis **UND** kontextrelativer Filter (`applyBurstDeltaFilter`): Burst zählt, wenn `burstDb − contextDb ≥ burstMinDeltaDb` (Default 20; 0 = Filter aus). Seit `48cf828`; der frühere ABSOLUTE Filter (Default −30, kontraintuitive Skala) verwarf reale DVB-Bursts — s. Pitfalls (historisch). |
+| detectAudioBurst → Wrapper | `bool` + `burstRmsDb`/`contextRmsDb` (nur bei Treffer gesetzt). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). `minDeltaDb` kommt als Parameter aus `TTSettings::burstMinDeltaDb()`. Peak statt First-Hit, weil die Burst-Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms → `present` invariant); der Erkennungs-Fix ist die Schwellen-Vereinheitlichung. |
+| Wrapper → Konsument (`present`) | Detektor-Ergebnis direkt (kein Nachfilter mehr, `a7d1c0e`). `burstMinDeltaDb <= 0` → Frühausstieg in `detectCutIn/OutBurst`, **ohne** die Audiodatei zu öffnen (verifiziert: 0 `openat`). Werte 1–19 wirken seit `a7d1c0e` erstmals (vorher blockierte die hartcodierte 20 dB die untere Reglerhälfte). |
 | onAppendItem/onUpdateItem → updateBurstIcon | Läuft bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). |
 | onActionSettings → refreshBurstIcons | Seit `48cf828`: nach Settings-OK (`save()`) werden ALLE Spalte-5-Icons neu bewertet (Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`). |
 | Clip-Auswahl → checkBurstForCurrentCut | Pro **ausgewähltem** Clip: iCut==0 → nur CutIn Schnitt 1; sonst CutOut Schnitt iCut (Priorität, return) dann CutIn Schnitt iCut+1. Kein globaler Überblick im Dialog. |
@@ -65,7 +67,7 @@ graph TD
 
 - Detektor: Quell-Audio Track 0; boundaryTime in Sekunden der Quell-Zeitachse
   (Audio-Start = Video-Frame 0, ttcut-demux-Trim).
-- `burstMinDeltaDb == 0` schaltet den Nachfilter ab (nur Detektor-Entscheidung; im Settings-Tooltip dokumentiert).
+- `burstMinDeltaDb == 0` schaltet die **Erkennung** ab (Frühausstieg vor dem Dateizugriff; im Settings-Tooltip dokumentiert). Früher (vor `a7d1c0e`) übersprang 0 nur den Nachfilter und wirkte damit wie 20.
 - Preview-Dialog und Schnittliste zeigen IMMER dieselbe `present`-Entscheidung
   (gemeinsame Wrapper) — Diskrepanzen zwischen beiden UIs sind ausgeschlossen;
   „Icon fehlt" und „Warnung fehlt" haben zwangsläufig dieselbe Ursache.
@@ -88,10 +90,13 @@ graph TD
 
 ## Redundanz / Konsolidierungskandidaten
 
+- **[BEHOBEN `a7d1c0e`]** `applyBurstDeltaFilter` prüfte die Relativschwelle
+  ein zweites Mal, die der Detektor bereits hartcodiert (20 dB) enthielt — ein
+  Filter kann nur abweisen, also war jeder Wert < 20 wirkungslos. Schwelle jetzt
+  als Parameter im Detektor, Filter entfällt.
 - `detectCutInBurst` und `detectCutOutBurst` sind bis auf
-  boundaryTime-Berechnung und `isCutOut`-Flag identisch; der Filter ist
-  seit `48cf828` in `applyBurstDeltaFilter` konsolidiert (Rest-Duplikat:
-  Rahmencode der beiden Wrapper).
+  boundaryTime-Berechnung und `isCutOut`-Flag identisch (Rest-Duplikat:
+  Rahmencode der beiden Wrapper inkl. `minDelta<=0`-Frühausstieg).
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.

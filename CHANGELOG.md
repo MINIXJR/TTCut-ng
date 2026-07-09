@@ -2,6 +2,33 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixes
+
+- **Burst detection: threshold slider had no effect below 20 dB** — `detectAudioBurst()`
+  enforced a hardcoded 20 dB relative threshold while `applyBurstDeltaFilter()` re-tested
+  the same quantity against `burstMinDeltaDb`. Since a filter can only reject, never
+  admit, any setting from 0 to 20 behaved identically. The threshold is now passed into
+  the detector and the post-filter is gone; values 1–19 finally work. Verified on DVB
+  reference material: a boundary with a 10.94 dB delta is reported at `--min-delta 10`
+  and suppressed at 20, where before the rewrite it was structurally always missed.
+
+- **Burst detection now reports the burst peak** — the detector returned the *first*
+  chunk above the threshold; it now returns the **peak** of the tested chunks, so the
+  level shown in the warning tooltip is the audible peak rather than a point on the
+  onset ramp (which climbs 38–51 dB within a single 32 ms audio frame). This changes
+  the *displayed* level only, not which cuts are flagged: both detection conditions are
+  monotone in level, so peak and first-hit agree on detection. The absolute −40 dB
+  audibility gate keeps its value and is now documented in the code.
+
+### Behaviour change
+
+- **`burstMinDeltaDb = 0` now disables burst detection.** Previously it skipped the
+  post-filter, which left the detector's own 20 dB threshold in force — 0 therefore behaved
+  exactly like 20. Anyone who had 0 configured will see no burst warnings until they set a
+  value ≥ 1. The setting is now also short-circuited before the audio file is opened.
+
 ## v0.72.2 (2026-07-06)
 
 **Fixes: default audio track flag and P-frame navigation**

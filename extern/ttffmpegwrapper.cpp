@@ -2387,18 +2387,17 @@ bool TTFFmpegWrapper::cutSrtSubtitle(const QString& inputFile,
 // (context ~-80 dB) would trigger on every cut -- on the reference recording 766
 // positions clear a 20 dB delta while peaking below this floor.
 //
-// The value stays at -40 dB. Measured on DVB material (ServusTV, 2022-10-25):
-// advertising-burst peaks land at -26..-34 dB, i.e. 6..14 dB of headroom, once the
-// detector evaluates the PEAK of the tested chunks instead of the first one above the
-// threshold. The onset ramp climbs 38..51 dB within a single 32 ms frame, so first-hit
-// logic sampled a random point on that ramp -- that, not the floor's value, was the bug.
+// The value stays at -40 dB. Measured with the real detector on DVB material
+// (ServusTV, 2022-10-25): the three advertising-burst peaks clear this floor by only
+// 2.5 / 12.7 / 3.5 dB (peaks -37.48 / -27.30 / -36.49 dB) -- the floor sits close under
+// real bursts, so raising it would start discarding them.
 //
 // Lowering the floor to -50 dB was considered and rejected: it would admit 709 further
-// positions (the floor rejects 766 at -40 dB, only 57 at -50 dB) to buy headroom the
-// peak evaluation already provides.
+// positions (the floor rejects 766 at -40 dB, only 57 at -50 dB) -- a large jump in
+// false positives for two of the reference bursts that already sit barely above -40 dB.
 //
-// Known risk: a broadcaster whose burst peaks below -40 dB is missed silently. Not
-// observed on the reference material; revisit if such a case appears.
+// Known risk: a broadcaster whose burst peaks below -40 dB is missed silently. The
+// reference material comes close (-37.48 dB); revisit if a real miss appears.
 static constexpr double kBurstAbsoluteFloorDb = -40.0;
 
 bool TTFFmpegWrapper::detectAudioBurst(const QString& audioFile, double boundaryTime,

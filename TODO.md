@@ -199,22 +199,6 @@
   - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
     Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
 
-- **Burst-Schwellen: zwei Prüfstellen, teils redundant** (Befund 2026-07-08, unverifiziert)
-  - `TTFFmpegWrapper::detectAudioBurst()` testet hartcodiert
-    `rmsValues[i] - median > 20.0 && rmsValues[i] > -40.0` — eine Relativschwelle **und**
-    eine absolute Untergrenze. Der nachgelagerte `applyBurstDeltaFilter()`
-    (`data/ttavdata.cpp`) prüft *dieselbe* Größe (`burstDb - contextDb`) erneut gegen
-    `burstMinDeltaDb`.
-  - Folge 1: Ein `burstMinDeltaDb` **unter 20** bleibt wirkungslos — die harte `20.0`
-    greift zuerst und ist strenger. Das Setting suggeriert Kontrolle, die es nicht hat.
-  - Folge 2: Die absolute `-40.0`-dB-Grenze untergräbt die „context-relative"-Absicht:
-    Ein -45-dB-Burst über -90-dB-Kontext (Delta 45 dB!) wird vom Detektor verworfen,
-    bevor der Filter ihn je sieht. Ob gewollt (unter -40 dB womöglich unhörbar?) ist
-    aus dem Code nicht entscheidbar; der Kommentar in `ttavdata.cpp` meint mit „altem
-    absolutem Threshold" offenbar den im Post-Filter, nicht diesen.
-  - Vor einer Änderung: an realem DVB-Material messen (leises Programm + echter
-    Werbe-Burst), nicht nach Code-Lektüre umbauen.
-
 - **Dead-Code-Audit (Medium Priority)**
   - Systematische Suche nach toten Klassen/Funktionen/Includes (Beispiel:
     `TTCutAudioTask` blieb seit der v0.60.0-libav-Migration jahrelang stehen)
@@ -475,9 +459,11 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
      repeated clicks. Note the shift moves the cut by one *video* frame (40 ms @ 25 fps)
      while an AC3 audio frame is 32 ms — the two grids do not align.
 
-  Orthogonal and already solved: the context-relative post-filter
-  `applyBurstDeltaFilter()` + `burstMinDeltaDb` (v0.72.0) fixed false negatives on quiet
-  programme material. It addresses neither gap above.
+  Orthogonal and already solved: the context-relative threshold `burstMinDeltaDb`
+  (v0.72.0) fixed false negatives on quiet programme material; the 2026-07-09 rewrite
+  passed that threshold into the detector, removed the redundant post-filter, and made
+  the detector report the **peak** of the tested chunks instead of the first one above
+  the threshold. None of this addresses the two gaps above — both remain open.
 
 - **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected). When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of ≤ reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
 
