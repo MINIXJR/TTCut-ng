@@ -85,3 +85,7 @@ tools/test-videos/cache/
 # personal paths and recording-specific filenames — privacy-sensitive)
 docs/plans/
 docs/superpowers/
+tools/ttcut-burst-probe/ttcut-burst-probe
+tools/ttcut-burst-probe/obj/
+tools/ttcut-burst-probe/moc/
+tools/ttcut-burst-probe/Makefile
