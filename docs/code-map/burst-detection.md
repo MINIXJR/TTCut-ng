@@ -11,7 +11,7 @@ sources:
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttsettings.cpp
-last_verified: 2026-07-10  # Spalte-5-Eingang (updateHintColumn) nach 666ed08 gegen den Code gelesen und GUI-verifiziert; Detektor-Kriterium/Floor/Frühausstieg u. Messgrenzen unverändert seit 2026-07-09
+last_verified: 2026-07-10  # Spalte-5-Eingang (updateHintColumn) nach 666ed08 gegen den Code gelesen und GUI-verifiziert; Detektor-Kriterium/Floor/Frühausstieg u. Messgrenzen unverändert seit 2026-07-09. Diagramm 2026-07-10 neu gezeichnet: Kantensemantik getrennt (Daten vs. Trigger), Ergebnis als eigener Knoten statt Rückwärtskante, fehlender Direktaufrufer ttcut-burst-probe ergänzt; alle Knoten-Symbole gegen den Code gegrept.
 ---
 
 # Burst-Erkennung: Detektor → zwei UI-Konsumenten
@@ -34,38 +34,54 @@ sauber ist. Anwenderfassung in `TODO.md` → „Known Limitations".
 
 ## Datenfluss
 
-```mermaid
-flowchart LR
-    SRC["Quell-Audio-ES (.ac3)<br/>(NICHT der geschnittene Output)"]
-    DET["TTFFmpegWrapper::detectAudioBurst<br/>(extern/ttffmpegwrapper.cpp)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
-    AVD["TTAVData::detectCutInBurst<br/>TTAVData::detectCutOutBurst<br/>(data/ttavdata.cpp)<br/>Frühausstieg bei minDelta &lt;= 0"]
-    SET["TTSettings::burstMinDeltaDb<br/>Default 20 dB, 0 = Erkennung aus<br/>Settings-Dialog Audio-Tab"]
-    HINT["TTCutTreeView::updateHintColumn<br/>EINZIGER Eingang zu Spalte 5<br/>hält die Reihenfolge (private)"]
-    LIST["TTCutTreeView::updateBurstIcon<br/>Spalte 5: SETZT Icon+Text+Tooltip<br/>(löscht sie, wenn kein Burst)"]
-    APPEND["TTCutTreeView::onAppendItem /<br/>TTCutTreeView::onUpdateItem"]
-    PREV["TTCutPreview::checkBurstForCurrentCut<br/>Warnlabel + Shift-Button"]
-    SEL["Clip-Auswahl im Preview-Dialog<br/>(TTCutPreview)"]
-    REFRESH["onActionSettings nach exec()<br/>-> TTCutTreeView::refreshHintIcons()<br/>läuft AUCH bei Abbrechen"]
-    FINAL["TTAVData::confirmBurstWarnings<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
-    NONINT["setNonInteractive(true)<br/>von runAutoCutMode (--auto-cut)"]
-    HDR["TTAudioHeaderList (in-memory)<br/>TTAC3AudioHeader::acmod<br/>kein File-I/O, kein libav"]
-    ACMOD["TTCutTreeView::updateAcmodIcon<br/>Rand-acmod vs. Mehrheits-acmod<br/>HÄNGT AN Spalte-5-Text AN"]
+**Legende:** durchgezogene Kante = *Daten fließen* (Produzent → Konsument);
+gestrichelte Kante = *löst aus* (Kontrollfluss, keine Nutzdaten). Alle Datenkanten
+laufen links → rechts; das Detektor-Ergebnis ist als eigener Knoten (`RES`)
+modelliert, damit keine Kante gegen die Flussrichtung zeigt.
 
-    SRC --> DET
-    SET --> AVD
-    AVD --> DET
-    AVD --> LIST
-    AVD --> PREV
-    AVD --> FINAL
-    APPEND --> HINT
-    REFRESH --> HINT
-    HINT -->|"1. setzt"| LIST
-    HINT -->|"2. hängt an"| ACMOD
+```mermaid
+flowchart TD
+    SRC["Quell-AC3<br/>(nicht der Output)"]
+    SET["burstMinDeltaDb"]
+    HDR["TTAudioHeaderList<br/>acmod"]
+
+    WRAP["detectCutInBurst /<br/>detectCutOutBurst"]
+    DET["detectAudioBurst"]
+    RES["CutBurstInfo"]
+
+    BURST["updateBurstIcon"]
+    ACMOD["updateAcmodIcon"]
+    COL5["Spalte 5"]
+    PREV["checkBurstForCurrentCut"]
+    FINAL["confirmBurstWarnings"]
+
+    HINT["updateHintColumn"]
+    APPEND["onAppendItem /<br/>onUpdateItem"]
+    REFRESH["refreshHintIcons"]
+    SEL["Clip-Auswahl<br/>(Preview)"]
+    CUTRUN["Cut-Start"]
+    NONINT["setNonInteractive"]
+    PROBE["ttcut-burst-probe"]
+
+    SET -->|"minDeltaDb"| WRAP
+    WRAP -->|"boundaryTime"| DET
+    SRC -->|"Samples"| DET
+    DET --> RES
+    RES --> BURST
+    RES --> PREV
+    RES --> FINAL
     HDR --> ACMOD
-    ACMOD --> COL5["Spalte 5 (geteilt)"]
-    LIST --> COL5
-    SEL --> PREV
-    NONINT --> FINAL
+    BURST -->|"setzt"| COL5
+    ACMOD -->|"hängt an"| COL5
+
+    APPEND -.-> HINT
+    REFRESH -.-> HINT
+    HINT -. "1." .-> BURST
+    HINT -. "2." .-> ACMOD
+    SEL -.-> PREV
+    CUTRUN -.-> FINAL
+    NONINT -. "Modus" .-> FINAL
+    PROBE -. "umgeht WRAP" .-> DET
 ```
 
 ## Edge-Semantik
