@@ -52,8 +52,8 @@ core.*
 tools/ttcut-ac3fix/ttcut-ac3fix
 tools/ttcut-pts-analyze/ttcut-pts-analyze
 tools/diag/check_idr
-tools/diag/test_nalu_parser
-tools/diag/test_au_types
+tools/diag/test_*
+!tools/diag/*.cpp
 
 # Python bytecode cache (e.g. tools/ttcut-quality-check.py)
 __pycache__/

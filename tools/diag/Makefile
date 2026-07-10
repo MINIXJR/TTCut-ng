@@ -71,6 +71,19 @@ $(DISPMAP_OBJS):
 clean:
 	rm -f $(TOOLS)
 
+# The MPEG-2 cut path pulls in the stream, header/index lists, the file buffer,
+# the transcode provider and the libmpeg2 decoder — effectively the whole tree.
+# Link against every object of the main build except the GUI entry point.
+MPEG2CUT_OBJS := $(filter-out ../../obj/ttcutmain.o,$(wildcard ../../obj/*.o))
+MPEG2CUT_PKGS := Qt5Core Qt5Gui Qt5Widgets Qt5Xml Qt5Network Qt5OpenGL \
+                 libavformat libavcodec libavutil libswscale libavfilter libswresample mpv
+
+test_mpeg2_cutout: test_mpeg2_cutout.cpp
+	@test -n "$(MPEG2CUT_OBJS)" || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
 MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider.o \
     ../../obj/ttcut.o $(WRAPPER_OBJS)
 
