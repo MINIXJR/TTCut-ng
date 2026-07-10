@@ -35,9 +35,13 @@ sauber ist. Anwenderfassung in `TODO.md` → „Known Limitations".
 ## Datenfluss
 
 **Legende:** durchgezogene Kante = *Daten fließen* (Produzent → Konsument);
-gestrichelte Kante = *löst aus* (Kontrollfluss, keine Nutzdaten). Alle Datenkanten
-laufen links → rechts; das Detektor-Ergebnis ist als eigener Knoten (`RES`)
-modelliert, damit keine Kante gegen die Flussrichtung zeigt.
+gestrichelte Kante = *löst aus* (Kontrollfluss, keine Nutzdaten).
+
+`RES` (`CutBurstInfo`) ist bewusst ein Datenknoten statt einer Komponente: sonst
+müsste das Detektor-Ergebnis als Rückwärtskante `DET → WRAP` gegen den Aufrufpfeil
+laufen und würde alle anderen Kanten kreuzen. Alle Datenkanten zeigen so in eine
+Richtung. Die Knoten tragen nur Symbol und Rolle — das Verhalten steht in der
+Edge-Semantik-Tabelle, eine Zeile pro Kante.
 
 ```mermaid
 flowchart TD
@@ -86,17 +90,25 @@ flowchart TD
 
 ## Edge-Semantik
 
+Eine Zeile pro Diagramm-Kante, in Diagramm-Reihenfolge. Die Knoten-IDs sind die
+aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
+
 | Kante | Daten / Ordnung / Invariante |
 |---|---|
-| CutItem → detectCut{In,Out}Burst | **Video-Frame-Index** → Zeit `index/frameRate`. **Beide** Pfade korrigieren um `countExtraFramesBefore` (MPEG-2-Field-Extras): CutIn rechnet `(cutInIndex − extraIn)/frameRate`, CutOut `(cutOutIndex + 1 − extraOut)/frameRate` — das `+1` legt die Grenze hinter den letzten behaltenen Frame. Analysiert wird immer das **Quell**-AC3 — unabhängig von Smart-Cut-/Mux-/PTS-Pfaden. |
-| detectAudioBurst → Wrapper | `bool` + `burstRmsDb`/`contextRmsDb` (nur bei Treffer gesetzt). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). `minDeltaDb` kommt als Parameter aus `TTSettings::burstMinDeltaDb()`. Peak statt First-Hit, weil die Burst-Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms → `present` invariant); der Erkennungs-Fix ist die Schwellen-Vereinheitlichung. |
-| Wrapper → Konsument (`present`) | Detektor-Ergebnis direkt (kein Nachfilter mehr, `a7d1c0e`). `burstMinDeltaDb <= 0` → Frühausstieg in `detectCutIn/OutBurst`, **ohne** die Audiodatei zu öffnen (verifiziert: 0 `openat`). Werte 1–19 wirken seit `a7d1c0e` erstmals (vorher blockierte die hartcodierte 20 dB die untere Reglerhälfte). |
-| onAppendItem/onUpdateItem/refreshHintIcons → updateHintColumn | Alle drei Aufrufstellen gehen seit `666ed08` **ausschließlich** über den Helper. `onAppend/onUpdate` bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). |
-| updateHintColumn → updateBurstIcon, updateAcmodIcon | **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt Spalte 5, leert sie bei `!present`), dann `updateAcmodIcon` (liest Text/Tooltip aus dem Widget zurück und hängt `" + AC3 …"` an). Vertauscht → Burst überschreibt den acmod-Hinweis; nur den ersten rufen → Hinweis geht ganz verloren (genau der Defekt vor `666ed08`). Beide Callees sind `private`; der Vertrag ist von außen nicht brechbar. |
-| updateAcmodIcon → Spalte 5 | Liest `acmod` aus der **In-Memory** `TTAudioHeaderList` (`TTAC3AudioHeader`), kein File-I/O, kein libav — anders als der Burst-Pfad. Rand-acmod am CutIn-/CutOut-Frame vs. Mehrheits-acmod (Stichprobe erste/letzte ~100 AC3-Frames des Segments). Abweichung → `„AC3 start/end"`. Nur AC3 (`dynamic_cast`), sonst stiller Rückweg. |
-| onActionSettings → refreshHintIcons | Seit `48cf828` (damals `refreshBurstIcons`): nach dem Settings-Dialog werden ALLE Spalte-5-Zellen neu bewertet (Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`). **Läuft auch bei „Abbrechen"** — `onActionSettings()` wertet den Rückgabewert von `settingsDlg->exec()` nicht aus und ruft `save()` + Refresh unbedingt. Seit `666ed08` über `updateHintColumn`, daher beide Hinweisarten. |
-| Clip-Auswahl → checkBurstForCurrentCut | Pro **ausgewähltem** Clip: iCut==0 → nur CutIn Schnitt 1; sonst CutOut Schnitt iCut (Priorität, return) dann CutIn Schnitt iCut+1. Kein globaler Überblick im Dialog. |
-| setNonInteractive → confirmBurstWarnings | Seit `27f8f29`: `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive=true`. Bei verbleibenden Bursts wird dann jede Warnung via `TTMessageLogger::warningMsg` geloggt + eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"); GUI-Pfad (`false`) zeigt weiter den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen headless. |
+| `SET → WRAP` | `TTSettings::burstMinDeltaDb()`, Default 20 dB. **`<= 0` ⇒ Frühausstieg im Wrapper, ohne die Audiodatei zu öffnen** (verifiziert: 0 `openat`). Werte 1–19 wirken erst seit `a7d1c0e`; vorher blockierte die im Detektor hartcodierte 20 dB die untere Reglerhälfte. |
+| `WRAP → DET` | `boundaryTime` in Sekunden der **Quell**-Zeitachse, aus dem Video-Frame-Index: CutIn `(cutInIndex − extraIn)/frameRate`, CutOut `(cutOutIndex + 1 − extraOut)/frameRate`. Das `+1` legt die Grenze hinter den letzten behaltenen Frame; `extraIn/Out` = `countExtraFramesBefore` (MPEG-2-Field-Extras, siehe `mpeg2-cut.md`). Dazu `minDeltaDb` durchgereicht. |
+| `SRC → DET` | Dekodierte Samples des **Quell**-AC3 (Track 0), nicht des geschnittenen Outputs — daher unabhängig von Smart-Cut-, Mux- und PTS-Pfaden. |
+| `DET → RES` | `bool present` + `burstRmsDb`/`contextRmsDb` (**nur bei Treffer gesetzt**). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). Peak statt First-Hit, weil die Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms ⇒ `present` invariant); der Erkennungs-Fix war die Schwellen-Vereinheitlichung. |
+| `RES → BURST`, `RES → PREV`, `RES → FINAL` | Dasselbe `CutBurstInfo` an alle drei Konsumenten, kein Nachfilter mehr (`a7d1c0e`). Deshalb zeigen Schnittliste, Preview-Dialog und Final-Warndialog **zwangsläufig dieselbe `present`-Entscheidung** — „Icon fehlt" und „Warnung fehlt" haben immer dieselbe Ursache. |
+| `HDR → ACMOD` | `acmod` aus der **In-Memory** `TTAudioHeaderList` (`TTAC3AudioHeader`): kein File-I/O, kein libav — anders als der Burst-Pfad. Rand-acmod am CutIn-/CutOut-Frame vs. Mehrheits-acmod (Stichprobe erste/letzte ~100 AC3-Frames des Segments). Nur AC3 (`dynamic_cast`), sonst stiller Rückweg. |
+| `BURST → COL5` | **Setzt** Icon, Text und Tooltip — und **leert sie in allen Rückwegen**, wenn kein Burst vorliegt (seit `666ed08`; der Kein-Audio-Ausstieg ließ den Text zuvor stehen). |
+| `ACMOD → COL5` | **Hängt an**: liest `text(5)`/`toolTip(5)` aus dem Widget zurück und ergänzt `" + AC3 …"`. Abweichung ⇒ `„AC3 start/end"`. Das Tree-Widget dient damit als Zwischenspeicher zwischen zwei Produzenten (siehe Redundanz). |
+| `APPEND -.-> HINT`, `REFRESH -.-> HINT` | Die drei Aufrufstellen (`onAppendItem`, `onUpdateItem`, `refreshHintIcons`) gehen seit `666ed08` **ausschließlich** über den Helper. `onAppend/onUpdate` bei Anlage/Änderung eines Cuts, inklusive Projekt-Laden (das appended). `refreshHintIcons` wird aus `onActionSettings` gerufen — **auch bei „Abbrechen"**, weil der Rückgabewert von `settingsDlg->exec()` nicht ausgewertet wird und `save()` + Refresh unbedingt laufen. Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`. |
+| `HINT -.-> BURST` (1.), `HINT -.-> ACMOD` (2.) | **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt/leert Spalte 5), dann `updateAcmodIcon` (hängt an). Vertauscht ⇒ Burst überschreibt den acmod-Hinweis; nur den ersten rufen ⇒ Hinweis geht ganz verloren (genau der Defekt vor `666ed08`). Beide Callees sind `private`; der Vertrag ist von außen nicht brechbar. |
+| `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. |
+| `CUTRUN -.-> FINAL` | `confirmBurstWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Dialog dort doppelt. Bewertet die gesamte `TTCutList` erneut über dieselben Wrapper. |
+| `NONINT -.-> FINAL` | `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
+| `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `detectAudioBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `detectAudioBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
 
 ## Annahmen & Verträge
 
