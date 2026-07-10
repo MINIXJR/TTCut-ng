@@ -2,6 +2,49 @@
 
 ## High Priority
 
+- **MPEG-2: Cut-Out auf B-Frame verliert bis zu M−1 Frames** (2026-07-10, BELEGT)
+  - **Reproduziert** mit `tools/diag/test_mpeg2_cutout` auf zwei echten DVB-Streams:
+    - `TEST.m2v` (M=3): `cut(0,5)` fordert 6 Frames, schreibt 4 → 2 fehlen
+    - Futurama 02x01 (Comedy Central, VDR, M=4): `cut(0,7)` fordert 8, schreibt 5 → 3 fehlen
+    - Cut-Out auf I/P ist immer korrekt; Cut-Out auf B verliert alles zwischen dem
+      letzten I/P und der Cut-Out-Position.
+  - **Ursache** (`getCutEndObject`, `avstream/ttmpeg2videostream.cpp`):
+    ```
+    if (bFrameCount > 0 && cutOutPos <= ipFramePos + bFrameCount)
+        cutParams->setCutOutIndex(cutOutPos);
+    ```
+    `ipFramePos` ist ein **Display**-Index, `bFrameCount` zählt B-Frames in
+    **Bitstream**-Reihenfolge nach dem I/P — bei IBBP sind das die Frames, die
+    *davor* angezeigt werden. Dadurch wird `cutOutIndex` auf `cutOutPos` gesetzt,
+    `cut()`s Bedingung `cutOutPos > getCutOutIndex()` wird falsch und der
+    Tail-`encodePart()` unterbleibt.
+  - **Reichweite:** `TTSettings::mEncoderMode` ist per Default `true`; nur dieses
+    Flag entscheidet, ob die GUI (`ttcutframenavigation.cpp`) B-Frames als Cut-Out
+    anbietet. `isCutOutPoint()` wird im Cut-Pfad **nicht** erzwungen.
+  - **Nicht einfach löschen:** Die Zeile kam mit `bb83d60` (2026-03-21) — ein
+    Commit über i18n und Progress-Scaling, in dem diese Änderung unerwähnt mitlief.
+    Ihr Kommentar beansprucht, doppelte B-Frames zu verhindern. **Welcher** GOP-Fall
+    das war, ist ungeklärt. Erst diesen Fall reproduzieren, dann Design, dann Fix.
+  - **Testmaterial:** `TEST.m2v` reicht für Fix + Regression. Kontrollfälle:
+    Nur-I/P-Stream (`ffmpeg -bf 0`, dort ist `bFrameCount == 0`), Open-GOP.
+  - Map: [docs/code-map/mpeg2-cut.md](docs/code-map/mpeg2-cut.md)
+
+- **MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames** (2026-07-10, BELEGT)
+  - `createIndexList()` legt pro `picture_start_code` einen `TTVideoIndex` an, also
+    **zwei Einträge pro Field-Picture-Frame** (gleicher `temporal_reference` ⇒ gleicher
+    `display_order`). `mExtraIndices` markiert den Zweiteintrag, **entfernt ihn aber nicht**.
+  - Gelesen wird `extraIndices()` nur von der Audio-Schnittkorrektur (`data/ttavdata.cpp`)
+    und der Standbildanzeige (`gui/ttcurrentframe.cpp`) — **nicht** vom Video-Cut.
+  - Messung Futurama 02x01: 85 720 Index-Einträge / 85 495 echte Frames (222 Feldpaare,
+    erstes bei Picture 11 673, mitten im Stream geclustert, nicht am Anfang).
+  - Folge: Eine Cut-Position driftet gegen die echte Frame-Nummer um die Anzahl der
+    vorangehenden Feldpaare.
+  - **Unabhängig vom Cut-Out-Defekt oben** — die ursprüngliche Vermutung, Feldpaare
+    würden `bFrameCount` aufblähen und den Fehler vergrößern, ist durch Messung
+    **widerlegt** (Cut-Outs im Feldbereich verlieren genau 1 Frame wie sonst auch).
+  - Zu klären: Soll die Cut-Achse Frames zählen (Zweitfelder aus `index_list` entfernen)
+    oder bleibt sie feldbasiert und alle Konsumenten korrigieren?
+
 - ~~**TTCut-ng Cut-Pipeline A/V Drift bei MPEG-2 mit field-picture-encoding**~~ → **RESOLVED** (2026-05-13, branch `feature/mpeg2-field-picture-fix`)
   - Root Cause: Field-Picture-Detection im MPEG-2-Parser (`picture_coding_extension` nicht gelesen, jeder picture_start_code als Frame gezählt, doppelte Zählung bei field-picture-encoded Frames). Fix in `avstream/ttmpeg2videostream.cpp` + Pipeline-Wiring in `data/ttavdata.cpp`. Spec: `docs/superpowers/specs/2026-05-12-mpeg2-field-picture-fix-design.md`.
   - Validation: Audio_a_sync.m2v Cut [60s..2400s] zeigt im Verlauf perfekt 0ms drift an mehreren Sample-Points (0/600/1200/1800/2300s). Pre-fix war 11.85s Drift. Der vorher gemeldete 104ms "Rest-Drift" war End-PTS-Asymmetrie-Artefakt (Frame-Duration 24ms+40ms quantisiert End-Diff bis ~64ms) + 2 Frames cutOut-Snap, ohne dass Verlauf-Inhalt asynchron ist.
