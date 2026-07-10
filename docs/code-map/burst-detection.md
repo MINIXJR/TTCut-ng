@@ -1,16 +1,17 @@
 ---
-base_commit: 90da654c1d7b8de1035ee65156af7a24963c8066
+base_commit: 666ed08609bf0a4bcb2c4111aeed391267f8668f
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
   - data/ttavdata.cpp
   - data/ttavdata.h
   - gui/ttcuttreeview.cpp
+  - gui/ttcuttreeview.h
   - gui/ttcutpreview.cpp
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttsettings.cpp
-last_verified: 2026-07-09  # Detektor-Kriterium, Floor, Default, Frühausstieg, GUI/headless-Verzweigung u. Spalte-5-Kopplung (Burst+acmod) gegen den Code gelesen; Messgrenzen an TEST_deu.ac3/ServusTV empirisch belegt
+last_verified: 2026-07-10  # Spalte-5-Eingang (updateHintColumn) nach 666ed08 gegen den Code gelesen und GUI-verifiziert; Detektor-Kriterium/Floor/Frühausstieg u. Messgrenzen unverändert seit 2026-07-09
 ---
 
 # Burst-Erkennung: Detektor → zwei UI-Konsumenten
@@ -22,8 +23,10 @@ Preview-Dialog).
 
 **Spalte 5 der Schnittliste hat zwei Produzenten**: `updateBurstIcon` (RMS-Burst,
 libav-Dekodierung) und `updateAcmodIcon` (AC3-Formatwechsel, nur In-Memory-Header).
-Der zweite hängt seinen Text an den ersten an — daher die Reihenfolge-Invariante in
-der Edge-Tabelle. Der acmod-Pfad ist deshalb hier mitkartiert, obwohl er kein Burst ist.
+Der zweite hängt seinen Text an den ersten an — die Aufrufreihenfolge ist damit ein
+Vertrag. Seit `666ed08` kapselt ihn `updateHintColumn()` als **einziger Eingang**; beide
+Produzenten sind `private` und werden von nirgends sonst gerufen. Der acmod-Pfad ist
+deshalb hier mitkartiert, obwohl er kein Burst ist.
 
 **Die Erkennung ist ein Hinweis, kein Urteil.** Ihre Auflösungsgrenzen sind gemessen
 und stehen unter Pitfalls; eine fehlende Warnung heißt *nicht*, dass der Schnitt
@@ -37,11 +40,12 @@ flowchart LR
     DET["TTFFmpegWrapper::detectAudioBurst<br/>(extern/ttffmpegwrapper.cpp)<br/>RMS-Chunks um boundaryTime,<br/>PEAK der Randchunks vs. Median,<br/>minDeltaDb als Parameter"]
     AVD["TTAVData::detectCutInBurst<br/>TTAVData::detectCutOutBurst<br/>(data/ttavdata.cpp)<br/>Frühausstieg bei minDelta &lt;= 0"]
     SET["TTSettings::burstMinDeltaDb<br/>Default 20 dB, 0 = Erkennung aus<br/>Settings-Dialog Audio-Tab"]
+    HINT["TTCutTreeView::updateHintColumn<br/>EINZIGER Eingang zu Spalte 5<br/>hält die Reihenfolge (private)"]
     LIST["TTCutTreeView::updateBurstIcon<br/>Spalte 5: SETZT Icon+Text+Tooltip<br/>(löscht sie, wenn kein Burst)"]
     APPEND["TTCutTreeView::onAppendItem /<br/>TTCutTreeView::onUpdateItem"]
     PREV["TTCutPreview::checkBurstForCurrentCut<br/>Warnlabel + Shift-Button"]
     SEL["Clip-Auswahl im Preview-Dialog<br/>(TTCutPreview)"]
-    REFRESH["onActionSettings nach save()<br/>-> TTCutTreeView::refreshBurstIcons()"]
+    REFRESH["onActionSettings nach exec()<br/>-> TTCutTreeView::refreshHintIcons()<br/>läuft AUCH bei Abbrechen"]
     FINAL["TTAVData::confirmBurstWarnings<br/>EIN Helper (beide Cut-Pfade);<br/>GUI: Warndialog, headless: Log"]
     NONINT["setNonInteractive(true)<br/>von runAutoCutMode (--auto-cut)"]
     HDR["TTAudioHeaderList (in-memory)<br/>TTAC3AudioHeader::acmod<br/>kein File-I/O, kein libav"]
@@ -53,13 +57,13 @@ flowchart LR
     AVD --> LIST
     AVD --> PREV
     AVD --> FINAL
-    APPEND --> LIST
-    APPEND --> ACMOD
-    LIST -.->|"Reihenfolge:<br/>erst Burst, dann acmod"| ACMOD
+    APPEND --> HINT
+    REFRESH --> HINT
+    HINT -->|"1. setzt"| LIST
+    HINT -->|"2. hängt an"| ACMOD
     HDR --> ACMOD
     ACMOD --> COL5["Spalte 5 (geteilt)"]
     LIST --> COL5
-    REFRESH -->|"ruft NUR updateBurstIcon<br/>-> acmod-Zusatz geht verloren"| LIST
     SEL --> PREV
     NONINT --> FINAL
 ```
@@ -71,9 +75,10 @@ flowchart LR
 | CutItem → detectCut{In,Out}Burst | **Video-Frame-Index** → Zeit `index/frameRate`. **Beide** Pfade korrigieren um `countExtraFramesBefore` (MPEG-2-Field-Extras): CutIn rechnet `(cutInIndex − extraIn)/frameRate`, CutOut `(cutOutIndex + 1 − extraOut)/frameRate` — das `+1` legt die Grenze hinter den letzten behaltenen Frame. Analysiert wird immer das **Quell**-AC3 — unabhängig von Smart-Cut-/Mux-/PTS-Pfaden. |
 | detectAudioBurst → Wrapper | `bool` + `burstRmsDb`/`contextRmsDb` (nur bei Treffer gesetzt). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). `minDeltaDb` kommt als Parameter aus `TTSettings::burstMinDeltaDb()`. Peak statt First-Hit, weil die Burst-Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms → `present` invariant); der Erkennungs-Fix ist die Schwellen-Vereinheitlichung. |
 | Wrapper → Konsument (`present`) | Detektor-Ergebnis direkt (kein Nachfilter mehr, `a7d1c0e`). `burstMinDeltaDb <= 0` → Frühausstieg in `detectCutIn/OutBurst`, **ohne** die Audiodatei zu öffnen (verifiziert: 0 `openat`). Werte 1–19 wirken seit `a7d1c0e` erstmals (vorher blockierte die hartcodierte 20 dB die untere Reglerhälfte). |
-| onAppendItem/onUpdateItem → updateBurstIcon, updateAcmodIcon | Läuft bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt Spalte 5), dann `updateAcmodIcon` (liest den vorhandenen Text/Tooltip und hängt `" + AC3 …"` an). Vertauscht man sie, überschreibt der Burst den acmod-Hinweis. |
+| onAppendItem/onUpdateItem/refreshHintIcons → updateHintColumn | Alle drei Aufrufstellen gehen seit `666ed08` **ausschließlich** über den Helper. `onAppend/onUpdate` bei Anlage/Änderung eines Cuts (inkl. Projekt-Laden, das appended). |
+| updateHintColumn → updateBurstIcon, updateAcmodIcon | **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt Spalte 5, leert sie bei `!present`), dann `updateAcmodIcon` (liest Text/Tooltip aus dem Widget zurück und hängt `" + AC3 …"` an). Vertauscht → Burst überschreibt den acmod-Hinweis; nur den ersten rufen → Hinweis geht ganz verloren (genau der Defekt vor `666ed08`). Beide Callees sind `private`; der Vertrag ist von außen nicht brechbar. |
 | updateAcmodIcon → Spalte 5 | Liest `acmod` aus der **In-Memory** `TTAudioHeaderList` (`TTAC3AudioHeader`), kein File-I/O, kein libav — anders als der Burst-Pfad. Rand-acmod am CutIn-/CutOut-Frame vs. Mehrheits-acmod (Stichprobe erste/letzte ~100 AC3-Frames des Segments). Abweichung → `„AC3 start/end"`. Nur AC3 (`dynamic_cast`), sonst stiller Rückweg. |
-| onActionSettings → refreshBurstIcons | Seit `48cf828`: nach Settings-OK (`save()`) werden ALLE Spalte-5-Icons neu bewertet (Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`). **Aber nur `updateBurstIcon`** — `updateAcmodIcon` wird nicht mitgerufen. Da `updateBurstIcon` Spalte 5 überschreibt bzw. bei `!present` leert, **verliert die Liste nach jedem Settings-OK den acmod-Hinweis**, bis der Cut neu angelegt/aktualisiert wird. Aus dem Code gelesen, in der GUI **nicht** gegengeprüft (Referenzmaterial ServusTV hat 0 acmod-Wechsel, daher unauffällig). |
+| onActionSettings → refreshHintIcons | Seit `48cf828` (damals `refreshBurstIcons`): nach dem Settings-Dialog werden ALLE Spalte-5-Zellen neu bewertet (Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`). **Läuft auch bei „Abbrechen"** — `onActionSettings()` wertet den Rückgabewert von `settingsDlg->exec()` nicht aus und ruft `save()` + Refresh unbedingt. Seit `666ed08` über `updateHintColumn`, daher beide Hinweisarten. |
 | Clip-Auswahl → checkBurstForCurrentCut | Pro **ausgewähltem** Clip: iCut==0 → nur CutIn Schnitt 1; sonst CutOut Schnitt iCut (Priorität, return) dann CutIn Schnitt iCut+1. Kein globaler Überblick im Dialog. |
 | setNonInteractive → confirmBurstWarnings | Seit `27f8f29`: `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive=true`. Bei verbleibenden Bursts wird dann jede Warnung via `TTMessageLogger::warningMsg` geloggt + eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"); GUI-Pfad (`false`) zeigt weiter den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen headless. |
 
@@ -91,6 +96,9 @@ flowchart LR
   „Median" ist `sorted[size/2]`, bei gerader Chunk-Zahl also das obere der beiden
   mittleren Elemente — für die Kontextschätzung unerheblich, beim Nachrechnen von
   `contextRmsDb` gegen eigene Messungen aber zu beachten.
+- Spalte 5 wird nur über `updateHintColumn()` geschrieben. `updateBurstIcon` leert
+  seit `666ed08` in **allen** Rückwegen Icon, Text und Tooltip (der Kein-Audio-Ausstieg
+  ließ zuvor den Text stehen).
 - Preview-Dialog und Schnittliste zeigen IMMER dieselbe `present`-Entscheidung
   (gemeinsame Wrapper) — Diskrepanzen zwischen beiden UIs sind ausgeschlossen;
   „Icon fehlt" und „Warnung fehlt" haben zwangsläufig dieselbe Ursache.
@@ -132,9 +140,12 @@ flowchart LR
    passieren das Gate um unter 4 dB**. Ein leiserer Sender wird stumm verfehlt.
    Absenken ist keine Option: bei −50 dB kämen 709 weitere Stellen derselben
    Aufnahme durch.
-8. **`refreshBurstIcons()` ruft `updateAcmodIcon` nicht** → der acmod-Zusatz in
-   Spalte 5 geht nach jedem Settings-OK verloren. Siehe Edge-Tabelle; aus dem Code
-   gelesen, GUI-Gegenprobe steht aus.
+8. **[BEHOBEN `666ed08`]** `refreshBurstIcons()` rief `updateAcmodIcon` nicht → der
+   acmod-Zusatz in Spalte 5 ging nach jedem Schließen des Settings-Dialogs verloren
+   (auch bei „Abbrechen"), bis der Cut neu angelegt/aktualisiert wurde. GUI-verifiziert
+   mit einem Cut über beide acmod-Wechsel von `TEST_deu.ac3` (2075/15624), bewusst ohne
+   Burst an den Grenzen: Spalte 5 trug nur `„AC3 start+end"` und wurde komplett leer.
+   Behoben durch `updateHintColumn()` als einzigen Eingang.
 9. i18n: Burst-UI-Strings seit `abf9001` englische Sources + dt.
    Übersetzung (waren hardcoded deutsch aus v0.58).
 
@@ -150,6 +161,12 @@ flowchart LR
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
+- **Append-Semantik über das Widget** (offen, bewusst nicht in `666ed08`): `updateAcmodIcon`
+  liest `text(5)`/`toolTip(5)` zurück und prüft `icon(5).isNull()`, um zu entscheiden, ob
+  es ein Icon setzt. Das Tree-Widget dient damit als Zwischenspeicher zwischen zwei
+  Produzenten. `updateHintColumn()` kapselt die Reihenfolge, beseitigt die Ursache aber
+  nicht. Sauberer wäre: beide liefern `{icon, text, tooltip}` zurück, ein Setter komponiert
+  und schreibt **einmal**.
 - **acmod-Mehrheitslogik doppelt implementiert:** `TTFFmpegWrapper::analyzeAcmod`
   (scannt die AC3-Datei per Syncword, dient der Cut-Normalisierung `targetAcmods`)
   und `TTCutTreeView::updateAcmodIcon` (nutzt die In-Memory-`TTAudioHeaderList`,
