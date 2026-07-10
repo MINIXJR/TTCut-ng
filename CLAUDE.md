@@ -225,13 +225,18 @@ Demux tool for H.264/H.265 TS files:
 
 1. **Video playback delay (first play only)**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer), because H.264/H.265 elementary streams lack the timestamps required for seeking and A/V synchronization. This causes a brief delay before playback starts. Since v0.71.0 the temp MKV is cached (fingerprint-based) across STOP→PLAY, so the delay only occurs on the first play (and after the source changes), not on every play. MPEG-2 playback does not have this limitation.
 
-**PAFF Smart Cut implementation notes:**
-- x264 produces MBAFF output while the source stream is PAFF. An EOS NAL flushes the decoder DPB at the re-encode→stream-copy transition.
-- MMCO commands in the first 32 stream-copy AUs are neutralized (`adaptive_ref_pic_marking_mode_flag` set to 0) to prevent DPB management errors on the empty DPB.
-- SPS Unification rewrites encoder output to use source SPS parameters (log2_max_frame_num, log2_max_pic_order_cnt_lsb, frame_mbs_only_flag).
-- Non-PAFF (MBAFF) streams use `realStartAU` filtering to exclude Open-GOP B-frames from before the cut-in.
+**Smart Cut seam handling (H.264 PAFF and beyond):**
+
+> Full detail incl. the Codec × stream-type variant matrix: `docs/code-map/smart-cut.md`.
+
+- `processSegment()` picks one of two reachable branches: **SPS-Unification** when `codecType() == H.264 && (isPAFF() || !pocBridgeable)`, otherwise the **standard** path (all H.265, plus progressive H.264 with a bridgeable POC seam).
+- **SPS Unification is not PAFF-only.** It rewrites encoder output to use source SPS parameters (log2_max_frame_num, log2_max_pic_order_cnt_lsb, frame_mbs_only_flag). PAFF always needs it (x264 emits MBAFF for a PAFF source); a *progressive* H.264 stream needs it too when the stream-copy start POC lies outside the encoder-representable bridge window (libx264 emits `log2_max_poc_lsb=4`, sources typically use 6).
+- An EOS NAL flushes the decoder DPB at the re-encode→stream-copy transition (both branches; H.264 type 11, H.265 type 37).
+- **MMCO neutralization** (`adaptive_ref_pic_marking_mode_flag` set to 0) is applied to the first 32 stream-copy AUs **only in the SPS-Unification branch** — not in the standard path.
+- Open-GOP B-frames / HEVC RASL pictures from before the cut-in are excluded by the **display lower bound** (`disp >= startDisplay`) in `selectFramesByDisplayOrder()`, for PAFF and non-PAFF alike.
 - SPS patching (`patchH264SpsReorderFrames`) is stream-type-aware via `isPAFF` parameter: PAFF streams get increased `num_ref_frames`/`max_dec_frame_buffering` for MBAFF→PAFF DPB transitions; non-PAFF streams keep original values.
-- After EOS in the standard (non-PAFF) path, `frameNumDelta` is recalculated from the encoder's last frame_num to the first stream-copy frame_num, ensuring seamless frame_num continuity across the DPB flush.
+- After EOS, `frameNumDelta` is recalculated from the encoder's last frame_num to the first stream-copy frame_num (EOS flushes the DPB but does **not** reset `PrevRefFrameNum`). The unification branch reads the width from the **source** SPS, the standard branch from the **encoder** SPS.
+- The `stream-copy → tail` seam needs none of this: the tail's first frame is a forced IDR, which resets `PrevRefFrameNum`.
 
 **Frame display (TTFFmpegWrapper):**
 - `seekToFrame()` seeks to the keyframe BEFORE the target keyframe (DPB prefill) to ensure Open-GOP B-frames decode correctly after `avcodec_flush_buffers()`.
