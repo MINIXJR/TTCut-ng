@@ -206,6 +206,19 @@
     cross-check via grep, dann entfernen
   - Außerdem: ungenutzte includes in .cpp/.h entfernen (clangd `unused-includes`)
   - Sollte als wiederkehrender Wartungs-Pass laufen, nicht als Einmalaktion
+  - Konkrete Funde 2026-07-09/10 (belegt, noch offen):
+    - `AcmodInfo::cutInChangeTime` / `cutOutChangeTime` (`extern/ttffmpegwrapper.h`) —
+      deklariert, in `analyzeAcmod()` auf `0.0` initialisiert, nie berechnet, nie gelesen.
+      Gedacht war die Distanz des Formatwechsels zur Schnittgrenze.
+    - `analyzeAcmod()` (Datei-Scan per Syncword, dient der Cut-Normalisierung) und
+      `TTCutTreeView::updateAcmodIcon()` (In-Memory-`TTAudioHeaderList`, dient der Anzeige)
+      implementieren die Mehrheits-acmod-Logik doppelt, mit verschiedenen
+      Stichprobenbereichen → können verschiedene `mainAcmod` liefern.
+    - `updateAcmodIcon()` liest `text(5)`/`toolTip(5)`/`icon(5)` aus dem Tree-Widget zurück,
+      um seinen Text anzuhängen: Das Widget dient als Zwischenspeicher zwischen zwei
+      Produzenten. `updateHintColumn()` kapselt die Reihenfolge seit `666ed08`, beseitigt
+      die Append-Semantik aber nicht. Sauberer: beide liefern `{icon, text, tooltip}`
+      zurück, ein Setter komponiert und schreibt einmal.
 
 - Display the resulting stream lengths after cut
 - Make the current frame position clickable (enter current frame position)

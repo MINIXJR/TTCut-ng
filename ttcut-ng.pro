@@ -9,7 +9,7 @@
 #-------------------------------------------------------------------------------
 
 PROJECT     = TTCut-ng
-VERSION     = 0.72.2
+VERSION     = 0.73.0
 CONFIG      += qt warn_on debug c++17
 QT          += core widgets gui xml network opengl
 DEFINES     += _FILE_OFFSET_BITS=64

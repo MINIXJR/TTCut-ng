@@ -2,9 +2,19 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.73.0 (2026-07-10)
+
+**Burst detection: crash fix, a threshold slider that finally works, and honest limits**
 
 ### Fixes
+
+- **Crash when updating a cut on AC3 with per-frame channel-mode changes** —
+  `detectAudioBurst()` looped over the decoder context's channel count, but an AC3 stream
+  may change `acmod` from frame to frame (e.g. 5.1 → 2.0). For a 2-channel frame in a
+  6-channel context, `frame->data[2]` is legitimately `NULL` for planar formats, and the
+  interleaved stride over-read past the frame. The per-frame channel count
+  (`frame->ch_layout.nb_channels`) is now used. Moving a cut's in/out point and pressing
+  Update no longer segfaults on such streams.
 
 - **AC3 format-change hint vanished from the cut list after opening the settings dialog** —
   column 5 is written by two producers: `updateBurstIcon()` sets it (and clears it when
@@ -38,6 +48,23 @@ All notable changes to TTCut-ng are documented in this file.
   post-filter, which left the detector's own 20 dB threshold in force — 0 therefore behaved
   exactly like 20. Anyone who had 0 configured will see no burst warnings until they set a
   value ≥ 1. The setting is now also short-circuited before the audio file is opened.
+
+### Documentation
+
+- **Burst detection is documented as approximate** (`TODO.md` → Known Limitations). It
+  reliably flags a loud advertising burst reaching the cut boundary, but its resolution is
+  limited by design and a missing warning does not mean the cut is clean. Every stated limit
+  is measured: time resolution is one audio frame (32 ms, so short transients average away),
+  only the outermost two chunks (~64 ms) of the 200 ms window are tested, an untested loud
+  chunk raises the context median and thereby makes detection *less* sensitive, and the
+  −40 dB audibility gate is cleared by under 4 dB by two of three real bursts.
+
+### Internal
+
+- New developer tools, not part of the application build: `tools/ttcut-burst-probe` calls
+  `detectAudioBurst()` directly for a single cut boundary, and `tools/burst-analysis` scans
+  a whole stream for candidate boundaries. Together they turned statements about the
+  detector's thresholds into measurements — and disproved two of them.
 
 ## v0.72.2 (2026-07-06)
 

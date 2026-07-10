@@ -1,5 +1,5 @@
 ---
-base_commit: bda6529fda474fb7122ad208afd8fe03692a14bc
+base_commit: 3e5f75e5e26913f3335f09c08b7047822d46ed4b
 last_verified: 2026-07-06  # + P/I-navigation -1-sentinel fix (v0.72.2); see moveToNextPIFrame pitfall below
 sources:
   - gui/ttcurrentframe.cpp
