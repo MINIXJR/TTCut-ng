@@ -203,8 +203,7 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
   treeItem->setText(4, QString::fromUtf8("\u2014"));  // em-dash "—"
   treeItem->setToolTip(4, tr("Audio drift is calculated during preview (first audio track)"));
 
-  updateBurstIcon(treeItem, item);
-  updateAcmodIcon(treeItem, item);
+  updateHintColumn(treeItem, item);
 
   //emit refreshDisplay();
 }
@@ -237,8 +236,7 @@ void TTCutTreeView::onUpdateItem(const TTCutItem& cItem, const TTCutItem& uitem)
   treeItem->setText(2, uitem.cutOutString());
   treeItem->setText(3, uitem.cutLengthString());
 
-  updateBurstIcon(treeItem, uitem);
-  updateAcmodIcon(treeItem, uitem);
+  updateHintColumn(treeItem, uitem);
 
   if (editItemIndex >= 0) {
     editItemIndex = -1;
@@ -621,18 +619,33 @@ void TTCutTreeView::onContextMenuRequest( const QPoint& point)
 }
 
 /*!
- * refreshBurstIcons
+ * refreshHintIcons
  * Re-evaluate column 5 for all entries (tree order == cut list order).
  * Call after the burst filter setting changed so the list matches without
- * requiring cut edits.
+ * requiring cut edits. Covers burst AND AC3 format-change hints.
  */
-void TTCutTreeView::refreshBurstIcons()
+void TTCutTreeView::refreshHintIcons()
 {
     if (!mAVData || !mAVData->cutList()) return;
     TTCutList* list = mAVData->cutList();
     int n = qMin(videoCutList->topLevelItemCount(), list->count());
     for (int i = 0; i < n; i++)
-        updateBurstIcon(videoCutList->topLevelItem(i), list->at(i));
+        updateHintColumn(videoCutList->topLevelItem(i), list->at(i));
+}
+
+/*!
+ * updateHintColumn
+ * The single entry point for column 5. Both producers write the same cell, and
+ * their order is a contract, not a preference: updateBurstIcon() sets the cell
+ * (and clears it when there is no burst), updateAcmodIcon() then appends to
+ * whatever it finds there. Calling them the other way round makes the burst
+ * text overwrite the acmod hint; calling only the first one drops the hint
+ * entirely -- which is exactly what refreshBurstIcons() used to do.
+ */
+void TTCutTreeView::updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item)
+{
+    updateBurstIcon(treeItem, item);
+    updateAcmodIcon(treeItem, item);
 }
 
 /*!
@@ -643,6 +656,7 @@ void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
 {
     if (!mAVData || !item.avDataItem() || item.avDataItem()->audioCount() == 0) {
         treeItem->setIcon(5, QIcon());
+        treeItem->setText(5, "");
         treeItem->setToolTip(5, "");
         return;
     }

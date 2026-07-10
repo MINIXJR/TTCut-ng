@@ -6,6 +6,16 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **AC3 format-change hint vanished from the cut list after opening the settings dialog** —
+  column 5 is written by two producers: `updateBurstIcon()` sets it (and clears it when
+  there is no burst), `updateAcmodIcon()` appends to it. Their call order was an implicit
+  contract, and `refreshBurstIcons()` — invoked unconditionally when the settings dialog
+  closes, even on Cancel — called only the first one. The "AC3 start/end" hint therefore
+  disappeared until the cut was edited again. Both now go through a single entry point,
+  `updateHintColumn()`; `refreshBurstIcons()` is renamed `refreshHintIcons()` because it
+  refreshes both hint kinds. Also fixes a stale text left behind in the hint column when a
+  cut has no audio track.
+
 - **Burst detection: threshold slider had no effect below 20 dB** — `detectAudioBurst()`
   enforced a hardcoded 20 dB relative threshold while `applyBurstDeltaFilter()` re-tested
   the same quantity against `burstMinDeltaDb`. Since a filter can only reject, never

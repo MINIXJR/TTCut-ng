@@ -631,8 +631,9 @@ void TTCutMainWindow::onActionSettings()
 
   TTSettings::instance()->save();
 
-  // Burst filter setting may have changed - re-evaluate cut list icons
-  cutList->refreshBurstIcons();
+  // Burst filter setting may have changed - re-evaluate the hint column
+  // (burst warnings and AC3 format-change hints share it)
+  cutList->refreshHintIcons();
 
   delete settingsDlg;
 }

@@ -2020,7 +2020,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   // burstMinDeltaDb == 0 disables burst detection entirely. Bail out before
   // touching the audio file: detectAudioBurst() would otherwise open and decode
   // it only for the result to be discarded. Read fresh on every call -- the
-  // settings dialog triggers refreshBurstIcons(), which re-evaluates all cuts.
+  // settings dialog triggers refreshHintIcons(), which re-evaluates all cuts.
   const int minDelta = TTSettings::instance()->burstMinDeltaDb();
   if (minDelta <= 0) return info;
 

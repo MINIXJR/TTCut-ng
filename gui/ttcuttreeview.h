@@ -77,15 +77,20 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
   	QTreeWidgetItem* findItem(const TTCutItem& cutItem);
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
     void createActions();
+
+    // Column 5 ("hint") has two producers whose call order is a contract.
+    // Everything goes through updateHintColumn(); never call these directly.
+    void updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item);
     void updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
+    void updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
 
   public:
-    // Re-evaluate the burst icons (column 5) of all entries — call after the
+    // Re-evaluate the hint column (column 5) of all entries — call after the
     // burst filter setting changed so the list matches without cut edits.
-    void refreshBurstIcons();
+    // Covers burst AND AC3 format-change hints.
+    void refreshHintIcons();
 
   private:
-    void updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
 
   private:
     TTAVData*        mAVData;
