@@ -613,40 +613,17 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
     progress->setLabelText(tr("Cutting audio..."));
     QApplication::processEvents();
 
-    TTAudioStream* aStream = avItem->audioStreamAt(0);
+    // Cut the first audio track for preview (consolidated onto cutAudioTracks).
     double fps = vStream->frameRate();
-    int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
-
-    QList<QPair<double, double>> videoKeepList;
-    for (int c = 0; c < tmpCutList->count(); c++) {
-      TTCutItem ci = tmpCutList->at(c);
-      int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
-      int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
-      double cutIn  = (ci.cutInIndex()      - extraIn)  / fps;
-      double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
-      videoKeepList.append(qMakePair(cutIn, cutOut));
-    }
-    TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
-    QList<QPair<double, double>> audioKeepList = plan.keepList;
-
-    QString audioExt = QFileInfo(aStream->filePath()).suffix();
-    QString cutAudioFile = TTCutPreviewTask::createPreviewFileName(fileIndex, audioExt);
-
-    QList<int> targetAcmods;
+    auto videoKeepList = mpAVData->buildVideoKeepList(tmpCutList, fps);
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    if (normalizeAcmod && audioExt.toLower() == "ac3") {
-      for (int s = 0; s < audioKeepList.size(); s++) {
-        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
-            aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
-        targetAcmods.append(aInfo.mainAcmod);
-      }
-    }
-
-    TTFFmpegWrapper ffmpegAudio;
-    if (ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
-                                    audioKeepList, normalizeAcmod, targetAcmods)) {
-      cutAudioFiles.append(cutAudioFile);
-    }
+    mpAVData->cutAudioTracks(avItem, {0}, videoKeepList, normalizeAcmod,
+        [&](int, const QString& ext) {
+          return TTCutPreviewTask::createPreviewFileName(fileIndex, ext);
+        },
+        [&](int, const QString& path, const QString&, bool ok) {
+          if (ok) cutAudioFiles.append(path);
+        });
   }
 
   progress->setLabelText(tr("Creating MKV..."));

@@ -204,40 +204,14 @@ void TTCutPreviewTask::operation()
 
         if (tmpCutList->at(0).avDataItem()->audioCount() > 0) {
           hasAudio = true;
-          // Use FFmpegWrapper for audio cutting (enables AC3 acmod normalization)
-          TTAudioStream* aStream = tmpCutList->at(0).avDataItem()->audioStreamAt(0);
-          TTVideoStream* vs = tmpCutList->at(0).avDataItem()->videoStream();
-          double fps = vs->frameRate();
-          int audioDelayMs = tmpCutList->at(0).avDataItem()->audioListItemAt(0).getDelayMs();
-
-          // Build video-domain keep list (extra-frame-corrected, no delay yet)
-          QList<QPair<double, double>> videoKeepList;
-          for (int c = 0; c < tmpCutList->count(); c++) {
-            TTCutItem ci = tmpCutList->at(c);
-            int extraIn  = mpAVData->countExtraFramesBefore(ci.cutInIndex());
-            int extraOut = mpAVData->countExtraFramesBefore(ci.cutOutIndex() + 1);
-            double cutIn  = (ci.cutInIndex()      - extraIn)  / fps;
-            double cutOut = (ci.cutOutIndex() + 1 - extraOut) / fps;
-            videoKeepList.append(qMakePair(cutIn, cutOut));
-          }
-          TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
-          QList<QPair<double, double>> audioKeepList = plan.keepList;
-          QString audioExt = QFileInfo(aStream->filePath()).suffix();
-          QString cutAudioFile = createPreviewFileName(i + 1, audioExt);
-
-          QList<int> targetAcmods;
+          // Cut the first audio track for preview (consolidated onto cutAudioTracks).
+          TTAVItem* pvItem = tmpCutList->at(0).avDataItem();
+          double fps = pvItem->videoStream()->frameRate();
+          auto videoKeepList = mpAVData->buildVideoKeepList(tmpCutList, fps);
           const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-          if (normalizeAcmod && audioExt.toLower() == "ac3") {
-            for (int s = 0; s < audioKeepList.size(); s++) {
-              TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
-                  aStream->filePath(), audioKeepList[s].first, audioKeepList[s].second);
-              targetAcmods.append(aInfo.mainAcmod);
-            }
-          }
-
-          TTFFmpegWrapper ffmpegAudio;
-          ffmpegAudio.cutAudioStream(aStream->filePath(), cutAudioFile,
-                                      audioKeepList, normalizeAcmod, targetAcmods);
+          mpAVData->cutAudioTracks(pvItem, {0}, videoKeepList, normalizeAcmod,
+              [&](int, const QString& ext) { return createPreviewFileName(i + 1, ext); },
+              [&](int, const QString&, const QString&, bool) {});
         }
 
         // Cut subtitle stream if available (use first subtitle stream)
@@ -324,15 +298,7 @@ void TTCutPreviewTask::operation()
       double fr = driftAvItem->videoStream()->frameRate();
       int    delayMs = driftAvItem->audioListItemAt(0).getDelayMs();
 
-      QList<QPair<double, double>> videoKeepList;
-      for (int i = 0; i < mpCutList->count(); i++) {
-        TTCutItem item = mpCutList->at(i);
-        int extraIn  = mpAVData->countExtraFramesBefore(item.cutInIndex());
-        int extraOut = mpAVData->countExtraFramesBefore(item.cutOutIndex() + 1);
-        double cutIn  = (item.cutInIndex()      - extraIn)  / fr;
-        double cutOut = (item.cutOutIndex() + 1 - extraOut) / fr;
-        videoKeepList.append(qMakePair(cutIn, cutOut));
-      }
+      auto videoKeepList = mpAVData->buildVideoKeepList(mpCutList, fr);
       audioDrifts = mpAVData->planAudioCut(firstAudio, videoKeepList, delayMs).drifts;
     }
   }
