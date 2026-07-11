@@ -724,6 +724,11 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
 
   if (hasAudio) {
     QString audioFile = avItem->audioStreamAt(0)->filePath();
+    // KNOWN DIVERGENCE: raw keep list — no extra-frame correction, no
+    // planAudioCut snapping, no acmod normalization (3-arg cutAudioStream).
+    // Deliberately left as-is during the audio-cut consolidation because
+    // changing it would alter preview output (see
+    // docs/code-map/audio-cut-timing.md, redundancy section, "Option A").
     QList<QPair<double, double>> keepList;
     for (int i = 0; i < tmpCutList->count(); i++) {
       TTCutItem item = tmpCutList->at(i);

@@ -374,6 +374,17 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **Code-Review-Follow-ups Redundanz-Branch** (2026-07-11, /code-review high über
+  `refactor/redundancy-safe-batch`; die Korrektheits-/Log-Funde wurden direkt gefixt):
+  - `cutAudioTracks`-Interface: `outPath`-Lambda transportiert an 2 Stellen
+    Seiteneffekte (Datei-Löschen, statusReport) — sauberer wäre ein eigener
+    Before-Hook oder Vorab-Löschen im Helfer (`data/ttavdata.h`).
+  - Alle-Spuren-Überladung für `cutAudioTracks` (der 2-Zeilen-Boilerplate
+    `QList<int> tracks; for(...)` steht an 3 Stellen).
+  - `tools/diag/Makefile`: `test_mpeg2_cutout` linkt per Glob gegen alle obj/*.o
+    (inkl. Qt5Widgets/mpv) statt kuratierter Objektliste — kaschiert die Kopplung
+    von `TTMpeg2VideoStream` an GUI/mpv; bei Gelegenheit entkoppeln.
+
 - ~~**Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**~~ → **DONE** (v0.71.0, libmpv-Render-Backend)
   - Root Cause war das mpv-`--wid`-Embedding des alten Process-Backends. Mit dem
     libmpv-in-process-Render-Backend (vo=libmpv, `TTMpvRenderWidget` als

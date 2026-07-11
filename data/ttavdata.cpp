@@ -1247,7 +1247,11 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       [&](int i, const QString& /*ext*/) {
         QString path = createCutFileName(tgtFileName,
                                          avItem->audioStreamAt(i)->fileName(), i + 1);
-        if (QFileInfo(path).exists()) QFile::remove(path);
+        if (QFileInfo(path).exists()) {
+          log->warningMsg(__FILE__, __LINE__,
+                          tr("deleting existing audio cut file: %1").arg(path));
+          QFile::remove(path);
+        }
         return path;
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
@@ -1327,23 +1331,14 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
                            fi.completeBaseName() + ".mkv").absoluteFilePath();
   }
 
-  // Build cut list as pairs of (startTime, endTime) in seconds - segments to KEEP
-  QList<QPair<double, double>> keepList;
-  for (int i = 0; i < cutList->count(); i++) {
+  // Build cut list as pairs of (startTime, endTime) in seconds - segments to
+  // KEEP (extra-frame-corrected, same conversion as every other producer).
+  QList<QPair<double, double>> keepList = buildVideoKeepList(cutList, frameRate);
+  for (int i = 0; i < keepList.size(); i++) {
     TTCutItem item = cutList->at(i);
-    int startFrame = item.cutInIndex();
-    int endFrame = item.cutOutIndex();
-
-    int extraIn  = countExtraFramesBefore(startFrame);
-    int extraOut = countExtraFramesBefore(endFrame + 1);
-    double cutInTime  = (startFrame - extraIn) / frameRate;
-    double cutOutTime = (endFrame + 1 - extraOut) / frameRate;  // +1 because endFrame is inclusive
-
     log->infoMsg(__FILE__, __LINE__, QString("Cut %1: frames %2-%3, time %4-%5")
-        .arg(i+1).arg(startFrame).arg(endFrame)
-        .arg(cutInTime, 0, 'f', 3).arg(cutOutTime, 0, 'f', 3));
-
-    keepList.append(qMakePair(cutInTime, cutOutTime));
+        .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex())
+        .arg(keepList[i].first, 0, 'f', 3).arg(keepList[i].second, 0, 'f', 3));
   }
 
   // Use TTESSmartCut for frame-accurate cutting
@@ -2022,12 +2017,22 @@ QList<QPair<double, double>> TTAVData::buildVideoKeepList(TTCutList* cutList,
 {
   QList<QPair<double, double>> videoKeepList;
   if (!cutList || frameRate <= 0) return videoKeepList;
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "[DRIFT] buildVideoKeepList: frameRate" << frameRate
+               << "extras_total" << mExtraFrameIndices.size()
+               << "cuts" << cutList->count();
   for (int c = 0; c < cutList->count(); c++) {
     TTCutItem ci = cutList->at(c);
     int extraIn  = countExtraFramesBefore(ci.cutInIndex());
     int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
     double cutInTime  = (ci.cutInIndex()      - extraIn)  / frameRate;
     double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "[DRIFT] Cut" << c
+                 << "cutInIndex" << ci.cutInIndex() << "extraIn" << extraIn
+                 << "cutOutIndex" << ci.cutOutIndex() << "extraOut" << extraOut
+                 << "cutInTime" << cutInTime << "cutOutTime" << cutOutTime
+                 << "segMs" << ((cutOutTime - cutInTime) * 1000.0);
     videoKeepList.append(qMakePair(cutInTime, cutOutTime));
   }
   return videoKeepList;
@@ -2073,6 +2078,14 @@ QList<float> TTAVData::cutAudioTracks(
   if (!avItem || trackIndices.isEmpty()) return firstDrifts;
 
   for (int idx : trackIndices) {
+    // Range-check before audioStreamAt/audioListItemAt (QList::at asserts on
+    // out-of-range) — this is a public method, callers may pass stale indices.
+    if (idx < 0 || idx >= avItem->audioCount()) {
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("Audio track index %1 out of range (count %2)")
+                        .arg(idx).arg(avItem->audioCount()));
+      continue;
+    }
     TTAudioStream* stream = avItem->audioStreamAt(idx);
     if (!stream) continue;
 

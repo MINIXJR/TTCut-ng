@@ -1159,12 +1159,13 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // bridge a frame_num gap after PrevRefFrameNum overflows the DPB with
         // dummy references ("co located POCs unavailable" -> first copied GOP
         // dropped). This branch runs without SPS unification, so the encoder
-        // slices carry the ENCODER SPS fn width.
-        if (mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264) {
-            frameNumDelta = bridgeFrameNum(scStart, mEncoderLog2MaxFrameNum);
-            if (TTSettings::instance()->logSmartCut())
-                qDebug() << "    frameNumDelta recalculated:" << frameNumDelta;
-        }
+        // slices carry the ENCODER SPS fn width. No outer guard: bridgeFrameNum
+        // itself returns 0 for H.265/no-SPS, and frameNumDelta is only ever
+        // consumed on H.264 paths (streamCopyFrames and the inter-segment
+        // recompute are both H.264-gated).
+        frameNumDelta = bridgeFrameNum(scStart, mEncoderLog2MaxFrameNum);
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    frameNumDelta recalculated:" << frameNumDelta;
 
         // Stream-copy from keyframe
         if (!streamCopyFrames(outFile, scStart, scEnd,

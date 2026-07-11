@@ -421,10 +421,13 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
 
     // Build video-domain keep list (no delay baked in) and let planAudioCut
-    // align to audio frame boundaries with feed-forward drift compensation —
-    // same as the MPEG-2 preview path and the final cut. A raw keep list
-    // snaps each segment independently (~32 ms per AC3 frame boundary) and
-    // the error accumulates across segments.
+    // align to audio frame boundaries with feed-forward drift compensation.
+    // KNOWN DIVERGENCE: unlike the consolidated paths (buildVideoKeepList),
+    // this build applies NO extra-frame correction — deliberately left as-is
+    // during the audio-cut consolidation because changing it would alter
+    // preview output (see docs/code-map/audio-cut-timing.md, redundancy
+    // section, "Option A"). Align only as a deliberate preview-correctness
+    // fix with its own verification.
     QList<QPair<double, double>> videoKeepList;
     for (int i = 0; i < cutList->count(); i++) {
       TTCutItem item = cutList->at(i);
