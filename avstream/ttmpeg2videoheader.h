@@ -141,6 +141,13 @@ public:
    bool      broken_link;
 };
 
+// MPEG-2 picture_coding_type values (ISO/IEC 13818-2, Table 6-12).
+enum Mpeg2PicCoding {
+  MPEG2_PIC_I = 1,   // intra-coded
+  MPEG2_PIC_P = 2,   // predictive-coded
+  MPEG2_PIC_B = 3    // bidirectionally predictive-coded
+};
+
 // -----------------------------------------------------------------------------
 // Pictures header [00000100]
 // -----------------------------------------------------------------------------

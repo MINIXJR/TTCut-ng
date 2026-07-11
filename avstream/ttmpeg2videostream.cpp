@@ -326,7 +326,7 @@ bool TTMpeg2VideoStream::isCutInPoint(int pos)
   int index      = (pos < 0) ? currentIndex() : pos;
   int frame_type = index_list->pictureCodingType(index);
 
-  return (frame_type == 1);
+  return (frame_type == MPEG2_PIC_I);
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -344,7 +344,7 @@ bool TTMpeg2VideoStream::isCutOutPoint(int pos)
   int index      = (pos < 0) ? currentIndex() : pos;
   int frame_type = index_list->pictureCodingType(index);
 
-  return ((frame_type == 1) || (frame_type == 2));
+  return ((frame_type == MPEG2_PIC_I) || (frame_type == MPEG2_PIC_P));
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -394,7 +394,7 @@ TTVideoHeader* TTMpeg2VideoStream::getCutStartObject(int cutInPos, int cutOutPos
   log->debugMsg(__FILE__, __LINE__, QString("frame-type is %1").arg(index_list->pictureCodingType(iFramePos)));
 
   // if coding type is not I-frame, we must encode
-  if (index_list->pictureCodingType(iFramePos) != 1)
+  if (index_list->pictureCodingType(iFramePos) != MPEG2_PIC_I)
   {
     iFramePos = index_list->moveToNextIndexPos(cutInPos, 1);
 
@@ -461,10 +461,10 @@ TTVideoHeader* TTMpeg2VideoStream::getCutEndObject(int cutOutPos, TTCutParameter
   log->debugMsg(__FILE__, __LINE__, QString("getEndObject::cutIn %1").arg(cutOutPos));
   log->debugMsg(__FILE__, __LINE__, QString("frame-type is %1").arg(index_list->pictureCodingType(ipFramePos)));
 
-  while (ipFramePos >= 0 && index_list->pictureCodingType(ipFramePos) == 3)
+  while (ipFramePos >= 0 && index_list->pictureCodingType(ipFramePos) == MPEG2_PIC_B)
     ipFramePos--;
 
-  if (index_list->pictureCodingType(ipFramePos) == 3)
+  if (index_list->pictureCodingType(ipFramePos) == MPEG2_PIC_B)
     throw TTInvalidOperationException(tr("No I- or P-Frame found at cut out position: %1").arg(cutOutPos));
 
   int headerListPos           = index_list->headerListIndex(ipFramePos);
@@ -483,7 +483,7 @@ TTVideoHeader* TTMpeg2VideoStream::getCutEndObject(int cutOutPos, TTCutParameter
     if (tmpObject->headerType() != TTMpeg2VideoHeader::picture_start_code)
       break;
 
-    if (tmpObject->picture_coding_type != 3)
+    if (tmpObject->picture_coding_type != MPEG2_PIC_B)
       break;
 
     endObject = tmpObject;
@@ -648,7 +648,7 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
 
           if (closeNextGOP       &&
               tempRefDelta  != 0 &&
-              currentPicture->picture_coding_type == 3)
+              currentPicture->picture_coding_type == MPEG2_PIC_B)
           {
             removeOrphanedBFrames(break_objects, currentObject);
             closeNextGOP = false;
@@ -662,7 +662,7 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
           //    arg(numPicsWritten).arg(currentPicture->headerOffset()));
           cr->setNumPicturesWritten(numPicsWritten);
 
-          if (currentPicture->picture_coding_type == 1) {
+          if (currentPicture->picture_coding_type == MPEG2_PIC_I) {
             tempRefDelta = (closeNextGOP)
               ? currentPicture->temporal_reference
               : 0;
@@ -730,7 +730,7 @@ void TTMpeg2VideoStream::removeOrphanedBFrames(QStack<TTBreakObject*>* breakObje
   }
   while (nextObject != NULL &&
       nextObject->headerType() == TTMpeg2VideoHeader::picture_start_code &&
-      ((TTPicturesHeader*)nextObject)->picture_coding_type == 3);
+      ((TTPicturesHeader*)nextObject)->picture_coding_type == MPEG2_PIC_B);
 
   TTBreakObject* new_break = new TTBreakObject();
 
