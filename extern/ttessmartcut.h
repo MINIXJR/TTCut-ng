@@ -274,7 +274,7 @@ private:
     //   pure re-encode (streamCopyStartFrame<0, endDisplay>=0):
     //               ctx.startDisplay <= DISPLAY <= ctx.endDisplay
     //   tail (ctx.tailMode): AU >= ctx.startFrame && DISPLAY <= ctx.endDisplay
-    // Sets ctx.framesToEncode, ctx.realStartAU, ctx.streamCopyLimit,
+    // Sets ctx.framesToEncode, ctx.streamCopyLimit,
     // *ctx.adjustedStreamCopyStart. The cut-in boundary-crossing extension
     // applies only to head/mixed mode.
     void selectFramesByDisplayOrder(ReencodeContext& ctx);

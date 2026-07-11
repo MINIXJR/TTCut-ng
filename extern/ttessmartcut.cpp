@@ -151,7 +151,6 @@ struct TTESSmartCut::ReencodeContext {
 
     // ---- Selection phase ----
     QList<AVFrame*> framesToEncode;
-    int    realStartAU       = 0;
     int    streamCopyLimit   = 0;
 
     // ---- Encode phase ----
@@ -2359,13 +2358,11 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     if (adjustedStreamCopyStart)
         *adjustedStreamCopyStart = -1;  // -1 = no adjustment needed
     if (actualStartAU)
-        *actualStartAU = -1;  // -1 = no adjustment (realStartAU == startFrame)
+        *actualStartAU = -1;  // -1 = no adjustment (start AU == startFrame)
 
     ReencodeContext ctx(outFile, startFrame, endFrame, streamCopyStartFrame,
                         adjustedStreamCopyStart, actualStartAU, startDisplay,
                         endDisplay, tailMode);
-    ctx.realStartAU = startFrame;  // fallback if mapping fails
-
     if (!computeDecodeRange(ctx)) return false;
 
     if (!resetDecoderForSegment(ctx)) return false;
@@ -2758,7 +2755,6 @@ void TTESSmartCut::selectFramesByDisplayOrder(ReencodeContext& ctx)
         // keep frames displaying <= endDisplay. There is no following stream-copy,
         // so streamCopyLimit is unused; the boundary-crossing logic (cut-in
         // specific) does not apply.
-        ctx.realStartAU     = ctx.startFrame;
         ctx.streamCopyLimit = frameCount();
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "      Tail selection: startFrame" << ctx.startFrame
@@ -2767,11 +2763,9 @@ void TTESSmartCut::selectFramesByDisplayOrder(ReencodeContext& ctx)
         ctx.streamCopyLimit = (ctx.streamCopyStartFrame >= 0) ? ctx.streamCopyStartFrame
                                                               : (ctx.endFrame + 1);
 
-        ctx.realStartAU = mDisplayMap.displayToDecode(ctx.startDisplay);
-
         if (TTSettings::instance()->logSmartCut()) {
             qDebug() << "      Display-order mapping: display" << ctx.startDisplay
-                     << "-> AU" << ctx.realStartAU
+                     << "-> AU" << mDisplayMap.displayToDecode(ctx.startDisplay)
                      << "(streamCopyLimit" << ctx.streamCopyLimit << ")";
         }
 
