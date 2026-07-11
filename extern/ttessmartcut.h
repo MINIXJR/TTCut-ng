@@ -329,6 +329,13 @@ private:
     // Write the codec's EOS NAL to flush the decoder DPB at a splice point.
     void writeEos(QFile& outFile) const;
 
+    // Bridge the encoder AUs' frame_num sequence to the stream-copy start.
+    // Returns the delta to add to every copied AU's frame_num (0 = don't
+    // patch). encLog2Fn is the frame_num width of the encoder AUs as written
+    // to the output: source width when SPS unification rewrote the slices,
+    // encoder SPS width otherwise. Not const: readAccessUnitData does file I/O.
+    int bridgeFrameNum(int scStartAU, int encLog2Fn);
+
     // Time/frame conversion
     int timeToFrame(double timeSeconds) const;
     double frameToTime(int frameIndex) const;

@@ -1109,36 +1109,14 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // Writing duplicate SPS/PPS causes the h264 parser to combine them
         // with the first AU into one oversized packet → "Invalid NAL unit size".
 
-        // frameNumDelta bridges re-encoded frame_nums (0..N-1) to stream-copy
-        // frame_nums (original values from source ES).
-        QByteArray firstAU = mParser.readAccessUnitData(scStart);
-        {
-            // Same wrap correction as the standard path: the last frame_num
-            // actually in the bitstream is (N-1) mod EncMaxFrameNum, not N-1.
-            // With SPS unification (always on in this PAFF path) the encoder
-            // slices carry the SOURCE fn width. Equal to the raw packet count
-            // for N <= EncMaxFrameNum (all short re-encodes: unchanged).
-            // This block only runs in the SPS-unification branch: the encoder
-            // slices were REWRITTEN into the source fn width (mSpsUnification is
-            // already reset back to false at this point, so do not consult it).
-            int encLog2Fn = mLog2MaxFrameNum;
-            int lastEncFrameNum = mEncoderPacketsWritten;
-            if (encLog2Fn > 0 && mEncoderPacketsWritten > 0) {
-                int encMaxFrameNum = 1 << encLog2Fn;
-                lastEncFrameNum = ((mEncoderPacketsWritten - 1) % encMaxFrameNum) + 1;
-            }
-            int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
-            if (firstScFrameNum > 0) {
-                frameNumDelta = lastEncFrameNum - firstScFrameNum;
-                if (TTSettings::instance()->logSmartCut()) {
-                    qDebug() << "    frameNumDelta:" << frameNumDelta
-                             << "(encoder last fn:" << lastEncFrameNum
-                             << ", stream-copy first fn:" << firstScFrameNum << ")";
-                }
-            } else {
-                frameNumDelta = 0;
-            }
-        }
+        // Bridge encoder frame_nums to the stream-copy start. The encoder
+        // slices were REWRITTEN into the SOURCE fn width by SPS unification
+        // (mSpsUnification is already reset back to false at this point, so
+        // do not consult it) — hence the encoder width here is
+        // mLog2MaxFrameNum.
+        frameNumDelta = bridgeFrameNum(scStart, mLog2MaxFrameNum);
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    frameNumDelta:" << frameNumDelta;
 
         // MMCO neutralization count: one full GOP (~32 AUs) covers DPB refill
         int mmcoNeutralizeCount = 32;
@@ -1176,44 +1154,16 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // Write source parameter sets
         writeParameterSets(outFile, mReorderDelay);
 
-        // Recalculate frame_num delta for stream-copy after EOS.
-        // EOS flushes the DPB but does NOT reset PrevRefFrameNum (only IDR does).
-        // The inter-segment delta from the caller doesn't account for the encoder's
-        // own frame_num sequence (0..N-1). Using it directly can create a frame_num
-        // gap after PrevRefFrameNum that overflows the DPB with dummy references
-        // (especially with small MaxFrameNum, e.g. 32).
-        // Fix: bridge from encoder's last frame_num to stream-copy's first, so
-        // frame_nums continue seamlessly — same approach as the PAFF path.
+        // Bridge encoder frame_nums to the stream-copy start. EOS flushes the
+        // DPB but does NOT reset PrevRefFrameNum (only IDR does); without the
+        // bridge a frame_num gap after PrevRefFrameNum overflows the DPB with
+        // dummy references ("co located POCs unavailable" -> first copied GOP
+        // dropped). This branch runs without SPS unification, so the encoder
+        // slices carry the ENCODER SPS fn width.
         if (mLog2MaxFrameNum > 0 && mParser.codecType() == NALU_CODEC_H264) {
-            QByteArray firstAU = mParser.readAccessUnitData(scStart);
-            // Desired first frame_num after the encoder section = last frame_num
-            // actually written to the bitstream + 1. The encoder's frame_num
-            // wraps at ITS OWN MaxFrameNum (encoder SPS; source SPS when SPS
-            // unification rewrote the slices) — with N packets the last
-            // bitstream fn is (N-1) mod EncMaxFrameNum, NOT N-1. Using the raw
-            // packet count leaves a frame_num gap at the copy start once
-            // N > EncMaxFrameNum (long re-encodes, e.g. keyframe cut-ins);
-            // the decoder then floods the DPB with dummy references and
-            // temporal-direct B-frames lose their co-located picture
-            // ("co located POCs unavailable" -> first copied GOP dropped).
-            // For N <= EncMaxFrameNum this equals the old value (N).
-            // This block only runs in the non-unification branch: the encoder
-            // slices carry the ENCODER SPS fn width.
-            int encLog2Fn = mEncoderLog2MaxFrameNum;
-            int lastEncFrameNum = mEncoderPacketsWritten;
-            if (encLog2Fn > 0 && mEncoderPacketsWritten > 0) {
-                int encMaxFrameNum = 1 << encLog2Fn;
-                lastEncFrameNum = ((mEncoderPacketsWritten - 1) % encMaxFrameNum) + 1;
-            }
-            int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
-            if (firstScFrameNum >= 0) {
-                frameNumDelta = lastEncFrameNum - firstScFrameNum;
-                if (TTSettings::instance()->logSmartCut()) {
-                    qDebug() << "    frameNumDelta recalculated:" << frameNumDelta
-                             << "(encoder last fn:" << lastEncFrameNum
-                             << ", stream-copy first fn:" << firstScFrameNum << ")";
-                }
-            }
+            frameNumDelta = bridgeFrameNum(scStart, mEncoderLog2MaxFrameNum);
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "    frameNumDelta recalculated:" << frameNumDelta;
         }
 
         // Stream-copy from keyframe
@@ -4594,6 +4544,47 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     }
 
     return result;
+}
+
+// ----------------------------------------------------------------------------
+// Bridge the encoder AUs' frame_num sequence to the stream-copy start.
+// Returns the delta to add to every copied AU's frame_num (0 = don't patch).
+//  - IDR copy-start (parser's isIDR, NOT fn==0): 0. An IDR resets
+//    PrevRefFrameNum and requires frame_num == 0 (H.264 7.4.3); patching it
+//    violated the spec (the old standard path did; libav tolerated it).
+//    A non-IDR keyframe that wrapped to fn 0 is now bridged correctly
+//    (the old fn>0 guard in the unification path skipped it).
+//  - Unreadable frame_num: 0 (don't guess).
+//  - Otherwise: lastEncoderFn - firstCopyFn, where lastEncoderFn is
+//    ((mEncoderPacketsWritten - 1) mod 2^encLog2Fn) + 1 — the wrap
+//    correction that previously existed twice, one copy fixed, one stale.
+//    The delta may be negative; the consumer (patchFrameNumInAU)
+//    normalizes modulo maxFrameNum.
+// encLog2Fn: frame_num width of the ENCODER AUs as written to the output —
+// source width when SPS unification rewrote the slices, encoder SPS width
+// otherwise. The caller knows which; this is the one legitimate difference
+// between the two call sites.
+// ----------------------------------------------------------------------------
+int TTESSmartCut::bridgeFrameNum(int scStartAU, int encLog2Fn)
+{
+    if (mLog2MaxFrameNum <= 0 || mParser.codecType() != NALU_CODEC_H264)
+        return 0;
+
+    TTAccessUnit au = mParser.accessUnitAt(scStartAU);
+    if (au.isIDR)
+        return 0;   // IDR resets PrevRefFrameNum; never patch an IDR's fn
+
+    QByteArray firstAU = mParser.readAccessUnitData(scStartAU);
+    int firstScFrameNum = readFrameNumFromAU(firstAU, mLog2MaxFrameNum);
+    if (firstScFrameNum < 0)
+        return 0;   // unreadable — don't guess
+
+    int lastEncFrameNum = mEncoderPacketsWritten;
+    if (encLog2Fn > 0 && mEncoderPacketsWritten > 0) {
+        int encMaxFrameNum = 1 << encLog2Fn;
+        lastEncFrameNum = ((mEncoderPacketsWritten - 1) % encMaxFrameNum) + 1;
+    }
+    return lastEncFrameNum - firstScFrameNum;
 }
 
 // ----------------------------------------------------------------------------
