@@ -1754,62 +1754,36 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   qApp->processEvents();
 
   // Build video-domain keep list (extra-frame-corrected, no delay yet)
-  QList<QPair<double, double>> videoKeepList;
-  for (int c = 0; c < cutList->count(); c++) {
-    TTCutItem ci = cutList->at(c);
-    int extraIn  = countExtraFramesBefore(ci.cutInIndex());
-    int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
-    double cutIn  = (ci.cutInIndex()      - extraIn)  / frameRate;
-    double cutOut = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
-    videoKeepList.append(qMakePair(cutIn, cutOut));
-  }
+  auto videoKeepList = buildVideoKeepList(cutList, frameRate);
 
   emit statusReport(0, StatusReportArgs::Start, tr("Cutting audio tracks..."), avItem->audioCount());
   qApp->processEvents();
 
   // Stage 1: stream-copy each track to its source codec
+  // (consolidated onto TTAVData::cutAudioTracks).
   QStringList trackFiles;
   QStringList trackLanguages;
-  QList<float> firstTrackDrifts;
+  const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+  QList<int> audioTracks;
+  for (int i = 0; i < avItem->audioCount(); i++) audioTracks << i;
 
-  for (int i = 0; i < avItem->audioCount(); i++) {
-    TTAudioStream* audioStream = avItem->audioStreamAt(i);
-    int delayMs = avItem->audioListItemAt(i).getDelayMs();
-
-    AudioCutPlan plan = planAudioCut(audioStream, videoKeepList, delayMs);
-    if (plan.keepList.isEmpty()) {
-      log->errorMsg(__FILE__, __LINE__, QString("Audio track %1: empty plan").arg(i+1));
-      continue;
-    }
-    if (i == 0) firstTrackDrifts = plan.drifts;
-
-    QString tgtAudioFilePath = createCutFileName(tgtFileName, audioStream->fileName(), i+1);
-    if (QFileInfo(tgtAudioFilePath).exists()) QFile::remove(tgtAudioFilePath);
-
-    QList<int> targetAcmods;
-    QString audioExt = QFileInfo(audioStream->filePath()).suffix().toLower();
-    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    if (normalizeAcmod && audioExt == "ac3") {
-      for (int s = 0; s < plan.keepList.size(); s++) {
-        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
-            audioStream->filePath(), plan.keepList[s].first, plan.keepList[s].second);
-        targetAcmods.append(aInfo.mainAcmod);
-      }
-    }
-
-    TTFFmpegWrapper ffmpegAudio;
-    if (ffmpegAudio.cutAudioStream(audioStream->filePath(), tgtAudioFilePath,
-                                    plan.keepList, normalizeAcmod, targetAcmods)) {
-      trackFiles     << tgtAudioFilePath;
-      trackLanguages << avItem->audioListItemAt(i).getLanguage();
-      log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(tgtAudioFilePath));
-    } else {
-      log->errorMsg(__FILE__, __LINE__, QString("Audio cut failed for track %1").arg(i+1));
-    }
-
-    emit statusReport(0, StatusReportArgs::Step, tr("Audio track %1 done").arg(i+1), i+1);
-    qApp->processEvents();
-  }
+  QList<float> firstTrackDrifts = cutAudioTracks(
+      avItem, audioTracks, videoKeepList, normalizeAcmod,
+      [&](int i, const QString& /*ext*/) {
+        QString path = createCutFileName(tgtFileName,
+                                         avItem->audioStreamAt(i)->fileName(), i + 1);
+        if (QFileInfo(path).exists()) QFile::remove(path);
+        return path;
+      },
+      [&](int i, const QString& path, const QString& lang, bool ok) {
+        if (ok) {
+          trackFiles     << path;
+          trackLanguages << lang;
+          log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
+        }
+        emit statusReport(0, StatusReportArgs::Step, tr("Audio track %1 done").arg(i+1), i+1);
+        qApp->processEvents();
+      });
 
   // Drift display (first track only, matches existing convention)
   emit cutAudioDriftCalculated(firstTrackDrifts);
