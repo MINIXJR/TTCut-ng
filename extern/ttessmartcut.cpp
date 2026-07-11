@@ -653,11 +653,7 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         // Between segments: write EOS NAL + SPS/PPS, compute frame_num delta
         if (i < segments.size() - 1) {
             // Write EOS NAL to flush decoder DPB
-            if (mParser.codecType() == NALU_CODEC_H265) {
-                outFile.write(kEosNalH265, sizeof(kEosNalH265));
-            } else {
-                outFile.write(kEosNalH264, sizeof(kEosNalH264));
-            }
+            writeEos(outFile);
             writeParameterSets(outFile, mReorderDelay);
             if (TTSettings::instance()->logSmartCut())
                 qDebug() << "    Wrote EOS + SPS/PPS between segments" << i << "and" << i + 1;
@@ -1102,8 +1098,9 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // EOS flushes all MBAFF references so stream-copy starts clean.
         // The overlap extension (in reencodeFrames) ensures the re-encode
         // covers all frames up to the next keyframe, so no Open-GOP B-frames
-        // need the flushed MBAFF references.
-        outFile.write(kEosNalH264, sizeof(kEosNalH264));
+        // need the flushed MBAFF references. (This branch is H.264-only, so
+        // writeEos emits the same H.264 EOS the open-coded write did.)
+        writeEos(outFile);
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    PAFF SPS Unification: EOS before stream-copy at" << scStart;
 
@@ -1172,15 +1169,9 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                 qDebug() << "    Re-encode consumed entire segment, no stream-copy needed";
         } else {
         // Non-PAFF: use EOS to flush decoder DPB
-        if (mParser.codecType() == NALU_CODEC_H264) {
-            outFile.write(kEosNalH264, sizeof(kEosNalH264));
-            if (TTSettings::instance()->logSmartCut())
-                qDebug() << "    Inserted H.264 EOS NAL (type 11) - flushing DPB at" << scStart;
-        } else if (mParser.codecType() == NALU_CODEC_H265) {
-            outFile.write(kEosNalH265, sizeof(kEosNalH265));
-            if (TTSettings::instance()->logSmartCut())
-                qDebug() << "    Inserted H.265 EOS NAL (type 37) - flushing DPB at" << scStart;
-        }
+        writeEos(outFile);
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    Inserted EOS NAL - flushing DPB at" << scStart;
 
         // Write source parameter sets
         writeParameterSets(outFile, mReorderDelay);
@@ -1242,10 +1233,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     // is needed across this boundary (unlike the head -> stream-copy boundary).
     if (segment.needsReencodeAtEnd && segment.tailStartFrame >= 0) {
         // EOS to flush the stream-copy DPB before the tail IDR (clean reset).
-        if (mParser.codecType() == NALU_CODEC_H265)
-            outFile.write(kEosNalH265, sizeof(kEosNalH265));
-        else
-            outFile.write(kEosNalH264, sizeof(kEosNalH264));
+        writeEos(outFile);
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    Cut-OUT: EOS before tail re-encode at" << segment.tailStartFrame;
 
@@ -4606,6 +4594,19 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
     }
 
     return result;
+}
+
+// ----------------------------------------------------------------------------
+// Write the codec's EOS NAL to flush the decoder DPB at a splice point
+// (H.264 type 11, H.265 type 37). Single home for the codec dispatch that
+// previously existed open-coded at four emit sites.
+// ----------------------------------------------------------------------------
+void TTESSmartCut::writeEos(QFile& outFile) const
+{
+    if (mParser.codecType() == NALU_CODEC_H265)
+        outFile.write(kEosNalH265, sizeof(kEosNalH265));
+    else
+        outFile.write(kEosNalH264, sizeof(kEosNalH264));
 }
 
 // ----------------------------------------------------------------------------

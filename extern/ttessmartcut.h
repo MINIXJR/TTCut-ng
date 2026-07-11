@@ -326,6 +326,9 @@ private:
     // with max_num_reorder_frames = patchReorderFrames
     bool writeParameterSets(QFile& outFile, int patchReorderFrames = 0);
 
+    // Write the codec's EOS NAL to flush the decoder DPB at a splice point.
+    void writeEos(QFile& outFile) const;
+
     // Time/frame conversion
     int timeToFrame(double timeSeconds) const;
     double frameToTime(int frameIndex) const;
