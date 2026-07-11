@@ -1,5 +1,5 @@
 ---
-base_commit: f90d0ab9be2f10aac1e887373dcdef8a227d92b8
+base_commit: 7849f66502f4cbda07a3c427a5d5ea7094020015
 last_verified: 2026-07-11
 sources:
   - data/ttavdata.cpp
@@ -31,6 +31,11 @@ Burst-Prüfung dieselbe Formel nutzen — siehe `burst-detection.md`).
 ## Diagramm
 
 Durchgezogen = Datenfluss (Produzent → Konsument). Gestrichelt = Auslöser.
+
+Seit `7849f66` ist die Spine `VKL → PLAN → KEEP → CUT` **einmal** in
+`TTAVData::cutAudioTracks` implementiert (VKL via `buildVideoKeepList`); `PROD` sind
+nur noch die Aufrufer, die Keep-List-Quelle + Ausgabe-Lambdas liefern. Die
+Kanten-Semantik unten gilt unverändert (siehe Redundanz-Abschnitt).
 
 ```mermaid
 flowchart TD
@@ -112,15 +117,21 @@ flowchart TD
 
 ## Redundanz / Konsolidierungskandidaten
 
-- **6 Produzenten** bauen dieselbe Sequenz — `videoKeepList` (via
-  `countExtraFramesBefore`) → `planAudioCut` → `targetAcmods` (AC3) →
-  `cutAudioStream` — mit kleinen Abweichungen: `onDoCut` (MPEG-2/Container),
-  `doH264Cut` (aus B-Frame-korrigierter Keep-List), `doAudioOnlyCut`,
-  `TTCutPreviewTask` (2×: Vollcut + Segment), `TTCutPreview` (GUI-Vorschau).
-  Kandidat für einen gemeinsamen Helfer (`buildAudioCutPlan` + `cut`). Solange
-  getrennt, driften die Pfade auseinander, wenn nur einer geändert wird.
-- **`(index − extra)/fps` ist an ≥6 Stellen offen kodiert** — die Audiozeit-Variante
-  der in `frame-order.md` notierten Anzeige-Zeit-Konvertierungen. Gemeinsamer
-  Helfer `videoIndexToAudioSeconds` wäre die eine Wahrheit.
+- **[KONSOLIDIERT `b28a7bd`..`7849f66`]** Die Producer bauen die Sequenz nicht mehr
+  jeder selbst. `TTAVData::cutAudioTracks` ist die eine Implementierung von
+  Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner
+  `computeTargetAcmods`) → `cutAudioStream`; `TTAVData::buildVideoKeepList` ist die
+  eine Stelle für `(index − extra)/fps` (löst zugleich die Audiozeit-Variante der in
+  `frame-order.md` notierten Konvertierung). Migriert: `onDoCut`, `doH264Cut` (reicht
+  seine eigene B-Frame-Keep-List durch), `doAudioOnlyCut` (Stage 1), der
+  `TTCutPreviewTask`-Vollcut, die `TTCutPreview`-GUI-Vorschau und die Drift-only-Stelle
+  (nur `buildVideoKeepList`). Die Producer liefern nur noch Keep-List-Quelle,
+  `trackIndices` und Ausgabe-Lambdas. **Bit-identisch belegt** (Benders MP2 deu+eng,
+  ServusTV AC3, `ffmpeg -c copy -f md5` vorher/nachher).
+- **Bewusst NICHT konsolidiert (Option A):** die zwei abweichenden Vorschau-Pfade —
+  `TTCutPreviewTask` Segment-Vollcut und `TTCutPreview` 3-Argument-Aufruf — bauen ihre
+  Keep-List **ohne** Extra-Frame-Korrektur (der 3-Arg auch ohne Snapping/acmod). Sie
+  durch `cutAudioTracks` zu leiten wäre eine **Verhaltensänderung** (Vorschau-
+  Korrektheitsfix, separat zu rechtfertigen). Bleibt offen.
 - **Zwei Drift-Signale** (`audioDriftCalculated`, `cutAudioDriftCalculated`) auf
-  denselben Slot `onAudioDriftUpdated`. Vereinheitlichbar.
+  denselben Slot `onAudioDriftUpdated`. Nicht Teil von A1/A2 — weiterhin offen.
