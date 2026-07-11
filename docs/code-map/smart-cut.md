@@ -1,5 +1,5 @@
 ---
-base_commit: 3191d987da64c554bc27b6586abe20d570a021cf
+base_commit: df20bb34a0dd7b449ee942428bab7d2b093784d7
 last_verified: 2026-07-11
 sources:
   - extern/ttessmartcut.cpp
@@ -87,7 +87,7 @@ flowchart TD
 | `selectFramesByDisplayOrder` → `*adjustedStreamCopyStart` | Boundary crossing: if any AU in `[streamCopyLimit, nextKF)` displays before `startDisplay`, the re-encode extends to `nextKF` and the stream-copy start moves with it. This is the old "Case A/B" distinction, now exact via the map. |
 | `runEncodePass` → `bufferAndWriteEncoderPacket` | With `bf=0` the encoder emits packets 1:1 in submission order, so packet *k* belongs to `framesToEncode[k]`. The pending-packet buffer delays the *write* by one packet but preserves FIFO order — this is what lets `applyPocDomainFix` patch the **last** encoder packet after the fact. |
 | `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard/fallback only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. |
-| `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does. Delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
+| `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's — computed by `bridgeFrameNum(scStartAU, encLog2Fn)` for both branches. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does; hence an **IDR copy-start yields delta 0** (never patch an IDR's fn — H.264 7.4.3). Otherwise delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
 | `frameNumDelta`: which `log2` width? | Unification branch uses **source** `mLog2MaxFrameNum` (slices were rewritten into the source domain); standard branch uses **encoder** `mEncoderLog2MaxFrameNum`. Swapping these silently corrupts the seam. |
 | `applyPocDomainFix` → `ctx.pendingPacket` | Patches the last encoder `poc_lsb` so `PicOrderCntMsb` does not wrap into the first copied GOP. Only H.264, only `poc_type == 0`, only when a stream-copy follows. Reads source POC at the *actual* copy start (post-adjustment). |
 | `processSegment` → `streamCopyFrames` (segment i → i+1) | Between segments: EOS + `writeParameterSets` + a **cumulative** `frame_num` delta computed from the last non-B AU of segment *i* to the first copied AU of segment *i+1*, modulo `MaxFrameNum`. |
@@ -184,22 +184,28 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `mDisplayMap.displayToDecode()` lookup is inlined into that debug line so the
   diagnostic output is preserved.
 
-- **Three `frame_num` bridge computations**: the unification branch, the standard
-  branch, and the inter-segment block in `smartCutFrames` each independently
-  compute "last written `frame_num` → first `frame_num` of the next copied AU",
-  each with its own wrap handling and its own choice of `log2` width. The first
-  two differ *only* in which `log2_max_frame_num` they use. Candidate for a
-  single `bridgeFrameNum(lastEncPackets, encLog2Fn, firstScAU)` helper — the
-  duplicated wrap correction is exactly the kind of thing that was already fixed
-  once in one copy and not the other.
+- **[RESOLVED `df20bb3` — with a corrected finding]** ~~Three~~ **Two** encoder→copy
+  `frame_num` bridge computations (unification branch, standard branch) — the
+  inter-segment block in `smartCutFrames` is a **different** computation
+  (source→source, cumulative across segments, load-bearing `int&` semantics) and
+  stays separate. The two copies differed in more than the `log2` width: the
+  unification guard was `fn > 0` (skipped bridging a non-IDR keyframe wrapped to
+  fn 0), the standard guard `fn >= 0` (patched IDR `frame_num` — violates H.264
+  7.4.3, tolerated by libav). Both now call `bridgeFrameNum(scStartAU, encLog2Fn)`
+  with one semantic: parser `isIDR` test (never patch an IDR; bridge a wrapped
+  non-IDR), delta 0 on unreadable fn, the wrap correction once. Verified
+  bit-identical on all non-IDR material; on a purpose-built IDR-copy-start
+  project the bitstream changes as intended with byte-identical decoded frames.
 
-- **Two EOS-emit sites plus a third for the tail**: `processSegment` (unification
-  branch, standard branch, tail epilogue) and `smartCutFrames` (inter-segment)
-  all open-code the `codecType() == H265 ? kEosNalH265 : kEosNalH264` choice.
-  Trivially consolidatable into `writeEos(outFile)`.
+- **[RESOLVED `24fea34`]** The four EOS-emit sites (`processSegment` unification/
+  standard/tail epilogue, `smartCutFrames` inter-segment) now call
+  `writeEos(outFile)`; the codec dispatch (H.264 type 11 / H.265 type 37) lives
+  once. The unification branch's formerly unconditional H.264 write is unchanged
+  in effect (that branch is H.264-only).
 
-- **Parameter-set writing after EOS is asymmetric**: the standard and fallback
-  branches call `writeParameterSets` after the EOS; the unification branch
+- **Parameter-set writing after EOS is asymmetric**: the standard branch (and,
+  until its removal in `3191d98`, the fallback branch) calls
+  `writeParameterSets` after the EOS; the unification branch
   deliberately does **not** (the first copied keyframe AU carries inline SPS/PPS,
   and writing duplicates makes the h264 parser merge them into one oversized
   packet → "Invalid NAL unit size"). This asymmetry is correct but load-bearing

@@ -93,34 +93,20 @@
 ## Medium Priority
 
 - **Smart-Cut Code-Map Findings prüfen** (2026-07-10, aus `docs/code-map/smart-cut.md`)
-  - Beim Erstellen der Smart-Cut-Map gefunden, **noch nicht behoben und noch nicht
-    zur Laufzeit gegengeprüft**. Alle drei Punkte sind statisch aus dem Code
-    abgeleitet (grep + Kontrollfluss), nicht an einem Stream gemessen.
-  - **(1) Unerreichbarer Zweig `processSegment()` "PAFF fallback"**
-    - `bool useSpsUnification = (codecType() == NALU_CODEC_H264) && (isPAFF() || !pocBridgeable);`
-      danach `if (useSpsUnification) {…} else if (isPAFF() && codecType() == NALU_CODEC_H264) {…}`
-    - Der `else if` fordert genau die Bedingung, die den `if` bereits garantiert erfüllt
-      ⇒ der gesamte IDR-Injektions-Pfad (`convertAUToIDR`, `frameNumDelta = -origFrameNum`)
-      ist toter Code.
-    - Kommentar dort ("SPS unification not possible — encoder SPS not yet parsed") legt nahe,
-      dass die Wächterbedingung ursprünglich auch `encoderSpsParsed` enthalten sollte; diese
-      Prüfung sitzt heute nur in `transformEncoderPacket()`.
-    - **Zu klären:** war der Fallback je nötig? Wenn nein → löschen. Wenn ja → Wächter
-      reparieren. Nicht ungeprüft entfernen: der Zweig dokumentiert eine Absicht.
-  - **(2) Totes Feld `ReencodeContext::realStartAU`**
-    - Geschrieben im Ctor-Default, als Fallback in `reencodeFrames()` und in beiden Armen
-      von `selectFramesByDisplayOrder()`; gelesen **ausschließlich** in einem `qDebug()`.
-    - Rest der v0.72.0 Frame-Index-Vereinheitlichung. Entfernen — oder bewusst als
-      AU-Untergrenze im head-Prädikat verwenden, falls das je die Absicht war.
-  - **(3) Drei redundante `frame_num`-Bridge-Berechnungen**
-    - SPS-Unification-Zweig, Standard-Zweig und der Inter-Segment-Block in
-      `smartCutFrames()` berechnen unabhängig "letztes geschriebenes frame_num →
-      erstes frame_num der nächsten Copy-AU", je mit eigener Wrap-Korrektur und eigener
-      Wahl der `log2_max_frame_num`-Breite (Source vs. Encoder).
-    - Die Wrap-Korrektur `((N-1) mod EncMaxFrameNum) + 1` wurde nachweislich in einer
-      Kopie nachgezogen. Kandidat für einen gemeinsamen Helper — **aber** die
-      Source-vs-Encoder-Breite ist ein echter semantischer Unterschied, kein Copy-Paste.
-  - **(4) Annahme `kExpectedEncoderLog2PocLsb = 4`**
+  - Punkte (1)–(3) **ERLEDIGT 2026-07-11** (Branch `refactor/redundancy-safe-batch`):
+    - (1) PAFF-fallback-Zweig: unerreichbar bestätigt (Bedingungsanalyse) und samt
+      exklusiver toter Helfer (`convertAUToIDR`, `convertSliceNalToIDR`) entfernt —
+      372 Zeilen, reine Löschung (`3191d98`).
+    - (2) `realStartAU` entfernt, Debug-Ausgabe erhalten (`1c0bd2b`).
+    - (3) Korrigierter Befund: **zwei** Encoder→Copy-Kopien (der Inter-Segment-Block
+      ist eine andere Rechnung und bleibt); vereinheitlicht in `bridgeFrameNum` mit
+      korrekter IDR-Semantik + `writeEos` für die 4 EOS-Stellen (`df20bb3`,
+      `24fea34`). Verifiziert: bit-identisch auf ServusTV/Moon_Crash/Petrocelli/
+      Designermode, Pixel-identisch auf gezieltem IDR-Naht-Projekt (`servus_idr`,
+      Sonde `tools/diag/probe_copystart`). Nebenbefund behoben: alter Standard-Zweig
+      patchte IDR-`frame_num` (Verstoß gegen 7.4.3); alter Unification-Guard
+      übersprang Wrap-auf-0-Keyframes.
+  - **(4) Annahme `kExpectedEncoderLog2PocLsb = 4`** — OFFEN:
     - `pocDomainBridgeable()` entscheidet über den Zweig, *bevor* die echte Encoder-SPS
       geparst ist. Ändert libx264 diesen Wert, fällt die Klassifikation still in die
       falsche Richtung (Seam als bridgeable eingestuft → erste kopierte GOP verworfen).

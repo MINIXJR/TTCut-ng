@@ -2,6 +2,34 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Changed
+
+- **H.264 smart cut: IDR copy-starts are no longer frame_num-patched** — when the
+  stream-copy section after a re-encoded head begins with a true IDR, the old code
+  patched `frame_num` into every copied AU including the IDR itself (`frame_num != 0`
+  on an IDR violates H.264 7.4.3; decoders tolerated it). An IDR resets
+  `PrevRefFrameNum`, so no bridging is needed there at all. Decoded output is
+  byte-identical (verified via framemd5 on a purpose-built IDR-seam cut); all
+  non-IDR material cuts bit-identically to before. Rare in practice: DVB broadcasts
+  carry few true IDRs (ARD none at all), so most seams start on non-IDR I-slices
+  and are unaffected. Also fixed: a non-IDR keyframe whose `frame_num` wrapped to 0
+  is now bridged in the SPS-unification path (was skipped).
+
+### Internal
+
+- Audio-cut chain consolidated onto `TTAVData::buildVideoKeepList` +
+  `cutAudioTracks` (five producers + the drift-only site; bit-identical audio
+  payloads verified on MPEG-2/MP2 and H.264/AC3 cuts).
+- Smart-cut seam helpers: the two encoder→copy `frame_num` bridges unified into
+  `bridgeFrameNum`, the four EOS-emit sites into `writeEos`; removed the
+  unreachable `processSegment` "PAFF fallback" branch (+ dead IDR-injection
+  helpers) and the write-only `ReencodeContext::realStartAU` field.
+- MPEG-2: `picture_coding_type` magic numbers replaced by `enum Mpeg2PicCoding`.
+- New diagnostic `tools/diag/probe_copystart` (classify copy-start keyframes,
+  list IDRs).
+
 ## v0.73.0 (2026-07-10)
 
 **Burst detection: crash fix, a threshold slider that finally works, and honest limits**
