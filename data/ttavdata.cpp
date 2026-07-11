@@ -1346,8 +1346,6 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     keepList.append(qMakePair(cutInTime, cutOutTime));
   }
 
-  TTFFmpegWrapper ffmpeg;
-
   // Use TTESSmartCut for frame-accurate cutting
   log->infoMsg(__FILE__, __LINE__, QString("  Video: %1").arg(sourceFile));
   log->infoMsg(__FILE__, __LINE__, QString("  Frame rate: %1 fps").arg(frameRate));
@@ -1447,48 +1445,26 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 
     // Cut audio tracks
     QStringList cutAudioFiles;
-    for (int i = 0; i < avItem->audioCount(); i++) {
-      TTAudioStream* audioStream = avItem->audioStreamAt(i);
-      QString srcAudioFile = audioStream->filePath();
+    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+    QList<int> audioTracks;
+    for (int i = 0; i < avItem->audioCount(); i++) audioTracks << i;
 
-      emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
-      qApp->processEvents();
-
-      // Calculate audio cut times from video frame rate
-      QString audioExt = QFileInfo(srcAudioFile).suffix();
-      QString cutAudioFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-          QFileInfo(sourceFile).completeBaseName() + QString("_audio%1.").arg(i+1) + audioExt).absoluteFilePath();
-
-      // Build per-track audioKeepList from the (B-frame-adjusted) video keepList,
-      // applying delay and snapping to audio-frame boundaries with feed-forward
-      // drift compensation.
-      int audioDelayMs = avItem->audioListItemAt(i).getDelayMs();
-      AudioCutPlan plan = planAudioCut(audioStream, keepList, audioDelayMs);
-      QList<QPair<double, double>> audioKeepList = plan.keepList;
-      if (audioDelayMs != 0) {
-        log->infoMsg(__FILE__, __LINE__, QString("Audio track %1: applying delay %2 ms to keepList").arg(i+1).arg(audioDelayMs));
-      }
-
-      // Build per-segment target acmod list for AC3 normalization
-      QList<int> targetAcmods;
-      const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-      if (normalizeAcmod && audioExt.toLower() == "ac3") {
-        for (int s = 0; s < audioKeepList.size(); s++) {
-          TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
-              srcAudioFile, audioKeepList[s].first, audioKeepList[s].second);
-          targetAcmods.append(aInfo.mainAcmod);
-        }
-      }
-
-      // Use FFmpeg wrapper for audio cutting (stream-copy + optional acmod normalization)
-      if (ffmpeg.cutAudioStream(srcAudioFile, cutAudioFile, audioKeepList,
-                                 normalizeAcmod, targetAcmods)) {
-        cutAudioFiles.append(cutAudioFile);
-        log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(cutAudioFile));
-      } else {
-        log->errorMsg(__FILE__, __LINE__, QString("Audio track %1 cut failed").arg(i+1));
-      }
-    }
+    // Cut all audio tracks against the (B-frame-adjusted) video keepList
+    // (consolidated onto TTAVData::cutAudioTracks).
+    cutAudioTracks(avItem, audioTracks, keepList, normalizeAcmod,
+        [&](int i, const QString& ext) {
+          emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
+          qApp->processEvents();
+          return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+              QFileInfo(sourceFile).completeBaseName()
+                + QString("_audio%1.").arg(i+1) + ext).absoluteFilePath();
+        },
+        [&](int i, const QString& path, const QString& /*lang*/, bool ok) {
+          if (ok) {
+            cutAudioFiles.append(path);
+            log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
+          }
+        });
 
     // Collect audio languages from data model
     QStringList cutAudioLanguages;
