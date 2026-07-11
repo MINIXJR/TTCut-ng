@@ -2113,6 +2113,97 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
   return plan;
 }
 
+// *****************************************************************************
+// Build a video-domain keep list (seconds) from cut indices, with the
+// extra-frame correction. Single home for a conversion previously open-coded
+// in the final-cut, audio-only, and preview producers.
+// *****************************************************************************
+QList<QPair<double, double>> TTAVData::buildVideoKeepList(TTCutList* cutList,
+                                                          double frameRate) const
+{
+  QList<QPair<double, double>> videoKeepList;
+  if (!cutList || frameRate <= 0) return videoKeepList;
+  for (int c = 0; c < cutList->count(); c++) {
+    TTCutItem ci = cutList->at(c);
+    int extraIn  = countExtraFramesBefore(ci.cutInIndex());
+    int extraOut = countExtraFramesBefore(ci.cutOutIndex() + 1);
+    double cutInTime  = (ci.cutInIndex()      - extraIn)  / frameRate;
+    double cutOutTime = (ci.cutOutIndex() + 1 - extraOut) / frameRate;
+    videoKeepList.append(qMakePair(cutInTime, cutOutTime));
+  }
+  return videoKeepList;
+}
+
+// *****************************************************************************
+// AC3-only per-segment target acmod list (majority acmod per kept window),
+// used by cutAudioStream to normalize acmod across segments. Empty for
+// non-AC3 or when normalization is off.
+// *****************************************************************************
+QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString& ext,
+                                         const QList<QPair<double, double>>& keepList,
+                                         bool normalizeAcmod) const
+{
+  QList<int> targetAcmods;
+  if (normalizeAcmod && ext.toLower() == "ac3") {
+    for (int s = 0; s < keepList.size(); s++) {
+      TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+          audioFile, keepList[s].first, keepList[s].second);
+      targetAcmods.append(aInfo.mainAcmod);
+    }
+  }
+  return targetAcmods;
+}
+
+// *****************************************************************************
+// Cut all requested audio tracks against a shared video keep list. Absorbs the
+// per-track loop, per-track delay, planAudioCut, AC3 acmod targets, and
+// cutAudioStream that the six producers used to duplicate. Output naming and
+// registration are supplied by the caller (mux list / file list / preview).
+// Returns the first requested track's drifts (legacy "track 0" semantics).
+// *****************************************************************************
+QList<float> TTAVData::cutAudioTracks(
+    TTAVItem* avItem,
+    const QList<int>& trackIndices,
+    const QList<QPair<double, double>>& videoKeepList,
+    bool normalizeAcmod,
+    const std::function<QString(int, const QString&)>& outPath,
+    const std::function<void(int, const QString&, const QString&, bool)>& onCut)
+{
+  QList<float> firstDrifts;
+  TTMessageLogger* log = TTMessageLogger::getInstance();
+  if (!avItem || trackIndices.isEmpty()) return firstDrifts;
+
+  for (int idx : trackIndices) {
+    TTAudioStream* stream = avItem->audioStreamAt(idx);
+    if (!stream) continue;
+
+    int delayMs = avItem->audioListItemAt(idx).getDelayMs();
+    AudioCutPlan plan = planAudioCut(stream, videoKeepList, delayMs);
+    if (plan.keepList.isEmpty()) {
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("Audio track %1: empty plan").arg(idx + 1));
+      continue;
+    }
+    // Legacy "first track" drift semantics: only the first requested index
+    // contributes, and only if its plan was non-empty.
+    if (idx == trackIndices.first()) firstDrifts = plan.drifts;
+
+    const QString ext     = QFileInfo(stream->filePath()).suffix();
+    const QString outFile = outPath(idx, ext);
+    QList<int> targetAcmods =
+        computeTargetAcmods(stream->filePath(), ext, plan.keepList, normalizeAcmod);
+
+    TTFFmpegWrapper ff;
+    bool ok = ff.cutAudioStream(stream->filePath(), outFile,
+                                plan.keepList, normalizeAcmod, targetAcmods);
+    if (!ok)
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("Audio cut failed for track %1").arg(idx + 1));
+    onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), ok);
+  }
+  return firstDrifts;
+}
+
 TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
 {
   CutBurstInfo info;

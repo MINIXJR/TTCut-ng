@@ -21,6 +21,7 @@
 #include <QListIterator>
 #include <QMap>
 #include <QPair>
+#include <functional>
 
 #include "ttcutlist.h"
 #include "ttmarkerlist.h"
@@ -292,11 +293,40 @@ class TTAVData : public QObject
                               const QList<QPair<double, double>>& videoKeepList,
                               int delayMs) const;
 
+    // Build a video-domain keep list (seconds) from cut indices, applying the
+    // extra-frame correction: (index - extraBefore)/fps, cut-out uses index+1.
+    // Single home for a conversion previously open-coded in >= 6 places.
+    QList<QPair<double, double>> buildVideoKeepList(TTCutList* cutList,
+                                                    double frameRate) const;
+
+    // Cut the given audio tracks of avItem against videoKeepList. Encapsulates
+    // the per-track loop, per-track delay, planAudioCut (audio-frame snapping +
+    // feed-forward drift), AC3 acmod target computation, and cutAudioStream.
+    // Codec-neutral: only forwards normalizeAcmod (codec-specific normalization
+    // lives inside cutAudioStream). outPath names the per-track output file;
+    // onCut registers it (mux list / file list / preview). Returns the first
+    // requested track's drifts for the caller's drift signal.
+    QList<float> cutAudioTracks(
+        TTAVItem* avItem,
+        const QList<int>& trackIndices,
+        const QList<QPair<double, double>>& videoKeepList,
+        bool normalizeAcmod,
+        const std::function<QString(int trackIdx, const QString& ext)>& outPath,
+        const std::function<void(int trackIdx, const QString& path,
+                                 const QString& lang, bool ok)>& onCut);
+
     // Last-cut metadata so the main window can build a meaningful completion
     // message after an audio-only cut (where cutVideoName + container extension
     // do not point at the actual output file).
     bool    lastCutWasAudioOnly()  const { return mLastCutWasAudioOnly; }
     QString lastCutOutputSummary() const { return mLastCutOutputSummary; }
+
+  private:
+    // AC3-only per-segment target acmod list (majority acmod per kept window).
+    // Empty unless normalizeAcmod && ext == "ac3".
+    QList<int> computeTargetAcmods(const QString& audioFile, const QString& ext,
+                                   const QList<QPair<double, double>>& keepList,
+                                   bool normalizeAcmod) const;
 };
 
 
