@@ -1,6 +1,6 @@
 ---
-base_commit: 98b2a669a6b3287bde0cee3563f5985c6e6a8e5b
-last_verified: 2026-07-10
+base_commit: 3191d987da64c554bc27b6586abe20d570a021cf
+last_verified: 2026-07-11
 sources:
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
@@ -171,21 +171,18 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 
 ## Redundancy / consolidation candidates
 
-- **Dead branch — `processSegment` "PAFF fallback"**: guarded by
-  `else if (isPAFF() && codecType() == NALU_CODEC_H264)` directly after
-  `if (useSpsUnification)`, where `useSpsUnification` is already implied by
-  `isPAFF() && H.264`. **Unreachable.** The whole IDR-injection path
-  (`convertAUToIDR`, `frameNumDelta = -origFrameNum`, the `patchSpsNalsInAccessUnit(…, true)`
-  call on the injected AU) is dead code. Its comment ("SPS unification not
-  possible — encoder SPS not yet parsed") suggests the intended guard was
-  `encoderSpsParsed`, which is instead checked inside `transformEncoderPacket`.
-  Either restore the intended condition or delete the branch — it currently
-  documents a behaviour the engine cannot exhibit.
+- **[REMOVED `3191d98`]** Dead branch — `processSegment` "PAFF fallback": was
+  guarded by `else if (isPAFF() && codecType() == NALU_CODEC_H264)` after
+  `if (useSpsUnification)`, where `useSpsUnification = H264 && (isPAFF ||
+  !pocBridgeable)` is always true when `isPAFF && H264` → the else-if was
+  unreachable. Deleted, together with its exclusive dead helpers `convertAUToIDR`
+  and `convertSliceNalToIDR` (no remaining callers). 372 lines removed, no
+  behaviour change.
 
-- **Dead field — `ReencodeContext::realStartAU`**: written in the ctor default,
-  in `reencodeFrames` as a fallback, and in both arms of
-  `selectFramesByDisplayOrder`; read only inside a `qDebug()`. Remove, or make the
-  head-mode predicate use it if an AU lower bound was ever intended.
+- **[REMOVED `1c0bd2b`]** Dead field — `ReencodeContext::realStartAU`: was
+  written in three places, read only inside one `qDebug()`. Removed; the
+  `mDisplayMap.displayToDecode()` lookup is inlined into that debug line so the
+  diagnostic output is preserved.
 
 - **Three `frame_num` bridge computations**: the unification branch, the standard
   branch, and the inter-segment block in `smartCutFrames` each independently

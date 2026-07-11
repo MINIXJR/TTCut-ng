@@ -1,6 +1,6 @@
 ---
-base_commit: b0df6b407706e54ca13cbcb1ec5b10a904d9ff67
-last_verified: 2026-07-10
+base_commit: 3191d987da64c554bc27b6586abe20d570a021cf
+last_verified: 2026-07-11
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -227,8 +227,8 @@ independent of the cut-out defect.
   "boundary re-encoder" interface would document the shared invariant
   (`no B-frames at a segment seam`) that is currently only a comment in each.
 
-- **Frame-type magic numbers**: `pictureCodingType() == 1 / 2 / 3` appears open-coded
+- **[RESOLVED `9e3b0d0`]** Frame-type magic numbers: `== 1 / 2 / 3` was open-coded
   in `isCutInPoint`, `isCutOutPoint`, `getCutStartObject`, `getCutEndObject` and
-  `transferCutObjects`. `TTMpeg2VideoHeader` has no `I_FRAME/P_FRAME/B_FRAME`
-  constants, unlike H.264's `H264::SLICE_B`. Cheap consolidation, and it would have
-  made the domain mixing in `getCutEndObject` easier to see.
+  `transferCutObjects`. Now `enum Mpeg2PicCoding { MPEG2_PIC_I/P/B = 1/2/3 }` in
+  `ttmpeg2videoheader.h` (per ISO/IEC 13818-2 Table 6-12); all sites use the named
+  constants. Pure rename, identical values.
