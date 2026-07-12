@@ -2,9 +2,11 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.74.0 (2026-07-12)
 
-### Changed
+**MPEG-2 B-frame cut-out fix, ttcut-demux duration fix + ES-only mode, smart-cut seam consolidation**
+
+### Changes
 
 - **ttcut-demux: the normalized-MKV mode is gone** — elementary-stream demux
   (the TTCut workflow) is now the only mode and the default; `-e` is still
@@ -22,7 +24,7 @@ All notable changes to TTCut-ng are documented in this file.
   and are unaffected. Also fixed: a non-IDR keyframe whose `frame_num` wrapped to 0
   is now bridged in the SPS-unification path (was skipped).
 
-### Fixed
+### Fixes
 
 - **ttcut-demux: video duration is measured from the video PTS span**, not the
   container span — fixes an inflated frame count, over-padded audio, and a

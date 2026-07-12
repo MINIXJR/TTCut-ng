@@ -108,7 +108,7 @@
   - Verifiziert: Video-ES byte-identisch, Audio-vor-Padding byte-identisch,
     es_extra_frames unverändert, H.264-Regression läuft, Benders-Audio bit-identisch.
     Protokoll `CLAUDE_TMP/TTCut-ng/demuxfix/REDEMUX.md`.
-  - **Offen:** User kopiert `tools/ttcut-demux/ttcut-demux` nach `/usr/bin/ttcut-demux`.
+  - `/usr/bin/ttcut-demux` aktualisiert (byte-identisch mit dem Repo-Stand, geprüft 2026-07-12).
 
 - **Smart-Cut Code-Map Findings prüfen** (2026-07-10, aus `docs/code-map/smart-cut.md`)
   - Punkte (1)–(3) **ERLEDIGT 2026-07-11** (Branch `refactor/redundancy-safe-batch`):
@@ -181,7 +181,7 @@
     Programm.
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
-  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1100 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
+  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
   - ttcut-demux blieb auf bash+CLI hängen.
   - **Probleme**: stream-copy concat über libav-CLI ist fragil bei mp2/ac3 Splice-Punkten (Frame-Misalignment, Header-missing-Errors). Re-encode als Workaround funktioniert (siehe Audio-Gap-Fix 2026-05-10), aber libav-direkt wäre PTS-genauer und ohne Subprocess-Overhead.
@@ -322,7 +322,7 @@
 
 - **MP3/AAC re-encoding für Audio-Only-Output**
   - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
-  - Code-Stelle `data/ttavdata.cpp:1934` warnt "not implemented yet"
+  - Code-Stelle `TTAVData::doAudioOnlyCut` (data/ttavdata.cpp) warnt "not implemented yet"
   - Bei Implementation: `sbAudioOnlyBitrate`-UI wieder einblenden
 
 - **Batch-Mux-Workflow per CLI für alle Codecs**
@@ -338,7 +338,7 @@
 - Internationalisation (i18n) - translate UI to other languages
   - **English source + de_DE: DONE** — die App ist vollständig auf englische
     Source-Strings konvertiert, deutsche Übersetzung in `trans/ttcut-ng_de_DE.ts`
-    (660 Einträge). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
+    (669 Einträge, vollständig). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
     (`51e798b`..`7b3eec5`).
   - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen, in
     `TRANSLATIONS` (`ttcut-ng.pro`) eintragen, mit `lupdate`/`lrelease` pflegen.

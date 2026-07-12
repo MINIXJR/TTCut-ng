@@ -1,6 +1,6 @@
 ---
-base_commit: 7849f66502f4cbda07a3c427a5d5ea7094020015
-last_verified: 2026-07-11
+base_commit: 6832d4064f18ab3c5df2b69c1fa8ecf4591d3e84
+last_verified: 2026-07-12
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -73,11 +73,11 @@ flowchart TD
 
 | von → nach | Daten / Reihenfolge / Invariante |
 |---|---|
-| `INFO → EXTRA` | `.info`-Feld `es_extra_frames` → `mExtraFrameIndices` (H.264/H.265). Aufsteigend sortiert. Geladen im Öffnen-Pfad (`openAVStreams`/`onOpenVideoFinished`) und erneut im Cut-Pfad, falls leer. |
-| `MP2X → EXTRA` | Für MPEG-2 stattdessen aus dem Bitstream-Parser: `loadMpeg2FieldExtras` → `TTMpeg2VideoStream::extraIndices()`, **nur wenn `mExtraFrameIndices` leer ist**. Feldbild-Zweiteinträge (siehe `mpeg2-cut.md`). |
+| `INFO → EXTRA` | H.264/H.265: `.info`-Feld `es_extra_frames` → `mExtraFrameIndices`, über den gemeinsamen Helfer `loadExtraFrameIndices(target, esInfo, vStream)` (no-op, falls `target` schon gefüllt). Für MPEG-2 nur Fallback, wenn der Parser keine Feldpaare liefert. Aufsteigend sortiert. Geladen **ausschließlich in `onOpenVideoFinished`** (nicht mehr im synchronen `openAVStreams` — der Parser-Index ist dort noch leer, siehe `fc2a573`) und erneut im Cut-Pfad (`onDoCut`), falls leer. |
+| `MP2X → EXTRA` | Für MPEG-2 hat seit `b69dfcf` der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor `es_extra_frames` (Decode-Index-Raum, PTS-Heuristik) — Prioritätsumkehr ggü. vorher. `loadMpeg2FieldExtras` wurde entfernt; die MPEG-2-Parser-Bevorzugung sitzt jetzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` zählt per Binärsuche die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
-| `PROD → VKL` | Produzent baut die (start,end)-Sekundenliste pro Segment. **`doH264Cut` speist die schon B-Frame-korrigierte Video-Keep-List ein**; `onDoCut`/`doAudioOnlyCut`/Vorschau bauen roh aus den Cut-Indizes via `CEFB`. Ohne Delay. |
+| `PROD → VKL` | Alle Final-Cut-Produzenten (`onDoCut`, `doH264Cut`, `doAudioOnlyCut`, die Drift-only-Stelle) bauen die (start,end)-Sekundenliste jetzt **einheitlich** über `buildVideoKeepList`. `doH264Cut` hatte dafür noch einen eigenen offen-codierten `(index−extra)/fps`-Block (die 6. Kopie dieser Umrechnung); seit `1d5b956` ruft sie `buildVideoKeepList` direkt auf, kein Sonderfall mehr. Ohne Delay. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). |
 | `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` auf die Segmentzeiten addiert. Pro Tonspur eigener Wert. |
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer: MP2@48k = 24 ms, AC3@48k = 32 ms). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
@@ -98,6 +98,11 @@ flowchart TD
   `numFrames`-Wahl in `planAudioCut` ist genau darauf ausgelegt.
 - **`countExtraFramesBefore`** setzt `mExtraFrameIndices` aufsteigend sortiert voraus
   (Binärsuche).
+- **`cutAudioTracks`** prüft `trackIndices` seit `1d5b956` gegen `avItem->audioCount()`,
+  bevor es `audioStreamAt`/`audioListItemAt` aufruft (beide asserten bei einem
+  Index außerhalb des Bereichs). Ein außerhalb liegender Index wird geloggt und
+  übersprungen statt die App abstürzen zu lassen — relevant, weil `cutAudioTracks`
+  public ist und Aufrufer veraltete Indizes reichen könnten.
 - **Synchron mit der Burst-Prüfung:** `detectCutOutBurst`/`detectCutInBurst`
   (`data/ttavdata.cpp`) nutzen dieselbe Grenzformel `(index[+1] − extra)/fps`.
   Ändert sich die Korrektur hier, muss sie dort mitgehen (siehe `burst-detection.md`).
@@ -122,12 +127,15 @@ flowchart TD
   Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner
   `computeTargetAcmods`) → `cutAudioStream`; `TTAVData::buildVideoKeepList` ist die
   eine Stelle für `(index − extra)/fps` (löst zugleich die Audiozeit-Variante der in
-  `frame-order.md` notierten Konvertierung). Migriert: `onDoCut`, `doH264Cut` (reicht
-  seine eigene B-Frame-Keep-List durch), `doAudioOnlyCut` (Stage 1), der
-  `TTCutPreviewTask`-Vollcut, die `TTCutPreview`-GUI-Vorschau und die Drift-only-Stelle
-  (nur `buildVideoKeepList`). Die Producer liefern nur noch Keep-List-Quelle,
-  `trackIndices` und Ausgabe-Lambdas. **Bit-identisch belegt** (Benders MP2 deu+eng,
-  ServusTV AC3, `ffmpeg -c copy -f md5` vorher/nachher).
+  `frame-order.md` notierten Konvertierung). Migriert: `onDoCut`, `doH264Cut`,
+  `doAudioOnlyCut` (Stage 1), der `TTCutPreviewTask`-Vollcut, die `TTCutPreview`-GUI-
+  Vorschau und die Drift-only-Stelle — alle über `buildVideoKeepList`. `doH264Cut`
+  baute die Keep-List anfangs noch mit eigenem `(index−extra)/fps`-Code (die 6. offene
+  Kopie dieser Umrechnung); seit `1d5b956` (Review-Fix auf dem Konsolidierungsbranch)
+  ruft auch sie `buildVideoKeepList` direkt auf, kein Sonderfall mehr. Die Producer
+  liefern nur noch Keep-List-Quelle, `trackIndices` und Ausgabe-Lambdas.
+  **Bit-identisch belegt** (Benders MP2 deu+eng, ServusTV AC3, `ffmpeg -c copy -f md5`
+  vorher/nachher; nach dem Review-Fix erneut belegt: ServusTV H.264, Designermode H.265).
 - **Bewusst NICHT konsolidiert (Option A):** die zwei abweichenden Vorschau-Pfade —
   `TTCutPreviewTask` Segment-Vollcut und `TTCutPreview` 3-Argument-Aufruf — bauen ihre
   Keep-List **ohne** Extra-Frame-Korrektur (der 3-Arg auch ohne Snapping/acmod). Sie

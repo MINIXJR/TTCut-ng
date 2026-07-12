@@ -1,5 +1,5 @@
 ---
-base_commit: 3b087ae  # mpeg2: fix B-frame cut-out losing up to M-1 tail frames
+base_commit: 6832d4064f18ab3c5df2b69c1fa8ecf4591d3e84
 last_verified: 2026-07-12
 sources:
   - avstream/ttmpeg2videostream.cpp
@@ -19,6 +19,7 @@ sources:
   - data/ttcutvideotask.cpp
   - data/ttopenvideotask.cpp
   - data/ttavdata.cpp
+  - data/ttavdata.h
   - gui/ttcurrentframe.cpp
   - gui/ttcutframenavigation.cpp
   - common/ttsettings.h
@@ -193,6 +194,20 @@ independent of the cut-out defect.
   `mExtraIndices` records the second entry of each pair but does **not** remove it;
   it is consumed only by the audio cut-time correction (`data/ttavdata.cpp`) and the
   still-image display (`gui/ttcurrentframe.cpp`), never by the video cut path.
+
+  **Consumer preference flipped (`b69dfcf`, `fc2a573`, 2026-07-12).** `TTAVData`'s
+  `loadExtraFrameIndices()` now prefers this parser list (`extraIndices()`) over the
+  `.info` `es_extra_frames` list for audio time correction — previously `.info` was
+  tried first and the parser list was only a fallback when `.info` was empty. Because
+  `extraIndices()` is populated by the (async) header-list build and is still empty
+  when `TTAVData::openAVStreams()` runs synchronously, the preference decision — and
+  a new cluster-classification step (`showExtraFrameClusterDialog()`) that confirms a
+  `.info` cluster as a real field-pair group when a parser `extraIndices()` position
+  lies within ±4 of it, labelling it "Feldpaare:" instead of "Defekt:" in the warning
+  dialog — was moved to `onOpenVideoFinished()`, gated by `mpPendingExtraFrameDialog`
+  (set only on a fresh open, mirroring `mpPendingVdrMarkers`, so project reload does
+  not re-show the dialog). Full detail on the audio-correction consumer itself:
+  `audio-cut-timing.md`.
 
   Consequence: **display positions count fields, not frames.** Measured on Futurama
   02x01: 85 720 index entries for 85 495 real frames (222 field pairs, first at

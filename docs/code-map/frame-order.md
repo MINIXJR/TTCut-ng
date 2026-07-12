@@ -1,6 +1,6 @@
 ---
-base_commit: 3e5f75e5e26913f3335f09c08b7047822d46ed4b
-last_verified: 2026-07-06  # + P/I-navigation -1-sentinel fix (v0.72.2); see moveToNextPIFrame pitfall below
+base_commit: 6832d4064f18ab3c5df2b69c1fa8ecf4591d3e84  # docs: record the encoder POC probe and the poc_type-2 finding
+last_verified: 2026-07-12
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -97,7 +97,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTNaluParser::accessUnitPtr(index, size)` → Smart Cut write path | byte offset + size of NAL units at decode position `index` | **DECODE order** → byte position in file (correct for stream-copy) |
 | `TTCutFrameNavigation::checkCutPosition(avData, pos)` ← `TTCutMainWindow::onNewFramePos(pos)` | explicit `pos` parameter; stored as `currentPosition` | **DECODE order** (same pos returned by `moveToXxx` in TTCurrentFrame) |
 | `TTCurrentFrame::onPlayVideo()` → `mPlayer->load(…, startSec)` | `startSec` corrected via `deliveredDecodeIndex / frameRate` for H.26x | **DISPLAY order** — `deliveredDecodeIndex` is the decode tag of the frame actually shown, mapping it to its correct display-time in the temp MKV |
-| `TTESSmartCut::processSegment/streamCopyFrames/reencodeFrames/bufferAndWriteEncoderPacket` → `TTESSmartCut::mOutputDisplayOrder` (via `appendOutputDisplay`) | one `mDisplayMap.decodeToDisplay(au)` value appended per written frame, in ES write order (call sites: `processSegment` for the IDR, `streamCopyFrames` for stream-copy, `bufferAndWriteEncoderPacket` for encoder packets via `ctx.encodeAuOrder`) | **DISPLAY order** (source-domain, absolute) — `ctx.encodeAuOrder` is filled in `reencodeFrames`, capturing each submitted frame's source AU (`AVFrame::pts`) at submission time so it survives `runEncodePass()` freeing `framesToEncode`; with `bf=0` the encoder returns packets 1:1 in submission order, so `ctx.packetsReceived` indexes `encodeAuOrder` correctly even though most x264 packets only arrive during `flushEncoder()` |
+| `TTESSmartCut::streamCopyFrames/reencodeFrames/bufferAndWriteEncoderPacket` → `TTESSmartCut::mOutputDisplayOrder` (via `appendOutputDisplay`) | one `mDisplayMap.decodeToDisplay(au)` value appended per written frame, in ES write order (call sites: `streamCopyFrames` for stream-copy — bulk-write and per-frame paths — and `bufferAndWriteEncoderPacket` for encoder packets via `ctx.encodeAuOrder`; the former dead-code "PAFF fallback" IDR-injection call site in `processSegment` was removed as unreachable, `3191d98`) | **DISPLAY order** (source-domain, absolute) — `ctx.encodeAuOrder` is filled in `reencodeFrames`, capturing each submitted frame's source AU (`AVFrame::pts`) at submission time so it survives `runEncodePass()` freeing `framesToEncode`; with `bf=0` the encoder returns packets 1:1 in submission order, so `ctx.packetsReceived` indexes `encodeAuOrder` correctly even though most x264 packets only arrive during `flushEncoder()` |
 | `TTESSmartCut::outputDisplayOrder()` → caller → `TTMkvMergeProvider::setVideoDisplayOrder()` | `QVector<int>` — source display indices re-numbered to a compact, gap-free, order-preserving RANK (sort + `QHash` rank lookup) | **DISPLAY order**, output-local (segments leave gaps in source display numbering, so the absolute source index is not usable as a packet-count-based array index in the muxer) — returns an **empty** `QVector` (fallback) on: a negative `decodeToDisplay()` result (HEVC dropped-RASL slot, guarded in `appendOutputDisplay`), an encoder-packet/submitted-frame-count mismatch (`bufferAndWriteEncoderPacket`), or a duplicate source display index (`outputDisplayOrder`) — all three warn loudly via `TTMessageLogger` |
 | `TTMkvMergeProvider::assignEsTimestamps(in)` | `pkt->pts = displayOrder[frameCount] × frameDur`; `pkt->dts = (frameCount − reorderOffset) × frameDur` | **PTS: DISPLAY order (true display time); DTS: approximated decode order** — `reorderOffset = max(i − displayOrder[i])` over the whole list (computed once in `setupVideoInput`) so `dts ≤ pts` always holds by lowering DTS, never raising PTS (raising PTS would shift video against the untouched audio streams); a resulting negative start DTS is normalized by `avoid_negative_ts` across **all** muxed streams together, not just video. Called once per output **frame** (`in.frameCount`) — PAFF field pairs are merged into one call by `processPAFFFieldPair()` first, matching `TTNaluParser`'s own field-pair merge 1:1 in count. Empty `displayOrder` (MPEG-2 task path: `data/ttavdata.cpp` MPEG-2 branch never calls `setVideoDisplayOrder`; playback temp MKV: the `TTMkvMergeProvider` instance in `TTCurrentFrame::createTempMkvForPlayback` also never does; or any invalidated H.26x run) falls back line-for-line to the pre-existing `pts = dts = frameCount × frameDur` linear stamping |
 
@@ -285,8 +285,8 @@ only the muxed timestamps change).
 
 **Fix:** `TTESSmartCut::appendOutputDisplay()` (added in `09cc8e5`) records the
 SOURCE display index (`mDisplayMap.decodeToDisplay(au)`) of every frame written
-to the ES, in write order, at all four write sites (the IDR in `processSegment`,
-stream-copy bulk/per-AU in `streamCopyFrames`, and encoder packets in
+to the ES, in write order, at all three write sites (stream-copy bulk/per-AU in
+`streamCopyFrames`, and encoder packets in
 `bufferAndWriteEncoderPacket` via `ctx.encodeAuOrder` — the latter is filled by
 `reencodeFrames`, capturing each submitted frame's source AU at *submission*
 time, because `runEncodePass()` frees `ctx.framesToEncode` before most x264
@@ -310,10 +310,25 @@ plain-empty-list case, which is normal/expected on those two paths.
 **2. Rewritten encoder POC anchoring was wrong at the seam (`466497a`,
 corrected by `88445b3`).** `TTESSmartCut::processSegment()` decides per-segment
 — not just for PAFF as before — whether the H.264 non-PAFF stream-copy start
-POC is reachable from the encoder's 4-bit POC domain (`pocDomainBridgeable()`,
+POC is reachable from the encoder's POC domain (`pocDomainBridgeable()`,
 a free function in `extern/ttessmartcut.cpp`: same linear-distance rule
 `applyPocDomainFix()` already used for its post-hoc patch search) and enables
-per-segment SPS unification when it is not. When unification runs for such a
+per-segment SPS unification when it is not. Since `1893497`, the encoder POC
+width feeding that decision is *measured*, not assumed: `probeEncoderPocParams()`
+opens a throwaway libx264 context (`AV_CODEC_FLAG_GLOBAL_HEADER`, same
+options `setupEncoder()` would use) before any segment is encoded and reads
+`log2_max_poc_lsb`/`poc_type` from its SPS extradata; `processSegment` uses the
+probed width only when the probe reports `poc_type==0`, otherwise it falls
+back to the constant `kExpectedEncoderLog2PocLsb` (4) — which is in fact the
+common case: measured (`b0e1335`) that libx264 with progressive `bf=0` picks
+`poc_type=2` (no POC-LSB field at all; `poc_type=0` only appears with the
+interlace flags this probe sets for MBAFF/PAFF sources), so the classic seam
+still runs on the constant, now confirmed rather than assumed; the probe
+reports that measured `poc_type!=0` fact as an `infoMsg`, not a warning.
+`parseEncoderSpsFromPacket` (`6cb520b`) cross-checks the probe against each
+segment's REAL encoder SPS (parsed from its first output packet's extradata)
+and warns loudly (`log2_max_poc_lsb` and `poc_type` both compared) if the two
+diverge. When unification runs for such a
 seam, `reencodeFrames()` anchors the rewritten encoder POCs on
 `mSpsUnificationPocAnchor`, computed in `processSegment` by scanning
 `[streamCopyStartFrame, min(+16, nextKeyframe))` in DECODE order for the AU
