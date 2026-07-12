@@ -42,6 +42,13 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Internal
 
+- Smart cut: the SPS-unification branch decision now probes the encoder's
+  real POC parameters (throwaway libx264 open, SPS from extradata) instead
+  of assuming `log2_max_poc_lsb=4`; the constant remains only as a fallback
+  and the real per-segment SPS is cross-checked against the probe. Measured
+  along the way: libx264 uses poc_type 2 for progressive bf=0 encodes (the
+  everyday case — seam continuity there is EOS + frame_num, unchanged).
+  Verified byte-identical on MBAFF/IDR-seam/progressive/HEVC reference cuts.
 - Audio-cut chain consolidated onto `TTAVData::buildVideoKeepList` +
   `cutAudioTracks` (five producers + the drift-only site; bit-identical audio
   payloads verified on MPEG-2/MP2 and H.264/AC3 cuts).

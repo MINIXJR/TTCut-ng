@@ -124,12 +124,20 @@
       Sonde `tools/diag/probe_copystart`). Nebenbefund behoben: alter Standard-Zweig
       patchte IDR-`frame_num` (Verstoß gegen 7.4.3); alter Unification-Guard
       übersprang Wrap-auf-0-Keyframes.
-  - **(4) Annahme `kExpectedEncoderLog2PocLsb = 4`** — OFFEN:
-    - `pocDomainBridgeable()` entscheidet über den Zweig, *bevor* die echte Encoder-SPS
-      geparst ist. Ändert libx264 diesen Wert, fällt die Klassifikation still in die
-      falsche Richtung (Seam als bridgeable eingestuft → erste kopierte GOP verworfen).
-      Backstop ist nur die `warningMsg` in `applyPocDomainFix()`.
-    - Prüfen, ob sich die Entscheidung nach dem ersten Encoder-Paket verifizieren lässt.
+  - ~~**(4) Annahme `kExpectedEncoderLog2PocLsb = 4`**~~ → **ERLEDIGT 2026-07-12**
+    (`4ed3a4e`..`b0e1335`): `probeEncoderPocParams()` misst die echte Encoder-SPS
+    vorab (Wegwerf-libx264 mit GLOBAL_HEADER, SPS aus extradata); Konstante nur
+    noch Fallback; Post-hoc-Check vergleicht Sonde↔Real (log2 UND poc_type).
+    - Norm-Befund: die gefürchtete Richtung war unmöglich — H.264 7.4.2.1.1
+      erlaubt minimal log2=4, die Annahme war also nie zu klein, nur ggf.
+      konservativ.
+    - **Neubefund:** libx264 nutzt bei progressivem bf=0 **poc_type=2** (0 nur
+      interlaced). Stand seit der v0.72-Ära in der Debug-Zeile („Encoder SPS:
+      … poc_type=2"), wurde aber nie gegen das poc_type-0-Denkmodell gehalten;
+      der warnende Check war auf poc_type==0 gegated. Naht dort über
+      EOS+frame_num (bewiesen), Routing bewusst unverändert; Meldung ist info,
+      nicht warning. Byte-identisch verifiziert auf MBAFF/IDR-Naht/progressiv/
+      HEVC.
 
 - **Vorschau: am letzten Frame stehenbleiben statt zum ersten Frame zurückspringen**
   - Aktuell springt die Vorschau am Ende der Wiedergabe zurück zum ersten Frame:

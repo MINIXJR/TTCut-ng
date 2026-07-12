@@ -1,5 +1,5 @@
 ---
-base_commit: 0c70f3ab468805249e6541c1ef9150c57d000d21
+base_commit: b0e1335  # smartcut: poc_type 2 is the progressive norm (POC probe series)
 last_verified: 2026-07-12
 sources:
   - extern/ttessmartcut.cpp
@@ -128,14 +128,24 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   neutralization is documented under "PAFF notes" but is emitted *only* by this
   branch, which is broader than PAFF and narrower than "all H.264".
 
-- **`pocDomainBridgeable`** — assumes libx264 emits
-  `log2_max_pic_order_cnt_lsb == 4` (`kExpectedEncoderLog2PocLsb`). The real
-  encoder SPS is not parsed until the first encoder packet arrives, i.e. *after*
-  the branch decision. **Pitfall:** if a future libx264 changes that value, the
-  classification is wrong in the silent direction — a seam is called bridgeable,
-  `applyPocDomainFix` finds no safe `poc_lsb`, and the first copied GOP is
-  dropped. The code escalates this via `TTMessageLogger::warningMsg` precisely
-  because it "must never happen".
+- **`pocDomainBridgeable`** — since `1893497` the encoder POC width is
+  **measured up front** by `probeEncoderPocParams()` (one throwaway libx264
+  open with `GLOBAL_HEADER`; the SPS sits in `extradata` without encoding a
+  frame; knobs mirrored from parser-derived sources — probe==real verified
+  empirically for progressive AND MBAFF). `kExpectedEncoderLog2PocLsb = 4`
+  is only the fallback (probe failure / poc_type ≠ 0), and per H.264
+  7.4.2.1.1 `log2_max_poc_lsb >= 4`, so the old assumption could only ever
+  be conservative — the feared "seam wrongly called bridgeable" direction is
+  spec-impossible. `parseEncoderSpsFromPacket` cross-checks probe vs. real
+  per-segment SPS and warns loudly on mismatch (log2 AND poc_type).
+  **Measured fact (2026-07-12):** libx264 picks **poc_type 2** for
+  progressive bf=0 encodes; poc_type 0 (with log2 4) only under interlace
+  flags. Every progressive cut has always run with a poc_type-2 encoder —
+  `applyPocDomainFix` never fires there (no poc_lsb exists), seam continuity
+  is carried by EOS + the frame_num bridge, and the 4-based classification
+  is a consequence-free heuristic routing onto proven paths (deliberately
+  unchanged; byte-identity is the contract). The old "log2=4" framing
+  applies to the interlaced case only.
 
 - **`selectFramesByDisplayOrder`** — guarantees: `AVFrame::pts` carries the
   source AU index. The frame selection filters by the display lower bound
