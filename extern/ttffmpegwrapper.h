@@ -265,8 +265,6 @@ public:
         int mainAcmod;            // Majority acmod of segment (-1 if not AC3)
         int cutInAcmod;           // acmod at CutIn position
         int cutOutAcmod;          // acmod at CutOut position
-        double cutInChangeTime;   // Time where acmod changes to mainAcmod (0 if no change)
-        double cutOutChangeTime;  // Time where acmod changes from mainAcmod (0 if no change)
     };
     static AcmodInfo analyzeAcmod(const QString& audioFile,
                                    double cutInTime, double cutOutTime);

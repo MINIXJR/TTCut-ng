@@ -1743,7 +1743,7 @@ void TTFFmpegWrapper::clearFrameCache()
 TTFFmpegWrapper::AcmodInfo TTFFmpegWrapper::analyzeAcmod(const QString& audioFile,
                                                           double cutInTime, double cutOutTime)
 {
-    AcmodInfo info = { -1, -1, -1, 0.0, 0.0 };
+    AcmodInfo info = { -1, -1, -1 };
 
     QFile file(audioFile);
     if (!file.open(QIODevice::ReadOnly))
