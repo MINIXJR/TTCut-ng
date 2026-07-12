@@ -1,6 +1,6 @@
 ---
-base_commit: df20bb34a0dd7b449ee942428bab7d2b093784d7
-last_verified: 2026-07-11
+base_commit: 0c70f3ab468805249e6541c1ef9150c57d000d21
+last_verified: 2026-07-12
 sources:
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
@@ -45,11 +45,9 @@ flowchart TD
     SEG --> PS["processSegment()"]
 
     PS -->|"H.264 &amp;&amp; (PAFF or !pocBridgeable)"| UNI["SPS-Unification branch"]
-    PS -->|"UNREACHABLE<br/>(see redundancy)"| FBK["PAFF fallback<br/>(IDR injection)"]
     PS -->|"H.265, or H.264 progressive<br/>&amp; pocBridgeable"| STD["Standard branch"]
 
     UNI --> RE["reencodeFrames()"]
-    FBK --> RE
     STD --> RE
 
     RE --> CDR["computeDecodeRange()"]
@@ -86,7 +84,7 @@ flowchart TD
 | `selectFramesByDisplayOrder` → `ctx.framesToEncode` | Keep-predicate is **mode-dependent**: tail → `au ≥ startFrame && disp ≤ endDisplay`; pure re-encode → `startDisplay ≤ disp ≤ endDisplay`; head/mixed → `disp ≥ startDisplay && au < streamCopyLimit`. `AVFrame::pts` carries the **source AU index**, not a timestamp. |
 | `selectFramesByDisplayOrder` → `*adjustedStreamCopyStart` | Boundary crossing: if any AU in `[streamCopyLimit, nextKF)` displays before `startDisplay`, the re-encode extends to `nextKF` and the stream-copy start moves with it. This is the old "Case A/B" distinction, now exact via the map. |
 | `runEncodePass` → `bufferAndWriteEncoderPacket` | With `bf=0` the encoder emits packets 1:1 in submission order, so packet *k* belongs to `framesToEncode[k]`. The pending-packet buffer delays the *write* by one packet but preserves FIFO order — this is what lets `applyPocDomainFix` patch the **last** encoder packet after the fact. |
-| `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard/fallback only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. |
+| `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. |
 | `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's — computed by `bridgeFrameNum(scStartAU, encLog2Fn)` for both branches. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does; hence an **IDR copy-start yields delta 0** (never patch an IDR's fn — H.264 7.4.3). Otherwise delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
 | `frameNumDelta`: which `log2` width? | Unification branch uses **source** `mLog2MaxFrameNum` (slices were rewritten into the source domain); standard branch uses **encoder** `mEncoderLog2MaxFrameNum`. Swapping these silently corrupts the seam. |
 | `applyPocDomainFix` → `ctx.pendingPacket` | Patches the last encoder `poc_lsb` so `PicOrderCntMsb` does not wrap into the first copied GOP. Only H.264, only `poc_type == 0`, only when a stream-copy follows. Reads source POC at the *actual* copy start (post-adjustment). |
@@ -140,11 +138,10 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   because it "must never happen".
 
 - **`selectFramesByDisplayOrder`** — guarantees: `AVFrame::pts` carries the
-  source AU index. **Pitfall:** `ctx.realStartAU` is assigned in three places but
-  read only by a `qDebug()` statement — no control flow depends on it. It is a
-  leftover of the v0.72.0 frame-index unification. `CLAUDE.md`'s claim that
-  "non-PAFF (MBAFF) streams use `realStartAU` filtering" does not match the code;
-  the filtering is done by the display lower bound.
+  source AU index. The frame selection filters by the display lower bound
+  (`disp >= startDisplay`), not by any AU-index cutoff. (The write-only
+  `ctx.realStartAU` leftover this section used to flag was removed in
+  `1c0bd2b`; CLAUDE.md no longer mentions it.)
 
 - **`decodeFramesIntoList`** — assumes `thread_count = 1` on the decoder.
   Frame-threading reassigns PTS and would break the AU-index-in-`pts` contract.
@@ -163,7 +160,8 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 - **EOS + Non-IDR (known latent defect)** — after EOS the decoder's DPB is
   flushed but `PrevRefFrameNum` is not reset. The standard branch bridges this
   with `frameNumDelta`. When the boundary-crossing extension does *not* fire
-  (`realStartAU < streamCopyLimit`) and the copy start is a Non-IDR I-slice, the
+  (`*adjustedStreamCopyStart` stays `-1`: no AU in `[streamCopyLimit, nextKF)`
+  displays before `startDisplay`) and the copy start is a Non-IDR I-slice, the
   same spec violation exists as in the historical PAFF case. Not observed with
   `has_b_frames ≥ 2` (the extension always fires); reachable in principle at
   `has_b_frames ∈ {0,1}`. Carried over from project memory, **not** re-verified
