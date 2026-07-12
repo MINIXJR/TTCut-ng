@@ -289,15 +289,22 @@
   - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
     Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
 
-- **Dead-Code-Audit (Medium Priority)**
-  - Systematische Suche nach toten Klassen/Funktionen/Includes (Beispiel:
-    `TTCutAudioTask` blieb nach der v0.60.0-libav-Migration vom 2026-02-21
-    noch rund zwei Monate stehen, bis f2c4412 am 2026-04-25)
-  - Vorgehen: clangd-Suche nach Klassen ohne lebende Caller, dann
-    cross-check via grep, dann entfernen
-  - Außerdem: ungenutzte includes in .cpp/.h entfernen (clangd `unused-includes`)
-  - Sollte als wiederkehrender Wartungs-Pass laufen, nicht als Einmalaktion
-  - Konkrete Funde 2026-07-09/10 (belegt):
+- **Dead-Code-Audit (Medium Priority)** — Erstlauf **DURCHGEFÜHRT 2026-07-12**
+  (Branch `cleanup/dead-code-audit`, ~2.185 Zeilen entfernt in Batches A–K +
+  Runde-2/3-Rescan bis Konvergenz; `--auto-cut`-QC bit-identisch zu master,
+  161.844 Pakete). Jetzt als wiederkehrender Pass automatisiert im Skill
+  `dead-code-audit` (claude-skills/global): 4-Quellen-Scanner
+  (Build-Abwesenheit, Symbol-Grep, Linker-gc-sections, clang-tidy-Includes)
+  + Sonnet-Klassifikation + Review-Gate. Künftige Läufe: Skill invoken.
+  - Beispiel-Altfund: `TTCutAudioTask` blieb nach der v0.60.0-libav-Migration
+    vom 2026-02-21 noch rund zwei Monate stehen, bis f2c4412 am 2026-04-25.
+  - Offene Folge-Funde aus dem Erstlauf (kein toter Code):
+    - Stale Doc-Kommentare, die `isBlackAt` namentlich erwähnen
+      (`gui/ttcutmainwindow.cpp:52,1686`, `data/ttsearchtask.cpp:128`) —
+      die Methode ist weg, die Kommentare nicht.
+    - `ttmpeg2window2.cpp` `histogramDifference` als `-Wunused-function`
+      gemeldet (statische Funktion, kein Member) — separat prüfen.
+  - Weiterhin offen (unverändert, kein toter Code):
     - ~~`AcmodInfo::cutInChangeTime` / `cutOutChangeTime`~~ → **ENTFERNT 2026-07-12**
       (`f4d4e66`, User-Entscheid: nur Burst-am-Schnittpunkt zählt; Umsetzungsweg
       falls je gewünscht in `docs/code-map/burst-detection.md` konserviert).
