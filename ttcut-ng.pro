@@ -86,7 +86,6 @@ HEADERS     = common/ttcut.h\
               data/ttstreampointmodel.h\
               data/ttstreampoint_videoworker.h\
               data/ttstreampoint_audioworker.h\
-              data/ttstreampoint_cutderivation.h\
               data/ttsearchtask.h\
               data/ttsearchtask_blackframe.h\
               data/ttsearchtask_scenechange.h\
@@ -187,7 +186,6 @@ SOURCES     = common/ttcut.cpp\
               data/ttstreampointmodel.cpp\
               data/ttstreampoint_videoworker.cpp\
               data/ttstreampoint_audioworker.cpp\
-              data/ttstreampoint_cutderivation.cpp\
               data/ttsearchtask.cpp\
               data/ttsearchtask_blackframe.cpp\
               data/ttsearchtask_scenechange.cpp\
