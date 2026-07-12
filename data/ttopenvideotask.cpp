@@ -19,7 +19,6 @@
 #include "../common/ttsettings.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavtypes.h"
-#include "../avstream/ttmpeg2videostream.h"
 
 #include <QDir>
 #include <QDebug>

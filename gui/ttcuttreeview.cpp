@@ -18,9 +18,7 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
-#include "../avstream/ttac3audiostream.h"
 #include "../avstream/ttaudioheaderlist.h"
-#include "../extern/ttffmpegwrapper.h"
 
 #include "ttcuttreeview.h"
 

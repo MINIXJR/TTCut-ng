@@ -42,8 +42,6 @@ class TTMarkerItem
 
     QString fileName() const;
     QTime   markerTime() const;
-    QString markerPosString() const;
-    QString markerTimeString() const;
 
     TTAVItem* avDataItem() const;
 

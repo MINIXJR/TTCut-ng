@@ -31,8 +31,6 @@ class TTProcessForm : public QDialog, Ui::ProcessViewWidget
 
   public:
     void enableButton(bool value);
-    void addLine(const QString& str_line);
-    void showOkButton(bool show);
 
   signals:
     void btnCancelClicked();

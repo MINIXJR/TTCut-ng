@@ -20,7 +20,6 @@
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavstream.h"
 #include "../common/ttexception.h"
-#include "../common/ttmessagelogger.h"
 
 #include <QList>
 #include <QDir>

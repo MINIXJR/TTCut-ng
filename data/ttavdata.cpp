@@ -889,11 +889,6 @@ void TTAVData::onCutOrderChanged(int oldIndex, int newIndex)
 	mpCutList->swap(oldIndex, newIndex);
 }
 
-void TTAVData::onMarkerOrderChanged(int oldIndex, int newIndex)
-{
-	mpMarkerList->swap(oldIndex, newIndex);
-}
-
 //! Search equal frame
 void TTAVData::onDoFrameSearch(TTAVItem* avItem, int startIndex)
 {

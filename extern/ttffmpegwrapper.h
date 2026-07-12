@@ -186,10 +186,8 @@ public:
 
     // Frame access
     TTFrameInfo frameAt(int index) const;
-    int findGOPForFrame(int frameIndex) const;
 
     // Utility functions
-    double ptsToSeconds(int64_t pts, int streamIndex) const;
 
     // Frame decoding for preview
     bool seekToFrame(int frameIndex);

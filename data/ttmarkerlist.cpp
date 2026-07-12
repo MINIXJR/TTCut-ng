@@ -16,9 +16,7 @@
 #include "ttavlist.h"
 
 #include "../common/ttcut.h"
-#include "../avstream/ttavheader.h"
 #include "../avstream/ttavstream.h"
-#include "../avstream/ttmpeg2videostream.h"
 
 #include <QDateTime>
 #include <QFileInfo>
@@ -58,16 +56,6 @@ QString TTMarkerItem::fileName() const
 	return (mpAVDataItem->videoStream() != 0)
 			? mpAVDataItem->videoStream()->fileName()
 			: "";
-}
-
-QString TTMarkerItem::markerPosString() const
-{
-	return QString("%1").arg(mMarkerPos);
-}
-
-QString TTMarkerItem::markerTimeString() const
-{
-	return markerTime().toString("hh:mm:ss.zzz");
 }
 
 TTAVItem* TTMarkerItem::avDataItem() const

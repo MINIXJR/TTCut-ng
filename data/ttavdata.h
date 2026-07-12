@@ -130,7 +130,6 @@ class TTAVData : public QObject
 
     void onAppendMarker(int);
     void onRemoveMarker(const TTMarkerItem& mItem);
-    void onMarkerOrderChanged(int, int);
 
     void onDoFrameSearch(TTAVItem* avItem, int startIndex);
     void onCurrentFramePositionChanged(int position);

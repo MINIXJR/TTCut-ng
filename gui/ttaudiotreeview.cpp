@@ -17,7 +17,6 @@
 
 #include "../data/ttaudiolist.h"
 #include "../data/ttavlist.h"
-#include "../avstream/ttavstream.h"
 
 #include <QAction>
 #include <QApplication>

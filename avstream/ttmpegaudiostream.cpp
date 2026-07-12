@@ -30,7 +30,6 @@
 #include "ttaudioheaderlist.h"
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
-#include "../data/ttcutlist.h"
 #include "../data/ttcutparameter.h"
 
 #include <QElapsedTimer>

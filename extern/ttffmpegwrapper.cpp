@@ -596,35 +596,6 @@ TTFrameInfo TTFFmpegWrapper::frameAt(int index) const
 }
 
 // ----------------------------------------------------------------------------
-// Find GOP for frame
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::findGOPForFrame(int frameIndex) const
-{
-    if (frameIndex >= 0 && frameIndex < mFrameIndex.size()) {
-        return mFrameIndex[frameIndex].gopIndex;
-    }
-    return -1;
-}
-
-// ----------------------------------------------------------------------------
-// Convert PTS to seconds
-// ----------------------------------------------------------------------------
-double TTFFmpegWrapper::ptsToSeconds(int64_t pts, int streamIndex) const
-{
-    if (!mFormatCtx || streamIndex < 0 ||
-        streamIndex >= static_cast<int>(mFormatCtx->nb_streams)) {
-        return 0.0;
-    }
-
-    if (pts == AV_NOPTS_VALUE) {
-        return 0.0;
-    }
-
-    AVStream* stream = mFormatCtx->streams[streamIndex];
-    return pts * av_q2d(stream->time_base);
-}
-
-// ----------------------------------------------------------------------------
 // Set error message
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::setError(const QString& error)

@@ -15,7 +15,6 @@
 #include "ttprogressbar.h"
 #include "tttaskprogress.h"
 
-#include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 #include "../common/ttthreadtask.h"
 

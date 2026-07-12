@@ -56,18 +56,6 @@ void TTProcessForm::enableButton(bool value)
 /**
  * Show the ok button
  */
-void TTProcessForm::showOkButton(bool show)
-{
-  btnCancel->setText(tr("Ok"));
-  btnCancel->setIcon(QIcon(":/pixmaps/pixmaps/button_ok.png"));
-  btnCancel->setVisible(show);
-}
-
 /**
  * Add a line to the process output
  */
-void TTProcessForm::addLine(const QString& str_line)
-{
-	procOutputList->addItem(str_line);
-  procOutputList->scrollToBottom();
-}

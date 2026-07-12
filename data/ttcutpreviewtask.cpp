@@ -21,7 +21,6 @@
 #include "../common/ttsettings.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/istatusreporter.h"
-#include "../avstream/ttfilebuffer.h"
 #include "../avstream/ttavtypes.h"
 #include "../data/ttcutparameter.h"
 #include "../data/ttcutlist.h"
