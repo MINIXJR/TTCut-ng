@@ -291,7 +291,8 @@
 
 - **Dead-Code-Audit (Medium Priority)**
   - Systematische Suche nach toten Klassen/Funktionen/Includes (Beispiel:
-    `TTCutAudioTask` blieb seit der v0.60.0-libav-Migration jahrelang stehen)
+    `TTCutAudioTask` blieb nach der v0.60.0-libav-Migration vom 2026-02-21
+    noch rund zwei Monate stehen, bis f2c4412 am 2026-04-25)
   - Vorgehen: clangd-Suche nach Klassen ohne lebende Caller, dann
     cross-check via grep, dann entfernen
   - Außerdem: ungenutzte includes in .cpp/.h entfernen (clangd `unused-includes`)
