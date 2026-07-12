@@ -63,7 +63,6 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/ttcutsettingsaudio.ui\
               ui/ttcutsettingspaths.ui\
               ui/ttcutsettingslogging.ui\
-              ui/mplexparamdlg.ui\
               ui/previewwidget.ui\
               ui/processviewwidget.ui\
               ui/avcutdialog.ui\
