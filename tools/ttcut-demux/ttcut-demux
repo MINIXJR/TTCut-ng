@@ -1178,14 +1178,25 @@ with open('$OUTPUT_VIDEO','rb') as f:
         _FD_DEN="${_FD_DEN:-1}"
         FRAME_DUR=$(awk "BEGIN {printf \"%.6f\", $_FD_DEN / $_FD_NUM}")
 
-        # First display PTS. MPEG-2 leading-B skip already trimmed the ES to
-        # the first I; align the span start with it in that case.
+        # First frame PTS = the stream's start_time (first DECODABLE frame).
+        # Not the minimum packet PTS: open-GOP leading B-frames at a mid-
+        # recording start have a lower PTS but are dropped by every decoder, so
+        # counting them would overstate the duration (by up to M-1 frames) and
+        # over-pad the audio. start_time excludes them and matches the decoded
+        # frame count. MPEG-2 leading-B skip already trimmed the ES to the
+        # first I; align the span start with it in that case.
         if [ "$VIDEO_START_TIME" != "0" ]; then
             SPAN_FIRST_PTS="$VIDEO_START_TIME"
         else
             SPAN_FIRST_PTS=$(ffprobe -v error -select_streams v:0 \
-                -read_intervals "%+2" -show_entries packet=pts_time \
-                -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | head -1)
+                -show_entries stream=start_time -of default=noprint_wrappers=1:nokey=1 \
+                "$INPUT" 2>/dev/null | grep -E '^[0-9]' | head -1)
+            # Fallback to min packet PTS if start_time is unavailable.
+            if [ -z "$SPAN_FIRST_PTS" ]; then
+                SPAN_FIRST_PTS=$(ffprobe -v error -select_streams v:0 \
+                    -read_intervals "%+2" -show_entries packet=pts_time \
+                    -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | head -1)
+            fi
         fi
 
         # Last PTS: probe a window near the end (container span as seek hint),
