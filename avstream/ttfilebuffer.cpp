@@ -121,11 +121,6 @@ void TTFileBuffer::close()
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns the current file name
  */
-QString TTFileBuffer::fileName()
-{
-  return file->fileName();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *Get file size in bytes
  */
@@ -154,11 +149,6 @@ quint64 TTFileBuffer::position()
  * Flushes any buffered data to the file. Returns true if successful;
  * otherwise returns false.
  */
-bool TTFileBuffer::flush()
-{
-  return file->flush();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
@@ -346,27 +336,12 @@ QString TTFileBuffer::readLine(QString delimiter)
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTFileBuffer::readUInt16(quint16 &byte2)
-{
-  readByte((quint8*)&byte2, 2);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTFileBuffer::readUInt32(quint32 &byte4)
-{
-  readByte((quint8*)&byte4, 4);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTFileBuffer::readUInt64(quint64 &byte8)
-{
-  readByte((quint8*)&byte8, 8);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Writes w_buffer with size w_length direct to stream and returns the number
  * of bytes that were actually written, or -1 if an error occured.
@@ -389,27 +364,12 @@ quint64 TTFileBuffer::directWrite(quint8 byte1)
 /* /////////////////////////////////////////////////////////////////////////////
  * Writes an quint16 to stream
  */
-quint64 TTFileBuffer::directWriteUInt16(quint16 byte2)
-{
-  return directWrite((quint8*)&byte2, 2);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Writes an quint32 to stream
  */
-quint64 TTFileBuffer::directWriteUInt32(quint32 byte4)
-{
-  return directWrite((quint8*)&byte4, 4);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Write an quint64 to stream
  */
-quint64 TTFileBuffer::directWriteUInt64(quint64 byte8)
-{
-  return directWrite((quint8*)&byte8, 8);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */

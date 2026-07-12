@@ -35,14 +35,11 @@ class TTVideoIndexList : public QVector<TTVideoIndex*>
   TTVideoIndex* videoIndexAt(int index);
 
   void sortDisplayOrder();
-  bool isStreamOrder();
-  bool isDisplayOrder();
 
   int moveToNextIndexPos(int start_pos, int frame_type=0);
   int moveToPrevIndexPos(int start_pos, int frame_type=0);
   int moveToIndexPos(int index, int frame_type=0);
 
-  int  displayOrder(int index);
   int  streamOrder(int index);
   int  headerListIndex(int index);
   int  pictureCodingType(int index);

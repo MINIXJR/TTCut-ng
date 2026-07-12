@@ -238,22 +238,16 @@ public:
     // Search functions
     int findKeyframeBefore(int auIndex) const;
     int findKeyframeAfter(int auIndex) const;
-    int findIDRBefore(int auIndex) const;
     int findIDRAfter(int auIndex) const;
     int findGopForAU(int auIndex) const;
 
     // GOP information
     TTGopInfo gopAt(int index) const;
-    int getGopStartAU(int gopIndex) const;
-    int getGopEndAU(int gopIndex) const;
 
     // B-frame reorder delay (number of B-frames between reference frames)
     int computeReorderDelay() const;
 
     // Utility
-    QString formatNalType(uint8_t type) const;
-    static bool isKeyframeType(uint8_t type, TTNaluCodecType codec);
-    static bool isSliceType(uint8_t type, TTNaluCodecType codec);
 
     // Parse H.264 slice_type from raw packet data (e.g. AVPacket->data).
     // Returns H264::SLICE_P (0), H264::SLICE_B (1), H264::SLICE_I (2), or -1 on error.

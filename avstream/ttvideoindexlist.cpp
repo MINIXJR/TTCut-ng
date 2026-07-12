@@ -86,27 +86,12 @@ void TTVideoIndexList::sortDisplayOrder()
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns true if the index list is sorted in stream order
  */
-bool TTVideoIndexList::isStreamOrder()
-{
-	return (current_order == 0);
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns true if the index list is sorted in display order
  */
-bool TTVideoIndexList::isDisplayOrder()
-{
-	return (current_order == 1);
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns the display order of the picture at index positon
  */
-int TTVideoIndexList::displayOrder( int index )
-{
-  return videoIndexAt(index)->getDisplayOrder();
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns the index in video header list of picture at given index
  */

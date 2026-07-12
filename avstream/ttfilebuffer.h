@@ -30,11 +30,9 @@ public:
   // file stream
   bool    open();    
   void    close();
-  QString fileName();
   quint64 size();
   bool    atEnd();
   quint64 position();
-  bool    flush();
 
   // read / write
   void    readByte( quint8 &byte1 );
@@ -52,15 +50,9 @@ public:
   void    seekAbsolute(quint64 offset);
 
   // migration stuff
-  void    readUInt16(quint16 &byte2);
-  void    readUInt32(quint32 &byte4);
-  void    readUInt64(quint64 &byte8);
 
   quint64 directWrite(quint8 byte1);
   quint64 directWrite(const quint8* w_buffer, int w_length);
-  quint64 directWriteUInt16(quint16 byte2);
-  quint64 directWriteUInt32(quint32 byte4);
-  quint64 directWriteUInt64(quint64 byte8);
 
  protected:
   void    initInstance();

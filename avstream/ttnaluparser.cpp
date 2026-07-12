@@ -1206,20 +1206,6 @@ int TTNaluParser::findKeyframeAfter(int auIndex) const
 }
 
 // ----------------------------------------------------------------------------
-// Find IDR frame before given AU index
-// IDR frames are true random access points, safe for stream-copy start
-// ----------------------------------------------------------------------------
-int TTNaluParser::findIDRBefore(int auIndex) const
-{
-    for (int i = auIndex; i >= 0; i--) {
-        if (mAccessUnits[i].isIDR) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// ----------------------------------------------------------------------------
 // Find IDR frame after given AU index
 // IDR frames are true random access points, safe for stream-copy start
 // ----------------------------------------------------------------------------
@@ -1253,28 +1239,6 @@ TTGopInfo TTNaluParser::gopAt(int index) const
         return mGops[index];
     }
     return TTGopInfo();
-}
-
-// ----------------------------------------------------------------------------
-// Get start AU of GOP
-// ----------------------------------------------------------------------------
-int TTNaluParser::getGopStartAU(int gopIndex) const
-{
-    if (gopIndex >= 0 && gopIndex < mGops.size()) {
-        return mGops[gopIndex].startAU;
-    }
-    return -1;
-}
-
-// ----------------------------------------------------------------------------
-// Get end AU of GOP
-// ----------------------------------------------------------------------------
-int TTNaluParser::getGopEndAU(int gopIndex) const
-{
-    if (gopIndex >= 0 && gopIndex < mGops.size()) {
-        return mGops[gopIndex].endAU;
-    }
-    return -1;
 }
 
 // ----------------------------------------------------------------------------
@@ -1320,69 +1284,6 @@ int TTNaluParser::computeReorderDelay() const
         qDebug() << "TTNaluParser: max consecutive B-frames in first" << gopsChecked
                  << "GOPs:" << maxConsecutiveB << "-> reorder delay:" << maxConsecutiveB;
     return maxConsecutiveB;
-}
-
-// ----------------------------------------------------------------------------
-// Format NAL type as string
-// ----------------------------------------------------------------------------
-QString TTNaluParser::formatNalType(uint8_t type) const
-{
-    if (mCodecType == NALU_CODEC_H264) {
-        switch (type) {
-            case H264::NAL_SLICE:     return "SLICE";
-            case H264::NAL_IDR_SLICE: return "IDR";
-            case H264::NAL_SEI:       return "SEI";
-            case H264::NAL_SPS:       return "SPS";
-            case H264::NAL_PPS:       return "PPS";
-            case H264::NAL_AUD:       return "AUD";
-            case H264::NAL_FILLER:    return "FILLER";
-            default: return QString("TYPE_%1").arg(type);
-        }
-    } else if (mCodecType == NALU_CODEC_H265) {
-        switch (type) {
-            case H265::NAL_TRAIL_R:   return "TRAIL_R";
-            case H265::NAL_TRAIL_N:   return "TRAIL_N";
-            case H265::NAL_IDR_W_RADL: return "IDR_W_RADL";
-            case H265::NAL_IDR_N_LP:  return "IDR_N_LP";
-            case H265::NAL_CRA_NUT:   return "CRA";
-            case H265::NAL_VPS:       return "VPS";
-            case H265::NAL_SPS:       return "SPS";
-            case H265::NAL_PPS:       return "PPS";
-            case H265::NAL_AUD:       return "AUD";
-            case H265::NAL_FD:        return "FILLER";
-            case H265::NAL_PREFIX_SEI: return "SEI_PREFIX";
-            case H265::NAL_SUFFIX_SEI: return "SEI_SUFFIX";
-            default: return QString("TYPE_%1").arg(type);
-        }
-    }
-    return QString("UNKNOWN_%1").arg(type);
-}
-
-// ----------------------------------------------------------------------------
-// Check if NAL type is a keyframe
-// ----------------------------------------------------------------------------
-bool TTNaluParser::isKeyframeType(uint8_t type, TTNaluCodecType codec)
-{
-    if (codec == NALU_CODEC_H264) {
-        return type == H264::NAL_IDR_SLICE;
-    } else if (codec == NALU_CODEC_H265) {
-        return (type >= H265::NAL_BLA_W_LP && type <= H265::NAL_CRA_NUT);
-    }
-    return false;
-}
-
-// ----------------------------------------------------------------------------
-// Check if NAL type is a slice
-// ----------------------------------------------------------------------------
-bool TTNaluParser::isSliceType(uint8_t type, TTNaluCodecType codec)
-{
-    if (codec == NALU_CODEC_H264) {
-        return type == H264::NAL_SLICE || type == H264::NAL_IDR_SLICE;
-    } else if (codec == NALU_CODEC_H265) {
-        return (type <= H265::NAL_RASL_R) ||
-               (type >= H265::NAL_BLA_W_LP && type <= H265::NAL_CRA_NUT);
-    }
-    return false;
 }
 
 // ----------------------------------------------------------------------------
