@@ -1041,7 +1041,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             ES_EXTRA_FRAMES_CSV=$(echo "$PTS_OUTPUT" | grep -oP '^extra_frames=\K.*' || true)
             if [ -n "$ES_EXTRA_FRAMES_CSV" ]; then
                 count=$(echo "$ES_EXTRA_FRAMES_CSV" | tr ',' '\n' | wc -l)
-                warn "PTS analysis: $count extra frames detected — stream has defective regions"
+                warn "PTS analysis: $count pictures with doubled PTS detected (field-picture pairs or TS corruption)"
             fi
         elif [ "$PTS_EXIT" -eq 2 ]; then
             warn "PTS analysis failed (exit 2)"
@@ -1163,28 +1163,73 @@ with open('$OUTPUT_VIDEO','rb') as f:
         fi
     fi
 
-    # Get video duration - use container duration if available (FAST)
-    # Otherwise fall back to probing elementary stream (slow)
-    if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
-        # Use duration from original container (already obtained earlier - instant!)
-        VIDEO_DURATION="$CONTAINER_VIDEO_DURATION"
-    else
-        # Fallback: probe elementary stream (slower)
-        VIDEO_DURATION=$(ffprobe -v error \
-            -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \
-            "$OUTPUT_VIDEO" 2>/dev/null | grep -E '^[0-9]' || echo "")
+    # Video duration = video PTS span, NOT the container span.
+    # ffprobe format=duration (CONTAINER_VIDEO_DURATION) spans the latest
+    # stream end minus the earliest stream start; with DVB audio leading the
+    # video it overshoots by the audio lead, inflating the frame count, the
+    # padding target and the reported drift. Measure the video stream itself:
+    # first display PTS (min over the first 2s -- covers leading B-frames) to
+    # last PTS + one frame duration, on the repaired TS (monotonic PTS; also
+    # collapses VDR multi-file to one clean timeline).
+    VIDEO_DURATION=""
+    if [ "$CLEANUP_REPAIRED" = true ]; then
+        _FD_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
+        _FD_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
+        _FD_DEN="${_FD_DEN:-1}"
+        FRAME_DUR=$(awk "BEGIN {printf \"%.6f\", $_FD_DEN / $_FD_NUM}")
 
-        if [ -z "$VIDEO_DURATION" ] || [ "$VIDEO_DURATION" = "N/A" ]; then
-            # Estimate from file size and bitrate (rough approximation)
-            VIDEO_SIZE_BYTES=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
-            # Assume ~5 Mbit/s for SD, ~15 Mbit/s for HD
-            if [ "$VIDEO_WIDTH" -gt 1280 ]; then
-                EST_BITRATE=15000000  # 15 Mbit/s for HD
-            else
-                EST_BITRATE=5000000   # 5 Mbit/s for SD
+        # First display PTS. MPEG-2 leading-B skip already trimmed the ES to
+        # the first I; align the span start with it in that case.
+        if [ "$VIDEO_START_TIME" != "0" ]; then
+            SPAN_FIRST_PTS="$VIDEO_START_TIME"
+        else
+            SPAN_FIRST_PTS=$(ffprobe -v error -select_streams v:0 \
+                -read_intervals "%+2" -show_entries packet=pts_time \
+                -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | head -1)
+        fi
+
+        # Last PTS: probe a window near the end (container span as seek hint),
+        # widen once if the first window is empty.
+        SPAN_SEEK=$(awk "BEGIN {s = ${CONTAINER_VIDEO_DURATION:-0} - 10; printf \"%.3f\", (s > 0) ? s : 0}")
+        SPAN_LAST_PTS=$(ffprobe -v error -select_streams v:0 \
+            -read_intervals "${SPAN_SEEK}%+15" -show_entries packet=pts_time \
+            -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | tail -1)
+        if [ -z "$SPAN_LAST_PTS" ]; then
+            SPAN_SEEK=$(awk "BEGIN {s = ${CONTAINER_VIDEO_DURATION:-0} - 60; printf \"%.3f\", (s > 0) ? s : 0}")
+            SPAN_LAST_PTS=$(ffprobe -v error -select_streams v:0 \
+                -read_intervals "${SPAN_SEEK}%+60" -show_entries packet=pts_time \
+                -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | tail -1)
+        fi
+
+        if [ -n "$SPAN_FIRST_PTS" ] && [ -n "$SPAN_LAST_PTS" ]; then
+            VIDEO_DURATION=$(awk "BEGIN {d = $SPAN_LAST_PTS + $FRAME_DUR - $SPAN_FIRST_PTS; printf \"%.6f\", (d > 0) ? d : 0}")
+            info "  Video duration from PTS span: ${VIDEO_DURATION}s (first=${SPAN_FIRST_PTS}s last=${SPAN_LAST_PTS}s)"
+        fi
+    fi
+
+    # Fallback: repair failed or PTS probe empty -> container span (honest warning).
+    if [ -z "$VIDEO_DURATION" ]; then
+        if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
+            VIDEO_DURATION="$CONTAINER_VIDEO_DURATION"
+            warn "  Video duration from container span (may include the audio lead)"
+        else
+            # Fallback: probe elementary stream (slower)
+            VIDEO_DURATION=$(ffprobe -v error \
+                -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \
+                "$OUTPUT_VIDEO" 2>/dev/null | grep -E '^[0-9]' || echo "")
+
+            if [ -z "$VIDEO_DURATION" ] || [ "$VIDEO_DURATION" = "N/A" ]; then
+                # Estimate from file size and bitrate (rough approximation)
+                VIDEO_SIZE_BYTES=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
+                # Assume ~5 Mbit/s for SD, ~15 Mbit/s for HD
+                if [ "$VIDEO_WIDTH" -gt 1280 ]; then
+                    EST_BITRATE=15000000  # 15 Mbit/s for HD
+                else
+                    EST_BITRATE=5000000   # 5 Mbit/s for SD
+                fi
+                VIDEO_DURATION=$(awk "BEGIN {printf \"%.3f\", $VIDEO_SIZE_BYTES * 8 / $EST_BITRATE}")
+                warn "  Duration estimated from file size (may be inaccurate)"
             fi
-            VIDEO_DURATION=$(awk "BEGIN {printf \"%.3f\", $VIDEO_SIZE_BYTES * 8 / $EST_BITRATE}")
-            warn "  Duration estimated from file size (may be inaccurate)"
         fi
     fi
 
@@ -1205,7 +1250,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # Calculate drift
         AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
 
-        info "  Video: $VIDEO_FRAME_COUNT frames = ${VIDEO_DURATION_MS}ms"
+        info "  Video: ~$VIDEO_FRAME_COUNT frames = ${VIDEO_DURATION_MS}ms"
         info "  Audio: ${AUDIO_DURATION_MS}ms"
         info "  Duration difference: ${AV_DRIFT_MS}ms"
 
