@@ -18,6 +18,7 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
+#include "../avstream/ttac3audiostream.h"  // TTAC3AudioHeader (dynamic_cast)
 #include "../avstream/ttaudioheaderlist.h"
 
 #include "ttcuttreeview.h"

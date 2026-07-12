@@ -19,6 +19,8 @@
 #include "../common/ttsettings.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavtypes.h"
+#include "../avstream/ttavstream.h"       // complete TTVideoStream
+#include "../avstream/ttvideoindexlist.h"  // indexList()->sortDisplayOrder()
 
 #include <QDir>
 #include <QDebug>
