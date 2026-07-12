@@ -387,113 +387,18 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         }
       }
 
-      // Store extra frame indices for audio time correction (MPEG-2 parser
-      // preferred over .info; see loadExtraFrameIndices). Fresh open here, so
-      // clear first — the helper is a no-op on a populated list.
+      // Defer the extra-frame / audio-gap load AND the cluster dialog to
+      // onOpenVideoFinished: the MPEG-2 parser's field-pair list
+      // (extraIndices()) is only built once the async open task finishes, and
+      // both the audio-correction source preference and the field-pair-vs-
+      // defect classification need it. Marking the item here (fresh open only)
+      // preserves the "no dialog on project reload" behaviour, since project
+      // load bypasses openAVStreams. Mirrors mpPendingVdrMarkers.
+      // Clear here so the fresh-open reload in onOpenVideoFinished always runs
+      // (openAVStreams used to clear + load the list itself).
       mExtraFrameIndices.clear();
-      loadExtraFrameIndices(mExtraFrameIndices, esInfo, avItem ? avItem->videoStream() : nullptr);
-      // Store audio gap frame indices (separate list \u2014 used for marker
-      // visualization only, NOT for audio cut time correction).
-      mAudioGapIndices = esInfo.audioGapFrames();
-      if (!mAudioGapIndices.isEmpty()) {
-        if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "Loaded" << mAudioGapIndices.size() << "audio gap frame indices";
-      }
-
-      // Show clustering dialog if extra frames OR audio gaps were detected
-      // (not on project reload). Both lists are clustered with the same
-      // settings (gap + offset) and emit TTStreamPoint with Error type;
-      // descriptions distinguish them ("Defekt:" vs "Audio-Gap:").
-      if ((!mExtraFrameIndices.isEmpty() || !mAudioGapIndices.isEmpty()) && avItem) {
-        TTVideoStream* vs = avItem->videoStream();
-        double frameRate = vs ? vs->frameRate() : 25.0;
-        int gapFrames = TTSettings::instance()->extraFrameClusterGapSec() * frameRate;
-        int offsetFrames = TTSettings::instance()->extraFrameClusterOffsetSec() * frameRate;
-
-        QList<TTStreamPoint> clusters;
-
-        // Cluster pass 1: video defect frames (es_extra_frames)
-        if (!mExtraFrameIndices.isEmpty()) {
-            int clusterStart = mExtraFrameIndices.first();
-            int clusterEnd = clusterStart;
-            int clusterCount = 1;
-
-            auto emitCluster = [&]() {
-                int pos = qMax(0, clusterStart - offsetFrames);
-                double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-                QString desc = QString("Defekt: %1\u2013%2 (%3 Frames, %4s)")
-                    .arg(clusterStart).arg(clusterEnd)
-                    .arg(clusterCount).arg(durSec, 0, 'f', 1);
-                clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
-            };
-
-            for (int i = 1; i < mExtraFrameIndices.size(); ++i) {
-                if (mExtraFrameIndices[i] - clusterEnd <= gapFrames) {
-                    clusterEnd = mExtraFrameIndices[i];
-                    clusterCount++;
-                } else {
-                    emitCluster();
-                    clusterStart = mExtraFrameIndices[i];
-                    clusterEnd = clusterStart;
-                    clusterCount = 1;
-                }
-            }
-            emitCluster();
-        }
-
-        // Cluster pass 2: audio gap frames
-        if (!mAudioGapIndices.isEmpty()) {
-            int clusterStart = mAudioGapIndices.first();
-            int clusterEnd = clusterStart;
-
-            auto emitGapCluster = [&]() {
-                int pos = qMax(0, clusterStart - offsetFrames);
-                double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-                QString desc = QString("Audio-Gap: %1\u2013%2 (%3s)")
-                    .arg(clusterStart).arg(clusterEnd).arg(durSec, 0, 'f', 1);
-                clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
-            };
-
-            for (int i = 1; i < mAudioGapIndices.size(); ++i) {
-                if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
-                    clusterEnd = mAudioGapIndices[i];
-                } else {
-                    emitGapCluster();
-                    clusterStart = mAudioGapIndices[i];
-                    clusterEnd = clusterStart;
-                }
-            }
-            emitGapCluster();
-        }
-
-        // Show dialog with group listing (combined defect + gap totals)
-        int totalDefects = mExtraFrameIndices.size() + mAudioGapIndices.size();
-        QString msg = tr("%1 defective frames in %2 groups detected.\n")
-            .arg(totalDefects)
-            .arg(clusters.size());
-
-        int showCount = qMin(clusters.size(), 10);
-        for (int i = 0; i < showCount; ++i) {
-            msg += QString("\n  %1").arg(clusters[i].description());
-        }
-        if (clusters.size() > 10) {
-            msg += QString("\n  ... %1 %2")
-                .arg(clusters.size() - 10)
-                .arg(tr("more groups"));
-        }
-
-        QMessageBox msgBox(QMessageBox::Warning,
-                           tr("Defective Frames Detected"),
-                           msg, QMessageBox::NoButton, TTCut::mainWindow);
-        QPushButton* importBtn = msgBox.addButton(
-            tr("Import as Stream Points"), QMessageBox::AcceptRole);
-        msgBox.addButton(QMessageBox::Ok);
-        msgBox.exec();
-
-        if (msgBox.clickedButton() == importBtn) {
-            emit vdrMarkersLoaded(clusters);
-        }
-      }
+      if (avItem)
+        mpPendingExtraFrameDialog.insert(avItem);
 
       // Show warning if decode errors were detected (legacy .info)
       if (esInfo.hasWarnings()) {
@@ -609,19 +514,170 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
 /*!
  * onOpenVideoFinished
  */
+/*!
+ * showExtraFrameClusterDialog
+ * Classify .info doubled-PTS clusters against the MPEG-2 parser's field-pair
+ * list and show the warning dialog. Runs once the video stream is built, so
+ * extraIndices() is available. Fresh open only (see mpPendingExtraFrameDialog).
+ */
+void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStream,
+                                           const TTESInfo& esInfo)
+{
+  if (avItem == nullptr) return;
+
+  // Audio gap indices (marker visualization only, NOT audio time correction).
+  mAudioGapIndices = esInfo.audioGapFrames();
+  if (!mAudioGapIndices.isEmpty() && TTSettings::instance()->logCutPipeline())
+      qDebug() << "Loaded" << mAudioGapIndices.size() << "audio gap frame indices";
+
+  // Cluster source for the video pass is the .info list itself, so unconfirmed
+  // PTS-heuristic hits still surface as "Defekt:" even though mExtraFrameIndices
+  // holds the parser list for MPEG-2. The parser's field-pair positions confirm
+  // which clusters are legitimate field pairs vs. real suspects.
+  QList<int> infoExtras = esInfo.esExtraFrames();
+  TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
+
+  if (infoExtras.isEmpty() && mAudioGapIndices.isEmpty()) return;
+
+  double frameRate = vStream ? vStream->frameRate() : 25.0;
+  int gapFrames    = TTSettings::instance()->extraFrameClusterGapSec() * frameRate;
+  int offsetFrames = TTSettings::instance()->extraFrameClusterOffsetSec() * frameRate;
+
+  // A cluster is a confirmed field-pair cluster when at least one parser
+  // field-pair position lies within +/-4 of its range (4 = local B-reorder
+  // distance M-1 plus slack). Confirmed = hint ("Feldpaare:"), unconfirmed =
+  // suspicion ("Defekt:").
+  auto clusterConfirmed = [&](int cs, int ce) -> bool {
+      for (int p : parserPairs)
+          if (p >= cs - 4 && p <= ce + 4) return true;
+      return false;
+  };
+
+  QList<TTStreamPoint> clusters;
+  int confirmedClusters = 0;
+  int unconfirmedClusters = 0;
+
+  // Cluster pass 1: video doubled-PTS frames (.info es_extra_frames)
+  if (!infoExtras.isEmpty()) {
+      int clusterStart = infoExtras.first();
+      int clusterEnd = clusterStart;
+      int clusterCount = 1;
+
+      auto emitCluster = [&]() {
+          int pos = qMax(0, clusterStart - offsetFrames);
+          double durSec = (clusterEnd - clusterStart + 1) / frameRate;
+          bool confirmed = clusterConfirmed(clusterStart, clusterEnd);
+          const char* prefix = confirmed ? "Feldpaare" : "Defekt";
+          if (confirmed) ++confirmedClusters; else ++unconfirmedClusters;
+          QString desc = QString("%1: %2–%3 (%4 Frames, %5s)")
+              .arg(prefix).arg(clusterStart).arg(clusterEnd)
+              .arg(clusterCount).arg(durSec, 0, 'f', 1);
+          clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+      };
+
+      for (int i = 1; i < infoExtras.size(); ++i) {
+          if (infoExtras[i] - clusterEnd <= gapFrames) {
+              clusterEnd = infoExtras[i];
+              clusterCount++;
+          } else {
+              emitCluster();
+              clusterStart = infoExtras[i];
+              clusterEnd = clusterStart;
+              clusterCount = 1;
+          }
+      }
+      emitCluster();
+  }
+
+  // Cluster pass 2: audio gap frames
+  if (!mAudioGapIndices.isEmpty()) {
+      int clusterStart = mAudioGapIndices.first();
+      int clusterEnd = clusterStart;
+
+      auto emitGapCluster = [&]() {
+          int pos = qMax(0, clusterStart - offsetFrames);
+          double durSec = (clusterEnd - clusterStart + 1) / frameRate;
+          QString desc = QString("Audio-Gap: %1–%2 (%3s)")
+              .arg(clusterStart).arg(clusterEnd).arg(durSec, 0, 'f', 1);
+          clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+      };
+
+      for (int i = 1; i < mAudioGapIndices.size(); ++i) {
+          if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
+              clusterEnd = mAudioGapIndices[i];
+          } else {
+              emitGapCluster();
+              clusterStart = mAudioGapIndices[i];
+              clusterEnd = clusterStart;
+          }
+      }
+      emitGapCluster();
+  }
+
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "extra-frame clusters:" << confirmedClusters
+               << "confirmed field pairs," << unconfirmedClusters << "unconfirmed";
+
+  if (clusters.isEmpty()) return;
+
+  // All video clusters are confirmed field pairs and there are no audio gaps ->
+  // legitimate field-picture coding, not a defect. Import the navigation
+  // markers silently, skip the warning dialog.
+  if (unconfirmedClusters == 0 && mAudioGapIndices.isEmpty()) {
+      emit vdrMarkersLoaded(clusters);
+      return;
+  }
+
+  // Show dialog with group listing (combined defect + gap totals)
+  int totalDefects = infoExtras.size() + mAudioGapIndices.size();
+  QString msg = tr("%1 defective frames in %2 groups detected.\n")
+      .arg(totalDefects)
+      .arg(clusters.size());
+
+  int showCount = qMin(clusters.size(), 10);
+  for (int i = 0; i < showCount; ++i) {
+      msg += QString("\n  %1").arg(clusters[i].description());
+  }
+  if (clusters.size() > 10) {
+      msg += QString("\n  ... %1 %2")
+          .arg(clusters.size() - 10)
+          .arg(tr("more groups"));
+  }
+
+  QMessageBox msgBox(QMessageBox::Warning,
+                     tr("Defective Frames Detected"),
+                     msg, QMessageBox::NoButton, TTCut::mainWindow);
+  QPushButton* importBtn = msgBox.addButton(
+      tr("Import as Stream Points"), QMessageBox::AcceptRole);
+  msgBox.addButton(QMessageBox::Ok);
+  msgBox.exec();
+
+  if (msgBox.clickedButton() == importBtn) {
+      emit vdrMarkersLoaded(clusters);
+  }
+}
+
 void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int, const QString& demuxedAudio)
 {
   if (avItem == nullptr) return;
 
   avItem->setVideoStream(vStream);
 
-  // Load extra frame indices from .info (for audio time correction)
-  // This runs for ALL paths: direct open, project load, etc.
-  if (vStream && mExtraFrameIndices.isEmpty()) {
+  // Load extra frame indices for audio time correction, now that the video
+  // stream (and, for MPEG-2, the parser's field-pair list) is built. Runs for
+  // ALL paths: direct open, project load. The cluster dialog only runs for a
+  // fresh open (avItem was marked in openAVStreams), never on project reload.
+  if (vStream) {
     QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
     TTESInfo esInfo;
     if (!infoFile.isEmpty()) esInfo.load(infoFile);
-    loadExtraFrameIndices(mExtraFrameIndices, esInfo, vStream);
+
+    if (mExtraFrameIndices.isEmpty())
+      loadExtraFrameIndices(mExtraFrameIndices, esInfo, vStream);
+
+    if (mpPendingExtraFrameDialog.remove(avItem))
+      showExtraFrameClusterDialog(avItem, vStream, esInfo);
   }
 
   if (mpAVList == nullptr) return;

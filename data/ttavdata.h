@@ -20,6 +20,7 @@
 #include <QList>
 #include <QListIterator>
 #include <QMap>
+#include <QSet>
 #include <QPair>
 #include <functional>
 
@@ -37,6 +38,7 @@ class TTMessageLogger;
 class TTAVStream;
 class TTAudioStream;
 class TTVideoStream;
+class TTESInfo;
 class TTOpenVideoTask;
 class TTOpenAudioTask;
 class TTOpenSubtitleTask;
@@ -213,6 +215,12 @@ class TTAVData : public QObject
                                            const QStringList& subtitleFilePaths = QStringList());
     void           doH264Cut(QString tgtFileName, TTCutList* cutList);
     void           doAudioOnlyCut(QString tgtFileName, TTCutList* cutList);
+    // Classify the .info doubled-PTS clusters against the MPEG-2 parser's
+    // field-pair list and show the warning dialog (or import silently when all
+    // clusters are confirmed field pairs). Called from onOpenVideoFinished for
+    // freshly-opened items only. Also refreshes mAudioGapIndices from esInfo.
+    void           showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStream,
+                                               const TTESInfo& esInfo);
 
   private:
   	TTThreadTaskPool* mpThreadTaskPool;
@@ -235,6 +243,13 @@ class TTAVData : public QObject
     // Pending VDR markers to be converted to cut entries after video stream is loaded
     // Key: TTAVItem*, Value: List of (cutIn, cutOut) pairs
     QMap<TTAVItem*, QList<QPair<int, int>>> mpPendingVdrMarkers;
+
+    // AVItems opened fresh (via openAVStreams) that should show the extra-frame
+    // cluster dialog once the video stream — and thus the MPEG-2 parser's
+    // field-pair list — is built (in onOpenVideoFinished). Project reload
+    // bypasses openAVStreams, so it never gets an entry here (no dialog on
+    // reload). Mirrors mpPendingVdrMarkers.
+    QSet<TTAVItem*> mpPendingExtraFrameDialog;
 
     // A/V sync offset in milliseconds (from .info file, used during muxing)
     int mAvSyncOffsetMs;
