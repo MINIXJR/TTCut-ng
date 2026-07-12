@@ -85,32 +85,11 @@ TTAVTypes::~TTAVTypes()
   }
 }
 
-// return current stream QFileInfo
-// -----------------------------------------------------------------------------
-QFileInfo& TTAVTypes::avStreamInfo()
-{
-  return *av_stream_info;
-}
-
 // return current stream type
 // -----------------------------------------------------------------------------
 TTAVTypes::AVStreamType TTAVTypes::avStreamType()
 {
   return av_stream_type;
-}
-
-// return stream type header offset
-// -----------------------------------------------------------------------------
-quint64 TTAVTypes::typeHeaderOffset()
-{
-  return type_header_offset;
-}
-
-// return stream type header length
-// -----------------------------------------------------------------------------
-long TTAVTypes::typeHeaderLength()
-{
-  return type_header_length;
 }
 
 

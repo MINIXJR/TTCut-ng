@@ -55,7 +55,6 @@ class TTMPEG2Window2 : public QLabel
     TTFFmpegWrapper* ffmpegWrapper() const { return mpFFmpegWrapper; }
 
     // navigation
-    void moveToFirstFrame(bool show = true);
     void moveToVideoFrame(int iFramePos);
 
     void showVideoFrame();
@@ -65,7 +64,6 @@ class TTMPEG2Window2 : public QLabel
     void saveCurrentFrame(QString fName, const char* format);
 
     void invalidateDisplay();
-    bool isBlackAt(int index, int pixelThreshold, float ratioThreshold);
 
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();

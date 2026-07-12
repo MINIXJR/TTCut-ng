@@ -93,8 +93,6 @@ public:
 
   virtual int     bitRate();
   virtual int     sampleRate();
-  virtual double  absFrameEndTime();
-  virtual int     compareTo();
   virtual int     frameLength();
 
   //protected:

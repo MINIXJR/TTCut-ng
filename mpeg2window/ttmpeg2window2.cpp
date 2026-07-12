@@ -200,50 +200,6 @@ void TTMPEG2Window2::showFrameAt(int index)
 }
 
 /*!
- * decode and show the first video frame
- */
-void TTMPEG2Window2::moveToFirstFrame(bool show)
-{
-  qDebug() << "TTMPEG2Window2::moveToFirstFrame() called, mUseFFmpeg=" << mUseFFmpeg;
-
-  if (mUseFFmpeg) {
-    // Use FFmpeg decoder for H.264/H.265
-    if (mpFFmpegWrapper == 0) {
-      qDebug() << "mpFFmpegWrapper is null, returning";
-      return;
-    }
-
-    qDebug() << "Decoding first frame...";
-    mCurrentFrame = mpFFmpegWrapper->decodeFrame(0);
-    currentIndex = 0;
-    qDebug() << "First frame decoded, isNull=" << mCurrentFrame.isNull();
-
-    if (show && !mCurrentFrame.isNull()) {
-      qDebug() << "Showing video frame...";
-      showVideoFrame();
-      qDebug() << "Video frame shown";
-    }
-    return;
-  }
-
-  // Use MPEG-2 decoder
-	if (mpeg2Decoder == 0) return;
-
-	try
-	{
-		mpeg2Decoder->decodeFirstMPEG2Frame( formatRGB32 );
-		getFrameInfo();
-	}
-	catch (TTMpeg2DecoderException ex)
-	{
-		log->errorMsg(__FILE__, __LINE__, ex.message());
-	}
-
-  if (show && picBuffer != 0)
-    showVideoFrame();
-}
-
-/*!
  * Open a video file and assign the mpeg2 decoder object
  */
 void TTMPEG2Window2::openVideoFile( QString fName, TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader )
@@ -368,65 +324,6 @@ static float histogramDifference(const int histA[256], const int histB[256],
         diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
     }
     return diff / 2.0f;  // normalize to 0.0–1.0
-}
-
-/*!
- * Check if frame at index is black
- */
-bool TTMPEG2Window2::isBlackAt(int index, int pixelThreshold, float ratioThreshold)
-{
-  QImage gray;
-
-  if (mUseFFmpeg) {
-    // Use lightweight Y-plane check (no RGB conversion, no QImage)
-    if (!mpFFmpegWrapper) return false;
-    return mpFFmpegWrapper->isFrameBlack(index, pixelThreshold, ratioThreshold);
-  } else {
-    // MPEG-2: fi->Y is RGB32 data (formatRGB32), not raw Y plane
-    if (!mpeg2Decoder) return false;
-    try {
-      mpeg2Decoder->moveToFrameIndex(index);
-      TFrameInfo* fi = mpeg2Decoder->getFrameInfo();
-      if (!fi || !fi->Y) return false;
-      QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
-      gray = rgb.convertToFormat(QImage::Format_Grayscale8);
-    } catch (TTMpeg2DecoderException&) {
-      return false;
-    }
-  }
-
-  if (gray.isNull()) return false;
-
-  int w = gray.width(), h = gray.height();
-  int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-
-  // Pixel-sampling (every 2nd row, every 2nd col = ~4x faster) + early exit
-  const int step = 2;
-  const int earlyExitSamples = 500;
-  long lumaSum = 0;
-  int totalPixels = 0, blackPixels = 0;
-
-  for (int row = y0; row < y1; row += step) {
-    const uchar* line = gray.constScanLine(row);
-    for (int col = x0; col < x1; col += step) {
-      totalPixels++;
-      lumaSum += line[col];
-      if (line[col] < pixelThreshold) blackPixels++;
-    }
-
-    // Early exit: if average luma already too high after enough samples
-    if (totalPixels >= earlyExitSamples) {
-      float avgSoFar = (float)lumaSum / totalPixels;
-      if (avgSoFar > 5.0f) return false;
-    }
-  }
-
-  if (totalPixels == 0) return false;
-
-  float avgLuma = (float)lumaSum / totalPixels;
-  if (avgLuma > 5.0f) return false;
-
-  return (float)blackPixels / totalPixels >= ratioThreshold;
 }
 
 void TTMPEG2Window2::moveToVideoFrame(int iFramePos)

@@ -62,10 +62,7 @@ class TTAVTypes
     unknown
   };
 
-  virtual QFileInfo&   avStreamInfo();
   virtual AVStreamType avStreamType();
-  virtual quint64      typeHeaderOffset();
-  virtual long         typeHeaderLength();
 
  protected:
 	 TTMessageLogger* log;

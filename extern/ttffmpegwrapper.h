@@ -257,10 +257,6 @@ public:
     static AcmodInfo analyzeAcmod(const QString& audioFile,
                                    double cutInTime, double cutOutTime);
 
-    // SRT subtitle cutting - text-based time filtering
-    bool cutSrtSubtitle(const QString& inputFile, const QString& outputFile,
-                        const QList<QPair<double, double>>& cutList);
-
     // Error handling
     QString lastError() const { return mLastError; }
 

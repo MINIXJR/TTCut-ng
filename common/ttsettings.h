@@ -30,7 +30,6 @@ public:
   // Persistence
   void load();              // QSettings -> fields
   void save();              // fields -> QSettings
-  void resetToDefaults();   // re-initialise to compile-time defaults
 
   // ----- Common Options group (Task 4) -------------------------------------
   bool    fastSlider() const         { return mFastSlider; }

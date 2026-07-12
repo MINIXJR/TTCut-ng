@@ -929,11 +929,3 @@ void TTSettings::save()
 
   settings.endGroup();
 }
-
-void TTSettings::resetToDefaults()
-{
-  // No-op: TTSettings reset to ctor-defaults requires re-running the full member
-  // initializer list, which is not currently exposed. When this becomes needed,
-  // move the per-field defaults into a private resetFields() helper called from
-  // both the ctor and here.
-}

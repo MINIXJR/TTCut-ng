@@ -149,17 +149,6 @@ int TTAudioHeader::sampleRate()
 }
 
 
-double TTAudioHeader::absFrameEndTime()
-{
-  return 0.0;
-}
-
-
-int TTAudioHeader::compareTo()
-{
-  return 0;
-}
-
 int TTAudioHeader::frameLength()
 {
   return frame_length;

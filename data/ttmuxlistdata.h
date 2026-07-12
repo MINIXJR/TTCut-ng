@@ -60,11 +60,6 @@ class TTMuxListData
     TTMuxListData();
     ~TTMuxListData();
 
-    int  addItem(QString video);
-    int  addItem(QString video, QString audio);
-    int  addItem(QString video, QStringList audio);
-    int  addItem(QString video, QStringList audio, QStringList subtitle);
-
     void appendItem(const TTMuxListDataItem& item);
 
     TTMuxListDataItem& itemAt(int index);

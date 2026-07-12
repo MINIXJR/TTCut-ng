@@ -105,15 +105,6 @@ void TTStreamPointModel::clearAutoDetected()
   endResetModel();
 }
 
-void TTStreamPointModel::onPointDetected(int frameIndex, int type,
-                                          const QString& description,
-                                          float confidence, float duration)
-{
-  TTStreamPoint pt(frameIndex, static_cast<StreamPointType>(type),
-                   description, confidence, duration);
-  insertSorted(pt);
-}
-
 void TTStreamPointModel::insertSorted(const TTStreamPoint& point)
 {
   int pos = 0;

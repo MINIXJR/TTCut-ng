@@ -152,49 +152,6 @@ void TTMuxListData::appendItem(const TTMuxListDataItem& item)
   data.append(item);
 }
 
-int TTMuxListData::addItem(QString video)
-{
-  TTMuxListDataItem item = createMuxListItem(video);
-
-  item.audioFileNames.clear();
-
-  return data.count()-1;
-}
-
-int TTMuxListData::addItem(QString video, QString audio)
-{
-  TTMuxListDataItem item = createMuxListItem(video);
-
-  item.audioFileNames.clear();
-  item.audioFileNames.append(audio);
-
-  return data.count()-1;
-}
-
-//! Add item to list
-int TTMuxListData::addItem(QString video, QStringList audio)
-{
-  TTMuxListDataItem item = createMuxListItem(video);
-
-  item.audioFileNames.clear();
-  item.audioFileNames = audio;
-
-  return data.count()-1;
-}
-
-//! Add item to list with subtitles
-int TTMuxListData::addItem(QString video, QStringList audio, QStringList subtitle)
-{
-  TTMuxListDataItem item = createMuxListItem(video);
-
-  item.audioFileNames.clear();
-  item.audioFileNames = audio;
-  item.subtitleFileNames.clear();
-  item.subtitleFileNames = subtitle;
-
-  return data.count()-1;
-}
-
 QString TTMuxListData::videoFilePathAt(int index)
 {
   return data[index].videoFileName;

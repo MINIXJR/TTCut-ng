@@ -46,10 +46,6 @@ public:
   // Bulk insert (from worker results), re-sorts after
   void addPoints(const QList<TTStreamPoint>& points);
 
-public slots:
-  void onPointDetected(int frameIndex, int type, const QString& description,
-                       float confidence, float duration);
-
 private:
   void insertSorted(const TTStreamPoint& point);
 
