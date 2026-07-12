@@ -219,14 +219,6 @@ const TTMarkerItem& TTMarkerList::at(int index)
 }
 
 /*!
- * indexOf
- */
-int TTMarkerList::indexOf(const TTMarkerItem& item)
-{
-  return data.indexOf(item);
-}
-
-/*!
  * count
  */
 int TTMarkerList::count()

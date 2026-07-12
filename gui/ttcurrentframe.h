@@ -57,7 +57,6 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void onWidgetPrevFrame();
 		void onWidgetNextFrame();
 		void onSetMarker();
-		void onGotoMarker(int markerPos);
 		void onGotoCutIn(int pos);
 		void onGotoCutOut(int pos);
 		void onGotoFrame(int pos);

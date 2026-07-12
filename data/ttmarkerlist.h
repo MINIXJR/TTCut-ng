@@ -79,7 +79,6 @@ class TTMarkerList : public QObject
 
     void clear();
     int  count();
-    int  indexOf(const TTMarkerItem& item);
 
     void swap(int a, int b);
     void sortByOrder();

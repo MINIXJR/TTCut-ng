@@ -178,14 +178,6 @@ void TTAVData::sortCutItemsByOrder()
  */
 
 /*!
- * appendMarker
- */
-void TTAVData::appendMarker(TTAVItem* avItem, int markerPos)
-{
-	avItem->appendMarker(markerPos);
-}
-
-/*!
  * onAppendMarker
  */
 void TTAVData::onAppendMarker(int markerPos)
@@ -203,17 +195,6 @@ void TTAVData::onRemoveMarker(const TTMarkerItem& mItem)
 {
 	TTAVItem* avItem = mItem.avDataItem();
 	avItem->removeMarker(mItem);
-}
-
-/*!
- * copyMarker
- */
-void TTAVData::copyMarker(const TTMarkerItem& markerItem)
-{
-	if (mpCurrentAVItem == 0)
-		throw TTInvalidOperationException("No current AV-Data set!");
-
-	appendMarker(mpCurrentAVItem, markerItem.markerPos());
 }
 
 /*!

@@ -82,8 +82,6 @@ class TTAVData : public QObject
     void      copyCutEntry(const TTCutItem& cutItem);
     void      sortCutItemsByOrder();
 
-    void      appendMarker(TTAVItem* avItem, int markerPos);
-    void      copyMarker(const TTMarkerItem& markerItem);
     void      sortMarkerByOrder();
 
     TTAVItem* avItemAt(int index)         { return mpAVList->at(index); }
@@ -95,7 +93,6 @@ class TTAVData : public QObject
     int       cutCount()                  { return mpCutList->count(); }
 
     TTMarkerItem markerAt(int index)                     { return mpMarkerList->at(index); }
-    int          markerIndexOf(const TTMarkerItem& item) { return mpMarkerList->indexOf(item); }
     int          markerCount()                           { return mpMarkerList->count(); }
 
 

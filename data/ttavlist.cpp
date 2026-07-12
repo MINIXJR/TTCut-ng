@@ -99,22 +99,6 @@ void TTAVItem::appendAudioEntry(const TTAudioItem& aItem)
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTAVItem::removeAudioEntry(const TTAudioItem& aItem)
-{
-	mpAudioList->remove(aItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTAVItem::updateAudioEntry(const TTAudioItem& aItem, const TTAudioItem& uItem)
-{
-	mpAudioList->update(aItem, uItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
 void TTAVItem::onRemoveAudioItem(int index)
 {
 	mpAudioList->remove(mpAudioList->at(index));
@@ -156,22 +140,6 @@ void TTAVItem::appendSubtitleEntry(TTSubtitleStream* sStream, int order)
 void TTAVItem::appendSubtitleEntry(const TTSubtitleItem& sItem)
 {
 	mpSubtitleList->append(sItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTAVItem::removeSubtitleEntry(const TTSubtitleItem& sItem)
-{
-	mpSubtitleList->remove(sItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTAVItem::updateSubtitleEntry(const TTSubtitleItem& sItem, const TTSubtitleItem& uItem)
-{
-	mpSubtitleList->update(sItem, uItem);
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////
@@ -328,17 +296,6 @@ void TTAVItem::appendMarker(const TTMarkerItem& cItem)
 void TTAVItem::removeMarker(const TTMarkerItem& cItem)
 {
 	mpMarkerList->remove(cItem);
-}
-
-void TTAVItem::updateMarker(const TTMarkerItem& cItem, int markerPos)
-{
-	TTMarkerItem uItem(this, markerPos);
-	mpMarkerList->update(cItem, uItem);
-}
-
-void TTAVItem::updateMarker(const TTMarkerItem& cItem, const TTMarkerItem& uItem)
-{
-	mpMarkerList->update(cItem, uItem);
 }
 
 

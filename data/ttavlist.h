@@ -58,19 +58,14 @@ class TTAVItem : public QObject
     TTCutItem      cutListItemAt(int index)   const { return mpCutList->at(index); }
     int            cutIndexOf(const TTCutItem& item) const { return mpCutList->indexOf(item); }
     TTMarkerItem   markerAt(int index)               const { return mpMarkerList->at(index); }
-    int            markerIndexOf(const TTMarkerItem& item) const { return mpMarkerList->indexOf(item); }
 
     void canCutWith(const TTAVItem* avItem, int cutIn, int cutOut);
 
     void appendAudioEntry(TTAudioStream* aStream, int order=-1);
     void appendAudioEntry(const TTAudioItem& aItem);
-    void removeAudioEntry(const TTAudioItem& aItem);
-    void updateAudioEntry(const TTAudioItem& aItem, const TTAudioItem& uItem);
 
     void appendSubtitleEntry(TTSubtitleStream* sStream, int order=-1);
     void appendSubtitleEntry(const TTSubtitleItem& sItem);
-    void removeSubtitleEntry(const TTSubtitleItem& sItem);
-    void updateSubtitleEntry(const TTSubtitleItem& sItem, const TTSubtitleItem& uItem);
 
     void appendCutEntry(int cutIn, int cutOut, int order=-1);
     void appendCutEntry(const TTCutItem& cItem);
@@ -81,8 +76,6 @@ class TTAVItem : public QObject
     void appendMarker(int markerPos, int order=-1);
     void appendMarker(const TTMarkerItem& cItem);
     void removeMarker(const TTMarkerItem& cItem);
-    void updateMarker(const TTMarkerItem& cItem, int markerPos);
-    void updateMarker(const TTMarkerItem& cItem, const TTMarkerItem& uItem);
 
   public slots:
     void onRemoveAudioItem(int index);

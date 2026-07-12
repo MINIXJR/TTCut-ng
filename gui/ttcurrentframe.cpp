@@ -344,18 +344,6 @@ void TTCurrentFrame::onWidgetNextFrame()
   }
 }
 
-//! Navigate to marker position
-void TTCurrentFrame::onGotoMarker(int markerPos)
-{
-  int newFramePos;
-
-  newFramePos = videoStream->moveToIndexPos(markerPos);
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
-}
-
 void TTCurrentFrame::onSetMarker()
 {
 	if (videoStream == 0) return;
