@@ -299,9 +299,10 @@
   - Beispiel-Altfund: `TTCutAudioTask` blieb nach der v0.60.0-libav-Migration
     vom 2026-02-21 noch rund zwei Monate stehen, bis f2c4412 am 2026-04-25.
   - Offene Folge-Funde aus dem Erstlauf (kein toter Code):
-    - Stale Doc-Kommentare, die `isBlackAt` namentlich erwähnen
-      (`gui/ttcutmainwindow.cpp:52,1686`, `data/ttsearchtask.cpp:128`) —
-      die Methode ist weg, die Kommentare nicht.
+    - ~~Stale Doc-Kommentare, die `isBlackAt` namentlich erwähnen~~ →
+      **GEFIXT 2026-07-12** (`73acdf0`): auf den echten Mechanismus
+      (TTBlackFrameSearchTask / Worker-Decoder, Preview-Fenster-Include)
+      umgeschrieben.
     - `ttmpeg2window2.cpp` `histogramDifference` als `-Wunused-function`
       gemeldet (statische Funktion, kein Member) — separat prüfen.
   - Weiterhin offen (unverändert, kein toter Code):
