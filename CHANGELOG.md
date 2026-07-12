@@ -6,6 +6,11 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Changed
 
+- **ttcut-demux: the normalized-MKV mode is gone** — elementary-stream demux
+  (the TTCut workflow) is now the only mode and the default; `-e` is still
+  accepted for compatibility. The MKV mode dated from the v0.52 initial
+  import and required mkvmerge, which nothing else needs anymore.
+
 - **H.264 smart cut: IDR copy-starts are no longer frame_num-patched** — when the
   stream-copy section after a re-encoded head begins with a true IDR, the old code
   patched `frame_num` into every copied AU including the IDR itself (`frame_num != 0`

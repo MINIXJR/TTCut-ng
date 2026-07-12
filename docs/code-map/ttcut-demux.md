@@ -1,5 +1,5 @@
 ---
-base_commit: d7a046b5cd69e5099e853e4635ec148326bcf0ee
+base_commit: 2e0cd6274a5600a40983abbf5125d14018429a34
 last_verified: 2026-07-12
 sources:
   - tools/ttcut-demux/ttcut-demux
@@ -14,9 +14,10 @@ sources:
 # ttcut-demux — TS→ES demux pipeline and its measurement/reporting chain
 
 Bash script (`tools/ttcut-demux/ttcut-demux`, installed copy at
-`/usr/bin/ttcut-demux` — the user copies it there after patches). ES mode
-(`-e`) is the TTCut workflow; MKV mode (default) is a separate tail covered
-only briefly here. Everything below is ES mode unless stated.
+`/usr/bin/ttcut-demux` — the user copies it there after patches). The ES
+demux is the only mode since the normalized-MKV mode (a leftover of the
+v0.52 initial import, requiring mkvmerge) was removed in `ce06817`; `-e` is
+accepted as a no-op for compatibility.
 
 Mapped 2026-07-12 while root-causing the reporting defects found in the
 Futurama audit (wrong "video duration", derived frame count, "defective
@@ -141,20 +142,25 @@ flowchart LR
 - **exit-code contract with the wrapper script**: pts-analyze exit 1 is
   "extras found" (not an error); the demux script must `set +e` around it.
 
-## Redundancy / consolidation candidates
+## Redundancy / consolidation candidates — ALL RESOLVED 2026-07-12
 
-1. **Subtitle extraction block duplicated** between ES mode and MKV mode
-   (~40 nearly identical lines: mid-point sampling, dvb_subtitle/srt cases).
-2. **Audio output naming with `LANG_COUNT`** duplicated (ES-mode loop, MKV
-   extra-tracks loop).
-3. **First-video-PTS probe duplicated**: `ORIG_VIDEO_PTS` (pre-repair block)
-   and `FIRST_VIDEO_PTS` (sync-offset section) run the identical
-   codec-dependent ffprobe on the original input twice.
-4. **Audio property probing duplicated**: `repair_audio_with_silence_inserts`
-   and the end-padding block each probe codec/bitrate/channels/sample-rate
-   with their own defaults table (silence-encoder selection duplicated too).
-5. ffmpeg log-grep pattern `error|warning|invalid|corrupt|...` repeated at
-   every ffmpeg call site (minor).
+1. **[RESOLVED `ce06817`]** Subtitle extraction block was duplicated between
+   ES mode and MKV mode — gone with the MKV-mode removal (one copy left).
+2. **[RESOLVED `ce06817`]** `LANG_COUNT` audio naming was duplicated — gone
+   with the MKV-mode removal.
+3. **[RESOLVED `ce6377c`]** First-video-PTS probe → `probe_first_video_pts`,
+   measured once pre-repair; the sync-offset section reuses the value.
+4. **[RESOLVED `2edd772`]** Audio property probing → `probe_audio_props`
+   (APROBE_* globals, validation + codec bitrate defaults); each call site
+   keeps its own fallback application, the two padding mechanisms stay
+   separate (see pitfall above).
+5. **[RESOLVED `2e0cd62`]** ffmpeg log-grep pattern → readonly
+   `FFMPEG_WARN_PATTERN` + `warn_ffmpeg_log` (superset pattern; may surface
+   a few more log lines than before — log-only change).
+
+Verified after all five: Futurama ES outputs byte-identical to the
+pre-refactor baseline (video, both audio tracks, logo, .info modulo
+timestamp/basename); a no-`-e` invocation produces the identical ES set.
 
 ## Reporting defects — FIXED 2026-07-12
 
