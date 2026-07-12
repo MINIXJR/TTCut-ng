@@ -125,8 +125,7 @@ bool TTSearchTask::isFrameBlackAt(int pos, int pixelThreshold, float ratioThresh
 
   if (!mMpeg2Decoder) return false;
 
-  // MPEG-2 path: replicate TTMPEG2Window2::isBlackAt (master line 432-477)
-  // verbatim, but on a worker-owned decoder.
+  // MPEG-2 path: black-frame check on a worker-owned libmpeg2 decoder.
   QImage gray;
   try {
     mMpeg2Decoder->moveToFrameIndex(pos);

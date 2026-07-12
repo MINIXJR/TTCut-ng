@@ -49,7 +49,7 @@
 #include "../data/ttavlist.h"
 #include "../data/ttlogodetector.h"
 
-// TTMPEG2Window2 for black frame detection via isBlackAt()
+// TTMPEG2Window2 is the preview window type (videoWindow(), logo ROI signal)
 #include "../mpeg2window/ttmpeg2window2.h"
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
@@ -1683,8 +1683,8 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Search for next/previous black frame from current position
- * Uses TTCut-ng's own decoder via TTMPEG2Window2::isBlackAt() for correct
- * frame index mapping (display order, matching the video stream's index).
+ * Runs a TTBlackFrameSearchTask on a worker-owned decoder, using the shared
+ * frame index for correct display-order mapping (matching the video stream).
  */
 void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float threshold)
 {
