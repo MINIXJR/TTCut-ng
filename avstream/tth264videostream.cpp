@@ -150,12 +150,6 @@ int TTH264VideoStream::accessUnitToCodingType(int idx) const
 // -----------------------------------------------------------------------------
 // Typed accessors
 // -----------------------------------------------------------------------------
-TTH264AccessUnit* TTH264VideoStream::frameAt(int index)
-{
-    if (index < 0 || index >= mAccessUnits.size()) return nullptr;
-    return mAccessUnits[index];
-}
-
 int TTH264VideoStream::findIDRAfter(int frameIndex)
 {
     for (int i = frameIndex; i < mAccessUnits.size(); ++i) {

@@ -52,12 +52,6 @@ public:
     int decodeToDisplayIndex(int index) const override;
     int displayToDecodeIndex(int index) const override;
 
-    // GOP forwarding — both H.264 and H.265 just delegate
-    int gopCount() const;
-    int findGOPForFrame(int frameIndex);
-    int getGOPStart(int gopIndex);
-    int getGOPEnd(int gopIndex);
-
     // Display-order map (POC-based, frame granularity) from the open stream's
     // wrapper. Used to inject into TTESSmartCut so cut positions map display->AU
     // consistently (esp. PAFF, where buildFromFile's field-granularity fallback

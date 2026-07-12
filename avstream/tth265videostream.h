@@ -38,7 +38,6 @@ public:
     // Typed accessors
     TTH265SPS*        getSPS() const { return mSPS; }
     TTH265VPS*        getVPS() const { return mVPS; }
-    TTH265AccessUnit* frameAt(int index);
     int               findRAPBefore(int frameIndex);
     int               findRAPAfter(int frameIndex);
 

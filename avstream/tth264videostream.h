@@ -40,7 +40,6 @@ public:
 
     // Typed accessors (kept for callers that need concrete H.264 types)
     TTH264SPS*        getSPS() const { return mSPS; }
-    TTH264AccessUnit* frameAt(int index);
     int               findIDRAfter(int frameIndex);
 
 protected:

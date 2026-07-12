@@ -158,12 +158,6 @@ int TTH265VideoStream::accessUnitToCodingType(int idx) const
 // -----------------------------------------------------------------------------
 // Typed accessors
 // -----------------------------------------------------------------------------
-TTH265AccessUnit* TTH265VideoStream::frameAt(int index)
-{
-    if (index < 0 || index >= mAccessUnits.size()) return nullptr;
-    return mAccessUnits[index];
-}
-
 int TTH265VideoStream::findRAPBefore(int frameIndex)
 {
     for (int i = frameIndex; i >= 0; --i) {

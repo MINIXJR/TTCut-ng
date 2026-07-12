@@ -279,37 +279,6 @@ int TTH26xVideoStream::displayToDecodeIndex(int index) const
     return mFFmpeg ? mFFmpeg->displayOrderMap().displayToDecode(index) : index;
 }
 
-int TTH26xVideoStream::gopCount() const
-{
-    return mFFmpeg ? mFFmpeg->gopCount() : 0;
-}
-
-// NOTE (index-space trap): findGOPForFrame, getGOPStart, and getGOPEnd all
-// operate in DECODE-order AU index space — they delegate to mFFmpeg->frameIndex()
-// and mFFmpeg->gopIndex() which are built in decode order.  A caller holding a
-// DISPLAY position MUST convert via displayToDecodeIndex() before calling these,
-// and convert the returned frame index back via decodeToDisplayIndex() if it will
-// be used as a display position.
-int TTH26xVideoStream::findGOPForFrame(int frameIndex)
-{
-    return mFFmpeg ? mFFmpeg->findGOPForFrame(frameIndex) : -1;
-}
-
-int TTH26xVideoStream::getGOPStart(int gopIndex)
-{
-    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
-        return mFFmpeg->gopIndex()[gopIndex].startFrame;
-    }
-    return -1;
-}
-
-int TTH26xVideoStream::getGOPEnd(int gopIndex)
-{
-    if (mFFmpeg && gopIndex >= 0 && gopIndex < mFFmpeg->gopCount()) {
-        return mFFmpeg->gopIndex()[gopIndex].endFrame;
-    }
-    return -1;
-}
 
 const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
 {
