@@ -12,7 +12,7 @@
 #
 # Workflow:
 #   1. Discover VDR recordings and select via dialog
-#   2. Demux with ttcut-demux -e -n (ES mode, named output)
+#   2. Demux with ttcut-demux -n (named output)
 #   3. Clean up unwanted audio tracks
 #   4. Launch TTCut-ng
 #
@@ -236,7 +236,7 @@ for ts_datei in "${TS_FILES[@]}"; do
     fi
 
     # ttcut-demux handles multi-file detection and concat automatically
-    if "$TTCUT_DEMUX" -e -n "$show_name" "$ts_datei" "$OUT_PFAD" > "$LOG_FILE" 2>&1; then
+    if "$TTCUT_DEMUX" -n "$show_name" "$ts_datei" "$OUT_PFAD" > "$LOG_FILE" 2>&1; then
         cat "$LOG_FILE"
         info "  OK: $show_name$marks_info"
         DEMUX_COUNT=$((DEMUX_COUNT + 1))
