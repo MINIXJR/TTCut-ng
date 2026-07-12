@@ -90,6 +90,33 @@ probe_first_video_pts() {
     fi
 }
 
+# Probe audio stream properties of $1 into the APROBE_* globals.
+# Values failing numeric validation become empty; the bitrate gets the
+# codec-dependent default (mp2 192k, ac3 384k, aac 192k). sample_rate and
+# channels are left empty on probe failure — each call site applies its own
+# fallback exactly as before. Shared by the mid-stream silence repair and
+# the end-padding block; the two MECHANISMS stay separate by design
+# (re-encode insert vs. bit-preserving concat padding).
+probe_audio_props() {
+    local af=$1
+    APROBE_CODEC=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
+        -of default=noprint_wrappers=1:nokey=1 "$af" 2>/dev/null)
+    APROBE_SAMPLE_RATE=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate \
+        -of default=noprint_wrappers=1:nokey=1 "$af" 2>/dev/null)
+    APROBE_CHANNELS=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels \
+        -of default=noprint_wrappers=1:nokey=1 "$af" 2>/dev/null)
+    APROBE_BITRATE=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate \
+        -of default=noprint_wrappers=1:nokey=1 "$af" 2>/dev/null)
+    [[ "$APROBE_SAMPLE_RATE" =~ ^[0-9]+$ ]] || APROBE_SAMPLE_RATE=""
+    [[ "$APROBE_CHANNELS" =~ ^[0-9]+$ ]] || APROBE_CHANNELS=""
+    [[ "$APROBE_BITRATE" =~ ^[0-9]+$ ]] || APROBE_BITRATE=""
+    case "$APROBE_CODEC" in
+        mp2)  [ -n "$APROBE_BITRATE" ] || APROBE_BITRATE=192000 ;;
+        ac3)  [ -n "$APROBE_BITRATE" ] || APROBE_BITRATE=384000 ;;
+        aac)  [ -n "$APROBE_BITRATE" ] || APROBE_BITRATE=192000 ;;
+    esac
+}
+
 # Detect audio packet gaps in source TS via ffprobe.
 # Output format (one gap per line):
 #   <gap_start_pts_source> <gap_end_pts_source> <gap_size_ms>
@@ -211,24 +238,11 @@ repair_audio_with_silence_inserts() {
     mkdir -p "$work_dir"
 
     # Probe original audio properties for silence generation
-    local codec sample_rate channels bitrate
-    codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name \
-        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
-    sample_rate=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate \
-        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
-    channels=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels \
-        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
-    bitrate=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate \
-        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null)
-
-    # Defaults if probe returned nothing
-    [[ "$sample_rate" =~ ^[0-9]+$ ]] || sample_rate=48000
-    [[ "$channels" =~ ^[0-9]+$ ]] || channels=2
-    case "$codec" in
-        mp2)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=192000 ;;
-        ac3)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=384000 ;;
-        aac)  [[ "$bitrate" =~ ^[0-9]+$ ]] || bitrate=192000 ;;
-    esac
+    probe_audio_props "$audio_file"
+    local codec="$APROBE_CODEC"
+    local sample_rate="${APROBE_SAMPLE_RATE:-48000}"
+    local channels="${APROBE_CHANNELS:-2}"
+    local bitrate="$APROBE_BITRATE"
 
     # Per-entry arrays. silence_dur is signed: positive = insert silence of
     # that many seconds at pos; negative = truncate |dur| seconds from the
@@ -1421,25 +1435,17 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 TEMP_CONCAT="$OUTDIR/.temp_concat_${i}.txt"
                 _CLEANUP_FILES+=("$TEMP_PADDED" "$TEMP_SILENCE" "$TEMP_CONCAT")
 
-                # Get audio codec, bitrate, channels, and sample rate from original
-                AUDIO_CODEC=$(ffprobe -v error -select_streams a:0 \
-                    -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 \
-                    "$AUDIO_FILE" 2>/dev/null || echo "copy")
-                ORIG_BITRATE=$(ffprobe -v error -select_streams a:0 \
-                    -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 \
-                    "$AUDIO_FILE" 2>/dev/null)
-                ORIG_CHANNELS=$(ffprobe -v error -select_streams a:0 \
-                    -show_entries stream=channels -of default=noprint_wrappers=1:nokey=1 \
-                    "$AUDIO_FILE" 2>/dev/null)
-                ORIG_SAMPLE_RATE=$(ffprobe -v error -select_streams a:0 \
-                    -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 \
-                    "$AUDIO_FILE" 2>/dev/null)
+                # Get audio codec, bitrate, channels, and sample rate from original.
+                # On probe failure APROBE_CODEC is empty and the ENCODER case
+                # below falls through to -c:a copy (same effect as the old
+                # `|| echo "copy"` fallback).
+                probe_audio_props "$AUDIO_FILE"
+                AUDIO_CODEC="$APROBE_CODEC"
+                ORIG_BITRATE="$APROBE_BITRATE"
+                ORIG_CHANNELS="$APROBE_CHANNELS"
+                ORIG_SAMPLE_RATE="$APROBE_SAMPLE_RATE"
                 ORIG_DURATION=$(ffprobe -v error -show_entries format=duration \
                     -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
-                # Clear non-numeric values (e.g. "N/A") so fallback defaults trigger
-                [[ "$ORIG_BITRATE" =~ ^[0-9]+$ ]] || ORIG_BITRATE=""
-                [[ "$ORIG_CHANNELS" =~ ^[0-9]+$ ]] || ORIG_CHANNELS=""
-                [[ "$ORIG_SAMPLE_RATE" =~ ^[0-9]+$ ]] || ORIG_SAMPLE_RATE=""
 
                 # Calculate padding duration
                 PAD_DURATION=$(awk "BEGIN {d = $TARGET_AUDIO_DUR - $ORIG_DURATION; printf \"%.6f\", (d > 0) ? d : 0}")
