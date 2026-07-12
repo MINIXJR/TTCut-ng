@@ -2877,10 +2877,15 @@ bool TTESSmartCut::probeEncoderPocParams()
         QString("Encoder POC probe: log2_max_poc_lsb=%1 poc_type=%2")
             .arg(mProbedEncoderLog2PocLsb).arg(mProbedEncoderPocType));
     if (mProbedEncoderPocType != 0) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("Encoder uses poc_type %1 - the POC bridge model is only "
-                    "verified for poc_type 0; falling back to the legacy "
-                    "assumption (log2_max_poc_lsb=%2)")
+        // Measured fact, not an anomaly: libx264 picks poc_type 2 for
+        // progressive bf=0 encodes (poc_type 0 only with interlace flags).
+        // No poc_lsb patch exists or is needed there — seam continuity is
+        // carried by EOS + the frame_num bridge, both verified. The branch
+        // classification keeps the legacy constant (unchanged routing).
+        TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
+            QString("Encoder uses poc_type %1 (libx264 default for progressive "
+                    "bf=0); POC classification keeps the legacy constant "
+                    "(log2_max_poc_lsb=%2), seam continuity via EOS + frame_num")
                 .arg(mProbedEncoderPocType).arg(kExpectedEncoderLog2PocLsb));
     }
     return true;
