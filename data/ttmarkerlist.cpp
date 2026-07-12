@@ -63,13 +63,6 @@ TTAVItem* TTMarkerItem::avDataItem() const
 	return mpAVDataItem;
 }
 
-QTime TTMarkerItem::markerTime() const
-{
-	return (mpAVDataItem->videoStream() != 0)
-			? mpAVDataItem->videoStream()->frameTime(mMarkerPos)
-			: QTime();
-}
-
 /*!
  * operator =
  */
