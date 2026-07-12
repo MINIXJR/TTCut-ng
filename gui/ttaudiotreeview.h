@@ -35,8 +35,6 @@ class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
   public:
     TTAudioTreeView(QWidget* parent=0);
 
-    void setTitle (const QString& title);
-    void setControlEnabled(bool enabled);
     void clear();
 
   signals:

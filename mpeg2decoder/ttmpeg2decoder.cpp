@@ -112,27 +112,12 @@ void TTMpeg2Decoder::openMPEG2File(QString cFName)
 /* /////////////////////////////////////////////////////////////////////////////
  * Return current stream size in byte
  */
-quint64 TTMpeg2Decoder::fileSize()
-{
-  return mpeg2Stream->size();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Return the current stream filename
  */
-QString TTMpeg2Decoder::fileName()
-{
-  return mpeg2Stream->fileName();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Decode the next following slice (picture) in the stream.
  */
-int TTMpeg2Decoder::gotoNextFrame()
-{
-  return decodeNextFrame();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Skip count number of frames by decoding each skiped slice.
  */
@@ -284,26 +269,6 @@ TFrameInfo* TTMpeg2Decoder::decodeFirstMPEG2Frame(TPixelFormat pixelFormat)
 /* /////////////////////////////////////////////////////////////////////////////
  * Get the current frame data (decoded picture)
  */
-void TTMpeg2Decoder::getCurrentFrameData(quint8* data )
-{
-  switch ( convType )
-  {
-  case formatRGB24:
-  case formatRGB32:
-    memcpy(data,t_frame_info->Y,t_frame_info->size);
-    break;
-  case formatYV12:
-    memcpy(data,t_frame_info->Y,t_frame_info->size);
-    data+=t_frame_info->size;
-    memcpy(data,t_frame_info->V,t_frame_info->chroma_size);
-    data+=t_frame_info->chroma_size;
-    memcpy(data,t_frame_info->U,t_frame_info->chroma_size);
-    break;
-  default:
-    break;
-  }
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Get the current decoded frame info
  */

@@ -67,11 +67,6 @@ TTAudioTreeView::TTAudioTreeView(QWidget* parent)
   connect(audioListView,      &QTreeWidget::customContextMenuRequested, this, &TTAudioTreeView::onContextMenuRequest);
 }
 
-//! Set the group box title string. This method is needed by designer.
-void TTAudioTreeView::setTitle (const QString&)
-{
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * setAVData
  */
@@ -116,15 +111,6 @@ void TTAudioTreeView::clear()
 /* /////////////////////////////////////////////////////////////////////////////
  * Enable or disable the widget
  */
-void TTAudioTreeView::setControlEnabled( bool enabled )
-{
-  pbAudioFileOpen->setEnabled(enabled);
-  pbAudioEntryUp->setEnabled(enabled);
-  pbAudioEntryDelete->setEnabled(enabled);
-  pbAudioEntryDown->setEnabled(enabled);
-  audioListView->setEnabled(enabled);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * onClearList
  */

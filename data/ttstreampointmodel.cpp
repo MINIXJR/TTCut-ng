@@ -105,11 +105,6 @@ void TTStreamPointModel::clearAutoDetected()
   endResetModel();
 }
 
-const TTStreamPoint& TTStreamPointModel::pointAt(int row) const
-{
-  return mPoints.at(row);
-}
-
 void TTStreamPointModel::onPointDetected(int frameIndex, int type,
                                           const QString& description,
                                           float confidence, float duration)

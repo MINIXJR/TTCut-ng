@@ -25,7 +25,6 @@ class TTCutSettingsMuxer : public QGroupBox, private Ui_TTCutSettingsMuxer
 
     void setTabData();
     void saveTabData();
-    void setMode(Mode m);
 
   private:
     void populateCodecMuxers();

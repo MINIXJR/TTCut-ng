@@ -120,13 +120,6 @@ void TTCutSettingsMuxer::saveTabData()
   s->setH265Muxer(cbH265Muxer->currentData().toInt());
 }
 
-void TTCutSettingsMuxer::setMode(Mode m)
-{
-  // Defaults mode: all widgets visible.
-  // Override mode no longer used — no-op.
-  Q_UNUSED(m);
-}
-
 void TTCutSettingsMuxer::onMkvChaptersChanged(int state)
 {
   TTSettings::instance()->setMkvCreateChapters(state == Qt::Checked);

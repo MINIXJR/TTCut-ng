@@ -49,8 +49,6 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     void        deleteElementaryStreams(const QString& videoFilePath, const QStringList& audioFilePaths);
 
     void procOutput();
-    int  createVerboseHash();
-    int  createFormatHash();
 
   public slots:
     void onProcError(QProcess::ProcessError procError);
@@ -58,7 +56,6 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     void onProcStarted();
     void onProcFinished(int exitCode, QProcess::ExitStatus);
     void onProcStateChanged(QProcess::ProcessState procState);
-    void onProcKill();
 
   private:
     TTMessageLogger*    log;

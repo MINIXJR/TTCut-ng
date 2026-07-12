@@ -25,14 +25,6 @@ TTSettings* TTSettings::instance()
   return sInstance;
 }
 
-void TTSettings::setInstance(TTSettings* override)
-{
-  // Caller owns the override pointer's lifetime. We do NOT delete sInstance
-  // when overriding because the test fixture pattern frequently passes a
-  // stack/RAII-owned pointer.
-  sInstance = override;
-}
-
 TTSettings::TTSettings(QObject* parent)
   : QObject(parent)
 {
@@ -129,12 +121,6 @@ void TTSettings::setStepPlusCtrl(int v)
   mStepPlusCtrl = v;
 }
 
-void TTSettings::setStepPlusShift(int v)
-{
-  if (mStepPlusShift == v) return;
-  mStepPlusShift = v;
-}
-
 void TTSettings::setStepMouseWheel(int v)
 {
   if (mStepMouseWheel == v) return;
@@ -143,12 +129,6 @@ void TTSettings::setStepMouseWheel(int v)
 
 // ---- Index Files & Logging group setters (Task 6) --------------------------
 // Each setter early-outs on no-op assignment.
-
-void TTSettings::setCreateD2V(bool v)
-{
-  if (mCreateD2V == v) return;
-  mCreateD2V = v;
-}
 
 void TTSettings::setCreateLogFile(bool v)
 {
@@ -519,13 +499,6 @@ void TTSettings::setMuxDeleteES(bool v)
   mMuxDeleteES = v;
 }
 
-void TTSettings::setOutputContainer(int v)
-{
-  if (mOutputContainer == v) return;
-  mOutputContainer = v;
-  emit outputContainerChanged(v);
-}
-
 void TTSettings::setMkvCreateChapters(bool v)
 {
   if (mMkvCreateChapters == v) return;
@@ -536,18 +509,6 @@ void TTSettings::setMkvChapterInterval(int v)
 {
   if (mMkvChapterInterval == v) return;
   mMkvChapterInterval = v;
-}
-
-void TTSettings::setAudioOnlyFormat(int v)
-{
-  if (mAudioOnlyFormat == v) return;
-  mAudioOnlyFormat = v;
-}
-
-void TTSettings::setAudioOnlyBitrateKbps(int v)
-{
-  if (mAudioOnlyBitrateKbps == v) return;
-  mAudioOnlyBitrateKbps = v;
 }
 
 // ---- Cut Settings & Chapter group setters (Task 13) ------------------------

@@ -370,57 +370,6 @@ static float histogramDifference(const int histA[256], const int histB[256],
     return diff / 2.0f;  // normalize to 0.0–1.0
 }
 
-bool TTMPEG2Window2::buildHistogramAt(int index, int hist[256], int& totalPixels)
-{
-  memset(hist, 0, 256 * sizeof(int));
-  totalPixels = 0;
-
-  if (mUseFFmpeg) {
-    if (!mpFFmpegWrapper) return false;
-    return mpFFmpegWrapper->buildHistogram(index, hist, totalPixels);
-  }
-
-  // MPEG-2: decode, convert to grayscale, build histogram
-  if (!mpeg2Decoder) return false;
-  try {
-    mpeg2Decoder->moveToFrameIndex(index);
-    TFrameInfo* fi = mpeg2Decoder->getFrameInfo();
-    if (!fi || !fi->Y) return false;
-    QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
-    QImage gray = rgb.convertToFormat(QImage::Format_Grayscale8);
-
-    int w = gray.width(), h = gray.height();
-    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-    const int step = 2;
-
-    for (int row = y0; row < y1; row += step) {
-      const uchar* line = gray.constScanLine(row);
-      for (int col = x0; col < x1; col += step) {
-        hist[line[col]]++;
-        totalPixels++;
-      }
-    }
-    return totalPixels > 0;
-  } catch (TTMpeg2DecoderException&) {
-    return false;
-  }
-}
-
-bool TTMPEG2Window2::isSceneChangeAt(int indexA, int indexB, float threshold)
-{
-  int histA[256], histB[256];
-  int totalA = 0, totalB = 0;
-
-  if (!buildHistogramAt(indexA, histA, totalA)) return false;
-  if (!buildHistogramAt(indexB, histB, totalB)) return false;
-
-  float diff = histogramDifference(histA, histB, totalA, totalB);
-  qDebug() << "Scene: frames" << indexA << "->" << indexB
-           << "diff=" << diff << "threshold=" << threshold
-           << (diff > threshold ? "MATCH" : "");
-  return diff > threshold;
-}
-
 /*!
  * Check if frame at index is black
  */
@@ -538,23 +487,6 @@ void TTMPEG2Window2::showDecodedSlice()
 /*!
  * Decode current video frame and show the resulting slice
  */
-void TTMPEG2Window2::decodeAndShowSlice()
-{
-	if (mpeg2Decoder == 0) return;
-
-	try
-	{
-		mpeg2Decoder->decodeMPEG2Frame(formatRGB24);
-		getFrameInfo();
-	}
-	catch (TTMpeg2DecoderException ex)
-	{
-		log->errorMsg(__FILE__, __LINE__, ex.message());
-	}
-
-  showVideoFrame();
-}
-
 /*!
  * getFrameInfo
  */

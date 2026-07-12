@@ -80,11 +80,6 @@ TTCutProjectData::~TTCutProjectData()
 /**
  * Returns the xml filename
  */
-QString TTCutProjectData::fileName()
-{
-  return xmlFileInfo->fileName();
-}
-
 /**
  * Returns the xml filepath
  */
@@ -691,11 +686,6 @@ void TTCutProjectData::parseSettingsSection(QDomElement settingsElement)
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTCutProjectData::printXml()
-{
-  qDebug("xml: %s", qPrintable(xmlDocument->toString()));
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */

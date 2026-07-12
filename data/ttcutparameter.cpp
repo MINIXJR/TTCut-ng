@@ -40,8 +40,6 @@ TTCutParameter::~TTCutParameter()
  */
 TTFileBuffer* TTCutParameter::getTargetStreamBuffer() { return targetStreamBuffer; }
 
-bool TTCutParameter::getIsDVDCompliantStream()           { return isDVDCompliantStream; }
-void TTCutParameter::setIsDVDCompliantStream(bool value) { isDVDCompliantStream = value; }
 int  TTCutParameter::getNumPicturesWritten()             { return numPicturesWritten; }
 void TTCutParameter::setNumPicturesWritten(int value)    { numPicturesWritten = value; }
 int  TTCutParameter::getCutInIndex()                     { return cutInIndex; }

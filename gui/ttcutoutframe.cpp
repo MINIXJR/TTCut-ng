@@ -108,20 +108,9 @@ void TTCutOutFrame::onCutOutChanged(const TTCutItem& cutItem)
 /*!
  * Returns the current frame position in stream
  */
-int TTCutOutFrame::currentFramePos()
-{
-  if (videoStream == 0) return 0;
-  return videoStream->currentIndex();
-}
-
 /*!
  * closeVideoStream
  */
-void TTCutOutFrame::closeVideoStream()
-{
-	mpegWindow->closeVideoStream();
-}
-
 /*
  * Goto specified cut out position
  */

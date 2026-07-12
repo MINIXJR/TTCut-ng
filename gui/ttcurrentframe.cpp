@@ -186,23 +186,6 @@ void TTCurrentFrame::onCutInChanged(const TTCutItem& cutItem)
 	onGotoCutIn(cutItem.cutIn());
 }
 
-//! Returns the current frame position in stream
-int TTCurrentFrame::currentFramePos()
-{
-  if (videoStream == nullptr) return 0;
-  return videoStream->currentIndex();
-}
-
-void TTCurrentFrame::closeVideoStream()
-{
-  // Stop any running playback and clean up temp file
-  if (mPlayer && mPlayer->isPlaying())
-    mPlayer->stop();
-  cleanupTempPlaybackFile();
-
-  mpegWindow->closeVideoStream();
-}
-
 void TTCurrentFrame::setSubtitleStream(TTSubtitleStream* subtitleStream)
 {
   mpegWindow->setSubtitleStream(subtitleStream);
@@ -816,19 +799,6 @@ double TTCurrentFrame::playbackSecondsForCurrentStill() const
     }
   }
   return static_cast<double>(decIdx) / static_cast<double>(fr);
-}
-
-//! Map a playback time slot (floor/round(t*fps), i.e. the MKV's PTS scale)
-//! back to the app's decode-order stream index for UI updates.
-int TTCurrentFrame::streamIndexForPlaybackSlot(int slot) const
-{
-  if (mTempPlaybackHasDisplayPts && videoStream != nullptr) {
-    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
-      int dec = h26x->displayOrderMap().displayToDecode(slot);
-      if (dec >= 0) return dec;
-    }
-  }
-  return slot;  // linear scale: slot IS the decode index
 }
 
 //! Decrease playback speed by one step

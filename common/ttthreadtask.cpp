@@ -72,31 +72,15 @@ int TTThreadTask::elapsedTime() const
 /**
  * Return the estimate number of total task steps
  */
-quint64 TTThreadTask::totalSteps() const
-{
-  return mTotalSteps;
-}
-
 /** 
  * Return the current step count
  */
-quint64 TTThreadTask::stepCount() const
-{
-  return mStepCount;
-}
-
 /**
  * Returns true if task is in running state, otherwise false
  */
 bool TTThreadTask::isRunning() const
 {
   return mIsRunning;
-}
-
-//TODO: isRunning should not be set from outside
-void TTThreadTask::setIsRunning(bool value)
-{
-  mIsRunning = value;
 }
 
 /**

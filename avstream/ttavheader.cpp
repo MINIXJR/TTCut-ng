@@ -256,16 +256,6 @@ TTVideoHeader* TTBreakObject::restartObject()
 }
 
 
-int TTBreakObject::stopObjectIndex()
-{
-  return stop_object_index;
-}
-
-
-int TTBreakObject::restartObjectIndex()
-{
-  return restart_object_index;
-}
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------

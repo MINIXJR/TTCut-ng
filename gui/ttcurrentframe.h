@@ -36,9 +36,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void setTitle(const QString & title);
 		void controlEnabled(bool enabled);
 		TTMPEG2Window2* videoWindow() { return mpegWindow; }
-		int currentFramePos();
 		void saveCurrentFrame();
-		void closeVideoStream();
 		void setSubtitleStream(TTSubtitleStream* subtitleStream);
 		void clearSubtitleStream();
 
@@ -76,7 +74,6 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		QString playbackSourceFingerprint() const;
 		// Playback time<->index conversion authority (display-PTS aware).
 		double playbackSecondsForCurrentStill() const;
-		int    streamIndexForPlaybackSlot(int slot) const;
 		void ensurePlayerCreated();
 
 	private:

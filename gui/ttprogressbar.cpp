@@ -123,11 +123,6 @@ void TTProgressBar::setTaskFinished(TTThreadTask* task, const QString& msg)
 /**
  * Set the progress value to 100%
  */
-void TTProgressBar::setComplete()
-{
-	progressBar->setValue(normTotalSteps);
-}
-
 /**
  * Reset the progress bar and remove all taskprogress widgets
  */
@@ -241,35 +236,9 @@ void TTProgressBar::addTaskProgress(TTThreadTask* task)
 /**
  * showProcessForm
  */
-void TTProgressBar::showProcessForm()
-{
-  if (processForm != 0) {
-    delete processForm;
-  }
-  // return;
-
-	processForm = new TTProcessForm(this);
-
-  connect(processForm, &TTProcessForm::btnCancelClicked, this, &TTProgressBar::onBtnCancelClicked);
-
-  processForm->setModal(isBlocking);
-	//processForm->showCancelButton(isBlocking);
-  processForm->showOkButton(isBlocking);
-  processForm->enableButton(false);
-
-	processForm->show();
-}
-
 /**
  * addProcessLine
  */
-void TTProgressBar::addProcessLine(const QString& line)
-{
-	if (processForm == 0) return;
-
-	processForm->addLine(line);
-}
-
 /**
  * hideProcessForm
  */

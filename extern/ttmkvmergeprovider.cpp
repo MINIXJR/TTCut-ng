@@ -248,29 +248,6 @@ TTMkvMergeProvider::~TTMkvMergeProvider()
 }
 
 // -----------------------------------------------------------------------------
-// Always available (libav is linked at build time)
-// -----------------------------------------------------------------------------
-bool TTMkvMergeProvider::isAvailable() const
-{
-    return true;
-}
-
-bool TTMkvMergeProvider::isMkvMergeInstalled()
-{
-    return true;  // libav matroska muxer is always available
-}
-
-QString TTMkvMergeProvider::mkvMergeVersion()
-{
-    return QString("libav (built-in)");
-}
-
-QString TTMkvMergeProvider::mkvMergePath()
-{
-    return QString();
-}
-
-// -----------------------------------------------------------------------------
 // Option setters (same API as before)
 // -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QString& duration)
@@ -279,16 +256,6 @@ void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QStrin
     mTrackOptions[id].defaultDuration = duration;
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
-}
-
-void TTMkvMergeProvider::setTrackName(int trackId, const QString& name)
-{
-    mTrackOptions[trackId].name = name;
-}
-
-void TTMkvMergeProvider::setLanguage(int trackId, const QString& lang)
-{
-    mTrackOptions[trackId].language = lang;
 }
 
 void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
@@ -321,14 +288,6 @@ void TTMkvMergeProvider::setAudioSyncOffset(int offsetMs)
     if (offsetMs != 0)
         if (TTSettings::instance()->logMkvMux())
             qDebug() << "TTMkvMergeProvider: audio sync offset" << offsetMs << "ms";
-}
-
-void TTMkvMergeProvider::setVideoSyncOffset(int offsetMs)
-{
-    mVideoSyncOffsetMs = offsetMs;
-    if (offsetMs != 0)
-        if (TTSettings::instance()->logMkvMux())
-            qDebug() << "TTMkvMergeProvider: video sync offset" << offsetMs << "ms";
 }
 
 // -----------------------------------------------------------------------------

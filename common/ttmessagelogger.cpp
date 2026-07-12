@@ -125,16 +125,6 @@ void TTMessageLogger::setLogModeExtended(bool extended)
     logLevel = (logExtended) ? ALL : MINIMAL;
 }
 
-void TTMessageLogger::setLogMode(int mode)
-{
-    logMode = mode;
-}
-
-void TTMessageLogger::setLogLevel(int level)
-{
-    logLevel = level;
-}
-
 // -----------------------------------------------------------------------------
 // Per-type message methods (QString variants)
 // -----------------------------------------------------------------------------
@@ -204,22 +194,6 @@ void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
     QString s = formatVa(msg, ap);
     va_end(ap);
     logMsg(DEBUG, caller, line, s);
-}
-
-void TTMessageLogger::showErrorMsg(QString caller, int line, const char* msg, ...)
-{
-    va_list ap; va_start(ap, msg);
-    QString s = formatVa(msg, ap);
-    va_end(ap);
-    logMsg(ERROR, caller, line, s, true);
-}
-
-void TTMessageLogger::showFatalMsg(QString caller, int line, const char* msg, ...)
-{
-    va_list ap; va_start(ap, msg);
-    QString s = formatVa(msg, ap);
-    va_end(ap);
-    logMsg(FATAL, caller, line, s, true);
 }
 
 // -----------------------------------------------------------------------------

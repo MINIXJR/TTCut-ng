@@ -39,12 +39,9 @@ public:
   QString taskName() const;
   QUuid taskID() const;
   int elapsedTime() const;
-  quint64 totalSteps() const;
-  quint64 stepCount() const;
   int processValue() const;
   bool isRunning() const;
   bool isAborted() const;
-  void setIsRunning(bool value);
 
 protected:
   virtual void operation() = 0;

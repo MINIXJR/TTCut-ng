@@ -431,22 +431,6 @@ int TTESSmartCut::gopCount() const
 }
 
 // ----------------------------------------------------------------------------
-// Get B-frame reorder delay (measured from decoder after first reencode)
-// ----------------------------------------------------------------------------
-int TTESSmartCut::reorderDelay() const
-{
-    return mReorderDelay;
-}
-
-// ----------------------------------------------------------------------------
-// Convert frame index to time
-// ----------------------------------------------------------------------------
-double TTESSmartCut::frameToTime(int frameIndex) const
-{
-    return frameIndex / mFrameRate;
-}
-
-// ----------------------------------------------------------------------------
 // Smart Cut (frame-based)
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::smartCutFrames(const QString& outputFile,
@@ -3420,38 +3404,6 @@ bool TTESSmartCut::writePendingPacket(ReencodeContext& ctx)
         setError("Failed to write last encoded packet");
         return false;
     }
-    return true;
-}
-
-// ----------------------------------------------------------------------------
-// Write NAL unit with start code
-// ----------------------------------------------------------------------------
-bool TTESSmartCut::writeNalUnit(QFile& outFile, const QByteArray& nalData)
-{
-    // Check if data already has start code
-    bool hasStartCode = false;
-    if (nalData.size() >= 4) {
-        if (nalData[0] == '\0' && nalData[1] == '\0') {
-            if (nalData[2] == '\x01' || (nalData[2] == '\0' && nalData[3] == '\x01')) {
-                hasStartCode = true;
-            }
-        }
-    }
-
-    if (!hasStartCode) {
-        // Add 4-byte start code
-        static const char startCode[4] = {0x00, 0x00, 0x00, 0x01};
-        if (outFile.write(startCode, 4) != 4) {
-            setError("Failed to write start code");
-            return false;
-        }
-    }
-
-    if (outFile.write(nalData) != nalData.size()) {
-        setError("Failed to write NAL data");
-        return false;
-    }
-
     return true;
 }
 

@@ -101,7 +101,6 @@ public:
     bool hasSPSChangeAtBoundary(int frameIndex, bool isCutOut);
 
     // B-frame reorder delay (frames)
-    int reorderDelay() const;
 
     // Statistics from last cut
     int framesStreamCopied() const { return mFramesStreamCopied; }
@@ -313,7 +312,6 @@ private:
     bool writePendingPacket(ReencodeContext& ctx);
 
     // Helper: write NAL unit with start code
-    bool writeNalUnit(QFile& outFile, const QByteArray& nalData);
 
     // Helper: write parameter sets (SPS/PPS/VPS)
     // patchReorderFrames > 0: patch H.264 SPS to add bitstream_restriction
@@ -331,7 +329,6 @@ private:
     int bridgeFrameNum(int scStartAU, int encLog2Fn);
 
     // Time/frame conversion
-    double frameToTime(int frameIndex) const;
 };
 
 #endif // TTESSMARTCUT_H

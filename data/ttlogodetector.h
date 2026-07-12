@@ -40,7 +40,6 @@ public:
   void finalizeProfile();
   bool hasProfile() const;
   void clearProfile();
-  int sampleCount() const;
 
   // Matching
   float matchScore(const QImage& fullFrame) const;

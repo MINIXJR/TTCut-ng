@@ -41,7 +41,6 @@ public:
   void clear();
   void clearAutoDetected();
 
-  const TTStreamPoint& pointAt(int row) const;
   const QList<TTStreamPoint>& points() const { return mPoints; }
 
   // Bulk insert (from worker results), re-sorts after

@@ -51,13 +51,10 @@ public:
                       const QStringList& audioLanguages = QStringList());
 
     // Always available (libav is linked at build time)
-    bool isAvailable() const;
     QString lastError() const { return mLastError; }
 
     // MKV-specific options
     void setDefaultDuration(const QString& trackType, const QString& duration);
-    void setTrackName(int trackId, const QString& name);
-    void setLanguage(int trackId, const QString& lang);
     void setChapterFile(const QString& chapterFile);
 
     // Language tags for audio/subtitle tracks (ISO 639-2/B)
@@ -66,7 +63,6 @@ public:
 
     // A/V sync offset in milliseconds (from .info file)
     void setAudioSyncOffset(int offsetMs);
-    void setVideoSyncOffset(int offsetMs);
 
     // Total duration for chapter end calculation (avoids INT64_MAX overflow)
     void setTotalDurationMs(qint64 durationMs);
@@ -97,9 +93,6 @@ public:
     static QVector<int> buildMpeg2DisplayOrder(const QString& filePath);
 
     // Compatibility stubs (always available — libav is built-in)
-    static bool isMkvMergeInstalled();
-    static QString mkvMergeVersion();
-    static QString mkvMergePath();
 
     // Chapter generation
     static QString generateChapterFile(qint64 durationMs, int intervalMinutes,

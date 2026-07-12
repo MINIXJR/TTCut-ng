@@ -23,7 +23,6 @@ public:
   // setInstance() lets tests inject a fixture; pass nullptr to discard
   // and re-create on next instance() call.
   static TTSettings* instance();
-  static void setInstance(TTSettings* override);
 
   TTSettings(QObject* parent = nullptr);
   ~TTSettings() override;
@@ -73,14 +72,12 @@ public:
   void    setStepPlusCtrl(int v);
 
   int     stepPlusShift() const      { return mStepPlusShift; }
-  void    setStepPlusShift(int v);
 
   int     stepMouseWheel() const     { return mStepMouseWheel; }
   void    setStepMouseWheel(int v);
 
   // ----- Index Files & Logging group (Task 6) -----------------------------
   bool    createD2V() const          { return mCreateD2V; }
-  void    setCreateD2V(bool v);
 
   bool    createLogFile() const      { return mCreateLogFile; }
   void    setCreateLogFile(bool v);
@@ -285,7 +282,6 @@ public:
 
 
   int     outputContainer() const          { return mOutputContainer; }
-  void    setOutputContainer(int v);
 
   bool    mkvCreateChapters() const        { return mMkvCreateChapters; }
   void    setMkvCreateChapters(bool v);
@@ -294,10 +290,8 @@ public:
   void    setMkvChapterInterval(int v);
 
   int     audioOnlyFormat() const          { return mAudioOnlyFormat; }
-  void    setAudioOnlyFormat(int v);
 
   int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
-  void    setAudioOnlyBitrateKbps(int v);
 
   // ----- Mux/Audio Working Set (Phase 2b, transient per-cut/per-project) ----
   // Same pattern as encoderCrf/Preset/Profile: working values are kept in

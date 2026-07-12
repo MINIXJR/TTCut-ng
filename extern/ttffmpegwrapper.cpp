@@ -114,15 +114,6 @@ void TTFFmpegWrapper::initializeFFmpeg()
 }
 
 // ----------------------------------------------------------------------------
-// Cleanup FFmpeg (call at shutdown)
-// ----------------------------------------------------------------------------
-void TTFFmpegWrapper::cleanupFFmpeg()
-{
-    // Nothing to do in modern FFmpeg
-    sFFmpegInitialized = false;
-}
-
-// ----------------------------------------------------------------------------
 // Open media file
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::openFile(const QString& filePath)
@@ -279,14 +270,6 @@ void TTFFmpegWrapper::closeFile()
 }
 
 // ----------------------------------------------------------------------------
-// Get stream count
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::getStreamCount() const
-{
-    return mFormatCtx ? mFormatCtx->nb_streams : 0;
-}
-
-// ----------------------------------------------------------------------------
 // Get stream information
 // ----------------------------------------------------------------------------
 TTStreamInfo TTFFmpegWrapper::getStreamInfo(int streamIndex) const
@@ -399,56 +382,6 @@ QString TTFFmpegWrapper::codecTypeToString(TTVideoCodecType type)
         case CODEC_H264:  return "H.264/AVC";
         case CODEC_H265:  return "H.265/HEVC";
         default:          return "Unknown";
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Detect container type
-// ----------------------------------------------------------------------------
-TTContainerType TTFFmpegWrapper::detectContainer() const
-{
-    if (!mFormatCtx || !mFormatCtx->iformat) {
-        return CONTAINER_UNKNOWN;
-    }
-
-    QString formatName = QString::fromUtf8(mFormatCtx->iformat->name);
-
-    // IMPORTANT: Check elementary stream formats FIRST, before generic "mpeg"
-    // "mpegvideo" contains "mpeg" so must be checked before CONTAINER_PS
-    if (formatName.contains("mpegvideo") || formatName.contains("m2v") ||
-        formatName.contains("h264") || formatName.contains("hevc")) {
-        return CONTAINER_ELEMENTARY;
-    }
-
-    // Check for common container formats
-    if (formatName.contains("mpegts") || formatName.contains("ts")) {
-        return CONTAINER_TS;
-    }
-    if (formatName.contains("mpeg") || formatName.contains("vob")) {
-        return CONTAINER_PS;
-    }
-    if (formatName.contains("matroska") || formatName.contains("webm")) {
-        return CONTAINER_MKV;
-    }
-    if (formatName.contains("mp4") || formatName.contains("mov") || formatName.contains("m4v")) {
-        return CONTAINER_MP4;
-    }
-
-    return CONTAINER_UNKNOWN;
-}
-
-// ----------------------------------------------------------------------------
-// Convert container type to string
-// ----------------------------------------------------------------------------
-QString TTFFmpegWrapper::containerTypeToString(TTContainerType type)
-{
-    switch (type) {
-        case CONTAINER_ELEMENTARY: return "Elementary Stream";
-        case CONTAINER_TS:         return "MPEG Transport Stream";
-        case CONTAINER_PS:         return "MPEG Program Stream";
-        case CONTAINER_MKV:        return "Matroska";
-        case CONTAINER_MP4:        return "MP4/ISOBMFF";
-        default:                   return "Unknown";
     }
 }
 
@@ -663,33 +596,6 @@ TTFrameInfo TTFFmpegWrapper::frameAt(int index) const
 }
 
 // ----------------------------------------------------------------------------
-// Find frame by PTS
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::findFrameByPts(int64_t pts) const
-{
-    // Binary search for efficiency
-    int left = 0;
-    int right = mFrameIndex.size() - 1;
-
-    while (left <= right) {
-        int mid = left + (right - left) / 2;
-
-        if (mFrameIndex[mid].pts == pts) {
-            return mid;
-        }
-
-        if (mFrameIndex[mid].pts < pts) {
-            left = mid + 1;
-        } else {
-            right = mid - 1;
-        }
-    }
-
-    // Return closest frame if exact match not found
-    return left < mFrameIndex.size() ? left : mFrameIndex.size() - 1;
-}
-
-// ----------------------------------------------------------------------------
 // Find GOP for frame
 // ----------------------------------------------------------------------------
 int TTFFmpegWrapper::findGOPForFrame(int frameIndex) const
@@ -716,38 +622,6 @@ double TTFFmpegWrapper::ptsToSeconds(int64_t pts, int streamIndex) const
 
     AVStream* stream = mFormatCtx->streams[streamIndex];
     return pts * av_q2d(stream->time_base);
-}
-
-// ----------------------------------------------------------------------------
-// Convert seconds to PTS
-// ----------------------------------------------------------------------------
-int64_t TTFFmpegWrapper::secondsToPts(double seconds, int streamIndex) const
-{
-    if (!mFormatCtx || streamIndex < 0 ||
-        streamIndex >= static_cast<int>(mFormatCtx->nb_streams)) {
-        return 0;
-    }
-
-    AVStream* stream = mFormatCtx->streams[streamIndex];
-    return static_cast<int64_t>(seconds / av_q2d(stream->time_base));
-}
-
-// ----------------------------------------------------------------------------
-// Format timestamp as string
-// ----------------------------------------------------------------------------
-QString TTFFmpegWrapper::formatTimestamp(int64_t pts, int streamIndex) const
-{
-    double seconds = ptsToSeconds(pts, streamIndex);
-    int hours = static_cast<int>(seconds / 3600);
-    int minutes = static_cast<int>((seconds - hours * 3600) / 60);
-    int secs = static_cast<int>(seconds) % 60;
-    int ms = static_cast<int>((seconds - static_cast<int>(seconds)) * 1000);
-
-    return QString("%1:%2:%3.%4")
-        .arg(hours, 2, 10, QChar('0'))
-        .arg(minutes, 2, 10, QChar('0'))
-        .arg(secs, 2, 10, QChar('0'))
-        .arg(ms, 3, 10, QChar('0'));
 }
 
 // ----------------------------------------------------------------------------
@@ -791,58 +665,6 @@ const AVInputFormat* TTFFmpegWrapper::esInputFormatForPath(const QString& filePa
     if (suffix == "m2v" || suffix == "mpv")
         return av_find_input_format("mpegvideo");
     return nullptr;
-}
-
-// ----------------------------------------------------------------------------
-// Get frame type from packet (requires decoding for accuracy)
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::getFrameType(AVPacket* packet, AVCodecContext* codecCtx)
-{
-    // Simple check: keyframe flag
-    if (packet->flags & AV_PKT_FLAG_KEY) {
-        return AV_PICTURE_TYPE_I;
-    }
-
-    // Parse slice_type from packet data for B-frame detection
-    if (codecCtx && codecCtx->codec_id == AV_CODEC_ID_H264) {
-        int sliceType = TTNaluParser::parseH264SliceTypeFromPacket(
-            packet->data, packet->size);
-        if (sliceType == H264::SLICE_B)
-            return AV_PICTURE_TYPE_B;
-        else if (sliceType == H264::SLICE_I)
-            return AV_PICTURE_TYPE_I;
-    } else if (codecCtx && codecCtx->codec_id == AV_CODEC_ID_HEVC) {
-        int sliceType = TTNaluParser::parseH265SliceTypeFromPacket(
-            packet->data, packet->size);
-        if (sliceType == H265::SLICE_B)
-            return AV_PICTURE_TYPE_B;
-        else if (sliceType == H265::SLICE_I)
-            return AV_PICTURE_TYPE_I;
-    }
-
-    return AV_PICTURE_TYPE_P;
-}
-
-// ----------------------------------------------------------------------------
-// Get video width
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::videoWidth() const
-{
-    if (mVideoCodecCtx) {
-        return mVideoCodecCtx->width;
-    }
-    return 0;
-}
-
-// ----------------------------------------------------------------------------
-// Get video height
-// ----------------------------------------------------------------------------
-int TTFFmpegWrapper::videoHeight() const
-{
-    if (mVideoCodecCtx) {
-        return mVideoCodecCtx->height;
-    }
-    return 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -1317,68 +1139,6 @@ QImage TTFFmpegWrapper::convertDecodedFrameToImage()
                   QImage::Format_RGB888).copy();
 }
 
-QImage TTFFmpegWrapper::decodeCurrentFrame()
-{
-    if (!mFormatCtx || !mVideoCodecCtx) {
-        setError("No file open or decoder not initialized");
-        return QImage();
-    }
-
-    // Allocate frames if needed
-    if (!mDecodedFrame) {
-        mDecodedFrame = av_frame_alloc();
-        if (!mDecodedFrame) {
-            setError("Could not allocate decoded frame");
-            return QImage();
-        }
-    }
-
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) {
-        setError("Could not allocate packet");
-        return QImage();
-    }
-
-    QImage result;
-
-    // Read packets until we get a complete frame
-    while (av_read_frame(mFormatCtx, packet) >= 0) {
-        if (packet->stream_index == mVideoStreamIndex) {
-            packet->pts = decodeOrderTagForPacket(packet);
-            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
-            if (ret < 0) {
-                av_packet_unref(packet);
-                continue;
-            }
-
-            ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
-            if (ret == 0) {
-                result = convertDecodedFrameToImage();
-                av_packet_unref(packet);
-                break;
-            }
-        }
-        av_packet_unref(packet);
-    }
-
-    // EOF drain: flush decoder pipeline to retrieve buffered frames
-    if (result.isNull()) {
-        int ret = avcodec_send_packet(mVideoCodecCtx, nullptr);
-        int recvRet = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
-        if (recvRet == 0) {
-            result = convertDecodedFrameToImage();
-            mDecoderDrained = true;
-        } else {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeCurrentFrame: EOF drain failed send_packet=%1 receive_frame=%2")
-                    .arg(ret).arg(recvRet));
-        }
-    }
-
-    av_packet_free(&packet);
-    return result;
-}
-
 // ----------------------------------------------------------------------------
 // Lightweight black frame check — decode to YUV, analyze Y-plane directly.
 // No RGB conversion, no QImage, no cache. Much faster than decodeFrame().
@@ -1599,32 +1359,6 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
 }
 
 // ----------------------------------------------------------------------------
-// Scene change detection: decode two I-frames and compare luma histograms
-// ----------------------------------------------------------------------------
-bool TTFFmpegWrapper::isSceneChange(int indexA, int indexB, float threshold)
-{
-    int histA[256], histB[256];
-    int totalA = 0, totalB = 0;
-
-    if (!buildHistogram(indexA, histA, totalA)) return false;
-    if (!buildHistogram(indexB, histB, totalB)) return false;
-
-    // Compare normalized histograms
-    float diff = 0.0f;
-    for (int i = 0; i < 256; i++) {
-        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
-    }
-    diff /= 2.0f;  // normalize to 0.0–1.0
-
-    if (TTSettings::instance()->logFFmpegDecoder()) {
-        qDebug() << "Scene FFmpeg: frames" << indexA << "->" << indexB
-                 << "diff=" << diff << "threshold=" << threshold
-                 << (diff > threshold ? "MATCH" : "");
-    }
-    return diff > threshold;
-}
-
-// ----------------------------------------------------------------------------
 // Decode-order tag for a packet about to be sent to the decoder.
 // Returns the current tag, then advances it for the NEXT frame. The tag must
 // count FRAMES, not packets: with PAFF, two field packets (top + bottom) form
@@ -1711,18 +1445,6 @@ bool TTFFmpegWrapper::skipCurrentFrame()
 
     av_packet_free(&packet);
     return decoded;
-}
-
-// ----------------------------------------------------------------------------
-// Set frame cache size
-// ----------------------------------------------------------------------------
-void TTFFmpegWrapper::setFrameCacheSize(int maxFrames)
-{
-    mFrameCacheMaxSize = qMax(0, maxFrames);
-    while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
-        int evict = mFrameCacheLRU.takeFirst();
-        mFrameCache.remove(evict);
-    }
 }
 
 // ----------------------------------------------------------------------------

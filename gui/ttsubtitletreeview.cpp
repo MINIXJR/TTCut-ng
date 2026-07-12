@@ -61,11 +61,6 @@ TTSubtitleTreeView::TTSubtitleTreeView(QWidget* parent)
   connect(subtitleListView,      &QTreeWidget::customContextMenuRequested, this, &TTSubtitleTreeView::onContextMenuRequest);
 }
 
-//! Set the group box title string. This method is needed by designer.
-void TTSubtitleTreeView::setTitle (const QString&)
-{
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * setAVData
  */
@@ -108,15 +103,6 @@ void TTSubtitleTreeView::clear()
 /* /////////////////////////////////////////////////////////////////////////////
  * Enable or disable the widget
  */
-void TTSubtitleTreeView::setControlEnabled( bool enabled )
-{
-  pbSubtitleFileOpen->setEnabled(enabled);
-  pbSubtitleEntryUp->setEnabled(enabled);
-  pbSubtitleEntryDelete->setEnabled(enabled);
-  pbSubtitleEntryDown->setEnabled(enabled);
-  subtitleListView->setEnabled(enabled);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * onClearList
  */

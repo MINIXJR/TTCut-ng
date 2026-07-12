@@ -195,32 +195,6 @@ int TTMuxListData::addItem(QString video, QStringList audio, QStringList subtitl
   return data.count()-1;
 }
 
-//!
-TTMuxListDataItem TTMuxListData::createMuxListItem(QString videoFilePath)
-{
-  for (int i=0; i< data.count(); i++) {
-    if (data[i].videoFileName == videoFilePath)
-      return data[i];
-  }
-
-  TTMuxListDataItem item;
-  item.videoFileName = videoFilePath;
-
-  data.append(item);
-
-  return item;
-}
-
-void TTMuxListData::appendAudioName(int index, QString audio)
-{
-  data[index].audioFileNames.append(audio);
-}
-
-void TTMuxListData::appendSubtitleName(int index, QString subtitle)
-{
-  data[index].subtitleFileNames.append(subtitle);
-}
-
 QString TTMuxListData::videoFilePathAt(int index)
 {
   return data[index].videoFileName;
@@ -230,12 +204,6 @@ QString TTMuxListData::videoFilePathAt(int index)
 QStringList TTMuxListData::audioFilePathsAt(int index)
 {
   return data[index].audioFileNames;
-}
-
-//! Returns the subtitle file-paths string list
-QStringList TTMuxListData::subtitleFilePathsAt(int index)
-{
-  return data[index].subtitleFileNames;
 }
 
 //! Returns the data item at position index
@@ -248,18 +216,6 @@ TTMuxListDataItem& TTMuxListData::itemAt(int index)
 int  TTMuxListData::count()
 {
   return data.count();
-}
-
-//! Delete all item from list
-void TTMuxListData::deleteAll()
-{
-  data.clear();
-}
-
-//! Remove item at position index from list
-void TTMuxListData::removeAt(int index)
-{
-  data.removeAt(index);
 }
 
 //! Print the data list for debug purpose

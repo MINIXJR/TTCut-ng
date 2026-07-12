@@ -32,8 +32,6 @@ class TTCutOutFrame: public QWidget, Ui::TTCutOutFrameWidget
 
 		void setTitle(const QString & title);
 		void controlEnabled(bool enabled);
-		int  currentFramePos();
-		void closeVideoStream();
 
 	public slots:
 		void onAVDataChanged(TTAVItem* avData);

@@ -209,11 +209,6 @@ bool TTLogoDetector::isFromMarkadLogo() const
   return !mMarkadLogoPath.isEmpty();
 }
 
-int TTLogoDetector::sampleCount() const
-{
-  return mSampleCount;
-}
-
 float TTLogoDetector::matchScore(const QImage& fullFrame) const
 {
   if (!hasProfile() || !hasROI()) return 0.0f;

@@ -57,12 +57,10 @@ class TTCutProjectData
     TTLogoProjectData deserializeLogoData();
     void deserializeSettings();
 
-    QString fileName();
     QString filePath();
 
     void writeXml();
     void readXml();
-    void printXml();
 
   private:
     void createDocumentStructure();

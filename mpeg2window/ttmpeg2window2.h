@@ -66,8 +66,6 @@ class TTMPEG2Window2 : public QLabel
 
     void invalidateDisplay();
     bool isBlackAt(int index, int pixelThreshold, float ratioThreshold);
-    bool isSceneChangeAt(int indexA, int indexB, float threshold);
-    bool buildHistogramAt(int index, int hist[256], int& totalPixels);
 
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();
@@ -87,7 +85,6 @@ class TTMPEG2Window2 : public QLabel
     void mouseReleaseEvent(QMouseEvent* event) override;
 
   	void getFrameInfo();
-    void decodeAndShowSlice();
     QString getSubtitleTextAtCurrentFrame();
     void drawSubtitleOnImage(QImage& image, const QString& text);
 

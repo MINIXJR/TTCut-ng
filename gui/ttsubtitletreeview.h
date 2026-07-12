@@ -34,8 +34,6 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
   public:
     TTSubtitleTreeView(QWidget* parent=0);
 
-    void setTitle (const QString& title);
-    void setControlEnabled(bool enabled);
     void clear();
 
   signals:

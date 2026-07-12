@@ -51,12 +51,9 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
       void setTaskProgress(TTThreadTask* task, const QString& msg);
       void setTaskFinished(TTThreadTask* task, const QString& msg);
 
-      void setComplete();
       void resetProgress();
 
       void updateProgressBar();
-      void showProcessForm();
-      void addProcessLine(const QString& line);
       void hideProcessForm();
 
   signals:

@@ -32,8 +32,6 @@ class TTCutParameter
     ~TTCutParameter();
 
     TTFileBuffer* getTargetStreamBuffer();
-    bool getIsDVDCompliantStream();
-    void setIsDVDCompliantStream(bool value);
     int  getNumPicturesWritten();
     void setNumPicturesWritten(int value);
     int  getCutInIndex();

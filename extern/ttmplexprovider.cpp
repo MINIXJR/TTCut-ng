@@ -310,12 +310,6 @@ void TTMplexProvider::onProcStateChanged(QProcess::ProcessState procState)
   qApp->processEvents();
 }
 
-//! Kills the current process, causing it to exit immediately
-void TTMplexProvider::onProcKill()
-{
-  proc->kill();
-}
-
 //! Write the process output to process form
 void TTMplexProvider::procOutput()
 {
@@ -334,33 +328,3 @@ void TTMplexProvider::procOutput()
   }
 }
 
-// /////////////////////////////////////////////////////////////////////////////
-// Settings
-// /////////////////////////////////////////////////////////////////////////////
-//
-//! Level of verbosity (--verbose|-v num)
-int TTMplexProvider::createVerboseHash()
-{
-  verbose["quiet"]         = 0;
-  verbose["normal"]        = 1;
-  verbose["verbose/debug"] = 2;
-
-  return verbose.size();
-}
-
-//! Set defaults for particular MPEG profiles (--format|-f fmt)
-int TTMplexProvider::createFormatHash()
-{
-  format["Generic MPEG1"]        = 0;
-  format["VCD"]                  = 1;
-  format["user-rate VCD"]        = 2;
-  format["Generic MPEG2"]        = 3;
-  format["SVCD"]                 = 4;
-  format["user-rate VCD"]        = 5;
-  format["VCD Stills"]           = 6;
-  format["SVCD Stills"]          = 7;
-  format["DVD with NAV sectors"] = 8;
-  format["DVD"]                  = 9;
-
-  return format.size();
-}

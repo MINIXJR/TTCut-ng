@@ -151,7 +151,6 @@ public:
 
     // Initialize/cleanup libav
     static void initializeFFmpeg();
-    static void cleanupFFmpeg();
 
     // Open/close media file
     void setAnalysisMode(bool enabled) { mAnalysisMode = enabled; }
@@ -161,7 +160,6 @@ public:
     bool isOpen() const { return mFormatCtx != nullptr; }
 
     // Get stream information
-    int getStreamCount() const;
     TTStreamInfo getStreamInfo(int streamIndex) const;
     int findBestVideoStream() const;
     int findBestAudioStream() const;
@@ -171,8 +169,6 @@ public:
     static QString codecTypeToString(TTVideoCodecType type);
 
     // Detect container type (used by Smart Cut)
-    TTContainerType detectContainer() const;
-    static QString containerTypeToString(TTContainerType type);
 
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);
@@ -190,13 +186,10 @@ public:
 
     // Frame access
     TTFrameInfo frameAt(int index) const;
-    int findFrameByPts(int64_t pts) const;
     int findGOPForFrame(int frameIndex) const;
 
     // Utility functions
     double ptsToSeconds(int64_t pts, int streamIndex) const;
-    int64_t secondsToPts(double seconds, int streamIndex) const;
-    QString formatTimestamp(int64_t pts, int streamIndex) const;
 
     // Frame decoding for preview
     bool seekToFrame(int frameIndex);
@@ -220,7 +213,6 @@ public:
      */
     bool decodeFrameYUV(int frameIndex, TFrameInfo& outInfo);
 
-    QImage decodeCurrentFrame();
     // Convert the already-decoded mDecodedFrame to a QImage (lazy-inits
     // mRgbFrame/mSwsCtx + sws_scale). Does NOT read or decode a packet.
     QImage convertDecodedFrameToImage();
@@ -230,15 +222,11 @@ public:
     bool isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold);
 
     // Scene change detection via luma histogram comparison
-    bool isSceneChange(int indexA, int indexB, float threshold);
 
     // Build luma histogram for a single frame (for cached scene change search)
     bool buildHistogram(int frameIndex, int hist[256], int& totalPixels);
-    int videoWidth() const;
-    int videoHeight() const;
 
     // Frame cache management
-    void setFrameCacheSize(int maxFrames);
     void clearFrameCache();
 
     // Audio ES cutting - time-based stream-copy (ms-accurate)
@@ -383,7 +371,6 @@ private:
 
     // Helper functions
     static QString avErrorToString(int errnum);
-    int getFrameType(AVPacket* packet, AVCodecContext* codecCtx);
 
 public:
     // Public ES-detection helpers shared with TTMkvMergeProvider.

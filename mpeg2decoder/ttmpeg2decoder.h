@@ -108,13 +108,9 @@ class TTMpeg2Decoder
   ~TTMpeg2Decoder();
 
   void        openMPEG2File(QString cFName);
-  quint64     fileSize();
-  QString     fileName();
   int         moveToFrameIndex(int iFramePos);
   TFrameInfo* decodeFirstMPEG2Frame(TPixelFormat pixelFormat=formatRGB32);
   TFrameInfo* decodeMPEG2Frame(TPixelFormat pixelFormat=formatRGB32);
-  int         gotoNextFrame();
-  void        getCurrentFrameData(quint8* data);
   TFrameInfo* getFrameInfo();
 
   int desiredFrameType;

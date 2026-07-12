@@ -39,8 +39,6 @@ class TTMessageLogger
     void setLogModeConsole(bool console);
     void setLogModeExtended(bool extended);
 
-    void setLogMode(int mode);
-    void setLogLevel(int level);
 
     void infoMsg(QString caller, int line, QString msgString);
     void warningMsg(QString caller, int line, QString msgString);
@@ -54,8 +52,6 @@ class TTMessageLogger
     void errorMsg(QString caller, int line, const char* msg, ...);
     void fatalMsg(QString caller, int line, const char* msg, ...);
     void debugMsg(QString caller, int line, const char* msg, ...);
-    void showErrorMsg(QString caller, int line, const char* msg, ...);
-    void showFatalMsg(QString caller, int line, const char* msg, ...);
 
     enum MsgType
     {

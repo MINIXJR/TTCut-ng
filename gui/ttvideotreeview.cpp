@@ -65,11 +65,6 @@ TTVideoTreeView::TTVideoTreeView(QWidget* parent)
   connect(videoListView,    &QTreeWidget::customContextMenuRequested,  this, &TTVideoTreeView::onContextMenuRequest);
 }
 
-//! Set the group box title string. This method is needed by designer.
-void TTVideoTreeView::setTitle ( __attribute__((unused))const QString& title )
-{
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * setAVData
  */
@@ -87,32 +82,9 @@ void TTVideoTreeView::setAVData(TTAVData* avData)
   connect(this,    &TTVideoTreeView::selectionChanged,  mAVData, qOverload<int>(&TTAVData::onChangeCurrentAVItem));
 }
 
-void TTVideoTreeView::clear()
-{
-  disconnect(mAVData, &TTAVData::avItemAppended,    this, &TTVideoTreeView::onAppendItem);
-  disconnect(mAVData, &TTAVData::avItemRemoved,     this, &TTVideoTreeView::onItemRemoved);
-  disconnect(mAVData, &TTAVData::avItemsSwapped,    this, &TTVideoTreeView::onItemsSwapped);
-  disconnect(mAVData, &TTAVData::avDataReloaded,    this, &TTVideoTreeView::onReloadList);
-
-  disconnect(this,    &TTVideoTreeView::removeItem,        mAVData, &TTAVData::onRemoveAVItem);
-  disconnect(this,    &TTVideoTreeView::swapItems,         mAVData, &TTAVData::onSwapAVItems);
-  disconnect(this,    &TTVideoTreeView::selectionChanged,  mAVData, qOverload<int>(&TTAVData::onChangeCurrentAVItem));
-
-	videoListView->clear();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Enable or disable the widget
  */
-void TTVideoTreeView::setControlEnabled( bool enabled )
-{
-  pbVideoFileOpen->setEnabled(enabled);
-  pbEntryUp->setEnabled(enabled);
-  pbEntryDelete->setEnabled(enabled);
-  pbEntryDown->setEnabled(enabled);
-  videoListView->setEnabled(enabled);
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * onClearList
  */

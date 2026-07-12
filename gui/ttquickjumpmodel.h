@@ -47,7 +47,6 @@ public:
   int intervalSeconds() const;
 
   int keyframeListIndex(int frameIndex) const;
-  int keyframeCount() const;
   const QList<int>& keyframeIndices() const;
   bool isFailedFrame(int frameIndex) const;
 

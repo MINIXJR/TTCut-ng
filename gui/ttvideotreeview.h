@@ -32,10 +32,7 @@ class TTVideoTreeView : public QWidget, Ui::TTVideoFileListWidget
   public:
     TTVideoTreeView(QWidget* parent=0);
 
-    void clear();
-    void setTitle (const QString& title);
     void setAVData(TTAVData* avData);
-    void setControlEnabled(bool enabled);
 
   signals:
     void openFile();

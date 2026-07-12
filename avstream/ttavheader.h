@@ -166,8 +166,6 @@ class TTBreakObject
   void setRestartObject( TTVideoHeader* restart, int index=-1 );
   TTVideoHeader* stopObject();
   TTVideoHeader* restartObject();
-  int stopObjectIndex();
-  int restartObjectIndex();
 
  private:
   TTVideoHeader* stop_object;

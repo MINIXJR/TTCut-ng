@@ -207,11 +207,6 @@ int TTQuickJumpModel::keyframeListIndex(int frameIndex) const
   return qMax(0, mKeyframeIndices.size() - 1);
 }
 
-int TTQuickJumpModel::keyframeCount() const
-{
-  return mKeyframeIndices.size();
-}
-
 const QList<int>& TTQuickJumpModel::keyframeIndices() const
 {
   return mKeyframeIndices;

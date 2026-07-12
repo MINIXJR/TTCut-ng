@@ -39,19 +39,9 @@ TTProcessForm::~TTProcessForm()
 /**
  * Set the process window frame caption
  */
-void TTProcessForm::setFrameCaption(QString& caption)
-{
-  gbProcessView->setTitle(caption);
-}
-
 /**
  * Enable the list control for manual scrolling
  */
-void TTProcessForm::enableList(bool value)
-{
-  procOutputList->setEnabled(value);
-}
-
 /**
  * Enable the cancel button
  */
@@ -63,13 +53,6 @@ void TTProcessForm::enableButton(bool value)
 /**
  * Show the cancel button
  */
-void TTProcessForm::showCancelButton(bool show)
-{
-  btnCancel->setText(tr("Cancel"));
-  btnCancel->setIcon(QIcon(":/pixmaps/pixmaps/messagebox_critical.png"));
-  btnCancel->setVisible(show);
-}
-
 /**
  * Show the ok button
  */
