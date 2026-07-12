@@ -76,7 +76,6 @@ HEADERS     = common/ttcut.h\
               common/ttthreadtask.h\
               common/ttthreadtaskpool.h\
               common/ttmessagelogger.h\
-              common/ttmessagebox.h\
               common/ttexception.h\
               common/istatusreporter.h\
               data/ttaudiolist.h\
@@ -178,7 +177,6 @@ SOURCES     = common/ttcut.cpp\
               common/ttthreadtask.cpp\
               common/ttthreadtaskpool.cpp\
               common/ttmessagelogger.cpp\
-              common/ttmessagebox.cpp\
               common/ttexception.cpp\
               common/istatusreporter.cpp\
               data/ttaudiolist.cpp\

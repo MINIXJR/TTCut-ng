@@ -30,7 +30,6 @@
 #include "../common/ttexception.h"
 #include "../common/ttthreadtask.h"
 #include "../common/ttthreadtaskpool.h"
-#include "../common/ttmessagebox.h"
 #include "../common/ttsettings.h"
 
 #include "../data/ttstreampointmodel.h"
