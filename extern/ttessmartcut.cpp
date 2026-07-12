@@ -3134,14 +3134,25 @@ void TTESSmartCut::parseEncoderSpsFromPacket(ReencodeContext& ctx, const QByteAr
                      << "log2_poc=" << mEncoderLog2MaxPocLsb
                      << "poc_type=" << mEncoderPocType;
         }
-        // The per-segment unification decision assumed this width before the
+        // The per-segment unification decision used a value before the
         // encoder existed — a mismatch means benign seams may have been
         // misclassified; surface it loudly instead of degrading silently.
-        if (mEncoderPocType == 0 && mEncoderLog2MaxPocLsb != kExpectedEncoderLog2PocLsb) {
+        // Compare against what the decision actually used: the probed value
+        // when available, the legacy constant otherwise.
+        int expectedLog2Poc = (mProbedEncoderPocType == 0 && mProbedEncoderLog2PocLsb >= 4)
+            ? mProbedEncoderLog2PocLsb : kExpectedEncoderLog2PocLsb;
+        if (mEncoderPocType == 0 && mEncoderLog2MaxPocLsb != expectedLog2Poc) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("Encoder log2_max_poc_lsb %1 differs from expected %2 - "
-                        "POC-domain bridge decision may be wrong")
-                    .arg(mEncoderLog2MaxPocLsb).arg(kExpectedEncoderLog2PocLsb));
+                QString("Encoder log2_max_poc_lsb %1 differs from the value the "
+                        "branch decision used (%2, probed %3) - POC-domain "
+                        "bridge decision may be wrong")
+                    .arg(mEncoderLog2MaxPocLsb).arg(expectedLog2Poc)
+                    .arg(mProbedEncoderLog2PocLsb));
+        }
+        if (mProbedEncoderPocType >= 0 && mEncoderPocType != mProbedEncoderPocType) {
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                QString("Encoder poc_type %1 differs from probed %2")
+                    .arg(mEncoderPocType).arg(mProbedEncoderPocType));
         }
         ctx.encoderSpsParsed = true;
     }
