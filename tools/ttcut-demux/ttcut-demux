@@ -117,6 +117,17 @@ probe_audio_props() {
     esac
 }
 
+# One shared filter for surfacing ffmpeg log lines as warnings (superset of
+# the per-site patterns that existed before; may surface a few more lines).
+readonly FFMPEG_WARN_PATTERN='error|warning|invalid|corrupt|failed|suppress|too many|repeated|mismatch'
+
+# Echo matching lines of log file $1 as warnings, prefixed with $2 (optional).
+warn_ffmpeg_log() {
+    local logfile=$1 prefix=${2:-}
+    grep -iE "$FFMPEG_WARN_PATTERN" "$logfile" 2>/dev/null | \
+        while IFS= read -r line; do warn "${prefix}ffmpeg: $line"; done
+}
+
 # Detect audio packet gaps in source TS via ffprobe.
 # Output format (one gap per line):
 #   <gap_start_pts_source> <gap_end_pts_source> <gap_size_ms>
@@ -780,7 +791,7 @@ if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     # Show progress line
     grep -E "^(frame=|size=)" "$FFMPEG_LOG" | tail -1 | while IFS= read -r line; do info "$line"; done
     # Show any warnings/errors from ffmpeg
-    grep -iE "error|warning|invalid|corrupt|suppress|too many|repeated|mismatch" "$FFMPEG_LOG" | while IFS= read -r line; do warn "ffmpeg: $line"; done
+    warn_ffmpeg_log "$FFMPEG_LOG"
     rm -f "$FFMPEG_LOG"
 
     # Verify repaired file
@@ -803,7 +814,7 @@ if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     fi
 else
     # Show ffmpeg errors
-    grep -iE "error|warning|invalid|corrupt|suppress|too many|repeated|mismatch" "$FFMPEG_LOG" | while IFS= read -r line; do warn "ffmpeg: $line"; done
+    warn_ffmpeg_log "$FFMPEG_LOG"
     rm -f "$FFMPEG_LOG"
     warn "Timestamp repair failed, using original file"
     CLEANUP_REPAIRED=false
@@ -1016,8 +1027,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         info "  Video done: $(numfmt --to=iec $VIDEO_SIZE)"
     else
         warn "  Video extraction failed (exit code: $VIDEO_EXIT)"
-        grep -iE "error|warning|invalid|corrupt|failed|suppress|too many" "$EXTRACT_LOG_DIR/video.log" 2>/dev/null | \
-            while IFS= read -r line; do warn "  ffmpeg: $line"; done
+        warn_ffmpeg_log "$EXTRACT_LOG_DIR/video.log" "  "
         VIDEO_SIZE=$(stat -c%s "$OUTPUT_VIDEO" 2>/dev/null || echo 0)
     fi
 
@@ -1028,8 +1038,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         if [ $? -ne 0 ]; then
             ((AUDIO_ERRORS++))
             warn "  Audio $i extraction failed"
-            grep -iE "error|warning|invalid|corrupt|failed|suppress|too many" "$EXTRACT_LOG_DIR/audio_$i.log" 2>/dev/null | \
-                while IFS= read -r line; do warn "  ffmpeg: $line"; done
+            warn_ffmpeg_log "$EXTRACT_LOG_DIR/audio_$i.log" "  "
         fi
     done
 
@@ -1513,8 +1522,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     info "    $(basename "$AUDIO_FILE"): +${ADDED_MS}ms padding"
                 else
                     warn "    Failed to pad $(basename "$AUDIO_FILE")"
-                    grep -iE "error|warning|invalid|corrupt|failed|suppress|too many" "$PAD_LOG_DIR/pad_$i.log" 2>/dev/null | \
-                        while IFS= read -r line; do warn "    ffmpeg: $line"; done
+                    warn_ffmpeg_log "$PAD_LOG_DIR/pad_$i.log" "    "
                     rm -f "$TEMP_PADDED"
                 fi
             done
