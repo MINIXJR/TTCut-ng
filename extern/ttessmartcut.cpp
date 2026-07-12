@@ -51,6 +51,9 @@ struct H264SpsInfo {
     int pocType;                 // pic_order_cnt_type (0, 1, or 2)
     int log2MaxPocLsbMinus4;     // only valid if pocType == 0, -1 otherwise
     bool frameMbsOnly;           // frame_mbs_only_flag
+    int picWidth;                // luma width in samples, uncropped (-1 on error)
+    int picHeight;               // luma height in samples, uncropped (-1 on error)
+    int bitDepthLuma;            // 8 unless the high-profile branch says otherwise
 };
 static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal);
 static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth);
@@ -1290,7 +1293,7 @@ static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int 
 // ----------------------------------------------------------------------------
 static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
 {
-    H264SpsInfo info = { -1, -1, -1, true };
+    H264SpsInfo info = { -1, -1, -1, true, -1, -1, 8 };
 
     // Find and strip start code
     int startCodeLen = 0;
@@ -1322,7 +1325,7 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
         uint32_t chroma_format_idc = spsReadUE(data, dataSize, bitPos);
         if (chroma_format_idc == 3)
             spsReadBits(data, dataSize, bitPos, 1);  // separate_colour_plane_flag
-        spsReadUE(data, dataSize, bitPos);    // bit_depth_luma_minus8
+        info.bitDepthLuma = 8 + static_cast<int>(spsReadUE(data, dataSize, bitPos));  // bit_depth_luma_minus8
         spsReadUE(data, dataSize, bitPos);    // bit_depth_chroma_minus8
         spsReadBits(data, dataSize, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
         uint32_t seq_scaling_matrix_present = spsReadBits(data, dataSize, bitPos, 1);
@@ -1354,10 +1357,18 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
 
     spsReadUE(data, dataSize, bitPos);  // max_num_ref_frames
     spsReadBits(data, dataSize, bitPos, 1);  // gaps_in_frame_num_allowed_flag
-    spsReadUE(data, dataSize, bitPos);  // pic_width_in_mbs_minus1
-    spsReadUE(data, dataSize, bitPos);  // pic_height_in_map_units_minus1
+    uint32_t pic_width_in_mbs_minus1 = spsReadUE(data, dataSize, bitPos);
+    uint32_t pic_height_in_map_units_minus1 = spsReadUE(data, dataSize, bitPos);
 
     info.frameMbsOnly = (spsReadBits(data, dataSize, bitPos, 1) != 0);
+
+    // Uncropped luma dimensions: map units are frame MBs when
+    // frame_mbs_only_flag is set, field MB pairs otherwise (height x2).
+    // Sufficient for the encoder POC probe, which only needs VALID encoder
+    // dimensions; cropping (e.g. 1088 vs 1080) does not affect POC fields.
+    info.picWidth  = static_cast<int>(pic_width_in_mbs_minus1 + 1) * 16;
+    info.picHeight = static_cast<int>(pic_height_in_map_units_minus1 + 1) * 16
+                     * (info.frameMbsOnly ? 1 : 2);
 
     return info;
 }
