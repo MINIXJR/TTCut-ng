@@ -73,6 +73,23 @@ audio_ext_for_codec() {
     esac
 }
 
+# First video packet PTS of $1, codec-aware (reads $VIDEO_CODEC, so call
+# only after stream discovery):
+# H.264/H.265: minimum PTS over the first 2s = first DISPLAY frame (leading
+# B-frames have a lower PTS than the I-frame that precedes them in decode
+# order). MPEG-2: first packet PTS (the I-frame).
+probe_first_video_pts() {
+    local src=$1
+    if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
+        ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
+            -show_entries packet=pts_time -of csv=p=0 "$src" 2>/dev/null | \
+            tr -d ',' | sort -n | head -1
+    else
+        ffprobe -v error -select_streams v:0 -show_entries packet=pts_time \
+            -of csv=p=0 "$src" 2>/dev/null | head -1 | tr -d ','
+    fi
+}
+
 # Detect audio packet gaps in source TS via ffprobe.
 # Output format (one gap per line):
 #   <gap_start_pts_source> <gap_end_pts_source> <gap_size_ms>
@@ -704,13 +721,7 @@ _CLEANUP_FILES+=("$REPAIRED_INPUT")
 # For H.264/H.265: use minimum PTS from first 2 seconds (= first display frame PTS)
 # because leading B-frames have lower PTS than the I-frame which comes first in decode order.
 # For MPEG-2: use first packet PTS (I-frame); B-frame skipping is handled separately below.
-if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
-    ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
-        -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | \
-        tr -d ',' | sort -n | head -1)
-else
-    ORIG_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
-fi
+ORIG_VIDEO_PTS=$(probe_first_video_pts "$INPUT")
 # Per-track audio PTS probe: each track gets its own trim value
 declare -a ORIG_AUDIO_PTS_ARR=()   # Original PTS per audio track
 declare -a AUDIO_TRIM_SECS=()      # Trim value per audio track
@@ -1579,16 +1590,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # The repaired file has timestamps normalized to 0, so we need the original for offset
     info "Calculating A/V sync offset..."
 
-    # Get first display PTS from ORIGINAL file (before timestamp repair)
-    # For H.264/H.265: use minimum PTS (first display frame, a B-frame)
-    # For MPEG-2: use first packet PTS (I-frame)
-    if [ "$VIDEO_CODEC" = "hevc" ] || [ "$VIDEO_CODEC" = "h265" ] || [ "$VIDEO_CODEC" = "h264" ]; then
-        FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -read_intervals "%+2" \
-            -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | \
-            tr -d ',' | sort -n | head -1)
-    else
-        FIRST_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$ORIGINAL_INPUT" 2>/dev/null | head -1 | tr -d ',')
-    fi
+    # Reuse the pre-repair measurement (probe_first_video_pts): for a single
+    # file $INPUT and $ORIGINAL_INPUT were the same path; for VDR multi-file
+    # the concat chain and the first segment share the same first PTS
+    # (recording start).
+    FIRST_VIDEO_PTS="$ORIG_VIDEO_PTS"
     # Use per-track PTS from earlier probe (ORIG_AUDIO_PTS_ARR)
     # Legacy: FIRST_AUDIO_PTS = first track's PTS (for backwards compat in .info)
     FIRST_AUDIO_PTS="${ORIG_AUDIO_PTS_ARR[0]:-}"
