@@ -288,10 +288,10 @@
     cross-check via grep, dann entfernen
   - Außerdem: ungenutzte includes in .cpp/.h entfernen (clangd `unused-includes`)
   - Sollte als wiederkehrender Wartungs-Pass laufen, nicht als Einmalaktion
-  - Konkrete Funde 2026-07-09/10 (belegt, noch offen):
-    - `AcmodInfo::cutInChangeTime` / `cutOutChangeTime` (`extern/ttffmpegwrapper.h`) —
-      deklariert, in `analyzeAcmod()` auf `0.0` initialisiert, nie berechnet, nie gelesen.
-      Gedacht war die Distanz des Formatwechsels zur Schnittgrenze.
+  - Konkrete Funde 2026-07-09/10 (belegt):
+    - ~~`AcmodInfo::cutInChangeTime` / `cutOutChangeTime`~~ → **ENTFERNT 2026-07-12**
+      (`f4d4e66`, User-Entscheid: nur Burst-am-Schnittpunkt zählt; Umsetzungsweg
+      falls je gewünscht in `docs/code-map/burst-detection.md` konserviert).
     - `analyzeAcmod()` (Datei-Scan per Syncword, dient der Cut-Normalisierung) und
       `TTCutTreeView::updateAcmodIcon()` (In-Memory-`TTAudioHeaderList`, dient der Anzeige)
       implementieren die Mehrheits-acmod-Logik doppelt, mit verschiedenen
