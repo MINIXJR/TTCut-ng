@@ -174,6 +174,13 @@ private:
     int mEncoderPocType;
     bool mEncoderFrameMbsOnly;
 
+    // Probed encoder POC parameters (one throwaway libx264 open with
+    // GLOBAL_HEADER per run, before the first branch decision). -1 = probe
+    // failed or not run; kExpectedEncoderLog2PocLsb stays the fallback.
+    bool mPocProbeDone = false;
+    int  mProbedEncoderLog2PocLsb = -1;
+    int  mProbedEncoderPocType = -1;
+
     // SPS Unification mode: rewrite encoder output to match source SPS
     // Set by processSegment() for PAFF H.264, checked in reencodeFrames()
     bool mSpsUnification;
@@ -219,6 +226,7 @@ private:
     // Setup decoder/encoder
     bool setupDecoder();
     bool setupEncoder();
+    bool probeEncoderPocParams();
     void freeDecoder();
     void freeEncoder();
 

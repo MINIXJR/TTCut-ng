@@ -99,10 +99,14 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
 static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWidth,
     int frameNumDelta, int maxFrameNum);
 
-// libx264 with bf=0 emits SPS with log2_max_pic_order_cnt_lsb_minus4 = 0.
-// The per-segment SPS-unification decision runs BEFORE the encoder produces
-// its first packet, so it relies on this constant; parseEncoderSpsFromPacket
-// verifies it afterwards and warns on mismatch.
+// libx264 with bf=0 emits SPS with log2_max_pic_order_cnt_lsb_minus4 = 0
+// (log2_max_pic_order_cnt_lsb = 4). Fallback only: probeEncoderPocParams()
+// measures the real value up front (throwaway libx264 open with
+// GLOBAL_HEADER); this constant is used when the probe fails or reports an
+// unexpected poc_type. parseEncoderSpsFromPacket cross-checks the real
+// per-segment SPS afterwards. Per H.264 7.4.2.1.1 log2_max_poc_lsb >= 4, so
+// the assumption could only ever be conservative (never call a real seam
+// bridgeable when it is not).
 static constexpr int kExpectedEncoderLog2PocLsb = 4;
 
 // True when some poc_lsb value representable in patchLog2PocLsb bits keeps
@@ -1027,7 +1031,13 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         QByteArray scAU = mParser.readAccessUnitData(segment.streamCopyStartFrame);
         int scPocLsb = readPocLsbFromAU(scAU, mLog2MaxFrameNum,
                                          mLog2MaxPocLsb, mFrameMbsOnly);
-        pocBridgeable = pocDomainBridgeable(scPocLsb, kExpectedEncoderLog2PocLsb,
+        // Measured encoder POC width when the probe succeeded with poc_type 0;
+        // the constant stays as the fallback (probe failure or unexpected
+        // poc_type — the latter is warned about loudly in the probe).
+        probeEncoderPocParams();
+        int encLog2PocLsb = (mProbedEncoderPocType == 0 && mProbedEncoderLog2PocLsb >= 4)
+            ? mProbedEncoderLog2PocLsb : kExpectedEncoderLog2PocLsb;
+        pocBridgeable = pocDomainBridgeable(scPocLsb, encLog2PocLsb,
                                             mLog2MaxPocLsb);
         if (!pocBridgeable && TTSettings::instance()->logSmartCut()) {
             qDebug() << "    POC domain not bridgeable (copy-start poc_lsb" << scPocLsb
@@ -2775,6 +2785,107 @@ bool TTESSmartCut::setupDecoder()
 // ----------------------------------------------------------------------------
 // Setup encoder
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Probe the encoder's POC parameters before any segment is encoded.
+// setupEncoder() cannot run yet (it needs decoded-frame parameters), so this
+// mirrors its knobs from parser-derived sources and opens a throwaway libx264
+// context with AV_CODEC_FLAG_GLOBAL_HEADER: the SPS is then available in
+// extradata without encoding a single frame. x264's POC choice depends on
+// bframes/interlace/keyint-class parameters, not on resolution — an
+// assumption this probe does NOT rely on blindly: parseEncoderSpsFromPacket
+// compares the probe against the real per-segment encoder SPS and warns
+// loudly on mismatch.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::probeEncoderPocParams()
+{
+    if (mPocProbeDone) return mProbedEncoderLog2PocLsb > 0;
+    mPocProbeDone = true;
+
+    if (mParser.codecType() != NALU_CODEC_H264 || mParser.spsCount() == 0)
+        return false;
+
+    H264SpsInfo src = parseH264SpsInfo(mParser.getSPS(0));
+    if (src.picWidth <= 0 || src.picHeight <= 0)
+        return false;
+
+    const AVCodec* codec = avcodec_find_encoder_by_name("libx264");
+    if (!codec) return false;
+
+    AVCodecContext* probe = avcodec_alloc_context3(codec);
+    if (!probe) return false;
+
+    probe->width  = src.picWidth;
+    probe->height = src.picHeight;
+    probe->pix_fmt = (src.bitDepthLuma >= 10) ? AV_PIX_FMT_YUV420P10LE
+                                              : AV_PIX_FMT_YUV420P;
+    probe->time_base = (AVRational){1, static_cast<int>(mFrameRate * 1000)};
+    probe->framerate = (AVRational){static_cast<int>(mFrameRate * 1000), 1000};
+    probe->max_b_frames = 0;
+    probe->thread_count = 1;
+    probe->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    // Interlace approximation from the source SPS: MBAFF/PAFF sources carry
+    // frame_mbs_only_flag == 0 and are encoded with interlace flags set.
+    if (!src.frameMbsOnly) {
+        probe->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
+        probe->field_order = AV_FIELD_TT;
+    }
+
+    // Same option sources as setupEncoder (H.264 branch).
+    TTSettings* s = TTSettings::instance();
+    int crf        = s->encoderCrf();
+    int presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
+                                            : qBound(0, s->encoderPreset(), 8);
+    int profileIdx = qBound(0, s->encoderProfile(), 5);
+    static const char* presetNames[] = {
+        "ultrafast", "superfast", "veryfast", "faster", "fast",
+        "medium", "slow", "slower", "veryslow"
+    };
+    static const char* h264Profiles[] = {
+        "baseline", "main", "high", "high10", "high422", "high444"
+    };
+    if (src.bitDepthLuma >= 10 && profileIdx < 3) profileIdx = 3;
+
+    AVDictionary* opts = nullptr;
+    av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
+    av_dict_set(&opts, "forced-idr", "1", 0);
+    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+    av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
+
+    int ret = avcodec_open2(probe, codec, &opts);
+    av_dict_free(&opts);
+    if (ret < 0 || !probe->extradata || probe->extradata_size <= 0) {
+        avcodec_free_context(&probe);
+        return false;
+    }
+
+    QByteArray extradata(reinterpret_cast<const char*>(probe->extradata),
+                         probe->extradata_size);
+    avcodec_free_context(&probe);
+
+    H264SpsInfo enc;
+    if (!findH264SpsInPacket(extradata, enc) || enc.log2MaxFrameNumMinus4 < 0)
+        return false;
+
+    mProbedEncoderPocType = enc.pocType;
+    mProbedEncoderLog2PocLsb = (enc.pocType == 0) ? enc.log2MaxPocLsbMinus4 + 4 : 0;
+    if (TTSettings::instance()->logSmartCut()) {
+        qDebug() << "    Probed encoder SPS: log2_poc=" << mProbedEncoderLog2PocLsb
+                 << "poc_type=" << mProbedEncoderPocType
+                 << "(expected constant" << kExpectedEncoderLog2PocLsb << ")";
+    }
+    TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
+        QString("Encoder POC probe: log2_max_poc_lsb=%1 poc_type=%2")
+            .arg(mProbedEncoderLog2PocLsb).arg(mProbedEncoderPocType));
+    if (mProbedEncoderPocType != 0) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("Encoder uses poc_type %1 - the POC bridge model is only "
+                    "verified for poc_type 0; falling back to the legacy "
+                    "assumption (log2_max_poc_lsb=%2)")
+                .arg(mProbedEncoderPocType).arg(kExpectedEncoderLog2PocLsb));
+    }
+    return true;
+}
+
 bool TTESSmartCut::setupEncoder()
 {
     freeEncoder();
