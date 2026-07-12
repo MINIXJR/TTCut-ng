@@ -272,20 +272,37 @@ TTAVItem* TTAVData::createAVItem()
 	}
 }
 
-// Helper: if mExtraFrameIndices is empty and the video stream is MPEG-2,
-// fall back to the parser-detected field-picture extras. H.264/H.265
-// streams populate the list via .info file (esInfo.esExtraFrames()); for
-// MPEG-2 the detection lives in the bitstream parser (see spec
-// 2026-05-12-mpeg2-field-picture-fix-design.md, Variante 2A).
-static void loadMpeg2FieldExtras(QList<int>& target, TTVideoStream* vStream)
+// Pick the extra-frame index list for audio time correction. For MPEG-2 the
+// bitstream parser knows the truth (picture_structure -> field pairs, in
+// display-index space), so prefer it over the .info es_extra_frames list
+// (decode-index space, and produced by a PTS heuristic that cannot tell
+// field pairs from TS corruption). H.264/H.265 have no parser field extras,
+// so they keep using the .info list. No-op if target is already populated.
+static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
+                                  TTVideoStream* vStream)
 {
-  if (!target.isEmpty() || vStream == nullptr) return;
+  if (!target.isEmpty()) return;
+
   TTMpeg2VideoStream* mpeg2 = dynamic_cast<TTMpeg2VideoStream*>(vStream);
-  if (mpeg2 == nullptr) return;
-  target = mpeg2->extraIndices();
-  if (!target.isEmpty()) {
+  if (mpeg2 != nullptr && !mpeg2->extraIndices().isEmpty()) {
+    target = mpeg2->extraIndices();
     if (TTSettings::instance()->logCutPipeline())
-        qDebug() << "Loaded" << target.size() << "MPEG-2 field-picture extra indices";
+        qDebug() << "Extra-frame source: MPEG-2 parser," << target.size() << "indices";
+    return;
+  }
+
+  if (esInfo.isLoaded() && !esInfo.esExtraFrames().isEmpty()) {
+    target = esInfo.esExtraFrames();
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "Extra-frame source: .info es_extra_frames," << target.size() << "indices";
+    return;
+  }
+
+  // MPEG-2 fallback when .info had nothing (mirrors old loadMpeg2FieldExtras).
+  if (mpeg2 != nullptr) {
+    target = mpeg2->extraIndices();
+    if (!target.isEmpty() && TTSettings::instance()->logCutPipeline())
+        qDebug() << "Extra-frame source: MPEG-2 parser (fallback)," << target.size() << "indices";
   }
 }
 
@@ -370,12 +387,11 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
         }
       }
 
-      // Store extra frame indices for audio time correction
-      mExtraFrameIndices = esInfo.esExtraFrames();
-      if (!mExtraFrameIndices.isEmpty()) {
-        if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
-      }
+      // Store extra frame indices for audio time correction (MPEG-2 parser
+      // preferred over .info; see loadExtraFrameIndices). Fresh open here, so
+      // clear first — the helper is a no-op on a populated list.
+      mExtraFrameIndices.clear();
+      loadExtraFrameIndices(mExtraFrameIndices, esInfo, avItem ? avItem->videoStream() : nullptr);
       // Store audio gap frame indices (separate list \u2014 used for marker
       // visualization only, NOT for audio cut time correction).
       mAudioGapIndices = esInfo.audioGapFrames();
@@ -603,15 +619,9 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
   // This runs for ALL paths: direct open, project load, etc.
   if (vStream && mExtraFrameIndices.isEmpty()) {
     QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
-    if (!infoFile.isEmpty()) {
-      TTESInfo esInfo(infoFile);
-      if (esInfo.isLoaded() && !esInfo.esExtraFrames().isEmpty()) {
-        mExtraFrameIndices = esInfo.esExtraFrames();
-        if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction";
-      }
-    }
-    loadMpeg2FieldExtras(mExtraFrameIndices, vStream);
+    TTESInfo esInfo;
+    if (!infoFile.isEmpty()) esInfo.load(infoFile);
+    loadExtraFrameIndices(mExtraFrameIndices, esInfo, vStream);
   }
 
   if (mpAVList == nullptr) return;
@@ -1213,12 +1223,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(mAvSyncOffsetMs));
       }
       // Ensure extra frame indices are loaded for audio time correction
-      if (mExtraFrameIndices.isEmpty() && !esInfo.esExtraFrames().isEmpty()) {
-        mExtraFrameIndices = esInfo.esExtraFrames();
-        if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "Loaded" << mExtraFrameIndices.size() << "extra frame indices for audio correction (cut path)";
-      }
-      loadMpeg2FieldExtras(mExtraFrameIndices, firstStream);
+      // (MPEG-2 parser preferred over .info; see loadExtraFrameIndices).
+      loadExtraFrameIndices(mExtraFrameIndices, esInfo, firstStream);
     }
   }
 
