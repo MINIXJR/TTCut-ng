@@ -84,16 +84,11 @@ public:
 
     // File info
     QString inputFile() const { return mInputFile; }
-    TTNaluCodecType codecType() const;
     int frameCount() const;
     int gopCount() const;
     double frameRate() const { return mFrameRate; }
 
     // Smart Cut operation
-    // cutList: pairs of (startTime, endTime) in seconds - segments to KEEP
-    bool smartCut(const QString& outputFile,
-                  const QList<QPair<double, double>>& cutList);
-
     // Frame-based version
     // cutFrames: pairs of (startFrame, endFrame) - frames to KEEP
     bool smartCutFrames(const QString& outputFile,
@@ -317,17 +312,8 @@ private:
     // Final flush: write the buffered last packet (post-poc-patch) to outFile.
     bool writePendingPacket(ReencodeContext& ctx);
 
-    // Helper: decode frame from NAL data
-    bool decodeFrame(const QByteArray& nalData, AVFrame* frame);
-
-    // Helper: encode frame to NAL units
-    QByteArray encodeFrame(AVFrame* frame, bool forceKeyframe);
-
     // Helper: write NAL unit with start code
     bool writeNalUnit(QFile& outFile, const QByteArray& nalData);
-
-    // Helper: filter encoder output (remove SPS/PPS, keep only slices)
-    QByteArray filterEncoderOutput(const QByteArray& data);
 
     // Helper: write parameter sets (SPS/PPS/VPS)
     // patchReorderFrames > 0: patch H.264 SPS to add bitstream_restriction
@@ -345,7 +331,6 @@ private:
     int bridgeFrameNum(int scStartAU, int encLog2Fn);
 
     // Time/frame conversion
-    int timeToFrame(double timeSeconds) const;
     double frameToTime(int frameIndex) const;
 };
 

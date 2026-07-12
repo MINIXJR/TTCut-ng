@@ -86,10 +86,6 @@ public:
     int frameRateDen() const { return mFrameRateDen; }
     double frameRate() const;
 
-    // Frame duration in various time bases
-    double frameDurationSeconds() const;
-    int64_t frameDurationInTimeBase(int64_t timeBase) const;
-
     // Original PTS start (for offset correction)
     double startPts() const { return mStartPts; }
 
@@ -100,14 +96,12 @@ public:
     // Audio tracks
     int audioTrackCount() const { return mAudioTracks.size(); }
     TTAudioTrackInfo audioTrack(int index) const;
-    QStringList audioFiles() const;
 
     // Source file
     QString sourceFile() const { return mSourceFile; }
 
     // VDR Markers (from markad plugin)
     int markerCount() const { return mMarkers.size(); }
-    TTMarkerInfo marker(int index) const;
     QList<TTMarkerInfo> markers() const { return mMarkers; }
     bool hasMarkers() const { return !mMarkers.isEmpty(); }
 
@@ -125,15 +119,11 @@ public:
 
     // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
     QList<int> esExtraFrames() const { return mEsExtraFrames; }
-    int countExtraFramesBefore(int frameIndex) const;
 
     // Audio gap frame indices (from ttcut-demux audio-gap detection).
     // Used for marker visualization only — NOT for audio cut time correction.
     QList<int> audioGapFrames() const { return mAudioGapFrames; }
     int        audioGapFrameCount() const { return mAudioGapFrames.size(); }
-
-    // Correct field rate to frame rate for PAFF streams (old .info files)
-    void correctFrameRateForPAFF();
 
     // Error handling
     QString lastError() const { return mLastError; }

@@ -346,26 +346,6 @@ double TTESInfo::frameRate() const
 }
 
 // ----------------------------------------------------------------------------
-// Get frame duration in seconds
-// ----------------------------------------------------------------------------
-double TTESInfo::frameDurationSeconds() const
-{
-    double fr = frameRate();
-    if (fr <= 0) return 0.04; // Default to 25fps
-    return 1.0 / fr;
-}
-
-// ----------------------------------------------------------------------------
-// Get frame duration in given time base
-// E.g., for time base 90000 (common in TS), 25fps gives 3600 ticks per frame
-// ----------------------------------------------------------------------------
-int64_t TTESInfo::frameDurationInTimeBase(int64_t timeBase) const
-{
-    if (mFrameRateNum == 0) return timeBase / 25;
-    return (timeBase * mFrameRateDen) / mFrameRateNum;
-}
-
-// ----------------------------------------------------------------------------
 // Get audio track info
 // ----------------------------------------------------------------------------
 TTAudioTrackInfo TTESInfo::audioTrack(int index) const
@@ -374,68 +354,6 @@ TTAudioTrackInfo TTESInfo::audioTrack(int index) const
         return mAudioTracks[index];
     }
     return TTAudioTrackInfo();
-}
-
-// ----------------------------------------------------------------------------
-// Get list of audio file names
-// ----------------------------------------------------------------------------
-QStringList TTESInfo::audioFiles() const
-{
-    QStringList files;
-    for (const TTAudioTrackInfo& track : mAudioTracks) {
-        if (!track.file.isEmpty()) {
-            files.append(track.file);
-        }
-    }
-    return files;
-}
-
-// ----------------------------------------------------------------------------
-// Get marker info by index
-// ----------------------------------------------------------------------------
-TTMarkerInfo TTESInfo::marker(int index) const
-{
-    if (index >= 0 && index < mMarkers.size()) {
-        return mMarkers[index];
-    }
-    return TTMarkerInfo();
-}
-
-// ----------------------------------------------------------------------------
-// Count extra frames before a given frame index (binary search)
-// Used by TTCut-ng to correct audio time calculations:
-//   corrected_time = (frame - countExtraFramesBefore(frame)) / fps
-// ----------------------------------------------------------------------------
-int TTESInfo::countExtraFramesBefore(int frameIndex) const
-{
-    if (mEsExtraFrames.isEmpty()) return 0;
-
-    // Binary search: find first element >= frameIndex
-    int lo = 0, hi = mEsExtraFrames.size();
-    while (lo < hi) {
-        int mid = (lo + hi) / 2;
-        if (mEsExtraFrames[mid] < frameIndex)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-    return lo;  // number of elements < frameIndex
-}
-
-// ----------------------------------------------------------------------------
-// Correct field rate to frame rate for PAFF streams (old .info files)
-// Old .info files written before PAFF detection store the field rate (50/60)
-// instead of the true frame rate (25/30). Halve it when it looks like a field rate.
-// ----------------------------------------------------------------------------
-void TTESInfo::correctFrameRateForPAFF()
-{
-    if (mFrameRateNum > 30 && mFrameRateDen == 1) {
-        int oldRate = mFrameRateNum;
-        mFrameRateNum /= 2;
-        if (TTSettings::instance()->logAVStream())
-            qDebug() << "TTESInfo: PAFF frame rate correction:" << oldRate
-                     << "/" << mFrameRateDen << " -> " << mFrameRateNum << "/" << mFrameRateDen;
-    }
 }
 
 // ----------------------------------------------------------------------------

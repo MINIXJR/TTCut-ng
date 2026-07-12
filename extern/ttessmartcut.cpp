@@ -356,14 +356,6 @@ void TTESSmartCut::cleanup()
 }
 
 // ----------------------------------------------------------------------------
-// Get codec type
-// ----------------------------------------------------------------------------
-TTNaluCodecType TTESSmartCut::codecType() const
-{
-    return mParser.codecType();
-}
-
-// ----------------------------------------------------------------------------
 // Get frame count
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -447,36 +439,11 @@ int TTESSmartCut::reorderDelay() const
 }
 
 // ----------------------------------------------------------------------------
-// Convert time to frame index
-// ----------------------------------------------------------------------------
-int TTESSmartCut::timeToFrame(double timeSeconds) const
-{
-    return qRound(timeSeconds * mFrameRate);
-}
-
-// ----------------------------------------------------------------------------
 // Convert frame index to time
 // ----------------------------------------------------------------------------
 double TTESSmartCut::frameToTime(int frameIndex) const
 {
     return frameIndex / mFrameRate;
-}
-
-// ----------------------------------------------------------------------------
-// Smart Cut (time-based)
-// ----------------------------------------------------------------------------
-bool TTESSmartCut::smartCut(const QString& outputFile,
-                            const QList<QPair<double, double>>& cutList)
-{
-    // Convert time-based cut list to frame-based
-    QList<QPair<int, int>> cutFrames;
-    for (const auto& segment : cutList) {
-        int startFrame = timeToFrame(segment.first);
-        int endFrame = timeToFrame(segment.second);
-        cutFrames.append(qMakePair(startFrame, endFrame));
-    }
-
-    return smartCutFrames(outputFile, cutFrames);
 }
 
 // ----------------------------------------------------------------------------
@@ -3454,195 +3421,6 @@ bool TTESSmartCut::writePendingPacket(ReencodeContext& ctx)
         return false;
     }
     return true;
-}
-
-// ----------------------------------------------------------------------------
-// Decode frame from NAL data
-// ----------------------------------------------------------------------------
-bool TTESSmartCut::decodeFrame(const QByteArray& nalData, AVFrame* frame)
-{
-    if (!mDecoder) return false;
-
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) return false;
-
-    if (!nalData.isEmpty()) {
-        if (av_new_packet(packet, nalData.size()) < 0) {
-            av_packet_free(&packet);
-            return false;
-        }
-        memcpy(packet->data, nalData.constData(), nalData.size());
-
-        int ret = avcodec_send_packet(mDecoder, packet);
-        if (ret < 0 && ret != AVERROR(EAGAIN)) {
-            av_packet_free(&packet);
-            return false;
-        }
-    } else {
-        // Flush
-        avcodec_send_packet(mDecoder, nullptr);
-    }
-
-    av_packet_free(&packet);
-
-    int ret = avcodec_receive_frame(mDecoder, frame);
-    return (ret >= 0);
-}
-
-// ----------------------------------------------------------------------------
-// Encode frame to NAL units
-// ----------------------------------------------------------------------------
-QByteArray TTESSmartCut::encodeFrame(AVFrame* frame, bool forceKeyframe)
-{
-    if (!mEncoder) {
-        TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
-            QString("encodeFrame: Encoder not initialized"));
-        return QByteArray();
-    }
-
-    if (frame) {
-        // Update encoder parameters if needed
-        if (frame->width != mEncoder->width || frame->height != mEncoder->height) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("Frame size mismatch: %1x%2 vs encoder %3x%4")
-                    .arg(frame->width).arg(frame->height)
-                    .arg(mEncoder->width).arg(mEncoder->height));
-            freeEncoder();
-            mEncoder = nullptr;
-            return QByteArray();
-        }
-
-        // Check pixel format
-        if (frame->format != mEncoder->pix_fmt) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("Frame pixel format mismatch: %1 vs encoder %2")
-                    .arg(frame->format).arg(mEncoder->pix_fmt));
-            // Try to convert or just log warning and continue
-        }
-
-        // Set PTS (member variable, reset in cleanup/setupEncoder)
-        frame->pts = mEncoderPts++;
-
-        // Force keyframe if requested
-        if (forceKeyframe) {
-            frame->pict_type = AV_PICTURE_TYPE_I;
-#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(58, 0, 0)
-            frame->flags |= AV_FRAME_FLAG_KEY;
-#else
-            frame->key_frame = 1;
-#endif
-        }
-
-        int ret = avcodec_send_frame(mEncoder, frame);
-        if (ret < 0) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("avcodec_send_frame failed: %1").arg(avErrStr(ret)));
-            return QByteArray();
-        }
-    } else {
-        // Flush
-        int ret = avcodec_send_frame(mEncoder, nullptr);
-        if (ret < 0 && ret != AVERROR_EOF) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("avcodec_send_frame (flush) failed: %1").arg(avErrStr(ret)));
-        }
-    }
-
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) return QByteArray();
-
-    // Drain all packets the encoder has buffered (lookahead, flush).
-    // A single receive_packet would silently drop subsequent packets.
-    QByteArray result;
-    while (true) {
-        int ret = avcodec_receive_packet(mEncoder, packet);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            break;
-        }
-        if (ret < 0) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("avcodec_receive_packet failed: %1").arg(avErrStr(ret)));
-            break;
-        }
-        result.append(reinterpret_cast<const char*>(packet->data), packet->size);
-        av_packet_unref(packet);
-    }
-    av_packet_free(&packet);
-
-    return result;
-}
-
-// ----------------------------------------------------------------------------
-// Filter encoder output - remove SPS/PPS NALs, keep only slices
-// This is needed because x264/x265 embed their own SPS/PPS which have
-// different parameters than the original stream. We use the original
-// SPS/PPS for both re-encoded and stream-copied sections.
-// ----------------------------------------------------------------------------
-QByteArray TTESSmartCut::filterEncoderOutput(const QByteArray& data)
-{
-    QByteArray result;
-    int pos = 0;
-    int dataLen = data.size();
-
-    while (pos < dataLen - 4) {
-        // Find next start code
-        int scLen = 0;
-        int scPos = -1;
-
-        for (int i = pos; i < dataLen - 3; i++) {
-            if (data[i] == '\0' && data[i+1] == '\0') {
-                if (data[i+2] == '\x01') {
-                    scPos = i;
-                    scLen = 3;
-                    break;
-                } else if (i < dataLen - 4 && data[i+2] == '\0' && data[i+3] == '\x01') {
-                    scPos = i;
-                    scLen = 4;
-                    break;
-                }
-            }
-        }
-
-        if (scPos < 0) break;
-
-        // Find end of this NAL (next start code or end of data)
-        int nalStart = scPos + scLen;
-        int nalEnd = dataLen;
-
-        for (int i = nalStart + 1; i < dataLen - 3; i++) {
-            if (data[i] == '\0' && data[i+1] == '\0') {
-                if (data[i+2] == '\x01' || (i < dataLen - 4 && data[i+2] == '\0' && data[i+3] == '\x01')) {
-                    nalEnd = i;
-                    break;
-                }
-            }
-        }
-
-        // Check NAL type
-        if (nalStart < dataLen) {
-            uint8_t nalByte = static_cast<uint8_t>(data[nalStart]);
-            int nalType;
-
-            if (mParser.codecType() == NALU_CODEC_H264) {
-                nalType = nalByte & 0x1F;
-                // H.264: Keep slices (1, 5), skip SPS (7), PPS (8), SEI (6), AUD (9)
-                if (nalType == 1 || nalType == 5) {
-                    result.append(data.mid(scPos, nalEnd - scPos));
-                }
-            } else {
-                // H.265: NAL type is in bits 1-6 of first byte
-                nalType = (nalByte >> 1) & 0x3F;
-                // H.265: Keep slices (0-21), skip VPS (32), SPS (33), PPS (34), SEI (39, 40)
-                if (nalType <= 21) {
-                    result.append(data.mid(scPos, nalEnd - scPos));
-                }
-            }
-        }
-
-        pos = nalEnd;
-    }
-
-    return result;
 }
 
 // ----------------------------------------------------------------------------
