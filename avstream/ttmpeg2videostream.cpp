@@ -490,11 +490,15 @@ TTVideoHeader* TTMpeg2VideoStream::getCutEndObject(int cutOutPos, TTCutParameter
     bFrameCount++;
   } while (headerListPos+1 < header_list->count());
 
-  // Update cutOutIndex to include trailing B-frames that will be stream-copied.
-  // Without this, cut() would re-encode these B-frames again (duplicate frames).
-  if (bFrameCount > 0 && cutOutPos <= ipFramePos + bFrameCount) {
-    cutParams->setCutOutIndex(cutOutPos);
-  }
+  // NOTE: The trailing bitstream B-frames collected above display BEFORE the
+  // I/P frame at ipFramePos (MPEG-2 reordering), so the copied range covers
+  // display positions up to ipFramePos exactly. The tail re-encode in cut()
+  // starts at cutOutIndex+1 = ipFramePos+1 and is disjoint from the copy --
+  // duplicates are impossible. cutOutIndex intentionally stays at ipFramePos
+  // (set above). A block here that raised cutOutIndex to cutOutPos (added in
+  // bb83d60, removed 2026-07-12) suppressed the tail re-encode and lost up to
+  // M-1 frames on every B-frame cut-out; the duplicate claim was disproved
+  // empirically (see tools/diag/test_mpeg2_cutout).
 
   log->debugMsg(__FILE__, __LINE__, QString("getCutEndObject: ipFramePos=%1 (type %2), added %3 trailing B-frames, cutOutIndex=%4")
       .arg(ipFramePos).arg(index_list->pictureCodingType(ipFramePos)).arg(bFrameCount).arg(cutParams->getCutOutIndex()));

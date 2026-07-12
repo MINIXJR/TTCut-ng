@@ -17,6 +17,15 @@ All notable changes to TTCut-ng are documented in this file.
   and are unaffected. Also fixed: a non-IDR keyframe whose `frame_num` wrapped to 0
   is now bridged in the SPS-unification path (was skipped).
 
+### Fixed
+
+- **MPEG-2: cut-out on a B-frame no longer loses up to M-1 frames** at the end
+  of the segment. A block in `getCutEndObject()` (introduced unnoticed in an
+  i18n commit) suppressed the tail re-encode based on a display-index vs.
+  bitstream-order mixup; the "duplicate frames" case it claimed to prevent was
+  disproved empirically (structural argument + A/B runs over 8 cut-out
+  positions, see `tools/diag/test_mpeg2_cutout`).
+
 ### Internal
 
 - Audio-cut chain consolidated onto `TTAVData::buildVideoKeepList` +
