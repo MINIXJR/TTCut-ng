@@ -67,30 +67,6 @@ TTVideoHeader* TTVideoHeaderList::headerAt(int index)
 /*! //////////////////////////////////////////////////////////////////////////////////////
  *
  */
-TTVideoHeader* TTVideoHeaderList::getPrevHeader(int startPos, TTMpeg2VideoHeader::mpeg2StartCodes type)
-{
-  int prevIndex = startPos-1;
-
-  if (prevIndex < 0 || prevIndex >= count())
-    return NULL;
-
-  if (prevIndex >= 0 && type == TTMpeg2VideoHeader::ndef)
-    return (TTVideoHeader*)at(prevIndex);
-
-  while (prevIndex >= 0)
-  {
-    if (at(prevIndex)->headerType() == type)
-      return (TTVideoHeader*)at(prevIndex);
-
-    prevIndex--;
-  }
-
-  return NULL;
-}
-
-/*! //////////////////////////////////////////////////////////////////////////////////////
- *
- */
 TTVideoHeader* TTVideoHeaderList::getNextHeader(int startPos, TTMpeg2VideoHeader::mpeg2StartCodes type)
 {
   int nextIndex = startPos+1;
@@ -117,13 +93,6 @@ TTVideoHeader* TTVideoHeaderList::getNextHeader(TTVideoHeader* current, TTMpeg2V
 {
   return (current != NULL)
       ? getNextHeader(indexOf((TTAVHeader*)current), type)
-      : NULL;
-}
-
-TTVideoHeader* TTVideoHeaderList::getPrevHeader(TTVideoHeader* current, TTMpeg2VideoHeader::mpeg2StartCodes type)
-{
-  return (current != NULL)
-      ? getPrevHeader(indexOf((TTAVHeader*)current), type)
       : NULL;
 }
 

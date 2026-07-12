@@ -87,10 +87,8 @@ class TTAudioList : public QObject
     int   count();
     void  clear();
     void  sortByOrder();
-    int   indexOf(const TTAudioItem& item);
     void  swap(int a, int b);
     void  print();
-    void  updateOrder();
 
   public slots:
     void onAppendItem(const TTAudioItem& item);

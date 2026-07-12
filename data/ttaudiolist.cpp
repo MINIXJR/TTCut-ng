@@ -329,11 +329,6 @@ void TTAudioList::sortByOrder()
 /*!
  * indexOf
  */
-int TTAudioList::indexOf(const TTAudioItem& item)
-{
-  return data.indexOf(item);
-}
-
 /*!
  * swap
  */
@@ -346,14 +341,6 @@ void TTAudioList::swap(int a, int b)
 /*!
  * updateOrder
  */
-void TTAudioList::updateOrder()
-{
-  for (int i = 0; i < data.count(); i++) {
-    data[i].setOrder(i);
-    emit orderUpdated(data.at(i), i);
-  }
-}
-
 /*!
  * onAppendItem
  */

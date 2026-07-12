@@ -81,11 +81,8 @@ class TTSubtitleList : public QObject
 
     int   count();
     void  clear();
-    void  sortByOrder();
-    int   indexOf(const TTSubtitleItem& item);
     void  swap(int a, int b);
     void  print();
-    void  updateOrder();
 
   public slots:
     void onAppendItem(const TTSubtitleItem& item);
