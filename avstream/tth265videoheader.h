@@ -87,7 +87,6 @@ public:
     void setOffset(int64_t offset) { mOffset = offset; }
     void setSize(int size) { mSize = size; }
 
-    static QString nalTypeString(int type);
 
 protected:
     int mNalUnitType;
@@ -242,7 +241,6 @@ public:
     void setTemporalId(int tid) { mTemporalId = tid; }
     void setPocValue(int poc) { mPocValue = poc; }
 
-    QString frameTypeString() const;
 
 private:
     int mFrameIndex;

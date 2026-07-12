@@ -54,9 +54,7 @@ class TTMPEGAudioStream : public TTAudioStream
   virtual int createHeaderList( );
   virtual int createIndexList(){return 0;};
 
-  QString streamExtension();
   QTime   streamLengthTime();
-  int     searchIndex( double s_time );
 };
 
 #endif //TTMPEGAUDIOSTREAM_H

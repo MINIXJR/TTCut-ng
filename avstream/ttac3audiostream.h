@@ -52,7 +52,6 @@ class TTAC3AudioStream : public TTAudioStream
 
   virtual int  createHeaderList();
   virtual int  createIndexList(){return 0;};
-  QString      streamExtension();
   QTime        streamLengthTime();
 };
 

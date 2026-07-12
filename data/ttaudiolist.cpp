@@ -135,11 +135,6 @@ bool TTAudioItem::operator==(const TTAudioItem& item) const
 /*!
  * fileInfo
  */
-QFileInfo TTAudioItem::getFileInfo() const
-{
-  return *audioStream->fileInfo();
-}
-
 /*!
  * audioStream
  */

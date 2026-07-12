@@ -90,7 +90,6 @@ class TTSequenceHeader : public TTMpeg2VideoHeader
   int     verticalSize();
   int     aspectRatio();
   QString aspectRatioText();
-  QString frameRateText();
   float   frameRateValue();
   float   bitRateKbit();
   int     vbvBufferSize();
@@ -160,7 +159,6 @@ class TTPicturesHeader : public TTMpeg2VideoHeader
   bool    readHeader( TTFileBuffer* mpeg2_stream, quint64 offset );
   void    parseBasicData( quint8* data, int offset=0 );
   void    parseExtensionData( quint8* data, int offset=0 );
-  QString codingTypeString();
 
   // from picture_header [00]
   int     temporal_reference;

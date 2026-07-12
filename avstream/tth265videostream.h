@@ -38,8 +38,6 @@ public:
     // Typed accessors
     TTH265SPS*        getSPS() const { return mSPS; }
     TTH265VPS*        getVPS() const { return mVPS; }
-    int               findRAPBefore(int frameIndex);
-    int               findRAPAfter(int frameIndex);
 
 protected:
     // Hooks
@@ -57,7 +55,6 @@ protected:
     bool    accessUnitIsRAP(int idx) const override;
     int     accessUnitToCodingType(int idx) const override;
 
-    static bool isRAPNalType(int nalType);
 
 private:
     TTH265SPS* mSPS;

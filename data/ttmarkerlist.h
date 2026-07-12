@@ -36,7 +36,6 @@ class TTMarkerItem
 
     QUuid ID() const { return mID; }
 
-    void  update(int markerPos);
     int   order()             const { return mOrder; }
     void  setOrder(int value)       { mOrder = value; }
     int   markerPos()         const { return mMarkerPos; }

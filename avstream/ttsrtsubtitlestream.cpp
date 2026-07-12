@@ -60,14 +60,6 @@ TTAVTypes::AVStreamType TTSrtSubtitleStream::streamType() const
   return TTAVTypes::srt_subtitle;
 }
 
-//! Returns the streams file extension
-QString TTSrtSubtitleStream::streamExtension()
-{
-  return (stream_info != 0)
-        ? stream_info->suffix().toLower()
-        : ".srt";
-}
-
 //! Return the stream length as QTime
 QTime TTSrtSubtitleStream::streamLengthTime()
 {

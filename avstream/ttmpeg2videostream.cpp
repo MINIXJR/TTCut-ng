@@ -63,17 +63,6 @@ TTMpeg2VideoStream::~TTMpeg2VideoStream()
 /*! ////////////////////////////////////////////////////////////////////////////
  * Create a shared copy from an existing videostream
  */
-void TTMpeg2VideoStream::makeSharedCopy( TTMpeg2VideoStream* v_stream )
-{
-  current_index = 0;
-  stream_info   = v_stream->stream_info;
-  stream_type   = v_stream->stream_type;
-  header_list   = v_stream->header_list;
-  index_list    = v_stream->index_list;
-  frame_rate    = v_stream->frame_rate;
-  bit_rate      = v_stream->bit_rate;
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Create the list with mpeg2 header informations
  */

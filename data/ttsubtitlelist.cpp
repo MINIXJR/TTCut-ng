@@ -110,11 +110,6 @@ bool TTSubtitleItem::operator==(const TTSubtitleItem& item) const
 /*!
  * fileInfo
  */
-QFileInfo TTSubtitleItem::getFileInfo() const
-{
-  return *subtitleStream->fileInfo();
-}
-
 /*!
  * subtitleStream
  */

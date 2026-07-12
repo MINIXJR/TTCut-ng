@@ -68,16 +68,6 @@ bool TTH26xVideoStream::openStream()
     return true;
 }
 
-bool TTH26xVideoStream::closeStream()
-{
-    if (mFFmpeg) {
-        mFFmpeg->closeFile();
-        delete mFFmpeg;
-        mFFmpeg = nullptr;
-    }
-    return true;
-}
-
 int TTH26xVideoStream::createHeaderList()
 {
     emit statusReport(StatusReportArgs::Start,

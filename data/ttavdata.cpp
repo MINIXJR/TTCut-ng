@@ -1886,12 +1886,6 @@ void TTAVData::onStatusReport(int state, const QString& msg, quint64 value)
   qApp->processEvents();
 }
 
-void TTAVData::onMplexStep(const QString& msg, quint64 value)
-{
-  emit statusReport(0, StatusReportArgs::Step, msg, value);
-  qApp->processEvents();
-}
-
 void TTAVData::onMuxProgress(int percent, const QString& msg)
 {
   emit statusReport(0, StatusReportArgs::Step, msg, percent);

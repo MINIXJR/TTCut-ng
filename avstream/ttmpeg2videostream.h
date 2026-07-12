@@ -54,7 +54,6 @@ class TTMpeg2VideoStream : public TTVideoStream
     TTMpeg2VideoStream( const QFileInfo &f_info );
     virtual ~TTMpeg2VideoStream();
 
-    void makeSharedCopy( TTMpeg2VideoStream* v_stream );
 
     virtual int createHeaderList();
     virtual int createIndexList();

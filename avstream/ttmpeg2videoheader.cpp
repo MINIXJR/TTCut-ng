@@ -201,17 +201,6 @@ QString TTSequenceHeader::aspectRatioText()
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns the frame rate as string value
  */
-QString TTSequenceHeader::frameRateText()
-{
-  QString szTemp;
-
-  if ( frame_rate_code == 2 ) szTemp = "24 fps";
-  if ( frame_rate_code == 3 ) szTemp = "25 fps";
-  if ( frame_rate_code == 5 ) szTemp = "30 fps";
-
-  return szTemp;
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns the frame rate value
  */
@@ -424,20 +413,3 @@ void TTPicturesHeader::parseExtensionData( quint8* data, int offset )
 /* /////////////////////////////////////////////////////////////////////////////
  * Form an string representing the picture coding type.
  */
-QString TTPicturesHeader::codingTypeString()
-{
-  switch (picture_coding_type)
-  {
-    case 1:
-      return "I";
-
-    case 2:
-      return "P";
-
-    case 3:
-      return "B";
-
-    default:
-      return "-";
-  }
-}

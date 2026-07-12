@@ -80,7 +80,6 @@ public:
 protected:
     // ffmpeg lifecycle (called from createHeaderList)
     bool openStream();
-    bool closeStream();
 
     // Hooks implemented by derived
     virtual TTVideoCodecType expectedCodec() const = 0;

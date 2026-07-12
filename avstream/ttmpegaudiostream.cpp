@@ -59,14 +59,6 @@ TTAVTypes::AVStreamType TTMPEGAudioStream::streamType() const
   return TTAVTypes::mpeg_audio;
 }
 
-//! Returns the stream file extension
-QString TTMPEGAudioStream::streamExtension()
-{
-  return (stream_info != 0)
-        ? stream_info->suffix().toLower()
-        : ".mp2";
-}
-
 //! Returns the stream length as QTime
 QTime TTMPEGAudioStream::streamLengthTime()
 {
@@ -76,14 +68,6 @@ QTime TTMPEGAudioStream::streamLengthTime()
   TTMpegAudioHeader* audio_header = (TTMpegAudioHeader*)header_list->audioHeaderAt( header_list->count()-1 );
 
   return ttMsecToTimeD( audio_header->abs_frame_time );
-}
-
-//! Returns the index in header list for given time in seconds
-int TTMPEGAudioStream::searchIndex( double s_time )
-{
-  return (ttAssigned( header_list ))
-      ? header_list->searchTimeIndex( s_time )
-      : -1;
 }
 
 // search next sync byte in stream

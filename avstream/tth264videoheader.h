@@ -215,7 +215,6 @@ public:
     void setFrameSize(int64_t size) { mFrameSize = size; }
 
     // String representation of frame type
-    QString frameTypeString() const;
 
     // Can this frame be used as cut-in point?
     bool isCutInPoint() const { return mIsIDR; }

@@ -155,36 +155,3 @@ int TTH265VideoStream::accessUnitToCodingType(int idx) const
     }
 }
 
-// -----------------------------------------------------------------------------
-// Typed accessors
-// -----------------------------------------------------------------------------
-int TTH265VideoStream::findRAPBefore(int frameIndex)
-{
-    for (int i = frameIndex; i >= 0; --i) {
-        if (mAccessUnits[i]->isRAP()) return i;
-    }
-    return 0;  // matches previous behaviour: first frame as fallback
-}
-
-int TTH265VideoStream::findRAPAfter(int frameIndex)
-{
-    for (int i = frameIndex; i < mAccessUnits.size(); ++i) {
-        if (mAccessUnits[i]->isRAP()) return i;
-    }
-    return mAccessUnits.size() - 1;
-}
-
-bool TTH265VideoStream::isRAPNalType(int nalType)
-{
-    switch (nalType) {
-        case HEVC_NAL_IDR_W_RADL:
-        case HEVC_NAL_IDR_N_LP:
-        case HEVC_NAL_CRA_NUT:
-        case HEVC_NAL_BLA_W_LP:
-        case HEVC_NAL_BLA_W_RADL:
-        case HEVC_NAL_BLA_N_LP:
-            return true;
-        default:
-            return false;
-    }
-}

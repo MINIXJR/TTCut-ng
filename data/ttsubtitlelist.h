@@ -37,7 +37,6 @@ class TTSubtitleItem
     int   order()             const { return mOrder; }
     void  setOrder(int value)       { mOrder = value; }
 
-    QFileInfo         getFileInfo() const;
     TTSubtitleStream* getSubtitleStream() const;
     QString           getFileName() const;
     QString           getLength() const;

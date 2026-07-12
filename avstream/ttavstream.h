@@ -145,9 +145,7 @@ class TTVideoStream : public TTAVStream
   virtual int     paffLog2MaxFrameNum() const { return 4; }
   float   bitRate();
   QTime   streamLengthTime();
-  int     currentFrameType();
   QTime   currentFrameTime();
-  quint64 currentFrameOffset();
   int     frameType(int i_pos);
   QTime   frameTime(int i_pos);
   quint64 frameOffset(int i_pos);
@@ -158,16 +156,12 @@ class TTVideoStream : public TTAVStream
   // navigation in index-list
   int currentIndex();
 
-  int markerIndex();
-  int setMarkerIndex( int index );
 
   int moveToIndexPos(int index, int f_type=0);
   int moveToNextFrame(int f_type=0);
   int moveToPrevFrame(int f_type=0);
   int moveToNextIFrame();
   int moveToPrevIFrame();
-  int moveToNextPFrame();
-  int moveToPrevPFrame();
   int moveToNextPIFrame();
   int moveToPrevPIFrame();
 
@@ -210,7 +204,6 @@ public:
 
   // header list
   TTSubtitleHeaderList* headerList();
-  TTSubtitleHeader* headerAt(int index);
 
   // virtual cut methods
   virtual bool isCutInPoint(int)  { return true; }

@@ -46,29 +46,6 @@ TTAudioHeader* TTAudioHeaderList::audioHeaderAt( int index )
 }
 
 
-int TTAudioHeaderList::searchTimeIndex( double s_time )
-{
-  int           abs_time = 0;
-  int           search_time = (int)(s_time * 1000);
-  TTAudioHeader* audio_header;
-
-  int index = 0;
-  const int n = size();
-
-  while ( index < n )
-  {
-    audio_header = (TTAudioHeader*)at(index);
-    abs_time = (int)(audio_header->abs_frame_time * 1000);
-    if ( abs_time > search_time )
-      break;
-    index++;
-  }
-
-  // index points one past the last header at-or-before s_time;
-  // the original API returns the index of the previous header.
-  return (index >= 1) ? index - 1 : 0;
-}
-
 void TTAudioHeaderList::sort()
 {
   std::sort( begin(), end(), audioHeaderListCompareItems );

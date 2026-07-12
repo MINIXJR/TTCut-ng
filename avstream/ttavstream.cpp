@@ -355,21 +355,9 @@ TTSequenceHeader* TTVideoStream::getSequenceHeader(int pos)
  * Return the picture coding type from picture at 'current_index'
  * position
  */
-int TTVideoStream::currentFrameType()
-{
-  return (ttAssigned(index_list))
-      ? index_list->pictureCodingType(current_index)
-      : 0;
-}
-
 QTime TTVideoStream::currentFrameTime()
 {
   return ttFramesToTime( current_index, frameRate() );
-}
-
-quint64 TTVideoStream::currentFrameOffset()
-{
-  return frameOffset(current_index);
 }
 
 int TTVideoStream::frameType( int i_pos )
@@ -418,23 +406,6 @@ int TTVideoStream::currentIndex()
   return current_index;
 }
 
-// return marker index position
-// -----------------------------------------------------------------------------
-int TTVideoStream::markerIndex()
-{
-  return current_marker_index;
-}
-
-// set marker index position
-// -----------------------------------------------------------------------------
-int TTVideoStream::setMarkerIndex( int index )
-{
-  int prev_marker_index = current_marker_index;
-  current_marker_index  = index;
-
-  return prev_marker_index;
-}
-
 // -----------------------------------------------------------------------------
 // positioning methods for convenience
 // -----------------------------------------------------------------------------
@@ -474,22 +445,6 @@ int TTVideoStream::moveToNextIFrame()
 int TTVideoStream::moveToPrevIFrame()
 {
   int index = index_list->moveToPrevIndexPos(current_index, 1);
-  return (index >= 0) ? current_index=index : current_index;
-}
-
-// goto next predicted-frame (P)
-// -----------------------------------------------------------------------------
-int TTVideoStream::moveToNextPFrame()
-{
-  int index = index_list->moveToNextIndexPos(current_index, 2);
-  return (index >= 0) ? current_index=index : current_index;
-}
-
-// goto previous predicted-frame (P)
-// -----------------------------------------------------------------------------
-int TTVideoStream::moveToPrevPFrame()
-{
-  int index = index_list->moveToPrevIndexPos(current_index, 2);
   return (index >= 0) ? current_index=index : current_index;
 }
 
@@ -570,11 +525,3 @@ TTSubtitleHeaderList* TTSubtitleStream::headerList()
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns the subtitle header at given index
  */
-TTSubtitleHeader* TTSubtitleStream::headerAt(int index)
-{
-  if (header_list == nullptr)
-    return nullptr;
-
-  return header_list->subtitleHeaderAt(index);
-}
-

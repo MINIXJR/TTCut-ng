@@ -53,11 +53,6 @@ TTMarkerItem::TTMarkerItem(const TTMarkerItem& item)
 /*!
  * update
  */
-void TTMarkerItem::update(int markerPos)
-{
-	mMarkerPos = markerPos;
-}
-
 QString TTMarkerItem::fileName() const
 {
 	return (mpAVDataItem->videoStream() != 0)

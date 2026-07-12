@@ -15,41 +15,6 @@
 #include "tth265videoheader.h"
 
 // -----------------------------------------------------------------------------
-// TTH265VideoHeader - Static helper methods
-// -----------------------------------------------------------------------------
-QString TTH265VideoHeader::nalTypeString(int type)
-{
-    switch (type) {
-        case HEVC_NAL_TRAIL_N:    return "TRAIL_N";
-        case HEVC_NAL_TRAIL_R:    return "TRAIL_R";
-        case HEVC_NAL_TSA_N:      return "TSA_N";
-        case HEVC_NAL_TSA_R:      return "TSA_R";
-        case HEVC_NAL_STSA_N:     return "STSA_N";
-        case HEVC_NAL_STSA_R:     return "STSA_R";
-        case HEVC_NAL_RADL_N:     return "RADL_N";
-        case HEVC_NAL_RADL_R:     return "RADL_R";
-        case HEVC_NAL_RASL_N:     return "RASL_N";
-        case HEVC_NAL_RASL_R:     return "RASL_R";
-        case HEVC_NAL_BLA_W_LP:   return "BLA_W_LP";
-        case HEVC_NAL_BLA_W_RADL: return "BLA_W_RADL";
-        case HEVC_NAL_BLA_N_LP:   return "BLA_N_LP";
-        case HEVC_NAL_IDR_W_RADL: return "IDR_W_RADL";
-        case HEVC_NAL_IDR_N_LP:   return "IDR_N_LP";
-        case HEVC_NAL_CRA_NUT:    return "CRA";
-        case HEVC_NAL_VPS:        return "VPS";
-        case HEVC_NAL_SPS:        return "SPS";
-        case HEVC_NAL_PPS:        return "PPS";
-        case HEVC_NAL_AUD:        return "AUD";
-        case HEVC_NAL_EOS_NUT:    return "EOS";
-        case HEVC_NAL_EOB_NUT:    return "EOB";
-        case HEVC_NAL_FD_NUT:     return "FD";
-        case HEVC_NAL_PREFIX_SEI: return "PREFIX_SEI";
-        case HEVC_NAL_SUFFIX_SEI: return "SUFFIX_SEI";
-        default:                  return QString("NAL_%1").arg(type);
-    }
-}
-
-// -----------------------------------------------------------------------------
 // TTH265VPS - Video Parameter Set
 // -----------------------------------------------------------------------------
 TTH265VPS::TTH265VPS()
@@ -135,28 +100,3 @@ TTH265AccessUnit::TTH265AccessUnit()
 {
 }
 
-QString TTH265AccessUnit::frameTypeString() const
-{
-    QString typeStr;
-
-    // Frame type based on slice type
-    switch (mSliceType) {
-        case HEVC_SLICE_I: typeStr = "I"; break;
-        case HEVC_SLICE_P: typeStr = "P"; break;
-        case HEVC_SLICE_B: typeStr = "B"; break;
-        default:           typeStr = "?"; break;
-    }
-
-    // Add special markers
-    if (mIsIDR) {
-        typeStr += " (IDR)";
-    } else if (mIsRAP) {
-        typeStr += " (RAP)";
-    }
-
-    if (mIsReference) {
-        typeStr += " [Ref]";
-    }
-
-    return typeStr;
-}

@@ -48,7 +48,6 @@ class TTSrtSubtitleStream : public TTSubtitleStream
     virtual int  createHeaderList();
     virtual int  createIndexList(){return 0;}
 
-    QString      streamExtension();
     QTime        streamLengthTime();
 };
 

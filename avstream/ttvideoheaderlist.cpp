@@ -171,12 +171,6 @@ TTPicturesHeader* TTVideoHeaderList::pictureHeaderAt( int index )
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns the TTGOPHeader at header list index position
  */
-TTGOPHeader* TTVideoHeaderList::gopHeaderAt( int index )
-{
-  checkIndexRange( index );
-  return (TTGOPHeader*)at( index );
-}
-
 /*! ////////////////////////////////////////////////////////////////////////////
  * Returns the index position of the current TTVideoHeader
  */

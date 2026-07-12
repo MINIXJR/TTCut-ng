@@ -418,15 +418,3 @@ TTFileBufferException::TTFileBufferException(ExceptionType type)
 /* /////////////////////////////////////////////////////////////////////////////
  * Returns the exception message
  */
-QString TTFileBufferException::message()
-{
-  switch(ex_type)
-  {
-    case TTFileBufferException::StreamEOF:
-      return "Stream EOF reached!";
-    case TTFileBufferException::SeekError:
-      return "Error during seek!";
-	default:
-	  return "Unknown exception type!";
-  }
-}

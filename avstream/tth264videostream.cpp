@@ -147,13 +147,3 @@ int TTH264VideoStream::accessUnitToCodingType(int idx) const
     }
 }
 
-// -----------------------------------------------------------------------------
-// Typed accessors
-// -----------------------------------------------------------------------------
-int TTH264VideoStream::findIDRAfter(int frameIndex)
-{
-    for (int i = frameIndex; i < mAccessUnits.size(); ++i) {
-        if (mAccessUnits[i]->isIDR()) return i;
-    }
-    return -1;
-}

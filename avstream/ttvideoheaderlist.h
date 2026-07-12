@@ -54,7 +54,6 @@ class TTVideoHeaderList : public TTHeaderList
     TTSequenceHeader* sequenceHeaderAt(int index);
     TTSequenceHeader* firstSequenceHeader();
     TTPicturesHeader* pictureHeaderAt(int index);
-    TTGOPHeader*      gopHeaderAt(int index);
 
     int headerIndex(TTVideoHeader* current);
 

@@ -59,14 +59,6 @@ TTAVTypes::AVStreamType TTAC3AudioStream::streamType() const
   return TTAVTypes::ac3_audio;
 }
 
-//! Returns the streams file extension
-QString TTAC3AudioStream::streamExtension()
-{
-  return (stream_info != 0)
-        ? stream_info->suffix().toLower()
-        : ".ac3";
-}
-
 //! Return the stream length as QTime
 QTime TTAC3AudioStream::streamLengthTime()
 {

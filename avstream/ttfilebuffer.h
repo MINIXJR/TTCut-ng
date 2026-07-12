@@ -88,7 +88,6 @@ class TTFileBufferException
 
     TTFileBufferException(ExceptionType type);
 
-    QString message();
 
   protected:
     ExceptionType ex_type;

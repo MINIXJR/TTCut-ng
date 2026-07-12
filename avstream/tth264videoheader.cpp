@@ -111,29 +111,3 @@ TTH264AccessUnit::TTH264AccessUnit()
     mNalType = NAL_SLICE;
 }
 
-QString TTH264AccessUnit::frameTypeString() const
-{
-    if (mIsIDR) {
-        return "IDR";
-    }
-
-    switch (mSliceType) {
-        case SLICE_TYPE_I:
-        case SLICE_TYPE_I_ALL:
-            return "I";
-        case SLICE_TYPE_P:
-        case SLICE_TYPE_P_ALL:
-            return "P";
-        case SLICE_TYPE_B:
-        case SLICE_TYPE_B_ALL:
-            return "B";
-        case SLICE_TYPE_SP:
-        case SLICE_TYPE_SP_ALL:
-            return "SP";
-        case SLICE_TYPE_SI:
-        case SLICE_TYPE_SI_ALL:
-            return "SI";
-        default:
-            return "?";
-    }
-}
