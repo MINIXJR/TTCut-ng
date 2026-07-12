@@ -1,5 +1,6 @@
 ---
-base_commit: 666ed08609bf0a4bcb2c4111aeed391267f8668f
+base_commit: f4d4e66b84e0fd1457ba0be0963afea1e097aa6a
+last_verified: 2026-07-12
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
@@ -201,12 +202,13 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   dient der Anzeige) bestimmen beide „Mehrheits-acmod aus ~100 Randframes" mit
   eigenem Code. Divergierende Stichprobenbereiche → beide können unterschiedliche
   `mainAcmod` liefern.
-- **`AcmodInfo::cutInChangeTime` / `cutOutChangeTime` sind tote Felder**: in
-  `analyzeAcmod` auf `0.0` initialisiert, nie berechnet, nirgends gelesen (Symbol
-  existiert nur in `extern/ttffmpegwrapper.h`). Sie waren als Distanz des
-  Formatwechsels zur Schnittgrenze gedacht — genau die Angabe, die der Anwender
-  bräuchte, um zu wissen, um wie viele Frames er schieben muss. Über die
-  `TTAudioHeaderList` wäre sie ohne File-I/O zu haben.
+- **[BEHOBEN 2026-07-12]** `AcmodInfo::cutInChangeTime` / `cutOutChangeTime`
+  waren tote Felder (nie berechnet, nirgends gelesen) — auf User-Entscheid
+  ersatzlos entfernt: für den Anwendungsfall zählt nur, ob am Schnittpunkt ein
+  Burst liegt, nicht wo der Formatwechsel ist. Falls die Angabe „Distanz des
+  Formatwechsels zur Schnittgrenze" je gewünscht wird: über die
+  `TTAudioHeaderList` ohne File-I/O berechenbar (das war die ursprüngliche
+  Idee hinter den Feldern).
 - **[BEHOBEN `27f8f29`]** Der Final-Warndialog existierte doppelt (audio-only-
   Pfad + Normalpfad, nahezu identisch — Stand vor `27f8f29`); beide sind jetzt in
   `confirmBurstWarnings()` konsolidiert — plus GUI/headless-Verzweigung über
