@@ -1,12 +1,14 @@
 ---
-base_commit: fe5e2077cb5991a25574e450a8240eac562aa8bb
+base_commit: d7a046b5cd69e5099e853e4635ec148326bcf0ee
 last_verified: 2026-07-12
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c
   - avstream/ttesinfo.cpp
   - avstream/ttesinfo.h
+  - avstream/ttmpeg2videostream.cpp
   - data/ttavdata.cpp
+  - data/ttavdata.h
 ---
 
 # ttcut-demux — TS→ES demux pipeline and its measurement/reporting chain
@@ -87,20 +89,20 @@ flowchart LR
 
 | From → To | Data / order / invariant carried |
 |---|---|
-| TS → CONTAINER_VIDEO_DURATION | `ffprobe format=duration` of the source = **container span** (latest stream end − earliest stream start). With audio leading video (typical VDR), this **exceeds the video display duration by the audio lead**. VDR multi-file: sum of per-segment format durations (same inflation). |
-| CONTAINER_VIDEO_DURATION → duration check | Taken verbatim as `VIDEO_DURATION` whenever non-empty (the normal path). ES-probe / size-estimate fallbacks are dead code in practice. **This is the root of the reporting defect**: not a video duration. |
-| duration check → `VIDEO_FRAME_COUNT` | `duration × fps`, rounded — **derived, never counted**. Off by (audio lead × fps) ≈ +9 frames on the Futurama audit (85507 claimed vs 85498 real). |
-| duration check → end padding | `TARGET_AUDIO_DUR = VIDEO_DURATION` when `AV_DRIFT_MS > 20`. Audio is physically padded to the inflated target → **over-padding by ≈ audio-lead-vs-first-display** (357 ms measured). Post-pad "Drift" is computed against the same inflated reference → circular ≈ 0. |
+| TS → CONTAINER_VIDEO_DURATION | `ffprobe format=duration` of the source = **container span** (latest stream end − earliest stream start). With audio leading video (typical VDR), this exceeds the video display duration by the audio lead. Since `d7a046b` used only as a **seek hint** for the end-window probe, no longer as the duration. |
+| VIDEO_DURATION = video PTS span (FIXED `d7a046b`) | Measured on the repaired TS: `last_video_pts + frame_dur − first_video_pts`, where `first_video_pts` = the video stream's **start_time** (first *decodable* frame — excludes open-GOP leading Bs, which every decoder drops and which the old min-packet-PTS wrongly included). Falls back to the container span (with a warning) only if the repair failed or the probe is empty. Futurama: 3419800 ms = 85495 frames, exact vs ffprobe count_frames (was container 3420269). |
+| VIDEO_DURATION → `VIDEO_FRAME_COUNT` | `duration × fps`, rounded — derived, logged with a `~` prefix. Now exact (85495) because the duration is the true video span. |
+| VIDEO_DURATION → end padding | `TARGET_AUDIO_DUR = VIDEO_DURATION` when `AV_DRIFT_MS > 20`. Pads to the true video duration → over-pad reduced from ~469 ms (old container basis) to ~one audio-frame granularity (Futurama: +960 ms for a 939 ms real gap). Post-pad drift now computed against the real reference. |
 | PTS0 → per-track trim | Per audio track: `video_pts − track_pts`, trimmed via decoder-side `-ss` **after** `-i` (input-side seek silently no-ops for TS audio copy). Only positive leads > 10 ms trim; negative logs "may need padding" and trims 0. |
 | PTS0 (video) semantics | H.264/H.265: min packet PTS of first 2 s = **first display frame** (leading Bs). MPEG-2: **first packet PTS = the I-frame**, NOT the display start — bitstream-leading open-GOP Bs display up to (M−1)/fps earlier. Audio is therefore aligned to the I's display time, while TTCut's index 0 is the leading B (the "ffmpeg-n = display − 3" ruler, see `mpeg2-cut.md`). |
 | MPEG-2 leading-B skip → extraction | Fires only when the **first decoded** frame is not I (ffprobe frame list = decoder output; broken leading Bs the decoder drops are invisible to this check). When it fires: video `-ss FIRST_I_PTS` + all audio trims += `VIDEO_START_TIME`. Futurama: did not fire (first decoded = I), bitstream-leading Bs stay in the ES. |
 | TS → ttcut-pts-analyze | Runs on the **original** TS (pre-repair), own mmap TS parser, video PID only. Exit 0 = clean, 1 = extras found, 2 = error. |
 | ttcut-pts-analyze → `extra_frames=` | **AU indices in decode/bitstream order** (index into its AU array). Three methods, first hit wins: (1) DTS non-monotonic (≤1 s backward; >1 s = epoch reset, ignored), (2) exact PTS duplicate in 16-AU window, (3) **PTS grid**: runs of half-nominal spacing → off-grid AUs marked. Field-picture material (each field its own PES PTS at half spacing) triggers method 3 **by design of the signature — it cannot distinguish TS corruption from legitimate field encoding**. Futurama: 222 = exactly the second fields of the 222 field pairs. |
-| script → warn "defective regions" | Fixed wording for any non-empty extra list — **mislabels valid field pairs as defects**. The count/list itself is correct. |
+| script → warn (neutral since `f85b237`) | "N pictures with doubled PTS detected (field-picture pairs or TS corruption)" — no longer a "defective regions" verdict. The count/list itself is unchanged. |
 | gap detection → silence insert | Audio gaps ≥ 5 s (packet PTS jumps in source TS); video gaps ≥ 1 s intersect-matched to classify combined A+V loss (insert only the audio-minus-video remainder). VDR multi-file adds per-boundary duration mismatches (>5 ms) as synthetic rows, same consumer format. |
 | .info `[timing]` → TTESInfo | Parsed: `first_video_pts`, `first_audio_pts`, `av_offset_ms` (→ `mAvSyncOffsetMs`, applied in the cut path). **NOT parsed: `video_duration_ms`, `audio_duration_ms`, `duration_drift_ms`, `drift_rate_ms_per_min`** — human-only diagnostics; fixing them changes no app behavior. |
 | .info `[audio]` → TTESInfo | Per track: `file/codec/lang/first_pts/trimmed_ms` → per-track delay handling (`TTAudioItem`). |
-| .info `es_extra_frames` → TTAVData | → `mExtraFrameIndices`. **Precedence over the MPEG-2 parser extras**: `loadMpeg2FieldExtras` only fills the list when the .info left it empty. Consumed by (a) audio cut time correction (`countExtraFramesBefore`) and (b) the clustering dialog → `TTStreamPoint` markers labeled **"Defekt:"** in the GUI — the mislabel propagates to the user. |
+| .info `es_extra_frames` → TTAVData (reworked `fc2a573`) | The audio-correction source is chosen by `loadExtraFrameIndices`: for **MPEG-2 the parser's field-pair list wins** (`extraIndices()`, display-index space, `picture_structure`-derived), .info only as fallback; H.264/H.265 keep .info. **Timing:** both the source choice and the cluster dialog run in `onOpenVideoFinished` (not `openAVStreams`), because the parser list is only built once the async open task finishes — running earlier saw an empty parser list. A per-item flag `mpPendingExtraFrameDialog` (set only on fresh open) gates the dialog so project reload stays silent. `showExtraFrameClusterDialog` classifies each .info cluster: confirmed by a parser field-pair within ±4 → **"Feldpaare:"** (hint); otherwise **"Defekt:"** (suspicion). All-confirmed + no audio gaps → markers imported silently, no dialog. |
 | .info `audio_gap_frames` → TTAVData | → `mAudioGapIndices`, marker visualization only ("Audio-Gap:"), NOT used for audio time correction. Emitted as frame indices relative to `first_video_pts` (`(gap_pts − first_video_pts) × fps`). |
 | .info `[markers]` → TTESInfo | Verbatim copy of the VDR marks file (timestamp, frame, start/stop, `*` verified). Faithful (audited 2026-07-12). |
 
@@ -154,13 +156,18 @@ flowchart LR
 5. ffmpeg log-grep pattern `error|warning|invalid|corrupt|...` repeated at
    every ffmpeg call site (minor).
 
-## Known defects (TODO.md, Medium — basis for the pending fix)
+## Reporting defects — FIXED 2026-07-12
 
-- `VIDEO_DURATION`/`VIDEO_FRAME_COUNT`/drift/padding chain: see edge table
-  rows 1–4. Fix direction: measure the video duration from the video stream
-  (PTS span from first **display** PTS, or count frames), keep padding
-  target consistent; the `.info` duration fields are human-only.
-- "defective regions" wording for grid-method hits: label must allow the
-  field-picture cause (e.g. "N doubled-PTS pictures (field pairs or TS
-  corruption)"); GUI "Defekt:" label inherits the same problem via
-  `TTStreamPoint` descriptions.
+- **Duration/frame-count/drift/padding chain** (`f85b237` + `d7a046b`):
+  `VIDEO_DURATION` is now the video PTS span (start_time to last PTS + one
+  frame), not the container span. Frame count, padding target and drift are
+  derived correctly; verified on Futurama (3419800 ms = 85495 frames, exact).
+- **Warning wording** (`f85b237`): grid-method hits are labelled "N pictures
+  with doubled PTS (field-picture pairs or TS corruption)".
+- **GUI "Defekt:" mislabel** (`fc2a573`): the cluster dialog now confirms
+  field pairs against the MPEG-2 parser and labels them "Feldpaare:"; the
+  classification runs in `onOpenVideoFinished` where the parser list exists.
+  All-confirmed field-pair sets import silently (no dialog).
+
+Still open (separate): field-picture material double-counts index positions
+(fields vs frames) in the video cut path — see `mpeg2-cut.md` Defekt 2.

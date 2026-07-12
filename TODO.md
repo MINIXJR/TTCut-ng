@@ -92,26 +92,23 @@
 
 ## Medium Priority
 
-- **ttcut-demux: Video-Dauer falsch gemessen → Über-Padding + irreführende Meldungen**
-  (2026-07-12, BELEGT beim Futurama-Audit, Log `/media/Daten/Video_Tmp/demux_audit/`)
-  - Die A/V-Dauerprüfung misst die "Video-Dauer" als Container-Spanne (Video-Ende −
-    erste **Audio**-PTS) und rechnet daraus die Frame-Zahl zurück statt zu zählen
-    ("85507 frames = 3420269ms"; echt: 85498 Display-Frames = 3419920 ms). Die
-    Differenz ist genau der Audio-Vorlauf (hier 469 ms).
-  - Folge: Audio-End-Padding zielt auf die zu große Dauer → ~357 ms Über-Padding
-    (Ton endet nach dem letzten Videobild); die gemeldete "Drift −8 ms" ist gegen
-    die eigene falsche Referenz gerechnet und damit zirkulär. Praktisch mild
-    (betrifft nur Schnitte bis zum Datei-Ende), aber die Meldung täuscht Präzision vor.
-  - Zusätzlich falsche Diagnose: "N extra frames detected — stream has defective
-    regions" — bei Field-Picture-Material (Futurama: 222 Feldpaare) sind das
-    **gültige** Kodierung, keine Defekte. Liste/Zahl stimmen (für die
-    Audio-Schnittkorrektur), nur der Warntext ist falsch.
-  - Korrekt befunden im selben Audit: VDR-Marker-Übernahme, Audio-Trim-Arithmetik,
-    PES-Corrupt-Durchreichung (Aufnahme-Ende), Null-Byte-Truncation, ES-Frame-Bilanz
-    (kein stiller Verlust, TS 85495 == ES 85495).
-  - Fix-Richtung: Video-Dauer aus Video-PTS-Spanne (erste **Video**-PTS bzw. erste
-    Display-PTS) oder echter Frame-Zählung; Warntext für erkannte Feldpaare neutral
-    formulieren. Nach Patch: User kopiert nach `/usr/bin/ttcut-demux`.
+- ~~**ttcut-demux: Video-Dauer falsch gemessen → Über-Padding + irreführende Meldungen**~~
+  → **FIXED 2026-07-12** (`f85b237` + `d7a046b` Skript, `fc2a573` TTCut-GUI)
+  - Video-Dauer jetzt aus der Video-PTS-Spanne: `start_time` (erstes dekodierbares
+    Bild, schließt Open-GOP-Leading-Bs aus) bis letzte PTS + eine Frame-Dauer, auf
+    der reparierten TS. Futurama: 3 419 800 ms = 85 495 Frames, exakt gegen ffprobe
+    count_frames (vorher Container 3 420 269 → Über-Padding). Frame-Zahl, Padding-Ziel,
+    Drift folgen korrekt; Container-Dauer nur noch als Seek-Hilfe.
+  - Warntext neutral: „N pictures with doubled PTS (field-picture pairs or TS corruption)".
+  - GUI: Cluster-Klassifikation gleicht die .info-Positionen gegen die MPEG-2-Parser-
+    Feldpaare ab → bestätigte heißen „Feldpaare:", nur unbestätigte „Defekt:"; reiner
+    Feldpaar-Fall importiert still ohne Dialog. **Reihenfolge-Fix:** Auswahl + Dialog
+    laufen in `onOpenVideoFinished` (Parser dann bereit), Pending-Flag verhindert
+    Dialog beim Projekt-Reload.
+  - Verifiziert: Video-ES byte-identisch, Audio-vor-Padding byte-identisch,
+    es_extra_frames unverändert, H.264-Regression läuft, Benders-Audio bit-identisch.
+    Protokoll `CLAUDE_TMP/TTCut-ng/demuxfix/REDEMUX.md`.
+  - **Offen:** User kopiert `tools/ttcut-demux/ttcut-demux` nach `/usr/bin/ttcut-demux`.
 
 - **Smart-Cut Code-Map Findings prüfen** (2026-07-10, aus `docs/code-map/smart-cut.md`)
   - Punkte (1)–(3) **ERLEDIGT 2026-07-11** (Branch `refactor/redundancy-safe-batch`):

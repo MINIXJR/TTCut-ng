@@ -19,6 +19,15 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **ttcut-demux: video duration is measured from the video PTS span**, not the
+  container span — fixes an inflated frame count, over-padded audio, and a
+  circular drift report on recordings whose audio leads the video (the span
+  start uses the stream's first decodable frame, excluding open-GOP leading
+  B-frames). The "defective regions" warning for doubled-PTS pictures is
+  reworded (field pairs are legitimate). TTCut now prefers the MPEG-2 parser's
+  field-pair list over the .info heuristic for audio time correction and labels
+  confirmed field-pair clusters "Feldpaare:" (no warning dialog when every
+  cluster is a confirmed field pair).
 - **MPEG-2: cut-out on a B-frame no longer loses up to M-1 frames** at the end
   of the segment. A block in `getCutEndObject()` (introduced unnoticed in an
   i18n commit) suppressed the tail re-encode based on a display-index vs.
