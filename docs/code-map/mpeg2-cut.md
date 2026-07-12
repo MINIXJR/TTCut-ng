@@ -1,6 +1,6 @@
 ---
-base_commit: 3191d987da64c554bc27b6586abe20d570a021cf
-last_verified: 2026-07-11
+base_commit: 3b087ae  # mpeg2: fix B-frame cut-out losing up to M-1 tail frames
+last_verified: 2026-07-12
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -87,7 +87,7 @@ flowchart TD
 | `getCutStartObject()` → `encodePart()` | Encodes `[cutIn .. nextI-1]`, clamped to `cutOut` when the next I-frame lies beyond the segment. Then sets `cutInIndex = iFramePos` — the copy starts at the I-frame, not at the user's cut-in. |
 | `checkIFrameSequence()` → target buffer | Copies raw bytes `[sequence_header .. gop_header-1]` when the I-frame's GOP is not preceded by a sequence header. Throws if neither a sequence header nor a GOP header can be found. |
 | `getCutEndObject()` → `endObject` | Walks **backwards over display positions** to the last I/P frame (`ipFramePos`), then extends `endObject` forward over the B-frames that follow that I/P **in the header list (bitstream order)**. Two different index domains in one function — see pitfalls. |
-| `getCutEndObject()` → `cutParams->cutOutIndex` | Normally `ipFramePos`. Conditionally overwritten with `cutOutPos` — **this is the defect documented below**. |
+| `getCutEndObject()` → `cutParams->cutOutIndex` | Always `ipFramePos` (the last I/P at or before the cut-out in display order). A conditional overwrite with `cutOutPos` was the B-frame cut-out defect — removed in `3b087ae`, see below. |
 | `cut()` → `encodePart()` (tail) | Fires only when `cutOutPos > cutParams->getCutOutIndex()`. Re-encodes `[cutOutIndex+1 .. cutOutPos]` to deliver the frames the stream copy could not. |
 | `transferCutObjects()` → target buffer | Copies bytes from `startObject->headerOffset()` up to `endObject`, in 256 KiB chunks, patching headers **in the buffer** as they pass. A 12-byte watermark guards against a header straddling the chunk boundary; an end-of-stream guard prevents an infinite `seekBackward` loop when the remainder already fits. |
 | `transferCutObjects()` → `rewriteGOP()` | Rewrites the GOP time code from `cr->getNumPicturesWritten()` (the *output* frame counter, not the source position) and forces `closed_gop` when the first picture of that GOP has `temporal_reference != 0`. |
@@ -108,7 +108,7 @@ flowchart TD
 |---|---|---|
 | **I-frame** | Pure stream copy from the I-frame. No re-encode. | Correct. Copy ends at the I/P plus its bitstream-trailing B-frames. |
 | **P-frame** | Head re-encode `[cutIn .. nextI-1]`, then copy from `nextI`. | Correct (measured: `cut(0,3)`, `cut(0,6)`, `cut(0,9)` all write `cutOut-cutIn+1` frames). |
-| **B-frame** | Head re-encode, as for P. | **BROKEN — up to M−1 frames silently dropped.** Measured on M=3 and M=4 streams. See below. |
+| **B-frame** | Head re-encode, as for P. | Correct since `3b087ae` (was: up to M−1 frames silently dropped — see the fixed defect below). Tail re-encode `[ipFramePos+1 .. cutOut]` supplies the frames after the last copied I/P. |
 | **encoderMode = false** | GUI only offers I-frames. | GUI only offers I/P. The broken path is unreachable *through the GUI*, but a `.ttcut` project storing a B-frame cut-out still reaches it. |
 
 Orthogonal to the table: with **field-picture** material every field pair occupies
@@ -122,18 +122,25 @@ independent of the cut-out defect.
   `headerListIndex(pos)` is that frame's *bitstream* position. Mixing the two
   domains in one expression is the root of the defect below.
 
-- **`getCutEndObject()` — CONFIRMED DEFECT (measured 2026-07-10).** The guard
+- **`getCutEndObject()` — DEFECT FIXED in `3b087ae` (2026-07-12).** The guard
 
   ```
   if (bFrameCount > 0 && cutOutPos <= ipFramePos + bFrameCount)
       cutParams->setCutOutIndex(cutOutPos);
   ```
 
-  adds a **display** index (`ipFramePos`) to a count of B-frames collected in
+  added a **display** index (`ipFramePos`) to a count of B-frames collected in
   **bitstream** order (`bFrameCount`). In an IBBP GOP the B-frames following a P
   in the bitstream are the ones displayed *before* it. Setting `cutOutIndex` to
-  `cutOutPos` then makes `cut()`'s condition `cutOutPos > getCutOutIndex()` false,
+  `cutOutPos` then made `cut()`'s condition `cutOutPos > getCutOutIndex()` false,
   suppressing the tail re-encode that should have supplied the missing frames.
+  The "duplicate frames" case its comment claimed to prevent was disproved before
+  removal — structurally (the re-encode range `ipFramePos+1..cutOutPos` is
+  disjoint from the copied display range) and empirically (A/B over 8 cut-out
+  positions on TEST.m2v incl. open-GOP boundaries: no duplicates, no reorder,
+  I/P cases bit-identical with and without the block). Post-fix regression:
+  TEST.m2v all 8 positions exact; Futurama M=4 all B positions exact (worst case
+  had lost 3 = M−1); GUI `--auto-cut` end-to-end byte-identical to the engine.
 
   Measured with `tools/diag/test_mpeg2_cutout` on two independent real DVB
   recordings with different GOP shapes:
@@ -158,16 +165,26 @@ independent of the cut-out defect.
   | `cut(0,7)` | B | 8 | 5 | 3 frames lost |
   | `cut(0,8)` | P | 9 | 9 | OK |
 
-  Exactly the frames between the last I/P and the requested cut-out are dropped —
-  **up to M−1 frames**. Cut-out on I or P is always correct. The defect does not
+  Exactly the frames between the last I/P and the requested cut-out were dropped —
+  **up to M−1 frames**. Cut-out on I or P was always correct. The defect did not
   fire when the I/P is followed immediately by another I/P in the bitstream
-  (`bFrameCount == 0`), e.g. the `I P B B B` head of an M=4 GOP.
+  (`bFrameCount == 0`) — e.g. the `I P B B B` head of an M=4 GOP, or the entire
+  field-picture region of Futurama 02x01 (there the B fields follow the P in the
+  bitstream, so no trailing Bs after an I/P exist and old == new behavior).
 
   The line entered with `bb83d60` (2026-03-21), a commit whose message covers only
-  i18n standardization and progress scaling — it was never the subject of a test.
-  Its comment claims to prevent duplicate B-frames; **which** GOP shape produced
-  those duplicates is unknown, so the line must not simply be deleted without
-  reproducing the original case first. Tracked in `TODO.md`.
+  i18n standardization and progress scaling — it was never the subject of a test,
+  and its "duplicate B-frames" justification turned out to be plain wrong.
+
+- **Measurement pitfall: ffmpeg frame index `n` ≠ TTCut display index.** A
+  demuxed VDR ES typically starts with open-GOP leading B-frames whose reference
+  GOP predates the recording; ffmpeg (and mpv) **drop them at decode**, TTCut's
+  index list counts them. Futurama 02x01: TTCut index 85720 = 85495 decoded
+  frames + 222 field-pair double entries + 3 dropped leading Bs → before the
+  field region, `ffmpeg-n = TTCut-display − 3`. Any SSIM/`select=n` oracle
+  against a demuxed ES must correct for this or it reports phantom offsets
+  (same trap class as the HEVC RASL "+7"). TEST.m2v starts with an I in display
+  order, so there the two rulers coincide.
 
 - **Field-picture coding — the index list double-counts (measured 2026-07-10).**
   `createIndexList()` calls `index_list->add()` once per `picture_start_code`, so a

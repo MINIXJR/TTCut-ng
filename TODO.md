@@ -2,32 +2,32 @@
 
 ## High Priority
 
-- **MPEG-2: Cut-Out auf B-Frame verliert bis zu M−1 Frames** (2026-07-10, BELEGT)
-  - **Reproduziert** mit `tools/diag/test_mpeg2_cutout` auf zwei echten DVB-Streams:
-    - `TEST.m2v` (M=3): `cut(0,5)` fordert 6 Frames, schreibt 4 → 2 fehlen
-    - Futurama 02x01 (Comedy Central, VDR, M=4): `cut(0,7)` fordert 8, schreibt 5 → 3 fehlen
-    - Cut-Out auf I/P ist immer korrekt; Cut-Out auf B verliert alles zwischen dem
-      letzten I/P und der Cut-Out-Position.
-  - **Ursache** (`getCutEndObject`, `avstream/ttmpeg2videostream.cpp`):
-    ```
-    if (bFrameCount > 0 && cutOutPos <= ipFramePos + bFrameCount)
-        cutParams->setCutOutIndex(cutOutPos);
-    ```
-    `ipFramePos` ist ein **Display**-Index, `bFrameCount` zählt B-Frames in
-    **Bitstream**-Reihenfolge nach dem I/P — bei IBBP sind das die Frames, die
-    *davor* angezeigt werden. Dadurch wird `cutOutIndex` auf `cutOutPos` gesetzt,
-    `cut()`s Bedingung `cutOutPos > getCutOutIndex()` wird falsch und der
-    Tail-`encodePart()` unterbleibt.
-  - **Reichweite:** `TTSettings::mEncoderMode` ist per Default `true`; nur dieses
-    Flag entscheidet, ob die GUI (`ttcutframenavigation.cpp`) B-Frames als Cut-Out
-    anbietet. `isCutOutPoint()` wird im Cut-Pfad **nicht** erzwungen.
-  - **Nicht einfach löschen:** Die Zeile kam mit `bb83d60` (2026-03-21) — ein
-    Commit über i18n und Progress-Scaling, in dem diese Änderung unerwähnt mitlief.
-    Ihr Kommentar beansprucht, doppelte B-Frames zu verhindern. **Welcher** GOP-Fall
-    das war, ist ungeklärt. Erst diesen Fall reproduzieren, dann Design, dann Fix.
-  - **Testmaterial:** `TEST.m2v` reicht für Fix + Regression. Kontrollfälle:
-    Nur-I/P-Stream (`ffmpeg -bf 0`, dort ist `bFrameCount == 0`), Open-GOP.
+- ~~**MPEG-2: Cut-Out auf B-Frame verliert bis zu M−1 Frames**~~ → **FIXED** (2026-07-12, `3b087ae`)
+  - Der Block in `getCutEndObject()` (Display-Index + Bitstream-B-Zählung vermischt,
+    unterdrückte den Tail-`encodePart()`) wurde ersatzlos entfernt. Die
+    „Duplikat"-Begründung seines Kommentars war widerlegt: strukturell (Trailing-Bs
+    zeigen VOR dem I/P an, Nachkodier-Bereich disjunkt zur Kopie) und per
+    Laufzeit-A/B (8 Cut-Out-Lagen TEST.m2v inkl. Open-GOP-Grenze: keine Doppler,
+    I/P-Fälle bit-identisch mit/ohne Block).
+  - Regression: TEST.m2v-Matrix exakt (I/P bit-identisch zur Baseline, SSIM-Diagonale
+    ≥0,97); Futurama M=4 alle B-Lagen exakt (Worst Case verlor 3 = M−1); GUI-Cut
+    via `--auto-cut` byte-identisch zur Engine. Spec/Protokolle:
+    `docs/superpowers/specs/2026-07-12-mpeg2-cutout-bframe-fix-design.md` (lokal),
+    `CLAUDE_TMP/TTCut-ng/dupcase/REGRESSION-*.md`.
   - Map: [docs/code-map/mpeg2-cut.md](docs/code-map/mpeg2-cut.md)
+
+- **MPEG-2-Re-Encoder: Einzelbild-Encode kann beschädigten letzten Slice liefern**
+  (2026-07-12, Nebenbefund aus dem Cut-Out-Fix, BELEGT + deterministisch)
+  - Repro: `tools/diag/test_mpeg2_cutout TEST.m2v 10 10 out.m2v` — der nachkodierte
+    I-Frame dekodiert mit `ac-tex damaged at 44 35` (letzter Makroblock) +
+    `corrupt decoded frame`; Bildinhalt trotzdem korrekt (SSIM 0,96,
+    Fehlerverdeckung greift).
+  - Eingrenzung (dupcase/DIAGNOSE-neu10.md): inhaltsabhängiger Einzelfall in
+    `encodePart`/`TTTranscodeProvider` (libavcodec mpeg2video) — Frame 4 einzeln
+    sauber, Frame 22 (auch Leading-B) einzeln sauber, Frame 10 mit Nachfolger
+    sauber. Cut-/Kopier-Pfad per Standalone-Repro entlastet.
+  - Verdachtsrichtung: Encoder-Flush/Rate-Control beim Einzelbild-Encode, NICHT
+    DPB/Referenzen.
 
 - **MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames** (2026-07-10, BELEGT)
   - `createIndexList()` legt pro `picture_start_code` einen `TTVideoIndex` an, also
