@@ -11,8 +11,9 @@
 #
 # Usage: ttcut-demux [-e] [-A] [-n name] <input.ts> [output_dir]
 #
-#   -e  Elementary stream mode: output separate .264/.265 and audio files
-#       (default: output normalized MKV with video+audio)
+# Output: elementary streams (.264/.265/.m2v + audio files + .info).
+# -e is accepted for compatibility (ES demux has always been the TTCut
+# workflow and is the only mode since the normalized-MKV mode was removed).
 #
 
 set -e
@@ -61,7 +62,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 
 # Map an ffprobe codec_name to the file extension we use for the demuxed
-# audio track. Used by both the ES-mode and MKV-mode audio loops.
+# audio track.
 audio_ext_for_codec() {
     case "$1" in
         mp2|mp3) echo "mp2" ;;
@@ -383,7 +384,7 @@ detect_segment_boundaries() {
 }
 
 # Parse arguments
-ES_MODE=false
+ES_MODE=true   # ES demux is the only mode; -e is kept as a no-op for compatibility
 AC3FIX=true
 OUTPUT_NAME=""
 while getopts "ehAn:" opt; do
@@ -397,17 +398,15 @@ while getopts "ehAn:" opt; do
             echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
             echo "Similar to ProjectX for MPEG-2."
             echo ""
+            echo "Output: video.264/.265/.m2v + audio.mp2/.ac3/.eac3 + info file"
+            echo "Filler NALUs are automatically stripped for H.264/H.265."
+            echo ""
             echo "Options:"
-            echo "  -e  Elementary stream mode (for TTCut workflow)"
-            echo "      Output: video.264/.265/.m2v + audio.mp2/.ac3/.eac3 + info file"
-            echo "      Filler NALUs are automatically stripped for H.264/H.265"
+            echo "  -e  Elementary stream mode (the default; kept for compatibility)"
             echo "  -A  Disable AC3 header repair (enabled by default)"
             echo "      Fixes corrupt acmod field in DVB AC3 streams (stereo->5.1)"
             echo "  -n  Set output basename (default: input filename)"
             echo "      Example: -n 'Tatort' → Tatort.264, Tatort_deu.ac3, Tatort.info"
-            echo ""
-            echo "Default mode (without -e):"
-            echo "  Output: normalized MKV with video + first audio"
             echo ""
             echo "VDR Integration:"
             echo "  If a 'marks' file exists in the input directory (from vdr-plugin-markad),"
@@ -415,11 +414,10 @@ while getopts "ehAn:" opt; do
             echo "  See: https://github.com/kfb77/vdr-plugin-markad"
             echo ""
             echo "Examples:"
-            echo "  $0 input.ts                          # MKV output"
-            echo "  $0 -e input.ts output_dir/           # Elementary stream output"
-            echo "  $0 -e /video/rec/00001.ts .          # VDR recording (auto-concat splits)"
-            echo "  $0 -e -n Tatort /video/rec/00001.ts  # VDR recording with custom name"
-            echo "  $0 -eA input.ts output_dir/          # ES without AC3 header repair"
+            echo "  $0 input.ts output_dir/           # Elementary stream output"
+            echo "  $0 /video/rec/00001.ts .          # VDR recording (auto-concat splits)"
+            echo "  $0 -n Tatort /video/rec/00001.ts  # VDR recording with custom name"
+            echo "  $0 -A input.ts output_dir/        # ES without AC3 header repair"
             exit 0
             ;;
         \?) error "Invalid option: -$OPTARG" ;;
@@ -573,11 +571,7 @@ if [ -n "$MARKS_FILE" ]; then
 fi
 
 info "Analyzing: $INPUT"
-if $ES_MODE; then
-    info "Mode: Elementary Stream (for TTCut)"
-else
-    info "Mode: Normalized MKV"
-fi
+info "Mode: Elementary Stream (for TTCut)"
 echo ""
 
 # Get stream information with language tags
@@ -1781,190 +1775,6 @@ EOF
         info "Audio files: ${#AUDIO_FILES[@]} track(s)"
     fi
 
-#############################################################################
-# MKV MODE (default)
-#############################################################################
-else
-    # Detect available CPU cores for parallel processing
-    NPROC=$(nproc 2>/dev/null || echo 4)
-    info "Using up to $NPROC parallel processes"
-
-    # Original MKV mode
-    if [ ${#AUDIO_STREAMS[@]} -gt 0 ]; then
-        IFS=':' read -r FIRST_AUDIO FIRST_CODEC FIRST_LANG <<< "${AUDIO_STREAMS[0]}"
-        OUTPUT_MKV="$OUTDIR/${BASENAME}_normalized.mkv"
-
-        step "Creating normalized MKV: $OUTPUT_MKV"
-        info "  Video: stream $VIDEO_STREAM"
-        info "  Audio: stream $FIRST_AUDIO [$FIRST_LANG]"
-
-        # Check if mkvmerge is available
-        if ! command -v mkvmerge &> /dev/null; then
-            error "mkvmerge not found. Please install mkvtoolnix package."
-        fi
-
-        # First extract video and audio separately with ffmpeg IN PARALLEL
-        TEMP_VIDEO="$OUTDIR/.temp_video_$$.mkv"
-        TEMP_AUDIO="$OUTDIR/.temp_audio_$$.mka"
-        MKV_LOG_DIR="$OUTDIR/.mkv_extract_logs_$$"
-        mkdir -p "$MKV_LOG_DIR"
-        _CLEANUP_FILES+=("$TEMP_VIDEO" "$TEMP_AUDIO")
-        _CLEANUP_DIRS+=("$MKV_LOG_DIR")
-
-        step "Extracting video and audio streams in parallel..."
-
-        # Start video extraction in background; capture stderr so we can
-        # diagnose failures instead of silently feeding mkvmerge garbage.
-        ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-            -map 0:$VIDEO_STREAM \
-            -c copy \
-            "$TEMP_VIDEO" > "$MKV_LOG_DIR/video.log" 2>&1 &
-        VIDEO_PID=$!
-
-        # Start audio extraction in background
-        ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-            -map 0:$FIRST_AUDIO \
-            -c copy \
-            "$TEMP_AUDIO" > "$MKV_LOG_DIR/audio.log" 2>&1 &
-        AUDIO_PID=$!
-
-        # Wait for both to complete and check exit codes — silent failures
-        # produced broken MKVs without diagnostics in the past.
-        set +e
-        wait $VIDEO_PID; VIDEO_EXIT=$?
-        wait $AUDIO_PID; AUDIO_EXIT=$?
-        set -e
-
-        if [ $VIDEO_EXIT -ne 0 ]; then
-            warn "ffmpeg video extraction failed (exit $VIDEO_EXIT):"
-            tail -20 "$MKV_LOG_DIR/video.log" | while IFS= read -r line; do warn "  $line"; done
-            error "Aborting: video stream extraction failed"
-        fi
-        info "  Video extraction complete"
-
-        if [ $AUDIO_EXIT -ne 0 ]; then
-            warn "ffmpeg audio extraction failed (exit $AUDIO_EXIT):"
-            tail -20 "$MKV_LOG_DIR/audio.log" | while IFS= read -r line; do warn "  $line"; done
-            error "Aborting: audio stream extraction failed"
-        fi
-        info "  Audio extraction complete"
-
-        # Use mkvmerge to create the final MKV with bitstream timing fix
-        info "  Muxing with mkvmerge (--fix-bitstream-timing-information)..."
-        mkvmerge -o "$OUTPUT_MKV" \
-            --fix-bitstream-timing-information 0:1 \
-            "$TEMP_VIDEO" \
-            "$TEMP_AUDIO"
-
-        # Clean up temp files (trap will catch leftovers on abort)
-        rm -f "$TEMP_VIDEO" "$TEMP_AUDIO"
-        rm -rf "$MKV_LOG_DIR"
-
-        # Verify output
-        NEW_START=$(ffprobe -v error -show_entries stream=start_time -of csv "$OUTPUT_MKV" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
-        info "Normalized start time: ${NEW_START}s"
-        echo ""
-    fi
-
-    # Extract additional audio tracks IN PARALLEL
-    if [ ${#AUDIO_STREAMS[@]} -gt 1 ]; then
-        step "Extracting ${#AUDIO_STREAMS[@]} additional audio track(s) in parallel..."
-        declare -A LANG_COUNT  # Track how many times each language appears
-
-        # Build list of extraction commands and output files
-        EXTRA_AUDIO_FILES=()
-        EXTRA_AUDIO_PIDS=()
-
-        for i in "${!AUDIO_STREAMS[@]}"; do
-            [ $i -eq 0 ] && continue  # Skip first (already in MKV)
-
-            IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
-
-            EXT=$(audio_ext_for_codec "$codec")
-
-            # If same language+extension appears multiple times, add index
-            OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}.${EXT}"
-            lang_ext_key="${lang}_${EXT}"
-            if [ "${LANG_COUNT[$lang_ext_key]:-0}" -gt 0 ]; then
-                OUTPUT_AUDIO="$OUTDIR/${BASENAME}_${lang}_${LANG_COUNT[$lang_ext_key]}.${EXT}"
-            fi
-            LANG_COUNT[$lang_ext_key]=$((${LANG_COUNT[$lang_ext_key]:-0} + 1))
-
-            info "  Audio $idx [$lang] -> $(basename "$OUTPUT_AUDIO")"
-            EXTRA_AUDIO_FILES+=("$OUTPUT_AUDIO")
-
-            # Start extraction in background
-            ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-                -map 0:$idx \
-                -c copy \
-                "$OUTPUT_AUDIO" 2>/dev/null &
-            EXTRA_AUDIO_PIDS+=($!)
-        done
-
-        # Wait for all extractions to complete
-        for pid in "${EXTRA_AUDIO_PIDS[@]}"; do
-            wait $pid
-        done
-        info "  All additional audio tracks extracted"
-        echo ""
-    fi
-
-    # Try to extract subtitles
-    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
-        info "Attempting subtitle extraction..."
-
-        # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
-        if [ "$VDR_MULTIFILE" = true ] && [ "$CLEANUP_REPAIRED" != true ]; then
-            # Use pre-calculated total duration
-            sub_duration="$CONTAINER_VIDEO_DURATION"
-        else
-            sub_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
-        fi
-        sub_midpoint=$(awk "BEGIN {printf \"%.0f\", ${sub_duration:-0} / 2}")
-        [ "$sub_midpoint" -lt 60 ] 2>/dev/null && sub_midpoint=0
-
-        for sub in "${SUBTITLE_STREAMS[@]}"; do
-            IFS=':' read -r idx codec lang <<< "$sub"
-
-            # Quick check: does the stream contain data? (sample 120s from mid-point)
-            sub_packets=$(timeout 30 ffprobe -v error -read_intervals "${sub_midpoint}%+120" \
-                -select_streams 0:$idx -show_entries packet=size \
-                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
-            if [ -z "$sub_packets" ]; then
-                info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
-                continue
-            fi
-
-            case "$codec" in
-                dvb_subtitle|dvbsub)
-                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
-                    info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
-                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
-                    [ -s "$OUTPUT_SUB" ] || rm -f "$OUTPUT_SUB"
-                    ;;
-                subrip|srt|text)
-                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
-                    info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
-                    ;;
-                *)
-                    warn "Subtitle stream $idx [$lang]: $codec - not supported"
-                    ;;
-            esac
-        done
-        echo ""
-    fi
-
-    # Summary
-    echo ""
-    info "=== Demux Complete ==="
-    echo ""
-    info "Output files:"
-    while IFS= read -r line; do
-        info "  $line"
-    done < <(ls -lh "$OUTDIR/${BASENAME}"* 2>/dev/null | grep -v "^total" || true)
-    echo ""
-    info "Main file for TTCut: $OUTPUT_MKV"
 fi
 
 #############################################################################
