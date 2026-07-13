@@ -387,6 +387,19 @@ TTVideoHeader* TTMpeg2VideoStream::getCutStartObject(int cutInPos, int cutOutPos
   {
     iFramePos = index_list->moveToNextIndexPos(cutInPos, 1);
 
+    // No I-frame at or after the cut-in: the source ends inside the GOP that
+    // follows the cut-in (a recording cut off mid-GOP — the only I-frame is
+    // before the cut-in and cannot be used). There is nothing to stream-copy,
+    // so re-encode the whole [cutIn..cutOut] segment and return the last
+    // header. Its offset is past any endObject, so cut() skips the transfer.
+    // Without this, encodeEnd below became iFramePos-1 = -2 and encodePart
+    // threw an uncaught TTInvalidOperationException (SIGABRT).
+    if (iFramePos < 0) {
+      encodePart(cutInPos, cutOutPos, cutParams);
+      cutParams->setCutInIndex(cutInPos);
+      return header_list->headerAt(header_list->count() - 1);
+    }
+
     // If next I-frame is beyond cutOut, encode the entire segment
     int encodeEnd = iFramePos-1;
     if (iFramePos > cutOutPos) {
