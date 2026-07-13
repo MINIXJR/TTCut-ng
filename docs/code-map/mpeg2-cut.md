@@ -118,6 +118,17 @@ independent of the cut-out defect.
 
 ## Assumptions, contracts & pitfalls
 
+- **`TTFileBuffer::readByte()` throws `StreamEOF` past the last valid byte**
+  (since `add2ac8`, 2026-07-13). Before that it silently returned stale
+  ring-buffer cells beyond `writePos`; the header-list parser then fabricated
+  a phantom `picture_start_code` 3 bytes before EOF, and `getByteCount()`
+  (whose "last header → `stream_buffer->size()`" rule only applies when the
+  phantom is absent) truncated the final slice of a re-encoded segment —
+  decoders reported `ac-tex damaged` at the last macroblock. The header-list
+  parsers rely on the exception as their regular end-of-stream path.
+  `nextStartCodeTS()` additionally stops when fewer than 4 valid bytes remain.
+  Scanner regression tool: `tools/diag/test_startcode_scan <file>`.
+
 - **`TTVideoIndexList` (MPEG-2)** — display-sorted after `sortDisplayOrder()`.
   `pictureCodingType(pos)` is the type of the frame *displayed* at `pos`;
   `headerListIndex(pos)` is that frame's *bitstream* position. Mixing the two

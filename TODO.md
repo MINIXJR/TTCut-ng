@@ -16,18 +16,32 @@
     `CLAUDE_TMP/TTCut-ng/dupcase/REGRESSION-*.md`.
   - Map: [docs/code-map/mpeg2-cut.md](docs/code-map/mpeg2-cut.md)
 
-- **MPEG-2-Re-Encoder: Einzelbild-Encode kann beschädigten letzten Slice liefern**
-  (2026-07-12, Nebenbefund aus dem Cut-Out-Fix, BELEGT + deterministisch)
-  - Repro: `tools/diag/test_mpeg2_cutout TEST.m2v 10 10 out.m2v` — der nachkodierte
-    I-Frame dekodiert mit `ac-tex damaged at 44 35` (letzter Makroblock) +
-    `corrupt decoded frame`; Bildinhalt trotzdem korrekt (SSIM 0,96,
-    Fehlerverdeckung greift).
-  - Eingrenzung (dupcase/DIAGNOSE-neu10.md): inhaltsabhängiger Einzelfall in
-    `encodePart`/`TTTranscodeProvider` (libavcodec mpeg2video) — Frame 4 einzeln
-    sauber, Frame 22 (auch Leading-B) einzeln sauber, Frame 10 mit Nachfolger
-    sauber. Cut-/Kopier-Pfad per Standalone-Repro entlastet.
-  - Verdachtsrichtung: Encoder-Flush/Rate-Control beim Einzelbild-Encode, NICHT
-    DPB/Referenzen.
+- ~~**MPEG-2-Re-Encoder: Einzelbild-Encode kann beschädigten letzten Slice liefern**~~
+  → **FIXED** (2026-07-13, `add2ac8`) — und die geerbte Verdachtsrichtung war
+  doppelt falsch: der Encoder war unschuldig, und die frühere „Entlastung" des
+  Cut-/Kopier-Pfads (dupcase/DIAGNOSE-neu10.md) ein Fehlschluss, weil auch der
+  Standalone-Repro durch `cut()` lief.
+  - Echte Root Cause: `TTFileBuffer::readByte()` warf am EOF nie, sondern
+    lieferte stale Ringpuffer-Bytes hinter `writePos`. Der Header-Parser las
+    nach dem stillen EOF-Return des Startcode-Scanners so ein Phantom-Typ-Byte
+    (zufällig 0x00 = picture_start_code) → Phantom-Picture-Header 3 Bytes vor
+    Dateiende → `getByteCount()` beendete die Kopie am Phantom → die letzten
+    3 Entropie-Bytes des letzten Slice fehlten (`ac-tex damaged` am letzten
+    Makroblock). „Inhaltsabhängig" war nur, ob das stale Byte 0x00 war.
+  - Fix: `readByte()` wirft `StreamEOF` (der Vertrag, den alle Aufrufer schon
+    implementierten); `nextStartCodeTS()` stoppt bei < 4 gültigen Restbytes.
+  - Verifiziert: TEST.m2v-Matrix (Einzelbilder 4/10/22, Paare 9-10/10-11,
+    Bereiche 0..3–0..10) exakte Framezahlen + 0 Decoder-Warnungen; Repro 10..10
+    schreibt jetzt das volle Encoder-Paket. Isolationstool
+    `tools/diag/test_startcode_scan` (Scanner allein: 41 echte Startcodes,
+    sauberes EOF, kein Phantom).
+
+- **MPEG-2: Cut der letzten Frames der Datei → Segfault** (2026-07-13, BELEGT,
+  pre-existing — auf master identisch, unabhängig vom Phantom-Fix)
+  - Repro: `tools/diag/test_mpeg2_cutout TEST.m2v 73470 73474 out.m2v`
+    (73475 Frames gesamt) → SIGABRT/Speicherabzug.
+  - Gehört zum offenen Rand-Fall „Einzelbild-/Cut-Bereich endet am letzten
+    Frame der Datei" (bewusst vom Phantom-Fix getrennt).
 
 - **MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames** (2026-07-10, BELEGT)
   - `createIndexList()` legt pro `picture_start_code` einen `TTVideoIndex` an, also
