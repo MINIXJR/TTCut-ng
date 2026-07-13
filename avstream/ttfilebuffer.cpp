@@ -195,7 +195,12 @@ void TTFileBuffer::nextStartCodeTS()
       i = m-1;
       fillBuffer(2*m+1);
 
-      if (isAtEnd && readPos > writePos)
+      // EOF guard: a start code needs m+1 (4) bytes. With fewer valid bytes
+      // left the window comparisons below would read ring-buffer cells beyond
+      // writePos — stale data from earlier fills — and could hallucinate a
+      // start code that is not in the file (seen as a phantom picture header
+      // 3 bytes before EOF, truncating the last slice on copy).
+      if (isAtEnd && readPos > writePos - m)
         return;
 
       while (cBuffer[(int)((position()+i)&mask)] != tsStartCode[i])
@@ -204,7 +209,7 @@ void TTFileBuffer::nextStartCodeTS()
         seekRelative(tsShift[(int)pos]);
         fillBuffer(2*m+1);
 
-        if (isAtEnd && readPos > writePos)
+        if (isAtEnd && readPos > writePos - m)
           return;
       }
 
@@ -403,6 +408,16 @@ quint8 TTFileBuffer::readByte()
 {
   while (readPos > writePos && !isAtEnd)
     fillBuffer();
+
+  // EOF: no valid byte left. The old code fell through and returned a stale
+  // ring-buffer cell from an earlier fill — callers like the header-list
+  // parser then fabricated phantom start codes/headers past EOF (seen as a
+  // phantom picture header 3 bytes before file end, truncating the last
+  // slice of a re-encoded frame on copy). Throwing here is what the callers
+  // already expect: readByte(quint8*,int) catches it, and the header-list
+  // parsers treat it as their regular end-of-stream path.
+  if (readPos > writePos)
+    throw TTFileBufferException(TTFileBufferException::StreamEOF);
 
   return cBuffer[(int)(readPos++&bufferMask)];
 }

@@ -26,9 +26,11 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
+
+FILEBUF_OBJS := ../../obj/ttfilebuffer.o ../../obj/ttmessagelogger.o ../../obj/ttsettings.o ../../obj/moc_ttsettings.o
 
 .PHONY: all clean
 all: $(TOOLS)
@@ -47,6 +49,9 @@ test_h264_leading: test_h264_leading.cpp $(DISPMAP_OBJS)
 
 test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
+test_startcode_scan: test_startcode_scan.cpp $(FILEBUF_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(FILEBUF_OBJS) $(LDLIBS)
 
 test_audiocut: test_audiocut.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
