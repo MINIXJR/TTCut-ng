@@ -129,6 +129,16 @@ independent of the cut-out defect.
   `nextStartCodeTS()` additionally stops when fewer than 4 valid bytes remain.
   Scanner regression tool: `tools/diag/test_startcode_scan <file>`.
 
+- **`getCutStartObject()` — no I-frame at/after a non-I cut-in.**
+  `moveToNextIndexPos(cutInPos, 1)` returns **-1** when the source ends inside
+  the GOP that follows the cut-in (recording cut off mid-GOP; the only I-frame
+  precedes the cut-in and cannot be used). Since `2dd104c` (2026-07-13) this is
+  handled like "next I beyond cutOut": the whole
+  `[cutIn..cutOut]` segment is re-encoded and the **last header** is returned
+  so `cut()` skips the transfer. Before the fix `encodeEnd` became -2 and
+  `encodePart` threw an uncaught exception (SIGABRT). Repro:
+  `test_mpeg2_cutout TEST.m2v 73470 73474`.
+
 - **`TTVideoIndexList` (MPEG-2)** — display-sorted after `sortDisplayOrder()`.
   `pictureCodingType(pos)` is the type of the frame *displayed* at `pos`;
   `headerListIndex(pos)` is that frame's *bitstream* position. Mixing the two

@@ -36,12 +36,17 @@
     `tools/diag/test_startcode_scan` (Scanner allein: 41 echte Startcodes,
     sauberes EOF, kein Phantom).
 
-- **MPEG-2: Cut der letzten Frames der Datei → Segfault** (2026-07-13, BELEGT,
-  pre-existing — auf master identisch, unabhängig vom Phantom-Fix)
-  - Repro: `tools/diag/test_mpeg2_cutout TEST.m2v 73470 73474 out.m2v`
-    (73475 Frames gesamt) → SIGABRT/Speicherabzug.
-  - Gehört zum offenen Rand-Fall „Einzelbild-/Cut-Bereich endet am letzten
-    Frame der Datei" (bewusst vom Phantom-Fix getrennt).
+- ~~**MPEG-2: Cut der letzten Frames der Datei → Segfault**~~
+  → **FIXED** (2026-07-13, `2dd104c`)
+  - Kein Memory-Bug: uncaught `TTInvalidOperationException`. Cut-In auf ein
+    Nicht-I-Frame ohne folgendes I-Frame (Aufnahme mitten in der GOP
+    abgeschnitten) → `moveToNextIndexPos` liefert -1 → `encodeEnd = -2` →
+    `encodePart(cutIn, -2)` schlägt fehl und wirft → `std::terminate`.
+  - Fix in `getCutStartObject()`: `iFramePos < 0` wie „nächstes I jenseits
+    cutOut" behandeln — ganzen Bereich re-encodieren, letzten Header
+    zurückgeben (Transfer wird übersprungen).
+  - Verifiziert: TEST.m2v 73470..73474 (vorher Crash) = 5 Frames, 0 Warnungen;
+    Regressionsmatrix unverändert; weitere EOF-Randfälle exakt.
 
 - **MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames** (2026-07-10, BELEGT)
   - `createIndexList()` legt pro `picture_start_code` einen `TTVideoIndex` an, also
