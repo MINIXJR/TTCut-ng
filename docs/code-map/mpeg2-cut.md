@@ -114,7 +114,9 @@ flowchart TD
 
 Orthogonal to the table: with **field-picture** material every field pair occupies
 two display positions (one real frame), so cut positions count fields. Measured,
-independent of the cut-out defect.
+independent of the cut-out defect — and **harmless** (see the field-picture note
+below): the video cut copies the field pictures byte-for-byte and they decode
+pixel-identically; the documented ProjectX demux strips field pictures entirely.
 
 ## Assumptions, contracts & pitfalls
 
@@ -242,6 +244,21 @@ independent of the cut-out defect.
   (`cut(0,21)`, `cut(0,22)`) lose exactly 1 frame, the same as an ordinary B-frame
   cut-out, and `cut(0,24)` / `cut(0,28)` are correct. The two problems are
   independent.
+
+  **Verdict: harmless, closed 2026-07-16.** Reproduced on real material (Futurama
+  02x01, both demux paths) with `tools/diag/dump_mpeg2_fields` +
+  `tools/diag/test_mpeg2_cutout`:
+  - **Unreachable via the documented workflow.** ProjectX (the mandated MPEG-2
+    demux) normalizes field pictures to frame pictures: the ffmpeg `-c:v copy` ES
+    carries 222 field pairs (85 721/85 499 entries), the ProjectX ES carries **0**.
+    Field pairs only reach TTCut if ProjectX is bypassed.
+  - **No frame loss, no corruption even then.** A cut spanning the field region
+    writes 39 coded pictures that decode to 37 real frames (the two pairs collapse),
+    with 0 decoder errors; a cut-out landing on a second field or on the first field
+    of a pair (dropping its partner) is likewise clean. The decoded field-region
+    frames are **pixel-identical** to the source (md5, 9 frames).
+  - The only real-world effect (non-ProjectX path only) is cosmetic: an inflated
+    frame counter and two navigation stops per real frame in the field region. No fix.
 
 - **`transferCutObjects()`** — assumes a picture header never spans the 12-byte
   watermark at the end of a 256 KiB chunk; guarantees in-place header rewriting of

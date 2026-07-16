@@ -89,6 +89,12 @@ test_mpeg2_cutout: test_mpeg2_cutout.cpp
 	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
 
+dump_mpeg2_fields: dump_mpeg2_fields.cpp
+	@test -n "$(MPEG2CUT_OBJS)" || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
 MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider.o \
     ../../obj/ttcut.o $(WRAPPER_OBJS)
 

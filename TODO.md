@@ -48,21 +48,31 @@
   - Verifiziert: TEST.m2v 73470..73474 (vorher Crash) = 5 Frames, 0 Warnungen;
     Regressionsmatrix unverändert; weitere EOF-Randfälle exakt.
 
-- **MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames** (2026-07-10, BELEGT)
+- ~~**MPEG-2 field-picture: Cut-Positionen zählen Felder statt Frames**~~ → **HARMLOS, GESCHLOSSEN** (2026-07-16)
   - `createIndexList()` legt pro `picture_start_code` einen `TTVideoIndex` an, also
     **zwei Einträge pro Field-Picture-Frame** (gleicher `temporal_reference` ⇒ gleicher
     `display_order`). `mExtraIndices` markiert den Zweiteintrag, **entfernt ihn aber nicht**.
-  - Gelesen wird `extraIndices()` nur von der Audio-Schnittkorrektur (`data/ttavdata.cpp`)
+    Gelesen wird `extraIndices()` nur von der Audio-Schnittkorrektur (`data/ttavdata.cpp`)
     und der Standbildanzeige (`gui/ttcurrentframe.cpp`) — **nicht** vom Video-Cut.
-  - Messung Futurama 02x01: 85 720 Index-Einträge / 85 495 echte Frames (222 Feldpaare,
-    erstes bei Picture 11 673, mitten im Stream geclustert, nicht am Anfang).
-  - Folge: Eine Cut-Position driftet gegen die echte Frame-Nummer um die Anzahl der
-    vorangehenden Feldpaare.
-  - **Unabhängig vom Cut-Out-Defekt oben** — die ursprüngliche Vermutung, Feldpaare
-    würden `bFrameCount` aufblähen und den Fehler vergrößern, ist durch Messung
-    **widerlegt** (Cut-Outs im Feldbereich verlieren genau 1 Frame wie sonst auch).
-  - Zu klären: Soll die Cut-Achse Frames zählen (Zweitfelder aus `index_list` entfernen)
-    oder bleibt sie feldbasiert und alle Konsumenten korrigieren?
+  - **Repro-Ergebnis (echtes Material, Futurama 02x01, beide Demux-Wege):** kein
+    sichtbarer Cut-Defekt. Prüfmatrix mit `tools/diag/dump_mpeg2_fields` +
+    `tools/diag/test_mpeg2_cutout`:
+    - **Erreichbarkeit:** Der dokumentierte MPEG-2-Workflow (ProjectX) **entfernt
+      Field-Pictures beim Demux** — ffmpeg-Roh-ES: 222 Feldpaare (85 721/85 499);
+      ProjectX-ES: **0**. Defekt 2 ist im normalen Gebrauch gar nicht erreichbar; die
+      Feldpaare entstehen nur, wenn man ProjectX umgeht (z.B. `ffmpeg -c:v copy`).
+    - **Kein Frame-Verlust:** Cut über die Field-Region (39 Pictures → 37 Frames, alle
+      da); Cut-Out **auf** einem Extra-Feld bzw. „halbem Paar" ebenfalls sauber.
+    - **0 Decoder-Fehler** über alle Cuts; dekodierter Inhalt **pixel-identisch** zur
+      Quelle (md5 über 9 Frames inkl. beider Field-Frames).
+    - **Audio:** `countExtraFramesBefore()` zieht die Extra-Felder ab
+      (`time=(frame−extras_before)/fps`); im ProjectX-Fall leere Liste → No-Op.
+  - Einziger realer Effekt (nur im Nicht-ProjectX-Fall): kosmetisch — Frame-Zähler
+    um bis zu 222 erhöht, zwei Navigations-Stops pro echtem Frame in der Field-Region.
+    Kein Korrektheitsfehler → **kein Fix**.
+  - Latent (sub-perzeptuell, nur an Field-Rändern): `mExtraIndices` speichert
+    Stream-Ordnung, wird aber gegen Display-Positionen verglichen → ±1–2 Frame
+    Ungenauigkeit der Audio-Korrektur. Irrelevant, da im Standard-Workflow leer.
 
 - ~~**TTCut-ng Cut-Pipeline A/V Drift bei MPEG-2 mit field-picture-encoding**~~ → **RESOLVED** (2026-05-13, branch `feature/mpeg2-field-picture-fix`)
   - Root Cause: Field-Picture-Detection im MPEG-2-Parser (`picture_coding_extension` nicht gelesen, jeder picture_start_code als Frame gezählt, doppelte Zählung bei field-picture-encoded Frames). Fix in `avstream/ttmpeg2videostream.cpp` + Pipeline-Wiring in `data/ttavdata.cpp`. Spec: `docs/superpowers/specs/2026-05-12-mpeg2-field-picture-fix-design.md`.
