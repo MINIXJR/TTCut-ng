@@ -2,6 +2,35 @@
 
 ## High Priority
 
+- **H.264 Smart Cut: EOS+Non-IDR-Naht beschädigt Leading-Pics des Copy-Start-Keyframes**
+  (Defekt A, BESTÄTIGT 2026-07-16 — Fix ausstehend)
+  - Nach dem EOS am Re-Encode→Stream-Copy-Übergang ist der DPB leer; die
+    Leading-B-Frames des Non-IDR-Copy-Start-Keyframes referenzieren Vor-Naht-Bilder.
+    Die frame_num-Brücke lässt diese Referenzen **still auf falsche Bilder** auflösen
+    (bf=1: 1 Frame verloren + korruptes Duplikat, 0 Decoder-Fehler; real ONE-HD
+    720p50: 3 korrupte Frames = Reorder-Tiefe, `mmco: unref short failure`).
+  - Reichweite: ARD/ONE progressive HD ist durchgehend non-IDR → jeder
+    frame-genaue Cut-In über die Standard-Branch betroffen (~60–120 ms Glitch).
+    Auch die (gefixte) Unification-Branch zeigt an der Naht dasselbe
+    Rest-Fenster (34 Frames Drift, SSIM ≥0,84, keine Artefakte).
+  - Alte Schutz-Annahme widerlegt: Die Boundary-Crossing-Extension feuert bei
+    Mitten-GOP-Cuts NIE (nur wenn Leading-Pics vor dem Cut-In anzeigen) —
+    `has_b_frames≥2` schützt nicht.
+  - Fix-Skizze: Extension auch feuern lassen, wenn der Non-IDR-Copy-Start
+    überhaupt Leading-Pics hat (Kosten: 1 GOP mehr Re-Encode pro Naht).
+    Offene Teilfrage: verliert H.265 an derselben Naht RASL-Frames
+    (Decoder verwirft statt korrumpiert)?
+  - Repro: `tools/diag/test_smartcut_seam`; Karte
+    [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
+    `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
+
+- ~~**H.264 Smart Cut: SPS-Unification zerstört progressive Quellen**~~ →
+  **FIXED** (2026-07-16, Defekt B) — Slice-Rewriter ließ bei poc_type-2-Encoder
+  (progressiv) das von der Quell-SPS verlangte `pic_order_cnt_lsb` weg → alle
+  Header ab dort bit-verschoben (real: 495 Decoder-Fehler, 13/1001 Frames weg).
+  Feld wird jetzt eingefügt (verankerte POC-Nummerierung). MBAFF-Unification und
+  Standard-Branch byte-identisch. Details CHANGELOG (Unreleased) + Karte.
+
 - ~~**MPEG-2: Cut-Out auf B-Frame verliert bis zu M−1 Frames**~~ → **FIXED** (2026-07-12, `3b087ae`)
   - Der Block in `getCutEndObject()` (Display-Index + Bitstream-B-Zählung vermischt,
     unterdrückte den Tail-`encodePart()`) wurde ersatzlos entfernt. Die
