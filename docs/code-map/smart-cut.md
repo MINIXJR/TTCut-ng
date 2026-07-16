@@ -167,15 +167,46 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   (only the H.264-only unification branch passes a non-zero count), but the guard
   is a codec check away from being a silent performance cliff.
 
-- **EOS + Non-IDR (known latent defect)** — after EOS the decoder's DPB is
-  flushed but `PrevRefFrameNum` is not reset. The standard branch bridges this
-  with `frameNumDelta`. When the boundary-crossing extension does *not* fire
-  (`*adjustedStreamCopyStart` stays `-1`: no AU in `[streamCopyLimit, nextKF)`
-  displays before `startDisplay`) and the copy start is a Non-IDR I-slice, the
-  same spec violation exists as in the historical PAFF case. Not observed with
-  `has_b_frames ≥ 2` (the extension always fires); reachable in principle at
-  `has_b_frames ∈ {0,1}`. Carried over from project memory, **not** re-verified
-  against a running stream in this pass.
+- **EOS + Non-IDR (CONFIRMED defect A, 2026-07-16 — fix pending)** — after EOS
+  the decoder's DPB is flushed but `PrevRefFrameNum` is not reset. The standard
+  branch bridges `frame_num` with `frameNumDelta`, but the **leading pictures of
+  the non-IDR copy-start keyframe** still reference pre-EOS frames; the bridge
+  makes those references resolve to *wrong* pictures instead of missing ones.
+  Measured damage: exactly the copy-start keyframe's leading pics (1 frame at
+  `bf=1` synthetic, 3 frames on real ONE-HD 720p50 material), everything after
+  bit-identical, frame count preserved — i.e. **silent** corruption (`bf=1`
+  produced zero decoder errors; `bf≥2` logs `mmco: unref short failure`).
+  The old claim "the extension always fires at `has_b_frames ≥ 2`" is
+  **disproven**: the boundary-crossing extension fires only when leading pics
+  display *before the cut-in* (cuts landing inside the copy-start keyframe's
+  reorder window), never for ordinary mid-GOP cuts. Reachability is real-world:
+  ARD/ONE progressive HD DVB is non-IDR throughout (0 IDR in 600-frame probes,
+  Tatort/Petrocelli). Repro harness: `tools/diag/test_smartcut_seam.cpp`;
+  artifacts `/usr/local/src/CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
+
+- **SPS-Unification × poc_type-2 encoder (defect B — FIXED 2026-07-16)** —
+  `rewriteEncoderSliceForSourceSps` step 8 was gated on
+  `encLog2MaxPocLsb > 0 && srcLog2MaxPocLsb > 0`: with a progressive
+  (poc_type 2) encoder it skipped the `pic_order_cnt_lsb` write entirely, while
+  the rewritten slice runs under the **source** SPS (poc_type 0), which
+  requires the field. Every rewritten slice header was bit-shifted from that
+  point → mass corruption ("illegal reordering_of_pic_nums_idc", "corrupted
+  macroblock 0 0"), measured 495 decoder-error lines and 13/1001 frames lost on
+  a real Petrocelli cut. Reachable whenever a **progressive** non-IDR source
+  hits a non-bridgeable POC seam (~2 of 6 probed cut positions); the MBAFF/PAFF
+  unification cases (encoder poc_type 0) were unaffected — and were the only
+  ones ever exercised. The probe/real cross-check warnings did not cover this
+  hole (both report poc_type 2, consistently); the computed POC anchoring base
+  was silently never written.
+  **Fix:** the gate is now `srcLog2MaxPocLsb > 0` alone; when the encoder slice
+  carries no POC field (`encLog2MaxPocLsb == 0`) nothing is consumed and the
+  anchored `pic_order_cnt_lsb` is **inserted** (`delta_pic_order_cnt_bottom`
+  written as 0 if the encoder PPS requires its presence). Verified: the broken
+  Petrocelli seams heal (0 decoder errors, exactly 1001 frames, copy region
+  bit-identical to source outside the defect-A window); MBAFF unification
+  (encoder poc_type 0) and the standard branch are **byte-identical** to
+  pre-fix. Residual seam drift at such cuts (34 frames, SSIM ≥ 0.84, no
+  artifacts) is defect A's cross-seam reference mechanism, tracked separately.
 
 ## Redundancy / consolidation candidates
 

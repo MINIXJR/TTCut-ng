@@ -62,6 +62,9 @@ test_stilldisplay: test_stilldisplay.cpp $(WRAPPER_OBJS)
 test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 
+test_smartcut_seam: test_smartcut_seam.cpp $(STILLFRAME_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
+
 test_segshape: test_segshape.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 

@@ -3644,8 +3644,17 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     // doesn't trigger PicOrderCntMsb increment at MaxPocLsb=256).
     // Fix: compute linear poc_lsb = (frameIndex * 2) % srcMaxPocLsb,
     // which only wraps at the source's MaxPocLsb boundary.
-    if (encLog2MaxPocLsb > 0 && srcLog2MaxPocLsb > 0) {
-        spsReadBits(oldData, oldSize, readPos, encLog2MaxPocLsb);  // skip old
+    //
+    // The rewritten slice is decoded under the SOURCE SPS (poc_type 0), so
+    // pic_order_cnt_lsb MUST be written whenever srcLog2MaxPocLsb > 0 — even
+    // when the encoder slice has no such field (progressive libx264 emits
+    // poc_type 2, encLog2MaxPocLsb == 0): then nothing is consumed from the
+    // old header and the field is INSERTED. Skipping the write (the pre-fix
+    // behaviour) bit-shifted every following header field and mass-corrupted
+    // the output (defect B, 2026-07-16).
+    if (srcLog2MaxPocLsb > 0) {
+        if (encLog2MaxPocLsb > 0)
+            spsReadBits(oldData, oldSize, readPos, encLog2MaxPocLsb);  // skip old
         int srcMaxPocLsb = 1 << srcLog2MaxPocLsb;
         // pocLsbBase >= 0: anchored numbering (non-PAFF POC seam) so the last
         // encoded frame lands directly below the copy-start POC. Otherwise
@@ -3655,9 +3664,14 @@ static QByteArray rewriteEncoderSliceForSourceSps(
             : (static_cast<uint32_t>(frameIndex) * 2) % srcMaxPocLsb;
         spsWriteBits(newData, newSize, writePos, newPocLsb, srcLog2MaxPocLsb);
 
-        // delta_pic_order_cnt_bottom (if PPS flag && !field_pic_flag) — copy
+        // delta_pic_order_cnt_bottom (if PPS flag && !field_pic_flag).
+        // Presence in the REWRITTEN slice is governed by the encoder PPS
+        // (pps_id=1) the slice references. A poc_type-2 encoder slice carries
+        // no such field to copy — write the neutral 0 in that case.
         if (encPps.bottomFieldPicOrderPresent && !fieldPicFlag) {
-            int32_t deltaBottom = spsReadSE(oldData, oldSize, readPos);
+            int32_t deltaBottom = (encLog2MaxPocLsb > 0)
+                ? spsReadSE(oldData, oldSize, readPos)
+                : 0;
             spsWriteSE(newData, newSize, writePos, deltaBottom);
         }
     }

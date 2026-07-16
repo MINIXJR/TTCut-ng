@@ -53,6 +53,7 @@ tools/ttcut-ac3fix/ttcut-ac3fix
 tools/ttcut-pts-analyze/ttcut-pts-analyze
 tools/diag/check_idr
 tools/diag/test_*
+tools/diag/dump_mpeg2_fields
 !tools/diag/*.cpp
 
 # Python bytecode cache (e.g. tools/ttcut-quality-check.py)

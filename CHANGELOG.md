@@ -2,6 +2,24 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixes
+
+- **H.264 smart cut: SPS unification no longer corrupts progressive sources** —
+  the unification slice rewriter skipped writing `pic_order_cnt_lsb` when the
+  re-encode encoder used poc_type 2 (libx264's choice for progressive content),
+  although the rewritten slices run under the source SPS (poc_type 0), which
+  requires the field. Every rewritten slice header was bit-shifted from that
+  point, mass-corrupting the output (measured on ONE-HD 720p50: 495 decoder
+  errors, 13 of 1001 frames lost). The field is now inserted (anchored POC
+  numbering) when the encoder slice has none. Reachable on progressive non-IDR
+  DVB material whenever a cut lands on a POC seam outside the encoder bridge
+  window (~1 in 3 probed cut positions). Interlaced unification cuts
+  (MBAFF/PAFF, encoder poc_type 0) are byte-identical to before; the standard
+  seam path is untouched (byte-identical). New diagnostic harness:
+  `tools/diag/test_smartcut_seam`.
+
 ## v0.74.0 (2026-07-12)
 
 **MPEG-2 B-frame cut-out fix, ttcut-demux duration fix + ES-only mode, smart-cut seam consolidation**
