@@ -16,10 +16,21 @@
   - Alte Schutz-Annahme widerlegt: Die Boundary-Crossing-Extension feuert bei
     Mitten-GOP-Cuts NIE (nur wenn Leading-Pics vor dem Cut-In anzeigen) —
     `has_b_frames≥2` schützt nicht.
+  - **H.265-Teilfrage GEMESSEN (2026-07-17): ja, Frame-VERLUST statt Korruption.**
+    Synthetik x265 open-gop bf=4 (CRA-Keyframes), Cut 160..400: 237 statt 241
+    Frames, 0 Decoder-Fehler — die 4 RASL-Pictures des Copy-Start-CRA
+    (Display 196–199) werden nach dem EOS still verworfen (`NoRaslOutputFlag=1`).
+    Folge-Verdacht (noch zu messen): fortlaufende Mux-Timestamps ⇒ ~160 ms
+    A/V-Verschiebung ab der Naht bei 25fps.
   - Fix-Skizze: Extension auch feuern lassen, wenn der Non-IDR-Copy-Start
     überhaupt Leading-Pics hat (Kosten: 1 GOP mehr Re-Encode pro Naht).
-    Offene Teilfrage: verliert H.265 an derselben Naht RASL-Frames
-    (Decoder verwirft statt korrumpiert)?
+    **Design-Prüfpunkt:** Die Extension verschiebt den Copy-Start zum nächsten
+    Keyframe — der auf IDR-losem Material ebenfalls Non-IDR/CRA mit eigenen
+    Leading-Pics ist. Ob die Naht dort wirklich sauber ist oder das Problem nur
+    wandert, MUSS die A-Spec messen (Cut im Reorder-Fenster erzwingt die
+    Extension schon heute). Alternative Richtung: EOS an der Naht weglassen und
+    Leading-Pics gegen die Re-Encode-Standins auflösen lassen (milde Drift statt
+    Verlust/Korruption) — POC/frame_num-Kontinuität wäre Voraussetzung.
   - Repro: `tools/diag/test_smartcut_seam`; Karte
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
     `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.

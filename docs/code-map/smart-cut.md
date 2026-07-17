@@ -181,7 +181,16 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   display *before the cut-in* (cuts landing inside the copy-start keyframe's
   reorder window), never for ordinary mid-GOP cuts. Reachability is real-world:
   ARD/ONE progressive HD DVB is non-IDR throughout (0 IDR in 600-frame probes,
-  Tatort/Petrocelli). Repro harness: `tools/diag/test_smartcut_seam.cpp`;
+  Tatort/Petrocelli). **H.265 variant (measured 2026-07-17): silent frame LOSS
+  instead of corruption** — the copy-start CRA's RASL pictures are discarded
+  after the EOS (`NoRaslOutputFlag = 1`): a synthetic x265 open-gop `bf=4` cut
+  lost exactly 4 frames (the RASL window, display 196–199), zero decoder
+  errors, all delivered frames clean. Suspected follow-on (unmeasured):
+  sequential mux timestamps turn the gap into an A/V shift for the rest of the
+  segment. Fix-design checkpoint: extending the re-encode to the next keyframe
+  merely *moves* the seam to another CRA/non-IDR keyframe with its own leading
+  pics on IDR-free material — whether that seam is clean must be measured, not
+  assumed. Repro harness: `tools/diag/test_smartcut_seam.cpp`;
   artifacts `/usr/local/src/CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
 - **SPS-Unification × poc_type-2 encoder (defect B — FIXED 2026-07-16)** —
