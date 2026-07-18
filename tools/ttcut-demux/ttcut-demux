@@ -1555,7 +1555,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
                 # Prefer probed channel_layout over bare channel count (e.g. "3.0",
                 # "5.1(side)") to avoid acmod mismatch when splicing silence.
-                local pad_layout="${ORIG_CHANNELS:-2}c"
+                pad_layout="${ORIG_CHANNELS:-2}c"
                 [ -n "$APROBE_CHANNEL_LAYOUT" ] && pad_layout="$APROBE_CHANNEL_LAYOUT"
 
                 # Run padding in background
