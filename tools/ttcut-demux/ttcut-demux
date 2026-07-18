@@ -460,6 +460,96 @@ repair_audio_with_silence_inserts() {
         accumulated_collapse=$(awk "BEGIN {printf \"%.6f\", $accumulated_collapse + $source_gap}")
     done < "$gap_file"
 
+    # --- Coalesce overlapping/touching gap windows ---
+    # Dense micro-gap clusters (signal degrading gradually before a full
+    # outage) can produce entries whose effective windows overlap: a
+    # truncate entry (dur<0) at pos_i skips [pos_i, pos_i+|dur_i|), and if
+    # the NEXT entry's pos_j falls inside that window, the assembly loop
+    # below emits "-ss pos_i(effective) -to pos_j" with pos_j < the actual
+    # cut point -> ffmpeg aborts with "-to value smaller than -ss", the
+    # whole call fails, and the caller falls back to leaving the audio
+    # unrepaired (see TODO.md, commit 9c345ea). Fix: merge any entry whose
+    # pos lies inside the previous entry's effective window into one
+    # combined edit at the earlier pos, summing the signed durations. This
+    # only changes how the LOCAL edit operations are grouped for assembly;
+    # it must NOT touch gap_positions/gap_durations semantics that later
+    # entries were computed from - and it doesn't, because pos_j for every
+    # entry was already fixed by the intake loop above from src_start/
+    # accumulated_collapse, both of which are driven solely by each
+    # original CLASSIFIED_FILE row's OWN src_start/src_end/gap_ms/
+    # silence_ms (independent of how neighboring entries get grouped
+    # later). Merging here only changes assembly bookkeeping, not any
+    # position that has already been computed.
+    if [ ${#gap_positions[@]} -gt 1 ]; then
+        # Establish ascending pos order first. CLASSIFIED_FILE is sorted by
+        # src_start, but gap_positions[] is NOT guaranteed ascending from
+        # that alone: an audio-gap row and a video-only-truncation row can
+        # cover overlapping SOURCE windows (e.g. a truncation row's
+        # src_start falls inside the preceding audio-gap row's [src_start,
+        # src_end)). accumulated_collapse advances by the full source_gap of
+        # every processed row regardless of type, so when the next row's
+        # src_start hasn't advanced past the previous row's src_end, its pos
+        # (= src_start - accumulated_collapse) can end up EARLIER than the
+        # previous entry's pos despite src_start being non-decreasing.
+        # Measured on real Gate-1 (07x11) data: rows 2/3 in one track had
+        # pos 96975.346633 then 96975.332900 (a ~13.7ms regression). The
+        # merge sweep below only detects overlap looking forward, so it
+        # requires true ascending pos order - sort explicitly rather than
+        # relying on src_start order. This reorders only the local walk
+        # used for grouping; it does not alter any already-computed pos or
+        # dur value.
+        local -a _sorted_pos=() _sorted_dur=()
+        while IFS=' ' read -r sp sd; do
+            _sorted_pos+=("$sp")
+            _sorted_dur+=("$sd")
+        done < <(paste -d' ' <(printf '%s\n' "${gap_positions[@]}") \
+                             <(printf '%s\n' "${gap_durations[@]}") | sort -g -k1,1)
+        gap_positions=("${_sorted_pos[@]}")
+        gap_durations=("${_sorted_dur[@]}")
+
+        local -a coalesced_positions=()
+        local -a coalesced_durations=()
+        local n_raw=${#gap_positions[@]}
+        local ci=0
+        while ((ci < n_raw)); do
+            local cur_pos="${gap_positions[$ci]}"
+            local cur_dur="${gap_durations[$ci]}"
+            local window_end
+            window_end=$(awk -v p="$cur_pos" -v d="$cur_dur" \
+                'BEGIN {e = (d < 0) ? -d : 0; printf "%.6f", p + e}')
+            local cj=$((ci + 1))
+            while ((cj < n_raw)); do
+                local next_pos="${gap_positions[$cj]}"
+                # <= (not strict <): two back-to-back audio-gap rows with
+                # zero source-time between them (row A's src_end == row B's
+                # src_start) collapse to the SAME pos - a real, measured
+                # case (Gate-1 track 2: two 0.216s/0.280s inserts both at
+                # pos=3048.576000). A strict "<" leaves them unmerged, and
+                # the assembly loop then emits a zero-width "-ss X -to X"
+                # segment, which ffmpeg also rejects as "-to value smaller
+                # than -ss". Touching windows must merge just like
+                # overlapping ones.
+                if ! awk -v np="$next_pos" -v we="$window_end" 'BEGIN {exit !(np <= we)}'; then
+                    break
+                fi
+                local next_dur="${gap_durations[$cj]}"
+                cur_dur=$(awk -v a="$cur_dur" -v b="$next_dur" 'BEGIN {printf "%.6f", a + b}')
+                window_end=$(awk -v p="$cur_pos" -v d="$cur_dur" \
+                    'BEGIN {e = (d < 0) ? -d : 0; printf "%.6f", p + e}')
+                cj=$((cj + 1))
+            done
+            # A merged sum near zero means the combined edit is a no-op -
+            # drop it instead of emitting a degenerate segment.
+            if ! awk -v d="$cur_dur" 'BEGIN {a = (d < 0) ? -d : d; exit !(a < 0.001)}'; then
+                coalesced_positions+=("$cur_pos")
+                coalesced_durations+=("$cur_dur")
+            fi
+            ci=$cj
+        done
+        gap_positions=("${coalesced_positions[@]}")
+        gap_durations=("${coalesced_durations[@]}")
+    fi
+
     if [ ${#gap_positions[@]} -eq 0 ]; then
         rm -rf "$work_dir"
         return 0  # nothing to do
@@ -494,7 +584,13 @@ repair_audio_with_silence_inserts() {
         local seg="$work_dir/seg${seg_idx}.${audio_ext}"
         ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
             -ss "$prev_end" -to "$pos" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
-        echo "file '$seg'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
+        # ffmpeg's concat demuxer resolves relative "file" entries relative
+        # to the DIRECTORY OF THE LIST FILE ITSELF, not the process CWD.
+        # concat_list lives inside work_dir, and so do the segments - so a
+        # work_dir-prefixed path here gets work_dir prepended TWICE by
+        # ffmpeg (observed: "./.gap_repair_PID/./.gap_repair_PID/seg0.mp2",
+        # "Impossible to open"). Write the basename only.
+        echo "file '$(basename "$seg")'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
         if awk "BEGIN {exit !($dur > 0)}"; then
             if awk "BEGIN {exit !($dur > 40)}"; then
                 warn "repair_audio_with_silence_inserts: silence gap ${dur}s exceeds 40s master, capping"
@@ -505,7 +601,7 @@ repair_audio_with_silence_inserts() {
             local sil="$work_dir/sil${seg_idx}.${audio_ext}"
             ffmpeg -y -hide_banner -loglevel error -i "$sil_master" \
                 -t "$dur" -c copy "$sil" || { rm -rf "$work_dir"; return 1; }
-            echo "file '$sil'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
+            echo "file '$(basename "$sil")'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
             prev_end="$pos"
         else
             local abs_dur
@@ -516,7 +612,7 @@ repair_audio_with_silence_inserts() {
     local seg="$work_dir/seg${seg_idx}.${audio_ext}"
     ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
         -ss "$prev_end" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
-    echo "file '$seg'" >> "$concat_list"
+    echo "file '$(basename "$seg")'" >> "$concat_list"
 
     local repaired="$work_dir/repaired.${audio_ext}"
     ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 \

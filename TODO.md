@@ -35,39 +35,41 @@
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
     `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
-- **ttcut-demux: `repair_audio_with_silence_inserts` bricht bei überlappenden
-  Gap-Fenstern ab (Silence-Insert schlägt fehl → Fallback-Padding statt echter
-  Reparatur)** (GEFUNDEN 2026-07-18 bei Task-7-Gates, Fix ausstehend)
-  - ffmpeg meldet `-to value smaller than -ss; aborting`. Die Funktion geht von
-    einer chronologisch sortierten, ÜBERLAPPUNGSFREIEN Partition der
-    CLASSIFIED_FILE-Zeilen aus (jede Zeile = ein sequentiell verarbeiteter
-    Schnitt). Bei dicht beieinanderliegenden Mikro-Lücken (z.B. eine
-    „Signal wird schlechter"-Phase mit mehreren <300ms-Drops kurz
-    hintereinander) überlappen `compute_audio_gap_silence_ms`-Zeilen
-    (Audio-Spur-eigene Lücke) und `emit_video_only_truncations`-Zeilen
-    (Video-Lücken-abgeleitete Kürzung) im Quell-PTS-Fenster, weil letztere PRO
-    Video-Lücke einzeln rechnet statt gegen die gesamte überlappende Audio-Lücke.
-  - Auswirkung: ALLE Silence-Insert-Aufrufe für die betroffene Spur schlagen
-    fehl, die Original-Audiodatei bleibt unverändert; nur der grobe
-    End-Padding-Fallback (PTS-Span-basiert, nicht Inhalt-basiert) korrigiert
-    danach noch — kaschiert den Fehler oft zufällig bis auf wenige ms
-    Rest-Drift (so bei 07x11 gemessen: -92ms „Erfolg" ist tatsächlich
-    fehlgeschlagene Reparatur + zufällig passendes Padding, keine echte
-    Lücken-Korrektur).
-  - **Bestätigt PRE-EXISTING**, nicht durch Task 7 eingeführt: identischer
-    Crash im unveränderten Gate-1-Baseline-Lauf (07x11, Single-File) UND im
-    Gate-2-Lauf (07x12, Multi-File) reproduziert — Zeilenzahl/Klassifikation
-    für Gate 1 vor/nach Task-7-Fixes identisch (2 pure A+V, 39 needing
-    silence), der Crash bestand schon vorher.
-  - Fix braucht eine Sweep-Line-Zusammenführung überlappender
-    [src_start,src_end]-Fenster VOR dem Aufruf von
-    `repair_audio_with_silence_inserts` (oder eine robustere
-    Positions-Berechnung dort selbst) — bewusst NICHT im Rahmen von Task 7
-    gefixt (Audio-Inhalt-Korrektheit ist sicherheitsrelevant, verdient einen
-    eigenen Design-Pass statt Schnellschuss unter Zeitdruck).
-  - Repro: `gateruns/g1_rerun/run.log` + `gateruns/g2_rerun/run.log`
-    (`/usr/local/src/CLAUDE_TMP/TTCut-ng/demuxrepair/`), Suche nach
-    `-to value smaller than -ss`.
+- ~~**ttcut-demux: `repair_audio_with_silence_inserts` bricht bei
+  überlappenden Gap-Fenstern ab (Silence-Insert schlägt fehl →
+  Fallback-Padding statt echter Reparatur)**~~ → **FIXED** (2026-07-18,
+  commit 9c345ea fand den Defekt, Fix-Commit "ttcut-demux: coalesce
+  overlapping gap windows before splice assembly")
+  - ffmpeg meldete `-to value smaller than -ss; aborting`. Die Funktion ging
+    von einer chronologisch sortierten, ÜBERLAPPUNGSFREIEN Partition der
+    CLASSIFIED_FILE-Zeilen aus. Bei dicht beieinanderliegenden Mikro-Lücken
+    überlappten `compute_audio_gap_silence_ms`-Zeilen und
+    `emit_video_only_truncations`-Zeilen im Quell-PTS-Fenster.
+  - **Fix**: Nach dem Intake-Loop werden die (pos,dur)-Einträge zuerst nach
+    `pos` sortiert (Quell-Zeilen sind nur nach `src_start` sortiert; bei
+    überlappenden Quell-Fenstern kann `pos = src_start - accumulated_collapse`
+    dadurch NICHT-monoton werden — real auf Gate-1-Daten gemessen, ~13,7 ms
+    Rückwärtssprung) und dann per Sweep zusammengeführt, wenn das nächste
+    `pos` INNERHALB oder GENAU AUF dem Fensterende des vorherigen Eintrags
+    liegt (`<=`, nicht `<` — zwei lückenlos aneinandergrenzende
+    Audio-Gap-Zeilen erzeugen sonst einen Nullbreite-Schnitt, den ffmpeg
+    ebenfalls als "-to smaller than -ss" ablehnt). Zusammengeführte
+    Einträge nahe Null (< 1 ms) werden verworfen.
+  - **Zweiter, dadurch erst sichtbarer Defekt mitgefixt**: Sobald die
+    Überlappungs-Crashes weg waren, erreichten 3 von 4 Spuren erstmals den
+    Concat-Schritt und scheiterten dort NEU (`Impossible to open
+    './.gap_repair_PID/./.gap_repair_PID/segN.ext'`) — die Concat-Liste
+    enthielt `work_dir`-relative Pfade, aber ffmpegs Concat-Demuxer löst
+    relative Pfade IN der Listendatei relativ zu deren EIGENEM Verzeichnis
+    auf (das ist bereits `work_dir`), wodurch der Präfix verdoppelt wurde.
+    War vorher immer durch den früheren Überlappungs-Crash maskiert.
+    Fix: nur `basename` in die Concat-Liste schreiben.
+  - Gates (`/usr/local/src/CLAUDE_TMP/TTCut-ng/demuxrepair/gateruns/`,
+    `g1_final`/`g2_final`): 07x11 0 FAILED-Zeilen (39/39 Silence-Inserts
+    angewendet, Delta -92ms), 07x12 0 FAILED-Zeilen (496/496 angewendet,
+    Delta -35040ms → **-23ms**, alle 4 Großlücken weiterhin in
+    `es_missing_ranges`). Clean-H.264-Regression byte-identisch zur alten
+    Baseline.
 
 - ~~**H.264 Smart Cut: SPS-Unification zerstört progressive Quellen**~~ →
   **FIXED** (2026-07-16, Defekt B) — Slice-Rewriter ließ bei poc_type-2-Encoder
