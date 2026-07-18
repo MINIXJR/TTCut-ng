@@ -35,6 +35,40 @@
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
     `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
+- **ttcut-demux: `repair_audio_with_silence_inserts` bricht bei überlappenden
+  Gap-Fenstern ab (Silence-Insert schlägt fehl → Fallback-Padding statt echter
+  Reparatur)** (GEFUNDEN 2026-07-18 bei Task-7-Gates, Fix ausstehend)
+  - ffmpeg meldet `-to value smaller than -ss; aborting`. Die Funktion geht von
+    einer chronologisch sortierten, ÜBERLAPPUNGSFREIEN Partition der
+    CLASSIFIED_FILE-Zeilen aus (jede Zeile = ein sequentiell verarbeiteter
+    Schnitt). Bei dicht beieinanderliegenden Mikro-Lücken (z.B. eine
+    „Signal wird schlechter"-Phase mit mehreren <300ms-Drops kurz
+    hintereinander) überlappen `compute_audio_gap_silence_ms`-Zeilen
+    (Audio-Spur-eigene Lücke) und `emit_video_only_truncations`-Zeilen
+    (Video-Lücken-abgeleitete Kürzung) im Quell-PTS-Fenster, weil letztere PRO
+    Video-Lücke einzeln rechnet statt gegen die gesamte überlappende Audio-Lücke.
+  - Auswirkung: ALLE Silence-Insert-Aufrufe für die betroffene Spur schlagen
+    fehl, die Original-Audiodatei bleibt unverändert; nur der grobe
+    End-Padding-Fallback (PTS-Span-basiert, nicht Inhalt-basiert) korrigiert
+    danach noch — kaschiert den Fehler oft zufällig bis auf wenige ms
+    Rest-Drift (so bei 07x11 gemessen: -92ms „Erfolg" ist tatsächlich
+    fehlgeschlagene Reparatur + zufällig passendes Padding, keine echte
+    Lücken-Korrektur).
+  - **Bestätigt PRE-EXISTING**, nicht durch Task 7 eingeführt: identischer
+    Crash im unveränderten Gate-1-Baseline-Lauf (07x11, Single-File) UND im
+    Gate-2-Lauf (07x12, Multi-File) reproduziert — Zeilenzahl/Klassifikation
+    für Gate 1 vor/nach Task-7-Fixes identisch (2 pure A+V, 39 needing
+    silence), der Crash bestand schon vorher.
+  - Fix braucht eine Sweep-Line-Zusammenführung überlappender
+    [src_start,src_end]-Fenster VOR dem Aufruf von
+    `repair_audio_with_silence_inserts` (oder eine robustere
+    Positions-Berechnung dort selbst) — bewusst NICHT im Rahmen von Task 7
+    gefixt (Audio-Inhalt-Korrektheit ist sicherheitsrelevant, verdient einen
+    eigenen Design-Pass statt Schnellschuss unter Zeitdruck).
+  - Repro: `gateruns/g1_rerun/run.log` + `gateruns/g2_rerun/run.log`
+    (`/usr/local/src/CLAUDE_TMP/TTCut-ng/demuxrepair/`), Suche nach
+    `-to value smaller than -ss`.
+
 - ~~**H.264 Smart Cut: SPS-Unification zerstört progressive Quellen**~~ →
   **FIXED** (2026-07-16, Defekt B) — Slice-Rewriter ließ bei poc_type-2-Encoder
   (progressiv) das von der Quell-SPS verlangte `pic_order_cnt_lsb` weg → alle
