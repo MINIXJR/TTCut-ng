@@ -450,9 +450,28 @@ detect_segment_boundaries() {
         v_dur=$(ffprobe -v error -select_streams v:0 \
             -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 \
             "$seg" 2>/dev/null | head -1)
-        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ || ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            echo "detect_segment_boundaries: ffprobe failed on segment $i ($seg)" >&2
-            return 1
+        # ffprobe's fast container-index duration probe can return "N/A" for a
+        # track in a badly damaged segment (observed on a real 5-segment
+        # signal-loss recording: the AC3/mp2 track's duration was N/A in the
+        # segment with the heaviest corruption). Aborting the whole function
+        # here (as before) silently discards every later boundary too - on
+        # that recording it dropped the two biggest gaps (317s, 4.8s) from
+        # audio correction entirely. Instead, fall back to the OTHER stream's
+        # duration for the unmeasurable one (assume that segment contributed
+        # no additional drift) so the cumulative totals stay usable and later
+        # boundaries are still checked. Only bail on this segment if BOTH are
+        # unmeasurable.
+        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ && ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            echo "detect_segment_boundaries: ffprobe failed on segment $i ($seg) for both streams - skipping segment" >&2
+            continue
+        fi
+        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            echo "detect_segment_boundaries: audio duration unavailable on segment $i ($seg) - assuming no drift for this segment" >&2
+            a_dur="$v_dur"
+        fi
+        if [[ ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            echo "detect_segment_boundaries: video duration unavailable on segment $i ($seg) - assuming no drift for this segment" >&2
+            v_dur="$a_dur"
         fi
         cum_audio=$(awk "BEGIN {printf \"%.6f\", $cum_audio + $a_dur}")
         cum_video=$(awk "BEGIN {printf \"%.6f\", $cum_video + $v_dur}")
