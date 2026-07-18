@@ -35,6 +35,33 @@
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
     `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
+- ~~**ttcut-demux: Löcher aus TS-Korruption / VDR-Signalverlust werden
+  weder erkannt noch repariert**~~ → **DONE** (2026-07-18, branch
+  `feature/demux-defect-repair`)
+  - Frame-skaliger PTS-Lücken-Scan (Video: DTS-basiert, 2,5× Frame-Dauer —
+    PTS ist unter B-Frame-Reorder nicht monoton; Audio: 0,08s = 2,5× größte
+    Paketdauer) über ALLE VDR-Segmente + Segmentnähte (vorher nur das erste
+    Segment gescannt). Reparatur zeitachsen-treu: Audio-eigene Löcher →
+    codec-native, layout-treue Stille (korrektes AC3-acmod statt
+    Kanalzahl-Raten); Video-Löcher → passendes Audio-Stück entfernt.
+    Assembly per Segment-Stream-Copy (kein Re-Encode der erhaltenen Audio-
+    Anteile); überlappende/aneinandergrenzende Reparaturfenster werden vor
+    der Assembly koalesziert (sonst ffmpeg-Abbruch „-to smaller than -ss").
+  - Meldung: neue .info-Felder `es_missing_frames`/`es_missing_ranges`,
+    `corrupt_frame_ranges`, `audio_N_silence_ms`/`audio_N_removed_ms` +
+    unabhängiger, von der Lücken-Erkennung entkoppelter Zähl-Check-Warn
+    (fängt stille Löcher ohne PTS-Sprung ab). TTCut-ng zeigt die Bereiche
+    als geclusterte Error-Landezonen ("Videoverlust: X–Y (T s) — Audio
+    angepasst", zusätzlicher "Signalverlust-Ende"-Marker bei >2s,
+    "Bildstörungen: X–Y" für erhaltene, aber korrupt geflaggte Frames).
+  - Gates (`docs/superpowers/sdd/progress.md`, Task 7): 07x11 (real, milde
+    Beschädigung) 0 Fehlschläge, Drift −11ms. 07x12 (real, 5 Segmente,
+    ≈7,6min Signalverlust) Drift von −35s auf −23ms, 496/496 Splices
+    angewendet, alle 4 Segmentgrenz-Großlücken in `es_missing_ranges`.
+    Saubere Aufnahmen byte-identisch (beide Codec-Familien).
+  - Karte: `docs/code-map/ttcut-demux.md` ("Defekt-Erkennung und
+    -Reparatur — Rev 3").
+
 - ~~**ttcut-demux: `repair_audio_with_silence_inserts` bricht bei
   überlappenden Gap-Fenstern ab (Silence-Insert schlägt fehl →
   Fallback-Padding statt echter Reparatur)**~~ → **FIXED** (2026-07-18,
@@ -198,6 +225,14 @@
   - Algorithmus bleibt YUV-byte-delta (SSIM/cross-correlation wäre separate Verbesserung).
 
 ## Medium Priority
+
+- **Fresh-Open: Extra-Frame-Cluster-Dialog blockt headless ohne `mNonInteractive`-Guard**
+  - `showExtraFrameClusterDialog` (`data/ttavdata.cpp`) ruft `msgBox.exec()`
+    ohne Prüfung auf `mNonInteractive` — betrifft NICHT `--auto-cut` (das
+    Projekt-Laden umgeht `openAVStreams`, wo der Dialog ausgelöst wird),
+    blockiert aber einen headless **Fresh-Open**-Workflow (Datei ohne
+    `.ttcut`-Projekt direkt öffnen). Follow-up aus Task 6 des
+    `demux-defect-repair`-Feature-Ledgers (`docs/superpowers/sdd/progress.md`).
 
 - ~~**ttcut-demux: Video-Dauer falsch gemessen → Über-Padding + irreführende Meldungen**~~
   → **FIXED 2026-07-12** (`f85b237` + `d7a046b` Skript, `fc2a573` TTCut-GUI)

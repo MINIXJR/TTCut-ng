@@ -1,6 +1,6 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38
-last_verified: 2026-07-12
+base_commit: 209f2f7665c8ceb0d3de0bb9a3c5c7c39bcc64ac
+last_verified: 2026-07-18
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c
@@ -43,15 +43,17 @@ flowchart LR
     PTSA["ttcut-pts-analyze<br/>(on ORIGINAL TS)"]
     EXTRA["extra_frames=<br/>AU indices, decode order"]
     AC3FIX["ttcut-ac3fix<br/>(AC3 only, decode-test gated)"]
-    GAPS["Gap detection<br/>audio gaps ≥5s, video gaps ≥1s<br/>+ VDR segment boundaries"]
-    SILENCE["Mid-stream silence insert<br/>filter_complex re-encode"]
+    GAPS["Gap detection (Rev 3)<br/>video: DTS-based (decode order), 2.5x frame duration<br/>audio: 0.08s (2.5x max packet duration)<br/>scans ALL VDR segments + inter-segment splices"]
+    CLASSIFY["Classify + coalesce<br/>compute_audio_gap_silence_ms /<br/>emit_video_only_truncations<br/>sort by pos, merge overlapping/touching windows"]
+    ASSEMBLY["Segment stream-copy assembly<br/>repair_audio_with_silence_inserts<br/>layout-faithful silence (probed acmod)<br/>no re-encode"]
+    COUNTCHECK["Count-check<br/>counted ES packets vs PTS-span-implied<br/>loud warn on silent hole"]
     DURCHK["A/V duration check<br/>VIDEO_DURATION := container span(!)<br/>VIDEO_FRAME_COUNT := duration×fps(!)"]
     PAD["End padding<br/>silence concat, stream-copy<br/>target = VIDEO_DURATION"]
     INFO[".info file"]
     ESINFO["TTESInfo (parser)"]
-    AVDATA["TTAVData<br/>mExtraFrameIndices / mAudioGapIndices<br/>mAvSyncOffsetMs"]
+    AVDATA["TTAVData<br/>mExtraFrameIndices / mAudioGapIndices<br/>mEsMissingRanges / mCorruptRanges<br/>mAvSyncOffsetMs"]
     AUDIOCORR["Audio cut time correction<br/>buildVideoKeepList: countExtraFramesBefore"]
-    STREAMPTS["Cluster dialog → TTStreamPoint<br/>GUI label 'Defekt:' / 'Audio-Gap:'"]
+    STREAMPTS["Cluster dialog → TTStreamPoint<br/>GUI label 'Defekt:' / 'Audio-Gap:' /<br/>'Videoverlust:' / 'Signalverlust-Ende' / 'Bildstörungen:'"]
 
     TS --> PROBE
     TS --> CONTDUR
@@ -64,18 +66,22 @@ flowchart LR
     EXTRACT --> ESV
     EXTRACT --> ESA
     ESV --> NULLTRUNC
+    EXTRACT --> COUNTCHECK
     TS --> PTSA
     PTSA --> EXTRA
     ESA --> AC3FIX
     TS --> GAPS
-    GAPS --> SILENCE
-    SILENCE --> ESA
+    GAPS --> CLASSIFY
+    CLASSIFY --> ASSEMBLY
+    ASSEMBLY --> ESA
     CONTDUR --> DURCHK
     ESA --> DURCHK
     DURCHK --> PAD
     PAD --> ESA
     EXTRA --> INFO
     GAPS --> INFO
+    CLASSIFY --> INFO
+    COUNTCHECK --> INFO
     TRIM --> INFO
     PTS0 --> INFO
     DURCHK --> INFO
@@ -100,11 +106,19 @@ flowchart LR
 | TS → ttcut-pts-analyze | Runs on the **original** TS (pre-repair), own mmap TS parser, video PID only. Exit 0 = clean, 1 = extras found, 2 = error. |
 | ttcut-pts-analyze → `extra_frames=` | **AU indices in decode/bitstream order** (index into its AU array). Three methods, first hit wins: (1) DTS non-monotonic (≤1 s backward; >1 s = epoch reset, ignored), (2) exact PTS duplicate in 16-AU window, (3) **PTS grid**: runs of half-nominal spacing → off-grid AUs marked. Field-picture material (each field its own PES PTS at half spacing) triggers method 3 **by design of the signature — it cannot distinguish TS corruption from legitimate field encoding**. Futurama: 222 = exactly the second fields of the 222 field pairs. |
 | script → warn (neutral since `f85b237`) | "N pictures with doubled PTS detected (field-picture pairs or TS corruption)" — no longer a "defective regions" verdict. The count/list itself is unchanged. |
-| gap detection → silence insert | Audio gaps ≥ 5 s (packet PTS jumps in source TS); video gaps ≥ 1 s intersect-matched to classify combined A+V loss (insert only the audio-minus-video remainder). VDR multi-file adds per-boundary duration mismatches (>5 ms) as synthetic rows, same consumer format. |
+| TS → gap detection (Rev 3, replaces the old ≥5s/≥1s thresholds) | Frame-scale thresholds, not fixed seconds: video `2.5 × nominal frame duration` (`detect_video_gaps`, DTS-based — **decode order**, not PTS, because PTS is non-monotonic under B-frame reorder and produced ~977 false positives at a 0.05 s threshold on clean material during Task 2; reported gap boundaries stay in the PTS domain so overlap math against audio stays comparable); audio `0.08 s` (2.5 × the larger of MP2@48k 24 ms / AC3 32 ms). Both scan **every** VDR segment (`detect_video_gaps_multifile` / `detect_audio_gaps_multifile`), not just the first — a real 5-segment signal-loss recording had ~25 s of within-segment holes invisible to a single-segment scan — and additionally emit the inter-segment **splice gap** (concat demuxer re-bases segment i+1 to start exactly where i ended, silently discarding real broadcast time between them; reported the same way as a within-segment hole). DTS-order measurement has a small upward bias (a few frame durations) from B-frame reorder lag. |
+| gap detection → classify (`compute_audio_gap_silence_ms` / `emit_video_only_truncations`) | Per audio gap: `silence_ms = max(0, audio_gap_ms − Σ overlapping video-gap ms)` — combined A+V loss inserts only the audio-minus-video remainder (often a small residual like 256 ms), pure audio-only loss inserts the full gap. Per video gap not fully covered by an audio gap: emits a **truncate row** (`silence_ms` negative) removing the audio-only surplus so the track doesn't run ahead. Rows accumulate into one 4-field `CLASSIFIED_FILE` per track (`src_start src_end gap_ms silence_ms`), sorted by source position. |
+| classify → coalesce (inside `repair_audio_with_silence_inserts`) | Dense micro-gap clusters can produce overlapping or exactly-touching local edit windows (measured: a ~13.7 ms non-monotonic `pos` regression, and two back-to-back inserts collapsing to the identical `pos`) — both crash `ffmpeg -ss/-to` with "-to value smaller than -ss" if left unmerged. Fix: re-sort the local (`pos`,`dur`) pairs ascending (source-row order does not guarantee ascending `pos` once truncation and silence rows interleave), then sweep-merge any entry whose `pos` falls **at or inside** (`<=`, not `<`) the running window end, summing signed durations; near-zero merged results (< 1 ms) are dropped. This only regroups *local* assembly bookkeeping — it never changes a `pos`/`dur` value already computed from the source `CLASSIFIED_FILE` row. |
+| coalesce → assembly (`repair_audio_with_silence_inserts`) | Segment **stream-copy** (no re-encode of surviving content): the track is cut into `[prev_end, pos)` copies at every coalesced gap, interleaved with trimmed slices of a single 40 s silence master (encoded once per parameter set, capped with a warning past 40 s) or with a truncation (negative `dur` just advances `prev_end`, dropping that span). All segments are concatenated via ffmpeg's concat demuxer using **basename-only** paths in the list file (list lives in `work_dir`, and the demuxer resolves relative paths against the list file's own directory — a `work_dir`-prefixed entry gets `work_dir` prepended twice). Silence uses the **probed channel layout** (`probe_audio_props` → e.g. `3.0`, `5.1(side)`), not a bare channel count — ffmpeg's default layout for a count doesn't always match the source AC3 acmod (3ch defaults to 2.1, not 3.0/surround). On any ffmpeg step failure the original audio file is left untouched (return non-zero, caller warns). |
+| assembly → per-track `.info` balance | Sum of the classified file's signed 4th column (positive = inserted silence, negative = removed/truncated) → `audio_${i}_silence_ms` / `audio_${i}_removed_ms`. |
+| gap detection (video) → `es_missing_frames` / `es_missing_ranges` | Each `VIDEO_GAPS_FILE` row mapped to **output-ES frame coordinates**: `fs = ((vs − FIRST_VIDEO_PTS) − lost_before) × fps`, where `lost_before` accumulates prior holes' durations (the output ES physically lacks those frames, so everything after a hole shifts earlier). `es_missing_ranges` carries `fs-fe:ms` per hole. |
+| video demux log → `corrupt_frame_ranges` | ffmpeg's "Packet corrupt" DTS ticks (captured during extraction, before ffmpeg's own wrap-correction) are wrap-corrected (`+= 2^33` until non-negative relative to `FIRST_VIDEO_PTS`'s own tick — a raw 33-bit/90kHz PES field, unrelated to `FIRST_VIDEO_PTS`'s wrap-relative value; a real recording had ffmpeg log post-wrap ticks that, subtracted naively, went massively negative and were silently dropped by an `f < 0` filter, losing 69 real corrupt-packet lines), converted to frame numbers, then clustered (≤ 2 s apart → one range). No duration is implied (frames are present, just flagged) — `TTESRange.ms == -1` for these. |
+| extraction → count-check (loud warn) | Independent second signal that does not depend on gap detection: `ffprobe -count_packets` on the output ES vs. `EXPECTED_FRAMES = (VIDEO_DURATION_MS/1000) × fps`; a difference > 1 frame warns "Video ES is missing N frames mid-stream ... audio was adjusted, check the defect markers". Catches a **silent** hole (dropped packets with no PTS discontinuity signature, e.g. right after a damaged GOP) that gap detection alone would miss. ffprobe's raw-`.m2v` CSV writer appends a trailing comma to `nb_read_packets` (a demuxer quirk, not a frame/packet distinction) which silently failed bash's integer test — the check was a no-op for every MPEG-2 run until the trailing comma was stripped. |
 | .info `[timing]` → TTESInfo | Parsed: `first_video_pts`, `first_audio_pts`, `av_offset_ms` (→ `mAvSyncOffsetMs`, applied in the cut path). **NOT parsed: `video_duration_ms`, `audio_duration_ms`, `duration_drift_ms`, `drift_rate_ms_per_min`** — human-only diagnostics; fixing them changes no app behavior. |
 | .info `[audio]` → TTESInfo | Per track: `file/codec/lang/first_pts/trimmed_ms` → per-track delay handling (`TTAudioItem`). |
 | .info `es_extra_frames` → TTAVData (reworked `fc2a573`) | The audio-correction source is chosen by `loadExtraFrameIndices`: for **MPEG-2 the parser's field-pair list wins** (`extraIndices()`, display-index space, `picture_structure`-derived), .info only as fallback; H.264/H.265 keep .info. **Timing:** both the source choice and the cluster dialog run in `onOpenVideoFinished` (not `openAVStreams`), because the parser list is only built once the async open task finishes — running earlier saw an empty parser list. A per-item flag `mpPendingExtraFrameDialog` (set only on fresh open) gates the dialog so project reload stays silent. `showExtraFrameClusterDialog` classifies each .info cluster: confirmed by a parser field-pair within ±4 → **"Feldpaare:"** (hint); otherwise **"Defekt:"** (suspicion). All-confirmed + no audio gaps → markers imported silently, no dialog. |
 | .info `audio_gap_frames` → TTAVData | → `mAudioGapIndices`, marker visualization only ("Audio-Gap:"), NOT used for audio time correction. Emitted as frame indices relative to `first_video_pts` (`(gap_pts − first_video_pts) × fps`). |
+| .info `es_missing_ranges` / `corrupt_frame_ranges` → TTAVData → STREAMPTS | Parsed by `TTESInfo` into `mEsMissingRanges` / `mCorruptRanges` (`TTESRange`, `avstream/ttesinfo.h`), consumed by `TTAVData`'s cluster pass 3 (`data/ttavdata.cpp`) alongside the extra-frame and audio-gap passes. Ranges arrive **pre-clustered** from the demuxer (already merged, `≤2s` rule for corrupt ticks) — TTAVData only emits the marker text, it does not re-cluster. Each `es_missing_ranges` entry emits `"Videoverlust: X–Y (T s) — Audio angepasst"`; a hole `> 2 s` additionally emits a second marker at the range end, `"Signalverlust-Ende (≈T s fehlen)"`, so long outages get a distinct end-of-loss landing zone rather than only a start marker. Each `corrupt_frame_ranges` entry emits `"Bildstörungen: X–Y"` (no duration — `ms == -1`). |
 | .info `[markers]` → TTESInfo | Verbatim copy of the VDR marks file (timestamp, frame, start/stop, `*` verified). Faithful (audited 2026-07-12). |
 
 ## Assumptions, contracts & pitfalls
@@ -131,9 +145,13 @@ flowchart LR
   Any wording/consumer that says "defective" must qualify it; the list itself
   remains correct and is what the audio correction needs.
 - **Padding granularity**: end padding appends whole encoded silence frames
-  via concat stream-copy (bit-preserving for AC3 acmod changes); mid-stream
-  silence insertion re-encodes the whole track (filter_complex). The two
-  mechanisms are intentionally different — do not "unify" them.
+  via concat stream-copy (bit-preserving for AC3 acmod changes). Mid-stream
+  gap repair (Rev 3, `repair_audio_with_silence_inserts`) is **also**
+  segment stream-copy now, not the old filter_complex re-encode — both
+  mechanisms are stream-copy, but stay two separate implementations (end
+  padding appends one silence block against a fixed target; mid-stream
+  repair splices N silence/truncate segments at arbitrary interior
+  positions) — do not "unify" them.
 - **`-ss` placement contract**: audio trim must be decoder-side (`-ss` after
   `-i`); input-side seek silently produces an untrimmed copy for TS audio.
 - **Repair step**: `+genpts+igndts -avoid_negative_ts make_zero` normalizes
@@ -141,6 +159,41 @@ flowchart LR
   recording end — benign, faithfully reported).
 - **exit-code contract with the wrapper script**: pts-analyze exit 1 is
   "extras found" (not an error); the demux script must `set +e` around it.
+- **Video gap detection is DTS-based, not PTS-based** (Rev 3, reviewer-
+  confirmed necessary in Task 2). PTS is not monotonic in decode order once
+  B-frames reorder the display sequence — a fixed PTS threshold produced 977
+  false positives on clean material at 0.05 s. DTS is monotonic in a healthy
+  stream, so a DTS jump is the correct corruption signal; reported gap
+  boundaries stay in the PTS domain for overlap math against audio gaps.
+- **VDR multi-file gap scanning must cover every segment, not just the
+  first.** `ORIGINAL_INPUT` is only `00001.ts`; a naive single-file scan is
+  blind to content loss inside segments 2..N (measured: ~25 s of
+  within-segment holes on segment 3 of a real 5-segment recording) and to
+  the splice gap the concat demuxer silently swallows between segments.
+- **Overlapping/touching local repair windows must be coalesced before
+  assembly**, or `ffmpeg -ss/-to` aborts with "-to value smaller than -ss"
+  and the whole track falls back to unrepaired audio. Dense micro-gap
+  clusters (signal degrading gradually before a full outage) are the
+  trigger; the merge sweep needs the local `(pos, dur)` pairs sorted
+  ascending first — source-row order (by `src_start`) does **not** guarantee
+  ascending `pos` once video-only-truncation rows interleave with
+  audio-gap rows (measured ~13.7 ms regression on real data) — and must
+  treat exactly-touching windows (`<=`) the same as overlapping ones, or a
+  zero-width segment triggers the identical ffmpeg abort.
+- **The count-check is a distinct, gap-detection-independent signal.** It
+  compares counted output-ES packets against what the PTS-span duration
+  implies, catching a silent hole (dropped packets with no PTS
+  discontinuity) that neither the DTS-jump nor the multi-file scan would
+  see. It was a silent no-op for every MPEG-2 run until fixed (ffprobe's
+  raw-`.m2v` CSV writer appends a trailing comma to `nb_read_packets`,
+  which fails bash's `-eq` integer test silently under `2>/dev/null`).
+- **`corrupt_frame_ranges`' DTS ticks need explicit 2^33 wrap correction**
+  against `FIRST_VIDEO_PTS`'s own tick before converting to frame numbers —
+  they are logged by ffmpeg's demuxer *before* its own wrap-correction runs.
+  Skipping this silently drops every corrupt-packet line logged after the
+  recording's tick counter has wrapped relative to `FIRST_VIDEO_PTS`
+  (measured: 69 real corrupt-packet lines lost on a real recording where
+  `first_video_pts` sat close to the wrap boundary).
 
 ## Redundancy / consolidation candidates — ALL RESOLVED 2026-07-12
 
@@ -177,3 +230,49 @@ timestamp/basename); a no-`-e` invocation produces the identical ES set.
 
 Still open (separate): field-picture material double-counts index positions
 (fields vs frames) in the video cut path — see `mpeg2-cut.md` Defekt 2.
+
+## Defect detection and repair — Rev 3 (2026-07-18)
+
+Replaces the earlier fixed-threshold (audio ≥5s / video ≥1s) gap machinery
+described above with a frame-scale, all-segment scan and adds actual repair
+(not just detection) plus mid-stream loss/corruption reporting. Motivation:
+TS-packet corruption and VDR signal-loss segment boundaries were previously
+either invisible (fixed thresholds too coarse, single-segment scan) or
+detected-but-unrepaired.
+
+- **Detection**: `detect_video_gaps`/`detect_video_gaps_multifile` (DTS-based,
+  decode order, 2.5× frame duration) and `detect_audio_gaps`/
+  `detect_audio_gaps_multifile` (0.08 s) scan every VDR segment plus
+  inter-segment splices — see the edge-table rows and pitfalls above for the
+  DTS-vs-PTS and multi-file rationale.
+- **Repair**: `compute_audio_gap_silence_ms` / `emit_video_only_truncations`
+  classify each hole (audio-own gap → codec-native, layout-faithful silence
+  insert; video-only gap → matching audio truncation) into a per-track
+  `CLASSIFIED_FILE`; `repair_audio_with_silence_inserts` sorts and coalesces
+  overlapping/touching windows, then assembles the repaired track via
+  segment stream-copy (no re-encode of surviving audio).
+- **Reporting**: new `.info` fields `es_missing_frames` / `es_missing_ranges`
+  (video holes, output-ES frame coordinates), `corrupt_frame_ranges` (frames
+  present but flagged corrupt, wrap-corrected DTS-tick clustering),
+  `audio_${i}_silence_ms` / `audio_${i}_removed_ms` (per-track repair
+  balance), plus the independent count-check warn for silent (no-PTS-jump)
+  holes.
+- **TTCut GUI**: `TTAVData`'s cluster pass 3 turns `es_missing_ranges` /
+  `corrupt_frame_ranges` into clustered error landing zones — see the
+  `.info es_missing_ranges / corrupt_frame_ranges → TTAVData → STREAMPTS`
+  edge-table row for the exact marker text and the >2s
+  "Signalverlust-Ende" double-marker rule.
+- **Gates (measured this cycle, `docs/superpowers/sdd/progress.md`,
+  Task 7)**: 07x11 (real, mild damage) — 0 failed repairs, 39/39 silence
+  inserts applied, drift −92 ms → the fixture's bound is `holes × 32 ms` =
+  1312 ms (PASS). 07x12 (real, 5 VDR segments, ≈7.6 min combined signal
+  loss) — 0 failed repairs, 496/496 applied, drift **−35 040 ms → −23 ms**,
+  all 4 segment-boundary large-loss ranges present in `es_missing_ranges`.
+  Clean (undamaged) recordings verified byte-identical to the pre-Rev-3
+  output for both codec families.
+- **Known gap** (pre-existing, not new): mid-stream loss/corruption markers
+  are populated regardless of interactivity; the fresh-open extra-frame
+  cluster dialog itself (`showExtraFrameClusterDialog`, unrelated code path)
+  still calls `msgBox.exec()` without an `mNonInteractive` guard — does not
+  affect `--auto-cut` (project load bypasses `openAVStreams`), but blocks a
+  headless fresh-open. Tracked in `TODO.md`.

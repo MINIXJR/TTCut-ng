@@ -2,6 +2,32 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Features
+
+- **ttcut-demux detects and repairs damaged recordings** — TS-packet
+  corruption and VDR signal-loss segment boundaries are now found by a
+  frame-scale PTS-gap scan across ALL segments of a multi-file recording
+  (not just the first) and repaired timeline-faithfully: audio-only gaps get
+  codec-native, layout-faithful silence (correct AC3 acmod, no channel-count
+  guessing), video-only gaps trim the matching amount of audio. Video gap
+  detection uses decode-order DTS jumps rather than PTS (PTS is not
+  monotonic under B-frame reorder); repair assembly is segment stream-copy,
+  no re-encode of surviving audio, with overlapping/touching repair windows
+  coalesced before splicing. Reported in new `.info` fields
+  (`es_missing_frames`/`es_missing_ranges`, `corrupt_frame_ranges`,
+  `audio_N_silence_ms`/`audio_N_removed_ms`) plus an independent loud
+  count-check warning for silent (no-PTS-jump) frame loss. TTCut-ng shows
+  the affected ranges as clustered error landing zones ("Videoverlust: X–Y
+  (T s) — Audio angepasst", a distinct "Signalverlust-Ende" marker for
+  losses over 2 s, "Bildstörungen: X–Y" for corrupt-but-retained frames).
+  Measured on real material: a mildly damaged recording (07x11) repaired
+  with 0 failures and −11 ms residual drift; a heavily damaged 5-segment
+  recording with ≈7.6 min of combined signal loss (07x12) went from −35 s
+  drift to −23 ms across 496 applied splices, with all 4 segment-boundary
+  loss ranges reported. Undamaged recordings remain byte-identical.
+
 ## v0.75.0 (2026-07-18)
 
 **Smart-cut corruption fix on progressive DVB, two MPEG-2 tail fixes, dead-code cleanup**
