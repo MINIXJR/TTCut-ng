@@ -519,7 +519,9 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
   QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
 
-  if (infoExtras.isEmpty() && mAudioGapIndices.isEmpty()) return;
+  if (infoExtras.isEmpty() && mAudioGapIndices.isEmpty() &&
+      esInfo.esMissingRanges().isEmpty() && esInfo.corruptFrameRanges().isEmpty())
+      return;
 
   double frameRate = vStream ? vStream->frameRate() : 25.0;
   int gapFrames    = TTSettings::instance()->extraFrameClusterGapSec() * frameRate;
@@ -596,22 +598,53 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
       emitGapCluster();
   }
 
+  // Cluster pass 3: mid-stream video loss + corrupt regions (defect repair,
+  // .info es_missing_ranges / corrupt_frame_ranges). Ranges arrive pre-
+  // clustered from the demuxer; only the marker emission happens here.
+  int lossZones = 0, corruptZones = 0;
+  for (const TTESRange& r : esInfo.esMissingRanges()) {
+    int pos = qMax(0, r.start - offsetFrames);
+    double durSec = (r.ms >= 0) ? r.ms / 1000.0
+                                : (r.end - r.start + 1) / frameRate;
+    QString desc = QString("Videoverlust: %1–%2 (%3 s) — Audio angepasst")
+        .arg(r.start).arg(r.end).arg(durSec, 0, 'f', 1);
+    clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
+    ++lossZones;
+    if (durSec > 2.0) {
+      clusters.append(TTStreamPoint(r.end,
+          StreamPointType::Error,
+          QString("Signalverlust-Ende (≈%1 s fehlen)").arg(durSec, 0, 'f', 0)));
+    }
+  }
+  for (const TTESRange& r : esInfo.corruptFrameRanges()) {
+    int pos = qMax(0, r.start - offsetFrames);
+    clusters.append(TTStreamPoint(pos, StreamPointType::Error,
+        QString("Bildstörungen: %1–%2").arg(r.start).arg(r.end)));
+    ++corruptZones;
+  }
+
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "extra-frame clusters:" << confirmedClusters
-               << "confirmed field pairs," << unconfirmedClusters << "unconfirmed";
+               << "confirmed field pairs," << unconfirmedClusters << "unconfirmed,"
+               << lossZones << "loss zones," << corruptZones << "corrupt zones";
 
   if (clusters.isEmpty()) return;
 
-  // All video clusters are confirmed field pairs and there are no audio gaps ->
-  // legitimate field-picture coding, not a defect. Import the navigation
-  // markers silently, skip the warning dialog.
-  if (unconfirmedClusters == 0 && mAudioGapIndices.isEmpty()) {
+  // All video clusters are confirmed field pairs and there are no audio gaps
+  // and no demuxer-reported loss/corruption -> legitimate field-picture
+  // coding, not a defect. Import the navigation markers silently, skip the
+  // warning dialog. Loss/corrupt zones (pass 3) are never false positives
+  // (they come straight from the demuxer's missing/corrupt range list), so
+  // their presence always forces the dialog.
+  if (unconfirmedClusters == 0 && mAudioGapIndices.isEmpty() &&
+      lossZones == 0 && corruptZones == 0) {
       emit vdrMarkersLoaded(clusters);
       return;
   }
 
   // Show dialog with group listing (combined defect + gap totals)
-  int totalDefects = infoExtras.size() + mAudioGapIndices.size();
+  int totalDefects = infoExtras.size() + mAudioGapIndices.size() +
+                      lossZones + corruptZones;
   QString msg = tr("%1 defective frames in %2 groups detected.\n")
       .arg(totalDefects)
       .arg(clusters.size());
