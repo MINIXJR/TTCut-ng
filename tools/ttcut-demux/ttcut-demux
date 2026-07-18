@@ -1923,9 +1923,28 @@ EOF
     # was captured from the video demux log before it was cleaned up, above).
     # Cluster dts ticks <=2s apart into one range (same seam tends to log
     # several corrupt packets close together).
+    #
+    # dts is a raw 33-bit (90kHz) PES timestamp field, printed by ffmpeg
+    # BEFORE its own wrap-correction runs (libavformat/demux.c logs "Packet
+    # corrupt" ahead of update_timestamps()). That field wraps every 2^33
+    # ticks (~26.5h) from wherever the broadcaster's counter happened to be
+    # when this recording started - unrelated to FIRST_VIDEO_PTS's own
+    # wrap-relative value. Measured on a real recording (07x11) where
+    # first_video_pts's raw tick was only ~1517s short of the 2^33 boundary:
+    # every "Packet corrupt" line logged after that point in the recording
+    # printed a small post-wrap dts (~1386s-2682s), which naively subtracting
+    # fvp_ticks (~8.45G ticks) from turned massively negative and got
+    # dropped by "f < 0" below, leaving corrupt_frame_ranges empty despite
+    # 69 real corrupt-packet lines in the log. Re-adding 2^33 until the delta
+    # is non-negative undoes the wrap (a single wrap covers any recording
+    # under ~26.5h, which every TS recording is) and reproduces the correct
+    # elapsed-time-since-start value.
     if [ -n "${VIDEO_CORRUPT_DTS_TICKS:-}" ] && [ -n "$FIRST_VIDEO_PTS" ]; then
         CORRUPT_RANGES=$(printf '%s\n' "$VIDEO_CORRUPT_DTS_TICKS" | grep -v '^$' | sort -n | awk -v fvp="$FIRST_VIDEO_PTS" -v fps="$FRAME_RATE_DEC" '
-            { f = int((($1/90000.0) - fvp) * fps); if (f < 0) next
+            BEGIN { fvp_ticks = fvp * 90000.0; wrap33 = 8589934592 }
+            { d = $1 - fvp_ticks
+              while (d < 0) d += wrap33
+              f = int((d/90000.0) * fps)
               if (state && f - last <= 2*fps) { last = f; next }        # <=2s: same range
               if (state) { printf "%s%d-%d", sep, start, last; sep="," }
               start = f; last = f; state = 1 }
