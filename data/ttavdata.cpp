@@ -602,7 +602,10 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   // .info es_missing_ranges / corrupt_frame_ranges). Ranges arrive pre-
   // clustered from the demuxer; only the marker emission happens here.
   int lossZones = 0, corruptZones = 0;
-  for (const TTESRange& r : esInfo.esMissingRanges()) {
+  int lossFrames = 0, corruptFrames = 0;
+  const QList<TTESRange> missingRanges = esInfo.esMissingRanges();
+  const QList<TTESRange> corruptRanges = esInfo.corruptFrameRanges();
+  for (const TTESRange& r : missingRanges) {
     int pos = qMax(0, r.start - offsetFrames);
     double durSec = (r.ms >= 0) ? r.ms / 1000.0
                                 : (r.end - r.start + 1) / frameRate;
@@ -610,17 +613,19 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
         .arg(r.start).arg(r.end).arg(durSec, 0, 'f', 1);
     clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
     ++lossZones;
+    lossFrames += (r.end - r.start + 1);
     if (durSec > 2.0) {
       clusters.append(TTStreamPoint(r.end,
           StreamPointType::Error,
           QString("Signalverlust-Ende (≈%1 s fehlen)").arg(durSec, 0, 'f', 0)));
     }
   }
-  for (const TTESRange& r : esInfo.corruptFrameRanges()) {
+  for (const TTESRange& r : corruptRanges) {
     int pos = qMax(0, r.start - offsetFrames);
     clusters.append(TTStreamPoint(pos, StreamPointType::Error,
         QString("Bildstörungen: %1–%2").arg(r.start).arg(r.end)));
     ++corruptZones;
+    corruptFrames += (r.end - r.start + 1);
   }
 
   if (TTSettings::instance()->logCutPipeline())
@@ -644,7 +649,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
 
   // Show dialog with group listing (combined defect + gap totals)
   int totalDefects = infoExtras.size() + mAudioGapIndices.size() +
-                      lossZones + corruptZones;
+                      lossFrames + corruptFrames;
   QString msg = tr("%1 defective frames in %2 groups detected.\n")
       .arg(totalDefects)
       .arg(clusters.size());
