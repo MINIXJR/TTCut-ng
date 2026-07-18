@@ -97,17 +97,19 @@
   - **Repro-Ergebnis (echtes Material, Futurama 02x01, beide Demux-Wege):** kein
     sichtbarer Cut-Defekt. Prüfmatrix mit `tools/diag/dump_mpeg2_fields` +
     `tools/diag/test_mpeg2_cutout`:
-    - **Erreichbarkeit:** Der dokumentierte MPEG-2-Workflow (ProjectX) **entfernt
-      Field-Pictures beim Demux** — ffmpeg-Roh-ES: 222 Feldpaare (85 721/85 499);
-      ProjectX-ES: **0**. Defekt 2 ist im normalen Gebrauch gar nicht erreichbar; die
-      Feldpaare entstehen nur, wenn man ProjectX umgeht (z.B. `ffmpeg -c:v copy`).
+    - **Erreichbarkeit (korrigiert 2026-07-18):** Der reale Workflow ist ttcut-demux
+      für ALLE Codecs (`-c copy`) — dessen ES **enthält die Feldpaare** (222,
+      85 721/85 499). Die frühere „unerreichbar via ProjectX"-Begründung war
+      hinfällig (ProjectX ist nicht Teil des Workflows; sein Feld-Stripping wurde
+      nur in meinem Testlauf beobachtet). Das Harmlos-Urteil stützt sich allein
+      auf die Messungen am ffmpeg-Copy-ES — dem realen Fall (nächster Punkt).
     - **Kein Frame-Verlust:** Cut über die Field-Region (39 Pictures → 37 Frames, alle
       da); Cut-Out **auf** einem Extra-Feld bzw. „halbem Paar" ebenfalls sauber.
     - **0 Decoder-Fehler** über alle Cuts; dekodierter Inhalt **pixel-identisch** zur
       Quelle (md5 über 9 Frames inkl. beider Field-Frames).
     - **Audio:** `countExtraFramesBefore()` zieht die Extra-Felder ab
-      (`time=(frame−extras_before)/fps`); im ProjectX-Fall leere Liste → No-Op.
-  - Einziger realer Effekt (nur im Nicht-ProjectX-Fall): kosmetisch — Frame-Zähler
+      (`time=(frame−extras_before)/fps`) — im realen Workflow aktiv.
+  - Einziger realer Effekt: kosmetisch — Frame-Zähler
     um bis zu 222 erhöht, zwei Navigations-Stops pro echtem Frame in der Field-Region.
     Kein Korrektheitsfehler → **kein Fix**.
   - Latent (sub-perzeptuell, nur an Field-Rändern): `mExtraIndices` speichert

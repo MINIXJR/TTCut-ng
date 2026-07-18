@@ -116,7 +116,7 @@ Orthogonal to the table: with **field-picture** material every field pair occupi
 two display positions (one real frame), so cut positions count fields. Measured,
 independent of the cut-out defect — and **harmless** (see the field-picture note
 below): the video cut copies the field pictures byte-for-byte and they decode
-pixel-identically; the documented ProjectX demux strips field pictures entirely.
+pixel-identically, and the audio cut-time correction subtracts them.
 
 ## Assumptions, contracts & pitfalls
 
@@ -245,20 +245,24 @@ pixel-identically; the documented ProjectX demux strips field pictures entirely.
   cut-out, and `cut(0,24)` / `cut(0,28)` are correct. The two problems are
   independent.
 
-  **Verdict: harmless, closed 2026-07-16.** Reproduced on real material (Futurama
-  02x01, both demux paths) with `tools/diag/dump_mpeg2_fields` +
-  `tools/diag/test_mpeg2_cutout`:
-  - **Unreachable via the documented workflow.** ProjectX (the mandated MPEG-2
-    demux) normalizes field pictures to frame pictures: the ffmpeg `-c:v copy` ES
-    carries 222 field pairs (85 721/85 499 entries), the ProjectX ES carries **0**.
-    Field pairs only reach TTCut if ProjectX is bypassed.
-  - **No frame loss, no corruption even then.** A cut spanning the field region
-    writes 39 coded pictures that decode to 37 real frames (the two pairs collapse),
-    with 0 decoder errors; a cut-out landing on a second field or on the first field
-    of a pair (dropping its partner) is likewise clean. The decoded field-region
-    frames are **pixel-identical** to the source (md5, 9 frames).
-  - The only real-world effect (non-ProjectX path only) is cosmetic: an inflated
-    frame counter and two navigation stops per real frame in the field region. No fix.
+  **Verdict: harmless, closed 2026-07-16 (reachability rationale corrected
+  2026-07-18).** Reproduced on real material (Futurama 02x01) with
+  `tools/diag/dump_mpeg2_fields` + `tools/diag/test_mpeg2_cutout`:
+  - **Reachable — and measured exactly there.** The real workflow demuxes
+    MPEG-2 with ttcut-demux (`-c copy`), whose ES **carries the field pairs**
+    (222; 85 721 entries / 85 499 real frames). An earlier claim that the
+    defect was unreachable rested on ProjectX (which normalizes field pictures
+    away, measured: 0 pairs) — but ProjectX is not part of the workflow; that
+    ES was an artifact of the investigation, not the real case.
+  - **No frame loss, no corruption.** On the ffmpeg-copy ES (= the real demux
+    output): a cut spanning the field region writes 39 coded pictures that
+    decode to 37 real frames (the two pairs collapse), 0 decoder errors; a
+    cut-out landing on either field of a pair is likewise clean. The decoded
+    field-region frames are **pixel-identical** to the source (md5, 9 frames).
+    The audio cut-time correction (`countExtraFramesBefore`) subtracts the
+    extra fields.
+  - The only real-world effect is cosmetic: an inflated frame counter and two
+    navigation stops per real frame in the field region. No fix.
 
 - **`transferCutObjects()`** — assumes a picture header never spans the 12-byte
   watermark at the end of a 256 KiB chunk; guarantees in-place header rewriting of

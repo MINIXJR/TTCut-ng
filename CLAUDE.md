@@ -20,8 +20,10 @@ TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 s
 - MKV (via libav matroska muxer) with optional chapters
 
 **Preprocessing Workflow:**
-- MPEG-2: Use ProjectX to demux TS → ES files
-- H.264/H.265: Use `tools/ttcut-demux -e` to demux TS → ES files
+- All codecs (MPEG-2, H.264, H.265): use `tools/ttcut-demux` to demux TS → ES
+  files (produces the `.info` metadata file TTCut relies on)
+- ProjectX is NOT part of the workflow (legacy alternative for MPEG-2 only;
+  produces no `.info` — do not base workflow assumptions on it)
 
 **Key Constraint for MPEG-2**: Cuts without re-encoding are only possible at:
 - Cut-in: I-frames only
