@@ -211,6 +211,123 @@ detect_video_gaps() {
     ' >> "$out_file"
 }
 
+# VDR multi-file variant of detect_video_gaps(): scans every segment (not
+# just the first) and additionally reports the splice gap BETWEEN segments.
+#
+# Why this is needed: for a single-file recording, detect_video_gaps("$INPUT")
+# sees the whole thing. For VDR multi-file, "$ORIGINAL_INPUT" was always just
+# argv[1] (00001.ts) - segments 2..N were never scanned, so any real content
+# loss inside them (corrupt GOPs, dropped packets) never reached
+# es_missing_ranges=. Measured on a real 5-segment signal-loss recording:
+# segment 3 alone had ~25s of within-segment holes invisible to the old scan.
+#
+# The 4 VDR_SEGMENTS files share ONE continuous PCR/PTS clock (this is a
+# normal, size-triggered VDR split, not a new tuner session), so each
+# segment's own start_time/duration are directly comparable absolute PTS -
+# no coordinate translation needed, and this stays in the same domain as
+# FIRST_VIDEO_PTS (which is also probed from raw, un-repaired input).
+#
+# The splice gap (end of segment i vs start of segment i+1) matters because
+# the concat DEMUXER used later for extraction (see FFMPEG_INPUT_ARGS)
+# stitches segments seamlessly - it re-bases segment i+1 to start right where
+# segment i ended, silently discarding whatever real broadcast time separated
+# them. From the merged output ES's point of view this is exactly like a
+# within-segment hole (frame N is immediately followed by frame N+1 with no
+# gap in the file, even though real content in between was never captured),
+# so it is reported the same way.
+#
+# This is a separate concern from detect_segment_boundaries(): that function
+# compares each segment's container-level PTS SPAN (last-first) between
+# audio and video, which does not shrink for an internal hole (the span still
+# covers the full segment even if frames are missing inside it) and is blind
+# to the size of the gap BETWEEN segments (it just sums each segment's own
+# span). It exists to catch the small, systematic audio-trim-carry drift
+# across boundaries and keeps doing that job unmodified; this function
+# instead finds actual packet-level content loss at exact positions.
+detect_video_gaps_multifile() {
+    local out_file=$1 threshold_s=$2
+    : > "$out_file"
+    local n=${#VDR_SEGMENTS[@]}
+    local i seg_gaps prev_end=""
+    for ((i = 0; i < n; i++)); do
+        seg_gaps="${out_file}.seg${i}"
+        _CLEANUP_FILES+=("$seg_gaps")
+        detect_video_gaps "${VDR_SEGMENTS[$i]}" "$seg_gaps" "$threshold_s"
+        cat "$seg_gaps" >> "$out_file"
+        rm -f "$seg_gaps"
+
+        local seg_start seg_dur
+        # ffprobe emits the stream= row twice for a raw .ts segment (global
+        # stream list + per-program stream list both match "v:0"); take the
+        # first line only (same defensive pattern as START_PTS/NEW_VIDEO_PTS
+        # above, and as detect_segment_boundaries()'s existing head -1).
+        seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            # %f formatting via awk (not bash's printf builtin, which is
+            # locale-sensitive - a comma-decimal locale turns "3663.6" into
+            # "3663,000000" here and corrupts every downstream PTS compare).
+            if [ -n "$prev_end" ]; then
+                awk -v ps="$prev_end" -v ss="$seg_start" -v th="$threshold_s" \
+                    'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
+            fi
+            prev_end=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
+        else
+            echo "detect_video_gaps_multifile: ffprobe failed on segment $i (${VDR_SEGMENTS[$i]}) - splice gap around it not measured" >&2
+            prev_end=""
+        fi
+    done
+    sort -n -o "$out_file" "$out_file"
+}
+
+# VDR multi-file variant of detect_audio_gaps() - same rationale as
+# detect_video_gaps_multifile() above, per audio track.
+detect_audio_gaps_multifile() {
+    local stream_idx=$1 out_file=$2 threshold_s=$3
+    : > "$out_file"
+    local n=${#VDR_SEGMENTS[@]}
+    local i seg_gaps prev_end=""
+    for ((i = 0; i < n; i++)); do
+        seg_gaps="${out_file}.seg${i}"
+        _CLEANUP_FILES+=("$seg_gaps")
+        detect_audio_gaps "${VDR_SEGMENTS[$i]}" "$stream_idx" "$seg_gaps" "$threshold_s"
+        cat "$seg_gaps" >> "$out_file"
+        rm -f "$seg_gaps"
+
+        local seg_start seg_dur
+        # See detect_video_gaps_multifile() above: take the first line only.
+        seg_start=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_dur=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        # A badly damaged segment can leave this track's own duration
+        # unprobeable ("N/A" - same root cause as detect_segment_boundaries()'s
+        # N/A fallback above: observed on the real 5-segment fixture for the
+        # AC3/mis tracks in the heaviest-corrupted segment). Falling back to
+        # "" here would break the prev_end chain and silently drop the splice
+        # gaps on BOTH sides of this segment. Fall back to the segment's own
+        # video timing as the least-wrong estimate (assumes this track's
+        # start/end roughly tracks video in that segment, which is the same
+        # assumption the "no additional drift" fallback below makes).
+        if [[ ! "$seg_start" =~ ^[0-9]+\.?[0-9]*$ || ! "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            echo "detect_audio_gaps_multifile: track $stream_idx duration unavailable on segment $i (${VDR_SEGMENTS[$i]}) - falling back to video timing for splice-gap purposes" >&2
+            seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+            seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        fi
+        if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            # See detect_video_gaps_multifile() above: awk formatting only,
+            # never bash's locale-sensitive printf builtin.
+            if [ -n "$prev_end" ]; then
+                awk -v ps="$prev_end" -v ss="$seg_start" -v th="$threshold_s" \
+                    'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
+            fi
+            prev_end=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
+        else
+            echo "detect_audio_gaps_multifile: ffprobe failed on segment $i track $stream_idx (${VDR_SEGMENTS[$i]}) - splice gap around it not measured" >&2
+            prev_end=""
+        fi
+    done
+    sort -n -o "$out_file" "$out_file"
+}
+
 # Compute how many milliseconds of silence to insert at an audio gap to keep
 # A/V sync after the gap. The silence amount equals the amount of audio content
 # missing that the video did NOT also lose.
@@ -1423,7 +1540,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
         VIDEO_GAPS_FILE="$OUTDIR/.video_gaps.txt"
         _CLEANUP_FILES+=("$VIDEO_GAPS_FILE")
-        detect_video_gaps "$ORIGINAL_INPUT" "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
+        # VDR multi-file: ORIGINAL_INPUT is only the first segment - scan all
+        # of them (plus inter-segment splice gaps), see
+        # detect_video_gaps_multifile() for why.
+        if [ "$VDR_MULTIFILE" = true ]; then
+            detect_video_gaps_multifile "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
+        else
+            detect_video_gaps "$ORIGINAL_INPUT" "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
+        fi
 
         GAP_FILES=()
         CLASSIFIED_FILES=()
@@ -1435,7 +1559,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
             GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
             CLASSIFIED_FILE="$OUTDIR/.classified_track_${i}.txt"
             _CLEANUP_FILES+=("$GAP_FILE" "$CLASSIFIED_FILE")
-            detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
+            if [ "$VDR_MULTIFILE" = true ]; then
+                detect_audio_gaps_multifile "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
+            else
+                detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
+            fi
             GAP_FILES[$i]="$GAP_FILE"
             : > "$CLASSIFIED_FILE"
             CLASSIFIED_FILES[$i]="$CLASSIFIED_FILE"
