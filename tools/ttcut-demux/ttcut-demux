@@ -838,6 +838,13 @@ if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     grep -E "^(frame=|size=)" "$FFMPEG_LOG" | tail -1 | while IFS= read -r line; do info "$line"; done
     # Show any warnings/errors from ffmpeg
     warn_ffmpeg_log "$FFMPEG_LOG"
+    # Preserve "Packet corrupt (stream = 0, dts = N)" markers for
+    # corrupt_frame_ranges= (.info emission, later) before the log is
+    # deleted below. This whole-TS remux pass is where the damaged region
+    # is first parsed, so it is the primary source for this marker; the
+    # ES extraction pass below merges in anything additional it sees.
+    VIDEO_CORRUPT_DTS_TICKS=$(grep -oE 'Packet corrupt \(stream = 0, dts = [0-9]+' \
+        "$FFMPEG_LOG" 2>/dev/null | grep -oE '[0-9]+$' || true)
     rm -f "$FFMPEG_LOG"
 
     # Verify repaired file
@@ -1093,6 +1100,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
     else
         info "  All ${#AUDIO_FILES[@]} audio track(s) extracted"
     fi
+
+    # Merge in any "Packet corrupt" markers also seen during the per-track
+    # extraction pass (in practice these come from the timestamp-repair log
+    # captured above, since that pass re-muxes the whole TS and hits the
+    # damaged region first; capturing here too costs nothing and covers the
+    # case where extraction re-triggers the same parser warning).
+    VIDEO_CORRUPT_DTS_TICKS="${VIDEO_CORRUPT_DTS_TICKS:-}"$'\n'"$(grep -oE 'Packet corrupt \(stream = 0, dts = [0-9]+' \
+        "$EXTRACT_LOG_DIR/video.log" 2>/dev/null | grep -oE '[0-9]+$' || true)"
 
     # Clean up log directory
     rm -rf "$EXTRACT_LOG_DIR"
@@ -1357,6 +1372,20 @@ with open('$OUTPUT_VIDEO','rb') as f:
         _FR_DEN="${_FR_DEN:-1}"
         FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $_FR_NUM / $_FR_DEN}")
 
+        # Loud count-check: counted packets in the output ES vs. what the
+        # measured PTS-span duration implies. A silent hole (dropped packets
+        # that leave no PTS discontinuity signature, e.g. right after a
+        # damaged GOP) would otherwise produce a clean-looking .info; this is
+        # a second, independent signal that does not depend on gap detection.
+        COUNTED_FRAMES=$(ffprobe -v error -count_packets -select_streams v:0 \
+            -show_entries stream=nb_read_packets -of csv=p=0 "$OUTPUT_VIDEO" 2>/dev/null)
+        if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
+            EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_DURATION_MS / 1000.0) * $FRAME_RATE_DEC}")
+            if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
+                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, check the defect markers"
+            fi
+        fi
+
         # Frame-skalige Gap-Schwellen: 2.5 x nominale Paketdauer.
         # Video: Frame-Dauer aus FRAME_RATE (Feld-Kadenz bei MPEG-2 halbiert die
         # Dauer -> Schwelle bleibt trotzdem > jede legale Kadenz-Luecke).
@@ -1372,6 +1401,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         CLASSIFIED_FILES=()
         HAS_ANY_SILENCE_NEEDED=false
         AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end silence_ms"
+        declare -A TRACK_SILENCE_MS TRACK_REMOVED_MS  # per-track repair balance for .info
         for i in "${!AUDIO_FILES[@]}"; do
             IFS=':' read -r idx _ _ <<< "${AUDIO_STREAMS[$i]}"
             GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
@@ -1436,6 +1466,20 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # sequentially with an accumulated-collapse offset, so it
             # requires ascending source order.
             sort -n -o "$CLASSIFIED_FILE" "$CLASSIFIED_FILE"
+
+            # Per-track audio repair balance for .info (audio_${i}_silence_ms /
+            # audio_${i}_removed_ms): sum the signed sms column (4th field) of
+            # CLASSIFIED_FILE — positive rows are inserted silence, negative
+            # rows are truncated (removed) audio.
+            TRACK_SILENCE_MS[$i]=0
+            TRACK_REMOVED_MS[$i]=0
+            if [ -s "$CLASSIFIED_FILE" ]; then
+                read -r TRACK_SILENCE_MS_I TRACK_REMOVED_MS_I < <(awk '
+                    { if ($4 > 0) s += $4; else if ($4 < 0) r += -$4 }
+                    END { printf "%.0f %.0f\n", s, r }' "$CLASSIFIED_FILE")
+                TRACK_SILENCE_MS[$i]="$TRACK_SILENCE_MS_I"
+                TRACK_REMOVED_MS[$i]="$TRACK_REMOVED_MS_I"
+            fi
         done
 
         if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
@@ -1780,6 +1824,13 @@ EOF
         echo "audio_${i}_lang=$lang" >> "$OUTPUT_INFO"
         echo "audio_${i}_first_pts=$TRACK_PTS" >> "$OUTPUT_INFO"
         echo "audio_${i}_trimmed_ms=$TRACK_TRIM_MS" >> "$OUTPUT_INFO"
+        # Repair balance from gap-fix classification (0 = not emitted, see brief).
+        if [ -n "${TRACK_SILENCE_MS[$i]:-}" ] && [ "${TRACK_SILENCE_MS[$i]:-0}" != "0" ]; then
+            echo "audio_${i}_silence_ms=${TRACK_SILENCE_MS[$i]}" >> "$OUTPUT_INFO"
+        fi
+        if [ -n "${TRACK_REMOVED_MS[$i]:-}" ] && [ "${TRACK_REMOVED_MS[$i]:-0}" != "0" ]; then
+            echo "audio_${i}_removed_ms=${TRACK_REMOVED_MS[$i]}" >> "$OUTPUT_INFO"
+        fi
         if [ -n "${AC3_FIX_RESULTS[$i]:-}" ]; then
             echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
             echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
@@ -1834,6 +1885,45 @@ EOF
         if [ -n "$GAP_FRAMES_SORTED" ]; then
             write_warnings_header_if_needed
             echo "audio_gap_frames=$GAP_FRAMES_SORTED" >> "$OUTPUT_INFO"
+        fi
+    fi
+
+    # es_missing_frames / es_missing_ranges: video holes (VIDEO_GAPS_FILE rows
+    # "src_start src_end gap_ms") mapped to OUTPUT-ES frame coordinates - each
+    # hole shifts everything after it earlier by the frames already lost
+    # before it, since the output ES has those frames physically missing.
+    if [ -s "$VIDEO_GAPS_FILE" ] && [ -n "$FIRST_VIDEO_PTS" ]; then
+        MISS_FRAMES=""; MISS_RANGES=""
+        lost_before=0
+        while IFS=' ' read -r vs ve vms; do
+            fs=$(awk "BEGIN {printf \"%.0f\", (($vs - $FIRST_VIDEO_PTS) - $lost_before) * $FRAME_RATE_DEC}")
+            fe=$(awk "BEGIN {printf \"%.0f\", $fs + 1}")
+            MISS_FRAMES="${MISS_FRAMES:+$MISS_FRAMES,}$fs"
+            MISS_RANGES="${MISS_RANGES:+$MISS_RANGES,}${fs}-${fe}:${vms%.*}"
+            lost_before=$(awk "BEGIN {printf \"%.6f\", $lost_before + ($ve - $vs)}")
+        done < "$VIDEO_GAPS_FILE"
+        if [ -n "$MISS_FRAMES" ]; then
+            write_warnings_header_if_needed
+            echo "es_missing_frames=$MISS_FRAMES" >> "$OUTPUT_INFO"
+            echo "es_missing_ranges=$MISS_RANGES" >> "$OUTPUT_INFO"
+        fi
+    fi
+
+    # corrupt_frame_ranges: frames present in the output ES but flagged
+    # corrupt by the demuxer/parser during extraction (VIDEO_CORRUPT_DTS_TICKS
+    # was captured from the video demux log before it was cleaned up, above).
+    # Cluster dts ticks <=2s apart into one range (same seam tends to log
+    # several corrupt packets close together).
+    if [ -n "${VIDEO_CORRUPT_DTS_TICKS:-}" ] && [ -n "$FIRST_VIDEO_PTS" ]; then
+        CORRUPT_RANGES=$(printf '%s\n' "$VIDEO_CORRUPT_DTS_TICKS" | grep -v '^$' | sort -n | awk -v fvp="$FIRST_VIDEO_PTS" -v fps="$FRAME_RATE_DEC" '
+            { f = int((($1/90000.0) - fvp) * fps); if (f < 0) next
+              if (state && f - last <= 2*fps) { last = f; next }        # <=2s: same range
+              if (state) { printf "%s%d-%d", sep, start, last; sep="," }
+              start = f; last = f; state = 1 }
+            END { if (state) printf "%s%d-%d", sep, start, last }')
+        if [ -n "$CORRUPT_RANGES" ]; then
+            write_warnings_header_if_needed
+            echo "corrupt_frame_ranges=$CORRUPT_RANGES" >> "$OUTPUT_INFO"
         fi
     fi
 
