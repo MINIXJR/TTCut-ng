@@ -1379,6 +1379,15 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # a second, independent signal that does not depend on gap detection.
         COUNTED_FRAMES=$(ffprobe -v error -count_packets -select_streams v:0 \
             -show_entries stream=nb_read_packets -of csv=p=0 "$OUTPUT_VIDEO" 2>/dev/null)
+        # ffprobe's csv writer appends a trailing comma for a raw .m2v
+        # elementary stream (verified: "stream,2964," vs. "stream,184960" for
+        # a raw .264 - reproduces even for the plain index/codec_name entries,
+        # so it's a raw-mpegvideo-demuxer csv quirk, not a frame-vs-packet
+        # count difference). "2964," fails bash's [ -eq ] integer test
+        # silently (exit 2, swallowed by the 2>/dev/null), so this whole
+        # count-check was a no-op for every MPEG-2 run. Strip it before the
+        # numeric test.
+        COUNTED_FRAMES="${COUNTED_FRAMES%,}"
         if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
             EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_DURATION_MS / 1000.0) * $FRAME_RATE_DEC}")
             if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
