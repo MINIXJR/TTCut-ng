@@ -19,6 +19,15 @@ Files: avilib/*
 Copyright: Original avilib authors
 License: GPL-3+
 
+Files: ui/pixmaps/Tux.svg
+Copyright: 1996 Larry Ewing <lewing@isc.tamu.edu>
+License: Tux-Permission
+ Permission to use and/or modify this image is granted provided you
+ acknowledge me lewing@isc.tamu.edu and The GIMP if someone asks.
+ .
+ Created with The GIMP. Not part of the installed application logo;
+ shipped in the source tree only.
+
 License: GPL-3+
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by

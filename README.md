@@ -81,6 +81,10 @@ Issues und Pull Requests sind willkommen.
 
 Ursprünglich basierend auf TTCut von B. Altendorf (2005-2008).
 
+Das Tux-Maskottchen (`ui/pixmaps/Tux.svg`) wurde 1996 von Larry Ewing
+(`lewing@isc.tamu.edu`) mit The GIMP erstellt — Details und die vollständige
+Erlaubnis in [CREDITS.md](CREDITS.md).
+
 ## Lizenz
 
 GPLv3+ — siehe [LICENSE](LICENSE).
