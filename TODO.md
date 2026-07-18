@@ -179,7 +179,7 @@
     Protokoll `CLAUDE_TMP/TTCut-ng/demuxfix/REDEMUX.md`.
   - `/usr/bin/ttcut-demux` aktualisiert (byte-identisch mit dem Repo-Stand, geprüft 2026-07-12).
 
-- **Smart-Cut Code-Map Findings prüfen** (2026-07-10, aus `docs/code-map/smart-cut.md`)
+- ~~**Smart-Cut Code-Map Findings prüfen**~~ → **ALLE 4 PUNKTE ERLEDIGT** (2026-07-11/12, Details unten)
   - Punkte (1)–(3) **ERLEDIGT 2026-07-11** (Branch `refactor/redundancy-safe-batch`):
     - (1) PAFF-fallback-Zweig: unerreichbar bestätigt (Bedingungsanalyse) und samt
       exklusiver toter Helfer (`convertAUToIDR`, `convertSliceNalToIDR`) entfernt —

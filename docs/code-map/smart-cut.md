@@ -1,5 +1,5 @@
 ---
-base_commit: b0e1335  # smartcut: poc_type 2 is the progressive norm (POC probe series)
+base_commit: 144dec8ac2de73aec48505e894322beedc673b38  # symbols re-verified, no drift found
 last_verified: 2026-07-12
 sources:
   - extern/ttessmartcut.cpp

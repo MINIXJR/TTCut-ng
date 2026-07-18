@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.75.0 (2026-07-18)
+
+**Smart-cut corruption fix on progressive DVB, two MPEG-2 tail fixes, dead-code cleanup**
 
 ### Fixes
 
@@ -19,6 +21,43 @@ All notable changes to TTCut-ng are documented in this file.
   (MBAFF/PAFF, encoder poc_type 0) are byte-identical to before; the standard
   seam path is untouched (byte-identical). New diagnostic harness:
   `tools/diag/test_smartcut_seam`.
+
+- **MPEG-2: no more phantom start codes past the end of file** —
+  `TTFileBuffer::readByte()` never threw at EOF and returned stale ring-buffer
+  bytes past `writePos`. The header parser could read a phantom
+  `picture_start_code` a few bytes before the file end, truncating the last
+  slice of a copied cut (visible as `ac-tex damaged` on the final macroblock).
+  `readByte()` now throws `StreamEOF` (the contract the array variant already
+  implemented) and the start-code scanner stops when fewer than 4 bytes remain.
+
+- **MPEG-2: cutting the file tail no longer crashes** — a cut-in on a non-I
+  frame with no I-frame following (recording truncated mid-GOP) drove
+  `encodePart()` with an invalid range and aborted via an uncaught exception
+  (SIGABRT). `getCutStartObject()` now re-encodes the whole remaining range in
+  that case. All non-tail cuts verified byte-identical.
+
+### Changes
+
+- **Dead-code audit, first pass: ~2 200 lines removed** — orphaned files
+  (including two unused dialogs and their `.ui` files), the unused
+  `TTMessageBox`, dead marker CRUD, pre-refactor smart-cut helpers, the
+  `TTStreamPointCutDerivation` subsystem, and dead methods across
+  avstream/list/provider/GUI classes. Verified by clean rebuilds and a
+  bit-identical package QC build. New reusable audit tooling lives in the
+  global skill collection.
+
+- **Tux attribution added** — `CREDITS.md` (Larry Ewing, The GIMP), a README
+  credits pointer, and a `debian/copyright` paragraph for the bundled
+  `ui/pixmaps/Tux.svg`. The application logo itself contains no Tux.
+
+### Known issues
+
+- **H.264/H.265 smart cut: the re-encode → stream-copy seam damages the
+  copy-start keyframe's leading pictures** on IDR-free open-GOP material
+  (all ARD/ONE HD): up to reorder-depth corrupt frames (H.264) or silently
+  dropped RASL frames (H.265) per cut-in. Confirmed and measured this cycle
+  (defect A in `docs/code-map/smart-cut.md`); the fix needs its own design
+  round and is the next major work item. Pre-existing in all earlier releases.
 
 ## v0.74.0 (2026-07-12)
 

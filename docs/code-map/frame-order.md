@@ -1,6 +1,6 @@
 ---
-base_commit: 6832d4064f18ab3c5df2b69c1fa8ecf4591d3e84  # docs: record the encoder POC probe and the poc_type-2 finding
-last_verified: 2026-07-12
+base_commit: 144dec8ac2de73aec48505e894322beedc673b38  # docs: record the encoder POC probe and the poc_type-2 finding
+last_verified: 2026-07-18
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -365,16 +365,25 @@ byte-identical output, unaffected by this fix.
 
 - **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `mFFmpeg->buildFrameIndex()`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Both previously scanned the entire file. Resolved in v0.72.0 by Owner A → Owner B index sharing via `provideFrameIndexTo()` (Qt COW, O(1)). Owner C (search sub-decoders) also adopts via the same mechanism. No longer redundant.
 
-- **Decode-order-to-display-order conversion**: RESOLVED (`95da7f3`). The three
-  ad-hoc corrections are consolidated into two flag-aware helpers in
-  TTCurrentFrame — `playbackSecondsForCurrentStill()` (used by `onPlayVideo`)
-  and `streamIndexForPlaybackSlot()` (used by `onPlaybackPositionChanged` and
-  `onPlaybackFinished`; the MPEG-2 field-picture fixup runs after the identity
-  mapping there). Both key off `mTempPlaybackHasDisplayPts`: the playback temp
-  MKV now carries TRUE display PTS (source display-order map passed to the
-  muxer; dropped-RASL AUs parked behind the last real slot — they never
-  render), so real frames satisfy pts == display index with no offset. The
-  linear fallback branches keep the pre-fix formulas verbatim (invalid/empty
-  map only). Measured: playback MKV output order 50% non-monotonic → 0.
+- **Decode-order-to-display-order conversion**: PARTIALLY RESOLVED (`95da7f3`).
+  `playbackSecondsForCurrentStill()` (used by `onPlayVideo`) is live and keys
+  off `mTempPlaybackHasDisplayPts`: the playback temp MKV now carries TRUE
+  display PTS (source display-order map passed to the muxer; dropped-RASL AUs
+  parked behind the last real slot — they never render), so real frames
+  satisfy pts == display index with no offset. The linear fallback branch
+  keeps the pre-fix formula verbatim (invalid/empty map only). Measured:
+  playback MKV output order 50% non-monotonic → 0.
+  **[REMOVED `18d7871`]** `streamIndexForPlaybackSlot()` — the introducing
+  commit's message described it as wired into `onPlaybackPositionChanged`/
+  `onPlaybackFinished`, but its own diff never added a call site; the method
+  was reference-free from the moment it was written and was deleted as dead
+  code by the audit (batch G+H+I). Verified against current code
+  (2026-07-18): both functions still derive `framePos`/`newFrame` linearly
+  from `seconds × frameRate` (plus the MPEG-2 `extraIndices()` fixup in
+  `onPlaybackFinished`), with **no** `TTDisplayOrderMap` conversion for
+  H.26x — so of the "three ad-hoc corrections" this bullet originally
+  flagged, only the `onPlayVideo` one is actually consolidated; the
+  `onPlaybackPositionChanged`/`onPlaybackFinished` conversion remains in its
+  original ad-hoc linear form.
 
 - **MPEG-2 field-picture extra-index correction** appears in both `onPlayVideo()` and `onPlaybackFinished()` (binary-search into `mpeg2vs->extraIndices()`). Same logic, duplicated. Consolidation candidate: a method on `TTMpeg2VideoStream` that converts between raw index and display-frame index.
