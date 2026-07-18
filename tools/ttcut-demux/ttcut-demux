@@ -143,6 +143,8 @@ detect_audio_gaps() {
     awk -F= -v threshold="$threshold_s" '
         /^pts_time=/ {
             curr = $2
+            # Skip N/A or empty timestamps without updating prev (transparent to gap detection)
+            if (curr == "N/A" || curr == "") next
             if (prev != "" && curr - prev > threshold) {
                 gap_size_ms = (curr - prev) * 1000
                 printf "%.6f %.6f %.0f\n", prev, curr, gap_size_ms
@@ -174,6 +176,9 @@ detect_audio_gaps() {
 #   $1 = source TS file path
 #   $2 = output file path (will be truncated to empty if no gaps)
 #   $3 = threshold in seconds (frame-scale, see Rev-2 block)
+#
+# NOTE: gap sizes are measured on decode-order boundaries; B-frame reorder lag
+# can overestimate a gap by a few frame durations (bias is always upward).
 detect_video_gaps() {
     local source_ts=$1 out_file=$2 threshold_s=$3
     : > "$out_file"
@@ -183,6 +188,8 @@ detect_video_gaps() {
         /^pts_time=/ { curr_pts = $2 }
         /^dts_time=/ {
             curr_dts = $2
+            # Skip N/A or empty timestamps without updating prev_* (transparent to gap detection)
+            if (curr_dts == "N/A" || curr_dts == "" || curr_pts == "N/A" || curr_pts == "") next
             if (prev_dts != "" && curr_dts - prev_dts > threshold) {
                 gap_size_ms = (curr_pts - prev_pts) * 1000
                 printf "%.6f %.6f %.0f\n", prev_pts, curr_pts, gap_size_ms
@@ -265,6 +272,7 @@ emit_video_only_truncations() {
                 if (oe > os) shared += (oe - os)
             }
             trunc_ms = (ve - vs - shared) * 1000
+            # 20ms floor also absorbs the decode-order measurement bias (see detect_video_gaps NOTE)
             if (trunc_ms >= 20)   # unter 1 Video-Frame: ignorieren
                 printf "%.6f %.6f %.0f -%.0f\n", vs, ve, (ve-vs)*1000, trunc_ms
         }
