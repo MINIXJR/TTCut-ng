@@ -181,6 +181,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             track.language  = values.value(QString("audio_%1_lang").arg(i), "und");
             track.firstPts  = values.value(QString("audio_%1_first_pts").arg(i), "0").toDouble();
             track.trimmedMs = values.value(QString("audio_%1_trimmed_ms").arg(i), "0").toInt();
+            track.silenceMs = values.value(QString("audio_%1_silence_ms").arg(i), "0").toInt();
+            track.removedMs = values.value(QString("audio_%1_removed_ms").arg(i), "0").toInt();
             mAudioTracks.append(track);
         }
     }
@@ -256,6 +258,56 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             if (!mAudioGapFrames.isEmpty())
                 if (TTSettings::instance()->logAVStream())
                     qDebug() << "Loaded" << mAudioGapFrames.size() << "audio gap frame indices from .info";
+        }
+
+        // Parse mid-stream gap-fill ranges (from ttcut-demux repair).
+        // Format: "start-end:ms" (filled duration known) or "start-end" (ms
+        // unknown, e.g. legacy data) -> ms = -1.
+        // Note: the flat "es_missing_frames" CSV list (individual frame
+        // indices) is intentionally not parsed into a member — every index
+        // it lists is already covered by an es_missing_ranges range, so the
+        // ranges alone are sufficient for consumers.
+        QString missingRangesStr = values.value("es_missing_ranges", "");
+        if (!missingRangesStr.isEmpty()) {
+            QStringList ranges = missingRangesStr.split(',');
+            for (const QString& tok : ranges) {
+                if (mEsMissingRanges.size() >= maxExtraFrames) break;
+                QString rangePart = tok.section(':', 0, 0);
+                bool okStart, okEnd;
+                int start = rangePart.section('-', 0, 0).toInt(&okStart);
+                int end   = rangePart.section('-', 1, 1).toInt(&okEnd);
+                if (!okStart || !okEnd) continue;
+                TTESRange r;
+                r.start = start;
+                r.end   = end;
+                r.ms    = tok.contains(':') ? tok.section(':', 1, 1).toInt() : -1;
+                mEsMissingRanges.append(r);
+            }
+            if (!mEsMissingRanges.isEmpty())
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "Loaded" << mEsMissingRanges.size() << "missing-frame ranges from .info";
+        }
+
+        // Parse corrupt-but-retained frame ranges (from ttcut-demux repair).
+        // Format: "start-end". No duration is reported -> ms is always -1.
+        QString corruptRangesStr = values.value("corrupt_frame_ranges", "");
+        if (!corruptRangesStr.isEmpty()) {
+            QStringList ranges = corruptRangesStr.split(',');
+            for (const QString& tok : ranges) {
+                if (mCorruptRanges.size() >= maxExtraFrames) break;
+                bool okStart, okEnd;
+                int start = tok.section('-', 0, 0).toInt(&okStart);
+                int end   = tok.section('-', 1, 1).toInt(&okEnd);
+                if (!okStart || !okEnd) continue;
+                TTESRange r;
+                r.start = start;
+                r.end   = end;
+                r.ms    = -1;
+                mCorruptRanges.append(r);
+            }
+            if (!mCorruptRanges.isEmpty())
+                if (TTSettings::instance()->logAVStream())
+                    qDebug() << "Loaded" << mCorruptRanges.size() << "corrupt-frame ranges from .info";
         }
 
         // Legacy format: decode error regions (from old ffmpeg -err_detect check).
@@ -354,6 +406,25 @@ TTAudioTrackInfo TTESInfo::audioTrack(int index) const
         return mAudioTracks[index];
     }
     return TTAudioTrackInfo();
+}
+
+// ----------------------------------------------------------------------------
+// Per-track audio repair balance (0 when the track has no repair entry)
+// ----------------------------------------------------------------------------
+int TTESInfo::audioSilenceMs(int track) const
+{
+    if (track >= 0 && track < mAudioTracks.size()) {
+        return mAudioTracks[track].silenceMs;
+    }
+    return 0;
+}
+
+int TTESInfo::audioRemovedMs(int track) const
+{
+    if (track >= 0 && track < mAudioTracks.size()) {
+        return mAudioTracks[track].removedMs;
+    }
+    return 0;
 }
 
 // ----------------------------------------------------------------------------

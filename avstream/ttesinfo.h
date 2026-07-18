@@ -29,8 +29,10 @@ struct TTAudioTrackInfo {
     QString file;
     QString codec;
     QString language;
-    double  firstPts  = 0.0;   // PTS of first audio frame (from .info audio_N_first_pts)
-    int     trimmedMs = 0;     // Milliseconds trimmed from start (from .info audio_N_trimmed_ms)
+    double  firstPts   = 0.0;  // PTS of first audio frame (from .info audio_N_first_pts)
+    int     trimmedMs  = 0;    // Milliseconds trimmed from start (from .info audio_N_trimmed_ms)
+    int     silenceMs  = 0;    // Milliseconds of silence inserted for gap-fill repair (audio_N_silence_ms)
+    int     removedMs  = 0;    // Milliseconds removed to correct A/V drift (audio_N_removed_ms)
 };
 
 // ----------------------------------------------------------------------------
@@ -55,6 +57,15 @@ struct TTDecodeErrorRegion {
     int frame;          // Approximate frame number
     QString time;       // Approximate timestamp (HH:MM:SS.FF)
     int errorCount;     // Number of errors in this region
+};
+
+// ----------------------------------------------------------------------------
+// Frame range from .info file (mid-stream gap repair / corruption reporting)
+// ----------------------------------------------------------------------------
+struct TTESRange {
+    int start;   // First affected frame index (decode order)
+    int end;     // Last affected frame index (decode order, inclusive)
+    int ms;      // Duration in milliseconds, -1 when unknown
 };
 
 // ----------------------------------------------------------------------------
@@ -125,6 +136,19 @@ public:
     QList<int> audioGapFrames() const { return mAudioGapFrames; }
     int        audioGapFrameCount() const { return mAudioGapFrames.size(); }
 
+    // Mid-stream ES gap-fill ranges (from ttcut-demux repair, .info es_missing_ranges).
+    // start/end are decode-order frame indices; ms is the filled duration.
+    QList<TTESRange> esMissingRanges() const { return mEsMissingRanges; }
+
+    // Corrupt-but-retained frame ranges (from ttcut-demux repair, .info
+    // corrupt_frame_ranges). No duration is reported for these -> ms == -1.
+    QList<TTESRange> corruptFrameRanges() const { return mCorruptRanges; }
+
+    // Per-track audio repair balance (from .info audio_N_silence_ms /
+    // audio_N_removed_ms). 0 when the track has no repair entry.
+    int audioSilenceMs(int track) const;
+    int audioRemovedMs(int track) const;
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -173,6 +197,10 @@ private:
 
     // Audio gap frame indices (from ttcut-demux audio-gap detection)
     QList<int> mAudioGapFrames;  // sorted list of frame indices spanning audio gaps
+
+    // Mid-stream ES gap-fill / corruption ranges (from ttcut-demux repair)
+    QList<TTESRange> mEsMissingRanges;  // gap-fill ranges with filled duration (es_missing_ranges)
+    QList<TTESRange> mCorruptRanges;    // corrupt-but-retained ranges, ms always -1 (corrupt_frame_ranges)
 };
 
 #endif // TTESINFO_H
