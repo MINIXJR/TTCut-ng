@@ -316,16 +316,6 @@ void TTMPEG2Window2::closeVideoStream()
   repaint();
 }
 
-static float histogramDifference(const int histA[256], const int histB[256],
-                                  int totalA, int totalB)
-{
-    float diff = 0.0f;
-    for (int i = 0; i < 256; i++) {
-        diff += qAbs((float)histA[i]/totalA - (float)histB[i]/totalB);
-    }
-    return diff / 2.0f;  // normalize to 0.0–1.0
-}
-
 void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
 {
   if (iFramePos == currentIndex) return;
