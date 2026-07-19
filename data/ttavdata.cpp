@@ -17,6 +17,8 @@
 #include <QProcess>
 #include <QTime>
 
+#include <algorithm>
+
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
 #include "ttavdata.h"
@@ -257,10 +259,11 @@ TTAVItem* TTAVData::createAVItem()
 // bitstream parser knows the truth (picture_structure -> field pairs, in
 // display-index space), so prefer it over the .info candidate list
 // (raw-AU-numbered, and produced by a PTS heuristic that cannot tell
-// field pairs from TS corruption). H.26x candidates need classification
-// through the PAFF merge map (raw AU != merged frame) — until that runs
-// (see the H.26x branch below, added in the follow-up commit), H.26x
-// applies nothing. No-op if target is already populated.
+// field pairs from TS corruption). H.26x candidates are classified
+// through the PAFF merge map (raw AU != merged frame): guard on the AU
+// count, drop collapsed field pairs, skip candidates without a display
+// slot, store real defects in display space. No-op if target is already
+// populated.
 static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
                                   TTVideoStream* vStream)
 {
@@ -271,6 +274,46 @@ static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
     target = mpeg2->extraIndices();
     if (TTSettings::instance()->logCutPipeline())
         qDebug() << "Extra-frame source: MPEG-2 parser," << target.size() << "indices";
+    return;
+  }
+
+  // H.26x: classify .info doubled-PTS candidates (raw AU numbering, one AU
+  // per PES packet — PAFF fields separate) through the merge map. Only real
+  // defects enter the audio-correction list, in display space.
+  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+    const QList<int> candidates = esInfo.esDoubledPtsAus();
+    if (candidates.isEmpty()) return;
+
+    // Guard: the candidate numbering is only usable when the analyzed TS
+    // and this ES agree on the AU count. On mismatch (damaged stream,
+    // detached .info) discard rather than apply misaligned positions.
+    if (esInfo.esTotalAus() != h26x->rawAuCount()) {
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString(".info es_total_aus=%1 does not match stream AU count %2 "
+                  "- discarding %3 doubled-PTS candidates")
+              .arg(esInfo.esTotalAus()).arg(h26x->rawAuCount())
+              .arg(candidates.size()));
+      return;
+    }
+
+    int fieldPairs = 0, noDispSkipped = 0;
+    for (int raw : candidates) {
+      if (h26x->rawAuIsCollapsedField(raw)) { ++fieldPairs; continue; }
+      const int disp = h26x->mapRawAuToDisplayIndex(raw);
+      if (disp < 0) { ++noDispSkipped; continue; }  // dropped leading pic / bad index
+      target.append(disp);
+    }
+    std::sort(target.begin(), target.end());
+
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "Extra-frame source: .info es_doubled_pts_aus classified:"
+                 << target.size() << "real defects," << fieldPairs
+                 << "legitimate field pairs," << noDispSkipped
+                 << "skipped (no display slot)";
+    if (noDispSkipped > 0)
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("%1 doubled-PTS candidates without display slot skipped "
+                    "(dropped leading pictures)").arg(noDispSkipped));
     return;
   }
 
@@ -512,8 +555,13 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   // PTS-heuristic hits still surface as "Defekt:" even though mExtraFrameIndices
   // holds the parser list for MPEG-2. The parser's field-pair positions confirm
   // which clusters are legitimate field pairs vs. real suspects.
-  QList<int> infoExtras = esInfo.esDoubledPtsAus();
+  // MPEG-2: raw .info candidates, confirmed against the parser field pairs.
+  // H.26x: mExtraFrameIndices already holds the classified real defects
+  // (display space; legitimate field pairs are structurally excluded by the
+  // merge map in loadExtraFrameIndices, which runs before this dialog).
   TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  TTH26xVideoStream*  h26xVs  = dynamic_cast<TTH26xVideoStream*>(vStream);
+  QList<int> infoExtras = h26xVs ? mExtraFrameIndices : esInfo.esDoubledPtsAus();
   QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
 
   if (infoExtras.isEmpty() && mAudioGapIndices.isEmpty() &&
