@@ -419,6 +419,11 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     const QString err = smartCut->lastError();
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("Preview Smart Cut failed: %1").arg(err));
+    // Record the reason so onCutPreviewAborted() can tell this real error
+    // apart from a plain user cancel (which leaves mErrorMessage empty) and
+    // surface it to the user in a dialog.
+    mErrorMessage = tr("The preview could not be created: this recording is "
+                       "too damaged for frame-accurate cutting.\n\n%1").arg(err);
     throw TTAbortException(__FILE__, __LINE__,
         QString("Preview not possible — recording too damaged for frame-accurate cutting: %1").arg(err));
   }

@@ -1181,8 +1181,16 @@ void TTAVData::onCutPreviewAborted()
 			   		 this,             &TTAVData::onCutPreviewAborted);
 
 	if (cutPreviewTask != 0) {
+    // Read the abort reason before deleting the task. Non-empty means a real
+    // error (e.g. an un-cuttable damaged stream), not a plain user cancel —
+    // inform the user with a dialog so the failed preview is not silent.
+    const QString previewError = cutPreviewTask->errorMessage();
     delete cutPreviewTask;
     cutPreviewTask = 0;
+    if (!previewError.isEmpty()) {
+      QMessageBox::warning(TTCut::mainWindow, tr("Preview not possible"),
+                           previewError);
+    }
   }
 }
 

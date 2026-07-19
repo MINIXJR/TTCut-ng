@@ -33,6 +33,11 @@ class TTCutPreviewTask : public TTThreadTask
 
 		static QString createPreviewFileName(int index, QString extension);
 
+		//! Reason the preview aborted, or empty for a clean run / plain user cancel.
+		//! Set only for real errors (e.g. an un-cuttable damaged stream) so the
+		//! abort handler can decide whether to inform the user with a dialog.
+		QString errorMessage() const { return mErrorMessage; }
+
 	protected:
     void cleanUp();
     void operation();
@@ -55,6 +60,7 @@ class TTCutPreviewTask : public TTThreadTask
 		TTCutList*         mpPreviewCutList;
 		TTCutVideoTask*    cutVideoTask;
 		TTCutSubtitleTask* cutSubtitleTask;
+		QString            mErrorMessage;
 };
 
 
