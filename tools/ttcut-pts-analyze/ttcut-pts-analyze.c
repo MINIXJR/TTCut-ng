@@ -116,11 +116,16 @@ static const uint8_t *ts_payload(const uint8_t *pkt, int *payload_len)
 }
 
 /* Parse PAT to find PMT PID, then PMT to find video stream PID.
- * Returns video PID or -1 on failure. */
-static int find_video_pid(const uint8_t *ts_data, int64_t ts_size)
+ * Also reports the PMT stream_type of the selected video stream via
+ * *stream_type_out (0 if not found). Returns video PID or -1 on failure. */
+static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
+                          int *stream_type_out)
 {
     int pmt_pid = -1;
     int video_pid = -1;
+
+    if (stream_type_out)
+        *stream_type_out = 0;
 
     /* Step 1: Find PAT (PID 0) and extract first non-NIT PMT PID */
     for (int64_t off = 0; off + TS_PACKET_SIZE <= ts_size; off += TS_PACKET_SIZE) {
@@ -256,6 +261,8 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size)
                 stream_type == ST_H264_VIDEO  ||
                 stream_type == ST_H265_VIDEO) {
                 video_pid = es_pid;
+                if (stream_type_out)
+                    *stream_type_out = stream_type;
                 return video_pid;
             }
 
@@ -570,7 +577,8 @@ static int cmp_pts_entry(const void *a, const void *b)
  *
  * Handles PTS/DTS wrap (>1s backward jump = epoch reset, not anomaly).
  * Returns number of extra frames detected. */
-static int detect_extra_frames(AccessUnit *aus, int count, int verbose)
+static int detect_extra_frames(AccessUnit *aus, int count, int verbose,
+                               bool skip_grid)
 {
     if (count <= 1)
         return 0;
@@ -642,6 +650,20 @@ static int detect_extra_frames(AccessUnit *aus, int count, int verbose)
                         extra_count);
             return extra_count;
         }
+    }
+
+    /* --- Method 3 gate ---
+     * H.264/H.265 interlaced streams legitimately carry field-rate PTS
+     * (one PES packet per PAFF field, half-duration spacing). The grid
+     * heuristic cannot tell those from TS corruption, so it is skipped
+     * for H.26x; Methods 1/2 above still catch genuine PTS/DTS defects.
+     * (Measured 2026-07-19 on mixed MBAFF+PAFF material: 1296 grid hits,
+     * zero real defects.) */
+    if (skip_grid) {
+        if (verbose)
+            fprintf(stderr, "PTS grid analysis: skipped for H.264/H.265 "
+                    "(field-rate PTS is legitimate)\n");
+        return 0;
     }
 
     /* --- Method 3: PTS grid analysis --- */
@@ -798,8 +820,9 @@ static void print_usage(const char *prog)
         "  --verbose, -v   Show progress on stderr\n"
         "  --help, -h      Show this help\n\n"
         "Output (stdout):\n"
-        "  extra_frames=<comma-separated frame indices>\n"
-        "  (empty if no extra frames detected)\n\n"
+        "  total_aus=<AU count>            (always)\n"
+        "  doubled_pts_aus=<comma-separated AU indices>\n"
+        "  (candidate line only when doubled-PTS AUs were detected)\n\n"
         "Exit codes:\n"
         "  0  Clean stream\n"
         "  1  Extra frames detected\n"
@@ -842,15 +865,21 @@ int main(int argc, char *argv[])
     if (verbose)
         fprintf(stderr, "TS file: %s (%lld bytes)\n", ts_file, (long long)ts_size);
 
-    int video_pid = find_video_pid(ts_data, ts_size);
+    int stream_type = 0;
+    int video_pid = find_video_pid(ts_data, ts_size, &stream_type);
     if (video_pid < 0) {
         fprintf(stderr, "Error: cannot detect video PID from TS.\n");
         close_mmap(ts_data, ts_size);
         return 2;
     }
 
-    if (verbose)
+    if (verbose) {
         fprintf(stderr, "Video PID: 0x%04x (%d)\n", video_pid, video_pid);
+        fprintf(stderr, "Stream type: 0x%02x (%s)\n", stream_type,
+                stream_type == ST_MPEG2_VIDEO ? "MPEG-2" :
+                stream_type == ST_H264_VIDEO  ? "H.264"  :
+                stream_type == ST_H265_VIDEO  ? "H.265"  : "unknown");
+    }
 
     close_mmap(ts_data, ts_size);
 
@@ -874,7 +903,11 @@ int main(int argc, char *argv[])
                 au_count, with_dts, with_pts);
     }
 
-    int extra_count = detect_extra_frames(aus, au_count, verbose);
+    bool skip_grid = (stream_type == ST_H264_VIDEO ||
+                      stream_type == ST_H265_VIDEO);
+    int extra_count = detect_extra_frames(aus, au_count, verbose, skip_grid);
+
+    printf("total_aus=%d\n", au_count);
 
     if (extra_count <= 0) {
         if (verbose)
@@ -883,7 +916,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    printf("extra_frames=");
+    printf("doubled_pts_aus=");
     bool first = true;
     for (int i = 0; i < au_count; i++) {
         if (aus[i].extra) {
