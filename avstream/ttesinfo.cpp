@@ -277,6 +277,11 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
                 int start = rangePart.section('-', 0, 0).toInt(&okStart);
                 int end   = rangePart.section('-', 1, 1).toInt(&okEnd);
                 if (!okStart || !okEnd) continue;
+                // Defense in depth: a malformed/inverted range from a
+                // corrupted or hand-edited .info must not reach consumers
+                // that assume start<=end (ttcut-demux's own emission
+                // already sanitizes this, but don't trust the file blindly).
+                if (end < start) continue;
                 TTESRange r;
                 r.start = start;
                 r.end   = end;
@@ -299,6 +304,10 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
                 int start = tok.section('-', 0, 0).toInt(&okStart);
                 int end   = tok.section('-', 1, 1).toInt(&okEnd);
                 if (!okStart || !okEnd) continue;
+                // Defense in depth: same reasoning as the es_missing_ranges
+                // guard above — reject an inverted range instead of trusting
+                // the .info file blindly.
+                if (end < start) continue;
                 TTESRange r;
                 r.start = start;
                 r.end   = end;

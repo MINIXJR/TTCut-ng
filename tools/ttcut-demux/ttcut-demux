@@ -1774,6 +1774,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
                         info "    $(basename "$AUDIO_FILE"): $N_REPAIRED silence-insertion(s) applied"
                     else
                         warn "    $(basename "$AUDIO_FILE"): silence-insert FAILED — leaving original"
+                        # Repair didn't happen — don't let the .info claim
+                        # a balance (audio_${i}_silence_ms/removed_ms) that
+                        # was only ever the INTENDED balance computed from
+                        # CLASSIFIED_FILE above, before the actual repair
+                        # attempt failed and left the original audio file
+                        # untouched.
+                        TRACK_SILENCE_MS[$i]=0
+                        TRACK_REMOVED_MS[$i]=0
                     fi
                 fi
             done
@@ -2145,18 +2153,40 @@ EOF
     # hole shifts everything after it earlier by the frames already lost
     # before it, since the output ES has those frames physically missing.
     if [ -s "$VIDEO_GAPS_FILE" ] && [ -n "$FIRST_VIDEO_PTS" ]; then
-        MISS_FRAMES=""; MISS_RANGES=""
+        MISS_FRAMES=""
         lost_before=0
+        MISS_POS_MS=""   # raw "fs ms" rows, one per hole, input to the clustering pass below
         while IFS=' ' read -r vs ve vms; do
             fs=$(awk "BEGIN {printf \"%.0f\", (($vs - $FIRST_VIDEO_PTS) - $lost_before) * $FRAME_RATE_DEC}")
-            fe=$(awk "BEGIN {printf \"%.0f\", $fs + 1}")
             MISS_FRAMES="${MISS_FRAMES:+$MISS_FRAMES,}$fs"
-            MISS_RANGES="${MISS_RANGES:+$MISS_RANGES,}${fs}-${fe}:${vms%.*}"
+            MISS_POS_MS="${MISS_POS_MS:+$MISS_POS_MS$'\n'}$fs ${vms%.*}"
             lost_before=$(awk "BEGIN {printf \"%.6f\", $lost_before + ($ve - $vs)}")
         done < "$VIDEO_GAPS_FILE"
         if [ -n "$MISS_FRAMES" ]; then
             write_warnings_header_if_needed
+            # es_missing_frames stays the raw, unclustered per-hole list
+            # (informational; one entry per row of VIDEO_GAPS_FILE).
             echo "es_missing_frames=$MISS_FRAMES" >> "$OUTPUT_INFO"
+            # es_missing_ranges is clustered (same <=2s / 2*fps-frames rule
+            # as corrupt_frame_ranges above): every raw hole used to become
+            # its own point-range, which on real signal-loss material is
+            # dozens to hundreds of degenerate single-frame ranges (measured
+            # g1: 5, incl. an exact duplicate position; g2: 137, 13 with
+            # negative ms from DTS/PTS boundary artifacts) instead of the
+            # handful of actual defect zones a human/consumer cares about.
+            # Merged-range end is the LAST member's fs+1 - a single-frame
+            # "fs-fs+1" span is the degenerate range for an isolated hole:
+            # the gap itself contributes no output-ES frames (it was
+            # physically removed by the demux), so the range only marks
+            # where it used to sit. Merged ms is the SUM of member ms, each
+            # first clamped to >=0 (a negative raw ms is a DTS/PTS boundary
+            # artifact, not real silence to subtract).
+            MISS_RANGES=$(printf '%s\n' "$MISS_POS_MS" | sort -n -k1,1 | awk -v fps="$FRAME_RATE_DEC" '
+                { fs = $1; ms = $2; if (ms < 0) ms = 0
+                  if (state && fs - last_fs <= 2*fps) { last_fs = fs; sum_ms += ms; next }
+                  if (state) { printf "%s%d-%d:%d", sep, start_fs, last_fs + 1, sum_ms; sep = "," }
+                  start_fs = fs; last_fs = fs; sum_ms = ms; state = 1 }
+                END { if (state) printf "%s%d-%d:%d", sep, start_fs, last_fs + 1, sum_ms }')
             echo "es_missing_ranges=$MISS_RANGES" >> "$OUTPUT_INFO"
         fi
     fi
@@ -2182,16 +2212,37 @@ EOF
     # is non-negative undoes the wrap (a single wrap covers any recording
     # under ~26.5h, which every TS recording is) and reproduces the correct
     # elapsed-time-since-start value.
+    #
+    # Ordering matters: wrap-correct and convert to a frame number BEFORE
+    # sorting. VDR can re-acquire signal on a different broadcaster PTS
+    # base after a full signal loss (a fresh 33-bit counter era); a raw dts
+    # tick from that era, once wrap-corrected, can land far outside the
+    # recording (frame count massively beyond total, or - after the old
+    # "sort raw ticks first" ordering scrambled chronological order -
+    # start>end inverted ranges). Measured on g2_final/00001.info: an
+    # inverted range "4760978-25194" and 7 ranges beyond 600k frames on a
+    # ~187k-frame recording. Sorting raw (pre-wrap) ticks numerically also
+    # put post-wrap (small-value) ticks before pre-wrap (large-value) ticks
+    # even though the post-wrap ones happened later in the recording -
+    # scrambling cluster order. Fix: wrap-correct + convert to frames per
+    # tick first, drop anything outside [0, VIDEO_FRAME_COUNT] right there
+    # (defense against a foreign PTS era surviving the wrap correction),
+    # THEN sort the resulting frame numbers, THEN cluster. Clustering on
+    # ascending input guarantees start<=end for every emitted range, but
+    # the emission still checks it explicitly as a second line of defense.
     if [ -n "${VIDEO_CORRUPT_DTS_TICKS:-}" ] && [ -n "$FIRST_VIDEO_PTS" ]; then
-        CORRUPT_RANGES=$(printf '%s\n' "$VIDEO_CORRUPT_DTS_TICKS" | grep -v '^$' | sort -n | awk -v fvp="$FIRST_VIDEO_PTS" -v fps="$FRAME_RATE_DEC" '
+        CORRUPT_RANGES=$(printf '%s\n' "$VIDEO_CORRUPT_DTS_TICKS" | grep -v '^$' | awk -v fvp="$FIRST_VIDEO_PTS" -v fps="$FRAME_RATE_DEC" -v maxf="${VIDEO_FRAME_COUNT:-0}" '
             BEGIN { fvp_ticks = fvp * 90000.0; wrap33 = 8589934592 }
             { d = $1 - fvp_ticks
               while (d < 0) d += wrap33
               f = int((d/90000.0) * fps)
+              if (f < 0 || f > maxf) next
+              print f }' | sort -n | awk -v fps="$FRAME_RATE_DEC" '
+            { f = $1
               if (state && f - last <= 2*fps) { last = f; next }        # <=2s: same range
-              if (state) { printf "%s%d-%d", sep, start, last; sep="," }
+              if (state) { if (start <= last) { printf "%s%d-%d", sep, start, last; sep="," } }
               start = f; last = f; state = 1 }
-            END { if (state) printf "%s%d-%d", sep, start, last }')
+            END { if (state && start <= last) printf "%s%d-%d", sep, start, last }')
         if [ -n "$CORRUPT_RANGES" ]; then
             write_warnings_header_if_needed
             echo "corrupt_frame_ranges=$CORRUPT_RANGES" >> "$OUTPUT_INFO"
