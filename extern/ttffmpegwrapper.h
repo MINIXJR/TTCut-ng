@@ -180,6 +180,11 @@ public:
     int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
     bool h264FrameMbsOnlyFlag() const { return mH264FrameMbsOnlyFlag; }
 
+    // Sample aspect ratio (SAR) of the video stream as width/height factor.
+    // Codec context first (populated once a frame was decoded), stream
+    // codecpar as fallback; 1.0 when unset/invalid.
+    double sampleAspectRatio() const;
+
     // Adopt stream-level metadata measured by the index OWNER during
     // buildFrameIndex (SPS parse + packet scan). Adopters via setFrameIndex()
     // never run that pass; without this their decode-order tagging counts

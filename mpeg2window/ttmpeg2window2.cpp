@@ -81,6 +81,7 @@ void TTMPEG2Window2::showVideoFrame()
     frameToShow = QImage(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32);
   }
 
+  float scaleFactorX = 1.0;
   float scaleFactorY = 1.0;
 
   if (mpVideoStream != 0 && !mUseFFmpeg) {
@@ -90,7 +91,21 @@ void TTMPEG2Window2::showVideoFrame()
     }
   }
 
-  QImage scale = frameToShow.scaled(videoWidth, videoHeight*scaleFactorY, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+  if (mUseFFmpeg && mpFFmpegWrapper != 0) {
+    // Anamorphic H.264/H.265 (SAR != 1:1, e.g. SD DVB 720x576 SAR 16:11):
+    // correct the display aspect in the upscale direction so no detail is
+    // lost before the final widget scaling. mpv playback applies the same
+    // correction — still frame and playback keep the same shape.
+    double sar = mpFFmpegWrapper->sampleAspectRatio();
+    if (sar > 0.0 && qAbs(sar - 1.0) > 0.005) {
+      if (sar > 1.0)
+        scaleFactorX = (float)sar;          // widen (e.g. 720 -> 1047)
+      else
+        scaleFactorY = (float)(1.0 / sar);  // heighten (SAR < 1, theoretical)
+    }
+  }
+
+  QImage scale = frameToShow.scaled(qRound(videoWidth*scaleFactorX), qRound(videoHeight*scaleFactorY), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
   // Draw subtitle overlay if available
   QString subtitleText = getSubtitleTextAtCurrentFrame();

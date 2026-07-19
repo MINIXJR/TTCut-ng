@@ -96,6 +96,11 @@ test_smartcut_seam: test_smartcut_seam.cpp $(SEAM_OBJS)
 test_feed_decode: test_feed_decode.cpp $(NALU_FULL_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_FULL_OBJS) $(LDLIBS) $(AVLIBS)
 
+# test_sar checks TTFFmpegWrapper::sampleAspectRatio on real material
+# (Befund D acceptance: still-frame aspect correction).
+test_sar: test_sar.cpp $(WRAPPER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
 test_segshape: test_segshape.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 

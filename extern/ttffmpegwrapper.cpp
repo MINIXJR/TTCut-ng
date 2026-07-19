@@ -351,6 +351,27 @@ int TTFFmpegWrapper::findBestAudioStream() const
 }
 
 // ----------------------------------------------------------------------------
+// Sample aspect ratio of the video stream (width/height factor, 1.0 = square
+// pixels). The codec context carries the SPS-derived SAR once a frame was
+// decoded; codecpar is the fallback for callers that never decoded.
+// ----------------------------------------------------------------------------
+double TTFFmpegWrapper::sampleAspectRatio() const
+{
+    AVRational sar = {0, 1};
+
+    if (mVideoCodecCtx)
+        sar = mVideoCodecCtx->sample_aspect_ratio;
+
+    if ((sar.num <= 0 || sar.den <= 0) && mFormatCtx && mVideoStreamIndex >= 0)
+        sar = mFormatCtx->streams[mVideoStreamIndex]->codecpar->sample_aspect_ratio;
+
+    if (sar.num <= 0 || sar.den <= 0)
+        return 1.0;
+
+    return av_q2d(sar);
+}
+
+// ----------------------------------------------------------------------------
 // Detect video codec type
 // ----------------------------------------------------------------------------
 TTVideoCodecType TTFFmpegWrapper::detectVideoCodec() const

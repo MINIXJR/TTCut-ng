@@ -21,10 +21,13 @@
     Frame grau concealed, bf=0-P-Frames trugen das Grau bis zum Copy-IDR.
     Alignment jetzt spec-bedingt (H.264 7.3.4) auf Lese- und Schreibseite;
     Details in `docs/code-map/smart-cut.md`, Diag `tools/diag/test_feed_decode`.
-  - **Befund D — H.264/H.265-Standbild-Aspect fehlt**: die anamorphe Korrektur
-    läuft nur im MPEG-2-Pfad (`ttmpeg2window2.cpp:86`, `!mUseFFmpeg`); SD-H.264
-    mit SAR≠1:1 (z.B. 720×576 SAR 16:11) wird als Standbild verzerrt gezeigt,
-    mpv-Play korrigiert. Fix-Richtung: SAR aus `sample_aspect_ratio` lesen.
+  - ~~**Befund D — H.264/H.265-Standbild-Aspect fehlt**~~ → **GEFIXT 2026-07-19**:
+    `showVideoFrame()` korrigiert im FFmpeg-Zweig jetzt jeden SAR≠1:1 in
+    Upscale-Richtung (Breite×SAR, z.B. 720×576 SAR 16:11 → 1047×576), Quelle
+    `TTFFmpegWrapper::sampleAspectRatio()` (Codec-Kontext, codecpar-Fallback).
+    MPEG-2-Pfad unverändert. Spec
+    `docs/superpowers/specs/2026-07-19-h26x-still-aspect-design.md`,
+    Diag `tools/diag/test_sar`.
 
 - **H.264 Smart Cut: EOS+Non-IDR-Naht beschädigt Leading-Pics des Copy-Start-Keyframes**
   (Defekt A, BESTÄTIGT 2026-07-16 — Fix ausstehend)

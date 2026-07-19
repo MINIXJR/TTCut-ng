@@ -30,6 +30,14 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **H.264/H.265: anamorphic SD material is no longer shown distorted in the
+  still-frame windows.** The CurrentFrame and CutOut windows displayed
+  H.26x frames at storage resolution (720×576 = 5:4), ignoring the signaled
+  sample aspect ratio — anamorphic widescreen (SAR 16:11, DAR 20:11) appeared
+  ~45 % too narrow, 4:3 DVB (SAR 12:11) ~9 %, while mpv playback letterboxed
+  correctly. Still frames now apply the SAR in the upscale direction (width
+  for SAR > 1), matching the playback shape; square-pixel material and the
+  MPEG-2 path are unchanged.
 - **H.264 Smart Cut: re-encoded segments no longer come out as uniform gray
   frames.** The SPS-unification slice rewriter emitted (and consumed) the
   CABAC alignment bits unconditionally; per H.264 7.3.4 they exist only when
