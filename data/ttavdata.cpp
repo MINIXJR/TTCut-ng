@@ -255,10 +255,12 @@ TTAVItem* TTAVData::createAVItem()
 
 // Pick the extra-frame index list for audio time correction. For MPEG-2 the
 // bitstream parser knows the truth (picture_structure -> field pairs, in
-// display-index space), so prefer it over the .info es_extra_frames list
-// (decode-index space, and produced by a PTS heuristic that cannot tell
-// field pairs from TS corruption). H.264/H.265 have no parser field extras,
-// so they keep using the .info list. No-op if target is already populated.
+// display-index space), so prefer it over the .info candidate list
+// (raw-AU-numbered, and produced by a PTS heuristic that cannot tell
+// field pairs from TS corruption). H.26x candidates need classification
+// through the PAFF merge map (raw AU != merged frame) — until that runs
+// (see the H.26x branch below, added in the follow-up commit), H.26x
+// applies nothing. No-op if target is already populated.
 static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
                                   TTVideoStream* vStream)
 {
@@ -272,18 +274,13 @@ static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
     return;
   }
 
-  if (esInfo.isLoaded() && !esInfo.esExtraFrames().isEmpty()) {
-    target = esInfo.esExtraFrames();
+  // MPEG-2 fallback when the parser found nothing: the .info candidate list
+  // (same numbering space as the field-granular MPEG-2 header list).
+  if (mpeg2 != nullptr && esInfo.isLoaded() && !esInfo.esDoubledPtsAus().isEmpty()) {
+    target = esInfo.esDoubledPtsAus();
     if (TTSettings::instance()->logCutPipeline())
-        qDebug() << "Extra-frame source: .info es_extra_frames," << target.size() << "indices";
-    return;
-  }
-
-  // MPEG-2 fallback when .info had nothing (mirrors old loadMpeg2FieldExtras).
-  if (mpeg2 != nullptr) {
-    target = mpeg2->extraIndices();
-    if (!target.isEmpty() && TTSettings::instance()->logCutPipeline())
-        qDebug() << "Extra-frame source: MPEG-2 parser (fallback)," << target.size() << "indices";
+        qDebug() << "Extra-frame source: .info es_doubled_pts_aus,"
+                 << target.size() << "indices";
   }
 }
 
@@ -515,7 +512,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   // PTS-heuristic hits still surface as "Defekt:" even though mExtraFrameIndices
   // holds the parser list for MPEG-2. The parser's field-pair positions confirm
   // which clusters are legitimate field pairs vs. real suspects.
-  QList<int> infoExtras = esInfo.esExtraFrames();
+  QList<int> infoExtras = esInfo.esDoubledPtsAus();
   TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
   QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
 

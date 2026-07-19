@@ -128,8 +128,13 @@ public:
     bool recommendProjectX() const { return mRecommendProjectX; }
     QList<TTDecodeErrorRegion> decodeErrorRegions() const { return mDecodeErrorRegions; }
 
-    // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
-    QList<int> esExtraFrames() const { return mEsExtraFrames; }
+    // Doubled-PTS candidate AUs (from ttcut-pts-analyze via ttcut-demux).
+    // Raw AU numbering of the analyzed TS (one AU per PES packet; PAFF
+    // fields count separately). esTotalAus() is the guard value: consumers
+    // must verify it against their own raw packet count before applying
+    // the candidate positions. -1 / empty when the .info lacks the keys.
+    int        esTotalAus() const { return mEsTotalAus; }
+    QList<int> esDoubledPtsAus() const { return mEsDoubledPtsAus; }
 
     // Audio gap frame indices (from ttcut-demux audio-gap detection).
     // Used for marker visualization only — NOT for audio cut time correction.
@@ -193,7 +198,8 @@ private:
     QList<TTDecodeErrorRegion> mDecodeErrorRegions;
 
     // Extra frame indices (from ttcut-pts-analyze via ttcut-demux)
-    QList<int> mEsExtraFrames;  // sorted list of extra frame indices
+    int        mEsTotalAus = -1;    // raw AU count of the analyzed TS (-1 = key absent)
+    QList<int> mEsDoubledPtsAus;    // doubled-PTS candidate AUs (raw AU numbering)
 
     // Audio gap frame indices (from ttcut-demux audio-gap detection)
     QList<int> mAudioGapFrames;  // sorted list of frame indices spanning audio gaps

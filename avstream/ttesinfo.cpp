@@ -225,21 +225,27 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         }
     }
     else if (section == "warnings") {
-        // Parse extra frame indices (comma-separated list).
+        // Parse doubled-PTS candidate AU indices (comma-separated list).
         // Cap list size to bound memory use against malformed .info files.
+        // The legacy key es_extra_frames is intentionally NOT parsed: its
+        // TS-AU numbering was consumed as merged-frame numbering, which
+        // drifts on PAFF streams (see spec 2026-07-19).
         const int maxExtraFrames = 100000;
-        QString extraFrameStr = values.value("es_extra_frames", "");
-        if (!extraFrameStr.isEmpty()) {
-            QStringList indices = extraFrameStr.split(',');
+        mEsTotalAus = values.value("es_total_aus", "-1").toInt();
+        QString doubledStr = values.value("es_doubled_pts_aus", "");
+        if (!doubledStr.isEmpty()) {
+            QStringList indices = doubledStr.split(',');
             for (const QString& idx : indices) {
-                if (mEsExtraFrames.size() >= maxExtraFrames) break;
+                if (mEsDoubledPtsAus.size() >= maxExtraFrames) break;
                 bool ok;
                 int frameIdx = idx.trimmed().toInt(&ok);
-                if (ok) mEsExtraFrames.append(frameIdx);
+                if (ok) mEsDoubledPtsAus.append(frameIdx);
             }
-            if (!mEsExtraFrames.isEmpty())
+            if (!mEsDoubledPtsAus.isEmpty())
                 if (TTSettings::instance()->logAVStream())
-                    qDebug() << "Loaded" << mEsExtraFrames.size() << "extra frame indices from .info";
+                    qDebug() << "Loaded" << mEsDoubledPtsAus.size()
+                             << "doubled-PTS candidate AUs from .info"
+                             << "(total_aus" << mEsTotalAus << ")";
         }
 
         // Parse audio gap frame indices (analogous to es_extra_frames).

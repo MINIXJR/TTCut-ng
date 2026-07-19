@@ -70,7 +70,10 @@ int main()
     "[warnings]\n"
     "es_missing_frames=500,501,1480,1481\n"
     "es_missing_ranges=500-501:400,1480-1481:300\n"
-    "corrupt_frame_ranges=100-140\n";
+    "corrupt_frame_ranges=100-140\n"
+    "es_total_aus=89800\n"
+    "es_doubled_pts_aus=454,668,1463\n"
+    "es_extra_frames=1,2,3\n";           // legacy key: must be IGNORED
   f.close();
 
   TTESInfo info;
@@ -99,6 +102,27 @@ int main()
   check(info.audioRemovedMs(1) == 0, "audioRemovedMs(1) == 0 (keys absent for track 1)");
   check(info.audioSilenceMs(2) == 0, "audioSilenceMs(2) == 0 (out-of-range track)");
   check(info.audioRemovedMs(2) == 0, "audioRemovedMs(2) == 0 (out-of-range track)");
+
+  check(info.esTotalAus() == 89800, "es_total_aus parsed");
+  check(info.esDoubledPtsAus().size() == 3, "es_doubled_pts_aus count (legacy es_extra_frames ignored)");
+  check(info.esDoubledPtsAus().value(0) == 454 &&
+        info.esDoubledPtsAus().value(2) == 1463, "es_doubled_pts_aus values");
+
+  // Absent-key defaults: a minimal .info without the new keys.
+  const QString path2 = dir + "/mini_nokeys.info";
+  QFile f2(path2);
+  if (!f2.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+    fprintf(stderr, "cannot write %s\n", qPrintable(path2));
+    return 1;
+  }
+  QTextStream out2(&f2);
+  out2 << "[video]\nfile=mini.264\ncodec=h264\nwidth=1280\nheight=720\n"
+          "frame_rate=50/1\nstart_pts=0.0\n";
+  f2.close();
+  TTESInfo info2;
+  check(info2.load(path2), "load() nokeys returns true");
+  check(info2.esTotalAus() == -1, "es_total_aus default -1");
+  check(info2.esDoubledPtsAus().isEmpty(), "es_doubled_pts_aus default empty");
 
   if (failures == 0) {
     printf("PASS\n");
