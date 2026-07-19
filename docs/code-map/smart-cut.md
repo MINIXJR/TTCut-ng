@@ -217,6 +217,30 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   pre-fix. Residual seam drift at such cuts (34 frames, SSIM ≥ 0.84, no
   artifacts) is defect A's cross-seam reference mechanism, tracked separately.
 
+- **SPS-Unification × byte-aligned slice header (defect E — FIXED
+  2026-07-19)** — `rewriteEncoderSliceForSourceSps` step 17 read and wrote
+  the CABAC alignment bits **unconditionally** (1 alignment bit + pad). Per
+  H.264 7.3.4 `cabac_alignment_one_bit` exists only *while* the header is
+  not byte-aligned; a header ending exactly on a byte boundary has none.
+  The unification deltas (+1 bit frame_num 4→5, +3 bits poc_lsb 4→7,
+  +2 bits pps_id 0→1) pushed a 42-bit x264 IDR header to exactly 48 bits →
+  a spurious 0xFF byte landed before the CABAC payload → ffmpeg discarded
+  the slice silently ("no picture", all 1620 MBs concealed gray), and the
+  following bf=0 P-frames (~98 % skip MBs) propagated the gray to the next
+  stream-copy IDR. Symptom looked position-local ("only this cut is gray")
+  but is pure per-slice header-bit-length luck — a neighbouring seam on the
+  same recording had a 50-bit header and was clean. The read side had the
+  symmetric bug (would eat 8 payload bits if an x264 header ever ended
+  aligned). **Fix:** both sides now pad conditionally (`(8 - pos % 8) % 8`,
+  the same pattern `neutralizeMmcoInAU` always used; `patchFrameNumInAU` /
+  `applyPocDomainFix` patch values at fixed bit width and were never
+  affected). H.265 never enters the rewriter (both transform paths are
+  H.264-gated). Gates: gray seam heals (0 concealment, luma matches
+  source); progressive/MBAFF/PAFF unification outputs and the standard
+  branch stay **byte-identical**. Diag: `tools/diag/test_feed_decode.cpp`
+  (decoder-feed isolation), minimal repro streams in
+  `/usr/local/src/CLAUDE_TMP/TTCut-ng/befund_e/`.
+
 ## Redundancy / consolidation candidates
 
 - **[REMOVED `3191d98`]** Dead branch — `processSegment` "PAFF fallback": was

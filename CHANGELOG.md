@@ -30,6 +30,21 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **H.264 Smart Cut: re-encoded segments no longer come out as uniform gray
+  frames.** The SPS-unification slice rewriter emitted (and consumed) the
+  CABAC alignment bits unconditionally; per H.264 7.3.4 they exist only when
+  the slice header does not already end on a byte boundary. Whenever the
+  rewritten header (widened frame_num/poc_lsb fields plus the new pps_id)
+  happened to land exactly on a byte boundary, a spurious 0xFF byte was
+  inserted before the CABAC payload — the decoder silently discarded the
+  slice and concealed the whole frame gray, and the following P-frames
+  (mostly skip macroblocks) carried the gray until the next stream-copy IDR.
+  Stream-dependent bit-length luck: measured on a mixed MBAFF+PAFF recording
+  (first re-encoded IDR hit exactly 48 header bits → 161 gray frames), while
+  neighbouring cut positions on the same recording were fine. Alignment is
+  now conditional on both the read and write side; outputs whose headers
+  never hit a byte boundary stay byte-identical (verified on progressive,
+  MBAFF and full-PAFF material).
 - **H.264 PAFF: navigating to a field-pair frame no longer hangs for ~2
   minutes.** The still-frame decoders of the CurrentFrame/CutOut windows
   adopt the frame index from the stream owner but never ran the index-build

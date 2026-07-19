@@ -3845,15 +3845,18 @@ static QByteArray rewriteEncoderSliceForSourceSps(
 
     // 17. CABAC alignment + slice data
     if (encPps.entropyCodingModeFlag) {
-        // Old: skip cabac_alignment_one_bit + padding to byte boundary
-        spsReadBits(oldData, oldSize, readPos, 1);  // cabac_alignment_one_bit (=1)
-        int oldPad = (8 - (readPos % 8)) % 8;
+        // cabac_alignment_one_bit(s) exist ONLY while the header does not end
+        // on a byte boundary (H.264 7.3.4: "while !byte_aligned()"). A header
+        // that already ends byte-aligned has NO alignment bits — consuming or
+        // emitting them unconditionally shifts the CABAC payload by a full
+        // byte and silently kills the whole slice (defect E: the widened
+        // rewritten header hit exactly 48 bits on 08x04's first IDR, the
+        // decoder discarded it and concealed the frame gray).
+        // All alignment bits are 1 (cabac_alignment_one_bit = f(1)).
+        int oldPad = (8 - (readPos % 8)) % 8;   // 0 when already aligned
         if (oldPad > 0) spsReadBits(oldData, oldSize, readPos, oldPad);
 
-        // New: write cabac_alignment_one_bit + padding to byte boundary
-        // All alignment bits must be 1 per H.264 spec (cabac_alignment_one_bit = f(1) = 1)
-        spsWriteBits(newData, newSize, writePos, 1, 1);
-        int newPad = (8 - (writePos % 8)) % 8;
+        int newPad = (8 - (writePos % 8)) % 8;  // 0 when already aligned
         if (newPad > 0) spsWriteBits(newData, newSize, writePos, (1 << newPad) - 1, newPad);
 
         // Copy CABAC data bytes (byte-aligned in both streams)
