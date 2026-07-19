@@ -238,6 +238,17 @@
 
 ## Medium Priority
 
+- **ttcut-demux: Audio-Padding bricht bei RELATIVEM output_dir ab** (latent,
+  gefunden 2026-07-19 bei den es-extras-Gates; kein Fix ohne Abnahme):
+  Der concat-Demuxer löst `file`-Einträge relativ zum Verzeichnis der
+  Concat-Liste auf. `TEMP_CONCAT` liegt in `$OUTDIR` und listet
+  `$OUTDIR/…`-relative Pfade → bei relativem output_dir wird `dir/dir/file`
+  gesucht (repro: „Impossible to open '08x04/08x04/…'"), das Padding-Subshell
+  stirbt und `set -e` reißt das Skript am `wait` um (exit 254, keine .info).
+  Absolute Aufrufe (VDR_Demux.sh-Workflow) sind nicht betroffen.
+  Fix-Richtung: Pfade beim Schreiben der Concat-Liste mit `realpath`
+  absolutieren (auch die Listen von `repair_audio_with_silence_inserts` prüfen).
+
 - **Fresh-Open: Extra-Frame-Cluster-Dialog blockt headless ohne `mNonInteractive`-Guard**
   - `showExtraFrameClusterDialog` (`data/ttavdata.cpp`) ruft `msgBox.exec()`
     ohne Prüfung auf `mNonInteractive` — betrifft NICHT `--auto-cut` (das
