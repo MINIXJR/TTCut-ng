@@ -78,8 +78,17 @@ test_adopt_paff: test_adopt_paff.cpp $(WRAPPER_OBJS)
 test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 
-test_smartcut_seam: test_smartcut_seam.cpp $(STILLFRAME_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
+# test_smartcut_seam links the wrapper too (injectmap mode mirrors the app's
+# display-map injection, required for PAFF ES). Union of STILLFRAME/WRAPPER
+# objects without duplicates:
+SEAM_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
+             ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
+             ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
+             ../../obj/ttesinfo.o ../../obj/ttnaluparser.o \
+             ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o
+
+test_smartcut_seam: test_smartcut_seam.cpp $(SEAM_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(SEAM_OBJS) $(LDLIBS) $(AVLIBS)
 
 test_segshape: test_segshape.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)

@@ -11,13 +11,19 @@
 #include <cstdio>
 #include <cstdlib>
 #include "extern/ttessmartcut.h"
+#include "extern/ttffmpegwrapper.h"
 #include "common/ttsettings.h"
+
+#include <cstring>
 
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
     if (argc < 5) {
-        fprintf(stderr, "usage: %s <es> <out> <cutIn> <cutOut> [frameRate]\n", argv[0]);
+        fprintf(stderr, "usage: %s <es> <out> <cutIn> <cutOut> [frameRate] [injectmap]\n"
+                        "  injectmap: build a TTFFmpegWrapper frame index and inject its\n"
+                        "  display-order map (mirrors the app path; needed for PAFF ES)\n",
+                argv[0]);
         return 2;
     }
     QString es = argv[1];
@@ -25,13 +31,29 @@ int main(int argc, char** argv)
     int cutIn  = atoi(argv[3]);
     int cutOut = atoi(argv[4]);
     double fr  = (argc > 5) ? atof(argv[5]) : 25.0;
+    bool injectMap = (argc > 6) && strcmp(argv[6], "injectmap") == 0;
 
     TTSettings::instance()->setLogSmartCut(true);
 
+    // Wrapper must outlive the smart cut: setDisplayOrderMap copies the map,
+    // but build it first so the injection below has a source.
+    TTFFmpegWrapper wrapper;
     TTESSmartCut sc;
     if (!sc.initialize(es, fr)) {
         fprintf(stderr, "initialize failed: %s\n", qPrintable(sc.lastError()));
         return 1;
+    }
+
+    if (injectMap) {
+        if (!wrapper.openFile(es) || wrapper.findBestVideoStream() < 0 ||
+            !wrapper.buildFrameIndex(wrapper.findBestVideoStream())) {
+            fprintf(stderr, "injectmap: wrapper index failed: %s\n",
+                    qPrintable(wrapper.lastError()));
+            return 1;
+        }
+        sc.setDisplayOrderMap(wrapper.displayOrderMap());
+        fprintf(stderr, "injectmap: wrapper map injected (%d frames, paff=%d)\n",
+                wrapper.frameCount(), wrapper.isPAFF() ? 1 : 0);
     }
     fprintf(stderr, "initialized: frames=%d gops=%d fr=%.3f\n",
             sc.frameCount(), sc.gopCount(), sc.frameRate());
