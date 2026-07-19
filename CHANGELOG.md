@@ -30,6 +30,20 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **H.264/H.265: legitimate PAFF field pairs are no longer reported as
+  defects.** ttcut-pts-analyze skips the PTS-grid heuristic for H.26x
+  (field-rate PTS is normal there; measured on a mixed MBAFF+PAFF recording:
+  1296 false positives, zero real defects). The .info contract is now
+  `es_total_aus`/`es_doubled_pts_aus` (raw AU numbering; the old
+  `es_extra_frames` key is retired and no longer parsed), and TTCut
+  classifies the remaining candidates through the PAFF merge map with an
+  AU-count guard — fixing false "defective frames" dialogs/markers and an
+  audio-timing error that grew to ~29 s on mixed MBAFF+PAFF recordings.
+  Re-demux affected recordings to refresh their .info.
+- **ttcut-demux: fixed a buffering race that truncated the extra-frame list
+  in the .info** (the analysis tool's stderr was interleaved into the
+  captured stdout CSV, cutting the list mid-stream and appending garbage).
+
 - **A recording too damaged to smart-cut no longer crashes the program.**
   When the display-order map cannot be built consistently on a badly
   corrupted stream, the preview previously kept attempting the doomed cut
