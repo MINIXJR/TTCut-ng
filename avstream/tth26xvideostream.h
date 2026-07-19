@@ -77,6 +77,13 @@ public:
     //           consumer->buildFrameIndex() itself.
     bool provideFrameIndexTo(TTFFmpegWrapper* consumer) const;
 
+    // Raw->merged AU translation for .info doubled-PTS candidates (raw AU
+    // numbering; see the TTFFmpegWrapper map doc). Display index is -1 for
+    // merged frames without a display slot (dropped HEVC RASL pics).
+    int  rawAuCount() const;
+    int  mapRawAuToDisplayIndex(int raw) const;
+    bool rawAuIsCollapsedField(int raw) const;
+
 protected:
     // ffmpeg lifecycle (called from createHeaderList)
     bool openStream();

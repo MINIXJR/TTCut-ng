@@ -179,6 +179,29 @@ public:
     bool isPAFF() const { return mIsPAFF; }
     int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
 
+    // --- Raw->merged AU map (PAFF) ---
+    // buildFrameIndex scans one packet per AU ("raw"); for H.264 PAFF,
+    // mergePAFFFieldsInIndex then collapses top+bottom field pairs, so the
+    // final frameIndex() is "merged". .info doubled-PTS candidates are
+    // raw-AU-numbered; these accessors translate. Only the index OWNER has
+    // the map — wrappers that adopt an index via setFrameIndex() never ran
+    // the merge and see identity (they adopt the already-merged list).
+    // Encoding: mRawToMerged entry >= 0 -> merged index; entry < 0 ->
+    // collapsed bottom field, merged index = ~entry. Empty = identity.
+    int  rawPacketCount() const { return mRawPacketCount; }
+    int  rawToMergedIndex(int raw) const
+    {
+        if (raw < 0 || raw >= mRawPacketCount) return -1;
+        if (mRawToMerged.isEmpty()) return raw;          // identity
+        const int v = mRawToMerged.at(raw);
+        return v >= 0 ? v : ~v;
+    }
+    bool rawIsCollapsedField(int raw) const
+    {
+        if (raw < 0 || raw >= mRawPacketCount) return false;
+        return !mRawToMerged.isEmpty() && mRawToMerged.at(raw) < 0;
+    }
+
     // Build GOP index
     bool buildGOPIndex();
     const QList<TTGOPInfo>& gopIndex() const { return mGOPIndex; }
@@ -302,6 +325,9 @@ private:
     bool mIsPAFF;                       // PAFF stream detected
     int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing
     bool mH264FrameMbsOnlyFlag;         // from SPS, true = no field coding
+
+    int          mRawPacketCount;       // AU count before PAFF merge
+    QVector<int> mRawToMerged;          // see accessor doc; empty = identity
 
     // H.264 PAFF field info from packet data
     struct TTFieldInfo {

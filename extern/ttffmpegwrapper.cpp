@@ -83,6 +83,7 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mIsPAFF(false)
     , mH264Log2MaxFrameNum(4)
     , mH264FrameMbsOnlyFlag(true)
+    , mRawPacketCount(0)
     , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
@@ -2326,6 +2327,8 @@ bool TTFFmpegWrapper::setupIndexingPass(int videoStreamIndex)
 
     mFrameIndex.clear();
     mIsPAFF = false;
+    mRawPacketCount = 0;
+    mRawToMerged.clear();
 
     // For raw ES files, seek to byte 0 instead of using av_seek_frame.
     // av_seek_frame doesn't work well with raw h264/hevc demuxers.
@@ -2500,7 +2503,11 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::mergePAFFFieldsInIndex()
 {
-    if (!mIsPAFF) return;
+    mRawPacketCount = mFrameIndex.size();
+    mRawToMerged.clear();
+    if (!mIsPAFF) return;                 // identity map (empty)
+
+    mRawToMerged.resize(mRawPacketCount);
 
     int w = 0;  // write index
     for (int r = 0; r < mFrameIndex.size(); ) {
@@ -2516,6 +2523,8 @@ void TTFFmpegWrapper::mergePAFFFieldsInIndex()
                 TTFrameInfo merged_info = cur;
                 merged_info.packetSize += next.packetSize;
                 mFrameIndex[w] = merged_info;
+                mRawToMerged[r]     = w;      // top field
+                mRawToMerged[r + 1] = ~w;     // bottom field, collapsed
                 w++;
                 r += 2;
                 merged = true;
@@ -2524,6 +2533,7 @@ void TTFFmpegWrapper::mergePAFFFieldsInIndex()
 
         if (!merged) {
             if (w != r) mFrameIndex[w] = mFrameIndex[r];
+            mRawToMerged[r] = w;
             w++;
             r++;
         }
@@ -2585,5 +2595,9 @@ void TTFFmpegWrapper::buildDisplayOrderMap()
 void TTFFmpegWrapper::setFrameIndex(const QList<TTFrameInfo>& index)
 {
     mFrameIndex = index;
+    // Adopted index is already merged: the raw->merged view is identity here
+    // (only the index owner ran mergePAFFFieldsInIndex and holds a real map).
+    mRawPacketCount = mFrameIndex.size();
+    mRawToMerged.clear();
     buildDisplayOrderMap();   // poc/isIDR/isDroppedLeading travel inside TTFrameInfo entries
 }

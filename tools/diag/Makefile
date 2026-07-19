@@ -66,6 +66,9 @@ test_audiocut: test_audiocut.cpp $(WRAPPER_OBJS)
 test_stilldisplay: test_stilldisplay.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
+test_rawmap: test_rawmap.cpp $(WRAPPER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
 test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 

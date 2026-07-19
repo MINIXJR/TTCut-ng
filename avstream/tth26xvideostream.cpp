@@ -295,3 +295,21 @@ bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
     consumer->setFrameIndex(idx);
     return true;
 }
+
+int TTH26xVideoStream::rawAuCount() const
+{
+    return mFFmpeg ? mFFmpeg->rawPacketCount() : 0;
+}
+
+int TTH26xVideoStream::mapRawAuToDisplayIndex(int raw) const
+{
+    if (!mFFmpeg) return -1;
+    const int merged = mFFmpeg->rawToMergedIndex(raw);
+    if (merged < 0) return -1;
+    return mFFmpeg->displayOrderMap().decodeToDisplay(merged);
+}
+
+bool TTH26xVideoStream::rawAuIsCollapsedField(int raw) const
+{
+    return mFFmpeg ? mFFmpeg->rawIsCollapsedField(raw) : false;
+}
