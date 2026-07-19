@@ -540,6 +540,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   QList<TTStreamPoint> clusters;
   int confirmedClusters = 0;
   int unconfirmedClusters = 0;
+  int defectVideoFrames = 0;   // frames in unconfirmed (real-defect) clusters only
 
   // Cluster pass 1: video doubled-PTS frames (.info es_extra_frames)
   if (!infoExtras.isEmpty()) {
@@ -548,13 +549,23 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
       int clusterCount = 1;
 
       auto emitCluster = [&]() {
+          bool confirmed = clusterConfirmed(clusterStart, clusterEnd);
+          if (confirmed) {
+              // Parser-confirmed legitimate field-picture coding, not a defect.
+              // Keep the count for logging, but do NOT add a visible timeline
+              // marker: field pairs are a normal encoder property (interlaced
+              // MPEG-2), not something the user needs flagged. The internal
+              // audio correction reads the parser positions via
+              // loadExtraFrameIndices(), independent of these markers.
+              ++confirmedClusters;
+              return;
+          }
+          ++unconfirmedClusters;
+          defectVideoFrames += clusterCount;
           int pos = qMax(0, clusterStart - offsetFrames);
           double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-          bool confirmed = clusterConfirmed(clusterStart, clusterEnd);
-          const char* prefix = confirmed ? "Feldpaare" : "Defekt";
-          if (confirmed) ++confirmedClusters; else ++unconfirmedClusters;
-          QString desc = QString("%1: %2–%3 (%4 Frames, %5s)")
-              .arg(prefix).arg(clusterStart).arg(clusterEnd)
+          QString desc = QString("Defekt: %1–%2 (%3 Frames, %4s)")
+              .arg(clusterStart).arg(clusterEnd)
               .arg(clusterCount).arg(durSec, 0, 'f', 1);
           clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
       };
@@ -633,22 +644,15 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
                << "confirmed field pairs," << unconfirmedClusters << "unconfirmed,"
                << lossZones << "loss zones," << corruptZones << "corrupt zones";
 
+  // Nothing to report: either a clean stream or only parser-confirmed field
+  // pairs. Field pairs are legitimate interlaced coding and are intentionally
+  // NOT turned into timeline markers (see emitCluster above), so clusters is
+  // empty here and we return silently -- no import, no dialog. Only real
+  // defects, audio gaps, and demuxer-reported loss/corruption reach clusters.
   if (clusters.isEmpty()) return;
 
-  // All video clusters are confirmed field pairs and there are no audio gaps
-  // and no demuxer-reported loss/corruption -> legitimate field-picture
-  // coding, not a defect. Import the navigation markers silently, skip the
-  // warning dialog. Loss/corrupt zones (pass 3) are never false positives
-  // (they come straight from the demuxer's missing/corrupt range list), so
-  // their presence always forces the dialog.
-  if (unconfirmedClusters == 0 && mAudioGapIndices.isEmpty() &&
-      lossZones == 0 && corruptZones == 0) {
-      emit vdrMarkersLoaded(clusters);
-      return;
-  }
-
   // Show dialog with group listing (combined defect + gap totals)
-  int totalDefects = infoExtras.size() + mAudioGapIndices.size() +
+  int totalDefects = defectVideoFrames + mAudioGapIndices.size() +
                       lossFrames + corruptFrames;
   QString msg = tr("%1 defective frames in %2 groups detected.\n")
       .arg(totalDefects)

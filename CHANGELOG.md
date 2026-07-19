@@ -39,6 +39,15 @@ All notable changes to TTCut-ng are documented in this file.
   explaining that the recording is too damaged for frame-accurate cutting,
   instead of failing silently or crashing.
 
+- **Legitimate field pairs are no longer added as timeline markers.** When
+  opening interlaced MPEG-2 material, parser-confirmed field-picture pairs
+  (doubled-PTS positions that are normal encoder output, not a defect) were
+  silently imported as `Error` stream points and cluttered the timeline
+  without asking. They are now counted for logging but never turned into
+  markers; only real defects, audio gaps, and demuxer-reported loss/
+  corruption produce markers. The internal audio-drift correction, which
+  reads the same field-pair positions, is unaffected.
+
 ## v0.75.0 (2026-07-18)
 
 **Smart-cut corruption fix on progressive DVB, two MPEG-2 tail fixes, dead-code cleanup**
