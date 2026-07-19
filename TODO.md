@@ -13,6 +13,14 @@
     aber nicht formal bewiesen (GUI-Soak ohne Crash bestanden); PAFF-
     **Playback**-Fehler beim Play (mpv `reference picture missing during
     reorder`) besteht fort — separates Follow-up (libmpv Phase 2).
+  - ~~**Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**~~
+    → **GEFIXT 2026-07-19** (`8dfda6d`): der SPS-Unification-Rewriter
+    schrieb/las die CABAC-Alignment-Bits unbedingt; endete der umgeschriebene
+    Slice-Header exakt byte-aligniert (08x04: 42+6 = 48 Bits am ersten IDR),
+    schob ein falsches 0xFF-Byte die Payload weg → Slice still verworfen,
+    Frame grau concealed, bf=0-P-Frames trugen das Grau bis zum Copy-IDR.
+    Alignment jetzt spec-bedingt (H.264 7.3.4) auf Lese- und Schreibseite;
+    Details in `docs/code-map/smart-cut.md`, Diag `tools/diag/test_feed_decode`.
   - **Befund D — H.264/H.265-Standbild-Aspect fehlt**: die anamorphe Korrektur
     läuft nur im MPEG-2-Pfad (`ttmpeg2window2.cpp:86`, `!mUseFFmpeg`); SD-H.264
     mit SAR≠1:1 (z.B. 720×576 SAR 16:11) wird als Standbild verzerrt gezeigt,
