@@ -30,6 +30,16 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **H.264 PAFF: navigating to a field-pair frame no longer hangs for ~2
+  minutes.** The still-frame decoders of the CurrentFrame/CutOut windows
+  adopt the frame index from the stream owner but never ran the index-build
+  pass that detects PAFF, so their decode-order tagging counted field packets
+  as frames — a field-pair target was never recognized as delivered and the
+  decoder drained the whole file to EOF (twice, ~53 s each) before falling
+  back to a neighbor frame. The owner's measured stream state (PAFF flag,
+  SPS field parameters) now travels with the adopted index; the same decode
+  is instant (13 ms measured). Affects mixed MBAFF+PAFF and full-PAFF
+  recordings.
 - **H.264/H.265: legitimate PAFF field pairs are no longer reported as
   defects.** ttcut-pts-analyze skips the PTS-grid heuristic for H.26x
   (field-rate PTS is normal there; measured on a mixed MBAFF+PAFF recording:

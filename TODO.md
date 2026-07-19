@@ -5,10 +5,14 @@
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — verbleibende Befunde**
   (Wurzel — TS↔ES-AU-Nummerierungs-Drift der es_extra_frames — GELÖST 2026-07-19,
   siehe Spec `docs/superpowers/specs/2026-07-19-es-extras-field-awareness-design.md`):
-  - **Befund B — Decode-Hänger/Crash** beim Navigieren auf ein PAFF-Feldpaar-AU
-    (Coredump `core.456277`; 53-s-EOF-Drain oder SIGABRT in `avcodec_send_packet`;
-    Verdacht: Zusammenspiel der zwei Decoder-Instanzen CurrentFrame+CutOut).
-    Nicht headless reproduzierbar — eigener Task, Brainstorming empfohlen.
+  - ~~**Befund B — Decode-Hänger** beim Navigieren auf ein PAFF-Feldpaar-AU~~
+    → **GEFIXT 2026-07-19** (`46d3dcb`): Index-Adopter erben jetzt den
+    PAFF-Zustand des Owners (`adoptStreamMetadata`); Diag `test_adopt_paff`.
+    Restpunkte: die Crash-Variante (`core.456277`, SIGABRT in
+    `avcodec_send_packet`) ist als Folge des beseitigten EOF-Drains plausibel,
+    aber nicht formal bewiesen (GUI-Soak ohne Crash bestanden); PAFF-
+    **Playback**-Fehler beim Play (mpv `reference picture missing during
+    reorder`) besteht fort — separates Follow-up (libmpv Phase 2).
   - **Befund D — H.264/H.265-Standbild-Aspect fehlt**: die anamorphe Korrektur
     läuft nur im MPEG-2-Pfad (`ttmpeg2window2.cpp:86`, `!mUseFFmpeg`); SD-H.264
     mit SAR≠1:1 (z.B. 720×576 SAR 16:11) wird als Standbild verzerrt gezeigt,
