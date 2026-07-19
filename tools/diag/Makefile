@@ -90,6 +90,12 @@ SEAM_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
 test_smartcut_seam: test_smartcut_seam.cpp $(SEAM_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(SEAM_OBJS) $(LDLIBS) $(AVLIBS)
 
+# test_feed_decode isolates the smart-cut decoder feed: parser AUs are fed to
+# a decoder configured like TTESSmartCut::setupDecoder and every output
+# frame's luma mean is printed (flat 128.0 = libav gray fill).
+test_feed_decode: test_feed_decode.cpp $(NALU_FULL_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_FULL_OBJS) $(LDLIBS) $(AVLIBS)
+
 test_segshape: test_segshape.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
 
