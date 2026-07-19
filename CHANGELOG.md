@@ -28,6 +28,17 @@ All notable changes to TTCut-ng are documented in this file.
   drift to −23 ms across 496 applied splices, with all 4 segment-boundary
   loss ranges reported. Undamaged recordings remain byte-identical.
 
+### Fixes
+
+- **A recording too damaged to smart-cut no longer crashes the program.**
+  When the display-order map cannot be built consistently on a badly
+  corrupted stream, the preview previously kept attempting the doomed cut
+  for every segment and then tried to play clips that were never written —
+  on a large stream this exhausted threads/memory and aborted the whole GUI.
+  The preview now stops on the first un-cuttable segment and shows a dialog
+  explaining that the recording is too damaged for frame-accurate cutting,
+  instead of failing silently or crashing.
+
 ## v0.75.0 (2026-07-18)
 
 **Smart-cut corruption fix on progressive DVB, two MPEG-2 tail fixes, dead-code cleanup**
