@@ -191,7 +191,20 @@ void TTCutPreviewTask::operation()
     if (isH264H265) {
       // For H.264/H.265: use ffmpeg directly to extract preview clips
       // The TTCutVideoTask cutting is not yet implemented for H.264/H.265
-      createH264PreviewClip(tmpCutList, outputFile, sharedSmartCut);
+      try
+      {
+        createH264PreviewClip(tmpCutList, outputFile, sharedSmartCut);
+      }
+      catch (const TTException&)
+      {
+        // Smart Cut aborted (e.g. un-cuttable damaged stream). Clean up the
+        // per-iteration cut list and the shared Smart Cut engine (both are
+        // otherwise deleted at the end of operation(), which we now skip),
+        // then re-raise so TTThreadTask::run() reports it as a clean abort.
+        delete tmpCutList;
+        delete sharedSmartCut;
+        throw;
+      }
       hasAudio = (tmpCutList->at(0).avDataItem()->audioCount() > 0);
     } else {
       // For MPEG-2: use traditional cutting workflow
@@ -396,11 +409,18 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
       .arg(TTSettings::instance()->tempDirPath())
       .arg(suffix);
 
-  // Perform frame-accurate video cut
+  // Perform frame-accurate video cut. On failure (e.g. a display-order map
+  // that cannot be built consistently on a badly damaged recording) abort the
+  // WHOLE preview instead of silently returning: the caller looped over every
+  // cut segment, and a swallowed failure let it keep spawning decoder/encoder
+  // instances per segment and then mux/play non-existent clips — on a large
+  // corrupt stream this exhausted threads/memory and crashed the process.
   if (!smartCut->smartCutFrames(tempVideoFile, cutFrames)) {
+    const QString err = smartCut->lastError();
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("Preview Smart Cut failed: %1").arg(smartCut->lastError()));
-    return;
+        QString("Preview Smart Cut failed: %1").arg(err));
+    throw TTAbortException(__FILE__, __LINE__,
+        QString("Preview not possible — recording too damaged for frame-accurate cutting: %1").arg(err));
   }
 
   qint64 smartCutMs = clipTimer.elapsed();
