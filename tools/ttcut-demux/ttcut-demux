@@ -1350,23 +1350,31 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # Detect extra frames in elementary streams via PTS comparison.
     # Uses ttcut-pts-analyze (replaces ttcut-esrepair).
     #########################################################################
-    ES_EXTRA_FRAMES_CSV=""
+    ES_TOTAL_AUS=""
+    ES_DOUBLED_PTS_CSV=""
     if command -v ttcut-pts-analyze >/dev/null 2>&1; then
         info "Running PTS analysis on $ORIGINAL_INPUT ..."
+        # stderr goes to its own log: mixing it into stdout (old 2>&1)
+        # raced the block-buffered CSV line and truncated the captured
+        # list mid-stream (measured: 731 of 1296 entries + garbage).
+        PTS_STDERR_LOG="$OUTDIR/.pts_analyze.log"
+        _CLEANUP_FILES+=("$PTS_STDERR_LOG")
         set +e
-        PTS_OUTPUT=$(ttcut-pts-analyze --verbose "$ORIGINAL_INPUT" 2>&1)
+        PTS_OUTPUT=$(ttcut-pts-analyze --verbose "$ORIGINAL_INPUT" 2>"$PTS_STDERR_LOG")
         PTS_EXIT=$?
         set -e
 
+        ES_TOTAL_AUS=$(echo "$PTS_OUTPUT" | grep -oP '^total_aus=\K[0-9]+' || true)
         if [ "$PTS_EXIT" -eq 1 ]; then
-            ES_EXTRA_FRAMES_CSV=$(echo "$PTS_OUTPUT" | grep -oP '^extra_frames=\K.*' || true)
-            if [ -n "$ES_EXTRA_FRAMES_CSV" ]; then
-                count=$(echo "$ES_EXTRA_FRAMES_CSV" | tr ',' '\n' | wc -l)
-                warn "PTS analysis: $count pictures with doubled PTS detected (field-picture pairs or TS corruption)"
+            ES_DOUBLED_PTS_CSV=$(echo "$PTS_OUTPUT" | grep -oP '^doubled_pts_aus=\K.*' || true)
+            if [ -n "$ES_DOUBLED_PTS_CSV" ]; then
+                count=$(echo "$ES_DOUBLED_PTS_CSV" | tr ',' '\n' | wc -l)
+                warn "PTS analysis: $count AUs with doubled PTS detected (field-picture pairs or TS corruption)"
             fi
         elif [ "$PTS_EXIT" -eq 2 ]; then
             warn "PTS analysis failed (exit 2)"
         fi
+        rm -f "$PTS_STDERR_LOG"
     else
         warn "ttcut-pts-analyze not found, skipping PTS analysis"
     fi
@@ -2116,13 +2124,18 @@ EOF
         fi
     }
 
-    if [ -n "$ES_EXTRA_FRAMES_CSV" ]; then
+    if [ -n "$ES_TOTAL_AUS" ]; then
         write_warnings_header_if_needed
-        echo "es_extra_frames=$ES_EXTRA_FRAMES_CSV" >> "$OUTPUT_INFO"
+        echo "es_total_aus=$ES_TOTAL_AUS" >> "$OUTPUT_INFO"
+    fi
+    if [ -n "$ES_DOUBLED_PTS_CSV" ]; then
+        write_warnings_header_if_needed
+        echo "es_doubled_pts_aus=$ES_DOUBLED_PTS_CSV" >> "$OUTPUT_INFO"
     fi
 
     # Emit audio_gap_frames= as comma-separated frame indices spanning each gap.
-    # Uses first_video_pts as reference (consistent with es_extra_frames mapping).
+    # Uses first_video_pts as reference (PTS-derived display-time frames;
+    # NOT the raw AU numbering that es_doubled_pts_aus uses).
     if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ] && [ -n "$FIRST_VIDEO_PTS" ]; then
         FRAME_RATE_NUM_LOCAL=$(echo "$FRAME_RATE" | cut -d'/' -f1)
         FRAME_RATE_DEN_LOCAL=$(echo "$FRAME_RATE" | cut -d'/' -f2)
