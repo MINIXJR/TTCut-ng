@@ -178,6 +178,21 @@ public:
     int frameCount() const { return mFrameIndex.size(); }
     bool isPAFF() const { return mIsPAFF; }
     int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
+    bool h264FrameMbsOnlyFlag() const { return mH264FrameMbsOnlyFlag; }
+
+    // Adopt stream-level metadata measured by the index OWNER during
+    // buildFrameIndex (SPS parse + packet scan). Adopters via setFrameIndex()
+    // never run that pass; without this their decode-order tagging counts
+    // PAFF field packets as frames (decodeOrderTagForPacket's field gate is
+    // off), so decodeFrame() never sees a field-pair target AU and drains the
+    // whole file to EOF. Call right after setFrameIndex() — see
+    // TTH26xVideoStream::provideFrameIndexTo().
+    void adoptStreamMetadata(bool isPAFF, bool frameMbsOnlyFlag, int log2MaxFrameNum)
+    {
+        mIsPAFF = isPAFF;
+        mH264FrameMbsOnlyFlag = frameMbsOnlyFlag;
+        mH264Log2MaxFrameNum = log2MaxFrameNum;
+    }
 
     // --- Raw->merged AU map (PAFF) ---
     // buildFrameIndex scans one packet per AU ("raw"); for H.264 PAFF,

@@ -293,6 +293,12 @@ bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
     if (idx.isEmpty())
         return false;                 // not built yet → caller builds itself
     consumer->setFrameIndex(idx);
+    // Stream-level metadata travels with the index: without it the adopter's
+    // PAFF field tagging is disabled and decodeFrame() hangs on field-pair
+    // targets (53 s EOF drain; Befund B, spec 2026-07-19).
+    consumer->adoptStreamMetadata(mFFmpeg->isPAFF(),
+                                  mFFmpeg->h264FrameMbsOnlyFlag(),
+                                  mFFmpeg->h264Log2MaxFrameNum());
     return true;
 }
 
