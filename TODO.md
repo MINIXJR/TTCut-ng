@@ -47,18 +47,41 @@
     Synthetik x265 open-gop bf=4 (CRA-Keyframes), Cut 160..400: 237 statt 241
     Frames, 0 Decoder-Fehler — die 4 RASL-Pictures des Copy-Start-CRA
     (Display 196–199) werden nach dem EOS still verworfen (`NoRaslOutputFlag=1`).
-    Folge-Verdacht (noch zu messen): fortlaufende Mux-Timestamps ⇒ ~160 ms
-    A/V-Verschiebung ab der Naht bei 25fps.
-  - Fix-Skizze: Extension auch feuern lassen, wenn der Non-IDR-Copy-Start
-    überhaupt Leading-Pics hat (Kosten: 1 GOP mehr Re-Encode pro Naht).
-    **Design-Prüfpunkt:** Die Extension verschiebt den Copy-Start zum nächsten
-    Keyframe — der auf IDR-losem Material ebenfalls Non-IDR/CRA mit eigenen
-    Leading-Pics ist. Ob die Naht dort wirklich sauber ist oder das Problem nur
-    wandert, MUSS die A-Spec messen (Cut im Reorder-Fenster erzwingt die
-    Extension schon heute). Alternative Richtung: EOS an der Naht weglassen und
-    Leading-Pics gegen die Re-Encode-Standins auflösen lassen (milde Drift statt
-    Verlust/Korruption) — POC/frame_num-Kontinuität wäre Voraussetzung.
-  - Repro: `tools/diag/test_smartcut_seam`; Karte
+    ~~Folge-Verdacht (noch zu messen): fortlaufende Mux-Timestamps ⇒ ~160 ms
+    A/V-Verschiebung ab der Naht bei 25fps.~~ → widerlegt, s. Mess-Session.
+  - **Mess-Session 2026-07-20 (Design-Entscheid steht noch aus):**
+    - **Extension-Hypothese als Fix-Richtung WIDERLEGT.** Jeder Mitten-GOP-Cut
+      sitzt schon heute an einem "nächsten Keyframe"; die verschobene Naht ist
+      strukturgleich. Auf IDR-freiem bf=3-Material (Keyframes alle 50) zeigen
+      zwei Standard-Branch-Nähte (KF 199 mit 1 Leading-B, KF 297 mit 3)
+      dieselbe Schadensklasse: **der KF wird N Display-Slots zu früh
+      ausgegeben, die N Leading-Bs kommen danach und sind still korrupt**
+      (Hash matcht kein Quellbild; 0–1 Decoder-Fehler; Rest ab KF
+      bit-identisch). Rekursion unmöglich: auf IDR-freiem Material hat jeder
+      Ziel-KF wieder Leading-Pics.
+    - **Schwere = Branch-Lotterie** (POC des Copy-Start-KF entscheidet
+      pocBridgeable): dieselbe Naht-Klasse über die Unification-Branch
+      (KF 248, 2 Leading-Bs) liefert korrekte Reihenfolge + **richtigen Inhalt
+      in Re-Encode-Qualität** (SSIM 0,973/0,981; Nachbar-Baseline 0,92;
+      Kreuz-SSIM 0,906), 0 Fehler, ab KF bit-identisch. Die
+      MMCO-Neutralisierung + POC-Domain-Kontinuität der Unification-Naht
+      erreichen das "Standins statt Korruption"-Ziel MIT EOS.
+      ⇒ Evidenz-gestützte Fix-Richtung H.264: der Standard-Branch-Naht die
+      Unification-Naht-Behandlung geben (statt Extension oder EOS-Verzicht).
+    - **H.265: Verlust wandert exakt mit** (Cut 210..450, Naht am nächsten
+      CRA 246: wieder genau 4 RASL-Frames weg, 0 Fehler, Rest bit-identisch).
+    - **A/V-Shift-Verdacht WIDERLEGT** (echte Mux-Pipeline via neuem Diag-Tool
+      `tools/diag/test_mkvmux`, app-getreu inkl. `outputDisplayOrder`):
+      RASL-AUs bekommen eigene PTS-Slots, die MKV-Zeitachse bleibt
+      inhaltstreu (PTS-Sprung 1,400→1,600 s an der Naht, Gesamtdauer voll
+      9,64 s). Symptom = **200-ms-Standbild** an der Naht (4 verlorene Slots
+      + Frameabstand bei 25fps), **kein kumulativer Sync-Drift**.
+    - H.264 im MKV: Container-PTS tragen die korrekten Slots (KF 1,600 s,
+      korruptes B 1,560 s; nicht-monoton in Decode-Reihenfolge) — die
+      ES-Inversion wird bei PTS-treuer Präsentation maskiert; sichtbares
+      Symptom = N korrupte Frames + PTS-Wobble (deckt sich mit realem
+      60–120-ms-Glitch).
+  - Repro: `tools/diag/test_smartcut_seam`, `tools/diag/test_mkvmux`; Karte
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
     `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 

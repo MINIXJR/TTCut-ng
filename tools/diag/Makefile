@@ -90,6 +90,12 @@ SEAM_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
 test_smartcut_seam: test_smartcut_seam.cpp $(SEAM_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(SEAM_OBJS) $(LDLIBS) $(AVLIBS)
 
+# test_mkvmux: smart-cut + app-faithful MKV mux (defect A: seam PTS analysis)
+MKVMUX_OBJS := $(SEAM_OBJS) ../../obj/ttmkvmergeprovider.o \
+               ../../obj/moc_ttmkvmergeprovider.o
+test_mkvmux: test_mkvmux.cpp $(MKVMUX_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(MKVMUX_OBJS) $(LDLIBS) $(AVLIBS)
+
 # test_feed_decode isolates the smart-cut decoder feed: parser AUs are fed to
 # a decoder configured like TTESSmartCut::setupDecoder and every output
 # frame's luma mean is printed (flat 128.0 = libav gray fill).

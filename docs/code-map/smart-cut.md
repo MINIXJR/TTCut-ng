@@ -185,12 +185,28 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   instead of corruption** — the copy-start CRA's RASL pictures are discarded
   after the EOS (`NoRaslOutputFlag = 1`): a synthetic x265 open-gop `bf=4` cut
   lost exactly 4 frames (the RASL window, display 196–199), zero decoder
-  errors, all delivered frames clean. Suspected follow-on (unmeasured):
-  sequential mux timestamps turn the gap into an A/V shift for the rest of the
-  segment. Fix-design checkpoint: extending the re-encode to the next keyframe
-  merely *moves* the seam to another CRA/non-IDR keyframe with its own leading
-  pics on IDR-free material — whether that seam is clean must be measured, not
-  assumed. Repro harness: `tools/diag/test_smartcut_seam.cpp`;
+  errors, all delivered frames clean. **Measured 2026-07-20 (both fix-design
+  checkpoints resolved):** (1) the extension/next-keyframe idea is refuted —
+  every mid-GOP cut already seams at a "next keyframe", and moved seams show
+  the identical damage class. Two standard-branch seams (KF with 1 and with 3
+  leading Bs) both emit **the keyframe N display slots early, followed by the
+  N leading Bs silently corrupted** (hashes match no source frame; 0–1 decoder
+  errors; everything from the KF on bit-identical). The same seam class
+  through the **unification branch** is benign: correct order, correct
+  content at re-encode quality (SSIM 0.97–0.98 vs 0.92 neighbor baseline),
+  zero errors — i.e. MMCO neutralization + POC-domain continuity achieve
+  standin-resolution WITH the EOS in place; severity is a POC lottery via
+  `pocBridgeable`. Evidence-backed fix direction: give the standard-branch
+  seam the unification seam treatment. H.265: the RASL loss moves with the
+  seam unchanged (next-CRA seam loses exactly its RASL window again).
+  (2) The suspected A/V shift is refuted: the app-faithful mux
+  (`outputDisplayOrder`) gives RASL AUs their own PTS slots; the MKV timeline
+  stays content-true (PTS gap at the seam, full total duration) — the symptom
+  is a ~200 ms freeze, no cumulative sync drift. For H.264 the container PTS
+  also carry the correct slots, masking the ES-level display inversion on
+  PTS-honoring players; the visible symptom is N corrupt frames + a
+  non-monotonic PTS wobble. Repro harnesses:
+  `tools/diag/test_smartcut_seam.cpp`, `tools/diag/test_mkvmux.cpp`;
   artifacts `/usr/local/src/CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
 - **SPS-Unification × poc_type-2 encoder (defect B — FIXED 2026-07-16)** —
