@@ -1000,8 +1000,11 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         // value applyPocDomainFix bridges towards on the standard path).
         // Deliberately NOT extended to the min-display POC: leading-B POCs
         // wrap below the keyframe's and would flag seams the standard path
-        // demonstrably bridges fine (2026-07-03 full-scan: 0 violations);
-        // widening the check would swap the proven path on benign seams.
+        // bridges fine POC-wise (2026-07-03 full-scan: 0 violations). Note
+        // that POC bridging alone does NOT make a seam clean: defect A
+        // (2026-07-20) showed non-IDR copy-starts with leading pictures are
+        // corrupt on the standard path regardless — those are routed to
+        // unification by the separate seamNeedsUnification trigger below.
         QByteArray scAU = mParser.readAccessUnitData(segment.streamCopyStartFrame);
         int scPocLsb = readPocLsbFromAU(scAU, mLog2MaxFrameNum,
                                          mLog2MaxPocLsb, mFrameMbsOnly);

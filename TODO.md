@@ -29,8 +29,33 @@
     `docs/superpowers/specs/2026-07-19-h26x-still-aspect-design.md`,
     Diag `tools/diag/test_sar`.
 
-- **H.264 Smart Cut: EOS+Non-IDR-Naht beschädigt Leading-Pics des Copy-Start-Keyframes**
-  (Defekt A, BESTÄTIGT 2026-07-16 — Fix ausstehend)
+- **H.265 Smart Cut: RASL-Verlust an der Non-IDR/CRA-Naht (Defekt A,
+  H.265-Teil) — OFFEN, eigener Folge-Fix geplant**
+  - Der EOS an der Naht verwirft die RASL-Bilder des Copy-Start-CRA still
+    (`NoRaslOutputFlag=1`, gemessen: exakt das RASL-Fenster, 0 Fehler).
+    Die Mux-Zeitachse bleibt inhaltstreu → Symptom = ~200-ms-Standbild pro
+    Naht, kein Sync-Drift. **User-Entscheid 2026-07-20: 200 ms Standbild
+    sind NICHT akzeptabel** → Fix-Richtung (z. B. EOS an der HEVC-Naht
+    weglassen, RASL gegen Re-Encode-Standins auflösen) in eigener Spec
+    messen und entscheiden.
+  - Repro: `tools/diag/test_smartcut_seam` (HEVC-Läufe), Messwerte im
+    H.264-Eintrag unten.
+
+- ~~**H.264 Smart Cut: EOS+Non-IDR-Naht beschädigt Leading-Pics des Copy-Start-Keyframes**~~
+  → **DONE (2026-07-20, branch `feature/defect-a-seam-unification`)**
+  (Defekt A, BESTÄTIGT 2026-07-16; H.264-Teil GEFIXT 2026-07-20)
+  - **Fix:** Non-IDR-Copy-Starts mit Leading-Pics nehmen jetzt die
+    Unification-Branch (`seamNeedsUnification`-Trigger, Probe
+    `kfHasLeadingPics`); IDR- und Leading-Pic-freie Nähte bleiben auf dem
+    byte-identischen Standard-Pfad. Zwei dabei freigelegte, vorbestehende
+    Unification-Defekte mitgefixt: RPLM-Kurzzeit-Diffs werden aus der
+    modularen Encoder-PicNum-Domäne (MaxPicNum 16, Voll-Zyklus-Padding!)
+    in die lineare Quell-Nummerierung übersetzt; MMCO-Neutralisierung nur
+    noch bei PAFF. Gates: Synthetik 160/260/349, MBAFF 500, Petro 900
+    (96 harte Fehler → 0) + 1500 alle PASS; PAFF/IDR byte-identisch;
+    MKV-PTS monoton. Qualitäts-Gate `tools/diag/gate_h264_seam.sh`.
+    Rest-Artefakt: 1 gutartige `mmco: unref short failure` pro Naht auf
+    Material mit periodischen MMCOs (Ketten-Neuaufsatz, pixel-neutral).
   - Nach dem EOS am Re-Encode→Stream-Copy-Übergang ist der DPB leer; die
     Leading-B-Frames des Non-IDR-Copy-Start-Keyframes referenzieren Vor-Naht-Bilder.
     Die frame_num-Brücke lässt diese Referenzen **still auf falsche Bilder** auflösen

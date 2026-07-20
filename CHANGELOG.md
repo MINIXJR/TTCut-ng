@@ -30,6 +30,23 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **H.264 Smart Cut: frame-accurate cuts on IDR-free DVB material (e.g.
+  ARD/ONE progressive HD) no longer corrupt the seam.** When the stream-copy
+  started at a non-IDR keyframe with leading B-pictures, the standard seam
+  silently emitted the keyframe several display slots early followed by the
+  corrupted leading pictures (defect A). Such seams now use the
+  SPS-unification path, whose single POC domain lets the leading pictures
+  resolve against the re-encoded frames (correct content at re-encode
+  quality); IDR seams and leading-pic-free seams keep the previous
+  byte-identical path. Two latent unification defects this exposed were
+  fixed along the way: ref-pic-list modification diffs are now translated
+  from the encoder's modular PicNum domain into the linear source numbering
+  (re-encodes longer than 16 frames referenced pictures a full frame_num
+  cycle back — pixel-neutral "reference picture missing" floods), and the
+  MMCO neutralization at the seam is PAFF-only now (blanket-emptying the
+  marking commands damaged frame-coded material whose adaptive reference
+  management is load-bearing). New quality gate:
+  `tools/diag/gate_h264_seam.sh`.
 - **H.264/H.265: anamorphic SD material is no longer shown distorted in the
   still-frame windows.** The CurrentFrame and CutOut windows displayed
   H.26x frames at storage resolution (720×576 = 5:4), ignoring the signaled

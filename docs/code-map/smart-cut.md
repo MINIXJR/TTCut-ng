@@ -84,7 +84,7 @@ flowchart TD
 | `selectFramesByDisplayOrder` → `ctx.framesToEncode` | Keep-predicate is **mode-dependent**: tail → `au ≥ startFrame && disp ≤ endDisplay`; pure re-encode → `startDisplay ≤ disp ≤ endDisplay`; head/mixed → `disp ≥ startDisplay && au < streamCopyLimit`. `AVFrame::pts` carries the **source AU index**, not a timestamp. |
 | `selectFramesByDisplayOrder` → `*adjustedStreamCopyStart` | Boundary crossing: if any AU in `[streamCopyLimit, nextKF)` displays before `startDisplay`, the re-encode extends to `nextKF` and the stream-copy start moves with it. This is the old "Case A/B" distinction, now exact via the map. |
 | `runEncodePass` → `bufferAndWriteEncoderPacket` | With `bf=0` the encoder emits packets 1:1 in submission order, so packet *k* belongs to `framesToEncode[k]`. The pending-packet buffer delays the *write* by one packet but preserves FIFO order — this is what lets `applyPocDomainFix` patch the **last** encoder packet after the fact. |
-| `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. |
+| `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification + PAFF only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. Neutralization is PAFF-only since 2026-07-20: on frame-coded material with load-bearing adaptive marking (ONE-HD) blanket-emptying the ops inverted display order and damaged references deep into the copy. |
 | `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's — computed by `bridgeFrameNum(scStartAU, encLog2Fn)` for both branches. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does; hence an **IDR copy-start yields delta 0** (never patch an IDR's fn — H.264 7.4.3). Otherwise delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
 | `frameNumDelta`: which `log2` width? | Unification branch uses **source** `mLog2MaxFrameNum` (slices were rewritten into the source domain); standard branch uses **encoder** `mEncoderLog2MaxFrameNum`. Swapping these silently corrupts the seam. |
 | `applyPocDomainFix` → `ctx.pendingPacket` | Patches the last encoder `poc_lsb` so `PicOrderCntMsb` does not wrap into the first copied GOP. Only H.264, only `poc_type == 0`, only when a stream-copy follows. Reads source POC at the *actual* copy start (post-adjustment). |
@@ -102,7 +102,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 | Stream property | H.264 | H.265 |
 |---|---|---|
 | **PAFF** (field pairs) | SPS-Unification branch, always (`isPAFF ⇒ useSpsUnification`). Encoder emits MBAFF; source SPS params (`log2_max_frame_num`, `log2_max_pic_order_cnt_lsb`, `frame_mbs_only_flag`) are stamped back onto the encoder slices. EOS before copy; MMCO neutralized for 32 AUs; `patchH264SpsReorderFrames(isPAFF=true)` raises `num_ref_frames`/`max_dec_frame_buffering` for the MBAFF→PAFF DPB transition. POC anchor stays `-1` (legacy linear numbering, byte-identical output). | **n/a** — `isPAFF()` is an H.264 concept; HEVC never enters this cell. |
-| **Progressive / MBAFF**, POC seam bridgeable | Standard branch. EOS → source SPS/PPS → `frameNumDelta` recalculated from the **encoder's** `log2_max_frame_num` → stream-copy. `applyPocDomainFix` bridges the POC seam. No MMCO neutralization. | Standard branch. EOS NAL type 37 → VPS+SPS+PPS → stream-copy. **No** `frame_num`, POC, MMCO or SPS patching at all — every one of those is gated on `NALU_CODEC_H264`. |
+| **Progressive / MBAFF**, POC seam bridgeable | Standard branch **only when the copy-start keyframe is IDR or has no leading pictures**. Otherwise the `seamNeedsUnification` trigger (defect A fix, 2026-07-20: probe `kfHasLeadingPics`, non-IDR check on the copy-start AU) routes the seam through unification regardless of bridgeability. Standard seam: EOS → source SPS/PPS → `frameNumDelta` recalculated from the **encoder's** `log2_max_frame_num` → stream-copy. `applyPocDomainFix` bridges the POC seam. No MMCO neutralization. | Standard branch. EOS NAL type 37 → VPS+SPS+PPS → stream-copy. **No** `frame_num`, POC, MMCO or SPS patching at all — every one of those is gated on `NALU_CODEC_H264`. |
 | **Progressive**, POC seam **not** bridgeable | SPS-Unification branch (`!pocBridgeable`). Slices rewritten into the **source** POC domain; `mSpsUnificationPocAnchor` = source `poc_lsb` of the first *displayed* copy frame (min-display AU in the copy GOP, not the copy-start AU — its leading B pictures carry smaller POCs). | Cannot occur: `pocBridgeable` is only computed for H.264. |
 | **Non-IDR I-frame cut-in** (open GOP, DVB) | `needsReencodeAtStart = !isAtKeyframe \|\| !isAtIDR` → re-encode with `forced-idr=1` produces an IDR barrier. Exception: segment 0 without leading pics → override to pure stream-copy. | Same rule, same override. `findKeyframeBefore/After` accept IDR/CRA/I-slice alike. |
 | **Open-GOP leading pictures** at cut-in | Excluded by the display lower bound `disp ≥ startDisplay` in `selectFramesByDisplayOrder`. | Same. HEVC RASL pictures map to `decodeToDisplay == -1` and are therefore treated as "displays before the cut-in". See `frame-order.md`. |
@@ -167,7 +167,9 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   (only the H.264-only unification branch passes a non-zero count), but the guard
   is a codec check away from being a silent performance cliff.
 
-- **EOS + Non-IDR (CONFIRMED defect A, 2026-07-16 — fix pending)** — after EOS
+- **EOS + Non-IDR (defect A — H.264 FIXED 2026-07-20 via `seamNeedsUnification`
+  trigger; H.265 RASL loss still OPEN, own follow-up planned — a 200 ms
+  freeze per seam is not acceptable per user decision 2026-07-20)** — after EOS
   the decoder's DPB is flushed but `PrevRefFrameNum` is not reset. The standard
   branch bridges `frame_num` with `frameNumDelta`, but the **leading pictures of
   the non-IDR copy-start keyframe** still reference pre-EOS frames; the bridge
@@ -205,7 +207,18 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   is a ~200 ms freeze, no cumulative sync drift. For H.264 the container PTS
   also carry the correct slots, masking the ES-level display inversion on
   PTS-honoring players; the visible symptom is N corrupt frames + a
-  non-monotonic PTS wobble. Repro harnesses:
+  non-monotonic PTS wobble. **Fix (2026-07-20, H.264):** non-IDR copy-start
+  keyframes with leading pictures take the unification branch
+  (`seamNeedsUnification`, probe `kfHasLeadingPics` — decodeToDisplay -1
+  counts as "before"); IDR and leading-pic-free seams keep the byte-identical
+  standard path. Two latent unification defects fixed with it: RPLM
+  short-term diffs are translated from the encoder's modular PicNum domain
+  (MaxPicNum 16, full-cycle no-op padding entries!) into the linear source
+  numbering, and MMCO neutralization is PAFF-only. Residual: one benign
+  `mmco: unref short failure` per seam on periodic-MMCO sources (chain
+  reestablishment, pixel-neutral — window-shift proof). Quality gate:
+  `tools/diag/gate_h264_seam.sh` (COUNT/DECERR/ORDER/COPY verdicts).
+  Repro harnesses:
   `tools/diag/test_smartcut_seam.cpp`, `tools/diag/test_mkvmux.cpp`;
   artifacts `/usr/local/src/CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
