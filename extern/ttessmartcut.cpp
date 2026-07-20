@@ -1126,8 +1126,17 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    frameNumDelta:" << frameNumDelta;
 
-        // MMCO neutralization count: one full GOP (~32 AUs) covers DPB refill
-        int mmcoNeutralizeCount = 32;
+        // MMCO neutralization: PAFF only. Its purpose is to stop source MMCOs
+        // from operating on the flushed MBAFF standins (mmco failures, visual
+        // artifacts); ~32 AUs cover the DPB refill. On frame-coded material
+        // blanket-emptying the ops is actively harmful: streams whose adaptive
+        // marking is load-bearing (measured: ONE-HD Petrocelli) end up with a
+        // sliding window that evicts different pictures than the source
+        // expected — display-order inversion and reference damage deep into
+        // the copy. Without neutralization the only residue there is the
+        // benign one-shot "mmco: unref short failure" chain reestablishment
+        // (the op's target is already gone), pixels bit-identical (2026-07-20).
+        int mmcoNeutralizeCount = mParser.isPAFF() ? 32 : 0;
 
         if (!streamCopyFrames(outFile, scStart, scEnd,
                               mReorderDelay, frameNumDelta, mmcoNeutralizeCount))
@@ -3649,7 +3658,7 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     // L0 → block artifacts. Fix: use the linear frame index (0,1,2,...,N-1) as
     // frame_num. This produces a monotonic sequence that directly precedes the
     // stream-copy frame_nums, eliminating all gaps.
-    spsReadBits(oldData, oldSize, readPos, encLog2MaxFN);  // consume encoder fn
+    uint32_t encFrameNum = spsReadBits(oldData, oldSize, readPos, encLog2MaxFN);
     uint32_t srcMaxFrameNum = 1u << srcLog2MaxFN;
     uint32_t newFrameNum = static_cast<uint32_t>(frameIndex) % srcMaxFrameNum;
     spsWriteBits(newData, newSize, writePos, newFrameNum, srcLog2MaxFN);
@@ -3749,41 +3758,80 @@ static QByteArray rewriteEncoderSliceForSourceSps(
         }
 
         // 11. ref_pic_list_modification
-        // For P/SP slices: ref_pic_list_modification_flag_l0
-        uint32_t rplmFlag0 = spsReadBits(oldData, oldSize, readPos, 1);
-        spsWriteBits(newData, newSize, writePos, rplmFlag0, 1);
-        if (rplmFlag0) {
+        // Short-term entries (idc 0/1) carry abs_diff_pic_num_minus1 values the
+        // encoder computed in ITS PicNum domain (MaxPicNum = 1<<encLog2MaxFN,
+        // fn cycling). The rewritten slice runs with LINEAR frame_num under the
+        // source SPS (MaxPicNum = 1<<srcLog2MaxFN), so those modular diffs must
+        // be translated: resolve each entry to the actual referenced frame via
+        // the H.264 8.2.4.3.1 predictor chain in the encoder domain, then
+        // re-encode the diff against the linear numbering. Without this, any
+        // re-encode longer than the encoder's fn cycle (16 frames) references
+        // pictures ~MaxPicNum back ("reference picture missing during
+        // reorder"). Long-term entries (idc 2) are domain-independent — copied
+        // verbatim. Field slices never occur here (x264 emits frame-coded
+        // output only).
+        int encMaxPicNum = 1 << encLog2MaxFN;
+        auto translateRplmList = [&](void) {
+            int predOld = static_cast<int>(encFrameNum);
+            int predNew = frameIndex;
             uint32_t idc;
             do {
                 idc = spsReadUE(oldData, oldSize, readPos);
-                spsWriteUE(newData, newSize, writePos, idc);
                 if (idc == 0 || idc == 1) {
                     uint32_t v = spsReadUE(oldData, oldSize, readPos);
-                    spsWriteUE(newData, newSize, writePos, v);
+                    // Encoder-domain target picNum (modular predictor chain)
+                    int t = (idc == 0) ? predOld - static_cast<int>(v) - 1
+                                       : predOld + static_cast<int>(v) + 1;
+                    t = ((t % encMaxPicNum) + encMaxPicNum) % encMaxPicNum;
+                    predOld = t;
+                    // Actual referenced frame index: unique j < frameIndex
+                    // within one fn cycle with j mod encMax == t.
+                    int delta = ((static_cast<int>(encFrameNum) - t) % encMaxPicNum
+                                 + encMaxPicNum) % encMaxPicNum;
+                    int j = frameIndex - delta;
+                    if (delta == 0 || j < 0) {
+                        // Inconsistent entry — keep original values (decoder
+                        // will fall back to the default list entry).
+                        if (TTSettings::instance()->logSmartCut())
+                            qDebug() << "      RPLM translation bail-out: idc" << idc
+                                     << "v" << v << "at frameIndex" << frameIndex;
+                        spsWriteUE(newData, newSize, writePos, idc);
+                        spsWriteUE(newData, newSize, writePos, v);
+                        continue;
+                    }
+                    // Re-encode against the linear numbering. d == 0 means the
+                    // entry re-lists the SAME picture (x264 pads short ref
+                    // lists with full-cycle no-op diffs, e.g. abs_diff 16 with
+                    // MaxPicNum 16) — expressed in the target domain as a full
+                    // cycle: abs_diff = srcMaxPicNum.
+                    int d = predNew - j;
+                    uint32_t newIdc = (d >= 0) ? 0u : 1u;
+                    uint32_t newV = (d == 0)
+                        ? srcMaxFrameNum - 1
+                        : static_cast<uint32_t>((d > 0 ? d : -d) - 1);
+                    predNew = j;
+                    spsWriteUE(newData, newSize, writePos, newIdc);
+                    spsWriteUE(newData, newSize, writePos, newV);
                 } else if (idc == 2) {
                     uint32_t v = spsReadUE(oldData, oldSize, readPos);
+                    spsWriteUE(newData, newSize, writePos, idc);
                     spsWriteUE(newData, newSize, writePos, v);
+                } else {
+                    spsWriteUE(newData, newSize, writePos, idc);
                 }
             } while (idc != 3);
-        }
+        };
+        // For P/SP slices: ref_pic_list_modification_flag_l0
+        uint32_t rplmFlag0 = spsReadBits(oldData, oldSize, readPos, 1);
+        spsWriteBits(newData, newSize, writePos, rplmFlag0, 1);
+        if (rplmFlag0)
+            translateRplmList();
         if (sliceTypeMod == 1) {
             // B-slice: ref_pic_list_modification_flag_l1
             uint32_t rplmFlag1 = spsReadBits(oldData, oldSize, readPos, 1);
             spsWriteBits(newData, newSize, writePos, rplmFlag1, 1);
-            if (rplmFlag1) {
-                uint32_t idc;
-                do {
-                    idc = spsReadUE(oldData, oldSize, readPos);
-                    spsWriteUE(newData, newSize, writePos, idc);
-                    if (idc == 0 || idc == 1) {
-                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
-                        spsWriteUE(newData, newSize, writePos, v);
-                    } else if (idc == 2) {
-                        uint32_t v = spsReadUE(oldData, oldSize, readPos);
-                        spsWriteUE(newData, newSize, writePos, v);
-                    }
-                } while (idc != 3);
-            }
+            if (rplmFlag1)
+                translateRplmList();
         }
 
         // 12. pred_weight_table (if weighted pred for P, or explicit bipred for B)
