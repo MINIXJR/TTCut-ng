@@ -898,6 +898,29 @@ bool TTESSmartCut::hasSPSChangeAtBoundary(int frameIndex, bool isCutOut)
 // ----------------------------------------------------------------------------
 // Process a single segment - Smart Cut using pure libav
 // Strategy: Both re-encoded and stream-copied sections are self-contained
+// Defect A (2026-07-20): true when the keyframe at kfAu is followed by
+// leading pictures — AUs that decode after it but display before it, within
+// the probe window up to the next keyframe (capped at +16 AUs).
+// decodeToDisplay() == -1 counts as "displays before" (cold-start/RASL
+// convention, same as the first-segment override probe).
+static bool kfHasLeadingPics(const TTNaluParser& parser,
+                             const TTDisplayOrderMap& map,
+                             int kfAu, int frameCount)
+{
+    int kfDisp = map.decodeToDisplay(kfAu);
+    if (kfDisp < 0)
+        return true;
+    int nextKF = parser.findKeyframeAfter(kfAu + 1);
+    if (nextKF < 0)
+        nextKF = frameCount;
+    int scanEnd = qMin(kfAu + 16, nextKF);
+    for (int au = kfAu + 1; au < scanEnd; ++au) {
+        if (map.decodeToDisplay(au) < kfDisp)   // -1 counts as "before"
+            return true;
+    }
+    return false;
+}
+
 // Each section starts with its own SPS/PPS + IDR, allowing clean decoder reset
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
@@ -997,8 +1020,29 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
                      << ") - enabling SPS unification for this segment";
         }
     }
+    // Defect A (2026-07-20): a non-IDR copy-start keyframe with leading
+    // pictures corrupts the standard seam — after the EOS flush the foreign
+    // encoder POC domain inverts the seam output order and the leading-B
+    // references resolve to wrong pictures (keyframe emitted N display slots
+    // early, its N leading Bs silently corrupt; measured on synthetic bf=3
+    // and ONE-HD material, see docs/code-map/smart-cut.md). The unification
+    // seam (source POC domain + MMCO defusal) resolves those leading
+    // pictures against the re-encode standins instead. IDR seams and
+    // leading-pic-free seams keep the byte-identical standard path.
+    bool seamNeedsUnification = false;
+    if (mParser.codecType() == NALU_CODEC_H264
+            && segment.streamCopyStartFrame >= 0
+            && !mParser.accessUnitAt(segment.streamCopyStartFrame).isIDR
+            && kfHasLeadingPics(mParser, mDisplayMap,
+                                segment.streamCopyStartFrame, frameCount())) {
+        seamNeedsUnification = true;
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    Non-IDR copy-start with leading pics at AU"
+                     << segment.streamCopyStartFrame
+                     << "- enabling SPS unification for this segment";
+    }
     bool useSpsUnification = (mParser.codecType() == NALU_CODEC_H264)
-        && (mParser.isPAFF() || !pocBridgeable);
+        && (mParser.isPAFF() || !pocBridgeable || seamNeedsUnification);
 
     if (useSpsUnification) {
         if (TTSettings::instance()->logSmartCut())
