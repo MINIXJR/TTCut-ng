@@ -609,3 +609,122 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
     if (errorReason) *errorReason = QStringLiteral("no CRA slice in AU");
     return false;
 }
+
+// -------------------------------------------------------- encoder packet fix
+QByteArray rewriteHevcEncoderPacket(const QByteArray& packetData,
+                                    const THevcSliceRewriteCtx& ctx,
+                                    int packetIndex,
+                                    QString* errorReason)
+{
+    auto fail = [errorReason](const QString& why) {
+        if (errorReason) *errorReason = why;
+        return QByteArray();
+    };
+    if (!ctx.encHeadersParsed || ctx.pocBase < 0 || ctx.srcPocBits <= 0
+        || ctx.encPpsId < 1)
+        return fail(QStringLiteral("rewrite context incomplete"));
+
+    const int pocMax = 1 << ctx.srcPocBits;
+    QByteArray out;
+    out.reserve(packetData.size() + 32);
+
+    int i = 0;
+    while (i + 3 < packetData.size()) {
+        int sc = 0;
+        if (packetData.at(i) == 0 && packetData.at(i + 1) == 0) {
+            if (packetData.at(i + 2) == 1) sc = 3;
+            else if (i + 3 < packetData.size() && packetData.at(i + 2) == 0
+                     && packetData.at(i + 3) == 1) sc = 4;
+        }
+        if (sc == 0) { return fail(QStringLiteral("packet NAL scan lost sync")); }
+        // Find next start code (NAL end)
+        int end = packetData.size();
+        for (int j = i + sc + 1; j + 2 < packetData.size(); ++j) {
+            if (packetData.at(j) == 0 && packetData.at(j + 1) == 0
+                && (packetData.at(j + 2) == 1
+                    || (j + 3 < packetData.size() && packetData.at(j + 2) == 0
+                        && packetData.at(j + 3) == 1))) {
+                end = j;
+                break;
+            }
+        }
+        QByteArray nal = packetData.mid(i, end - i);
+        int type = (quint8(packetData.at(i + sc)) >> 1) & 0x3F;
+
+        if (type == 32 || type == 33) {
+            // Drop encoder VPS/SPS — the source sets rule the stream.
+        } else if (type == 34) {
+            QByteArray patched = patchHevcPpsId(nal, ctx.encPpsId);
+            if (patched.isEmpty())
+                return fail(QStringLiteral("encoder PPS id patch failed"));
+            out += patched;
+        } else if (type == 39 || type == 40 || type == 35) {
+            out += nal;                           // SEI / AUD verbatim
+        } else if ((type <= 9) || (type >= 16 && type <= 21)) {
+            THevcSliceHeader h =
+                parseHevcSliceHeader(nal, ctx.encSps, ctx.encPps);
+            if (!h.ok)
+                return fail(QStringLiteral("slice parse: %1").arg(h.error));
+
+            const int poc = (ctx.pocBase + packetIndex) % pocMax;
+            if (isIdrNal(h.nalType)) {
+                if (packetIndex != 0)
+                    return fail(QStringLiteral("unexpected mid-segment IDR"));
+                // Demotion IDR -> CRA: type 21, insert poc + empty RPS + tmvp.
+                h.nalType = 21;
+                h.pocLsb = poc;
+                h.rpsNeg.clear();
+                h.rpsPos.clear();
+                h.tmvp = ctx.encSps.temporalMvpEnabled ? 1 : 0;
+            } else if (h.nalType == 0 || h.nalType == 1) {
+                if (h.sliceType != 1)
+                    return fail(QStringLiteral("non-P trail slice"));
+                // POC anchoring: uniform shift keeps original deltas valid.
+                // Retain extension: keep the used list untouched (CABAC
+                // ref_idx conformance), append retain POCs as used=0.
+                QVector<int> absUsed;
+                int p = poc;
+                for (const THevcRpsEntry& e : h.rpsNeg) {
+                    p -= e.deltaPoc;
+                    absUsed.append(p);
+                }
+                QVector<QPair<int, int>> merged;   // (absPoc, used) desc
+                for (int k = 0; k < absUsed.size(); ++k)
+                    merged.append({absUsed.at(k), h.rpsNeg.at(k).used});
+                for (int rp : ctx.retainPocs) {
+                    if (rp >= poc) continue;               // not yet decoded
+                    if (rp < ctx.pocBase) continue;        // outside window
+                    if (absUsed.contains(rp)) continue;    // already listed
+                    merged.append({rp, 0});
+                }
+                std::sort(merged.begin(), merged.end(),
+                          [](const QPair<int, int>& a, const QPair<int, int>& b)
+                          { return a.first > b.first; });
+                h.rpsNeg.clear();
+                int prev = poc;
+                for (const auto& m : merged) {
+                    THevcRpsEntry e;
+                    e.deltaPoc = prev - m.first;
+                    e.used = m.second;
+                    if (e.deltaPoc < 1)
+                        return fail(QStringLiteral("retain merge delta < 1"));
+                    h.rpsNeg.append(e);
+                    prev = m.first;
+                }
+                h.pocLsb = poc;
+            } else {
+                return fail(QStringLiteral("unexpected slice NAL type %1")
+                            .arg(h.nalType));
+            }
+
+            QByteArray rebuilt = buildHevcSliceHeader(
+                h, ctx.encSps, ctx.encPps, ctx.srcPocBits, ctx.encPpsId);
+            out += nal.left(sc);                  // original start code
+            out += ttHevcEscape(rebuilt);
+        } else {
+            return fail(QStringLiteral("unexpected NAL type %1").arg(type));
+        }
+        i = end;
+    }
+    return out;
+}
