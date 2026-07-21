@@ -7,6 +7,8 @@
 
 #include <QtGlobal>
 
+#include <algorithm>
+
 // ---------------------------------------------------------------- bit reader
 namespace {
 
@@ -357,4 +359,253 @@ QByteArray patchHevcPpsId(const QByteArray& ppsNalWithStartCode, int newPpsId)
     w.alignOneZeros();                           // stop bit + padding
 
     return ppsNalWithStartCode.left(sc) + ttHevcEscape(w.data());
+}
+
+// --------------------------------------------------------------- slice header
+bool isIrapNal(int t)  { return t >= 16 && t <= 23; }
+bool isIdrNal(int t)   { return t == 19 || t == 20; }
+
+THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
+                                      const THevcSpsSeamInfo& sps,
+                                      const THevcPpsSeamInfo& pps)
+{
+    THevcSliceHeader h;
+    int sc = ttHevcStartCodeLen(nalWithSc);
+    QByteArray rbsp = ttHevcDeescape(nalWithSc.mid(sc));
+    THevcBitReader r(rbsp);
+
+    quint32 hdr = r.bits(16);
+    h.nalType = int((hdr >> 9) & 0x3F);
+    h.nuhRest = hdr & 0x1FF;
+
+    auto fail = [&h](const char* why) {
+        h.ok = false; h.error = QString::fromLatin1(why); return h;
+    };
+
+    if (r.bit() != 1) return fail("first_slice_segment_in_pic_flag != 1");
+    if (isIrapNal(h.nalType)) h.noOutputPrior = r.bit();
+    h.ppsId = int(r.ue());
+    if (h.ppsId != 0) return fail("encoder pps_id != 0");
+    for (int i = 0; i < pps.numExtraSliceHeaderBits; ++i) r.bit();
+    h.sliceType = int(r.ue());
+    if (h.sliceType == 0) return fail("B slice in encoder output");
+    if (h.sliceType > 2) return fail("bad slice_type");
+
+    if (!isIdrNal(h.nalType)) {
+        h.pocLsb = int(r.bits(sps.log2MaxPocLsb));
+        if (r.bit() != 0) return fail("st_rps_sps_flag != 0");
+        quint32 nneg = r.ue(), npos = r.ue();
+        if (nneg > 16 || npos > 16) return fail("RPS too large");
+        for (quint32 i = 0; i < nneg; ++i) {
+            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bit();
+            h.rpsNeg.append(e);
+        }
+        for (quint32 i = 0; i < npos; ++i) {
+            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bit();
+            h.rpsPos.append(e);
+        }
+        if (sps.temporalMvpEnabled) h.tmvp = r.bit();
+    }
+    if (sps.saoEnabled) { h.saoLuma = r.bit(); h.saoChroma = r.bit(); }
+
+    if (h.sliceType == 1) {                       // P
+        h.numRefIdxOverride = r.bit();
+        int nActive = pps.numRefIdxL0DefaultMinus1 + 1;
+        if (h.numRefIdxOverride) {
+            h.l0ActiveMinus1 = int(r.ue());
+            nActive = h.l0ActiveMinus1 + 1;
+        }
+        if (pps.listsModificationPresent)
+            return fail("lists_modification unsupported");
+        if (h.tmvp && nActive > 1) {
+            h.hasCollocatedRefIdx = true;
+            h.collocatedRefIdx = r.ue();
+        }
+        if (pps.weightedPred) {
+            h.lumaLog2Denom = r.ue();
+            if (sps.chromaFormatIdc != 0) h.deltaChromaDenom = r.se();
+            for (int i = 0; i < nActive; ++i)
+                h.lumaWeightFlag.append(r.bit());
+            for (int i = 0; i < nActive; ++i) {
+                if (h.lumaWeightFlag.at(i)) {
+                    qint32 wgt = r.se(), off = r.se();
+                    h.lumaWeights.append({wgt, off});
+                }
+            }
+            if (sps.chromaFormatIdc != 0) {
+                for (int i = 0; i < nActive; ++i)
+                    h.chromaWeightFlag.append(r.bit());
+                for (int i = 0; i < nActive; ++i) {
+                    if (h.chromaWeightFlag.at(i)) {
+                        QVector<qint32> v;
+                        for (int k = 0; k < 4; ++k) v.append(r.se());
+                        h.chromaWeights.append(v);
+                    }
+                }
+            }
+        }
+        h.fiveMinusMaxMergeCand = r.ue();
+    }
+    h.qpDelta = r.se();
+    if (pps.sliceChromaQpOffsetsPresent) { r.se(); r.se(); }
+    if (pps.deblockingControlPresent)
+        return fail("deblocking control in encoder PPS unsupported");
+    // loop_filter_across present iff pps flag && (sao used || deblocking on).
+    // x265: deblocking on (not disabled), so present iff pps flag set.
+    if (pps.ppsLoopFilterAcrossSlices) {
+        h.hasLoopFilterAcross = true;
+        h.loopFilterAcross = r.bit();
+    }
+    if (pps.tilesEnabled || pps.entropyCodingSync) {
+        h.numEntryPoints = r.ue();
+        if (h.numEntryPoints > 0) {
+            h.offsetLenMinus1 = r.ue();
+            for (quint32 i = 0; i < h.numEntryPoints; ++i)
+                h.entryPointOffsets.append(r.bits(int(h.offsetLenMinus1) + 1));
+        }
+    }
+    if (pps.sliceHeaderExtension)
+        return fail("slice header extension unsupported");
+
+    if (r.bit() != 1) return fail("alignment stop bit missing");
+    while (r.pos() & 7) {
+        if (r.bit() != 0) return fail("alignment zero bit not zero");
+    }
+    if (r.error()) return fail("bitstream overrun");
+    h.sliceData = rbsp.mid(r.pos() / 8);
+    h.ok = true;
+    return h;
+}
+
+QByteArray buildHevcSliceHeader(const THevcSliceHeader& h,
+                                const THevcSpsSeamInfo& sps,
+                                const THevcPpsSeamInfo& pps,
+                                int writePocBits, int writePpsId)
+{
+    THevcBitWriter w;
+    w.bit(0);                                    // forbidden_zero
+    w.bits(quint32(h.nalType), 6);
+    w.bits(h.nuhRest, 9);
+    w.bit(1);                                    // first_slice
+    if (isIrapNal(h.nalType)) w.bit(h.noOutputPrior);
+    w.ue(quint32(writePpsId));
+    // numExtraSliceHeaderBits is 0 for x265 PPS (asserted in the preflight)
+    w.ue(quint32(h.sliceType));
+    if (!isIdrNal(h.nalType)) {
+        w.bits(quint32(h.pocLsb), writePocBits);
+        w.bit(0);                                // st_rps_sps_flag
+        w.ue(quint32(h.rpsNeg.size()));
+        w.ue(quint32(h.rpsPos.size()));
+        for (const THevcRpsEntry& e : h.rpsNeg) {
+            w.ue(quint32(e.deltaPoc - 1)); w.bit(e.used);
+        }
+        for (const THevcRpsEntry& e : h.rpsPos) {
+            w.ue(quint32(e.deltaPoc - 1)); w.bit(e.used);
+        }
+        if (sps.temporalMvpEnabled) w.bit(h.tmvp);
+    }
+    if (sps.saoEnabled) { w.bit(h.saoLuma); w.bit(h.saoChroma); }
+    if (h.sliceType == 1) {
+        w.bit(h.numRefIdxOverride);
+        if (h.numRefIdxOverride) w.ue(quint32(h.l0ActiveMinus1));
+        if (h.hasCollocatedRefIdx) w.ue(h.collocatedRefIdx);
+        if (pps.weightedPred) {
+            w.ue(h.lumaLog2Denom);
+            if (sps.chromaFormatIdc != 0) w.se(h.deltaChromaDenom);
+            for (int f : h.lumaWeightFlag) w.bit(f);
+            for (const auto& lw : h.lumaWeights) { w.se(lw.first); w.se(lw.second); }
+            if (sps.chromaFormatIdc != 0) {
+                for (int f : h.chromaWeightFlag) w.bit(f);
+                for (const auto& cw : h.chromaWeights)
+                    for (qint32 v : cw) w.se(v);
+            }
+        }
+        w.ue(h.fiveMinusMaxMergeCand);
+    }
+    w.se(h.qpDelta);
+    if (h.hasLoopFilterAcross) w.bit(h.loopFilterAcross);
+    if (pps.tilesEnabled || pps.entropyCodingSync) {
+        w.ue(h.numEntryPoints);
+        if (h.numEntryPoints > 0) {
+            w.ue(h.offsetLenMinus1);
+            for (quint32 off : h.entryPointOffsets)
+                w.bits(off, int(h.offsetLenMinus1) + 1);
+        }
+    }
+    w.alignOneZeros();
+    return w.data() + h.sliceData;
+}
+
+// ------------------------------------------------------------- CRA RPS probe
+bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
+                         const QVector<int>& ppsExtraBitsById,
+                         int* craPoc, QVector<int>* retainPocs,
+                         QString* errorReason)
+{
+    // Find the first CRA slice NAL (type 21) inside the AU data.
+    int i = 0;
+    while (i + 4 < auData.size()) {
+        int sc = 0;
+        if (auData.at(i) == 0 && auData.at(i + 1) == 0) {
+            if (auData.at(i + 2) == 1) sc = 3;
+            else if (auData.at(i + 2) == 0 && auData.at(i + 3) == 1) sc = 4;
+        }
+        if (sc == 0) { ++i; continue; }
+        int type = (quint8(auData.at(i + sc)) >> 1) & 0x3F;
+        if (type == 21) {
+            QByteArray rbsp = ttHevcDeescape(auData.mid(i + sc));
+            THevcBitReader r(rbsp);
+            r.bits(16);
+            if (r.bit() != 1) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA not first_slice");
+                return false;
+            }
+            r.bit();                              // no_output_of_prior_pics
+            int ppsId = int(r.ue());
+            int extraBits = (ppsId >= 0 && ppsId < ppsExtraBitsById.size())
+                ? ppsExtraBitsById.at(ppsId) : -1;
+            if (extraBits < 0) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA references unknown PPS %1").arg(ppsId);
+                return false;
+            }
+            for (int k = 0; k < extraBits; ++k) r.bit();
+            int sliceType = int(r.ue());
+            if (sliceType != 2) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA slice_type != I");
+                return false;
+            }
+            *craPoc = int(r.bits(srcPocBits));
+            if (r.bit() != 0) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA uses SPS RPS set");
+                return false;
+            }
+            quint32 nneg = r.ue(), npos = r.ue();
+            if (nneg > 16 || npos > 16 || r.error()) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA RPS parse error");
+                return false;
+            }
+            retainPocs->clear();
+            int p = *craPoc;
+            for (quint32 k = 0; k < nneg; ++k) {
+                p -= int(r.ue()) + 1;
+                r.bit();                          // used flag (irrelevant)
+                retainPocs->append(p);
+            }
+            if (r.error()) {
+                if (errorReason) *errorReason =
+                    QStringLiteral("CRA RPS parse overrun");
+                return false;
+            }
+            std::sort(retainPocs->begin(), retainPocs->end());
+            return true;
+        }
+        i += sc + 1;
+    }
+    if (errorReason) *errorReason = QStringLiteral("no CRA slice in AU");
+    return false;
 }

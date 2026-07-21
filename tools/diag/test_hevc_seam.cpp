@@ -111,7 +111,42 @@ int main(int argc, char** argv)
         fprintf(stderr, "no PPS\n");
         return 1;
     }
-    // "roundtrip" subcommand is added in task 4.
+    if (!strcmp(argv[1], "roundtrip")) {
+        THevcSpsSeamInfo encSps; THevcPpsSeamInfo encPps;
+        bool haveSets = false;
+        int tested = 0;
+        for (const Nal& n : nals) {
+            if (n.type == 33 && !haveSets)
+                encSps = parseHevcSpsSeamInfo(buf.mid(n.sc, n.end - n.sc));
+            if (n.type == 34 && !haveSets) {
+                encPps = parseHevcPpsSeamInfo(buf.mid(n.sc, n.end - n.sc));
+                haveSets = encSps.valid && encPps.valid;
+            }
+            if (n.type == 37) break;              // EOB = seam
+            if (haveSets && tested > 0 && (n.type == 32 || n.type == 33))
+                break;                            // param-set re-send = seam
+            bool isSlice = (n.type <= 9) || (n.type >= 16 && n.type <= 21);
+            if (!haveSets || !isSlice) continue;
+            QByteArray raw = buf.mid(n.sc, n.end - n.sc);
+            THevcSliceHeader h = parseHevcSliceHeader(raw, encSps, encPps);
+            if (!h.ok) {
+                printf("slice %d PARSE FAIL: %s\n", tested,
+                       qPrintable(h.error));
+                return 1;
+            }
+            QByteArray rebuilt = buildHevcSliceHeader(
+                h, encSps, encPps, encSps.log2MaxPocLsb, h.ppsId);
+            QByteArray orig = ttHevcDeescape(raw.mid(ttHevcStartCodeLen(raw)));
+            if (rebuilt != orig) {
+                printf("slice %d ROUNDTRIP MISMATCH (%d vs %d bytes)\n",
+                       tested, rebuilt.size(), orig.size());
+                return 1;
+            }
+            ++tested;
+        }
+        printf("roundtrip OK: %d slices byte-identical\n", tested);
+        return tested > 0 ? 0 : 1;
+    }
     fprintf(stderr, "unknown subcommand\n");
     return 2;
 }

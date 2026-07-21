@@ -14,6 +14,7 @@
 #define TTHEVCSEAM_H
 
 #include <QByteArray>
+#include <QPair>
 #include <QString>
 #include <QVector>
 
@@ -120,6 +121,58 @@ QByteArray rewriteHevcEncoderPacket(const QByteArray& packetData,
                                     const THevcSliceRewriteCtx& ctx,
                                     int packetIndex,
                                     QString* errorReason);
+
+// --- Slice header parse/build (exposed for the diag harness) ---------------
+// Layout is x265 encoder output as measured in the PoC; anything the builder
+// cannot re-emit faithfully is rejected at PARSE time, so a failure always
+// becomes a seam fallback instead of corrupted output.
+struct THevcRpsEntry { int deltaPoc; int used; };    // deltaPoc >= 1
+
+struct THevcSliceHeader {
+    bool ok = false;
+    QString error;
+
+    int  nalType = -1;
+    quint32 nuhRest = 0;          // layer_id + temporal_id_plus1 (9 bits)
+    int  noOutputPrior = 0;       // IRAP only
+    int  ppsId = 0;
+    int  sliceType = -1;          // 0=B 1=P 2=I
+    int  pocLsb = -1;             // non-IDR only (parse width = encSps)
+    QVector<THevcRpsEntry> rpsNeg, rpsPos;
+    int  tmvp = 0;                // present iff encSps.temporalMvpEnabled
+    int  saoLuma = 0, saoChroma = 0;   // present iff encSps.saoEnabled
+    // P-slice only:
+    int  numRefIdxOverride = 0;
+    int  l0ActiveMinus1 = 0;      // if override
+    bool hasCollocatedRefIdx = false;
+    quint32 collocatedRefIdx = 0;
+    // pred_weight_table (iff encPps.weightedPred && P):
+    quint32 lumaLog2Denom = 0;
+    qint32  deltaChromaDenom = 0;
+    QVector<int> lumaWeightFlag, chromaWeightFlag;
+    QVector<QPair<qint32, qint32>> lumaWeights;         // per set flag
+    QVector<QVector<qint32>> chromaWeights;             // 4 se per set flag
+    quint32 fiveMinusMaxMergeCand = 0;
+    qint32  qpDelta = 0;
+    int  loopFilterAcross = 0;    // presence per PPS/SAO condition
+    bool hasLoopFilterAcross = false;
+    quint32 numEntryPoints = 0;
+    quint32 offsetLenMinus1 = 0;
+    QVector<quint32> entryPointOffsets;
+    QByteArray sliceData;         // byte-aligned CABAC payload (verbatim)
+};
+
+bool isIrapNal(int t);
+bool isIdrNal(int t);
+
+THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
+                                      const THevcSpsSeamInfo& sps,
+                                      const THevcPpsSeamInfo& pps);
+// Re-serialize. writePocBits = source poc width; writePpsId = target pps_id.
+QByteArray buildHevcSliceHeader(const THevcSliceHeader& h,
+                                const THevcSpsSeamInfo& sps,
+                                const THevcPpsSeamInfo& pps,
+                                int writePocBits, int writePpsId);
 
 // --- Shared low-level helpers (exposed for the diag harness) ---------------
 QByteArray ttHevcDeescape(const QByteArray& nalData);
