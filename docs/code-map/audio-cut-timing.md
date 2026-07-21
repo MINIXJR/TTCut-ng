@@ -1,6 +1,6 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38
-last_verified: 2026-07-12
+base_commit: 60804c02ae123072f89f60ed10d6ce112281f019
+last_verified: 2026-07-21  # .info-Vertrag auf es_total_aus/es_doubled_pts_aus umgestellt (ea08e20f); ungenutzte Reparaturbilanz-Felder dokumentiert
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -13,6 +13,7 @@ sources:
   - gui/ttcuttreeview.h
   - gui/ttcutmainwindow.cpp
   - avstream/ttesinfo.h
+  - avstream/ttesinfo.cpp
 ---
 
 # Audio-Cut-Zeitkette (video-frame-index → audio-frame-aligned cut)
@@ -39,7 +40,7 @@ Kanten-Semantik unten gilt unverändert (siehe Redundanz-Abschnitt).
 
 ```mermaid
 flowchart TD
-  INFO[".info esExtraFrames()"]
+  INFO[".info esDoubledPtsAus()<br/>+ esTotalAus() (raw-AU-Raum)"]
   MP2X["MPEG-2 parser<br/>extraIndices()"]
   EXTRA["mExtraFrameIndices"]
   CEFB["countExtraFramesBefore"]
@@ -73,8 +74,8 @@ flowchart TD
 
 | von → nach | Daten / Reihenfolge / Invariante |
 |---|---|
-| `INFO → EXTRA` | H.264/H.265: `.info`-Feld `es_extra_frames` → `mExtraFrameIndices`, über den gemeinsamen Helfer `loadExtraFrameIndices(target, esInfo, vStream)` (no-op, falls `target` schon gefüllt). Für MPEG-2 nur Fallback, wenn der Parser keine Feldpaare liefert. Aufsteigend sortiert. Geladen **ausschließlich in `onOpenVideoFinished`** (nicht mehr im synchronen `openAVStreams` — der Parser-Index ist dort noch leer, siehe `fc2a573`) und erneut im Cut-Pfad (`onDoCut`), falls leer. |
-| `MP2X → EXTRA` | Für MPEG-2 hat seit `b69dfcf` der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor `es_extra_frames` (Decode-Index-Raum, PTS-Heuristik) — Prioritätsumkehr ggü. vorher. `loadMpeg2FieldExtras` wurde entfernt; die MPEG-2-Parser-Bevorzugung sitzt jetzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
+| `INFO → EXTRA` | H.264/H.265: `.info`-Felder `es_total_aus` + `es_doubled_pts_aus` → `mExtraFrameIndices`, über den gemeinsamen Helfer `loadExtraFrameIndices(target, esInfo, vStream)` (no-op, falls `target` schon gefüllt). **Der Altschlüssel `es_extra_frames` wird seit `ea08e20f` bewusst NICHT mehr gelesen** — seine Nummerierung war mehrdeutig. Die Kandidaten sind **roh-AU-nummeriert** (ein AU je PES-Paket, PAFF-Felder getrennt) und werden über die raw→merged-Karte in den Anzeigeraum übersetzt (siehe `frame-order.md`); Vorbedingung ist `es_total_aus == rawAuCount()`, sonst werden sie verworfen und gewarnt. Kollabierte zweite Felder und Positionen ohne Anzeigeplatz fallen dabei heraus, nur echte Defekte bleiben übrig. Für MPEG-2 nur Fallback, wenn der Parser keine Feldpaare liefert. Aufsteigend sortiert. Geladen **ausschließlich in `onOpenVideoFinished`** (nicht mehr im synchronen `openAVStreams` — der Parser-Index ist dort noch leer, siehe `fc2a573`) und erneut im Cut-Pfad (`onDoCut`), falls leer. |
+| `MP2X → EXTRA` | Für MPEG-2 hat seit `b69dfcf` der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor den `.info`-Kandidaten (Roh-AU-Raum, PTS-Heuristik) — Prioritätsumkehr ggü. vorher. `loadMpeg2FieldExtras` wurde entfernt; die MPEG-2-Parser-Bevorzugung sitzt jetzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` zählt per Binärsuche die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
 | `PROD → VKL` | Alle Final-Cut-Produzenten (`onDoCut`, `doH264Cut`, `doAudioOnlyCut`, die Drift-only-Stelle) bauen die (start,end)-Sekundenliste jetzt **einheitlich** über `buildVideoKeepList`. `doH264Cut` hatte dafür noch einen eigenen offen-codierten `(index−extra)/fps`-Block (die 6. Kopie dieser Umrechnung); seit `1d5b956` ruft sie `buildVideoKeepList` direkt auf, kein Sonderfall mehr. Ohne Delay. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). |
@@ -113,6 +114,15 @@ flowchart TD
   Benders-Beispiel (MPEG-2 SD, Comedy Central): 273 Extra-Frames vor dem Cut-Out
   → −10,9 s. Kein Fehler: Schnitt und Burst-Prüfung nutzen dieselbe Formel, sind
   also einig. Ein Konsument, der die Korrektur vergäße, läge Sekunden daneben.
+- **Die Reparaturbilanz des Demuxers erreicht diese Kette NICHT.** `TTESInfo`
+  parst seit `7c60cfba` pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
+  `audio_N_removed_ms` (entferntes Audio zur A/V-Korrektur) nach
+  `TTESAudioTrack::silenceMs`/`removedMs` — **gelesen wird beides derzeit von
+  niemandem** (Stand 2026-07-21 im ganzen Baum gegrept: nur die Deklaration in
+  `avstream/ttesinfo.h`). Die Zeitrechnung des Schnitts beruht also unverändert
+  allein auf Extra-Frames und Delay. Wer diese Felder künftig zur Korrektur
+  heranzieht, muss prüfen, ob ttcut-demux die Lücken bereits zeitachsentreu
+  aufgefüllt hat — sonst wird zweimal korrigiert.
 - **`mAudioGapIndices` ist NICHT Teil dieser Kette.** Diese zweite Liste
   (`.info audioGapFrames`, in `ttavdata.cpp` zu Clustern verarbeitet) dient nur der
   Defekt-Meldung, nicht der Cut-Zeitrechnung. `countExtraFramesBefore` liest allein
