@@ -1,5 +1,5 @@
 ---
-base_commit: 2b2fa186c866b80c9609f95e74315da70e5059cb  # all 62 named symbols re-greped; convertAUToIDR/convertSliceNalToIDR are correctly documented as deleted
+base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226  # all 62 named symbols re-greped; convertAUToIDR/convertSliceNalToIDR are correctly documented as deleted
 last_verified: 2026-07-21  # HEVC RASL-preserving seam added (branch trigger, seam edge, variant matrix); preview failure edge documented (ba064f15)
 sources:
   - extern/ttessmartcut.cpp

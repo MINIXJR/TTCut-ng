@@ -1,5 +1,5 @@
 ---
-base_commit: 412f4e409697d0c59fadbb898951c10bcf639dbb  # all named symbols re-greped
+base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226  # all named symbols re-greped
 last_verified: 2026-07-21  # raw->merged AU domain + adoptStreamMetadata added; EOS/EOB arming corrected; HEVC seam interaction noted
 sources:
   - gui/ttcurrentframe.cpp

@@ -1,5 +1,5 @@
 ---
-base_commit: 1724e53388d9e0ed7d75b39ca4dc81e4c1dc077f
+base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226
 last_verified: 2026-07-21  # field-pair clusters no longer become markers (34c80890); rest re-checked against dce0b83b/ea08e20f/37ef8746 and found already correct
 sources:
   - tools/ttcut-demux/ttcut-demux
