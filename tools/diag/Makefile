@@ -17,6 +17,7 @@ WRAPPER_OBJS  := $(DISPMAP_OBJS) \
 
 # Objects needed for the smart-cut still-frame acceptance test (Task 5)
 STILLFRAME_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
+                   ../../obj/tthevcseam.o \
                    ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
                    ../../obj/ttesinfo.o ../../obj/ttnaluparser.o \
                    ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o
@@ -88,6 +89,7 @@ test_stillframe: test_stillframe.cpp $(STILLFRAME_OBJS)
 # display-map injection, required for PAFF ES). Union of STILLFRAME/WRAPPER
 # objects without duplicates:
 SEAM_OBJS := ../../obj/ttessmartcut.o ../../obj/moc_ttessmartcut.o \
+             ../../obj/tthevcseam.o \
              ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
              ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
              ../../obj/ttesinfo.o ../../obj/ttnaluparser.o \

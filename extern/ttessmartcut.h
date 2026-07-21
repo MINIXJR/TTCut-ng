@@ -17,6 +17,7 @@
 #define TTESSMARTCUT_H
 
 #include <QString>
+#include <QStringList>
 #include <QList>
 #include <QPair>
 #include <QFile>
@@ -24,6 +25,7 @@
 
 #include "../avstream/ttnaluparser.h"
 #include "../avstream/ttdisplayordermap.h"
+#include "tthevcseam.h"
 
 // Forward declarations for libav types
 struct AVFormatContext;
@@ -120,6 +122,11 @@ public:
     // Error handling
     QString lastError() const { return mLastError; }
 
+    // Seam fallback notes collected during smartCutFrames (English tr()
+    // strings; empty when every seam took the RASL-preserving path or no
+    // H.265 CRA+RASL seam occurred).
+    QStringList seamNotes() const { return mSeamNotes; }
+
 signals:
     void progressChanged(int percent, const QString& message);
 
@@ -185,6 +192,23 @@ private:
     int mSpsUnificationPocAnchor;   // source poc_lsb at copy start, or -1
     int mSpsUnificationPocBase;     // poc_lsb for encoder frameIndex 0, or -1
     int mEncoderPacketsWritten;     // track encoder packets for PPS injection
+
+    // --- HEVC seam fix (Defekt A / H.265, spec 2026-07-21) ---
+    bool mHevcSeamFix;                 // fix mode active for current segment
+    bool mHevcSeamRewriteFailed;       // P5: rewrite failed -> rollback
+    QString mHevcSeamFailReason;
+    THevcSliceRewriteCtx mHevcSeamCtx;
+    QString mHevcSeamX265Params;       // derived x265-params for setupEncoder
+    QStringList mSeamNotes;            // fallback notes (GUI)
+
+    static QString deriveX265SeamParams(const THevcSpsSeamInfo& src);
+    bool probeHevcEncoderSeamSps(const THevcSpsSeamInfo& srcSps,
+                                 const QString& x265Params,
+                                 THevcSpsSeamInfo* encSps);
+    static bool hevcSpsSeamCompatible(const THevcSpsSeamInfo& src,
+                                      const THevcSpsSeamInfo& enc,
+                                      QString* reason);
+    bool planHevcSeamFix(const TTCutSegmentInfo& segment);
 
     // Output display-order tracking for the MKV muxer. One entry per written
     // parser AU (= one frame; TTNaluParser merges PAFF field pairs), in write

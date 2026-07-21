@@ -215,6 +215,8 @@ TTESSmartCut::TTESSmartCut()
     , mSpsUnificationPocAnchor(-1)
     , mSpsUnificationPocBase(-1)
     , mEncoderPacketsWritten(0)
+    , mHevcSeamFix(false)
+    , mHevcSeamRewriteFailed(false)
     , mOutputDisplayOrderValid(true)
     , mEncoderPts(0)
     , mFramesStreamCopied(0)
@@ -347,6 +349,8 @@ void TTESSmartCut::cleanup()
     mSpsUnificationPocAnchor = -1;
     mSpsUnificationPocBase = -1;
     mEncoderPacketsWritten = 0;
+    mHevcSeamFix = false;
+    mHevcSeamRewriteFailed = false;
     mEncoderPocType = -1;
     mEncoderFrameMbsOnly = true;
     mEncoderPts = 0;
@@ -465,6 +469,7 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mActualOutputRanges.clear();
     mOutputDisplayOrder.clear();
     mOutputDisplayOrderValid = true;
+    mSeamNotes.clear();
 
     // ---- Display -> AU conversion (single source of truth) ----
     // UI/cut-list indices are display positions (Direction A). Below this point
@@ -2898,6 +2903,143 @@ bool TTESSmartCut::probeEncoderPocParams()
     return true;
 }
 
+// ----------------------------------------------------------------------------
+// HEVC seam fix: derive x265 params so the encoder SPS matches the source SPS
+// in every CABAC-/parse-relevant field. Explicit on/off for each knob so the
+// user's preset cannot silently break conformance (spec decision 3).
+// ----------------------------------------------------------------------------
+QString TTESSmartCut::deriveX265SeamParams(const THevcSpsSeamInfo& src)
+{
+    QStringList p;
+    p << QString("tu-intra-depth=%1").arg(src.tuDepthIntra + 1);
+    p << QString("tu-inter-depth=%1").arg(src.tuDepthInter + 1);
+    p << QString("amp=%1").arg(src.ampEnabled ? 1 : 0);
+    p << QString("sao=%1").arg(src.saoEnabled ? 1 : 0);
+    p << QString("tmvp=%1").arg(src.temporalMvpEnabled ? 1 : 0);
+    p << QString("strong-intra-smoothing=%1").arg(src.strongIntraSmoothing ? 1 : 0);
+    return p.join(':');
+}
+
+// ----------------------------------------------------------------------------
+// Probe the actual encoder SPS for the derived params (measure, don't assume —
+// same pattern as probeEncoderPocParams for H.264). GLOBAL_HEADER puts the
+// parameter sets into extradata without encoding a frame.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::probeHevcEncoderSeamSps(const THevcSpsSeamInfo& srcSps,
+                                           const QString& x265Params,
+                                           THevcSpsSeamInfo* encSps)
+{
+    const AVCodec* codec = avcodec_find_encoder_by_name("libx265");
+    if (!codec) return false;
+    AVCodecContext* probe = avcodec_alloc_context3(codec);
+    if (!probe) return false;
+
+    probe->width  = srcSps.picWidth;
+    probe->height = srcSps.picHeight;
+    probe->pix_fmt = (srcSps.bitDepthLuma >= 10) ? AV_PIX_FMT_YUV420P10LE
+                                                 : AV_PIX_FMT_YUV420P;
+    probe->time_base = (AVRational){1, static_cast<int>(mFrameRate * 1000)};
+    probe->framerate = (AVRational){static_cast<int>(mFrameRate * 1000), 1000};
+    probe->max_b_frames = 0;
+    probe->thread_count = 1;
+    probe->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    TTSettings* s = TTSettings::instance();
+    int crf       = s->encoderCrf();
+    int presetIdx = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
+                                           : qBound(0, s->encoderPreset(), 8);
+    static const char* presetNames[] = {
+        "ultrafast", "superfast", "veryfast", "faster", "fast",
+        "medium", "slow", "slower", "veryslow"
+    };
+    AVDictionary* opts = nullptr;
+    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+    av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
+    av_dict_set(&opts, "profile",
+                srcSps.bitDepthLuma >= 10 ? "main10" : "main", 0);
+    av_dict_set(&opts, "x265-params", x265Params.toUtf8().constData(), 0);
+
+    int ret = avcodec_open2(probe, codec, &opts);
+    av_dict_free(&opts);
+    if (ret < 0 || !probe->extradata || probe->extradata_size <= 0) {
+        avcodec_free_context(&probe);
+        return false;
+    }
+    QByteArray extradata(reinterpret_cast<const char*>(probe->extradata),
+                         probe->extradata_size);
+    avcodec_free_context(&probe);
+
+    // Find the SPS NAL (type 33) in the annex-b extradata.
+    for (int i = 0; i + 4 < extradata.size(); ++i) {
+        int sc = 0;
+        if (extradata.at(i) == 0 && extradata.at(i + 1) == 0) {
+            if (extradata.at(i + 2) == 1) sc = 3;
+            else if (extradata.at(i + 2) == 0 && extradata.at(i + 3) == 1) sc = 4;
+        }
+        if (sc == 0) continue;
+        int type = (quint8(extradata.at(i + sc)) >> 1) & 0x3F;
+        if (type == 33) {
+            *encSps = parseHevcSpsSeamInfo(extradata.mid(i));
+            return encSps->valid;
+        }
+        i += sc;
+    }
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+// CABAC-/parse-relevant field comparison. Whitelisted (may differ):
+// log2MaxPocLsb (rewrite writes source width), dpb/reorder/latency, VUI,
+// profile constraint flags. Scaling: source disabled -> encoder must be
+// disabled; source enabled -> only flat-16 acceptable (decode-neutral,
+// encoder stays without lists).
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::hevcSpsSeamCompatible(const THevcSpsSeamInfo& src,
+                                         const THevcSpsSeamInfo& enc,
+                                         QString* reason)
+{
+    auto fail = [reason](const QString& why) {
+        if (reason) *reason = why;
+        return false;
+    };
+    if (!src.valid) return fail(QString("source SPS: %1").arg(src.invalidReason));
+    if (!enc.valid) return fail(QString("encoder SPS: %1").arg(enc.invalidReason));
+    if (src.maxSubLayersMinus1 != 0 || enc.maxSubLayersMinus1 != 0)
+        return fail(QStringLiteral("sub-layers"));
+    if (src.chromaFormatIdc != enc.chromaFormatIdc)
+        return fail(QStringLiteral("chroma_format"));
+    if (src.picWidth != enc.picWidth || src.picHeight != enc.picHeight)
+        return fail(QStringLiteral("dimensions"));
+    if (src.bitDepthLuma != enc.bitDepthLuma
+        || src.bitDepthChroma != enc.bitDepthChroma)
+        return fail(QStringLiteral("bit depth"));
+    if (src.log2MinCbSizeMinus3 != enc.log2MinCbSizeMinus3
+        || src.log2DiffMaxMinCbSize != enc.log2DiffMaxMinCbSize)
+        return fail(QStringLiteral("coding block sizes"));
+    if (src.log2MinTbSizeMinus2 != enc.log2MinTbSizeMinus2
+        || src.log2DiffMaxMinTbSize != enc.log2DiffMaxMinTbSize)
+        return fail(QStringLiteral("transform block sizes"));
+    if (src.tuDepthInter != enc.tuDepthInter
+        || src.tuDepthIntra != enc.tuDepthIntra)
+        return fail(QStringLiteral("transform hierarchy depth"));
+    if (src.ampEnabled != enc.ampEnabled) return fail(QStringLiteral("amp"));
+    if (src.saoEnabled != enc.saoEnabled) return fail(QStringLiteral("sao"));
+    if (src.pcmEnabled || enc.pcmEnabled) return fail(QStringLiteral("pcm"));
+    if (src.temporalMvpEnabled != enc.temporalMvpEnabled)
+        return fail(QStringLiteral("temporal mvp"));
+    if (src.strongIntraSmoothing != enc.strongIntraSmoothing)
+        return fail(QStringLiteral("strong intra smoothing"));
+    if (enc.scalingListEnabled)
+        return fail(QStringLiteral("encoder scaling lists unexpected"));
+    if (src.scalingListEnabled && !src.scalingListFlat16)
+        return fail(QStringLiteral("source scaling lists not flat"));
+    if (src.numShortTermRefPicSets != 0 || enc.numShortTermRefPicSets != 0)
+        return fail(QStringLiteral("SPS RPS sets"));
+    if (src.longTermRefPicsPresent || enc.longTermRefPicsPresent)
+        return fail(QStringLiteral("long-term ref pics"));
+    return true;
+}
+
 bool TTESSmartCut::setupEncoder()
 {
     freeEncoder();
@@ -3067,6 +3209,17 @@ bool TTESSmartCut::setupEncoder()
         }
 
         av_dict_set(&opts, "profile", h265Profiles[profileIdx], 0);
+
+        // HEVC seam fix: SPS-derived params (tu-depth, amp, sao, tmvp,
+        // strong-intra-smoothing) so the re-encode slices stay CABAC-conform
+        // under the SOURCE SPS. Matching wins over preset defaults
+        // (spec 2026-07-21, decision 3). Empty when the fix is inactive.
+        if (mHevcSeamFix && !mHevcSeamX265Params.isEmpty()) {
+            av_dict_set(&opts, "x265-params",
+                        mHevcSeamX265Params.toUtf8().constData(), 0);
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "TTESSmartCut: seam x265-params:" << mHevcSeamX265Params;
+        }
     }
 
     av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
