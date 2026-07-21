@@ -1,9 +1,11 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38  # symbols re-verified, no drift found
-last_verified: 2026-07-12
+base_commit: 2b2fa186c866b80c9609f95e74315da70e5059cb  # all 62 named symbols re-greped; convertAUToIDR/convertSliceNalToIDR are correctly documented as deleted
+last_verified: 2026-07-21  # HEVC RASL-preserving seam added (branch trigger, seam edge, variant matrix); preview failure edge documented (ba064f15)
 sources:
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
+  - extern/tthevcseam.cpp
+  - extern/tthevcseam.h
   - avstream/ttnaluparser.cpp
   - avstream/ttnaluparser.h
   - avstream/ttdisplayordermap.cpp
@@ -58,12 +60,13 @@ flowchart TD
     CDR --> DEC["decodeFramesIntoList()<br/>(libav decoder, thread_count=1)"]
     DEC --> SEL["selectFramesByDisplayOrder()<br/>display bounds + streamCopyLimit"]
     SEL --> ENC["runEncodePass()<br/>(libx264/x265, bf=0, forced-idr)"]
-    ENC --> TEP["transformEncoderPacket()<br/>SPS-unify or reorder-patch"]
+    ENC --> TEP["transformEncoderPacket()<br/>SPS-unify, HEVC seam rewrite<br/>or reorder-patch"]
     TEP --> BUF["bufferAndWriteEncoderPacket()<br/>(1-packet pending buffer)"]
     BUF --> PDF["applyPocDomainFix()<br/>(patches the last packet)"]
     PDF --> WPP["writePendingPacket()"]
 
-    WPP --> EOS["EOS NAL<br/>(flush DPB)"]
+    WPP -->|"standard / unification"| EOS["EOS NAL<br/>(flush DPB)"]
+    WPP -->|"HEVC RASL seam:<br/>no EOB, DPB survives"| SC
     EOS --> FND["frameNumDelta bridge"]
     FND --> SC["streamCopyFrames()<br/>+ MMCO neutralize (unification only)"]
     SC --> TAIL["reencodeTail()<br/>(forced-IDR closed sub-segment)"]
@@ -98,6 +101,8 @@ flowchart TD
 | `stream-copy → tail` seam | Clean by construction: the tail's first frame is a **forced IDR**, which resets `PrevRefFrameNum`. No `frameNumDelta`, no MMCO, no SPS unification needed across this boundary — unlike the head seam. |
 | `streamCopyFrames` / `runEncodePass` → `mOutputDisplayOrder` | One entry per written AU, in write order, holding the **source display index**. Any anomaly (encoder emits more packets than frames submitted) invalidates the whole vector; the muxer then falls back to legacy linear PTS. |
 | `mOutputDisplayOrder` → `TTMkvMergeProvider` | Output-local display rank, used to assign MKV display PTS. Empty vector = "trust the muxer's linear timeline instead". |
+| `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` used to swallow it and kept looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
+| `TTESSmartCut::seamNotes()` → `ttavdata` → `statusReport` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
 
 ## Variant matrix — which branch fires, and what it must guarantee
 
