@@ -574,8 +574,8 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
 
   // A cluster is a confirmed field-pair cluster when at least one parser
   // field-pair position lies within +/-4 of its range (4 = local B-reorder
-  // distance M-1 plus slack). Confirmed = hint ("Feldpaare:"), unconfirmed =
-  // suspicion ("Defekt:").
+  // distance M-1 plus slack). Confirmed clusters are counted for the log only;
+  // unconfirmed ones become a visible "Defekt:" marker (see emitCluster).
   auto clusterConfirmed = [&](int cs, int ce) -> bool {
       for (int p : parserPairs)
           if (p >= cs - 4 && p <= ce + 4) return true;
@@ -587,7 +587,8 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   int unconfirmedClusters = 0;
   int defectVideoFrames = 0;   // frames in unconfirmed (real-defect) clusters only
 
-  // Cluster pass 1: video doubled-PTS frames (.info es_extra_frames)
+  // Cluster pass 1: video doubled-PTS frames (.info es_doubled_pts_aus,
+  // already classified into display space by loadExtraFrameIndices)
   if (!infoExtras.isEmpty()) {
       int clusterStart = infoExtras.first();
       int clusterEnd = clusterStart;
