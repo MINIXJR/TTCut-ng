@@ -261,3 +261,100 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
     info.valid = true;
     return info;
 }
+
+// ------------------------------------------------------------------ PPS parse
+THevcPpsSeamInfo parseHevcPpsSeamInfo(const QByteArray& ppsNal)
+{
+    THevcPpsSeamInfo info;
+    int sc = ttHevcStartCodeLen(ppsNal);
+    QByteArray rbsp = ttHevcDeescape(ppsNal.mid(sc));
+    THevcBitReader r(rbsp);
+
+    quint32 hdr = r.bits(16);
+    if (((hdr >> 9) & 0x3F) != 34) {
+        info.invalidReason = QStringLiteral("not a PPS NAL");
+        return info;
+    }
+    info.ppsId = int(r.ue());
+    info.spsId = int(r.ue());
+    info.dependentSliceSegments = r.bit();
+    info.outputFlagPresent = r.bit();
+    info.numExtraSliceHeaderBits = int(r.bits(3));
+    info.signDataHiding = r.bit();
+    info.cabacInitPresent = r.bit();
+    info.numRefIdxL0DefaultMinus1 = int(r.ue());
+    info.numRefIdxL1DefaultMinus1 = int(r.ue());
+    r.se();                                      // init_qp_minus26
+    r.bit();                                     // constrained_intra_pred
+    r.bit();                                     // transform_skip_enabled
+    if (r.bit())                                 // cu_qp_delta_enabled
+        r.ue();                                  // diff_cu_qp_delta_depth
+    r.se();                                      // pps_cb_qp_offset
+    r.se();                                      // pps_cr_qp_offset
+    info.sliceChromaQpOffsetsPresent = r.bit();
+    info.weightedPred = r.bit();
+    info.weightedBipred = r.bit();
+    r.bit();                                     // transquant_bypass_enabled
+    info.tilesEnabled = r.bit();
+    info.entropyCodingSync = r.bit();
+    if (info.tilesEnabled) {
+        info.invalidReason = QStringLiteral("tiles unsupported");
+        return info;
+    }
+    info.ppsLoopFilterAcrossSlices = r.bit();
+    info.deblockingControlPresent = r.bit();
+    if (info.deblockingControlPresent) {
+        r.bit();                                 // deblocking_filter_override_enabled
+        if (r.bit() == 0) {                      // pps_deblocking_filter_disabled
+            r.se();                              // pps_beta_offset_div2
+            r.se();                              // pps_tc_offset_div2
+        }
+    }
+    if (r.bit()) {                               // pps_scaling_list_data_present
+        bool flatIgnored = true;
+        parseScalingListData(r, &flatIgnored);   // walk to stay in sync
+    }
+    info.listsModificationPresent = r.bit();
+    r.ue();                                      // log2_parallel_merge_level_minus2
+    info.sliceHeaderExtension = r.bit();
+    // pps_extension_present + trailing: not needed.
+
+    if (r.error()) {
+        info.invalidReason = QStringLiteral("bitstream overrun");
+        return info;
+    }
+    info.valid = true;
+    return info;
+}
+
+// -------------------------------------------------------------- pps_id patch
+QByteArray patchHevcPpsId(const QByteArray& ppsNalWithStartCode, int newPpsId)
+{
+    int sc = ttHevcStartCodeLen(ppsNalWithStartCode);
+    if (sc == 0 || newPpsId < 1 || newPpsId > 63)
+        return QByteArray();
+    QByteArray rbsp = ttHevcDeescape(ppsNalWithStartCode.mid(sc));
+    THevcBitReader r(rbsp);
+
+    quint32 hdr = r.bits(16);
+    if (((hdr >> 9) & 0x3F) != 34) return QByteArray();
+    if (r.bit() != 1) return QByteArray();       // pps_id must be ue(0) = '1'
+
+    // Locate the rbsp stop bit (last set bit) so trailing alignment can be
+    // rebuilt after the shift.
+    int totalBits = rbsp.size() * 8;
+    int last1 = totalBits - 1;
+    const quint8* d = reinterpret_cast<const quint8*>(rbsp.constData());
+    while (last1 > r.pos() && ((d[last1 >> 3] >> (7 - (last1 & 7))) & 1) == 0)
+        --last1;
+    if (last1 <= r.pos()) return QByteArray();
+
+    THevcBitWriter w;
+    w.bits(hdr, 16);
+    w.ue(quint32(newPpsId));
+    for (int p = r.pos(); p < last1; ++p)
+        w.bit((d[p >> 3] >> (7 - (p & 7))) & 1);
+    w.alignOneZeros();                           // stop bit + padding
+
+    return ppsNalWithStartCode.left(sc) + ttHevcEscape(w.data());
+}

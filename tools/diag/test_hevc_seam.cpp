@@ -7,6 +7,7 @@
 //                                              for all pre-seam encoder slices
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <QByteArray>
 #include <QFile>
 #include <QPair>
@@ -79,7 +80,38 @@ int main(int argc, char** argv)
         fprintf(stderr, "no SPS found\n");
         return 1;
     }
-    // "pps", "ppsid", "roundtrip" subcommands are added in tasks 3 and 4.
+    if (!strcmp(argv[1], "pps")) {
+        QVector<QByteArray> seen;
+        for (const Nal& n : nals) {
+            if (n.type != 34) continue;
+            QByteArray raw = buf.mid(n.sc, n.end - n.sc);
+            if (seen.contains(raw)) continue;
+            seen.append(raw);
+            THevcPpsSeamInfo p = parseHevcPpsSeamInfo(raw);
+            printf("ppsId=%d valid=%d reason='%s' extraBits=%d wp=%d wbp=%d "
+                   "wpp=%d deblockCtrl=%d listsMod=%d chromaQp=%d\n",
+                   p.ppsId, p.valid, qPrintable(p.invalidReason),
+                   p.numExtraSliceHeaderBits, p.weightedPred, p.weightedBipred,
+                   p.entropyCodingSync, p.deblockingControlPresent,
+                   p.listsModificationPresent, p.sliceChromaQpOffsetsPresent);
+        }
+        return 0;
+    }
+    if (!strcmp(argv[1], "ppsid")) {
+        if (argc < 4) { fprintf(stderr, "need newid\n"); return 2; }
+        for (const Nal& n : nals) {
+            if (n.type != 34) continue;
+            QByteArray patched =
+                patchHevcPpsId(buf.mid(n.sc, n.end - n.sc), atoi(argv[3]));
+            if (patched.isEmpty()) { printf("PATCH FAILED\n"); return 1; }
+            THevcPpsSeamInfo p = parseHevcPpsSeamInfo(patched);
+            printf("patched ppsId=%d valid=%d\n", p.ppsId, p.valid);
+            return (p.valid && p.ppsId == atoi(argv[3])) ? 0 : 1;
+        }
+        fprintf(stderr, "no PPS\n");
+        return 1;
+    }
+    // "roundtrip" subcommand is added in task 4.
     fprintf(stderr, "unknown subcommand\n");
     return 2;
 }
