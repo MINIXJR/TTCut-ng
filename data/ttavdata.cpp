@@ -1546,6 +1546,13 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     log->infoMsg(__FILE__, __LINE__, QString("Smart Cut complete: %1 frames re-encoded, %2 frames stream-copied")
         .arg(smartCut.framesReencoded()).arg(smartCut.framesStreamCopied()));
 
+    // HEVC seam fallback notes (Defekt A / H.265): surface in the progress
+    // window and the log so affected seams are visible (spec decision 1).
+    for (const QString& note : smartCut.seamNotes()) {
+      log->warningMsg(__FILE__, __LINE__, note);
+      emit statusReport(0, StatusReportArgs::Step, note, 0);
+    }
+
     // Adjust audio keepList to match actual video output ranges.
     // B-frame reorder delay can shift the display-order CutIn forward, causing
     // the video Smart Cut to output fewer frames than the cut list specifies.
