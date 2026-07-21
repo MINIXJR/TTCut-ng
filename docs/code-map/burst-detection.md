@@ -1,6 +1,6 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38
-last_verified: 2026-07-12  # Spalte-5-Eingang (updateHintColumn) nach 666ed08 gegen den Code gelesen und GUI-verifiziert; Detektor-Kriterium/Floor/Frühausstieg u. Messgrenzen unverändert seit 2026-07-09. Diagramm 2026-07-10 neu gezeichnet: Kantensemantik getrennt (Daten vs. Trigger), Ergebnis als eigener Knoten statt Rückwärtskante, fehlender Direktaufrufer ttcut-burst-probe ergänzt; alle Knoten-Symbole gegen den Code gegrept.
+base_commit: 3725455e74a477daa2dc845bb266682448beb37c
+last_verified: 2026-07-21  # re-checked against all commits touching its sources since 144dec8a: burst chain itself unchanged
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h

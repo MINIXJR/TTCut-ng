@@ -1,6 +1,6 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38
-last_verified: 2026-07-12
+base_commit: 3725455e74a477daa2dc845bb266682448beb37c
+last_verified: 2026-07-21  # .info key renamed (ea08e20f); confirmed field-pair clusters are log-only (34c80890)
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -220,16 +220,19 @@ pixel-identically, and the audio cut-time correction subtracts them.
 
   **Consumer preference flipped (`b69dfcf`, `fc2a573`, 2026-07-12).** `TTAVData`'s
   `loadExtraFrameIndices()` now prefers this parser list (`extraIndices()`) over the
-  `.info` `es_extra_frames` list for audio time correction — previously `.info` was
-  tried first and the parser list was only a fallback when `.info` was empty. Because
+  `.info` candidate list for audio time correction — previously `.info` was
+  tried first and the parser list was only a fallback when `.info` was empty. (The
+  `.info` key itself changed with `ea08e20f`: the legacy `es_extra_frames` is no
+  longer parsed, its successors are `es_total_aus` + `es_doubled_pts_aus`.) Because
   `extraIndices()` is populated by the (async) header-list build and is still empty
   when `TTAVData::openAVStreams()` runs synchronously, the preference decision — and
   a new cluster-classification step (`showExtraFrameClusterDialog()`) that confirms a
   `.info` cluster as a real field-pair group when a parser `extraIndices()` position
-  lies within ±4 of it, labelling it "Feldpaare:" instead of "Defekt:" in the warning
-  dialog — was moved to `onOpenVideoFinished()`, gated by `mpPendingExtraFrameDialog`
+  lies within ±4 of it — was moved to `onOpenVideoFinished()`, gated by `mpPendingExtraFrameDialog`
   (set only on a fresh open, mirroring `mpPendingVdrMarkers`, so project reload does
-  not re-show the dialog). Full detail on the audio-correction consumer itself:
+  not re-show the dialog). **Confirmed field-pair clusters produce no timeline
+  marker** since `34c80890` — they are counted for the log only; only unconfirmed
+  clusters become a `"Defekt:"` stream point. Full detail on the audio-correction consumer itself:
   `audio-cut-timing.md`.
 
   Consequence: **display positions count fields, not frames.** Measured on Futurama
