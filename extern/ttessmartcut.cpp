@@ -926,6 +926,138 @@ static bool kfHasLeadingPics(const TTNaluParser& parser,
     return false;
 }
 
+// ----------------------------------------------------------------------------
+// HEVC seam preflight (Defekt A / H.265, spec 2026-07-21): decide per segment
+// whether the RASL-preserving seam can run. All checks happen BEFORE any
+// output is written; every failure falls back to the standard (EOB) seam.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::planHevcSeamFix(const TTCutSegmentInfo& segment)
+{
+    mHevcSeamFix = false;
+    mHevcSeamX265Params.clear();
+    mHevcSeamCtx = THevcSliceRewriteCtx();
+
+    const int scStart = segment.streamCopyStartFrame;
+    if (mParser.codecType() != NALU_CODEC_H265 || scStart < 0
+        || segment.reencodeStartFrame < 0)
+        return false;
+
+    // P1a: copy-start must be a CRA (not IDR, not BLA).
+    const TTAccessUnit au = mParser.accessUnitAt(scStart);
+    if (au.isIDR || !au.isKeyframe)
+        return false;                              // silent: nothing to fix
+    int firstSliceType = -1;
+    for (int ni : au.nalIndices) {
+        TTNalUnit nu = mParser.nalUnitAt(ni);
+        if (nu.isSlice) { firstSliceType = nu.type; break; }
+    }
+    if (firstSliceType != 21)
+        return false;                              // silent: not CRA
+
+    // P1b: RASL window after the CRA (decode order). No RASL -> seam is
+    // already loss-free with the standard path.
+    int numRasl = 0;
+    for (int a = scStart + 1; a < mParser.accessUnitCount(); ++a) {
+        int t = -1;
+        const TTAccessUnit next = mParser.accessUnitAt(a);
+        for (int ni : next.nalIndices) {
+            TTNalUnit nu = mParser.nalUnitAt(ni);
+            if (nu.isSlice) { t = nu.type; break; }
+        }
+        if (t == 8 || t == 9) ++numRasl;
+        else break;
+    }
+    if (numRasl == 0)
+        return false;                              // silent
+
+    auto fallback = [this, scStart](const QString& why) {
+        const QString note =
+            tr("Seam at frame %1: RASL preservation not possible (%2) - "
+               "using standard seam (short freeze)").arg(scStart).arg(why);
+        mSeamNotes.append(note);
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__, note);
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "    HEVC seam fallback:" << note;
+        return false;
+    };
+
+    // P0: uniform parameter sets in the source.
+    if (mParser.spsCount() < 1)
+        return fallback(QStringLiteral("no source SPS"));
+    QByteArray sps0 = mParser.getSPS(0);
+    for (int i = 1; i < mParser.spsCount(); ++i)
+        if (mParser.getSPS(i) != sps0)
+            return fallback(QStringLiteral("SPS changes mid-stream"));
+
+    THevcSpsSeamInfo srcSps = parseHevcSpsSeamInfo(sps0);
+    if (!srcSps.valid)
+        return fallback(QString("source SPS: %1").arg(srcSps.invalidReason));
+    if (srcSps.scalingListEnabled && !srcSps.scalingListFlat16)
+        return fallback(QStringLiteral("non-flat scaling lists"));
+
+    // P2: free pps_id + extra-bits table for the CRA probe.
+    QVector<int> ppsExtraBitsById(64, -1);
+    quint64 usedIds = 0;
+    for (int i = 0; i < mParser.ppsCount(); ++i) {
+        THevcPpsSeamInfo p = parseHevcPpsSeamInfo(mParser.getPPS(i));
+        if (!p.valid || p.ppsId < 0 || p.ppsId > 63)
+            return fallback(QStringLiteral("source PPS unparsable"));
+        usedIds |= (1ULL << p.ppsId);
+        ppsExtraBitsById[p.ppsId] = p.numExtraSliceHeaderBits;
+    }
+    int freeId = -1;
+    for (int id = 1; id < 64; ++id)
+        if (!(usedIds & (1ULL << id))) { freeId = id; break; }
+    if (freeId < 0)
+        return fallback(QStringLiteral("no free pps_id"));
+
+    // P1c: CRA slice header -> craPoc + retain set.
+    QByteArray craAu = mParser.readAccessUnitData(scStart);
+    int craPoc = -1;
+    QVector<int> retain;
+    QString craErr;
+    if (!parseHevcCraRpsInfo(craAu, srcSps.log2MaxPocLsb, ppsExtraBitsById,
+                             &craPoc, &retain, &craErr))
+        return fallback(QString("CRA probe: %1").arg(craErr));
+
+    // P4 (coarse): POC window must not wrap inside the lsb cycle. Only the
+    // structural minimum is testable here — the standin count N is decided by
+    // frame selection, and no upper bound derived from the segment extent is
+    // both safe and useful (a margin large enough to cover the boundary-
+    // crossing extension rejects working seams: measured hevc_og 14..250 needs
+    // base = 50 - 4 - 32 = 14, a +32 margin would demand 64). The exact check
+    // runs in reencodeFrames before the first encoder packet is written, so a
+    // late reject still rolls back without half-written output.
+    if (craPoc - numRasl - 1 < 0)
+        return fallback(QStringLiteral("POC window wraps lsb cycle"));
+    for (int rp : retain)
+        if (rp < 0)
+            return fallback(QStringLiteral("retain set wraps lsb cycle"));
+
+    // P3: encoder matching (measure, don't assume).
+    QString params = deriveX265SeamParams(srcSps);
+    THevcSpsSeamInfo encProbe;
+    if (!probeHevcEncoderSeamSps(srcSps, params, &encProbe))
+        return fallback(QStringLiteral("encoder SPS probe failed"));
+    QString cmpReason;
+    if (!hevcSpsSeamCompatible(srcSps, encProbe, &cmpReason))
+        return fallback(QString("encoder SPS mismatch: %1").arg(cmpReason));
+
+    mHevcSeamCtx.srcPocBits = srcSps.log2MaxPocLsb;
+    mHevcSeamCtx.craPoc = craPoc;
+    mHevcSeamCtx.numRasl = numRasl;
+    mHevcSeamCtx.encPpsId = freeId;
+    mHevcSeamCtx.retainPocs = retain;
+    mHevcSeamX265Params = params;
+    mHevcSeamFix = true;
+    if (TTSettings::instance()->logSmartCut())
+        qDebug() << "    HEVC RASL-preserving seam: CRA AU" << scStart
+                 << "poc" << craPoc << "rasl" << numRasl
+                 << "retain" << retain << "encPpsId" << freeId
+                 << "params" << mHevcSeamX265Params;
+    return true;
+}
+
 // Each section starts with its own SPS/PPS + IDR, allowing clean decoder reset
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segment,
@@ -1052,6 +1184,69 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
     bool useSpsUnification = (mParser.codecType() == NALU_CODEC_H264)
         && (mParser.isPAFF() || !pocBridgeable || seamNeedsUnification);
 
+    // HEVC seam fix (Defekt A / H.265): preflighted RASL-preserving seam.
+    // On any later rewrite failure the segment output is rolled back and
+    // re-written on the standard path (never a half-written segment).
+    bool hevcSeamDone = false;
+    if (planHevcSeamFix(segment)) {
+        const qint64 segPos = outFile.pos();
+        const int dispCount = mOutputDisplayOrder.size();
+        const int rangeCount = mActualOutputRanges.size();
+        const int reencBefore = mFramesReencoded;
+        const int copiedBefore = mFramesStreamCopied;
+
+        bool ok = false;
+        mHevcSeamRewriteFailed = false;
+        mEncoderPacketsWritten = 0;
+        // 1. Source parameter sets rule the whole segment (prevents the
+        //    DPB flush from an SPS content switch at the seam). For H.265
+        //    writeParameterSets emits VPS/SPS/PPS verbatim (the reorder
+        //    patch argument only ever applies to H.264).
+        ok = writeParameterSets(outFile, 0);
+        int adjustedStart = -1;
+        if (ok)
+            ok = reencodeFrames(outFile, segment.reencodeStartFrame,
+                                segment.reencodeEndFrame,
+                                segment.streamCopyStartFrame, &adjustedStart,
+                                actualStartAU, segment.startDisplay);
+        if (ok && !mHevcSeamRewriteFailed) {
+            int scStart = (adjustedStart >= 0) ? adjustedStart
+                                               : segment.streamCopyStartFrame;
+            // 2. NO EOB, NO parameter-set re-write at the seam: the DPB must
+            //    survive so the RASL window resolves against the standins.
+            if (scStart <= segment.streamCopyEndFrame)
+                ok = streamCopyFrames(outFile, scStart,
+                                      segment.streamCopyEndFrame,
+                                      mReorderDelay, frameNumDelta);
+        }
+        mHevcSeamFix = false;
+        mHevcSeamX265Params.clear();
+
+        if (ok && !mHevcSeamRewriteFailed) {
+            hevcSeamDone = true;      // tail epilogue below is shared
+        } else if (!mHevcSeamRewriteFailed) {
+            return false;             // hard error (I/O, encoder) — abort
+        } else {
+            // P5 rollback: truncate segment output + restore counters, then
+            // run the standard path below.
+            const QString note =
+                tr("Seam at frame %1: RASL preservation aborted (%2) - "
+                   "using standard seam (short freeze)")
+                .arg(segment.streamCopyStartFrame).arg(mHevcSeamFailReason);
+            mSeamNotes.append(note);
+            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__, note);
+            outFile.resize(segPos);
+            outFile.seek(segPos);
+            mOutputDisplayOrder.resize(dispCount);
+            while (mActualOutputRanges.size() > rangeCount)
+                mActualOutputRanges.removeLast();
+            mFramesReencoded = reencBefore;
+            mFramesStreamCopied = copiedBefore;
+            mHevcSeamRewriteFailed = false;
+        }
+    }
+
+    if (!hevcSeamDone) {
     if (useSpsUnification) {
         if (TTSettings::instance()->logSmartCut())
             qDebug() << "    PAFF SPS Unification: rewriting encoder output for source SPS";
@@ -1199,6 +1394,7 @@ bool TTESSmartCut::processSegment(QFile& outFile, const TTCutSegmentInfo& segmen
         }
         }   // end: stream-copy middle present (scStart <= scEnd)
     }
+    }   // end: standard/unification path (skipped when the HEVC seam fix ran)
     }   // end mixed-segment else
 
     // ---- Frame-accurate cut-OUT: re-encode the tail GOP if needed ----
@@ -2296,6 +2492,24 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
         }
     }
 
+    // HEVC seam fix: anchor encoder POCs so the standins end directly below
+    // the RASL window: base = craPoc - numRasl - N (source lsb domain).
+    if (mHevcSeamFix) {
+        const int n = ctx.framesToEncode.size();
+        const int base = mHevcSeamCtx.craPoc - mHevcSeamCtx.numRasl - n;
+        if (base < 0) {
+            // P4 exact check failed (lsb wrap) -> trigger rollback before
+            // any packet is written.
+            mHevcSeamRewriteFailed = true;
+            mHevcSeamFailReason = QStringLiteral("POC window wraps lsb cycle");
+            return false;
+        }
+        mHevcSeamCtx.pocBase = base;
+        if (TTSettings::instance()->logSmartCut())
+            qDebug() << "      HEVC seam POC base:" << base
+                     << "(" << n << "standins )";
+    }
+
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "      Selected" << ctx.framesToEncode.size() << "frames for encoding"
                  << "(AU range" << startFrame << "-" << (ctx.streamCopyLimit - 1) << ")";
@@ -3336,6 +3550,45 @@ QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByt
 {
     QByteArray encodedData = rawData;
 
+    if (mHevcSeamFix && mParser.codecType() == NALU_CODEC_H265) {
+        // First packet: capture encoder SPS/PPS (x265 sends its parameter
+        // sets inline with the first keyframe packet).
+        if (!mHevcSeamCtx.encHeadersParsed) {
+            for (int i = 0; i + 4 < rawData.size(); ++i) {
+                int sc = 0;
+                if (rawData.at(i) == 0 && rawData.at(i + 1) == 0) {
+                    if (rawData.at(i + 2) == 1) sc = 3;
+                    else if (rawData.at(i + 2) == 0 && rawData.at(i + 3) == 1) sc = 4;
+                }
+                if (sc == 0) continue;
+                int t = (quint8(rawData.at(i + sc)) >> 1) & 0x3F;
+                if (t == 33)
+                    mHevcSeamCtx.encSps = parseHevcSpsSeamInfo(rawData.mid(i));
+                else if (t == 34)
+                    mHevcSeamCtx.encPps = parseHevcPpsSeamInfo(rawData.mid(i));
+                i += sc;
+            }
+            mHevcSeamCtx.encHeadersParsed =
+                mHevcSeamCtx.encSps.valid && mHevcSeamCtx.encPps.valid
+                && mHevcSeamCtx.encPps.numExtraSliceHeaderBits == 0;
+            if (!mHevcSeamCtx.encHeadersParsed) {
+                mHevcSeamRewriteFailed = true;
+                mHevcSeamFailReason =
+                    QStringLiteral("encoder parameter sets unparsable");
+                return QByteArray();
+            }
+        }
+        QString reason;
+        QByteArray rewritten = rewriteHevcEncoderPacket(
+            rawData, mHevcSeamCtx, mEncoderPacketsWritten, &reason);
+        if (rewritten.isEmpty()) {
+            mHevcSeamRewriteFailed = true;
+            mHevcSeamFailReason = reason;
+            return QByteArray();
+        }
+        return rewritten;
+    }
+
     if (mSpsUnification && mParser.codecType() == NALU_CODEC_H264 && ctx.encoderSpsParsed) {
         // SPS Unification: extract encoder PPS from first packet, rewrite all slices
         if (!ctx.encPpsParsed) {
@@ -3467,6 +3720,10 @@ bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
 
             parseEncoderSpsFromPacket(ctx, rawData);
             QByteArray transformed = transformEncoderPacket(ctx, rawData);
+            if (transformed.isEmpty() && mHevcSeamRewriteFailed) {
+                av_packet_free(&packet);
+                return false;    // seam rewrite failed -> rollback in caller
+            }
             if (!bufferAndWriteEncoderPacket(ctx, transformed)) {
                 av_packet_free(&packet);
                 return false;
@@ -3503,6 +3760,10 @@ bool TTESSmartCut::flushEncoder(ReencodeContext& ctx)
 
         parseEncoderSpsFromPacket(ctx, rawData);
         QByteArray transformed = transformEncoderPacket(ctx, rawData);
+        if (transformed.isEmpty() && mHevcSeamRewriteFailed) {
+            av_packet_free(&packet);
+            return false;    // seam rewrite failed -> rollback in caller
+        }
         if (!bufferAndWriteEncoderPacket(ctx, transformed)) {
             av_packet_free(&packet);
             return false;
