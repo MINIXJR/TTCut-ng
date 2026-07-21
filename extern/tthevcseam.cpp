@@ -137,4 +137,127 @@ int ttHevcStartCodeLen(const QByteArray& nal)
     return 0;
 }
 
-// Later tasks append the parsers/rewriter below this line.
+// ------------------------------------------------------------------ SPS parse
+// Scaling list data walk with flat-16 tracking (H.265 7.3.4).
+// A list is "flat 16" when every coefficient (and the DC coef for
+// sizeId >= 2) decodes to 16 — numerically identical to scaling disabled.
+// pred_matrix_id_delta references copy earlier lists, inheriting flatness;
+// delta == 0 references the DEFAULT list, which is NOT flat -> not flat16.
+static void parseScalingListData(THevcBitReader& r, bool* allFlat16)
+{
+    *allFlat16 = true;
+    for (int sizeId = 0; sizeId < 4; ++sizeId) {
+        for (int matrixId = 0; matrixId < 6;
+             matrixId += (sizeId == 3) ? 3 : 1) {
+            int predMode = r.bit();
+            if (!predMode) {
+                quint32 delta = r.ue();
+                if (delta == 0)          // copies DEFAULT list (non-flat)
+                    *allFlat16 = false;
+                // delta > 0 copies an earlier parsed list: flatness inherited,
+                // tracked implicitly via *allFlat16 over all explicit lists.
+            } else {
+                int coefNum = qMin(64, 1 << (4 + (sizeId << 1)));
+                int nextCoef = 8;
+                if (sizeId > 1) {
+                    qint32 dcMinus8 = r.se();
+                    if (dcMinus8 != 8) *allFlat16 = false;   // DC must be 16
+                    nextCoef = dcMinus8 + 8;
+                }
+                for (int i = 0; i < coefNum; ++i) {
+                    qint32 d = r.se();
+                    nextCoef = (nextCoef + d + 256) % 256;
+                    if (nextCoef != 16) *allFlat16 = false;
+                }
+            }
+        }
+    }
+}
+
+THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
+{
+    THevcSpsSeamInfo info;
+    int sc = ttHevcStartCodeLen(spsNal);
+    QByteArray rbsp = ttHevcDeescape(spsNal.mid(sc));
+    THevcBitReader r(rbsp);
+
+    quint32 hdr = r.bits(16);
+    if (((hdr >> 9) & 0x3F) != 33) {
+        info.invalidReason = QStringLiteral("not an SPS NAL");
+        return info;
+    }
+    r.bits(4);                                   // sps_video_parameter_set_id
+    info.maxSubLayersMinus1 = int(r.bits(3));
+    r.bit();                                     // temporal_id_nesting
+    if (info.maxSubLayersMinus1 != 0) {
+        info.invalidReason = QStringLiteral("sub-layers unsupported");
+        return info;
+    }
+    // profile_tier_level(1, 0): 2+1+5+32+4x1+43+1 = 88 bits general + 8 level
+    r.skip(88 + 8);
+
+    info.spsId = int(r.ue());
+    info.chromaFormatIdc = int(r.ue());
+    if (info.chromaFormatIdc == 3) r.bit();      // separate_colour_plane
+    info.picWidth  = int(r.ue());
+    info.picHeight = int(r.ue());
+    if (r.bit()) {                               // conformance_window
+        r.ue(); r.ue(); r.ue(); r.ue();
+    }
+    info.bitDepthLuma   = int(r.ue()) + 8;
+    info.bitDepthChroma = int(r.ue()) + 8;
+    info.log2MaxPocLsb  = int(r.ue()) + 4;
+    int subLayerOrdering = r.bit();
+    // maxSubLayersMinus1 == 0: exactly one dpb/reorder/latency triple either way
+    Q_UNUSED(subLayerOrdering);
+    info.maxDecPicBufferingMinus1 = int(r.ue());
+    r.ue();                                      // max_num_reorder_pics
+    r.ue();                                      // max_latency_increase_plus1
+    info.log2MinCbSizeMinus3  = int(r.ue());
+    info.log2DiffMaxMinCbSize = int(r.ue());
+    info.log2MinTbSizeMinus2  = int(r.ue());
+    info.log2DiffMaxMinTbSize = int(r.ue());
+    info.tuDepthInter = int(r.ue());
+    info.tuDepthIntra = int(r.ue());
+    info.scalingListEnabled = r.bit();
+    if (info.scalingListEnabled) {
+        info.scalingListDataPresent = r.bit();
+        if (info.scalingListDataPresent) {
+            bool flat = true;
+            parseScalingListData(r, &flat);
+            info.scalingListFlat16 = flat;
+        } else {
+            // Default lists active — NOT flat.
+            info.scalingListFlat16 = false;
+        }
+    }
+    info.ampEnabled = r.bit();
+    info.saoEnabled = r.bit();
+    info.pcmEnabled = r.bit();
+    if (info.pcmEnabled) {
+        info.invalidReason = QStringLiteral("PCM unsupported");
+        return info;
+    }
+    info.numShortTermRefPicSets = int(r.ue());
+    if (info.numShortTermRefPicSets != 0) {
+        // st_ref_pic_set parsing in the SPS is not implemented; preflight
+        // requires 0 anyway (all measured corpora).
+        info.invalidReason = QStringLiteral("SPS RPS sets unsupported");
+        return info;
+    }
+    info.longTermRefPicsPresent = r.bit();
+    if (info.longTermRefPicsPresent) {
+        info.invalidReason = QStringLiteral("long-term ref pics unsupported");
+        return info;
+    }
+    info.temporalMvpEnabled = r.bit();
+    info.strongIntraSmoothing = r.bit();
+    // VUI and extensions are irrelevant for the seam — stop here.
+
+    if (r.error()) {
+        info.invalidReason = QStringLiteral("bitstream overrun");
+        return info;
+    }
+    info.valid = true;
+    return info;
+}
