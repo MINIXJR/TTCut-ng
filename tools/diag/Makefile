@@ -26,7 +26,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -35,6 +35,9 @@ FILEBUF_OBJS := ../../obj/ttfilebuffer.o ../../obj/ttmessagelogger.o ../../obj/t
 # Objects needed for the TTESInfo demux-repair field parsing test
 ESINFO_OBJS := ../../obj/ttesinfo.o ../../obj/ttsettings.o ../../obj/moc_ttsettings.o \
                ../../obj/ttmessagelogger.o
+
+# Objects needed for the HEVC seam bitstream machinery test
+HEVCSEAM_OBJS := ../../obj/tthevcseam.o
 
 .PHONY: all clean
 all: $(TOOLS)
@@ -59,6 +62,9 @@ test_startcode_scan: test_startcode_scan.cpp $(FILEBUF_OBJS)
 
 test_esinfo: test_esinfo.cpp $(ESINFO_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(ESINFO_OBJS) $(LDLIBS)
+
+test_hevc_seam: test_hevc_seam.cpp $(HEVCSEAM_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
 test_audiocut: test_audiocut.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
