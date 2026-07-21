@@ -1,6 +1,6 @@
 ---
-base_commit: 144dec8ac2de73aec48505e894322beedc673b38  # docs: record the encoder POC probe and the poc_type-2 finding
-last_verified: 2026-07-18
+base_commit: 412f4e409697d0c59fadbb898951c10bcf639dbb  # all named symbols re-greped
+last_verified: 2026-07-21  # raw->merged AU domain + adoptStreamMetadata added; EOS/EOB arming corrected; HEVC seam interaction noted
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -20,6 +20,7 @@ sources:
   - avstream/ttvideoindexlist.h
   - avstream/ttavheader.h
   - avstream/ttdisplayordermap.h
+  - avstream/ttdisplayordermap.cpp
   - avstream/tth26xvideostream.cpp
   - avstream/tth26xvideostream.h
   - avstream/tth264videostream.cpp
@@ -61,8 +62,13 @@ flowchart TD
     Q["Cut/preview caller<br/>(data/ttavdata.cpp doH264Cut,<br/>data/ttcutpreviewtask.cpp createH264PreviewClip,<br/>gui/ttcutpreview.cpp regenerateSmartCutPreviewClip)<br/>smartCut->outputDisplayOrder() → mkvProvider.setVideoDisplayOrder()"]
     R["TTMkvMergeProvider::mux() → assignEsTimestamps()<br/>(extern/ttmkvmergeprovider.cpp)<br/>pts = displayOrder[i] × frameDur (DISPLAY time)<br/>dts = (i − reorderOffset) × frameDur"]
 
+    MRG["TTFFmpegWrapper::mergePAFFFieldsInIndex<br/>collapses PAFF field pairs<br/>records mRawToMerged (raw AU → merged idx)"]
+    DPC["TTAVData doubled-PTS classification<br/>.info es_doubled_pts_aus (raw-AU-numbered)"]
+
     A --> B --> C
     C --> D --> E
+    MRG --> E
+    MRG --> DPC
     C --> F
     F --> G --> H --> I
     C --> J --> K --> L
@@ -83,6 +89,8 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 
 | From → To | What crosses | Order domain |
 |---|---|---|
+| `mergePAFFFieldsInIndex` → `mRawToMerged` → `rawToMergedIndex` / `TTH26xVideoStream::mapRawAuToDisplayIndex` | **A third index domain, distinct from both decode and display order:** `buildFrameIndex` scans **one packet per raw AU** (PAFF top and bottom field are separate packets); the merge then collapses each field pair, so `frameIndex()` is *merged*. `.info` fields written by ttcut-demux (`es_doubled_pts_aus`) are numbered in **raw** AUs and must be translated before they can be compared against anything TTCut shows. Encoding: entry ≥ 0 → merged index; entry < 0 → collapsed bottom field with merged index `~entry`; empty vector = identity. **Only the index OWNER holds the map** — a wrapper that adopts an index via `setFrameIndex()` never ran the merge and sees identity, because it adopts the already-merged list. | **RAW AU order** on the input side (one entry per demuxed packet), **merged decode order** on the output side — neither is display order |
+| `TTH26xVideoStream::provideFrameIndexTo` → `TTFFmpegWrapper::adoptStreamMetadata` | PAFF flag, `frame_mbs_only_flag` and `log2_max_frame_num` must travel **with** an adopted index. Adopters never run the index pass themselves, so without this their decode-order tagging counts PAFF field packets as whole frames: `decodeFrame()` then never reaches a field-pair target AU and drains the file to EOF (measured: 2×53 s navigation hang, fixed in `46d3dcb1`). Must be called right after `setFrameIndex()`. | n/a — carries stream properties, not indices; but it decides whether the adopter's **decode-order** tagging is correct |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCurrentFrame` slot | `currentPosition` — the integer last stored by `checkCutPosition(avData, pos)` | **DECODE order** (see below) |
 | `TTVideoStream::moveToXxx()` → caller (TTCurrentFrame, TTCutOutFrame) | return value = `current_index` = position in `TTVideoIndexList` | **DECODE order** for H.26x; **display order** for MPEG-2 after `sortDisplayOrder()` |
 | `TTVideoIndexList::moveToNextIndexPos(pos, type)` → TTVideoStream | next list position ≥ pos+1 matching frame type | **DECODE order** for H.26x (list built frame-by-frame from `mFrameIndex`, no POC sort); **display order** for MPEG-2 (list is sorted by `display_order` via `sortDisplayOrder()`) |
@@ -201,9 +209,17 @@ display k. ffmpeg/mpv drop them → map-display N == ffmpeg-display (N−k).
 
 **Fix (Ansatz A — raw decode dimension kept, display dimension compacted):**
 - `TTLeadingPicClassifier` (avstream/ttdisplayordermap.cpp) — stateful per-AU NAL-walk
-  implementing the HEVC `NoRaslOutputFlag` rule (first IRAP / post-EOS NAL 36 / BLA
-  16-18). HEVC-only; H.264/MPEG-2 → always false. The dropped count is detected
-  dynamically, never hardcoded.
+  implementing the HEVC `NoRaslOutputFlag` rule (first IRAP / IRAP after a sequence
+  end / BLA 16-18 / defensively IDR). "Sequence end" means **either** NAL type
+  36 (`EOS`) **or** 37 (`EOB`) — the classifier arms on both, which matters because
+  TTCut's own seam writes type 37. HEVC-only; H.264/MPEG-2 → always false. The
+  dropped count is detected dynamically, never hardcoded.
+- **Interaction with the HEVC RASL-preserving seam (2026-07-21):** that seam
+  deliberately writes **no** EOB, so when its output is read back the classifier does
+  not arm at the seam and keeps the copy-start CRA's RASL pictures in the display
+  dimension. That is the correct result — the decoder now emits them too. The
+  cold-start drop described here (first CRA of a file) is unaffected: it has no
+  preceding sequence end either way. See `smart-cut.md`.
 - `displayRanksFromPoc` skips entries flagged `isDroppedLeading` → `decodeToDisplay[i]=-1`
   (dropped AUs keep their raw decode slot but get no display position).
 - `buildFromRanks` allows -1 holes; `displayCount()` (m = decodable frames) is exposed
