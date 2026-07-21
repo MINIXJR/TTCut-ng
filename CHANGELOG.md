@@ -6,6 +6,18 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Features
 
+- **H.265 Smart Cut: the RASL window at cut-in seams is preserved** — cutting
+  into broadcast HEVC (CRA-based open GOPs, e.g. UHD/HLG channels) silently
+  dropped the leading pictures right after the seam, visible as a short freeze
+  of roughly 100–200 ms per cut. Those frames are now kept: the seam runs
+  without an end-of-bitstream NAL, uses the source parameter sets from the
+  start of the segment and rewrites the re-encoded slices so the leading
+  pictures resolve against them. When the source cannot be matched (encoder
+  parameters, scaling lists, POC range), the previous behavior is used
+  unchanged and the affected seam is reported in the cut progress window and
+  the log. Material without leading pictures at the seam (IDR-only streams)
+  and all H.264 cutting are byte-for-byte unaffected.
+
 - **ttcut-demux detects and repairs damaged recordings** — TS-packet
   corruption and VDR signal-loss segment boundaries are now found by a
   frame-scale PTS-gap scan across ALL segments of a multi-file recording

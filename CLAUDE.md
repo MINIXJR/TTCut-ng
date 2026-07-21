@@ -193,7 +193,8 @@ DVB Recording (TS) → ttcut-demux -e → ES files + .info → TTCut-ng → MKV
 - GOP detection recognizes both IDR frames and I-slices (Open GOPs)
 - Non-IDR I-frame streams: `analyzeCutPoints()` forces re-encode to produce IDR at segment boundaries
 - B-frame reorder boundary crossing: Case A/B differentiation via `adjustedStreamCopyStart` output parameter
-- EOS NAL always written before stream-copy to flush decoder DPB
+- EOS NAL written before stream-copy to flush decoder DPB — with one deliberate
+  exception: the H.265 RASL-preserving seam skips it (see below)
 - Decoder: `thread_count=1` (single-threaded to prevent PTS misassignment)
 - SPS inline patching with `max_num_reorder_frames` for correct decoder buffering
 
@@ -234,6 +235,7 @@ Demux tool for H.264/H.265 TS files:
 - `processSegment()` picks one of two reachable branches: **SPS-Unification** when `codecType() == H.264 && (isPAFF() || !pocBridgeable)`, otherwise the **standard** path (all H.265, plus progressive H.264 with a bridgeable POC seam).
 - **SPS Unification is not PAFF-only.** It rewrites encoder output to use source SPS parameters (log2_max_frame_num, log2_max_pic_order_cnt_lsb, frame_mbs_only_flag). PAFF always needs it (x264 emits MBAFF for a PAFF source); a *progressive* H.264 stream needs it too when the stream-copy start POC lies outside the encoder-representable bridge window (libx264 emits `log2_max_poc_lsb=4`, sources typically use 6).
 - An EOS NAL flushes the decoder DPB at the re-encode→stream-copy transition (both branches; H.264 type 11, H.265 type 37).
+- **H.265 RASL-preserving seam** (`planHevcSeamFix`, module `extern/tthevcseam.{h,cpp}`): when the copy-start AU is a CRA followed by RASL pictures and a preflight passes, the seam runs *without* the EOB, with the source parameter sets written from segment start, the encoder PPS moved to a free `pps_id`, and every encoder slice rewritten (IDR→CRA demotion, POC anchoring into the source `poc_lsb` domain, RPS retain extension) — otherwise those RASL pictures would be discarded (`NoRaslOutputFlag`). The encoder SPS is *measured* (throwaway libx265 open) and compared field by field; any mismatch, non-flat scaling list or POC wrap falls back to the standard seam and reports it via `seamNotes()`.
 - **MMCO neutralization** (`adaptive_ref_pic_marking_mode_flag` set to 0) is applied to the first 32 stream-copy AUs **only in the SPS-Unification branch** — not in the standard path.
 - Open-GOP B-frames / HEVC RASL pictures from before the cut-in are excluded by the **display lower bound** (`disp >= startDisplay`) in `selectFramesByDisplayOrder()`, for PAFF and non-PAFF alike.
 - SPS patching (`patchH264SpsReorderFrames`) is stream-type-aware via `isPAFF` parameter: PAFF streams get increased `num_ref_frames`/`max_dec_frame_buffering` for MBAFF→PAFF DPB transitions; non-PAFF streams keep original values.

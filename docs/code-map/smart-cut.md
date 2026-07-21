@@ -45,10 +45,14 @@ flowchart TD
     SEG --> PS["processSegment()"]
 
     PS -->|"H.264 &amp;&amp; (PAFF or !pocBridgeable)"| UNI["SPS-Unification branch"]
-    PS -->|"H.265, or H.264 progressive<br/>&amp; pocBridgeable"| STD["Standard branch"]
+    PS -->|"H.265 &amp;&amp; CRA copy-start<br/>+ RASL + preflight ok"| HSF["HEVC RASL-preserving seam<br/>(planHevcSeamFix)"]
+    PS -->|"H.265 otherwise, or H.264<br/>progressive &amp; pocBridgeable"| STD["Standard branch"]
 
     UNI --> RE["reencodeFrames()"]
     STD --> RE
+    HSF --> RE
+    HSF -.->|"rewrite fails"| RB["rollback: truncate<br/>+ standard branch"]
+    RB --> STD
 
     RE --> CDR["computeDecodeRange()"]
     CDR --> DEC["decodeFramesIntoList()<br/>(libav decoder, thread_count=1)"]
@@ -85,6 +89,7 @@ flowchart TD
 | `selectFramesByDisplayOrder` → `*adjustedStreamCopyStart` | Boundary crossing: if any AU in `[streamCopyLimit, nextKF)` displays before `startDisplay`, the re-encode extends to `nextKF` and the stream-copy start moves with it. This is the old "Case A/B" distinction, now exact via the map. |
 | `runEncodePass` → `bufferAndWriteEncoderPacket` | With `bf=0` the encoder emits packets 1:1 in submission order, so packet *k* belongs to `framesToEncode[k]`. The pending-packet buffer delays the *write* by one packet but preserves FIFO order — this is what lets `applyPocDomainFix` patch the **last** encoder packet after the fact. |
 | `reencode → stream-copy` seam | The load-bearing boundary. Carries, in order: EOS NAL (flush DPB) → *(standard only)* source SPS/PPS → `frame_num` continuity via `frameNumDelta` → *(unification + PAFF only)* MMCO neutralization for 32 AUs. Getting any of these wrong drops the first copied GOP. Neutralization is PAFF-only since 2026-07-20: on frame-coded material with load-bearing adaptive marking (ONE-HD) blanket-emptying the ops inverted display order and damaged references deep into the copy. |
+| `reencode → stream-copy` seam, **HEVC RASL-preserving variant** | Carries the opposite of the standard seam: source VPS/SPS/PPS are written **before** the re-encode (not at the seam) and **no EOB** is emitted, so the DPB survives and the copy-start CRA's RASL pictures resolve against the re-encode standins instead of being discarded (`NoRaslOutputFlag`). Encoder VPS/SPS are dropped, the encoder PPS is moved to a free `pps_id`, and every encoder slice is rewritten in `rewriteHevcEncoderPacket` (IDR→CRA demotion on packet 0, POC anchoring into the source `poc_lsb` domain, RPS retain extension). An SPS **content** switch at the seam would flush the DPB by itself — that is why the source sets must rule from segment start. |
 | `processSegment` → `streamCopyFrames` (`frameNumDelta`) | Bridges the encoder's own `frame_num` sequence (0..N-1) to the source's — computed by `bridgeFrameNum(scStartAU, encLog2Fn)` for both branches. **EOS flushes the DPB but does not reset `PrevRefFrameNum`** — only an IDR does; hence an **IDR copy-start yields delta 0** (never patch an IDR's fn — H.264 7.4.3). Otherwise delta = `lastEncFrameNum - firstScFrameNum`, where `lastEncFrameNum = ((N-1) mod EncMaxFrameNum) + 1`. The modulo matters once `N > EncMaxFrameNum`; without it the decoder floods the DPB with dummy refs and temporal-direct B-frames lose their co-located picture. |
 | `frameNumDelta`: which `log2` width? | Unification branch uses **source** `mLog2MaxFrameNum` (slices were rewritten into the source domain); standard branch uses **encoder** `mEncoderLog2MaxFrameNum`. Swapping these silently corrupts the seam. |
 | `applyPocDomainFix` → `ctx.pendingPacket` | Patches the last encoder `poc_lsb` so `PicOrderCntMsb` does not wrap into the first copied GOP. Only H.264, only `poc_type == 0`, only when a stream-copy follows. Reads source POC at the *actual* copy start (post-adjustment). |
@@ -101,11 +106,12 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 
 | Stream property | H.264 | H.265 |
 |---|---|---|
+| **CRA copy-start with RASL window** | n/a (the H.264 analogue is the `seamNeedsUnification` trigger one row down). | **RASL-preserving seam** (defect A / H.265 fix, 2026-07-21). Trigger in `planHevcSeamFix`: copy-start AU is a CRA (slice NAL type 21, not IDR/BLA) **and** ≥ 1 RASL AU (type 8/9) follows in decode order **and** the preflight passes. Preflight (all failures fall back to the standard seam with a note in `seamNotes()`): uniform source SPS, no non-flat scaling lists, all source PPS parsable with a free `pps_id`, CRA slice header + RPS readable, POC window does not wrap the `lsb` cycle, and a **measured** encoder-SPS match — `deriveX265SeamParams` derives `tu-intra/inter-depth`, `amp`, `sao`, `tmvp`, `strong-intra-smoothing` from the source SPS, `probeHevcEncoderSeamSps` opens a throwaway libx265 with `GLOBAL_HEADER` and `hevcSpsSeamCompatible` compares every CABAC-/parse-relevant field. Matching overrides preset defaults. |
 | **PAFF** (field pairs) | SPS-Unification branch, always (`isPAFF ⇒ useSpsUnification`). Encoder emits MBAFF; source SPS params (`log2_max_frame_num`, `log2_max_pic_order_cnt_lsb`, `frame_mbs_only_flag`) are stamped back onto the encoder slices. EOS before copy; MMCO neutralized for 32 AUs; `patchH264SpsReorderFrames(isPAFF=true)` raises `num_ref_frames`/`max_dec_frame_buffering` for the MBAFF→PAFF DPB transition. POC anchor stays `-1` (legacy linear numbering, byte-identical output). | **n/a** — `isPAFF()` is an H.264 concept; HEVC never enters this cell. |
 | **Progressive / MBAFF**, POC seam bridgeable | Standard branch **only when the copy-start keyframe is IDR or has no leading pictures**. Otherwise the `seamNeedsUnification` trigger (defect A fix, 2026-07-20: probe `kfHasLeadingPics`, non-IDR check on the copy-start AU) routes the seam through unification regardless of bridgeability. Standard seam: EOS → source SPS/PPS → `frameNumDelta` recalculated from the **encoder's** `log2_max_frame_num` → stream-copy. `applyPocDomainFix` bridges the POC seam. No MMCO neutralization. | Standard branch. EOS NAL type 37 → VPS+SPS+PPS → stream-copy. **No** `frame_num`, POC, MMCO or SPS patching at all — every one of those is gated on `NALU_CODEC_H264`. |
 | **Progressive**, POC seam **not** bridgeable | SPS-Unification branch (`!pocBridgeable`). Slices rewritten into the **source** POC domain; `mSpsUnificationPocAnchor` = source `poc_lsb` of the first *displayed* copy frame (min-display AU in the copy GOP, not the copy-start AU — its leading B pictures carry smaller POCs). | Cannot occur: `pocBridgeable` is only computed for H.264. |
 | **Non-IDR I-frame cut-in** (open GOP, DVB) | `needsReencodeAtStart = !isAtKeyframe \|\| !isAtIDR` → re-encode with `forced-idr=1` produces an IDR barrier. Exception: segment 0 without leading pics → override to pure stream-copy. | Same rule, same override. `findKeyframeBefore/After` accept IDR/CRA/I-slice alike. |
-| **Open-GOP leading pictures** at cut-in | Excluded by the display lower bound `disp ≥ startDisplay` in `selectFramesByDisplayOrder`. | Same. HEVC RASL pictures map to `decodeToDisplay == -1` and are therefore treated as "displays before the cut-in". See `frame-order.md`. |
+| **Open-GOP leading pictures** at cut-in | Excluded by the display lower bound `disp ≥ startDisplay` in `selectFramesByDisplayOrder`. | Same. HEVC RASL pictures map to `decodeToDisplay == -1` and are therefore treated as "displays before the cut-in". See `frame-order.md`. This concerns the **cut-in**; the RASL window at the **seam** is a different question and is preserved by the row above. |
 | **Cut-out mid-GOP** | Tail re-encode: stream-copy ends at `tailStartFrame-1` (whole GOPs only), tail GOP re-encoded as a forced-IDR closed sub-segment bounded by `disp ≤ endDisplay`. Collapses to a pure re-encode when `tailStart ≤ streamCopyStart`. | Identical (codec-agnostic path). |
 
 ## Assumptions, contracts & pitfalls
@@ -168,8 +174,12 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   is a codec check away from being a silent performance cliff.
 
 - **EOS + Non-IDR (defect A — H.264 FIXED 2026-07-20 via `seamNeedsUnification`
-  trigger; H.265 RASL loss still OPEN, own follow-up planned — a 200 ms
-  freeze per seam is not acceptable per user decision 2026-07-20)** — after EOS
+  trigger; H.265 RASL loss FIXED 2026-07-21 via the RASL-preserving seam, see
+  the variant matrix row "CRA copy-start with RASL window". Everything the
+  paragraph below says about the H.265 loss describes the behavior BEFORE that
+  fix and the measurements the fix is built on; it is kept because the fallback
+  path still produces exactly this behavior when the preflight rejects a seam)**
+  — after EOS
   the decoder's DPB is flushed but `PrevRefFrameNum` is not reset. The standard
   branch bridges `frame_num` with `frameNumDelta`, but the **leading pictures of
   the non-IDR copy-start keyframe** still reference pre-EOS frames; the bridge

@@ -29,17 +29,22 @@
     `docs/superpowers/specs/2026-07-19-h26x-still-aspect-design.md`,
     Diag `tools/diag/test_sar`.
 
-- **H.265 Smart Cut: RASL-Verlust an der Non-IDR/CRA-Naht (Defekt A,
-  H.265-Teil) — OFFEN, eigener Folge-Fix geplant**
-  - Der EOS an der Naht verwirft die RASL-Bilder des Copy-Start-CRA still
-    (`NoRaslOutputFlag=1`, gemessen: exakt das RASL-Fenster, 0 Fehler).
-    Die Mux-Zeitachse bleibt inhaltstreu → Symptom = ~200-ms-Standbild pro
-    Naht, kein Sync-Drift. **User-Entscheid 2026-07-20: 200 ms Standbild
-    sind NICHT akzeptabel** → Fix-Richtung (z. B. EOS an der HEVC-Naht
-    weglassen, RASL gegen Re-Encode-Standins auflösen) in eigener Spec
-    messen und entscheiden.
-  - Repro: `tools/diag/test_smartcut_seam` (HEVC-Läufe), Messwerte im
-    H.264-Eintrag unten.
+- ~~**H.265 Smart Cut: RASL-Verlust an der Non-IDR/CRA-Naht (Defekt A,
+  H.265-Teil)**~~ → **DONE (2026-07-21, branch `feature/hevc-seam-rasl`)**
+  - War: Der EOS an der Naht verwarf die RASL-Bilder des Copy-Start-CRA still
+    (`NoRaslOutputFlag=1`, exakt das RASL-Fenster, 0 Fehler). Mux-Zeitachse
+    inhaltstreu → Symptom = ~200-ms-Standbild pro Naht, kein Sync-Drift.
+    **User-Entscheid 2026-07-20: nicht akzeptabel.**
+  - Fix: RASL-erhaltende Naht (`planHevcSeamFix` + neues Modul
+    `extern/tthevcseam.{h,cpp}`) — Quell-Parametersätze ab Segmentbeginn,
+    kein EOB an der Naht, Encoder-PPS auf freier `pps_id`, Slice-Rewrite
+    (IDR→CRA-Demotion, POC-Ankerung, RPS-Retain-Erweiterung). Encoder-SPS
+    wird gemessen statt angenommen; jede Preflight-Absage fällt auf die
+    bisherige Naht zurück und meldet das im Schnitt-Fortschritt.
+  - Belege: synthetisch 237/237 Frames (vorher 233), Designermode 4K und
+    Astra HLG je 301/301 (vorher 294), 0 Dekoderfehler, Kopie ab Copy-CRA
+    bit-identisch, RASL-SSIM 0,997–0,9997; SES-IDR-Material und alle
+    H.264-Gates unverändert (byte-identisch zu master).
 
 - ~~**H.264 Smart Cut: EOS+Non-IDR-Naht beschädigt Leading-Pics des Copy-Start-Keyframes**~~
   → **DONE (2026-07-20, branch `feature/defect-a-seam-unification`)**
