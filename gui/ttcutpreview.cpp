@@ -89,8 +89,8 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   lblBurstWarning->hide();
 
-  pbBurstShift = new QPushButton(tr("Shift -1 Frame"), this);
-  pbBurstShift->setIcon(QApplication::style()->standardIcon(QStyle::SP_ArrowLeft));
+  pbBurstShift = new QPushButton(this);
+  configureBurstShiftButton(/*isCutOut=*/false);
   pbBurstShift->hide();
   connect(pbBurstShift, &QPushButton::clicked, this, &TTCutPreview::onBurstShift);
 
@@ -315,6 +315,33 @@ void TTCutPreview::onNextCut()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Set caption, icon and tooltip of the burst shift button
+ *
+ * Caption and icon must always be set together — setting them apart is what
+ * made a cut-in burst show "+1 Frame" next to a left arrow. A cut-in burst
+ * moves the cut point later (arrow right), a cut-out burst moves it earlier
+ * (arrow left). The warning left of the button already names the affected cut
+ * point, so the caption only carries the step size.
+ */
+void TTCutPreview::configureBurstShiftButton(bool isCutOut)
+{
+  QStyle* style = QApplication::style();
+
+  if (isCutOut) {
+    pbBurstShift->setIcon(QIcon::fromTheme("go-previous",
+        style->standardIcon(QStyle::SP_ArrowBack)));
+    pbBurstShift->setToolTip(tr("Move cut-out one frame earlier"));
+  }
+  else {
+    pbBurstShift->setIcon(QIcon::fromTheme("go-next",
+        style->standardIcon(QStyle::SP_ArrowForward)));
+    pbBurstShift->setToolTip(tr("Move cut-in one frame later"));
+  }
+
+  pbBurstShift->setText(tr("1 Frame"));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Check for audio burst at the currently selected cut transition
  */
 void TTCutPreview::checkBurstForCurrentCut(int iCut)
@@ -324,7 +351,6 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
   // ("Burst resolved"), and we'd otherwise show the next burst in green too.
   lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   pbBurstShift->hide();
-  pbBurstShift->setText(tr("Shift -1 Frame"));
   mBurstSegmentIdx = -1;
 
   if (!mpAVData || !mpCutList || mpCutList->count() < 2) return;
@@ -341,7 +367,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
       lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at start of cut 1 (%1 dB)")
           .arg(bin.burstDb, 0, 'f', 1));
       lblBurstWarning->show();
-      pbBurstShift->setText(tr("Shift +1 Frame"));
+      configureBurstShiftButton(/*isCutOut=*/false);
       pbBurstShift->show();
       mBurstSegmentIdx = 0;
       mBurstIsCutOut = false;
@@ -360,6 +386,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
     lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at end of cut %1 (%2 dB)")
         .arg(iCut).arg(bout.burstDb, 0, 'f', 1));
     lblBurstWarning->show();
+    configureBurstShiftButton(/*isCutOut=*/true);
     pbBurstShift->show();
     mBurstSegmentIdx = iPos;
     mBurstIsCutOut = true;
@@ -374,7 +401,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
       lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at start of cut %1 (%2 dB)")
           .arg(iCut + 1).arg(bin.burstDb, 0, 'f', 1));
       lblBurstWarning->show();
-      pbBurstShift->setText(tr("Shift +1 Frame"));
+      configureBurstShiftButton(/*isCutOut=*/false);
       pbBurstShift->show();
       mBurstSegmentIdx = iPos + 1;
       mBurstIsCutOut = false;
