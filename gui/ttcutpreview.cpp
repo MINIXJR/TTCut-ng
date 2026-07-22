@@ -84,7 +84,7 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   connect(pbPrevCut,    &QPushButton::clicked, this, &TTCutPreview::onPrevCut);
   connect(pbNextCut,    &QPushButton::clicked, this, &TTCutPreview::onNextCut);
 
-  // Burst warning widgets — inserted into existing controls layout
+  // Burst warning widgets — placed in their own grid row further below
   lblBurstWarning = new QLabel(this);
   lblBurstWarning->hide();
 
@@ -617,7 +617,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
       QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 
-  // Re-check burst for the current cut (resets label color internally)
+  // Re-check burst for the current cut
   checkBurstForCurrentCut(iCut);
 
   // If no burst detected after shift, show success
