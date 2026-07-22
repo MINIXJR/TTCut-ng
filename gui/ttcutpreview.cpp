@@ -66,7 +66,6 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   previewHeight = prevH;
 
   cbCutPreview->setEditable( false );
-  cbCutPreview->setMinimumSize( 160, 20 );
   cbCutPreview->setInsertPolicy( QComboBox::InsertAfterCurrent );
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
