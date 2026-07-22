@@ -48,7 +48,8 @@ public:
   void   seek(double seconds);
 
   // True once playback has reached its end, from either signal source.
-  // Cleared by load(), play() and seek().
+  // Cleared by load(), play() and seek(); stop() does not clear it, but that
+  // is harmless because every restart goes through one of those three first.
   bool   isAtEnd() const                     { return mAtEnd; }
   bool   isPlaying() const                  { return mPlaying; }
 

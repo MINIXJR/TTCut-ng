@@ -348,6 +348,22 @@ void TTMpvLibBackend::drainEvents()
           // kein Signal nötig
           break;
         }
+        if (e && e->reason == MPV_END_FILE_REASON_STOP) {
+          // STOP means "the file was replaced or stopped by our own command,
+          // not an ending" — not a playback outcome to report. Measured
+          // against libmpv 2.5.0: a "loadfile <file> replace ..." command
+          // makes mpv emit END_FILE with reason=STOP for the OUTGOING file
+          // about 1 ms after the command, before the new file's own events
+          // arrive. The app never issues mpv's "stop" command itself
+          // (TTMpvWrapper::stop() tears down via shutdown()/
+          // mpv_terminate_destroy instead, which yields reason=QUIT and
+          // emits playerFinished() on its own), so every STOP seen here comes
+          // from a replace. With keep-open=yes a natural end produces no
+          // END_FILE at all, which makes this STOP the only remaining
+          // END_FILE the preview player ever sees — without this filter it
+          // was mistaken for the end of the clip that was just replaced.
+          break;
+        }
         if (!mPlaybackEndedEmitted) {
           mPlaybackEndedEmitted = true;
           emit playbackFinished();

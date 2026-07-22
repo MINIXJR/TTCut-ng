@@ -335,8 +335,10 @@ void TTCutPreview::onPrevCut()
 
   if (mPlayer->playbackPosition() >= kAtStartSec) {
     // Stage 1: back to the start, as a still image.
-    if (mPlayer->isPlaying())
-      mPlayer->pause();
+    // Pause unconditionally: isPlaying() is not a reliable statement about
+    // mpv here (at EOF it is false while mpv may still be unpaused), and a
+    // redundant pause costs nothing.
+    mPlayer->pause();
     mPlayer->seek(0.0);
     pbPlay->setText(tr("Play"));
     pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));

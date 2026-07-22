@@ -122,6 +122,10 @@ void TTMpvWrapper::seek(double seconds)
                                   << QString::number(seconds, 'f', 3)
                                   << QStringLiteral("absolute"));
   mAtEnd = false;
+  // Mirrors load(): keep the cached position in sync with the seek target
+  // right away, instead of leaving it stale until mpv's next time-pos update
+  // (~100 ms later).
+  mPlaybackPosition = seconds;
 }
 
 void TTMpvWrapper::stop()
@@ -204,7 +208,10 @@ void TTMpvWrapper::onBackendConnected()
   // With keep-open the file is not unloaded at the end, so mpv emits no
   // END_FILE and the backend's playbackFinished() never fires. eof-reached
   // is the replacement source. Observing it unconditionally is harmless:
-  // without keep-open the property never turns true before the file is gone.
+  // without keep-open, mpv does deliver an eof-reached change at EOF too, but
+  // as an unavailable/NONE node (the file is already gone by then) —
+  // onPropertyChanged()'s value.isValid() guard drops it, so TTCurrentFrame
+  // (keep-open=no) never sees a spurious playerFinished() from this path.
   mBackend->observeProperty(QStringLiteral("eof-reached"));
   // Only signal "playing" when load() was called with autoPlay=true. In the
   // preloaded-paused case (autoPlay=false), the caller drives play()/pause()

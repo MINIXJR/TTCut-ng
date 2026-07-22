@@ -40,9 +40,13 @@ public:
   //   keep-open=yes -> NO END_FILE. Instead eof-reached=1, mpv pauses itself,
   //                    the file stays loaded and time-pos rests on the last
   //                    frame.
-  // Since END_FILE is the only source of playbackFinished(), a caller using
-  // keep-open=yes loses that signal and has to detect the end via the
-  // "eof-reached" property.
+  // At this backend layer, END_FILE is still the only source of
+  // playbackFinished() — a caller of ITTMpvBackend directly (bypassing
+  // TTMpvWrapper) using keep-open=yes loses that signal at a natural end and
+  // must detect it via the "eof-reached" property instead. TTMpvWrapper
+  // already does this itself (observes eof-reached and re-derives its own
+  // playerFinished() from it), so this limitation does not reach
+  // TTMpvWrapper's own callers.
   virtual void setKeepOpen(bool keepOpen) = 0;
 
   // mpv-Steuermodell
