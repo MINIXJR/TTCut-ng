@@ -210,7 +210,12 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   }
 
   current_video_file = preview_video_info.absoluteFilePath();
+  // Filling the combobox already fired currentIndexChanged for the first item,
+  // and this call loads clip 1 explicitly. Both must stay paused; only cut
+  // changes the user asks for afterwards start playback.
+  mAutoPlayOnSelect = false;
   onCutSelectionChanged(0);
+  mAutoPlayOnSelect = true;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -245,13 +250,21 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   }
 
   qDebug("load preview %s", qPrintable(current_video_file));
-  // Preload paused: mpv shows the first frame, user has to press Play.
-  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
-  pbPlay->setText(tr("Play"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/mAutoPlayOnSelect);
+  if (mAutoPlayOnSelect) {
+    pbPlay->setText(tr("Stop"));
+    pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
+  } else {
+    pbPlay->setText(tr("Play"));
+    pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+  }
 
   // Update prev/next button states
-  pbPrevCut->setEnabled(iCut > 0);
+  // Back stays enabled even on the first cut: its first stage — jump to the
+  // start of the current clip — is useful there too. Only one combination is
+  // inert (first cut, already at position 0), which beats re-evaluating the
+  // enabled state on every position update.
+  pbPrevCut->setEnabled(cbCutPreview->count() > 0);
   pbNextCut->setEnabled(iCut < cbCutPreview->count() - 1);
 
   checkBurstForCurrentCut(iCut);
@@ -311,18 +324,34 @@ void TTCutPreview::onExitPreview()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to previous cut in the list (preloads it; user presses Play to start)
+ * Back: first stage jumps to the start of the current clip and shows it as a
+ * still; only when already at the start does a click move to the previous cut.
+ * Same idea as the skip-back button on a CD player. The trigger is the
+ * position, not a time window, so the two stages stay predictable.
  */
 void TTCutPreview::onPrevCut()
 {
-  int currentIndex = cbCutPreview->currentIndex();
-  if (currentIndex > 0) {
-    cbCutPreview->setCurrentIndex(currentIndex - 1);
+  const double kAtStartSec = 0.5;   // time-pos arrives ~10x/s; ample for this
+
+  if (mPlayer->playbackPosition() >= kAtStartSec) {
+    // Stage 1: back to the start, as a still image.
+    if (mPlayer->isPlaying())
+      mPlayer->pause();
+    mPlayer->seek(0.0);
+    pbPlay->setText(tr("Play"));
+    pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+    return;
   }
+
+  // Stage 2: previous cut (loads and plays via onCutSelectionChanged).
+  int currentIndex = cbCutPreview->currentIndex();
+  if (currentIndex > 0)
+    cbCutPreview->setCurrentIndex(currentIndex - 1);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Go to next cut in the list (preloads it; user presses Play to start)
+ * Forward: straight to the next cut, which loads and starts playing. Single
+ * stage on purpose — unlike Back, there is no sensible intermediate target.
  */
 void TTCutPreview::onNextCut()
 {

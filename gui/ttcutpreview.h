@@ -80,6 +80,11 @@ private:
     int          mClipOffset;
     bool         mBurstIsCutOut;
 
+    //! False while the dialog loads its first clip, true once the user drives
+    //! the selection. Decides whether a cut change starts playback: opening
+    //! the dialog must not play, a deliberate cut change must.
+    bool mAutoPlayOnSelect = false;
+
     void checkBurstForCurrentCut(int iCut);
     void configureBurstShiftButton(bool isCutOut);
     void setBurstMessage(const QString& message, bool resolved);
