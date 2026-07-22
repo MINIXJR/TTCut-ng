@@ -26,10 +26,10 @@ public:
   explicit TTMpvWrapper(QObject* parent = nullptr);
   ~TTMpvWrapper() override;
 
-  // mpv am Dateiende offen halten statt die Datei zu entladen. Muss vor dem
-  // ersten renderWidget()/load() gerufen werden (beide starten das Backend,
-  // und die Option greift nur vor mpv_initialize()). Mit keep-open bleibt
-  // playerFinished() am natürlichen Ende aus — siehe ITTMpvBackend::setKeepOpen.
+  // Keep mpv on the file at EOF instead of unloading it. Must be called before
+  // the first renderWidget()/load() (both start the backend, and the option
+  // only takes effect before mpv_initialize()). See ITTMpvBackend::setKeepOpen
+  // for the measured behaviour.
   void   setKeepOpen(bool keepOpen);
 
   // Liefert das Render-Widget des Backends (libmpv). Nach der Phase-2-

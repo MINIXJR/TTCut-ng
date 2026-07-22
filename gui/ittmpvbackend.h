@@ -30,19 +30,19 @@ public:
   virtual bool start()    = 0;   // Backend hochfahren
   virtual void shutdown() = 0;   // sauber beenden
 
-  // mpv am Dateiende offen halten (mpv-Option "keep-open"), statt die Datei
-  // zu entladen. Muss VOR start() gesetzt werden — danach wirkungslos, weil
-  // die Optionen vor mpv_initialize() festgeschrieben werden.
+  // Keep mpv on the file at EOF (mpv option "keep-open") instead of unloading
+  // it. Must be set BEFORE start(); afterwards it has no effect, because the
+  // options are frozen at mpv_initialize().
   //
-  // Gemessen an libmpv 2.5.0 (keepopen_probe, 2026-07-22):
-  //   keep-open=no  → MPV_EVENT_END_FILE reason=EOF, Datei entladen
-  //                   (filename=none, idle-active=1) — das Bild ist weg.
-  //   keep-open=yes → KEIN END_FILE. Stattdessen eof-reached=1, mpv setzt
-  //                   pause selbst auf 1, Datei bleibt geladen, time-pos
-  //                   steht auf dem letzten Frame.
-  // Weil END_FILE die einzige Quelle von playbackFinished() ist, verliert
-  // ein Aufrufer mit keep-open=yes dieses Signal und muss das Ende an
-  // "eof-reached" erkennen.
+  // Measured against libmpv 2.5.0 (2026-07-22):
+  //   keep-open=no  -> MPV_EVENT_END_FILE reason=EOF, file unloaded
+  //                    (filename=none, idle-active=1) - the picture is gone.
+  //   keep-open=yes -> NO END_FILE. Instead eof-reached=1, mpv pauses itself,
+  //                    the file stays loaded and time-pos rests on the last
+  //                    frame.
+  // Since END_FILE is the only source of playbackFinished(), a caller using
+  // keep-open=yes loses that signal and has to detect the end via the
+  // "eof-reached" property.
   virtual void setKeepOpen(bool keepOpen) = 0;
 
   // mpv-Steuermodell
