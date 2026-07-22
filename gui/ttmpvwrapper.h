@@ -42,6 +42,14 @@ public:
   void   play();    // resume from pause (file must already be loaded)
   void   pause();   // pause without tearing mpv down
   void   stop();    // hard shutdown: terminates mpv process
+  // Absolute seek within the loaded file. Unlike load(), this keeps the file
+  // open and the decoder warm; measured to work even from the eof-reached
+  // state, which is how Play at the end restarts without a reload.
+  void   seek(double seconds);
+
+  // True while mpv sits at the end of the file with keep-open. Cleared as
+  // soon as playback resumes or another file is loaded.
+  bool   isAtEnd() const                     { return mAtEnd; }
   bool   isPlaying() const                  { return mPlaying; }
 
   void   setSpeed(double factor);            // ±-Faktor; <0 → play-dir=backward
@@ -71,6 +79,8 @@ private:
   QString        mSubtitleFile;
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;
+  bool           mKeepOpen         = false;
+  bool           mAtEnd            = false;
   // Einmal-Flag: nach dem initialen --start-Seek (PLAYBACK_RESTART) entpausen.
   // Verhindert das Aufblitzen des Lande-Keyframes vor dem gewählten Frame.
   bool           mPendingAutoPlay  = false;

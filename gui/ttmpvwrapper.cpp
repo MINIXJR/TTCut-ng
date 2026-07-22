@@ -42,6 +42,7 @@ TTMpvWrapper::~TTMpvWrapper()
 
 void TTMpvWrapper::setKeepOpen(bool keepOpen)
 {
+  mKeepOpen = keepOpen;
   if (mBackend)
     mBackend->setKeepOpen(keepOpen);
 }
@@ -67,6 +68,12 @@ void TTMpvWrapper::load(const QString& file, double startSec,
   // mpv is launched paused (still shows first frame), so we are not playing.
   mPlaying         = autoPlay;
   mPendingAutoPlay = autoPlay;
+  mAtEnd = false;
+  // The cached position belongs to the file being replaced. Without this it
+  // survives into the new file until mpv's first time-pos arrives (~100 ms),
+  // and TTCutPreview::onPrevCut() would read a stale "not at the start" and
+  // jump to the beginning instead of to the previous cut.
+  mPlaybackPosition = startSec;
 
   mBackend->start();
 
@@ -96,6 +103,7 @@ void TTMpvWrapper::play()
   // loaded via load(); calling play() without a prior load() is a no-op.
   mBackend->setProperty("pause", false);
   mPlaying = true;
+  mAtEnd = false;
   emit playerPlaying();
 }
 
@@ -106,6 +114,15 @@ void TTMpvWrapper::pause()
   mPendingAutoPlay = false;   // expliziter Pause schlägt den verzögerten Unpause
   mBackend->setProperty("pause", true);
   mPlaying = false;
+}
+
+void TTMpvWrapper::seek(double seconds)
+{
+  // Absolute seek; mpv clears eof-reached itself when it lands.
+  mBackend->command(QStringList() << QStringLiteral("seek")
+                                  << QString::number(seconds, 'f', 3)
+                                  << QStringLiteral("absolute"));
+  mAtEnd = false;
 }
 
 void TTMpvWrapper::stop()
@@ -163,6 +180,20 @@ void TTMpvWrapper::onPropertyChanged(const QString& name, const QVariant& value)
     mPlaybackPosition = value.toDouble();
     emit positionChanged(mPlaybackPosition);
   }
+
+  if (name == QLatin1String("eof-reached") && value.isValid()) {
+    const bool atEnd = value.toBool();
+    if (atEnd && !mAtEnd) {
+      // mpv pauses itself here (measured: pause=1 about 12 ms later). Report
+      // the same playerFinished() the END_FILE path reports, so callers need
+      // not know which mode they are in.
+      mAtEnd   = true;
+      mPlaying = false;
+      emit playerFinished();
+    } else if (!atEnd) {
+      mAtEnd = false;
+    }
+  }
 }
 
 void TTMpvWrapper::onBackendConnected()
@@ -171,6 +202,11 @@ void TTMpvWrapper::onBackendConnected()
   // timecode. Start position / audio / subtitle were already passed as CLI
   // options in load(), so nothing else is needed here.
   mBackend->observeProperty("time-pos");
+  // With keep-open the file is not unloaded at the end, so mpv emits no
+  // END_FILE and the backend's playbackFinished() never fires. eof-reached
+  // is the replacement source. Observing it unconditionally is harmless:
+  // without keep-open the property never turns true before the file is gone.
+  mBackend->observeProperty(QStringLiteral("eof-reached"));
   // Only signal "playing" when load() was called with autoPlay=true. In the
   // preloaded-paused case (autoPlay=false), the caller drives play()/pause()
   // explicitly and does not want a stray playerPlaying() at startup.
@@ -180,6 +216,10 @@ void TTMpvWrapper::onBackendConnected()
 
 void TTMpvWrapper::onBackendPlaybackFinished()
 {
+  // END_FILE path. With keep-open this does not fire at a natural end, but it
+  // still does on error or shutdown — guard so a caller never sees two
+  // playerFinished() for one ending.
+  if (mAtEnd) return;
   mPlaying = false;
   emit playerFinished();
 }
