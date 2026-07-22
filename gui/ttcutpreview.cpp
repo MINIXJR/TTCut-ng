@@ -270,7 +270,12 @@ void TTCutPreview::onPlayPreview()
     return;
   }
 
-  // Resume (or start, after onPlayerFinished reloaded the file in pause mode).
+  // Standing on the last frame: one click replays from the start. The seek is
+  // enough — the file is still loaded, so no reload is needed.
+  if (mPlayer->isAtEnd())
+    mPlayer->seek(0.0);
+
+  // Resume (or start, after a preload in pause mode).
   mPlayer->play();
 }
 
@@ -282,9 +287,9 @@ void TTCutPreview::onPlayerPlaying()
 
 void TTCutPreview::onPlayerFinished()
 {
-  // Reload the file in paused state so the next Play click can resume from
-  // the start without re-launching mpv on demand.
-  mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
+  // No reload. With keep-open the file stays loaded and mpv holds the last
+  // frame on screen — that is the point of this dialog change. Reloading here
+  // is what used to snap the picture back to frame 0.
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 }
