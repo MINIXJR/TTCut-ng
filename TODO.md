@@ -372,27 +372,6 @@
       nicht warning. Byte-identisch verifiziert auf MBAFF/IDR-Naht/progressiv/
       HEVC.
 
-- **Vorschau: am letzten Frame stehenbleiben statt zum ersten Frame zurückspringen**
-  - Aktuell springt die Vorschau am Ende der Wiedergabe zurück zum ersten Frame:
-    `TTCutPreview::onPlayerFinished()` (`gui/ttcutpreview.cpp:270`) lädt die (bereits
-    fertige) Preview-MKV via `mPlayer->load(current_video_file, 0.0, …, autoPlay=false)`
-    neu — pausiert an Position 0. Grund ist nur, mpv nach EOF ohne Neustart in einen
-    bespielbaren Startzustand zu bringen (kein MKV-Neubau — die Datei wird vorab von
-    `TTCutPreviewTask` erstellt).
-  - Gewünscht: am letzten Frame pausiert stehenbleiben.
-  - Machbar und isolierbar: die Preview hat eine **eigene** mpv-Instanz
-    (`ttcutpreview.cpp:54`), getrennt von der „Aktueller Frame"-Wiedergabe
-    (`ttcurrentframe.cpp:510`) — eine Umstellung betrifft die Hauptwiedergabe nicht.
-  - **Nötige Änderungen** (~3):
-    1. `keep-open=yes` nur für die Preview-mpv-Instanz (Default ist `no`,
-       `ttmpvlibbackend.cpp:73`) — mpv pausiert dann am letzten Frame statt auszulaufen.
-    2. EOF-Erkennung umstellen: mit `keep-open=yes` entfällt `MPV_EVENT_END_FILE`/
-       `playerFinished()` — stattdessen auf mpvs `eof-reached`-Property lauschen, um
-       den Play/Stop-Button-Zustand zu setzen.
-    3. `onPlayPreview()`: bei `eof-reached` vor dem Abspielen erst auf Position 0 seeken.
-  - **Offene UX-Frage**: soll „Play" am Ende automatisch von vorne starten, oder erst
-    nach einem expliziten zweiten Klick? → vor Umsetzung per brainstorming klären.
-
 - **Schnittdialog: Button-Leiste überarbeiten + alle Dialoge auf einheitliches Design prüfen**
   - Im Schnittdialog („Schnitt-Optionen", `ui/avcutdialog.ui`, unteres H-Layout Z. 30–77)
     ist die Button-Reihenfolge `[Auf Standard zurücksetzen] [Starten] [Abbrechen]`, und
@@ -742,6 +721,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Batch muxing via mux script generation
 - [x] Preview: Next/Previous cut navigation buttons
 - [x] Current Frame: Play button with audio (via mpv)
+- [x] Preview: stay on the last frame at the end, two-stage Back, cut changes play
 - [x] User warning when clicking "New Project"
 - [x] Keyboard shortcuts (j/k for frame, g/G for home/end, [ ] for cut-in/out)
 - [x] Warning if audio and video length differ
