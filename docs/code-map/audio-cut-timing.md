@@ -1,6 +1,6 @@
 ---
-base_commit: 60804c02ae123072f89f60ed10d6ce112281f019
-last_verified: 2026-07-21  # .info-Vertrag auf es_total_aus/es_doubled_pts_aus umgestellt (ea08e20f); ungenutzte Reparaturbilanz-Felder dokumentiert
+base_commit: c4e8619f0187934e85f2c9118e79f571b010424e
+last_verified: 2026-07-21  # Reparaturbilanz-Befund praezisiert: Getter audioSilenceMs/audioRemovedMs existieren und sind per test_esinfo abgedeckt, nur ohne App-Konsument; Zeitachsentreue der Demux-Reparatur belegt
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -117,12 +117,19 @@ flowchart TD
 - **Die Reparaturbilanz des Demuxers erreicht diese Kette NICHT.** `TTESInfo`
   parst seit `7c60cfba` pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
   `audio_N_removed_ms` (entferntes Audio zur A/V-Korrektur) nach
-  `TTESAudioTrack::silenceMs`/`removedMs` — **gelesen wird beides derzeit von
-  niemandem** (Stand 2026-07-21 im ganzen Baum gegrept: nur die Deklaration in
-  `avstream/ttesinfo.h`). Die Zeitrechnung des Schnitts beruht also unverändert
-  allein auf Extra-Frames und Delay. Wer diese Felder künftig zur Korrektur
-  heranzieht, muss prüfen, ob ttcut-demux die Lücken bereits zeitachsentreu
-  aufgefüllt hat — sonst wird zweimal korrigiert.
+  `TTESAudioTrack::silenceMs`/`removedMs`, abrufbar über `audioSilenceMs(track)`
+  / `audioRemovedMs(track)`. **In der App ruft diese Getter niemand auf** (Stand
+  2026-07-21; einziger Aufrufer im Baum ist der Diag-Harness
+  `tools/diag/test_esinfo`). Das ist **kein Versehen in der Zeitkette**: die
+  Demux-Reparatur ist zeitachsentreu — Audiolöcher werden mit Stille aufgefüllt,
+  und für Videoverlust, den der Ton nicht teilt, wird genau die überschüssige
+  Tonzeit entfernt (`emit_video_only_truncations`, negative `silence_ms`-Zeile).
+  Nach der Reparatur laufen Bild und Ton also wieder synchron; die `.info`-Werte
+  sind die **Rechenschaftsbilanz** darüber, keine noch anzuwendende Korrektur.
+  Wer sie künftig doch in die Zeitrechnung einbezieht, korrigiert zweimal.
+  Offen ist allein, ob die Bilanz dem Nutzer **angezeigt** werden soll — die
+  Spec (`project_demux_defect_repair`) sah TTCut-seitig nur die
+  Range-Felder → Marker vor, für die Audiobilanz nie einen Konsumenten.
 - **`mAudioGapIndices` ist NICHT Teil dieser Kette.** Diese zweite Liste
   (`.info audioGapFrames`, in `ttavdata.cpp` zu Clustern verarbeitet) dient nur der
   Defekt-Meldung, nicht der Cut-Zeitrechnung. `countExtraFramesBefore` liest allein
