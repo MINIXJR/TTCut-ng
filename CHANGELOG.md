@@ -42,6 +42,20 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixes
 
+- **Preview dialog: the audio-burst warning is fully readable and its
+  correction button points the right way.** The warning shared a row with the
+  cut selector and four buttons, so the text was clipped mid-word without an
+  ellipsis — the German translation hit the limit first. It now occupies its
+  own full-width row, whose height is reserved even without a burst so the
+  video frame no longer jumps between cuts. The button's arrow was set once at
+  construction while its caption changed per burst type, so a burst at the
+  cut-in showed "+1 Frame" next to a left arrow; caption, arrow and tooltip now
+  come from one place and cannot drift apart. The button reads "1 Frame" and
+  names the affected cut point and direction in its tooltip — the previous
+  captions were never translated and showed English in the German interface.
+  The cut selector may now grow to show its full range instead of being pinned
+  to 220 px.
+
 - **H.264 Smart Cut: frame-accurate cuts on IDR-free DVB material (e.g.
   ARD/ONE progressive HD) no longer corrupt the seam.** When the stream-copy
   started at a non-IDR keyframe with leading B-pictures, the standard seam
