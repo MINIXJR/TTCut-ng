@@ -127,9 +127,16 @@ flowchart TD
   Nach der Reparatur laufen Bild und Ton also wieder synchron; die `.info`-Werte
   sind die **Rechenschaftsbilanz** darüber, keine noch anzuwendende Korrektur.
   Wer sie künftig doch in die Zeitrechnung einbezieht, korrigiert zweimal.
-  Offen ist allein, ob die Bilanz dem Nutzer **angezeigt** werden soll — die
-  Spec (`project_demux_defect_repair`) sah TTCut-seitig nur die
-  Range-Felder → Marker vor, für die Audiobilanz nie einen Konsumenten.
+  **Auch als Anzeige wären sie redundant** (geprüft 2026-07-21): Beide Ursachen
+  der Bilanz sind bereits markiert — eingefügte Stille stammt aus Audiolücken,
+  die als `audio_gap_frames` → Marker „Audio-Gap: X–Y (Ts)" erscheinen;
+  entfernter Ton stammt aus Videoverlust, der als `es_missing_ranges` → Marker
+  „Videoverlust: X–Y (T s) — Audio angepasst" erscheint. Beide Marker tragen
+  ihre Dauer, die Bilanz ist nur deren Summe. Die Spec
+  (`project_demux_defect_repair`) sah TTCut-seitig konsequenterweise nur die
+  Range-Felder vor. Damit sind Parser + Getter **Kandidaten für den nächsten
+  Dead-Code-Audit**; das `.info`-Feld selbst bleibt als Rechenschaft des
+  Demuxers sinnvoll.
 - **`mAudioGapIndices` ist NICHT Teil dieser Kette.** Diese zweite Liste
   (`.info audioGapFrames`, in `ttavdata.cpp` zu Clustern verarbeitet) dient nur der
   Defekt-Meldung, nicht der Cut-Zeitrechnung. `countExtraFramesBefore` liest allein
