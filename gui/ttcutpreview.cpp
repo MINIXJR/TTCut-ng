@@ -41,6 +41,7 @@ extern "C" {
 #include <QIcon>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QSizePolicy>
 #include <QStyle>
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -90,21 +91,29 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 
   pbBurstShift = new QPushButton(this);
   configureBurstShiftButton(/*isCutOut=*/false);
+  // Keep the button's space while hidden, so the row keeps its height and the
+  // video frame does not jump when stepping between cuts with and without a
+  // burst.
+  QSizePolicy shiftPolicy = pbBurstShift->sizePolicy();
+  shiftPolicy.setRetainSizeWhenHidden(true);
+  pbBurstShift->setSizePolicy(shiftPolicy);
   pbBurstShift->hide();
   connect(pbBurstShift, &QPushButton::clicked, this, &TTCutPreview::onBurstShift);
 
-  // Find the controls HBoxLayout (row 1 in the grid) and insert burst widgets
-  // after pbNextCut (index 3) and before the spacer/pbExit
+  // The burst warning gets its own grid row below the controls (row 0 = video
+  // frame, row 1 = controls). Sharing the controls row meant competing with
+  // the cut selector and four buttons: the spacer collapsed first, then the
+  // label was squeezed below its size hint and clipped its text without an
+  // ellipsis — which the longer German translation hit first.
+  // videoFrame carries verstretch 6 and this row defaults to 0, so the extra
+  // row takes no height from the video when the dialog is resized.
   QGridLayout* grid = qobject_cast<QGridLayout*>(layout());
   if (grid) {
-    QLayoutItem* controlsItem = grid->itemAtPosition(1, 0);
-    QHBoxLayout* controlsLayout = controlsItem ? qobject_cast<QHBoxLayout*>(controlsItem->layout()) : nullptr;
-    if (controlsLayout) {
-      // Original order: cbCutPreview(0), pbPrevCut(1), pbPlay(2), pbNextCut(3), spacer(4), pbExit(5)
-      // Insert after pbNextCut → positions 4 and 5, pushing spacer and pbExit right
-      controlsLayout->insertWidget(4, lblBurstWarning);
-      controlsLayout->insertWidget(5, pbBurstShift);
-    }
+    QHBoxLayout* burstLayout = new QHBoxLayout();
+    burstLayout->addWidget(lblBurstWarning);
+    burstLayout->addStretch(1);
+    burstLayout->addWidget(pbBurstShift);
+    grid->addLayout(burstLayout, 2, 0);
   }
 
   mpCutList = nullptr;
