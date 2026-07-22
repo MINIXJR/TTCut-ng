@@ -28,6 +28,7 @@ public:
 
   bool start() override;
   void shutdown() override;
+  void setKeepOpen(bool keepOpen) override { mKeepOpen = keepOpen; }
   void command(const QStringList& args) override;
   void setProperty(const QString& name, const QVariant& value) override;
   void observeProperty(const QString& name) override;
@@ -49,6 +50,7 @@ private:
   QPointer<TTMpvRenderWidget> mWidget;
   int                         mNextObserveId        = 1;
   bool                        mPlaybackEndedEmitted = false;
+  bool                        mKeepOpen             = false;
 };
 
 #endif // TTMPVLIBBACKEND_H

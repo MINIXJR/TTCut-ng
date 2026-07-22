@@ -70,7 +70,7 @@ bool TTMpvLibBackend::start()
   const OptPair opts[] = {
     { "osc",                      "no"        },
     { "input-default-bindings",   "no"        },
-    { "keep-open",                "no"        },
+    { "keep-open",                mKeepOpen ? "yes" : "no" },
     { "hr-seek",                  "yes"       },
     { "hr-seek-framedrop",        "no"        },
     { "vo",                       "libmpv"    },

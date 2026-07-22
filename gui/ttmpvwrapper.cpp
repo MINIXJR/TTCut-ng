@@ -40,6 +40,12 @@ TTMpvWrapper::~TTMpvWrapper()
   // mBackend is parented to this — Qt deletes it
 }
 
+void TTMpvWrapper::setKeepOpen(bool keepOpen)
+{
+  if (mBackend)
+    mBackend->setKeepOpen(keepOpen);
+}
+
 QWidget* TTMpvWrapper::renderWidget()
 {
   // Backend liefert sein eigenes Widget (libmpv). Lazy start: damit das

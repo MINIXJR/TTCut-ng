@@ -30,6 +30,21 @@ public:
   virtual bool start()    = 0;   // Backend hochfahren
   virtual void shutdown() = 0;   // sauber beenden
 
+  // mpv am Dateiende offen halten (mpv-Option "keep-open"), statt die Datei
+  // zu entladen. Muss VOR start() gesetzt werden — danach wirkungslos, weil
+  // die Optionen vor mpv_initialize() festgeschrieben werden.
+  //
+  // Gemessen an libmpv 2.5.0 (keepopen_probe, 2026-07-22):
+  //   keep-open=no  → MPV_EVENT_END_FILE reason=EOF, Datei entladen
+  //                   (filename=none, idle-active=1) — das Bild ist weg.
+  //   keep-open=yes → KEIN END_FILE. Stattdessen eof-reached=1, mpv setzt
+  //                   pause selbst auf 1, Datei bleibt geladen, time-pos
+  //                   steht auf dem letzten Frame.
+  // Weil END_FILE die einzige Quelle von playbackFinished() ist, verliert
+  // ein Aufrufer mit keep-open=yes dieses Signal und muss das Ende an
+  // "eof-reached" erkennen.
+  virtual void setKeepOpen(bool keepOpen) = 0;
+
   // mpv-Steuermodell
   virtual void command(const QStringList& args)                     = 0;
   virtual void setProperty(const QString& name, const QVariant& v)  = 0;

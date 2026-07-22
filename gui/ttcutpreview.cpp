@@ -53,6 +53,12 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   setupUi(this);
 
   mPlayer = new TTMpvWrapper(this);
+  // In der Vorschau IST mpv die Anzeige — das renderWidget sitzt im videoFrame,
+  // ein Standbild-Fallback wie das mpegWindow im TTCurrentFrame gibt es hier
+  // nicht. Ohne keep-open entlädt mpv am Dateiende die Datei und das Bild ist
+  // weg; nur deshalb lud onPlayerFinished() bisher neu und sprang dabei auf
+  // Frame 0. Muss vor renderWidget() stehen: das startet das Backend.
+  mPlayer->setKeepOpen(true);
   if (QWidget* rw = mPlayer->renderWidget()) {
     rw->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     if (QLayout* fl = videoFrame->layout())
