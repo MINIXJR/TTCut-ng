@@ -3187,8 +3187,8 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../ui/previewwidget.ui" line="58"/>
-        <source>Previous cut (and play)</source>
-        <translation>Vorheriger Schnitt (und abspielen)</translation>
+        <source>Previous cut (or back to start)</source>
+        <translation>Vorheriger Schnitt (oder zum Anfang)</translation>
     </message>
 </context>
 <context>

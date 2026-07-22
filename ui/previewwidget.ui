@@ -55,7 +55,7 @@
         <string>Back</string>
        </property>
        <property name="toolTip" >
-        <string>Previous cut (and play)</string>
+        <string>Previous cut (or back to start)</string>
        </property>
       </widget>
      </item>
