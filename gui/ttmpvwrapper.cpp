@@ -42,7 +42,6 @@ TTMpvWrapper::~TTMpvWrapper()
 
 void TTMpvWrapper::setKeepOpen(bool keepOpen)
 {
-  mKeepOpen = keepOpen;
   if (mBackend)
     mBackend->setKeepOpen(keepOpen);
 }
@@ -217,9 +216,12 @@ void TTMpvWrapper::onBackendConnected()
 void TTMpvWrapper::onBackendPlaybackFinished()
 {
   // END_FILE path. With keep-open this does not fire at a natural end, but it
-  // still does on error or shutdown — guard so a caller never sees two
-  // playerFinished() for one ending.
+  // still does on error or shutdown. Set mAtEnd here as well as in the
+  // eof-reached handler, so whichever source reports an ending first also
+  // blocks the other one — a caller must never see two playerFinished() for
+  // one ending.
   if (mAtEnd) return;
+  mAtEnd   = true;
   mPlaying = false;
   emit playerFinished();
 }

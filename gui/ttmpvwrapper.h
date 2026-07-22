@@ -47,8 +47,8 @@ public:
   // state, which is how Play at the end restarts without a reload.
   void   seek(double seconds);
 
-  // True while mpv sits at the end of the file with keep-open. Cleared as
-  // soon as playback resumes or another file is loaded.
+  // True once playback has reached its end, from either signal source.
+  // Cleared by load(), play() and seek().
   bool   isAtEnd() const                     { return mAtEnd; }
   bool   isPlaying() const                  { return mPlaying; }
 
@@ -79,7 +79,6 @@ private:
   QString        mSubtitleFile;
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;
-  bool           mKeepOpen         = false;
   bool           mAtEnd            = false;
   // Einmal-Flag: nach dem initialen --start-Seek (PLAYBACK_RESTART) entpausen.
   // Verhindert das Aufblitzen des Lande-Keyframes vor dem gewählten Frame.
