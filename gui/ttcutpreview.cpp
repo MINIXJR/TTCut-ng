@@ -86,7 +86,6 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 
   // Burst warning widgets — inserted into existing controls layout
   lblBurstWarning = new QLabel(this);
-  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   lblBurstWarning->hide();
 
   pbBurstShift = new QPushButton(this);
@@ -315,6 +314,23 @@ void TTCutPreview::onNextCut()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Show a message in the burst label
+ *
+ * Single owner of text, colour and tooltip. The tooltip repeats the text so
+ * the message stays reachable should a future translation ever outgrow the
+ * row. Visibility stays with the caller: regeneratePreviewClip() reads
+ * isVisible() to tell "burst gone" from "burst still there".
+ */
+void TTCutPreview::setBurstMessage(const QString& message, bool resolved)
+{
+  lblBurstWarning->setStyleSheet(resolved
+      ? "QLabel { color: #228B22; font-weight: bold; }"
+      : "QLabel { color: #FF8C00; font-weight: bold; }");
+  lblBurstWarning->setText(message);
+  lblBurstWarning->setToolTip(message);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Set caption, icon and tooltip of the burst shift button
  *
  * Caption and icon must always be set together — setting them apart is what
@@ -346,10 +362,10 @@ void TTCutPreview::configureBurstShiftButton(bool isCutOut)
  */
 void TTCutPreview::checkBurstForCurrentCut(int iCut)
 {
+  // No colour reset needed: setBurstMessage() sets the colour with every
+  // message, so an earlier green "Burst resolved" cannot bleed into the next
+  // warning.
   lblBurstWarning->hide();
-  // Reset to warning color — earlier shifts may have left the label green
-  // ("Burst resolved"), and we'd otherwise show the next burst in green too.
-  lblBurstWarning->setStyleSheet("QLabel { color: #FF8C00; font-weight: bold; }");
   pbBurstShift->hide();
   mBurstSegmentIdx = -1;
 
@@ -364,8 +380,8 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
     TTCutItem cutInItem = mpCutList->at(0);
     TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
     if (bin.present) {
-      lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at start of cut 1 (%1 dB)")
-          .arg(bin.burstDb, 0, 'f', 1));
+      setBurstMessage(tr("\xe2\x9a\xa0 Audio burst at start of cut 1 (%1 dB)")
+          .arg(bin.burstDb, 0, 'f', 1), /*resolved=*/false);
       lblBurstWarning->show();
       configureBurstShiftButton(/*isCutOut=*/false);
       pbBurstShift->show();
@@ -383,8 +399,8 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
   TTAVData::CutBurstInfo bout = mpAVData->detectCutOutBurst(cutOutItem);
 
   if (bout.present) {
-    lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at end of cut %1 (%2 dB)")
-        .arg(iCut).arg(bout.burstDb, 0, 'f', 1));
+    setBurstMessage(tr("\xe2\x9a\xa0 Audio burst at end of cut %1 (%2 dB)")
+        .arg(iCut).arg(bout.burstDb, 0, 'f', 1), /*resolved=*/false);
     lblBurstWarning->show();
     configureBurstShiftButton(/*isCutOut=*/true);
     pbBurstShift->show();
@@ -398,8 +414,8 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
     TTCutItem cutInItem = mpCutList->at(iPos + 1);
     TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
     if (bin.present) {
-      lblBurstWarning->setText(tr("\xe2\x9a\xa0 Audio burst at start of cut %1 (%2 dB)")
-          .arg(iCut + 1).arg(bin.burstDb, 0, 'f', 1));
+      setBurstMessage(tr("\xe2\x9a\xa0 Audio burst at start of cut %1 (%2 dB)")
+          .arg(iCut + 1).arg(bin.burstDb, 0, 'f', 1), /*resolved=*/false);
       lblBurstWarning->show();
       configureBurstShiftButton(/*isCutOut=*/false);
       pbBurstShift->show();
@@ -496,9 +512,8 @@ void TTCutPreview::onBurstShift()
 
   // Show feedback
   QString label = mBurstIsCutOut ? tr("CutOut updated") : tr("CutIn updated");
-  lblBurstWarning->setStyleSheet("QLabel { color: #228B22; font-weight: bold; }");
-  lblBurstWarning->setText(tr("\xe2\x9c\x93 %1 (frame %2 \xe2\x86\x92 %3)")
-      .arg(label).arg(oldIdx).arg(newIdx));
+  setBurstMessage(tr("\xe2\x9c\x93 %1 (frame %2 \xe2\x86\x92 %3)")
+      .arg(label).arg(oldIdx).arg(newIdx), /*resolved=*/true);
   pbBurstShift->hide();
 
   // Regenerate the current preview clip
@@ -599,8 +614,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
 
   // If no burst detected after shift, show success
   if (!lblBurstWarning->isVisible()) {
-    lblBurstWarning->setStyleSheet("QLabel { color: #228B22; font-weight: bold; }");
-    lblBurstWarning->setText(tr("\xe2\x9c\x93 Burst resolved"));
+    setBurstMessage(tr("\xe2\x9c\x93 Burst resolved"), /*resolved=*/true);
     lblBurstWarning->show();
   }
 }
