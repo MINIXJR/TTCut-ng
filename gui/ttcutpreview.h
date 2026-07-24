@@ -51,6 +51,7 @@ public:
 
 protected:
 	void closeEvent(QCloseEvent* event);
+	void showEvent(QShowEvent* event);
 	void cleanUp();
 
 protected slots:
@@ -84,6 +85,11 @@ private:
     //! the selection. Decides whether a cut change starts playback: opening
     //! the dialog must not play, a deliberate cut change must.
     bool mAutoPlayOnSelect = false;
+
+    //! True until showEvent() has loaded the first clip. The load cannot happen
+    //! in initPreview(): TTCutMainWindow calls that before exec(), so the mpv
+    //! render widget has never been painted and mpv has no render target yet.
+    bool mInitialLoadPending = true;
 
     void checkBurstForCurrentCut(int iCut);
     void configureBurstShiftButton(bool isCutOut);

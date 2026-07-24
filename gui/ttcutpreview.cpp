@@ -33,6 +33,7 @@ extern "C" {
 #include <libavcodec/codec_id.h>
 }
 #include "ttmpvwrapper.h"
+#include "ttmpvrenderwidget.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -41,8 +42,10 @@ extern "C" {
 #include <QIcon>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QSignalBlocker>
 #include <QSizePolicy>
 #include <QStyle>
+#include <QTimer>
 
 /* /////////////////////////////////////////////////////////////////////////////
  * TTCutPreview constructor
@@ -166,7 +169,12 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   // combobox index → preview file index.
   mClipOffset = skipFirst ? 1 : 0;
 
-  // Create video and audio preview clips
+  // Create video and audio preview clips.
+  // Signals stay blocked while filling: the first addItem() moves currentIndex
+  // from -1 to 0 and would fire currentIndexChanged → onCutSelectionChanged →
+  // load(). Loading is deferred to showEvent() (see there), so nothing may
+  // reach the player before the dialog is on screen.
+  const QSignalBlocker fillBlocker(cbCutPreview);
   for (int i = 0; i < numPreview; i++ ) {
     // first cut-in (skip when first cut is neighbor-only context)
     if (i == 0 && !skipFirst) {
@@ -210,12 +218,46 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   }
 
   current_video_file = preview_video_info.absoluteFilePath();
-  // Filling the combobox already fired currentIndexChanged for the first item,
-  // and this call loads clip 1 explicitly. Both must stay paused; only cut
-  // changes the user asks for afterwards start playback.
-  mAutoPlayOnSelect = false;
-  onCutSelectionChanged(0);
-  mAutoPlayOnSelect = true;
+  // No load here — showEvent() does it once the widget can render.
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Load the first clip once the dialog is actually on screen.
+ *
+ * TTCutMainWindow calls initPreview() before exec(), so at that point the mpv
+ * render widget has never been painted: there is no GL context, hence no mpv
+ * render context, and mpv marks vo/libmpv as broken for the whole session —
+ * "No render context set", a black preview that no later Play can revive.
+ * Deferring the first load past show() is what gives the widget its context.
+ *
+ * The load goes through a zero-timer rather than running inline: showEvent()
+ * fires while the dialog is being shown, before its children have been
+ * painted. One turn of the event loop later the widget is realised and
+ * prepareRenderContext() succeeds (measured: it fails when called any earlier).
+ */
+void TTCutPreview::showEvent(QShowEvent* event)
+{
+  QDialog::showEvent(event);
+
+  if (!mInitialLoadPending) return;
+  mInitialLoadPending = false;
+
+  QTimer::singleShot(0, this, [this]() {
+    if (auto* mrw = qobject_cast<TTMpvRenderWidget*>(mPlayer->renderWidget())) {
+      if (!mrw->prepareRenderContext())
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("TTCutPreview: prepareRenderContext failed"));
+    }
+
+    // Opening the dialog must not start playback — only cut changes the user
+    // asks for afterwards do.
+    const int iCut = cbCutPreview->currentIndex();
+    if (iCut >= 0) {
+      mAutoPlayOnSelect = false;
+      onCutSelectionChanged(iCut);
+    }
+    mAutoPlayOnSelect = true;
+  });
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
