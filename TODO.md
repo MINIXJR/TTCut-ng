@@ -721,7 +721,14 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] Batch muxing via mux script generation
 - [x] Preview: Next/Previous cut navigation buttons
 - [x] Current Frame: Play button with audio (via mpv)
-- [x] Preview: stay on the last frame at the end, two-stage Back, cut changes play
+- [x] Preview: stay on the last frame at the end; Forward and the cut selector
+      start playback, Back is two-stage and always shows a still (start of the
+      current clip, then the previous cut)
+- [x] Preview: fix the missing mpv render context that left the video frame
+      black — initPreview() loaded before exec(), so the render widget had
+      never been painted ("No render context set", vo/libmpv broken for the
+      whole session). Pre-existing, until now masked by the reload at end of
+      playback
 - [x] User warning when clicking "New Project"
 - [x] Keyboard shortcuts (j/k for frame, g/G for home/end, [ ] for cut-in/out)
 - [x] Warning if audio and video length differ
