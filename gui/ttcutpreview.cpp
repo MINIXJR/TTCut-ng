@@ -387,10 +387,16 @@ void TTCutPreview::onPrevCut()
     return;
   }
 
-  // Stage 2: previous cut (loads and plays via onCutSelectionChanged).
+  // Stage 2: previous cut, loaded paused on its first frame.
+  // Back stays silent in both stages, so what the button does never depends on
+  // where playback happens to stand — a state the dialog does not show. Forward
+  // is the one that plays; press Play here to hear the cut.
   int currentIndex = cbCutPreview->currentIndex();
-  if (currentIndex > 0)
+  if (currentIndex > 0) {
+    mAutoPlayOnSelect = false;
     cbCutPreview->setCurrentIndex(currentIndex - 1);
+    mAutoPlayOnSelect = true;
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

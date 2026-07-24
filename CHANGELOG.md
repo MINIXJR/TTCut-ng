@@ -6,15 +6,15 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Features
 
-- **Cut preview: stays on the last frame, and changing the cut starts
-  playback.** Reaching the end of a clip previously jumped the preview back
-  to the first frame; it now holds on the last frame instead, and pressing
-  Play restarts from the beginning in one click. Changing the cut — Forward,
-  Back to the previous cut, or the cut selector — now starts playback right
-  away instead of leaving the preview paused on the newly loaded frame. Back
-  is two-stage, like the skip-back button on a CD player: the first press
-  returns to the start of the current clip as a still image, the second
-  moves to the previous cut.
+- **Cut preview: stays on the last frame, and Forward starts playback.**
+  Reaching the end of a clip previously jumped the preview back to the first
+  frame; it now holds on the last frame instead, and pressing Play restarts
+  from the beginning in one click. Forward and the cut selector now start
+  playback right away instead of leaving the preview paused on the newly
+  loaded frame. Back is two-stage, like the skip-back button on a CD player:
+  the first press returns to the start of the current clip, the second moves
+  to the previous cut — both as a still image, so Back never starts playing
+  on its own.
 
 - **H.265 Smart Cut: the RASL window at cut-in seams is preserved** — cutting
   into broadcast HEVC (CRA-based open GOPs, e.g. UHD/HLG channels) silently
