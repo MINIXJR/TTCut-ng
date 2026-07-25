@@ -1374,10 +1374,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
   TTAVItem* avItem = cutList->at(0).avDataItem();
 
-  QList<int> tracks;
-  for (int i = 0; i < avItem->audioCount(); i++) tracks << i;
-
-  cutAudioTracks(avItem, tracks, videoKeepList, normalizeAcmod,
+  cutAudioTracks(avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
         QString path = createCutFileName(tgtFileName,
                                          avItem->audioStreamAt(i)->fileName(), i + 1);
@@ -1582,12 +1579,9 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // Cut audio tracks
     QStringList cutAudioFiles;
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    QList<int> audioTracks;
-    for (int i = 0; i < avItem->audioCount(); i++) audioTracks << i;
-
     // Cut all audio tracks against the (B-frame-adjusted) video keepList
     // (consolidated onto TTAVData::cutAudioTracks).
-    cutAudioTracks(avItem, audioTracks, keepList, normalizeAcmod,
+    cutAudioTracks(avItem, keepList, normalizeAcmod,
         [&](int i, const QString& ext) {
           emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
           qApp->processEvents();
@@ -1900,11 +1894,8 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   QStringList trackFiles;
   QStringList trackLanguages;
   const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-  QList<int> audioTracks;
-  for (int i = 0; i < avItem->audioCount(); i++) audioTracks << i;
-
   QList<float> firstTrackDrifts = cutAudioTracks(
-      avItem, audioTracks, videoKeepList, normalizeAcmod,
+      avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
         QString path = createCutFileName(tgtFileName,
                                          avItem->audioStreamAt(i)->fileName(), i + 1);
@@ -2194,6 +2185,23 @@ QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString
 }
 
 // *****************************************************************************
+// Convenience overload: cut ALL of avItem's audio tracks. Builds the all-tracks
+// index list (empty for a null avItem, which the main overload rejects) and
+// forwards. Replaces the `QList<int> tracks; for(...) tracks << i;` boilerplate
+// that stood at every all-tracks call site.
+QList<float> TTAVData::cutAudioTracks(
+    TTAVItem* avItem,
+    const QList<QPair<double, double>>& videoKeepList,
+    bool normalizeAcmod,
+    const std::function<QString(int, const QString&)>& outPath,
+    const std::function<void(int, const QString&, const QString&, bool)>& onCut)
+{
+  QList<int> allTracks;
+  if (avItem)
+    for (int i = 0; i < avItem->audioCount(); i++) allTracks << i;
+  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut);
+}
+
 // Cut all requested audio tracks against a shared video keep list. Absorbs the
 // per-track loop, per-track delay, planAudioCut, AC3 acmod targets, and
 // cutAudioStream that the six producers used to duplicate. Output naming and

@@ -325,6 +325,17 @@ class TTAVData : public QObject
         const std::function<void(int trackIdx, const QString& path,
                                  const QString& lang, bool ok)>& onCut);
 
+    // Convenience overload for the common case: cut ALL of avItem's audio
+    // tracks. Builds the all-tracks index list and forwards to the overload
+    // above.
+    QList<float> cutAudioTracks(
+        TTAVItem* avItem,
+        const QList<QPair<double, double>>& videoKeepList,
+        bool normalizeAcmod,
+        const std::function<QString(int trackIdx, const QString& ext)>& outPath,
+        const std::function<void(int trackIdx, const QString& path,
+                                 const QString& lang, bool ok)>& onCut);
+
     // Last-cut metadata so the main window can build a meaningful completion
     // message after an audio-only cut (where cutVideoName + container extension
     // do not point at the actual output file).
