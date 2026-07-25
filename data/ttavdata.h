@@ -266,6 +266,8 @@ class TTAVData : public QObject
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;
     QString mLastCutOutputSummary;
+    qint64  mLastCutSourceMs = 0;
+    qint64  mLastCutResultMs = 0;
 
   public:
     // Count extra frames before a given frame index (for audio time correction)
@@ -345,6 +347,8 @@ class TTAVData : public QObject
     // do not point at the actual output file).
     bool    lastCutWasAudioOnly()  const { return mLastCutWasAudioOnly; }
     QString lastCutOutputSummary() const { return mLastCutOutputSummary; }
+    qint64  lastCutSourceMs()      const { return mLastCutSourceMs; }
+    qint64  lastCutResultMs()      const { return mLastCutResultMs; }
 
   private:
     // AC3-only per-segment target acmod list (majority acmod per kept window).
@@ -352,6 +356,9 @@ class TTAVData : public QObject
     QList<int> computeTargetAcmods(const QString& audioFile, const QString& ext,
                                    const QList<QPair<double, double>>& keepList,
                                    bool normalizeAcmod) const;
+    // Source (at(0) video duration) + result (Σ kept-segment lengths) in ms
+    // from the cut list, into mLastCutSourceMs/mLastCutResultMs (0 if unknown).
+    void computeCutLengths(TTCutList* cutList);
 };
 
 

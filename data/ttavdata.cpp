@@ -1304,9 +1304,33 @@ bool TTAVData::confirmBurstWarnings(TTCutList* cutList)
   return (ret != 1);
 }
 
+void TTAVData::computeCutLengths(TTCutList* cutList)
+{
+  mLastCutSourceMs = 0;
+  mLastCutResultMs = 0;
+  if (!cutList || cutList->count() == 0) return;
+
+  qint64 resultMs = 0;
+  for (int i = 0; i < cutList->count(); i++) {
+    QTime t = cutList->at(i).cutLengthTime();
+    resultMs += t.hour()*3600000 + t.minute()*60000 + t.second()*1000 + t.msec();
+  }
+  mLastCutResultMs = resultMs;
+
+  TTAVItem* avItem = cutList->at(0).avDataItem();
+  if (avItem && avItem->videoStream()) {
+    double fr = avItem->videoStream()->frameRate();
+    if (fr > 0)
+      mLastCutSourceMs =
+          static_cast<qint64>(avItem->videoStream()->frameCount() / fr * 1000.0 + 0.5);
+  }
+}
+
 void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 {
   if (cutList == 0) cutList = mpCutList;
+
+  computeCutLengths(cutList);
 
   // Reset last-cut metadata; non-audio-only path leaves it cleared.
   mLastCutWasAudioOnly = false;
@@ -1411,6 +1435,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
 void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 {
+  computeCutLengths(cutList);
+
   log->infoMsg(__FILE__, __LINE__, "Using TTESSmartCut for frame-accurate cutting");
 
   // Get source file and frame rate from first cut item
@@ -1638,14 +1664,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0 &&
         finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
 
-      qint64 totalDurationMs = 0;
-      for (int i = 0; i < cutList->count(); i++) {
-        QTime cutLength = cutList->at(i).cutLengthTime();
-        totalDurationMs += cutLength.hour() * 3600000 +
-                           cutLength.minute() * 60000 +
-                           cutLength.second() * 1000 +
-                           cutLength.msec();
-      }
+      qint64 totalDurationMs = mLastCutResultMs;
 
       log->infoMsg(__FILE__, __LINE__, QString("Total cut duration: %1 ms").arg(totalDurationMs));
 
@@ -1766,15 +1785,7 @@ void TTAVData::onCutFinished()
         // Generate chapters if enabled
         QString chapterFile;
         if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0) {
-          // Calculate total duration from cut list
-          qint64 totalDurationMs = 0;
-          for (int i = 0; i < mpCutList->count(); i++) {
-            QTime cutLength = mpCutList->at(i).cutLengthTime();
-            totalDurationMs += cutLength.hour() * 3600000 +
-                               cutLength.minute() * 60000 +
-                               cutLength.second() * 1000 +
-                               cutLength.msec();
-          }
+          qint64 totalDurationMs = mLastCutResultMs;
 
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "Total cut duration:" << totalDurationMs << "ms";
@@ -1870,6 +1881,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   mLastCutOutputSummary.clear();
 
   if (cutList == 0 || cutList->count() == 0) return;
+  computeCutLengths(cutList);
   TTAVItem* avItem = cutList->at(0).avDataItem();
   if (!avItem || avItem->audioCount() == 0) return;
   TTVideoStream* vStream = avItem->videoStream();
