@@ -129,21 +129,35 @@ $(DISPMAP_OBJS):
 clean:
 	rm -f $(TOOLS)
 
-# The MPEG-2 cut path pulls in the stream, header/index lists, the file buffer,
-# the transcode provider and the libmpeg2 decoder — effectively the whole tree.
-# Link against every object of the main build except the GUI entry point.
-MPEG2CUT_OBJS := $(filter-out ../../obj/ttcutmain.o,$(wildcard ../../obj/*.o))
-MPEG2CUT_PKGS := Qt5Core Qt5Gui Qt5Widgets Qt5Xml Qt5Network Qt5OpenGL \
-                 libavformat libavcodec libavutil libswscale libavfilter libswresample mpv
+# The MPEG-2 cut path (TTMpeg2VideoStream::cut + TTTranscodeProvider + the
+# libmpeg2 decoder) needs exactly these objects — determined by linking the
+# tools against an archive of every non-GUI object and reading which members the
+# linker actually pulled. It pulls NO GUI/mpv objects, so the tools link against
+# Qt5Core/Qt5Gui only (not Widgets/OpenGL/mpv). Curated instead of the old
+# link-everything glob so a new GUI/mpv dependency in the cut path surfaces as
+# an undefined-reference link error here instead of being silently masked.
+MPEG2CUT_OBJS := ../../obj/istatusreporter.o ../../obj/moc_istatusreporter.o \
+                 ../../obj/moc_ttavstream.o ../../obj/moc_ttmpeg2videostream.o \
+                 ../../obj/moc_ttsettings.o ../../obj/moc_tttranscode.o \
+                 ../../obj/ttaudioheaderlist.o ../../obj/ttavheader.o \
+                 ../../obj/ttavstream.o ../../obj/ttcommon.o \
+                 ../../obj/ttcutparameter.o ../../obj/ttexception.o \
+                 ../../obj/ttfilebuffer.o ../../obj/ttheaderlist.o \
+                 ../../obj/ttmessagelogger.o ../../obj/ttmpeg2decoder.o \
+                 ../../obj/ttmpeg2videoheader.o ../../obj/ttmpeg2videostream.o \
+                 ../../obj/ttsettings.o ../../obj/tttranscode.o \
+                 ../../obj/ttvideoheaderlist.o ../../obj/ttvideoindexlist.o
+MPEG2CUT_PKGS := Qt5Core Qt5Gui \
+                 libavformat libavcodec libavutil libswscale libavfilter libswresample
 
 test_mpeg2_cutout: test_mpeg2_cutout.cpp
-	@test -n "$(MPEG2CUT_OBJS)" || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
 	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
 
 dump_mpeg2_fields: dump_mpeg2_fields.cpp
-	@test -n "$(MPEG2CUT_OBJS)" || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
 	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
