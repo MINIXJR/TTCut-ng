@@ -32,6 +32,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 		public:
 		TTCurrentFrame(QWidget* parent = 0);
+		~TTCurrentFrame();
 
 		void setTitle(const QString & title);
 		void controlEnabled(bool enabled);

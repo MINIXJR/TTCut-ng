@@ -110,6 +110,14 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   setPlayingButtonState(false);
 }
 
+TTCurrentFrame::~TTCurrentFrame()
+{
+  // Drop the cached H.264/H.265 playback MKV if it still exists (e.g. the
+  // window is closed during playback) so it does not linger in the temp
+  // directory. cleanupTempPlaybackFile() is a no-op when there is nothing left.
+  cleanupTempPlaybackFile();
+}
+
 //! Needeb by Qt Designer
 void TTCurrentFrame::setTitle ( const QString & title )
 {
@@ -856,6 +864,16 @@ QString TTCurrentFrame::createTempMkvForPlayback()
             qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
       }
     }
+  }
+
+  // Without a valid frame rate the default-duration math below divides by zero
+  // (frameDurationNs would be UB) and playback timing would be meaningless.
+  // Bail out; the caller treats an empty result as "playback unavailable".
+  if (frameRate <= 0) {
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Cannot create playback MKV: no valid frame rate for %1")
+            .arg(videoStream->filePath()));
+    return QString();
   }
 
   // Set up MKV muxer
