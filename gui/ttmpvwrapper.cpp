@@ -134,10 +134,11 @@ void TTMpvWrapper::stop()
   // Play/Stop toggle, where stopping returns control to the frame navigator.
   // For pause-style stopping that keeps the frame visible, use pause().
   //
-  // NOTE: we deliberately do NOT pause() here. The backend's shutdown()
-  // synchronously reads the last video position before tearing down, and
-  // mpv's video-pts/time-pos properties read after a pause are reset/stale.
-  // mpv_terminate_destroy halts playback cleanly without needing pause first.
+  // NOTE: we do not pause() here because the backend's shutdown() already
+  // handles it internally — a synchronous pause followed by a synchronous
+  // time-pos read — so the last playback position is captured stably (and
+  // propagated to mPlaybackPosition) before mpv_terminate_destroy tears the
+  // handle down. A separate pause() here would be redundant.
   mPendingAutoPlay = false;
   mBackend->shutdown();
   // Emit playerFinished explicitly: shutdown() disconnects mProcess to avoid

@@ -645,10 +645,13 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     im "Aktueller Frame"-Widget läuft während der mpv-Wiedergabe live mit.
 
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
-  - `TTMpvWrapper::stop()` ist „best-effort": der gestoppte Frame kann ~1 Frame ungenau
-    sein (kein synchrones Warten auf das eingefrorene `time-pos`). Frame-genau wäre ein
-    synchrones `getProperty` im `ITTMpvBackend`-Interface (bewusst weggelassen) oder ein
-    kurzes Warten auf das `time-pos`-Event nach `pause` in `stop()`.
+  - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →
+    **ÜBERHOLT/erledigt (2026-07-25):** die vorgeschlagene synchrone Lesung ist längst
+    implementiert. `TTMpvLibBackend::shutdown()` macht ein synchrones `pause` + synchrone
+    `time-pos`-Lesung und propagiert sie nach `mPlaybackPosition`; `onPlaybackFinished()`
+    nimmt als Stop-Frame `lastRenderedTimePos()` (die time-pos des zuletzt gemalten
+    Frames). Verbleibende Ungenauigkeit ist allein der ~5-Frame-Pipeline-Versatz unten,
+    kein Sync-Problem.
   - **Stop-Rest-Versatz ~5 Frames (Known Issue, tiefere Analyse offen)** — siehe
     Abschnitt „Known Limitations". Bei `vo=libmpv` hängt das in die FBO gerenderte Bild
     der mpv-Clock um eine feste Pipeline-Tiefe (~16 Frames) hinterher. Der eingebaute
