@@ -372,25 +372,27 @@
       nicht warning. Byte-identisch verifiziert auf MBAFF/IDR-Naht/progressiv/
       HEVC.
 
-- **Schnittdialog: Button-Leiste überarbeiten + alle Dialoge auf einheitliches Design prüfen**
-  - Im Schnittdialog („Schnitt-Optionen", `ui/avcutdialog.ui`, unteres H-Layout Z. 30–77)
-    ist die Button-Reihenfolge `[Auf Standard zurücksetzen] [Starten] [Abbrechen]`, und
-    **kein** Button hat `default=true` → Qt macht den ersten (`btnResetDefaults`) zum
-    Default-Button (wird bei Enter ausgelöst, ist hervorgehoben). Unglücklich: die
-    primäre Aktion (Starten) sollte der Default sein, nicht „Auf Standard zurücksetzen".
-  - **Gewünschtes Layout (KDE-Konvention, mit User abgestimmt):** Reset links abgesetzt,
-    rechts `[Abbrechen] [✓ Starten]`; Starten ganz rechts und als Default.
-    - Layout-Reihenfolge: `laFreeSpace`, Spacer, `btnResetDefaults`, Spacer (neu),
-      `cancelButton`, `okButton`.
-    - `okButton`: `default=true` / `autoDefault=true`; `btnResetDefaults` + `cancelButton`:
-      `autoDefault=false` (damit Enter zuverlässig Starten auslöst).
-    - Keine Signal/Slot- oder Übersetzungsänderung nötig; vorher prüfen, ob der
-      `gui/ttcutavcutdlg.cpp`-Konstruktor bereits einen Default-Button setzt.
-  - **Ausweiten auf alle Dialoge — einheitliches Design:** übrige Dialoge (Einstellungen,
-    Vorschau, About, QuickJump, …) auf konsistente Button-Leisten prüfen — primäre Aktion
-    = Default-Button, einheitliche Reihenfolge/Aufteilung (Reset/sekundär links,
-    Abbrechen + OK/primär rechts). Ziel: durchgängig gleiches Button-Layout im ganzen
-    Programm.
+- ~~**Schnittdialog: Button-Leiste überarbeiten + alle Dialoge auf einheitliches Design prüfen**~~
+  → **DONE (2026-07-25, branch `feature/dialog-button-consistency`, GUI-verifiziert)**
+  - **Schnittdialog** (`ui/avcutdialog.ui`): Reihenfolge auf `[Reset] ⎯ [Abbrechen] [Starten]`
+    (Reset links abgesetzt via neuem Spacer), `okButton` `default=true`/`autoDefault=true`,
+    Reset+Cancel `autoDefault=false`. Keine Signal/Slot-Änderung. Konstruktor setzte vorher
+    keinen Default.
+  - **Vorschau** (`ui/previewwidget.ui`): Transport-Leiste, kein OK/Cancel-Fall. `pbPlay`
+    (Start) als Enter-Default; Back/Forward/Close + dynamischer BurstShift `autoDefault=false`.
+  - **About** (`ui/aboutdlg.ui`): einziger Button rechtsbündig (zweiter Spacer entfernt),
+    `okButton` explizit Default.
+  - **Einstellungen** (`ui/ttsettingsdialog.ui`): **bewusst abweichend** — persistiert sofort
+    (`accept()` → `saveTabData()`, kein Apply). OK→**Speichern** umbenannt (Label nennt die
+    Aktion), und **kein** Enter-Default: eine `findChildren<QPushButton*>`-Schleife im
+    Konstruktor setzt alle Buttons `autoDefault=false`, sonst würde Qt einen Tab-eigenen
+    „Reset"-Button zum Default machen. Enter inert, Escape verwirft (QDialog-Standard),
+    Speichern nur per Klick. Deutsche Übersetzung „Speichern" ergänzt.
+  - **QuickJump** bewusst ausgelassen: dynamische Back/Forward-Navigationsleiste mit
+    Thumbnail-Auswahl, kein sinnvoller primärer Enter-Default (strukturell wie Vorschau).
+  - Zwei begründete Muster statt strikter Uniformität: Aktion-nicht-sofort-persistent
+    (Schnitt/About) → primäre Aktion = Enter-Default; sofort-persistent+feldreich
+    (Einstellungen) → kein Enter-Default.
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
