@@ -58,6 +58,32 @@
        <property name="toolTip" >
         <string>Reset all override values in this dialog to the App-Defaults from the Settings dialog. The dialog stays open; click Start to apply, or Cancel to discard.</string>
        </property>
+       <property name="autoDefault" >
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0" >
+        <size>
+         <width>131</width>
+         <height>31</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelButton" >
+       <property name="text" >
+        <string>Cancel</string>
+       </property>
+       <property name="autoDefault" >
+        <bool>false</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -65,12 +91,11 @@
        <property name="text" >
         <string>Start</string>
        </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="cancelButton" >
-       <property name="text" >
-        <string>Cancel</string>
+       <property name="default" >
+        <bool>true</bool>
+       </property>
+       <property name="autoDefault" >
+        <bool>true</bool>
        </property>
       </widget>
      </item>
