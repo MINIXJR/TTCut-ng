@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcurrentframe.h"
+#include "ttgotoframedialog.h"
 #include "ttmpvwrapper.h"
 #include "ttmpvrenderwidget.h"
 #include "../avstream/ttmpeg2videostream.h"
@@ -35,6 +36,7 @@ extern "C" {
 #include <QApplication>
 #include <QDebug>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QGridLayout>
 #include <QTimer>
@@ -54,6 +56,10 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   :QWidget(parent)
 {
   setupUi( this );
+
+  laCurrentPosition->installEventFilter(this);
+  laCurrentPosition->setCursor(Qt::PointingHandCursor);
+  laCurrentPosition->setToolTip(tr("Double-click to go to a frame or timecode"));
 
   // mpegWindow steckt heute direkt im gbCurrentFrame-Grid. Wir kapseln es in
   // einen Stack-Container, sodass das libmpv-Render-Widget bei Playback
@@ -228,6 +234,21 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
     currentPosition = videoStream->frameCount()-1;
 
   onGotoFrame(currentPosition, 0);
+}
+
+bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
+{
+  if (watched == laCurrentPosition && event->type() == QEvent::MouseButtonDblClick) {
+    if (videoStream != nullptr && videoStream->frameCount() > 0) {
+      TTGotoFrameDialog dlg(videoStream->currentIndex(),
+                            static_cast<int>(videoStream->frameCount()),
+                            videoStream->frameRate(), this);
+      if (dlg.exec() == QDialog::Accepted)
+        onGotoFrame(dlg.selectedFrame(), 0);
+    }
+    return true;   // consume the double-click on the label
+  }
+  return QWidget::eventFilter(watched, event);
 }
 
 // Signals from the navigation widget

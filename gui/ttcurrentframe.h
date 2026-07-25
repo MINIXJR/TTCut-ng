@@ -43,6 +43,9 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 
 		void wheelEvent(QWheelEvent * e);
 
+	protected:
+		bool eventFilter(QObject* watched, QEvent* event) override;
+
 	public slots:
 		void onAVDataChanged(TTAVItem* avData);
 		void onCutInChanged(const TTCutItem& cutItem);
