@@ -623,16 +623,21 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
-- **Code-Review-Follow-ups Redundanz-Branch** (2026-07-11, /code-review high über
-  `refactor/redundancy-safe-batch`; die Korrektheits-/Log-Funde wurden direkt gefixt):
-  - `cutAudioTracks`-Interface: `outPath`-Lambda transportiert an 2 Stellen
-    Seiteneffekte (Datei-Löschen, statusReport) — sauberer wäre ein eigener
-    Before-Hook oder Vorab-Löschen im Helfer (`data/ttavdata.h`).
-  - Alle-Spuren-Überladung für `cutAudioTracks` (der 2-Zeilen-Boilerplate
-    `QList<int> tracks; for(...)` steht an 3 Stellen).
-  - `tools/diag/Makefile`: `test_mpeg2_cutout` linkt per Glob gegen alle obj/*.o
-    (inkl. Qt5Widgets/mpv) statt kuratierter Objektliste — kaschiert die Kopplung
-    von `TTMpeg2VideoStream` an GUI/mpv; bei Gelegenheit entkoppeln.
+- ~~**Code-Review-Follow-ups Redundanz-Branch**~~ → **DONE (2026-07-25,
+  branch `refactor/code-review-followups`)**
+  - ~~Alle-Spuren-Überladung für `cutAudioTracks`~~ → `4c56d9d9`: Convenience-
+    Überladung baut die All-Tracks-Liste und leitet weiter; Boilerplate an 3
+    Stellen (doMpeg2Cut/doH264Cut/doAudioOnlyCut) entfernt. Verhaltensneutral.
+  - ~~`outPath`-Lambda-Seiteneffekte (Datei-Löschen, statusReport)~~ → `6026f0ab`:
+    `outPath` ist überall reine Pfad-Funktion; die Stale-Output-Löschung ist im
+    Helfer zentralisiert (einheitlich mit Warn-Log), Fortschritt via neuem
+    optionalem `beforeCut`-Hook. Audio-Ausgabe unverändert, nur Diagnose-Logs
+    vereinheitlicht (nicht bit-identisch — bewusste Vereinheitlichung).
+  - ~~`tools/diag/Makefile` Glob gegen alle obj/*.o~~ → `202160b7`: Kopplung
+    `TTMpeg2VideoStream`↔GUI/mpv ist **nicht real** (per Archiv-Link-Map belegt:
+    22 interne Objekte, 0 GUI/mpv). Glob durch kuratierte Liste ersetzt,
+    Qt5Widgets/Xml/Network/OpenGL/mpv aus den pkg-Libs entfernt; neue GUI/mpv-
+    Abhängigkeit im Cut-Pfad bricht jetzt hier den Link statt still absorbiert.
 
 - ~~**Wayland: Ursache für `QT_QPA_PLATFORM=xcb`-Zwang ermitteln**~~ → **DONE** (v0.71.0, libmpv-Render-Backend)
   - Root Cause war das mpv-`--wid`-Embedding des alten Process-Backends. Mit dem
