@@ -514,20 +514,13 @@ p, li { white-space: pre-wrap; }
        <property name="text" >
         <string>OK</string>
        </property>
+       <property name="default" >
+        <bool>true</bool>
+       </property>
+       <property name="autoDefault" >
+        <bool>true</bool>
+       </property>
       </widget>
-     </item>
-     <item>
-      <spacer>
-       <property name="orientation" >
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" >
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
      </item>
     </layout>
    </item>
