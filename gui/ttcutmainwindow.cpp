@@ -1064,6 +1064,16 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   mpAVData->onDoCut(QFileInfo(QDir(TTSettings::instance()->cutDirPath()), TTSettings::instance()->cutVideoName()).absoluteFilePath(), cutData, audioOnly);
 }
 
+// ms -> "H:MM:SS" (hours dropped when 0 -> "M:SS").
+static QString formatDurationMs(qint64 ms)
+{
+  if (ms < 0) ms = 0;
+  qint64 total = ms / 1000, h = total/3600, m = (total%3600)/60, s = total%60;
+  if (h > 0)
+    return QString("%1:%2:%3").arg(h).arg(m, 2, 10, QChar('0')).arg(s, 2, 10, QChar('0'));
+  return QString("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
+}
+
 /* /////////////////////////////////////////////////////////////////////////////
  * Cutting finished - notify user
  */
@@ -1073,10 +1083,19 @@ void TTCutMainWindow::onCutFinished()
       qDebug() << "TTCutMainWindow::onCutFinished() called!";
   disconnect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
 
+  QString lengths;
+  qint64 srcMs = mpAVData->lastCutSourceMs();
+  qint64 resMs = mpAVData->lastCutResultMs();
+  if (srcMs > 0 && resMs > 0) {
+    qint64 removed = srcMs > resMs ? srcMs - resMs : 0;
+    lengths = tr("\n\nSource:  %1\nResult:  %2  (%3 removed)")
+        .arg(formatDurationMs(srcMs), formatDurationMs(resMs), formatDurationMs(removed));
+  }
+
   if (mpAVData->lastCutWasAudioOnly()) {
     QString summary = mpAVData->lastCutOutputSummary();
     QMessageBox::information(this, tr("Audio Cut Complete"),
-        tr("Audio cutting has finished.\n\n%1").arg(summary));
+        tr("Audio cutting has finished.\n\n%1").arg(summary) + lengths);
     return;
   }
 
@@ -1085,7 +1104,7 @@ void TTCutMainWindow::onCutFinished()
       qDebug() << "Showing completion dialog for:" << outputFile;
 
   QMessageBox::information(this, tr("Cutting Complete"),
-      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile));
+      tr("Video cutting has finished successfully.\n\nOutput file:\n%1").arg(outputFile) + lengths);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
