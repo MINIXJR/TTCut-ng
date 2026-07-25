@@ -1317,6 +1317,9 @@ void TTAVData::computeCutLengths(TTCutList* cutList)
   }
   mLastCutResultMs = resultMs;
 
+  // Source duration from at(0)'s video only (single-source assumption, matching
+  // how the cut paths use at(0) throughout). A joined multi-file project would
+  // under-count the source; that edge is cosmetic (spec-approved at(0) semantics).
   TTAVItem* avItem = cutList->at(0).avDataItem();
   if (avItem && avItem->videoStream()) {
     double fr = avItem->videoStream()->frameRate();
@@ -1783,6 +1786,11 @@ void TTAVData::onCutFinished()
         // Generate chapters if enabled
         QString chapterFile;
         if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0) {
+          // mLastCutResultMs is the duration of the segments actually cut (the
+          // cut list passed to onDoCut). The earlier code summed the full
+          // project cut list here; for a "cut selected" subset this now matches
+          // the real output length (the old full-list sum could place chapters
+          // past end-of-file).
           qint64 totalDurationMs = mLastCutResultMs;
 
           if (TTSettings::instance()->logCutPipeline())
@@ -2253,8 +2261,8 @@ QList<float> TTAVData::cutAudioTracks(
     // Overwrite any stale output from a previous run before cutting. Centralized
     // here so outPath stays a pure path computation across all callers.
     if (QFileInfo(outFile).exists()) {
-      log->warningMsg(__FILE__, __LINE__,
-                      tr("deleting existing audio cut file: %1").arg(outFile));
+      log->infoMsg(__FILE__, __LINE__,
+                   tr("deleting existing audio cut file: %1").arg(outFile));
       QFile::remove(outFile);
     }
     if (beforeCut) beforeCut(idx);
