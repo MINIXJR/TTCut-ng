@@ -323,7 +323,10 @@ class TTAVData : public QObject
         bool normalizeAcmod,
         const std::function<QString(int trackIdx, const QString& ext)>& outPath,
         const std::function<void(int trackIdx, const QString& path,
-                                 const QString& lang, bool ok)>& onCut);
+                                 const QString& lang, bool ok)>& onCut,
+        // Optional hook run just before each track is cut (progress/UI). Keeps
+        // outPath a pure path computation; existing output is deleted centrally.
+        const std::function<void(int trackIdx)>& beforeCut = {});
 
     // Convenience overload for the common case: cut ALL of avItem's audio
     // tracks. Builds the all-tracks index list and forwards to the overload
@@ -334,7 +337,8 @@ class TTAVData : public QObject
         bool normalizeAcmod,
         const std::function<QString(int trackIdx, const QString& ext)>& outPath,
         const std::function<void(int trackIdx, const QString& path,
-                                 const QString& lang, bool ok)>& onCut);
+                                 const QString& lang, bool ok)>& onCut,
+        const std::function<void(int trackIdx)>& beforeCut = {});
 
     // Last-cut metadata so the main window can build a meaningful completion
     // message after an audio-only cut (where cutVideoName + container extension

@@ -1376,14 +1376,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
   cutAudioTracks(avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
-        QString path = createCutFileName(tgtFileName,
-                                         avItem->audioStreamAt(i)->fileName(), i + 1);
-        if (QFileInfo(path).exists()) {
-          log->warningMsg(__FILE__, __LINE__,
-                          tr("deleting existing audio cut file: %1").arg(path));
-          QFile::remove(path);
-        }
-        return path;
+        return createCutFileName(tgtFileName,
+                                 avItem->audioStreamAt(i)->fileName(), i + 1);
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
         if (ok) cutVideoTask->muxListItem()->appendAudioFile(path, lang);
@@ -1583,8 +1577,6 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // (consolidated onto TTAVData::cutAudioTracks).
     cutAudioTracks(avItem, keepList, normalizeAcmod,
         [&](int i, const QString& ext) {
-          emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
-          qApp->processEvents();
           return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
               QFileInfo(sourceFile).completeBaseName()
                 + QString("_audio%1.").arg(i+1) + ext).absoluteFilePath();
@@ -1594,6 +1586,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
             cutAudioFiles.append(path);
             log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
           }
+        },
+        [&](int i) {
+          emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
+          qApp->processEvents();
         });
 
     // Collect audio languages from data model
@@ -1897,10 +1893,8 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   QList<float> firstTrackDrifts = cutAudioTracks(
       avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
-        QString path = createCutFileName(tgtFileName,
-                                         avItem->audioStreamAt(i)->fileName(), i + 1);
-        if (QFileInfo(path).exists()) QFile::remove(path);
-        return path;
+        return createCutFileName(tgtFileName,
+                                 avItem->audioStreamAt(i)->fileName(), i + 1);
       },
       [&](int i, const QString& path, const QString& lang, bool ok) {
         if (ok) {
@@ -2194,12 +2188,13 @@ QList<float> TTAVData::cutAudioTracks(
     const QList<QPair<double, double>>& videoKeepList,
     bool normalizeAcmod,
     const std::function<QString(int, const QString&)>& outPath,
-    const std::function<void(int, const QString&, const QString&, bool)>& onCut)
+    const std::function<void(int, const QString&, const QString&, bool)>& onCut,
+    const std::function<void(int)>& beforeCut)
 {
   QList<int> allTracks;
   if (avItem)
     for (int i = 0; i < avItem->audioCount(); i++) allTracks << i;
-  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut);
+  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut, beforeCut);
 }
 
 // Cut all requested audio tracks against a shared video keep list. Absorbs the
@@ -2214,7 +2209,8 @@ QList<float> TTAVData::cutAudioTracks(
     const QList<QPair<double, double>>& videoKeepList,
     bool normalizeAcmod,
     const std::function<QString(int, const QString&)>& outPath,
-    const std::function<void(int, const QString&, const QString&, bool)>& onCut)
+    const std::function<void(int, const QString&, const QString&, bool)>& onCut,
+    const std::function<void(int)>& beforeCut)
 {
   QList<float> firstDrifts;
   TTMessageLogger* log = TTMessageLogger::getInstance();
@@ -2245,6 +2241,15 @@ QList<float> TTAVData::cutAudioTracks(
 
     const QString ext     = QFileInfo(stream->filePath()).suffix();
     const QString outFile = outPath(idx, ext);
+    // Overwrite any stale output from a previous run before cutting. Centralized
+    // here so outPath stays a pure path computation across all callers.
+    if (QFileInfo(outFile).exists()) {
+      log->warningMsg(__FILE__, __LINE__,
+                      tr("deleting existing audio cut file: %1").arg(outFile));
+      QFile::remove(outFile);
+    }
+    if (beforeCut) beforeCut(idx);
+
     QList<int> targetAcmods =
         computeTargetAcmods(stream->filePath(), ext, plan.keepList, normalizeAcmod);
 
