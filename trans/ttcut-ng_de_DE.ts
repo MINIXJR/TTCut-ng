@@ -503,102 +503,102 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Setzt alle Override-Werte in diesem Dialog auf die App-Defaults aus dem Einstellungen-Dialog zurück. Der Dialog bleibt offen; klicke auf Start zum Übernehmen oder auf Abbrechen zum Verwerfen.</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="66"/>
+        <location filename="../ui/avcutdialog.ui" line="92"/>
         <source>Start</source>
         <translation>Starten</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="73"/>
+        <location filename="../ui/avcutdialog.ui" line="82"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="257"/>
+        <location filename="../ui/avcutdialog.ui" line="282"/>
         <source>Audio-Only Output</source>
         <translation>Nur-Audio-Ausgabe</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="266"/>
+        <location filename="../ui/avcutdialog.ui" line="291"/>
         <source>Format:</source>
         <translation>Format:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="89"/>
+        <location filename="../ui/avcutdialog.ui" line="114"/>
         <source>Cut</source>
         <translation>Schnitt</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="111"/>
+        <location filename="../ui/avcutdialog.ui" line="136"/>
         <source>Cut Output Options</source>
         <translation>Ausgabe-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="120"/>
+        <location filename="../ui/avcutdialog.ui" line="145"/>
         <source>Output file</source>
         <translation>Ausgabedatei</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="137"/>
+        <location filename="../ui/avcutdialog.ui" line="162"/>
         <source>Output path</source>
         <translation>Ausgabepfad</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="194"/>
+        <location filename="../ui/avcutdialog.ui" line="219"/>
         <source>Add &quot;_cut&quot; suffix to output filename</source>
         <translation>Suffix „_cut&quot; an Dateinamen anhängen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="201"/>
+        <location filename="../ui/avcutdialog.ui" line="226"/>
         <source>Container:</source>
         <translation>Container:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="211"/>
+        <location filename="../ui/avcutdialog.ui" line="236"/>
         <source>MPEG-2 Target:</source>
         <translation>MPEG-2 Ziel:</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="228"/>
+        <location filename="../ui/avcutdialog.ui" line="253"/>
         <source>Multiplexer Mode</source>
         <translation>Multiplexer-Modus</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="237"/>
+        <location filename="../ui/avcutdialog.ui" line="262"/>
         <source>Create mux script</source>
         <translation>Mux-Script erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="244"/>
+        <location filename="../ui/avcutdialog.ui" line="269"/>
         <source>Mux streams directly</source>
         <translation>Streams direkt muxen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="292"/>
+        <location filename="../ui/avcutdialog.ui" line="317"/>
         <source>Multiplexing Options</source>
         <translation>Multiplexen-Optionen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="300"/>
+        <location filename="../ui/avcutdialog.ui" line="325"/>
         <source>Create MKV chapters</source>
         <translation>MKV-Kapitel erstellen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="307"/>
+        <location filename="../ui/avcutdialog.ui" line="332"/>
         <source>Interval (min):</source>
         <translation>Intervall (Min):</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="342"/>
+        <location filename="../ui/avcutdialog.ui" line="367"/>
         <source>Delete ES files after muxing</source>
         <translation>ES-Dateien nach Mux löschen</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="369"/>
+        <location filename="../ui/avcutdialog.ui" line="394"/>
         <source>Encoding</source>
         <translation>Encodieren</translation>
     </message>
     <message>
-        <location filename="../ui/avcutdialog.ui" line="385"/>
+        <location filename="../ui/avcutdialog.ui" line="410"/>
         <source>GroupBox</source>
         <translation>GroupBox</translation>
     </message>
@@ -659,12 +659,12 @@ p, li { white-space: pre-wrap; }
         <translation>Ok</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="543"/>
+        <location filename="../ui/aboutdlg.ui" line="536"/>
         <source>About</source>
         <translation>Über</translation>
     </message>
     <message>
-        <location filename="../ui/aboutdlg.ui" line="967"/>
+        <location filename="../ui/aboutdlg.ui" line="960"/>
         <source>&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;Sans Serif&apos;; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
@@ -1568,36 +1568,38 @@ Ausgabedatei:
         <translation type="vanished">Shift -1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="244"/>
-        <location filename="../gui/ttcutpreview.cpp" line="262"/>
-        <location filename="../gui/ttcutpreview.cpp" line="282"/>
-        <location filename="../gui/ttcutpreview.cpp" line="290"/>
-        <location filename="../gui/ttcutpreview.cpp" line="616"/>
+        <location filename="../gui/ttcutpreview.cpp" line="303"/>
+        <location filename="../gui/ttcutpreview.cpp" line="326"/>
+        <location filename="../gui/ttcutpreview.cpp" line="351"/>
+        <location filename="../gui/ttcutpreview.cpp" line="359"/>
+        <location filename="../gui/ttcutpreview.cpp" line="388"/>
+        <location filename="../gui/ttcutpreview.cpp" line="709"/>
         <source>Play</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="273"/>
+        <location filename="../gui/ttcutpreview.cpp" line="300"/>
+        <location filename="../gui/ttcutpreview.cpp" line="342"/>
         <source>Stop</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="357"/>
+        <location filename="../gui/ttcutpreview.cpp" line="450"/>
         <source>Move cut-out one frame earlier</source>
         <translation>Cut-Out um einen Frame nach vorn verschieben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="362"/>
+        <location filename="../gui/ttcutpreview.cpp" line="455"/>
         <source>Move cut-in one frame later</source>
         <translation>Cut-In um einen Frame nach hinten verschieben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="365"/>
+        <location filename="../gui/ttcutpreview.cpp" line="458"/>
         <source>1 Frame</source>
         <translation>1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="391"/>
+        <location filename="../gui/ttcutpreview.cpp" line="484"/>
         <source>⚠ Audio burst at start of cut 1 (%1 dB)</source>
         <translation>⚠ Audio-Burst am Anfang von Schnitt 1 (%1 dB)</translation>
     </message>
@@ -1606,59 +1608,59 @@ Ausgabedatei:
         <translation type="vanished">Shift +1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="410"/>
+        <location filename="../gui/ttcutpreview.cpp" line="503"/>
         <source>⚠ Audio burst at end of cut %1 (%2 dB)</source>
         <translation>⚠ Audio-Burst am Ende von Schnitt %1 (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="425"/>
+        <location filename="../gui/ttcutpreview.cpp" line="518"/>
         <source>⚠ Audio burst at start of cut %1 (%2 dB)</source>
         <translation>⚠ Audio-Burst am Anfang von Schnitt %1 (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="522"/>
+        <location filename="../gui/ttcutpreview.cpp" line="615"/>
         <source>CutOut updated</source>
         <translation>CutOut neu</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="522"/>
+        <location filename="../gui/ttcutpreview.cpp" line="615"/>
         <source>CutIn updated</source>
         <translation>CutIn neu</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="523"/>
+        <location filename="../gui/ttcutpreview.cpp" line="616"/>
         <source>✓ %1 (frame %2 → %3)</source>
         <translation>✓ %1 (Frame %2 → %3)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="553"/>
+        <location filename="../gui/ttcutpreview.cpp" line="646"/>
         <source>Regenerating preview...</source>
         <translation>Vorschau wird neu generiert...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="625"/>
+        <location filename="../gui/ttcutpreview.cpp" line="718"/>
         <source>✓ Burst resolved</source>
         <translation>✓ Burst behoben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="649"/>
+        <location filename="../gui/ttcutpreview.cpp" line="742"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>MPEG-2 Video schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="662"/>
-        <location filename="../gui/ttcutpreview.cpp" line="767"/>
+        <location filename="../gui/ttcutpreview.cpp" line="755"/>
+        <location filename="../gui/ttcutpreview.cpp" line="860"/>
         <source>Cutting audio...</source>
         <translation>Audio schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="678"/>
-        <location filename="../gui/ttcutpreview.cpp" line="799"/>
+        <location filename="../gui/ttcutpreview.cpp" line="771"/>
+        <location filename="../gui/ttcutpreview.cpp" line="892"/>
         <source>Creating MKV...</source>
         <translation>MKV erstellen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="732"/>
+        <location filename="../gui/ttcutpreview.cpp" line="825"/>
         <source>Video Smart Cut...</source>
         <translation>Video Smart Cut...</translation>
     </message>
@@ -3166,22 +3168,22 @@ Unterstützte Formate:
         <translation>Zurück</translation>
     </message>
     <message>
-        <location filename="../ui/previewwidget.ui" line="76"/>
+        <location filename="../ui/previewwidget.ui" line="85"/>
         <source>Forward</source>
         <translation>Vor</translation>
     </message>
     <message>
-        <location filename="../ui/previewwidget.ui" line="99"/>
+        <location filename="../ui/previewwidget.ui" line="111"/>
         <source>Close</source>
         <translation>Beenden</translation>
     </message>
     <message>
-        <location filename="../ui/previewwidget.ui" line="79"/>
+        <location filename="../ui/previewwidget.ui" line="88"/>
         <source>Next cut (and play)</source>
         <translation>Nächster Schnitt (und abspielen)</translation>
     </message>
     <message>
-        <location filename="../ui/previewwidget.ui" line="65"/>
+        <location filename="../ui/previewwidget.ui" line="68"/>
         <source>Start</source>
         <translation>Start</translation>
     </message>
@@ -3309,47 +3311,51 @@ Unterstützte Formate:
         <translation>TTCut-ng — Einstellungen</translation>
     </message>
     <message>
-        <location filename="../ui/ttsettingsdialog.ui" line="22"/>
-        <source>OK</source>
-        <translation>Ok</translation>
+        <location filename="../ui/ttsettingsdialog.ui" line="23"/>
+        <source>Save</source>
+        <translation>Speichern</translation>
     </message>
     <message>
-        <location filename="../ui/ttsettingsdialog.ui" line="23"/>
+        <source>OK</source>
+        <translation type="vanished">Ok</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttsettingsdialog.ui" line="22"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="56"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="57"/>
         <source>Navigation</source>
         <translation>Navigation</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="59"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="60"/>
         <source>Search &amp; Preview</source>
         <translation>Suche &amp; Vorschau</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="62"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="63"/>
         <source>Audio &amp; Language</source>
         <translation>Audio &amp; Sprache</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="68"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="69"/>
         <source>Multiplexing</source>
         <translation>Multiplexen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="71"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="72"/>
         <source>Paths</source>
         <translation>Pfade</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="65"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="66"/>
         <source>Encoder</source>
         <translation>Encoder</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutsettingsdlg.cpp" line="74"/>
+        <location filename="../gui/ttcutsettingsdlg.cpp" line="75"/>
         <source>Logging</source>
         <translation>Logging</translation>
     </message>

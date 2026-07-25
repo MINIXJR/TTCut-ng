@@ -17,6 +17,7 @@
 #include "ttcutsettingslogging.h"
 
 #include <QListWidgetItem>
+#include <QPushButton>
 #include <QIcon>
 #include <QSettings>
 #include <QStyle>
@@ -85,6 +86,17 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
     categoryList->setCurrentRow(lastRow);
   else
     categoryList->setCurrentRow(0);
+
+  // No Enter default anywhere in this dialog. Save persists immediately (there
+  // is no explicit apply step), so Enter must not trigger it by accident when
+  // the user only means to confirm a field value. With no explicit default Qt
+  // would promote the first autoDefault button it finds — a per-tab "Reset to
+  // defaults" button — to the dialog default, which is worse. Clearing
+  // autoDefault on every button leaves Enter inert (Escape still rejects via
+  // the QDialog default) and Save reachable only by an explicit click.
+  const auto buttons = findChildren<QPushButton*>();
+  for (QPushButton* button : buttons)
+    button->setAutoDefault(false);
 }
 
 TTSettingsDialog::~TTSettingsDialog()
