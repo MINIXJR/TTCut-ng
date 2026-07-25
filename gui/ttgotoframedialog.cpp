@@ -15,6 +15,8 @@
 #include <QVBoxLayout>
 #include <QDialogButtonBox>
 
+#include <climits>
+
 namespace {
 
 // frame -> "hh:mm:ss.zzz"
@@ -39,9 +41,12 @@ bool timecodeToFrame(const QString& text, double fps, int& outFrame)
   const QString t = text.trimmed();
   if (t.isEmpty()) return false;
 
-  if (t.contains(':')) {
+  // Accept German decimal comma ("00:01:30,500") the same as a dot.
+  QString norm = t; norm.replace(',', '.');
+
+  if (norm.contains(':')) {
     if (fps <= 0.0) return false;
-    const QStringList parts = t.split(':');
+    const QStringList parts = norm.split(':');
     int h = 0, m = 0; double s = 0.0; bool ok = false;
     if (parts.size() == 3) {
       h = parts[0].toInt(&ok); if (!ok) return false;
@@ -55,12 +60,12 @@ bool timecodeToFrame(const QString& text, double fps, int& outFrame)
     }
     if (h < 0 || m < 0 || s < 0.0) return false;
     double sec = h * 3600.0 + m * 60.0 + s;
-    outFrame = static_cast<int>(sec * fps + 0.5);
+    outFrame = static_cast<int>(qBound(0.0, sec * fps + 0.5, static_cast<double>(INT_MAX)));
     return true;
   }
 
   bool ok = false;
-  int f = t.toInt(&ok);
+  int f = norm.toInt(&ok);
   if (!ok) return false;
   outFrame = f;
   return true;

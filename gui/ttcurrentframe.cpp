@@ -172,6 +172,7 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 
 	if (avData == 0) {
 		mAVItem = 0;
+		videoStream = 0;
 		mpegWindow->closeVideoStream();
 		return;
 	}
@@ -239,6 +240,7 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
 bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
 {
   if (watched == laCurrentPosition && event->type() == QEvent::MouseButtonDblClick) {
+    if (!isControlEnabled) return true;   // no project loaded: consume, do nothing
     if (videoStream != nullptr && videoStream->frameCount() > 0) {
       TTGotoFrameDialog dlg(videoStream->currentIndex(),
                             static_cast<int>(videoStream->frameCount()),
