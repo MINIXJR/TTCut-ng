@@ -167,6 +167,7 @@ HEADERS     = common/ttcut.h\
               gui/ttcutpreview.h\
               gui/ttcutaboutdlg.h\
               gui/ttcutavcutdlg.h\
+              gui/ttgotoframedialog.h\
               gui/ttcutmainwindow.h\
               gui/ttquickjumpmodel.h\
               gui/ttquickjumpdelegate.h\
@@ -265,6 +266,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutpreview.cpp\
               gui/ttcutaboutdlg.cpp\
               gui/ttcutavcutdlg.cpp\
+              gui/ttgotoframedialog.cpp\
               gui/ttcutmainwindow.cpp\
               gui/ttquickjumpmodel.cpp\
               gui/ttquickjumpdelegate.cpp\
