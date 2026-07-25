@@ -1435,8 +1435,6 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
 void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 {
-  computeCutLengths(cutList);
-
   log->infoMsg(__FILE__, __LINE__, "Using TTESSmartCut for frame-accurate cutting");
 
   // Get source file and frame rate from first cut item
@@ -1881,7 +1879,6 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   mLastCutOutputSummary.clear();
 
   if (cutList == 0 || cutList->count() == 0) return;
-  computeCutLengths(cutList);
   TTAVItem* avItem = cutList->at(0).avDataItem();
   if (!avItem || avItem->audioCount() == 0) return;
   TTVideoStream* vStream = avItem->videoStream();
