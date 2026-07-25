@@ -98,6 +98,9 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   lblBurstWarning->hide();
 
   pbBurstShift = new QPushButton(this);
+  // Keep Enter bound to Start: this button appears only on a burst warning and
+  // must not become the dialog default when it takes focus.
+  pbBurstShift->setAutoDefault(false);
   configureBurstShiftButton(/*isCutOut=*/false);
   // Keep the button's space while hidden, so the row keeps its height and the
   // video frame does not jump when stepping between cuts with and without a

@@ -57,6 +57,9 @@
        <property name="toolTip" >
         <string>Previous cut (or back to start)</string>
        </property>
+       <property name="autoDefault" >
+        <bool>false</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -68,6 +71,12 @@
         <iconset resource="previewwidget.qrc" >
          <normaloff>:/pixmaps/pixmaps/play_18.xpm</normaloff>:/pixmaps/pixmaps/play_18.xpm</iconset>
        </property>
+       <property name="default" >
+        <bool>true</bool>
+       </property>
+       <property name="autoDefault" >
+        <bool>true</bool>
+       </property>
       </widget>
      </item>
      <item>
@@ -77,6 +86,9 @@
        </property>
        <property name="toolTip" >
         <string>Next cut (and play)</string>
+       </property>
+       <property name="autoDefault" >
+        <bool>false</bool>
        </property>
       </widget>
      </item>
@@ -101,6 +113,9 @@
        <property name="icon" >
         <iconset resource="previewwidget.qrc" >
          <normaloff>:/pixmaps/pixmaps/fileclose_18.xpm</normaloff>:/pixmaps/pixmaps/fileclose_18.xpm</iconset>
+       </property>
+       <property name="autoDefault" >
+        <bool>false</bool>
        </property>
       </widget>
      </item>
