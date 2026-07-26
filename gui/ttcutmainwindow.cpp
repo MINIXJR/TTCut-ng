@@ -44,6 +44,7 @@
 #include "ttcutsettingsdlg.h"
 #include "ttprogressbar.h"
 #include "ttcutaboutdlg.h"
+#include "ttgotoframedialog.h"
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -1540,7 +1541,8 @@ void TTCutMainWindow::runScreenshotMode()
     {
         QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
                              "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
-                             "Recommendation: Use ProjectX to demux this file instead.")
+                             "Recommendation: demux the recording again with the current "
+                             "ttcut-demux - it finds and repairs such gaps.")
                           .arg(333).arg(7);
         warnMsg += "\n\n" + tr("Affected regions:");
         warnMsg += "\n  ~Frame 0 (00:00:00.00): 1 " + tr("errors");
@@ -1562,7 +1564,59 @@ void TTCutMainWindow::runScreenshotMode()
         msgBox.close();
     }
 
-    // 14. Copy main window as docs/MainWindow.png
+    // 14. Goto frame/timecode dialog (opened by clicking the position display).
+    // Uses the loaded stream when available so frame count and timecode match
+    // the recording shown in the other screenshots; falls back to plausible
+    // values otherwise, so the shot is produced either way.
+    {
+        int   curFrame  = 0;
+        int   frameCnt  = 90000;
+        float frameRate = 25.0f;
+        if (mpCurrentAVDataItem && mpCurrentAVDataItem->videoStream()) {
+            TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+            if (vs->frameCount() > 0) {
+                frameCnt  = static_cast<int>(vs->frameCount());
+                curFrame  = qMin(vs->currentIndex(), frameCnt - 1);
+                if (vs->frameRate() > 0) frameRate = vs->frameRate();
+            }
+        }
+        // Frame 0 would show 00:00:00.000 in both fields, which says nothing
+        // about how the two stay in sync — put the shot mid-recording instead.
+        if (curFrame == 0) curFrame = frameCnt / 2;
+        TTGotoFrameDialog gotoDlg(curFrame, frameCnt, frameRate, this);
+        gotoDlg.show();
+        QApplication::processEvents();
+        saveWidgetScreenshot(&gotoDlg, "ttcutng-goto-frame.png", 0);
+        gotoDlg.close();
+    }
+
+    // 15. Cut completion dialog (simulated durations — the real one appears
+    // only after a finished cut). Text kept identical to onCutFinished().
+    {
+        // cutVideoName() is empty until a cut has run, which would leave the
+        // dialog showing a bare directory — name the file for the shot.
+        QString cutName = TTSettings::instance()->cutVideoName();
+        if (cutName.isEmpty()) cutName = "Recording_cut.mkv";
+        QString outputFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+                                       cutName).absoluteFilePath();
+        const qint64 srcMs = 5400000;   // 1:30:00
+        const qint64 resMs = 2535000;   // 42:15
+        QString lengths = tr("\n\nSource:  %1\nResult:  %2  (%3 removed)")
+            .arg(formatDurationMs(srcMs), formatDurationMs(resMs),
+                 formatDurationMs(srcMs - resMs));
+
+        QMessageBox doneBox(QMessageBox::Information,
+                            tr("Cutting Complete"),
+                            tr("Video cutting has finished successfully.\n\nOutput file:\n%1")
+                                .arg(outputFile) + lengths,
+                            QMessageBox::Ok, this);
+        doneBox.show();
+        QApplication::processEvents();
+        saveWidgetScreenshot(&doneBox, "ttcutng-cut-complete.png", 0);
+        doneBox.close();
+    }
+
+    // 16. Copy main window as docs/MainWindow.png
     QString docsPath = QFileInfo(QApplication::applicationDirPath() + "/../docs/MainWindow.png").absoluteFilePath();
     QFile::remove(docsPath);
     QFile::copy(outDir.filePath("ttcutng-main.png"), docsPath);
