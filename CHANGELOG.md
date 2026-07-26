@@ -2,6 +2,22 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixes
+
+- **ttcut-quality-check rechnete auf aktuellen Demux-Ergebnissen ohne
+  Extra-Frame-Korrektur.** Das Werkzeug las weiterhin das `.info`-Feld
+  `es_extra_frames`, das `ttcut-demux` seit v0.76.0 nicht mehr schreibt
+  (ersetzt durch `es_doubled_pts_aus` + `es_total_aus`). Es bekam damit
+  immer eine leere Liste, und die Zeitkorrektur fiel still aus — an realem
+  MPEG-2-Material (150 Feldpaare, 25 fps) sind das 6 Sekunden Zeitfehler am
+  Dateiende, die direkt in die A/V-Sync- und Dauer-Prüfungen gingen. Das
+  neue Feld wird jetzt gelesen, das alte bleibt als Rückfall für ältere
+  `.info`-Dateien. Auf PAFF-Material verwirft das Werkzeug die Liste mit
+  einer Warnung, weil dort jedes Halbbild eine eigene Zugriffseinheit ist
+  und die Positionen nicht zu den Schnitt-Frames passen.
+
 ## v0.76.0 (2026-07-26)
 
 **H.265 RASL-preserving seam, damaged-recording repair in ttcut-demux, goto-frame dialog**
