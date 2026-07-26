@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.76.1 (2026-07-26)
+
+**Quality-Check liest wieder die richtigen Extra-Frame-Positionen**
 
 ### Fixes
 

@@ -1212,7 +1212,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1092"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1597"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1604"/>
         <source>
 
 Source:  %1
@@ -1229,14 +1229,14 @@ Ergebnis:  %2  (%3 entfernt)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1319"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1934"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2000"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1941"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2007"/>
         <source>Logo profile loaded: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1321"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1936"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1943"/>
         <source>Logo profile could not be verified</source>
         <translation>Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
@@ -1252,94 +1252,94 @@ Dieser MPEG-2-Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet und repariert solche Lücken.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1788"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1858"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2123"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1795"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1865"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2130"/>
         <source>Searching... %1 frames checked</source>
         <translation>Suche... %1 Frames geprüft</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1796"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1803"/>
         <source>Searching black frame from frame %1...</source>
         <translation>Suche Schwarzbild ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1816"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1823"/>
         <source>Black frame search aborted</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1817"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1824"/>
         <source>No black frame found</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1866"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1873"/>
         <source>Searching scene change from frame %1...</source>
         <translation>Suche Szenenwechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1886"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1893"/>
         <source>Scene change search aborted</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1887"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1894"/>
         <source>No scene change found</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1899"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1906"/>
         <source>Select the logo area in the video frame...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1913"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1920"/>
         <source>Load logo file</source>
         <translation>Logo-Datei laden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1928"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1935"/>
         <source>Loading logo profile...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1949"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1956"/>
         <source>Logo profile removed</source>
         <translation>Logo-Profil entfernt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1963"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1970"/>
         <source>Logo file not found: %1</source>
         <translation>Logo-Datei nicht gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2050"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2057"/>
         <source>Creating logo profile (%1/%2 frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2079"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2086"/>
         <source>Logo profile created (%1 frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2082"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2089"/>
         <source>Logo profile could not be created</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2131"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2138"/>
         <source>Searching logo change from frame %1...</source>
         <translation>Suche Logo-Wechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2151"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2158"/>
         <source>Logo search aborted</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2152"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2159"/>
         <source>No logo state change found</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
@@ -1399,19 +1399,19 @@ Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1913"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1920"/>
         <source>PGM Logo (*.pgm)</source>
         <translation>PGM Logo (*.pgm)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1107"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1602"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1609"/>
         <source>Cutting Complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1108"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1603"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1610"/>
         <source>Video cutting has finished successfully.
 
 Output file:
@@ -1422,7 +1422,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1693"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1700"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
