@@ -44,6 +44,7 @@ extern "C" {
 #include <QStackedLayout>
 #include <QStyle>
 #include <QWheelEvent>
+#include <QMouseEvent>
 #include <cmath>
 #include <iterator>
 
@@ -59,7 +60,7 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
 
   laCurrentPosition->installEventFilter(this);
   laCurrentPosition->setCursor(Qt::PointingHandCursor);
-  laCurrentPosition->setToolTip(tr("Double-click to go to a frame or timecode"));
+  laCurrentPosition->setToolTip(tr("Click to go to a frame or timecode"));
 
   // mpegWindow steckt heute direkt im gbCurrentFrame-Grid. Wir kapseln es in
   // einen Stack-Container, sodass das libmpv-Render-Widget bei Playback
@@ -239,7 +240,21 @@ void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
 
 bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
 {
-  if (watched == laCurrentPosition && event->type() == QEvent::MouseButtonDblClick) {
+  if (watched != laCurrentPosition)
+    return QWidget::eventFilter(watched, event);
+
+  // The second click of a fast double-click arrives as MouseButtonDblClick
+  // instead of a press; swallow it so the dialog cannot open twice.
+  if (event->type() == QEvent::MouseButtonDblClick)
+    return true;
+
+  if (event->type() == QEvent::MouseButtonRelease) {
+    QMouseEvent* me = static_cast<QMouseEvent*>(event);
+    // Button semantics: only a left click that also ends on the label counts
+    // (the implicit grab delivers the release even if the mouse moved away).
+    if (me->button() != Qt::LeftButton || !laCurrentPosition->rect().contains(me->pos()))
+      return QWidget::eventFilter(watched, event);
+
     if (!isControlEnabled) return true;   // no project loaded: consume, do nothing
     if (videoStream != nullptr && videoStream->frameCount() > 0) {
       TTGotoFrameDialog dlg(videoStream->currentIndex(),
@@ -248,8 +263,9 @@ bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
       if (dlg.exec() == QDialog::Accepted)
         onGotoFrame(dlg.selectedFrame(), 0);
     }
-    return true;   // consume the double-click on the label
+    return true;   // consume the click on the label
   }
+
   return QWidget::eventFilter(watched, event);
 }
 

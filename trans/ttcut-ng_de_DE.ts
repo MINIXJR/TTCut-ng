@@ -470,9 +470,13 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
 <context>
     <name>TTCurrentFrame</name>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="62"/>
         <source>Double-click to go to a frame or timecode</source>
-        <translation>Doppelklick: zu Frame oder Timecode springen</translation>
+        <translation type="vanished">Doppelklick: zu Frame oder Timecode springen</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcurrentframe.cpp" line="63"/>
+        <source>Click to go to a frame or timecode</source>
+        <translation>Klick: zu Frame oder Timecode springen</translation>
     </message>
 </context>
 <context>
@@ -2882,17 +2886,17 @@ Ausgabedatei:
 <context>
     <name>TTGotoFrameDialog</name>
     <message>
-        <location filename="../gui/ttgotoframedialog.cpp" line="75"/>
+        <location filename="../gui/ttgotoframedialog.cpp" line="80"/>
         <source>Go to Frame</source>
         <translation>Gehe zu Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttgotoframedialog.cpp" line="85"/>
+        <location filename="../gui/ttgotoframedialog.cpp" line="90"/>
         <source>Frame:</source>
         <translation>Frame:</translation>
     </message>
     <message>
-        <location filename="../gui/ttgotoframedialog.cpp" line="86"/>
+        <location filename="../gui/ttgotoframedialog.cpp" line="91"/>
         <source>Timecode:</source>
         <translation>Timecode:</translation>
     </message>
