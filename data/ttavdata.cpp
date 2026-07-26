@@ -425,7 +425,8 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
       if (esInfo.hasWarnings()) {
         QString warnMsg = tr("%1 decode errors detected in %2 region(s) during demux.\n\n"
                              "This MPEG-2 stream has defective GOPs that may cause A/V sync issues.\n"
-                             "Recommendation: Use ProjectX to demux this file instead.")
+                             "Recommendation: demux the recording again with the current "
+                             "ttcut-demux - it finds and repairs such gaps.")
                           .arg(esInfo.decodeErrors())
                           .arg(esInfo.decodeErrorRegions().size());
 
