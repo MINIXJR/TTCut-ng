@@ -1,9 +1,11 @@
 ---
-base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226  # all named symbols re-greped
-last_verified: 2026-07-21  # raw->merged AU domain + adoptStreamMetadata added; EOS/EOB arming corrected; HEVC seam interaction noted
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # position-label click -> TTGotoFrameDialog -> onGotoFrame edge added (introduces no domain conversion); all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
+  - gui/ttgotoframedialog.cpp
+  - gui/ttgotoframedialog.h
   - gui/ttcutoutframe.cpp
   - gui/ttcutframenavigation.cpp
   - gui/ttcutpreview.cpp
@@ -43,7 +45,7 @@ still-image preview show a different frame than the one that ends up in the outp
 
 ```mermaid
 flowchart TD
-    A["User action<br/>(nav button / slider / cut-select)"]
+    A["User action<br/>(nav button / slider / cut-select /<br/>position-label click → TTGotoFrameDialog)"]
     B["TTCutFrameNavigation<br/>(gui/ttcutframenavigation.cpp)<br/>emits: prevBFrame/nextBFrame/setCutIn/setCutOut …"]
     C["TTCurrentFrame<br/>(gui/ttcurrentframe.cpp)<br/>onPrevBFrame / onGotoFrame / onCutInChanged"]
     D["TTVideoStream::moveToXxx<br/>(avstream/ttavstream.cpp)<br/>current_index ← TTVideoIndexList position"]
@@ -91,6 +93,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 |---|---|---|
 | `mergePAFFFieldsInIndex` → `mRawToMerged` → `rawToMergedIndex` / `TTH26xVideoStream::mapRawAuToDisplayIndex` | **A third index domain, distinct from both decode and display order:** `buildFrameIndex` scans **one packet per raw AU** (PAFF top and bottom field are separate packets); the merge then collapses each field pair, so `frameIndex()` is *merged*. `.info` fields written by ttcut-demux (`es_doubled_pts_aus`) are numbered in **raw** AUs and must be translated before they can be compared against anything TTCut shows. Encoding: entry ≥ 0 → merged index; entry < 0 → collapsed bottom field with merged index `~entry`; empty vector = identity. **Only the index OWNER holds the map** — a wrapper that adopts an index via `setFrameIndex()` never ran the merge and sees identity, because it adopts the already-merged list. | **RAW AU order** on the input side (one entry per demuxed packet), **merged decode order** on the output side — neither is display order |
 | `TTH26xVideoStream::provideFrameIndexTo` → `TTFFmpegWrapper::adoptStreamMetadata` | PAFF flag, `frame_mbs_only_flag` and `log2_max_frame_num` must travel **with** an adopted index. Adopters never run the index pass themselves, so without this their decode-order tagging counts PAFF field packets as whole frames: `decodeFrame()` then never reaches a field-pair target AU and drains the file to EOF (measured: 2×53 s navigation hang, fixed in `46d3dcb1`). Must be called right after `setFrameIndex()`. | n/a — carries stream properties, not indices; but it decides whether the adopter's **decode-order** tagging is correct |
+| `TTCurrentFrame::eventFilter` (click on the position label) → `TTGotoFrameDialog` → `onGotoFrame(selectedFrame, 0)` | Dialog inputs are `videoStream->currentIndex()`, `frameCount()` and `frameRate()`; the spin box clamps to `0..frameCount-1`, and the timecode field converts with `frame / fps` — the same arithmetic the position label itself uses (`frameTime()` → `ttFramesToTime`), so the two never disagree. **The dialog introduces no domain conversion of its own:** the number it returns re-enters through `onGotoFrame` → `moveToIndexPos`, i.e. exactly the path the slider takes, so it inherits whatever domain the navigation index already has. Guard difference worth knowing: `ttFramesToTime` silently substitutes 25 fps when `fps < 1`, while the dialog refuses the conversion at `fps <= 0` and leaves the timecode field empty (the frame spin box stays usable) | same domain as every other navigation index — **DECODE order** for H.26x, **display order** for MPEG-2 |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCurrentFrame` slot | `currentPosition` — the integer last stored by `checkCutPosition(avData, pos)` | **DECODE order** (see below) |
 | `TTVideoStream::moveToXxx()` → caller (TTCurrentFrame, TTCutOutFrame) | return value = `current_index` = position in `TTVideoIndexList` | **DECODE order** for H.26x; **display order** for MPEG-2 after `sortDisplayOrder()` |
 | `TTVideoIndexList::moveToNextIndexPos(pos, type)` → TTVideoStream | next list position ≥ pos+1 matching frame type | **DECODE order** for H.26x (list built frame-by-frame from `mFrameIndex`, no POC sort); **display order** for MPEG-2 (list is sorted by `display_order` via `sortDisplayOrder()`) |

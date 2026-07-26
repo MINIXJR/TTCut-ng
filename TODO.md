@@ -517,8 +517,10 @@
       **GEFIXT 2026-07-12** (`73acdf0`): auf den echten Mechanismus
       (TTBlackFrameSearchTask / Worker-Decoder, Preview-Fenster-Include)
       umgeschrieben.
-    - `ttmpeg2window2.cpp` `histogramDifference` als `-Wunused-function`
-      gemeldet (statische Funktion, kein Member) — separat prüfen.
+    - ~~`ttmpeg2window2.cpp` `histogramDifference` als `-Wunused-function`
+      gemeldet (statische Funktion, kein Member)~~ → **ERLEDIGT** (`17b2ca99`,
+      v0.75.0): die verwaiste statische Kopie ist entfernt; die echte
+      Implementierung lebt in `TTSceneChangeSearchTask::histogramDifference`.
   - Weiterhin offen (unverändert, kein toter Code):
     - ~~`AcmodInfo::cutInChangeTime` / `cutOutChangeTime`~~ → **ENTFERNT 2026-07-12**
       (`f4d4e66`, User-Entscheid: nur Burst-am-Schnittpunkt zählt; Umsetzungsweg
@@ -580,7 +582,7 @@
 - Internationalisation (i18n) - translate UI to other languages
   - **English source + de_DE: DONE** — die App ist vollständig auf englische
     Source-Strings konvertiert, deutsche Übersetzung in `trans/ttcut-ng_de_DE.ts`
-    (669 Einträge, vollständig). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
+    (661 Einträge, vollständig). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
     (`51e798b`..`7b3eec5`).
   - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen, in
     `TRANSLATIONS` (`ttcut-ng.pro`) eintragen, mit `lupdate`/`lrelease` pflegen.
@@ -688,15 +690,33 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     hängt, Play/Stop-Button toggelt nicht mehr, render.h §93-94) → nicht gangbar ohne
     separaten Render-Thread. Tiefere Lösung Prio low: ggf. mit künftiger libmpv-Version
     (echte „angezeigter-Frame"-Property) oder Render-Thread-Architektur erneut bewerten.
-  - `createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
+  - ~~`createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
     `frameRate==0` (Division → UB); kein Destruktor-Cleanup (Temp-MKV bleibt liegen,
-    wenn das Fenster während H.264/H.265-Wiedergabe geschlossen wird).
+    wenn das Fenster während H.264/H.265-Wiedergabe geschlossen wird).~~
+    → **ERLEDIGT (2026-07-25, `25c966eb`)**: `frameRate <= 0` bricht mit Warn-Log
+    ab und liefert einen leeren Pfad (der Aufrufer behandelt das als „Wiedergabe
+    nicht möglich"); `~TTCurrentFrame()` ruft `cleanupTempPlaybackFile()`.
     (Temp-Dateiname ist seit v0.71.0 eindeutig: `ttcut-ng_playback_temp.mkv`.)
   - **Erster PLAY pro Quelle ~5 s** (H.264/H.265): die ganze ES wird vor der
     Wiedergabe in eine temp-MKV gemuxt. Seit v0.71.0 wird die MKV über
     STOP→PLAY gecacht (Re-PLAY sofort), aber der erste Mux bleibt. Hebel:
     nur den abgespielten Bereich muxen, oder mpv die ES mit erzwungener
     Framerate direkt füttern. Prio low.
+
+- **Screenshot-Modus: Vorschau-Dialog fehlt** (2026-07-26, beim v0.76.0-Release
+  aufgefallen)
+  - Der `--screenshots`-Modus deckt inzwischen alle Dialoge ab außer dem
+    **Vorschau-Dialog** — es gibt kein `ttcutng-preview.png` im Wiki, obwohl
+    sich der Dialog in v0.76.0 sichtbar geändert hat (eigene Zeile für die
+    Burst-Warnung, mitwachsender Cut-Wähler, neue Tooltips, Start als
+    Enter-Vorgabe).
+  - Aufwändiger als die anderen: der Dialog braucht einen erzeugten
+    Vorschau-Clip (Smart Cut auf dem Tux-Video) **und** einen laufenden
+    mpv-Render-Kontext, sonst ist der Bildbereich leer. Beides im
+    Screenshot-Modus aufzusetzen ist mehr als die ~10 Zeilen, die Goto- und
+    Abschlussdialog gekostet haben (`8c47403e`).
+  - Ebenfalls noch ohne Bild, aber unkritisch: der Vorschau-Fehlerdialog
+    (`f658db7f`), der nur bei einem nicht schneidbaren Stream erscheint.
 
 - **Auto-Cut from Markers** (ohne .info-Datei, z.B. bei ProjectX-Demux)
   - VDR-Marks werden bei ttcut-demux bereits automatisch als Cut-Einträge übernommen

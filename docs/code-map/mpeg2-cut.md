@@ -1,6 +1,6 @@
 ---
-base_commit: 3725455e74a477daa2dc845bb266682448beb37c
-last_verified: 2026-07-21  # .info key renamed (ea08e20f); confirmed field-pair clusters are log-only (34c80890)
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # drift on data/ttavdata.cpp re-checked: computeCutLengths/cutAudioTracks/chapter correction touch no component this map documents; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h

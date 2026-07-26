@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.76.0 (2026-07-26)
+
+**H.265 RASL-preserving seam, damaged-recording repair in ttcut-demux, goto-frame dialog**
 
 ### Features
 
@@ -76,6 +78,12 @@ All notable changes to TTCut-ng are documented in this file.
   the whole dialog. Escape still discards everywhere.
 
 ### Fixes
+
+- **The stream-integrity warning no longer recommends ProjectX.** The dialog
+  shown for a recording whose `.info` reports decode errors advised demuxing
+  the file with ProjectX, which is not part of the workflow — `ttcut-demux`
+  handles every codec, and since this version it detects and repairs exactly
+  the kind of gaps the warning is about. It now says so.
 
 - **MPEG-2 chapter marks no longer run past the end when cutting a selection.**
   With automatic chapters enabled, cutting only selected entries computed the

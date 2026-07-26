@@ -1,6 +1,6 @@
 ---
-base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226  # all 62 named symbols re-greped; convertAUToIDR/convertSliceNalToIDR are correctly documented as deleted
-last_verified: 2026-07-21  # HEVC RASL-preserving seam added (branch trigger, seam edge, variant matrix); preview failure edge documented (ba064f15)
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # drift on data/ttavdata.cpp + gui/ttcutpreview.cpp re-checked: cut-length bookkeeping and preview playback control touch no documented edge; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h

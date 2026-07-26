@@ -1,6 +1,6 @@
 ---
-base_commit: d401449f1a1846339c9c2d0d3c466e14d32ac226
-last_verified: 2026-07-21  # field-pair clusters no longer become markers (34c80890); rest re-checked against dce0b83b/ea08e20f/37ef8746 and found already correct
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # drift on data/ttavdata.{cpp,h} re-checked: the .info consumer chain is untouched by the cut-length/audio-cut changes; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c

@@ -1,6 +1,6 @@
 ---
-base_commit: 3725455e74a477daa2dc845bb266682448beb37c
-last_verified: 2026-07-21  # re-checked against all commits touching its sources since 144dec8a: burst chain itself unchanged
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # preview burst UI consolidated (80a8460f/7310407d) + own grid row (8ecf4cb0); detector chain itself unchanged; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
@@ -105,7 +105,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 | `ACMOD → COL5` | **Hängt an**: liest `text(5)`/`toolTip(5)` aus dem Widget zurück und ergänzt `" + AC3 …"`. Abweichung ⇒ `„AC3 start/end"`. Das Tree-Widget dient damit als Zwischenspeicher zwischen zwei Produzenten (siehe Redundanz). |
 | `APPEND -.-> HINT`, `REFRESH -.-> HINT` | Die drei Aufrufstellen (`onAppendItem`, `onUpdateItem`, `refreshHintIcons`) gehen seit `666ed08` **ausschließlich** über den Helper. `onAppend/onUpdate` bei Anlage/Änderung eines Cuts, inklusive Projekt-Laden (das appended). `refreshHintIcons` wird aus `onActionSettings` gerufen — **auch bei „Abbrechen"**, weil der Rückgabewert von `settingsDlg->exec()` nicht ausgewertet wird und `save()` + Refresh unbedingt laufen. Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`. |
 | `HINT -.-> BURST` (1.), `HINT -.-> ACMOD` (2.) | **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt/leert Spalte 5), dann `updateAcmodIcon` (hängt an). Vertauscht ⇒ Burst überschreibt den acmod-Hinweis; nur den ersten rufen ⇒ Hinweis geht ganz verloren (genau der Defekt vor `666ed08`). Beide Callees sind `private`; der Vertrag ist von außen nicht brechbar. |
-| `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. |
+| `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. Die Darstellung liegt seit `8ecf4cb0` in einer **eigenen, volle Breite spannenden Grid-Zeile** (vorher teilte sich die Warnung die Steuerzeile mit Cut-Auswahl und vier Knöpfen und wurde unter ihren Size-Hint gedrückt — der Text brach mitten im Wort ab, ohne Auslassungspunkte; die längere deutsche Übersetzung riss die Grenze zuerst). Der Shift-Knopf behält seinen Platz auch im versteckten Zustand, damit das Videobild beim Clip-Wechsel nicht springt. |
 | `CUTRUN -.-> FINAL` | `confirmBurstWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Dialog dort doppelt. Bewertet die gesamte `TTCutList` erneut über dieselben Wrapper. |
 | `NONINT -.-> FINAL` | `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
 | `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `detectAudioBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `detectAudioBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
@@ -189,6 +189,16 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 - Drei Konsumenten reimplementieren die „welcher Text/welches UI"-Logik
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
+- **[BEHOBEN `80a8460f`/`7310407d`, innerhalb des Preview-Konsumenten]** Im
+  Preview-Dialog war die Burst-Darstellung dreifach offen codiert: die
+  Beschriftung des Shift-Knopfs stand an drei Stellen, sein Icon dagegen nur
+  im Konstruktor — ein Cut-**In**-Burst zeigte deshalb „1 Frame" neben einem
+  **Links**-Pfeil. Ebenso stand derselbe Stylesheet-String dreimal, plus ein
+  Farb-Reset, der nur eine frühere grüne Meldung rückgängig machte. Jetzt
+  besitzt `configureBurstShiftButton(isCutOut)` Beschriftung, Icon und Tooltip
+  gemeinsam (jede Show-Stelle nennt ihre Richtung explizit statt sich auf
+  einen Reset zu verlassen), und `setBurstMessage()` setzt Text, Farbe und
+  Tooltip in einem Zug. Die Detektor-Kette selbst ist unverändert.
 - **Append-Semantik über das Widget** (offen, bewusst nicht in `666ed08`): `updateAcmodIcon`
   liest `text(5)`/`toolTip(5)` zurück und prüft `icon(5).isNull()`, um zu entscheiden, ob
   es ein Icon setzt. Das Tree-Widget dient damit als Zwischenspeicher zwischen zwei

@@ -1,6 +1,6 @@
 ---
-base_commit: c4e8619f0187934e85f2c9118e79f571b010424e
-last_verified: 2026-07-21  # Reparaturbilanz-Befund praezisiert: Getter audioSilenceMs/audioRemovedMs existieren und sind per test_esinfo abgedeckt, nur ohne App-Konsument; Zeitachsentreue der Demux-Reparatur belegt
+base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+last_verified: 2026-07-26  # cutAudioTracks: all-tracks overload (4c56d9d9) + pure outPath/central stale-output deletion/beforeCut hook (6026f0ab); all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -104,6 +104,15 @@ flowchart TD
   Index außerhalb des Bereichs). Ein außerhalb liegender Index wird geloggt und
   übersprungen statt die App abstürzen zu lassen — relevant, weil `cutAudioTracks`
   public ist und Aufrufer veraltete Indizes reichen könnten.
+- **`outPath` ist seit `6026f0ab` eine reine Pfadfunktion.** Vorher löschten
+  einzelne Aufrufer-Lambdas eine vorhandene Vorgänger-Ausgabe und meldeten
+  Fortschritt aus dem Pfad-Lambda heraus. Beides ist jetzt in `cutAudioTracks`
+  zentralisiert: die Stale-Output-Löschung läuft für alle Aufrufer gleich (mit
+  einheitlichem Log auf `info`-Ebene), Fortschritt/UI läuft über den neuen,
+  optionalen `beforeCut(trackIdx)`-Hook, der unmittelbar vor dem Schnitt der
+  Spur feuert. Reihenfolge-Kontrakt: Plan → `outPath` → Löschung → `beforeCut`
+  → `computeTargetAcmods` → `cutAudioStream` → `onCut`. Ein Aufrufer, der in
+  `outPath` wieder Seiteneffekte legt, läuft ihnen damit voraus.
 - **Synchron mit der Burst-Prüfung:** `detectCutOutBurst`/`detectCutInBurst`
   (`data/ttavdata.cpp`) nutzen dieselbe Grenzformel `(index[+1] − extra)/fps`.
   Ändert sich die Korrektur hier, muss sie dort mitgehen (siehe `burst-detection.md`).
@@ -158,6 +167,13 @@ flowchart TD
   Kopie dieser Umrechnung); seit `1d5b956` (Review-Fix auf dem Konsolidierungsbranch)
   ruft auch sie `buildVideoKeepList` direkt auf, kein Sonderfall mehr. Die Producer
   liefern nur noch Keep-List-Quelle, `trackIndices` und Ausgabe-Lambdas.
+  Seit `4c56d9d9` entfällt auch `trackIndices` im Regelfall: eine
+  Convenience-Überladung von `cutAudioTracks` ohne `trackIndices` baut die
+  All-Tracks-Liste selbst und leitet weiter — die `QList<int> tracks; for(...)
+  tracks << i;`-Schleife ist an allen drei All-Tracks-Stellen
+  (`onDoCut`/`doH264Cut`/`doAudioOnlyCut`) verschwunden. Verhaltensneutral;
+  bei `avItem == nullptr` bleibt die Liste leer, was die Hauptüberladung
+  ohnehin ablehnt.
   **Bit-identisch belegt** (Benders MP2 deu+eng, ServusTV AC3, `ffmpeg -c copy -f md5`
   vorher/nachher; nach dem Review-Fix erneut belegt: ServusTV H.264, Designermode H.265).
 - **Bewusst NICHT konsolidiert (Option A):** die zwei abweichenden Vorschau-Pfade —
