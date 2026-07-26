@@ -40,6 +40,14 @@ int main(int argc, char** argv)
         for (int i = 1; i < extras.size(); ++i)
             if (extras[i] != extras[i-1] + 2) gaps++;   // field pairs step by 2 in pic_num
         printf("== extra-index step!=2 transitions : %d (0 => single contiguous field-run)\n", gaps);
+
+        // Machine-readable full list, so the parser's positions can be diffed
+        // against another producer's (e.g. ttcut-pts-analyze's doubled_pts_aus,
+        // which numbers raw AUs rather than parsed pictures).
+        printf("extra_indices=");
+        for (int i = 0; i < extras.size(); ++i)
+            printf("%s%d", i ? "," : "", extras[i]);
+        printf("\n");
     }
 
     // Frame types in STREAM order (index list before sort == pic_num order)

@@ -315,8 +315,24 @@ def detect_paff(es_file: str) -> bool:
 
 
 def parse_info_file(info_path: str) -> dict:
-    """Parse TTCut .info file, return dict with fps, avOffset, extra_frames."""
-    result = {"fps": None, "av_offset_ms": 0, "extra_frames": []}
+    """Parse TTCut .info file, return dict with fps, avOffset, extra_frames.
+
+    Extra-frame positions come from ttcut-demux's PTS analysis. The key was
+    renamed: es_extra_frames (ambiguous numbering, no longer written) became
+    es_doubled_pts_aus, with es_total_aus as its check value. Both are read
+    here -- the new key wins, the old one keeps .info files from older demux
+    runs working.
+
+    Numbering: the new key counts RAW access units, one per PES packet. For
+    MPEG-2 that is the same numbering the cut frame indices use -- measured on
+    real DVB material (Comedy Central SD576i25, 150 field pairs): the list is
+    elementwise identical to what TTCut-ng's own MPEG-2 parser reports as
+    extra indices. For PAFF H.264 it is NOT: top and bottom field are separate
+    AUs there, so the positions would have to be translated first. total_aus
+    is carried along so the caller can refuse the list in that case.
+    """
+    result = {"fps": None, "av_offset_ms": 0, "extra_frames": [], "total_aus": 0,
+              "extra_frames_are_raw_aus": False}
     section = None
     with open(info_path) as f:
         for line in f:
@@ -340,8 +356,19 @@ def parse_info_file(info_path: str) -> dict:
                     result["fps"] = float(val)
             elif section == "timing" and key == "av_offset_ms":
                 result["av_offset_ms"] = int(val)
-            elif section == "warnings" and key == "es_extra_frames":
+            elif section == "warnings" and key == "es_doubled_pts_aus":
                 if val:
+                    result["extra_frames"] = sorted(
+                        int(x.strip()) for x in val.split(",") if x.strip()
+                    )
+                    result["extra_frames_are_raw_aus"] = True
+            elif section == "warnings" and key == "es_total_aus":
+                result["total_aus"] = int(val) if val.strip().isdigit() else 0
+            elif section == "warnings" and key == "es_extra_frames":
+                # Legacy key from .info files written before the rename. Only
+                # used when the current key was absent, so a file carrying both
+                # (older demux plus a newer re-run) keeps the newer numbering.
+                if val and not result["extra_frames"]:
                     result["extra_frames"] = sorted(
                         int(x.strip()) for x in val.split(",") if x.strip()
                     )
@@ -1320,11 +1347,13 @@ Examples:
     # Parse .info if provided
     fps = args.fps
     extra_frames = []
+    extra_frames_are_raw_aus = False
     if args.info:
         info_data = parse_info_file(args.info)
         if info_data["fps"] is not None:
             fps = info_data["fps"]
         extra_frames = info_data.get("extra_frames", [])
+        extra_frames_are_raw_aus = info_data.get("extra_frames_are_raw_aus", False)
 
     if fps is None:
         print("Error: --fps is required (or provide --info with frame_rate)", file=sys.stderr)
@@ -1359,6 +1388,18 @@ Examples:
 
     # Detect PAFF (H.264 separated field coding)
     is_paff = detect_paff(args.video)
+
+    # es_doubled_pts_aus counts raw access units. On PAFF material each field
+    # is its own AU, so those positions do not line up with the cut frame
+    # indices -- translating them needs the raw->merged map, which only
+    # TTCut-ng itself builds. Refuse the list rather than correct by a wrong
+    # amount, and say so instead of silently skipping the correction.
+    if is_paff and extra_frames and extra_frames_are_raw_aus:
+        print(f"Warning: ignoring {len(extra_frames)} extra-frame positions from .info — "
+              f"they are numbered in raw access units, which do not match frame "
+              f"indices on PAFF material. Timing results may be off where field "
+              f"pairs occur.", file=sys.stderr)
+        extra_frames = []
 
     # Temporary directory
     if args.tmpdir:
