@@ -6,6 +6,19 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Features
 
+- **Jump to a frame or timecode from the position display.** Clicking the
+  position readout in the "Current Frame" widget opens a small dialog with two
+  synchronized fields: the frame number and the timecode. Editing one updates
+  the other, so you can type either `63376` or `01:28:01` and land on the same
+  picture; a German decimal comma is accepted as well. Values beyond the end of
+  the recording are limited to the last frame, and the dialog is prefilled with
+  the position you clicked on.
+
+- **The cut result length is shown when cutting finishes.** The completion
+  dialog now reports the source duration, the resulting duration and how much
+  was removed, e.g. `Source: 1:30:00 / Result: 42:15 (47:45 removed)` — for
+  video cuts and for audio-only cuts alike.
+
 - **Cut preview: stays on the last frame, and Forward starts playback.**
   Reaching the end of a clip previously jumped the preview back to the first
   frame; it now holds on the last frame instead, and pressing Play restarts
@@ -50,7 +63,32 @@ All notable changes to TTCut-ng are documented in this file.
   drift to −23 ms across 496 applied splices, with all 4 segment-boundary
   loss ranges reported. Undamaged recordings remain byte-identical.
 
+### Changes
+
+- **Consistent dialog buttons, and "OK" is now "Save" in the settings.** The
+  primary action is the one Enter triggers, and it sits on the right: the cut
+  dialog is now `[Reset to defaults] … [Cancel] [Start]` with Start as the
+  default (previously Enter triggered "Reset to defaults"), the preview dialog
+  triggers Start/Stop, and the about dialog OK. The settings dialog is
+  deliberately different: it saves immediately, with no separate apply step, so
+  its confirm button is now labelled **Save** and Enter deliberately does
+  nothing — a stray Enter while editing a field can no longer close and commit
+  the whole dialog. Escape still discards everywhere.
+
 ### Fixes
+
+- **MPEG-2 chapter marks no longer run past the end when cutting a selection.**
+  With automatic chapters enabled, cutting only selected entries computed the
+  chapter total from the full project cut list, so chapters could be placed
+  beyond the end of the output file. The total now follows the entries actually
+  cut.
+
+- **Playback of H.264/H.265 no longer leaves a temporary file behind, and a
+  stream without a usable frame rate is refused cleanly.** Closing the window
+  during playback used to leave the temporary playback MKV in the temp
+  directory; it is now removed. A stream whose frame rate cannot be determined
+  reports that playback is unavailable instead of computing an undefined frame
+  duration.
 
 - **Preview dialog: the audio-burst warning is fully readable and its
   correction button points the right way.** The warning shared a row with the

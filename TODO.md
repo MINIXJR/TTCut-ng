@@ -533,8 +533,27 @@
       die Append-Semantik aber nicht. Sauberer: beide liefern `{icon, text, tooltip}`
       zurück, ein Setter komponiert und schreibt einmal.
 
-- Display the resulting stream lengths after cut
-- Make the current frame position clickable (enter current frame position)
+- ~~Display the resulting stream lengths after cut~~ → **DONE (2026-07-25)**
+  - `TTAVData::computeCutLengths()` speichert Quell- und Ergebnisdauer
+    (`mLastCutSourceMs` = `at(0)`-Video, `mLastCutResultMs` = Σ Segmentlängen)
+    einmal pro Schnitt; `onCutFinished` zeigt `Quelle → Ergebnis (entfernt)` in
+    beiden Abschlussdialogen (Video und Audio-only).
+  - Nebeneffekt (vom Schluss-Review gefunden): die MPEG-2-Kapitelmarken bei
+    „Auswahl schneiden" summierten vorher die volle Projekt-Schnittliste und
+    konnten hinter das Dateiende reichen — jetzt korrekt die tatsächlich
+    geschnittene Liste.
+  - Spec: `docs/superpowers/specs/2026-07-25-cut-result-length-display-design.md` (lokal)
+
+- ~~Make the current frame position clickable (enter current frame position)~~
+  → **DONE (2026-07-25/26)**
+  - Klick auf die Positionsanzeige öffnet `TTGotoFrameDialog`
+    (`gui/ttgotoframedialog.{h,cpp}`) mit zwei synchronen Feldern: Frame
+    (`QSpinBox`, klemmt auf `0..frameCount-1`) und Timecode (`[hh:]mm:ss[.zzz]`,
+    akzeptiert auch Dezimalkomma). OK springt über das bestehende
+    `onGotoFrame()`.
+  - Geste bewusst Einfachklick statt Doppelklick (User-Entscheid): das Label
+    zeigt den Hand-Cursor, der überall Einfachklick signalisiert.
+  - Spec: `docs/superpowers/specs/2026-07-25-goto-frame-position-design.md` (lokal)
 - ~~Prepare long term processes for user cancellation (abort button)~~ → **DONE**
   - `TTProgressBar` hat Cancel-Button → `TTAVData::onUserAbortRequest()` → `TTThreadTaskPool`;
     Cut-, Search- und QuickJump-Tasks werfen `TTAbortException` bei `onUserAbort()`
