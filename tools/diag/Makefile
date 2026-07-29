@@ -58,6 +58,9 @@ test_h264_leading: test_h264_leading.cpp $(DISPMAP_OBJS)
 test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
+test_pillarbox: test_pillarbox.cpp $(WRAPPER_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
 test_startcode_scan: test_startcode_scan.cpp $(FILEBUF_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(FILEBUF_OBJS) $(LDLIBS)
 
