@@ -128,6 +128,17 @@ void TTAspectScanTask::operation()
     return;
   }
 
+  // Opening N decoders takes long enough for the user to hit Cancel meanwhile.
+  // Reporting Start after that would re-open the progress dialog the cancel
+  // just closed, because TTCutMainWindow::onStatusReport shows the bar on
+  // every Start.
+  if (mIsAborted) {
+    onStatusReport(StatusReportArgs::Finished, tr("Aspect format analysis cancelled"), 0);
+    emit pointsDetected(points);
+    teardownWorkers();
+    return;
+  }
+
   const int plannedSamples = qMax(1, mFrameCount / mSampleStride);
   onStatusReport(StatusReportArgs::Start, tr("Aspect format analysis..."), plannedSamples);
 

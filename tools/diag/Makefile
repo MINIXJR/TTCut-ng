@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -230,7 +230,7 @@ MPEG2ASPECTSCAN_OBJS := $(MPEG2CUT_OBJS) \
                  ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
                  ../../obj/ttesinfo.o ../../obj/ttnaluparser.o
 
-test_aspectscan_mpeg2: test_aspectscan_mpeg2.cpp
+test_aspectscan_mpeg2: test_aspectscan_mpeg2.cpp $(MPEG2ASPECTSCAN_OBJS)
 	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
 	    -o $@ $< $(MPEG2ASPECTSCAN_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \

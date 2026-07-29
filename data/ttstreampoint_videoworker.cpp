@@ -16,10 +16,9 @@
 #include <QDebug>
 
 TTStreamPointVideoWorker::TTStreamPointVideoWorker(
-    bool detectAspectChange, int streamType, TTVideoHeaderList* videoHeaderList)
+    int streamType, TTVideoHeaderList* videoHeaderList)
   : TTThreadTask("StreamPointVideoAnalysis"),
     mStreamType(streamType),
-    mDetectAspectChange(detectAspectChange),
     mVideoHeaderList(videoHeaderList)
 {
 }
@@ -30,7 +29,7 @@ void TTStreamPointVideoWorker::operation()
 
   onStatusReport(StatusReportArgs::Start, tr("Analyzing video..."), 1);
 
-  if (mDetectAspectChange && !mIsAborted) {
+  if (!mIsAborted) {
     onStatusReport(StatusReportArgs::Step, tr("Aspect ratio analysis..."), 0);
     QList<TTStreamPoint> aspectPoints = detectAspectChanges();
     allPoints.append(aspectPoints);

@@ -22,8 +22,10 @@ class TTStreamPointVideoWorker : public TTThreadTask
   Q_OBJECT
 
 public:
-  TTStreamPointVideoWorker(bool detectAspectChange, int streamType,
-                           TTVideoHeaderList* videoHeaderList);
+  // Header-based aspect detection is the worker's only job; the caller
+  // decides whether to create it at all (spDetectAspectChange() plus a
+  // non-empty header list), so there is nothing left to switch off here.
+  TTStreamPointVideoWorker(int streamType, TTVideoHeaderList* videoHeaderList);
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);
@@ -39,7 +41,6 @@ private:
   QList<TTStreamPoint> detectAspectChanges();
 
   int                  mStreamType;
-  bool                 mDetectAspectChange;
   TTVideoHeaderList*   mVideoHeaderList;
 };
 

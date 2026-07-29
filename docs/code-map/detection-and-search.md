@@ -1,6 +1,6 @@
 ---
 base_commit: aaad1172cc1b64e4482a75ecec199f56ee15c12c
-last_verified: 2026-07-29  # Erstanlage zusammen mit TTAspectScanTask (Zweig feature/aspect-change-scan); alle Kanten am Code geprüft, Laufzeitwerte aus den Harnesses in tools/diag
+last_verified: 2026-07-29  # Erstanlage zusammen mit TTAspectScanTask (Zweig feature/aspect-change-scan); alle Kanten am Code geprüft, Laufzeitwerte aus den Harnesses in tools/diag. Nach der Zweig-Abschlussprüfung korrigiert: test_pillarbox-Argumente, Init-Behauptung, Anzeigeordnungs-Aussage auf die TTSearchTask-Abkömmlinge eingegrenzt, Index-Wiederverwendung statt "nie zweimal"
 sources:
   - data/ttsearchtask.cpp
   - data/ttsearchtask.h
@@ -40,10 +40,12 @@ Daneben stehen zwei Analysen, die **kein** Bild dekodieren und deshalb nicht von
 münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header) und
 `TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel).
 
-**Der Bildindex wird nie zweimal gebaut.** Jeder Aufruf zieht ihn aus dem
-Vorschau-Wrapper (`currentFrame->videoWindow()->ffmpegWrapper()->frameIndex()`)
-und reicht ihn als `preBuiltFrameIndex` durch. Das spart ~2 s je Lauf — und ist
-für H.264/H.265 **Voraussetzung**, nicht Optimierung (siehe Fallstricke).
+**Der Bildindex wird wiederverwendet, wo es einen gibt.** Jeder Aufruf zieht ihn
+aus dem Vorschau-Wrapper
+(`currentFrame->videoWindow()->ffmpegWrapper()->frameIndex()`) und reicht ihn als
+`preBuiltFrameIndex` durch; nur wenn der leer ist, baut jeder Sub-Dekoder sich
+selbst einen. Das spart den erneuten Aufbau — und ist für H.264/H.265
+**Voraussetzung**, nicht Optimierung (siehe Fallstricke).
 
 ## Datenfluss
 
@@ -111,15 +113,15 @@ flowchart TB
 | Kante | Bedeutung | Fallstrick |
 |---|---|---|
 | `PREV → MW → Task` (`preBuiltFrameIndex`) | Kopie der `QList<TTFrameInfo>` des Vorschau-Wrappers. Leer ⇒ jeder Sub-Dekoder ruft `buildFrameIndex()` selbst. | Bei H.26x ist die Liste die **einzige** Quelle für Anzeige↔Dekodier-Zuordnung. Ein Worker ohne Index gibt aus `decodeFrame()` leere `QImage` zurück — genau der zweite der beiden Ur-Defekte der Pillarbox-Erkennung. |
-| `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die ganze Kette (Positionsauswahl → `decodeFrame` → `found`/`pointsDetected` → `onVideoSliderChanged`) ist durchgehend anzeigeordnungs-konsistent. |
-| `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
+| `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die Kette (Positionsauswahl → `decodeFrame` → `found`/`pointsDetected` → `onVideoSliderChanged`) ist durchgehend anzeigeordnungs-konsistent — **aber nur für die `TTSearchTask`-Abkömmlinge**. `TTStreamPointVideoWorker` zählt `picture_start_code`-Header in Bitstrom-Reihenfolge (`ttstreampoint_videoworker.cpp:78-102`) und meldet diesen Zähler als Markerposition; ob der bei führenden B-Bildern gegen den Anzeigeindex verrutscht, ist vorbestehend und ungeprüft. |
+| `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
 | `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
 | `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
-| `POOLQ → BAR` (`statusReport`) | Jede Aufgabe meldet `Init`/`Start`/`Step`/`Finished`; der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
+| `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
 | `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. `TTAspectScanTask` verbindet beide; die drei gerichteten Suchen verbinden bis heute nur `finished` (offen, siehe Redundanz). |
 
@@ -190,6 +192,14 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
   freigegeben (GUI-Thread über `deleteLater`). Ein Aufräumen im Arbeitsthread
   läuft ohne Happens-before-Kante gegen den Destruktor und kann doppelt
   freigeben.
+- **`run()` sendet das Endsignal *vor* `cleanUp()`** (`ttthreadtask.cpp:168`,
+  ebenso `:175` und `:187`). Wer `finished`/`aborted` an `deleteLater` hängt —
+  also jeder Nutzer dieser Familie — öffnet damit ein schmales Fenster, in dem
+  der GUI-Thread die Aufgabe zerstört, während der Arbeitsthread noch den
+  virtuellen `cleanUp()`-Aufruf über den vptr absetzt. Vorbestehend, nicht
+  nachgestellt; die richtige Reihenfolge wäre `cleanUp(); emit finished(this);`.
+  Betrifft alle Aufgaben der Anwendung, nicht nur diese Familie — eigener
+  Durchgang nötig, nicht beauftragt.
 - **Leerer Indexlisten-Fall meldet nichts.** `TTAspectScanTask::operation()`
   kehrt bei `mIndexList->count() == 0` zurück, ohne `onStatusReport` zu rufen;
   die GUI schirmt den Fall zwar ab, der Harness-Pfad aber nicht. Kleinigkeit,
@@ -221,5 +231,5 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
 | `tools/diag/test_aspectdetect` | ohne Argumente | Klassifizierer + Hysterese, synthetische Bilder |
 | `tools/diag/test_aspectscan` | `<datei> <fps> <stichprobe_s> [erwarteter_frame]` | Voll-Scan über H.264/H.265 |
 | `tools/diag/test_aspectscan_mpeg2` | `<datei> <stichprobe_s> [erwartete_anzahl]` | dito für MPEG-2 — **andere Argumentreihenfolge**, kein fps |
-| `tools/diag/test_pillarbox` | `<datei> <fps> <von> <bis>` | Einzelbild-Klassifikation über den echten Dekodierpfad |
+| `tools/diag/test_pillarbox` | `<datei> [erster] [letzter] [schritt] [schwelle]` | Einzelbild-Klassifikation über den echten Dekodierpfad — **kein** fps-Argument |
 | `tools/diag/test_pool_abort` | `[anzahl] [millisekunden]` | Abbruch-Absturz aus `e247dbda` |

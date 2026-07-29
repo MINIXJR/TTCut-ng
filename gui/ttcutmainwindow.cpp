@@ -855,7 +855,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   if (TTSettings::instance()->spDetectAspectChange() &&
       videoHeaders && videoHeaders->size() > 0) {
     TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
-      true, vs->streamType(), videoHeaders);
+      vs->streamType(), videoHeaders);
 
     connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
             this, &TTCutMainWindow::onVideoPointsDetected);
