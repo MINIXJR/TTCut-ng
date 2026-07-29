@@ -142,17 +142,17 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   gl->addWidget(mCbPillarbox, row, 0, 1, 2);
   row++;
 
-  QLabel* lblPillarboxThreshold = new QLabel(tr("Threshold (luminance):"), tab);
-  lblPillarboxThreshold->setStyleSheet("QLabel { padding-left: 20px; }");
-  gl->addWidget(lblPillarboxThreshold, row, 0);
+  mLblPillarboxThreshold = new QLabel(tr("Threshold (luminance):"), tab);
+  mLblPillarboxThreshold->setStyleSheet("QLabel { padding-left: 20px; }");
+  gl->addWidget(mLblPillarboxThreshold, row, 0);
   mSbPillarboxThreshold = new QSpinBox(tab);
   mSbPillarboxThreshold->setRange(5, 50);
   gl->addWidget(mSbPillarboxThreshold, row, 1);
   row++;
 
-  QLabel* lblPillarboxSample = new QLabel(tr("Sample distance (s):"), tab);
-  lblPillarboxSample->setStyleSheet("QLabel { padding-left: 20px; }");
-  gl->addWidget(lblPillarboxSample, row, 0);
+  mLblPillarboxSample = new QLabel(tr("Sample distance (s):"), tab);
+  mLblPillarboxSample->setStyleSheet("QLabel { padding-left: 20px; }");
+  gl->addWidget(mLblPillarboxSample, row, 0);
   mSbPillarboxSampleSeconds = new QDoubleSpinBox(tab);
   mSbPillarboxSampleSeconds->setRange(0.2, 10.0);
   mSbPillarboxSampleSeconds->setSingleStep(0.1);
@@ -166,9 +166,9 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   // them - that coupling made pillarbox detection unreachable for anyone who
   // switched the MPEG-2-only option off.
   connect(mCbPillarbox, &QCheckBox::toggled, mSbPillarboxThreshold,      &QWidget::setEnabled);
-  connect(mCbPillarbox, &QCheckBox::toggled, lblPillarboxThreshold,      &QWidget::setEnabled);
+  connect(mCbPillarbox, &QCheckBox::toggled, mLblPillarboxThreshold,     &QWidget::setEnabled);
   connect(mCbPillarbox, &QCheckBox::toggled, mSbPillarboxSampleSeconds,  &QWidget::setEnabled);
-  connect(mCbPillarbox, &QCheckBox::toggled, lblPillarboxSample,         &QWidget::setEnabled);
+  connect(mCbPillarbox, &QCheckBox::toggled, mLblPillarboxSample,        &QWidget::setEnabled);
 
   // Vertical spacer
   gl->setRowStretch(row, 1);
@@ -186,7 +186,9 @@ void TTStreamPointWidget::loadSettings()
   mSbPillarboxSampleSeconds->setValue(TTSettings::instance()->spPillarboxSampleSeconds());
   // Sync enabled state
   mSbPillarboxThreshold->setEnabled(mCbPillarbox->isChecked());
+  mLblPillarboxThreshold->setEnabled(mCbPillarbox->isChecked());
   mSbPillarboxSampleSeconds->setEnabled(mCbPillarbox->isChecked());
+  mLblPillarboxSample->setEnabled(mCbPillarbox->isChecked());
 }
 
 void TTStreamPointWidget::saveSettings()

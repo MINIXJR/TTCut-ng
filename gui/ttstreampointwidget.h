@@ -71,7 +71,9 @@ private:
   QCheckBox*      mCbAudioChange;
   QCheckBox*      mCbAspectChange;
   QCheckBox*      mCbPillarbox;
+  QLabel*         mLblPillarboxThreshold;
   QSpinBox*       mSbPillarboxThreshold;
+  QLabel*         mLblPillarboxSample;
   QDoubleSpinBox* mSbPillarboxSampleSeconds;
 };
 
