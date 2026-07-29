@@ -53,6 +53,7 @@ class TTThreadTaskPool : public QObject
 	  void onThreadTaskStarted(TTThreadTask* task);
 		void onThreadTaskFinished(TTThreadTask* task);
 		void onThreadTaskAborted(TTThreadTask* task);
+		void onThreadTaskDestroyed(QObject* task);
     void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
 	private:

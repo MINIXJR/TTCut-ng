@@ -20,6 +20,7 @@
 #include "../gui/ttprogressbar.h"
 
 #include <QThreadPool>
+#include <QPointer>
 #include <QDebug>
 
 /**
@@ -90,6 +91,8 @@ void TTThreadTaskPool::cleanUpQueue()
     disconnect(task, &TTThreadTask::statusReport,
       this, &TTThreadTaskPool::onStatusReport);
 
+    disconnect(task, &QObject::destroyed,
+      this, &TTThreadTaskPool::onThreadTaskDestroyed);
 
     //qDebug() << "remove task " << task->taskName() << " with UUID " << task->taskID();
     t.remove();
@@ -114,6 +117,18 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
 
   connect(task, &TTThreadTask::statusReport,
     this, &TTThreadTaskPool::onStatusReport);
+
+  // Safety net for the task lifetime. The pool does not own the tasks; their
+  // owners are free to delete them (the main window wires finished/aborted to
+  // deleteLater). Without this the queue can end up holding a pointer to an
+  // already destroyed task and the next traversal walks freed memory.
+  // The connection is deliberately direct: the pointer has to leave the queue
+  // while the destructor is running, not whenever the event loop gets around
+  // to it. It stays in place until the task really dies - unique, because
+  // some tasks (TTCutTask) are re-started for every cut of a cut list.
+  connect(task, &QObject::destroyed,
+    this, &TTThreadTaskPool::onThreadTaskDestroyed,
+    Qt::ConnectionType(Qt::DirectConnection | Qt::UniqueConnection));
 
   if (runningTaskCount() == 0)
   {
@@ -207,6 +222,22 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
 }
 
 /**
+ * Threadtask was destroyed by its owner
+ *
+ * Last line of defence only: in the regular flow the task has already left the
+ * queue via onThreadTaskFinished() or onThreadTaskAborted() and removeAll() is
+ * a no-op here. The TTThreadTask part of the object is gone at this point, so
+ * the pointer may only be compared, never dereferenced.
+ */
+void TTThreadTaskPool::onThreadTaskDestroyed(QObject* task)
+{
+  int removed = mTaskQueue.removeAll(static_cast<TTThreadTask*>(task));
+
+  if (removed > 0)
+    qDebug() << "task destroyed while still enqueued, removed from queue; remaining tasks " << mTaskQueue.count();
+}
+
+/**
  * Status reporting
  */
 void TTThreadTaskPool::onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value)
@@ -243,20 +274,30 @@ void TTThreadTaskPool::onUserAbortRequest()
   //qDebug() << "-----------------------------------------------------";
   //qDebug() << "TTThreadTaskPool -> request to abort all tasks";
 
+  // Never disconnect started/finished here. onThreadTaskFinished() is what
+  // takes a task out of mTaskQueue; a task that ignores the abort flag and
+  // completes normally would otherwise stay enqueued forever while its owner
+  // deletes it - which leaves a dangling pointer in the queue.
+  //
+  // Work on a guarded snapshot instead of on mTaskQueue itself. onUserAbort()
+  // may re-enter the event loop (TTThreadTask::abort() calls processEvents()),
+  // and that both mutates mTaskQueue through the queued finished/aborted
+  // signals and runs the deferred deleteLater of the tasks. The snapshot keeps
+  // the traversal stable, the guarded pointers keep us from touching a task
+  // that died while a sibling was being aborted.
+  QList< QPointer<TTThreadTask> > abortList;
+
   for (int i = 0; i < mTaskQueue.count(); i++)
+    abortList.append(QPointer<TTThreadTask>(mTaskQueue.at(i)));
+
+  for (int i = 0; i < abortList.count(); i++)
   {
-    TTThreadTask* task = mTaskQueue.at(i);
+    TTThreadTask* task = abortList.at(i).data();
 
-    disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-    disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-    //disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-    //disconnect(task, &TTThreadTask::statusReport,
-    //           this, &TTThreadTaskPool::onStatusReport);
+    if (task == 0) continue;
 
     //onStatusReport(task, StatusReportArgs::Step, "Aborting task...", 0);
     task->onUserAbort();
-    qApp->processEvents();
   }
 
   //qDebug() << "-----------------------------------------------------";

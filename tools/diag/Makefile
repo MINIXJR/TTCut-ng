@@ -64,6 +64,16 @@ test_pillarbox: test_pillarbox.cpp $(WRAPPER_OBJS)
 # test_aspectdetect: pure-data acceptance for the aspect classifier + hysteresis
 ASPECTDETECT_OBJS := ../../obj/ttaspectdetect.o
 
+# test_pool_abort: regression harness for TTThreadTaskPool::onUserAbortRequest
+POOLABORT_OBJS := ../../obj/ttthreadtaskpool.o ../../obj/moc_ttthreadtaskpool.o \
+                  ../../obj/ttthreadtask.o ../../obj/moc_ttthreadtask.o \
+                  ../../obj/istatusreporter.o ../../obj/moc_istatusreporter.o \
+                  ../../obj/ttmessagelogger.o ../../obj/ttexception.o \
+                  ../../obj/ttsettings.o ../../obj/moc_ttsettings.o
+
+test_pool_abort: test_pool_abort.cpp $(POOLABORT_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(POOLABORT_OBJS) $(LDLIBS)
+
 test_aspectdetect: test_aspectdetect.cpp $(ASPECTDETECT_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(ASPECTDETECT_OBJS) $(LDLIBS)
 
