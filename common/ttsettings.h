@@ -258,6 +258,9 @@ public:
   int     spPillarboxThreshold() const { return mSpPillarboxThreshold; }
   void    setSpPillarboxThreshold(int v);
 
+  double  spPillarboxSampleSeconds() const { return mSpPillarboxSampleSeconds; }
+  void    setSpPillarboxSampleSeconds(double v);
+
   int     extraFrameClusterGapSec() const    { return mExtraFrameClusterGapSec; }
   void    setExtraFrameClusterGapSec(int v);
 
@@ -464,6 +467,7 @@ private:
   bool  mSpDetectAspectChange     = true;
   bool  mSpDetectPillarbox        = true;
   int   mSpPillarboxThreshold     = 20;
+  double mSpPillarboxSampleSeconds = 1.0;
   int   mExtraFrameClusterGapSec    = 5;
   int   mExtraFrameClusterOffsetSec = 2;
 

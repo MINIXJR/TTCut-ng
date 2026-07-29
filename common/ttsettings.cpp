@@ -463,6 +463,12 @@ void TTSettings::setSpPillarboxThreshold(int v)
   mSpPillarboxThreshold = v;
 }
 
+void TTSettings::setSpPillarboxSampleSeconds(double v)
+{
+  if (mSpPillarboxSampleSeconds == v) return;
+  mSpPillarboxSampleSeconds = v;
+}
+
 void TTSettings::setExtraFrameClusterGapSec(int v)
 {
   if (mExtraFrameClusterGapSec == v) return;
@@ -580,6 +586,7 @@ void TTSettings::load()
   mSpDetectAspectChange = settings.value("DetectAspectChange/", mSpDetectAspectChange).toBool();
   mSpDetectPillarbox    = settings.value("DetectPillarbox/",    mSpDetectPillarbox).toBool();
   mSpPillarboxThreshold = settings.value("PillarboxThreshold/", mSpPillarboxThreshold).toInt();
+  mSpPillarboxSampleSeconds = settings.value("PillarboxSampleSeconds/", mSpPillarboxSampleSeconds).toDouble();
   settings.endGroup();
 
   settings.beginGroup("Common");
@@ -829,6 +836,7 @@ void TTSettings::save()
   settings.setValue("DetectAspectChange/", mSpDetectAspectChange);
   settings.setValue("DetectPillarbox/",    mSpDetectPillarbox);
   settings.setValue("PillarboxThreshold/", mSpPillarboxThreshold);
+  settings.setValue("PillarboxSampleSeconds/", mSpPillarboxSampleSeconds);
   settings.endGroup();
 
   settings.beginGroup("Common");

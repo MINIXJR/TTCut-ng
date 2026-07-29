@@ -132,7 +132,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // Aspect ratio change detection (MPEG-2 only)
-  mCbAspectChange = new QCheckBox(tr("Aspect ratio (4:3/16:9)"), tab);
+  mCbAspectChange = new QCheckBox(tr("Aspect ratio (4:3/16:9, MPEG-2 only)"), tab);
   gl->addWidget(mCbAspectChange, row, 0, 1, 2);
   row++;
 
@@ -150,10 +150,25 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   gl->addWidget(mSbPillarboxThreshold, row, 1);
   row++;
 
-  // Enable/disable pillarbox controls based on aspect change checkbox
-  connect(mCbAspectChange, &QCheckBox::toggled, mCbPillarbox,          &QWidget::setEnabled);
-  connect(mCbAspectChange, &QCheckBox::toggled, mSbPillarboxThreshold, &QWidget::setEnabled);
-  connect(mCbAspectChange, &QCheckBox::toggled, lblPillarboxThreshold, &QWidget::setEnabled);
+  QLabel* lblPillarboxSample = new QLabel(tr("Sample distance (s):"), tab);
+  lblPillarboxSample->setStyleSheet("QLabel { padding-left: 20px; }");
+  gl->addWidget(lblPillarboxSample, row, 0);
+  mSbPillarboxSampleSeconds = new QDoubleSpinBox(tab);
+  mSbPillarboxSampleSeconds->setRange(0.2, 10.0);
+  mSbPillarboxSampleSeconds->setSingleStep(0.1);
+  mSbPillarboxSampleSeconds->setDecimals(1);
+  mSbPillarboxSampleSeconds->setSuffix(" s");
+  gl->addWidget(mSbPillarboxSampleSeconds, row, 1);
+  row++;
+
+  // The pillarbox sub-controls belong to the pillarbox check box. The aspect
+  // check box drives header-based detection only (MPEG-2) and must not gate
+  // them - that coupling made pillarbox detection unreachable for anyone who
+  // switched the MPEG-2-only option off.
+  connect(mCbPillarbox, &QCheckBox::toggled, mSbPillarboxThreshold,      &QWidget::setEnabled);
+  connect(mCbPillarbox, &QCheckBox::toggled, lblPillarboxThreshold,      &QWidget::setEnabled);
+  connect(mCbPillarbox, &QCheckBox::toggled, mSbPillarboxSampleSeconds,  &QWidget::setEnabled);
+  connect(mCbPillarbox, &QCheckBox::toggled, lblPillarboxSample,         &QWidget::setEnabled);
 
   // Vertical spacer
   gl->setRowStretch(row, 1);
@@ -168,9 +183,10 @@ void TTStreamPointWidget::loadSettings()
   mCbAspectChange->setChecked(TTSettings::instance()->spDetectAspectChange());
   mCbPillarbox->setChecked(TTSettings::instance()->spDetectPillarbox());
   mSbPillarboxThreshold->setValue(TTSettings::instance()->spPillarboxThreshold());
+  mSbPillarboxSampleSeconds->setValue(TTSettings::instance()->spPillarboxSampleSeconds());
   // Sync enabled state
-  mCbPillarbox->setEnabled(mCbAspectChange->isChecked());
-  mSbPillarboxThreshold->setEnabled(mCbAspectChange->isChecked());
+  mSbPillarboxThreshold->setEnabled(mCbPillarbox->isChecked());
+  mSbPillarboxSampleSeconds->setEnabled(mCbPillarbox->isChecked());
 }
 
 void TTStreamPointWidget::saveSettings()
@@ -182,9 +198,10 @@ void TTStreamPointWidget::saveSettings()
   TTSettings::instance()->setSpDetectAspectChange(mCbAspectChange->isChecked());
   TTSettings::instance()->setSpDetectPillarbox(mCbPillarbox->isChecked());
   TTSettings::instance()->setSpPillarboxThreshold(mSbPillarboxThreshold->value());
+  TTSettings::instance()->setSpPillarboxSampleSeconds(mSbPillarboxSampleSeconds->value());
 }
 
-void TTStreamPointWidget::setAnalysisRunning(bool running)
+void TTStreamPointWidget::setAnalysisRunning(bool running, bool aborted)
 {
   mAnalysisRunning = running;
 
@@ -197,7 +214,10 @@ void TTStreamPointWidget::setAnalysisRunning(bool running)
     QApplication::restoreOverrideCursor();
     mBtnAnalyze->setText(tr("Start analysis"));
     int count = mModel->rowCount();
-    if (count > 0) {
+    if (aborted) {
+      mLblStatus->setText(tr("Analysis cancelled - list incomplete"));
+      mLblStatus->show();
+    } else if (count > 0) {
       mLblStatus->setText(tr("%1 stream points detected").arg(count));
       mLblStatus->show();
     } else {

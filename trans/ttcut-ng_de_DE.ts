@@ -367,6 +367,34 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
     </message>
 </context>
 <context>
+    <name>TTAspectScanTask</name>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="120"/>
+        <source>Aspect format analysis failed</source>
+        <translation>Bildformat-Analyse fehlgeschlagen</translation>
+    </message>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="126"/>
+        <source>Aspect format analysis...</source>
+        <translation>Bildformat-Analyse …</translation>
+    </message>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="174"/>
+        <source>Aspect format: %1 of %2 samples</source>
+        <translation>Bildformat: %1 von %2 Stichproben</translation>
+    </message>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="186"/>
+        <source>Aspect format analysis cancelled</source>
+        <translation>Bildformat-Analyse abgebrochen</translation>
+    </message>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="187"/>
+        <source>Aspect format analysis complete</source>
+        <translation>Bildformat-Analyse abgeschlossen</translation>
+    </message>
+</context>
+<context>
     <name>TTAudioFileListWidget</name>
     <message>
         <location filename="../ui/audiofilelistwidget.ui" line="25"/>
@@ -3517,14 +3545,13 @@ Unterstützte Formate:
     <name>TTStreamPointWidget</name>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="94"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="249"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="269"/>
         <source>Delete all</source>
         <translation>Alle löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="135"/>
         <source>Aspect ratio (4:3/16:9)</source>
-        <translation>Seitenverhältnis (4:3/16:9)</translation>
+        <translation type="vanished">Seitenverhältnis (4:3/16:9)</translation>
     </message>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="45"/>
@@ -3538,7 +3565,7 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="90"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="198"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="215"/>
         <source>Start analysis</source>
         <translation>Analyse starten</translation>
     </message>
@@ -3563,6 +3590,11 @@ Unterstützte Formate:
         <translation>Audioformatwechsel</translation>
     </message>
     <message>
+        <location filename="../gui/ttstreampointwidget.cpp" line="135"/>
+        <source>Aspect ratio (4:3/16:9, MPEG-2 only)</source>
+        <translation>Seitenverhältnis (4:3/16:9, nur MPEG-2)</translation>
+    </message>
+    <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="140"/>
         <source>Pillarbox detection (4:3 in 16:9)</source>
         <translation>Pillarbox-Erkennung (4:3 in 16:9)</translation>
@@ -3573,32 +3605,42 @@ Unterstützte Formate:
         <translation>Schwellwert (Luminanz):</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="193"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="153"/>
+        <source>Sample distance (s):</source>
+        <translation>Stichprobenabstand (s):</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttstreampointwidget.cpp" line="210"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="194"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="211"/>
         <source>Analysis running...</source>
         <translation>Analyse läuft...</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="201"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="218"/>
+        <source>Analysis cancelled - list incomplete</source>
+        <translation>Analyse abgebrochen – Liste unvollständig</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttstreampointwidget.cpp" line="221"/>
         <source>%1 stream points detected</source>
         <translation>%1 Landezonen erkannt</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="240"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="260"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="242"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="262"/>
         <source>Set as Cut-In</source>
         <translation>Als Schnittanfang setzen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="243"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="263"/>
         <source>Set as Cut-Out</source>
         <translation>Als Schnittende setzen</translation>
     </message>

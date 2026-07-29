@@ -28,7 +28,7 @@ class TTStreamPointWidget : public QWidget
 public:
   TTStreamPointWidget(TTStreamPointModel* model, QWidget* parent = 0);
 
-  void setAnalysisRunning(bool running);
+  void setAnalysisRunning(bool running, bool aborted = false);
   void loadSettings();
   void saveSettings();
 
@@ -72,6 +72,7 @@ private:
   QCheckBox*      mCbAspectChange;
   QCheckBox*      mCbPillarbox;
   QSpinBox*       mSbPillarboxThreshold;
+  QDoubleSpinBox* mSbPillarboxSampleSeconds;
 };
 
 #endif // TTSTREAMPOINTWIDGET_H
