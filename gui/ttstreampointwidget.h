@@ -66,7 +66,9 @@ private:
 
   // Settings widgets
   QCheckBox*      mCbSilence;
+  QLabel*         mLblSilenceThreshold;
   QSpinBox*       mSbSilenceThreshold;
+  QLabel*         mLblSilenceMinDuration;
   QDoubleSpinBox* mSbSilenceMinDuration;
   QCheckBox*      mCbAudioChange;
   QCheckBox*      mCbAspectChange;
