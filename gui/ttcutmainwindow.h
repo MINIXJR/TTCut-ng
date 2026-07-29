@@ -154,6 +154,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTStreamPointWidget* mpStreamPointWidget;
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
+    bool                 mStreamPointAnalysisAborted = false;
     QElapsedTimer        mDirectProgressTimer;
     TTSearchTask*        mpRunningSearch = nullptr;
     int                  mLastSearchStartPos = -1;

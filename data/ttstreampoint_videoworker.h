@@ -17,18 +17,14 @@
 #include <QString>
 
 class TTVideoHeaderList;
-class TTVideoIndexList;
 
 class TTStreamPointVideoWorker : public TTThreadTask
 {
   Q_OBJECT
 
 public:
-  TTStreamPointVideoWorker(const QString& videoFilePath, int streamType,
-                           float frameRate, bool detectAspectChange,
-                           bool detectPillarbox, int pillarboxThreshold,
-                           TTVideoHeaderList* videoHeaderList,
-                           TTVideoIndexList* videoIndexList);
+  TTStreamPointVideoWorker(bool detectAspectChange, int streamType,
+                           TTVideoHeaderList* videoHeaderList);
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);
@@ -42,19 +38,10 @@ public slots:
 
 private:
   QList<TTStreamPoint> detectAspectChanges();
-  QList<TTStreamPoint> detectPillarboxChanges();
 
-  bool isPillarboxFrame(const uint8_t* yPlane, int yStride, int width, int height,
-                        int threshold, float& barWidthPercent);
-
-  QString              mVideoFilePath;
   int                  mStreamType;
-  float                mFrameRate;
   bool                 mDetectAspectChange;
-  bool                 mDetectPillarbox;
-  int                  mPillarboxThreshold;
   TTVideoHeaderList*   mVideoHeaderList;
-  TTVideoIndexList*    mVideoIndexList;
 };
 
 #endif // TTSTREAMPOINT_VIDEOWORKER_H

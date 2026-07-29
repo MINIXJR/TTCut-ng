@@ -39,6 +39,7 @@
 #include "../data/ttsearchtask_blackframe.h"
 #include "../data/ttsearchtask_scenechange.h"
 #include "../data/ttsearchtask_logo.h"
+#include "../data/ttsearchtask_aspectscan.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttcutsettingsdlg.h"
@@ -844,25 +845,50 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   mpStreamPointModel->clearAutoDetected();
 
   mStreamPointWorkersRunning = 0;
+  mStreamPointAnalysisAborted = false;
 
-  // Video worker (aspect ratio changes, pillarbox detection)
-  if (TTSettings::instance()->spDetectAspectChange() || TTSettings::instance()->spDetectPillarbox()) {
-    TTVideoHeaderList* videoHeaders = vs->headerList();
-    TTVideoIndexList*  videoIndex   = vs->indexList();
-    if (videoHeaders && videoHeaders->size() > 0) {
-      TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
-        vs->filePath(), vs->streamType(), vs->frameRate(),
-        TTSettings::instance()->spDetectAspectChange(), TTSettings::instance()->spDetectPillarbox(),
-        TTSettings::instance()->spPillarboxThreshold(), videoHeaders, videoIndex);
+  TTVideoHeaderList* videoHeaders = vs->headerList();
+  TTVideoIndexList*  videoIndex   = vs->indexList();
 
-      connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
-              this, &TTCutMainWindow::onVideoPointsDetected);
-      connect(videoWorker, &TTThreadTask::finished,
-              this, &TTCutMainWindow::onAnalysisWorkerFinished);
+  // Header-based aspect detection reads MPEG-2 sequence headers; only MPEG-2
+  // streams have a header list at all.
+  if (TTSettings::instance()->spDetectAspectChange() &&
+      videoHeaders && videoHeaders->size() > 0) {
+    TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
+      true, vs->streamType(), videoHeaders);
 
-      mpStreamPointTaskPool->start(videoWorker);
-      mStreamPointWorkersRunning++;
-    }
+    connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
+            this, &TTCutMainWindow::onVideoPointsDetected);
+    connect(videoWorker, &TTThreadTask::finished,
+            this, &TTCutMainWindow::onAnalysisWorkerFinished);
+
+    mpStreamPointTaskPool->start(videoWorker);
+    mStreamPointWorkersRunning++;
+  }
+
+  // Pillarbox detection decodes I-frames; it needs the index list, which every
+  // codec has. The frame index comes from the preview wrapper, so the scan does
+  // not re-scan the file (and, for H.26x, has a valid index at all).
+  if (TTSettings::instance()->spDetectPillarbox() &&
+      videoIndex && videoIndex->count() > 0) {
+    QList<TTFrameInfo> preBuiltIndex;
+    if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
+      preBuiltIndex = preview->frameIndex();
+
+    TTAspectScanTask* aspectTask = new TTAspectScanTask(
+      vs->filePath(), vs->streamType(), videoIndex, videoHeaders,
+      vs->frameCount(), vs->frameRate(),
+      TTSettings::instance()->spPillarboxThreshold(),
+      TTSettings::instance()->spPillarboxSampleSeconds(),
+      preBuiltIndex);
+
+    connect(aspectTask, &TTAspectScanTask::pointsDetected,
+            this, &TTCutMainWindow::onVideoPointsDetected);
+    connect(aspectTask, &TTThreadTask::finished,
+            this, &TTCutMainWindow::onAnalysisWorkerFinished);
+
+    mpStreamPointTaskPool->start(aspectTask);
+    mStreamPointWorkersRunning++;
   }
 
   // Audio worker (silence, audio format changes)
@@ -904,6 +930,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
 
 void TTCutMainWindow::onAbortStreamPoints()
 {
+  mStreamPointAnalysisAborted = true;
   mpStreamPointTaskPool->onUserAbortRequest();
 }
 
@@ -952,7 +979,7 @@ void TTCutMainWindow::onAnalysisWorkerFinished()
   mStreamPointWorkersRunning--;
   if (mStreamPointWorkersRunning <= 0) {
     mStreamPointWorkersRunning = 0;
-    mpStreamPointWidget->setAnalysisRunning(false);
+    mpStreamPointWidget->setAnalysisRunning(false, mStreamPointAnalysisAborted);
 
     // Close progress dialog
     if (progressBar != 0) {
@@ -1150,6 +1177,14 @@ void TTCutMainWindow::closeProject()
     mpRunningSearch->onUserAbort();
     QThreadPool::globalInstance()->waitForDone();
     mpRunningSearch = nullptr;
+  }
+
+  // Stream-point tasks hold pointers into the stream's index and header lists,
+  // which mpAVData->clear() below frees. Abort and wait before that happens.
+  if (mStreamPointWorkersRunning > 0) {
+    mpStreamPointTaskPool->onUserAbortRequest();
+    QThreadPool::globalInstance()->waitForDone();
+    mStreamPointWorkersRunning = 0;
   }
 
 	disconnect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
@@ -1651,8 +1686,15 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       break;
 
     case StatusReportArgs::Start:
-      if (progressBar != 0)
-        progressBar->showBar();
+      // Stream-point analysis never emits Init (only open/cut does), so the
+      // bar has to be created here as well - otherwise a long scan runs with
+      // no visible feedback whenever no open operation created it earlier.
+      if (progressBar == 0) {
+        progressBar = new TTProgressBar(this);
+        connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
+        connect(progressBar, &TTProgressBar::cancel, mpStreamPointTaskPool, &TTThreadTaskPool::onUserAbortRequest);
+      }
+      progressBar->showBar();
       break;
 
     case StatusReportArgs::Exit:
