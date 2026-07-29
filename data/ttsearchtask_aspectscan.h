@@ -54,6 +54,15 @@ private:
   //! window is empty or contains no frame with the new state.
   int refineTransition(int oldStatePos, int newStatePos, bool toPillarbox);
 
+  //! A confirmed state must hold for this many seconds before the hysteresis
+  //! in operation() reports a transition. mSampleStride is clamped to this
+  //! window in the constructor: a stride wider than the window would let a
+  //! whole short episode fall between two samples and be missed entirely, or
+  //! anchor a transition on the wrong sample. Both operation() and the
+  //! constructor read this single constant, so changing the hysteresis
+  //! duration can never silently outrun the clamp (or vice versa).
+  static constexpr float kHysteresisWindowSeconds = 10.0f;
+
   float mFrameRate;
   int   mLuminanceThreshold;
   int   mSampleStride;      //!< frames between two samples

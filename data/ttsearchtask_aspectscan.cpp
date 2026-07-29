@@ -33,6 +33,12 @@ TTAspectScanTask::TTAspectScanTask(const QString& videoFilePath,
     mLuminanceThreshold(luminanceThreshold),
     mSampleStride(qMax(1, qRound(sampleSeconds * (double)(frameRate > 0.0f ? frameRate : 25.0f))))
 {
+  // See kHysteresisWindowSeconds: clamp defensively so a stride wider than
+  // the hysteresis window can never silently defeat it. The shipped UI caps
+  // the stride at 10 s and the window is 10 s, so this is a no-op today -
+  // it only matters if either number changes in the future.
+  const int hysteresisWindowFrames = qMax(1, qRound(kHysteresisWindowSeconds * mFrameRate));
+  mSampleStride = qMin(mSampleStride, hysteresisWindowFrames);
 }
 
 QVector<int> TTAspectScanTask::collectSampleBatch(int& pos)
@@ -125,7 +131,7 @@ void TTAspectScanTask::operation()
   const int plannedSamples = qMax(1, mFrameCount / mSampleStride);
   onStatusReport(StatusReportArgs::Start, tr("Aspect format analysis..."), plannedSamples);
 
-  TTAspectHysteresis hysteresis(qMax(1, qRound(10.0f * mFrameRate)));
+  TTAspectHysteresis hysteresis(qMax(1, qRound(kHysteresisWindowSeconds * mFrameRate)));
 
   int  pos           = mIndexList->moveToIndexPos(0, 1);
   int  prevPos       = -1;
