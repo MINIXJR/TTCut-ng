@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -60,6 +60,12 @@ test_wrapper_map: test_wrapper_map.cpp $(WRAPPER_OBJS)
 
 test_pillarbox: test_pillarbox.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
+
+# test_aspectdetect: pure-data acceptance for the aspect classifier + hysteresis
+ASPECTDETECT_OBJS := ../../obj/ttaspectdetect.o
+
+test_aspectdetect: test_aspectdetect.cpp $(ASPECTDETECT_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(ASPECTDETECT_OBJS) $(LDLIBS)
 
 test_startcode_scan: test_startcode_scan.cpp $(FILEBUF_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(FILEBUF_OBJS) $(LDLIBS)

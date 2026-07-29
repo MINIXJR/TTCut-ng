@@ -78,6 +78,7 @@ HEADERS     = common/ttcut.h\
               common/ttmessagelogger.h\
               common/ttexception.h\
               common/istatusreporter.h\
+              data/ttaspectdetect.h\
               data/ttaudiolist.h\
               data/ttsubtitlelist.h\
               data/ttcutlist.h\
@@ -180,6 +181,7 @@ SOURCES     = common/ttcut.cpp\
               common/ttmessagelogger.cpp\
               common/ttexception.cpp\
               common/istatusreporter.cpp\
+              data/ttaspectdetect.cpp\
               data/ttaudiolist.cpp\
               data/ttsubtitlelist.cpp\
               data/ttcutlist.cpp\
