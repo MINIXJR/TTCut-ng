@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -66,6 +66,40 @@ ASPECTDETECT_OBJS := ../../obj/ttaspectdetect.o
 
 test_aspectdetect: test_aspectdetect.cpp $(ASPECTDETECT_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(ASPECTDETECT_OBJS) $(LDLIBS)
+
+# test_aspectscan: end-to-end acceptance for TTAspectScanTask on real material.
+# Pulls in the search-task base (which references TTMpeg2Decoder) and therefore
+# libmpeg2.
+#
+# Deviation from the brief's list: ttavtypes.o was dropped and ttheaderlist.o
+# added. ttavtypes.cpp is a factory (TTAudioType/TTVideoType::create*Stream())
+# that #includes every concrete AV stream header, so pulling in ttavtypes.o
+# drags in TTAC3AudioStream, TTMPEGAudioStream, TTMpeg2VideoStream,
+# TTH264VideoStream, TTH265VideoStream and TTSrtSubtitleStream (and their own
+# transitive dependents) purely for its unused factory code - the only symbol
+# this link set actually references from TTAVTypes is the AVStreamType enum
+# (a compile-time value, no object code). Verified via
+# `nm -u` on every other object in this list: the sole TTAVTypes-related
+# undefined symbol is the TTSearchTask constructor's own parameter type.
+# ttheaderlist.o is added instead because ttvideoheaderlist.o (already listed)
+# needs TTHeaderList's out-of-line members.
+ASPECTSCAN_OBJS := ../../obj/ttsearchtask_aspectscan.o \
+                   ../../obj/moc_ttsearchtask_aspectscan.o \
+                   ../../obj/ttsearchtask.o ../../obj/moc_ttsearchtask.o \
+                   ../../obj/ttaspectdetect.o \
+                   ../../obj/ttstreampoint.o \
+                   ../../obj/ttthreadtask.o ../../obj/moc_ttthreadtask.o \
+                   ../../obj/ttvideoindexlist.o ../../obj/ttvideoheaderlist.o \
+                   ../../obj/ttheaderlist.o \
+                   ../../obj/ttavheader.o ../../obj/ttmpeg2videoheader.o \
+                   ../../obj/ttexception.o \
+                   ../../obj/ttfilebuffer.o ../../obj/ttcommon.o \
+                   ../../obj/istatusreporter.o ../../obj/moc_istatusreporter.o \
+                   ../../obj/ttmpeg2decoder.o \
+                   $(WRAPPER_OBJS)
+
+test_aspectscan: test_aspectscan.cpp $(ASPECTSCAN_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(ASPECTSCAN_OBJS) $(LDLIBS) $(AVLIBS) -lmpeg2 -lmpeg2convert
 
 test_startcode_scan: test_startcode_scan.cpp $(FILEBUF_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(FILEBUF_OBJS) $(LDLIBS)
