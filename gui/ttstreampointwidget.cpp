@@ -138,10 +138,16 @@ QLabel* addSubHeading(QGridLayout* gl, int row, const QString& text, QWidget* ta
   return lbl;
 }
 
-// Indentation for the checkboxes and value fields that belong to a codec
+// Indentation for the detector check boxes that belong to a codec
 // sub-heading - one level in from the sub-heading itself. Matches the 20px
 // indent already used for the pillarbox controls before this rework.
 const char* kControlIndentStyle = "padding-left: 20px;";
+
+// Indentation for the value fields that belong to a detector check box - one
+// level in again, so a glance shows which detector a value configures. 40px
+// puts the label roughly under the check box's text rather than under its
+// indicator (20px padding + indicator width + spacing).
+const char* kValueIndentStyle = "padding-left: 40px;";
 
 } // namespace
 
@@ -167,7 +173,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   mLblSilenceThreshold = new QLabel(tr("Threshold (dB):"), tab);
-  mLblSilenceThreshold->setStyleSheet(kControlIndentStyle);
+  mLblSilenceThreshold->setStyleSheet(kValueIndentStyle);
   gl->addWidget(mLblSilenceThreshold, row, 0);
   mSbSilenceThreshold = new QSpinBox(tab);
   mSbSilenceThreshold->setRange(-80, -20);
@@ -176,7 +182,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   mLblSilenceMinDuration = new QLabel(tr("Minimum duration (s):"), tab);
-  mLblSilenceMinDuration->setStyleSheet(kControlIndentStyle);
+  mLblSilenceMinDuration->setStyleSheet(kValueIndentStyle);
   gl->addWidget(mLblSilenceMinDuration, row, 0);
   mSbSilenceMinDuration = new QDoubleSpinBox(tab);
   mSbSilenceMinDuration->setRange(0.1, 5.0);
@@ -230,7 +236,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   mLblPillarboxThreshold = new QLabel(tr("Threshold (luminance):"), tab);
-  mLblPillarboxThreshold->setStyleSheet(kControlIndentStyle);
+  mLblPillarboxThreshold->setStyleSheet(kValueIndentStyle);
   gl->addWidget(mLblPillarboxThreshold, row, 0);
   mSbPillarboxThreshold = new QSpinBox(tab);
   mSbPillarboxThreshold->setRange(5, 50);
@@ -239,7 +245,7 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   mLblPillarboxSample = new QLabel(tr("Sample distance (s):"), tab);
-  mLblPillarboxSample->setStyleSheet(kControlIndentStyle);
+  mLblPillarboxSample->setStyleSheet(kValueIndentStyle);
   gl->addWidget(mLblPillarboxSample, row, 0);
   mSbPillarboxSampleSeconds = new QDoubleSpinBox(tab);
   mSbPillarboxSampleSeconds->setRange(0.2, 10.0);
