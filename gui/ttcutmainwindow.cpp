@@ -861,6 +861,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
             this, &TTCutMainWindow::onVideoPointsDetected);
     connect(videoWorker, &TTThreadTask::finished,
             this, &TTCutMainWindow::onAnalysisWorkerFinished);
+    connect(videoWorker, &TTThreadTask::aborted,
+            this, &TTCutMainWindow::onAnalysisWorkerFinished);
 
     mpStreamPointTaskPool->start(videoWorker);
     mStreamPointWorkersRunning++;
@@ -886,6 +888,14 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
             this, &TTCutMainWindow::onVideoPointsDetected);
     connect(aspectTask, &TTThreadTask::finished,
             this, &TTCutMainWindow::onAnalysisWorkerFinished);
+    connect(aspectTask, &TTThreadTask::aborted,
+            this, &TTCutMainWindow::onAnalysisWorkerFinished);
+    // TTSearchTask's ownership contract puts real teardown (freeing the
+    // MPEG-2 decoder etc.) in the destructor, only reached via deleteLater.
+    // Connect both terminal signals so a task aborted before it ever started
+    // (still queued in the pool) is freed too.
+    connect(aspectTask, &TTThreadTask::finished, aspectTask, &QObject::deleteLater);
+    connect(aspectTask, &TTThreadTask::aborted,  aspectTask, &QObject::deleteLater);
 
     mpStreamPointTaskPool->start(aspectTask);
     mStreamPointWorkersRunning++;
@@ -913,6 +923,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
       connect(audioWorker, &TTStreamPointAudioWorker::pointsDetected,
               this, &TTCutMainWindow::onAudioPointsDetected);
       connect(audioWorker, &TTThreadTask::finished,
+              this, &TTCutMainWindow::onAnalysisWorkerFinished);
+      connect(audioWorker, &TTThreadTask::aborted,
               this, &TTCutMainWindow::onAnalysisWorkerFinished);
 
       mpStreamPointTaskPool->start(audioWorker);
@@ -1181,11 +1193,13 @@ void TTCutMainWindow::closeProject()
 
   // Stream-point tasks hold pointers into the stream's index and header lists,
   // which mpAVData->clear() below frees. Abort and wait before that happens.
-  if (mStreamPointWorkersRunning > 0) {
-    mpStreamPointTaskPool->onUserAbortRequest();
-    QThreadPool::globalInstance()->waitForDone();
-    mStreamPointWorkersRunning = 0;
-  }
+  // Unconditional: mStreamPointWorkersRunning drops to 0 as soon as the GUI
+  // thread processes a queued finished/aborted signal, which fires before
+  // the task's run() actually returns - so the counter can already read 0
+  // while a pool runnable is still executing.
+  mpStreamPointTaskPool->onUserAbortRequest();
+  QThreadPool::globalInstance()->waitForDone();
+  mStreamPointWorkersRunning = 0;
 
 	disconnect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
   disconnect(mpAVData, &TTAVData::currentAVItemChanged,     this, &TTCutMainWindow::onAVItemChanged);
@@ -1680,7 +1694,11 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       if (progressBar == 0) {
         progressBar = new TTProgressBar(this);
         connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
-        connect(progressBar, &TTProgressBar::cancel, mpStreamPointTaskPool, &TTThreadTaskPool::onUserAbortRequest);
+        // Route through onAbortStreamPoints() (not directly to the pool) so a
+        // cancel from this dialog also marks the run as aborted - otherwise a
+        // stream-point scan cancelled here delivers its partial results as if
+        // the run had completed normally (TTAspectScanTask reports on abort).
+        connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
       }
       this->setEnabled(false);
       break;
@@ -1692,7 +1710,11 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       if (progressBar == 0) {
         progressBar = new TTProgressBar(this);
         connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
-        connect(progressBar, &TTProgressBar::cancel, mpStreamPointTaskPool, &TTThreadTaskPool::onUserAbortRequest);
+        // Route through onAbortStreamPoints() (not directly to the pool) so a
+        // cancel from this dialog also marks the run as aborted - otherwise a
+        // stream-point scan cancelled here delivers its partial results as if
+        // the run had completed normally (TTAspectScanTask reports on abort).
+        connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
       }
       progressBar->showBar();
       break;

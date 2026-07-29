@@ -14,7 +14,6 @@
 #include "ttstreampoint.h"
 
 #include <QList>
-#include <QString>
 
 class TTVideoHeaderList;
 

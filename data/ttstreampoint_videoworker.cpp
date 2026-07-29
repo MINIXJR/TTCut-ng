@@ -11,8 +11,6 @@
 #include "../avstream/ttvideoheaderlist.h"
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
-#include "../common/ttcut.h"
-#include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 
 #include <QDebug>
