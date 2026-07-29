@@ -5,6 +5,16 @@
 //
 // usage: test_pillarbox <es-file> [firstFrame] [lastFrame] [step] [threshold]
 //
+// firstFrame/lastFrame/the printed frame number are all DISPLAY positions —
+// the same space decodeFrame() expects. The indexed path below walks display
+// order and uses the wrapper's display-order map (TTDisplayOrderMap) to find
+// each display position's decode-order frame type, so the number that is
+// printed is always the exact number that was fed to decodeFrame(). Earlier
+// this loop iterated w.frameIndex() (decode order) and passed that loop
+// index straight to decodeFrame() (which takes a display position) — the
+// printed number and the classified image came from different index spaces,
+// which produced a wrong reference frame in this project's aspect-scan work.
+//
 // Build via `make test_pillarbox` in tools/diag (needs a root `make` first).
 #include <QCoreApplication>
 #include <QImage>
@@ -111,6 +121,7 @@ int main(int argc, char** argv)
     w.buildGOPIndex();
 
     const QList<TTFrameInfo>& idx = w.frameIndex();
+    const TTDisplayOrderMap&  map = w.displayOrderMap();
     printf("frames=%d gops=%d\n", idx.size(), w.gopCount());
 
     int nI = 0;
@@ -118,16 +129,22 @@ int main(int argc, char** argv)
         if (fi.frameType == AV_PICTURE_TYPE_I) nI++;
     printf("I-frames=%d\n", nI);
 
-    if (last < 0 || last >= idx.size()) last = idx.size() - 1;
+    // first/last/the loop variable are DISPLAY positions from here on (see
+    // the header comment). displayCount() is the navigable (post-drop) frame
+    // count; fall back to the raw decode-order size if no map was built.
+    const int displayCount = map.isValid() ? map.displayCount() : idx.size();
+    if (last < 0 || last >= displayCount) last = displayCount - 1;
 
     int seen = 0;
-    for (int i = first; i <= last; ++i) {
-        if (idx[i].frameType != AV_PICTURE_TYPE_I) continue;
+    for (int disp = first; disp <= last; ++disp) {
+        const int decodeIdx = map.isValid() ? map.displayToDecode(disp) : disp;
+        if (decodeIdx < 0 || decodeIdx >= idx.size()) continue;
+        if (idx[decodeIdx].frameType != AV_PICTURE_TYPE_I) continue;
         if ((seen++ % step) != 0) continue;
 
-        QImage frame = w.decodeFrame(i);
+        QImage frame = w.decodeFrame(disp);
         if (frame.isNull()) {
-            printf("%8d I  DECODE-NULL\n", i);
+            printf("%8d I  DECODE-NULL\n", disp);
             continue;
         }
         QImage gray = frame.convertToFormat(QImage::Format_Grayscale8);
@@ -136,7 +153,7 @@ int main(int argc, char** argv)
         bool pb = isPillarboxFrame(gray.constBits(), gray.bytesPerLine(),
                                    gray.width(), gray.height(), thres, pct, l, r);
         printf("%8d I  %dx%d  left=%-4d right=%-4d min=%-4d %s\n",
-               i, gray.width(), gray.height(), l, r, gray.width() / 10,
+               disp, gray.width(), gray.height(), l, r, gray.width() / 10,
                pb ? "PILLARBOX" : "-");
         fflush(stdout);
     }
