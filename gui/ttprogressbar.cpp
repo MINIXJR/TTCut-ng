@@ -20,6 +20,7 @@
 
 #include <QDebug>
 #include <QApplication>
+#include <QCloseEvent>
 
 /**
  * Constructor
@@ -35,6 +36,7 @@ TTProgressBar::TTProgressBar(QWidget* parent)
   processForm    = 0;
   normTotalSteps = 100;
   isBlocking     = false;
+  mClosing       = false;
 
   progressBar->setMinimum( 0 );
   progressBar->setMaximum( normTotalSteps );
@@ -73,8 +75,44 @@ void TTProgressBar::hideBar()
 
   setModal(true);
   hide();
-  
+
   qApp->processEvents();
+}
+
+/**
+ * Handle the window's close button (the X).
+ *
+ * This behaves exactly like the Cancel button (onBtnCancelClicked()): a
+ * QDialog's default closeEvent() maps to reject(), i.e. "discard the
+ * operation", not "put the window away" - and Qt's own QProgressDialog
+ * reimplements closeEvent() for the same reason. An operation that keeps
+ * running with its only progress window gone, with no separate "run in
+ * background" affordance, is a usability trap, not a convenience.
+ *
+ * This also fixes the original complaint (the dialog reopening after being
+ * closed): every task emits StatusReportArgs::Start, and the Start branch in
+ * TTCutMainWindow::onStatusReport calls showBar(). Cancelling here goes
+ * through onBtnCancelClicked(), which - via the cancel() signal -
+ * synchronously aborts every task still in the pool's queue
+ * (TTThreadTaskPool::onUserAbortRequest()), including ones that have not
+ * started running yet. TTThreadTask::run() checks mIsAborted before calling
+ * operation() (where Start is reported), so an aborted-but-not-yet-started
+ * task never reports Start at all - there is no second Start left to reopen
+ * the dialog.
+ */
+void TTProgressBar::closeEvent(QCloseEvent* event)
+{
+  // onBtnCancelClicked() calls hideBar(), which only hides the window (never
+  // close()s it), so this does not recurse back into closeEvent() today.
+  // The guard is defensive in case that ever changes, so the cancel() signal
+  // can never fire twice for one user action.
+  if (!mClosing) {
+    mClosing = true;
+    onBtnCancelClicked();
+    mClosing = false;
+  }
+
+  event->accept();
 }
 
 /**

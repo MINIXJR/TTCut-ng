@@ -26,6 +26,7 @@
 
 class TTThreadTask;
 class TTTaskProgress;
+class QCloseEvent;
 
 class TTProgressBar : public QDialog, Ui::TTProgressForm
 {
@@ -43,6 +44,9 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
       void onDetailsStateChanged(int);
       void onBtnCancelClicked();
       void onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress, QTime totalTime);
+
+    protected:
+      void closeEvent(QCloseEvent* event) override;
 
     private:
       void addTaskProgress(TTThreadTask* task);
@@ -65,5 +69,9 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
     int            normTotalSteps;
     bool           isBlocking;
 
+    // Re-entrancy guard for closeEvent() -> onBtnCancelClicked(): makes sure
+    // the cancel() signal fires only once per user action even if
+    // onBtnCancelClicked()'s own path ever ends up closing the window too.
+    bool           mClosing;
 };
 #endif // TTPROGRESSBAR_H
