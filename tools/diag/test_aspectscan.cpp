@@ -9,8 +9,13 @@
 // display position.
 //
 // Stream type is derived from the file extension (.264/.h264 -> h264_video,
-// .265/.h265 -> h265_video, .m2v -> mpeg2_demuxed_video) so the same harness
-// can be reused for both H.264 and H.265 acceptance material.
+// .265/.h265 -> h265_video). This harness always passes a null
+// TTVideoHeaderList* to TTAspectScanTask, which is harmless for H.264/H.265
+// (that path only ever touches TTFFmpegWrapper), but MPEG-2 goes through
+// TTMpeg2Decoder, which dereferences the header list unconditionally and
+// would segfault - so .m2v input is refused here rather than crashing.
+// Use tools/diag/test_aspectscan_mpeg2 for MPEG-2 material; it builds a real
+// header list via TTMpeg2VideoStream, the same way the GUI does.
 //
 // Build via `make test_aspectscan` in tools/diag.
 #include <QCoreApplication>
@@ -44,7 +49,6 @@ static bool streamTypeFromExtension(const QString& file, TTAVTypes::AVStreamType
     const QString ext = QFileInfo(file).suffix().toLower();
     if (ext == "264" || ext == "h264") { outType = TTAVTypes::h264_video; return true; }
     if (ext == "265" || ext == "h265") { outType = TTAVTypes::h265_video; return true; }
-    if (ext == "m2v")                 { outType = TTAVTypes::mpeg2_demuxed_video; return true; }
     return false;
 }
 
@@ -60,6 +64,16 @@ int main(int argc, char** argv)
     const float   fps     = atof(argv[2]);
     const double  sampleS = atof(argv[3]);
     const int     expect  = (argc > 4) ? atoi(argv[4]) : -1;
+
+    if (QFileInfo(file).suffix().toLower() == "m2v") {
+        fprintf(stderr,
+                "test_aspectscan does not support MPEG-2 (.m2v) input: it always "
+                "passes a null TTVideoHeaderList*, and TTMpeg2Decoder dereferences "
+                "that unconditionally (segfault). Use "
+                "tools/diag/test_aspectscan_mpeg2 instead - it builds a real "
+                "header list via TTMpeg2VideoStream.\n");
+        return 2;
+    }
 
     TTAVTypes::AVStreamType streamType;
     if (!streamTypeFromExtension(file, streamType)) {

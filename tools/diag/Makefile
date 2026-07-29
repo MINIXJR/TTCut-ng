@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -203,6 +203,27 @@ dump_mpeg2_fields: dump_mpeg2_fields.cpp
 	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
 	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
+# test_aspectscan_mpeg2: MPEG-2 counterpart to test_aspectscan. Builds real
+# header/index lists via TTMpeg2VideoStream (same objects as MPEG2CUT_OBJS,
+# the curated MPEG-2 cut-path link set above) plus the TTAspectScanTask/
+# TTSearchTask objects. Only the objects MPEG2CUT_OBJS doesn't already
+# provide are added below (ttsettings.o/moc, ttmessagelogger.o etc. are
+# shared - listing them twice would duplicate-define their symbols).
+MPEG2ASPECTSCAN_OBJS := $(MPEG2CUT_OBJS) \
+                 ../../obj/ttsearchtask_aspectscan.o ../../obj/moc_ttsearchtask_aspectscan.o \
+                 ../../obj/ttsearchtask.o ../../obj/moc_ttsearchtask.o \
+                 ../../obj/ttaspectdetect.o ../../obj/ttstreampoint.o \
+                 ../../obj/ttthreadtask.o ../../obj/moc_ttthreadtask.o \
+                 ../../obj/ttdisplayordermap.o \
+                 ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
+                 ../../obj/ttesinfo.o ../../obj/ttnaluparser.o
+
+test_aspectscan_mpeg2: test_aspectscan_mpeg2.cpp
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(MPEG2ASPECTSCAN_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
 
 MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider.o \
