@@ -211,6 +211,10 @@ void TTStreamPointWidget::setupSettingsTab(QWidget* tab)
   row++;
 
   // ---------------------------------------------------------------- Video --
+  // Blank row: without it the Video heading sits as close to the last audio
+  // control as that control sits to its own heading, and the two detector
+  // groups run into each other.
+  gl->setRowMinimumHeight(row++, 12);
   addSectionHeading(gl, row++, tr("Video"), tab);
 
   addSubHeading(gl, row++, tr("MPEG-2 only"), tab);
