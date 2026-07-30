@@ -1862,6 +1862,16 @@ void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float thre
           this, &TTCutMainWindow::onBlackSearchFinished);
   connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
 
+  // A task aborted before the pool ever ran it emits aborted, never finished
+  // and never found: TTThreadTask::run() throws TTAbortException before
+  // reaching operation(). Without this, the task leaks and - worse -
+  // mpRunningSearch stays set, which blocks every later search. The pointer
+  // comparison keeps the reset from firing on a task that already reported
+  // through found(), which is possible if operation() throws after emitting.
+  connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
+  connect(task, &TTThreadTask::aborted, this,
+          [this, task]() { if (mpRunningSearch == task) onBlackSearchFinished(-1, true); });
+
   mpRunningSearch = task;
   navigation->setBlackSearchRunning(true);
   statusBar()->showMessage(tr("Searching black frame from frame %1...").arg(startPos));
@@ -1931,6 +1941,16 @@ void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float thr
   connect(task, &TTSearchTask::found,
           this, &TTCutMainWindow::onSceneSearchFinished);
   connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
+
+  // A task aborted before the pool ever ran it emits aborted, never finished
+  // and never found: TTThreadTask::run() throws TTAbortException before
+  // reaching operation(). Without this, the task leaks and - worse -
+  // mpRunningSearch stays set, which blocks every later search. The pointer
+  // comparison keeps the reset from firing on a task that already reported
+  // through found(), which is possible if operation() throws after emitting.
+  connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
+  connect(task, &TTThreadTask::aborted, this,
+          [this, task]() { if (mpRunningSearch == task) onSceneSearchFinished(-1, true); });
 
   mpRunningSearch = task;
   navigation->setSceneSearchRunning(true);
@@ -2196,6 +2216,16 @@ void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
   connect(task, &TTSearchTask::found,
           this, &TTCutMainWindow::onLogoSearchFinished);
   connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
+
+  // A task aborted before the pool ever ran it emits aborted, never finished
+  // and never found: TTThreadTask::run() throws TTAbortException before
+  // reaching operation(). Without this, the task leaks and - worse -
+  // mpRunningSearch stays set, which blocks every later search. The pointer
+  // comparison keeps the reset from firing on a task that already reported
+  // through found(), which is possible if operation() throws after emitting.
+  connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
+  connect(task, &TTThreadTask::aborted, this,
+          [this, task]() { if (mpRunningSearch == task) onLogoSearchFinished(-1, true); });
 
   mpRunningSearch = task;
   navigation->setLogoSearchRunning(true);

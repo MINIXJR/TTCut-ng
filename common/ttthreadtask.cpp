@@ -144,7 +144,18 @@ void TTThreadTask::runSynchron()
 
 /**
  * Runable run method
- * 
+ *
+ * cleanUp() runs BEFORE the terminal signal, in all three exits. Every owner
+ * of a task connects finished/aborted to deleteLater, so emitting first hands
+ * the GUI thread permission to destroy the object while this thread is still
+ * about to dispatch the virtual cleanUp() through its vptr. Proven with
+ * tools/diag/test_task_cleanup_order under AddressSanitizer: heap-use-after-free
+ * in cleanUp(), freed by the DeferredDelete event on the GUI thread.
+ *
+ * The order is also the more sensible one on its own: no task's cleanUp()
+ * needs the completion to have been announced, and several of them release
+ * resources or disconnect signals that observers have no business seeing
+ * afterwards.
  */
 void TTThreadTask::run()
 {
@@ -165,15 +176,15 @@ void TTThreadTask::run()
 
     mIsRunning = false;
     //qDebug() << "emit finished for task " << taskName() << " with UUID " << taskID();
-    emit finished(this);
     cleanUp();
+    emit finished(this);
   }
   catch(const TTAbortException&)
   {
     qDebug() << taskName() << " with UUID " << taskID() << " catched TTAbortException";
     mIsRunning = false;
-    emit aborted(this);
     cleanUp();
+    emit aborted(this);
 
     if (mIsSynchron) {
       qDebug() << taskName() << " with UUID " << taskID() << " redirect TTAbortException";
@@ -184,8 +195,8 @@ void TTThreadTask::run()
   {
     qDebug() << taskName() << "with UUID " << taskID() << " catched TTException";
     mIsRunning = false;
-    emit aborted(this);
     cleanUp();
+    emit aborted(this);
   }
 }
 
