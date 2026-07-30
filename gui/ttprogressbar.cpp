@@ -68,12 +68,19 @@ void TTProgressBar::showBar()
 
 /**
  * Hide the progress form
+ *
+ * Does NOT set the dialog modal on the way out. It used to, which is a strange
+ * thing to do to a window one is about to hide - and under Wayland it left an
+ * invisible modal grab behind: after a stream-point analysis the application
+ * looked frozen, a "goto frame" dialog opened but shivered without taking
+ * input, and marker jumps went nowhere. The same session under
+ * QT_QPA_PLATFORM=xcb worked, and the process was idle throughout (0.7% CPU
+ * over 35 minutes), so nothing was looping - input simply never arrived.
  */
 void TTProgressBar::hideBar()
 {
   if (isBlocking) return;
 
-  setModal(true);
   hide();
 
   qApp->processEvents();
