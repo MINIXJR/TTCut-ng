@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order test_mpeg2_seek
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -260,3 +260,33 @@ test_mpeg2order: test_mpeg2order.cpp $(MKVORDER_OBJS)
 
 test_cutprogress: test_cutprogress.cpp $(STILLFRAME_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(STILLFRAME_OBJS) $(LDLIBS) $(AVLIBS)
+
+# test_mpeg2_seek: drives the MPEG-2 still-image path (moveToIndexPos +
+# TTMpeg2Decoder::moveToFrameIndex) for a list of positions and reports the
+# returned picture's checksum - the headless view of "the image does not
+# change when I jump to a marker".
+test_mpeg2_seek: test_mpeg2_seek.cpp $(MPEG2CUT_OBJS)
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
+# test_window_jump: same jump as test_mpeg2_seek, but through the real display
+# widget (TTMPEG2Window2), so the pixmap it produces can be compared. Needs
+# Qt5Widgets and the widget's own dependencies; run with
+# QT_QPA_PLATFORM=offscreen.
+WINDOWJUMP_OBJS := $(MPEG2CUT_OBJS) \
+                 ../../obj/ttmpeg2window2.o ../../obj/moc_ttmpeg2window2.o \
+                 ../../obj/ttcut.o \
+                 ../../obj/ttffmpegwrapper.o ../../obj/moc_ttffmpegwrapper.o \
+                 ../../obj/ttdisplayordermap.o ../../obj/ttesinfo.o \
+                 ../../obj/ttnaluparser.o ../../obj/ttsubtitleheaderlist.o \
+                 ../../obj/tth26xvideostream.o ../../obj/moc_tth26xvideostream.o
+
+test_window_jump: test_window_jump.cpp $(WINDOWJUMP_OBJS)
+	@test -f ../../obj/ttmpeg2window2.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. -I../../ui_h \
+	    $(shell pkg-config --cflags $(MPEG2CUT_PKGS) Qt5Widgets) \
+	    -o $@ $< $(WINDOWJUMP_OBJS) \
+	    $(shell pkg-config --libs $(MPEG2CUT_PKGS) Qt5Widgets) \
+	    -lmpeg2 -lmpeg2convert -lpthread
