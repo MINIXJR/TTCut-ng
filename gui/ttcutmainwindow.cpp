@@ -951,7 +951,16 @@ void TTCutMainWindow::onAbortStreamPoints()
 void TTCutMainWindow::onStreamPointJump(int frameIndex)
 {
   if (!mpCurrentAVDataItem) return;
-  onVideoSliderChanged(frameIndex);
+
+  // Deliberately not onVideoSliderChanged(): that one passes fastSlider() on
+  // as onGotoFrame's second argument, and that argument is a FRAME TYPE, not a
+  // speed switch - 1 means "look for the next I frame from here". With
+  // FastSlider on, a marker at 7045 therefore landed on 7050, and the three
+  // error markers of one defect (7045, 7048, 7048) all ended up on the same
+  // picture. A marker jump has to land where the marker points; the fast mode
+  // belongs to dragging the slider, where skipping to I frames is the point.
+  currentFrame->onGotoFrame(frameIndex, 0);
+  navigation->checkCutPosition(mpCurrentAVDataItem);
 }
 
 void TTCutMainWindow::onStreamPointDelete(int row)
