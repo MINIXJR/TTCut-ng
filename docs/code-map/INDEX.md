@@ -56,9 +56,11 @@ From `detection-and-search.md`:
   `TTSearchTask::isFrameBlackAt`, `TTSearchTask::buildHistogramAt` (both MPEG-2
   fallbacks of what `TTFFmpegWrapper` does for H.26x) and `centreMeanLuma` in
   `ttaspectdetect.cpp`.
-- The three directed searches connect only `finished → deleteLater`, not
-  `aborted` — the leak pattern fixed for `TTAspectScanTask`. Open, not
-  commissioned.
+- ~~The three directed searches connect only `finished → deleteLater`, not
+  `aborted`.~~ Fixed (`f8fe7dd6`), together with the root hazard underneath it:
+  `TTThreadTask::run()` emitted its terminal signal before the virtual
+  `cleanUp()`, which every owner turns into a use-after-free by wiring that
+  signal to `deleteLater` (reproduced under ASAN).
 
 **Cross-cutting:** `CLAUDE.md`'s "PAFF Smart Cut implementation notes" attribute
 SPS-Unification, MMCO neutralization and `realStartAU` filtering to PAFF. All

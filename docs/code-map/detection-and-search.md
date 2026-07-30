@@ -206,14 +206,14 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
   freigegeben (GUI-Thread über `deleteLater`). Ein Aufräumen im Arbeitsthread
   läuft ohne Happens-before-Kante gegen den Destruktor und kann doppelt
   freigeben.
-- **`run()` sendet das Endsignal *vor* `cleanUp()`** (`ttthreadtask.cpp:168`,
-  ebenso `:175` und `:187`). Wer `finished`/`aborted` an `deleteLater` hängt —
-  also jeder Nutzer dieser Familie — öffnet damit ein schmales Fenster, in dem
-  der GUI-Thread die Aufgabe zerstört, während der Arbeitsthread noch den
-  virtuellen `cleanUp()`-Aufruf über den vptr absetzt. Vorbestehend, nicht
-  nachgestellt; die richtige Reihenfolge wäre `cleanUp(); emit finished(this);`.
-  Betrifft alle Aufgaben der Anwendung, nicht nur diese Familie — eigener
-  Durchgang nötig, nicht beauftragt.
+- **`run()` räumt vor dem Endsignal auf** — seit `f8fe7dd6`, vorher umgekehrt.
+  Wer `finished`/`aborted` an `deleteLater` hängt (jeder Nutzer dieser Familie),
+  gab dem GUI-Thread damit die Erlaubnis, die Aufgabe zu zerstören, während der
+  Arbeitsthread noch den virtuellen `cleanUp()`-Aufruf über den vptr absetzte.
+  Mit `tools/diag/test_task_cleanup_order` unter AddressSanitizer nachgestellt:
+  `heap-use-after-free` in `cleanUp()`, freigegeben im `DeferredDelete` des
+  GUI-Threads. Keine `cleanUp()`-Implementierung im Baum braucht das Signal
+  vorher; die beiden, die etwas freigeben, halten es privat ohne Getter.
 - **Leerer Indexlisten-Fall meldet nichts.** `TTAspectScanTask::operation()`
   kehrt bei `mIndexList->count() == 0` zurück, ohne `onStatusReport` zu rufen;
   die GUI schirmt den Fall zwar ab, der Harness-Pfad aber nicht. Kleinigkeit,
@@ -231,9 +231,11 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
   MPEG-2-Zweitimplementierung dessen, was `TTFFmpegWrapper` für H.26x tut —
   inklusive der 10-%-Randmaske und der `step = 2`-Abtastung. Drei Kopien
   derselben Abtastregel im Baum (dazu `centreMeanLuma` in `ttaspectdetect.cpp`).
-- Die drei gerichteten Suchen verbinden nur `finished → deleteLater`, nicht
-  `aborted`. Gleiches Leck-Muster wie das in `TTAspectScanTask` behobene.
-  Nicht beauftragt.
+- ~~Die drei gerichteten Suchen verbinden nur `finished → deleteLater`, nicht
+  `aborted`.~~ Behoben in `f8fe7dd6` — dabei zeigte sich, dass das Leck nur die
+  halbe Wirkung war: eine vor dem Start abgebrochene Suche meldet weder
+  `finished` noch `found`, also blieb auch `mpRunningSearch` gesetzt und
+  blockierte jede weitere Suche.
 - `TTCutPreviewTask`/`TTCutVideoTask` rufen `pool->start()` aus Arbeitsthreads
   und verändern `mTaskQueue` threadübergreifend ohne Absicherung. Berührt
   denselben Pool wie diese Familie. Nicht beauftragt.
@@ -247,3 +249,4 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
 | `tools/diag/test_aspectscan_mpeg2` | `<datei> <stichprobe_s> [erwartete_anzahl]` | dito für MPEG-2 — **andere Argumentreihenfolge**, kein fps |
 | `tools/diag/test_pillarbox` | `<datei> [erster] [letzter] [schritt] [schwelle]` | Einzelbild-Klassifikation über den echten Dekodierpfad — **kein** fps-Argument |
 | `tools/diag/test_pool_abort` | `[anzahl] [millisekunden]` | Abbruch-Absturz aus `e247dbda` |
+| `tools/diag/test_task_cleanup_order` | `[wiederholungen]` | Aufräum-Reihenfolge aus `f8fe7dd6` — **braucht einen ASAN-Bau**, Aufrufzeile steht in der Datei |
