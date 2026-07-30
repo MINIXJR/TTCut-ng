@@ -111,7 +111,9 @@ void TTCutVideoTask::operation()
       mpCutParams->firstCall();
 
     mpCutTask->init(mpCutStream, mpCutParams);
-    mpAVData->threadTaskPool()->start(mpCutTask, true);
+    // This operation() runs in a pool thread; startNested() keeps the pool's
+    // task queue in its own thread (see TTThreadTaskPool::startNested).
+    mpAVData->threadTaskPool()->startNested(mpCutTask);
 
 		if (i == mpCutList->count() - 1)
 		  mpCutParams->lastCall();

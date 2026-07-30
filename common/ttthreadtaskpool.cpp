@@ -21,6 +21,7 @@
 
 #include <QThreadPool>
 #include <QPointer>
+#include <QThread>
 #include <QDebug>
 
 /**
@@ -108,9 +109,19 @@ void TTThreadTaskPool::cleanUpQueue()
 
 /**
  * Threadtask has emitted start signal
+ *
+ * mTaskQueue is a plain QQueue with no lock, and this method reads and writes
+ * it (runningTaskCount, contains, enqueue). It therefore belongs to the pool's
+ * own thread - use startNested() to run a task from inside another one.
+ * ThreadSanitizer on the pre-`startNested` code reported data races on the
+ * queue's QListData and a SEGV in runningTaskCount(), reading a pointer out of
+ * the buffer another thread had just reallocated
+ * (tools/diag/test_pool_crossthread).
  */
 void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
 {
+  Q_ASSERT(thread() == QThread::currentThread());
+
   connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
   connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
   connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
@@ -148,6 +159,48 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
     task->runSynchron();
   else
     QThreadPool::globalInstance()->start(task, priority);
+}
+
+/**
+ * Run an embedded task synchronously, from inside a task that is already
+ * running.
+ *
+ * Same wiring as start(), minus everything that touches mTaskQueue. The
+ * callers (TTCutVideoTask for every cut of a list, TTCutPreviewTask for the
+ * per-clip video and subtitle cut) run in a pool thread, while the GUI thread
+ * keeps enqueuing tasks of its own and removes finished ones through the
+ * queued finished/aborted slots - two threads on one unguarded QQueue.
+ *
+ * Connecting is safe from any thread, and the slots run in the pool's thread
+ * because the task objects live there (Qt picks a queued connection when the
+ * emitting thread differs from the receiver's).
+ *
+ * Nothing else changes for the caller:
+ *   - start()'s `emit init()` only fires while no task is running, and the
+ *     outer task always is, so it never fired for these calls anyway.
+ *   - overallPercentage() feeds off mTotalMap/mProgressMap, which are filled
+ *     through onStatusReport - not through the queue. The embedded task still
+ *     reports progress, which matters because TTCutTask forwards
+ *     TTVideoStream::statusReport (the fine-grained progress inside one cut).
+ *   - overallTime() sums elapsedTime() over the queue. The embedded task runs
+ *     inside the outer one, so its time used to be counted twice; now it is
+ *     counted once.
+ */
+void TTThreadTaskPool::startNested(TTThreadTask* task)
+{
+  connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
+
+  connect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
+
+  // No destroyed() connection: that one only exists to take a dead task out of
+  // the queue, and this task never enters it.
+
+  qDebug() << "run nested task" << task->taskName() << "with UUID" << task->taskID();
+
+  task->runSynchron();
 }
 
 /**

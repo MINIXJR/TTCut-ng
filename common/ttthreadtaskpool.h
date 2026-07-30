@@ -37,6 +37,7 @@ class TTThreadTaskPool : public QObject
 
     void  init(int estimateTaskCount);
 		void  start(TTThreadTask* task, bool runSyncron=false, int priority=0);
+    void  startNested(TTThreadTask* task);
     int   overallPercentage();
     QTime overallTime();
 

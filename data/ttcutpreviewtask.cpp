@@ -212,7 +212,9 @@ void TTCutPreviewTask::operation()
       {
         QString videoExt = "m2v";
         cutVideoTask->init(createPreviewFileName(i + 1, videoExt), tmpCutList);
-        mpAVData->threadTaskPool()->start(cutVideoTask, true);
+        // This operation() runs in a pool thread; startNested() keeps the
+        // pool's task queue in its own thread.
+        mpAVData->threadTaskPool()->startNested(cutVideoTask);
 
         if (tmpCutList->at(0).avDataItem()->audioCount() > 0) {
           hasAudio = true;
@@ -229,7 +231,7 @@ void TTCutPreviewTask::operation()
         // Cut subtitle stream if available (use first subtitle stream)
         if (tmpCutList->at(0).avDataItem()->subtitleCount() > 0) {
           cutSubtitleTask->init(createPreviewFileName(i + 1, "srt"), tmpCutList, 0, cutVideoTask->muxListItem());
-          mpAVData->threadTaskPool()->start(cutSubtitleTask, true);
+          mpAVData->threadTaskPool()->startNested(cutSubtitleTask);
         }
 
         // Get A/V sync offset from .info file
