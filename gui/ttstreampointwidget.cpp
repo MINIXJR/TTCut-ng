@@ -119,21 +119,22 @@ namespace {
 
 QLabel* addSectionHeading(QGridLayout* gl, int row, const QString& text, QWidget* tab)
 {
-  // Strongest emphasis level - marks the two top-level detector groups.
-  // Displayed upper-case for visual weight; the translatable source string
-  // itself stays normal-case (see trans/ttcut-ng_de_DE.ts).
-  QLabel* lbl = new QLabel(text.toUpper(), tab);
-  lbl->setStyleSheet("QLabel { font-weight: bold; font-size: 11pt; }");
+  // Marks the two top-level detector groups. Bold at the surrounding text
+  // size - an enlarged, upper-cased variant shouted next to the group box
+  // titles and tab labels around it, which are plain weight.
+  QLabel* lbl = new QLabel(text, tab);
+  lbl->setStyleSheet("QLabel { font-weight: bold; }");
   gl->addWidget(lbl, row, 0, 1, 2);
   return lbl;
 }
 
 QLabel* addSubHeading(QGridLayout* gl, int row, const QString& text, QWidget* tab)
 {
-  // One level down from the section heading - bold, but visibly weaker
-  // (default point size, indented under its section).
+  // One level down from the section heading. Italic rather than bold: the
+  // second level needs to be distinguishable, not louder, and stacking two
+  // bold weights left no room for the check box labels below them.
   QLabel* lbl = new QLabel(text, tab);
-  lbl->setStyleSheet("QLabel { font-weight: bold; padding-left: 10px; }");
+  lbl->setStyleSheet("QLabel { font-style: italic; padding-left: 10px; }");
   gl->addWidget(lbl, row, 0, 1, 2);
   return lbl;
 }
