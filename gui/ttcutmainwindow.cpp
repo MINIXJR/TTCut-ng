@@ -854,8 +854,10 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   // streams have a header list at all.
   if (TTSettings::instance()->spDetectAspectChange() &&
       videoHeaders && videoHeaders->size() > 0) {
+    // videoIndex is display-sorted (TTOpenVideoTask sorts right after building
+    // it); the worker needs it to report markers in navigation positions.
     TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
-      vs->streamType(), videoHeaders);
+      vs->streamType(), videoHeaders, videoIndex);
 
     connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
             this, &TTCutMainWindow::onVideoPointsDetected);

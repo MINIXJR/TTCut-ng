@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -234,6 +234,22 @@ test_aspectscan_mpeg2: test_aspectscan_mpeg2.cpp $(MPEG2ASPECTSCAN_OBJS)
 	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
 	    -o $@ $< $(MPEG2ASPECTSCAN_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
+# test_streampoint_order: compares the bitstream-order picture counter that
+# TTStreamPointVideoWorker reports against the display-order position the
+# navigation actually uses, then runs the real worker as a gate. Needs the
+# MPEG-2 header/index machinery plus the worker itself.
+STREAMPOINTORDER_OBJS := $(MPEG2CUT_OBJS) \
+                 ../../obj/ttstreampoint_videoworker.o \
+                 ../../obj/moc_ttstreampoint_videoworker.o \
+                 ../../obj/ttstreampoint.o \
+                 ../../obj/ttthreadtask.o ../../obj/moc_ttthreadtask.o
+
+test_streampoint_order: test_streampoint_order.cpp $(STREAMPOINTORDER_OBJS)
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(STREAMPOINTORDER_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
 
 MKVORDER_OBJS := ../../obj/ttmkvmergeprovider.o ../../obj/moc_ttmkvmergeprovider.o \

@@ -16,6 +16,7 @@
 #include <QList>
 
 class TTVideoHeaderList;
+class TTVideoIndexList;
 
 class TTStreamPointVideoWorker : public TTThreadTask
 {
@@ -25,7 +26,13 @@ public:
   // Header-based aspect detection is the worker's only job; the caller
   // decides whether to create it at all (spDetectAspectChange() plus a
   // non-empty header list), so there is nothing left to switch off here.
-  TTStreamPointVideoWorker(int streamType, TTVideoHeaderList* videoHeaderList);
+  //
+  // videoIndexList is the display-sorted index list of the same stream. It
+  // turns the header position of a sequence header into the position the
+  // navigation works with; see detectAspectChanges(). May be null, in which
+  // case the marker keeps its bitstream position.
+  TTStreamPointVideoWorker(int streamType, TTVideoHeaderList* videoHeaderList,
+                           TTVideoIndexList* videoIndexList);
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);
@@ -39,9 +46,11 @@ public slots:
 
 private:
   QList<TTStreamPoint> detectAspectChanges();
+  int                  displayPositionAfter(int headerIndex) const;
 
   int                  mStreamType;
   TTVideoHeaderList*   mVideoHeaderList;
+  TTVideoIndexList*    mVideoIndexList;
 };
 
 #endif // TTSTREAMPOINT_VIDEOWORKER_H
