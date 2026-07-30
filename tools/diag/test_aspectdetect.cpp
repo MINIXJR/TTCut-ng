@@ -15,18 +15,24 @@ static void check(bool ok, const char* what)
     if (!ok) gFailures++;
 }
 
-// Build a 1280x720 grayscale frame: `barWidth` black columns on each side,
-// the rest filled with `centreLuma`.
-static QImage makeFrame(int barWidth, int centreLuma)
+// Build a 1280x720 grayscale frame: `leftBar` black columns on the left,
+// `rightBar` on the right, the rest filled with `centreLuma`.
+static QImage makeFrameLR(int leftBar, int rightBar, int centreLuma)
 {
     QImage img(1280, 720, QImage::Format_Grayscale8);
     img.fill(0);
     for (int row = 0; row < img.height(); ++row) {
         uchar* line = img.scanLine(row);
-        for (int col = barWidth; col < img.width() - barWidth; ++col)
+        for (int col = leftBar; col < img.width() - rightBar; ++col)
             line[col] = (uchar)centreLuma;
     }
     return img;
+}
+
+// Symmetric shorthand: the same bar width on both sides.
+static QImage makeFrame(int barWidth, int centreLuma)
+{
+    return makeFrameLR(barWidth, barWidth, centreLuma);
 }
 
 static void testClassifier()
@@ -54,6 +60,45 @@ static void testClassifier()
     // A null image cannot be classified.
     check(classifyAspectSample(QImage(), 20) == TTAspectSample::NoStatement,
           "null image -> NoStatement");
+
+    // --- plausible bar width ----------------------------------------------
+    // Nominal 4:3-in-16:9 bar at 1280 wide is w/8 = 160 px; the limit is
+    // 1.5x that = 240 px. Values measured on two recordings, see
+    // classifyAspectSample().
+
+    // Real geometry from "1994x05_-_Flemming_...", bars 3 px apart.
+    check(classifyAspectSample(makeFrameLR(177, 174, 128), 20) == TTAspectSample::Pillarbox,
+          "177/174 px bars (real 4:3 section) -> Pillarbox");
+
+    // Genuine bleed inside a real 4:3 segment: left bar stays put, dark
+    // picture content widens the right one. Must still count as pillarbox.
+    check(classifyAspectSample(makeFrameLR(161, 212, 128), 20) == TTAspectSample::Pillarbox,
+          "161/212 px bars (measured bleed in a real segment) -> Pillarbox");
+
+    // Exactly at the limit, and one past it.
+    check(classifyAspectSample(makeFrameLR(161, 240, 128), 20) == TTAspectSample::Pillarbox,
+          "161/240 px bars (bar == limit) -> Pillarbox");
+    check(classifyAspectSample(makeFrameLR(161, 241, 128), 20) == TTAspectSample::NoStatement,
+          "161/241 px bars (one past the limit) -> NoStatement");
+
+    // The night-scene frames that produced the false 4:3 segment. Both bars
+    // clear the 10 % minimum, so only the width limit rejects them.
+    check(classifyAspectSample(makeFrameLR(137, 276, 128), 20) == TTAspectSample::NoStatement,
+          "137/276 px bars (dark scene, narrowest offending bar) -> NoStatement");
+    check(classifyAspectSample(makeFrameLR(318, 211, 128), 20) == TTAspectSample::NoStatement,
+          "318/211 px bars (dark scene) -> NoStatement");
+    check(classifyAspectSample(makeFrameLR(167, 384, 128), 20) == TTAspectSample::NoStatement,
+          "167/384 px bars (dark scene) -> NoStatement");
+    check(classifyAspectSample(makeFrameLR(391, 364, 128), 20) == TTAspectSample::NoStatement,
+          "391/364 px bars (dark scene) -> NoStatement");
+    check(classifyAspectSample(makeFrameLR(544, 185, 128), 20) == TTAspectSample::NoStatement,
+          "544/185 px bars (dark scene) -> NoStatement");
+
+    // An over-wide bar must NOT break a candidate run: the same bleed occurs
+    // inside genuine 4:3 material (175/472 measured), where treating it as
+    // NoPillarbox tore one segment into three.
+    check(classifyAspectSample(makeFrameLR(175, 472, 128), 20) == TTAspectSample::NoStatement,
+          "175/472 px bars (bleed inside a real segment) -> NoStatement, not NoPillarbox");
 }
 
 static void testHysteresis()

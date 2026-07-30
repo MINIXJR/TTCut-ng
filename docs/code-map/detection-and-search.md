@@ -1,6 +1,6 @@
 ---
 base_commit: aaad1172cc1b64e4482a75ecec199f56ee15c12c
-last_verified: 2026-07-29  # Erstanlage zusammen mit TTAspectScanTask (Zweig feature/aspect-change-scan); alle Kanten am Code geprüft, Laufzeitwerte aus den Harnesses in tools/diag. Nach der Zweig-Abschlussprüfung korrigiert: test_pillarbox-Argumente, Init-Behauptung, Anzeigeordnungs-Aussage auf die TTSearchTask-Abkömmlinge eingegrenzt, Index-Wiederverwendung statt "nie zweimal"
+last_verified: 2026-07-30  # Erstanlage zusammen mit TTAspectScanTask (Zweig feature/aspect-change-scan); alle Kanten am Code geprüft, Laufzeitwerte aus den Harnesses in tools/diag. Nach der Zweig-Abschlussprüfung korrigiert: test_pillarbox-Argumente, Init-Behauptung, Anzeigeordnungs-Aussage auf die TTSearchTask-Abkömmlinge eingegrenzt, Index-Wiederverwendung statt "nie zweimal"
 sources:
   - data/ttsearchtask.cpp
   - data/ttsearchtask.h
@@ -116,7 +116,7 @@ flowchart TB
 | `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die Kette (Positionsauswahl → `decodeFrame` → `found`/`pointsDetected` → `onVideoSliderChanged`) ist durchgehend anzeigeordnungs-konsistent — **aber nur für die `TTSearchTask`-Abkömmlinge**. `TTStreamPointVideoWorker` zählt `picture_start_code`-Header in Bitstrom-Reihenfolge (`ttstreampoint_videoworker.cpp:78-102`) und meldet diesen Zähler als Markerposition; ob der bei führenden B-Bildern gegen den Anzeigeindex verrutscht, ist vorbestehend und ungeprüft. |
 | `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
 | `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
-| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. |
+| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
@@ -154,7 +154,11 @@ testbar (`tools/diag/test_aspectdetect`):
    unter dem Luminanz-Schwellwert liegen (Voreinstellung 20).
 3. Von beiden Rändern nach innen zählen, bis die erste nicht-schwarze Spalte
    kommt. Beide Balken müssen ≥ 10 % der Bildbreite messen.
-4. **Gegenprobe in der Mitte**: liegt die mittlere Luminanz zwischen den Balken
+4. **Obergrenze der Balkenbreite**: ist ein Balken breiter als 1,5 × dem
+   Nennwert (`w·3/16`, bei 1280 also 240 statt 160), ist es `NoStatement`.
+   Sonst liest eine dunkle Nachtszene als Pillarbox — gemessen im
+   Flemming-Korpus 167/384, 391/364, 544/185, 318/211, 137/276.
+5. **Gegenprobe in der Mitte**: liegt die mittlere Luminanz zwischen den Balken
    bei ≤ 20, ist es `NoStatement` — sonst läse ein Schwarzbild als Pillarbox,
    weil seine „Balken" in der Mitte zusammenstoßen. Das spiegelt
    `TTFFmpegWrapper::isFrameBlack`, das seinerseits die äußeren 10 % ignoriert.
@@ -169,6 +173,16 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
   Wer über `frameIndex()` iteriert und die Einträge an `decodeFrame()` gibt,
   misst falsch. Genau das tat die erste Fassung von `tools/diag/test_pillarbox`
   und lieferte 49726 statt 49719 (behoben in `61c36f5c`).
+- **Symmetrie taugt *nicht* als Kriterium.** Naheliegend wäre, echte Balken an
+  ihrer Mittigkeit zu erkennen (echt 0–3 px Unterschied, Nachtszene 16–638).
+  Gemessen überlappen die beiden Verteilungen aber: im *echten* 4:3-Abschnitt
+  von 03x01 bleibt der linke Balken bei 161 und der rechte wächst über 10 s auf
+  212 (Unterschied 51), im Flemming-Korpus sogar auf 472. Dunkler Bildinhalt
+  direkt am Balken lässt ihn breiter erscheinen. Ein Symmetrie-Gate zerriss
+  beide echten Abschnitte in drei. Deshalb die Obergrenze auf die *absolute*
+  Breite, und sie liefert `NoStatement` (übersprungen) statt `NoPillarbox`
+  (bricht den Lauf ab) — genau damit dieses Ausbluten einen echten Abschnitt
+  nicht zerschneidet.
 - **Zu kleines Messfenster.** Vor jeder Aussage „der Wechsel ist bei Frame X"
   prüfen, ob der neue Zustand *anhält*. Auf `pb43.m2v` liegt bei 715 ein
   1,4-s-Pillarbox-Einschub, dann 3,0 s 16:9, der bleibende Wechsel erst bei 825

@@ -73,6 +73,29 @@ TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold)
   if (leftBar < minBar || rightBar < minBar)
     return TTAspectSample::NoPillarbox;
 
+  // A bar that is far wider than any aspect conversion could produce is dark
+  // picture content, not a bar. Pillarboxing 4:3 into 16:9 leaves
+  // w * (1 - (4/3)/(16/9)) / 2 = w/8 on each side; measured bars sit close to
+  // that (161 px and 174-177 px at 1280 wide, on two different recordings).
+  // Dark scenes do not: a 45 s night sequence in "1994x05_-_Flemming_..."
+  // produced 167/384, 391/364, 544/185, 318/211 and 137/276 and was reported
+  // as a 4:3 segment.
+  //
+  // The limit is 1.5x the nominal bar. It has to leave room for the real
+  // effect that widens a genuine bar - dark picture content directly against
+  // it: the 4:3 section of "03x01_-_Drunter_und_drüber" holds its left bar at
+  // 161 px while the right one grows to 212 px for over 10 s. Measured
+  // largest genuine bar 212 px, smallest offending one 276 px; the limit sits
+  // between them at 240 px.
+  //
+  // Such a frame carries no aspect information rather than proving the
+  // absence of a pillarbox - hence NoStatement, which the hysteresis skips
+  // instead of using it to break a run. Otherwise the bleed above would tear
+  // a genuine 4:3 segment into three.
+  const int maxBar = w * 3 / 16;
+  if (leftBar > maxBar || rightBar > maxBar)
+    return TTAspectSample::NoStatement;
+
   // Mirror of TTFFmpegWrapper::isFrameBlack, which ignores the outer 10 % and
   // calls a frame black at a mean luminance <= 20: a fully black frame would
   // otherwise read as pillarbox, because its bars meet in the middle. The
