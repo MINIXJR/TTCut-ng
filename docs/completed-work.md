@@ -579,7 +579,12 @@ Punkten, die oben einen eigenen Abschnitt haben, steht es dort.
       not a speed switch, so with FastSlider on (the default) every jump
       searched forward to the next I frame. Marker 7045 landed on 7050, and
       three error markers of one defect all ended up on the same picture.
-      Harness `tools/diag/test_mpeg2_seek.cpp`
+      Harnesses `tools/diag/test_mpeg2_seek.cpp` (navigation + decoder answer
+      per position) and `tools/diag/test_window_jump.cpp` (one layer up: drives
+      `TTMPEG2Window2` headless as `TTCurrentFrame::onGotoFrame` does and
+      checksums the pixmap the widget actually shows). The second one also
+      cleared the widget of the *remaining* "picture stays" report — that turned
+      out to be a KWin repaint fault under fractional scaling, not TTCut.
 - [x] Aspect markers are reported in display order — `TTStreamPointVideoWorker`
       handed out a `picture_start_code` counter (bitstream order) while
       navigation works with the rank in the display-sorted index list. Measured

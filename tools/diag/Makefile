@@ -27,7 +27,21 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order test_mpeg2_seek
+# TOOLS is what `make` / `make diag` builds by default. MATERIAL_TOOLS are the
+# harnesses that only make sense pointed at a specific recording, so they are
+# built on demand (`make test_mkvmux`) rather than on every diag build. Both
+# lists are cleaned.
+TOOLS := test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order test_mpeg2_seek
+
+MATERIAL_TOOLS := test_audiocut test_rawmap test_adopt_paff test_stillframe \
+                  test_smartcut_seam test_mkvmux test_feed_decode test_sar \
+                  test_segshape test_mpeg2_cutout test_extra_index_rank \
+                  dump_mpeg2_fields test_mpeg2order test_cutprogress \
+                  test_window_jump
+
+# Built by their gate scripts with a sanitizer, never by this Makefile — but
+# they land here, so clean has to know about them.
+SANITIZER_TOOLS := test_pool_crossthread test_task_cleanup_order
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -43,7 +57,7 @@ HEVCSEAM_OBJS := ../../obj/tthevcseam.o
 .PHONY: all clean
 all: $(TOOLS)
 
-check_idr test_nalu_parser test_au_types probe_copystart: %: %.cpp $(NALU_FULL_OBJS)
+test_nalu_parser test_au_types probe_copystart: %: %.cpp $(NALU_FULL_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(NALU_FULL_OBJS) $(LDLIBS)
 
 test_leadingclass: test_leadingclass.cpp $(DISPMAP_OBJS)
@@ -129,9 +143,6 @@ test_stilldisplay: test_stilldisplay.cpp $(WRAPPER_OBJS)
 test_rawmap: test_rawmap.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
-dump_fieldcoded: dump_fieldcoded.cpp $(WRAPPER_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
-
 test_adopt_paff: test_adopt_paff.cpp $(WRAPPER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(WRAPPER_OBJS) $(LDLIBS) $(AVLIBS)
 
@@ -180,7 +191,7 @@ $(DISPMAP_OBJS):
 	@exit 1
 
 clean:
-	rm -f $(TOOLS)
+	rm -f $(TOOLS) $(MATERIAL_TOOLS) $(SANITIZER_TOOLS)
 
 # The MPEG-2 cut path (TTMpeg2VideoStream::cut + TTTranscodeProvider + the
 # libmpeg2 decoder) needs exactly these objects — determined by linking the

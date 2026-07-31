@@ -2,9 +2,13 @@
 // TTDisplayOrderMap (spec 2026-07-05-h264-coldstart-leading-pics-design.md).
 //
 // Builds the REAL production map via TTDisplayOrderMap::buildFromFile() and
-// compares it against decoder ground truth (thread_count=1, pts=AU index —
-// the Pass-B pattern from test_parser_poc). The whole bug lives at the cold
-// start, so a head-slice clip exercises it fully and decodes fast.
+// compares it against decoder ground truth (thread_count=1, pts=AU index).
+// The whole bug lives at the cold start, so a head-slice clip exercises it
+// fully and decodes fast.
+//
+// The ground-truth pass below is the one the 2026-06-12 display-order
+// evaluation used; this harness superseded that throwaway tool by running the
+// same comparison against the production map instead of a local rebuild.
 //
 // Asserts:
 //   - drop count (= count() - displayCount()) == expected
