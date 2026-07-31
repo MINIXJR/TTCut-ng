@@ -70,12 +70,19 @@ void TTProgressBar::showBar()
  * Hide the progress form
  *
  * Does NOT set the dialog modal on the way out. It used to, which is a strange
- * thing to do to a window one is about to hide - and under Wayland it left an
- * invisible modal grab behind: after a stream-point analysis the application
- * looked frozen, a "goto frame" dialog opened but shivered without taking
- * input, and marker jumps went nowhere. The same session under
- * QT_QPA_PLATFORM=xcb worked, and the process was idle throughout (0.7% CPU
- * over 35 minutes), so nothing was looping - input simply never arrived.
+ * thing to do to a window one is about to hide, so the line was dropped.
+ *
+ * Honesty note on the history: this removal was first believed to fix a
+ * frozen-looking GUI after a stream-point analysis under Wayland. The next
+ * day's investigation traced that whole symptom set (stale panes, shivering
+ * dialogs, marker jumps with no visible effect, fine under xcb) to a
+ * compositor bug instead: KWin 6.7.2 fails to refresh parts of a Qt5 window
+ * at a FRACTIONAL display scale (1.5/1.75) while the window is maximized -
+ * the Alt-Tab thumbnail of the very same window showed the correct content
+ * while the screen showed stale pixels. Integer scale (100%/200%), an
+ * unmaximized window, or QT_QPA_PLATFORM=xcb avoid it. So this change stands
+ * on its own merits, but there is no evidence the old setModal(true) ever
+ * caused a hang.
  */
 void TTProgressBar::hideBar()
 {
