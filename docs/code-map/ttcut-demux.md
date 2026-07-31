@@ -1,5 +1,5 @@
 ---
-base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
 last_verified: 2026-07-26  # drift on data/ttavdata.{cpp,h} re-checked: the .info consumer chain is untouched by the cut-length/audio-cut changes; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - tools/ttcut-demux/ttcut-demux
@@ -147,6 +147,15 @@ flowchart LR
   For H.26x the method is therefore gated OFF at the source (PMT
   stream_type); for MPEG-2 the list stays as-is and TTCut's parser
   confirmation supplies the field-pair/defect distinction.
+- **Concat list paths, both writers**: the demuxer resolves a list entry
+  against the **list file's own directory**, so an entry carrying the same
+  prefix as the list gets that prefix twice. The two writers avoid it
+  differently: the mid-stream repair writes basenames next to its list in
+  `work_dir`, while the VDR multi-file list and — since `40087a4c` — the end
+  padding write `realpath` absolutes. Before that fix a relative `output_dir`
+  killed the padding subshell, and `set -e` tore the script down at the
+  `wait`: exit 254, no `.info`, and nothing on screen because the padding log
+  goes to `$PAD_LOG_DIR`.
 - **Padding granularity**: end padding appends whole encoded silence frames
   via concat stream-copy (bit-preserving for AC3 acmod changes). Mid-stream
   gap repair (Rev 3, `repair_audio_with_silence_inserts`) is **also**

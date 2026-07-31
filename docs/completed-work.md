@@ -272,6 +272,24 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Audio-Padding bricht bei relativem `output_dir` ab** → **DONE
+  (2026-07-31, `40087a4c`, v0.77.0)**
+  - War: Der concat-Demuxer löst `file`-Einträge relativ zum Verzeichnis der
+    Liste auf. `TEMP_CONCAT` liegt in `$OUTDIR` und listete `$OUTDIR/…`-Pfade
+    → gesucht wurde `dir/dir/file`. Die Padding-Subshell starb, `set -e` riss
+    das Skript am `wait` um: exit 254, keine `.info`, und auf dem Bildschirm
+    keine Fehlermeldung (das Padding-Log liegt in `$PAD_LOG_DIR`).
+  - Fix: `realpath` auf beide Einträge — dieselbe Absicherung, die die
+    VDR-Multi-Datei-Liste am Kopf des Skripts längst hatte, samt Begründung
+    im Kommentar. Die Listen von `repair_audio_with_silence_inserts` sind
+    **nicht** betroffen (Basename-Einträge, Segmente liegen neben der Liste) —
+    beim Fix mitgeprüft.
+  - Beleg: 8-s-Tux-TS mit 7 s Ton (damit der Padding-Zweig läuft), relativ
+    gegen absolut. Vorher exit 254 / nur `.m2v` + `.ac3`, nachher exit 0.
+    Beide Läufe byte-identisch in `.m2v` und `.ac3`; die `.info` unterscheidet
+    sich nur in Zeitstempel und Quellpfad. Absolute Aufrufe — der
+    VDR_Demux.sh-Workflow — waren nie betroffen.
+
 - **ttcut-demux: Löcher aus TS-Korruption / VDR-Signalverlust werden
   weder erkannt noch repariert** → **DONE** (2026-07-18, branch
   `feature/demux-defect-repair`)
@@ -486,6 +504,29 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     22 interne Objekte, 0 GUI/mpv). Glob durch kuratierte Liste ersetzt,
     Qt5Widgets/Xml/Network/OpenGL/mpv aus den pkg-Libs entfernt; neue GUI/mpv-
     Abhängigkeit im Cut-Pfad bricht jetzt hier den Link statt still absorbiert.
+
+- **Systemanforderungen dokumentieren** → **DONE (2026-07-31, `7f88d484` +
+  Wiki `9b3d915`, v0.77.0)**
+  - README und `Installation.md` haben jetzt eine Anforderungstabelle
+    (Betriebssystem, Architektur, Qt, libav, libmpeg2, Grafik) plus einen
+    Absatz zum Plattenplatz.
+  - Dabei zwei echte Fehler gefunden, keine reine Fleißarbeit: in der
+    Installationszeile fehlten `libqt5opengl5-dev` (`QT += opengl`) und
+    `libmpv-dev` (`PKGCONFIG += mpv`) — ohne die bricht schon `qmake` ab;
+    `debian/control` führte beide korrekt, nur die Doku hing hinterher. libmpv
+    stand außerdem noch unter „optional: Video-Vorschau", obwohl es seit
+    v0.71.0 fest gelinkt ist. Raus flog die Behauptung, Wayland brauche
+    `QT_QPA_PLATFORM=xcb`.
+  - **Der TODO-Vorgabe „Architektur (x86_64)" wurde bewusst nicht gefolgt:**
+    `debian/control` deklariert `linux-any`, und im Quelltext gibt es weder
+    Intrinsics noch `__x86_64__`-Zweige. Dokumentiert ist daher „getestet wird
+    auf x86_64", nicht „erfordert". Die libav-Untergrenze 5.1 hängt an
+    `AVChannelLayout`.
+  - **Nicht gemessen, sondern hergeleitet:** die Platzangabe (Faustregel
+    Zweieinhalbfaches der Aufnahme) folgt aus der Pipeline —
+    `createTempMkvForPlayback` übergibt die vollen Dateipfade, muxt also den
+    ganzen Strom, keinen Ausschnitt. Eine echte Speichermessung an großem
+    Material steht aus.
 
 - **ttcut-ng-Kommandozeilenoptionen im Wiki dokumentieren** → **DONE** (Quickstart.md, 2026-06-03)
   - Nutzerrelevante Optionen (`<datei>`, `--project`, `--help`) als Abschnitt

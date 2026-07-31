@@ -1,5 +1,5 @@
 ---
-base_commit: 8c47403e6b888b184a77dcb68c3cfbb1c8b4efed
+base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
 last_verified: 2026-07-26  # drift on data/ttavdata.cpp + gui/ttcutpreview.cpp re-checked: cut-length bookkeeping and preview playback control touch no documented edge; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
 sources:
   - extern/ttessmartcut.cpp

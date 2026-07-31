@@ -42,17 +42,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
-- **ttcut-demux: Audio-Padding bricht bei RELATIVEM output_dir ab** (latent,
-  gefunden 2026-07-19 bei den es-extras-Gates; kein Fix ohne Abnahme):
-  Der concat-Demuxer löst `file`-Einträge relativ zum Verzeichnis der
-  Concat-Liste auf. `TEMP_CONCAT` liegt in `$OUTDIR` und listet
-  `$OUTDIR/…`-relative Pfade → bei relativem output_dir wird `dir/dir/file`
-  gesucht (repro: „Impossible to open '08x04/08x04/…'"), das Padding-Subshell
-  stirbt und `set -e` reißt das Skript am `wait` um (exit 254, keine .info).
-  Absolute Aufrufe (VDR_Demux.sh-Workflow) sind nicht betroffen.
-  Fix-Richtung: Pfade beim Schreiben der Concat-Liste mit `realpath`
-  absolutieren (auch die Listen von `repair_audio_with_silence_inserts` prüfen).
-
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
@@ -232,12 +221,22 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Support DVB-SUB (bitmap subtitles) and Teletext subtitles
 - Extract and convert to SRT or keep as PGS for MKV output
 
-- **Systemanforderungen dokumentieren**
-  - Mindestanforderungen für README/Wiki: Architektur (x86_64), OS, Qt, ffmpeg/libav, libmpeg2
-  - Optionale Abhängigkeiten: mplex, mpv, ttcut-pts-analyze
-  - Empfehlungen für Speicher/Plattenplatz bei großen DVB-Aufnahmen
-
 ## Low Priority
+
+- **Einstellungs-Tab der Landezonen staucht bei knapper Panel-Höhe**
+  (gemessen 2026-07-31 beim v0.77.0-Release)
+  - Reicht die Höhe nicht, drückt das Layout die Zeilen unter ihre
+    Mindesthöhe, statt zu scrollen: Beschriftungen werden waagerecht
+    abgeschnitten, Eingabefelder zu Strichen. Gemessen im Screenshot-Modus bei
+    1024×768-Fenster — das Widget bekam 159 px für einen Inhalt, der 351 px
+    braucht. Seit dem zweistufigen Umbau (v0.77.0) ist der Tab höher, der
+    Effekt tritt also früher ein als vorher.
+  - Umgangen, nicht behoben: der Screenshot-Modus setzt das Fenster fest auf
+    1920×1080. Im laufenden Programm bleibt es bei knappem Panel bestehen.
+  - Fix-Richtung: den Tab-Inhalt in eine `QScrollArea` setzen, damit bei zu
+    wenig Platz gescrollt statt gestaucht wird. Betrifft auch die anderen
+    Tabs, sobald deren Inhalt wächst — deshalb vor der Umsetzung entscheiden,
+    ob es einen gemeinsamen Container gibt.
 
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
   - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →

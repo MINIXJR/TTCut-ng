@@ -374,22 +374,23 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>Bildformat-Analyse fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="132"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="143"/>
         <source>Aspect format analysis...</source>
         <translation>Bildformat-Analyse …</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="180"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="191"/>
         <source>Aspect format: %1 of %2 samples</source>
         <translation>Bildformat: %1 von %2 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="192"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="136"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="203"/>
         <source>Aspect format analysis cancelled</source>
         <translation>Bildformat-Analyse abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="193"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="204"/>
         <source>Aspect format analysis complete</source>
         <translation>Bildformat-Analyse abgeschlossen</translation>
     </message>
@@ -1224,7 +1225,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="833"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="938"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="940"/>
         <source>Stream Points</source>
         <translation>Stream-Punkte</translation>
     </message>
@@ -1234,13 +1235,13 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
         <translation>Kein Videostream geladen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="939"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="941"/>
         <source>No detection methods enabled. Check Settings tab.</source>
         <translation>Keine Erkennungsmethoden aktiviert. Prüfen Sie die Einstellungen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1131"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1653"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1142"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1664"/>
         <source>
 
 Source:  %1
@@ -1251,25 +1252,25 @@ Quelle:  %1
 Ergebnis:  %2  (%3 entfernt)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1359"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1370"/>
         <source>Loading logo profile (%1/%2 frames)...</source>
         <translation>Lade Logo-Profil (%1/%2 Frames)...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1368"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2005"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2071"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1379"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2036"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2102"/>
         <source>Logo profile loaded: %1</source>
         <translation>Logo-Profil geladen: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1370"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2007"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1381"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2038"/>
         <source>Logo profile could not be verified</source>
         <translation>Logo-Profil konnte nicht verifiziert werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1591"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1602"/>
         <source>%1 decode errors detected in %2 region(s) during demux.
 
 This MPEG-2 stream has defective GOPs that may cause A/V sync issues.
@@ -1280,94 +1281,94 @@ Dieser MPEG-2-Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet und repariert solche Lücken.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1859"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1929"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2194"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1870"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1950"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2225"/>
         <source>Searching... %1 frames checked</source>
         <translation>Suche... %1 Frames geprüft</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1867"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1888"/>
         <source>Searching black frame from frame %1...</source>
         <translation>Suche Schwarzbild ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1887"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1908"/>
         <source>Black frame search aborted</source>
         <translation>Schwarzbild-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1888"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1909"/>
         <source>No black frame found</source>
         <translation>Kein Schwarzbild gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1937"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1968"/>
         <source>Searching scene change from frame %1...</source>
         <translation>Suche Szenenwechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1957"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1988"/>
         <source>Scene change search aborted</source>
         <translation>Szenenwechsel-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1958"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1989"/>
         <source>No scene change found</source>
         <translation>Kein Szenenwechsel gefunden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1970"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2001"/>
         <source>Select the logo area in the video frame...</source>
         <translation>Logo-Bereich im Videobild auswählen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1984"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2015"/>
         <source>Load logo file</source>
         <translation>Logo-Datei laden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1999"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2030"/>
         <source>Loading logo profile...</source>
         <translation>Lade Logo-Profil...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2020"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2051"/>
         <source>Logo profile removed</source>
         <translation>Logo-Profil entfernt</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2034"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2065"/>
         <source>Logo file not found: %1</source>
         <translation>Logo-Datei nicht gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2121"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2152"/>
         <source>Creating logo profile (%1/%2 frames)</source>
         <translation>Erstelle Logo-Profil (%1/%2 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2150"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2181"/>
         <source>Logo profile created (%1 frames)</source>
         <translation>Logo-Profil erstellt (%1 Frames)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2153"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2184"/>
         <source>Logo profile could not be created</source>
         <translation>Logo-Profil konnte nicht erstellt werden</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2202"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2243"/>
         <source>Searching logo change from frame %1...</source>
         <translation>Suche Logo-Wechsel ab Frame %1...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2222"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2263"/>
         <source>Logo search aborted</source>
         <translation>Logo-Suche abgebrochen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="2223"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2264"/>
         <source>No logo state change found</source>
         <translation>Keine Logo-Statusänderung gefunden</translation>
     </message>
@@ -1377,12 +1378,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>&lt;h3&gt;Navigation&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vorheriger/Nächster Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;j / k&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (Vim-Stil)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%1 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Shift+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%2 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Alt+Links/Rechts&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%3 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Bild auf/ab&lt;/b&gt;&lt;/td&gt;&lt;td&gt;%4 Frames springen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Pos1 / g&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum ersten Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ende / G&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Zum letzten Frame&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Frame-Typen&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;I / Ctrl+I&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / Ctrl+P&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger P- oder I-Frame&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;B / Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (B, P oder I)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F / Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nächster / Vorheriger Frame (wie B)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Schneiden&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;[&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-In setzen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;]&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cut-Out setzen&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;h3&gt;Maus&lt;/h3&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Mausrad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Frames navigieren&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Rad&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Schneller navigieren&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1137"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1148"/>
         <source>Audio Cut Complete</source>
         <translation>Audio-Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1138"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1149"/>
         <source>Audio cutting has finished.
 
 %1</source>
@@ -1401,45 +1402,45 @@ Dieser MPEG-2 Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: ProjectX zum Demuxen dieser Datei verwenden.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1596"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1607"/>
         <source>Affected regions:</source>
         <translation>Betroffene Regionen:</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1597"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1598"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1599"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1600"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1601"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1602"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1603"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1608"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1609"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1610"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1611"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1612"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1613"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1614"/>
         <source>errors</source>
         <translation>Fehler</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1606"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1617"/>
         <source>Stream Integrity Warning</source>
         <translation>Stream-Integritätswarnung</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1608"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1619"/>
         <source>Import as Stream Points</source>
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1984"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="2015"/>
         <source>PGM Logo (*.pgm)</source>
         <translation>PGM Logo (*.pgm)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1146"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1658"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1157"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1669"/>
         <source>Cutting Complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1147"/>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1659"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1158"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1670"/>
         <source>Video cutting has finished successfully.
 
 Output file:
@@ -1450,7 +1451,7 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="1764"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="1775"/>
         <source>&amp;%1 %2</source>
         <translation>&amp;%1 %2</translation>
     </message>
@@ -1752,17 +1753,17 @@ Ausgabedatei:
         <translation>Vorschau-Clip %1 von %2 erstellen</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="292"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="294"/>
         <source>Preview clip %1 of %2 created</source>
         <translation>Vorschau-Clip %1 von %2 erstellt</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="319"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="321"/>
         <source>preview cuts done</source>
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="425"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="427"/>
         <source>The preview could not be created: this recording is too damaged for frame-accurate cutting.
 
 %1</source>
@@ -2685,7 +2686,7 @@ Ausgabedatei:
 <context>
     <name>TTCutTask</name>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="178"/>
+        <location filename="../data/ttcutvideotask.cpp" line="180"/>
         <source>No cut stream specified!</source>
         <translation>Kein Schnitt-Stream angegeben!</translation>
     </message>
@@ -2863,7 +2864,7 @@ Ausgabedatei:
         <translation>Schnitt 1 von %1</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="119"/>
+        <location filename="../data/ttcutvideotask.cpp" line="121"/>
         <source>Cut %1 of %2</source>
         <translation>Schnitt %1 von %2</translation>
     </message>
@@ -3516,12 +3517,12 @@ Unterstützte Formate:
 <context>
     <name>TTStreamPointVideoWorker</name>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="31"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="34"/>
         <source>Analyzing video...</source>
         <translation>Video wird analysiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="34"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="37"/>
         <source>Aspect ratio analysis...</source>
         <translation>Seitenverhältnis-Analyse...</translation>
     </message>
@@ -3530,7 +3531,7 @@ Unterstützte Formate:
         <translation type="vanished">Pillarbox-Analyse...</translation>
     </message>
     <message>
-        <location filename="../data/ttstreampoint_videoworker.cpp" line="45"/>
+        <location filename="../data/ttstreampoint_videoworker.cpp" line="48"/>
         <source>Video analysis complete</source>
         <translation>Videoanalyse abgeschlossen</translation>
     </message>
@@ -3543,27 +3544,27 @@ Unterstützte Formate:
     <name>TTStreamPointWidget</name>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="97"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="367"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="378"/>
         <source>Delete all</source>
         <translation>Alle löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="202"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="209"/>
         <source>Finds points where the audio format changes (e.g. stereo to 5.1).</source>
         <translation>Findet Stellen, an denen sich das Audioformat ändert (z. B. Stereo zu 5.1).</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="207"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="218"/>
         <source>Video</source>
         <translation>Video</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="209"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="220"/>
         <source>MPEG-2 only</source>
         <translation>Nur MPEG-2</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="213"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="224"/>
         <source>Aspect ratio (4:3/16:9)</source>
         <translation>Seitenverhältnis (4:3/16:9)</translation>
     </message>
@@ -3579,52 +3580,52 @@ Unterstützte Formate:
     </message>
     <message>
         <location filename="../gui/ttstreampointwidget.cpp" line="93"/>
-        <location filename="../gui/ttstreampointwidget.cpp" line="313"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="324"/>
         <source>Start analysis</source>
         <translation>Analyse starten</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="156"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="163"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="160"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="167"/>
         <source>All formats</source>
         <translation>Alle Formate</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="163"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="170"/>
         <source>Silence</source>
         <translation>Stille</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="165"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="172"/>
         <source>Finds passages quieter than the threshold for at least the minimum duration.</source>
         <translation>Findet Passagen, die für mindestens die Mindestdauer leiser als der Schwellwert sind.</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="169"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="176"/>
         <source>Threshold (dB):</source>
         <translation>Schwellwert (dB):</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="178"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="185"/>
         <source>Minimum duration (s):</source>
         <translation>Mindestdauer (s):</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="200"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="207"/>
         <source>Audio format change</source>
         <translation>Audioformatwechsel</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="215"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="226"/>
         <source>Reads the aspect ratio from MPEG-2 sequence headers. Has no effect on H.264/H.265, which carry no such headers.</source>
         <translation>Liest das Seitenverhältnis aus MPEG-2-Sequenzheadern. Hat bei H.264/H.265 keine Wirkung, da diese Formate keine solchen Header besitzen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="219"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="230"/>
         <source>All codecs</source>
         <translation>Alle Codecs</translation>
     </message>
@@ -3633,67 +3634,67 @@ Unterstützte Formate:
         <translation type="vanished">Seitenverhältnis (4:3/16:9, nur MPEG-2)</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="226"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="237"/>
         <source>Pillarbox detection (4:3 in 16:9)</source>
         <translation>Pillarbox-Erkennung (4:3 in 16:9)</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="228"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="239"/>
         <source>Detects 4:3 content inside a 16:9 frame by measuring the black bars. Works for MPEG-2, H.264 and H.265.</source>
         <translation>Erkennt 4:3-Inhalt innerhalb eines 16:9-Bildes anhand der schwarzen Balken. Funktioniert bei MPEG-2, H.264 und H.265.</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="232"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="243"/>
         <source>Threshold (luminance):</source>
         <translation>Schwellwert (Luminanz):</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="237"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="248"/>
         <source>A column counts as black below this brightness. Higher values detect more, but risk false hits in dark scenes.</source>
         <translation>Eine Spalte gilt unterhalb dieser Helligkeit als schwarz. Höhere Werte erkennen mehr, riskieren aber Fehltreffer in dunklen Szenen.</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="241"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="252"/>
         <source>Sample distance (s):</source>
         <translation>Stichprobenabstand (s):</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="249"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="260"/>
         <source>Distance between analysed frames. Smaller is slower; the reported position stays frame-exact either way.</source>
         <translation>Abstand zwischen den analysierten Frames. Kleiner ist langsamer; die gemeldete Position bleibt in jedem Fall bildgenau.</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="308"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="319"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="309"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="320"/>
         <source>Analysis running...</source>
         <translation>Analyse läuft...</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="316"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="327"/>
         <source>Analysis cancelled - list incomplete</source>
         <translation>Analyse abgebrochen – Liste unvollständig</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="319"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="330"/>
         <source>%1 stream points detected</source>
         <translation>%1 Landezonen erkannt</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="358"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="369"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="360"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="371"/>
         <source>Set as Cut-In</source>
         <translation>Als Schnittanfang setzen</translation>
     </message>
     <message>
-        <location filename="../gui/ttstreampointwidget.cpp" line="361"/>
+        <location filename="../gui/ttstreampointwidget.cpp" line="372"/>
         <source>Set as Cut-Out</source>
         <translation>Als Schnittende setzen</translation>
     </message>

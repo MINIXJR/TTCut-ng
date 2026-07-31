@@ -1,6 +1,6 @@
 ---
-base_commit: 65af8fe470898782a3c430dd9974baa1bd7bc96d
-last_verified: 2026-07-30  # Erstanlage zusammen mit TTAspectScanTask (Zweig feature/aspect-change-scan); alle Kanten am Code geprüft, Laufzeitwerte aus den Harnesses in tools/diag. Nach der Zweig-Abschlussprüfung korrigiert: test_pillarbox-Argumente, Init-Behauptung, Anzeigeordnungs-Aussage auf die TTSearchTask-Abkömmlinge eingegrenzt, Index-Wiederverwendung statt "nie zweimal". Danach (65af8fe4): die Anzeigeordnungs-Einschränkung ist erledigt — TTStreamPointVideoWorker schlägt die Position jetzt nach, neue Kante displayPositionAfter mit den Messwerten aus tools/diag/test_streampoint_order
+base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
+last_verified: 2026-07-31  # v0.77.0-Abgleich: Pool-Pitfall auf startNested korrigiert (die Aufgabe läuft weiter synchron im Aufrufer-Thread, nur die Warteschlange bleibt unberührt — am Code nachgelesen, nicht aus dem Commit-Titel geschlossen); Kante onStreamPointJump ergänzt; ttcutpreviewtask/ttcutvideotask in sources aufgenommen
 sources:
   - data/ttsearchtask.cpp
   - data/ttsearchtask.h
@@ -19,6 +19,8 @@ sources:
   - gui/ttcutmainwindow.cpp
   - common/ttthreadtaskpool.cpp
   - common/ttthreadtask.cpp
+  - data/ttcutpreviewtask.cpp
+  - data/ttcutvideotask.cpp
 ---
 
 # Erkennung und Suche: ein Dekodier-Unterbau, zwei Ergebnisformen
@@ -125,6 +127,7 @@ flowchart TB
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
 | `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden seit `f8fe7dd6` beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
+| Marker → `onStreamPointJump(frameIndex)` | Ruft `TTCurrentFrame::onGotoFrame(frameIndex, 0)` und danach `checkCutPosition`. | **Nicht** `onVideoSliderChanged`: die reicht `fastSlider()` als zweites Argument weiter, und das ist ein **Bildtyp**, kein Geschwindigkeitsschalter — `1` heißt „ab hier den nächsten I-Frame suchen". Mit eingeschaltetem FastSlider landete ein Marker bei 7045 deshalb auf 7050, und die drei Fehlermarker eines Defekts (7045, 7048, 7048) fielen auf dasselbe Bild (`ad536d7c`). |
 
 ## Varianten-Matrix
 
@@ -237,9 +240,22 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
   halbe Wirkung war: eine vor dem Start abgebrochene Suche meldet weder
   `finished` noch `found`, also blieb auch `mpRunningSearch` gesetzt und
   blockierte jede weitere Suche.
-- `TTCutPreviewTask`/`TTCutVideoTask` rufen `pool->start()` aus Arbeitsthreads
-  und verändern `mTaskQueue` threadübergreifend ohne Absicherung. Berührt
-  denselben Pool wie diese Familie. Nicht beauftragt.
+- ~~`TTCutPreviewTask`/`TTCutVideoTask` rufen `pool->start()` aus
+  Arbeitsthreads und verändern `mTaskQueue` threadübergreifend ohne
+  Absicherung.~~ Behoben in `0f7b532d`: beide rufen jetzt
+  `TTThreadTaskPool::startNested()`. Die eingebettete Aufgabe läuft weiterhin
+  **synchron im aufrufenden Arbeitsthread** (`runSynchron()`) — sie wird nicht
+  an den Pool-Thread gereicht. Weggefallen ist alles, was `mTaskQueue`
+  berührt: die Aufgabe wird nicht eingereiht, und die `destroyed`-Verbindung
+  entfällt (sie existiert nur, um eine tote Aufgabe aus der Warteschlange zu
+  nehmen). Die Fortschritts-Slots laufen im Pool-Thread, weil die
+  Aufgabenobjekte dort leben — Qt wählt dann eine Queued Connection.
+  `start()` sichert seine Thread-Zugehörigkeit jetzt per `Q_ASSERT` ab.
+  Beleg: ThreadSanitizer meldete auf dem alten Stand Datenrennen auf
+  `QListData` der Warteschlange und einen SEGV in `runningTaskCount()`
+  (Zeiger aus einem gerade neu belegten Puffer); Harness
+  `tools/diag/test_pool_crossthread`, Gate
+  `tools/diag/gate_pool_crossthread.sh`.
 
 ## Prüfwerkzeuge
 

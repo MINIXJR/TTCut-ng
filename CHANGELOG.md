@@ -2,6 +2,93 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.77.0 (2026-07-31)
+
+**Pillarbox detection works on H.264/H.265, and the search no longer crashes when cancelled**
+
+### Features
+
+- **Pillarbox detection now runs on H.264 and H.265.** The setting existed and
+  could be switched on, but for those codecs the scan never started — the old
+  implementation was tied to the MPEG-2 sequence headers, and its workers
+  decoded into empty images without a frame index. It has been rebuilt as a
+  full-stream scan on the same decode path the other searches use, so 4:3
+  content inside a 16:9 frame is found for MPEG-2, H.264 and H.265 alike.
+  The related "Aspect ratio (4:3/16:9)" detection is unchanged and remains
+  MPEG-2 only — it reads the sequence headers, which H.264/H.265 do not have.
+  The tooltips now say so instead of leaving it to be discovered.
+
+  Two judgement calls are visible in the results. A frame that cannot support
+  a statement — a black frame, a bar wider than 1.5× the nominal width (dark
+  picture content at the edge), a decode error — is skipped rather than
+  counted as "no pillarbox", so a dark night scene no longer ends the run.
+  And a detected change is reported at the frame where it happens: the scan
+  samples at intervals, then refines the transition to be frame-exact.
+
+- **New setting "Sample distance (s)" for the pillarbox scan** (stream point
+  settings). Smaller values scan more slowly; the reported position stays
+  frame-exact either way. The four pillarbox controls now enable and disable
+  independently of the aspect-ratio ones, and all four follow the check box
+  state when the dialog is opened — previously two of them stayed greyed out
+  until the box was toggled once.
+
+- **The stream point settings tab is laid out in two levels.** Detection kinds
+  are headings, their value fields are indented underneath, and the audio and
+  video sections are separated. Nothing moved between tabs; it is the same
+  settings, grouped so the value belonging to a check box is visible at a
+  glance.
+
+### Fixes
+
+- **Cancelling a running search could crash the application.** Aborting a task
+  pool freed tasks that were still being handed back by their worker threads
+  (use-after-free, reproduced under ASAN). Task teardown now runs `cleanUp()`
+  before the terminal signal rather than after it, and the queue is only
+  touched from the pool's own thread — the previous code manipulated it from
+  whichever worker happened to finish, which is a data race regardless of
+  whether it was ever observed to bite.
+
+- **Jumping to a marker landed on the following I frame.** The jump now lands
+  on the marker itself. The frame type shown on the fast slider follows the
+  jump instead of keeping the previous frame's type.
+
+- **Aspect markers were placed by bitstream position, not display position.**
+  On material with B frames the two differ, so a detected change was marked a
+  few frames away from where it is seen. The detection now looks up the
+  display position.
+
+- **The progress dialog blocked the window while it was hidden**, and its
+  window close button (X) did nothing where the Cancel button worked. The X
+  now cancels like the button.
+
+- **ttcut-demux aborted when the output directory was given as a relative
+  path.** The audio padding step wrote a concat list whose entries the demuxer
+  resolves relative to the list file's own directory, so `dir/file` was looked
+  up as `dir/dir/file`. The run died with exit 254, no `.info` file and no
+  error message on screen. Absolute paths — the VDR_Demux.sh workflow — were
+  never affected.
+
+### Changes
+
+- **README: system requirements, and two missing build packages.**
+  `libqt5opengl5-dev` and `libmpv-dev` were absent from the install line even
+  though `qmake` fails without them; libmpv was still listed as an optional
+  video preview although it has been linked in as a library since v0.71.0.
+  The claim that Wayland needs `QT_QPA_PLATFORM=xcb` is gone — it is a
+  fallback for a misbehaving compositor now, not a requirement.
+
+- **`TODO.md` holds only open work.** Finished work moved to
+  `docs/completed-work.md` together with the evidence it was closed on, so a
+  question that has already been investigated can be recognised as such. Six
+  topics that were being tracked twice are now tracked once.
+
+- **A known limitation was identified as a compositor bug, not ours:** under
+  KWin 6.7.2 with fractional display scaling and a maximized window, large
+  painted areas are not refreshed on screen — the still frame keeps showing
+  the previous picture while frame number and timecode advance. Workarounds
+  (integer scaling, do not maximize, or `QT_QPA_PLATFORM=xcb`) and the
+  evidence are in `TODO.md`.
+
 ## v0.76.1 (2026-07-26)
 
 **Quality-Check liest wieder die richtigen Extra-Frame-Positionen**
