@@ -11,10 +11,14 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - ~~**Befund B — Decode-Hänger** beim Navigieren auf ein PAFF-Feldpaar-AU~~
     → **GEFIXT 2026-07-19** (`46d3dcb`): Index-Adopter erben jetzt den
     PAFF-Zustand des Owners (`adoptStreamMetadata`); Diag `test_adopt_paff`.
-    Restpunkte: die Crash-Variante (`core.456277`, SIGABRT in
-    `avcodec_send_packet`) ist als Folge des beseitigten EOF-Drains plausibel,
-    aber nicht formal bewiesen (GUI-Soak ohne Crash bestanden); PAFF-
-    **Playback**-Fehler beim Play (mpv `reference picture missing during
+    Restpunkte: die Crash-Variante (SIGABRT in `avcodec_send_packet`) ist als
+    Folge des beseitigten EOF-Drains plausibel, aber nicht formal bewiesen
+    (GUI-Soak ohne Crash bestanden). **Der Core-Dump `core.456277` ist am
+    2026-07-31 gelöscht worden** — ein Backtrace wäre ohnehin unbrauchbar
+    gewesen, weil das Binary seit dem 19.07. vielfach neu gebaut ist und keine
+    passenden Symbole mehr existieren. Nachprüfbar also nur noch über einen
+    neuen Repro-Lauf auf dem 08x04-Korpus, nicht mehr aus vorhandenem Material.
+    PAFF-**Playback**-Fehler beim Play (mpv `reference picture missing during
     reorder`) besteht fort — separates Follow-up (libmpv Phase 2).
   - ~~**Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**~~
     → **GEFIXT 2026-07-19** (`8dfda6d`): der SPS-Unification-Rewriter
