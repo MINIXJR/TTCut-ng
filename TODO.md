@@ -255,9 +255,34 @@
   - Einziger realer Effekt: kosmetisch — Frame-Zähler
     um bis zu 222 erhöht, zwei Navigations-Stops pro echtem Frame in der Field-Region.
     Kein Korrektheitsfehler → **kein Fix**.
-  - Latent (sub-perzeptuell, nur an Field-Rändern): `mExtraIndices` speichert
-    Stream-Ordnung, wird aber gegen Display-Positionen verglichen → ±1–2 Frame
-    Ungenauigkeit der Audio-Korrektur. Irrelevant, da im Standard-Workflow leer.
+  - **Ordnungs-Vermischung: gemessen folgenlos** (2026-07-31, Harness
+    `tools/diag/test_extra_index_rank`, Protokoll
+    `CLAUDE_TMP/TTCut-ng/fieldrank/MESSUNG.md`). `mExtraIndices` speichert
+    Bitstrom-Ordnung (`current_pic_num`, `ttmpeg2videostream.cpp:163`), wird nach
+    `sortDisplayOrder()` (`ttopenvideotask.cpp:144`) aber gegen Anzeigepositionen
+    gelesen. Die früher hier vermutete „±1–2 Frame Ungenauigkeit der
+    Audio-Korrektur" ist auf echtem Material **nicht reproduzierbar**:
+    - Der **Einzelversatz ist real**: 807 von 904 gespeicherten Positionen liegen
+      nach der Sortierung woanders (Bereich −3…+6, Mittel ~2,5). Vier Aufnahmen,
+      Comedy Central SD 576i (Futurama 150 Paare, Benders 324, AV-async 315,
+      multifile 115).
+    - Die **Zählung stimmt trotzdem exakt**: 0 Abweichungen über alle 323 381
+      Anzeigepositionen. Grund gemessen, nicht angenommen — beide Felder eines
+      Paares landen immer auf zwei benachbarten Anzeigeplätzen (0 von 904
+      Ausnahmen), und die Menge der so belegten Doppelplätze ist elementweise
+      identisch mit der Menge der gespeicherten Bitstrom-Positionen. Die
+      Sortierung tauscht nur, welches Paar welchen Platz belegt; `countBefore()`
+      sieht davon nichts.
+    - Betroffen wären nur Verbraucher, die eine **einzelne** Position aus der
+      Liste nehmen statt zu zählen — heute keiner: `countExtraFramesBefore()` und
+      die beiden Stellen in `ttcurrentframe.cpp` zählen, und `clusterConfirmed`
+      (`ttavdata.cpp:580`, ±4-Fenster, das +6 überschreiten würde) vergleicht
+      gegen `.info`-Roh-AU-Nummern, also beide Seiten in Bitstrom-Ordnung.
+    - Messung, kein Beweis: die Platzerhaltung ist eine beobachtete Eigenschaft
+      der MPEG-2-Umordnung auf diesem Material. Ein neuer Verbraucher, der
+      Einzelwerte benutzt, braucht vorher wieder eine Messung.
+    - Nebenbefund: die frühere Abmoderation „irrelevant, da im Standard-Workflow
+      leer" war falsch — die Listen sind nicht leer (115–324 Paare je Aufnahme).
 
 - ~~**TTCut-ng Cut-Pipeline A/V Drift bei MPEG-2 mit field-picture-encoding**~~ → **RESOLVED** (2026-05-13, branch `feature/mpeg2-field-picture-fix`)
   - Root Cause: Field-Picture-Detection im MPEG-2-Parser (`picture_coding_extension` nicht gelesen, jeder picture_start_code als Frame gezählt, doppelte Zählung bei field-picture-encoded Frames). Fix in `avstream/ttmpeg2videostream.cpp` + Pipeline-Wiring in `data/ttavdata.cpp`. Spec: `docs/superpowers/specs/2026-05-12-mpeg2-field-picture-fix-design.md`.

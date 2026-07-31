@@ -209,6 +209,15 @@ test_mpeg2_cutout: test_mpeg2_cutout.cpp
 	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
 	    -lmpeg2 -lmpeg2convert -lpthread
 
+# test_extra_index_rank: measures whether the field-pair extra indices
+# (stored in bitstream order) drift against the display positions they are
+# compared with in TTAVData::countExtraFramesBefore().
+test_extra_index_rank: test_extra_index_rank.cpp
+	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
+	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
+	    -o $@ $< $(MPEG2CUT_OBJS) $(shell pkg-config --libs $(MPEG2CUT_PKGS)) \
+	    -lmpeg2 -lmpeg2convert -lpthread
+
 dump_mpeg2_fields: dump_mpeg2_fields.cpp
 	@test -f ../../obj/ttmpeg2videostream.o || { echo "Missing ../../obj/*.o — run \`make\` in the repo root first." >&2; exit 1; }
 	$(CXX) -O2 -Wall -fPIC -std=gnu++17 -I../.. $(shell pkg-config --cflags $(MPEG2CUT_PKGS)) \
