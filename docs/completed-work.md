@@ -493,6 +493,35 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     `--auto-cut`) bewusst als intern gekennzeichnet. Erster Fund des neuen
     `wiki-audit`-Skills.
 
+- **Fresh-Open-Dialoge ohne `mNonInteractive`-Guard** → **KEIN DEFEKT
+  (nachgemessen 2026-07-31)**
+  - Behauptung war: `showExtraFrameClusterDialog` (`data/ttavdata.cpp:724`)
+    ruft `msgBox.exec()` ungeschützt und blockiert damit einen headless
+    Fresh-Open. Beim Nachsehen fand sich ein **zweiter** ungeschützter Dialog
+    direkt in `openAVStreams` (`:457`, „Import as Stream Points").
+  - Beide hängen am Fresh-Open, wenn auch verschieden: der Regionen-Dialog
+    steht in `openAVStreams` selbst, der Cluster-Dialog läuft erst in
+    `onOpenVideoFinished` (`:749`) — der Frame-Index existiert vorher nicht —
+    und nur für Items, die `openAVStreams` in `mpPendingExtraFrameDialog`
+    markiert hat (`:422`), weshalb ein Projekt-Reload stumm bleibt.
+  - Der Guard wäre trotzdem wirkungslos: `openAVStreams` hat genau einen
+    Aufrufer (`onReadVideoStream`, `gui/ttcutmainwindow.cpp:705`), erreichbar
+    aus dem Menü und über ein positionales CLI-Argument
+    (`gui/ttcutmain.cpp:222`). `setNonInteractive(true)` steht genau einmal im
+    Baum (`runAutoCutMode`, `ttcutmainwindow.cpp:1424`), und dieser Modus
+    verlangt `--project` (`ttcutmain.cpp:189`), lädt also über
+    `openProjectFile`. Auf dem Pfad mit den Dialogen ist `mNonInteractive`
+    damit immer `false`. `--screenshots` setzt das Flag gar nicht, lädt aber
+    ebenfalls über ein Projekt.
+  - Ein headless Fresh-Open müsste erst gebaut werden. Der naheliegende Weg —
+    `--auto-cut` ohne `--project`, mit positionaler Videodatei — ist am
+    2026-07-31 als sinnlos verworfen worden. Ohne diesen Modus gibt es nichts
+    zu schützen; kämen die Dialoge je auf einen headless Pfad, wären **beide**
+    zu behandeln, beim Regionen-Dialog zusätzlich mit der Festlegung, welcher
+    Zweig ohne Nutzer gilt.
+  - Herkunft: Task 6 des `demux-defect-repair`-Feature-Ledgers
+    (`docs/superpowers/sdd/progress.md`).
+
 - **Subagent-Driven Development: Build-Permissions für Subagents** → **Konfiguriert 2026-05-19**
   - `.claude/settings.local.json` (lokal, gitignored) erweitert um `Bash(make:*)`,
     `Bash(make clean:*)`, `Bash(qmake:*)`, `Bash(bear -- make:*)`, `Bash(lrelease:*)`.

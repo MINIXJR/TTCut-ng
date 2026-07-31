@@ -53,14 +53,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   Fix-Richtung: Pfade beim Schreiben der Concat-Liste mit `realpath`
   absolutieren (auch die Listen von `repair_audio_with_silence_inserts` prüfen).
 
-- **Fresh-Open: Extra-Frame-Cluster-Dialog blockt headless ohne `mNonInteractive`-Guard**
-  - `showExtraFrameClusterDialog` (`data/ttavdata.cpp`) ruft `msgBox.exec()`
-    ohne Prüfung auf `mNonInteractive` — betrifft NICHT `--auto-cut` (das
-    Projekt-Laden umgeht `openAVStreams`, wo der Dialog ausgelöst wird),
-    blockiert aber einen headless **Fresh-Open**-Workflow (Datei ohne
-    `.ttcut`-Projekt direkt öffnen). Follow-up aus Task 6 des
-    `demux-defect-repair`-Feature-Ledgers (`docs/superpowers/sdd/progress.md`).
-
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
