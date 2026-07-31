@@ -1879,8 +1879,15 @@ with open('$OUTPUT_VIDEO','rb') as f:
                         $ENCODER \
                         "$TEMP_SILENCE" 2>&1
 
-                    # 2. Concatenate original + silence via concat demuxer (stream copy)
-                    printf "file '%s'\nfile '%s'\n" "$AUDIO_FILE" "$TEMP_SILENCE" > "$TEMP_CONCAT"
+                    # 2. Concatenate original + silence via concat demuxer (stream copy).
+                    # realpath: the list lives in $OUTDIR and the concat demuxer
+                    # resolves its entries relative to the list file's own
+                    # directory. Writing "$OUTDIR/..." entries would therefore be
+                    # looked up as "$OUTDIR/$OUTDIR/..." whenever output_dir was
+                    # given as a relative path (see the same guard above where the
+                    # VDR multi-file list is built).
+                    printf "file '%s'\nfile '%s'\n" \
+                        "$(realpath "$AUDIO_FILE")" "$(realpath "$TEMP_SILENCE")" > "$TEMP_CONCAT"
                     ffmpeg -y -f concat -safe 0 -i "$TEMP_CONCAT" \
                         -c:a copy \
                         "$TEMP_PADDED" 2>&1
