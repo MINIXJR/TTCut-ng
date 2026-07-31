@@ -778,6 +778,27 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Completed
 
+- [x] A marker jump lands on the marker itself — `onStreamPointJump` went
+      through `onVideoSliderChanged`, whose second argument is a FRAME TYPE,
+      not a speed switch, so with FastSlider on (the default) every jump
+      searched forward to the next I frame. Marker 7045 landed on 7050, and
+      three error markers of one defect all ended up on the same picture.
+      Harness `tools/diag/test_mpeg2_seek.cpp`
+- [x] Aspect markers are reported in display order — `TTStreamPointVideoWorker`
+      handed out a `picture_start_code` counter (bitstream order) while
+      navigation works with the rank in the display-sorted index list. Measured
+      off by +2 on all 626 TELE5 markers and by up to +6 on 268 of 350 Comedy
+      Central ones; RTLZWEI was correct only by accident (closed GOPs).
+      Computing `base_number + temporal_reference` would be wrong too, because
+      field-picture pairs make rank and display_order value diverge — the
+      position is now looked up in the sorted list.
+      Harness `tools/diag/test_streampoint_order.cpp`
+- [x] Task pool: nested tasks no longer touch the queue from a worker thread —
+      `TTThreadTaskPool::startNested()` runs a sub-task synchronously with the
+      same signal wiring, so `mTaskQueue` stays confined to the pool's own
+      thread (TSAN showed data races plus a SEGV on the old path; `start()`
+      now asserts the thread). Callers: `TTCutVideoTask`, `TTCutPreviewTask`.
+      Harness `tools/diag/test_pool_crossthread.cpp` + `gate_pool_crossthread.sh`
 - [x] H.264 open-GOP cold-start leading-picture alignment: non-IDR-I streams (`I B B B P`) no longer hang on load; map/still/search/cut match ffmpeg decoder (v0.72.1)
 - [x] Frame-accurate H.264/H.265 cut-in and cut-out (TTDisplayOrderMap display↔decode, tail-GOP re-encode) (v0.72.0)
 - [x] HEVC RASL leading-picture alignment: frame count/numbers match ffmpeg/mpv decoder (v0.72.0)
@@ -861,6 +882,29 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - [x] 'Reset to defaults' Buttons in 6 Settings-Tabs + Cut-Dialog (v0.70.0)
 
 ## Known Limitations
+
+- **Stale image in "Current Frame" under KWin at fractional scaling (compositor
+  bug, not TTCut-ng).** With KWin 6.7.2 on Wayland, a fractional display scale
+  (150 %, 175 %) and a **maximized** window, parts of the window are not
+  refreshed on screen. Large painted areas are affected — the still-frame pixmap
+  keeps showing the previous picture while frame number and timecode advance;
+  small painted areas arrive normally, and dialogs drawn over the affected area
+  appear to shake. It reads exactly like a frozen GUI, and it cost two days of
+  hunting on 2026-07-30/31 before the compositor was identified.
+  - **Quickest proof it is not the application:** the Alt-Tab window preview
+    shows the *correct* frame while the screen shows stale pixels. The buffer is
+    right, only its presentation is not. Everything downstream of the decoder was
+    measured correct headless (decoder, navigation, widget), and every paint path
+    — QLabel, direct painting, with and without the GL widget, software GL —
+    ends in the same verified-correct buffer. There is nothing to fix in TTCut-ng.
+  - **Workarounds:** integer scaling (100 %, 200 %), do not maximize the window,
+    or run `QT_QPA_PLATFORM=xcb ./ttcut-ng`.
+  - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
+    protocol, so KWin uses its *forced server side scale factor* path — the
+    Plasma 6.7.0 changelog lists "making forced server side scale factor single
+    buffered". Same failure class as (fixed) KDE bug 482987. No matching bug
+    report existed as of 2026-07-31; 6.7.3 contains nothing relevant. On
+    recurrence, check for a KWin update first (`apt policy kwin-wayland`).
 
 - **Audio burst detection is approximate — treat it as a hint, not a verdict.** It
   reliably flags the case it was built for (a loud advertising burst reaching the cut
