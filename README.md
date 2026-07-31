@@ -25,23 +25,42 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 - **ttcut-demux** — Multi-Core TS-Demuxer mit A/V-Sync-Korrektur, Audio-Padding und VDR-Marks-Unterstützung
 - Tastaturkürzel für Frame-Navigation und Schnittpunkt-Auswahl (`?` für Hilfe)
 
-## Installation
+## Systemanforderungen
 
-Entwickelt und getestet auf [Siduction](https://siduction.org/), einer Distribution
-basierend auf Debian unstable (sid), die aktuelle Versionen von Qt und libav
-bereitstellt.
+| | |
+|---|---|
+| Betriebssystem | Linux. Entwickelt und getestet auf [Siduction](https://siduction.org/) (Debian unstable), das aktuelle Qt- und libav-Versionen bereitstellt |
+| Architektur | `linux-any` — der Quelltext enthält keinen architekturabhängigen Code; getestet wird ausschließlich auf x86_64 |
+| Qt | 5.15 (Qt 6 wird nicht unterstützt), C++17 |
+| libav/ffmpeg | 5.1 oder neuer — genutzt wird die `AVChannelLayout`-API, die ältere Versionen nicht kennen. Entwickelt gegen 8.x |
+| libmpeg2 | 0.5.1 |
+| Grafik | OpenGL für die Videoausgabe (libmpv rendert in ein `QOpenGLWidget`). Läuft nativ unter Wayland und X11 |
 
 ### Abhängigkeiten (Debian/Ubuntu)
 
 ```bash
 # Build + erforderliche Laufzeit-Bibliotheken
-sudo apt install qt5-qmake qtbase5-dev libmpeg2-4-dev \
+sudo apt install qt5-qmake qtbase5-dev libqt5opengl5-dev libmpeg2-4-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
-  libavfilter-dev libswresample-dev
+  libavfilter-dev libswresample-dev libmpv-dev
 
-# Optional: Video-Vorschau (empfohlen), MP4-Output, MPEG-2 Multiplexing
-sudo apt install mpv ffmpeg mjpegtools
+# Optional: MP4-Output, MPEG-2 Multiplexing, Qualitätsprüfung
+sudo apt install ffmpeg mjpegtools python3-numpy
 ```
+
+> **libmpv ist nicht optional.** Der Player ist seit v0.71.0 als Bibliothek
+> eingebunden (in-process Rendering für Wayland), nicht mehr als externer
+> mpv-Prozess — ohne `libmpv-dev` bricht bereits `qmake` ab.
+
+### Plattenplatz
+
+Die elementaren Streams entsprechen in der Summe ungefähr der TS-Aufnahme, und
+das Schnittergebnis kommt daneben. Bei H.264/H.265 legt der erste Klick auf
+*Play* zusätzlich eine temporäre MKV über die **gesamte** Länge des Streams an
+(Elementary Streams tragen keine Zeitstempel, die zum Suchen taugen) — sie wird
+über STOP→PLAY zwischengespeichert und im Temp-Verzeichnis abgelegt. Für eine
+zweistündige HD-Aufnahme sollte man daher grob das Zweieinhalbfache der
+Aufnahmegröße frei haben.
 
 ### Build
 
@@ -66,8 +85,9 @@ qmake ttcut-ng.pro && make -j$(nproc)
 3. **Navigieren** zu den gewünschten Positionen und Schnittpunkte setzen (Cut-In/Cut-Out)
 4. **Schneiden** — das Ergebnis wird als MKV mit allen ausgewählten Audio- und Untertitelspuren geschrieben
 
-> **Hinweis:** Unter Wayland benötigt TTCut-ng das XCB-Backend:
-> `QT_QPA_PLATFORM=xcb ./ttcut-ng`
+> **Hinweis:** TTCut-ng läuft nativ unter Wayland und X11. Sollte ein
+> Wayland-Compositor Darstellungsfehler zeigen, hilft ersatzweise
+> `QT_QPA_PLATFORM=xcb ./ttcut-ng`.
 
 ## Dokumentation
 
