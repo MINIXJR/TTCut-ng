@@ -3,13 +3,23 @@
 /* Diagnostic: verify the PAFF raw->merged AU map recorded by                 */
 /* mergePAFFFieldsInIndex. Opens an ES, builds the frame index, checks map    */
 /* invariants, and prints counts plus the first dropped-RASL raw index (for   */
-/* the RASL guard gate). Optional argv[2]/argv[3]: expected raw/merged count. */
+/* the RASL guard gate).                                                      */
+/*                                                                            */
+/* usage: test_rawmap <es-file> [expRaw expMerged] [--field-at N ...]         */
+/*   expRaw/expMerged  asserted exactly when given                            */
+/*   --field-at N      report whether MERGED index N is field-coded           */
+/*                                                                            */
+/* The field-coded positions in merged numbering (each hit is the top field   */
+/* of a pair) used to be a separate tool (dump_fieldcoded, removed            */
+/* 2026-07-31); it read the same frameIndex() this harness already builds.    */
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <vector>
 
 static int failures = 0;
 static void check(bool cond, const char* what)
@@ -20,7 +30,21 @@ static void check(bool cond, const char* what)
 
 int main(int argc, char** argv)
 {
-  if (argc < 2) { fprintf(stderr, "usage: %s <es-file> [expRaw expMerged]\n", argv[0]); return 2; }
+  if (argc < 2) {
+    fprintf(stderr, "usage: %s <es-file> [expRaw expMerged] [--field-at N ...]\n", argv[0]);
+    return 2;
+  }
+
+  // Split the tail into plain numbers (expected counts) and --field-at spots,
+  // so the original two-argument form keeps working unchanged.
+  std::vector<int> expected, fieldSpots;
+  for (int a = 2; a < argc; ++a) {
+    if (strcmp(argv[a], "--field-at") == 0) {
+      while (a + 1 < argc && argv[a + 1][0] != '-') fieldSpots.push_back(atoi(argv[++a]));
+    } else {
+      expected.push_back(atoi(argv[a]));
+    }
+  }
 
   TTFFmpegWrapper w;
   if (!w.openFile(QString::fromLocal8Bit(argv[1]))) {
@@ -67,9 +91,23 @@ int main(int argc, char** argv)
   }
   printf("first_dropped_rasl_raw=%d\n", firstNoDisp);
 
-  if (argc >= 4) {
-    check(raw == atoi(argv[2]), "expected raw count");
-    check(merged == atoi(argv[3]), "expected merged count");
+  // Field-coded positions in MERGED numbering (top field of each pair).
+  const QList<TTFrameInfo>& idx = w.frameIndex();
+  int fieldCoded = 0;
+  printf("field-coded merged positions (first 60):");
+  for (int i = 0; i < idx.size(); ++i) {
+    if (!idx[i].isFieldCoded) continue;
+    if (fieldCoded < 60) printf(" %d", i);
+    ++fieldCoded;
+  }
+  printf("\ntotal field-coded: %d\n", fieldCoded);
+  for (int s : fieldSpots)
+    printf("spot %d: %s\n", s,
+           (s >= 0 && s < idx.size() && idx[s].isFieldCoded) ? "field-coded" : "not field-coded");
+
+  if (expected.size() >= 2) {
+    check(raw == expected[0], "expected raw count");
+    check(merged == expected[1], "expected merged count");
   }
   return failures == 0 ? 0 : 1;
 }

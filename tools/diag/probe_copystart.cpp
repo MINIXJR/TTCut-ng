@@ -6,6 +6,12 @@
  * and reports whether it is a true IDR. This decides the verification tier
  * for the bridgeFrameNum change: non-IDR seams must stay bit-identical,
  * IDR seams may change bitstream but must stay pixel-identical.
+ *
+ * The header line also answers the stream-wide question "does this stream
+ * carry real IDRs, or only non-IDR I-slices?" — the property that decides
+ * whether analyzeCutPoints() has to force a re-encode at every seam. That
+ * summary used to live in a separate tool (check_idr, removed 2026-07-31);
+ * the parser walk needed for it runs here anyway.
  */
 #include <QCoreApplication>
 #include <QTextStream>
@@ -24,8 +30,17 @@ int main(int argc, char* argv[])
         err << "cannot open/parse " << argv[1] << "\n";
         return 1;
     }
+    int idrCount = 0, iSliceCount = 0;
+    for (int i = 0; i < parser.accessUnitCount(); ++i) {
+        TTAccessUnit au = parser.accessUnitAt(i);
+        if (au.isIDR)                        ++idrCount;
+        else if (au.isKeyframe)              ++iSliceCount;
+    }
     out << "codec=" << parser.codecName()
-        << " AUs=" << parser.accessUnitCount() << "\n";
+        << " AUs=" << parser.accessUnitCount()
+        << " GOPs=" << parser.gopCount()
+        << " IDRs=" << idrCount
+        << " nonIdrIslices=" << iSliceCount << "\n";
     if (QString(argv[2]) == "--list-idrs") {
         // List every true-IDR AU (for placing cut-ins just before one).
         for (int i = 0; i < parser.accessUnitCount(); ++i) {

@@ -1,5 +1,7 @@
 // test_wrapper_map — verifies the display-order map against empirically
-// measured ground truth (test_parser_poc run, 2026-06-12).
+// measured ground truth (decoder-output run of 2026-06-12; the expectations
+// below are that measurement frozen in place, so re-measuring needs
+// test_h264_leading, which reproduces the same ground-truth pass).
 // Part 1 (Task 2): TTDisplayOrderMap::buildFromFile on MBAFF.264.
 // Part 2 (Task 3) adds TTFFmpegWrapper integration asserts.
 //
