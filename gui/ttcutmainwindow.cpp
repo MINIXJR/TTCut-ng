@@ -179,6 +179,11 @@ TTCutMainWindow::TTCutMainWindow()
       setGeometry(ttClampToArea(saved.rect, s->availableGeometry()));
       if (saved.maximized) showMaximized();
       restored = true;
+      if (TTSettings::instance()->logUI())
+        qDebug() << "geometry restore: stored" << saved.rect
+                 << "maximized" << saved.maximized
+                 << "-> geometry" << geometry()
+                 << "normalGeometry" << normalGeometry();
       break;
     }
   }
@@ -590,6 +595,11 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
   // un-maximised rectangle, so a maximised window still records a sensible
   // size to come back to.
   QSettings geom("TTCut-ng", "TTCut-ng");
+  if (TTSettings::instance()->logUI())
+    qDebug() << "geometry save: geometry" << geometry()
+             << "normalGeometry" << normalGeometry()
+             << "maximized" << isMaximized()
+             << "minimumSize" << minimumSize();
   ttSaveWindowGeometry(geom, "MainWindow", normalGeometry(), isMaximized());
 
   TTSettings::instance()->save();

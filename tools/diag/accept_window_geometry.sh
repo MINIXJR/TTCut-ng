@@ -26,6 +26,15 @@ BACKUP="$WORK/acceptance-original.conf"
 BLOB_SRC="$WORK/backup.conf"          # a config still holding the legacy blob
 APP="$(cd "$(dirname "$0")/../.." && pwd)/ttcut-ng"
 
+# Wayland clients cannot place their own window: setGeometry's position is
+# dropped when the surface is mapped (measured 2026-08-01 on this system —
+# xcb keeps 320,180, wayland reports 0,0). So x/y are only meaningful under
+# xcb, and any case that depends on the position proves nothing under wayland.
+on_wayland() {
+  [ "${QT_QPA_PLATFORM:-}" = "xcb" ] && return 1
+  [ "${XDG_SESSION_TYPE:-}" = "wayland" ]
+}
+
 pass=0; fail=0
 ok()   { echo -e "  \033[32mPASS\033[0m  $*"; pass=$((pass+1)); }
 bad()  { echo -e "  \033[31mFAIL\033[0m  $*"; fail=$((fail+1)); }
@@ -102,10 +111,10 @@ case_title() {
   case $1 in
     1) echo "fresh config -> 80% of the primary screen, centred" ;;
     2) echo "legacy blob  -> migrated to plain keys on start" ;;
-    3) echo "hand-edited  -> window opens exactly where you typed" ;;
+    3) echo "hand-edited  -> window opens at the size you typed (position: xcb only)" ;;
     4) echo "maximised    -> stage 1: maximise and close" ;;
     4b) echo "maximised    -> stage 2: comes back maximised, normal size preserved" ;;
-    5) echo "off-screen   -> falls back to 80% centred" ;;
+    5) echo "off-screen   -> falls back to 80% centred (xcb only)" ;;
     6) echo "oversized    -> clamped to the screen" ;;
     7) echo "QuickJump    -> dialog size survives, no stray file" ;;
     8) echo "settings     -> no @Variant left after a normal close" ;;
@@ -144,8 +153,8 @@ setup_case() {
        set_key MainWindow maximized false
        note "watch: window fits on the screen instead of overflowing it" ;;
     7) drop_group QuickJumpDialog
-       note "DO: open the frame-jump dialog, resize it noticeably, close it"
-       note "     then close TTCut" ;;
+       note "DO: LOAD A VIDEO FIRST — the frame-jump dialog needs one."
+       note "     Then open it, resize it noticeably, close it, close TTCut." ;;
     8) note "DO: just close TTCut normally (the settings are rewritten on close)" ;;
     *) echo "no such case"; return 2 ;;
   esac
@@ -186,9 +195,15 @@ verify_case() {
     3) [ "$(get MainWindow width)" = "1920" ] && [ "$(get MainWindow height)" = "1080" ] \
          && ok "size kept at 1920x1080" \
          || bad "size became $(get MainWindow width)x$(get MainWindow height)"
-       [ "$(get MainWindow x)" = "320" ] && [ "$(get MainWindow y)" = "180" ] \
-         && ok "position kept at 320,180" \
-         || bad "position became $(get MainWindow x),$(get MainWindow y)"
+       if on_wayland; then
+         note "position: $(get MainWindow x),$(get MainWindow y) — NOT checked."
+         note "  A wayland client cannot place itself; x/y only take effect under"
+         note "  QT_QPA_PLATFORM=xcb. Re-run this case that way to test the position."
+       else
+         [ "$(get MainWindow x)" = "320" ] && [ "$(get MainWindow y)" = "180" ] \
+           && ok "position kept at 320,180" \
+           || bad "position became $(get MainWindow x),$(get MainWindow y)"
+       fi
        note "this only proves the value survived; that the window LOOKED right is your call" ;;
     5|6)
        local x y w h
@@ -196,9 +211,15 @@ verify_case() {
        w=$(get MainWindow width); h=$(get MainWindow height)
        note "recorded: ${w}x${h} at ${x},${y}"
        if [ "$1" = 5 ]; then
-         [ "$x" -lt 9000 ] 2>/dev/null \
-           && ok "no longer at the off-screen x" \
-           || bad "x is still $x — the fallback did not engage"
+         if on_wayland; then
+           note "SKIPPED under wayland: the window never lands off-screen there,"
+           note "  because the position is ignored on mapping. A pass here would"
+           note "  mean nothing. Re-run with QT_QPA_PLATFORM=xcb to test it."
+         else
+           [ "$x" -lt 9000 ] 2>/dev/null \
+             && ok "no longer at the off-screen x" \
+             || bad "x is still $x — the fallback did not engage"
+         fi
        else
          [ "$w" -lt 9999 ] 2>/dev/null && [ "$h" -lt 9999 ] 2>/dev/null \
            && ok "clamped below the nonsense size" \
@@ -235,8 +256,42 @@ run_case() {
   echo "=== case $1: $(case_title "$1") ==="
   setup_case "$1" || return
   echo
+
+  # The application's output goes to a log, not /dev/null: a start that fails
+  # must not look like a start that worked. And the run itself is checked -
+  # verifying the config file proves nothing if TTCut never came up.
+  local log started rc elapsed conf_before conf_after
+  log="$WORK/last-run-case$1.log"
+  conf_before=$(stat -c %Y "$CONF" 2>/dev/null || echo 0)
+  started=$(date +%s)
+
   echo "  starting $APP — close it when you are done looking"
-  "$APP" >/dev/null 2>&1
+  "$APP" > "$log" 2>&1
+  rc=$?
+  elapsed=$(( $(date +%s) - started ))
+  conf_after=$(stat -c %Y "$CONF" 2>/dev/null || echo 0)
+
+  echo
+  if [ "$elapsed" -lt 3 ]; then
+    bad "TTCut exited after ${elapsed}s (rc=$rc) — it never really ran"
+    note "last lines of $log:"
+    tail -5 "$log" | sed 's/^/      /'
+    note "everything below is meaningless while this fails"
+  else
+    ok "TTCut ran for ${elapsed}s and exited with rc=$rc"
+  fi
+  if [ "$rc" != 0 ]; then
+    bad "non-zero exit code $rc — see $log"
+  fi
+  if [ "$conf_after" = "$conf_before" ]; then
+    bad "the config file was not touched — closeEvent did not run"
+    note "did you close the window, or kill the process?"
+  fi
+  if [ -s "$log" ]; then
+    note "the application wrote output; first lines:"
+    head -3 "$log" | sed 's/^/      /'
+  fi
+
   echo
   verify_case "$1"
 }
