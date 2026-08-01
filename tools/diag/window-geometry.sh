@@ -10,6 +10,11 @@
 # the screen size. That is a different quantity from what the application
 # stores in its settings file, which is the *normal* (un-maximised) geometry.
 # Both are correct; do not compare them directly.
+#
+# When comparing two window states, change ONE thing at a time. Comparing a
+# small unmaximised window against a large maximised one varies size and state
+# together and supports no conclusion about either - a mistake made with this
+# very script on 2026-08-01.
 MATCH="${1:-TTCut}"
 JS=$(mktemp /tmp/wingeom-XXXX.js)
 cat > "$JS" <<JSEOF
