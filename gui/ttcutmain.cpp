@@ -164,8 +164,12 @@ int main( int argc, char **argv )
     mainWnd->setWindowTitle( TTCut::versionString );
     mainWnd->show();
 
-    // set initial size of applications main window
-    mainWnd->resize(1024, 768);
+    // No resize() here. There used to be a resize(1024, 768) at this point,
+    // dating back to the initial commit, which threw away whatever geometry
+    // the constructor had just restored — every start came up 1024x768 and the
+    // saved size was silently pointless. The window's size is decided in
+    // TTCutMainWindow's constructor: the stored value, or 80% of the screen
+    // when there is none.
 
     // Command line options
     QCommandLineParser parser;

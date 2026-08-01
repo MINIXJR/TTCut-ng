@@ -1484,11 +1484,11 @@ void TTCutMainWindow::runScreenshotMode()
         return;
     }
 
-    // Fixed window size for reproducible screenshots. The default 1024x768 is
-    // too small for the stream point settings tab: its layout has to squeeze
-    // the rows below their minimum height, and the grab then shows clipped
-    // text and controls flattened to lines. A fixed size also keeps the images
-    // independent of the screen the run happens on.
+    // Fixed window size for reproducible screenshots, independent of the screen
+    // the run happens on and of whatever size the user last left the window at.
+    // Anything much smaller clips the stream point settings tab: its layout has
+    // to squeeze the rows below their minimum height, and the grab then shows
+    // cut-off text and controls flattened to lines.
     resize(1920, 1080);
     QApplication::processEvents();
 
