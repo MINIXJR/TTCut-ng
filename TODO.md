@@ -42,6 +42,34 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
+- **Einmaliger Absturz beim zweiten Landezonen-Analyselauf (2026-08-01, Ursache
+  offen)**
+  - Ablauf: MPEG-2 geladen
+    (`MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI.m2v`), Analyse
+    gestartet, danach 4:3-Erkennung aktiviert, Analyse erneut gestartet —
+    Programm verschwand ohne Meldung. Im Log endet die Aufzeichnung mitten im
+    zweiten `AspectScan` (5452 Schritte); erstmals liefen dabei zwei
+    videodekodierende Tasks parallel (`StreamPointVideoAnalysis` +
+    `AspectScan`).
+  - **Nicht reproduzierbar**: zwei Läufe unter `gdb` und einer mit
+    AddressSanitizer, jeweils mit identischem Vorgehen, blieben ohne Absturz.
+  - **Ausgeschlossen:** Speicherfehler (ASAN meldet nur Lecks aus
+    Fremdbibliotheken — libwayland, libfontconfig, libmpv —, keinen Zugriff in
+    TTCut-Code); Datenrennen an den geteilten Listen (beide Tasks bekommen
+    dieselben Zeiger auf `videoIndex`/`videoHeaders`, aber
+    `moveToNextIndexPos` ist rein lesend und der VideoWorker fasst sie nicht
+    an).
+  - **Auffällig:** kein Core-Abbild trotz `core_pattern=core` und
+    `ulimit -c unlimited`, und kein Fehlereintrag im Log. Ein Signal hätte
+    beides hinterlassen. Passt auf einen Wayland-Protokollfehler, der einen
+    Qt-Klienten sofort beendet und nur auf stderr meldet — dorthin schaut
+    weder die Logdatei noch der Debugger im Batch-Betrieb.
+  - **Nächster Schritt bei Wiederauftreten:**
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/ttcut-mit-protokoll.sh` benutzen; es
+    schreibt stderr mit. Ohne diese Ausgabe ist der Fehler nicht greifbar.
+    Falls er sich damit einfangen lässt und stderr nichts zeigt, wäre
+    ThreadSanitizer der nächste Schritt.
+
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
@@ -333,7 +361,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 - **Stale image in "Current Frame" under KWin at fractional scaling (compositor
   bug, not TTCut-ng).** With KWin 6.7.2 on Wayland, a fractional display scale
-  (150 %, 175 %) and a **maximized** window, parts of the window are not
+  (150 %, 175 %) and a large or maximized window, parts of the window are not
   refreshed on screen. Large painted areas are affected — the still-frame pixmap
   keeps showing the previous picture while frame number and timecode advance;
   small painted areas arrive normally, and dialogs drawn over the affected area
@@ -345,6 +373,24 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     measured correct headless (decoder, navigation, widget), and every paint path
     — QLabel, direct painting, with and without the GL widget, software GL —
     ends in the same verified-correct buffer. There is nothing to fix in TTCut-ng.
+  - **Gemessen 2026-08-01:** Gemischte Skalierung ist NICHT der Auslöser — bei
+    einheitlichen 150 % auf beiden Monitoren besteht der Fehler weiter, und
+    zwar auf beiden Schirmen. Unter `QT_QPA_PLATFORM=xcb` bei denselben 150 %
+    ist alles korrekt. Ein Bericht muss also "fractional scaling" nennen, nicht
+    "mixed scale factors".
+  - **Offener Messpunkt: wo liegt die Schwelle?** 1775 × 1412 (nicht maximiert)
+    zeigt das Bild korrekt, maximiert (2400 × 1440) nicht. Auslöser ist die
+    Größe der gemalten Fläche, nicht der Zustand "maximiert" — ein früherer
+    gegenteiliger Schluss beruhte auf einem Vergleich, der Größe und Zustand
+    zugleich änderte. Ein Zahlenpaar "bis X × Y erscheint es, ab X' × Y' nicht"
+    wäre für die KDE-Entwickler wertvoller als jede Zustandsbeschreibung.
+    Fenstergröße im Betrieb ablesbar mit `tools/diag/window-geometry.sh`.
+  - **Minimaler Testfall fehlt weiterhin.** `kwin-repaint-testcase.cpp` unter
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-bugreport/` reproduziert den
+    Fehler NICHT — weder mit großer einfarbiger Fläche noch als `QPixmap`,
+    weder mit `QOpenGLWidget` noch maximiert. Ausgeschlossen ist damit, dass
+    diese Zutaten genügen. Ohne so ein Beispiel fragen die KDE-Entwickler
+    erfahrungsgemäß zuerst danach.
   - **Workarounds:** integer scaling (100 %, 200 %), do not maximize the window,
     or run `QT_QPA_PLATFORM=xcb ./ttcut-ng`.
   - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
