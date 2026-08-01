@@ -46,6 +46,7 @@
 #include "ttprogressbar.h"
 #include "ttcutaboutdlg.h"
 #include "ttgotoframedialog.h"
+#include "ttwindowgeometry.h"
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -161,20 +162,25 @@ TTCutMainWindow::TTCutMainWindow()
   // QSettings here is the per-window UI-state persistence — outside
   // Phase B scope (TTSettings owns app settings, not window geometry).
   QSettings geom("TTCut-ng", "TTCut-ng");
-  QByteArray savedGeometry = geom.value("MainWindow/geometry").toByteArray();
+  // Both one-time upgrades run here, on the first start of this version —
+  // not when some dialog happens to be opened. No-ops afterwards.
+  ttMigrateGeometryBlob(geom, "MainWindow");
+  ttImportStrayQuickJumpSize(geom);
+
   bool restored = false;
-  if (!savedGeometry.isEmpty()) {
-    restoreGeometry(savedGeometry);
-    // Verify window center is still on an existing screen
-    QPoint center = geometry().center();
-    bool onScreen = false;
+  const TTWindowGeometry saved = ttLoadWindowGeometry(geom, "MainWindow");
+  if (saved.valid) {
+    // Find the screen the saved window belongs to, then keep it inside that
+    // screen's work area. This replaces what the old blob did with its stored
+    // screen width.
+    const QPoint center = saved.rect.center();
     for (QScreen* s : QGuiApplication::screens()) {
-      if (s->availableGeometry().contains(center)) {
-        onScreen = true;
-        break;
-      }
+      if (!s->availableGeometry().contains(center)) continue;
+      setGeometry(ttClampToArea(saved.rect, s->availableGeometry()));
+      if (saved.maximized) showMaximized();
+      restored = true;
+      break;
     }
-    restored = onScreen;
   }
   if (!restored) {
     QRect screenGeom = QGuiApplication::primaryScreen()->availableGeometry();
@@ -580,9 +586,11 @@ void TTCutMainWindow::onFileExit()
 void TTCutMainWindow::closeEvent(QCloseEvent* event)
 {
   // Window geometry persistence — outside Phase B scope (TTSettings owns
-  // app settings, not per-window UI state).
+  // app settings, not per-window UI state). normalGeometry() is the
+  // un-maximised rectangle, so a maximised window still records a sensible
+  // size to come back to.
   QSettings geom("TTCut-ng", "TTCut-ng");
-  geom.setValue("MainWindow/geometry", saveGeometry());
+  ttSaveWindowGeometry(geom, "MainWindow", normalGeometry(), isMaximized());
 
   TTSettings::instance()->save();
 

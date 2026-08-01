@@ -111,6 +111,10 @@ int main( int argc, char **argv )
     std::setlocale(LC_NUMERIC, "C");
 
     a.setApplicationName("TTCut-ng");
+    // Without an organisation name, an argument-less QSettings resolves to
+    // "Unknown Organization" — which is where TTQuickJumpDialog's size used to
+    // land, in a second file next to the real one.
+    a.setOrganizationName("TTCut-ng");
 
     // Force the lazy TTSettings singleton to construct and run its first
     // load() before any UI code reads a persisted value.

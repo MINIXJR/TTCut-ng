@@ -27,7 +27,7 @@ LDLIBS   := $(QT_LIB) -lpthread
 
 AVLIBS   := -lavformat -lavcodec -lavutil -lswscale -lswresample
 
-TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order test_mpeg2_seek
+TOOLS := check_idr test_nalu_parser test_au_types test_displayordermap test_wrapper_map test_stilldisplay test_leadingclass test_h264_leading probe_copystart test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort test_streampoint_order test_mpeg2_seek test_window_geometry
 
 NALU_FULL_OBJS := $(NALU_OBJ) ../../obj/ttsettings.o ../../obj/moc_ttsettings.o ../../obj/ttmessagelogger.o
 
@@ -76,6 +76,16 @@ test_pool_abort: test_pool_abort.cpp $(POOLABORT_OBJS)
 
 test_aspectdetect: test_aspectdetect.cpp $(ASPECTDETECT_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(ASPECTDETECT_OBJS) $(LDLIBS)
+
+# test_window_geometry: plain-data acceptance for the window-state keys. The
+# functions under test need QtCore only; QtWidgets is linked because the
+# harness *produces* its legacy blobs with QWidget::saveGeometry() rather than
+# pasting recorded bytes. Run with QT_QPA_PLATFORM=offscreen.
+WINDOWGEOM_OBJS := ../../obj/ttwindowgeometry.o
+
+test_window_geometry: test_window_geometry.cpp $(WINDOWGEOM_OBJS)
+	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags Qt5Widgets) -o $@ $< \
+	    $(WINDOWGEOM_OBJS) $(LDLIBS) $(shell pkg-config --libs Qt5Widgets)
 
 # test_aspectscan: end-to-end acceptance for TTAspectScanTask on real material.
 # Pulls in the search-task base (which references TTMpeg2Decoder) and therefore

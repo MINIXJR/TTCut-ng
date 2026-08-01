@@ -228,14 +228,14 @@ public:
   // carry no `Sec` suffix; preserved verbatim from gui/ttcutsettings.cpp
   // for round-trip compatibility with already-installed user settings.
   // No signals — none of the 12 fields have reactive UI dependents.
-  float   navBlackThreshold() const  { return mNavBlackThreshold; }
-  void    setNavBlackThreshold(float v);
+  double  navBlackThreshold() const  { return mNavBlackThreshold; }
+  void    setNavBlackThreshold(double v);
 
-  float   navSceneThreshold() const  { return mNavSceneThreshold; }
-  void    setNavSceneThreshold(float v);
+  double  navSceneThreshold() const  { return mNavSceneThreshold; }
+  void    setNavSceneThreshold(double v);
 
-  float   navLogoThreshold() const   { return mNavLogoThreshold; }
-  void    setNavLogoThreshold(float v);
+  double  navLogoThreshold() const   { return mNavLogoThreshold; }
+  void    setNavLogoThreshold(double v);
 
   bool    spDetectSilence() const      { return mSpDetectSilence; }
   void    setSpDetectSilence(bool v);
@@ -243,8 +243,8 @@ public:
   int     spSilenceThresholdDb() const { return mSpSilenceThresholdDb; }
   void    setSpSilenceThresholdDb(int v);
 
-  float   spSilenceMinDuration() const { return mSpSilenceMinDuration; }
-  void    setSpSilenceMinDuration(float v);
+  double  spSilenceMinDuration() const { return mSpSilenceMinDuration; }
+  void    setSpSilenceMinDuration(double v);
 
   bool    spDetectAudioChange() const  { return mSpDetectAudioChange; }
   void    setSpDetectAudioChange(bool v);
@@ -457,12 +457,12 @@ private:
   // (Tasks 4-5). The seven sp* fields share /Settings/StreamPoints. The two
   // extraFrame* fields share /Settings/Common (legacy keys without `Sec`
   // suffix — see public-section comment for detail).
-  float mNavBlackThreshold        = 0.980f;
-  float mNavSceneThreshold        = 0.300f;
-  float mNavLogoThreshold         = 0.500f;
+  double mNavBlackThreshold       = 0.980;
+  double mNavSceneThreshold       = 0.300;
+  double mNavLogoThreshold        = 0.500;
   bool  mSpDetectSilence          = true;
   int   mSpSilenceThresholdDb     = -75;
-  float mSpSilenceMinDuration     = 0.3f;
+  double mSpSilenceMinDuration    = 0.3;
   bool  mSpDetectAudioChange      = true;
   bool  mSpDetectAspectChange     = true;
   bool  mSpDetectPillarbox        = true;
