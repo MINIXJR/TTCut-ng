@@ -46,6 +46,7 @@
 #include "ttprogressbar.h"
 #include "ttcutaboutdlg.h"
 #include "ttgotoframedialog.h"
+#include "ttwindowgeometry.h"
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -161,20 +162,30 @@ TTCutMainWindow::TTCutMainWindow()
   // QSettings here is the per-window UI-state persistence — outside
   // Phase B scope (TTSettings owns app settings, not window geometry).
   QSettings geom("TTCut-ng", "TTCut-ng");
-  QByteArray savedGeometry = geom.value("MainWindow/geometry").toByteArray();
+  // Both one-time upgrades run here, on the first start of this version —
+  // not when some dialog happens to be opened. No-ops afterwards.
+  ttMigrateGeometryBlob(geom, "MainWindow");
+  ttImportStrayQuickJumpSize(geom);
+
   bool restored = false;
-  if (!savedGeometry.isEmpty()) {
-    restoreGeometry(savedGeometry);
-    // Verify window center is still on an existing screen
-    QPoint center = geometry().center();
-    bool onScreen = false;
+  const TTWindowGeometry saved = ttLoadWindowGeometry(geom, "MainWindow");
+  if (saved.valid) {
+    // Find the screen the saved window belongs to, then keep it inside that
+    // screen's work area. This replaces what the old blob did with its stored
+    // screen width.
+    const QPoint center = saved.rect.center();
     for (QScreen* s : QGuiApplication::screens()) {
-      if (s->availableGeometry().contains(center)) {
-        onScreen = true;
-        break;
-      }
+      if (!s->availableGeometry().contains(center)) continue;
+      setGeometry(ttClampToArea(saved.rect, s->availableGeometry()));
+      if (saved.maximized) showMaximized();
+      restored = true;
+      if (TTSettings::instance()->logUI())
+        qDebug() << "geometry restore: stored" << saved.rect
+                 << "maximized" << saved.maximized
+                 << "-> geometry" << geometry()
+                 << "normalGeometry" << normalGeometry();
+      break;
     }
-    restored = onScreen;
   }
   if (!restored) {
     QRect screenGeom = QGuiApplication::primaryScreen()->availableGeometry();
@@ -580,9 +591,16 @@ void TTCutMainWindow::onFileExit()
 void TTCutMainWindow::closeEvent(QCloseEvent* event)
 {
   // Window geometry persistence — outside Phase B scope (TTSettings owns
-  // app settings, not per-window UI state).
+  // app settings, not per-window UI state). normalGeometry() is the
+  // un-maximised rectangle, so a maximised window still records a sensible
+  // size to come back to.
   QSettings geom("TTCut-ng", "TTCut-ng");
-  geom.setValue("MainWindow/geometry", saveGeometry());
+  if (TTSettings::instance()->logUI())
+    qDebug() << "geometry save: geometry" << geometry()
+             << "normalGeometry" << normalGeometry()
+             << "maximized" << isMaximized()
+             << "minimumSize" << minimumSize();
+  ttSaveWindowGeometry(geom, "MainWindow", normalGeometry(), isMaximized());
 
   TTSettings::instance()->save();
 
@@ -1476,11 +1494,11 @@ void TTCutMainWindow::runScreenshotMode()
         return;
     }
 
-    // Fixed window size for reproducible screenshots. The default 1024x768 is
-    // too small for the stream point settings tab: its layout has to squeeze
-    // the rows below their minimum height, and the grab then shows clipped
-    // text and controls flattened to lines. A fixed size also keeps the images
-    // independent of the screen the run happens on.
+    // Fixed window size for reproducible screenshots, independent of the screen
+    // the run happens on and of whatever size the user last left the window at.
+    // Anything much smaller clips the stream point settings tab: its layout has
+    // to squeeze the rows below their minimum height, and the grab then shows
+    // cut-off text and controls flattened to lines.
     resize(1920, 1080);
     QApplication::processEvents();
 

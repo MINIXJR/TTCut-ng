@@ -2,6 +2,46 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**Window size and detection thresholds are readable settings again**
+
+### Fixed
+
+- **The window no longer forgets its size.** Every start came up at 1024×768,
+  no matter what size the window had when it was closed: `main()` called
+  `resize(1024, 768)` two lines after showing the window, discarding the
+  geometry that had just been restored. The line dates back to the very first
+  commit and had the same effect on the previous implementation — it stayed
+  unnoticed because the stored value was not readable. The window now opens at
+  the size it was left at, or at 80% of the screen when there is no stored
+  value.
+
+  A hand-edited size that no longer fits is reduced to the screen it opens on.
+  The window *position* can only be honoured under X11: a Wayland client is not
+  permitted to place its own window, so `x` and `y` are recorded but only take
+  effect with `QT_QPA_PLATFORM=xcb`.
+
+- **The "go to frame" dialog stored its size in a second settings file** under
+  `Unknown Organization`, because the application never set an organisation
+  name. The value now lives in the application's own settings file, and the
+  stray file is picked up and removed on the first start. Note that the
+  directory is shared with other applications and therefore stays.
+
+### Changed
+
+- **Window position and size are stored as plain numbers** (`x`, `y`, `width`,
+  `height`, `maximized` under `[MainWindow]`) instead of a serialised byte
+  array, so they can be inspected and edited by hand. An existing entry is
+  converted automatically on the first start.
+
+- **The detection thresholds are readable too.** Black frame, scene change and
+  logo threshold and the minimum silence duration were the only settings stored
+  as binary blobs, because they were the only ones held as `float` — a type
+  QSettings cannot render as text. They are plain decimals now. Values from an
+  older configuration are rounded when read, so an inherited `0.98` does not
+  reappear as `0.9800000190734863`.
+
 ## v0.77.0 (2026-07-31)
 
 **Pillarbox detection works on H.264/H.265, and the search no longer crashes when cancelled**

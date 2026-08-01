@@ -11,6 +11,7 @@
 #include "ttquickjumpmodel.h"
 #include "ttquickjumpdelegate.h"
 #include "ttquickjumpworker.h"
+#include "ttwindowgeometry.h"
 
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttavtypes.h"
@@ -94,21 +95,26 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
   mDelegate->setHighlightFrameIndex(highlightFrameIndex);
   navigateCenteredOn(mHighlightKeyframeListIndex);
 
-  // Restore window size or use 80% of available screen
-  QSettings settings;
-  QRect screenGeom = QGuiApplication::primaryScreen()->availableGeometry();
-  QSize defaultSize(screenGeom.width() * 80 / 100, screenGeom.height() * 80 / 100);
-  QSize savedSize = settings.value("QuickJumpDialog/size", defaultSize).toSize();
-  resize(savedSize);
+  // Restore window size or use 80% of available screen. Size only — the dialog
+  // has a parent and no move(), so Qt centres it over the main window.
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  const QRect screenGeom = QGuiApplication::primaryScreen()->availableGeometry();
+  const TTWindowGeometry saved = ttLoadDialogSize(settings, "QuickJumpDialog");
+  const QSize wanted = saved.valid
+      ? saved.rect.size()
+      : QSize(screenGeom.width() * 80 / 100, screenGeom.height() * 80 / 100);
+  resize(ttClampToArea(QRect(QPoint(0, 0), wanted), screenGeom).size());
 }
 
 TTQuickJumpDialog::~TTQuickJumpDialog()
 {
   abortCurrentWorker();
 
-  // Save window size
-  QSettings settings;
-  settings.setValue("QuickJumpDialog/size", size());
+  // Save window size. The organisation/application arguments are spelled out
+  // like at every other call site: an argument-less QSettings is what put this
+  // value in ~/.config/Unknown Organization/ in the first place.
+  QSettings settings("TTCut-ng", "TTCut-ng");
+  ttSaveDialogSize(settings, "QuickJumpDialog", size());
 
   delete mTaskPool;
 }

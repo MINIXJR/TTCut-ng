@@ -174,7 +174,8 @@ HEADERS     = common/ttcut.h\
               gui/ttquickjumpmodel.h\
               gui/ttquickjumpdelegate.h\
               gui/ttquickjumpworker.h\
-              gui/ttquickjumpdialog.h
+              gui/ttquickjumpdialog.h\
+              gui/ttwindowgeometry.h
 SOURCES     = common/ttcut.cpp\
               common/ttsettings.cpp\
               common/ttthreadtask.cpp\
@@ -276,6 +277,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttquickjumpdelegate.cpp\
               gui/ttquickjumpworker.cpp\
               gui/ttquickjumpdialog.cpp\
+              gui/ttwindowgeometry.cpp\
               gui/ttcutmain.cpp
 #
 # -------------------------------------------------------------------------------

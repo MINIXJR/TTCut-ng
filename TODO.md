@@ -237,6 +237,18 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     wenig Platz gescrollt statt gestaucht wird. Betrifft auch die anderen
     Tabs, sobald deren Inhalt wächst — deshalb vor der Umsetzung entscheiden,
     ob es einen gemeinsamen Container gibt.
+  - **Zweite Erscheinungsform, beobachtet 2026-08-01:** wird die *Fensterhöhe*
+    klein gezogen, schiebt sich die Landezonen-Liste über die
+    Navigations-Schaltflächen (Screenshot beim Nutzer). Gleicher Mechanismus,
+    eine Ebene höher: `gbNavigation` trägt ein `QGridLayout` mit den Schaltern
+    in Zeile 0 und `TTStreamPointWidget` in Zeile 1
+    (`ttcutmainwindow.cpp:223`). Beide konkurrieren um dieselbe Höhe, und die
+    `minimumSize` des Hauptfensters (900×700 laut `ttcutmainwindow.ui`) liegt
+    unter dem, was der Inhalt zusammen braucht — also wird geclippt statt
+    umgebrochen. Beim Festlegen der Fix-Richtung mitbedenken: eine
+    `QScrollArea` nur im Tab löst die Überlappung in der Gruppe nicht
+    zwangsläufig; womöglich muss die Mindesthöhe des Fensters mit dem
+    tatsächlichen Platzbedarf in Einklang gebracht werden.
 
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
   - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →

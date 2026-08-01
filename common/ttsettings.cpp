@@ -403,19 +403,19 @@ void TTSettings::setScreenshotProject(const QString& v)
 // (legacy keys without `Sec` suffix). Each setter early-outs on no-op
 // assignment. No signals — none of the 12 fields have reactive UI dependents.
 
-void TTSettings::setNavBlackThreshold(float v)
+void TTSettings::setNavBlackThreshold(double v)
 {
   if (mNavBlackThreshold == v) return;
   mNavBlackThreshold = v;
 }
 
-void TTSettings::setNavSceneThreshold(float v)
+void TTSettings::setNavSceneThreshold(double v)
 {
   if (mNavSceneThreshold == v) return;
   mNavSceneThreshold = v;
 }
 
-void TTSettings::setNavLogoThreshold(float v)
+void TTSettings::setNavLogoThreshold(double v)
 {
   if (mNavLogoThreshold == v) return;
   mNavLogoThreshold = v;
@@ -433,7 +433,7 @@ void TTSettings::setSpSilenceThresholdDb(int v)
   mSpSilenceThresholdDb = v;
 }
 
-void TTSettings::setSpSilenceMinDuration(float v)
+void TTSettings::setSpSilenceMinDuration(double v)
 {
   if (mSpSilenceMinDuration == v) return;
   mSpSilenceMinDuration = v;
@@ -569,9 +569,16 @@ void TTSettings::load()
   mStepPlusShift   = settings.value("StepPlusShift/",   mStepPlusShift).toInt();
   mStepMouseWheel  = settings.value("StepMouseWheel/",  mStepMouseWheel).toInt();
   // ----- Detection Thresholds (Task 11) -----
-  mNavBlackThreshold = settings.value("BlackThreshold/", mNavBlackThreshold).toFloat();
-  mNavSceneThreshold = settings.value("SceneThreshold/", mNavSceneThreshold).toFloat();
-  mNavLogoThreshold  = settings.value("LogoThreshold/",  mNavLogoThreshold).toFloat();
+  // Rounded on the way in: these keys used to be stored as float, and widening
+  // 0.98f to double yields 0.9800000190734863 — readable, but not editable.
+  // Three decimals is more than the spin boxes allow, so nothing is lost.
+  auto loadRounded = [&settings](const char* key, double fallback) {
+    const double v = settings.value(key, fallback).toDouble();
+    return qRound(v * 1000.0) / 1000.0;
+  };
+  mNavBlackThreshold = loadRounded("BlackThreshold/", mNavBlackThreshold);
+  mNavSceneThreshold = loadRounded("SceneThreshold/", mNavSceneThreshold);
+  mNavLogoThreshold  = loadRounded("LogoThreshold/",  mNavLogoThreshold);
   settings.endGroup();
 
   // ----- Stream Points group (Task 11) --------------------------------
@@ -581,7 +588,10 @@ void TTSettings::load()
   settings.beginGroup("StreamPoints");
   mSpDetectSilence      = settings.value("DetectSilence/",      mSpDetectSilence).toBool();
   mSpSilenceThresholdDb = settings.value("SilenceThresholdDb/", mSpSilenceThresholdDb).toInt();
-  mSpSilenceMinDuration = settings.value("SilenceMinDuration/", mSpSilenceMinDuration).toFloat();
+  // Rounded like the thresholds above — same float-to-double history.
+  mSpSilenceMinDuration =
+      qRound(settings.value("SilenceMinDuration/", mSpSilenceMinDuration).toDouble()
+             * 1000.0) / 1000.0;
   mSpDetectAudioChange  = settings.value("DetectAudioChange/",  mSpDetectAudioChange).toBool();
   mSpDetectAspectChange = settings.value("DetectAspectChange/", mSpDetectAspectChange).toBool();
   mSpDetectPillarbox    = settings.value("DetectPillarbox/",    mSpDetectPillarbox).toBool();
