@@ -60,6 +60,7 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/ttsettingsdialog.ui\
               ui/ttcutsettingsnavigation.ui\
               ui/ttcutsettingssearch.ui\
+              ui/ttcutsettingsstreampoints.ui\
               ui/ttcutsettingsaudio.ui\
               ui/ttcutsettingspaths.ui\
               ui/ttcutsettingslogging.ui\
@@ -146,6 +147,7 @@ HEADERS     = common/ttcut.h\
               gui/ttcutsettingsdlg.h\
               gui/ttcutsettingsnavigation.h\
               gui/ttcutsettingssearch.h\
+              gui/ttcutsettingsstreampoints.h\
               gui/ttcutsettingsaudio.h\
               gui/ttcutsettingspaths.h\
               gui/ttcutsettingslogging.h\
@@ -249,6 +251,7 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcutsettingsdlg.cpp\
               gui/ttcutsettingsnavigation.cpp\
               gui/ttcutsettingssearch.cpp\
+              gui/ttcutsettingsstreampoints.cpp\
               gui/ttcutsettingsaudio.cpp\
               gui/ttcutsettingspaths.cpp\
               gui/ttcutsettingslogging.cpp\

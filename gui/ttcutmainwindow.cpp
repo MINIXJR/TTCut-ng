@@ -299,6 +299,7 @@ TTCutMainWindow::TTCutMainWindow()
   // Stream point widget signals
   connect(mpStreamPointWidget, &TTStreamPointWidget::analyzeRequested,    this, &TTCutMainWindow::onAnalyzeStreamPoints);
   connect(mpStreamPointWidget, &TTStreamPointWidget::abortRequested,      this, &TTCutMainWindow::onAbortStreamPoints);
+  connect(mpStreamPointWidget, &TTStreamPointWidget::settingsRequested,   this, &TTCutMainWindow::onStreamPointSettingsRequested);
   connect(mpStreamPointWidget, &TTStreamPointWidget::jumpToFrame,         this, &TTCutMainWindow::onStreamPointJump);
   connect(mpStreamPointWidget, &TTStreamPointWidget::deleteRequested,     this, &TTCutMainWindow::onStreamPointDelete);
   connect(mpStreamPointWidget, &TTStreamPointWidget::deleteAllRequested,  this, &TTCutMainWindow::onStreamPointDeleteAll);
@@ -641,7 +642,31 @@ void TTCutMainWindow::onActionSave()
  */
 void TTCutMainWindow::onActionSettings()
 {
+  openSettingsDialog(-1);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * The settings button in the stream point panel
+ */
+void TTCutMainWindow::onStreamPointSettingsRequested()
+{
+  // 7 = "Stream Points", the eighth category added in TTSettingsDialog's
+  // constructor. The dialog owns that order; this is the one place that has
+  // to follow it.
+  openSettingsDialog(7);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Settings dialog, optionally opened on a given sidebar category
+ */
+void TTCutMainWindow::openSettingsDialog(int category)
+{
   TTCutSettingsDlg* settingsDlg = new TTCutSettingsDlg( this );
+  if (category >= 0) {
+    if (QListWidget* cats = settingsDlg->findChild<QListWidget*>("categoryList")) {
+      if (category < cats->count()) cats->setCurrentRow(category);
+    }
+  }
   settingsDlg->exec();
 
   log->enableLogFile(TTSettings::instance()->createLogFile());
@@ -855,9 +880,6 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
 
   TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
   if (!vs) return;
-
-  // Save settings from widget
-  mpStreamPointWidget->saveSettings();
 
   // Clear previous auto-detected points
   mpStreamPointModel->clearAutoDetected();
@@ -1552,11 +1574,9 @@ void TTCutMainWindow::runScreenshotMode()
 
     saveWidgetScreenshot(mpStreamPointWidget, "ttcutng-landezonen.png", 0);
 
-    // 8. Landezonen settings tab
-    mpStreamPointWidget->showSettingsTab();
-    QApplication::processEvents();
-    saveWidgetScreenshot(mpStreamPointWidget, "ttcutng-landezonen-settings.png", 0);
-    mpStreamPointWidget->showLandezonenTab();
+    // The settings used to be a second tab here and were captured separately.
+    // They are a category in the settings dialog now, so they arrive with the
+    // per-category captures further down.
 
     // 9. Zeitsprung dialog (non-modal for screenshot)
     if (mpCurrentAVDataItem && mpCurrentAVDataItem->videoStream()) {
@@ -1579,8 +1599,9 @@ void TTCutMainWindow::runScreenshotMode()
         QStackedWidget* pages = settingsDlg.findChild<QStackedWidget*>("stackedPages");
         if (catList && pages) {
             // Must match the category order in TTCutSettingsDlg::TTCutSettingsDlg
+            // Must match the category order in TTCutSettingsDlg's constructor.
             QStringList catNames = {"navigation", "search", "audio", "encoder",
-                                    "muxer", "paths", "logging"};
+                                    "muxer", "paths", "logging", "streampoints"};
             for (int i = 0; i < catList->count() && i < catNames.size(); ++i) {
                 catList->setCurrentRow(i);
                 QApplication::processEvents();

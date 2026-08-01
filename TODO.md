@@ -223,8 +223,18 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
-- **Einstellungs-Tab der Landezonen staucht bei knapper Panel-Höhe**
-  (gemessen 2026-07-31 beim v0.77.0-Release)
+- ~~**Einstellungs-Tab der Landezonen staucht bei knapper Panel-Höhe**~~
+  → **ERLEDIGT 2026-08-01, anders als gedacht.** Der Tab ist weg: die
+  Einstellungen sind eine eigene Kategorie im Einstellungsdialog, erreichbar
+  über das Symbol neben der Landezonen-Überschrift. Damit erledigt sich die
+  Stauchung ebenso wie die unten vorgeschlagene `QScrollArea` — die zielte auf
+  das **Formular**, das nicht von selbst scrollt. Die verbliebene Liste ist ein
+  `QListView` und bringt Scrollbalken mit, braucht also keine.
+  Die eigentliche Ursache der Überlappung war eine andere und ist mitgefixt:
+  das Hauptfenster deklarierte `minimumSize` 900×700, während sein Inhalt 1067
+  verlangte — Qt rechnet korrekt, die feste Angabe überschrieb das Ergebnis.
+  Ohne sie erzwingt Qt die echte Untergrenze, jetzt 863.
+  Ursprünglicher Befund (gemessen 2026-07-31 beim v0.77.0-Release):
   - Reicht die Höhe nicht, drückt das Layout die Zeilen unter ihre
     Mindesthöhe, statt zu scrollen: Beschriftungen werden waagerecht
     abgeschnitten, Eingabefelder zu Strichen. Gemessen im Screenshot-Modus bei

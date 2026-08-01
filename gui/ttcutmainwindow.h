@@ -67,6 +67,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void closeEvent(QCloseEvent* event);
 		void onActionSave();
 		void onActionSettings();
+		void onStreamPointSettingsRequested();
 
 		void onHelpAbout();
 		void onHelpKeyboardShortcuts();
@@ -131,6 +132,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void openProjectFile(QString fName);
 
 	private:
+		// Opens the settings dialog; category >= 0 selects a sidebar entry.
+		void openSettingsDialog(int category);
 		void closeProject();
 		void navigationEnabled(bool enabled);
 		void updateRecentFileActions();
