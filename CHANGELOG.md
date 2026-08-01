@@ -6,6 +6,15 @@ All notable changes to TTCut-ng are documented in this file.
 
 **Window size and detection thresholds are readable settings again**
 
+### Changed
+
+- **The stream point detection settings moved into the settings dialog**, into
+  a category of their own ("Landezonen"), reachable directly through the icon
+  next to the stream point list's heading. The navigation panel now shows only
+  the list of detected points. That is what lets the main window be made
+  smaller: its content demanded 1067 px of height before, the settings tab
+  alone accounting for 325 of them, and the window now stops at 863.
+
 ### Fixed
 
 - **The window no longer forgets its size.** Every start came up at 1024×768,

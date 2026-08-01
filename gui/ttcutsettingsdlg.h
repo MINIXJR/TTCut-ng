@@ -20,6 +20,7 @@ class TTCutSettingsEncoderDefaults;
 class TTCutSettingsMuxer;
 class TTCutSettingsPaths;
 class TTCutSettingsLogging;
+class TTCutSettingsStreamPoints;
 
 class TTSettingsDialog : public QDialog, private Ui_TTSettingsDialog
 {
@@ -40,6 +41,7 @@ private:
     TTCutSettingsMuxer*      pageMuxer;
     TTCutSettingsPaths*      pagePaths;
     TTCutSettingsLogging*    pageLogging;
+    TTCutSettingsStreamPoints* pageStreamPoints;
 };
 
 // Legacy compatibility alias — existing call sites use TTCutSettingsDlg

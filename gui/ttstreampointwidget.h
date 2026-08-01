@@ -29,12 +29,11 @@ public:
   TTStreamPointWidget(TTStreamPointModel* model, QWidget* parent = 0);
 
   void setAnalysisRunning(bool running, bool aborted = false);
-  void loadSettings();
-  void saveSettings();
 
 signals:
   void analyzeRequested();
   void abortRequested();
+  void settingsRequested();
   void jumpToFrame(int frameIndex);
   void deleteRequested(int row);
   void deleteAllRequested();
@@ -49,34 +48,18 @@ private slots:
   void onDeleteKey();
 
 public:
-  void showLandezonenTab();
-  void showSettingsTab();
 
 private:
   void setupLandezonenTab(QWidget* tab);
-  void setupSettingsTab(QWidget* tab);
 
   TTStreamPointModel* mModel;
   QListView*          mListView;
-  QTabWidget*         mTabWidget;
   QPushButton*        mBtnAnalyze;
   QPushButton*        mBtnDeleteAll;
   QLabel*             mLblStatus;
   bool                mAnalysisRunning;
 
   // Settings widgets
-  QCheckBox*      mCbSilence;
-  QLabel*         mLblSilenceThreshold;
-  QSpinBox*       mSbSilenceThreshold;
-  QLabel*         mLblSilenceMinDuration;
-  QDoubleSpinBox* mSbSilenceMinDuration;
-  QCheckBox*      mCbAudioChange;
-  QCheckBox*      mCbAspectChange;
-  QCheckBox*      mCbPillarbox;
-  QLabel*         mLblPillarboxThreshold;
-  QSpinBox*       mSbPillarboxThreshold;
-  QLabel*         mLblPillarboxSample;
-  QDoubleSpinBox* mSbPillarboxSampleSeconds;
 };
 
 #endif // TTSTREAMPOINTWIDGET_H

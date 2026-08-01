@@ -15,6 +15,7 @@
 #include "ttcutsettingsmuxer.h"
 #include "ttcutsettingspaths.h"
 #include "ttcutsettingslogging.h"
+#include "ttcutsettingsstreampoints.h"
 
 #include <QListWidgetItem>
 #include <QPushButton>
@@ -36,6 +37,7 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   pageMuxer      = new TTCutSettingsMuxer(this);
   pagePaths      = new TTCutSettingsPaths(this);
   pageLogging    = new TTCutSettingsLogging(this);
+  pageStreamPoints = new TTCutSettingsStreamPoints(this);
 
   // Load data into all pages
   pageNavigation->setTabData();
@@ -45,6 +47,7 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   pageMuxer->setTabData();
   pagePaths->setTabData();
   pageLogging->setTabData();
+  pageStreamPoints->setTabData();
 
   // Populate sidebar list and stacked pages — order: UI interaction →
   // processing → output → system. Bedienung first, Logging last.
@@ -75,6 +78,9 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
   addCat(tr("Logging"),
          QIcon::fromTheme("utilities-log-viewer", s->standardIcon(QStyle::SP_FileIcon)),
          pageLogging);
+  addCat(tr("Stream Points"),
+         QIcon::fromTheme("edit-find", s->standardIcon(QStyle::SP_FileDialogContentsView)),
+         pageStreamPoints);
 
   connect(categoryList, &QListWidget::currentRowChanged,
           stackedPages, &QStackedWidget::setCurrentIndex);
@@ -115,6 +121,7 @@ void TTSettingsDialog::accept()
   pageMuxer->saveTabData();
   pagePaths->saveTabData();
   pageLogging->saveTabData();
+  pageStreamPoints->saveTabData();
 
   QDialog::accept();
 }
