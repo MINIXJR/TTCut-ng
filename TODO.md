@@ -102,8 +102,6 @@ Schritte in dieser Reihenfolge:
 - Die **KWin-Messreihe** (Known Limitations): behebt Qt6 den Fehler, sind die
   Schwellenwerte nicht mehr zu messen — weder für den KDE-Bugreport noch als
   Beleg, dass es an Qt5 lag.
-- Der **Log-Flush** (Medium Priority): bei einem Versionssprung dieser Größe
-  wird es Abstürze geben, und dann braucht man den Verlauf davor.
 - Der **Dead-Code-Audit** (Medium Priority): was tot ist, muss nicht migriert
   werden.
 
@@ -115,20 +113,6 @@ Kapitel-Editor, Undo/Redo) — sonst baut man zweimal. Unberührt und jederzeit
 machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
 
 ## Medium Priority
-
-- **Logdatei verliert beim Absturz genau den interessanten Teil**
-  (2026-08-02 belegt)
-  - Der `TTMessageLogger` schreibt gepuffert. Beim Absturz vom 2026-08-01
-    endet `logfile.log` um 18:32:36, das Core-Abbild ist von 18:39 — die
-    letzten sechseinhalb Minuten fehlen vollständig, darunter der zweite
-    Analysestart, um den es ging.
-  - Folge: bei jedem Absturz fehlt der Verlauf unmittelbar davor. Genau der,
-    den man für die Einordnung braucht. Der damalige Schluss „kein
-    Logeintrag ⇒ kein Signal" beruhte auf dieser Lücke und war falsch.
-  - Richtung: nach jeder Zeile spülen (`QTextStream::flush()` +
-    `QFile::flush()`), mindestens ab Stufe `warning`. Kosten prüfen — der
-    Debug-Kanal schreibt in Analyseläufen viele Zeilen pro Sekunde; ggf. nur
-    Warn-/Fehlerstufen sofort spülen und den Debug-Kanal gepuffert lassen.
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
