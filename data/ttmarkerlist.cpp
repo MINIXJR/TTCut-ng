@@ -16,7 +16,6 @@
 #include "ttavlist.h"
 
 #include "../common/ttcut.h"
-#include "../avstream/ttavstream.h"
 
 #include <QDateTime>
 #include <QFileInfo>
