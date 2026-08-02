@@ -189,7 +189,18 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 	// Player + renderWidget jetzt erzeugen und GL/Render-Context initialisieren,
 	// damit er lange vor dem ersten PLAY bereitsteht (sonst scheitert der erste
 	// Play an "No render context set"; siehe ensurePlayerCreated).
-	ensurePlayerCreated();
+	//
+	// Diagnose-Schalter (KWin-Repaint-Bisektion, 2026-08-02): mit
+	// TTCUT_DIAG_NO_PLAYER=1 wird der Player samt QOpenGLWidget hier NICHT
+	// erzeugt — bei reiner Navigation existiert dann kein GL-Widget und kein
+	// mpv-Render-Kontext im Fenster. Entscheidet, ob der KWin-Auffrischfehler
+	// diese Zutat braucht. Gefahrlos: onPlay() holt die Erzeugung bei Bedarf
+	// über die zweite ensurePlayerCreated()-Aufrufstelle nach.
+	if (qEnvironmentVariableIsSet("TTCUT_DIAG_NO_PLAYER"))
+		TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+			"TTCUT_DIAG_NO_PLAYER: skipping player/GL widget creation at stream open");
+	else
+		ensurePlayerCreated();
 
 	updateCurrentPosition();
 }

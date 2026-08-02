@@ -162,6 +162,31 @@ int main( int argc, char **argv )
 
     // Caption text in applications title bar
     mainWnd->setWindowTitle( TTCut::versionString );
+
+    // Diagnose-Schalter (KWin-Repaint-Bisektion, 2026-08-02): mit
+    // TTCUT_DIAG_HIDE=name1,name2,... werden die benannten Kind-Widgets vor
+    // dem Anzeigen versteckt (Objektnamen aus den .ui-Dateien). Erlaubt die
+    // binäre Eingrenzung, welcher Fensterteil den KWin-Auffrischfehler
+    // braucht, ohne weitere Codeänderungen. Ohne die Variable: wirkungslos.
+    if (qEnvironmentVariableIsSet("TTCUT_DIAG_HIDE")) {
+      TTMessageLogger* log = TTMessageLogger::getInstance();
+      const QStringList names =
+          QString::fromLocal8Bit(qgetenv("TTCUT_DIAG_HIDE"))
+              .split(',', Qt::SkipEmptyParts);
+      for (const QString& rawName : names) {
+        const QString name = rawName.trimmed();
+        QWidget* w = mainWnd->findChild<QWidget*>(name);
+        if (w) {
+          w->hide();
+          log->warningMsg(__FILE__, __LINE__,
+              QString("TTCUT_DIAG_HIDE: hid '%1'").arg(name));
+        } else {
+          log->warningMsg(__FILE__, __LINE__,
+              QString("TTCUT_DIAG_HIDE: no widget named '%1'").arg(name));
+        }
+      }
+    }
+
     mainWnd->show();
 
     // No resize() here. There used to be a resize(1024, 768) at this point,

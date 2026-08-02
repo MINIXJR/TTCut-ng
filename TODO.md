@@ -93,6 +93,11 @@ Schritte in dieser Reihenfolge:
    gehört vor den Anfang, nicht in die Mitte.
 6. **Nachziehen:** Debian-Bauabhängigkeiten auf qt6, `lupdate`/`lrelease` aus
    Qt6, Screenshots und Wiki neu.
+   Dabei den KWin-Auffrischfehler erneut prüfen (siehe Known Limitations): bei
+   1819×1412 und Skalierung 1,5 starten und navigieren. Ist er weg, war es der
+   Qt5-Skalierungspfad; bleibt er, liegt es an KWin und der Bugreport bekommt
+   sein Beispielprogramm gratis — ein Qt6-Programm, das `wp_fractional_scale`
+   spricht und trotzdem stehen bleibt, wäre ein viel stärkerer Befund.
 7. **Abnahmemaß:** die bestehende `--auto-cut`-QC als Gate — ES bit-identisch
    zum Qt5-Stand, MKV nie (zufällige Segment-UID, siehe
    `docs/completed-work.md`). So ist belegt, dass die Migration die
@@ -385,13 +390,67 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     zwar auf beiden Schirmen. Unter `QT_QPA_PLATFORM=xcb` bei denselben 150 %
     ist alles korrekt. Ein Bericht muss also "fractional scaling" nennen, nicht
     "mixed scale factors".
-  - **Offener Messpunkt: wo liegt die Schwelle?** 1775 × 1412 (nicht maximiert)
-    zeigt das Bild korrekt, maximiert (2400 × 1440) nicht. Auslöser ist die
-    Größe der gemalten Fläche, nicht der Zustand "maximiert" — ein früherer
-    gegenteiliger Schluss beruhte auf einem Vergleich, der Größe und Zustand
-    zugleich änderte. Ein Zahlenpaar "bis X × Y erscheint es, ab X' × Y' nicht"
-    wäre für die KDE-Entwickler wertvoller als jede Zustandsbeschreibung.
-    Fenstergröße im Betrieb ablesbar mit `tools/diag/window-geometry.sh`.
+  - **Schwelle vermessen (2026-08-02, Skalierung 1,5, alle Punkte einzeln
+    reproduziert):** Die Grenze hängt von BEIDEN Dimensionen ab — weder die
+    Breite allein noch die Fläche allein erklärt sie. Beide Ein-Größen-Modelle
+    wurden ausprobiert und sind an den Messwerten gescheitert (Flächen an der
+    Schwelle: 2,50–2,57 Mio. bei fester Höhe gegen 2,01–2,05 Mio. bei fester
+    Breite — 25 % auseinander). Gemessene Punkte (Fensterinhalt logisch;
+    KWin-Frame = +28 px Titelleiste, keine Seitenränder):
+
+    | Breite \ Höhe | ≤1103 | 1128 | 1412 |
+    |---|---|---|---|
+    | 1774 | sauber | sauber | sauber |
+    | 1819 | sauber | FEHLER | FEHLER |
+    | 2500 | — | — | FEHLER |
+
+    Bei Breite 1774 tritt der Fehler in keiner getesteten Höhe auf; bei 1819
+    ab Höhe 1128. Der Effekt ist deterministisch: fünf Wiederholungen in
+    geänderter Reihenfolge, alle identisch zum Erstbefund. Randnotiz für den
+    Bericht, ausdrücklich ohne These: 1774 logisch = 2661,0 physische Pixel,
+    1819 logisch = 2728,5 — ungerade logische Breite ergibt bei 1,5 eine
+    halbe physische Pixelbreite; 1819×1103 war jedoch trotz halber Breite
+    sauber. Messwerkzeuge: `tools/diag/window-geometry.sh` (liest die
+    Ist-Geometrie bei KWin ab) und die Messskripte
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-{threshold,verify,area-test,repeat-test}.sh`
+    samt Protokollen (`kwin-*-2026*.log`) im selben Verzeichnis.
+  - **Messfalle aus dem ersten Durchlauf:** die Startfassung des Messskripts
+    beendete die TTCut-Instanzen nicht (`kill` traf die Subshell statt des
+    Programms — `$!` nach `( cd … && ./prog ) &` ist die Subshell-PID; Fix:
+    `exec` in der Subshell). Dadurch liefen bis zu fünf Instanzen parallel und
+    die erste Messreihe war wertlos; alle obigen Zahlen stammen aus
+    Wiederholungen mit genau einer Instanz.
+  - **Ein Skalierungsvergleich 1,5 gegen 1,75 steht noch aus** (er hätte
+    logische von physischen Grenzen getrennt). Er scheiterte daran, dass bei
+    1,75 nur ~1234 logische Zeilen verfügbar sind und die Schwelle dort mit
+    anderer Höhe gemessen werden müsste — nicht vergleichbar, solange das
+    Zusammenspiel von Breite und Höhe unverstanden ist. Erst sinnvoll, wenn
+    die KDE-Entwickler sagen, welche Größe intern die relevante ist.
+  - **ZURÜCKGESTELLT bis zur Qt6-Migration (2026-08-02, User-Entscheid).** Ohne
+    Minimalbeispiel wird kein Bugreport eingereicht. Offen gehaltene Hypothese:
+    die Ursache könnte im **Qt5**-Skalierungspfad liegen statt in KWin — der
+    Protokollmitschnitt entlastet TTCut, aber nicht Qt5. Qt6 bindet
+    `wp_fractional_scale`, Qt5 nicht; der Umstieg entscheidet es. Prüfschritt
+    für danach: TTCut unter Qt6 bei 1819×1412 und Skalierung 1,5 starten und
+    navigieren — dieselben Skripte, dieselbe Beobachtung.
+  - **Protokollbeweis vorhanden** (`WAYLAND_DEBUG=1`, Logs unter
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/wayland-diff/`): Qt setzt
+    `set_buffer_scale(2)` auf dem 1,5-Schirm und bindet
+    `wp_fractional_scale_manager_v1` nie, obwohl angeboten. Zum nicht
+    erschienenen Bild gehören `attach` + `damage_buffer(0,0,3638,2416)`
+    (gesamte Bildfläche) + `commit`, danach 14 s lang kein weiterer Commit.
+    Client-seitig also korrekt. **Auswertungsfalle:** der Log enthält zwei
+    getrennte Wayland-Verbindungen (Qt und mpvs EGL) mit unabhängigen
+    Objekt-IDs — es gibt zwei `wl_surface#25`; nur getrennt nach Queue
+    (`{Default Queue}` vs `{mesa egl *}`) auswertbar.
+  - **Als Ursache ausgeschlossen** (Testfälle `kwin-repaint-testcase{2,3}.cpp`
+    mit Abschalt-Optionen, plus Bisektion an TTCut über die Diagnose-Schalter
+    `TTCUT_DIAG_NO_PLAYER` und `TTCUT_DIAG_HIDE`): GL-Widget/mpv-Kontext,
+    `QLabel::setPixmap`, `QStackedLayout::StackAll`, `QMainWindow`,
+    App- und Widget-Stylesheets, `QGroupBox`/`QTabWidget`, Fenstergröße allein,
+    Fläche allein, Teilschaden, Dekodierlatenz, Fortschrittsdialog,
+    berührungsloser Betrieb ohne Eingaben. Der Fehler überlebt sogar das fast
+    leere Fenster.
   - **Minimaler Testfall fehlt weiterhin.** `kwin-repaint-testcase.cpp` unter
     `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-bugreport/` reproduziert den
     Fehler NICHT — weder mit großer einfarbiger Fläche noch als `QPixmap`,
