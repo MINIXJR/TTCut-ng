@@ -14,13 +14,28 @@ project(ttcut-ng VERSION 0.78.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# The qmake build used -std=c++17 (no GNU extensions), not the CMake default
+# gnu++17.
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Self-healing compile_commands.json symlink: recreated on every reconfigure
+# so a stale or missing link at the project root never has to be fixed by
+# hand (clangd reads it from there).
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+  file(REMOVE ${CMAKE_SOURCE_DIR}/compile_commands.json)
+  file(CREATE_LINK ${CMAKE_BINARY_DIR}/compile_commands.json
+       ${CMAKE_SOURCE_DIR}/compile_commands.json SYMBOLIC)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
-# The qmake build (CONFIG += debug) never defined NDEBUG, so Q_ASSERT has
-# always been active in shipped binaries. Keep it that way.
+# NDEBUG stripping (below) only keeps assert() from <cassert> alive in
+# RelWithDebInfo - it does NOT reach Q_ASSERT. Qt5::Core appends QT_NO_DEBUG
+# for every non-Debug config regardless of NDEBUG, and Q_ASSERT keys off
+# QT_NO_DEBUG, not NDEBUG. QT_FORCE_ASSERTS (in add_compile_definitions
+# below) is Qt's supported override to keep Q_ASSERT active despite that.
 string(REPLACE "-DNDEBUG" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 string(REPLACE "-DNDEBUG" "" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
 
@@ -30,7 +45,7 @@ set(CMAKE_AUTORCC ON)
 # The .ui files live in ui/, sources include "ui_xxx.h" unqualified.
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_SOURCE_DIR}/ui)
 
-add_compile_options(-Wall)
+add_compile_options(-Wall -Wextra)
 add_compile_definitions(
   _FILE_OFFSET_BITS=64
   UNIX
@@ -38,6 +53,9 @@ add_compile_definitions(
   # Qt6 preparation: API deprecated before Qt 6.0 is compiled out entirely -
   # any use is a hard error, not a warning.
   QT_DISABLE_DEPRECATED_BEFORE=0x060000
+  # Qt's supported override to keep Q_ASSERT active in non-Debug configs -
+  # see the comment above the NDEBUG stripping for why NDEBUG alone does not.
+  QT_FORCE_ASSERTS
 )
 
 find_package(Qt5 5.15 REQUIRED COMPONENTS Core Widgets Gui Xml Network OpenGL)
@@ -315,7 +333,6 @@ add_executable(ttcut-pts-analyze tools/ttcut-pts-analyze/ttcut-pts-analyze.c)
 set_target_properties(ttcut-pts-analyze PROPERTIES
   C_STANDARD 17 C_STANDARD_REQUIRED ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/ttcut-pts-analyze)
-target_compile_options(ttcut-pts-analyze PRIVATE -Wextra)
 
 add_executable(ttcut-ac3fix tools/ttcut-ac3fix/ttcut-ac3fix.c)
 set_target_properties(ttcut-ac3fix PROPERTIES

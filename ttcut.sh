@@ -5,4 +5,4 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 export QT_QPA_PLATFORM=xcb
-exec "$SCRIPT_DIR/ttcut-ng" "$@"
+exec "$SCRIPT_DIR/build/ttcut-ng" "$@"

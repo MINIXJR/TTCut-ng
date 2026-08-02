@@ -34,10 +34,10 @@ Debian/Ubuntu:
 3. Uebersetzen
 --------------
 
-  qmake ttcut-ng.pro
-  make -j$(nproc)
+  cmake -B build -G Ninja
+  cmake --build build
 
-Das erzeugt die ausfuehrbare Datei "ttcut-ng" im Projektverzeichnis.
+Das erzeugt die ausfuehrbare Datei "build/ttcut-ng".
 
 
 4. Debian-Paket bauen
@@ -55,7 +55,7 @@ Oder mit dem mitgelieferten Skript:
 
 TTCut-ng entweder im lokalen Verzeichnis ausfuehren:
 
-  ./ttcut-ng
+  build/ttcut-ng
 
 Oder das Debian-Paket installieren:
 
@@ -67,7 +67,7 @@ Oder das Debian-Paket installieren:
 
 TTCut-ng benoetigt das XCB-Backend auf Wayland-Systemen:
 
-  QT_QPA_PLATFORM=xcb ./ttcut-ng
+  QT_QPA_PLATFORM=xcb build/ttcut-ng
 
 
 7. Probleme

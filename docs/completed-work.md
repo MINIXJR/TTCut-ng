@@ -696,6 +696,35 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - Herkunft: Task 6 des `demux-defect-repair`-Feature-Ledgers
     (`docs/superpowers/sdd/progress.md`).
 
+- **qmake → CMake-Migration (Ninja)** → **DONE (2026-08-02, branch
+  `feature/cmake-migration`)**
+  - Bausystem vollständig auf CMake (Ninja-Backend) umgestellt:
+    `qmake ttcut-ng.pro && make` → `cmake -B build -G Ninja && cmake --build
+    build`, Binary jetzt `build/ttcut-ng`. Alle qmake-Bauartefakte (`.pro`,
+    `moc/`, `ui_h/`, `obj/`, `res/`) entfernt; `compile_commands.json`
+    entsteht ab jetzt automatisch bei jedem Konfigurationslauf (kein `bear`
+    mehr nötig).
+  - Qt6-Veraltungs-Gate `QT_DISABLE_DEPRECATED_BEFORE=0x060000` scharf
+    geschaltet, **null Codeänderungen nötig** — der Qt5-Build kompiliert
+    unverändert durch. Schließt Schritt 2 („Veraltungs-Gate im Qt5-Build
+    einschalten") des Qt6-Migrationsplans in `TODO.md`.
+  - `tools/diag/`: die pro-Test kuratierten Quelllisten aus dem alten
+    Makefile wurden 1:1 in CMake-Ziele übernommen (bewusst keine gemeinsame
+    Archiv-Library — jede neue GUI/mpv-Abhängigkeit im Cut-Pfad soll als
+    Linker-Fehler auffallen, nicht still durchgereicht werden). Die Guard-
+    Absicht bewährte sich dabei einmal real: `common/ttthreadtask.h` erreichte
+    zuvor `gui/ttprogressbar.h` → `QDialog` → `ui_ttprogressform.h`; dieser
+    Include-Pfad existiert inzwischen nicht mehr, wodurch die bisherigen
+    Handbau-Kommentare in `tools/diag/test_task_cleanup_order.cpp` und
+    `tools/diag/test_pool_crossthread.cpp` eine falsche Begründung nannten
+    (korrigiert im selben Zug wie die übrigen toten Pfade `-I../../moc`).
+  - QC-Beleg: A/B byte-identisch für ES + Audio (H.264-Tux-Testvideo,
+    395-Paket-PTS/DTS-Liste identisch vor/nach der Migration).
+  - Debian-Paket gebaut und geprüft (`build-package.sh` → `dpkg-buildpackage`).
+  - Belege: `.superpowers/sdd/2026-08-02-cmake-migration/` (Task-Briefs/
+    -Reports, Review-Diffs), `final-fix-report.md` für die abschließende
+    Fix-Welle.
+
 - **Subagent-Driven Development: Build-Permissions für Subagents** → **Konfiguriert 2026-05-19**
   - `.claude/settings.local.json` (lokal, gitignored) erweitert um `Bash(make:*)`,
     `Bash(make clean:*)`, `Bash(qmake:*)`, `Bash(bear -- make:*)`, `Bash(lrelease:*)`.

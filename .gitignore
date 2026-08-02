@@ -1,24 +1,13 @@
 # Build artifacts
-Makefile
-Makefile.*
 ttcut-ng
 ttcut
 *.o
 *.tmp
 *~
-# Static tool Makefiles (override the global Makefile pattern)
-!tools/diag/Makefile
-!tools/ttcut-pts-analyze/Makefile
 
-# qmake generated
-.qmake.stash
-.dep.inc
-
-# Build output directories
-obj/
-moc/
-ui_h/
-res/
+# CMake build directories
+build/
+build-deb/
 
 # macOS app bundle
 ttcut-ng.app/

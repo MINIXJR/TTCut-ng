@@ -64,7 +64,7 @@ QPixmap* TTCut::imgPFrame     = NULL;
 QPixmap* TTCut::imgBFrame     = NULL;
 
 
-// Version (APP_VERSION is defined in ttcut-ng.pro)
+// Version (APP_VERSION is defined in CMakeLists.txt)
 QString TTCut::versionString = "TTCut-ng - " APP_VERSION;
 
 // --------------------------------------------------------------

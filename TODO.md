@@ -51,7 +51,7 @@ Von den üblichen Qt6-Blockern ist nichts im Code — kein `QRegExp`, kein
 `QLinkedList`/`QStringRef`, kein `setMargin()`, kein `toSet()`/`fromList()`,
 kein `qSort`, keine High-DPI-Attribute (die in Qt6 wegfallen). `QWheelEvent`
 nutzt bereits `angleDelta()`, `QTime` dient nur als Wertetyp, gemessen wird mit
-`QElapsedTimer`. C++17 steht in der `.pro`. Werkzeuge sind installiert:
+`QElapsedTimer`. C++17 steht in der `CMakeLists.txt`. Werkzeuge sind installiert:
 `qmake6`, `qt6-base-dev` 6.10.2, `qt6-wayland`, `libqt6openglwidgets6`.
 
 Bekannter Anpassungsbedarf: `QT += opengl` braucht zusätzlich `openglwidgets`
@@ -76,29 +76,29 @@ Schritte in dieser Reihenfolge:
    (`git switch -c qt5-maintenance qt5-final`). Umgekehrt ist ein Zweig ohne
    Tag kein stabiler Marker, weil er weiterwandert. Ein Wartungszweig entsteht
    also erst, wenn tatsächlich ein Qt5-Fix ausgeliefert werden soll.
-2. **Veraltungs-Gate im Qt5-Build einschalten.**
-   `DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000` in `ttcut-ng.pro`: der
-   Qt5-Compiler meldet dann alles, was in Qt6 wegfällt. Der Umbau passiert im
-   laufenden, testbaren Qt5-Build statt im Blindflug — der billigste Hebel des
-   ganzen Vorhabens.
-3. **Risiko zuerst prüfen: das libmpv-Render-Backend.**
+2. **Risiko zuerst prüfen: das libmpv-Render-Backend.**
    Qt6 hat den Unterbau von `QOpenGLWidget` umgestellt. Wie sich das mit dem
    mpv-Render-Kontext verträgt (`vo=libmpv`, `gui/ttmpvrenderwidget.*`), ist
    das größte Unbekannte. Einzeln ausprobieren, bevor der Rest angefasst wird —
    nicht am Ende, wo es das ganze Vorhaben blockieren würde.
-4. **Machbarkeitsprobe mit `qmake6`**: einmal bauen, Fehler zählen, **nicht**
+3. **Machbarkeitsprobe mit CMake + Qt6**: `find_package(Qt6 ...)` probeweise
+   anstelle von `Qt5` einsetzen, einmal bauen, Fehler zählen, **nicht**
    reparieren. Erst danach ist der Aufwand seriös schätzbar.
-5. **Bauverfahren entscheiden: qmake6 oder CMake.** `qmake6` gibt es, aber Qt
-   hat qmake für Qt7 abgekündigt. Die Entscheidung bestimmt den Umfang und
-   gehört vor den Anfang, nicht in die Mitte.
-6. **Nachziehen:** Debian-Bauabhängigkeiten auf qt6, `lupdate`/`lrelease` aus
+4. **Bauverfahren: CMake — bereits entschieden und umgesetzt.** Die
+   ursprüngliche Frage qmake6 vs. CMake ist mit diesem Zweig
+   (`feature/cmake-migration`, siehe `docs/completed-work.md`) beantwortet:
+   CMake, bei laufendem Qt5-Betrieb. `qmake6` gäbe es zwar, aber Qt hat qmake
+   für Qt7 abgekündigt — die qmake6-Variante war damit ohnehin vom Tisch. Die
+   Qt6-Migration probiert künftig `find_package(Qt6 ...)` in der bestehenden
+   `CMakeLists.txt`, kein neues Bausystem mehr nötig.
+5. **Nachziehen:** Debian-Bauabhängigkeiten auf qt6, `lupdate`/`lrelease` aus
    Qt6, Screenshots und Wiki neu.
    Dabei den KWin-Auffrischfehler erneut prüfen (siehe Known Limitations): bei
    1819×1412 und Skalierung 1,5 starten und navigieren. Ist er weg, war es der
    Qt5-Skalierungspfad; bleibt er, liegt es an KWin und der Bugreport bekommt
    sein Beispielprogramm gratis — ein Qt6-Programm, das `wp_fractional_scale`
    spricht und trotzdem stehen bleibt, wäre ein viel stärkerer Befund.
-7. **Abnahmemaß:** die bestehende `--auto-cut`-QC als Gate — ES bit-identisch
+6. **Abnahmemaß:** die bestehende `--auto-cut`-QC als Gate — ES bit-identisch
    zum Qt5-Stand, MKV nie (zufällige Segment-UID, siehe
    `docs/completed-work.md`). So ist belegt, dass die Migration die
    Schnittausgabe nicht verändert.
@@ -107,7 +107,11 @@ Schritte in dieser Reihenfolge:
 (Schwelle vermessen, solange Qt5 den Fehler noch zeigt) und der Dead-Code-Audit
 (677 Zeilen weniger zu migrieren). Belege in `docs/completed-work.md`. Der
 dritte damals gelistete Punkt, ein Log-Flush, hat sich als gegenstandslos
-erwiesen — der Logger spülte längst.
+erwiesen — der Logger spülte längst. Das Veraltungs-Gate
+(`QT_DISABLE_DEPRECATED_BEFORE=0x060000`) ist mit der qmake→CMake-Migration
+(dieser Zweig) bereits aktiv — im laufenden Qt5-Build, ohne Codeänderungen
+nötig gewesen. Damit ist der frühere Schritt „Veraltungs-Gate im Qt5-Build
+einschalten" aus der Liste unten entfallen; Beleg in `docs/completed-work.md`.
 
 **Was wartet, bis die Migration steht:** der Rename `TTMPEG2Window2 →
 TTVideoFrameWidget` (fasst `.ui`, `.pro` und moc an — dieselbe Fläche wie die
@@ -230,8 +234,10 @@ machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
     Source-Strings konvertiert, deutsche Übersetzung in `trans/ttcut-ng_de_DE.ts`
     (661 Einträge, vollständig). Settings+Cut-Dialog (`ed2a531`/`d716c83`), Rest der App
     (`51e798b`..`7b3eec5`).
-  - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen, in
-    `TRANSLATIONS` (`ttcut-ng.pro`) eintragen, mit `lupdate`/`lrelease` pflegen.
+  - **Offen:** weitere Zielsprachen — je `ttcut-ng_<locale>.ts` anlegen und
+    mit `lupdate` (Verzeichnis-Scan `common data avstream gui extern
+    mpeg2decoder mpeg2window ui -ts trans/ttcut-ng_<locale>.ts`, siehe
+    `.claude/skills/release/SKILL.md`) / `lrelease` pflegen.
 - Undo/Redo for cut list operations
 - Direct VDR .rec folder support (open recording without manual demux)
 
@@ -443,7 +449,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     diese Zutaten genügen. Ohne so ein Beispiel fragen die KDE-Entwickler
     erfahrungsgemäß zuerst danach.
   - **Workarounds:** integer scaling (100 %, 200 %), do not maximize the window,
-    or run `QT_QPA_PLATFORM=xcb ./ttcut-ng`.
+    or run `QT_QPA_PLATFORM=xcb build/ttcut-ng`.
   - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
     protocol, so KWin uses its *forced server side scale factor* path — the
     Plasma 6.7.0 changelog lists "making forced server side scale factor single

@@ -59,19 +59,14 @@ DEBFULLNAME="MINIXJR" DEBEMAIL="35893755+MINIXJR@users.noreply.github.com" \
     dch --newversion "$PACKAGE_VERSION" --distribution "$DISTRO" \
     "$CHANGELOG_MSG"
 
-# Clean build artifacts
-echo "==> Cleaning build artifacts..."
-make clean 2>/dev/null || true
-rm -f ttcut-ng *.o moc/*.cpp ui_h/*.h res/*.cpp obj/*.o
-
 # Remove old build directory
 [ -d "$BUILD_DIR" ] && rm -rf "$BUILD_DIR"
 
 # Copy source to build directory
 echo "==> Copying source to build directory..."
 rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
-         --exclude='moc/' --exclude='obj/' --exclude='ui_h/' --exclude='res/' \
          --exclude='/Makefile' --exclude='*.pro.user' \
+         --exclude='/build/' --exclude='/build-deb/' \
          --exclude='/tools/test-videos/cache/' \
          --exclude='/docs/' \
          "$SOURCE_DIR/" "$BUILD_DIR/"

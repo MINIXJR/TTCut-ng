@@ -6,7 +6,7 @@
 #
 # Default output: /usr/local/src/TTCut-ng.wiki/images
 #
-# Prerequisites: ffmpeg, built ttcut-ng binary in project root
+# Prerequisites: ffmpeg, built ttcut-ng binary in build/
 #-----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -22,13 +22,13 @@ AUDIO_FILE="$TESTDATA_DIR/tux_test.ac3"
 PROJECT_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
 TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
-BINARY="$PROJECT_DIR/ttcut-ng"
+BINARY="$PROJECT_DIR/build/ttcut-ng"
 
 #-----------------------------------------------------------------------------
 # Preflight checks
 #-----------------------------------------------------------------------------
 if [[ ! -x "$BINARY" ]]; then
-    echo "ERROR: ttcut-ng binary not found. Run 'make' first."
+    echo "ERROR: ttcut-ng binary not found. Run 'cmake --build build' first."
     exit 1
 fi
 

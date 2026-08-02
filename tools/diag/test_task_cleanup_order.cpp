@@ -103,20 +103,32 @@ int main(int argc, char** argv)
 }
 
 // Build (from tools/diag), compiling the sources rather than linking the
-// project's objects so AddressSanitizer covers them too:
+// project's objects so AddressSanitizer covers them too. Mocs are generated
+// into a throwaway temp dir with Qt's own moc binary, same pattern as
+// gate_pool_crossthread.sh:28-33 (MOC="$(pkg-config --variable=host_bins
+// Qt5Core)/moc"):
+//
+//   MOC="$(pkg-config --variable=host_bins Qt5Core)/moc"
+//   MOCDIR=$(mktemp -d)
+//   for h in ttthreadtask ttthreadtaskpool ttsettings istatusreporter; do
+//     "$MOC" ../../common/$h.h -o "$MOCDIR/moc_$h.cpp"
+//   done
+//   "$MOC" test_task_cleanup_order.cpp -o "$MOCDIR/moc_test_task_cleanup_order.cpp"
 //
 //   g++ -g -O1 -fsanitize=address -fno-omit-frame-pointer -fPIC -std=gnu++17 \
-//       -I../.. -I../../moc $(pkg-config --cflags Qt5Core) \
+//       -I../.. -I"$MOCDIR" $(pkg-config --cflags Qt5Core) \
 //       -o test_task_cleanup_order test_task_cleanup_order.cpp \
 //       ../../common/ttthreadtask.cpp ../../common/ttthreadtaskpool.cpp \
 //       ../../common/ttmessagelogger.cpp ../../common/ttexception.cpp \
 //       ../../common/ttsettings.cpp ../../common/istatusreporter.cpp \
-//       ../../moc/moc_ttthreadtask.cpp ../../moc/moc_ttthreadtaskpool.cpp \
-//       ../../moc/moc_ttsettings.cpp ../../moc/moc_istatusreporter.cpp \
-//       moc_test_task_cleanup_order.cpp \
+//       "$MOCDIR"/moc_ttthreadtask.cpp "$MOCDIR"/moc_ttthreadtaskpool.cpp \
+//       "$MOCDIR"/moc_ttsettings.cpp "$MOCDIR"/moc_istatusreporter.cpp \
 //       $(pkg-config --libs Qt5Core) -lpthread
 //
-// Qt5Widgets cflags are needed too: common/ttthreadtask.h reaches
-// gui/ttprogressbar.h, which includes QDialog.
+// Do NOT also list moc_test_task_cleanup_order.cpp as a separate g++ input:
+// the #include at the bottom of this file already pulls it in (its
+// SlowCleanupTask class is declared right here, in this translation unit -
+// compiling the moc output standalone as a second TU fails to see it).
+// -I"$MOCDIR" is what lets that #include find it.
 
 #include "moc_test_task_cleanup_order.cpp"
