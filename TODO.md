@@ -119,22 +119,6 @@ machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
 
 ## Medium Priority
 
-- **`--auto-cut` beendet sich bei MPEG-2 nicht selbst**
-  - Der Schnitt läuft korrekt durch (MKV finalisiert, Dauer und Paketzahlen
-    stimmen), danach bleibt der Prozess im Leerlauf stehen. Bei H.264 nicht:
-    dort löst ein synchrones `emit cutFinished()` in `data/ttavdata.cpp` das
-    Ende aus. Im MPEG-2-Abschlusspfad (`TTAVData::onCutFinished`, heap-
-    `TTMkvMergeProvider`, asynchroner `onMuxProgress`) greift
-    `cutFinished → QApplication::quit()` nicht.
-  - Folge: jede headless QC braucht einen Wächter-Wrapper, der auf eine
-    stabile Ausgabedatei wartet und den Prozess dann beendet
-    (`/usr/local/src/CLAUDE_TMP/TTCut-ng/acm-cut.sh`, für A/B-Vergleiche
-    `qc-autocut.sh`). **`timeout` ist untauglich** — es wartet die volle Zeit
-    ab und liefert einen Abbruch, der wie ein Ergebnis aussieht; am
-    2026-08-02 wurde ein Lauf dadurch als „sauber beendet" gewertet, obwohl
-    ihn der Nutzer von Hand geschlossen hatte.
-  - Ohne Fix bleibt die Schnitt-QC halbautomatisch und damit CI-untauglich.
-
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).

@@ -390,6 +390,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **`--auto-cut` beendet sich bei MPEG-2 nicht selbst** → **GEFIXT (2026-08-02,
+  `9da00f13`)**
+  - Ursache: das Signal wurde auf diesem Pfad schlicht nie gesendet.
+    `doH264Cut()` und `doAudioOnlyCut()` laufen synchron und emittieren am
+    Ende; der MPEG-2-Schnitt endet dagegen in `TTAVData::onCutFinished()` —
+    einem Slot am `exit`-Signal des Thread-Pools —, und die Methode muxte und
+    kehrte zurück, ohne `emit cutFinished()`.
+  - Zwei Folgen, eine davon bis dahin unbemerkt: `--auto-cut` verbindet
+    `cutFinished` mit `QApplication::quit()`, also lief der Schnitt korrekt
+    durch und der Prozess blieb danach ewig im Leerlauf stehen. Und
+    `TTCutMainWindow::onCutFinished` lief ebenfalls nie — das ist der
+    „Cutting Complete"-Dialog: **nach einem interaktiven MPEG-2-Schnitt gab es
+    gar keine Abschlussmeldung**, während H.264 eine zeigte.
+  - Fix: `emit cutFinished()` am Ende von `onCutFinished()`, dazu vorher
+    `setCutVideoName()` auf den tatsächlich geschriebenen `.mkv`-Namen (wie im
+    H.264-Pfad), damit der Dialog die richtige Datei nennt. Geprüft, dass sich
+    das nicht aufschaukeln kann: der Schnittdialog normalisiert den Namen bei
+    jedem Durchlauf über `completeBaseName()` + codec-spezifische ES-Endung.
+  - Bewusst **unabhängig vom Mux-Erfolg** emittiert — ein fehlgeschlagener Mux
+    darf einen headless-Lauf nicht hängen lassen. **Offener Rest:** der
+    H.264-Pfad kehrt bei Mux-Fehler früh zurück, ohne zu emittieren, und würde
+    dort weiterhin hängen.
+  - Belege: Prozess beendet sich nach 4 s selbst (vorher nie), `--auto-cut`-QC
+    gegen master bit-identisch (1202 Video-, 2003 Audiopakete). Messfalle auf
+    dem Weg dorthin in [[reference_auto_cut_modal_dialogs]]: `timeout` als
+    Absicherung täuscht Erfolg vor, es braucht einen Wächter plus Sollwerte.
+
 - **Einmaliger Absturz beim zweiten Landezonen-Analyselauf (2026-08-01)**
   → **GEKLÄRT (2026-08-02), Ursache liegt nicht in TTCut-ng**
   - Ablauf war: MPEG-2 geladen
