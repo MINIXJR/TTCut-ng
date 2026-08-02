@@ -409,9 +409,16 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     das nicht aufschaukeln kann: der Schnittdialog normalisiert den Namen bei
     jedem Durchlauf über `completeBaseName()` + codec-spezifische ES-Endung.
   - Bewusst **unabhängig vom Mux-Erfolg** emittiert — ein fehlgeschlagener Mux
-    darf einen headless-Lauf nicht hängen lassen. **Offener Rest:** der
-    H.264-Pfad kehrt bei Mux-Fehler früh zurück, ohne zu emittieren, und würde
-    dort weiterhin hängen.
+    darf einen headless-Lauf nicht hängen lassen.
+  - **Nachgezogen im selben Zug (2026-08-02):** der H.264-Pfad hatte *drei*
+    Fehlerausgänge (Engine-Start, Schnitt, Mux), alle ohne `emit` — derselbe
+    Defekt, nur schwerer zu bemerken, weil erst etwas schiefgehen muss. Gemessen
+    am selben Fall (Ausgabe in ein nur lesbares Verzeichnis): master hing nach
+    30 s immer noch, der Fix beendet sich nach 4 s. Da ein Emittieren im
+    Fehlerfall sonst den Abschlussdialog „erfolgreich beendet" melden ließe,
+    trägt `TTAVData` jetzt die Fehlerursache (`mLastCutError`, zu Beginn jedes
+    Schnitts geleert) und `TTCutMainWindow::onCutFinished` zeigt eine Warnung
+    statt der Erfolgsmeldung — dem Vorbild des Audio-Pfads folgend.
   - Belege: Prozess beendet sich nach 4 s selbst (vorher nie), `--auto-cut`-QC
     gegen master bit-identisch (1202 Video-, 2003 Audiopakete). Messfalle auf
     dem Weg dorthin in [[reference_auto_cut_modal_dialogs]]: `timeout` als
