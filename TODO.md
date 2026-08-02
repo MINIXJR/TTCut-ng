@@ -42,33 +42,19 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
-- **Einmaliger Absturz beim zweiten Landezonen-Analyselauf (2026-08-01, Ursache
-  offen)**
-  - Ablauf: MPEG-2 geladen
-    (`MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI.m2v`), Analyse
-    gestartet, danach 4:3-Erkennung aktiviert, Analyse erneut gestartet —
-    Programm verschwand ohne Meldung. Im Log endet die Aufzeichnung mitten im
-    zweiten `AspectScan` (5452 Schritte); erstmals liefen dabei zwei
-    videodekodierende Tasks parallel (`StreamPointVideoAnalysis` +
-    `AspectScan`).
-  - **Nicht reproduzierbar**: zwei Läufe unter `gdb` und einer mit
-    AddressSanitizer, jeweils mit identischem Vorgehen, blieben ohne Absturz.
-  - **Ausgeschlossen:** Speicherfehler (ASAN meldet nur Lecks aus
-    Fremdbibliotheken — libwayland, libfontconfig, libmpv —, keinen Zugriff in
-    TTCut-Code); Datenrennen an den geteilten Listen (beide Tasks bekommen
-    dieselben Zeiger auf `videoIndex`/`videoHeaders`, aber
-    `moveToNextIndexPos` ist rein lesend und der VideoWorker fasst sie nicht
-    an).
-  - **Auffällig:** kein Core-Abbild trotz `core_pattern=core` und
-    `ulimit -c unlimited`, und kein Fehlereintrag im Log. Ein Signal hätte
-    beides hinterlassen. Passt auf einen Wayland-Protokollfehler, der einen
-    Qt-Klienten sofort beendet und nur auf stderr meldet — dorthin schaut
-    weder die Logdatei noch der Debugger im Batch-Betrieb.
-  - **Nächster Schritt bei Wiederauftreten:**
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/ttcut-mit-protokoll.sh` benutzen; es
-    schreibt stderr mit. Ohne diese Ausgabe ist der Fehler nicht greifbar.
-    Falls er sich damit einfangen lässt und stderr nichts zeigt, wäre
-    ThreadSanitizer der nächste Schritt.
+- **Logdatei verliert beim Absturz genau den interessanten Teil**
+  (2026-08-02 belegt)
+  - Der `TTMessageLogger` schreibt gepuffert. Beim Absturz vom 2026-08-01
+    endet `logfile.log` um 18:32:36, das Core-Abbild ist von 18:39 — die
+    letzten sechseinhalb Minuten fehlen vollständig, darunter der zweite
+    Analysestart, um den es ging.
+  - Folge: bei jedem Absturz fehlt der Verlauf unmittelbar davor. Genau der,
+    den man für die Einordnung braucht. Der damalige Schluss „kein
+    Logeintrag ⇒ kein Signal" beruhte auf dieser Lücke und war falsch.
+  - Richtung: nach jeder Zeile spülen (`QTextStream::flush()` +
+    `QFile::flush()`), mindestens ab Stufe `warning`. Kosten prüfen — der
+    Debug-Kanal schreibt in Analyseläufen viele Zeilen pro Sekunde; ggf. nur
+    Warn-/Fehlerstufen sofort spülen und den Debug-Kanal gepuffert lassen.
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
@@ -250,43 +236,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Extract and convert to SRT or keep as PGS for MKV output
 
 ## Low Priority
-
-- ~~**Einstellungs-Tab der Landezonen staucht bei knapper Panel-Höhe**~~
-  → **ERLEDIGT 2026-08-01, anders als gedacht.** Der Tab ist weg: die
-  Einstellungen sind eine eigene Kategorie im Einstellungsdialog, erreichbar
-  über das Symbol neben der Landezonen-Überschrift. Damit erledigt sich die
-  Stauchung ebenso wie die unten vorgeschlagene `QScrollArea` — die zielte auf
-  das **Formular**, das nicht von selbst scrollt. Die verbliebene Liste ist ein
-  `QListView` und bringt Scrollbalken mit, braucht also keine.
-  Die eigentliche Ursache der Überlappung war eine andere und ist mitgefixt:
-  das Hauptfenster deklarierte `minimumSize` 900×700, während sein Inhalt 1067
-  verlangte — Qt rechnet korrekt, die feste Angabe überschrieb das Ergebnis.
-  Ohne sie erzwingt Qt die echte Untergrenze, jetzt 863.
-  Ursprünglicher Befund (gemessen 2026-07-31 beim v0.77.0-Release):
-  - Reicht die Höhe nicht, drückt das Layout die Zeilen unter ihre
-    Mindesthöhe, statt zu scrollen: Beschriftungen werden waagerecht
-    abgeschnitten, Eingabefelder zu Strichen. Gemessen im Screenshot-Modus bei
-    1024×768-Fenster — das Widget bekam 159 px für einen Inhalt, der 351 px
-    braucht. Seit dem zweistufigen Umbau (v0.77.0) ist der Tab höher, der
-    Effekt tritt also früher ein als vorher.
-  - Umgangen, nicht behoben: der Screenshot-Modus setzt das Fenster fest auf
-    1920×1080. Im laufenden Programm bleibt es bei knappem Panel bestehen.
-  - Fix-Richtung: den Tab-Inhalt in eine `QScrollArea` setzen, damit bei zu
-    wenig Platz gescrollt statt gestaucht wird. Betrifft auch die anderen
-    Tabs, sobald deren Inhalt wächst — deshalb vor der Umsetzung entscheiden,
-    ob es einen gemeinsamen Container gibt.
-  - **Zweite Erscheinungsform, beobachtet 2026-08-01:** wird die *Fensterhöhe*
-    klein gezogen, schiebt sich die Landezonen-Liste über die
-    Navigations-Schaltflächen (Screenshot beim Nutzer). Gleicher Mechanismus,
-    eine Ebene höher: `gbNavigation` trägt ein `QGridLayout` mit den Schaltern
-    in Zeile 0 und `TTStreamPointWidget` in Zeile 1
-    (`ttcutmainwindow.cpp:223`). Beide konkurrieren um dieselbe Höhe, und die
-    `minimumSize` des Hauptfensters (900×700 laut `ttcutmainwindow.ui`) liegt
-    unter dem, was der Inhalt zusammen braucht — also wird geclippt statt
-    umgebrochen. Beim Festlegen der Fix-Richtung mitbedenken: eine
-    `QScrollArea` nur im Tab löst die Überlappung in der Gruppe nicht
-    zwangsläufig; womöglich muss die Mindesthöhe des Fensters mit dem
-    tatsächlichen Platzbedarf in Einklang gebracht werden.
 
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
   - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →

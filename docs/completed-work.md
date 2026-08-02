@@ -390,6 +390,64 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Einmaliger Absturz beim zweiten Landezonen-Analyselauf (2026-08-01)**
+  → **GEKLÄRT (2026-08-02), Ursache liegt nicht in TTCut-ng**
+  - Ablauf war: MPEG-2 geladen
+    (`MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI.m2v`), Analyse
+    gestartet, 4:3-Erkennung aktiviert, Analyse erneut gestartet — das Programm
+    verschwand ohne Meldung. Nicht reproduzierbar in zwei `gdb`-Läufen und
+    einem ASAN-Lauf.
+  - Ursache: **Use-after-free in Qt**, `QtWaylandClient::WlCallback::callback_done`
+    (`qwaylandinputdevice.cpp:186`, Qt 5.15.19), aufgerufen über
+    `wl_display_dispatch_queue_pending` ← `QWaylandDisplay::flushRequests()`.
+    **Kein Frame in TTCut-Code auf dem Absturzstapel**; alle vier
+    `setOverrideCursor`-Stellen haben ihr `restoreOverrideCursor`.
+  - Beleg für Use-after-free statt Überlauf: der Speicher des Callback-Objekts
+    (`_vptr = 0x400000004`, `_M_invoker = 0x1000300010003`) liegt mitten in
+    einem ARGB32-Pixelpuffer, der über mehrere KB davor und danach konsistent
+    ist (`0x002b5a61` = A/R/G/B). Der freigegebene 64-Byte-Block wurde also neu
+    vergeben. Die Bilddaten stammen vom laufenden Scan: Thread 5 stand in
+    `data/ttsearchtask_aspectscan.cpp:77`
+    (`QImage::convertToFormat(Format_Grayscale8)`), die übrigen 42 Threads
+    schliefen im Syscall.
+  - **Zwei Irrtümer der damaligen Notiz, beide korrigiert:** (1) „kein
+    Core-Abbild trotz `core_pattern=core`" — es lag als `core.291969` im
+    Projektwurzelverzeichnis, unsichtbar allein deshalb, weil das Repo
+    `status.showUntrackedFiles=no` setzt; `git status` zeigt Cores nicht. (2)
+    Der saubere ASAN-Lauf galt als Entlastung für einen Speicherfehler —
+    tatsächlich war er folgerichtig, weil ASAN unseren Heap prüft, der
+    Fehlgriff aber im Qt-Wayland-Klienten passierte.
+  - Vorgehen (ohne sudo reproduzierbar): Build-ID des Cores gegen die des
+    Binaries prüfen (`eu-unstrip -n --core=` gegen `readelf -n`), Symbole für
+    Systembibliotheken per `DEBUGINFOD_URLS=https://debuginfod.debian.net/` und
+    `set debuginfod enabled on` nachladen. Handzuordnung über `nm -D` führt in
+    die Irre: die Absturzstelle lag hinter dem Ende des letzten exportierten
+    Symbols in einer statischen Funktion.
+  - **Auf Nutzerentscheid nicht weiterverfolgt** (2026-08-02); Core gelöscht.
+
+- **Einstellungs-Tab der Landezonen staucht bei knapper Panel-Höhe**
+  → **ERLEDIGT (2026-08-01, `1481f1cd`), anders als vorgeschlagen**
+  - Der Tab ist weg: die Erkennungseinstellungen sind eine eigene Kategorie im
+    Einstellungsdialog, erreichbar über das Symbol neben der
+    Landezonen-Überschrift (sie waren immer schon globale `TTSettings`-Felder,
+    nie projektbezogen). Damit erledigt sich die Stauchung ebenso wie die
+    ursprünglich vorgeschlagene `QScrollArea` — die zielte auf das **Formular**,
+    das nicht von selbst scrollt; die verbliebene Liste ist ein `QListView` und
+    bringt Scrollbalken mit.
+  - **Die Ursache war eine andere als das Symptom nahelegte.** Nicht das Layout
+    war falsch: `ttcutmainwindow.ui` deklarierte eine `minimumSize` von 900×700,
+    während der Inhalt 1067 verlangte. Qt rechnet die Untergrenze korrekt aus
+    und propagiert sie sauber — die feste Angabe überschrieb nur das Ergebnis,
+    sodass das Fenster unter seinen Bedarf gezogen werden konnte und Qt die
+    Widgets stauchte. Ohne sie erzwingt Qt die echte Untergrenze: **1067 → 863**.
+  - Drei Messfallen auf dem Weg: im Konstruktor gemessene Layout-Werte sind
+    Zwischenstände (617 statt 1052 — messen per `QTimer::singleShot` nach dem
+    ersten `show()`); `minimumSizeHint` ist gecacht (ohne
+    `layout()->invalidate()` auf der ganzen Kette liest man veraltete Werte);
+    und `QT_QPA_PLATFORM=offscreen` meldet fest 800×600 (nicht konfigurierbar)
+    und schneidet jede Beschriftung ab — für Referenzbilder
+    `tools/ttcut-screenshots.sh` oder `xvfb-run -s "-screen 0 2560x1440x24"`.
+
 - **Schnittdialog: Button-Leiste überarbeiten + alle Dialoge auf einheitliches Design prüfen**
   → **DONE (2026-07-25, branch `feature/dialog-button-consistency`, GUI-verifiziert)**
   - **Schnittdialog** (`ui/avcutdialog.ui`): Reihenfolge auf `[Reset] ⎯ [Abbrechen] [Starten]`
