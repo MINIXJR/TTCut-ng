@@ -266,6 +266,10 @@ class TTAVData : public QObject
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;
     QString mLastCutOutputSummary;
+    // Empty means the cut succeeded. Set on every failing exit so the
+    // completion notification can tell success from failure — without it a
+    // failed cut still reported "finished successfully".
+    QString mLastCutError;
     qint64  mLastCutSourceMs = 0;
     qint64  mLastCutResultMs = 0;
 
@@ -347,6 +351,7 @@ class TTAVData : public QObject
     // do not point at the actual output file).
     bool    lastCutWasAudioOnly()  const { return mLastCutWasAudioOnly; }
     QString lastCutOutputSummary() const { return mLastCutOutputSummary; }
+    QString lastCutError()         const { return mLastCutError; }
     qint64  lastCutSourceMs()      const { return mLastCutSourceMs; }
     qint64  lastCutResultMs()      const { return mLastCutResultMs; }
 

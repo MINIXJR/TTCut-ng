@@ -1183,6 +1183,16 @@ void TTCutMainWindow::onCutFinished()
         .arg(formatDurationMs(srcMs), formatDurationMs(resMs), formatDurationMs(removed));
   }
 
+  // A failing cut now emits cutFinished() too, so that a headless --auto-cut
+  // run cannot hang on a failure. That makes it this slot's job to tell the
+  // two apart — otherwise a failed cut would be reported as a success.
+  const QString cutError = mpAVData->lastCutError();
+  if (!cutError.isEmpty()) {
+    QMessageBox::warning(this, tr("Cutting Failed"),
+        tr("The cut did not complete.\n\n%1").arg(cutError));
+    return;
+  }
+
   if (mpAVData->lastCutWasAudioOnly()) {
     QString summary = mpAVData->lastCutOutputSummary();
     QMessageBox::information(this, tr("Audio Cut Complete"),

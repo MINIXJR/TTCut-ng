@@ -1339,6 +1339,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   // Reset last-cut metadata; non-audio-only path leaves it cleared.
   mLastCutWasAudioOnly = false;
   mLastCutOutputSummary.clear();
+  mLastCutError.clear();
 
   if (audioOnly) {
     // Burst warning still useful, dispatch the rest to the audio-only pipeline.
@@ -1517,6 +1518,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (!smartCut.initialize(sourceFile, frameRate)) {
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut init failed: %1").arg(smartCut.lastError()));
       emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed - could not initialize"), 0);
+      mLastCutError = tr("Could not initialize the cut engine: %1").arg(smartCut.lastError());
+      emit cutFinished();
       return;
     }
 
@@ -1560,6 +1563,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
       log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut failed: %1").arg(smartCut.lastError()));
       emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed"), 0);
+      mLastCutError = tr("Cutting failed: %1").arg(smartCut.lastError());
+      emit cutFinished();
       return;
     }
 
@@ -1693,6 +1698,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       log->errorMsg(__FILE__, __LINE__, QString("Muxing failed: %1").arg(mkvProvider.lastError()));
       emit statusReport(0, StatusReportArgs::Exit, tr("Muxing failed"), 0);
       if (!chapterFile.isEmpty()) QFile::remove(chapterFile);
+      mLastCutError = tr("Muxing failed: %1").arg(mkvProvider.lastError());
+      emit cutFinished();
       return;
     }
 
@@ -1833,6 +1840,7 @@ void TTAVData::onCutFinished()
           TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
               QString("MKV muxing failed: %1").arg(mkvProvider->lastError()));
           emit statusReport(0, StatusReportArgs::Exit, tr("MKV muxing failed"), 0);
+          mLastCutError = tr("Muxing failed: %1").arg(mkvProvider->lastError());
         }
 
         // Clean up chapter file
