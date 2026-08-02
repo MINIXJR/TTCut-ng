@@ -69,18 +69,6 @@ QString TTH265SPS::levelString() const
     return QString::number(major);
 }
 
-// -----------------------------------------------------------------------------
-// TTH265PPS - Picture Parameter Set
-// -----------------------------------------------------------------------------
-TTH265PPS::TTH265PPS()
-    : TTH265VideoHeader()
-    , mPpsId(0)
-    , mSpsId(0)
-    , mSignDataHiding(false)
-    , mCabacInitPresent(false)
-{
-    setNalUnitType(HEVC_NAL_PPS);
-}
 
 // -----------------------------------------------------------------------------
 // TTH265AccessUnit - Complete picture
