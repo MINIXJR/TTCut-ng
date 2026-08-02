@@ -96,10 +96,6 @@ TTAVStream::~TTAVStream()
 /*!
  * abort
  */
-void TTAVStream::abort()
-{
-	mAbort = true;
-}
 
 /*!
  * setAbort

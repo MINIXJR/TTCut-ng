@@ -177,31 +177,6 @@ private:
     double mFrameRate;
 };
 
-// -----------------------------------------------------------------------------
-// TTH265PPS - Picture Parameter Set
-// -----------------------------------------------------------------------------
-class TTH265PPS : public TTH265VideoHeader
-{
-public:
-    TTH265PPS();
-    virtual ~TTH265PPS() {}
-
-    int ppsId() const { return mPpsId; }
-    int spsId() const { return mSpsId; }
-    bool signDataHidingEnabled() const { return mSignDataHiding; }
-    bool cabacInitPresent() const { return mCabacInitPresent; }
-
-    void setPpsId(int id) { mPpsId = id; }
-    void setSpsId(int id) { mSpsId = id; }
-    void setSignDataHidingEnabled(bool enabled) { mSignDataHiding = enabled; }
-    void setCabacInitPresent(bool present) { mCabacInitPresent = present; }
-
-private:
-    int mPpsId;
-    int mSpsId;
-    bool mSignDataHiding;
-    bool mCabacInitPresent;
-};
 
 // -----------------------------------------------------------------------------
 // TTH265AccessUnit - One complete picture (access unit)

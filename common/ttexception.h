@@ -36,42 +36,6 @@ class TTException
     QString message;
 };
 
-class TTCommonException : public TTException
-{
-  public:
-    TTCommonException(const QString& msg) : TTException(msg){};
-    TTCommonException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-  protected:
-    virtual QString getClassName() const { return "TTCommonException"; };
-};
-
-class TTMemoryAllocationException : public TTException
-{
-  public:
-    TTMemoryAllocationException(const QString&msg) : TTException(msg){};
-    TTMemoryAllocationException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
-    virtual QString getClassName() const {return "TTMemoryAllocationException";}
-};
-
-class TTMethodNotImplementedException : public TTException
-{
-  public:
-    TTMethodNotImplementedException(const QString&msg) : TTException(msg){};
-    TTMethodNotImplementedException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
-    virtual QString getClassName() const {return "TTMethodNotImplementedException";};
-};
-
-class TTMissingMethodException : public TTException
-{
-  public:
-    TTMissingMethodException(const QString&msg) : TTException(msg){};
-    TTMissingMethodException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
-    virtual QString getClassName() const {return "TTMissingMethodException";};
-};
-
 class TTIOException : public TTException
 {
   public:
@@ -106,24 +70,6 @@ class TTArgumentException : public TTException
     TTArgumentException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
    protected:
     virtual QString getClassName() const {return "TTArgumentException";};
-};
-
-class TTArgumentNullException : public TTException
-{
-  public:
-    TTArgumentNullException(const QString& msg) : TTException(msg) {};
-    TTArgumentNullException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
-    virtual QString getClassName() const {return "TTArgumentNullException";};
-};
-
-class TTArgumentOutOfRangeException : public TTException
-{
-  public:
-    TTArgumentOutOfRangeException(const QString& msg) : TTException(msg) {};
-    TTArgumentOutOfRangeException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
-    virtual QString getClassName() const {return "TTArgumentOutOfRangeException";};
 };
 
 class TTIndexOutOfRangeException : public TTException

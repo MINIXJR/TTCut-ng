@@ -40,7 +40,6 @@ class TTMarkerItem
     void  setOrder(int value)       { mOrder = value; }
     int   markerPos()         const { return mMarkerPos; }
 
-    QString fileName() const;
 
     TTAVItem* avDataItem() const;
 
@@ -76,7 +75,6 @@ class TTMarkerList : public QObject
     void clear();
     int  count();
 
-    void swap(int a, int b);
     void sortByOrder();
     void updateOrder();
 

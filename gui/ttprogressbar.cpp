@@ -33,7 +33,6 @@ TTProgressBar::TTProgressBar(QWidget* parent)
   scrollArea->hide();
   this->adjustSize();
 
-  processForm    = 0;
   normTotalSteps = 100;
   isBlocking     = false;
   mClosing       = false;
@@ -52,7 +51,6 @@ TTProgressBar::TTProgressBar(QWidget* parent)
  */
 TTProgressBar::~TTProgressBar()
 {
-  if (processForm != 0) delete processForm;
 }
 
 /**
@@ -214,7 +212,6 @@ void TTProgressBar::onBtnCancelClicked()
   emit cancel();
 
   isBlocking = false;
-  hideProcessForm();
   hideBar();
 }
 
@@ -247,20 +244,16 @@ void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& 
       break;
 
     case StatusReportArgs::ShowProcessForm:
-      //showProcessForm();
       break;
 
     case StatusReportArgs::ShowProcessFormBlocking:
       isBlocking = true;
-      //showProcessForm();
       break;
 
     case StatusReportArgs::AddProcessLine:
-      //addProcessLine(msg);
       break;
 
     case StatusReportArgs::HideProcessForm:
-      //hideProcessForm();
       break;
 
     default:
@@ -282,28 +275,4 @@ void TTProgressBar::addTaskProgress(TTThreadTask* task)
   verticalLayout->addWidget(taskProgress);
 }
 
-// /////////////////////////////////////////////////////////////////////////////
-// Process output form
-/**
- * showProcessForm
- */
-/**
- * addProcessLine
- */
-/**
- * hideProcessForm
- */
-void TTProgressBar::hideProcessForm()
-{
-  if (processForm == 0) return;
-
-  if (isBlocking) {
-    processForm->enableButton(true);
-    return;
-  }
-
-	processForm->hide();
-	//delete processForm;
-	//processForm = 0;
-}
 

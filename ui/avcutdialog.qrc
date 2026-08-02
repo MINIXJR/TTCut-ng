@@ -2,7 +2,6 @@
     <qresource prefix="/pixmaps" >
         <file>pixmaps/exec.png</file>
         <file>pixmaps/fileopen_24.xpm</file>
-        <file>pixmaps/filter.png</file>
         <file>pixmaps/saveimage_16.xpm</file>
         <file>pixmaps/settings_18.xpm</file>
     </qresource>

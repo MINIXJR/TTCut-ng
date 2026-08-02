@@ -12,7 +12,6 @@
 // ----------------------------------------------------------------------------
 // TTH264VideoHeader (abstract base)
 // TTH264SPS - Sequence Parameter Set
-// TTH264PPS - Picture Parameter Set
 // TTH264AccessUnit - Access Unit (one video frame)
 // ----------------------------------------------------------------------------
 
@@ -152,25 +151,6 @@ private:
     int mSpsId;
 };
 
-// -----------------------------------------------------------------------------
-// TTH264PPS - Picture Parameter Set
-// Contains picture-level coding parameters
-// -----------------------------------------------------------------------------
-class TTH264PPS : public TTH264VideoHeader
-{
-public:
-    TTH264PPS();
-
-    int ppsId() const { return mPpsId; }
-    int spsId() const { return mSpsId; }
-
-    void setPpsId(int id) { mPpsId = id; }
-    void setSpsId(int id) { mSpsId = id; }
-
-private:
-    int mPpsId;
-    int mSpsId;
-};
 
 // -----------------------------------------------------------------------------
 // TTH264AccessUnit - Represents one complete video frame

@@ -83,16 +83,6 @@ QString TTH264SPS::levelString() const
     return QString("%1.%2").arg(major).arg(minor);
 }
 
-// -----------------------------------------------------------------------------
-// TTH264PPS - Picture Parameter Set
-// -----------------------------------------------------------------------------
-TTH264PPS::TTH264PPS()
-    : TTH264VideoHeader()
-    , mPpsId(0)
-    , mSpsId(0)
-{
-    mNalType = NAL_PPS;
-}
 
 // -----------------------------------------------------------------------------
 // TTH264AccessUnit - One complete video frame

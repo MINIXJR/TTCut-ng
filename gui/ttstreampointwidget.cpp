@@ -10,7 +10,6 @@
 #include "ttstreampointwidget.h"
 #include "../data/ttstreampointmodel.h"
 #include "../common/ttcut.h"
-#include "../common/ttsettings.h"
 
 #include <QListView>
 #include <QPushButton>
