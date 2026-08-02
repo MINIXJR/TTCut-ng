@@ -72,7 +72,6 @@ public:
   virtual TTAVTypes::AVStreamType streamType() const = 0;
   virtual bool isCutInPoint(int pos) = 0;
   virtual bool isCutOutPoint(int pos) = 0;
-  void         abort();
   void         setAbort(bool value);
 
 public:

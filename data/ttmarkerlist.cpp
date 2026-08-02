@@ -51,12 +51,6 @@ TTMarkerItem::TTMarkerItem(const TTMarkerItem& item)
 /*!
  * update
  */
-QString TTMarkerItem::fileName() const
-{
-	return (mpAVDataItem->videoStream() != 0)
-			? mpAVDataItem->videoStream()->fileName()
-			: "";
-}
 
 TTAVItem* TTMarkerItem::avDataItem() const
 {
@@ -205,11 +199,6 @@ int TTMarkerList::count()
 /*!
  * swap
  */
-void TTMarkerList::swap(int a, int b)
-{
-  data.swapItemsAt(a, b);
-  updateOrder();
-}
 
 /*!
  * updateOrder
