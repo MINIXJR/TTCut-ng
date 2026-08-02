@@ -578,6 +578,47 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
+  2026-08-02 (v0.78.0)**
+  - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den
+    Batches A–K entfernt, Runde-2/3-Rescan bis Konvergenz, `--auto-cut`-QC
+    bit-identisch zu master (161.844 Pakete). Beispiel-Altfund: `TTCutAudioTask`
+    stand nach der v0.60.0-libav-Migration vom 2026-02-21 noch rund zwei Monate,
+    bis `f2c4412` am 2026-04-25.
+  - **Zweiter Lauf** (Branch `cleanup/dead-code-audit-2026-08`, gemergt
+    `99fddc6c`): 677 Zeilen und 16 Bilddateien in neun einzeln geprüften
+    Schritten. Größter Fund `TTProcessForm` — in jeden Build kompiliert, nie
+    instanziiert, Zeiger dauerhaft null, zwei von drei Methoden auf
+    Doc-Kommentare geschrumpft; der Linker verwarf sogar das moc-Metaobjekt.
+    Dazu sechs nie geworfene Exception-Klassen, `TTH264PPS`/`TTH265PPS`, drei
+    vom Linker verworfene Methoden, 13 Ressourceneinträge und zwei Includes
+    (einer davon erst in Runde 2 transitiv tot geworden).
+  - **Zwei Werkzeug-Funde wogen schwerer als die Zeilen.**
+    (1) `avstream/ttac3audioheader.h` war ISO-8859 kodiert — ein einziges `ü`
+    in einem Kommentar —, weshalb `grep` die Datei als binär überspringt und
+    **jedes „null Referenzen"-Urteil zunächst über einem Baum ohne diese Datei
+    fiel**. Aufgefallen erst, als eine Klasse „nirgends definiert" schien,
+    obwohl das Projekt sie baut. Seither UTF-8 (`a2705aba`), einzige
+    Nicht-UTF-8-Quelle im Projekt.
+    (2) Der eingelagerte ffmpeg-Quellbaum im Projektwurzelverzeichnis lieferte
+    699 der 780 Rohkandidaten; er liegt jetzt unter `/usr/local/src/`.
+  - **Falsch-Positive, die keine sind:** `tools/diag/*` hat ein eigenes
+    Build-Target (`make diag`) und ist damit lebendig — ebenso Methoden, die nur
+    von dort aufgerufen werden. Basisklassen kann der Linker nicht verwerfen,
+    ein `gc-sections`-Treffer auf eine *virtuelle* Methode beweist also nichts.
+  - **Prüfverfahren:** jeder Batch mit gewischtem Build-Verzeichnis gebaut
+    (`make clean` genügt nicht — eine überlebende `obj/*.o` kann ein
+    falsch-grünes Binary linken), Scanner bis zur Konvergenz (Runde 3 ohne neue
+    Funde), Abschluss-Gate `--auto-cut` paketweise bit-identisch zu master
+    (1202 Video-, 2003 Audiopakete). Wiederkehrender Lauf: Skill
+    `dead-code-audit`.
+  - Bereits im Erstlauf miterledigt: veraltete Doc-Kommentare zu `isBlackAt`
+    (`73acdf0`), die verwaiste statische `histogramDifference`-Kopie in
+    `ttmpeg2window2.cpp` (`17b2ca99`, v0.75.0) und die toten
+    `AcmodInfo::cutInChangeTime`/`cutOutChangeTime` (`f4d4e66`; Umsetzungsweg
+    in `docs/code-map/burst-detection.md` konserviert). **Offen geblieben** ist
+    allein die doppelte Mehrheits-acmod-Logik — steht in `TODO.md`.
+
 - **Security Audit Findings beheben** → **25/25 FIXED** (2026-03-28, commits aea1809 + 66eacb2)
   - Siehe [docs/security-audit-2026-03-02.md](docs/security-audit-2026-03-02.md) für alle Findings
 

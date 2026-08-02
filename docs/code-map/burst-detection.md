@@ -1,6 +1,6 @@
 ---
-base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
-last_verified: 2026-07-26  # preview burst UI consolidated (80a8460f/7310407d) + own grid row (8ecf4cb0); detector chain itself unchanged; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
+base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+last_verified: 2026-08-02
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h

@@ -1,6 +1,6 @@
 ---
-base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
-last_verified: 2026-07-31  # v0.77.0-Abgleich: Pool-Pitfall auf startNested korrigiert (die Aufgabe läuft weiter synchron im Aufrufer-Thread, nur die Warteschlange bleibt unberührt — am Code nachgelesen, nicht aus dem Commit-Titel geschlossen); Kante onStreamPointJump ergänzt; ttcutpreviewtask/ttcutvideotask in sources aufgenommen
+base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+last_verified: 2026-08-02
 sources:
   - data/ttsearchtask.cpp
   - data/ttsearchtask.h
@@ -62,7 +62,7 @@ flowchart TB
     end
 
     MW["TTCutMainWindow<br/>onAnalyzeStreamPoints /<br/>onSearchBlackFrame …"]
-    WIDGET["TTStreamPointWidget<br/>Einstellungen, Start, Abbruch"]
+    WIDGET["TTStreamPointWidget<br/>Trefferliste, Start, Abbruch"]
     POOLQ["TTThreadTaskPool<br/>mTaskQueue"]
 
     subgraph BASE["TTSearchTask — gemeinsamer Unterbau (Arbeitsthread)"]

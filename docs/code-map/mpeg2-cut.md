@@ -1,6 +1,6 @@
 ---
-base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
-last_verified: 2026-07-26  # drift on data/ttavdata.cpp re-checked: computeCutLengths/cutAudioTracks/chapter correction touch no component this map documents; all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
+base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+last_verified: 2026-08-02
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -97,6 +97,7 @@ flowchart TD
 | `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate, fps) come from the **sequence header at `current_index`**, interlace/TFF from the picture header — not from the segment being encoded. |
 | `encodePart()` → `cut()` (recursion) | The re-encoded `encode.m2v` is reopened as a fresh `TTMpeg2VideoStream`, display-sorted, and **cut again** with `cut(0, end-start)`. Termination relies on the encoder emitting an I-frame at position 0 (`max_b_frames = 0`), so `getCutStartObject` finds `pictureCodingType(0) == 1` and does not recurse further. |
 | `TTCutParameter::numPicturesWritten` | Accumulates across **all** cuts of a session (`firstCall()` once, `lastCall()` once, one `TTCutParameter` for the whole cut list). Feeds the rewritten GOP time codes, which is why it must count output frames. |
+| `TTThreadTaskPool::exit` → `TTAVData::onCutFinished()` → `emit cutFinished()` | The MPEG-2 cut ends in a **slot**, not synchronously like `doH264Cut()`/`doAudioOnlyCut()`. The slot muxes and then announces the finished cut; the signal drives both the GUI completion dialog and `QApplication::quit()` under `--auto-cut`. Until `9da00f13` the `emit` was missing entirely, so MPEG-2 cuts showed no completion dialog and a headless run never terminated. Emitted **regardless of mux success** — a failure sets `TTAVData::mLastCutError`, which the dialog reads to show a warning instead of a success message. |
 
 ## Variant matrix — cut-in / cut-out frame type
 

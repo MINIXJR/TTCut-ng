@@ -2,9 +2,30 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.78.0 (2026-08-02)
 
-**Window size and detection thresholds are readable settings again**
+**The window remembers its size, an MPEG-2 cut reports when it is done, and a headless cut no longer hangs**
+
+### Fixed
+
+- **`--auto-cut` never ended by itself after an MPEG-2 cut.** The cut ran
+  correctly, the MKV was finalised — and the process then sat idle until
+  someone closed the window. The signal that announces a finished cut was
+  simply never sent on that path: MPEG-2 finishes inside a slot triggered by
+  the thread pool, while the H.264 and audio-only paths run synchronously and
+  emit at their end. Anyone scripting a cut had to kill the process on a timer.
+
+- **An MPEG-2 cut now shows the completion dialog.** This is the other half of
+  the same defect: because the signal was missing, the "Cutting Complete"
+  message with output file and lengths never appeared for MPEG-2, while H.264
+  cuts showed it. It has been absent since the dialog was introduced.
+
+- **A failed cut no longer hangs a headless run either.** The H.264 path had
+  three exits — engine start, the cut itself, muxing — that returned without
+  announcing anything, so a failure left the process running forever. All three
+  now report, and because "finished" no longer implies "succeeded", the dialog
+  distinguishes the two: a failed cut shows a warning naming the cause instead
+  of claiming success.
 
 ### Changed
 
@@ -50,6 +71,14 @@ All notable changes to TTCut-ng are documented in this file.
   QSettings cannot render as text. They are plain decimals now. Values from an
   older configuration are rounded when read, so an inherited `0.98` does not
   reappear as `0.9800000190734863`.
+
+- **677 lines of dead code and 16 unused images removed.** Nothing that ran:
+  the largest item was a process-output window that was compiled into every
+  build but never created — its pointer permanently null, two of its three
+  methods already reduced to comments. Alongside it six exception classes that
+  were never thrown, two unused parameter-set classes, three methods the linker
+  had already discarded, and resource entries nothing referenced. The cut
+  output is unchanged, verified packet by packet against the previous version.
 
 ## v0.77.0 (2026-07-31)
 

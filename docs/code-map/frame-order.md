@@ -1,6 +1,6 @@
 ---
-base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
-last_verified: 2026-07-26  # position-label click -> TTGotoFrameDialog -> onGotoFrame edge added (introduces no domain conversion); all named symbols re-greped; re-checked against 89c736f3 (integrity-warning wording) + 8c47403e (screenshot mode) - neither touches a documented component
+base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+last_verified: 2026-08-02
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h

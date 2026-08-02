@@ -103,12 +103,11 @@ Schritte in dieser Reihenfolge:
    `docs/completed-work.md`). So ist belegt, dass die Migration die
    Schnittausgabe nicht verändert.
 
-**Vorher erledigen, weil es danach nicht mehr geht oder nicht mehr hilft:**
-- Die **KWin-Messreihe** (Known Limitations): behebt Qt6 den Fehler, sind die
-  Schwellenwerte nicht mehr zu messen — weder für den KDE-Bugreport noch als
-  Beleg, dass es an Qt5 lag.
-- Der **Dead-Code-Audit** (Medium Priority): was tot ist, muss nicht migriert
-  werden.
+**Die Vorarbeiten sind erledigt (2026-08-02, v0.78.0):** die KWin-Messreihe
+(Schwelle vermessen, solange Qt5 den Fehler noch zeigt) und der Dead-Code-Audit
+(677 Zeilen weniger zu migrieren). Belege in `docs/completed-work.md`. Der
+dritte damals gelistete Punkt, ein Log-Flush, hat sich als gegenstandslos
+erwiesen — der Logger spülte längst.
 
 **Was wartet, bis die Migration steht:** der Rename `TTMPEG2Window2 →
 TTVideoFrameWidget` (fasst `.ui`, `.pro` und moc an — dieselbe Fläche wie die
@@ -152,6 +151,9 @@ machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
     Qt-GUI-Anwendung — echte X11/Wayland-Freiheit fehlt.
   - Burst-Warndialog-Blocker BEHOBEN (v0.72.0, `27f8f29`): der modale Burst-Warndialog am finalen
     Schnitt wird im headless `--auto-cut`-Modus geloggt statt zu blockieren (`setNonInteractive`).
+  - Selbstbeendung BEHOBEN (v0.78.0, `9da00f13`/`4071cc3d`): `--auto-cut` endet jetzt von
+    selbst — bei Erfolg wie bei Fehlschlag, für MPEG-2 wie für H.264. Ein Wächter-Wrapper,
+    der auf eine stabile Ausgabedatei wartet und den Prozess killt, ist nicht mehr nötig.
   - Offen: echtes Qt-freies Standalone-Tool, das `.ttcut` liest und ohne GUI-Event-Loop schneidet —
     läuft dann auch auf reinen Servern. Use case: VDR → demux → TTCut-ng CLI → archive
 
@@ -193,37 +195,20 @@ machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
   - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
     Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
 
-- **Dead-Code-Audit (Medium Priority)** — Erstlauf **DURCHGEFÜHRT 2026-07-12**
-  (Branch `cleanup/dead-code-audit`, ~2.185 Zeilen entfernt in Batches A–K +
-  Runde-2/3-Rescan bis Konvergenz; `--auto-cut`-QC bit-identisch zu master,
-  161.844 Pakete). Jetzt als wiederkehrender Pass automatisiert im Skill
-  `dead-code-audit` (claude-skills/global): 4-Quellen-Scanner
-  (Build-Abwesenheit, Symbol-Grep, Linker-gc-sections, clang-tidy-Includes)
-  + Sonnet-Klassifikation + Review-Gate. Künftige Läufe: Skill invoken.
-  - Beispiel-Altfund: `TTCutAudioTask` blieb nach der v0.60.0-libav-Migration
-    vom 2026-02-21 noch rund zwei Monate stehen, bis f2c4412 am 2026-04-25.
-  - Offene Folge-Funde aus dem Erstlauf (kein toter Code):
-    - ~~Stale Doc-Kommentare, die `isBlackAt` namentlich erwähnen~~ →
-      **GEFIXT 2026-07-12** (`73acdf0`): auf den echten Mechanismus
-      (TTBlackFrameSearchTask / Worker-Decoder, Preview-Fenster-Include)
-      umgeschrieben.
-    - ~~`ttmpeg2window2.cpp` `histogramDifference` als `-Wunused-function`
-      gemeldet (statische Funktion, kein Member)~~ → **ERLEDIGT** (`17b2ca99`,
-      v0.75.0): die verwaiste statische Kopie ist entfernt; die echte
-      Implementierung lebt in `TTSceneChangeSearchTask::histogramDifference`.
-  - Weiterhin offen (unverändert, kein toter Code):
-    - ~~`AcmodInfo::cutInChangeTime` / `cutOutChangeTime`~~ → **ENTFERNT 2026-07-12**
-      (`f4d4e66`, User-Entscheid: nur Burst-am-Schnittpunkt zählt; Umsetzungsweg
-      falls je gewünscht in `docs/code-map/burst-detection.md` konserviert).
-    - `analyzeAcmod()` (Datei-Scan per Syncword, dient der Cut-Normalisierung) und
-      `TTCutTreeView::updateAcmodIcon()` (In-Memory-`TTAudioHeaderList`, dient der Anzeige)
-      implementieren die Mehrheits-acmod-Logik doppelt, mit verschiedenen
-      Stichprobenbereichen → können verschiedene `mainAcmod` liefern.
-    - `updateAcmodIcon()` liest `text(5)`/`toolTip(5)`/`icon(5)` aus dem Tree-Widget zurück,
-      um seinen Text anzuhängen: Das Widget dient als Zwischenspeicher zwischen zwei
-      Produzenten. `updateHintColumn()` kapselt die Reihenfolge seit `666ed08`, beseitigt
-      die Append-Semantik aber nicht. Sauberer: beide liefern `{icon, text, tooltip}`
-      zurück, ein Setter komponiert und schreibt einmal.
+- **Doppelte Mehrheits-acmod-Logik** (Folge-Fund aus den Dead-Code-Audits, kein
+  toter Code)
+  - `analyzeAcmod()` (Datei-Scan per Syncword, dient der Cut-Normalisierung) und
+    `TTCutTreeView::updateAcmodIcon()` (In-Memory-`TTAudioHeaderList`, dient der
+    Anzeige) implementieren dieselbe Mehrheitsauswahl doppelt, mit
+    verschiedenen Stichprobenbereichen → sie können verschiedene `mainAcmod`
+    liefern.
+  - `updateAcmodIcon()` liest `text(5)`/`toolTip(5)`/`icon(5)` aus dem
+    Tree-Widget zurück, um seinen Text anzuhängen: das Widget dient als
+    Zwischenspeicher zwischen zwei Produzenten. `updateHintColumn()` kapselt die
+    Reihenfolge seit `666ed08`, beseitigt die Append-Semantik aber nicht.
+    Sauberer: beide liefern `{icon, text, tooltip}` zurück, ein Setter
+    komponiert und schreibt einmal.
+  - Wiederkehrender Audit-Lauf selbst: Skill `dead-code-audit` invoken.
 
 - **MP3/AAC re-encoding für Audio-Only-Output**
   - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)

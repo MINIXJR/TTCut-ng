@@ -1,6 +1,6 @@
 ---
-base_commit: 6dbcc504313d9c2af3c6320a84dd90d4e2ef1d86
-last_verified: 2026-07-26  # MPEG-2: raw-AU and display index MEASURED identical (Comedy Central SD576i25, 150 pairs) - the parser preference is about reliability, not numbering; plus cutAudioTracks all-tracks overload + pure outPath/beforeCut; all named symbols re-greped
+base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+last_verified: 2026-08-02
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
