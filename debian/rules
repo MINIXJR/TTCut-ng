@@ -1,20 +1,19 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
 
+# Plain cmake (Make backend), not cmake+ninja: the package declares
+# debhelper (>= 11) and the ninja variant needs >= 12.4. Ninja is the dev
+# workflow; the package result is identical.
 %:
-	dh $@
-
-override_dh_auto_configure:
-	qmake ttcut-ng.pro
+	dh $@ --buildsystem=cmake --builddirectory=build-deb
 
 override_dh_auto_build:
 	# Compile translation files
 	lrelease trans/ttcut-ng_de_DE.ts
-	# Build ttcut-ng + tools (via QMAKE_POST_LINK)
-	$(MAKE)
+	dh_auto_build
 
 override_dh_auto_install:
-	install -D -m 0755 ttcut-ng $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ng
+	install -D -m 0755 build-deb/ttcut-ng $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ng
 	install -D -m 0755 tools/ttcut-demux/ttcut-demux $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-demux
 	install -D -m 0755 tools/ttcut-ac3fix/ttcut-ac3fix $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ac3fix
 	install -D -m 0755 tools/ttcut-pts-analyze/ttcut-pts-analyze $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-pts-analyze
@@ -26,6 +25,6 @@ override_dh_auto_install:
 	install -D -m 0644 trans/*.qm $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/trans/
 
 override_dh_auto_clean:
-	# make clean includes tools via CLEAN_DEPS
-	$(MAKE) clean || true
-	rm -f Makefile
+	dh_auto_clean
+	# Tool binaries land in the source tree (RUNTIME_OUTPUT_DIRECTORY)
+	rm -f tools/ttcut-pts-analyze/ttcut-pts-analyze tools/ttcut-ac3fix/ttcut-ac3fix

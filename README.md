@@ -40,7 +40,7 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 
 ```bash
 # Build + erforderliche Laufzeit-Bibliotheken
-sudo apt install qt5-qmake qtbase5-dev libqt5opengl5-dev libmpeg2-4-dev \
+sudo apt install cmake ninja-build qtbase5-dev libqt5opengl5-dev libmpeg2-4-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
   libavfilter-dev libswresample-dev libmpv-dev
 
@@ -50,7 +50,7 @@ sudo apt install ffmpeg mjpegtools python3-numpy
 
 > **libmpv ist nicht optional.** Der Player ist seit v0.71.0 als Bibliothek
 > eingebunden (in-process Rendering für Wayland), nicht mehr als externer
-> mpv-Prozess — ohne `libmpv-dev` bricht bereits `qmake` ab.
+> mpv-Prozess — ohne `libmpv-dev` bricht bereits `cmake` beim Konfigurieren ab.
 
 ### Plattenplatz
 
@@ -65,7 +65,7 @@ Aufnahmegröße frei haben.
 ### Build
 
 ```bash
-qmake ttcut-ng.pro && make -j$(nproc)
+cmake -B build -G Ninja && cmake --build build
 ```
 
 ## Verwendung
@@ -87,7 +87,7 @@ qmake ttcut-ng.pro && make -j$(nproc)
 
 > **Hinweis:** TTCut-ng läuft nativ unter Wayland und X11. Sollte ein
 > Wayland-Compositor Darstellungsfehler zeigen, hilft ersatzweise
-> `QT_QPA_PLATFORM=xcb ./ttcut-ng`.
+> `QT_QPA_PLATFORM=xcb ./build/ttcut-ng`.
 
 ## Dokumentation
 

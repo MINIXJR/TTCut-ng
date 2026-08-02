@@ -14,11 +14,11 @@ cd "$SOURCE_DIR"
 # version entry and complains, or worse, accumulates stale entries).
 trap 'git checkout -- debian/changelog 2>/dev/null || true' EXIT
 
-# Get version from .pro file (single source of truth)
-VERSION=$(grep -oP '^VERSION\s*=\s*\K[0-9.]+' ttcut-ng.pro)
+# Get version from CMakeLists.txt (single source of truth)
+VERSION=$(grep -oP '^project\(ttcut-ng VERSION \K[0-9.]+' CMakeLists.txt)
 
 if [ -z "$VERSION" ]; then
-    echo "ERROR: Could not determine version from ttcut-ng.pro"
+    echo "ERROR: Could not determine version from CMakeLists.txt"
     exit 1
 fi
 

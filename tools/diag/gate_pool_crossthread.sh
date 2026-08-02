@@ -25,19 +25,25 @@ MAIN=${2:-200}
 LOGDIR=$(mktemp -d)
 trap 'rm -rf "$LOGDIR"' EXIT
 
+MOC="$(pkg-config --variable=host_bins Qt5Core)/moc"
+MOCDIR=$(mktemp -d)
+trap 'rm -rf "$LOGDIR" "$MOCDIR"' EXIT   # extends the existing LOGDIR trap
+for h in ttthreadtask ttthreadtaskpool ttsettings istatusreporter; do
+  "$MOC" ../../common/$h.h -o "$MOCDIR/moc_$h.cpp" || exit 1
+done
+
 # QT_NO_DEBUG, not NDEBUG: Q_ASSERT keys off Qt's own macro, and start() now
 # asserts on the calling thread - without this the "queued" run aborts at the
 # assertion before it ever reaches the race.
 echo "building (ThreadSanitizer)..."
 g++ -g -O1 -fsanitize=thread -fno-omit-frame-pointer -fPIC -std=gnu++17 \
-    -DQT_NO_DEBUG -I../.. -I../../moc -I../../ui_h \
+    -DQT_NO_DEBUG -I../.. \
     $(pkg-config --cflags Qt5Core Qt5Widgets) \
     -o test_pool_crossthread test_pool_crossthread.cpp \
     ../../common/ttthreadtask.cpp ../../common/ttthreadtaskpool.cpp \
     ../../common/ttmessagelogger.cpp ../../common/ttexception.cpp \
     ../../common/ttsettings.cpp ../../common/istatusreporter.cpp \
-    ../../moc/moc_ttthreadtask.cpp ../../moc/moc_ttthreadtaskpool.cpp \
-    ../../moc/moc_ttsettings.cpp ../../moc/moc_istatusreporter.cpp \
+    "$MOCDIR"/moc_*.cpp \
     $(pkg-config --libs Qt5Core) -lpthread || exit 1
 
 for mode in queued nested; do
