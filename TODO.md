@@ -40,6 +40,80 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
+## Qt6-Migration
+
+Eigenes Vorhaben mit fester Reihenfolge; es bestimmt mit, wann andere Punkte
+dieser Liste sinnvoll sind (siehe „Was wartet" am Ende).
+
+**Ausgangslage, gemessen 2026-08-02** über 210 Quelldateien und 26 `.ui`:
+Von den üblichen Qt6-Blockern ist nichts im Code — kein `QRegExp`, kein
+`QTextCodec`, kein `QDesktopWidget`, kein `QGLWidget`, kein
+`QLinkedList`/`QStringRef`, kein `setMargin()`, kein `toSet()`/`fromList()`,
+kein `qSort`, keine High-DPI-Attribute (die in Qt6 wegfallen). `QWheelEvent`
+nutzt bereits `angleDelta()`, `QTime` dient nur als Wertetyp, gemessen wird mit
+`QElapsedTimer`. C++17 steht in der `.pro`. Werkzeuge sind installiert:
+`qmake6`, `qt6-base-dev` 6.10.2, `qt6-wayland`, `libqt6openglwidgets6`.
+
+Bekannter Anpassungsbedarf: `QT += opengl` braucht zusätzlich `openglwidgets`
+(`QOpenGLWidget` in 3 Dateien); `event->pos()` bei `QMouseEvent` an 4 Stellen
+ist veraltet, nicht entfernt (→ `position()`); `QT += network` wird nirgends
+benutzt und kann raus; `QT += xml` bleibt (`QDomDocument` nur in
+`ttcutprojectdata`).
+
+**Warum es sich lohnt, über den Versionssprung hinaus:** Qt6 spricht das
+`wp_fractional_scale`-Protokoll, Qt5 nicht (50 Treffer in
+`libQt6WaylandClient.so.6` gegen 0 in `libQt5WaylandClient.so.5`). Genau
+darauf zielt die Vermutung zum KWin-Anzeigefehler unter „Known Limitations" —
+die Migration könnte diese Einschränkung erledigen.
+
+Schritte in dieser Reihenfolge:
+
+1. **Rückfallpunkt festschreiben, bevor der erste Qt6-Commit fällt.**
+   Ein **annotierter Tag** auf dem letzten Qt5-Stand (`qt5-final`, zusätzlich
+   zum regulären Release-Tag) — unveränderlich, benannt, gepusht. **Kein**
+   Wartungszweig auf Vorrat: ein Zweig, der nie beschrieben wird, verrottet,
+   und aus dem Tag lässt sich jederzeit einer ziehen
+   (`git switch -c qt5-maintenance qt5-final`). Umgekehrt ist ein Zweig ohne
+   Tag kein stabiler Marker, weil er weiterwandert. Ein Wartungszweig entsteht
+   also erst, wenn tatsächlich ein Qt5-Fix ausgeliefert werden soll.
+2. **Veraltungs-Gate im Qt5-Build einschalten.**
+   `DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000` in `ttcut-ng.pro`: der
+   Qt5-Compiler meldet dann alles, was in Qt6 wegfällt. Der Umbau passiert im
+   laufenden, testbaren Qt5-Build statt im Blindflug — der billigste Hebel des
+   ganzen Vorhabens.
+3. **Risiko zuerst prüfen: das libmpv-Render-Backend.**
+   Qt6 hat den Unterbau von `QOpenGLWidget` umgestellt. Wie sich das mit dem
+   mpv-Render-Kontext verträgt (`vo=libmpv`, `gui/ttmpvrenderwidget.*`), ist
+   das größte Unbekannte. Einzeln ausprobieren, bevor der Rest angefasst wird —
+   nicht am Ende, wo es das ganze Vorhaben blockieren würde.
+4. **Machbarkeitsprobe mit `qmake6`**: einmal bauen, Fehler zählen, **nicht**
+   reparieren. Erst danach ist der Aufwand seriös schätzbar.
+5. **Bauverfahren entscheiden: qmake6 oder CMake.** `qmake6` gibt es, aber Qt
+   hat qmake für Qt7 abgekündigt. Die Entscheidung bestimmt den Umfang und
+   gehört vor den Anfang, nicht in die Mitte.
+6. **Nachziehen:** Debian-Bauabhängigkeiten auf qt6, `lupdate`/`lrelease` aus
+   Qt6, Screenshots und Wiki neu.
+7. **Abnahmemaß:** die bestehende `--auto-cut`-QC als Gate — ES bit-identisch
+   zum Qt5-Stand, MKV nie (zufällige Segment-UID, siehe
+   `docs/completed-work.md`). So ist belegt, dass die Migration die
+   Schnittausgabe nicht verändert.
+
+**Vorher erledigen, weil es danach nicht mehr geht oder nicht mehr hilft:**
+- Die **KWin-Messreihe** (Known Limitations): behebt Qt6 den Fehler, sind die
+  Schwellenwerte nicht mehr zu messen — weder für den KDE-Bugreport noch als
+  Beleg, dass es an Qt5 lag.
+- Der **Log-Flush** (Medium Priority): bei einem Versionssprung dieser Größe
+  wird es Abstürze geben, und dann braucht man den Verlauf davor.
+- Der **Dead-Code-Audit** (Medium Priority): was tot ist, muss nicht migriert
+  werden.
+
+**Was wartet, bis die Migration steht:** der Rename `TTMPEG2Window2 →
+TTVideoFrameWidget` (fasst `.ui`, `.pro` und moc an — dieselbe Fläche wie die
+Migration, das mischt man nicht), der Vorschau-Dialog im Screenshot-Modus
+(Screenshots werden ohnehin neu) und die größeren GUI-Vorhaben (LipSync-Dialog,
+Kapitel-Editor, Undo/Redo) — sonst baut man zweimal. Unberührt und jederzeit
+machbar: Bit-Stream-API und ttcut-demux, beide ohne Qt-Bezug.
+
 ## Medium Priority
 
 - **Logdatei verliert beim Absturz genau den interessanten Teil**
