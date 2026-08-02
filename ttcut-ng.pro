@@ -44,7 +44,6 @@ RESOURCES   = ui/audiofilelistwidget.qrc\
               ui/ttsettingsdialog.qrc\
               ui/previewwidget.qrc\
               ui/avcutdialog.qrc\
-              ui/processviewwidget.qrc\
               ui/mainwindow.qrc
 FORMS       = ui/audiofilelistwidget.ui\
               ui/videofilelistwidget.ui\
@@ -65,7 +64,6 @@ FORMS       = ui/audiofilelistwidget.ui\
               ui/ttcutsettingspaths.ui\
               ui/ttcutsettingslogging.ui\
               ui/previewwidget.ui\
-              ui/processviewwidget.ui\
               ui/avcutdialog.ui\
               ui/aboutdlg.ui\
               ui/ttcutmainwindow.ui\
@@ -166,7 +164,6 @@ HEADERS     = common/ttcut.h\
               gui/ttstreamnavigator.h \
               gui/ttcuttreeview.h\
               gui/ttprogressbar.h\
-              gui/ttprocessform.h\
               gui/tttaskprogress.h\
               gui/ttcutpreview.h\
               gui/ttcutaboutdlg.h\
@@ -270,7 +267,6 @@ SOURCES     = common/ttcut.cpp\
               gui/ttcuttreeview.cpp\
               gui/ttprogressbar.cpp\
               gui/tttaskprogress.cpp\
-              gui/ttprocessform.cpp\
               gui/ttcutpreview.cpp\
               gui/ttcutaboutdlg.cpp\
               gui/ttcutavcutdlg.cpp\

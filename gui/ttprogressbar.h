@@ -22,7 +22,6 @@
 
 #include "ui_ttprogressform.h"
 #include "../common/ttcut.h"
-#include "ttprocessform.h"
 
 class TTThreadTask;
 class TTTaskProgress;
@@ -58,13 +57,11 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
       void resetProgress();
 
       void updateProgressBar();
-      void hideProcessForm();
 
   signals:
     void cancel();
 
   private:
-    TTProcessForm* processForm;
     QHash<QUuid, TTTaskProgress*>* taskProgressHash;
     int            normTotalSteps;
     bool           isBlocking;
