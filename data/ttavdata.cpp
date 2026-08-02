@@ -1819,6 +1819,10 @@ void TTAVData::onCutFinished()
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "MKV muxing completed successfully";
 
+          // Record the real output name for the completion notification —
+          // the same step the H.264 path does before emitting cutFinished().
+          TTSettings::instance()->setCutVideoName(QFileInfo(mkvOutput).fileName());
+
           // Delete elementary streams if option is set
           if (TTSettings::instance()->workingMuxDeleteES()) {
             deleteElementaryStreams(muxItem.getVideoName(),
@@ -1828,6 +1832,7 @@ void TTAVData::onCutFinished()
         } else {
           TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
               QString("MKV muxing failed: %1").arg(mkvProvider->lastError()));
+          emit statusReport(0, StatusReportArgs::Exit, tr("MKV muxing failed"), 0);
         }
 
         // Clean up chapter file
@@ -1866,6 +1871,21 @@ void TTAVData::onCutFinished()
       }
       break;
   }
+
+  // The MPEG-2 path ends here, in a slot invoked by the thread pool's exit
+  // signal — unlike doH264Cut()/doAudioOnlyCut(), which run synchronously and
+  // emit at their end. Without this the signal was never sent at all: the GUI
+  // never showed the completion dialog for MPEG-2 cuts, and --auto-cut never
+  // reached the QApplication::quit() it connects to, so the process sat idle
+  // until someone closed the window.
+  //
+  // Emitted regardless of mux success: a failed mux must not leave a headless
+  // run hanging. (The H.264 path still returns early on mux failure - noted as
+  // a follow-up, not changed here.)
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "onCutFinished: emitting cutFinished(), cutVideoName ="
+               << TTSettings::instance()->cutVideoName();
+  emit cutFinished();
 }
 
 void TTAVData::onCutAborted()
