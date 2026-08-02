@@ -16,8 +16,7 @@
 #include "ttmessagelogger.h"
 #include "ttexception.h"
 
-#include "../gui/ttprogressbar.h"
-
+#include <QCoreApplication>
 #include <QThread>
 #include <QDebug>
 

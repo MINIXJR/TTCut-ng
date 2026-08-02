@@ -17,7 +17,6 @@
 #include "ttthreadtask.h"
 
 #include "../common/ttmessagelogger.h"
-#include "../gui/ttprogressbar.h"
 
 #include <QThreadPool>
 #include <QPointer>
