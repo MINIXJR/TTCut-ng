@@ -339,3 +339,4 @@ set_target_properties(ttcut-ac3fix PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/ttcut-ac3fix)
 
 add_subdirectory(tools/diag)
+add_subdirectory(tools/ttcut-burst-probe)

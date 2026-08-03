@@ -77,6 +77,3 @@ tools/test-videos/cache/
 docs/plans/
 docs/superpowers/
 tools/ttcut-burst-probe/ttcut-burst-probe
-tools/ttcut-burst-probe/obj/
-tools/ttcut-burst-probe/moc/
-tools/ttcut-burst-probe/Makefile

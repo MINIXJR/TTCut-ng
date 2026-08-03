@@ -8,7 +8,7 @@ Detektors an *einer* Schnittgrenze, ohne GUI.
 Nicht Teil des Anwendungs-Builds (es kompiliert `ttffmpegwrapper.cpp` erneut):
 
 ```bash
-cd tools/ttcut-burst-probe && qmake && make
+cmake --build build --target ttcut-burst-probe
 ```
 
 ## Aufruf
