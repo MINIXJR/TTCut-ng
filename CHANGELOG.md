@@ -2,6 +2,29 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**The build system is CMake now**
+
+### Changed
+
+- **qmake is gone; TTCut-ng builds with CMake and Ninja.**
+  `cmake -B build -G Ninja && cmake --build build` replaces the qmake/make
+  invocation, and the Debian package builds through debhelper's cmake
+  buildsystem. Building from source now needs `cmake` and `ninja-build`
+  installed. `compile_commands.json` comes straight out of the configure
+  step, so `bear` is no longer needed. The diagnostic tools and the
+  burst-detector probe (`tools/ttcut-burst-probe`, the last qmake consumer
+  in the tree) are CMake targets as well.
+
+### Fixed
+
+- **`build-package.sh` left the dch entry behind in `debian/changelog`.**
+  The restore ran after the script had changed into the package build
+  directory — an rsync copy without `.git` — so it failed silently and
+  every run left the source tree modified. The cleanup is now anchored to
+  the source tree.
+
 ## v0.78.0 (2026-08-02)
 
 **The window remembers its size, an MPEG-2 cut reports when it is done, and a headless cut no longer hangs**
