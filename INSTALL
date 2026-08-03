@@ -65,7 +65,9 @@ Oder das Debian-Paket installieren:
 6. Wayland
 ----------
 
-TTCut-ng benoetigt das XCB-Backend auf Wayland-Systemen:
+TTCut-ng laeuft nativ unter Wayland, eine Umgebungsvariable ist nicht
+noetig. Falls ein Wayland-Compositor Probleme macht, steht das XCB-Backend
+als Ausweichloesung zur Verfuegung:
 
   QT_QPA_PLATFORM=xcb build/ttcut-ng
 
