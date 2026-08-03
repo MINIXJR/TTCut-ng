@@ -12,7 +12,9 @@ cd "$SOURCE_DIR"
 # dch modifies debian/changelog in-place. Restore the working copy on exit so
 # a second run starts from a clean slate (otherwise dch sees the previous
 # version entry and complains, or worse, accumulates stale entries).
-trap 'git checkout -- debian/changelog 2>/dev/null || true' EXIT
+# -C is required: the script cd's into $BUILD_DIR (an rsync copy without
+# .git), where a plain "git checkout" finds no repository and does nothing.
+trap 'git -C "$SOURCE_DIR" checkout -- debian/changelog 2>/dev/null || true' EXIT
 
 # Get version from CMakeLists.txt (single source of truth)
 VERSION=$(grep -oP '^project\(ttcut-ng VERSION \K[0-9.]+' CMakeLists.txt)
