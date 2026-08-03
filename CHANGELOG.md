@@ -2,9 +2,14 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.79.0 (2026-08-03)
 
-**The build system is CMake now**
+**The build system is CMake now — the last Qt5-based release before the Qt6 migration**
+
+This release intentionally closes out the Qt5 era: the commit is additionally
+tagged `qt5-final` as the immutable fallback point the Qt6 migration plan
+calls for. A Qt6 feasibility probe against this tree already passed (three
+one-line fixes to a full build, playback working); details in `TODO.md`.
 
 ### Changed
 

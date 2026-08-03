@@ -1,5 +1,5 @@
 ---
-base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
+base_commit: a710821c97d05b373ac90995908e4c55e3091ba2
 last_verified: 2026-08-02
 sources:
   - data/ttsearchtask.cpp
