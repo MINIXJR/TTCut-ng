@@ -63,8 +63,14 @@ benutzt und kann raus; `QT += xml` bleibt (`QDomDocument` nur in
 **Warum es sich lohnt, über den Versionssprung hinaus:** Qt6 spricht das
 `wp_fractional_scale`-Protokoll, Qt5 nicht (50 Treffer in
 `libQt6WaylandClient.so.6` gegen 0 in `libQt5WaylandClient.so.5`). Genau
-darauf zielt die Vermutung zum KWin-Anzeigefehler unter „Known Limitations" —
-die Migration könnte diese Einschränkung erledigen.
+darauf zielte die Vermutung zum KWin-Anzeigefehler unter „Known Limitations".
+**Gemessen 2026-08-03 (Machbarkeitsprobe): erledigt sie NICHT.** Das
+Qt6-Probe-Binary bindet `wp_fractional_scale_manager_v1` nachweislich
+(WAYLAND_DEBUG-Mitschnitt) — und der Fehler tritt trotzdem auf (User-Repro,
+maximiertes Fenster bei 150 %). Widerlegt ist damit ausschließlich die
+Hypothese „Ursache im Qt5-Skalierungspfad". Die Zuordnung KWin vs.
+TTCut-spezifischer Auslöser bleibt OFFEN — Details unter „Known
+Limitations".
 
 Schritte in dieser Reihenfolge:
 
@@ -76,14 +82,26 @@ Schritte in dieser Reihenfolge:
    (`git switch -c qt5-maintenance qt5-final`). Umgekehrt ist ein Zweig ohne
    Tag kein stabiler Marker, weil er weiterwandert. Ein Wartungszweig entsteht
    also erst, wenn tatsächlich ein Qt5-Fix ausgeliefert werden soll.
-2. **Risiko zuerst prüfen: das libmpv-Render-Backend.**
-   Qt6 hat den Unterbau von `QOpenGLWidget` umgestellt. Wie sich das mit dem
-   mpv-Render-Kontext verträgt (`vo=libmpv`, `gui/ttmpvrenderwidget.*`), ist
-   das größte Unbekannte. Einzeln ausprobieren, bevor der Rest angefasst wird —
-   nicht am Ende, wo es das ganze Vorhaben blockieren würde.
-3. **Machbarkeitsprobe mit CMake + Qt6**: `find_package(Qt6 ...)` probeweise
-   anstelle von `Qt5` einsetzen, einmal bauen, Fehler zählen, **nicht**
-   reparieren. Erst danach ist der Aufwand seriös schätzbar.
+2. **Risiko zuerst prüfen: das libmpv-Render-Backend.** → **ERLEDIGT
+   2026-08-03**: Wiedergabe läuft im Qt6-Probe-Binary (User-abgenommen,
+   Wayland nativ). Der QOpenGLWidget-Umbau in Qt6 verträgt sich mit dem
+   mpv-Render-Kontext; das größte Unbekannte ist vom Tisch.
+3. **Machbarkeitsprobe mit CMake + Qt6** → **ERLEDIGT 2026-08-03**
+   (Wegwerf-Worktree, nichts auf master): Configure inkl. AUTOMOC/AUTOUIC
+   aller 26 `.ui` auf Anhieb grün (Qt 6.10.2, Komponente `OpenGLWidgets`
+   zusätzlich nötig). Build: 52 Fehler, die auf **drei Einzeiler**
+   kollabieren — `class QStringList;`-Forward-Declaration in
+   `common/ttcut.h` (Qt6: Typedef; → `#include <QtContainerFwd>`),
+   `QVariant::type()` → `typeId()` in `gui/ttmpvlibbackend.cpp`,
+   `QLibraryInfo::location()` → `path()` in `gui/ttcutmain.cpp`. Mit diesen
+   drei Zeilen linkt das komplette Binary fehlerfrei. Warnungsinventar für
+   die Migration: 4× `QCheckBox::stateChanged`→`checkStateChanged`
+   (Qt-6.7-Deprecation, vom 6.0-Gate nicht erfasst), 1× alte
+   `QMessageBox::warning`-Überladung, 1× `nodiscard` bei `QFile::open`
+   (ttmplexprovider), 1× GCC-15-SFINAE-Hinweis. **Compile-Aufwand der
+   Migration: trivial.** Neuer Befund aus dem Probelauf: Standbild und
+   mpv-Play-Bild präsentieren 4:3-Material unterschiedlich (siehe
+   Low-Priority-Eintrag „Aspect-Präsentation Standbild vs. Play").
 4. **Bauverfahren: CMake — bereits entschieden und umgesetzt.** Die
    ursprüngliche Frage qmake6 vs. CMake ist mit diesem Zweig
    (`feature/cmake-migration`, siehe `docs/completed-work.md`) beantwortet:
@@ -93,11 +111,9 @@ Schritte in dieser Reihenfolge:
    `CMakeLists.txt`, kein neues Bausystem mehr nötig.
 5. **Nachziehen:** Debian-Bauabhängigkeiten auf qt6, `lupdate`/`lrelease` aus
    Qt6, Screenshots und Wiki neu.
-   Dabei den KWin-Auffrischfehler erneut prüfen (siehe Known Limitations): bei
-   1819×1412 und Skalierung 1,5 starten und navigieren. Ist er weg, war es der
-   Qt5-Skalierungspfad; bleibt er, liegt es an KWin und der Bugreport bekommt
-   sein Beispielprogramm gratis — ein Qt6-Programm, das `wp_fractional_scale`
-   spricht und trotzdem stehen bleibt, wäre ein viel stärkerer Befund.
+   (Der Auffrischfehler ist durch die Machbarkeitsprobe teilbeantwortet:
+   bleibt unter Qt6 bestehen, Qt5-Pfad ausgeschlossen; Zuordnung weiter
+   offen — siehe Known Limitations.)
 6. **Abnahmemaß:** die bestehende `--auto-cut`-QC als Gate — ES bit-identisch
    zum Qt5-Stand, MKV nie (zufällige Segment-UID, siehe
    `docs/completed-work.md`). So ist belegt, dass die Migration die
@@ -324,6 +340,20 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     nur den abgespielten Bereich muxen, oder mpv die ES mit erzwungener
     Framerate direkt füttern. Prio low.
 
+- **Aspect-Präsentation Standbild vs. Play inkonsistent bei 4:3**
+  (2026-08-03, beim Qt6-Probelauf aufgefallen; vorbestehend — Qt5 zeigt es
+  auch, nur anders)
+  - Beobachtung (User, 4:3-Material): **Qt5** — Play-Bild mit Balken
+    oben/unten, Standbild mit schmalen schwarzen Streifen rundum. **Qt6-Probe**
+    — Standbild mit Balken links/rechts, Play-Bild füllt OHNE Balken.
+  - Standbild-Pfad (TTMPEG2Window2, SAR-korrigierte QImage) und mpv-Renderpfad
+    (`vo=libmpv` → FBO) skalieren also unterschiedlich in die Widget-Fläche;
+    unter Qt6 füllt der mpv-Pfad offenbar ohne Aspekt-Erhalt
+    (keepaspect-Verhalten des Render-Kontexts prüfen).
+  - Bei der Qt6-Migration mit untersuchen: beide Pfade sollen dieselbe
+    Geometrie zeigen (Balkenlage identisch, kein Füllen ohne Aspekt-Erhalt).
+    Repro: Tux-MPEG-2-PAL-SD-Testvideo (4:3) aus `tools/test-videos/`.
+
 - **Screenshot-Modus: Vorschau-Dialog fehlt** (2026-07-26, beim v0.76.0-Release
   aufgefallen)
   - Der `--screenshots`-Modus deckt inzwischen alle Dialoge ab außer dem
@@ -362,8 +392,9 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Known Limitations
 
-- **Stale image in "Current Frame" under KWin at fractional scaling (compositor
-  bug, not TTCut-ng).** With KWin 6.7.2 on Wayland, a fractional display scale
+- **Stale image in "Current Frame" under KWin at fractional scaling
+  (attribution OPEN: compositor bug vs. an app-specific trigger — the painted
+  buffer itself is proven correct either way).** With KWin 6.7.2 on Wayland, a fractional display scale
   (150 %, 175 %) and a large or maximized window, parts of the window are not
   refreshed on screen. Large painted areas are affected — the still-frame pixmap
   keeps showing the previous picture while frame number and timecode advance;
@@ -417,13 +448,28 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     anderer Höhe gemessen werden müsste — nicht vergleichbar, solange das
     Zusammenspiel von Breite und Höhe unverstanden ist. Erst sinnvoll, wenn
     die KDE-Entwickler sagen, welche Größe intern die relevante ist.
-  - **ZURÜCKGESTELLT bis zur Qt6-Migration (2026-08-02, User-Entscheid).** Ohne
-    Minimalbeispiel wird kein Bugreport eingereicht. Offen gehaltene Hypothese:
-    die Ursache könnte im **Qt5**-Skalierungspfad liegen statt in KWin — der
-    Protokollmitschnitt entlastet TTCut, aber nicht Qt5. Qt6 bindet
-    `wp_fractional_scale`, Qt5 nicht; der Umstieg entscheidet es. Prüfschritt
-    für danach: TTCut unter Qt6 bei 1819×1412 und Skalierung 1,5 starten und
-    navigieren — dieselben Skripte, dieselbe Beobachtung.
+  - **Qt5-Hypothese WIDERLEGT, Zuordnung OFFEN (2026-08-03,
+    Qt6-Machbarkeitsprobe):** Das Qt6-Probe-Binary bindet
+    `wp_fractional_scale_manager_v1` nachweislich (WAYLAND_DEBUG: bind +
+    `get_fractional_scale`) — und der Fehler tritt trotzdem auf (User-Repro,
+    maximiert bei 150 %). Ausgeschlossen ist damit nur der
+    Qt5-Skalierungspfad. **Ob KWin oder ein TTCut-spezifischer Auslöser,
+    ist offen** (User-Einschätzung: eher TTCut). Für einen App-Auslöser
+    sprechen: fünf gescheiterte Minimalbeispiele (irgendeine
+    TTCut-spezifische Zutat ist notwendig), die Abhängigkeit von der
+    Größen-Historie (Maximieren WÄHREND laufender Wiedergabe heilt
+    dauerhaft — ein reiner Compositor-Schwellenfehler sollte den Weg zur
+    Größe nicht kennen), und: die Qt6-Repro schwächt den bisher vermuteten
+    KWin-Mechanismus (forced server side scale factor greift nur bei
+    Klienten OHNE das Protokoll). Dagegen sprechen: Alt-Tab zeigt den
+    korrekten Puffer, und der Qt5-Protokollmitschnitt des Fehlerlaufs war
+    klientenseitig korrekt (attach + voller damage + commit). Da die
+    Qt6-Probe dieselbe Codebasis ist, wäre ein TTCut-Auslöser in
+    Qt-versionsunabhängigem App-Code zu suchen (Fensteraufbau, Widget-Stack,
+    mpv-Subsurface). **Nächster Diskriminator bei Wiederaufnahme:**
+    WAYLAND_DEBUG-Vergleich Qt6-Fehlerlauf gegen den „geheilten" Zustand
+    nach Maximieren-bei-Wiedergabe — unterscheidet sich die
+    Protokollsequenz, liegt die Spur in der App.
   - **Protokollbeweis vorhanden** (`WAYLAND_DEBUG=1`, Logs unter
     `/usr/local/src/CLAUDE_TMP/TTCut-ng/wayland-diff/`): Qt setzt
     `set_buffer_scale(2)` auf dem 1,5-Schirm und bindet
@@ -449,7 +495,10 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     diese Zutaten genügen. Ohne so ein Beispiel fragen die KDE-Entwickler
     erfahrungsgemäß zuerst danach.
   - **Workarounds:** integer scaling (100 %, 200 %), do not maximize the window,
-    or run `QT_QPA_PLATFORM=xcb build/ttcut-ng`.
+    or run `QT_QPA_PLATFORM=xcb build/ttcut-ng`. New (found 2026-08-03, works
+    on Qt5 and the Qt6 probe alike): start with a small window and maximize
+    **while a video is playing** — the display then stays correct, including
+    navigation, until the program is closed.
   - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
     protocol, so KWin uses its *forced server side scale factor* path — the
     Plasma 6.7.0 changelog lists "making forced server side scale factor single
