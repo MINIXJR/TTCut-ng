@@ -85,7 +85,7 @@ int main(int argc, char** argv)
         window.showFrameAt(nav);
         app.processEvents();
 
-        const QByteArray sum = pixmapSum(window.pixmap(Qt::ReturnByValue));
+        const QByteArray sum = pixmapSum(window.pixmap());
         printf("%-9d %-9d %-34s %s\n", want, nav, sum.constData(),
                (sum == previous) ? "SAME PICTURE AS PREVIOUS" : "");
         previous = sum;
