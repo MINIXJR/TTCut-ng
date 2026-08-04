@@ -433,6 +433,17 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     on Qt5 and the Qt6 probe alike): start with a small window and maximize
     **while a video is playing** — the display then stays correct, including
     navigation, until the program is closed.
+    Second heal variant (User, 2026-08-04, verified on the Qt6 build
+    `60bea93f` AND on Qt5 — version-independent like the first variant;
+    4:3 material): maximize FIRST, then press PLAY — the play picture
+    appears, and the still frame afterwards is correct too. So resizing
+    *during* playback is not required; playback happening in the large
+    window appears to be the operative ingredient (points further at the
+    mpv subsurface kicking the presentation). Confirmed (User,
+    2026-08-04): BEFORE the first PLAY the bug does manifest — the
+    still-frame area shows nothing at all, or the background, or
+    whatever was displayed last (the known stale presentation). So this
+    genuinely is "playback heals it", not "the bug did not trigger".
   - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
     protocol, so KWin uses its *forced server side scale factor* path — the
     Plasma 6.7.0 changelog lists "making forced server side scale factor single
