@@ -243,7 +243,7 @@ void TTMpvLibBackend::setProperty(const QString& name, const QVariant& value)
   const QByteArray nameUtf8 = name.toUtf8();
   int rc = -1;
 
-  switch (static_cast<int>(value.type())) {
+  switch (value.typeId()) {
     case QMetaType::Bool: {
       int flag = value.toBool() ? 1 : 0;
       rc = mpv_set_property_async(mMpv, 0, nameUtf8.constData(),

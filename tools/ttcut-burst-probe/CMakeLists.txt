@@ -23,4 +23,4 @@ set_target_properties(ttcut-burst-probe PROPERTIES
 
 target_include_directories(ttcut-burst-probe PRIVATE ${ROOT})
 target_link_libraries(ttcut-burst-probe PRIVATE
-  Qt5::Core Qt5::Gui Threads::Threads PkgConfig::AVLIBS)
+  Qt6::Core Qt6::Gui Threads::Threads PkgConfig::AVLIBS)

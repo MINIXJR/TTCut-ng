@@ -133,7 +133,7 @@ int main( int argc, char **argv )
     // is an empty stub. qtbase_<locale>.qm carries QMessageBox button labels
     // like Yes/No/OK/Cancel). Forward-compatible with Qt 6.
     QTranslator qtTranslator;
-    if (!qtTranslator.load("qtbase_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath))) {
+    if (!qtTranslator.load("qtbase_" + QLocale::system().name(), QLibraryInfo::path(QLibraryInfo::TranslationsPath))) {
       TTMessageLogger* log = TTMessageLogger::getInstance();
       log->warningMsg(__FILE__, __LINE__,
                     QString("Qt translation file %1 for locale %2 could not be found!").

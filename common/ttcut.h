@@ -21,7 +21,8 @@
 class QPixmap;
 class QString;
 class QWidget;
-class QStringList;
+// Qt6: QStringList is a typedef on QList<QString>, not a forward-declarable class.
+#include <QtContainerFwd>
 
 class TTCut
 {

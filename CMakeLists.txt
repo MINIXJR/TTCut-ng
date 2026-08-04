@@ -58,7 +58,7 @@ add_compile_definitions(
   QT_FORCE_ASSERTS
 )
 
-find_package(Qt5 5.15 REQUIRED COMPONENTS Core Widgets Gui Xml Network OpenGL)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Widgets Gui Xml OpenGL OpenGLWidgets)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(AVLIBS REQUIRED IMPORTED_TARGET
@@ -317,7 +317,7 @@ target_include_directories(ttcut-core PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/ttcut-c
 # includes) is pulled in by gui/ttcutmain.cpp on the ttcut-ng executable too.
 target_include_directories(ttcut-core PUBLIC ${CMAKE_SOURCE_DIR}/ui)
 target_link_libraries(ttcut-core PUBLIC
-  Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Xml Qt5::Network Qt5::OpenGL
+  Qt6::Core Qt6::Widgets Qt6::Gui Qt6::Xml Qt6::OpenGL Qt6::OpenGLWidgets
   PkgConfig::AVLIBS PkgConfig::MPV PkgConfig::MPEG2
   Threads::Threads)
 
