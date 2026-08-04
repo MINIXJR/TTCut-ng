@@ -4,9 +4,8 @@ Priority: optional
 Maintainer: MINIXJR <35893755+MINIXJR@users.noreply.github.com>
 Build-Depends: debhelper (>= 11),
                cmake,
-               qtbase5-dev,
-               qttools5-dev-tools,
-               libqt5opengl5-dev,
+               qt6-base-dev,
+               qt6-l10n-tools,
                libmpeg2-4-dev,
                libavformat-dev,
                libavcodec-dev,
