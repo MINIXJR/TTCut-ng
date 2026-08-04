@@ -40,7 +40,7 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
     void hideBar();
 
     public slots:
-      void onDetailsStateChanged(int);
+      void onDetailsStateChanged(Qt::CheckState);
       void onBtnCancelClicked();
       void onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress, QTime totalTime);
 

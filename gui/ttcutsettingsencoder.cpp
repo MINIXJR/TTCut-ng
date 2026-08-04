@@ -31,7 +31,7 @@ TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
 
   // Connect signals
   connect(cbCodec, qOverload<int>(&QComboBox::currentIndexChanged), this, &TTCutSettingsEncoder::onCodecChanged);
-  connect(cbEncodingMode, &QCheckBox::stateChanged, this, &TTCutSettingsEncoder::onEncodingModeChanged);
+  connect(cbEncodingMode, &QCheckBox::checkStateChanged, this, &TTCutSettingsEncoder::onEncodingModeChanged);
 }
 
 void TTCutSettingsEncoder::setTitle(__attribute__((unused))const QString& title)
@@ -272,7 +272,7 @@ void TTCutSettingsEncoder::onCodecChanged(int newCodec)
   emit codecChanged(newCodec);
 }
 
-void TTCutSettingsEncoder::onEncodingModeChanged(int state)
+void TTCutSettingsEncoder::onEncodingModeChanged(Qt::CheckState state)
 {
   gbCodecSettings->setEnabled(state == Qt::Checked);
 }

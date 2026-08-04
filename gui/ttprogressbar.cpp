@@ -43,7 +43,7 @@ TTProgressBar::TTProgressBar(QWidget* parent)
   taskProgressHash = new QHash<QUuid, TTTaskProgress*>;
 
   connect(pbCancel,  &QPushButton::clicked,    this, &TTProgressBar::onBtnCancelClicked);
-  connect(cbDetails, &QCheckBox::stateChanged, this, &TTProgressBar::onDetailsStateChanged);
+  connect(cbDetails, &QCheckBox::checkStateChanged, this, &TTProgressBar::onDetailsStateChanged);
 }
 
 /**
@@ -194,7 +194,7 @@ void TTProgressBar::resetProgress()
 /**
  * Show/hide the details view
  */
-void TTProgressBar::onDetailsStateChanged(int)
+void TTProgressBar::onDetailsStateChanged(Qt::CheckState)
 {
   if (cbDetails->isChecked()) {
     scrollArea->show();

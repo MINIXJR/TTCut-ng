@@ -14,7 +14,7 @@ TTCutSettingsLogging::TTCutSettingsLogging(QWidget* parent)
     : QGroupBox(parent)
 {
   setupUi(this);
-  connect(cbCreateLog, &QCheckBox::stateChanged, this, &TTCutSettingsLogging::onCreateLogStateChanged);
+  connect(cbCreateLog, &QCheckBox::checkStateChanged, this, &TTCutSettingsLogging::onCreateLogStateChanged);
   connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsLogging::resetToDefaults);
 }
 
@@ -72,7 +72,7 @@ void TTCutSettingsLogging::saveTabData()
   TTSettings::instance()->setLogLibav(cbLogPlusLibav->isChecked());
 }
 
-void TTCutSettingsLogging::onCreateLogStateChanged(int state)
+void TTCutSettingsLogging::onCreateLogStateChanged(Qt::CheckState state)
 {
   gbLogPlus->setEnabled(state != Qt::Unchecked);
 }

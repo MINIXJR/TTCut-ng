@@ -23,7 +23,7 @@ public:
     void saveTabData();
 
 private slots:
-    void onCreateLogStateChanged(int state);
+    void onCreateLogStateChanged(Qt::CheckState state);
     void resetToDefaults();
 };
 

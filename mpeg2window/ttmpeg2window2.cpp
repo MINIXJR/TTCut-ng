@@ -411,7 +411,7 @@ void TTMPEG2Window2::getFrameInfo()
 
 QRect TTMPEG2Window2::currentPixmapRect() const
 {
-  QPixmap pm = pixmap(Qt::ReturnByValue);
+  QPixmap pm = pixmap();
   if (pm.isNull()) return QRect();
 
   QSize pmSize = pm.size();
@@ -470,7 +470,7 @@ void TTMPEG2Window2::setLogoSelectionMode(bool enable)
 void TTMPEG2Window2::mousePressEvent(QMouseEvent* event)
 {
   if (mLogoSelectionMode && event->button() == Qt::LeftButton) {
-    mRubberBandOrigin = event->pos();
+    mRubberBandOrigin = event->position().toPoint();
     if (!mRubberBand)
       mRubberBand = new QRubberBand(QRubberBand::Rectangle, this);
     mRubberBand->setGeometry(QRect(mRubberBandOrigin, QSize()));
@@ -483,7 +483,7 @@ void TTMPEG2Window2::mousePressEvent(QMouseEvent* event)
 void TTMPEG2Window2::mouseMoveEvent(QMouseEvent* event)
 {
   if (mLogoSelectionMode && mRubberBand && mRubberBand->isVisible()) {
-    mRubberBand->setGeometry(QRect(mRubberBandOrigin, event->pos()).normalized());
+    mRubberBand->setGeometry(QRect(mRubberBandOrigin, event->position().toPoint()).normalized());
     return;
   }
   QLabel::mouseMoveEvent(event);
@@ -493,7 +493,7 @@ void TTMPEG2Window2::mouseReleaseEvent(QMouseEvent* event)
 {
   if (mLogoSelectionMode && mRubberBand && event->button() == Qt::LeftButton) {
     mRubberBand->hide();
-    QRect widgetRect = QRect(mRubberBandOrigin, event->pos()).normalized();
+    QRect widgetRect = QRect(mRubberBandOrigin, event->position().toPoint()).normalized();
     QRect imageRect = widgetToImageRect(widgetRect);
 
     if (imageRect.width() >= 4 && imageRect.height() >= 4) {

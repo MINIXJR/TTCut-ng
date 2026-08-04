@@ -49,7 +49,7 @@ class TTCutSettingsEncoder : public QWidget, Ui::TTCutSettingsEncoder
 
   protected slots:
     void onCodecChanged(int index);
-    void onEncodingModeChanged(int state);
+    void onEncodingModeChanged(Qt::CheckState state);
 };
 
 #endif

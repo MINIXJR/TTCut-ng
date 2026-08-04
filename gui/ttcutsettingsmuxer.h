@@ -32,7 +32,7 @@ class TTCutSettingsMuxer : public QGroupBox, private Ui_TTCutSettingsMuxer
     void populateMpgMode();
 
   protected slots:
-    void onMkvChaptersChanged(int state);
+    void onMkvChaptersChanged(Qt::CheckState state);
 
   private slots:
     void resetToDefaults();

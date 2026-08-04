@@ -1300,9 +1300,13 @@ bool TTAVData::confirmBurstWarnings(TTCutList* cutList)
   QString msg = tr("The following cuts have detected audio bursts:\n\n")
               + burstWarnings.join("\n")
               + tr("\n\nUse preview to check if shift is needed.");
-  int ret = QMessageBox::warning(TTCut::mainWindow, tr("Audio Burst Warning"),
-                                 msg, tr("Cut anyway"), tr("Cancel"));
-  return (ret != 1);
+  QMessageBox warnBox(QMessageBox::Warning, tr("Audio Burst Warning"), msg,
+                      QMessageBox::NoButton, TTCut::mainWindow);
+  QPushButton* cutButton = warnBox.addButton(tr("Cut anyway"), QMessageBox::AcceptRole);
+  warnBox.addButton(tr("Cancel"), QMessageBox::RejectRole);
+  warnBox.setDefaultButton(cutButton);
+  warnBox.exec();
+  return warnBox.clickedButton() == cutButton;
 }
 
 void TTAVData::computeCutLengths(TTCutList* cutList)

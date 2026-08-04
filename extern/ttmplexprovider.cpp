@@ -96,7 +96,11 @@ void TTMplexProvider::writeMuxScript()
   QFile       muxFile(muxInfo.absoluteFilePath());
 
   muxFile.remove();
-  muxFile.open(QIODevice::WriteOnly | QIODevice::Text);
+  if (!muxFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    log->errorMsg(__FILE__, __LINE__,
+        QString("Cannot open mux script for writing: %1").arg(muxFile.fileName()));
+    return;
+  }
 
   QTextStream muxOutStream(&muxFile);
 

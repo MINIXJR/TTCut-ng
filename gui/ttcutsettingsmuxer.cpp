@@ -22,7 +22,7 @@ TTCutSettingsMuxer::TTCutSettingsMuxer(QWidget* parent)
   populateCodecMuxers();
   populateMpgTarget();
   populateMpgMode();
-  connect(cbMkvCreateChapters, &QCheckBox::stateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
+  connect(cbMkvCreateChapters, &QCheckBox::checkStateChanged, this, &TTCutSettingsMuxer::onMkvChaptersChanged);
   connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsMuxer::resetToDefaults);
 }
 
@@ -120,7 +120,7 @@ void TTCutSettingsMuxer::saveTabData()
   s->setH265Muxer(cbH265Muxer->currentData().toInt());
 }
 
-void TTCutSettingsMuxer::onMkvChaptersChanged(int state)
+void TTCutSettingsMuxer::onMkvChaptersChanged(Qt::CheckState state)
 {
   TTSettings::instance()->setMkvCreateChapters(state == Qt::Checked);
   sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());

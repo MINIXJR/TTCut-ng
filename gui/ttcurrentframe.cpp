@@ -263,7 +263,7 @@ bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
     QMouseEvent* me = static_cast<QMouseEvent*>(event);
     // Button semantics: only a left click that also ends on the label counts
     // (the implicit grab delivers the release even if the mouse moved away).
-    if (me->button() != Qt::LeftButton || !laCurrentPosition->rect().contains(me->pos()))
+    if (me->button() != Qt::LeftButton || !laCurrentPosition->rect().contains(me->position().toPoint()))
       return QWidget::eventFilter(watched, event);
 
     if (!isControlEnabled) return true;   // no project loaded: consume, do nothing

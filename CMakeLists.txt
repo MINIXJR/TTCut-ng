@@ -50,9 +50,9 @@ add_compile_definitions(
   _FILE_OFFSET_BITS=64
   UNIX
   APP_VERSION="${PROJECT_VERSION}"
-  # Qt6 preparation: API deprecated before Qt 6.0 is compiled out entirely -
-  # any use is a hard error, not a warning.
-  QT_DISABLE_DEPRECATED_BEFORE=0x060000
+  # API deprecated before Qt 6.7 is compiled out - keeps the tree clean
+  # against future deprecations.
+  QT_DISABLE_DEPRECATED_BEFORE=0x060700
   # Qt's supported override to keep Q_ASSERT active in non-Debug configs -
   # see the comment above the NDEBUG stripping for why NDEBUG alone does not.
   QT_FORCE_ASSERTS
