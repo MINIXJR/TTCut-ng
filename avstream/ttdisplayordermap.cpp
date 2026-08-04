@@ -144,7 +144,7 @@ TTPocCollector::TTPocCollector(int avCodecId, bool trackIDR)
     if (!codec) return;
     mCtx = avcodec_alloc_context3(codec);
     if (!mCtx) return;
-    mParser = av_parser_init(avCodecId);
+    mParser = av_parser_init(static_cast<AVCodecID>(avCodecId));
     if (!mParser) {
         avcodec_free_context(&mCtx);
         mCtx = nullptr;
