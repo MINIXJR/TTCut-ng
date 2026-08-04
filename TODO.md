@@ -211,6 +211,22 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **libav-Konsolenausgaben trotz deaktiviertem libav-Logging** (Beobachtung
+  bei der Qt6-GUI-Abnahme 2026-08-04, vorbestehend — keine Qt6-Regression, der
+  Branch fasst die Logging-Kette nicht an). Beim Start aus dem Terminal
+  erscheinen nach der ersten mpv-Wiedergabe libav-Meldungen im
+  ffmpeg-Default-Format auf stderr (`[h264 @ …] mmco: unref short failure`,
+  libx264-Statistiken, `Cannot load libcuda.so.1`), obwohl `ttcutmain.cpp`
+  einen av_log-Callback installiert, der auf `logLibav()` (default aus) gated.
+  **Hypothese (unbelegt):** libmpv überschreibt beim Playback den
+  prozessglobalen av_log-Callback und stellt beim Zerstören des mpv-Kontexts
+  ffmpegs *Default*-Callback wieder her — danach schreibt jede libav-Operation
+  (Frame-Decode, Preview-Encode, Audio-Probing) direkt auf die Konsole.
+  Prüfweg: App starten, ohne Play nur navigieren/Vorschau (erwartet: still),
+  dann einmal Play und erneut navigieren (erwartet: Ausgaben). Möglicher Fix
+  (separates Vorhaben): eigenen Callback nach jeder mpv-Session neu
+  installieren.
+
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
   - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →
     **ÜBERHOLT/erledigt (2026-07-25):** die vorgeschlagene synchrone Lesung ist längst
