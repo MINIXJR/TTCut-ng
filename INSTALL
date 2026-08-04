@@ -8,7 +8,7 @@ Anleitung zum Bauen von TTCut-ng unter Linux.
 1. Benoetigte Bibliotheken (dev- und runtime-Pakete)
 ----------------------------------------------------
 
-Qt 5               (Core, Widgets, Gui, Network, Xml)
+Qt 6.7+ (entwickelt gegen 6.10) (Core, Widgets, Gui, Xml, OpenGL, OpenGLWidgets)
 libmpeg2            (>= 0.5.1)
 libavformat         (ffmpeg/libav)
 libavcodec          (ffmpeg/libav)
@@ -16,7 +16,7 @@ libavutil           (ffmpeg/libav)
 libswscale          (ffmpeg/libav)
 
 Debian/Ubuntu:
-  apt install qtbase5-dev libmpeg2-4-dev libavformat-dev libavcodec-dev \
+  apt install qt6-base-dev qt6-l10n-tools libmpeg2-4-dev libavformat-dev libavcodec-dev \
               libavutil-dev libswscale-dev libavfilter-dev libswresample-dev
 
 

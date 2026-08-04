@@ -725,6 +725,92 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     -Reports, Review-Diffs), `final-fix-report.md` für die abschließende
     Fix-Welle.
 
+- **Qt5 → Qt6-Migration** → **DONE (2026-08-04, branch
+  `feature/qt6-migration`, HEAD `408586e5`)**
+  - **Ausgangslage (gemessen 2026-08-02, 210 Quelldateien + 26 `.ui`):** keiner
+    der üblichen Qt6-Blocker im Code (kein `QRegExp`, `QTextCodec`,
+    `QDesktopWidget`, `QGLWidget`, `QLinkedList`/`QStringRef`, `setMargin()`,
+    `toSet()`/`fromList()`, `qSort`, keine High-DPI-Attribute). C++17 stand
+    bereits in `CMakeLists.txt`.
+  - **Schritt 1 — Rückfallpunkt:** Tag `qt5-final` auf dem letzten Qt5-Stand
+    (v0.79.0) gesetzt und gepusht, bevor der erste Qt6-Commit fiel.
+  - **Schritt 2 — Risiko libmpv-Render-Backend zuerst geprüft:** in der
+    Machbarkeitsprobe (2026-08-03) lief die Wiedergabe im Qt6-Probe-Binary
+    unverändert (User-abgenommen, Wayland nativ) — der
+    `QOpenGLWidget`-Umbau in Qt6 verträgt sich mit dem mpv-Render-Kontext.
+  - **Schritt 3 — Machbarkeitsprobe:** Configure inkl. AUTOMOC/AUTOUIC aller
+    26 `.ui` auf Anhieb grün (Qt 6.10.2, zusätzliche Komponente
+    `OpenGLWidgets`). 52 Build-Fehler kollabierten auf drei Einzeiler
+    (`QStringList`-Forward-Declaration → `<QtContainerFwd>`,
+    `QVariant::type()` → `typeId()`, `QLibraryInfo::location()` → `path()`).
+  - **Schritt 4 — Umsetzung, fünf Commits:**
+    - `63103ea2` — Cast der codec_id für `av_parser_init` (vorbestehender
+      Clean-Build-Bruch mit neuerem libavcodec, unabhängig von Qt6).
+    - `6c5a747b` — Umstellung auf Qt6: `find_package(Qt6 6.7 REQUIRED
+      COMPONENTS Core Widgets Gui Xml OpenGL OpenGLWidgets)`, `QT +=
+      network` entfernt (ungenutzt), die drei Einzeiler aus der
+      Machbarkeitsprobe.
+    - `b1e65bcf` — Veraltungs-Gate von `0x060000` auf `0x060700` angehoben
+      und alles gefixt, was der höhere Gate als Fehler/Warnung markierte:
+      4× `QCheckBox::stateChanged` → `checkStateChanged` (Slots auf
+      `Qt::CheckState` umgestellt: `ttcutsettingslogging`,
+      `ttcutsettingsencoder`, `ttcutsettingsmuxer`, `ttprogressbar`);
+      `data/ttavdata.cpp` — der Audio-Burst-Warndialog von der entfernten
+      `QMessageBox::warning(parent, title, text, button0Text,
+      button1Text)`-Überladung auf die `QMessageBox`-Instanz +
+      `addButton(..., role)`-API portiert, mit bewusster
+      Verhaltensänderung: Esc schließt den Dialog jetzt als Cancel
+      (RejectRole) statt (wie vorher über die alte Überladung, Esc → −1 →
+      `ret != 1` → „Cut anyway") den gewarnten Schnitt lautlos zu starten;
+      `extern/ttmplexprovider.cpp` — `QFile::open()` ist jetzt
+      `[[nodiscard]]`, `writeMuxScript()` prüft das Ergebnis und
+      loggt+returned bei Fehlschlag; `QMouseEvent::pos()` →
+      `position().toPoint()` (`mpeg2window/ttmpeg2window2.cpp`,
+      `gui/ttcurrentframe.cpp`); zusätzlich, außerhalb der ursprünglichen
+      Liste, `QLabel::pixmap(Qt::ReturnByValue)` entfernt (Qt6 liefert
+      `pixmap()` bereits by value). **Verbleibender Diagnose-Hinweis (als
+      G1-Ausnahme akzeptiert, Spec C.5):** GCC-15
+      `-Wsfinae-incomplete=1`-Note für `TTAVItem` (`data/ttavlist.h`), eine
+      Folge von AUTOMOCs `mocs_compilation.cpp`-Konkatenationsreihenfolge
+      (Vorwärtsdeklaration vor der vollständigen Definition in einer
+      früheren moc-Übersetzungseinheit) — kein lokales Include-Problem,
+      Fix würde CMakeLists.txt-Quelllistenreihenfolge zur Beeinflussung von
+      AUTOMOC-Internals ausnutzen, außerhalb des Scopes.
+    - `0cef32ba` — Übersetzungen mit den Qt6-`lupdate`/`lrelease`-Werkzeugen
+      aufgefrischt.
+    - `408586e5` — Debian-Paket auf Qt6 umgestellt (`debian/control`:
+      `qtbase5-dev`/`qttools5-dev-tools` → `qt6-base-dev`/`qt6-l10n-tools`;
+      `debian/rules` entsprechend angepasst).
+  - **QC-Gate: PASS 3/3** (2026-08-04, `qc-qt6.sh`, Log
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/qc-result-20260804.log`) —
+    Kandidat (Qt6-Binary) gegen den `qt5-final`-Baseline-Binary, je Codec
+    Dauer/Paketzahlen identisch und Video- **und** Audio-Paketlisten
+    bit-identisch:
+    - H.264: 301 Video-, 94 Audiopakete, BIT-IDENTISCH.
+    - MPEG-2: 1202 Video-, 2003 Audiopakete, BIT-IDENTISCH.
+    - HEVC: 1162 Video-, 726 Audiopakete, BIT-IDENTISCH.
+  - **Warum sich der Sprung über die reine Versionsanhebung hinaus lohnen
+    sollte — Ergebnis negativ:** Qt6 spricht `wp_fractional_scale`, Qt5
+    nicht; das war die Hypothese zum KWin-Anzeigefehler unter „Known
+    Limitations" in `TODO.md`. **Widerlegt in der Machbarkeitsprobe
+    (2026-08-03):** das Qt6-Probe-Binary bindet
+    `wp_fractional_scale_manager_v1` nachweislich (WAYLAND_DEBUG-Mitschnitt)
+    — der Fehler tritt trotzdem auf. Ausgeschlossen ist damit nur die
+    Hypothese „Ursache im Qt5-Skalierungspfad"; die Zuordnung KWin vs.
+    TTCut-spezifischer Auslöser bleibt offen (weiter unter „Known
+    Limitations" in `TODO.md`, nicht Teil dieser Migration).
+  - **Nebenbefund aus der Machbarkeitsprobe:** Standbild und mpv-Play-Bild
+    stellen 4:3-Material auf dem Qt6-Probe-Binary unterschiedlich dar (Qt5
+    zeigt es ebenfalls, nur anders gelagert) — als eigener Low-Priority-Punkt
+    in `TODO.md` weitergeführt, kein Migrations-Blocker.
+  - **Bauverfahren:** CMake war bereits durch die qmake→CMake-Migration
+    (siehe oben) entschieden; die Qt6-Migration hat kein neues Bausystem
+    gebraucht, nur `find_package(Qt6 ...)` in der bestehenden
+    `CMakeLists.txt`.
+  - Belege: `.superpowers/sdd/2026-08-03-qt6-migration/` (Task-Briefs
+    /-Reports je Schritt), QC-Werkzeug und -Log unter
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/`.
+
 - **Subagent-Driven Development: Build-Permissions für Subagents** → **Konfiguriert 2026-05-19**
   - `.claude/settings.local.json` (lokal, gitignored) erweitert um `Bash(make:*)`,
     `Bash(make clean:*)`, `Bash(qmake:*)`, `Bash(bear -- make:*)`, `Bash(lrelease:*)`.

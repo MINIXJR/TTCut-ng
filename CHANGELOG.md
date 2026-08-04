@@ -2,6 +2,32 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Changed
+
+- **The application now builds against Qt 6 (6.7 minimum, developed against
+  6.10) instead of Qt 5.15.** `find_package(Qt6 ...)` replaces the Qt5
+  lookup in `CMakeLists.txt`; the linked components are Core, Widgets, Gui,
+  Xml, OpenGL, and OpenGLWidgets. The `Network` component is gone — nothing
+  in the tree used it. The deprecation gate
+  (`QT_DISABLE_DEPRECATED_BEFORE`) is raised from `0x060000` to `0x060700`,
+  closing off everything Qt deprecated between 6.0 and 6.7. Debian packaging
+  (`debian/control`, `debian/rules`) builds against `qt6-base-dev` and
+  `qt6-l10n-tools`.
+
+### Fixed
+
+- **Esc in the audio-burst warning dialog now cancels the cut instead of
+  starting it.** The dialog's old `QMessageBox::warning(parent, title, text,
+  button0Text, button1Text)` overload is removed in Qt6; the replacement
+  (a `QMessageBox` instance with `addButton(..., role)`) changes Esc's
+  behaviour along the way. Previously Esc returned `-1`, and `ret != 1`
+  mapped that to "Cut anyway" — Esc silently starting a warned cut was a
+  trap, not a feature. Esc now maps to the button with `RejectRole`
+  (Cancel), matching what a user pressing Esc actually expects. Deliberate
+  behaviour change, not a side effect; see commit `b1e65bcf`.
+
 ## v0.79.0 (2026-08-03)
 
 **The build system is CMake now — the last Qt5-based release before the Qt6 migration**

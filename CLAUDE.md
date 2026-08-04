@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TTCut-ng is a Qt5-based video editing application for MPEG-2, H.264, and H.265 streams (Linux only). It allows frame-accurate cutting without re-encoding the entire stream - only the frames around cut points are re-encoded. The primary use case is removing advertisements from DVB recordings.
+TTCut-ng is a Qt6-based video editing application for MPEG-2, H.264, and H.265 streams (Linux only). It allows frame-accurate cutting without re-encoding the entire stream - only the frames around cut points are re-encoded. The primary use case is removing advertisements from DVB recordings.
 
 **Supported Codecs:**
 - MPEG-2 (fully supported, original TTCut functionality)
@@ -119,14 +119,14 @@ TTAVStream
 
 ## Qt/C++ Conventions
 
-- The project uses Qt 5 (QtCore, QtWidgets, QtGui, QtNetwork, QtXml)
+- The project uses Qt 6 (QtCore, QtWidgets, QtGui, QtXml, QtOpenGL, QtOpenGLWidgets)
 - Generated moc/uic/rcc output lives under `build/` (CMake AUTOMOC/AUTOUIC/AUTORCC)
 - Class names use TT prefix (e.g., TTCutMainWindow, TTMpeg2VideoStream)
 - Qt signals/slots mechanism is used extensively for GUI communication
 
 ## Dependencies
 
-- Qt5 (Core, Widgets, Gui, Network, Xml)
+- Qt6 (Core, Widgets, Gui, Xml, OpenGL, OpenGLWidgets)
 - libmpeg2 and libmpeg2convert (MPEG-2 decoding)
 - libavformat, libavcodec, libavutil, libswscale (H.264/H.265 smart cut, audio cutting, MKV muxing)
 - ffmpeg CLI (optional, for MP4 output container muxing)
@@ -252,7 +252,7 @@ Demux tool for H.264/H.265 TS files:
 - `seekToFrame()` seeks to the keyframe BEFORE the target keyframe (DPB prefill) to ensure Open-GOP B-frames decode correctly after `avcodec_flush_buffers()`.
 - The sequential decode optimization is disabled — `decodeFrame()` always seeks. This ensures identical DPB state across all decoder instances (CutOut and CurrentFrame widgets). The LRU frame cache mitigates the performance impact.
 
-The project is Linux-only, builds cleanly with Qt 5.15 and has full Wayland support.
+The project is Linux-only, builds cleanly with Qt 6.7+ (developed against 6.10) and has full Wayland support.
 
 ## Running
 

@@ -31,7 +31,7 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 |---|---|
 | Betriebssystem | Linux. Entwickelt und getestet auf [Siduction](https://siduction.org/) (Debian unstable), das aktuelle Qt- und libav-Versionen bereitstellt |
 | Architektur | `linux-any` — der Quelltext enthält keinen architekturabhängigen Code; getestet wird ausschließlich auf x86_64 |
-| Qt | 5.15 (Qt 6 wird nicht unterstützt), C++17 |
+| Qt | 6.7+ (entwickelt gegen 6.10), C++17 |
 | libav/ffmpeg | 5.1 oder neuer — genutzt wird die `AVChannelLayout`-API, die ältere Versionen nicht kennen. Entwickelt gegen 8.x |
 | libmpeg2 | 0.5.1 |
 | Grafik | OpenGL für die Videoausgabe (libmpv rendert in ein `QOpenGLWidget`). Läuft nativ unter Wayland und X11 |
@@ -40,7 +40,7 @@ Nur die Frames an den Schnittpunkten werden selektiv neu kodiert.
 
 ```bash
 # Build + erforderliche Laufzeit-Bibliotheken
-sudo apt install cmake ninja-build qtbase5-dev libqt5opengl5-dev libmpeg2-4-dev \
+sudo apt install cmake ninja-build qt6-base-dev qt6-l10n-tools libmpeg2-4-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
   libavfilter-dev libswresample-dev libmpv-dev
 
