@@ -1,10 +1,6 @@
 // Diagnostic + acceptance harness: drive TTESSmartCut::smartCutFrames on a
 // single short keep-range and assert the selected start AU (Direction A).
-// Build via `make test_stillframe` in tools/diag (run a root `make` first so
-// the object files exist). Link line (kept in sync in the Makefile):
-//   obj/ttessmartcut.o obj/moc_ttessmartcut.o obj/ttsettings.o
-//   obj/moc_ttsettings.o obj/ttesinfo.o obj/ttnaluparser.o
-//   obj/ttdisplayordermap.o obj/ttmessagelogger.o  + Qt5 + libav
+// Build: cmake --build build --target test_stillframe
 #include <QCoreApplication>
 #include <QString>
 #include <cstdio>

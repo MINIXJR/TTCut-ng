@@ -6,11 +6,7 @@
 // Part 2 (Task 3) adds TTFFmpegWrapper integration asserts.
 //
 // Build:
-//   g++ -O2 -std=gnu++17 -fPIC -I../.. $(pkg-config --cflags Qt5Core) \
-//       -o test_wrapper_map test_wrapper_map.cpp \
-//       ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o \
-//       $(pkg-config --libs Qt5Core) -lpthread \
-//       -lavformat -lavcodec -lavutil
+//   cmake --build build --target test_wrapper_map
 
 #include <cstdio>
 #include <QString>

@@ -211,6 +211,20 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **`gate_pool_crossthread.sh` baut noch gegen Qt5** (gefunden bei der
+  Qt6-Migrations-Abschlussprüfung 2026-08-04, `tools/diag/gate_pool_crossthread.sh:28,41,47`
+  — `pkg-config Qt5Core`/`Qt5Widgets` und moc via `host_bins`). Solange das
+  so bleibt, prüft das Gate `TTThreadTaskPool::startNested()` gegen die
+  Qt5-`QList`-Implementierung statt der Qt6-eigenen — ein bestandenes Gate
+  belegt dann nicht mehr, dass der tatsächlich gebaute Qt6-Binary
+  race-frei ist. Die Portierung braucht eine moc-Pfad-Entscheidung: unter
+  Qt6 liegt moc nicht mehr in `host_bins`, sondern unter
+  `/usr/lib/qt6/libexec/`. Zur selben Portierung gehören die veralteten
+  manuellen g++/Qt5-Build-Anleitungen in den Headerkommentaren von
+  `tools/diag/test_pool_crossthread.cpp:151-167` und
+  `tools/diag/test_task_cleanup_order.cpp:109-126` (referenzieren
+  `gate_pool_crossthread.sh:28-33` und Qt5Core/Qt5Widgets direkt).
+
 - **libav-Konsolenausgaben trotz deaktiviertem libav-Logging** (Beobachtung
   bei der Qt6-GUI-Abnahme 2026-08-04, vorbestehend — keine Qt6-Regression, der
   Branch fasst die Logging-Kette nicht an). Beim Start aus dem Terminal
@@ -270,8 +284,8 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     (`vo=libmpv` → FBO) skalieren also unterschiedlich in die Widget-Fläche;
     unter Qt6 füllt der mpv-Pfad offenbar ohne Aspekt-Erhalt
     (keepaspect-Verhalten des Render-Kontexts prüfen).
-  - Bei der Qt6-Migration mit untersuchen: beide Pfade sollen dieselbe
-    Geometrie zeigen (Balkenlage identisch, kein Füllen ohne Aspekt-Erhalt).
+  - Noch zu untersuchen: beide Pfade sollen dieselbe Geometrie zeigen
+    (Balkenlage identisch, kein Füllen ohne Aspekt-Erhalt).
     Repro: Tux-MPEG-2-PAL-SD-Testvideo (4:3) aus `tools/test-videos/`.
 
 - **Screenshot-Modus: Vorschau-Dialog fehlt** (2026-07-26, beim v0.76.0-Release

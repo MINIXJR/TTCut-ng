@@ -131,7 +131,7 @@ set(WINDOWJUMP_SRC
   ${ROOT}/avstream/tth26xvideostream.cpp)
 
 # diag_tool(<name> [AV] [MPEG2] [WIDGETS] SOURCES <curated list>)
-# Base link set mirrors the Makefile's LDLIBS: Qt5Core + Qt5Gui + pthread.
+# Base link set mirrors the Makefile's LDLIBS: Qt6Core + Qt6Gui + pthread.
 function(diag_tool name)
   cmake_parse_arguments(DT "AV;MPEG2;WIDGETS" "" "SOURCES" ${ARGN})
   set(srcs ${DT_SOURCES})

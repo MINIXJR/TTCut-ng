@@ -141,9 +141,9 @@ void TTMplexProvider::mplexPart(int index)
   proc->setProcessChannelMode( QProcess::MergedChannels );
   qApp->processEvents();
 
-  // Qt5 functor connects: errorOccurred replaces deprecated 'error' signal
-  // (Qt 6 removed it entirely), and the new-style syntax is type-checked
-  // at compile time so typos no longer fail silently at runtime.
+  // Functor connects: errorOccurred replaces the old 'error' signal, and
+  // the new-style syntax is type-checked at compile time so typos no
+  // longer fail silently at runtime.
   connect(proc, &QProcess::errorOccurred, this, &TTMplexProvider::onProcError);
   connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
           this, &TTMplexProvider::onProcFinished);

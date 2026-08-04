@@ -32,7 +32,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 # NDEBUG stripping (below) only keeps assert() from <cassert> alive in
-# RelWithDebInfo - it does NOT reach Q_ASSERT. Qt5::Core appends QT_NO_DEBUG
+# RelWithDebInfo - it does NOT reach Q_ASSERT. Qt6::Core appends QT_NO_DEBUG
 # for every non-Debug config regardless of NDEBUG, and Q_ASSERT keys off
 # QT_NO_DEBUG, not NDEBUG. QT_FORCE_ASSERTS (in add_compile_definitions
 # below) is Qt's supported override to keep Q_ASSERT active despite that.

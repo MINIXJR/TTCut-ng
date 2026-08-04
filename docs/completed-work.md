@@ -726,7 +726,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Fix-Welle.
 
 - **Qt5 → Qt6-Migration** → **DONE (2026-08-04, branch
-  `feature/qt6-migration`, HEAD `408586e5`)**
+  `feature/qt6-migration`)**
   - **Ausgangslage (gemessen 2026-08-02, 210 Quelldateien + 26 `.ui`):** keiner
     der üblichen Qt6-Blocker im Code (kein `QRegExp`, `QTextCodec`,
     `QDesktopWidget`, `QGLWidget`, `QLinkedList`/`QStringRef`, `setMargin()`,

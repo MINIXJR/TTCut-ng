@@ -1,6 +1,6 @@
 /*
  * Test program for TTNaluParser
- * Compile: g++ -I.. -I/usr/include/x86_64-linux-gnu/qt5 -fPIC test_nalu_parser.cpp ../avstream/ttnaluparser.cpp -o test_nalu_parser -lQt5Core
+ * Build: cmake --build build --target test_nalu_parser
  * Usage: ./test_nalu_parser <input.264|input.265>
  */
 

@@ -2,10 +2,7 @@
 // algorithm with synthetic POC sequences. Exits 0 on success, 1 on failure.
 //
 // Build:
-//   g++ -O2 -std=gnu++17 -fPIC -I../.. $(pkg-config --cflags Qt5Core) \
-//       -o test_displayordermap test_displayordermap.cpp \
-//       ../../obj/ttdisplayordermap.o ../../obj/ttmessagelogger.o \
-//       $(pkg-config --libs Qt5Core) -lpthread
+//   cmake --build build --target test_displayordermap
 
 #include <cstdio>
 #include "../../avstream/ttdisplayordermap.h"
