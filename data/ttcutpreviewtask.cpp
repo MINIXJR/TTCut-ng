@@ -227,11 +227,15 @@ void TTCutPreviewTask::operation()
               [&](int, const QString&, const QString&, bool) {});
         }
 
-        // Cut subtitle stream if available (consolidated onto cutSubtitleTracks;
-        // the preview dialog picks the file up by its name)
-        mpAVData->cutSubtitleTracks(pvItem, videoKeepList,
-            [&](int /*trk*/) { return createPreviewFileName(i + 1, "srt"); },
-            [](int, const QString&, const QString&, bool) {});
+        // Cut subtitle track 0 for preview (consolidated onto
+        // cutSubtitleTracks; the preview dialog picks the file up by its
+        // name, and only one --sub-file is supported, so only the first
+        // track is cut)
+        if (pvItem->subtitleCount() > 0) {
+          mpAVData->cutSubtitleTracks(pvItem, {0}, videoKeepList,
+              [&](int /*trk*/) { return createPreviewFileName(i + 1, "srt"); },
+              [](int, const QString&, const QString&, bool) {});
+        }
 
         // Get A/V sync offset from .info file
         int avOffsetMs = 0;
@@ -494,11 +498,12 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     }
   }
 
-  // Cut subtitle for the preview clip (same uncorrected keep list as the
-  // preview audio — see KNOWN DIVERGENCE above). The preview dialog finds
-  // the file by name; only one --sub-file is supported, last track wins.
+  // Cut subtitle track 0 for the preview clip (same uncorrected keep list as
+  // the preview audio — see KNOWN DIVERGENCE above). The preview dialog
+  // finds the file by name; only one --sub-file is supported, so only the
+  // first track is cut.
   if (avItem->subtitleCount() > 0) {
-    mpAVData->cutSubtitleTracks(avItem, videoKeepList,
+    mpAVData->cutSubtitleTracks(avItem, {0}, videoKeepList,
         [&](int /*trk*/) {
           return QFileInfo(outputFile).absolutePath() + "/"
                + QFileInfo(outputFile).completeBaseName() + ".srt";

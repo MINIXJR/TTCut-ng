@@ -2336,10 +2336,10 @@ QList<float> TTAVData::cutAudioTracks(
   return firstDrifts;
 }
 
-// Cut all subtitle tracks of avItem against a shared video keep list. Mirrors
-// cutAudioTracks' shape (outPath/onCut callbacks) but stays synchronous — no
-// task pool — and deliberately skips TTCutParameter::lastCall(), which writes
-// the MPEG-2 sequence-end trailer that has no place in an SRT file.
+// Convenience overload: cut ALL of avItem's subtitle tracks. Builds the
+// all-tracks index list (empty for a null avItem, which the main overload
+// tolerates via the loop guard below) and forwards. Mirrors the
+// cutAudioTracks all-tracks convenience overload.
 void TTAVData::cutSubtitleTracks(
     TTAVItem* avItem,
     const QList<QPair<double, double>>& keepList,
@@ -2347,7 +2347,33 @@ void TTAVData::cutSubtitleTracks(
     const std::function<void(int trackIdx, const QString& path,
                              const QString& lang, bool ok)>& onCut)
 {
-  for (int i = 0; i < avItem->subtitleCount(); i++) {
+  QList<int> allTracks;
+  if (avItem)
+    for (int i = 0; i < avItem->subtitleCount(); i++) allTracks << i;
+  cutSubtitleTracks(avItem, allTracks, keepList, outPath, onCut);
+}
+
+// Cut the given subtitle tracks of avItem against a shared video keep list.
+// Mirrors cutAudioTracks' shape (outPath/onCut callbacks) but stays
+// synchronous — no task pool — and deliberately skips
+// TTCutParameter::lastCall(), which writes the MPEG-2 sequence-end trailer
+// that has no place in an SRT file.
+void TTAVData::cutSubtitleTracks(
+    TTAVItem* avItem,
+    const QList<int>& trackIndices,
+    const QList<QPair<double, double>>& keepList,
+    const std::function<QString(int trackIdx)>& outPath,
+    const std::function<void(int trackIdx, const QString& path,
+                             const QString& lang, bool ok)>& onCut)
+{
+  if (!avItem) return;
+  for (int i : trackIndices) {
+    if (i < 0 || i >= avItem->subtitleCount()) {
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("Subtitle track index %1 out of range (count %2)")
+                        .arg(i).arg(avItem->subtitleCount()));
+      continue;
+    }
     TTSubtitleStream* subStream = avItem->subtitleStreamAt(i);
     QString target = outPath(i);
     QString lang   = avItem->subtitleListItemAt(i).getLanguage();

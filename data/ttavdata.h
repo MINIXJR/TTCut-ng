@@ -344,10 +344,21 @@ class TTAVData : public QObject
                                  const QString& lang, bool ok)>& onCut,
         const std::function<void(int trackIdx)>& beforeCut = {});
 
-    //! Cut all subtitle tracks of avItem against the video keep list
+    //! Cut the given subtitle tracks of avItem against the video keep list
     //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2
     //! sequence-end trailer. outPath names the target file per track;
     //! onCut reports path/language/success per track.
+    void cutSubtitleTracks(
+        TTAVItem* avItem,
+        const QList<int>& trackIndices,
+        const QList<QPair<double, double>>& keepList,
+        const std::function<QString(int trackIdx)>& outPath,
+        const std::function<void(int trackIdx, const QString& path,
+                                 const QString& lang, bool ok)>& onCut);
+
+    // Convenience overload for the common case: cut ALL of avItem's subtitle
+    // tracks. Builds the all-tracks index list and forwards to the overload
+    // above.
     void cutSubtitleTracks(
         TTAVItem* avItem,
         const QList<QPair<double, double>>& keepList,
