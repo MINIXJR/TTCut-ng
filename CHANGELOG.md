@@ -59,6 +59,15 @@ All notable changes to TTCut-ng are documented in this file.
   asynchronous subtitle load finishes, and the current still frame is
   refreshed immediately so it appears without requiring navigation.
 
+- **UTF-8 SRT files were read as Latin-1, garbling non-ASCII characters.**
+  `TTFileBuffer::readLine` maps raw bytes 1:1 onto `QChar`s; SRT files
+  produced by the ttcut-demux workflow are UTF-8, so multi-byte sequences
+  (e.g. German umlauts) showed up as mojibake in the overlay and were
+  double-encoded in cut subtitle output (final MKV tracks, preview SRTs).
+  `TTSrtSubtitleStream::createHeaderList` now recovers the original bytes
+  and decodes subtitle text as UTF-8, falling back to Latin-1 for genuinely
+  Latin-1-encoded legacy files.
+
 ## v0.79.0 (2026-08-03)
 
 **The build system is CMake now — the last Qt5-based release before the Qt6 migration**

@@ -35,6 +35,29 @@
 #include "../data/ttcutparameter.h"
 
 #include <QCoreApplication>
+#include <QStringDecoder>
+
+namespace {
+
+// TTFileBuffer::readLine (avstream/ttfilebuffer.cpp) maps each raw input
+// byte 1:1 onto a QChar - de-facto Latin-1 decoding. SRT files produced by
+// the ttcut-demux workflow are UTF-8, so multi-byte sequences (e.g. german
+// umlauts) come out mangled ("ü" -> "Ã¼") unless corrected here. The
+// byte->QChar mapping is lossless, so the original bytes can be recovered
+// via toLatin1() and re-decoded as UTF-8. Genuinely Latin-1-encoded legacy
+// SRT files are not valid UTF-8, so decoding them as UTF-8 fails and we
+// fall back to the raw Latin-1 interpretation for those.
+QString decodeSrtLine(const QString &rawLine)
+{
+  const QByteArray bytes = rawLine.toLatin1();
+  QStringDecoder dec(QStringDecoder::Utf8, QStringDecoder::Flag::Stateless);
+  QString out = dec.decode(bytes);
+  if (dec.hasError())
+    return QString::fromLatin1(bytes);
+  return out;
+}
+
+} // namespace
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
@@ -170,7 +193,13 @@ int TTSrtSubtitleStream::createHeaderList()
       while (!line.isEmpty());
       while(text.right(2) == "\r\n")
         text = text.left(text.length()-2);
-      header->setText(text);
+      // Decode the fully assembled text block, after the 64KB raw-byte cap
+      // above, so the cap continues to operate on the same raw byte count
+      // as before this fix (decoding can shrink multi-byte UTF-8 sequences
+      // into fewer QChars, which would silently loosen the cap if applied
+      // earlier). The index/timestamp lines are pure ASCII and need no
+      // decoding.
+      header->setText(decodeSrtLine(text));
 
       header_list->append(header);
 
