@@ -211,6 +211,21 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Low Priority
 
+- **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
+  (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die
+  beiden Finalschnitt-Pfade benennen ihre Elementary-Stream-Ausgaben nach
+  verschiedenen Schemata UND verschiedenen Basen:
+  - MPEG-2 (`onDoCut` via `createCutFileName`): Basis = **Zielname** →
+    `<ziel>.m2v`, `<ziel>_001.mp2`, `<ziel>_001.srt`
+  - H.264/H.265 (`doH264Cut`, lokale Lambdas): Basis = **Quellname** →
+    `<quelle>_cut.264`, `<quelle>_audio1.ac3`, `<quelle>_sub1.srt`
+  Sichtbar wird das vor allem mit „ES-Dateien nach Mux löschen" AUS, wenn
+  die Dateien im Schnittverzeichnis liegen bleiben. Vereinheitlichung =
+  Verhaltensänderung an Ausgabenamen → eigenes kleines Vorhaben mit
+  Entscheidung, welches Schema gewinnt (Zielname wirkt konsistenter zur
+  MKV-Benennung); `createCutFileName` existiert bereits als gemeinsamer
+  Baustein.
+
 - **`gate_pool_crossthread.sh` baut noch gegen Qt5** (gefunden bei der
   Qt6-Migrations-Abschlussprüfung 2026-08-04, `tools/diag/gate_pool_crossthread.sh:28,41,47`
   — `pkg-config Qt5Core`/`Qt5Widgets` und moc via `host_bins`). Solange das
