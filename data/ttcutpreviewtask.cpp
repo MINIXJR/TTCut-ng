@@ -216,23 +216,24 @@ void TTCutPreviewTask::operation()
         // pool's task queue in its own thread.
         mpAVData->threadTaskPool()->startNested(cutVideoTask);
 
+        TTAVItem* pvItem = tmpCutList->at(0).avDataItem();
+        double fps = pvItem->videoStream()->frameRate();
+        auto videoKeepList = mpAVData->buildVideoKeepList(tmpCutList, fps);
+
         if (tmpCutList->at(0).avDataItem()->audioCount() > 0) {
           hasAudio = true;
           // Cut the first audio track for preview (consolidated onto cutAudioTracks).
-          TTAVItem* pvItem = tmpCutList->at(0).avDataItem();
-          double fps = pvItem->videoStream()->frameRate();
-          auto videoKeepList = mpAVData->buildVideoKeepList(tmpCutList, fps);
           const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
           mpAVData->cutAudioTracks(pvItem, {0}, videoKeepList, normalizeAcmod,
               [&](int, const QString& ext) { return createPreviewFileName(i + 1, ext); },
               [&](int, const QString&, const QString&, bool) {});
         }
 
-        // Cut subtitle stream if available (use first subtitle stream)
-        if (tmpCutList->at(0).avDataItem()->subtitleCount() > 0) {
-          cutSubtitleTask->init(createPreviewFileName(i + 1, "srt"), tmpCutList, 0, cutVideoTask->muxListItem());
-          mpAVData->threadTaskPool()->startNested(cutSubtitleTask);
-        }
+        // Cut subtitle stream if available (consolidated onto cutSubtitleTracks;
+        // the preview dialog picks the file up by its name)
+        mpAVData->cutSubtitleTracks(pvItem, videoKeepList,
+            [&](int /*trk*/) { return createPreviewFileName(i + 1, "srt"); },
+            [](int, const QString&, const QString&, bool) {});
 
         // Get A/V sync offset from .info file
         int avOffsetMs = 0;
@@ -439,6 +440,23 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // --- Cut audio (same approach as final cut in doH264Cut) ---
   int frameDurationNs = (int)(1000000000.0 / frameRate);
   QStringList cutAudioFiles;
+
+  // Build video-domain keep list (no delay baked in) and let planAudioCut
+  // align to audio frame boundaries with feed-forward drift compensation.
+  // KNOWN DIVERGENCE: unlike the consolidated paths (buildVideoKeepList),
+  // this build applies NO extra-frame correction — deliberately left as-is
+  // during the audio-cut consolidation because changing it would alter
+  // preview output (see docs/code-map/audio-cut-timing.md, redundancy
+  // section, "Option A"). Align only as a deliberate preview-correctness
+  // fix with its own verification.
+  QList<QPair<double, double>> videoKeepList;
+  for (int i = 0; i < cutList->count(); i++) {
+    TTCutItem item = cutList->at(i);
+    double cutInTime  = item.cutInIndex() / frameRate;
+    double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
+    videoKeepList.append(qMakePair(cutInTime, cutOutTime));
+  }
+
   if (hasAudio && !audioFile.isEmpty()) {
     // Apply per-track audio delay for the first audio track.
     // Preview only uses a single audio track (track 0), so we only need
@@ -446,21 +464,6 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     TTAudioStream* aStream = avItem->audioStreamAt(0);
     int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
 
-    // Build video-domain keep list (no delay baked in) and let planAudioCut
-    // align to audio frame boundaries with feed-forward drift compensation.
-    // KNOWN DIVERGENCE: unlike the consolidated paths (buildVideoKeepList),
-    // this build applies NO extra-frame correction — deliberately left as-is
-    // during the audio-cut consolidation because changing it would alter
-    // preview output (see docs/code-map/audio-cut-timing.md, redundancy
-    // section, "Option A"). Align only as a deliberate preview-correctness
-    // fix with its own verification.
-    QList<QPair<double, double>> videoKeepList;
-    for (int i = 0; i < cutList->count(); i++) {
-      TTCutItem item = cutList->at(i);
-      double cutInTime  = item.cutInIndex() / frameRate;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-      videoKeepList.append(qMakePair(cutInTime, cutOutTime));
-    }
     TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
     QList<QPair<double, double>> audioKeepList = plan.keepList;
 
@@ -491,6 +494,18 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Preview audio cut failed"));
     }
+  }
+
+  // Cut subtitle for the preview clip (same uncorrected keep list as the
+  // preview audio — see KNOWN DIVERGENCE above). The preview dialog finds
+  // the file by name; only one --sub-file is supported, last track wins.
+  if (avItem->subtitleCount() > 0) {
+    mpAVData->cutSubtitleTracks(avItem, videoKeepList,
+        [&](int /*trk*/) {
+          return QFileInfo(outputFile).absolutePath() + "/"
+               + QFileInfo(outputFile).completeBaseName() + ".srt";
+        },
+        [](int, const QString&, const QString&, bool) {});
   }
 
   // --- Mux video + audio into MKV (same as final cut) ---
