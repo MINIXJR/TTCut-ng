@@ -47,7 +47,6 @@
 #include "ttopensubtitletask.h"
 #include "ttcutpreviewtask.h"
 #include "ttcutvideotask.h"
-#include "ttcutsubtitletask.h"
 #include "ttframesearchtask.h"
 
 #include <QThreadPool>

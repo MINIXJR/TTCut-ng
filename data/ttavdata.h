@@ -45,7 +45,6 @@ class TTOpenSubtitleTask;
 class TTSubtitleStream;
 class TTCutPreviewTask;
 class TTCutVideoTask;
-class TTCutSubtitleTask;
 class TTCutProjectData;
 class TTMuxListData;
 class TTMuxListDataItem;
@@ -231,7 +230,6 @@ class TTAVData : public QObject
     TTOpenSubtitleTask* openSubtitleTask;
     TTCutPreviewTask*   cutPreviewTask;
     TTCutVideoTask*   cutVideoTask;
-    TTCutSubtitleTask* cutSubtitleTask;
     TTCutProjectData* mpProjectData;
     int               mCurrentFramePosition;  // Track Current Frame widget position for frame search
 

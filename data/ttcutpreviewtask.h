@@ -20,7 +20,6 @@
 class TTAVData;
 class TTCutList;
 class TTCutVideoTask;
-class TTCutSubtitleTask;
 class TTESSmartCut;
 
 //! Runable task for creating cut preview clips
@@ -59,7 +58,6 @@ class TTCutPreviewTask : public TTThreadTask
 		TTCutList*         mpCutList;
 		TTCutList*         mpPreviewCutList;
 		TTCutVideoTask*    cutVideoTask;
-		TTCutSubtitleTask* cutSubtitleTask;
 		QString            mErrorMessage;
 };
 

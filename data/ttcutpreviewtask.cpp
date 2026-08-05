@@ -27,7 +27,6 @@
 #include "../data/ttavdata.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttcutvideotask.h"
-#include "../data/ttcutsubtitletask.h"
 #include "../data/ttmuxlistdata.h"
 #include "../extern/ttmkvmergeprovider.h"
 
@@ -57,7 +56,6 @@ TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
 	mpAVData        = avData;
 	mpCutList       = cutList;
  	cutVideoTask    = new TTCutVideoTask(mpAVData);
-	cutSubtitleTask = new TTCutSubtitleTask();
 }
 
 /**

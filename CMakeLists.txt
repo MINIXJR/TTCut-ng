@@ -97,7 +97,6 @@ set(TTCUT_HEADERS
   data/ttopenaudiotask.h
   data/ttopensubtitletask.h
   data/ttcutvideotask.h
-  data/ttcutsubtitletask.h
   data/ttcutpreviewtask.h
   data/ttframesearchtask.h
   data/ttlogodetector.h
@@ -205,7 +204,6 @@ set(TTCUT_CORE_SOURCES
   data/ttopenaudiotask.cpp
   data/ttopensubtitletask.cpp
   data/ttcutvideotask.cpp
-  data/ttcutsubtitletask.cpp
   data/ttcutpreviewtask.cpp
   data/ttframesearchtask.cpp
   data/ttlogodetector.cpp
