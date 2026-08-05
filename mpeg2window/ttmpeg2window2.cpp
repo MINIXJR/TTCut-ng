@@ -18,6 +18,9 @@
 
 #include <QDebug>
 #include <QMouseEvent>
+#include <QTextDocument>
+#include <QAbstractTextDocumentLayout>
+#include <QtMath>
 
 /*!
  * TTMPEG2Window2
@@ -165,39 +168,54 @@ QString TTMPEG2Window2::getSubtitleTextAtCurrentFrame()
 }
 
 /*!
- * Draw subtitle text on image
+ * Draw subtitle text on image. SRT markup (<font color>, <i>, <b>) is
+ * rendered via QTextDocument; the black outline is produced by tinting
+ * the rendered text image, so italic metrics cannot ghost against the
+ * outline pass.
  */
 void TTMPEG2Window2::drawSubtitleOnImage(QImage& image, const QString& text)
 {
-  QPainter painter(&image);
-
-  // Calculate font size based on image height (approx. 5% of height)
   int fontSize = qMax(12, image.height() / 20);
+
+  QTextDocument doc;
   QFont font("Sans", fontSize, QFont::Bold);
-  painter.setFont(font);
+  doc.setDefaultFont(font);
+  QTextOption opt;
+  opt.setAlignment(Qt::AlignHCenter);
+  opt.setWrapMode(QTextOption::WordWrap);
+  doc.setDefaultTextOption(opt);
+  doc.setTextWidth(image.width());
 
-  // Draw text outline (black) for better visibility
-  QPen outlinePen(Qt::black);
-  outlinePen.setWidth(2);
-  painter.setPen(outlinePen);
+  // SRT line breaks -> <br/>; tags (<font color>, <i>, <b>) pass through.
+  QString html = text;
+  html.replace("\r\n", "<br/>");
+  html.replace("\n", "<br/>");
+  doc.setHtml(QString("<span style=\"color:white;\">%1</span>").arg(html));
 
-  QRect textRect = image.rect();
-  textRect.setTop(image.height() - fontSize * 3);  // Position at bottom
-
-  // Draw outline by drawing text multiple times with offset
-  for (int dx = -1; dx <= 1; dx++) {
-    for (int dy = -1; dy <= 1; dy++) {
-      if (dx != 0 || dy != 0) {
-        QRect offsetRect = textRect.translated(dx, dy);
-        painter.drawText(offsetRect, Qt::AlignBottom | Qt::AlignHCenter | Qt::TextWordWrap, text);
-      }
-    }
+  // Render the text into a transparent image
+  QImage textImg(image.width(), qCeil(doc.size().height()),
+                 QImage::Format_ARGB32_Premultiplied);
+  textImg.fill(Qt::transparent);
+  {
+    QPainter tp(&textImg);
+    doc.drawContents(&tp);
   }
 
-  // Draw main text (white/yellow)
-  painter.setPen(Qt::yellow);
-  painter.drawText(textRect, Qt::AlignBottom | Qt::AlignHCenter | Qt::TextWordWrap, text);
+  // Black copy for the outline: keep alpha, replace all color with black
+  QImage outlineImg = textImg;
+  {
+    QPainter op(&outlineImg);
+    op.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    op.fillRect(outlineImg.rect(), Qt::black);
+  }
 
+  QPainter painter(&image);
+  int y = image.height() - textImg.height() - fontSize / 2;   // bottom margin
+  for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1; dy++)
+      if (dx != 0 || dy != 0)
+        painter.drawImage(dx, y + dy, outlineImg);
+  painter.drawImage(0, y, textImg);
   painter.end();
 }
 
