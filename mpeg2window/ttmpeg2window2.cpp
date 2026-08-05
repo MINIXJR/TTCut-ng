@@ -19,7 +19,6 @@
 #include <QDebug>
 #include <QMouseEvent>
 #include <QTextDocument>
-#include <QAbstractTextDocumentLayout>
 #include <QtMath>
 
 /*!

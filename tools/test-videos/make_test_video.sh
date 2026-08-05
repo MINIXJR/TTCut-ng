@@ -24,6 +24,12 @@
 # Outputs go to the gitignored ./cache/ subdirectory. Existing files are
 # reused (skip-if-present); pass --force to regenerate.
 #
+# NOTE: some raw-ES probes need a manually created .info file (frame-rate
+# override) sitting next to its cached video, e.g.
+# tux_h264_1080p_progressive_test.info and tux_hevc4k_cra_test.info. This
+# script does NOT produce those — if the cache is regenerated (--force or a
+# fresh checkout), recreate them by hand before relying on the probe.
+#
 # Usage:
 #   ./make_test_video.sh             # all six files
 #   ./make_test_video.sh hevc4k      # only HEVC 4K

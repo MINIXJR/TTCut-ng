@@ -42,7 +42,8 @@ All notable changes to TTCut-ng are documented in this file.
 - **SRT markup is now rendered in the still-frame overlay instead of showing
   literal tags.** Subtitles containing formatted text (`<font color>`, `<i>`,
   etc.) were displayed with the markup visible; the overlay now decodes and
-  applies the formatting.
+  applies the formatting. The default subtitle color is now white, the DVB
+  SRT convention (previously yellow); tag colors still override it.
 
 - **Cut subtitle files no longer end with a stray MPEG-2 sequence-end code.**
   SRT files are text and do not use NAL units; an accidental MPEG-2
@@ -58,6 +59,17 @@ All notable changes to TTCut-ng are documented in this file.
   the overlay permanently empty. The overlay is now also re-wired when the
   asynchronous subtitle load finishes, and the current still frame is
   refreshed immediately so it appears without requiring navigation.
+
+- **A fast (cache-hot) MPEG-2 cut could mux an MKV without the subtitle
+  track.** `TTAVData::onDoCut` started the MPEG-2 video task in the thread
+  pool first, then ran the audio and subtitle cuts synchronously afterwards,
+  appending their results to the video task's mux list item. Both
+  synchronous cuts pump the event loop while reporting status; if the (tiny,
+  cache-hot) video task finished during that pump, the queued pool-exit
+  signal fired and muxed the item before the later subtitle append had
+  landed. Audio and subtitles are now cut to completion before the video
+  task is started, so all mux-list appends exist before the pool can ever
+  trigger the mux.
 
 - **UTF-8 SRT files were read as Latin-1, garbling non-ASCII characters.**
   `TTFileBuffer::readLine` maps raw bytes 1:1 onto `QChar`s; SRT files
