@@ -622,6 +622,15 @@ void TTCurrentFrame::onPlayVideo()
   TTAVTypes::AVStreamType stype = videoStream->streamType();
   bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
 
+  // Subtitles via mpv --sub-file (set at load time below, not muxed into the
+  // temp MKV — see playbackSourceFingerprint()). Source SRT: its times match
+  // the source timeline, which both the temp MKV and the direct MPEG-2 ES share.
+  if (mAVItem->subtitleCount() > 0) {
+    mPlayer->setSubtitleFile(mAVItem->subtitleStreamAt(0)->filePath());
+  } else {
+    mPlayer->clearSubtitleFile();
+  }
+
   // Compute start position in seconds from the current frame time.
   // Default: naive currentIndex / frameRate.
   QTime frameTime = videoStream->currentFrameTime();
@@ -823,9 +832,11 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
 //! Used to decide whether a cached temp MKV can be reused on a subsequent PLAY
 //! instead of re-muxing the whole ES (~5 s). Covers exactly what
 //! createTempMkvForPlayback() feeds into the muxer: the video file path and the
-//! first audio track's path. startSec (mpv --start), subtitles (mpegWindow
-//! overlay only) and the UI audio delay (final cut only) deliberately do NOT
-//! enter the MKV and are therefore excluded.
+//! first audio track's path. startSec (mpv --start) and the UI audio delay
+//! (final cut only) deliberately do NOT enter the MKV and are therefore
+//! excluded. Subtitles are excluded too: onPlayVideo() passes the source SRT
+//! to mpv via --sub-file at load time (TTMpvWrapper::setSubtitleFile), so they
+//! never enter the MKV either — re-evaluated fresh on every PLAY, not cached.
 QString TTCurrentFrame::playbackSourceFingerprint() const
 {
   if (videoStream == nullptr) return QString();

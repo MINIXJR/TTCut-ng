@@ -49,6 +49,16 @@ All notable changes to TTCut-ng are documented in this file.
   sequence-end was appended to every cut subtitle file. The erroneous append
   is removed.
 
+- **Subtitles are now shown during main-window playback, and the still-frame
+  overlay no longer depends on subtitle-load order.** PLAY never passed a
+  subtitle to the player; it now passes the source SRT to mpv via
+  `--sub-file` at load time. Separately, the still-frame overlay was wired
+  only once, when the AV item changed — for small/fast videos the subtitle
+  file (loaded asynchronously) could still be loading at that point, leaving
+  the overlay permanently empty. The overlay is now also re-wired when the
+  asynchronous subtitle load finishes, and the current still frame is
+  refreshed immediately so it appears without requiring navigation.
+
 ## v0.79.0 (2026-08-03)
 
 **The build system is CMake now — the last Qt5-based release before the Qt6 migration**
