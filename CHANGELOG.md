@@ -28,6 +28,27 @@ All notable changes to TTCut-ng are documented in this file.
   (Cancel), matching what a user pressing Esc actually expects. Deliberate
   behaviour change, not a side effect; see commit `b1e65bcf`.
 
+- **Subtitles were neither cut nor muxed for H.264/H.265 (final cut and
+  preview).** Subtitle streams opened alongside video and audio were ignored
+  by the smart-cut pipeline and did not appear in the output MKV. Both
+  preview and final cuts now cut and mux subtitle streams alongside video and
+  audio.
+
+- **"Delete ES files after muxing" setting was ignored by H.264/H.265 cuts.**
+  The cleanup hook ran only after MPEG-2 multiplexing; for H.264/H.265 cuts
+  the setting was never checked. Intermediate cut video segments are now
+  cleaned up when the setting is enabled.
+
+- **SRT markup is now rendered in the still-frame overlay instead of showing
+  literal tags.** Subtitles containing formatted text (`<font color>`, `<i>`,
+  etc.) were displayed with the markup visible; the overlay now decodes and
+  applies the formatting.
+
+- **Cut subtitle files no longer end with a stray MPEG-2 sequence-end code.**
+  SRT files are text and do not use NAL units; an accidental MPEG-2
+  sequence-end was appended to every cut subtitle file. The erroneous append
+  is removed.
+
 ## v0.79.0 (2026-08-03)
 
 **The build system is CMake now — the last Qt5-based release before the Qt6 migration**
