@@ -25,6 +25,8 @@
 #include "ttmuxlistdata.h"
 #include "ttcutprojectdata.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/ttfilebuffer.h"
+#include "ttcutparameter.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
@@ -1416,29 +1418,16 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         if (ok) cutVideoTask->muxListItem()->appendAudioFile(path, lang);
       });
 
-  // cut subtitle streams
-  for (int i = 0; i < cutList->at(0).avDataItem()->subtitleCount(); i++) {
-    TTSubtitleStream* subtitleStream = cutList->at(0).avDataItem()->subtitleStreamAt(i);
-
-    QString tgtSubtitleFilePath = createCutFileName(tgtFileName, subtitleStream->fileName(), i+1);
-
-    log->debugMsg(__FILE__, __LINE__, QString("current subtitle stream %1").arg(subtitleStream->fileName()));
-    log->debugMsg(__FILE__, __LINE__, QString("subtitle cut file %1").arg(tgtSubtitleFilePath));
-
-    // subtitle file exists
-    if (QFileInfo(tgtSubtitleFilePath).exists()) {
-      log->warningMsg(__FILE__, __LINE__, tr("deleting existing subtitle cut file: %1").arg(tgtSubtitleFilePath));
-      QFile tempFile(tgtSubtitleFilePath);
-      tempFile.remove();
-      tempFile.close();
-    }
-
-    cutSubtitleTask = new TTCutSubtitleTask();
-    TTSubtitleItem subtitleItem = cutList->at(0).avDataItem()->subtitleListItemAt(i);
-    cutSubtitleTask->init(tgtSubtitleFilePath, cutList, i, cutVideoTask->muxListItem(), subtitleItem.getLanguage());
-
-    mpThreadTaskPool->start(cutSubtitleTask);
-  }
+  // cut subtitle streams against the same extra-frame-corrected keep list
+  // as the audio (consolidated onto TTAVData::cutSubtitleTracks)
+  cutSubtitleTracks(avItem, videoKeepList,
+      [&](int i) {
+        return createCutFileName(tgtFileName,
+                                 avItem->subtitleStreamAt(i)->fileName(), i + 1);
+      },
+      [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
+        if (ok) cutVideoTask->muxListItem()->appendSubtitleFile(path, lang);
+      });
 }
 
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
@@ -2312,6 +2301,61 @@ QList<float> TTAVData::cutAudioTracks(
     onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), ok);
   }
   return firstDrifts;
+}
+
+// Cut all subtitle tracks of avItem against a shared video keep list. Mirrors
+// cutAudioTracks' shape (outPath/onCut callbacks) but stays synchronous — no
+// task pool — and deliberately skips TTCutParameter::lastCall(), which writes
+// the MPEG-2 sequence-end trailer that has no place in an SRT file.
+void TTAVData::cutSubtitleTracks(
+    TTAVItem* avItem,
+    const QList<QPair<double, double>>& keepList,
+    const std::function<QString(int trackIdx)>& outPath,
+    const std::function<void(int trackIdx, const QString& path,
+                             const QString& lang, bool ok)>& onCut)
+{
+  for (int i = 0; i < avItem->subtitleCount(); i++) {
+    TTSubtitleStream* subStream = avItem->subtitleStreamAt(i);
+    QString target = outPath(i);
+    QString lang   = avItem->subtitleListItemAt(i).getLanguage();
+
+    if (QFileInfo(target).exists()) {
+      log->warningMsg(__FILE__, __LINE__,
+          QString("deleting existing subtitle cut file: %1").arg(target));
+      QFile::remove(target);
+    }
+
+    TTFileBuffer tgtStream(target, QIODevice::WriteOnly);
+    TTCutParameter cutParams(&tgtStream);
+    cutParams.setNumPicturesWritten(0);
+    cutParams.setCutInIndex(0);
+    cutParams.setCutOutIndex(0);
+
+    bool ok = true;
+    try {
+      tgtStream.open();
+      for (int s = 0; s < keepList.size(); s++) {
+        int startMs = qRound(keepList[s].first  * 1000.0);
+        int endMs   = qRound(keepList[s].second * 1000.0) - 1;
+        subStream->cut(startMs, endMs, &cutParams);
+        cutParams.setCutInIndex(cutParams.getCutOutIndex() + 1);
+      }
+      // deliberately NO cutParams.lastCall(): that writes the MPEG-2
+      // sequence-end code, which has no place in an SRT file
+      tgtStream.close();
+    }
+    catch (TTAbortException&) {
+      tgtStream.close();
+      throw;                       // user abort propagates like before
+    }
+    catch (TTException& ex) {
+      tgtStream.close();
+      log->errorMsg(__FILE__, __LINE__,
+          QString("subtitle cut failed for %1: %2").arg(target).arg(ex.getMessage()));
+      ok = false;
+    }
+    onCut(i, target, lang, ok);
+  }
 }
 
 TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const

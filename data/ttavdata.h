@@ -346,6 +346,17 @@ class TTAVData : public QObject
                                  const QString& lang, bool ok)>& onCut,
         const std::function<void(int trackIdx)>& beforeCut = {});
 
+    //! Cut all subtitle tracks of avItem against the video keep list
+    //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2
+    //! sequence-end trailer. outPath names the target file per track;
+    //! onCut reports path/language/success per track.
+    void cutSubtitleTracks(
+        TTAVItem* avItem,
+        const QList<QPair<double, double>>& keepList,
+        const std::function<QString(int trackIdx)>& outPath,
+        const std::function<void(int trackIdx, const QString& path,
+                                 const QString& lang, bool ok)>& onCut);
+
     // Last-cut metadata so the main window can build a meaningful completion
     // message after an audio-only cut (where cutVideoName + container extension
     // do not point at the actual output file).
