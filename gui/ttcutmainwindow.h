@@ -34,6 +34,7 @@
 
 class TTAVData;
 class TTAVItem;
+class TTSubtitleItem;
 class TTCutList;
 class TTProgressBar;
 class TTThreadTask;
@@ -119,6 +120,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
 		void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
+    void onSubtitleItemAppended(const TTSubtitleItem& item);
 
     void onOpenProjectFileFinished(const QString&);
     void onProjectModified();

@@ -1350,7 +1350,18 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
 	  return;
    }
 
+  // Re-wire the async-subtitle-load hook (see onSubtitleItemAppended) to the
+  // new current item — subtitle files load via TTOpenSubtitleTask on the
+  // thread pool and can finish after this switch.
+  if (mpCurrentAVDataItem != 0) {
+    disconnect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
+               this, &TTCutMainWindow::onSubtitleItemAppended);
+  }
+
   mpCurrentAVDataItem = avItem;
+
+  connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
+          this, &TTCutMainWindow::onSubtitleItemAppended);
 
   // Update stream point model frame rate for time display
   if (avItem->videoStream()) {
@@ -1373,9 +1384,15 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   audioFileList->onAVDataChanged(avItem);
   subtitleFileList->onAVDataChanged(avItem);
 
-  // Set subtitle stream for preview overlay (use first subtitle if available)
+  // Set subtitle stream for preview overlay (use first subtitle if available).
+  // If the subtitle file is still loading (async TTOpenSubtitleTask), this is
+  // a no-op here and onSubtitleItemAppended() wires it in once it lands.
   if (avItem->subtitleCount() > 0) {
     currentFrame->setSubtitleStream(avItem->subtitleStreamAt(0));
+    // currentFrame->onAVDataChanged() above already showed the first still
+    // frame — refresh so the overlay is on it right away, not only after the
+    // next navigation.
+    currentFrame->refreshCurrentFrame();
   } else {
     currentFrame->clearSubtitleStream();
   }
@@ -1449,6 +1466,25 @@ void TTCutMainWindow::onAVDataReloaded()
     audioFileList->onReloadList(mpCurrentAVDataItem);
     subtitleFileList->onReloadList(mpCurrentAVDataItem);
   }
+}
+
+/*!
+ * onSubtitleItemAppended
+ * Fires when a subtitle file finishes loading asynchronously (TTOpenSubtitleTask,
+ * see TTAVData::onOpenSubtitleFinished -> TTAVItem::appendSubtitleEntry) for the
+ * currently displayed AV item. onAVItemChanged only wires the still-frame overlay
+ * once, at item-switch time; for small/fast videos the video can finish opening
+ * before the subtitle load task does, so subtitleCount() is still 0 there and the
+ * overlay never gets wired. This is the same connect/disconnect pattern
+ * TTSubtitleTreeView::onAVDataChanged uses for its own subtitleItemAppended hook.
+ */
+void TTCutMainWindow::onSubtitleItemAppended(const TTSubtitleItem&)
+{
+  if (mpCurrentAVDataItem == 0) return;
+  if (mpCurrentAVDataItem->subtitleCount() == 0) return;
+
+  currentFrame->setSubtitleStream(mpCurrentAVDataItem->subtitleStreamAt(0));
+  currentFrame->refreshCurrentFrame();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

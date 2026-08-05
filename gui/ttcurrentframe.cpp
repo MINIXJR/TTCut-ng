@@ -223,6 +223,15 @@ void TTCurrentFrame::clearSubtitleStream()
   mpegWindow->clearSubtitleStream();
 }
 
+void TTCurrentFrame::refreshCurrentFrame()
+{
+  // Don't fight mpv while it owns the display — avoid tearing/flicker
+  // during playback (same guard onAVDataChanged uses before stopping it).
+  if (mPlayer && mPlayer->isPlaying()) return;
+
+  mpegWindow->showVideoFrame();
+}
+
 void TTCurrentFrame::wheelEvent ( QWheelEvent * e )
 {
   if (!isControlEnabled)

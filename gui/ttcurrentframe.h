@@ -40,6 +40,10 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void saveCurrentFrame();
 		void setSubtitleStream(TTSubtitleStream* subtitleStream);
 		void clearSubtitleStream();
+		// Cheap re-render of the still frame already held by mpegWindow (no
+		// re-decode) so a newly wired subtitle overlay appears immediately.
+		// No-op while playback is running.
+		void refreshCurrentFrame();
 
 		void wheelEvent(QWheelEvent * e);
 
