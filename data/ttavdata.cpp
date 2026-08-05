@@ -1624,6 +1624,25 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       cutAudioLanguages.append(avItem->audioListItemAt(i).getLanguage());
     }
 
+    // Cut subtitle tracks against the same (B-frame-adjusted) keepList as
+    // the audio (consolidated onto TTAVData::cutSubtitleTracks)
+    QStringList cutSubtitleFiles;
+    QStringList cutSubtitleLanguages;
+    cutSubtitleTracks(avItem, keepList,
+        [&](int i) {
+          return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+              QFileInfo(sourceFile).completeBaseName()
+                + QString("_sub%1.srt").arg(i+1)).absoluteFilePath();
+        },
+        [&](int i, const QString& path, const QString& lang, bool ok) {
+          if (ok) {
+            cutSubtitleFiles.append(path);
+            cutSubtitleLanguages.append(lang);
+            log->infoMsg(__FILE__, __LINE__,
+                QString("Subtitle track %1 cut: %2").arg(i+1).arg(path));
+          }
+        });
+
     // Mux video and audio into final MKV
     log->infoMsg(__FILE__, __LINE__, QString("tempVideoFile: %1 (%2 bytes)")
         .arg(tempVideoFile).arg(QFileInfo(tempVideoFile).size()));
@@ -1658,6 +1677,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     // — that would double-apply the delay.
 
     mkvProvider.setAudioLanguages(cutAudioLanguages);
+    mkvProvider.setSubtitleLanguages(cutSubtitleLanguages);
 
     // Add chapters in first mux pass (no second container remux needed)
     QString chapterFile;
@@ -1678,14 +1698,20 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       }
     }
 
-    bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, QStringList());
+    bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, cutSubtitleFiles);
 
     if (success) {
       log->infoMsg(__FILE__, __LINE__, QString("Muxing complete: %1").arg(finalOutput));
-      // Clean up temporary files
-      QFile::remove(tempVideoFile);
-      for (const QString& f : cutAudioFiles) {
-        QFile::remove(f);
+      // Delete cut elementary streams only if the option says so — same
+      // semantics as the MPEG-2 path (workingMuxDeleteES)
+      if (TTSettings::instance()->workingMuxDeleteES()) {
+        QFile::remove(tempVideoFile);
+        for (const QString& f : cutAudioFiles) {
+          QFile::remove(f);
+        }
+        for (const QString& f : cutSubtitleFiles) {
+          QFile::remove(f);
+        }
       }
     } else {
       log->errorMsg(__FILE__, __LINE__, QString("Muxing failed: %1").arg(mkvProvider.lastError()));
