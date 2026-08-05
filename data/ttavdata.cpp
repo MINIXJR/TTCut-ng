@@ -1393,13 +1393,6 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   cutVideoTask = new TTCutVideoTask(this);
   cutVideoTask->init(tgtFileName, cutList);
 
-  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
-  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
-
-  // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
-  mpThreadTaskPool->init(cutList->count());
-  mpThreadTaskPool->start(cutVideoTask);
-
   // all video must have the same count of audio streams!
   // Cut all audio tracks against the shared, extra-frame-corrected keep list
   // (consolidated onto TTAVData::cutAudioTracks).
@@ -1427,6 +1420,21 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
         if (ok) cutVideoTask->muxListItem()->appendSubtitleFile(path, lang);
       });
+
+  // The audio/subtitle muxListItem appends above must complete before the
+  // pool is started: pool exit fires onCutFinished, which COPIES
+  // muxListItem and muxes that copy immediately. cutAudioTracks/
+  // cutSubtitleTracks report status via qApp->processEvents(), which can let
+  // a fast (cache-hot) video task finish and drain the pool mid-way through
+  // these synchronous cuts — muxing a copy taken before a later append
+  // landed. There is no way to express this ordering constraint other than
+  // literally doing the appends first; do not move pool start earlier.
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+  // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
+  mpThreadTaskPool->init(cutList->count());
+  mpThreadTaskPool->start(cutVideoTask);
 }
 
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
