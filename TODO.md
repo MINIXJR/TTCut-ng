@@ -273,20 +273,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     nur den abgespielten Bereich muxen, oder mpv die ES mit erzwungener
     Framerate direkt füttern. Prio low.
 
-- **Aspect-Präsentation Standbild vs. Play inkonsistent bei 4:3**
-  (2026-08-03, beim Qt6-Probelauf aufgefallen; vorbestehend — Qt5 zeigt es
-  auch, nur anders)
-  - Beobachtung (User, 4:3-Material): **Qt5** — Play-Bild mit Balken
-    oben/unten, Standbild mit schmalen schwarzen Streifen rundum. **Qt6-Probe**
-    — Standbild mit Balken links/rechts, Play-Bild füllt OHNE Balken.
-  - Standbild-Pfad (TTMPEG2Window2, SAR-korrigierte QImage) und mpv-Renderpfad
-    (`vo=libmpv` → FBO) skalieren also unterschiedlich in die Widget-Fläche;
-    unter Qt6 füllt der mpv-Pfad offenbar ohne Aspekt-Erhalt
-    (keepaspect-Verhalten des Render-Kontexts prüfen).
-  - Noch zu untersuchen: beide Pfade sollen dieselbe Geometrie zeigen
-    (Balkenlage identisch, kein Füllen ohne Aspekt-Erhalt).
-    Repro: Tux-MPEG-2-PAL-SD-Testvideo (4:3) aus `tools/test-videos/`.
-
 - **Screenshot-Modus: Vorschau-Dialog fehlt** (2026-07-26, beim v0.76.0-Release
   aufgefallen)
   - Der `--screenshots`-Modus deckt inzwischen alle Dialoge ab außer dem

@@ -18,6 +18,21 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **4:3 MPEG-2 still frames were displayed too narrow (storage aspect
+  instead of 4:3), unlike playback.** The still-frame path handled only the
+  16:9 aspect code; 4:3 recordings showed the current frame at the raw
+  720/576 storage shape while mpv playback showed the correct 4:3 picture.
+  All MPEG-2 display aspect codes (4:3, 16:9, 2.21:1) are now corrected,
+  in the upscale direction so no detail is lost before the widget scaling.
+  Still frame and playback now show the same shape.
+
+- **After stopping playback, still frames could take on the aspect of the
+  file's beginning.** The aspect lookup used a display-cache marker that
+  the stop path invalidates, falling back to the file's first sequence
+  header — on recordings starting with a 4:3 ad block, a 16:9 still was
+  squeezed to 4:3 by the next repaint (window resize, stop). The lookup is
+  now anchored to the frame actually displayed.
+
 - **Preview dialog: the Play button stayed on "Play" although playback was
   running.** Clicking Forward auto-plays the next clip; any mpv error-level
   log message arriving right after (typically "Can not open external file

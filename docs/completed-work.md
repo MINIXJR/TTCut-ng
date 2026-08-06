@@ -390,6 +390,30 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Aspect-Präsentation Standbild vs. Play inkonsistent bei 4:3** → **GEFIXT
+  (2026-08-06, `b83cd002` + `9b4b78e2`)**
+  - TODO-Hypothese („mpv-Renderpfad füllt ohne Aspekt-Erhalt, keepaspect
+    prüfen") per Messung WIDERLEGT: der mpv-Pfad war korrekt (Harness
+    `aspecttrace`, 4:3-Clip 720×576 DAR 4:3 → Content-Box 1,333 mit
+    Pillarbox). Defekt war der **Standbild-Pfad**: `showVideoFrame()`
+    (MPEG-2-Zweig) behandelte nur Aspekt-Code 3 (16:9, in
+    Schrumpf-Richtung), Code 2 (4:3) gar nicht → Storage-Aspekt 1,25
+    (Harness `stillgrab`, gemessen 1,249).
+  - Fix 1 (`b83cd002`): DAR aus dem Aspekt-Code (2→4:3, 3→16:9, 4→2,21:1),
+    Korrektur in Upscale-Richtung (Befund-D-Prinzip); 16:9 wechselt von
+    Höhe-Schrumpfen auf Breite-Aufweiten.
+  - Fix 2 (`9b4b78e2`, von der User-Abnahme aufgedeckter latenter Altfehler):
+    Die Header-Suche lief über `currentIndex`, den `invalidateDisplay()` im
+    Stop-Pfad auf -1 parkt → `getSequenceHeader(-1)` = ERSTER Header der
+    Datei; bei Aufnahmen mit 4:3-Werbeblock am Anfang wurde das
+    16:9-Standbild nach Stop/Resize auf 4:3 gequetscht (Repro: konkatenierter
+    4:3+16:9-Clip, invalidate+resize → 1,333 statt 1,778). Jetzt eigener
+    `mAspectIndex`, gesetzt beim Dekodieren, übersteht die Invalidierung.
+  - Abnahme: stillgrab/aspecttrace 4:3 = 1,333, 16:9 = 1,778 auf beiden
+    Pfaden, invalidate+resize stabil; User-GUI-Abnahme 16:9 (Play→Stop,
+    Resize) + 4:3 PASS. Harnesses in
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/`.
+
 - **Vorschau: Play-Button blieb auf „Start" trotz laufender Wiedergabe
   (VOR-Klick)** → **GEFIXT (2026-08-06, `908a672f`)**
   - Symptom (User-Report): Vorschau öffnen → VOR, oder Play → Stop → VOR;
