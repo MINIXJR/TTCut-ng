@@ -390,6 +390,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Vorschau: Play-Button blieb auf „Start" trotz laufender Wiedergabe
+  (VOR-Klick)** → **GEFIXT (2026-08-06, `908a672f`)**
+  - Symptom (User-Report): Vorschau öffnen → VOR, oder Play → Stop → VOR;
+    Wiedergabe startet, Button bleibt im Play-Zustand.
+  - Root Cause per instrumentiertem Build + User-Repro (DIAG-Logzeilen):
+    `onCutSelectionChanged` setzt bei VOR-Autoplay den Button synchron auf
+    „Stop"; unmittelbar danach kippt `onPlayerError` ihn zurück, weil mpv
+    error-Level-Meldungen zur Untertiteldatei loggt („Can not open external
+    file preview_002.srt", 2×). Der Übergangs-Clip lag im Werbeblock →
+    `cutSubtitleTracks` erzeugte eine 0-Byte-`.srt` (Datei wird
+    bedingungslos geöffnet), der Dialog prüfte nur `exists()`.
+  - Zwei Vor-Hypothesen widerlegt (Wrapper-Signal-Trace + headless
+    getriebener echter Dialog, beide korrekt): END_FILE-Replace-Event
+    (reason=STOP wird bereits gefiltert) und eof-reached-Race.
+  - Fix: `onPlayerError` nur noch loggen (wie `TTCurrentFrame`, dort als
+    Lektion schon dokumentiert); `.srt` nur bei Größe > 0 an mpv;
+    `cutSubtitleTracks` löscht leere Ausgabe + `ok=false` (auch kein leerer
+    Untertitel-Track mehr im finalen MKV).
+  - Abnahme: Harness `dlgtrace` (Fall A leere srt: kein Fehler, Button
+    „Stop"; Fall B unlesbare srt: 6 mpv-Fehlerzeilen, Button bleibt „Stop")
+    + User-GUI-Repro beide Szenarien PASS; Fix-3-Laufzeitbeleg im Log
+    („no subtitle entries in cut range, removed empty …", 2×).
+  - Harness-Falle fürs nächste Mal: `TTCutPreview::cleanUp()` löscht beim
+    Schließen ALLE `preview*` im tempDirPath — tempDirPath für Harnesses
+    nie auf ein Verzeichnis mit eigenen `preview*`-Dateien zeigen (hat
+    hier die Harness-Quellen gefressen).
+
 - **libav-Konsolenausgaben trotz deaktiviertem libav-Logging** → **GEFIXT
   (2026-08-06, branch `fix/avlog-callback-after-mpv`)**
   - Beobachtet bei der Qt6-GUI-Abnahme 2026-08-04: nach der ersten

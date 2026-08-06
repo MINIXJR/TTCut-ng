@@ -18,6 +18,17 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **Preview dialog: the Play button stayed on "Play" although playback was
+  running.** Clicking Forward auto-plays the next clip; any mpv error-level
+  log message arriving right after (typically "Can not open external file
+  preview_00N.srt") reset the button while playback continued. Two causes,
+  both fixed: the dialog no longer treats non-fatal mpv log messages as
+  playback failures (it only logs them, like the main window's player), and
+  a preview clip range without any subtitle entries no longer produces an
+  empty `.srt` — `cutSubtitleTracks` removes the 0-byte file instead of
+  handing it to mpv or the muxer. Empty subtitle files also no longer end
+  up as empty subtitle tracks in the final MKV.
+
 - **libav messages leaked to the console after the first mpv playback,
   despite disabled libav logging.** libmpv takes over the process-global
   av_log callback at `mpv_create()` and restores ffmpeg's *default* stderr

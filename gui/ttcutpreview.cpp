@@ -285,10 +285,13 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   }
   current_video_file = preview_video_info.absoluteFilePath();
 
-  // Check for subtitle file
+  // Check for subtitle file. size() > 0: a clip range without subtitle
+  // entries used to leave a 0-byte .srt behind (cutSubtitleTracks removes
+  // those now, but stale files may still exist), and mpv reports an
+  // error-level "Can not open external file" on it.
   preview_subtitle_name = QString("preview_%1.srt").arg(fileIndex, 3, 10, QChar('0'));
   preview_subtitle_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_subtitle_name );
-  if (preview_subtitle_info.exists()) {
+  if (preview_subtitle_info.exists() && preview_subtitle_info.size() > 0) {
     mPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
   } else {
     mPlayer->clearSubtitleFile();
@@ -354,10 +357,15 @@ void TTCutPreview::onPlayerFinished()
 
 void TTCutPreview::onPlayerError(const QString& message)
 {
+  // Log only — do NOT reset the Play button. mpv classifies many non-fatal
+  // messages as "error" level (an unreadable --sub-file, transient libmpv
+  // OpenGL texture errors, h264 mmco warnings) while playback continues
+  // fine; resetting here is what left the button on "Play" during running
+  // playback. A real abnormal termination is followed by playerFinished,
+  // which resets the button. Same reasoning as TTCurrentFrame's
+  // playerError handler.
   TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
       QString("Preview player error: %1").arg(message));
-  pbPlay->setText(tr("Play"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

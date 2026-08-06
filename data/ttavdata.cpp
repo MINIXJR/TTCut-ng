@@ -2413,6 +2413,17 @@ void TTAVData::cutSubtitleTracks(
           QString("subtitle cut failed for %1: %2").arg(target).arg(ex.getMessage()));
       ok = false;
     }
+
+    // A cut range without any subtitle entry yields a 0-byte file. Drop it
+    // and report ok=false: an empty .srt is useless as a mux input, and mpv
+    // errors out on it as a --sub-file ("Can not open external file").
+    if (ok && QFileInfo(target).size() == 0) {
+      QFile::remove(target);
+      log->infoMsg(__FILE__, __LINE__,
+          QString("no subtitle entries in cut range, removed empty %1").arg(target));
+      ok = false;
+    }
+
     onCut(i, target, lang, ok);
   }
 }
