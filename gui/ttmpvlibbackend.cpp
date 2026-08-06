@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QCoreApplication>
 #include <cstdlib>
+#include <cstring>
 
 extern "C" {
 #include <mpv/client.h>
@@ -86,6 +87,14 @@ bool TTMpvLibBackend::start()
           .arg(o.name).arg(o.value).arg(mpv_error_string(rc)));
     }
   }
+
+  // With hwdec=no there is no use for a GPU interop; the default "auto"
+  // still eagerly loads ALL interops at mpv_render_context_create — on
+  // non-NVIDIA systems ffnvcodec's loader then prints "Cannot load
+  // libcuda.so.1" as a raw fprintf(stderr), bypassing av_log and mpv
+  // logging (gdb evidence 2026-08-06: dlopen from mpv_render_context_create).
+  if (std::strcmp(hwdecVal, "no") == 0)
+    mpv_set_option_string(mMpv, "gpu-hwdec-interop", "no");
 
   // Log-Level filtern (nur Errors/Fatal in mpvError leiten)
   mpv_request_log_messages(mMpv, "error");
