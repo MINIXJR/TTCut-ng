@@ -18,6 +18,17 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **"Frozen" window areas under KWin with fractional display scaling
+  (150 %/175 %) and a large window no longer occur.** The mpv render
+  widget — an OpenGL widget kept permanently visible (though covered)
+  behind the still frame — turned out to be the in-app trigger of a KWin
+  presentation bug: parts of the window stopped refreshing until the
+  first playback. The widget stack now keeps the render widget truly
+  hidden outside playback and only exposes it for the duration of a
+  playback session. The previous workarounds (X11 via
+  `QT_QPA_PLATFORM=xcb`, integer scaling, playing once) are no longer
+  needed.
+
 - **The whole main window was visibly rebuilt when the first video was
   opened.** The mpv render widget (a QOpenGLWidget) was created lazily at
   stream open; the first OpenGL widget entering an already visible window

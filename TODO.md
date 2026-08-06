@@ -311,130 +311,27 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 
 ## Known Limitations
 
-- **Stale image in "Current Frame" under KWin at fractional scaling
-  (attribution OPEN: compositor bug vs. an app-specific trigger — the painted
-  buffer itself is proven correct either way).** With KWin 6.7.2 on Wayland, a fractional display scale
-  (150 %, 175 %) and a large or maximized window, parts of the window are not
-  refreshed on screen. Large painted areas are affected — the still-frame pixmap
-  keeps showing the previous picture while frame number and timecode advance;
-  small painted areas arrive normally, and dialogs drawn over the affected area
-  appear to shake. It reads exactly like a frozen GUI, and it cost two days of
-  hunting on 2026-07-30/31 before the compositor was identified.
-  - **Quickest proof it is not the application:** the Alt-Tab window preview
-    shows the *correct* frame while the screen shows stale pixels. The buffer is
-    right, only its presentation is not. Everything downstream of the decoder was
-    measured correct headless (decoder, navigation, widget), and every paint path
-    — QLabel, direct painting, with and without the GL widget, software GL —
-    ends in the same verified-correct buffer. There is nothing to fix in TTCut-ng.
-  - **Gemessen 2026-08-01:** Gemischte Skalierung ist NICHT der Auslöser — bei
-    einheitlichen 150 % auf beiden Monitoren besteht der Fehler weiter, und
-    zwar auf beiden Schirmen. Unter `QT_QPA_PLATFORM=xcb` bei denselben 150 %
-    ist alles korrekt. Ein Bericht muss also "fractional scaling" nennen, nicht
-    "mixed scale factors".
-  - **Schwelle vermessen (2026-08-02, Skalierung 1,5, alle Punkte einzeln
-    reproduziert):** Die Grenze hängt von BEIDEN Dimensionen ab — weder die
-    Breite allein noch die Fläche allein erklärt sie. Beide Ein-Größen-Modelle
-    wurden ausprobiert und sind an den Messwerten gescheitert (Flächen an der
-    Schwelle: 2,50–2,57 Mio. bei fester Höhe gegen 2,01–2,05 Mio. bei fester
-    Breite — 25 % auseinander). Gemessene Punkte (Fensterinhalt logisch;
-    KWin-Frame = +28 px Titelleiste, keine Seitenränder):
-
-    | Breite \ Höhe | ≤1103 | 1128 | 1412 |
-    |---|---|---|---|
-    | 1774 | sauber | sauber | sauber |
-    | 1819 | sauber | FEHLER | FEHLER |
-    | 2500 | — | — | FEHLER |
-
-    Bei Breite 1774 tritt der Fehler in keiner getesteten Höhe auf; bei 1819
-    ab Höhe 1128. Der Effekt ist deterministisch: fünf Wiederholungen in
-    geänderter Reihenfolge, alle identisch zum Erstbefund. Randnotiz für den
-    Bericht, ausdrücklich ohne These: 1774 logisch = 2661,0 physische Pixel,
-    1819 logisch = 2728,5 — ungerade logische Breite ergibt bei 1,5 eine
-    halbe physische Pixelbreite; 1819×1103 war jedoch trotz halber Breite
-    sauber. Messwerkzeuge: `tools/diag/window-geometry.sh` (liest die
-    Ist-Geometrie bei KWin ab) und die Messskripte
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-{threshold,verify,area-test,repeat-test}.sh`
-    samt Protokollen (`kwin-*-2026*.log`) im selben Verzeichnis.
-  - **Messfalle aus dem ersten Durchlauf:** die Startfassung des Messskripts
-    beendete die TTCut-Instanzen nicht (`kill` traf die Subshell statt des
-    Programms — `$!` nach `( cd … && ./prog ) &` ist die Subshell-PID; Fix:
-    `exec` in der Subshell). Dadurch liefen bis zu fünf Instanzen parallel und
-    die erste Messreihe war wertlos; alle obigen Zahlen stammen aus
-    Wiederholungen mit genau einer Instanz.
-  - **Ein Skalierungsvergleich 1,5 gegen 1,75 steht noch aus** (er hätte
-    logische von physischen Grenzen getrennt). Er scheiterte daran, dass bei
-    1,75 nur ~1234 logische Zeilen verfügbar sind und die Schwelle dort mit
-    anderer Höhe gemessen werden müsste — nicht vergleichbar, solange das
-    Zusammenspiel von Breite und Höhe unverstanden ist. Erst sinnvoll, wenn
-    die KDE-Entwickler sagen, welche Größe intern die relevante ist.
-  - **Qt5-Hypothese WIDERLEGT, Zuordnung OFFEN (2026-08-03,
-    Qt6-Machbarkeitsprobe):** Das Qt6-Probe-Binary bindet
-    `wp_fractional_scale_manager_v1` nachweislich (WAYLAND_DEBUG: bind +
-    `get_fractional_scale`) — und der Fehler tritt trotzdem auf (User-Repro,
-    maximiert bei 150 %). Ausgeschlossen ist damit nur der
-    Qt5-Skalierungspfad. **Ob KWin oder ein TTCut-spezifischer Auslöser,
-    ist offen** (User-Einschätzung: eher TTCut). Für einen App-Auslöser
-    sprechen: fünf gescheiterte Minimalbeispiele (irgendeine
-    TTCut-spezifische Zutat ist notwendig), die Abhängigkeit von der
-    Größen-Historie (Maximieren WÄHREND laufender Wiedergabe heilt
-    dauerhaft — ein reiner Compositor-Schwellenfehler sollte den Weg zur
-    Größe nicht kennen), und: die Qt6-Repro schwächt den bisher vermuteten
-    KWin-Mechanismus (forced server side scale factor greift nur bei
-    Klienten OHNE das Protokoll). Dagegen sprechen: Alt-Tab zeigt den
-    korrekten Puffer, und der Qt5-Protokollmitschnitt des Fehlerlaufs war
-    klientenseitig korrekt (attach + voller damage + commit). Da die
-    Qt6-Probe dieselbe Codebasis ist, wäre ein TTCut-Auslöser in
-    Qt-versionsunabhängigem App-Code zu suchen (Fensteraufbau, Widget-Stack,
-    mpv-Subsurface). **Nächster Diskriminator bei Wiederaufnahme:**
-    WAYLAND_DEBUG-Vergleich Qt6-Fehlerlauf gegen den „geheilten" Zustand
-    nach Maximieren-bei-Wiedergabe — unterscheidet sich die
-    Protokollsequenz, liegt die Spur in der App.
-  - **Protokollbeweis vorhanden** (`WAYLAND_DEBUG=1`, Logs unter
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/wayland-diff/`): Qt setzt
-    `set_buffer_scale(2)` auf dem 1,5-Schirm und bindet
-    `wp_fractional_scale_manager_v1` nie, obwohl angeboten. Zum nicht
-    erschienenen Bild gehören `attach` + `damage_buffer(0,0,3638,2416)`
-    (gesamte Bildfläche) + `commit`, danach 14 s lang kein weiterer Commit.
-    Client-seitig also korrekt. **Auswertungsfalle:** der Log enthält zwei
-    getrennte Wayland-Verbindungen (Qt und mpvs EGL) mit unabhängigen
-    Objekt-IDs — es gibt zwei `wl_surface#25`; nur getrennt nach Queue
-    (`{Default Queue}` vs `{mesa egl *}`) auswertbar.
-  - **Als Ursache ausgeschlossen** (Testfälle `kwin-repaint-testcase{2,3}.cpp`
-    mit Abschalt-Optionen, plus Bisektion an TTCut über die Diagnose-Schalter
-    `TTCUT_DIAG_NO_PLAYER` und `TTCUT_DIAG_HIDE`): GL-Widget/mpv-Kontext,
-    `QLabel::setPixmap`, `QStackedLayout::StackAll`, `QMainWindow`,
-    App- und Widget-Stylesheets, `QGroupBox`/`QTabWidget`, Fenstergröße allein,
-    Fläche allein, Teilschaden, Dekodierlatenz, Fortschrittsdialog,
-    berührungsloser Betrieb ohne Eingaben. Der Fehler überlebt sogar das fast
-    leere Fenster.
-  - **Minimaler Testfall fehlt weiterhin.** `kwin-repaint-testcase.cpp` unter
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-bugreport/` reproduziert den
-    Fehler NICHT — weder mit großer einfarbiger Fläche noch als `QPixmap`,
-    weder mit `QOpenGLWidget` noch maximiert. Ausgeschlossen ist damit, dass
-    diese Zutaten genügen. Ohne so ein Beispiel fragen die KDE-Entwickler
-    erfahrungsgemäß zuerst danach.
-  - **Workarounds:** integer scaling (100 %, 200 %), do not maximize the window,
-    or run `QT_QPA_PLATFORM=xcb build/ttcut-ng`. New (found 2026-08-03, works
-    on Qt5 and the Qt6 probe alike): start with a small window and maximize
-    **while a video is playing** — the display then stays correct, including
-    navigation, until the program is closed.
-    Second heal variant (User, 2026-08-04, verified on the Qt6 build
-    `60bea93f` AND on Qt5 — version-independent like the first variant;
-    4:3 material): maximize FIRST, then press PLAY — the play picture
-    appears, and the still frame afterwards is correct too. So resizing
-    *during* playback is not required; playback happening in the large
-    window appears to be the operative ingredient (points further at the
-    mpv subsurface kicking the presentation). Confirmed (User,
-    2026-08-04): BEFORE the first PLAY the bug does manifest — the
-    still-frame area shows nothing at all, or the background, or
-    whatever was displayed last (the known stale presentation). So this
-    genuinely is "playback heals it", not "the bug did not trigger".
-  - **Suspected mechanism:** Qt 5 cannot speak the fractional-scale Wayland
-    protocol, so KWin uses its *forced server side scale factor* path — the
-    Plasma 6.7.0 changelog lists "making forced server side scale factor single
-    buffered". Same failure class as (fixed) KDE bug 482987. No matching bug
-    report existed as of 2026-07-31; 6.7.3 contains nothing relevant. On
-    recurrence, check for a KWin update first (`apt policy kwin-wayland`).
+- **KWin stale-area bug: upstream report + minimal test case still open**
+  (the in-app symptom itself is RESOLVED since 2026-08-06 — the render
+  widget is stacked StackAll only during playback, `f87ea06c`; full
+  investigation record incl. threshold matrix, Wayland protocol proof and
+  experiment history in `docs/completed-work.md`, GUI und Wiedergabe, and
+  in the kwin-fractional-scale-bug memory).
+  - Proven in-app ingredient under Qt6: a visible-but-obscured
+    QOpenGLWidget (StackAll) in a large window at fractional scaling. It
+    is NECESSARY (TTCUT_DIAG_NO_PLAYER bisection 2026-08-06: bug gone) but
+    NOT SUFFICIENT (`kwin-repaint-testcase.cpp` with a QOpenGLWidget does
+    not reproduce) — a KDE report still lacks the second ingredient.
+  - NOTE the path dependence: the SAME bisection on Qt5 (2026-08-02) saw
+    the bug survive TTCUT_DIAG_NO_PLAYER and a nearly empty window — Qt5
+    ran KWin's forced-server-side-scale path (no fractional-scale
+    protocol), Qt6 binds `wp_fractional_scale_manager_v1`. The trigger
+    sets differ per path; Qt5 data must not be mixed into a Qt6 report.
+  - Tools/logs: `tools/diag/window-geometry.sh`,
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-*.{sh,log}`, `wayland-diff/`,
+    `kwin-bugreport/` (BEFUND.md — keep, do not clean up).
+  - On recurrence: check for a KWin update first
+    (`apt policy kwin-wayland`), then read the record.
 
 - **Audio burst detection is approximate — treat it as a hint, not a verdict.** It
   reliably flags the case it was built for (a loud advertising burst reaching the cut

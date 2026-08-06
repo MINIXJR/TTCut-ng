@@ -390,6 +390,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **KWin-Stale-Area-Fehler („eingefrorene" Standbild-Fläche bei fraktionaler
+  Skalierung) — App-Auslöser gefunden und entschärft** → **GEFIXT
+  (2026-08-06, `f87ea06c`)**
+  - Symptom (seit 2026-07-30 verfolgt, zwei Tage als TTCut-Defekt gejagt):
+    KWin 6.7.2 + Skalierung 1,5/1,75 + großes Fenster → Teile des Fensters
+    werden nicht aufgefrischt; Alt-Tab-Vorschau zeigt den korrekten Puffer.
+    Schwellen-Matrix, Wayland-Protokollbeweis, Messfallen: Memory
+    `kwin-fractional-scale-bug` + `/usr/local/src/CLAUDE_TMP/TTCut-ng/`
+    (`kwin-*`, `wayland-diff/`, `kwin-bugreport/`).
+  - Neuer Einstieg war die User-Beobachtung „Fehler ist weg, sobald einmal
+    Play gedrückt wurde" + die Frage „warum besteht das Problem bei CutOut
+    nicht?". Experiment-Matrix 2026-08-06 (alle User-verifiziert, Qt6):
+    native Fenster-Neuerzeugung → Fehler blieb; ein komponierter GL-Frame
+    (Warmup v1) → blieb; 25-fps-Frame-Strom über 3 s (Warmup v2) → blieb;
+    `TTCUT_DIAG_NO_PLAYER` (kein GL-Widget) → **Fehler weg**. CutOut ist
+    strukturell identisch minus GL-Widget und war nie betroffen.
+  - Auslöser (Qt6): das permanent sichtbare-aber-verdeckte QOpenGLWidget im
+    StackAll-Frame-Stack. Notwendig, aber nicht hinreichend — der minimale
+    Testfall mit QOpenGLWidget reproduziert weiterhin nicht (zweite Zutat
+    unbekannt, Upstream-Report offen → TODO.md).
+  - **Pfad-Abhängigkeit statt Widerspruch:** dieselbe Bisektion unter Qt5
+    (2026-08-02) sah den Fehler `TTCUT_DIAG_NO_PLAYER` und das fast leere
+    Fenster überleben — Qt5 lief über KWins forced-server-side-scale-Pfad
+    (kein fraktionales Protokoll), Qt6 bindet `wp_fractional_scale`. Die
+    Auslöser-Mengen der beiden Pfade unterscheiden sich.
+  - Fix: Frame-Stack läuft außerhalb der Wiedergabe im Default StackOne
+    (GL-Widget wirklich versteckt, Struktur wie CutOut); StackAll nur für
+    die Wiedergabe-Session (vor mpv-Load gesetzt, in onPlaybackFinished
+    zurück) — dort muss das Widget verdeckt anrendern können, bevor
+    firstFrameReady es nach vorn hebt (Henne-Ei-Problem bleibt gelöst).
+  - Abnahme (User, alle drei PASS): kein Einfrieren mehr ab Start ohne
+    Play; Play→Stop→Play funktioniert ohne Schwarzbild; nach Stop bleibt
+    die Navigation sauber. Damit sind xcb-/Ganzzahl-Skalierungs-Workarounds
+    für TTCut-ng nicht mehr nötig. Warmup-Diagnoseschalter
+    (`diag/gl-warmup`-Branch) nach negativem Ergebnis verworfen,
+    `TTCUT_DIAG_NO_PLAYER` bleibt als Bisektionswerkzeug.
+
 - **Hauptfenster wurde beim ersten Video-Open sichtbar neu aufgebaut**
   (User-Beobachtung 2026-08-06: „Oberfläche wird noch mal geladen") →
   **GEFIXT (2026-08-06, `be007c19`)**
