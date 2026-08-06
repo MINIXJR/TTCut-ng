@@ -390,6 +390,24 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Hauptfenster wurde beim ersten Video-Open sichtbar neu aufgebaut**
+  (User-Beobachtung 2026-08-06: „Oberfläche wird noch mal geladen") →
+  **GEFIXT (2026-08-06, `be007c19`)**
+  - Beleg per Event-Filter auf dem Top-Level: ~50 ms nach Beginn des
+    Video-Opens Hide → 2× PlatformSurface/WinIdChange → Show = native
+    Fenster-Neuerzeugung. Ursache: `ensurePlayerCreated()` fügte das erste
+    QOpenGLWidget (mpv-Render-Widget) ins bereits sichtbare Fenster ein →
+    Qt stellt den Surface-Typ auf RasterGLSurface um und muss das Fenster
+    dafür abreißen (dokumentiertes Qt-Verhalten; bestand seit dem
+    libmpv-Render-Backend v0.71.0).
+  - Fix: `ensurePlayerCreated()` aufgeteilt — Player + Widget entstehen im
+    TTCurrentFrame-Konstruktor (vor dem ersten show()), die GL-/mpv-
+    Render-Context-Realisierung bleibt lazy beim Stream-Open (neu:
+    `realizeRenderContext()`, braucht ein sichtbares Fenster).
+    `TTCUT_DIAG_NO_PLAYER`-Bisektionsschalter greift auch im Konstruktor.
+  - Abnahme: Event-Trace nach Fix ohne jedes Fenster-Ereignis nach dem
+    Open; User-GUI-Abnahme (kein Neuladen, Play/Stop unverändert) PASS.
+
 - **Aspect-Präsentation Standbild vs. Play inkonsistent bei 4:3** → **GEFIXT
   (2026-08-06, `b83cd002` + `9b4b78e2`)**
   - TODO-Hypothese („mpv-Renderpfad füllt ohne Aspekt-Erhalt, keepaspect

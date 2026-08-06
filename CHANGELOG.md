@@ -18,6 +18,15 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **The whole main window was visibly rebuilt when the first video was
+  opened.** The mpv render widget (a QOpenGLWidget) was created lazily at
+  stream open; the first OpenGL widget entering an already visible window
+  forces Qt to destroy and recreate the native top-level window, which
+  looked like the entire UI reloading. The widget is now created before
+  the window is first shown, so the window is GL-capable from the start
+  and is never rebuilt; the mpv render context itself is still set up
+  lazily at stream open.
+
 - **4:3 MPEG-2 still frames were displayed too narrow (storage aspect
   instead of 4:3), unlike playback.** The still-frame path handled only the
   16:9 aspect code; 4:3 recordings showed the current frame at the raw
