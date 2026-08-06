@@ -75,15 +75,20 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
       mFrameStack = new QStackedLayout(mFrameStackContainer);
       mFrameStack->setContentsMargins(0, 0, 0, 0);
       mFrameStack->setSpacing(0);
-      // StackAll statt des Default StackOne: ALLE Stack-Widgets bleiben sichtbar,
-      // das aktuelle wird nur nach vorn gehoben. Nötig, weil das libmpv-
-      // renderWidget im Hintergrund rendern können MUSS, bevor es nach vorn
-      // geschaltet wird — ein verstecktes QOpenGLWidget bekommt kein paintGL,
-      // sonst entstünde ein Deadlock (Switch wartet auf den ersten echten
-      // Frame, der Frame braucht aber Sichtbarkeit). Das opake mpegWindow
-      // verdeckt das hinten rendernde renderWidget vollständig, sodass dessen
-      // erster (stale) Frame nie sichtbar wird.
-      mFrameStack->setStackingMode(QStackedLayout::StackAll);
+      // StackOne (default) outside playback: a permanently visible-but-
+      // obscured QOpenGLWidget in the stack triggers the KWin stale-area
+      // bug (fractional scaling 1.5/1.75, large windows; bisected
+      // 2026-08-06 — with TTCUT_DIAG_NO_PLAYER the bug is gone, and the
+      // CutOut frame, structurally identical minus the GL widget, never
+      // showed it). The stack therefore runs StackAll ONLY for the
+      // duration of a playback session (switched in onPlayVideo before
+      // load, back in onPlaybackFinished): during that window the libmpv
+      // renderWidget MUST be able to render behind the opaque mpegWindow
+      // before being raised — a hidden QOpenGLWidget gets no paintGL,
+      // which would deadlock the raise (it waits for the first real
+      // frame, the frame needs visibility). The opaque mpegWindow fully
+      // covers the widget rendering behind it, so its first (stale)
+      // frame is never visible.
       mFrameStack->addWidget(mpegWindow);  // Index 0 (default)
       // Index 1 wird im onPlayVideo gefüllt, sobald der Player existiert.
 
@@ -735,6 +740,12 @@ void TTCurrentFrame::onPlayVideo()
 
     // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
     setPlayingButtonState(true);
+    // StackAll for the playback session only: the renderWidget must paint
+    // its first frames while still covered by the opaque mpegWindow (see
+    // the constructor comment; outside playback StackOne avoids the KWin
+    // stale-area trigger). Reset in onPlaybackFinished.
+    if (mFrameStack)
+      mFrameStack->setStackingMode(QStackedLayout::StackAll);
     // Audio is already muxed into the temp MKV — no separate audio file needed
     mPlayer->load(mTempPlaybackFile, startSec);
   } else {
@@ -747,6 +758,9 @@ void TTCurrentFrame::onPlayVideo()
     }
     // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
     setPlayingButtonState(true);
+    // StackAll for the playback session only — see H.26x branch above.
+    if (mFrameStack)
+      mFrameStack->setStackingMode(QStackedLayout::StackAll);
     mPlayer->load(videoStream->filePath(), startSec, audioFile);
   }
 }
@@ -778,8 +792,13 @@ void TTCurrentFrame::onPlaybackFinished()
 {
   if (videoStream == nullptr) return;
 
-  if (mFrameStack && mpegWindow)
+  if (mFrameStack && mpegWindow) {
     mFrameStack->setCurrentWidget(mpegWindow);
+    // Playback session over: back to StackOne, hiding the renderWidget —
+    // a visible-but-obscured QOpenGLWidget outside playback triggers the
+    // KWin stale-area bug (see constructor comment).
+    mFrameStack->setStackingMode(QStackedLayout::StackOne);
+  }
 
   double frameRate   = videoStream->frameRate();
 
