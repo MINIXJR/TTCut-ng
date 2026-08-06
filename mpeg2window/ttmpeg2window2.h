@@ -103,6 +103,13 @@ class TTMPEG2Window2 : public QLabel
     int                 videoWidth;
     int                 videoHeight;
     int                 currentIndex;
+    //! Index of the frame the display actually shows, for the sequence-header
+    //! (aspect) lookup. Unlike currentIndex it survives invalidateDisplay():
+    //! that sets currentIndex to -1 as a re-decode marker, and an aspect
+    //! lookup with -1 falls back to the FIRST sequence header of the file —
+    //! wrong shape when the recording starts in a different aspect than the
+    //! frame on screen (e.g. 4:3 ad block before a 16:9 show).
+    int                 mAspectIndex;
     TTVideoStream*      mpVideoStream;
     TTSubtitleStream*   mpSubtitleStream;
     TTMessageLogger*    log;

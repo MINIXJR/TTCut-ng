@@ -45,6 +45,7 @@ TTMPEG2Window2::TTMPEG2Window2(QWidget *parent )
   mpFFmpegWrapper  = 0;
   mUseFFmpeg       = false;
   currentIndex     = 0;
+  mAspectIndex     = 0;
   picBuffer        = 0;
   videoWidth       = 0;
   videoHeight      = 0;
@@ -95,7 +96,12 @@ void TTMPEG2Window2::showVideoFrame()
     // same shape. Code 1 (square samples) needs no correction. This used
     // to handle only 16:9 — and shrank the height for it — leaving 4:3
     // material displayed at its 720/576 storage aspect.
-    TTSequenceHeader* seqHeader = mpVideoStream->getSequenceHeader(currentIndex);
+    // mAspectIndex, NOT currentIndex: invalidateDisplay() parks currentIndex
+    // at -1, and getSequenceHeader(-1) falls back to the file's FIRST
+    // sequence header — the wrong aspect once the recording changes shape
+    // (measured: 16:9 frame squeezed to 4:3 after stop + resize on a
+    // recording that starts with a 4:3 block).
+    TTSequenceHeader* seqHeader = mpVideoStream->getSequenceHeader(mAspectIndex);
     double dar = 0.0;
     if (seqHeader != 0) {
       switch (seqHeader->aspectRatio()) {
@@ -281,6 +287,7 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
   qDebug() << "TTMPEG2Window2::openVideoStream() called";
   mpVideoStream = vStream;
   currentIndex = -1;
+  mAspectIndex = 0;
 
   // Check stream type
   TTAVTypes::AVStreamType streamType = vStream->streamType();
@@ -365,6 +372,7 @@ void TTMPEG2Window2::closeVideoStream()
   mUseFFmpeg = false;
   mpVideoStream = 0;
   currentIndex = 0;
+  mAspectIndex = 0;
 
   QImage dummy;
   this->setPixmap(QPixmap::fromImage(dummy));
@@ -382,6 +390,7 @@ void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
     mCurrentFrame = mpFFmpegWrapper->decodeFrame(iFramePos);
     if (!mCurrentFrame.isNull()) {
       currentIndex = iFramePos;
+      mAspectIndex = iFramePos;
       showVideoFrame();
     }
     return;
@@ -394,6 +403,7 @@ void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
 	{
 		mpeg2Decoder->moveToFrameIndex(iFramePos);
 		currentIndex = iFramePos;
+		mAspectIndex = iFramePos;
 		getFrameInfo();
 	}
 	catch (TTMpeg2DecoderException ex)
