@@ -83,6 +83,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		// Playback time<->index conversion authority (display-PTS aware).
 		double playbackSecondsForCurrentStill() const;
 		void ensurePlayerCreated();
+		void realizeRenderContext();
 
 	private:
 		void                clearCutContext();
@@ -105,6 +106,8 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		int                 currentCutItemIndex;
 		int                 currentCutPosition;
 		TTMpvWrapper*       mPlayer = nullptr;
+		//! True once realizeRenderContext() built the mpv render context.
+		bool                mRenderContextRealized = false;
 		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback (cached across STOP→PLAY)
 		QString             mCachedPlaybackFingerprint;  // source fingerprint of the cached temp MKV
 		// True when the cached temp MKV carries real display PTS (source

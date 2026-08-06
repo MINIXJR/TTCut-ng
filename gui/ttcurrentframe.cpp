@@ -115,6 +115,19 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
 
   // Initial stopped state: Stop and speed buttons disabled
   setPlayingButtonState(false);
+
+  // Create player + renderWidget NOW, while the main window is not yet
+  // shown: the first QOpenGLWidget entering an already visible window
+  // forces Qt to recreate the native top-level window (surface type
+  // switches to RasterGLSurface; measured as Hide → 2×
+  // PlatformSurface/WinIdChange → Show ~50 ms after video open — the whole
+  // UI visibly "reloads"). The GL/mpv render context is still built lazily
+  // at stream-open (realizeRenderContext), because it needs a visible
+  // window.
+  // TTCUT_DIAG_NO_PLAYER (KWin repaint bisection): honour it here too,
+  // otherwise the switch would be pointless.
+  if (!qEnvironmentVariableIsSet("TTCUT_DIAG_NO_PLAYER"))
+    ensurePlayerCreated();
 }
 
 TTCurrentFrame::~TTCurrentFrame()
@@ -186,21 +199,24 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 	mpegWindow->openVideoStream(videoStream);
 	mpegWindow->showFrameAt(videoStream->currentIndex());
 
-	// Player + renderWidget jetzt erzeugen und GL/Render-Context initialisieren,
-	// damit er lange vor dem ersten PLAY bereitsteht (sonst scheitert der erste
-	// Play an "No render context set"; siehe ensurePlayerCreated).
+	// Initialize the GL/mpv render context now so it is ready long before
+	// the first PLAY (which would otherwise fail with "No render context
+	// set"). Player + renderWidget exist since the constructor — see there
+	// for why the creation must happen BEFORE the first show().
 	//
-	// Diagnose-Schalter (KWin-Repaint-Bisektion, 2026-08-02): mit
-	// TTCUT_DIAG_NO_PLAYER=1 wird der Player samt QOpenGLWidget hier NICHT
-	// erzeugt — bei reiner Navigation existiert dann kein GL-Widget und kein
-	// mpv-Render-Kontext im Fenster. Entscheidet, ob der KWin-Auffrischfehler
-	// diese Zutat braucht. Gefahrlos: onPlay() holt die Erzeugung bei Bedarf
-	// über die zweite ensurePlayerCreated()-Aufrufstelle nach.
-	if (qEnvironmentVariableIsSet("TTCUT_DIAG_NO_PLAYER"))
+	// Diagnostic switch (KWin repaint bisection, 2026-08-02): with
+	// TTCUT_DIAG_NO_PLAYER=1 neither player, QOpenGLWidget nor render
+	// context are created (not in the constructor either) — pure navigation
+	// then runs without any GL widget and mpv render context in the window.
+	// Decides whether the KWin refresh bug needs this ingredient. Safe:
+	// onPlay() creates both on demand.
+	if (qEnvironmentVariableIsSet("TTCUT_DIAG_NO_PLAYER")) {
 		TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
 			"TTCUT_DIAG_NO_PLAYER: skipping player/GL widget creation at stream open");
-	else
+	} else {
 		ensurePlayerCreated();
+		realizeRenderContext();
+	}
 
 	updateCurrentPosition();
 }
@@ -537,10 +553,16 @@ void TTCurrentFrame::saveCurrentFrame()
   delete fileDlg;
 }
 
-//! Play video with audio from current position using mpv
-//! Create the mpv player + render widget once and initialize its GL/render
-//! context. Called at stream-open (onAVDataChanged) so the context exists long
-//! before the first PLAY. Idempotent — does nothing if the player already exists.
+//! Create the mpv player and put its render widget into the frame stack.
+//! Called from the constructor, BEFORE the main window is first shown: the
+//! first QOpenGLWidget entering an already visible window forces Qt to
+//! recreate the native top-level window (surface type switches to
+//! RasterGLSurface) — measured as Hide → 2× PlatformSurface/WinIdChange →
+//! Show ~50 ms after video open, visible as the whole UI "reloading".
+//! Created up front, the window is GL-capable from the start and is never
+//! rebuilt. Idempotent — does nothing if the player already exists.
+//! The GL/mpv render context is NOT built here (that needs a visible
+//! window) — see realizeRenderContext().
 void TTCurrentFrame::ensurePlayerCreated()
 {
   if (mPlayer != nullptr) return;
@@ -548,24 +570,8 @@ void TTCurrentFrame::ensurePlayerCreated()
   mPlayer = new TTMpvWrapper(this);
   if (QWidget* rw = mPlayer->renderWidget()) {
     // libmpv-Pfad: Widget in den Frame-Stack als Index 1 einreihen
-    if (mFrameStack && mFrameStack->indexOf(rw) < 0) {
+    if (mFrameStack && mFrameStack->indexOf(rw) < 0)
       mFrameStack->addWidget(rw);
-      // GL-Context EINMAL realisieren: das renderWidget kurz nach vorn schalten
-      // erzwingt show→initializeGL und damit einen voll initialisierten
-      // QOpenGLContext (makeCurrent allein reicht bei einem versteckten
-      // QOpenGLWidget NICHT — mpv_render_context_create scheitert sonst mit
-      // "Can't load OpenGL functions"). Danach baut prepareRenderContext den
-      // mpv-Render-Context auf und wir schalten sofort zurück auf mpegWindow.
-      // Im StackAll-Modus bleibt mpegWindow vorne (Standbild), bis firstFrame
-      // Ready beim Play umschaltet.
-      mFrameStack->setCurrentWidget(rw);
-      if (auto* mrw = qobject_cast<TTMpvRenderWidget*>(rw)) {
-        if (!mrw->prepareRenderContext())
-          TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("ensurePlayerCreated: prepareRenderContext failed"));
-      }
-      mFrameStack->setCurrentWidget(mpegWindow);
-    }
   }
   connect(mPlayer, &TTMpvWrapper::playerFinished,  this, &TTCurrentFrame::onPlaybackFinished);
   connect(mPlayer, &TTMpvWrapper::positionChanged, this, &TTCurrentFrame::onPlaybackPositionChanged);
@@ -580,6 +586,34 @@ void TTCurrentFrame::ensurePlayerCreated()
   });
 }
 
+//! Build the GL + mpv render context once. Needs a visible window, so this
+//! runs at stream-open (onAVDataChanged), not in the constructor: the
+//! renderWidget is switched to the front briefly, which forces
+//! show→initializeGL and a fully initialized QOpenGLContext (makeCurrent
+//! alone is NOT enough on a hidden QOpenGLWidget — mpv_render_context_create
+//! fails with "Can't load OpenGL functions"). prepareRenderContext() then
+//! builds the mpv render context and we switch straight back to mpegWindow.
+//! In StackAll mode mpegWindow stays in front (still frame) until
+//! firstFrameReady flips the stack on Play.
+void TTCurrentFrame::realizeRenderContext()
+{
+  if (mRenderContextRealized) return;
+  if (mPlayer == nullptr || mFrameStack == nullptr) return;
+
+  QWidget* rw = mPlayer->renderWidget();
+  if (rw == nullptr || mFrameStack->indexOf(rw) < 0) return;
+
+  mFrameStack->setCurrentWidget(rw);
+  if (auto* mrw = qobject_cast<TTMpvRenderWidget*>(rw)) {
+    if (mrw->prepareRenderContext())
+      mRenderContextRealized = true;
+    else
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("realizeRenderContext: prepareRenderContext failed"));
+  }
+  mFrameStack->setCurrentWidget(mpegWindow);
+}
+
 void TTCurrentFrame::onPlayVideo()
 {
   if (videoStream == 0 || mAVItem == 0) return;
@@ -590,10 +624,11 @@ void TTCurrentFrame::onPlayVideo()
     return;
   }
 
-  // Player + renderWidget werden beim Stream-Open (ensurePlayerCreated, via
-  // onAVDataChanged) erzeugt und ihr GL-Context dort initialisiert. Als Netz
-  // hier nochmal sicherstellen, falls onPlayVideo ohne vorheriges Open läuft.
+  // Player + renderWidget entstehen im Konstruktor, der GL-Context beim
+  // Stream-Open (realizeRenderContext via onAVDataChanged). Als Netz hier
+  // nochmal sicherstellen, falls onPlayVideo ohne vorheriges Open läuft.
   ensurePlayerCreated();
+  realizeRenderContext();
 
   // Stack-Switch zu renderWidget erst, wenn das Widget seinen ZWEITEN echten
   // mpv-Frame gerendert hat (firstFrameReady). Per Log belegt: mpv liefert nach
