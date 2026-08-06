@@ -86,10 +86,33 @@ void TTMPEG2Window2::showVideoFrame()
   float scaleFactorX = 1.0;
   float scaleFactorY = 1.0;
 
-  if (mpVideoStream != 0 && !mUseFFmpeg) {
+  if (mpVideoStream != 0 && !mUseFFmpeg && videoWidth > 0 && videoHeight > 0) {
+    // MPEG-2 aspect_ratio_information signals the DISPLAY aspect ratio of
+    // the whole picture (2 = 4:3, 3 = 16:9, 4 = 2.21:1), unlike H.26x SAR.
+    // Correct in the upscale direction so no detail is lost before the
+    // final widget scaling (same principle as the FFmpeg branch below);
+    // mpv playback applies the same aspect, so still and playback keep the
+    // same shape. Code 1 (square samples) needs no correction. This used
+    // to handle only 16:9 — and shrank the height for it — leaving 4:3
+    // material displayed at its 720/576 storage aspect.
     TTSequenceHeader* seqHeader = mpVideoStream->getSequenceHeader(currentIndex);
-    if (seqHeader != 0 && seqHeader->aspectRatio() == 3) {
-      scaleFactorY = (float)(videoWidth*9.0/(videoHeight*16.0));
+    double dar = 0.0;
+    if (seqHeader != 0) {
+      switch (seqHeader->aspectRatio()) {
+        case 2: dar = 4.0 / 3.0;  break;
+        case 3: dar = 16.0 / 9.0; break;
+        case 4: dar = 2.21;       break;
+        default:                  break;
+      }
+    }
+    if (dar > 0.0) {
+      double displayWidth = videoHeight * dar;
+      if (qAbs(displayWidth - videoWidth) > 0.5) {
+        if (displayWidth > videoWidth)
+          scaleFactorX = (float)(displayWidth / videoWidth);   // widen (720 -> 768 or 1024)
+        else
+          scaleFactorY = (float)(videoWidth / displayWidth);   // heighten
+      }
     }
   }
 
