@@ -72,6 +72,7 @@ set(TTCUT_HEADERS
   common/ttthreadtask.h
   common/ttthreadtaskpool.h
   common/ttmessagelogger.h
+  common/ttavlog.h
   common/ttexception.h
   common/istatusreporter.h
   data/ttaspectdetect.h
@@ -179,6 +180,7 @@ set(TTCUT_CORE_SOURCES
   common/ttthreadtask.cpp
   common/ttthreadtaskpool.cpp
   common/ttmessagelogger.cpp
+  common/ttavlog.cpp
   common/ttexception.cpp
   common/istatusreporter.cpp
   data/ttaspectdetect.cpp

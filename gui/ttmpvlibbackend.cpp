@@ -21,6 +21,7 @@ extern "C" {
 }
 
 #include "../common/ttmessagelogger.h"
+#include "../common/ttavlog.h"
 
 TTMpvLibBackend::TTMpvLibBackend(QObject* parent)
   : ITTMpvBackend(parent)
@@ -94,6 +95,9 @@ bool TTMpvLibBackend::start()
     emit mpvError(QString("mpv_initialize failed: %1").arg(mpv_error_string(initRc)));
     mpv_terminate_destroy(mMpv);
     mMpv = nullptr;
+    // mpv_terminate_destroy restores ffmpeg's DEFAULT av_log callback,
+    // not ours — re-install, or all later libav output goes raw to stderr.
+    ttInstallAvLogCallback();
     return false;
   }
 
@@ -158,6 +162,12 @@ void TTMpvLibBackend::shutdown()
   if (mMpv) {
     mpv_terminate_destroy(mMpv);
     mMpv = nullptr;
+    // libmpv takes over the process-global av_log callback at mpv_create
+    // and restores ffmpeg's DEFAULT callback (not ours) when the last
+    // context is destroyed — without this re-install every later libav
+    // operation would log raw to the console (runtime evidence
+    // 2026-08-06, avlog_mpv_diag).
+    ttInstallAvLogCallback();
   }
 
   // 4. Bereits in der Qt-Event-Queue stehende drainEvents-/onMpvUpdate-Calls
