@@ -18,6 +18,25 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **libav messages leaked to the console after the first mpv playback,
+  despite disabled libav logging.** libmpv takes over the process-global
+  av_log callback at `mpv_create()` and restores ffmpeg's *default* stderr
+  callback — not the application's — when the mpv context is destroyed.
+  After the first Play from the Current Frame widget, every later libav
+  operation (frame decode, preview encode, audio probing) therefore logged
+  raw to the terminal, bypassing the "Log libav messages" setting. The
+  callback (now in `common/ttavlog.{h,cpp}`) is re-installed after every
+  mpv teardown.
+
+- **"Cannot load libcuda.so.1" was printed to the terminal once per
+  playback session on non-NVIDIA systems.** libmpv eagerly loads all GPU
+  hwdec interops when the render context is created, even with hardware
+  decoding disabled; the failed CUDA probe is reported by ffnvcodec's
+  loader directly on stderr, outside any logging mechanism. With hardware
+  decoding off (the default), interop loading is now blocked entirely
+  (`gpu-hwdec-interop=no`); an `MPV_HWDEC` override keeps the interop path
+  available.
+
 - **Esc in the audio-burst warning dialog now cancels the cut instead of
   starting it.** The dialog's old `QMessageBox::warning(parent, title, text,
   button0Text, button1Text)` overload is removed in Qt6; the replacement

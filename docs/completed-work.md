@@ -390,6 +390,32 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **libav-Konsolenausgaben trotz deaktiviertem libav-Logging** → **GEFIXT
+  (2026-08-06, branch `fix/avlog-callback-after-mpv`)**
+  - Beobachtet bei der Qt6-GUI-Abnahme 2026-08-04: nach der ersten
+    mpv-Wiedergabe erschienen libav-Meldungen im ffmpeg-Default-Format auf
+    stderr, obwohl der `logLibav()`-gegatete Callback installiert war.
+  - Hypothese bestätigt und präzisiert (Laufzeit-Beleg `avlog_mpv_diag`,
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/`): libmpv übernimmt den
+    prozessglobalen av_log-Callback schon bei `mpv_create()` (nicht erst beim
+    Playback) und stellt bei `mpv_terminate_destroy()` ffmpegs
+    *Default*-Callback wieder her — nicht den der Anwendung.
+  - Fix: Callback aus `ttcutmain.cpp` nach `common/ttavlog.{h,cpp}`
+    verschoben (`ttInstallAvLogCallback()`); `TTMpvLibBackend` installiert
+    ihn nach beiden `mpv_terminate_destroy()`-Stellen neu.
+  - Separater zweiter Kanal, vom av_log-Fix unberührt: `Cannot load
+    libcuda.so.1` (1× pro Play-Session, schon vor dem ersten Play sichtbar).
+    gdb-Beleg: `dlopen("libcuda.so.1")` aus `mpv_render_context_create()` —
+    libmpv lädt mit `gpu-hwdec-interop=auto` eifrig ALLE Interops, auch bei
+    `hwdec=no`; die Fehlermeldung druckt ffnvcodecs Fallback-`FFNV_LOG_FUNC`
+    als nacktes `fprintf(stderr)` (ffmpeg biegt das Makro auf `av_log` um,
+    mpv nicht). Fix: `gpu-hwdec-interop=no` wenn `hwdec` auf „no" steht;
+    ein `MPV_HWDEC`-Override lässt den Interop-Pfad unangetastet.
+  - Abnahme: Mini-Player-Harness aus echten Projektklassen
+    (`miniplayer.cpp`, TTMpvWrapper→Backend→RenderWidget, 3 s Playback) —
+    stderr vorher 1 cuda-Zeile, nachher leer; GUI-Prüfweg (navigieren →
+    Play → navigieren) durch den User bestanden: Terminal durchgehend still.
+
 - **`--auto-cut` beendet sich bei MPEG-2 nicht selbst** → **GEFIXT (2026-08-02,
   `9da00f13`)**
   - Ursache: das Signal wurde auf diesem Pfad schlicht nie gesendet.
