@@ -161,7 +161,6 @@ set(TTCUT_HEADERS
   gui/ttstreamnavigator.h
   gui/ttcuttreeview.h
   gui/ttprogressbar.h
-  gui/tttaskprogress.h
   gui/ttcutpreview.h
   gui/ttcutaboutdlg.h
   gui/ttcutavcutdlg.h
@@ -266,7 +265,6 @@ set(TTCUT_CORE_SOURCES
   gui/ttstreamnavigator.cpp
   gui/ttcuttreeview.cpp
   gui/ttprogressbar.cpp
-  gui/tttaskprogress.cpp
   gui/ttcutpreview.cpp
   gui/ttcutaboutdlg.cpp
   gui/ttcutavcutdlg.cpp

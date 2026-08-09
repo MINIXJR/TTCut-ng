@@ -16,15 +16,12 @@
 #define TTPROGRESSBAR_H
 
 #include <QDialog>
-#include <QDateTime>
-#include <QUuid>
-#include <QHash>
+#include <QTime>
 
 #include "ui_ttprogressform.h"
 #include "../common/ttcut.h"
 
 class TTThreadTask;
-class TTTaskProgress;
 class QCloseEvent;
 
 class TTProgressBar : public QDialog, Ui::TTProgressForm
@@ -46,25 +43,26 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
 
     protected:
       void closeEvent(QCloseEvent* event) override;
+      void reject() override;
 
     private:
-      void addTaskProgress(TTThreadTask* task);
-      void setTotalSteps(quint64  t_steps, int r_int=0);
       void setTotalProgress(int progress, QTime time);
-      void setTaskProgress(TTThreadTask* task, const QString& msg);
-      void setTaskFinished(TTThreadTask* task, const QString& msg);
-
-      void resetProgress();
-
-      void updateProgressBar();
+      void appendDetailLine(const QString& text);
+      void resetForNewOperation();
+      void enterFinishedState();
 
   signals:
     void cancel();
 
   private:
-    QHash<QUuid, TTTaskProgress*>* taskProgressHash;
-    int            normTotalSteps;
-    bool           isBlocking;
+    // Finished state: operation ended (Exit/Canceled received — Error is
+    // mid-task, not operation-terminal, and does not set this). The Cancel
+    // button becomes Close, and closing no longer emits cancel().
+    bool           mFinished;
+
+    // Last Step message appended to the details log. Step fires per frame
+    // with mostly identical text; only text CHANGES become log lines.
+    QString        mLastStepMsg;
 
     // Re-entrancy guard for closeEvent() -> onBtnCancelClicked(): makes sure
     // the cancel() signal fires only once per user action even if

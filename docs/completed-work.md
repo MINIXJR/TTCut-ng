@@ -390,6 +390,40 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Fortschrittsanzeige-Überholung** (Details-Panel leer, Audio-Cut ohne
+  echte Prozente, MPEG-2-Finalschnitt teilweise außerhalb des Dialogs) →
+  **GEFIXT (2026-08-06/07, branch `feature/progress-details`)**
+  - War: Details-Panel des Fortschrittsdialogs blieb leer — die
+    Cut-Pipeline meldete `task==0` und `AddProcessLine` wurde verworfen.
+    Audio-Cut sprang pro Spur in einem Sprung (`TTFFmpegWrapper::cutAudioStream`
+    hatte keinen Pro-Packet-Callback). MPEG-2-Finalschnitt hatte
+    Pool- statt Operationsklammern: Audio wurde VOR dem Dialog stumm
+    geschnitten, Mux lief NACH dessen Verstecken unsichtbar, und es gab
+    keinen End-Exit im Erfolgspfad. Fensterkreuz (X) ging in drei
+    Import-Dialogen ("Defekte Frames erkannt", "Stream-Integritätswarnung")
+    nicht (zwei AcceptRole-Buttons → kein RejectRole/Escape-Button; Repro
+    `CLAUDE_TMP/TTCut-ng/msgbox_close_repro.cpp`).
+  - Fix: zentrales Zeitstempel-Log in `TTProgressBar` (Details-Panel als
+    Live-Statuslog, inkl. Re-Encoder-/mplex-Ausgabe); bei angehaktem
+    „Details anzeigen" bleibt der Dialog nach Abschluss offen
+    (Abbrechen→Schließen), Mid-Task-Fehlermeldungen halten ihn ebenfalls
+    offen (`d0240fbf`, `91a5d014`, `071800e5`). `cutAudioStream` bekam
+    einen optionalen `std::function<void(int percent)>`-Callback an der
+    `av_read_frame`-Schleife (`9b8b2746`), verdrahtet in H.26x- und
+    Audio-Only-Pipelines (`720c083f`). MPEG-2-Finalschnitt bekommt eigene
+    Operationsklammern über `mCutOperationActive`, konsumiert am
+    Pool-Exit, um einen doppelten Exit nach Abbruch zu vermeiden
+    (`6e71d79c`, `ec45323a`). Deutsche Übersetzungen ergänzt (`3b7b6499`).
+  - Nebenbefund: totes `TTTaskProgress` + `isBlocking` entfernt. Statuskette
+    komplett inventarisiert: Öffnen / Framesuche / Vorschau (Pool-Klammern
+    bereits korrekt), Quick-Jump (eigener Pool, unverbunden),
+    Playback-Temp-MKV (sendet nichts) — beide unauffällig, kein Fix nötig.
+  - Belege: Gate `tools/diag/test_audioprogress` auf Tux-AC3 — streng
+    steigende Prozente, Ende bei 100, ≤101 `av_read_frame`-Aufrufe (Bound
+    gegen Busy-Loop-Regression). GUI-Abnahme (Details-Log, Schließen-Button,
+    MPEG-2-Dialog-Abdeckung, Stream-Point-Analyse, Fensterkreuz,
+    Abbruch-Verhalten) steht beim User noch aus.
+
 - **KWin-Stale-Area-Fehler („eingefrorene" Standbild-Fläche bei fraktionaler
   Skalierung) — App-Auslöser gefunden und entschärft** → **GEFIXT
   (2026-08-06, `f87ea06c`)**

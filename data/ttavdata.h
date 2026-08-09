@@ -271,6 +271,13 @@ class TTAVData : public QObject
     qint64  mLastCutSourceMs = 0;
     qint64  mLastCutResultMs = 0;
 
+    // True while a MPEG-2 final cut is running (onDoCut MPEG-2 branch until
+    // onCutFinished/onCutAborted). Suppresses the thread pool's own
+    // Init/Exit status brackets: the pool is an inner stage of the cut
+    // (audio is cut before it, muxing runs after it), and its brackets
+    // would reset resp. prematurely finish the progress dialog.
+    bool mCutOperationActive = false;
+
   public:
     // Count extra frames before a given frame index (for audio time correction)
     int countExtraFramesBefore(int frameIndex) const;
@@ -330,7 +337,10 @@ class TTAVData : public QObject
                                  const QString& lang, bool ok)>& onCut,
         // Optional hook run just before each track is cut (progress/UI). Keeps
         // outPath a pure path computation; existing output is deleted centrally.
-        const std::function<void(int trackIdx)>& beforeCut = {});
+        const std::function<void(int trackIdx)>& beforeCut = {},
+        // Optional per-track progress hook (0..100), forwarded to
+        // cutAudioStream's own progress callback.
+        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr);
 
     // Convenience overload for the common case: cut ALL of avItem's audio
     // tracks. Builds the all-tracks index list and forwards to the overload
@@ -342,7 +352,8 @@ class TTAVData : public QObject
         const std::function<QString(int trackIdx, const QString& ext)>& outPath,
         const std::function<void(int trackIdx, const QString& path,
                                  const QString& lang, bool ok)>& onCut,
-        const std::function<void(int trackIdx)>& beforeCut = {});
+        const std::function<void(int trackIdx)>& beforeCut = {},
+        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr);
 
     //! Cut the given subtitle tracks of avItem against the video keep list
     //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2

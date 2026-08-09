@@ -1044,11 +1044,16 @@ void TTCutMainWindow::onAnalysisWorkerFinished()
     mStreamPointWorkersRunning = 0;
     mpStreamPointWidget->setAnalysisRunning(false, mStreamPointAnalysisAborted);
 
-    // Close progress dialog
-    if (progressBar != 0) {
-      progressBar->hideBar();
-    }
-    this->setEnabled(true);
+    // End the scan through the status chain instead of hiding the dialog
+    // manually: the dialog decides itself whether to stay open (details
+    // pane) and needs the finished state for its next-operation reset.
+    // onStatusReport's Exit/Canceled branch also re-enables the window.
+    onStatusReport(nullptr,
+        mStreamPointAnalysisAborted ? StatusReportArgs::Canceled
+                                    : StatusReportArgs::Exit,
+        mStreamPointAnalysisAborted ? tr("Stream point analysis cancelled")
+                                    : tr("Stream point analysis complete"),
+        0);
   }
 }
 
@@ -1710,7 +1715,10 @@ void TTCutMainWindow::runScreenshotMode()
                            tr("Stream Integrity Warning"),
                            warnMsg, QMessageBox::NoButton, this);
         msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
-        msgBox.addButton(QMessageBox::Ok);
+        QPushButton* okBtn = msgBox.addButton(QMessageBox::Ok);
+        // Two AcceptRole buttons leave QMessageBox without an escape button;
+        // without this the msgBox.close() below is silently ignored.
+        msgBox.setEscapeButton(okBtn);
         msgBox.show();
         QApplication::processEvents();
         saveWidgetScreenshot(&msgBox, "ttcutng-integrity-warning.png", 0);
@@ -1824,11 +1832,13 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       break;
 
     case StatusReportArgs::Exit:
-    case StatusReportArgs::Error:
     case StatusReportArgs::Canceled:
-      if (progressBar != 0) {
-        progressBar->hideBar();
-      }
+      // Hiding (or keeping the dialog open to read the details log) is
+      // decided in TTProgressBar::enterFinishedState() via the
+      // onSetProgress() call below. Error is deliberately NOT listed here:
+      // it is emitted mid-task (e.g. H.26x frame-index build during open)
+      // and is never operation-terminal — the operation still ends with
+      // Exit or Canceled, so the window must stay disabled until then.
       this->setEnabled(true);
       break;
   }
@@ -1843,7 +1853,7 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
         mDirectProgressTimer.start();
       time = QTime(0, 0, 0, 0).addMSecs(mDirectProgressTimer.elapsed());
       if (state == StatusReportArgs::Exit || state == StatusReportArgs::Finished ||
-          state == StatusReportArgs::Error || state == StatusReportArgs::Canceled)
+          state == StatusReportArgs::Canceled)
         mDirectProgressTimer.invalidate();
     } else if (mStreamPointWorkersRunning > 0) {
       progress = mpStreamPointTaskPool->overallPercentage();

@@ -1574,7 +1574,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                                       const QString& outputFile,
                                       const QList<QPair<double, double>>& cutList,
                                       bool normalizeAcmod,
-                                      const QList<int>& targetAcmods)
+                                      const QList<int>& targetAcmods,
+                                      const std::function<void(int)>& progressCb)
 {
     if (!QFile::exists(inputFile)) {
         setError(QString("Audio file not found: %1").arg(inputFile));
@@ -1671,6 +1672,19 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
         frameDuration = av_rescale_q(1, AVRational{32, 1000}, inStream->time_base);
     }
 
+    // Per-packet duration in seconds (loop-invariant) and progress state.
+    const double frameDurSec = frameDuration * av_q2d(inStream->time_base);
+    double totalKeepSec = 0.0;
+    for (const auto& seg : cutList)
+        totalKeepSec += qMax(0.0, seg.second - seg.first);
+    double writtenSec = 0.0;
+    int lastPercent = -1;
+    auto reportProgress = [&]() {
+        if (!progressCb || totalKeepSec <= 0.0) return;
+        int p = qBound(0, (int)(writtenSec / totalKeepSec * 100.0), 100);
+        if (p != lastPercent) { lastPercent = p; progressCb(p); }
+    };
+
     AVPacket* pkt = av_packet_alloc();
     if (!pkt) {
         avformat_close_input(&inFmtCtx);
@@ -1749,7 +1763,6 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
             }
 
             // Stop at end time — only include frames that fit completely
-            double frameDurSec = frameDuration * av_q2d(inStream->time_base);
             if (pktTime + frameDurSec > endTime + 0.001) {
                 av_packet_unref(pkt);
                 break;
@@ -1887,6 +1900,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                             acmodReencoded++;
                             ++totalPacketsWritten;
                             lastWrittenPtsTicks = encPkt->pts;
+                            writtenSec += frameDurSec;
+                            reportProgress();
                         }
                     }
                     av_packet_free(&encPkt);
@@ -1907,12 +1922,18 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                     nextOutputPts = pkt->pts + frameDuration;
                     ++totalPacketsWritten;
                     lastWrittenPtsTicks = pkt->pts;
+                    writtenSec += frameDurSec;
+                    reportProgress();
                 }
 
                 av_packet_unref(pkt);
             }
         }
     }
+
+    // Guarantee the contract's final 100 even when rounding stopped short.
+    if (progressCb && totalKeepSec > 0.0 && lastPercent < 100)
+        progressCb(100);
 
     // Cleanup acmod re-encode resources
     if (swrCtx)             swr_free(&swrCtx);

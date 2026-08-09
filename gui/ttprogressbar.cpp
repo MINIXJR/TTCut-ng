@@ -13,14 +13,14 @@
 // ----------------------------------------------------------------------------
 
 #include "ttprogressbar.h"
-#include "tttaskprogress.h"
 
 #include "../common/istatusreporter.h"
 #include "../common/ttthreadtask.h"
 
-#include <QDebug>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QScrollBar>
+#include <QTime>
 
 /**
  * Constructor
@@ -30,19 +30,16 @@ TTProgressBar::TTProgressBar(QWidget* parent)
 {
   setupUi(this);
 
-  scrollArea->hide();
+  detailsView->hide();
   this->adjustSize();
 
-  normTotalSteps = 100;
-  isBlocking     = false;
-  mClosing       = false;
+  mFinished = false;
+  mClosing  = false;
 
-  progressBar->setMinimum( 0 );
-  progressBar->setMaximum( normTotalSteps );
+  progressBar->setMinimum(0);
+  progressBar->setMaximum(100);
 
-  taskProgressHash = new QHash<QUuid, TTTaskProgress*>;
-
-  connect(pbCancel,  &QPushButton::clicked,    this, &TTProgressBar::onBtnCancelClicked);
+  connect(pbCancel,  &QPushButton::clicked,         this, &TTProgressBar::onBtnCancelClicked);
   connect(cbDetails, &QCheckBox::checkStateChanged, this, &TTProgressBar::onDetailsStateChanged);
 }
 
@@ -66,26 +63,9 @@ void TTProgressBar::showBar()
 
 /**
  * Hide the progress form
- *
- * Does NOT set the dialog modal on the way out. It used to, which is a strange
- * thing to do to a window one is about to hide, so the line was dropped.
- *
- * Honesty note on the history: this removal was first believed to fix a
- * frozen-looking GUI after a stream-point analysis under Wayland. The next
- * day's investigation traced that whole symptom set (stale panes, shivering
- * dialogs, marker jumps with no visible effect, fine under xcb) to a
- * compositor bug instead: KWin 6.7.2 fails to refresh parts of a Qt5 window
- * at a FRACTIONAL display scale (1.5/1.75) while the window is maximized -
- * the Alt-Tab thumbnail of the very same window showed the correct content
- * while the screen showed stale pixels. Integer scale (100%/200%), an
- * unmaximized window, or QT_QPA_PLATFORM=xcb avoid it. So this change stands
- * on its own merits, but there is no evidence the old setModal(true) ever
- * caused a hang.
  */
 void TTProgressBar::hideBar()
 {
-  if (isBlocking) return;
-
   hide();
 
   qApp->processEvents();
@@ -94,37 +74,31 @@ void TTProgressBar::hideBar()
 /**
  * Handle the window's close button (the X).
  *
- * This behaves exactly like the Cancel button (onBtnCancelClicked()): a
- * QDialog's default closeEvent() maps to reject(), i.e. "discard the
- * operation", not "put the window away" - and Qt's own QProgressDialog
- * reimplements closeEvent() for the same reason. An operation that keeps
- * running with its only progress window gone, with no separate "run in
- * background" affordance, is a usability trap, not a convenience.
- *
- * This also fixes the original complaint (the dialog reopening after being
- * closed): every task emits StatusReportArgs::Start, and the Start branch in
- * TTCutMainWindow::onStatusReport calls showBar(). Cancelling here goes
- * through onBtnCancelClicked(), which - via the cancel() signal -
- * synchronously aborts every task still in the pool's queue
- * (TTThreadTaskPool::onUserAbortRequest()), including ones that have not
- * started running yet. TTThreadTask::run() checks mIsAborted before calling
- * operation() (where Start is reported), so an aborted-but-not-yet-started
- * task never reports Start at all - there is no second Start left to reopen
- * the dialog.
+ * While the operation is running this behaves exactly like the Cancel
+ * button (see onBtnCancelClicked()): a progress window silently closing
+ * over a still-running operation is a usability trap, and Qt's own
+ * QProgressDialog reimplements closeEvent() for the same reason.
+ * After the operation finished (mFinished), closing is just closing.
  */
 void TTProgressBar::closeEvent(QCloseEvent* event)
 {
-  // onBtnCancelClicked() calls hideBar(), which only hides the window (never
-  // close()s it), so this does not recurse back into closeEvent() today.
-  // The guard is defensive in case that ever changes, so the cancel() signal
-  // can never fire twice for one user action.
-  if (!mClosing) {
+  if (!mFinished && !mClosing) {
     mClosing = true;
     onBtnCancelClicked();
     mClosing = false;
   }
 
   event->accept();
+}
+
+/**
+ * Esc arrives here via QDialog::keyPressEvent. Route it through close()
+ * so it takes exactly the closeEvent() path: cancel-once while running,
+ * plain hide when finished.
+ */
+void TTProgressBar::reject()
+{
+  close();
 }
 
 /**
@@ -146,49 +120,47 @@ void TTProgressBar::setTotalProgress(int progress, QTime time)
 }
 
 /**
- * Set the task's progress value
+ * Append one timestamped line to the details log. Keeps the view glued to
+ * the newest line unless the user has scrolled up to read older output.
  */
-void TTProgressBar::setTaskProgress(TTThreadTask* task, const QString& msg)
+void TTProgressBar::appendDetailLine(const QString& text)
 {
-  if (task == 0) return;
-  if (!taskProgressHash->contains(task->taskID())) return;
+  QScrollBar* sb = detailsView->verticalScrollBar();
+  const bool wasAtEnd = (sb->value() >= sb->maximum() - 4);
 
-  TTTaskProgress* tp = taskProgressHash->value(task->taskID());
-  tp->onRefreshProgress(msg);
+  detailsView->appendPlainText(
+      QString("%1  %2").arg(QTime::currentTime().toString("HH:mm:ss"), text));
+
+  if (wasAtEnd)
+    sb->setValue(sb->maximum());
 }
 
 /**
- * Set task finished
+ * Reset for a new operation: clear the log, restore the Cancel button.
  */
-void TTProgressBar::setTaskFinished(TTThreadTask* task, const QString& msg)
-{
-  if (task == 0) return;
-  if (!taskProgressHash->contains(task->taskID())) return;
-
-  TTTaskProgress* tp = taskProgressHash->value(task->taskID());
-  tp->onTaskFinished(msg);
-}
-
-/**
- * Set the progress value to 100%
- */
-/**
- * Reset the progress bar and remove all taskprogress widgets
- */
-void TTProgressBar::resetProgress()
+void TTProgressBar::resetForNewOperation()
 {
   progressBar->reset();
+  percentageString->setText("0%");
+  elapsedTimeString->setText("00:00:00");
+  detailsView->clear();
+  mLastStepMsg.clear();
+  mFinished = false;
+  pbCancel->setText(tr("Cancel"));
+  this->setEnabled(true);
+}
 
-  for (TTTaskProgress* value : *taskProgressHash) {
-    if (value == 0) continue;
+/**
+ * Operation ended: turn Cancel into Close. With the details pane open the
+ * dialog stays visible so the log can be read; otherwise hide as before.
+ */
+void TTProgressBar::enterFinishedState()
+{
+  mFinished = true;
+  pbCancel->setText(tr("Close"));
 
-    verticalLayout->removeWidget(value);
-    delete value;
-    value = 0;
-  }
-  taskProgressHash->clear();
-  scrollArea->adjustSize();
-  this->adjustSize();
+  if (!cbDetails->isChecked())
+    hideBar();
 }
 
 /**
@@ -197,82 +169,103 @@ void TTProgressBar::resetProgress()
 void TTProgressBar::onDetailsStateChanged(Qt::CheckState)
 {
   if (cbDetails->isChecked()) {
-    scrollArea->show();
+    detailsView->show();
   } else {
-    scrollArea->hide();
+    detailsView->hide();
   }
   this->adjustSize();
 }
 
 /**
- * Button cancel clicked
+ * Button clicked: Cancel while running, Close when finished
  */
 void TTProgressBar::onBtnCancelClicked()
 {
-  emit cancel();
+  if (!mFinished)
+    emit cancel();
 
-  isBlocking = false;
   hideBar();
 }
 
 /**
- * Set progress values
+ * Central status sink: drives the action line, the total progress bar and
+ * the details log. All senders arrive here (task-based and task==0 alike);
+ * the log needs no task objects.
  */
 void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress, QTime totalTime)
 {
+  Q_UNUSED(task)
+
   switch (state) {
     case StatusReportArgs::Init:
-      isBlocking = false;
-      resetProgress();
+      resetForNewOperation();
       setActionText(msg);
-      this->setEnabled(true);
+      appendDetailLine(msg);
       break;
 
     case StatusReportArgs::Start:
-      addTaskProgress(task);
+      // Stream-point scans emit Start without Init, so a new operation can
+      // arrive on a dialog still in its finished state - reset then. A
+      // Start DURING a running operation (every open task emits one) must
+      // NOT clear the log.
+      if (mFinished) resetForNewOperation();
       setActionText(msg);
+      appendDetailLine(msg);
       break;
 
     case StatusReportArgs::Step:
       setActionText(msg);
       setTotalProgress(totalProgress, totalTime);
-      setTaskProgress(task, msg);
+      if (msg != mLastStepMsg) {
+        mLastStepMsg = msg;
+        appendDetailLine(msg);
+      }
       break;
 
     case StatusReportArgs::Finished:
-      setTaskFinished(task, msg);
-      break;
-
-    case StatusReportArgs::ShowProcessForm:
-      break;
-
-    case StatusReportArgs::ShowProcessFormBlocking:
-      isBlocking = true;
+      appendDetailLine(msg);
       break;
 
     case StatusReportArgs::AddProcessLine:
+      appendDetailLine(msg);
       break;
 
+    case StatusReportArgs::ShowProcessForm:
     case StatusReportArgs::HideProcessForm:
+      // Legacy process-form brackets from the MPEG-2 re-encoder and mplex —
+      // the form is gone, but the messages (incl. "Encoding failed - encoder
+      // setup") belong in the log.
+      appendDetailLine(msg);
+      break;
+
+    case StatusReportArgs::Error:
+      // Error is emitted from inside a single task (e.g. the H.26x frame
+      // index build during open) and is never operation-terminal — every
+      // operation ends with Exit or Canceled. Log the line and stay in the
+      // running state; entering the finished state here would let the next
+      // task's Start wipe the log (including this very error line) and
+      // would disable cancel while the pool is still running.
+      appendDetailLine(tr("Error: %1").arg(msg));
+      break;
+
+    case StatusReportArgs::Canceled:
+      setActionText(msg);
+      appendDetailLine(tr("Cancelled: %1").arg(msg));
+      enterFinishedState();
+      break;
+
+    case StatusReportArgs::Exit:
+      // Finalize the display: the last Step often leaves the bar at a mid
+      // value (e.g. the pool's overall percentage) when the operation ends.
+      // Without this a kept-open dialog shows a frozen mid-run state
+      // forever (GUI acceptance finding 2026-08-07).
+      setActionText(msg);
+      setTotalProgress(100, totalTime);
+      appendDetailLine(msg);
+      enterFinishedState();
       break;
 
     default:
       break;
   }
 }
-
-/**
- * Add progress bar for the given task
- */
-void TTProgressBar::addTaskProgress(TTThreadTask* task)
-{
-  if (task == 0) return;
-  if (taskProgressHash->contains(task->taskID())) return;
-
-  TTTaskProgress* taskProgress = new TTTaskProgress(this, task);
-
-  taskProgressHash->insert(task->taskID(), taskProgress);
-  verticalLayout->addWidget(taskProgress);
-}
-
-

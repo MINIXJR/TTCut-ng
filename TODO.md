@@ -5,6 +5,37 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## High Priority
 
+- **SIGSEGV nach Smart Cut in `doH264Cut` — Use-after-free in Qt-Model-Internals
+  (2026-08-07, vertagt auf User-Entscheidung; blockiert den Merge von
+  `feature/progress-details`)**
+  - Absturz bei der GUI-Abnahme: Öffnen (18:34) → Vorschau (18:36:38) →
+    Schnitt-Dialog → GUI-Schnitt einer 85-min-H.264-Aufnahme; Crash ~18:38,
+    direkt nach „Smart Cut complete" (Log endet dort), in der
+    Audio-/Folgephase von `doH264Cut`.
+  - **Forensik (Core `core.500359`, 2 GB, Build-ID passt zu `bb553cd6`):**
+    Absturz-Thread: `QAbstractItemModelPrivate::invalidatePersistentIndexes`
+    ← `QAbstractProxyModelPrivate::_q_sourceModelDestroyed` ← (Frames
+    fehlen/kollabiert) ← `TTAVData::doH264Cut` (attribuiert ~ttavdata.cpp:1637,
+    -O2-Inlining, ±). Der Proxy-Private-Block ist **freigegebener,
+    wiederverwendeter Speicher**: ungültiger vtable-Zeiger, `persistent.indexes`
+    mit m_size 2 951 281, „Source-Model"-Zeiger zeigt in denselben Block.
+    Backtrace-Dump: `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt`.
+  - TTCut-Code enthält **kein einziges** Proxy-Model und keinen QCompleter
+    (Grep 2026-08-07) — das Proxy ist Qt-intern. Direkt vor `onDoCut` wird
+    `TTCutAVCutDlg` per `delete` zerstört (`ttcutmainwindow.cpp:1151`), davor
+    der Vorschau-Dialog (`delete cutPreview`, `:1100`).
+  - **Zuordnung offen:** Der Branch fasst keine Models an; dieselbe
+    Use-after-free-Klasse trat am 2026-08-01 vorbestehend auf (qtwayland,
+    → Memory `reference_core_dump_forensics`). Diese Bediensequenz
+    (Vorschau → Cut-Dialog → langer GUI-Schnitt) läuft unter Qt6 erst seit
+    dem 04.08. — Ursache kann im Branch, in der Qt6-Migration oder in Qt
+    selbst (6.10, Debian sid) liegen.
+  - **Nächster Schritt (vereinbart):** ASAN-Build
+    (`-fsanitize=address`), Bediensequenz einmal wiederholen — ASAN meldet
+    den ERSTEN fehlerhaften Zugriff mit vollem Stack statt des späten
+    Symptoms. Alternativ-Check: gleiche Sequenz auf `master` (Qt6 ohne
+    Branch) → klärt die Branch-Schuldfrage.
+
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — verbleibende Befunde**
   (Wurzel — TS↔ES-AU-Nummerierungs-Drift der es_extra_frames — GELÖST 2026-07-19,
   siehe Spec `docs/superpowers/specs/2026-07-19-es-extras-field-awareness-design.md`):
@@ -80,12 +111,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     der auf eine stabile Ausgabedatei wartet und den Prozess killt, ist nicht mehr nötig.
   - Offen: echtes Qt-freies Standalone-Tool, das `.ttcut` liest und ohne GUI-Event-Loop schneidet —
     läuft dann auch auf reinen Servern. Use case: VDR → demux → TTCut-ng CLI → archive
-
-- **Echte Fortschrittsanzeige für `cutAudioStream` / Audio-Only-Cut**
-  - Aktuell springt der Balken pro Audiospur in einem Schritt, da `TTFFmpegWrapper::cutAudioStream` keine Pro-Packet-Progress-Callbacks liefert
-  - Lösung: Optionalen `std::function<void(int percent)>` Callback in `cutAudioStream` einbauen, an `av_read_frame`-Loop koppeln (bekanntes Total über `endTime − startTime` pro Segment)
-  - Audio-Only-Pfad in `TTAVData::doAudioOnlyCut` daraus echte Step-Updates emittieren
-  - Auch dem MP3/AAC-Re-Encode-Pfad (Stage 2) gleich mitgeben
 
 - **LipSync-Prüfdialog: A/V-Versatz objektiv messen und übernehmen** (Idee 2026-07-05)
   - Ziel: den Audio/Video-Versatz einer Aufnahme objektiv bestimmen und als
@@ -210,6 +235,14 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Extract and convert to SRT or keep as PGS for MKV output
 
 ## Low Priority
+
+- **mplex-/Elementary-Fehlschlag meldet „Cut complete"** (Final-Review-Fund
+  2026-08-07, vorbestehend, durch die neue Abschlussmeldung sichtbar geworden):
+  In `TTAVData::onCutFinished` setzt nur der MKV-Zweig bei Mux-Fehlern
+  `mLastCutError`; der mplex-Zweig (`case 0`) und der Elementary-Zweig
+  (`case 3`) nie. Ein fehlgeschlagener mplex-Mux endet daher mit dem
+  End-`Exit` „Cut complete". Fix: Rückgabewert von `mplexPart()` auswerten
+  und `mLastCutError` setzen. Legacy-Pfad, im MKV-Workflow nicht erreichbar.
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
   (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die

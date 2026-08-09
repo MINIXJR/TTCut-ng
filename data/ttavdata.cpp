@@ -454,7 +454,10 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
                            tr("Stream Integrity Warning"),
                            warnMsg, QMessageBox::NoButton, TTCut::mainWindow);
         QPushButton* importBtn = msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
-        msgBox.addButton(QMessageBox::Ok);
+        QPushButton* okBtn = msgBox.addButton(QMessageBox::Ok);
+        // Two AcceptRole buttons leave QMessageBox without an escape button,
+        // which silently disables the window close (X) and Esc.
+        msgBox.setEscapeButton(okBtn);
         msgBox.exec();
 
         if (msgBox.clickedButton() == importBtn && !regions.isEmpty()) {
@@ -721,7 +724,10 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
                      msg, QMessageBox::NoButton, TTCut::mainWindow);
   QPushButton* importBtn = msgBox.addButton(
       tr("Import as Stream Points"), QMessageBox::AcceptRole);
-  msgBox.addButton(QMessageBox::Ok);
+  QPushButton* okBtn = msgBox.addButton(QMessageBox::Ok);
+  // Two AcceptRole buttons leave QMessageBox without an escape button,
+  // which silently disables the window close (X) and Esc.
+  msgBox.setEscapeButton(okBtn);
   msgBox.exec();
 
   if (msgBox.clickedButton() == importBtn) {
@@ -1008,6 +1014,10 @@ void TTAVData::onUserAbortRequest()
 
 void TTAVData::onThreadPoolInit()
 {
+  // See mCutOperationActive: during a final cut the operation brackets are
+  // emitted by onDoCut/onCutFinished, not by the pool.
+  if (mCutOperationActive) return;
+
   emit statusReport(0, StatusReportArgs::Init, tr("starting thread pool"), 0);
 }
 
@@ -1021,7 +1031,18 @@ void TTAVData::onThreadPoolExit()
     }
   }
 
-  emit statusReport(0, StatusReportArgs::Exit, tr("exiting thread pool"), 0);
+  // onThreadTaskPool::onThreadTaskAborted emits aborted() then exit() back to
+  // back on abort, so onCutAborted's Canceled emit is immediately followed by
+  // this slot. Consume mCutOperationActive here (instead of onCutAborted
+  // resetting it) so that pool-exit stays suppressed on the abort path too —
+  // otherwise a stray "exiting thread pool" Exit would follow the Canceled,
+  // breaking the one-closing-bracket guarantee the completion dialog relies
+  // on. On the success path this is the only place the flag gets reset;
+  // onCutFinished's own reset is then a harmless no-op.
+  if (!mCutOperationActive)
+    emit statusReport(0, StatusReportArgs::Exit, tr("exiting thread pool"), 0);
+  else
+    mCutOperationActive = false;
   emit avDataReloaded();
   emit threadPoolExit();
 }
@@ -1374,6 +1395,15 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   }
 
   // For MPEG-2: use traditional cutting workflow
+  // The cut operation is larger than the thread pool run inside it: audio
+  // and subtitles are cut synchronously BEFORE the pool starts, muxing runs
+  // AFTER the pool exits (onCutFinished). Emit the operation brackets here
+  // and suppress the pool's own Init/Exit until onCutFinished/onCutAborted.
+  mCutOperationActive = true;
+  emit statusReport(0, StatusReportArgs::Init, tr("Initializing MPEG-2 cut..."), 0);
+  qApp->processEvents();
+  emit statusReport(0, StatusReportArgs::Start, tr("Cutting MPEG-2 video..."), 0);
+  qApp->processEvents();
   // Read A/V sync offset from .info file if available
   mAvSyncOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(firstStream->filePath());
@@ -1408,6 +1438,18 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
         if (ok) cutVideoTask->muxListItem()->appendAudioFile(path, lang);
+      },
+      [&](int i) {
+        emit statusReport(0, StatusReportArgs::Step,
+            tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()),
+            i * 100 / qMax(1, avItem->audioCount()));
+        qApp->processEvents();
+      },
+      [&](int i, int percent) {
+        int overall = (i * 100 + percent) / qMax(1, avItem->audioCount());
+        emit statusReport(0, StatusReportArgs::Step,
+            tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
+        qApp->processEvents();
       });
 
   // cut subtitle streams against the same extra-frame-corrected keep list
@@ -1621,7 +1663,15 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
           }
         },
         [&](int i) {
-          emit statusReport(0, StatusReportArgs::Step, tr("Cutting audio track %1...").arg(i+1), 0);
+          emit statusReport(0, StatusReportArgs::Step,
+              tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()),
+              i * 100 / qMax(1, avItem->audioCount()));
+          qApp->processEvents();
+        },
+        [&](int i, int percent) {
+          int overall = (i * 100 + percent) / qMax(1, avItem->audioCount());
+          emit statusReport(0, StatusReportArgs::Step,
+              tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
           qApp->processEvents();
         });
 
@@ -1865,7 +1915,7 @@ void TTAVData::onCutFinished()
         } else {
           TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
               QString("MKV muxing failed: %1").arg(mkvProvider->lastError()));
-          emit statusReport(0, StatusReportArgs::Exit, tr("MKV muxing failed"), 0);
+          emit statusReport(0, StatusReportArgs::Step, tr("MKV muxing failed"), 0);
           mLastCutError = tr("Muxing failed: %1").arg(mkvProvider->lastError());
         }
 
@@ -1919,6 +1969,12 @@ void TTAVData::onCutFinished()
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "onCutFinished: emitting cutFinished(), cutVideoName ="
                << TTSettings::instance()->cutVideoName();
+  // Close the operation bracket opened in onDoCut(): re-enable the pool's
+  // own status brackets and report the single final Exit (success or the
+  // recorded error text).
+  mCutOperationActive = false;
+  emit statusReport(0, StatusReportArgs::Exit,
+      mLastCutError.isEmpty() ? tr("Cut complete") : mLastCutError, 0);
   emit cutFinished();
 }
 
@@ -1926,6 +1982,15 @@ void TTAVData::onCutAborted()
 {
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+  // Report the operation's Canceled bracket (see onDoCut), but do NOT reset
+  // mCutOperationActive here: TTThreadTaskPool::onThreadTaskAborted emits
+  // aborted() then exit() back to back, so onThreadPoolExit runs right after
+  // this slot and must still see the flag set to suppress its own "exiting
+  // thread pool" Exit. onThreadPoolExit consumes (resets) the flag.
+  if (mCutOperationActive) {
+    emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+  }
 }
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -1974,7 +2039,16 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
           trackLanguages << lang;
           log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
         }
-        emit statusReport(0, StatusReportArgs::Step, tr("Audio track %1 done").arg(i+1), i+1);
+        emit statusReport(0, StatusReportArgs::Step,
+            tr("Audio track %1 done").arg(i+1),
+            (i + 1) * 100 / qMax(1, avItem->audioCount()));
+        qApp->processEvents();
+      },
+      {},
+      [&](int i, int percent) {
+        int overall = (i * 100 + percent) / qMax(1, avItem->audioCount());
+        emit statusReport(0, StatusReportArgs::Step,
+            tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
         qApp->processEvents();
       });
 
@@ -2261,12 +2335,13 @@ QList<float> TTAVData::cutAudioTracks(
     bool normalizeAcmod,
     const std::function<QString(int, const QString&)>& outPath,
     const std::function<void(int, const QString&, const QString&, bool)>& onCut,
-    const std::function<void(int)>& beforeCut)
+    const std::function<void(int)>& beforeCut,
+    const std::function<void(int, int)>& onProgress)
 {
   QList<int> allTracks;
   if (avItem)
     for (int i = 0; i < avItem->audioCount(); i++) allTracks << i;
-  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut, beforeCut);
+  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut, beforeCut, onProgress);
 }
 
 // Cut all requested audio tracks against a shared video keep list. Absorbs the
@@ -2282,7 +2357,8 @@ QList<float> TTAVData::cutAudioTracks(
     bool normalizeAcmod,
     const std::function<QString(int, const QString&)>& outPath,
     const std::function<void(int, const QString&, const QString&, bool)>& onCut,
-    const std::function<void(int)>& beforeCut)
+    const std::function<void(int)>& beforeCut,
+    const std::function<void(int, int)>& onProgress)
 {
   QList<float> firstDrifts;
   TTMessageLogger* log = TTMessageLogger::getInstance();
@@ -2326,8 +2402,12 @@ QList<float> TTAVData::cutAudioTracks(
         computeTargetAcmods(stream->filePath(), ext, plan.keepList, normalizeAcmod);
 
     TTFFmpegWrapper ff;
+    std::function<void(int)> perTrackCb;
+    if (onProgress)
+      perTrackCb = [&onProgress, idx](int p) { onProgress(idx, p); };
     bool ok = ff.cutAudioStream(stream->filePath(), outFile,
-                                plan.keepList, normalizeAcmod, targetAcmods);
+                                plan.keepList, normalizeAcmod, targetAcmods,
+                                perTrackCb);
     if (!ok)
       log->errorMsg(__FILE__, __LINE__,
                     QString("Audio cut failed for track %1").arg(idx + 1));

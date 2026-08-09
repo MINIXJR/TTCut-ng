@@ -16,6 +16,16 @@ All notable changes to TTCut-ng are documented in this file.
   (`debian/control`, `debian/rules`) builds against `qt6-base-dev` and
   `qt6-l10n-tools`.
 
+- Progress dialog details pane is now a live, timestamped status log
+  (including re-encoder/mplex output lines); with details open the dialog
+  stays open after the operation finishes (Cancel becomes Close)
+- Audio cutting reports real per-track progress instead of one jump per
+  finished track (all cut pipelines)
+- The progress dialog now covers the whole MPEG-2 final cut: audio cutting
+  (previously silent, before any dialog appeared) and muxing (previously
+  invisible, after the dialog was already hidden) are shown, and the cut
+  reports a proper completion status
+
 ### Fixed
 
 - **"Frozen" window areas under KWin with fractional display scaling
@@ -144,6 +154,10 @@ All notable changes to TTCut-ng are documented in this file.
   `TTSrtSubtitleStream::createHeaderList` now recovers the original bytes
   and decodes subtitle text as UTF-8, falling back to Latin-1 for genuinely
   Latin-1-encoded legacy files.
+
+- Window close button (X) did nothing in the "Defective Frames Detected"
+  and "Stream Integrity Warning" dialogs
+- "Show details" in the progress dialog showed nothing for cut operations
 
 ## v0.79.0 (2026-08-03)
 

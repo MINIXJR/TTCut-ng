@@ -17,6 +17,7 @@
 #define TTFFMPEGWRAPPER_H
 
 #include <climits>
+#include <functional>
 #include <QString>
 #include <QFileInfo>
 #include <QList>
@@ -273,10 +274,13 @@ public:
     // Audio ES cutting - time-based stream-copy (ms-accurate)
     // If normalizeAcmod is true and targetAcmods is provided, frames with wrong acmod
     // at segment boundaries are re-encoded to match the target channel layout.
+    // progressCb (optional) is called with 0..100, only on value changes,
+    // strictly increasing, final value 100 (requires a known total duration).
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList,
                         bool normalizeAcmod = false,
-                        const QList<int>& targetAcmods = QList<int>());
+                        const QList<int>& targetAcmods = QList<int>(),
+                        const std::function<void(int)>& progressCb = nullptr);
 
     // Detect audio burst near a boundary (returns true if burst found).
     // A burst is reported when the PEAK of the boundary chunks exceeds the

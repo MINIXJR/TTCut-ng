@@ -178,6 +178,7 @@ diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
 
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
 diag_tool(test_audiocut        AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_audioprogress   AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_adopt_paff      AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_sar             AV SOURCES ${WRAPPER_SRC})
