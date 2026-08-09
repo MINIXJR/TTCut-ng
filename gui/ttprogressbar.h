@@ -16,13 +16,14 @@
 #define TTPROGRESSBAR_H
 
 #include <QDialog>
-#include <QTime>
+#include <QElapsedTimer>
 
 #include "ui_ttprogressform.h"
 #include "../common/ttcut.h"
 
 class TTThreadTask;
 class QCloseEvent;
+class QTimer;
 
 class TTProgressBar : public QDialog, Ui::TTProgressForm
 {
@@ -39,14 +40,18 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
     public slots:
       void onDetailsStateChanged(Qt::CheckState);
       void onBtnCancelClicked();
-      void onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress, QTime totalTime);
+      void onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress);
+      void setRemaining(const QString& text);
+
+    private slots:
+      void onTick();
 
     protected:
       void closeEvent(QCloseEvent* event) override;
       void reject() override;
 
     private:
-      void setTotalProgress(int progress, QTime time);
+      void setTotalProgress(int progress);
       void appendDetailLine(const QString& text);
       void resetForNewOperation();
       void enterFinishedState();
@@ -68,5 +73,11 @@ class TTProgressBar : public QDialog, Ui::TTProgressForm
     // the cancel() signal fires only once per user action even if
     // onBtnCancelClicked()'s own path ever ends up closing the window too.
     bool           mClosing;
+
+    QTimer*        mTickTimer     = nullptr;   // 1 s: clock, remaining, stall
+    QElapsedTimer  mWallClock;                 // true operation wall time
+    QElapsedTimer  mSinceLastStep;             // stall detection
+    QString        mPendingRemaining;          // applied on next tick
+    bool           mIndeterminate = false;     // bar in pulse mode
 };
 #endif // TTPROGRESSBAR_H

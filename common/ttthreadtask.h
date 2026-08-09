@@ -17,7 +17,6 @@
 
 #include <QRunnable>
 #include <QObject>
-#include <QElapsedTimer>
 #include <QUuid>
 
 #include "../common/istatusreporter.h"
@@ -38,7 +37,6 @@ public:
   void runSynchron();
   QString taskName() const;
   QUuid taskID() const;
-  int elapsedTime() const;
   int processValue() const;
   bool isRunning() const;
   bool isAborted() const;
@@ -64,7 +62,6 @@ signals:
 
 protected:
   QUuid mTaskID; /**<unique task ID                             */
-  QElapsedTimer mTaskTime; /**<timer started when task started */
   quint64 mTotalSteps; /**<estimate count of total task steps         */
   quint64 mStepCount; /**<current step count                         */
   TTMessageLogger* log; /**<message logger istance                     */

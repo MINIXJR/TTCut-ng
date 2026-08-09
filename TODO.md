@@ -30,11 +30,36 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     (Vorschau → Cut-Dialog → langer GUI-Schnitt) läuft unter Qt6 erst seit
     dem 04.08. — Ursache kann im Branch, in der Qt6-Migration oder in Qt
     selbst (6.10, Debian sid) liegen.
-  - **Nächster Schritt (vereinbart):** ASAN-Build
-    (`-fsanitize=address`), Bediensequenz einmal wiederholen — ASAN meldet
-    den ERSTEN fehlerhaften Zugriff mit vollem Stack statt des späten
-    Symptoms. Alternativ-Check: gleiche Sequenz auf `master` (Qt6 ohne
-    Branch) → klärt die Branch-Schuldfrage.
+  - **ASAN-Lauf 2026-08-09 (Branch-Stand `8b156cb4`, RelWithDebInfo +
+    `-fsanitize=address`): SAUBER.** Identifizierte Absturz-Datei
+    (`03x01_-_Drunter_und_drüber.264`, per Core-Strings belegt — die
+    „85 min" oben waren grob, real 75 min), komplette Sequenz Öffnen →
+    Vorschau → Cut-Dialog → GUI-Schnitt → Warten nach „Smart Cut
+    complete": kein ASAN-Report, kein Core, Mux komplett. Zusätzlich
+    lief die gesamte GUI-Abnahme am 2026-08-09 (>10 Öffnen-/
+    Schnitt-Zyklen, unintstrumentiert) absturzfrei. Der Befund stützt
+    „timing-abhängig, Qt-intern" (gleiche UAF-Klasse trat am 2026-08-01
+    vorbestehend auf, qtwayland). `core.500359` und der ASAN-Build
+    wurden am 2026-08-09 auf User-Entscheid gelöscht (veralten mit dem
+    nächsten Build); der Backtrace-Dump
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt` bleibt.
+    Bei Wiederauftreten: Core sichern, Forensik-Referenz nutzen,
+    ASAN-Build neu erzeugen (`cmake -B build-asan -G Ninja
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fsanitize=address
+    -fno-omit-frame-pointer -g" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`).
+
+- **H.26x-Schnitt ist nicht abbrechbar** (User-Entscheid 2026-08-09:
+  eigenes Vorhaben nach dem Merge von `feature/progress-details`)
+  - „Abbrechen"/Kreuz wirken nur auf Pool-Tasks (MPEG-2-Videoschnitt,
+    Analysen); der synchrone Smart Cut (`doH264Cut`) läuft ungebremst zu
+    Ende — das war in allen bisherigen Versionen so.
+  - Seit `501a040f` holt sich der Fortschrittsdialog beim nächsten Step
+    zurück auf den Schirm, statt eine scheinbar tote Anwendung zu
+    hinterlassen (Hauptfenster ist während der Operation deaktiviert).
+  - Echter Abbruch braucht: Abbruchflag in `TTESSmartCut` (Prüfung in den
+    Copy-/Encode-Schleifen), Aufräumen der Teil-Ausgabedateien, saubere
+    `Canceled`-Meldekette; Audio-/Mux-Phase (`cutAudioTracks`,
+    MKV-Mux) ebenfalls prüfen.
 
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — verbleibende Befunde**
   (Wurzel — TS↔ES-AU-Nummerierungs-Drift der es_extra_frames — GELÖST 2026-07-19,

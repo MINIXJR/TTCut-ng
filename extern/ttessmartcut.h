@@ -232,6 +232,29 @@ private:
     int mCurrentSegment;
     int mTotalSegments;
 
+    // Work-weighted progress (measured cost ratio encode/copy):
+    int  weightedProgressPercent(int encodeInFlight) const;
+    void emitCutProgress(const QString& msg, int encodeInFlight);
+
+    // Planned work split (from analyzeCutPoints results) + measured cost:
+    int    mPlannedCopyFrames   = 0;
+    int    mPlannedEncodeFrames = 0;
+    qint64 mCopyMsAcc   = 0;
+    qint64 mEncodeMsAcc = 0;
+    int    mCopyFramesAcc   = 0;
+    int    mEncodeFramesAcc = 0;
+    int    mLastEmittedPercent = 0;
+
+    // Seed for the encode/copy cost ratio k (see weightedProgressPercent):
+    // the LAST run's measured k for this codec, loaded in initialize() and
+    // used as the fallback weight until this run has measured both rates
+    // itself. This is a machine-relative RATIO, not an absolute-time
+    // calibration, so it does not fall under "video has no stored
+    // calibration" (that rule is about mux/audio-style ms-per-work-unit
+    // factors for absolute ETA; k only rebalances copy vs. encode frames
+    // against each other within the video stage). < 0 = not yet seeded.
+    double mSeedK = -1.0;
+
     // Actual output frame ranges (start AU may differ from requested due to B-frame reorder)
     QList<QPair<int, int>> mActualOutputRanges;
 

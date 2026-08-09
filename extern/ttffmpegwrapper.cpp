@@ -2454,10 +2454,21 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
     int64_t lastProgress = -1;
     int rawCount = 0;
 
+    // Prefer byte-position progress over the frame-count estimate: raw ES
+    // files report no frame count (estimatedFrames falls back to a fixed
+    // 10000), so on real recordings (~360000 frames for a 2h capture) the
+    // frame-based progress hits 100 at ~3% of the file and the `<= 100`
+    // gate below then silences every further emission for the rest of the
+    // scan. Byte position is monotonic and known up front for seekable
+    // input, so it stays accurate for the whole scan.
+    int64_t totalBytes = (mFormatCtx->pb) ? avio_size(mFormatCtx->pb) : -1;
+    const bool useByteProgress = totalBytes > 0;
+    int64_t lastValidPos = 0;
+
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "Building frame index for stream" << videoStreamIndex;
     if (TTSettings::instance()->logFFmpegDecoder())
-        qDebug() << "Estimated frames:" << estimatedFrames;
+        qDebug() << "Estimated frames:" << estimatedFrames << "totalBytes:" << totalBytes;
 
     AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
 
@@ -2516,11 +2527,26 @@ void TTFFmpegWrapper::scanPacketsIntoRawIndex(int videoStreamIndex)
             mFrameIndex.append(info);
             rawCount++;
 
-            int64_t progress = (rawCount * 100) / estimatedFrames;
-            if (progress != lastProgress && progress <= 100) {
-                emit progressChanged(static_cast<int>(progress),
-                    tr("Indexing frame %1...").arg(rawCount));
-                lastProgress = progress;
+            if (useByteProgress) {
+                if (packet->pos >= 0)
+                    lastValidPos = packet->pos;
+                int64_t progress = qMin<int64_t>((lastValidPos * 100) / totalBytes, 100);
+                if (progress != lastProgress) {
+                    emit progressChanged(static_cast<int>(progress),
+                        tr("Indexing frame %1...").arg(rawCount));
+                    lastProgress = progress;
+                }
+            } else {
+                // Non-seekable input: fall back to the frame-count estimate
+                // (unchanged from before this fix — still subject to the
+                // same >100% silencing when estimatedFrames underestimates,
+                // but only reachable when byte-based progress is unavailable).
+                int64_t progress = (rawCount * 100) / estimatedFrames;
+                if (progress != lastProgress && progress <= 100) {
+                    emit progressChanged(static_cast<int>(progress),
+                        tr("Indexing frame %1...").arg(rawCount));
+                    lastProgress = progress;
+                }
             }
         }
         av_packet_unref(packet);

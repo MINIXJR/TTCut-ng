@@ -260,6 +260,14 @@ TTCutMainWindow::TTCutMainWindow()
   connect(mpAVData, qOverload<TTThreadTask*, int, const QString&, quint64>(&TTAVData::statusReport),
           this, &TTCutMainWindow::onStatusReport);
 
+  mEstimatorClock.start();
+  mpProgressEstimator = new TTProgressEstimator(
+      &mCalibStore, [this]() { return mEstimatorClock.elapsed(); });
+
+  connect(mpAVData, &TTAVData::operationPlanReady,
+          this, [this](const QVector<TTStagePlan>& plan) {
+            mpProgressEstimator->setPlan(plan);
+          });
 
   connect(videoFileList,    &TTVideoTreeView::openFile,    this, &TTCutMainWindow::onOpenVideoFile);
   connect(audioFileList,    &TTAudioTreeView::openFile,    this, &TTCutMainWindow::onOpenAudioFile);
@@ -365,6 +373,8 @@ TTCutMainWindow::~TTCutMainWindow()
   mpAVData = nullptr;
   delete mLogoDetector;
   mLogoDetector = nullptr;
+  delete mpProgressEstimator;
+  mpProgressEstimator = nullptr;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -1801,6 +1811,16 @@ void TTCutMainWindow::onSetCutOut(int index)
  */
 void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value)
 {
+  // Stage announcements feed the progress estimator; they must never reach
+  // the percent/display path below. mpProgressEstimator is guarded here and
+  // below because it is deleted before some child widgets in ~TTCutMainWindow
+  // (destructor order) - a late-arriving signal must not dereference it.
+  if (state == StatusReportArgs::Stage) {
+    if (mpProgressEstimator)
+      mpProgressEstimator->beginStage(int(value));
+    return;
+  }
+
   switch(state) {
     case StatusReportArgs::Init:
       if (progressBar == 0) {
@@ -1844,25 +1864,108 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
   }
 
   if (progressBar != 0) {
-    int progress;
-    QTime time;
+    int rawPercent;
     if (task == 0) {
-      // No ThreadTask (e.g. Smart Cut, MKV mux) — use value directly as percent
-      progress = static_cast<int>(value);
-      if (!mDirectProgressTimer.isValid())
-        mDirectProgressTimer.start();
-      time = QTime(0, 0, 0, 0).addMSecs(mDirectProgressTimer.elapsed());
-      if (state == StatusReportArgs::Exit || state == StatusReportArgs::Finished ||
-          state == StatusReportArgs::Canceled)
-        mDirectProgressTimer.invalidate();
+      // No ThreadTask (e.g. Smart Cut, MKV mux) - value IS the percent
+      rawPercent = static_cast<int>(value);
     } else if (mStreamPointWorkersRunning > 0) {
-      progress = mpStreamPointTaskPool->overallPercentage();
-      time = mpStreamPointTaskPool->overallTime();
+      rawPercent = mpStreamPointTaskPool->overallPercentage();
+      // Pool operations are single-stage; enter the ad-hoc stage once.
+      if (mpProgressEstimator && !mpProgressEstimator->active())
+        mpProgressEstimator->beginStage(StatusReportArgs::StagePool);
     } else {
-      progress = mpAVData->totalProcess();
-      time = mpAVData->totalTime();
+      rawPercent = mpAVData->totalProcess();
+      if (mpProgressEstimator && !mpProgressEstimator->active() && !mpProgressEstimator->planned())
+        mpProgressEstimator->beginStage(StatusReportArgs::StagePool);
     }
-    progressBar->onSetProgress(task, state, msg, progress, time);
+
+    if (state == StatusReportArgs::Exit || state == StatusReportArgs::Canceled) {
+      // Exit is "regular" only for a cut that didn't fail. mLastCutError is
+      // cleared at the start of every onDoCut and only ever set by cut
+      // paths, so a stale value from a PRIOR failed cut can in theory
+      // linger into the Exit of a later non-cut operation (open, scan) -
+      // those never write a calibKey anyway, so the only effect would be a
+      // skipped (harmless) calibration write, not a wrong display.
+      const bool regular = state == StatusReportArgs::Exit
+                         && mpAVData->lastCutError().isEmpty();
+      if (mpProgressEstimator) {
+        mpProgressEstimator->finishOperation(regular);
+        qint64 dur = mpProgressEstimator->operationDurationMs();
+        if (state == StatusReportArgs::Canceled)
+          progressBar->setRemaining(tr("Cancelled"));
+        else if (regular && dur > 0)
+          progressBar->setRemaining(tr("Finished after %1")
+              .arg(QTime(0, 0).addMSecs(int(dur)).toString("hh:mm:ss")));
+        // Exit on a failed cut: leave the remaining label as-is (no stale
+        // countdown, but no fabricated "Finished after" either) - the
+        // failure itself is already visible in the Exit message/action line.
+      } else if (state == StatusReportArgs::Canceled) {
+        progressBar->setRemaining(tr("Cancelled"));
+      }
+      progressBar->onSetProgress(task, state, msg, rawPercent);
+      return;
+    }
+
+    // Only Step carries a real progress sample (spec §7) - every other
+    // state (Init/Start/Error/AddProcessLine/ShowProcessForm/...) forwards
+    // its raw/last-known percent untouched. onSetProgress() ignores the
+    // totalProgress argument for all of those states anyway (only Step
+    // reads it; Exit hardcodes 100), so this is a display no-op for them -
+    // it only stops those filler values (often 0) from resetting the
+    // estimator's stage percent / flipping the remaining label back to
+    // "calculating...".
+    if (state == StatusReportArgs::Step && mpProgressEstimator) {
+      TTProgressEstimator::Result r = mpProgressEstimator->update(rawPercent);
+      progressBar->setRemaining(formatRemaining(r));
+      progressBar->onSetProgress(task, state, msg, r.totalPercent);
+    } else {
+      progressBar->onSetProgress(task, state, msg, rawPercent);
+    }
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Human-readable remaining time (spec rounding rules): coarse on purpose -
+ * a seconds-precise countdown suggests an accuracy the estimate cannot have.
+ */
+QString TTCutMainWindow::formatRemaining(const TTProgressEstimator::Result& r) const
+{
+  if (r.kind == TTProgressEstimator::RemainingUnknown)
+    return tr("calculating...");
+
+  const qint64 s = r.remainingMs / 1000;
+  QString t;
+  if (s < 10) {
+    t = tr("almost done");
+  } else {
+    qint64 rounded;
+    if (s < 60)       rounded = ((s + 5) / 10) * 10;
+    else if (s < 600) rounded = ((s + 15) / 30) * 30;
+    else              rounded = ((s + 30) / 60) * 60;
+    QString clock = (rounded >= 3600)
+        ? QString("%1:%2:%3").arg(rounded / 3600)
+              .arg((rounded % 3600) / 60, 2, 10, QChar('0'))
+              .arg(rounded % 60, 2, 10, QChar('0'))
+        : QString("%1:%2").arg(rounded / 60, 2, 10, QChar('0'))
+              .arg(rounded % 60, 2, 10, QChar('0'));
+    t = tr("about %1").arg(clock);
+  }
+
+  if (r.kind == TTProgressEstimator::RemainingStageOnly) {
+    QString stage = progressStageName(r.stage);
+    if (!stage.isEmpty())
+      return QString("%1: %2").arg(stage, t);
+  }
+  return t;
+}
+
+QString TTCutMainWindow::progressStageName(int stage) const
+{
+  switch (stage) {
+    case StatusReportArgs::StageVideo: return tr("Video");
+    case StatusReportArgs::StageAudio: return tr("Audio");
+    case StatusReportArgs::StageMux:   return tr("Muxing");
+    default:                           return QString();
   }
 }
 

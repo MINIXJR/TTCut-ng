@@ -22,6 +22,8 @@
 
 #include "../common/ttcut.h"
 #include "../common/ttmessagelogger.h"
+#include "../common/ttprogressestimator.h"
+#include "../common/ttcalibrationstore.h"
 #include "../data/ttaudiolist.h"
 #include "../data/ttcutlist.h"
 #include "../data/ttstreampoint.h"
@@ -143,6 +145,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void setProjectModified(bool modified);
 		void updateWindowTitle();
 		void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
+		QString formatRemaining(const TTProgressEstimator::Result& r) const;
+		QString progressStageName(int stage) const;
 
 	private:
 		TTAVData*        mpAVData;
@@ -160,7 +164,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
     bool                 mStreamPointAnalysisAborted = false;
-    QElapsedTimer        mDirectProgressTimer;
+    TTSettingsCalibrationStore mCalibStore;
+    TTProgressEstimator*       mpProgressEstimator;
+    QElapsedTimer              mEstimatorClock;   // monotone time source
     TTSearchTask*        mpRunningSearch = nullptr;
     int                  mLastSearchStartPos = -1;
     TTLogoDetector*      mLogoDetector;

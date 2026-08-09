@@ -19,8 +19,10 @@
 
 #include <QApplication>
 #include <QCloseEvent>
+#include <QFontMetrics>
 #include <QScrollBar>
 #include <QTime>
+#include <QTimer>
 
 /**
  * Constructor
@@ -29,6 +31,15 @@ TTProgressBar::TTProgressBar(QWidget* parent)
               : QDialog(parent)
 {
   setupUi(this);
+
+  // Rows 1 and 3 are now independent QHBoxLayouts (ttprogressform.ui) so a
+  // hidden laRemaining releases its column width instead of leaving
+  // remainingString indented at row 3's "Elapsed:" label width. Equalize
+  // both label widths in code (font-independent) so the value columns of
+  // the two rows still line up while both labels are visible.
+  int lw = qMax(laRemaining->sizeHint().width(), laDebugClock->sizeHint().width());
+  laRemaining->setMinimumWidth(lw);
+  laDebugClock->setMinimumWidth(lw);
 
   detailsView->hide();
   this->adjustSize();
@@ -41,6 +52,25 @@ TTProgressBar::TTProgressBar(QWidget* parent)
 
   connect(pbCancel,  &QPushButton::clicked,         this, &TTProgressBar::onBtnCancelClicked);
   connect(cbDetails, &QCheckBox::checkStateChanged, this, &TTProgressBar::onDetailsStateChanged);
+
+  // Debug wall clock: only visible with the details pane (checkbox).
+  laDebugClock->hide();
+  debugClockString->hide();
+
+  mTickTimer = new QTimer(this);
+  mTickTimer->setInterval(1000);
+  connect(mTickTimer, &QTimer::timeout, this, &TTProgressBar::onTick);
+
+  // Start the lifecycle here too, not only in resetForNewOperation(): a
+  // freshly created dialog whose first message is Start (stream-point
+  // scans emit no Init) hit the "if (mFinished) resetForNewOperation()"
+  // branch in onSetProgress() with mFinished already false (just set above),
+  // so the tick timer/wall clock never started - the remaining label and
+  // debug clock stayed frozen for the whole scan. Idempotent: Init's own
+  // resetForNewOperation() (or a finished-dialog Start) just restarts both.
+  mWallClock.restart();
+  mSinceLastStep.restart();
+  mTickTimer->start();
 }
 
 /**
@@ -102,21 +132,40 @@ void TTProgressBar::reject()
 }
 
 /**
- * Set the action text
+ * Set the action text. Now that the label owns a full-width row (v0.81
+ * layout fix), this rarely elides in practice — but very long messages
+ * (segment counters plus a long file name) can still exceed the width, so
+ * QFontMetrics::elidedText() stays as a safety net. ElideMiddle keeps both
+ * ends: the start ("Encoding segment ...") and the end (counters / file
+ * name) each carry information a trailing-only elide would drop. The full
+ * text always goes into the tooltip so nothing is lost from view.
  */
 void TTProgressBar::setActionText( QString action )
 {
-  actionString->setText( action );
+  actionString->setToolTip( action );
+
+  if (actionString->width() > 0) {
+    QFontMetrics fm(actionString->font());
+    actionString->setText(fm.elidedText(action, Qt::ElideMiddle, actionString->width()));
+  } else {
+    // First call can arrive before the widget has been laid out (width 0).
+    actionString->setText( action );
+  }
 }
 
 /**
- * Set the current total progress values
+ * Set the current total progress value. Also feeds the stall detection:
+ * every Step restarts the silence clock and leaves pulse mode.
  */
-void TTProgressBar::setTotalProgress(int progress, QTime time)
+void TTProgressBar::setTotalProgress(int progress)
 {
-    percentageString->setText(QString("%1%").arg(qMin(progress, 100)));
-    progressBar->setValue(progress);
-    elapsedTimeString->setText(time.toString("hh:mm:ss"));
+  if (mIndeterminate) {
+    progressBar->setRange(0, 100);
+    mIndeterminate = false;
+  }
+  percentageString->setText(QString("%1%").arg(qMin(progress, 100)));
+  progressBar->setValue(progress);
+  mSinceLastStep.restart();
 }
 
 /**
@@ -136,17 +185,61 @@ void TTProgressBar::appendDetailLine(const QString& text)
 }
 
 /**
+ * Buffered remaining-time text: stored here, applied by the 1 s tick so the
+ * label never flickers with per-frame Step messages.
+ */
+void TTProgressBar::setRemaining(const QString& text)
+{
+  mPendingRemaining = text;
+}
+
+/**
+ * 1 s heartbeat: debug wall clock, remaining-time label, stall detection.
+ * The wall clock keeps ticking during a stall - that is its debug value
+ * (frozen bar + ticking clock = stage hangs, application alive).
+ */
+void TTProgressBar::onTick()
+{
+  if (mWallClock.isValid())
+    debugClockString->setText(
+        QTime(0, 0).addMSecs(int(mWallClock.elapsed())).toString("hh:mm:ss"));
+
+  if (!mPendingRemaining.isEmpty()) {
+    remainingString->setText(mPendingRemaining);
+    mPendingRemaining.clear();
+  }
+
+  // Stall: >5 s without a Step -> indeterminate (pulsing) bar. The percent
+  // text stays as the last known value.
+  if (!mFinished && mSinceLastStep.isValid()
+      && mSinceLastStep.elapsed() > 5000 && !mIndeterminate) {
+    progressBar->setRange(0, 0);
+    mIndeterminate = true;
+  }
+}
+
+/**
  * Reset for a new operation: clear the log, restore the Cancel button.
  */
 void TTProgressBar::resetForNewOperation()
 {
+  if (mIndeterminate) {
+    progressBar->setRange(0, 100);
+    mIndeterminate = false;
+  }
   progressBar->reset();
   percentageString->setText("0%");
-  elapsedTimeString->setText("00:00:00");
+  remainingString->setText(tr("calculating..."));
+  debugClockString->setText("00:00:00");
   detailsView->clear();
   mLastStepMsg.clear();
+  mPendingRemaining.clear();
   mFinished = false;
   pbCancel->setText(tr("Cancel"));
+  laRemaining->show();
+  mWallClock.restart();
+  mSinceLastStep.restart();
+  mTickTimer->start();
   this->setEnabled(true);
 }
 
@@ -156,6 +249,25 @@ void TTProgressBar::resetForNewOperation()
  */
 void TTProgressBar::enterFinishedState()
 {
+  mTickTimer->stop();
+  if (mIndeterminate) {
+    progressBar->setRange(0, 100);
+    mIndeterminate = false;
+  }
+  if (!mPendingRemaining.isEmpty()) {          // show the final value
+    remainingString->setText(mPendingRemaining);
+    mPendingRemaining.clear();
+  }
+  if (mWallClock.isValid())
+    debugClockString->setText(
+        QTime(0, 0).addMSecs(int(mWallClock.elapsed())).toString("hh:mm:ss"));
+
+  // The value label keeps showing "Finished after ..." / "Cancelled ..." -
+  // hide the "Remaining:" caption so the row does not read as a run-on
+  // ("Remaining: Finished after 00:00:07"). Restored in
+  // resetForNewOperation() for the next run.
+  laRemaining->hide();
+
   mFinished = true;
   pbCancel->setText(tr("Close"));
 
@@ -173,6 +285,8 @@ void TTProgressBar::onDetailsStateChanged(Qt::CheckState)
   } else {
     detailsView->hide();
   }
+  laDebugClock->setVisible(cbDetails->isChecked());
+  debugClockString->setVisible(cbDetails->isChecked());
   this->adjustSize();
 }
 
@@ -192,7 +306,7 @@ void TTProgressBar::onBtnCancelClicked()
  * the details log. All senders arrive here (task-based and task==0 alike);
  * the log needs no task objects.
  */
-void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress, QTime totalTime)
+void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& msg, int totalProgress)
 {
   Q_UNUSED(task)
 
@@ -214,8 +328,16 @@ void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& 
       break;
 
     case StatusReportArgs::Step:
+      // A running operation must never leave the user with a hidden dialog
+      // AND a disabled main window (dead UI): closing the dialog mid-run
+      // (X or Cancel) hides it, but the synchronous H.26x cut cannot be
+      // aborted and keeps reporting - bring the dialog back on the next
+      // Step. Also improves the MPEG-2 audio-phase quirk (dialog used to
+      // stay hidden until the pool video task's Start).
+      if (!mFinished && !isVisible())
+        showBar();
       setActionText(msg);
-      setTotalProgress(totalProgress, totalTime);
+      setTotalProgress(totalProgress);
       if (msg != mLastStepMsg) {
         mLastStepMsg = msg;
         appendDetailLine(msg);
@@ -260,7 +382,7 @@ void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& 
       // Without this a kept-open dialog shows a frozen mid-run state
       // forever (GUI acceptance finding 2026-08-07).
       setActionText(msg);
-      setTotalProgress(100, totalTime);
+      setTotalProgress(100);
       appendDetailLine(msg);
       enterFinishedState();
       break;

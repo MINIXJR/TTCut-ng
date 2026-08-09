@@ -214,11 +214,6 @@ int TTAVData::totalProcess() const
 	return mpThreadTaskPool->overallPercentage();
 }
 
-QTime TTAVData::totalTime() const
-{
-	return mpThreadTaskPool->overallTime();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * createAVDataItem
  * Create an AVData item, connect Signals and Slots
@@ -1356,6 +1351,26 @@ void TTAVData::computeCutLengths(TTCutList* cutList)
   }
 }
 
+namespace {
+  // Calibration key for the audio stage: keyed by container/codec suffix of
+  // the FIRST track ("audio/ac3", "audio/mp2", ...). Tracks of one recording
+  // share the codec in practice; a mixed set just calibrates on track 1.
+  QString audioCalibKey(TTAVItem* avItem)
+  {
+    if (avItem == 0 || avItem->audioCount() == 0) return QString();
+    QString suffix = QFileInfo(avItem->audioStreamAt(0)->fileName()).suffix().toLower();
+    if (suffix.isEmpty()) return QString();   // empty key = no persistence
+    return QStringLiteral("audio/") + suffix;
+  }
+
+  double keepListSeconds(const QList<QPair<double,double>>& keepList)
+  {
+    double s = 0;
+    for (const auto& kp : keepList) s += kp.second - kp.first;
+    return qMax(0.001, s);
+  }
+}
+
 void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 {
   if (cutList == 0) cutList = mpCutList;
@@ -1400,6 +1415,31 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   // AFTER the pool exits (onCutFinished). Emit the operation brackets here
   // and suppress the pool's own Init/Exit until onCutFinished/onCutAborted.
   mCutOperationActive = true;
+
+  // Announce the planned stages for the progress estimator. MPEG-2 runs
+  // audio synchronously FIRST, then the pool video task, then mux (mplex or
+  // MKV) inside onCutFinished.
+  {
+    TTAVItem* planItem = cutList->at(0).avDataItem();
+    double keptSecs = 0.001;
+    int totalFrames = 0;
+    double fr = firstStream->frameRate();
+    for (int i = 0; i < cutList->count(); i++)
+      totalFrames += cutList->at(i).cutOutIndex() - cutList->at(i).cutInIndex() + 1;
+    if (fr > 0) keptSecs = qMax(0.001, totalFrames / fr);
+    QVector<TTStagePlan> plan;
+    if (planItem->audioCount() > 0)
+      plan.append({ StatusReportArgs::StageAudio, audioCalibKey(planItem),
+                    keptSecs * planItem->audioCount() });
+    // Video calib key stores a BLENDED ms-per-media-second factor across the
+    // whole cut. For MPEG-2 stream-copy this is fairly stable; it only needs
+    // to bridge the stage start and the pre-stage total, since the in-run
+    // projection + correction take over within seconds.
+    plan.append({ StatusReportArgs::StageVideo, QStringLiteral("video/mpeg2cut"), keptSecs });
+    plan.append({ StatusReportArgs::StageMux, QStringLiteral("mux/mpeg2cut"), keptSecs });
+    emit operationPlanReady(plan);
+  }
+
   emit statusReport(0, StatusReportArgs::Init, tr("Initializing MPEG-2 cut..."), 0);
   qApp->processEvents();
   emit statusReport(0, StatusReportArgs::Start, tr("Cutting MPEG-2 video..."), 0);
@@ -1431,6 +1471,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
   TTAVItem* avItem = cutList->at(0).avDataItem();
 
+  if (avItem->audioCount() > 0)
+    emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
   cutAudioTracks(avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
         return createCutFileName(tgtFileName,
@@ -1475,6 +1517,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
   // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
+  emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageVideo);
   mpThreadTaskPool->init(cutList->count());
   mpThreadTaskPool->start(cutVideoTask);
 }
@@ -1515,6 +1558,36 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     log->infoMsg(__FILE__, __LINE__, QString("Audio file: %1").arg(audioFile));
   }
 
+  // Build cut list as pairs of (startTime, endTime) in seconds - segments to
+  // KEEP (extra-frame-corrected, same conversion as every other producer).
+  QList<QPair<double, double>> keepList = buildVideoKeepList(cutList, frameRate);
+  for (int i = 0; i < keepList.size(); i++) {
+    TTCutItem item = cutList->at(i);
+    log->infoMsg(__FILE__, __LINE__, QString("Cut %1: frames %2-%3, time %4-%5")
+        .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex())
+        .arg(keepList[i].first, 0, 'f', 3).arg(keepList[i].second, 0, 'f', 3));
+  }
+
+  // Announce the planned stages + work amounts for the progress estimator.
+  {
+    double keptSecs = keepListSeconds(keepList);
+    QVector<TTStagePlan> plan;
+    // Video calib key stores a BLENDED ms-per-media-second factor across the
+    // whole cut. This is bound to be rough for H.26x since the re-encode
+    // share (Smart Cut boundary GOPs vs. stream-copy interior) varies per
+    // cut; that's acceptable because the in-run projection + correction
+    // take over within seconds — the stored value only bridges the stage
+    // start and the pre-stage totals.
+    const QString videoCalibKey = (vStream->streamType() == TTAVTypes::h265_video)
+        ? QStringLiteral("video/h265") : QStringLiteral("video/h264");
+    plan.append({ StatusReportArgs::StageVideo, videoCalibKey, keptSecs });
+    if (avItem->audioCount() > 0)
+      plan.append({ StatusReportArgs::StageAudio, audioCalibKey(avItem),
+                    keptSecs * avItem->audioCount() });
+    plan.append({ StatusReportArgs::StageMux, QStringLiteral("mux/h26xcut"), keptSecs });
+    emit operationPlanReady(plan);
+  }
+
   emit statusReport(0, StatusReportArgs::Init, tr("Initializing H.264/H.265 cut..."), 0);
   qApp->processEvents();
   emit statusReport(0, StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
@@ -1525,16 +1598,6 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     QFileInfo fi(finalOutput);
     finalOutput = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
                            fi.completeBaseName() + ".mkv").absoluteFilePath();
-  }
-
-  // Build cut list as pairs of (startTime, endTime) in seconds - segments to
-  // KEEP (extra-frame-corrected, same conversion as every other producer).
-  QList<QPair<double, double>> keepList = buildVideoKeepList(cutList, frameRate);
-  for (int i = 0; i < keepList.size(); i++) {
-    TTCutItem item = cutList->at(i);
-    log->infoMsg(__FILE__, __LINE__, QString("Cut %1: frames %2-%3, time %4-%5")
-        .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex())
-        .arg(keepList[i].first, 0, 'f', 3).arg(keepList[i].second, 0, 'f', 3));
   }
 
   // Use TTESSmartCut for frame-accurate cutting
@@ -1600,6 +1663,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
         QFileInfo(sourceFile).completeBaseName() + "_cut." + QFileInfo(sourceFile).suffix()).absoluteFilePath();
 
     // Perform frame-accurate video cut
+    emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageVideo);
     emit statusReport(0, StatusReportArgs::Step, tr("Cutting video (Smart Cut)..."), 0);
     qApp->processEvents();
     if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
@@ -1650,6 +1714,8 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
     // Cut all audio tracks against the (B-frame-adjusted) video keepList
     // (consolidated onto TTAVData::cutAudioTracks).
+    if (avItem->audioCount() > 0)
+      emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
     cutAudioTracks(avItem, keepList, normalizeAcmod,
         [&](int i, const QString& ext) {
           return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
@@ -1707,6 +1773,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       log->infoMsg(__FILE__, __LINE__, QString("cutAudioFile[%1]: %2 (%3 bytes)")
           .arg(i).arg(cutAudioFiles[i]).arg(QFileInfo(cutAudioFiles[i]).size()));
     }
+    emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageMux);
     emit statusReport(0, StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
     qApp->processEvents();
     TTMkvMergeProvider mkvProvider;
@@ -1805,6 +1872,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 void TTAVData::onCutFinished()
 {
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onCutFinished);
+  emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageMux);
 
   mpMuxList->appendItem(*(cutVideoTask->muxListItem()));
   mpMuxList->print();
@@ -2013,6 +2081,22 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   if (!vStream) return;
   double frameRate = vStream->frameRate();
 
+  {
+    double keptSecs = 0.001;
+    if (frameRate > 0) {
+      int totalFrames = 0;
+      for (int i = 0; i < cutList->count(); i++)
+        totalFrames += cutList->at(i).cutOutIndex() - cutList->at(i).cutInIndex() + 1;
+      keptSecs = qMax(0.001, totalFrames / frameRate);
+    }
+    QVector<TTStagePlan> plan;
+    plan.append({ StatusReportArgs::StageAudio, audioCalibKey(avItem),
+                  keptSecs * avItem->audioCount() });
+    if (TTSettings::instance()->workingAudioOnlyFormat() == TTCut::AOF_OriginalMKA)
+      plan.append({ StatusReportArgs::StageMux, QStringLiteral("mux/audiomka"), keptSecs });
+    emit operationPlanReady(plan);
+  }
+
   emit statusReport(0, StatusReportArgs::Init, tr("Initializing audio cut..."), 0);
   qApp->processEvents();
 
@@ -2027,6 +2111,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   QStringList trackFiles;
   QStringList trackLanguages;
   const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+  emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
   QList<float> firstTrackDrifts = cutAudioTracks(
       avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
@@ -2079,6 +2164,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
                                   QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
       if (QFileInfo(mkaPath).exists()) QFile::remove(mkaPath);
 
+      emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageMux);
       emit statusReport(0, StatusReportArgs::Step, tr("Muxing audio tracks into MKA..."), 0);
       qApp->processEvents();
 

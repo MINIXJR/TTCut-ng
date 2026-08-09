@@ -54,6 +54,13 @@ void TTCutVideoTask::init(QString tgtFilePath, TTCutList* cutList)
 void TTCutVideoTask::onUserAbort()
 {
   abort();
+
+  // Mid-cut abort: the MPEG-2 transfer loop polls TTAVStream::mAbort and
+  // throws TTAbortException; without this the abort only took effect
+  // BETWEEN cut-list entries - a single long cut was effectively
+  // unabortable (same forwarding as TTCutTask::onUserAbort below).
+  if (mpCutStream != 0)
+    mpCutStream->setAbort(true);
 }
 
 /**

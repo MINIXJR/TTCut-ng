@@ -25,8 +25,53 @@ All notable changes to TTCut-ng are documented in this file.
   (previously silent, before any dialog appeared) and muxing (previously
   invisible, after the dialog was already hidden) are shown, and the cut
   reports a proper completion status
+- Progress dialog: remaining-time estimate (measured, self-calibrating per
+  machine and material - no hardcoded codec factors), single 0-100 total
+  progress sweep per operation (video/audio/mux weighted by measured cost),
+  pulsing bar after 5 s without progress messages, debug wall clock behind
+  the details checkbox (replaces the frozen "Time elapsed" field)
+- Smart Cut: progress is now reported inside encode passes ("Encoding
+  segment N/M") and weighted by measured re-encode cost - long re-encodes
+  no longer look like hangs
+- File-open progress: H.264/H.265 raw frame-index scanning now tracks the
+  demuxer's byte position instead of an estimated frame count (a fixed
+  10000-frame estimate previously made progress hit 100% at ~3% of a real
+  2h recording and then fall silent for the rest of the scan); the H.26x
+  video-open task is now weighted in bytes like the audio-open tasks, so
+  building the video frame/GOP index - the dominant wall-time cost - moves
+  the open progress bar instead of being swamped by the faster audio scans;
+  a pool task's Step progress is now clamped monotonically non-decreasing,
+  so a late-delivered signal from an already-finished task can no longer
+  flicker the overall percentage backwards
+- Remaining-time estimate: shown in clock format ("about 01:30" instead of
+  "about 1.5 minutes"); a trailing ~15 s recent-rate window keeps the ETA
+  responsive to the current pace of a stage instead of an initial burst
+  (e.g. Smart Cut's stream-copy-first ordering) dragging a whole-stage
+  average down for minutes; the Smart Cut encode/copy cost ratio and the
+  video stage's own per-codec cost factor are now persisted across runs
+  (like the existing audio/mux factors), so from the second run of a given
+  cut kind onward a total ETA is shown from the very start instead of
+  "calculating..."; short, fully-calibrated operations (a few seconds) now
+  fall back to a coarse whole-plan ETA instead of showing "calculating..."
+  for their entire run
+- Progress dialog layout: the action line now spans its own full-width row;
+  the Remaining/Elapsed rows are left-aligned with each other (previously
+  one was indented); the debug wall clock moved from beside the bar to a
+  row below it; the redundant static "Complete" label was removed (the
+  percentage value next to it already reads "100%"); the dialog re-appears
+  on the next progress message if the user closes it while an unabortable
+  phase (synchronous H.26x Smart Cut, audio re-encode) is still running,
+  instead of leaving a disabled, apparently-dead main window behind
 
 ### Fixed
+
+- **Aborting a running MPEG-2 final cut had no effect until the current
+  cut-list entry finished.** `TTCutVideoTask::onUserAbort()` set only its
+  own thread-task abort flag, never forwarding it to the video stream's
+  transfer loop (`TTCutTask::onUserAbort()`, used for the same stream,
+  already did) - a cut list with one long entry was effectively
+  unabortable. The stream abort flag is now forwarded the same way, so an
+  abort request takes effect mid-cut.
 
 - **"Frozen" window areas under KWin with fractional display scaling
   (150 %/175 %) and a large window no longer occur.** The mpv render

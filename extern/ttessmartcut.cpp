@@ -12,10 +12,14 @@
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../common/ttmessagelogger.h"
+#include "../common/ttcalibrationstore.h"
 
 #include <QDebug>
 #include <algorithm>
+#include <cmath>
 #include <QFileInfo>
+#include <QElapsedTimer>
+#include <QScopeGuard>
 
 // Include libav headers
 extern "C" {
@@ -308,6 +312,15 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
         }
     }
 
+    // Seed the encode/copy cost ratio k from the last run's measurement for
+    // this codec (see weightedProgressPercent). Machine-relative ratio, not
+    // an absolute-time calibration - see the mSeedK comment in the header.
+    {
+        TTSettingsCalibrationStore store;
+        const QString codecKey = (mParser.codecType() == NALU_CODEC_H265) ? "h265" : "h264";
+        mSeedK = store.factor(QStringLiteral("videok/") + codecKey);
+    }
+
     if (TTSettings::instance()->logSmartCut())
         qDebug() << "TTESSmartCut: Initialization complete";
     if (TTSettings::instance()->logSmartCut())
@@ -576,6 +589,18 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         mTotalFrames += (seg.endFrame - seg.startFrame + 1);
     }
 
+    // Planned copy/encode split for time-proportional progress weighting.
+    mPlannedCopyFrames = 0;
+    for (const auto& seg : segments) {
+        if (seg.streamCopyStartFrame >= 0
+            && seg.streamCopyEndFrame >= seg.streamCopyStartFrame)
+            mPlannedCopyFrames += seg.streamCopyEndFrame - seg.streamCopyStartFrame + 1;
+    }
+    mPlannedEncodeFrames = qMax(0, mTotalFrames - mPlannedCopyFrames);
+    mCopyMsAcc = mEncodeMsAcc = 0;
+    mCopyFramesAcc = mEncodeFramesAcc = 0;
+    mLastEmittedPercent = 0;
+
     // H.264 frame_num patching: track cumulative delta for inter-segment continuity.
     // Without this, frame_num gaps at segment boundaries cause the decoder to generate
     // dummy reference frames, resulting in visual stuttering/flashing.
@@ -673,6 +698,26 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
 
     outFile.close();
     mBytesWritten = QFileInfo(outputFile).size();
+
+    // Persist the measured encode/copy cost ratio k for the next run's seed
+    // (mSeedK, see weightedProgressPercent). This is a machine-relative
+    // RATIO between the two rates measured in THIS run, not an absolute-time
+    // calibration - it does not fall under "video has no stored calibration"
+    // (that rule targets ms-per-work-unit factors like mux/audio; k only
+    // rebalances copy vs. encode frame weights within the video stage).
+    if (mCopyFramesAcc > 0 && mEncodeFramesAcc > 0
+        && mCopyMsAcc > 0 && mEncodeMsAcc > 0) {
+        double copyMsPerFrame = double(mCopyMsAcc) / mCopyFramesAcc;
+        double encMsPerFrame  = double(mEncodeMsAcc) / mEncodeFramesAcc;
+        if (copyMsPerFrame > 0) {
+            double k = encMsPerFrame / copyMsPerFrame;
+            if (std::isfinite(k) && k > 0) {
+                TTSettingsCalibrationStore store;
+                const QString codecKey = (mParser.codecType() == NALU_CODEC_H265) ? "h265" : "h264";
+                store.setFactor(QStringLiteral("videok/") + codecKey, k);
+            }
+        }
+    }
 
     emit progressChanged(100, tr("Cut complete"));
 
@@ -2322,6 +2367,47 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
 }
 
 // ----------------------------------------------------------------------------
+// Work-weighted progress: re-encoded frames cost far more than stream-copied
+// ones. Weight both by their MEASURED per-frame cost so the reported percent
+// is time-proportional (codec/resolution/machine all live in the measurement).
+// Falls back to weight 1 (frame-count-proportional, previous behavior) until
+// both rates have been measured.
+// ----------------------------------------------------------------------------
+int TTESSmartCut::weightedProgressPercent(int encodeInFlight) const
+{
+    if (mTotalFrames <= 0) return mLastEmittedPercent;
+
+    // Fallback weight while this run has not yet measured both rates itself:
+    // use the seeded k from the previous run (mSeedK) rather than assuming
+    // encode and copy cost the same (k=1) - that assumption is what made the
+    // initial stream-copy burst look too cheap and produced an over-optimistic
+    // ETA (UAT 2026-08-09). No seed available yet -> k=1, previous behavior.
+    double k = (mSeedK > 0) ? mSeedK : 1.0;
+    if (mCopyFramesAcc > 0 && mEncodeFramesAcc > 0
+        && mCopyMsAcc > 0 && mEncodeMsAcc > 0) {
+        double copyMsPerFrame = double(mCopyMsAcc) / mCopyFramesAcc;
+        double encMsPerFrame  = double(mEncodeMsAcc) / mEncodeFramesAcc;
+        if (copyMsPerFrame > 0)
+            k = encMsPerFrame / copyMsPerFrame;
+    }
+
+    double done  = mFramesStreamCopied + k * (mFramesReencoded + encodeInFlight);
+    double total = mPlannedCopyFrames + k * mPlannedEncodeFrames;
+    if (total <= 0) return mLastEmittedPercent;
+
+    int pct = int(done * 100.0 / total);
+    // Monotone despite k changing mid-run; cap at 99 (100 only at the end).
+    return qBound(mLastEmittedPercent, pct, 99);
+}
+
+void TTESSmartCut::emitCutProgress(const QString& msg, int encodeInFlight)
+{
+    int pct = weightedProgressPercent(encodeInFlight);
+    mLastEmittedPercent = pct;
+    emit progressChanged(pct, msg);
+}
+
+// ----------------------------------------------------------------------------
 // Stream-copy frames (no re-encoding)
 // If patchReorderFrames > 0, patches H.264 SPS NALs inline for correct
 // decoder reorder buffer signaling.
@@ -2330,6 +2416,13 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
                                      int patchReorderFrames, int frameNumDelta,
                                      int neutralizeMmcoFrames)
 {
+    QElapsedTimer copyTimer; copyTimer.start();
+    const int copiedAtEntry = mFramesStreamCopied;
+    auto accountCopy = qScopeGuard([&] {
+        mCopyMsAcc     += copyTimer.elapsed();
+        mCopyFramesAcc += mFramesStreamCopied - copiedAtEntry;
+    });
+
     if (TTSettings::instance()->logSmartCut())
         qDebug() << "    Stream-copying frames" << startFrame << "->" << endFrame;
     if (frameNumDelta != 0) {
@@ -2431,9 +2524,8 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 
         // Granular progress update (every 50 frames to avoid signal overhead)
         if (mTotalFrames > 0 && (mFramesStreamCopied % 50 == 0 || i == endFrame)) {
-            int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
-            emit progressChanged(qMin(percent, 99),
-                tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
+            emitCutProgress(
+                tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments), 0);
         }
     }
 
@@ -2519,6 +2611,13 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     // Buffer the last encoder packet so we can patch poc_lsb before writing it,
     // preventing POC domain mismatch at the re-encode→stream-copy transition.
 
+    QElapsedTimer encTimer; encTimer.start();
+    const int reencodedAtEntry = mFramesReencoded;
+    auto accountEncode = qScopeGuard([&] {
+        mEncodeMsAcc     += encTimer.elapsed();
+        mEncodeFramesAcc += mFramesReencoded - reencodedAtEntry;
+    });
+
     if (!runEncodePass(ctx)) return false;
 
     if (!flushEncoder(ctx)) return false;
@@ -2532,9 +2631,8 @@ bool TTESSmartCut::reencodeFrames(QFile& outFile, int startFrame, int endFrame,
     mFramesReencoded += ctx.packetsReceived;
 
     if (mTotalFrames > 0) {
-        int percent = ((mFramesStreamCopied + mFramesReencoded) * 100) / mTotalFrames;
-        emit progressChanged(qMin(percent, 99),
-            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments));
+        emitCutProgress(
+            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments), 0);
     }
 
     return true;
@@ -3699,6 +3797,14 @@ bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
             return false;
         }
         ctx.framesSent++;
+
+        // Progress inside the encode pass: without this a whole-GOP encode
+        // is silent and the dialog looks frozen (observed stall 2026-08-09).
+        if (ctx.framesSent % 10 == 0) {
+            emitCutProgress(
+                tr("Encoding segment %1/%2...").arg(mCurrentSegment).arg(mTotalSegments),
+                ctx.framesSent);
+        }
 
         AVPacket* packet = av_packet_alloc();
         if (!packet) {

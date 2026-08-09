@@ -70,8 +70,18 @@ bool TTH26xVideoStream::openStream()
 
 int TTH26xVideoStream::createHeaderList()
 {
+    // Progress domain is the video file's byte size, matching what MPEG-2's
+    // createHeaderList() registers (stream_buffer->size()). The pool sums
+    // Start totals across all open tasks (4 OpenAudioTask byte totals plus
+    // this one) into a single overall percentage - if this task registered
+    // its internal 0-100 percent scale instead, it would be swamped by the
+    // audio tasks' byte totals and carry effectively zero weight in the bar,
+    // even though building the video index is the dominant wall-time cost.
+    qint64 fileSize = QFileInfo(filePath()).size();
+    quint64 total = (fileSize > 0) ? static_cast<quint64>(fileSize) : 100;
+
     emit statusReport(StatusReportArgs::Start,
-        tr("Opening %1 stream...").arg(codecLabel()), 100);
+        tr("Opening %1 stream...").arg(codecLabel()), total);
 
     if (!openStream()) {
         emit statusReport(StatusReportArgs::Error,
@@ -81,16 +91,21 @@ int TTH26xVideoStream::createHeaderList()
 
     // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part).
     // Must be done after openStream() since that is what creates mFFmpeg.
+    // percent (0-100, from ffmpeg) is first mapped onto the milestone scale
+    // used by this method's own Step calls (10/82/90, see below), then that
+    // mapped value is scaled onto the byte-domain `total` so all Step values
+    // emitted by this task share one consistent unit.
     connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this,
-            [this](int percent, const QString&) {
+            [this, total](int percent, const QString&) {
         int mapped = 10 + percent * 70 / 100;
-        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), mapped);
+        quint64 value = static_cast<quint64>(mapped) * total / 100;
+        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), value);
     });
 
     mLog->infoMsg(__FILE__, __LINE__,
         QString("Creating %1 header list...").arg(codecLabel()));
     emit statusReport(StatusReportArgs::Step,
-        tr("Creating %1 header list...").arg(codecLabel()), 10);
+        tr("Creating %1 header list...").arg(codecLabel()), 10 * total / 100);
 
     int videoStreamIdx = mFFmpeg->findBestVideoStream();
     if (videoStreamIdx < 0) {
@@ -129,7 +144,7 @@ int TTH26xVideoStream::createHeaderList()
             .arg(frame_rate, 0, 'f', 2)
             .arg(spsDescription()));
 
-    emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 10);
+    emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 10 * total / 100);
 
     if (!mFFmpeg->buildFrameIndex(videoStreamIdx)) {
         mLog->errorMsg(__FILE__, __LINE__,
@@ -150,10 +165,10 @@ int TTH26xVideoStream::createHeaderList()
         setSPSFrameRate(static_cast<double>(frame_rate));
     }
 
-    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82);
+    emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82 * total / 100);
     mFFmpeg->buildGOPIndex();
 
-    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90);
+    emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90 * total / 100);
     buildAccessUnits();
 
     int n = accessUnitCount();
@@ -161,8 +176,12 @@ int TTH26xVideoStream::createHeaderList()
         QString("%1 header list created: %2 frames, %3 GOPs")
             .arg(codecLabel()).arg(n).arg(mFFmpeg->gopCount()));
 
+    // total (bytes), not a literal 100: TTThreadTask::onStatusReport() divides
+    // this by mTotalSteps (== total, set from the Start value above) to derive
+    // the individual task's own percentage() - a literal 100 here would make
+    // that division collapse to ~0% once total is in the hundreds-of-MB range.
     emit statusReport(StatusReportArgs::Finished,
-        tr("%1 header list created").arg(codecLabel()), 100);
+        tr("%1 header list created").arg(codecLabel()), total);
 
     return n;
 }

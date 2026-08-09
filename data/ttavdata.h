@@ -28,6 +28,7 @@
 #include "ttmarkerlist.h"
 #include "ttavlist.h"
 #include "ttstreampoint.h"
+#include "../common/ttprogressestimator.h"
 
 #include <QMessageBox>
 #include "ttcutprojectdata.h"
@@ -105,7 +106,6 @@ class TTAVData : public QObject
     void      doCutPreview(TTCutList* cutList);
 
     int       totalProcess() const;
-    QTime     totalTime() const;
 
     //TODO: just for testing purpose
     TTThreadTaskPool* threadTaskPool() const;
@@ -197,6 +197,10 @@ class TTAVData : public QObject
     void cutPreviewFinished(TTCutList* cutList);
     void cutAudioDriftCalculated(const QList<float>& driftsMs);
     void cutFinished();
+
+    //! Emitted before a cut operation's Init: the planned stage sequence
+    //! with work amounts, for the progress estimator.
+    void operationPlanReady(const QVector<TTStagePlan>& plan);
 
   private:
     TTAVItem*      createAVItem();

@@ -17,7 +17,6 @@
 #define TTTHREADTASKPOOL_H
 
 #include <QObject>
-#include <QTime>
 #include <QQueue>
 #include <QMap>
 #include <QUuid>
@@ -39,7 +38,6 @@ class TTThreadTaskPool : public QObject
 		void  start(TTThreadTask* task, bool runSyncron=false, int priority=0);
     void  startNested(TTThreadTask* task);
     int   overallPercentage();
-    QTime overallTime();
 
   signals:
     void init();
@@ -66,7 +64,6 @@ class TTThreadTaskPool : public QObject
     QMap<QUuid, quint64>  mTotalMap;
     QMap<QUuid, quint64>  mProgressMap;
     TTMessageLogger*      log;
-    QTime                 mOverallTotalTime;
     quint64               mOverallTotalSteps;
     quint64               mOverallStepCount;
     //quint64               mCompletedStepCount;

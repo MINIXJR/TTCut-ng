@@ -49,7 +49,21 @@ class StatusReportArgs
       ShowProcessForm,
       ShowProcessFormBlocking,
       AddProcessLine,
-      HideProcessForm
+      HideProcessForm,
+      // Stage announcement: sender declares which operation stage follows.
+      // The stage id (ProgressStage) travels in the quint64 value parameter;
+      // msg is unused for this state. Appended LAST - existing numeric values
+      // must not shift.
+      Stage
+    };
+
+    //! Stage ids for StatusReportArgs::Stage (value parameter)
+    enum ProgressStage
+    {
+      StageVideo,
+      StageAudio,
+      StageMux,
+      StagePool
     };
 };
 

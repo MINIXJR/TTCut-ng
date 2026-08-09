@@ -61,14 +61,6 @@ QUuid TTThreadTask::taskID() const
 }
 
 /**
- * Elapsed time since task was started in msecs
- */
-int TTThreadTask::elapsedTime() const
-{
-  return (mTaskTime.elapsed() <= 8640000) ? mTaskTime.elapsed() : 0;
-}
-
-/**
  * Return the estimate number of total task steps
  */
 /** 
@@ -158,8 +150,6 @@ void TTThreadTask::runSynchron()
  */
 void TTThreadTask::run()
 {
- mTaskTime.start();
-
   try
   {
     if (mIsAborted) {

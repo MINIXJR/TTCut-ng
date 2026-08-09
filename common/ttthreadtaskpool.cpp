@@ -181,9 +181,6 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
  *     through onStatusReport - not through the queue. The embedded task still
  *     reports progress, which matters because TTCutTask forwards
  *     TTVideoStream::statusReport (the fine-grained progress inside one cut).
- *   - overallTime() sums elapsedTime() over the queue. The embedded task runs
- *     inside the outer one, so its time used to be counted twice; now it is
- *     counted once.
  */
 void TTThreadTaskPool::startNested(TTThreadTask* task)
 {
@@ -303,7 +300,12 @@ void TTThreadTaskPool::onStatusReport(TTThreadTask* task, int state, const QStri
 
   if (state == StatusReportArgs::Step)
   {
-    mProgressMap[task->taskID()] = value;
+    // Clamp monotone per task: senders emit cumulative progress positions, so
+    // a smaller value than what is already recorded can only be a stale Step
+    // signal delivered late through the queued connection (observed as the
+    // overall percentage flickering down, e.g. 55->56->55, when an
+    // already-finished task's earlier Step arrives after its Finished).
+    mProgressMap[task->taskID()] = qMax(mProgressMap.value(task->taskID(), 0), value);
   }
 
   if (state == StatusReportArgs::Finished)
@@ -378,25 +380,6 @@ int TTThreadTaskPool::overallPercentage()
 
   // Return percentage (0-100)
   return (int)((double)totalProgress / (double)totalSteps * 100.0);
-}
-
-//! Calculate the total progress time value of all enqueued tasks
-
-QTime TTThreadTaskPool::overallTime()
-{
-  mOverallTotalTime.setHMS(0, 0, 0, 0);
-  int totalTimeMsecs = 0;
-
-  for (int i = 0; i < mTaskQueue.count(); i++)
-  {
-    TTThreadTask* task = mTaskQueue.at(i);
-
-    //if (task == 0) continue;
-
-    totalTimeMsecs += task->elapsedTime();
-  }
-
-  return QTime(0, 0, 0, 0).addMSecs(totalTimeMsecs);
 }
 
 /**

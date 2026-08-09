@@ -75,6 +75,8 @@ set(TTCUT_HEADERS
   common/ttavlog.h
   common/ttexception.h
   common/istatusreporter.h
+  common/ttcalibrationstore.h
+  common/ttprogressestimator.h
   data/ttaspectdetect.h
   data/ttaudiolist.h
   data/ttsubtitlelist.h
@@ -182,6 +184,8 @@ set(TTCUT_CORE_SOURCES
   common/ttavlog.cpp
   common/ttexception.cpp
   common/istatusreporter.cpp
+  common/ttcalibrationstore.cpp
+  common/ttprogressestimator.cpp
   data/ttaspectdetect.cpp
   data/ttaudiolist.cpp
   data/ttsubtitlelist.cpp
