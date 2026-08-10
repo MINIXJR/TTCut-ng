@@ -3775,7 +3775,21 @@ bool TTESSmartCut::bufferAndWriteEncoderPacket(ReencodeContext& ctx,
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
 {
-    for (AVFrame* frame : ctx.framesToEncode) {
+    // Index-based iteration is deliberate: `frame` below is a REFERENCE into
+    // the ctx.framesToEncode slot (not a value copy), so av_frame_free(&frame)
+    // nulls the slot itself. ~ReencodeContext's cleanup loop later frees every
+    // remaining pointer in this list; av_frame_free() is a no-op on a null
+    // entry, so a slot freed here can never be double-freed by the destructor,
+    // regardless of which iteration an early return happens on. The previous
+    // version of this loop used `for (AVFrame* frame : ctx.framesToEncode)`,
+    // which binds by value: freeing the local copy left the (now dangling)
+    // pointer sitting in the QList slot, and any early return afterwards
+    // (avcodec_send_frame/receive_packet/write failures below) handed that
+    // dangling pointer to the destructor a second time -- a reproduced
+    // double free / heap corruption, not just a leak.
+    for (int fi = 0; fi < ctx.framesToEncode.size(); ++fi) {
+        AVFrame*& frame = ctx.framesToEncode[fi];
+
         if (ctx.firstFrame) {
             frame->pict_type = AV_PICTURE_TYPE_I;
 #if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 0, 0)

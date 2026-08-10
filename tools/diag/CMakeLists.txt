@@ -33,7 +33,8 @@ set(STILLFRAME_SRC
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
-  ${ROOT}/common/ttmessagelogger.cpp)
+  ${ROOT}/common/ttmessagelogger.cpp
+  ${ROOT}/common/ttcalibrationstore.cpp)
 
 set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp)
 
