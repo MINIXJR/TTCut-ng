@@ -204,6 +204,14 @@ bool TTNaluParser::parseFile()
     int nalCount = 0;
 
     while (currentPos < mFileSize) {
+        if (mAbortCallback && mAbortCallback()) {
+            // Deliberately not setError(): a user cancel is not a parse
+            // failure and must not log as one (mirrors
+            // TTESSmartCut::checkAbort()'s reasoning).
+            mLastError = "aborted by user";
+            return false;
+        }
+
         int result = findNextStartCode(currentPos, startCodePos, startCodeLen);
         if (result < 0) {
             break;  // No more start codes

@@ -2422,12 +2422,13 @@ QList<float> TTAVData::cutAudioTracks(
     const std::function<QString(int, const QString&)>& outPath,
     const std::function<void(int, const QString&, const QString&, bool)>& onCut,
     const std::function<void(int)>& beforeCut,
-    const std::function<void(int, int)>& onProgress)
+    const std::function<void(int, int)>& onProgress,
+    const std::function<bool()>& shouldAbort)
 {
   QList<int> allTracks;
   if (avItem)
     for (int i = 0; i < avItem->audioCount(); i++) allTracks << i;
-  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut, beforeCut, onProgress);
+  return cutAudioTracks(avItem, allTracks, videoKeepList, normalizeAcmod, outPath, onCut, beforeCut, onProgress, shouldAbort);
 }
 
 // Cut all requested audio tracks against a shared video keep list. Absorbs the
@@ -2444,13 +2445,16 @@ QList<float> TTAVData::cutAudioTracks(
     const std::function<QString(int, const QString&)>& outPath,
     const std::function<void(int, const QString&, const QString&, bool)>& onCut,
     const std::function<void(int)>& beforeCut,
-    const std::function<void(int, int)>& onProgress)
+    const std::function<void(int, int)>& onProgress,
+    const std::function<bool()>& shouldAbort)
 {
   QList<float> firstDrifts;
   TTMessageLogger* log = TTMessageLogger::getInstance();
   if (!avItem || trackIndices.isEmpty()) return firstDrifts;
 
   for (int idx : trackIndices) {
+    if (shouldAbort && shouldAbort()) break;
+
     // Range-check before audioStreamAt/audioListItemAt (QList::at asserts on
     // out-of-range) — this is a public method, callers may pass stale indices.
     if (idx < 0 || idx >= avItem->audioCount()) {
@@ -2493,7 +2497,7 @@ QList<float> TTAVData::cutAudioTracks(
       perTrackCb = [&onProgress, idx](int p) { onProgress(idx, p); };
     bool ok = ff.cutAudioStream(stream->filePath(), outFile,
                                 plan.keepList, normalizeAcmod, targetAcmods,
-                                perTrackCb);
+                                perTrackCb, shouldAbort);
     if (!ok)
       log->errorMsg(__FILE__, __LINE__,
                     QString("Audio cut failed for track %1").arg(idx + 1));

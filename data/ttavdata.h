@@ -344,7 +344,10 @@ class TTAVData : public QObject
         const std::function<void(int trackIdx)>& beforeCut = {},
         // Optional per-track progress hook (0..100), forwarded to
         // cutAudioStream's own progress callback.
-        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr);
+        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr,
+        // Optional abort predicate, polled once per track before it starts
+        // and forwarded into cutAudioStream's own in-loop poll.
+        const std::function<bool()>& shouldAbort = {});
 
     // Convenience overload for the common case: cut ALL of avItem's audio
     // tracks. Builds the all-tracks index list and forwards to the overload
@@ -357,7 +360,8 @@ class TTAVData : public QObject
         const std::function<void(int trackIdx, const QString& path,
                                  const QString& lang, bool ok)>& onCut,
         const std::function<void(int trackIdx)>& beforeCut = {},
-        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr);
+        const std::function<void(int trackIdx, int percent)>& onProgress = nullptr,
+        const std::function<bool()>& shouldAbort = {});
 
     //! Cut the given subtitle tracks of avItem against the video keep list
     //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2

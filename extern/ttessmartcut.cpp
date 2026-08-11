@@ -244,6 +244,10 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
 {
     cleanup();
 
+    // Only clearing point for mAbortRequested -- see the member declaration
+    // in the header for the full flag-lifetime rationale.
+    mAbortRequested.store(false, std::memory_order_relaxed);
+
     mInputFile = esFile;
 
     // Try to get frame rate from .info file if not provided
@@ -277,9 +281,25 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
         qDebug() << "TTESSmartCut: Parsing ES file...";
     emit progressChanged(0, tr("Parsing ES file..."));
 
+    // Poll point for the ES parse itself (can run seconds on a real
+    // recording): forwards to checkAbort() so a Cancel during initialize()
+    // is recorded the same cooperative way as every other phase. Set fresh
+    // every call -- mParser outlives a single initialize() (case (c)-style
+    // reuse), but the lambda must always target the current instance.
+    mParser.setAbortCallback([this]() { return checkAbort(); });
+
     if (!mParser.parseFile()) {
-        setError(QString("Cannot parse ES file: %1").arg(mParser.lastError()));
         mParser.closeFile();
+        // Not wasAborted(): mWasAborted is only cleared at smartCutFrames()
+        // entry (see its declaration), so on a reused engine whose PRIOR
+        // run was aborted, it can still read true here even though THIS
+        // call's parse failed for an unrelated reason. mAbortRequested was
+        // just cleared at the top of this same call, so reading it directly
+        // reliably answers "did a Cancel arrive during this call's parse" --
+        // checkAbort() above still did the actual recording for the public
+        // wasAborted()/lastError() contract.
+        if (mAbortRequested.load(std::memory_order_relaxed)) return false;
+        setError(QString("Cannot parse ES file: %1").arg(mParser.lastError()));
         return false;
     }
 
@@ -458,6 +478,11 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
         return false;
     }
 
+    // mWasAborted is an output, not an input: cleared at every run's entry
+    // point (see the member declaration for the flag-lifetime rule).
+    mWasAborted = false;
+    if (checkAbort()) return false;  // pre-run abort request
+
     if (cutFrames.isEmpty()) {
         setError("Cut list is empty");
         return false;
@@ -609,6 +634,8 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
 
     mTotalSegments = segments.size();
     for (int i = 0; i < segments.size(); ++i) {
+        if (checkAbort()) { outFile.close(); return false; }
+
         const TTCutSegmentInfo& seg = segments[i];
         mCurrentSegment = i + 1;
 
@@ -705,7 +732,12 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     // calibration - it does not fall under "video has no stored calibration"
     // (that rule targets ms-per-work-unit factors like mux/audio; k only
     // rebalances copy vs. encode frame weights within the video stage).
-    if (mCopyFramesAcc > 0 && mEncodeFramesAcc > 0
+    // !mWasAborted is unreachable-true today: every abort return above this
+    // point (segment loop, and every nested poll point via processSegment's
+    // failure path) already exits before this code is reached. Kept anyway,
+    // defensively, against a future reordering of the return points -- this
+    // check is cheap and correct either way.
+    if (!mWasAborted && mCopyFramesAcc > 0 && mEncodeFramesAcc > 0
         && mCopyMsAcc > 0 && mEncodeMsAcc > 0) {
         double copyMsPerFrame = double(mCopyMsAcc) / mCopyFramesAcc;
         double encMsPerFrame  = double(mEncodeMsAcc) / mEncodeFramesAcc;
@@ -2454,15 +2486,33 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
                          << (totalSize / (1024*1024)) << "MB";
             }
 
-            if (outFile.write(reinterpret_cast<const char*>(startPtr), totalSize) != totalSize) {
-                setError(QString("Bulk write failed for frames %1-%2").arg(startFrame).arg(endFrame));
-                return false;
+            // Chunked so a user abort takes effect within one chunk and the
+            // progress signal keeps flowing during multi-GB interior copies.
+            static const int64_t kChunk = 8LL * 1024 * 1024;
+            int64_t written = 0;
+            while (written < totalSize) {
+                if (checkAbort()) return false;
+                int64_t n = qMin(kChunk, totalSize - written);
+                if (outFile.write(reinterpret_cast<const char*>(startPtr) + written, n) != n) {
+                    setError(QString("Bulk write failed for frames %1-%2").arg(startFrame).arg(endFrame));
+                    return false;
+                }
+                written += n;
+                // Progress: proportional frame count for the weighting model.
+                int framesDone = int((endFrame - startFrame + 1) * (double(written) / totalSize));
+                if (mTotalFrames > 0) {
+                    int prev = mFramesStreamCopied;
+                    mFramesStreamCopied = copiedAtEntry + framesDone;
+                    if (mFramesStreamCopied != prev)
+                        emitCutProgress(
+                            tr("Processing segment %1/%2").arg(mCurrentSegment).arg(mTotalSegments), 0);
+                }
             }
 
             for (int au = startFrame; au <= endFrame && mOutputDisplayOrderValid; ++au)
                 appendOutputDisplay(mDisplayMap.decodeToDisplay(au), au);
 
-            mFramesStreamCopied += (endFrame - startFrame + 1);
+            mFramesStreamCopied = copiedAtEntry + (endFrame - startFrame + 1);
             return true;
         }
         // Fall through to per-frame path if accessUnitPtr failed
@@ -2470,6 +2520,8 @@ bool TTESSmartCut::streamCopyFrames(QFile& outFile, int startFrame, int endFrame
 
     // --- Per-frame path: patching required or mmap unavailable ---
     for (int i = startFrame; i <= endFrame; ++i) {
+        if (checkAbort()) return false;
+
         QByteArray auData;
 
         // Prefer mmap over QFile seek+read
@@ -2873,6 +2925,8 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
 
     // Feed all AUs from keyframe through extended range
     for (int i = ctx.decodeStart; i <= ctx.decodeEnd; ++i) {
+        if (checkAbort()) return false;
+
         QByteArray auData = mParser.readAccessUnitData(i);
         if (auData.isEmpty()) {
             setError(QString("Failed to read frame %1 for decoding").arg(i));
@@ -3780,15 +3834,22 @@ bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
     // nulls the slot itself. ~ReencodeContext's cleanup loop later frees every
     // remaining pointer in this list; av_frame_free() is a no-op on a null
     // entry, so a slot freed here can never be double-freed by the destructor,
-    // regardless of which iteration an early return happens on. The previous
+    // regardless of which iteration an early return happens on. A prior
     // version of this loop used `for (AVFrame* frame : ctx.framesToEncode)`,
     // which binds by value: freeing the local copy left the (now dangling)
     // pointer sitting in the QList slot, and any early return afterwards
-    // (avcodec_send_frame/receive_packet/write failures below) handed that
-    // dangling pointer to the destructor a second time -- a reproduced
-    // double free / heap corruption, not just a leak.
+    // (pre-existing avcodec_send_frame/receive_packet/write failures, or an
+    // abort) handed that dangling pointer to the destructor a second time --
+    // a real, reproduced double free / heap corruption, not just a leak.
     for (int fi = 0; fi < ctx.framesToEncode.size(); ++fi) {
         AVFrame*& frame = ctx.framesToEncode[fi];
+
+        // Consistent with the other early returns in this loop below (none
+        // of which free `frame` either): leave ownership of the current and
+        // all not-yet-consumed entries to ~ReencodeContext. That is now safe
+        // for every entry, not just this one, because of the null-after-free
+        // pattern above.
+        if (checkAbort()) return false;
 
         if (ctx.firstFrame) {
             frame->pict_type = AV_PICTURE_TYPE_I;
@@ -3868,6 +3929,8 @@ bool TTESSmartCut::flushEncoder(ReencodeContext& ctx)
     AVPacket* packet = av_packet_alloc();
     if (!packet) return false;
     while (true) {
+        if (checkAbort()) { av_packet_free(&packet); return false; }
+
         int ret = avcodec_receive_packet(mEncoder, packet);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             break;
@@ -5176,4 +5239,21 @@ void TTESSmartCut::setError(const QString& error)
     mLastError = error;
     TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
         QString("TTESSmartCut error: %1").arg(error));
+}
+
+// ----------------------------------------------------------------------------
+// Poll point for cooperative abort. Returns true (and records the abort)
+// when a requestAbort() arrived; every caller returns false through its
+// normal error path afterwards.
+// ----------------------------------------------------------------------------
+bool TTESSmartCut::checkAbort()
+{
+    if (!mAbortRequested.load(std::memory_order_relaxed)) return false;
+    mWasAborted = true;
+    // Deliberately not setError(): a user cancel is not a failure and must
+    // not read as one in the log (setError() logs at ERROR level via
+    // TTMessageLogger). Set mLastError directly so lastError() still
+    // contains "aborted", without the error-level log line.
+    mLastError = "aborted by user";
+    return true;
 }

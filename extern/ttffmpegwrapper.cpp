@@ -1575,7 +1575,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                                       const QList<QPair<double, double>>& cutList,
                                       bool normalizeAcmod,
                                       const QList<int>& targetAcmods,
-                                      const std::function<void(int)>& progressCb)
+                                      const std::function<void(int)>& progressCb,
+                                      const std::function<bool()>& shouldAbort)
 {
     if (!QFile::exists(inputFile)) {
         setError(QString("Audio file not found: %1").arg(inputFile));
@@ -1716,6 +1717,7 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
              << "outTimeBase" << outFmtCtx->streams[0]->time_base.num
              << "/" << outFmtCtx->streams[0]->time_base.den;
 
+    bool aborted = false;
     for (int segIdx = 0; segIdx < cutList.size(); ++segIdx) {
         double startTime = cutList[segIdx].first;
         double endTime = cutList[segIdx].second;
@@ -1744,6 +1746,18 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
 
         bool segmentStarted = false;
         while (av_read_frame(inFmtCtx, pkt) >= 0) {
+            if (shouldAbort && shouldAbort()) {
+                // Deliberately not setError(): a user cancel is not a failure
+                // and must not read as one in the log (setError() logs at
+                // warning level via TTMessageLogger). Set mLastError directly
+                // so lastError() still contains "aborted", without the
+                // error-level log line. Mirrors TTESSmartCut::checkAbort().
+                mLastError = "aborted by user";
+                aborted = true;
+                av_packet_unref(pkt);
+                break;
+            }
+
             if (pkt->stream_index != audioIdx) {
                 av_packet_unref(pkt);
                 continue;
@@ -1929,10 +1943,12 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                 av_packet_unref(pkt);
             }
         }
+        if (aborted) break;
     }
 
     // Guarantee the contract's final 100 even when rounding stopped short.
-    if (progressCb && totalKeepSec > 0.0 && lastPercent < 100)
+    // Skipped on abort — the cut did not actually reach 100% of the keep list.
+    if (!aborted && progressCb && totalKeepSec > 0.0 && lastPercent < 100)
         progressCb(100);
 
     // Cleanup acmod re-encode resources
@@ -1956,6 +1972,17 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
     if (!(outFmtCtx->oformat->flags & AVFMT_NOFILE))
         avio_closep(&outFmtCtx->pb);
     avformat_free_context(outFmtCtx);
+
+    // Deliberate user abort: all AV contexts are already closed above via the
+    // function's normal cleanup sequence (same code the error paths use).
+    // lastError() already carries "aborted by user" from the poll site; do
+    // not let the size-0 check below overwrite it with a generic failure —
+    // the caller deletes the partial/empty output file.
+    if (aborted) {
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "cutAudioStream: aborted by user";
+        return false;
+    }
 
     // Verify output
     QFileInfo outInfo(outputFile);

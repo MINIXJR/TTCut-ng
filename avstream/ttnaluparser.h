@@ -21,6 +21,7 @@
 #include <QByteArray>
 #include <QFile>
 #include <QMap>
+#include <functional>
 
 // ----------------------------------------------------------------------------
 // NAL Unit types for H.264 (AVC)
@@ -201,6 +202,12 @@ public:
     // Full file parsing
     bool parseFile();
 
+    // Cooperative-abort poll hook. When set, parseFile() calls it once per
+    // NAL unit found in the scan loop; a true return aborts the parse early
+    // (parseFile() returns false, lastError() reports the cancellation, no
+    // error-level log line -- mirrors TTESSmartCut::checkAbort()).
+    void setAbortCallback(std::function<bool()> cb) { mAbortCallback = std::move(cb); }
+
     // Accessors
     TTNaluCodecType codecType() const { return mCodecType; }
     QString codecName() const;
@@ -299,6 +306,9 @@ private:
     QMap<int, TTSpsInfo> mSpsInfoMap;   // SPS ID -> SPS info
     QMap<int, int> mPpsToSpsMap;        // PPS ID -> SPS ID
     bool mIsPAFF;                       // true if any field-coded slices found
+
+    // Cooperative-abort poll hook (see setAbortCallback())
+    std::function<bool()> mAbortCallback;
 
     // Error handling
     QString mLastError;

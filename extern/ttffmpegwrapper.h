@@ -276,11 +276,16 @@ public:
     // at segment boundaries are re-encoded to match the target channel layout.
     // progressCb (optional) is called with 0..100, only on value changes,
     // strictly increasing, final value 100 (requires a known total duration).
+    // shouldAbort (optional) is polled inside the per-segment packet loop; a
+    // deliberate abort routes through the function's normal cleanup path,
+    // returns false, and sets lastError() to "aborted by user" (distinguishable
+    // from a real failure without a separate wasAborted() flag).
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList,
                         bool normalizeAcmod = false,
                         const QList<int>& targetAcmods = QList<int>(),
-                        const std::function<void(int)>& progressCb = nullptr);
+                        const std::function<void(int)>& progressCb = nullptr,
+                        const std::function<bool()>& shouldAbort = {});
 
     // Detect audio burst near a boundary (returns true if burst found).
     // A burst is reported when the PEAK of the boundary chunks exceeds the

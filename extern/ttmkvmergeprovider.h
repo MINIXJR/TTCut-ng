@@ -21,6 +21,7 @@
 #include <QList>
 #include <QObject>
 #include <QMap>
+#include <atomic>
 
 // Libav forward decls — keep heavy headers out of this public header.
 struct AVFormatContext;
@@ -52,6 +53,12 @@ public:
 
     // Always available (libav is linked at build time)
     QString lastError() const { return mLastError; }
+
+    // Cooperative abort: thread-safe request from any thread (GUI or task's
+    // onUserAbort). Work loops poll the flag and return through the normal
+    // false/error path; wasAborted() distinguishes abort from real errors.
+    void requestAbort() { mAbortRequested.store(true, std::memory_order_relaxed); }
+    bool wasAborted() const { return mWasAborted; }
 
     // MKV-specific options
     void setDefaultDuration(const QString& trackType, const QString& duration);
@@ -103,6 +110,11 @@ signals:
 
 private:
     QString mLastError;
+    // Providers are created fresh per operation (unlike TTESSmartCut, which
+    // is reused across calls) so mAbortRequested needs no clearing point of
+    // its own; mWasAborted is cleared at the top of mux()/muxAudioOnly().
+    std::atomic<bool> mAbortRequested { false };
+    bool mWasAborted = false;
     QString mChapterFile;
     int mAudioSyncOffsetMs;
     int mVideoSyncOffsetMs;
@@ -179,6 +191,9 @@ private:
                               const AVFormatContext* outCtx) const;
 
     void setError(const QString& error);
+
+    // Poll point for cooperative abort (see mAbortRequested / mWasAborted).
+    bool checkAbort();
 };
 
 #endif // TTMKVMERGEPROVIDER_H

@@ -22,6 +22,7 @@
 #include <QPair>
 #include <QFile>
 #include <QObject>
+#include <atomic>
 
 #include "../avstream/ttnaluparser.h"
 #include "../avstream/ttdisplayordermap.h"
@@ -126,6 +127,12 @@ public:
     // strings; empty when every seam took the RASL-preserving path or no
     // H.265 CRA+RASL seam occurred).
     QStringList seamNotes() const { return mSeamNotes; }
+
+    // Cooperative abort: thread-safe request from any thread (GUI or task's
+    // onUserAbort). Work loops poll the flag and return through the normal
+    // false/error path; wasAborted() distinguishes abort from real errors.
+    void requestAbort() { mAbortRequested.store(true, std::memory_order_relaxed); }
+    bool wasAborted() const { return mWasAborted; }
 
 signals:
     void progressChanged(int percent, const QString& message);
@@ -255,12 +262,25 @@ private:
     // against each other within the video stage). < 0 = not yet seeded.
     double mSeedK = -1.0;
 
+    // Cooperative abort flag. Cleared ONLY in initialize() -- nowhere else.
+    // Precise timing: a requestAbort() that arrives AFTER initialize() has
+    // run intentionally fails the next (or current) smartCutFrames() call at
+    // its entry check. One that arrives BEFORE initialize() is discarded --
+    // initialize()'s clear (extern/ttessmartcut.cpp) runs after it and wins.
+    // Every owner constructs a fresh TTESSmartCut per operation, so a stale
+    // request can never leak into an unrelated later run.
+    std::atomic<bool> mAbortRequested { false };
+    bool mWasAborted = false;   // output, not input; cleared at smartCutFrames() entry
+
     // Actual output frame ranges (start AU may differ from requested due to B-frame reorder)
     QList<QPair<int, int>> mActualOutputRanges;
 
     // Error handling
     QString mLastError;
     void setError(const QString& error);
+
+    // Poll point for cooperative abort (see mAbortRequested / mWasAborted).
+    bool checkAbort();
 
     // Internal methods
 

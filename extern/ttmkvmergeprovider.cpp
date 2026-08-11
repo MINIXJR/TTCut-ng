@@ -820,6 +820,11 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                               const QStringList& audioFiles,
                               const QStringList& subtitleFiles)
 {
+    // mWasAborted is an output, not an input: cleared at every run's entry
+    // point. mAbortRequested needs no clearing point of its own -- providers
+    // are created fresh per operation (see the member declaration).
+    mWasAborted = false;
+
     if (videoFile.isEmpty() || !QFile::exists(videoFile)) {
         setError(QString("Video file not found: %1").arg(videoFile));
         return false;
@@ -981,6 +986,11 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
     // Write packets in PTS order
     while (true) {
+        if (checkAbort()) {
+            cleanupAll();
+            return false;
+        }
+
         int bestIdx = -1;
         int64_t bestPts = INT64_MAX;
         for (int i = 0; i < inputs.size(); i++) {
@@ -1174,6 +1184,11 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
                                       const QStringList& audioFiles,
                                       const QStringList& audioLanguages)
 {
+    // mWasAborted is an output, not an input: cleared at every run's entry
+    // point. mAbortRequested needs no clearing point of its own -- providers
+    // are created fresh per operation (see the member declaration).
+    mWasAborted = false;
+
     if (audioFiles.isEmpty()) {
         setError("muxAudioOnly: empty input list");
         return false;
@@ -1244,6 +1259,14 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
         AVRational outTb = outCtx->streams[mi.outIdx]->time_base;
 
         while (av_read_frame(mi.fmtCtx, pkt) >= 0) {
+            if (checkAbort()) {
+                av_packet_unref(pkt);
+                av_packet_free(&pkt);
+                cleanupInputs();
+                if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
+                avformat_free_context(outCtx);
+                return false;
+            }
             if (pkt->stream_index != mi.srcIdx) {
                 av_packet_unref(pkt);
                 continue;
@@ -1285,6 +1308,24 @@ void TTMkvMergeProvider::setError(const QString& error)
     mLastError = error;
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("TTMkvMergeProvider error: %1").arg(error));
+}
+
+// -----------------------------------------------------------------------------
+// Poll point for cooperative abort. Returns true (and records the abort)
+// when a requestAbort() arrived; every caller returns false through its
+// normal error path afterwards.
+// -----------------------------------------------------------------------------
+bool TTMkvMergeProvider::checkAbort()
+{
+    if (!mAbortRequested.load(std::memory_order_relaxed)) return false;
+    mWasAborted = true;
+    // Deliberately not setError(): a user cancel is not a failure and must
+    // not read as one in the log (setError() logs at warning level via
+    // TTMessageLogger). Set mLastError directly so lastError() still
+    // contains "aborted", without the warning-level log line. Mirrors
+    // TTESSmartCut::checkAbort().
+    mLastError = "aborted by user";
+    return true;
 }
 
 // -----------------------------------------------------------------------------
