@@ -101,6 +101,9 @@ set(TTCUT_HEADERS
   data/ttopensubtitletask.h
   data/ttcutvideotask.h
   data/ttcutpreviewtask.h
+  data/tth26xcuttask.h
+  data/ttaudioonlycuttask.h
+  data/ttmuxtask.h
   data/ttframesearchtask.h
   data/ttlogodetector.h
   avstream/ttcommon.h
@@ -210,6 +213,9 @@ set(TTCUT_CORE_SOURCES
   data/ttopensubtitletask.cpp
   data/ttcutvideotask.cpp
   data/ttcutpreviewtask.cpp
+  data/tth26xcuttask.cpp
+  data/ttaudioonlycuttask.cpp
+  data/ttmuxtask.cpp
   data/ttframesearchtask.cpp
   data/ttlogodetector.cpp
   avstream/ttcommon.cpp

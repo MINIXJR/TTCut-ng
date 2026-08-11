@@ -34,7 +34,6 @@
 #include "../common/ttexception.h"
 #include "../data/ttcutparameter.h"
 
-#include <QCoreApplication>
 #include <QStringDecoder>
 
 namespace {
@@ -92,6 +91,18 @@ QTime TTSrtSubtitleStream::streamLengthTime()
 }
 
 //! Cut the subtitle stream
+//!
+//! Deliberately without qApp->processEvents(). The three calls that used to sit
+//! next to the statusReport emissions were there to keep the window painting
+//! during a synchronous cut, and both of today's task callers have moved off
+//! the GUI thread (TTCutPreviewTask, TTH26xCutTask); pumping a pool thread's
+//! event queue mid-write is at best pointless. They were also
+//! pumping for nothing even on the GUI thread: statusReport is connected only by
+//! TTOpenSubtitleTask, which disconnects again in its cleanUp(), so by cut()
+//! time the signal has no receiver at all and no progress message is produced.
+//! The remaining GUI-thread caller (the MPEG-2 branch of TTAVData::onDoCut)
+//! therefore loses no feedback - only the repaint during a text-file write over
+//! an in-memory header list.
 void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
 {
   int index = header_list->searchTimeIndex(start);
@@ -102,7 +113,6 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
   int offsett = cp->getCutInIndex()-start;
 
   emit statusReport(StatusReportArgs::Start, tr("Cutting subtitles"), header_list->searchTimeIndex(end) - index + 1);
-  qApp->processEvents();
 
   while (index < header_list->count())
   {
@@ -130,11 +140,9 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
     index++;
     progress++;
     emit statusReport(StatusReportArgs::Step, tr("Cutting subtitles"), progress);
-    qApp->processEvents();
   }
   emit statusReport(StatusReportArgs::Step, tr("Copying subtitle segment"), progress);
   emit statusReport(StatusReportArgs::Finished, tr("Subtitle cut finished"), progress);
-  qApp->processEvents();
 }
 
 //! Read subtitles

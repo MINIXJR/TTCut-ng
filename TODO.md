@@ -48,19 +48,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fsanitize=address
     -fno-omit-frame-pointer -g" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`).
 
-- **H.26x-Schnitt ist nicht abbrechbar** (User-Entscheid 2026-08-09:
-  eigenes Vorhaben nach dem Merge von `feature/progress-details`)
-  - „Abbrechen"/Kreuz wirken nur auf Pool-Tasks (MPEG-2-Videoschnitt,
-    Analysen); der synchrone Smart Cut (`doH264Cut`) läuft ungebremst zu
-    Ende — das war in allen bisherigen Versionen so.
-  - Seit `501a040f` holt sich der Fortschrittsdialog beim nächsten Step
-    zurück auf den Schirm, statt eine scheinbar tote Anwendung zu
-    hinterlassen (Hauptfenster ist während der Operation deaktiviert).
-  - Echter Abbruch braucht: Abbruchflag in `TTESSmartCut` (Prüfung in den
-    Copy-/Encode-Schleifen), Aufräumen der Teil-Ausgabedateien, saubere
-    `Canceled`-Meldekette; Audio-/Mux-Phase (`cutAudioTracks`,
-    MKV-Mux) ebenfalls prüfen.
-
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — verbleibende Befunde**
   (Wurzel — TS↔ES-AU-Nummerierungs-Drift der es_extra_frames — GELÖST 2026-07-19,
   siehe Spec `docs/superpowers/specs/2026-07-19-es-extras-field-awareness-design.md`):
@@ -97,6 +84,100 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
 
 ## Medium Priority
+
+- **Vorbestehende Defekte, gefunden beim Abbruch-Vorhaben (2026-08-10)** —
+  keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
+  Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
+  festgehalten. Reihenfolge grob nach Nutzerwirkung.
+  - **Abgebrochene Vorschau verliert den geteilten Smart-Cut-Motor samt
+    aller darin gehaltenen Bilder.** `TTCutPreviewTask::operation()` prüft am
+    Schleifenkopf `isAborted()` und wirft dort eine `TTAbortException`
+    (`data/ttcutpreviewtask.cpp:196`). Dieser Wurf liegt **außerhalb** des
+    `try` um `createH264PreviewClip()`, das den Motor im Fehlerfall löscht
+    (`:257`), und überspringt zugleich das `delete sharedSmartCut` am Ende von
+    `operation()` (`:377`); `cleanUp()` ist leer. Fällt der Abbruch also
+    zwischen zwei Vorschau-Clips, bleibt der Motor mitsamt seiner
+    dekodierten Bilder liegen. Gemessen mit ASAN auf
+    `tux_h264_1080p_progressive_test`, beide Male mit demselben Harness und
+    demselben Fall (`audio`), nur mit unterschiedlicher Landestelle:
+    **535 391 447 B in 62 183 Allokationen**, wenn der Abbruch zwischen
+    Clip 1 und Clip 2 landet, gegenüber **4 253 512 B**, wenn er innerhalb
+    von Clip 1 landet (dann greift der `catch`). Wurfstelle und Löschstelle
+    stammen beide aus Februar 2026 (`a65ccd22` / `1cf22691`) — vorbestehend.
+    Der Speicher wird erst beim Programmende frei; mehrere abgebrochene
+    Vorschauen in einer Sitzung summieren sich.
+    Reproduzieren: `tools/diag/test_previewcut_abort <es> <ac3> <wd> audio`
+    unter ASAN mehrfach laufen lassen — je nachdem, ob der Abbruch inner-
+    oder zwischen-Clip landet, unterscheidet sich die Leak-Summe um ~530 MB.
+  - **`TTCutVideoTask` gibt weder seinen `TTFileBuffer` noch seinen
+    `TTCutParameter` noch sich selbst frei** (ASAN-bestätigt, vorbestehend).
+    Sichtbare Folge seit dem Abbruch-Vorhaben: Löscht ein abgebrochener
+    MPEG-2-Schnitt sein Video-ES, wird die Datei entlinkt, während noch ein
+    Deskriptor offen ist — sie verschwindet aus dem Verzeichnis, ihre Blöcke
+    werden aber erst beim Programmende frei. Mehrere abgebrochene große
+    MPEG-2-Schnitte in einer Sitzung halten die Platte belegt, ohne dass
+    etwas zu sehen wäre. Behebung ist eine Eigentums-/Lebensdauer-Änderung
+    in einer Klasse mit drei Aufrufstellen (inkl. `TTCutPreviewTask`) —
+    etwa zehn Zeilen plus eigener Prüflauf.
+  - **`Exit` wird gemeldet, bevor `mLastCutError` gesetzt ist** (H.26x- und
+    Audio-only-Pfad). `TTCutMainWindow::onStatusReport` liest beim
+    Behandeln von `Exit` `lastCutError()`, um zu entscheiden, ob die
+    Operation regulär endete — ein **fehlgeschlagener** Schnitt gilt damit
+    als regulärer Abschluss, und die Restzeit-Schätzung schreibt aus einem
+    kaputten Lauf einen Kalibrierfaktor. Beim Umbau in Aufgabe 5 bewusst
+    unverändert gelassen (dort war Verhaltensgleichheit das Prüfkriterium).
+  - **Eine echte `TTException` aus einer Schnitt-Aufgabe wird als „Cut
+    cancelled" gemeldet** und löst kein `cutFinished()` aus: ein echter
+    Fehler sieht aus wie ein Nutzer-Abbruch, und ein `--auto-cut`-Lauf auf
+    diesem Pfad wartet ewig.
+  - **`TTThreadTask::abort()` sendet `aborted()` selbst dann**, wenn der
+    Abbruch eintrifft, während `finished()` schon in der Warteschlange
+    liegt — eine tatsächlich fertig gewordene Aufgabe kann sich damit als
+    abgebrochen melden. Generisch, betrifft jede Aufgabe im Pool.
+  - **Der MPEG-2-Neucodierer ist von Lauf zu Lauf nicht reproduzierbar**
+    (`thread_count = 0`; zwei verschiedene Video-ES in sechs Läufen
+    **desselben** unveränderten Binaries). Für die Ausgabequalität harmlos,
+    aber es schließt den Byte-Vergleich als Prüfkriterium auf diesem Pfad
+    aus — festgehalten, damit niemand erneut eines baut.
+    `tools/diag/qc-autocut.sh` überspringt die Videospur deshalb bei
+    mpeg2video und prüft dort nur Paketzahl, Dauer und Audiospur.
+  - **`runEncodePass`s Fehlerpfad bei `av_packet_alloc`** liefert `true`
+    zurück, nachdem die Bildliste bereits teilweise verarbeitet wurde —
+    der Rest leckt und das Segment wird still abgeschnitten. Nur bei einer
+    fehlgeschlagenen Speicheranforderung erreichbar.
+  - **Arbeiter-Fäden lesen den `TTSettings`-Singleton direkt** — latent, kein
+    Datenrennen im heutigen Programm, aber die Begründung dafür steht
+    nirgends im Code. Warum es heute sicher ist: alle benutzten Zugriffe
+    sind triviale Inline-Feldlesungen (`normalizeAcmod()`,
+    `cutDirPath()`, `workingMkvCreateChapters()`,
+    `workingMkvChapterInterval()`, `workingMuxDeleteES()`,
+    `logCutPipeline()`); **keiner** fasst `QSettings` an — das wird nur in
+    `TTSettings::load()`/`save()` geöffnet, und der einzige Speicher, der
+    pro Aufruf öffnet, ist `TTCalibrationStore`, den ausschließlich der
+    GUI-Faden benutzt. `QThreadPool::start()` liefert die
+    Happens-before-Kante, die das fertig gebaute Objekt im Arbeiter sichtbar
+    macht (der Singleton selbst ist ein ungeschützter Lazy-Zeiger, wird aber
+    beim Programmstart im GUI-Faden gebaut). Und jeder Schreiber dieser
+    Felder sitzt hinter einem Dialog, der zu diesem Zeitpunkt geschlossen
+    ist, bzw. hinter dem Hauptfenster, das von `Init` bis `Exit`/`Canceled`
+    genau für die Lebensdauer des Arbeiters deaktiviert ist.
+    Latent bleibt es, weil dieses Sicherheitsargument eine **nirgends
+    erzwungene äußere Zusicherung** ist und `cutDirPath()` ein `QString`
+    zurückgibt — eine nebenläufige Zuweisung dazu ist undefiniertes
+    Verhalten, kein zerrissener `int`. Ein nicht-modales Seitenpanel, ein
+    Hintergrund-Timer oder ein Settings-Schreibvorgang aus einem
+    Status-Slot macht daraus ein echtes Rennen mit einer Absturzsignatur,
+    die kein headless-Harness reproduziert.
+    **Nicht** durch Kopieren der fünf Felder nach `TTH26xCutParams`
+    schließen: `TTH26xCutTask` ist kein Ausreißer — `data/ttcutpreviewtask.cpp`
+    liest denselben Singleton aus seinem Arbeiter an **30** Stellen,
+    `data/ttopenvideotask.cpp` an 2. Eine Task allein umzubauen erkauft nur
+    den Anschein einer Disziplin, die es im Code nicht gibt. Angemessen ist
+    ein projektweiter Schritt in eigener Änderung: entweder eine
+    dokumentierte, geprüfte Regel („Arbeiter-Code liest keinen Singleton",
+    erzwingbar über eine Faden-Zugehörigkeitsprüfung in
+    `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
+    haben.
 
 - **Detailausgabe der Landezonen-Analyse ist unvollständig** (User-Befund
   2026-08-10)
@@ -388,11 +469,94 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     (`tools/test-videos/cache/tux_*`). Kompakt (8-85 MB), reproduzierbar, im Repo.
   - Original-User-Videos nur bei neuen Problemen, die kein Tux-Test-Video reproduziert.
     Bei jedem solchen Fall ein neues Tux-Test-Video erzeugen (via `make_test_video.sh` o.ä.).
-  - **Offen:** Tux-`.ttcut`-Files haben aktuell keine Cut-Entries — `--auto-cut`-Verification
-    erfordert dass Cuts via Skript hinzugefügt werden. Helper-Script `make_tux_with_cuts.sh` wäre
-    nützlich.
+  - **Teilweise gelöst:** Tux-`.ttcut`-Files haben nach wie vor keine
+    Cut-Entries. `tools/diag/qc-autocut.sh` erzeugt sich seit 2026-08-10 sein
+    MPEG-2-Referenzprojekt selbst (drei Schnitte, dieselben wie in
+    `tools/diag/test_mpeg2cut_abort.cpp`, mit den passenden Sollwerten). Für
+    H.264/H.265 fehlt das Gegenstück noch — dort muss ein Projekt mit Schnitten
+    weiterhin von Hand bzw. per Skript gebaut werden.
 
 ## Known Limitations
+
+- **Cancelling a cut: what it reaches, and the one place it does not.**
+  Since `feature/cut-abort` (2026-08-10) Cancel — and the progress dialog's
+  X / Esc, which take the same route — stops the H.264/H.265 final cut
+  (elementary-stream parse, Smart Cut video, audio, MKV mux), every remaining
+  phase of the MPEG-2 final cut (audio, MKV mux and the mplex step for MPG
+  output; the video phase was already abortable), the audio-only cut (audio
+  and MKA mux) and the H.264/H.265 cut preview. A cancel deletes every file
+  that run created, closes the operation with `Canceled` instead of `Exit`,
+  emits no `cutFinished()`, leaves the progress bar frozen at its last value
+  and writes no error, warning or fatal log line. A genuine failure is treated
+  the opposite way: its partial files stay on disk for diagnosis — and for
+  the *preview* that includes the bracket: a real failure still closes with
+  `Exit` and raises the damaged-recording dialog, only a cancel reports
+  `Canceled`. The preview also keeps the clips it had already finished
+  (they are valid previews); only the clip being written when the cancel
+  landed is removed.
+  One gap remains, deliberate:
+  - **A cancel during MPEG-2 *preview* generation does nothing.** The MPEG-2
+    preview's video phase runs through `TTThreadTaskPool::startNested()`,
+    which is deliberately never enqueued and therefore never receives the
+    pool's `onUserAbort()` broadcast (`data/ttcutpreviewtask.cpp:269`).
+    Preview cancel works for H.264/H.265 and is silently a no-op for
+    MPEG-2. Closing it means covering the whole MPEG-2 preview branch —
+    the video task, the audio track and the mux that follows it — not just
+    adding a predicate to the audio call, which would mux a truncated track
+    into a clip reported as "created".
+  Four further sharp edges worth knowing when testing:
+  - A cancel arriving during **subtitle** cutting is acted on only at the
+    end of that phase, not immediately (`cutSubtitleTracks` has no poll
+    point of its own).
+  - The **mplex** step stops an external process, so its cancel is bounded
+    by that process's exit: `TTMplexProvider::stopProcess()` sends SIGTERM
+    and waits up to 2 s, then SIGKILL and up to 1 s more. In practice mplex
+    exits on the SIGTERM immediately (measured: the SIGKILL branch never ran
+    in any harness run). The bound is 2 s + 1 s only as long as the SIGKILL
+    is reaped inside its second — if it is not, `~QProcess` waits again with
+    Qt's own 30 s budget and prints a `qWarning`, so the honest worst case is
+    ~33 s. That needs a process surviving SIGKILL, i.e. wedged in
+    uninterruptible I/O; do not quote "3 s" without this caveat.
+  - A cancel clicked in the **first moments** of an H.264/H.265 cut — before
+    `TTESSmartCut::initialize()` starts — is not seen by the elementary-stream
+    parse: `initialize()` is the only place that clears `mAbortRequested`
+    (`extern/ttessmartcut.cpp:249`), so a request that arrived before it is
+    wiped, and the parse (which *is* pollable via
+    `TTNaluParser::setAbortCallback`) runs to the end. The request is not
+    lost — `TTH26xCutTask` keeps its own flag and acts on it right after
+    `initialize()` returns (`data/tth26xcuttask.cpp:235`) — but on a long
+    recording that is a Cancel that appears dead for several seconds.
+  - There is deliberately **no poll behind a successful mux**: a cancel
+    landing in that last microsecond lets the run finish with a regular
+    `Exit` rather than deleting a complete result.
+
+- **Cancelling an MPEG-2 cut in the last cut-list entry can emit TWO closing
+  brackets** (`Canceled`, then a stray `Exit` "exiting thread pool"), and
+  reloads both tree views twice. Pre-existing — reproduced unchanged on
+  `1a621fa0` — and *not* specific to MPG output; found while building the
+  mplex-abort probe (2026-08-11), measured in 4 of 10 runs of
+  `tools/diag/test_mpeg2cut_abort … mplexlate` in its earlier, queued-injection
+  form (`exit=1 cancel=1 avReload=2`).
+  Mechanism: the MPEG-2 video phase runs **two** tasks — `TTCutVideoTask` on
+  the pool plus a nested `TTCutTask` per cut (`startNested`). A cancel arriving
+  after the last `isAborted()` poll makes both of them throw `TTAbortException`
+  and emit `aborted(this)`. `TTThreadTaskPool::onThreadTaskAborted()` fires
+  `emit aborted(); emit exit();` whenever `mTaskQueue` is empty afterwards, and
+  the queue is already empty for the *second* one — so the pair is emitted
+  twice. The first `exit()` is swallowed by `onThreadPoolExit()`'s
+  `mCutOperationActive` branch (which also consumes the flag); the second finds
+  the flag false, takes the `else` branch and emits the stray `Exit` plus a
+  second `avDataReloaded()`.
+  Fix would be in the pool (emit the pair only on a real non-empty → empty
+  transition), which is shared by every operation on this branch — deliberately
+  not attempted as a late change to the cut-abort work. The `mplexlate` probe
+  therefore arms deterministically *after* the pool has drained, where this
+  cannot occur.
+  A related consequence in the same window: the aborted nested `TTCutTask`
+  belongs to the shared `TTMpeg2VideoStream`, and its `mIsAborted` is never
+  cleared, so the *next* cut on the same stream throws immediately on entry
+  (`TTThreadTask::run()`'s "entering running state while already aborted").
+  Observed once in a restart-after-cancel run; same root, same fix location.
 
 - **KWin stale-area bug: upstream report + minimal test case still open**
   (the in-app symptom itself is RESOLVED since 2026-08-06 — the render

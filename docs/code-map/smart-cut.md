@@ -1,7 +1,9 @@
 ---
-base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
-last_verified: 2026-08-02
+base_commit: f9352969a275edbd06ada29abcab304f52a42828
+last_verified: 2026-08-10
 sources:
+  - common/ttexception.cpp
+  - data/tth26xcuttask.cpp
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
   - extern/tthevcseam.cpp
@@ -29,6 +31,16 @@ the re-encode → stream-copy seam (EOS, `frame_num`, POC, MMCO, SPS).
 - Decode-order vs display-order semantics of the *display/navigation* path —
   see `frame-order.md`, which is the authority for `TTDisplayOrderMap` and for
   the RASL / open-GOP cold-start findings this map relies on.
+
+**Scope of the 2026-08-10 update:** `feature/cut-abort` (`f5a22762`..
+`f9352969`) added cooperative abort to this engine and chunked the bulk
+stream-copy write so it has somewhere to poll. That pass re-verified the
+abort rows and the engine-ownership pitfall below against the code; the seam,
+POC/`frame_num` and variant-matrix sections were **not** re-derived and are
+carried forward from the 2026-08-02 verification (the cut-abort commits did
+not touch them — the only functional change inside a seam path was the
+`runEncodePass` double-free fix, `4547c300`, which corrected frame cleanup
+without altering what is written).
 
 **Codec scope:** `NALU_CODEC_H264` and `NALU_CODEC_H265` only. There is one
 class for both; codec and stream-type differences are runtime branches, not
@@ -102,6 +114,9 @@ flowchart TD
 | `streamCopyFrames` / `runEncodePass` → `mOutputDisplayOrder` | One entry per written AU, in write order, holding the **source display index**. Any anomaly (encoder emits more packets than frames submitted) invalidates the whole vector; the muxer then falls back to legacy linear PTS. |
 | `mOutputDisplayOrder` → `TTMkvMergeProvider` | Output-local display rank, used to assign MKV display PTS. Empty vector = "trust the muxer's linear timeline instead". |
 | `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` used to swallow it and kept looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
+| `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **8 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
+| `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`common/ttexception.cpp:31`). A cancelled cut therefore produces no error, warning or fatal line at all. |
+| `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (`ttessmartcut.cpp:301`). |
 | `TTESSmartCut::seamNotes()` → `ttavdata` → `statusReport` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
 
 ## Variant matrix — which branch fires, and what it must guarantee
@@ -125,6 +140,24 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `TTDisplayOrderMap` has exactly `frameCount()` entries; hard-fails otherwise
   (a misaligned map cannot cut accurately). Guarantees: all indices below it are
   decode-order AU indices.
+
+- **Who owns the engine on the abort path** — the two callers differ, and
+  getting it wrong leaks the whole engine with every decoded frame it still
+  holds. `TTH26xCutTask` holds its engine **by value** (`TTESSmartCut
+  mSmartCut`, `tth26xcuttask.h:116`), so its lifetime is the task's and an
+  abort exit needs no cleanup at all. `TTCutPreviewTask` shares **one** engine
+  across all preview clips (the ES is parsed once) and publishes it as
+  `mpActiveSmartCut` under `mSmartCutMutex` so `onUserAbort()` (GUI thread)
+  can call `requestAbort()` on it. The invariant that makes that race-free:
+  the worker always clears the pointer under the mutex **before** deleting
+  the pointee, never after — `createH264PreviewClip` uses a `qScopeGuard`
+  that only clears (it does not own the engine), while `operation()`'s three
+  deletion sites each clear first and then delete. **Known gap, pre-existing
+  and recorded in `TODO.md`:** the loop-top `isAborted()` throw in
+  `operation()` (`data/ttcutpreviewtask.cpp:196`) sits outside the `try` that
+  deletes the engine and skips the delete at the end of the function, so a
+  cancel landing *between* two preview clips leaks it — measured at ~530 MB
+  on the 1080p Tux sample.
 
 - **`analyzeCutPoints`** — assumes: a keyframe exists within the segment,
   otherwise it degrades to a full re-encode. The `endFrame` search window is

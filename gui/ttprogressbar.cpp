@@ -349,6 +349,17 @@ void TTProgressBar::onSetProgress(TTThreadTask* task, int state, const QString& 
       break;
 
     case StatusReportArgs::AddProcessLine:
+      // Same guard as Step, for the same reason. It used to sit only in the
+      // Step branch, and a phase that reports exclusively through
+      // AddProcessLine - mplex is the one that does - therefore never brought
+      // the dialog back: closing it mid-run left the main window disabled
+      // (Init disables it, only Exit/Canceled re-enable it) with nothing
+      // visible for the rest of the mux. The application looked dead, and a
+      // GUI acceptance run read a completed cut as an aborted one because of
+      // it. Safe against re-showing a legitimately finished, user-closed
+      // dialog because enterFinishedState() sets mFinished before hideBar().
+      if (!mFinished && !isVisible())
+        showBar();
       appendDetailLine(msg);
       break;
 

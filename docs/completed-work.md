@@ -390,6 +390,74 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **„Abbrechen" wirkte nur auf den MPEG-2-Videoschnitt** → **GELÖST
+  (2026-08-10, branch `feature/cut-abort`, `f5a22762`..`f9352969`, 17 Commits)**
+  - War: Der Abbruch erreichte ausschließlich Pool-Aufgaben. Der H.26x-Schnitt
+    lief synchron auf dem GUI-Faden und damit ungebremst zu Ende; ebenso die
+    Audio- und Mux-Phasen des MPEG-2-Schnitts, der reine Audioschnitt und die
+    Vorschau. Das Hauptfenster blieb bis zum Ende deaktiviert.
+  - Jetzt: `TTESSmartCut` und `TTMkvMergeProvider` haben ein
+    Abbruchflag (`requestAbort()`/`wasAborted()`), `TTFFmpegWrapper::cutAudioStream`
+    ein `shouldAbort`-Prädikat; `doH264Cut` und `doAudioOnlyCut` laufen als
+    Pool-Aufgaben (`TTH26xCutTask`, `TTAudioOnlyCutTask`), der MPEG-2-MKV-Mux
+    als zweiter Pool-Lauf (`TTMuxTask`). Ein Abbruch löscht alles, was der
+    Lauf erzeugt hat, meldet `Canceled` statt `Exit`, sendet kein
+    `cutFinished()` und schreibt keine Fehler-, Warn- oder Fatal-Zeile.
+    Ein echter Fehler lässt seine Teildateien liegen.
+  - Nebenbefund, in Aufgabe 1 als Blocker behoben: **Double-Free in
+    `TTESSmartCut::runEncodePass()`** (`4547c300`). Die Schleife band
+    `AVFrame*` per Wert, `av_frame_free(&frame)` nullte nur die Kopie; jeder
+    frühe `return` übersprang das rettende `framesToEncode.clear()`, und
+    `~ReencodeContext` gab dieselben Zeiger erneut frei. Ohne Abbruch nur bei
+    einem seltenen Encoderfehler erreichbar — mit Abbruch der Normalfall.
+    Belegt: SIGABRT („corrupted size vs. prev_size") reproduzierbar mit
+    zurückgenommenem Fix, sauber mit Fix, auf beiden Codecs.
+  - Belege: sieben neue Prüf-Harnesses in `tools/diag/`. Drei prüfen die
+    Motoren einzeln (`test_smartcut_abort`, `test_audiocut_abort`,
+    `test_mkvmux_abort`), vier fahren die echte `TTAVData::onDoCut` →
+    Pool → Task-Kette kopflos und brechen über ein in die GUI-Schleife
+    gestelltes `onUserAbortRequest()` ab — also über genau den Weg, den der
+    Abbrechen-Knopf nimmt (`test_h26xcut_abort`, `test_mpeg2cut_abort`,
+    `test_audioonlycut_abort`, `test_previewcut_abort`; die Vorschau kommt
+    über `doCutPreview()` statt `onDoCut()`).
+    Abschlussmatrix 2026-08-10: 24 Läufe (H.264, H.265, MPEG-2 inkl. mplex,
+    Audio-only, Vorschau; je Phase ein Abbruch plus Kontrolllauf) bestanden,
+    dieselben 24 unter ASAN ohne einen einzigen
+    `ERROR: AddressSanitizer`.
+  - Nicht-Vakuität wurde für jede Aufräum-Zusage einzeln gezeigt: mit
+    abgeschaltetem Löschen bleiben die Teilprodukte messbar liegen (z. B.
+    157 440 von 960 000 B Audio, 2 948 872 B teilweise geschriebene MKV,
+    20 492 134 B teilweises Video-ES).
+  - A/B gegen `8cc32c6a` (letzter Motor-Commit, **nicht** `master`) über
+    `--auto-cut`: Sollwerte zuerst geprüft (40,000 s / 2000 Video- /
+    1250 Audiopakete für H.264 und H.265; 84,000 s / 2100 / 3500 für
+    MPEG-2), dann verglichen — H.264 und H.265 paketweise identisch in Bild
+    und Ton, MPEG-2 identisch in Paketzahl, Dauer und Tonspur.
+  - Nach der Gesamtdurchsicht des Zweiges nachgezogen (2026-08-10):
+    - Eine **abgebrochene Vorschau** meldete `Exit "exiting thread pool"`
+      statt `Canceled` — der Balken sprang damit auf 100 % und der Dialog
+      meldete „Finished after …" für einen Lauf, den der Nutzer abgebrochen
+      hatte. `onCutPreviewAborted()` setzt jetzt (nur bei einem echten
+      Abbruch, nicht bei einem Fehler) `mCutOperationActive` und meldet
+      `Canceled "Preview cancelled"`; `onThreadPoolExit()` verbraucht das
+      Flag wie auf den vier Schnittpfaden.
+    - Die Verbindung `aborted → onCutAborted` wurde auf dem **Erfolgspfad**
+      des MPEG-2-Schnitts nie gelöst — jeder fertige MPEG-2-Schnitt ließ
+      eine dauerhafte Verbindung zu einem Slot zurück, der Dateien löscht.
+      Gelöst in `finishMpeg2Cut()`; dieselbe Disziplin für die Vorschau in
+      `onCutPreviewFinished()`.
+    - Neues Harness `tools/diag/test_cutsequence_abort`: sechs Operationen
+      auf **einem** langlebigen `TTAVData` (wie in der Anwendung). Kein
+      bisheriges Harness prüfte zwei Operationen auf demselben Objekt.
+    - Alle Abbruch-Harnesses hängen jetzt am Ziel `diag-abort`, damit ein
+      Prüflauf nicht wieder unbemerkt alte Binaries aus einer früheren
+      Sitzung ausführt.
+    Abschlussmatrix danach: 25/25 einfach und 25/25 unter ASAN, jeweils
+    ohne `ERROR: AddressSanitizer`.
+  - Bleibende Einschränkungen und die dabei gefundenen vorbestehenden
+    Defekte stehen in `TODO.md`; wie die Kette heute funktioniert, in
+    `docs/code-map/progress-reporting.md` und `docs/code-map/smart-cut.md`.
+
 - **Fortschrittsanzeige-Überholung** (Details-Panel leer, Audio-Cut ohne
   echte Prozente, MPEG-2-Finalschnitt teilweise außerhalb des Dialogs) →
   **GEFIXT (2026-08-06/07, branch `feature/progress-details`)**

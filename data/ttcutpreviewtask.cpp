@@ -46,6 +46,8 @@ extern "C" {
 #include <QFile>
 #include <QTextStream>
 #include <QElapsedTimer>
+#include <QMutexLocker>
+#include <QScopeGuard>
 
 /**
  * Create cut preview clips task
@@ -60,11 +62,23 @@ TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
 
 /**
  * Operation abort requested
+ *
+ * Runs on the GUI thread while operation() runs on the pool. mpActiveSmartCut
+ * is worker-owned (the shared Smart Cut instance for H.264/H.265, or a
+ * clip-local one); mSmartCutMutex is what makes reading it here safe against
+ * the worker creating, reassigning or destroying it concurrently. The
+ * invariant that makes this race-free: the worker always clears the pointer
+ * under the mutex BEFORE deleting the pointee, never after (see the header).
+ * requestAbort() itself is just an atomic store, so calling it once more than
+ * strictly necessary (e.g. between clips, on an instance about to be reused
+ * for the next one) is harmless.
  */
 void TTCutPreviewTask::onUserAbort()
 {
-	//if (cutVideoTask != 0) cutVideoTask->onUserAbort();
-	//if (cutAudioTask != 0) cutAudioTask->onUserAbort();
+  {
+    QMutexLocker lock(&mSmartCutMutex);
+    if (mpActiveSmartCut) mpActiveSmartCut->requestAbort();
+  }
   abort();
 }
 
@@ -126,9 +140,35 @@ void TTCutPreviewTask::operation()
 		QElapsedTimer initTimer;
 		initTimer.start();
 		sharedSmartCut = new TTESSmartCut();
+		// Register as the active engine BEFORE initialize(): the ES parse it
+		// does can run for seconds on a real recording and polls checkAbort()
+		// internally (TTESSmartCut::initialize()), but happens entirely before
+		// the clip loop below, so isAborted() has no poll point covering it.
+		// Without this, a cancel during the initial parse only took effect
+		// after the parse had already run to completion.
+		{
+			QMutexLocker lock(&mSmartCutMutex);
+			mpActiveSmartCut = sharedSmartCut;
+		}
 		if (!sharedSmartCut->initialize(vStream->filePath(), frameRate)) {
-			TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-				QString("Preview: Shared Smart Cut init failed: %1").arg(sharedSmartCut->lastError()));
+			// A cancel during the ES parse comes back through the same false
+			// return as a real parse failure — only the latter is a warning
+			// (logging a plain user cancel at warning level would put a
+			// failure-looking line in the persistent log for something the
+			// user asked for).
+			if (sharedSmartCut->wasAborted())
+				TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
+					"Preview: Shared Smart Cut init aborted by user");
+			else
+				TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+					QString("Preview: Shared Smart Cut init failed: %1").arg(sharedSmartCut->lastError()));
+			// Clear the tracking pointer BEFORE deleting the engine — never
+			// after, or onUserAbort() on the GUI thread could dereference a
+			// freed object in the (tiny) window between the two.
+			{
+				QMutexLocker lock(&mSmartCutMutex);
+				mpActiveSmartCut = nullptr;
+			}
 			delete sharedSmartCut;
 			sharedSmartCut = nullptr;
 		} else {
@@ -154,7 +194,12 @@ void TTCutPreviewTask::operation()
 
   for (int i = 0; i < numPreview; i++) {
     if (isAborted())
-  		throw TTAbortException(__FILE__, __LINE__, "Task gets abort signal!");
+      // Message-only constructor deliberately: the (caller, line) overload
+      // logs at fatal level on construction (TTException::TTException(caller,
+      // line, msg) -> log->fatalMsg(), common/ttexception.cpp:31-37), which
+      // would record a deliberate user cancel as the most severe class of
+      // log event (same fix as TTH26xCutTask::abortNow(), Task 6).
+  		throw TTAbortException("Task gets abort signal!");
 
     onStatusReport(this, StatusReportArgs::Step, tr("Creating preview clip %1 of %2").
         arg(i+1).arg(numPreview), i+1);
@@ -195,11 +240,20 @@ void TTCutPreviewTask::operation()
       }
       catch (const TTException&)
       {
-        // Smart Cut aborted (e.g. un-cuttable damaged stream). Clean up the
-        // per-iteration cut list and the shared Smart Cut engine (both are
-        // otherwise deleted at the end of operation(), which we now skip),
-        // then re-raise so TTThreadTask::run() reports it as a clean abort.
+        // Smart Cut aborted (e.g. un-cuttable damaged stream) or a plain user
+        // cancel routed through createH264PreviewClip's own TTAbortException
+        // (see there for how the two are told apart before this point). Clean
+        // up the per-iteration cut list and the shared Smart Cut engine (both
+        // are otherwise deleted at the end of operation(), which we now
+        // skip), then re-raise so TTThreadTask::run() reports it as a clean
+        // abort.
         delete tmpCutList;
+        // Clear the tracking pointer BEFORE deleting the engine — same
+        // ordering requirement as the init-failure branch above.
+        {
+          QMutexLocker lock(&mSmartCutMutex);
+          mpActiveSmartCut = nullptr;
+        }
         delete sharedSmartCut;
         throw;
       }
@@ -221,6 +275,21 @@ void TTCutPreviewTask::operation()
         if (tmpCutList->at(0).avDataItem()->audioCount() > 0) {
           hasAudio = true;
           // Cut the first audio track for preview (consolidated onto cutAudioTracks).
+          //
+          // NOT wired to isAborted() here (unlike the H.264/H.265 path below):
+          // this MPEG-2 branch's video phase (cutVideoTask, above) already runs
+          // via TTThreadTaskPool::startNested(), which is deliberately not
+          // enqueued (see its own comment) and therefore never receives the
+          // pool's onUserAbort() broadcast — a cancel during MPEG-2 preview
+          // video generation is not currently forwarded at all. Adding the
+          // abort predicate only here, without also handling an aborted
+          // mid-track cutAudioStream (partial file cleanup, bailing out before
+          // the mux below still runs on it), would produce a worse outcome
+          // than today - a truncated audio track silently muxed into a clip
+          // reported as "created". Left as a follow-up covering the whole
+          // MPEG-2 preview branch, not attempted piecemeal here (out of this
+          // task's scope - see task-10-brief.md, which only covers the
+          // H.264/H.265 Smart Cut path).
           const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
           mpAVData->cutAudioTracks(pvItem, {0}, videoKeepList, normalizeAcmod,
               [&](int, const QString& ext) { return createPreviewFileName(i + 1, ext); },
@@ -299,6 +368,12 @@ void TTCutPreviewTask::operation()
     delete tmpCutList;
   }
 
+  // Clear the tracking pointer BEFORE deleting the engine — same ordering
+  // requirement as the two earlier deletion sites above.
+  {
+    QMutexLocker lock(&mSmartCutMutex);
+    mpActiveSmartCut = nullptr;
+  }
   delete sharedSmartCut;
 
   if (TTSettings::instance()->logCutPipeline())
@@ -390,6 +465,15 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "Preview: Using Smart Cut (frame-accurate)";
 
+  // Local fallback engine, used only when the shared one failed to initialise
+  // (operation() then leaves sharedSmartCut null). KNOWN GAP, pre-existing:
+  // this engine is never published to mpActiveSmartCut, so onUserAbort() cannot
+  // reach it and its initialize() — a full ES parse — is not cancellable. It is
+  // reached for EVERY clip, so a recording damaged enough to fail the shared
+  // init produces N uncancellable full-ES parses in a row, with a cancel only
+  // landing at the clip-loop top in operation(). Registering it would mean
+  // publishing/clearing it under mSmartCutMutex around both the initialize()
+  // and the smartCutFrames() call below, the same shape the shared engine uses.
   TTESSmartCut localSmartCut;
   TTESSmartCut* smartCut = sharedSmartCut;
   if (!smartCut) {
@@ -420,7 +504,43 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // cut segment, and a swallowed failure let it keep spawning decoder/encoder
   // instances per segment and then mux/play non-existent clips — on a large
   // corrupt stream this exhausted threads/memory and crashed the process.
-  if (!smartCut->smartCutFrames(tempVideoFile, cutFrames)) {
+  bool smartCutOk;
+  {
+    // Register this engine as the active one for the duration of THIS call
+    // only, so onUserAbort() (GUI thread) can reach into it - this is what
+    // makes a cancel take effect INSIDE a clip instead of only being noticed
+    // between clips. qScopeGuard covers both the normal return and the throw
+    // below: the guard only clears the tracking pointer, it never deletes the
+    // engine (that stays owned by the caller — sharedSmartCut in operation(),
+    // or the local stack instance above), so there is no ordering hazard here
+    // like the ones in operation() (which DOES delete its engine and has to
+    // clear the pointer strictly before that).
+    {
+      QMutexLocker lock(&mSmartCutMutex);
+      mpActiveSmartCut = smartCut;
+    }
+    auto clearActiveSmartCut = qScopeGuard([this] {
+      QMutexLocker lock(&mSmartCutMutex);
+      mpActiveSmartCut = nullptr;
+    });
+    smartCutOk = smartCut->smartCutFrames(tempVideoFile, cutFrames);
+  }
+  if (!smartCutOk) {
+    if (smartCut->wasAborted()) {
+      // Plain user cancel: NOT a failure, so mErrorMessage stays empty -
+      // onCutPreviewAborted() reads a non-empty mErrorMessage as "tell the
+      // user the recording is too damaged", and a cancel must not raise that
+      // dialog. Delete what this clip has produced so far (this is the ONLY
+      // thing smartCutFrames could have created before the abort landed).
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Preview Smart Cut aborted by user";
+      QFile::remove(tempVideoFile);
+      QFile::remove(outputFile);
+      // Message-only constructor: the (caller, line) overload logs at fatal
+      // level on construction, which would record a deliberate cancel as the
+      // most severe class of log event (see TTH26xCutTask::abortNow()).
+      throw TTAbortException("user abort");
+    }
     const QString err = smartCut->lastError();
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("Preview Smart Cut failed: %1").arg(err));
@@ -487,11 +607,31 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     QElapsedTimer audioTimer;
     audioTimer.start();
     TTFFmpegWrapper ffmpeg;
+    // shouldAbort is polled inside cutAudioStream's per-segment packet loop,
+    // so a cancel stops it at the next packet instead of only being noticed
+    // once the whole track has been copied. isAborted() is TTThreadTask's own
+    // flag, read here on the same worker thread that is about to act on it -
+    // same cross-thread contract TTCutVideoTask/TTCutTask already rely on
+    // (onUserAbort() on the GUI thread only ever sets it, never reads it back).
     if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, audioKeepList,
-                              normalizeAcmod, targetAcmods)) {
+                              normalizeAcmod, targetAcmods, nullptr,
+                              [this] { return isAborted(); })) {
       cutAudioFiles.append(cutAudioFile);
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
+    } else if (isAborted()) {
+      // Plain user cancel: cutAudioStream still finalizes the container
+      // before returning false, so cutAudioFile is a partial/empty file on
+      // disk (same behavior TTAVData::cutAudioTracks's own comment documents
+      // for the consolidated path). Stop here rather than falling through to
+      // subtitle cut and mux with a truncated clip - same treatment as the
+      // video phase above.
+      if (TTSettings::instance()->logCutPipeline())
+          qDebug() << "Preview audio cut aborted by user";
+      QFile::remove(cutAudioFile);
+      QFile::remove(tempVideoFile);
+      QFile::remove(outputFile);
+      throw TTAbortException("user abort");
     } else {
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("Preview audio cut failed"));
@@ -512,6 +652,17 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   }
 
   // --- Mux video + audio into MKV (same as final cut) ---
+  //
+  // Deliberately NOT wired to TTMkvMergeProvider::requestAbort() here, unlike
+  // TTH26xCutTask's final-cut mux. A preview clip is at most
+  // 2 * cutPreviewSeconds() (default 25s each side) of already-cut ES plus one
+  // short audio track - muxing that is on the order of tens of milliseconds,
+  // not the many seconds a full-recording final-cut mux can take. Adding a
+  // third mutex-guarded cross-thread pointer (next to mpActiveSmartCut) for a
+  // phase that finishes before a cancel could realistically land inside it
+  // would not make cancellation any more responsive; the outer isAborted()
+  // check at the top of operation()'s clip loop already stops the NEXT clip
+  // promptly.
   QElapsedTimer muxTimer;
   muxTimer.start();
   TTMkvMergeProvider mkvProvider;

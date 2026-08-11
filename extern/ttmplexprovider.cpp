@@ -135,6 +135,9 @@ void TTMplexProvider::mplexPart(int index)
 {
   mCurrentMuxIndex = index;
   int  update      = EVENT_LOOP_INTERVALL;
+  // mWasAborted is an output, not an input: cleared at this run's entry point
+  // (see the header for why mAbortRequested has no clearing point of its own).
+  mWasAborted      = false;
   delete proc;             // free any QProcess from a previous startMplex
   proc             = new QProcess();
 
@@ -158,23 +161,125 @@ void TTMplexProvider::mplexPart(int index)
 
   emit statusReport(StatusReportArgs::ShowProcessForm, "Starting mplex", 0);
   qApp->processEvents();
-  proc->start(mplexCmd, mplexArgs);
 
-  // just a very simple event loop ;-)
-  while (proc->state() == QProcess::Starting ||
-         proc->state() == QProcess::Running     )
-  {
-    update--;
-    if ( update == 0 )
+  // A cancel can already have arrived in one of the qApp->processEvents()
+  // calls above - this method runs on the GUI thread, so the Cancel button's
+  // slot chain executes inside them. Then there is nothing to start, and the
+  // partial-output cleanup below has nothing to remove either.
+  if (!checkAbort()) {
+    proc->start(mplexCmd, mplexArgs);
+
+    // just a very simple event loop ;-)
+    while (proc->state() == QProcess::Starting ||
+           proc->state() == QProcess::Running     )
     {
-      qApp->processEvents();
-      update = EVENT_LOOP_INTERVALL;
+      // The abort poll the loop was missing. Nothing here ever looked at a
+      // flag and nobody stopped the child, so a Cancel click was delivered
+      // (the processEvents() below runs the whole slot chain) and then had no
+      // effect - the mux ran to completion and only the progress dialog
+      // disappeared. Polled on every iteration, not only every
+      // EVENT_LOOP_INTERVALL: a relaxed atomic load is far cheaper than the
+      // QProcess::state() call the loop condition already does.
+      if (checkAbort()) {
+        stopProcess();
+        break;
+      }
+
+      update--;
+      if ( update == 0 )
+      {
+        qApp->processEvents();
+        update = EVENT_LOOP_INTERVALL;
+      }
     }
+  }
+
+  if (mWasAborted) {
+    // Rule for this feature: a cancel deletes everything the run created, a
+    // genuine error leaves the files for diagnosis. The partial .mpg is this
+    // provider's own product and this is the only place that knows its path;
+    // the cut elementary streams that fed it are deleted by the abort block in
+    // TTAVData::onCutFinished(), which owns that list - so nothing is removed
+    // twice.
+    const QString outputFile = createOutputFilePath(mpMuxList->videoFilePathAt(index));
+
+    if (!QFile::exists(outputFile))
+      // The cancel arrived before proc->start(), so mplex never created it.
+      log->debugMsg(__FILE__, __LINE__,
+          QString("No partial mplex output to remove (%1)").arg(outputFile));
+    else if (!QFile::remove(outputFile))
+      log->warningMsg(__FILE__, __LINE__,
+          QString("abort cleanup: could not remove %1").arg(outputFile));
+    else
+      log->debugMsg(__FILE__, __LINE__,
+          QString("Removed partial mplex output %1").arg(outputFile));
+
+    // Not "Mplex finished": a cancelled mux must not read as a completed one
+    // anywhere, not even in the details log. Still no error/warning level -
+    // the cancel is a deliberate user action.
+    emit statusReport(StatusReportArgs::HideProcessForm, tr("Mplex cancelled"), 0);
+    qApp->processEvents();
+    return;
   }
 
   emit statusReport(StatusReportArgs::HideProcessForm, tr("Mplex finished"), 0);
 
   qApp->processEvents();
+}
+
+// -----------------------------------------------------------------------------
+// Poll point for the cooperative abort. Returns true (and records the abort)
+// once a requestAbort() has arrived. Idempotent - the wait loop calls it on
+// every iteration.
+// -----------------------------------------------------------------------------
+bool TTMplexProvider::checkAbort()
+{
+  if (!mAbortRequested.load(std::memory_order_relaxed)) return false;
+  mWasAborted = true;
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Stop the running mplex child process.
+//
+// SIGTERM first: mplex installs no signal handler, so the default action ends
+// it right away and the kernel closes its output file descriptor - the partial
+// .mpg is then a closed, quiescent file when the caller removes it, with no
+// write still in flight. It is also what a user pressing Ctrl-C on a shell
+// invocation would get, so a future mplex that DOES clean up after itself
+// keeps that chance.
+//
+// SIGKILL only as the fallback, because SIGTERM can be ignored or blocked and
+// a cancel must never be able to leave an mplex process running (it would keep
+// writing into the file we are about to delete). Both waits are bounded.
+//
+// The GUI-thread block this can cost is 2 s + 1 s ONLY as long as the SIGKILL
+// is reaped inside its second. If it is not, ~QProcess (via close()) waits for
+// the child again with Qt's own 30 s budget and prints a qWarning - so the
+// honest worst case is ~33 s, not 3 s. It needs a process that survives
+// SIGKILL, i.e. one wedged in uninterruptible I/O; mplex on a local file
+// cannot get there in practice, and the alternative (leaving the child running
+// while we delete the file it writes) is worse. Do not restate the bound as
+// "3 s" without this caveat.
+// -----------------------------------------------------------------------------
+void TTMplexProvider::stopProcess()
+{
+  emit statusReport(StatusReportArgs::AddProcessLine,
+                    tr("Cancel requested - stopping the mplex process"), 0);
+  qApp->processEvents();
+
+  proc->terminate();
+
+  // The state test is not redundant: mplex can finish on its own between the
+  // abort poll and the terminate(), and waitForFinished() returns false for an
+  // ALREADY finished process just as it does for a timeout. Without it that
+  // ordinary race logged "did not exit on terminate()" and sent a SIGKILL to a
+  // dead process - a misleading line about a wholly normal event.
+  if (!proc->waitForFinished(2000) && proc->state() != QProcess::NotRunning) {
+    log->debugMsg(__FILE__, __LINE__, "mplex did not exit on terminate() - killing it");
+    proc->kill();
+    proc->waitForFinished(1000);
+  }
 }
 
 //! Creates the muxed video output file path
@@ -259,6 +364,16 @@ void TTMplexProvider::deleteElementaryStreams(const QString& videoFilePath, cons
 //! This signal is emitted when an error occurs with the process
 void TTMplexProvider::onProcError(QProcess::ProcessError procError)
 {
+  // stopProcess() ends the child on purpose and QProcess reports that as
+  // QProcess::Crashed. A deliberate cancel must not write an error line (the
+  // standing rule for the whole cut-abort feature), so record it at debug
+  // level instead; the cancel itself is reported by mplexPart().
+  if (mWasAborted) {
+    log->debugMsg(__FILE__, __LINE__,
+        QString("QProcess error %1 after a user cancel - expected").arg(procError));
+    return;
+  }
+
   log->errorMsg(__FILE__, __LINE__, QString("QProcess error %1").arg(procError));
 }
 
@@ -281,6 +396,13 @@ void TTMplexProvider::onProcStarted()
 //! This signal is emitted when the process finishes
 void TTMplexProvider::onProcFinished(int, QProcess::ExitStatus exitStatus)
 {
+  // A cancelled mux has no elementary streams to consume: they are deleted by
+  // the abort cleanup, not kept as the input of a finished mux. Stated
+  // explicitly rather than left to the exit-status check below (a terminated
+  // process reports CrashExit, so that check already covers it today) because
+  // the two conditions mean different things.
+  if (mWasAborted) return;
+
   if (exitStatus != QProcess::NormalExit) return;
   if (!TTSettings::instance()->workingMuxDeleteES()) return;
 

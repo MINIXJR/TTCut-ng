@@ -28,6 +28,8 @@
 #include <QProcess>
 #include <QHash>
 
+#include <atomic>
+
 class TTMplexProvider : public IStatusReporter, public IMuxProvider
 {
   Q_OBJECT
@@ -43,10 +45,27 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     // mplex uses --sync-offset (positive = video ahead of audio)
     void setAudioSyncOffset(int offsetMs) { mAudioSyncOffsetMs = offsetMs; }
 
+    // Cooperative abort, same shape as TTMkvMergeProvider: requestAbort() is
+    // thread-safe, the wait loop in mplexPart() polls the flag, and
+    // wasAborted() lets the caller tell a cancel from a real failure.
+    //
+    // Unlike the other engines this one does not abort a loop of its own - it
+    // stops the external mplex process (see stopProcess()). mplexPart() runs
+    // synchronously on the GUI thread and pumps the event loop while it waits,
+    // so the request arrives re-entrantly from TTAVData::onUserAbortRequest()
+    // while mplexPart() is still on the stack.
+    void requestAbort() { mAbortRequested.store(true, std::memory_order_relaxed); }
+    bool wasAborted() const { return mWasAborted; }
+
   private:
     QString     createOutputFilePath(const QString& videoFilePath);
     QStringList createMplexArguments(const QString& videoFilePath, const QStringList& audioFilePaths, bool escapeFileNames);
     void        deleteElementaryStreams(const QString& videoFilePath, const QStringList& audioFilePaths);
+
+    // Poll point for the cooperative abort (see requestAbort()).
+    bool        checkAbort();
+    // Stop the running mplex child process: SIGTERM first, SIGKILL as fallback.
+    void        stopProcess();
 
     void procOutput();
 
@@ -65,6 +84,12 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     QHash<QString, int> verbose;
     QHash<QString, int> format;
     int                 mAudioSyncOffsetMs;
+    // Providers are created fresh per mux operation (TTAVData::onCutFinished),
+    // so mAbortRequested needs no clearing point of its own; mWasAborted is an
+    // output and is cleared at the top of mplexPart(). Same arrangement as
+    // TTMkvMergeProvider.
+    std::atomic<bool>   mAbortRequested { false };
+    bool                mWasAborted     = false;
 };
 
 #endif //TTMPLEXPROVIDER

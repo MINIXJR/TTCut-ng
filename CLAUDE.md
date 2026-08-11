@@ -53,7 +53,13 @@ rm -rf build && cmake -B build -G Ninja && cmake --build build
 the project root automatically on every configure (`CMakeLists.txt`, guarded
 on `CMAKE_EXPORT_COMPILE_COMMANDS`) — `bear` is no longer needed for clangd.
 
-Diagnostic tools (`tools/diag/`) build via `cmake --build build --target diag`.
+Diagnostic tools (`tools/diag/`) build via `cmake --build build --target diag`,
+which builds **everything**, the cut-abort harnesses included (`diag` depends
+on `diag-abort`). `cmake --build build --target diag-abort` builds just those
+eight harnesses — useful before an abort matrix run, since most of them link
+the whole `ttcut-core` and `diag` is correspondingly slower. Build the target
+before running a harness — the executables live in the source tree and are
+gitignored, so a stale one from an earlier session is invisible.
 
 The generated executable is `build/ttcut-ng`.
 

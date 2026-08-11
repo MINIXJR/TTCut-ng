@@ -1092,6 +1092,18 @@ void TTCutMainWindow::onCutPreview(TTCutList* cutList, bool skipFirst, bool skip
   mPreviewSkipFirst = skipFirst;
   mPreviewSkipLast = skipLast;
 
+  // Re-arm instead of blindly connecting: onCutPreviewFinished() drops both
+  // again, but a preview that was cancelled or that failed never reaches it,
+  // so the connections would survive the operation. cutPreviewFinished is
+  // harmless (that slot disconnects itself), but
+  // cutAudioDriftCalculated -> onAudioDriftUpdated does not, so N cancelled
+  // previews left N+1 live connections and the slot ran N+1 times per drift
+  // emission. disconnect() removes EVERY matching connection, so exactly one
+  // of each is live from here on - without relying on a slot disconnecting
+  // itself, which is the fragility this class keeps producing.
+  disconnect(mpAVData, &TTAVData::cutPreviewFinished,      this,           &TTCutMainWindow::onCutPreviewFinished);
+  disconnect(mpAVData, &TTAVData::cutAudioDriftCalculated, this->cutList,  &TTCutTreeView::onAudioDriftUpdated);
+
   connect(mpAVData, &TTAVData::cutPreviewFinished,        this,           &TTCutMainWindow::onCutPreviewFinished);
   connect(mpAVData, &TTAVData::cutAudioDriftCalculated,   this->cutList,  &TTCutTreeView::onAudioDriftUpdated);
   mpAVData->doCutPreview(cutList);
@@ -1160,9 +1172,14 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   // dialog exit with start
   delete cutAVDlg;
 
-  // Connect to cutFinished signal for notification
+  // Connect to cutFinished signal for notification. Re-armed rather than
+  // blindly connected: the disconnect sits in onCutFinished(), which a
+  // cancelled cut never reaches (no cutFinished() on abort - that is the
+  // spec), so the connection would otherwise survive the cancelled operation
+  // and accumulate. Same reasoning as onCutPreview() above.
   if (TTSettings::instance()->logUI())
       qDebug() << "Connecting cutFinished signal to onCutFinished slot";
+  disconnect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
   bool connected = connect(mpAVData, &TTAVData::cutFinished, this, &TTCutMainWindow::onCutFinished);
   if (TTSettings::instance()->logUI())
       qDebug() << "Connection result:" << connected;

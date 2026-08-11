@@ -23,6 +23,7 @@
 #include <QSet>
 #include <QPair>
 #include <functional>
+#include <atomic>
 
 #include "ttcutlist.h"
 #include "ttmarkerlist.h"
@@ -46,6 +47,10 @@ class TTOpenSubtitleTask;
 class TTSubtitleStream;
 class TTCutPreviewTask;
 class TTCutVideoTask;
+class TTH26xCutTask;
+class TTAudioOnlyCutTask;
+class TTMuxTask;
+class TTMplexProvider;
 class TTCutProjectData;
 class TTMuxListData;
 class TTMuxListDataItem;
@@ -137,7 +142,15 @@ class TTAVData : public QObject
 
     void onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly = false);
     void onCutFinished();
+    void onMpeg2MuxFinished();
+    void onH26xCutFinished();
+    void onAudioOnlyCutFinished();
     void onCutAborted();
+
+    // Status forwarding for engines that report from a worker thread
+    // (TTH26xCutTask) as well as for the synchronous GUI-thread providers.
+    void onStatusReport(int state, const QString& msg, quint64 value);
+    void onMuxProgress(int percent, const QString& msg);
 
 
   private slots:
@@ -159,9 +172,6 @@ class TTAVData : public QObject
 
     void onThreadPoolInit();
     void onThreadPoolExit();
-
-    void onStatusReport(int state, const QString& msg, quint64 value);
-    void onMuxProgress(int percent, const QString& msg);
 
   signals:
     void threadPoolExit();
@@ -207,10 +217,14 @@ class TTAVData : public QObject
     TTAVList*      videoDataList() { return mpAVList; }
     QFileInfoList  getAudioNames(const QFileInfo& vFileInfo);
     QFileInfoList  getSubtitleNames(const QFileInfo& vFileInfo);
-    QString        createCutFileName(QString cutBaseFileName, QString sourceFileName, int index);
     void           deleteElementaryStreams(const QString& videoFilePath,
                                            const QStringList& audioFilePaths,
                                            const QStringList& subtitleFilePaths = QStringList());
+    //! Close the MPEG-2 cut operation: reset mCutOperationActive, emit the
+    //! single final Exit bracket and cutFinished(). Called inline by
+    //! onCutFinished()'s mplex/Elementary branches and by onMpeg2MuxFinished()
+    //! for the MKV branch, whose mux is a second pool run.
+    void           finishMpeg2Cut();
     void           doH264Cut(QString tgtFileName, TTCutList* cutList);
     void           doAudioOnlyCut(QString tgtFileName, TTCutList* cutList);
     // Classify the .info doubled-PTS clusters against the MPEG-2 parser's
@@ -234,6 +248,24 @@ class TTAVData : public QObject
     TTOpenSubtitleTask* openSubtitleTask;
     TTCutPreviewTask*   cutPreviewTask;
     TTCutVideoTask*   cutVideoTask;
+    TTH26xCutTask*    mpH26xCutTask = nullptr;
+    //! Audio-only cut, running as a single pool task. Non-null only between
+    //! doAudioOnlyCut() and onAudioOnlyCutFinished()/onCutAborted() - same
+    //! lifetime shape as mpH26xCutTask.
+    TTAudioOnlyCutTask* mpAudioOnlyCutTask = nullptr;
+    //! MKV mux of the MPEG-2 cut, running as the operation's second pool task.
+    //! Non-null only between onCutFinished() and onMpeg2MuxFinished()/
+    //! onCutAborted().
+    TTMuxTask*        mpMuxTask = nullptr;
+    //! mplex mux of an MPG-output MPEG-2 cut. Unlike every other cut engine
+    //! this one is NOT a pool task: it drives an external process
+    //! synchronously on the GUI thread inside onCutFinished(), so
+    //! mpThreadTaskPool->onUserAbortRequest() has nothing to deliver a cancel
+    //! to. Published here for exactly the duration of that mplexPart() call so
+    //! onUserAbortRequest() can reach it; null at every other moment. GUI
+    //! thread only - onUserAbortRequest() runs re-entrantly from mplexPart()'s
+    //! own qApp->processEvents(), never from another thread.
+    TTMplexProvider*  mpMplexProvider = nullptr;
     TTCutProjectData* mpProjectData;
     int               mCurrentFramePosition;  // Track Current Frame widget position for frame search
 
@@ -275,12 +307,51 @@ class TTAVData : public QObject
     qint64  mLastCutSourceMs = 0;
     qint64  mLastCutResultMs = 0;
 
-    // True while a MPEG-2 final cut is running (onDoCut MPEG-2 branch until
-    // onCutFinished/onCutAborted). Suppresses the thread pool's own
+    // True while a final cut is running (onDoCut MPEG-2 branch until
+    // onCutFinished/onCutAborted, doH264Cut until onH26xCutFinished).
+    // Suppresses the thread pool's own
     // Init/Exit status brackets: the pool is an inner stage of the cut
     // (audio is cut before it, muxing runs after it), and its brackets
     // would reset resp. prematurely finish the progress dialog.
     bool mCutOperationActive = false;
+
+    // True while the MPEG-2 cut's MKV mux run (the operation's second pool
+    // run) is in flight. Consumed by onThreadPoolExit(), which uses it to
+    // skip the per-pool-run avDataReloaded() for that run: the mux changes no
+    // AV data, and the views must reload once per operation.
+    // Unlike mSyncPhaseAbort and mCutProducedFiles, this one is NOT re-cleared
+    // at the cut entry points: its "false between operations" invariant is
+    // global rather than local. It holds because it is set immediately before
+    // the pool start and consumed by a slot connected in the constructor, and
+    // TTThreadTaskPool always emits exit() when its queue drains — on the
+    // finished route and on the aborted one alike. Measured across operations
+    // (a leaked flag would swallow the next operation's avDataReloaded(); the
+    // two operations following a two-pool-run MPEG-2 cut both reported one).
+    bool mMuxPoolRunActive = false;
+
+    // Set by onUserAbortRequest(), polled by the MPEG-2 branch of onDoCut()
+    // during its synchronous audio/subtitle phase (before the pool -- and
+    // thus TTThreadTaskPool::onUserAbortRequest()'s own abort delivery --
+    // has anything to cancel). qApp->processEvents() inside that phase's
+    // progress callbacks lets a queued Cancel click reach
+    // onUserAbortRequest() re-entrantly while cutAudioTracks/cutSubtitleTracks
+    // are still on the stack. Reset at the top of onDoCut()/doH264Cut()/
+    // doAudioOnlyCut() so a stale request from a previous operation can't
+    // kill the next one. std::atomic to match the shouldAbort predicate
+    // shape TTFFmpegWrapper::cutAudioStream polls (Task 3); the write and
+    // every read happen on the GUI thread, nested via processEvents(), not
+    // across threads.
+    std::atomic<bool> mSyncPhaseAbort { false };
+
+    // Files the running MPEG-2 cut has created (cut audio/subtitle tracks and
+    // the video ES). An abort deletes all of them - the user's decision for
+    // this feature is "on abort, delete everything the run created", and after
+    // a cancel none of these is useful on its own. Filled in onDoCut(),
+    // consumed by the abort paths (onDoCut's own sync-phase block,
+    // onCutAborted) or handed over to the mux task
+    // (TTMuxTaskParams::cleanupOnAbort) when that run starts, and cleared by
+    // finishMpeg2Cut() on the success path. GUI thread only.
+    QStringList mCutProducedFiles;
 
   public:
     // Count extra frames before a given frame index (for audio time correction)
@@ -323,6 +394,13 @@ class TTAVData : public QObject
     // Single home for a conversion previously open-coded in >= 6 places.
     QList<QPair<double, double>> buildVideoKeepList(TTCutList* cutList,
                                                     double frameRate) const;
+
+    //! Builds "<cutBase>_NNN.<ext>" inside TTSettings::cutDirPath(). Used for
+    //! per-track audio and subtitle output filenames. Public (rather than
+    //! private, as it used to be) so TTAudioOnlyCutTask's worker thread can
+    //! call it too - it is pure aside from reading the TTSettings singleton,
+    //! the same thing cutAudioTracks/cutSubtitleTracks already do from there.
+    QString createCutFileName(QString cutBaseFileName, QString sourceFileName, int index);
 
     // Cut the given audio tracks of avItem against videoKeepList. Encapsulates
     // the per-track loop, per-track delay, planAudioCut (audio-frame snapping +

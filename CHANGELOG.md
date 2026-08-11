@@ -16,6 +16,20 @@ All notable changes to TTCut-ng are documented in this file.
   (`debian/control`, `debian/rules`) builds against `qt6-base-dev` and
   `qt6-l10n-tools`.
 
+- **Cancel now stops a running cut.** Pressing Cancel in the progress dialog
+  — or closing it with the window X or Esc, which do the same thing — aborts
+  the H.264/H.265 cut, the audio and muxing phases of an MPEG-2 cut, an
+  audio-only cut, and an H.264/H.265 cut preview. Previously only the MPEG-2
+  video phase reacted; everything else ran to the end no matter what, leaving
+  the main window disabled for the rest of the cut. The cancelled cut
+  removes the files it had already written, so nothing half-finished is left
+  behind for you to clean up, and it is reported as cancelled rather than as
+  a completed or failed cut. A cut that fails for a real reason still leaves
+  its partial files in place, so the cause can be examined. This includes the
+  final multiplexing step of an MPG (rather than MKV) output: the external
+  `mplex` process is stopped, and the partial `.mpg` is removed together with
+  the cut elementary streams that fed it. One thing is unchanged: cancelling
+  the preview of an MPEG-2 recording still has no effect.
 - Progress dialog details pane is now a live, timestamped status log
   (including re-encoder/mplex output lines); with details open the dialog
   stays open after the operation finishes (Cancel becomes Close)
@@ -59,9 +73,11 @@ All notable changes to TTCut-ng are documented in this file.
   one was indented); the debug wall clock moved from beside the bar to a
   row below it; the redundant static "Complete" label was removed (the
   percentage value next to it already reads "100%"); the dialog re-appears
-  on the next progress message if the user closes it while an unabortable
-  phase (synchronous H.26x Smart Cut, audio re-encode) is still running,
-  instead of leaving a disabled, apparently-dead main window behind
+  on the next progress message if the user closes it while an operation is
+  still running, instead of leaving a disabled, apparently-dead main window
+  behind — this now also covers phases that report only process output and
+  no percentage (the mplex step for MPG output), where closing the dialog
+  used to hide it for the rest of the run
 
 ### Fixed
 

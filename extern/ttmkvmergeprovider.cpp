@@ -1260,7 +1260,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
 
         while (av_read_frame(mi.fmtCtx, pkt) >= 0) {
             if (checkAbort()) {
-                av_packet_unref(pkt);
+                // av_packet_free() unrefs the packet itself.
                 av_packet_free(&pkt);
                 cleanupInputs();
                 if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);

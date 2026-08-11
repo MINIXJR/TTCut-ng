@@ -1,5 +1,6 @@
 # Diagnostic tools for TTCut-ng. Built on demand:
 #   cmake --build build --target diag            (the default TOOLS set)
+#   cmake --build build --target diag-abort      (the cut-abort harnesses)
 #   cmake --build build --target test_mkvmux     (material-dependent tools)
 #
 # Each tool compiles its own curated source list instead of linking the full
@@ -201,7 +202,40 @@ diag_tool(test_mpeg2_cutout    AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_extra_index_rank AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(dump_mpeg2_fields    AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_mpeg2order      AV WIDGETS SOURCES ${MKVORDER_SRC})
+# The one tool that links the whole ttcut-core instead of a curated list. It
+# drives TTH26xCutTask through TTAVData::onDoCut(), and TTAVData already pulls
+# in QMessageBox, the mplex provider and every open/cut task - a curated list
+# for it would be the core library minus nothing, so the "GUI creep shows up as
+# an undefined reference" guard cannot apply here anyway.
+diag_tool(test_h26xcut_abort   AV WIDGETS SOURCES)
+target_link_libraries(test_h26xcut_abort PRIVATE ttcut-core)
+# Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
+# branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
+# the whole core library, not a curated source list.
+diag_tool(test_mpeg2cut_abort  AV MPEG2 WIDGETS SOURCES)
+target_link_libraries(test_mpeg2cut_abort PRIVATE ttcut-core)
+# Same rationale as test_h26xcut_abort: drives TTAudioOnlyCutTask through
+# TTAVData::onDoCut(audioOnly=true), so it needs the whole core library too.
+diag_tool(test_audioonlycut_abort AV WIDGETS SOURCES)
+target_link_libraries(test_audioonlycut_abort PRIVATE ttcut-core)
+# Same rationale as test_h26xcut_abort: drives TTCutPreviewTask through
+# TTAVData::doCutPreview() (a different entry point than onDoCut(), but the
+# same TTAVData/pool/QMessageBox dependency chain), so it needs the whole
+# core library too.
+diag_tool(test_previewcut_abort AV WIDGETS SOURCES)
+target_link_libraries(test_previewcut_abort PRIVATE ttcut-core)
+# Same rationale again, plus both codec branches in one process: it drives
+# onDoCut() for H.26x AND MPEG-2 and doCutPreview(), five operations on one
+# long-lived TTAVData.
+diag_tool(test_cutsequence_abort AV MPEG2 WIDGETS SOURCES)
+target_link_libraries(test_cutsequence_abort PRIVATE ttcut-core)
 diag_tool(test_window_jump     AV MPEG2 WIDGETS SOURCES ${WINDOWJUMP_SRC})
+# Drives TTProgressBar's status sink directly (dialog re-show guard). Links
+# ttcut-core rather than a curated list because the dialog's header includes
+# the AUTOUIC-generated ui_ttprogressform.h, and that generated include
+# directory is exported by the ttcut-core target (see the root CMakeLists).
+diag_tool(test_progressbar_reshow WIDGETS SOURCES)
+target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 
 # test_pool_crossthread and test_task_cleanup_order are NOT CMake targets:
 # their gate scripts compile them with a sanitizer themselves.
@@ -213,3 +247,29 @@ add_custom_target(diag DEPENDS
   test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_window_geometry
   test_progressestimator)
+
+# --- the cut-abort harness suite -------------------------------------------
+# One command builds every harness the abort verification matrix runs, so a
+# matrix run can never test binaries left over from an earlier session. That
+# is not a hypothetical: diag_tool() writes its executables into this SOURCE
+# directory, .gitignore hides them (tools/diag/test_*) and the repository sets
+# status.showUntrackedFiles=no - a stale binary is invisible to `git status`
+# and runs happily. Naming the seven (now nine) targets by hand on the build
+# line already cost one full matrix run.
+#
+# A target of its own so the abort matrix has one short name to build, but NOT
+# a separate island: `diag` depends on it below, so `--target diag` really does
+# build everything. The two names exist for different jobs - `diag` links
+# curated per-tool source lists so that a new GUI/mpv dependency in the cut
+# path shows up as an undefined reference (see the file header), while six of
+# these nine link the whole ttcut-core and cannot provide that guard. Keeping
+# them in their own target preserves the distinction (and lets a matrix run
+# rebuild just them); making `diag` depend on it means nobody has to know the
+# second name to get a complete build. The price is the longer `diag` build -
+# a deliberate trade.
+add_custom_target(diag-abort DEPENDS
+  test_smartcut_abort test_audiocut_abort test_mkvmux_abort
+  test_h26xcut_abort test_mpeg2cut_abort test_audioonlycut_abort
+  test_previewcut_abort test_cutsequence_abort test_progressbar_reshow)
+
+add_dependencies(diag diag-abort)

@@ -98,7 +98,24 @@ void TTCutVideoTask::operation()
   for (int i = 0; i < mpCutList->count(); i++) {
 
     if (isAborted())
-      throw TTAbortException(__FILE__, __LINE__, tr("Operation aborted!"));
+      // Message-only constructor deliberately: the (caller, line) overload
+      // logs at fatal level on construction (TTException::TTException(caller,
+      // line, msg) -> log->fatalMsg(), common/ttexception.cpp:30-36), which
+      // would record a deliberate user cancel as the most severe class of
+      // log event. Same fix as Task 6's TTH26xCutTask::abortNow().
+      //
+      // This outer, per-segment check is coarse and in practice loses the
+      // race to the inner, message-only TTAbortException throws in
+      // TTAVStream::copySegment() and TTMpeg2VideoStream::
+      // transferCutObjects(), which poll far more often (per chunk, not per
+      // cut-list entry) and normally catch the abort first — confirmed by
+      // reverting this fix and instrumenting the throw site: across 12 runs
+      // (6 Release, 6 Debug -O0) it never fired. So this line is currently
+      // defensive, not load-bearing: it exists so the coarse outer path
+      // cannot reintroduce a fatal-level line for a plain cancel if that
+      // polling-frequency ordering ever changes (e.g. a future caller that
+      // aborts between segments with no inner throw in between).
+      throw TTAbortException(tr("Operation aborted!"));
 
 	  TTCutItem cutItem = mpCutList->at(i);
 	  int       cutIn   = cutItem.cutInIndex();

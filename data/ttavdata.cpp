@@ -47,6 +47,9 @@
 #include "ttopensubtitletask.h"
 #include "ttcutpreviewtask.h"
 #include "ttcutvideotask.h"
+#include "tth26xcuttask.h"
+#include "ttaudioonlycuttask.h"
+#include "ttmuxtask.h"
 #include "ttframesearchtask.h"
 
 #include <QThreadPool>
@@ -1004,6 +1007,20 @@ void TTAVData::onCurrentFramePositionChanged(int position)
 //! User request to abort current operation
 void TTAVData::onUserAbortRequest()
 {
+  // Delivered unconditionally: the MPEG-2 branch of onDoCut() has not
+  // started the pool yet during its synchronous audio/subtitle phase, so
+  // mpThreadTaskPool->onUserAbortRequest() below has no task to cancel.
+  // mSyncPhaseAbort is what that phase polls instead.
+  mSyncPhaseAbort.store(true, std::memory_order_relaxed);
+
+  // Same situation at the other end of the MPEG-2 cut: the mplex step of an
+  // MPG-output cut runs synchronously on this thread inside onCutFinished(),
+  // after the pool run is already over, so the pool call below has no task
+  // carrying it either. The provider polls its own flag in the loop it waits
+  // in and stops the external process (see TTMplexProvider::requestAbort).
+  if (mpMplexProvider != 0)
+    mpMplexProvider->requestAbort();
+
 	mpThreadTaskPool->onUserAbortRequest();
 }
 
@@ -1018,6 +1035,25 @@ void TTAVData::onThreadPoolInit()
 
 void TTAVData::onThreadPoolExit()
 {
+  // Drop the abort connection openAVStreams() armed - the same discipline
+  // finishMpeg2Cut() applies to onCutAborted(). This slot is the single place
+  // every pool run ends on BOTH routes: TTThreadTaskPool emits exit() when the
+  // queue drains and aborted() + exit() back to back on an abort, so the
+  // connection lives exactly as long as the run that armed it. Without this
+  // the connection survives every successful stream open for the rest of the
+  // session (its only other disconnect sits inside the slot itself), and any
+  // later cancelled cut or preview runs onOpenAVStreamsAborted() too: it sets
+  // the current AV item to the LAST one and emits currentAVItemChanged(),
+  // which in the GUI is a full stream switch (TTCutMainWindow::onAVItemChanged
+  // re-wires the subtitle hook, rewrites TTSettings::encoderCodec and reloads
+  // both frame widgets) executed inside the cut's abort teardown. With one
+  // video open the slot's early return hides it; with two or more open the
+  // cancel silently jumps the user to the last video. Disconnecting an
+  // already-dropped connection is a no-op, so the abort route (which
+  // disconnects it itself) is unaffected.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+             this,             &TTAVData::onOpenAVStreamsAborted);
+
   // Sort audio lists by priority (AC3 first, locale language first)
   for (int i = 0; i < mpAVList->count(); i++) {
     TTAudioList* audioList = mpAVList->at(i)->audioDataList();
@@ -1038,6 +1074,19 @@ void TTAVData::onThreadPoolExit()
     emit statusReport(0, StatusReportArgs::Exit, tr("exiting thread pool"), 0);
   else
     mCutOperationActive = false;
+
+  // The MKV mux of an MPEG-2 cut is a SECOND pool run (see onCutFinished), so
+  // without this the reload below fires twice per cut operation and both tree
+  // views rebuild twice (measured: 2 instead of the 1 every other path emits).
+  // The mux reads the cut elementary streams and writes the .mkv - it changes
+  // no AV data at all, so its exit has nothing to reload. Consumed here, the
+  // same one-shot arrangement as mCutOperationActive above, which also makes
+  // it self-clearing on the abort path (onCutAborted runs before this slot).
+  if (mMuxPoolRunActive) {
+    mMuxPoolRunActive = false;
+    return;
+  }
+
   emit avDataReloaded();
   emit threadPoolExit();
 }
@@ -1231,6 +1280,16 @@ void TTAVData::doCutPreview(TTCutList* cutList)
 //! Finished creating cut preview clips
 void TTAVData::onCutPreviewFinished(TTCutList* cutList)
 {
+  // Drop the abort connection doCutPreview() made - the same discipline
+  // finishMpeg2Cut() applies to onCutAborted(). Without it a completed
+  // preview leaves onCutPreviewAborted() connected to the pool, and the next
+  // cancelled operation would run it as well: it emits the preview's own
+  // Canceled bracket, so a cancelled cut after a completed preview would
+  // report TWO closing brackets. Disconnecting an already-dropped connection
+  // is a no-op, so the abort path (which disconnects it itself) is unaffected.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
+             this,             &TTAVData::onCutPreviewAborted);
+
 	emit cutPreviewFinished(cutList);
 }
 
@@ -1255,7 +1314,27 @@ void TTAVData::onCutPreviewAborted()
     const QString previewError = cutPreviewTask->errorMessage();
     delete cutPreviewTask;
     cutPreviewTask = 0;
-    if (!previewError.isEmpty()) {
+
+    if (previewError.isEmpty()) {
+      // Plain user cancel: close the operation with the Canceled bracket the
+      // four final-cut paths emit, not with the pool's own "exiting thread
+      // pool" Exit. That Exit made TTProgressBar force the bar to 100 %
+      // (gui/ttprogressbar.cpp, the Exit branch) and TTCutMainWindow report
+      // "Finished after ..." for a run the user had just cancelled.
+      //
+      // Arming mCutOperationActive is the same mechanism onCutAborted() uses:
+      // TTThreadTaskPool::onThreadTaskAborted() emits aborted() and exit()
+      // back to back, so onThreadPoolExit() runs immediately after this slot
+      // and its else-branch consumes the flag instead of emitting the pool's
+      // Exit - which keeps the one-closing-bracket guarantee the completion
+      // dialog relies on. The preview does NOT own its opening bracket (the
+      // pool's Init stays), so the flag is armed here rather than in
+      // doCutPreview(): the success path must keep emitting the pool's Exit,
+      // and TTCutPreviewTask::finished() is a queued signal whose order
+      // against the pool's exit() is not guaranteed.
+      mCutOperationActive = true;
+      emit statusReport(0, StatusReportArgs::Canceled, tr("Preview cancelled"), 0);
+    } else {
       QMessageBox::warning(TTCut::mainWindow, tr("Preview not possible"),
                            previewError);
     }
@@ -1373,6 +1452,10 @@ namespace {
 
 void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 {
+  // A stale abort request from a previous, already-finished operation must
+  // not kill this one (see mSyncPhaseAbort).
+  mSyncPhaseAbort.store(false, std::memory_order_relaxed);
+
   if (cutList == 0) cutList = mpCutList;
 
   computeCutLengths(cutList);
@@ -1471,6 +1554,13 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
   TTAVItem* avItem = cutList->at(0).avDataItem();
 
+  // Files this run has actually created, so an abort can clean up after
+  // itself - during the synchronous audio/subtitle phase below (handled
+  // right here), during the video pool run and up to the moment the mux task
+  // takes the list over (both handled in onCutAborted). Cleared here so a
+  // previous run's list can never be deleted by this one's abort.
+  mCutProducedFiles.clear();
+
   if (avItem->audioCount() > 0)
     emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
   cutAudioTracks(avItem, videoKeepList, normalizeAcmod,
@@ -1479,6 +1569,13 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
                                  avItem->audioStreamAt(i)->fileName(), i + 1);
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
+        // Register the path even when the cut did NOT succeed: an aborted
+        // audio cut leaves a partial file behind (TTFFmpegWrapper::
+        // cutAudioStream finalizes the container before returning false —
+        // see its own comment "the caller deletes the partial/empty output
+        // file"), and the abort cleanup below can only remove what it knows
+        // about. Mirrors TTH26xCutTask::doCut's mCreatedFiles handling.
+        mCutProducedFiles << path;
         if (ok) cutVideoTask->muxListItem()->appendAudioFile(path, lang);
       },
       [&](int i) {
@@ -1492,29 +1589,68 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         emit statusReport(0, StatusReportArgs::Step,
             tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
         qApp->processEvents();
-      });
+      },
+      [this] { return mSyncPhaseAbort.load(std::memory_order_relaxed); });
 
   // cut subtitle streams against the same extra-frame-corrected keep list
-  // as the audio (consolidated onto TTAVData::cutSubtitleTracks)
+  // as the audio (consolidated onto TTAVData::cutSubtitleTracks). No abort
+  // predicate of its own (see TTH26xCutTask::doCut) — a request arriving
+  // during this call is only caught by the check right below, once it
+  // returns.
   cutSubtitleTracks(avItem, videoKeepList,
       [&](int i) {
         return createCutFileName(tgtFileName,
                                  avItem->subtitleStreamAt(i)->fileName(), i + 1);
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
+        // Registered unconditionally, same reasoning as the audio lambda
+        // above: a subtitle write interrupted by a genuine I/O failure can
+        // leave a partial .srt behind even though cutSubtitleTracks() has
+        // no abort predicate of its own. Mirrors TTH26xCutTask::doCut.
+        mCutProducedFiles << path;
         if (ok) cutVideoTask->muxListItem()->appendSubtitleFile(path, lang);
       });
 
+  // Abort landed during the synchronous audio/subtitle phase above, before
+  // the pool ever started: none of the pool's own machinery (onCutAborted,
+  // onThreadPoolExit) will run for this operation, so this is the only
+  // place that can close the Canceled bracket and consume
+  // mCutOperationActive. cutVideoTask was constructed but never handed to
+  // the pool (mpThreadTaskPool->start() is below, still unreached) — the
+  // pool never took ownership, so TTAVData is the only owner and must free
+  // it itself.
+  if (mSyncPhaseAbort.load(std::memory_order_relaxed)) {
+    for (const QString& f : mCutProducedFiles) {
+      if (!QFile::remove(f))
+        log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
+    }
+    mCutProducedFiles.clear();
+    delete cutVideoTask;
+    cutVideoTask = nullptr;
+    mCutOperationActive = false;
+    emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+    return;
+  }
+
   // The audio/subtitle muxListItem appends above must complete before the
   // pool is started: pool exit fires onCutFinished, which COPIES
-  // muxListItem and muxes that copy immediately. cutAudioTracks/
-  // cutSubtitleTracks report status via qApp->processEvents(), which can let
-  // a fast (cache-hot) video task finish and drain the pool mid-way through
-  // these synchronous cuts — muxing a copy taken before a later append
-  // landed. There is no way to express this ordering constraint other than
-  // literally doing the appends first; do not move pool start earlier.
+  // muxListItem and hands that copy to the muxer (today as TTMuxTaskParams
+  // for the mux task, before that to an inline mux - either way the copy is
+  // taken there and then). cutAudioTracks/cutSubtitleTracks report status via
+  // qApp->processEvents(), which can let a fast (cache-hot) video task finish
+  // and drain the pool mid-way through these synchronous cuts — muxing a copy
+  // taken before a later append landed. There is no way to express this
+  // ordering constraint other than literally doing the appends first; do not
+  // move pool start earlier.
   connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+  // From here on the video ES is a product of this run too: TTCutVideoTask
+  // creates the file as soon as its operation() starts, and a cancel during
+  // the video phase has to take it with it (onCutAborted). Registered before
+  // the start, not after, because the task may already be running when
+  // start() returns.
+  mCutProducedFiles << tgtFileName;
 
   // Init pool for video task only — audio is cut synchronously via FFmpegWrapper
   emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageVideo);
@@ -1525,6 +1661,16 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
 void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
 {
+  // Reset here too (onDoCut() already does this before dispatching, since
+  // doH264Cut() is private and only reachable through it) so the invariant
+  // reads locally at every entry point, matching mCutOperationActive below.
+  mSyncPhaseAbort.store(false, std::memory_order_relaxed);
+  // Same reason: onCutAborted() is shared with the MPEG-2 path and deletes
+  // whatever is in this list. TTH26xCutTask cleans up its own products, so
+  // the list has to be empty here - stated locally instead of relying on the
+  // MPEG-2 path having cleared it.
+  mCutProducedFiles.clear();
+
   log->infoMsg(__FILE__, __LINE__, "Using TTESSmartCut for frame-accurate cutting");
 
   // Get source file and frame rate from first cut item
@@ -1532,7 +1678,6 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   TTVideoStream* vStream = avItem->videoStream();
   QString sourceFile = vStream->filePath();
   double frameRate = vStream->frameRate();
-  QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
   // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
   int avOffsetMs = 0;
@@ -1567,6 +1712,13 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
         .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex())
         .arg(keepList[i].first, 0, 'f', 3).arg(keepList[i].second, 0, 'f', 3));
   }
+
+  // The cut runs as a single pool task (TTH26xCutTask) but is a larger
+  // operation than the pool run: the brackets below and the closing one in
+  // onH26xCutFinished() belong to the cut, not to the pool. Suppress the
+  // pool's own Init/Exit for the duration — same arrangement as the MPEG-2
+  // branch of onDoCut().
+  mCutOperationActive = true;
 
   // Announce the planned stages + work amounts for the progress estimator.
   {
@@ -1604,252 +1756,93 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   log->infoMsg(__FILE__, __LINE__, QString("  Video: %1").arg(sourceFile));
   log->infoMsg(__FILE__, __LINE__, QString("  Frame rate: %1 fps").arg(frameRate));
 
-    // Build frame-based cut list
-    QList<QPair<int, int>> cutFrames;
-    for (int i = 0; i < cutList->count(); i++) {
-      TTCutItem item = cutList->at(i);
-      cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
-      log->infoMsg(__FILE__, __LINE__, QString("  Segment %1: frames %2-%3")
-          .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex()));
-    }
+  // Build frame-based cut list
+  QList<QPair<int, int>> cutFrames;
+  for (int i = 0; i < cutList->count(); i++) {
+    TTCutItem item = cutList->at(i);
+    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+    log->infoMsg(__FILE__, __LINE__, QString("  Segment %1: frames %2-%3")
+        .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex()));
+  }
 
-    // Initialize Smart Cut engine
-    TTESSmartCut smartCut;
-    connect(&smartCut, &TTESSmartCut::progressChanged, this, [this](int percent, const QString& msg) {
-      emit statusReport(0, StatusReportArgs::Step, msg, percent);
-      qApp->processEvents();
-    });
+  // Create temporary video output
+  QString tempVideoFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+      QFileInfo(sourceFile).completeBaseName() + "_cut." + QFileInfo(sourceFile).suffix()).absoluteFilePath();
 
-    if (!smartCut.initialize(sourceFile, frameRate)) {
-      log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut init failed: %1").arg(smartCut.lastError()));
-      emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed - could not initialize"), 0);
-      mLastCutError = tr("Could not initialize the cut engine: %1").arg(smartCut.lastError());
-      emit cutFinished();
-      return;
-    }
+  // Everything the pipeline needs, copied by value while we are still on the
+  // GUI thread. The worker must not read the cut list again: the caller owns
+  // it (TTCutTreeView hands over a freshly built one, --auto-cut passes
+  // mpCutList) and nothing guarantees it outlives the task.
+  TTH26xCutParams params;
+  params.sourceFile          = sourceFile;
+  params.finalOutput         = finalOutput;
+  params.tempVideoFile       = tempVideoFile;
+  params.frameRate           = frameRate;
+  params.avOffsetMs          = avOffsetMs;
+  params.isH265              = (vStream->streamType() == TTAVTypes::h265_video);
+  params.isPAFF              = vStream->isPAFF();
+  params.paffLog2MaxFrameNum = vStream->paffLog2MaxFrameNum();
+  params.totalDurationMs     = mLastCutResultMs;
+  params.cutFrames           = cutFrames;
+  params.keepList            = keepList;
 
-    // Inject frame-granularity display-order map from the open stream's wrapper.
-    // Required for PAFF: buildFromFile fallback is field-granularity and would
-    // mismatch the parser's frame count, aborting smartCutFrames.
-    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
-      smartCut.setDisplayOrderMap(h26x->displayOrderMap());
-      if (TTSettings::instance()->logCutPipeline())
-          qDebug() << "doH264Cut: Injected display-order map ("
-                   << h26x->displayOrderMap().count() << "entries)";
-    }
+  // Frame-granularity display-order map from the open stream's wrapper.
+  // Required for PAFF: TTESSmartCut's buildFromFile fallback is
+  // field-granularity and would mismatch the parser's frame count.
+  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+    params.displayMap    = h26x->displayOrderMap();
+    params.hasDisplayMap = true;
+  }
 
-    // SPS boundary check (H.264/H.265 only)
-    for (int i = 0; i < cutFrames.size(); i++) {
-      // Check CutOut (skip last segment)
-      if (i < cutFrames.size() - 1) {
-        if (smartCut.hasSPSChangeAtBoundary(cutFrames[i].second, true)) {
-          log->warningMsg(__FILE__, __LINE__,
-              QString("SPS change at CutOut segment %1 (frame %2) - possible aspect ratio change")
-              .arg(i + 1).arg(cutFrames[i].second));
-        }
-      }
-      // Check CutIn (skip first segment)
-      if (i > 0) {
-        if (smartCut.hasSPSChangeAtBoundary(cutFrames[i].first, false)) {
-          log->warningMsg(__FILE__, __LINE__,
-              QString("SPS change at CutIn segment %1 (frame %2) - possible aspect ratio change")
-              .arg(i + 1).arg(cutFrames[i].first));
-        }
-      }
-    }
+  mpH26xCutTask = new TTH26xCutTask(this, avItem);
+  mpH26xCutTask->init(params);
 
-    // Create temporary video output
-    QString tempVideoFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-        QFileInfo(sourceFile).completeBaseName() + "_cut." + QFileInfo(sourceFile).suffix()).absoluteFilePath();
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onH26xCutFinished);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
-    // Perform frame-accurate video cut
-    emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageVideo);
-    emit statusReport(0, StatusReportArgs::Step, tr("Cutting video (Smart Cut)..."), 0);
-    qApp->processEvents();
-    if (!smartCut.smartCutFrames(tempVideoFile, cutFrames)) {
-      log->errorMsg(__FILE__, __LINE__, QString("TTESSmartCut failed: %1").arg(smartCut.lastError()));
-      emit statusReport(0, StatusReportArgs::Exit, tr("Cutting failed"), 0);
-      mLastCutError = tr("Cutting failed: %1").arg(smartCut.lastError());
-      emit cutFinished();
-      return;
-    }
+  // One task: video, audio, subtitles and muxing all run inside it, in the
+  // order the synchronous version used.
+  mpThreadTaskPool->init(1);
+  mpThreadTaskPool->start(mpH26xCutTask);
+}
 
-    log->infoMsg(__FILE__, __LINE__, QString("Smart Cut complete: %1 frames re-encoded, %2 frames stream-copied")
-        .arg(smartCut.framesReencoded()).arg(smartCut.framesStreamCopied()));
+//! H.264/H.265 cut task finished (pool exit, GUI thread)
+void TTAVData::onH26xCutFinished()
+{
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onH26xCutFinished);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
-    // HEVC seam fallback notes (Defekt A / H.265): surface in the progress
-    // window and the log so affected seams are visible (spec decision 1).
-    for (const QString& note : smartCut.seamNotes()) {
-      log->warningMsg(__FILE__, __LINE__, note);
-      emit statusReport(0, StatusReportArgs::Step, note, 0);
-    }
+  // Close the operation bracket opened in doH264Cut(). onThreadPoolExit()
+  // runs before this slot (it is connected in the constructor) and already
+  // consumed the flag; the reset mirrors onCutFinished() and keeps the
+  // invariant readable at both ends of the bracket.
+  mCutOperationActive = false;
 
-    // Adjust audio keepList to match actual video output ranges.
-    // B-frame reorder delay can shift the display-order CutIn forward, causing
-    // the video Smart Cut to output fewer frames than the cut list specifies.
-    // Without adjustment, audio would be cut for the original (wider) range,
-    // resulting in cumulative A/V drift across segments.
-    QList<QPair<int, int>> actualRanges = smartCut.actualOutputFrameRanges();
-    if (actualRanges.size() == keepList.size()) {
-      for (int i = 0; i < keepList.size(); i++) {
-        double origStart = keepList[i].first;
-        // actualRanges[i].first is a decode-order AU index; the keepList is in
-        // display space. Map AU -> display (identity for MPEG-2 / no-B streams)
-        // so the comparison is space-consistent. After the display-order fix the
-        // video starts exactly at the requested display cut-in, so this is
-        // normally a no-op; the guard remains defensive.
-        int actualStartDisplay = vStream->decodeToDisplayIndex(actualRanges[i].first);
-        double newStart = actualStartDisplay / frameRate;
-        if (qAbs(newStart - origStart) > 0.001) {
-          log->infoMsg(__FILE__, __LINE__, QString("Audio segment %1: adjusting start %2 -> %3 (B-frame reorder shift: %4 frames)")
-              .arg(i+1).arg(origStart, 0, 'f', 3).arg(newStart, 0, 'f', 3)
-              .arg(actualStartDisplay - cutFrames[i].first));
-          keepList[i].first = newStart;
-        }
-      }
-    }
+  if (mpH26xCutTask == 0) return;
 
-    // Cut audio tracks
-    QStringList cutAudioFiles;
-    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    // Cut all audio tracks against the (B-frame-adjusted) video keepList
-    // (consolidated onto TTAVData::cutAudioTracks).
-    if (avItem->audioCount() > 0)
-      emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
-    cutAudioTracks(avItem, keepList, normalizeAcmod,
-        [&](int i, const QString& ext) {
-          return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-              QFileInfo(sourceFile).completeBaseName()
-                + QString("_audio%1.").arg(i+1) + ext).absoluteFilePath();
-        },
-        [&](int i, const QString& path, const QString& /*lang*/, bool ok) {
-          if (ok) {
-            cutAudioFiles.append(path);
-            log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
-          }
-        },
-        [&](int i) {
-          emit statusReport(0, StatusReportArgs::Step,
-              tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()),
-              i * 100 / qMax(1, avItem->audioCount()));
-          qApp->processEvents();
-        },
-        [&](int i, int percent) {
-          int overall = (i * 100 + percent) / qMax(1, avItem->audioCount());
-          emit statusReport(0, StatusReportArgs::Step,
-              tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
-          qApp->processEvents();
-        });
+  const QString exitMessage = mpH26xCutTask->exitMessage();
+  const QString error       = mpH26xCutTask->lastError();
+  const QString finalOutput = mpH26xCutTask->finalOutput();
 
-    // Collect audio languages from data model
-    QStringList cutAudioLanguages;
-    for (int i = 0; i < avItem->audioCount(); i++) {
-      cutAudioLanguages.append(avItem->audioListItemAt(i).getLanguage());
-    }
+  mpH26xCutTask->deleteLater();
+  mpH26xCutTask = 0;
 
-    // Cut subtitle tracks against the same (B-frame-adjusted) keepList as
-    // the audio (consolidated onto TTAVData::cutSubtitleTracks)
-    QStringList cutSubtitleFiles;
-    QStringList cutSubtitleLanguages;
-    cutSubtitleTracks(avItem, keepList,
-        [&](int i) {
-          return QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-              QFileInfo(sourceFile).completeBaseName()
-                + QString("_sub%1.srt").arg(i+1)).absoluteFilePath();
-        },
-        [&](int i, const QString& path, const QString& lang, bool ok) {
-          if (ok) {
-            cutSubtitleFiles.append(path);
-            cutSubtitleLanguages.append(lang);
-            log->infoMsg(__FILE__, __LINE__,
-                QString("Subtitle track %1 cut: %2").arg(i+1).arg(path));
-          }
-        });
+  // Exit is emitted BEFORE mLastCutError is recorded, which is the order the
+  // synchronous version had. TTCutMainWindow::onStatusReport reads
+  // lastCutError() while handling Exit to decide whether the run counts as a
+  // regular finish, so a failed H.26x cut currently arrives there as a regular
+  // one. Preserved deliberately (this task's gate is behavioural equality);
+  // changing it is a separate decision. Note the MPEG-2 path does NOT have the
+  // quirk - onCutFinished() sets mLastCutError during the mux and emits Exit
+  // afterwards - and doAudioOnlyCut() never assigns mLastCutError at all, it
+  // reports failures through mLastCutOutputSummary.
+  emit statusReport(0, StatusReportArgs::Exit, exitMessage, 0);
 
-    // Mux video and audio into final MKV
-    log->infoMsg(__FILE__, __LINE__, QString("tempVideoFile: %1 (%2 bytes)")
-        .arg(tempVideoFile).arg(QFileInfo(tempVideoFile).size()));
-    for (int i = 0; i < cutAudioFiles.size(); i++) {
-      log->infoMsg(__FILE__, __LINE__, QString("cutAudioFile[%1]: %2 (%3 bytes)")
-          .arg(i).arg(cutAudioFiles[i]).arg(QFileInfo(cutAudioFiles[i]).size()));
-    }
-    emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageMux);
-    emit statusReport(0, StatusReportArgs::Step, tr("Muxing video and audio..."), 0);
-    qApp->processEvents();
-    TTMkvMergeProvider mkvProvider;
-    connect(&mkvProvider, &TTMkvMergeProvider::progressChanged,
-            this,        &TTAVData::onMuxProgress);
-
-    // Calculate frame duration in nanoseconds (e.g., "0:20000000ns" for 50fps)
-    int frameDurationNs = (int)(1000000000.0 / frameRate);
-    mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-    mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
-    AVCodecID codecId = (vStream->streamType() == TTAVTypes::h265_video)
-                      ? AV_CODEC_ID_HEVC
-                      : AV_CODEC_ID_H264;
-    mkvProvider.setVideoCodecId(codecId);
-    // Display-PTS: SmartCut-supplied output order (empty = legacy linear PTS)
-    mkvProvider.setVideoDisplayOrder(smartCut.outputDisplayOrder());
-
-    // Apply A/V sync offset if present
-    if (avOffsetMs != 0) {
-      mkvProvider.setAudioSyncOffset(avOffsetMs);
-    }
-
-    // Note: per-track audio delay is already baked into each track's cut audio
-    // file via audioKeepList above. Do NOT apply it again here via setAudioDelays()
-    // — that would double-apply the delay.
-
-    mkvProvider.setAudioLanguages(cutAudioLanguages);
-    mkvProvider.setSubtitleLanguages(cutSubtitleLanguages);
-
-    // Add chapters in first mux pass (no second container remux needed)
-    QString chapterFile;
-    if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0 &&
-        finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
-
-      qint64 totalDurationMs = mLastCutResultMs;
-
-      log->infoMsg(__FILE__, __LINE__, QString("Total cut duration: %1 ms").arg(totalDurationMs));
-
-      if (totalDurationMs > 0) {
-        mkvProvider.setTotalDurationMs(totalDurationMs);
-        chapterFile = TTMkvMergeProvider::generateChapterFile(
-            totalDurationMs, TTSettings::instance()->workingMkvChapterInterval(), TTSettings::instance()->cutDirPath());
-        if (!chapterFile.isEmpty()) {
-          mkvProvider.setChapterFile(chapterFile);
-        }
-      }
-    }
-
-    bool success = mkvProvider.mux(finalOutput, tempVideoFile, cutAudioFiles, cutSubtitleFiles);
-
-    if (success) {
-      log->infoMsg(__FILE__, __LINE__, QString("Muxing complete: %1").arg(finalOutput));
-      // Delete cut elementary streams only if the option says so — same
-      // semantics as the MPEG-2 path (workingMuxDeleteES)
-      if (TTSettings::instance()->workingMuxDeleteES()) {
-        QFile::remove(tempVideoFile);
-        for (const QString& f : cutAudioFiles) {
-          QFile::remove(f);
-        }
-        for (const QString& f : cutSubtitleFiles) {
-          QFile::remove(f);
-        }
-      }
-    } else {
-      log->errorMsg(__FILE__, __LINE__, QString("Muxing failed: %1").arg(mkvProvider.lastError()));
-      emit statusReport(0, StatusReportArgs::Exit, tr("Muxing failed"), 0);
-      if (!chapterFile.isEmpty()) QFile::remove(chapterFile);
-      mLastCutError = tr("Muxing failed: %1").arg(mkvProvider.lastError());
-      emit cutFinished();
-      return;
-    }
-
-    // Clean up chapter file
-    if (!chapterFile.isEmpty()) QFile::remove(chapterFile);
-
-  emit statusReport(0, StatusReportArgs::Exit, tr("H.264/H.265 cutting complete"), 0);
+  if (!error.isEmpty()) {
+    mLastCutError = error;
+    emit cutFinished();
+    return;
+  }
 
   // Create a mux list item for the finished signal
   TTMuxListDataItem muxItem;
@@ -1894,30 +1887,30 @@ void TTAVData::onCutFinished()
   // 3 = Elementary (no muxing; not reachable from UI, kept as defensive default)
 
   switch (TTSettings::instance()->workingOutputContainer()) {
-    case 1: // MKV - use mkvmerge
+    case 1: // MKV - libav matroska muxer, run as a SECOND pool task
       {
-        TTMkvMergeProvider* mkvProvider = new TTMkvMergeProvider();
-
-        connect(mkvProvider, &TTMkvMergeProvider::progressChanged,
-                this,        &TTAVData::onMuxProgress);
+        // Everything the muxer needs is copied by value here, on the GUI
+        // thread; the worker never reads mpCutList or the mux list again.
+        TTMuxTaskParams params;
 
         // Set frame duration for raw ES video (required for PTS assignment)
         TTVideoStream* videoStream = mpCutList->at(0).avDataItem()->videoStream();
         double frameRate = videoStream->frameRate();
         int frameDurationNs = (int)(1000000000.0 / frameRate);
-        mkvProvider->setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-        mkvProvider->setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
+        params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
+        params.isPAFF              = videoStream->isPAFF();
+        params.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
         AVCodecID codecId;
         switch (videoStream->streamType()) {
           case TTAVTypes::h265_video:  codecId = AV_CODEC_ID_HEVC;       break;
           case TTAVTypes::h264_video:  codecId = AV_CODEC_ID_H264;       break;
           default:                     codecId = AV_CODEC_ID_MPEG2VIDEO; break;
         }
-        mkvProvider->setVideoCodecId(codecId);
+        params.videoCodecId = codecId;
 
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {
-          mkvProvider->setAudioSyncOffset(mAvSyncOffsetMs);
+          params.audioSyncOffsetMs = mAvSyncOffsetMs;
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
         }
@@ -1927,16 +1920,20 @@ void TTAVData::onCutFinished()
         // setAudioDelays() — that would double-apply the delay.
 
         // Pass explicit language tags from data model
-        mkvProvider->setAudioLanguages(muxItem.getAudioLanguages());
-        mkvProvider->setSubtitleLanguages(muxItem.getSubtitleLanguages());
+        params.videoFile         = muxItem.getVideoName();
+        params.audioFiles        = muxItem.getAudioNames();
+        params.subtitleFiles     = muxItem.getSubtitleNames();
+        params.audioLanguages    = muxItem.getAudioLanguages();
+        params.subtitleLanguages = muxItem.getSubtitleLanguages();
 
         // Build MKV output filename
         QFileInfo videoInfo(muxItem.getVideoName());
-        QString mkvOutput = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-                                       videoInfo.completeBaseName() + ".mkv").absoluteFilePath();
+        params.mkvOutput = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+                                     videoInfo.completeBaseName() + ".mkv").absoluteFilePath();
 
-        // Generate chapters if enabled
-        QString chapterFile;
+        // Generate chapters if enabled. Still done here, on the GUI thread:
+        // it is a millisecond text-file write, and keeping it out of the task
+        // preserves the exact call order the synchronous version had.
         if (TTSettings::instance()->workingMkvCreateChapters() && TTSettings::instance()->workingMkvChapterInterval() > 0) {
           // mLastCutResultMs is the duration of the segments actually cut (the
           // cut list passed to onDoCut). The earlier code summed the full
@@ -1949,52 +1946,54 @@ void TTAVData::onCutFinished()
               qDebug() << "Total cut duration:" << totalDurationMs << "ms";
 
           if (totalDurationMs > 0) {
-            mkvProvider->setTotalDurationMs(totalDurationMs);
-            chapterFile = TTMkvMergeProvider::generateChapterFile(
+            // Mirrors the old order: setTotalDurationMs() was called whenever
+            // chapters were requested and the duration was known, even if
+            // generateChapterFile() then returned nothing.
+            params.totalDurationMs = totalDurationMs;
+            params.chapterFile = TTMkvMergeProvider::generateChapterFile(
                 totalDurationMs, TTSettings::instance()->workingMkvChapterInterval(), TTSettings::instance()->cutDirPath());
-            if (!chapterFile.isEmpty()) {
-              mkvProvider->setChapterFile(chapterFile);
-            }
           }
         }
 
         if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "Muxing to MKV:" << mkvOutput;
+            qDebug() << "Muxing to MKV:" << params.mkvOutput;
 
-        bool muxSuccess = mkvProvider->mux(mkvOutput,
-                             muxItem.getVideoName(),
-                             muxItem.getAudioNames(),
-                             muxItem.getSubtitleNames());
+        // Everything the run has produced so far feeds this mux; a cancel
+        // makes all of it useless, so the task deletes it together with its
+        // own partial products (spec: delete everything the run created).
+        // Handing the list over transfers ownership - onCutAborted() must not
+        // delete the same paths a second time.
+        params.cleanupOnAbort = mCutProducedFiles;
+        mCutProducedFiles.clear();
 
-        if (muxSuccess) {
-          if (TTSettings::instance()->logCutPipeline())
-              qDebug() << "MKV muxing completed successfully";
+        mpMuxTask = new TTMuxTask(this);
+        mpMuxTask->init(params);
 
-          // Record the real output name for the completion notification —
-          // the same step the H.264 path does before emitting cutFinished().
-          TTSettings::instance()->setCutVideoName(QFileInfo(mkvOutput).fileName());
+        // Second pool run of this operation. onCutAborted() is still connected
+        // to the pool's aborted() from onDoCut() and covers this run too.
+        connect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onMpeg2MuxFinished);
 
-          // Delete elementary streams if option is set
-          if (TTSettings::instance()->workingMuxDeleteES()) {
-            deleteElementaryStreams(muxItem.getVideoName(),
-                                    muxItem.getAudioNames(),
-                                    muxItem.getSubtitleNames());
-          }
-        } else {
-          TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-              QString("MKV muxing failed: %1").arg(mkvProvider->lastError()));
-          emit statusReport(0, StatusReportArgs::Step, tr("MKV muxing failed"), 0);
-          mLastCutError = tr("Muxing failed: %1").arg(mkvProvider->lastError());
-        }
+        // Re-arm the operation flag. onThreadPoolExit() is connected in the
+        // constructor and therefore ran BEFORE this slot; it consumed the flag
+        // (its else-branch sets it to false) to suppress the pool's own Exit
+        // for run A. The flag is a one-shot, so the second run needs it set
+        // again - otherwise the pool would emit "starting thread pool" Init and
+        // "exiting thread pool" Exit around the mux, and that stray Exit would
+        // close the progress dialog before the real one arrives. The window in
+        // which the flag is false is inside this single synchronous emit
+        // exit(): no pool signal can occur in it (run A's task has already left
+        // mTaskQueue, run B is started below).
+        mCutOperationActive = true;
+        // ... and mark this run as the mux run, so onThreadPoolExit() does not
+        // reload the tree views a second time for one cut operation.
+        mMuxPoolRunActive = true;
 
-        // Clean up chapter file
-        if (!chapterFile.isEmpty()) {
-          QFile::remove(chapterFile);
-        }
-
-        delete mkvProvider;
+        mpThreadTaskPool->init(1);
+        mpThreadTaskPool->start(mpMuxTask);
+        // The operation continues in onMpeg2MuxFinished(); it, not this slot,
+        // calls finishMpeg2Cut().
+        return;
       }
-      break;
 
     case 3: // Elementary - no muxing
       if (TTSettings::instance()->logCutPipeline())
@@ -2014,15 +2013,180 @@ void TTAVData::onCutFinished()
         connect(mplexProvider, &TTMplexProvider::statusReport,
                 this,          &TTAVData::onStatusReport);
 
-        if (TTSettings::instance()->workingMuxMode() == 1)
+        if (TTSettings::instance()->workingMuxMode() == 1) {
           mplexProvider->writeMuxScript();
-        else
-          mplexProvider->mplexPart(lastIdx);
+        }
+        else {
+          // mplexPart() runs the external muxer synchronously on this thread
+          // and pumps the event loop while it waits, so the Cancel button's
+          // onUserAbortRequest() executes re-entrantly inside it. Publishing
+          // the provider is what gives that slot something to cancel; cleared
+          // again the moment the call returns, well before the delete below.
+          mpMplexProvider = mplexProvider;
 
+          // Seed the provider with a request that arrived BEFORE it existed.
+          // There is a window between the video task's last abort poll and
+          // the line above in which nobody is listening: the task polls
+          // isAborted() at the top of each cut-list iteration, so a cancel
+          // landing during the last iteration is never polled again;
+          // TTThreadTask::run() emits finished() regardless of mIsAborted, so
+          // the pool reports a normal finish and this slot runs. Without this
+          // seed the request is simply lost and the mux completes - the exact
+          // symptom this task was written to remove, in a narrower window
+          // (measured: 5 of 8 runs on the branch point). mSyncPhaseAbort is
+          // the record of that request: onUserAbortRequest() sets it
+          // unconditionally and only the cut entry points clear it, so it is
+          // still set here. Reaching this slot with it set means the pool did
+          // NOT honour the abort (had it done so, aborted() would have fired
+          // and onCutAborted() would have disconnected this slot).
+          if (mSyncPhaseAbort.load(std::memory_order_relaxed))
+            mplexProvider->requestAbort();
+
+          mplexProvider->mplexPart(lastIdx);
+          mpMplexProvider = 0;
+        }
+
+        const bool mplexAborted = mplexProvider->wasAborted();
         delete mplexProvider;
+
+        if (mplexAborted) {
+          // Same situation as the synchronous audio phase in onDoCut(): the
+          // pool run of this operation is already over (onThreadPoolExit()
+          // ran before this slot), so none of the pool's abort machinery -
+          // onCutAborted(), onThreadPoolExit() - will run for this cancel.
+          // This block is therefore the only place that can close the
+          // operation, and it does the same three things onDoCut()'s
+          // sync-phase block does: delete what the run created, consume
+          // mCutOperationActive, emit the single Canceled bracket. Falling
+          // through to finishMpeg2Cut() instead would report Exit and
+          // cutFinished() for a cancelled run.
+          //
+          // The disconnect mirrors finishMpeg2Cut()'s: onDoCut() armed
+          // onCutAborted() and nothing on this path drops it otherwise, and
+          // it is a slot that QFile::remove()s every entry of
+          // mCutProducedFiles - a later, unrelated pool abort must not reach
+          // it.
+          disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+          // The cut elementary streams that fed the mux. The partial .mpg is
+          // removed by TTMplexProvider itself (the only place that knows the
+          // output path), so no file is deleted twice. Cancel-only by
+          // construction: this branch is reached exclusively through
+          // wasAborted(), never through an mplex failure - a failed mux keeps
+          // its files for diagnosis.
+          for (const QString& f : mCutProducedFiles) {
+            if (f.isEmpty() || !QFile::exists(f)) continue;
+            if (!QFile::remove(f))
+              log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
+          }
+          mCutProducedFiles.clear();
+
+          // Mirror of finishMpeg2Cut()'s own reset, and a no-op for the same
+          // reason: onThreadPoolExit() already consumed the flag for the video
+          // pool run that ended just before this slot. Written out so the
+          // bracket state is stated locally instead of inferred.
+          mCutOperationActive = false;
+          emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+          return;
+        }
       }
       break;
   }
+
+  finishMpeg2Cut();
+}
+
+//! MKV mux task of the MPEG-2 cut finished (second pool run, GUI thread)
+//!
+//! Slot order on that run's exit(): onThreadPoolExit() (constructor
+//! connection, always first; suppresses the pool's own Exit and consumes
+//! mCutOperationActive again) -> this slot. On a cancel the pool emits
+//! aborted() BEFORE exit(), so onCutAborted() runs first and disconnects this
+//! slot - a cancelled mux never gets here.
+void TTAVData::onMpeg2MuxFinished()
+{
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onMpeg2MuxFinished);
+
+  if (mpMuxTask == 0) {
+    // Cannot happen through the wired paths (onCutAborted() disconnects this
+    // slot when it clears the pointer), but it must not end the operation
+    // silently if it ever does: this slot owns the closing bracket, and
+    // without it the progress dialog stays open forever and --auto-cut never
+    // reaches its quit. Report it as the defect it would be, then close.
+    log->errorMsg(__FILE__, __LINE__,
+        QString("MKV mux finished without a task object - closing the cut anyway"));
+    mLastCutError = tr("Muxing failed: the mux task was gone");
+    finishMpeg2Cut();
+    return;
+  }
+
+  const QString     error       = mpMuxTask->lastError();
+  const QString     mkvOutput   = mpMuxTask->mkvOutput();
+  const QString     chapterFile = mpMuxTask->params().chapterFile;
+  const QString     videoFile   = mpMuxTask->params().videoFile;
+  const QStringList audioFiles  = mpMuxTask->params().audioFiles;
+  const QStringList subFiles    = mpMuxTask->params().subtitleFiles;
+
+  mpMuxTask->deleteLater();
+  mpMuxTask = 0;
+
+  if (error.isEmpty()) {
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << "MKV muxing completed successfully";
+
+    // Record the real output name for the completion notification —
+    // the same step the H.264 path does before emitting cutFinished().
+    TTSettings::instance()->setCutVideoName(QFileInfo(mkvOutput).fileName());
+
+    // Delete elementary streams if option is set
+    if (TTSettings::instance()->workingMuxDeleteES()) {
+      deleteElementaryStreams(videoFile, audioFiles, subFiles);
+    }
+  } else {
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("MKV muxing failed: %1").arg(error));
+    emit statusReport(0, StatusReportArgs::Step, tr("MKV muxing failed"), 0);
+    mLastCutError = tr("Muxing failed: %1").arg(error);
+  }
+
+  // Clean up chapter file
+  if (!chapterFile.isEmpty()) {
+    QFile::remove(chapterFile);
+  }
+
+  finishMpeg2Cut();
+}
+
+//! Close the MPEG-2 cut operation - the single place that ends it.
+//!
+//! Called from the mplex/Elementary branches of onCutFinished() inline, and
+//! from onMpeg2MuxFinished() for the MKV branch (whose mux is a second pool
+//! run and therefore cannot finish inside onCutFinished()).
+//!
+//! Bracket ordering (verified, see onCutFinished()): by the time this runs,
+//! onThreadPoolExit() has already consumed mCutOperationActive for the pool
+//! run that just ended - it is connected in the constructor and therefore
+//! fires before any slot connected later. The reset below is a mirror of that
+//! (same situation as onH26xCutFinished()), and the Exit emitted here is the
+//! ONE closing bracket of the whole operation.
+void TTAVData::finishMpeg2Cut()
+{
+  // Drop the abort connection onDoCut() made. The two exit connections are
+  // dropped by the slots that consume them (onCutFinished(),
+  // onMpeg2MuxFinished()), but nothing dropped this one on the SUCCESS path -
+  // so every completed MPEG-2 cut used to leave a live connection to
+  // onCutAborted(), a slot that iterates mCutProducedFiles and QFile::remove()s
+  // every entry. Any later pool abort (a cancelled preview, stream open or
+  // frame search) then reached it. Harmless as long as the list is empty
+  // between operations, but that invariant is global and stated in a comment
+  // rather than enforced, and this is the one place that ends the MPEG-2 cut.
+  // The abort path disconnects it itself (onCutAborted()), and disconnecting
+  // an already-dropped connection is a no-op, so this is unconditional.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+  // The run is over: whatever it created is a wanted product now, not
+  // abort-cleanup material (see mCutProducedFiles).
+  mCutProducedFiles.clear();
 
   // The MPEG-2 path ends here, in a slot invoked by the thread pool's exit
   // signal — unlike doH264Cut()/doAudioOnlyCut(), which run synchronously and
@@ -2035,7 +2199,7 @@ void TTAVData::onCutFinished()
   // run hanging. (The H.264 path still returns early on mux failure - noted as
   // a follow-up, not changed here.)
   if (TTSettings::instance()->logCutPipeline())
-      qDebug() << "onCutFinished: emitting cutFinished(), cutVideoName ="
+      qDebug() << "finishMpeg2Cut: emitting cutFinished(), cutVideoName ="
                << TTSettings::instance()->cutVideoName();
   // Close the operation bracket opened in onDoCut(): re-enable the pool's
   // own status brackets and report the single final Exit (success or the
@@ -2050,6 +2214,63 @@ void TTAVData::onCutAborted()
 {
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onCutFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
+
+  // The H.26x branch closes its bracket in onH26xCutFinished(), which the
+  // pool's exit() would still reach right after this slot - the queue emits
+  // aborted() and exit() back to back. Drop that connection so an aborted cut
+  // reports Canceled and nothing else, exactly like the MPEG-2 branch above.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onH26xCutFinished);
+  if (mpH26xCutTask != 0) {
+    mpH26xCutTask->deleteLater();
+    mpH26xCutTask = 0;
+  }
+
+  // Audio-only cut: same reasoning as the H.26x branch above - it closes its
+  // own bracket in onAudioOnlyCutFinished(), which the pool's exit() would
+  // otherwise still reach right after this slot.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onAudioOnlyCutFinished);
+  if (mpAudioOnlyCutTask != 0) {
+    mpAudioOnlyCutTask->deleteLater();
+    mpAudioOnlyCutTask = 0;
+  }
+
+  // Same for the MPEG-2 MKV mux, which is a pool run of its own (see
+  // onCutFinished): its exit() would otherwise reach onMpeg2MuxFinished()
+  // right after this slot and report Exit + cutFinished() on a cancelled run.
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onMpeg2MuxFinished);
+  if (mpMuxTask != 0) {
+    mpMuxTask->deleteLater();
+    mpMuxTask = 0;
+  }
+
+  // Delete everything this run created - but ONLY for a deliberate cancel.
+  // This slot is not cancel-specific: TTThreadTask::run()'s catch(TTException)
+  // emits aborted(this) too, so a genuine I/O failure in the video task lands
+  // here as well, and deleting the products of a failed run would take the
+  // evidence with it (measured: an injected TTIOException wiped the partial
+  // video ES AND the already finished audio track). The standing rule for this
+  // feature is: on a cancel delete everything, on a real error leave the files
+  // in place. mSyncPhaseAbort is the discriminator - onUserAbortRequest() sets
+  // it unconditionally, and every cut entry point resets it - and it is the
+  // same distinction TTMuxTask makes with isAborted() for its own products.
+  //
+  // The list holds the cut audio/subtitle files plus the partial video ES.
+  // It is empty on the H.26x and audio-only paths (doH264Cut()/
+  // doAudioOnlyCut() never fill it - TTH26xCutTask and TTAudioOnlyCutTask
+  // clean up their own products via their own mCreatedFiles, and only the
+  // MPEG-2 branch of onDoCut() ever fills this one) and empty once the mux
+  // task has taken it over (onCutFinished() hands it to TTMuxTaskParams::
+  // cleanupOnAbort and clears it), so no path deletes the same file twice.
+  if (mSyncPhaseAbort.load(std::memory_order_relaxed)) {
+    for (const QString& f : mCutProducedFiles) {
+      if (f.isEmpty() || !QFile::exists(f)) continue;
+      if (!QFile::remove(f))
+        log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
+    }
+  }
+  // Cleared either way: the operation is over, and a later abort must never
+  // delete a previous run's products.
+  mCutProducedFiles.clear();
 
   // Report the operation's Canceled bracket (see onDoCut), but do NOT reset
   // mCutOperationActive here: TTThreadTaskPool::onThreadTaskAborted emits
@@ -2071,6 +2292,20 @@ void TTAVData::onCutAborted()
 // /////////////////////////////////////////////////////////////////////////////
 void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
 {
+  // Reset here too (onDoCut() already does this before dispatching, since
+  // doAudioOnlyCut() is private and only reachable through it) so the
+  // invariant reads locally at every entry point. Unused by this path (the
+  // audio-only cut runs entirely inside TTAudioOnlyCutTask and is cancelled
+  // through its own onUserAbort(), like the H.26x/MPEG-2 final cuts) but kept
+  // for the same defensive reason doH264Cut() keeps it.
+  mSyncPhaseAbort.store(false, std::memory_order_relaxed);
+  // Same reason again, and the same wording as doH264Cut(): onCutAborted() is
+  // shared with the MPEG-2 path and deletes whatever is in this list.
+  // TTAudioOnlyCutTask cleans up its own products via its own mCreatedFiles,
+  // so the list has to be empty here - re-established locally at every entry
+  // point instead of relying on the previous operation having cleared it.
+  mCutProducedFiles.clear();
+
   mLastCutWasAudioOnly = true;
   mLastCutOutputSummary.clear();
 
@@ -2097,6 +2332,12 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
     emit operationPlanReady(plan);
   }
 
+  // The cut runs as a single pool task (TTAudioOnlyCutTask) but is a larger
+  // operation than the pool run itself: the brackets below and the closing
+  // one in onAudioOnlyCutFinished() belong to the cut, not to the pool - same
+  // arrangement as doH264Cut()/onH26xCutFinished().
+  mCutOperationActive = true;
+
   emit statusReport(0, StatusReportArgs::Init, tr("Initializing audio cut..."), 0);
   qApp->processEvents();
 
@@ -2106,105 +2347,89 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   emit statusReport(0, StatusReportArgs::Start, tr("Cutting audio tracks..."), avItem->audioCount());
   qApp->processEvents();
 
-  // Stage 1: stream-copy each track to its source codec
-  // (consolidated onto TTAVData::cutAudioTracks).
-  QStringList trackFiles;
-  QStringList trackLanguages;
-  const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-  emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
-  QList<float> firstTrackDrifts = cutAudioTracks(
-      avItem, videoKeepList, normalizeAcmod,
-      [&](int i, const QString& /*ext*/) {
-        return createCutFileName(tgtFileName,
-                                 avItem->audioStreamAt(i)->fileName(), i + 1);
-      },
-      [&](int i, const QString& path, const QString& lang, bool ok) {
-        if (ok) {
-          trackFiles     << path;
-          trackLanguages << lang;
-          log->infoMsg(__FILE__, __LINE__, QString("Audio track %1 cut: %2").arg(i+1).arg(path));
-        }
-        emit statusReport(0, StatusReportArgs::Step,
-            tr("Audio track %1 done").arg(i+1),
-            (i + 1) * 100 / qMax(1, avItem->audioCount()));
-        qApp->processEvents();
-      },
-      {},
-      [&](int i, int percent) {
-        int overall = (i * 100 + percent) / qMax(1, avItem->audioCount());
-        emit statusReport(0, StatusReportArgs::Step,
-            tr("Cutting audio track %1 of %2...").arg(i+1).arg(avItem->audioCount()), overall);
-        qApp->processEvents();
-      });
-
-  // Drift display (first track only, matches existing convention)
-  emit cutAudioDriftCalculated(firstTrackDrifts);
-
-  if (trackFiles.isEmpty()) {
-    log->errorMsg(__FILE__, __LINE__, "Audio-only cut produced no output files");
-    mLastCutOutputSummary = tr("Audio cut failed");
-    emit statusReport(0, StatusReportArgs::Exit, tr("Audio cut failed"), 0);
-    emit cutFinished();
-    return;
+  // Everything the pipeline needs, copied by value while we are still on the
+  // GUI thread. The worker must not read the cut list or TTSettings' working
+  // set again after this point - see TTH26xCutParams for the same rule.
+  TTAudioOnlyCutParams params;
+  params.targetFileName  = tgtFileName;
+  params.videoKeepList   = videoKeepList;
+  params.normalizeAcmod  = TTSettings::instance()->normalizeAcmod();
+  params.audioOnlyFormat = TTSettings::instance()->workingAudioOnlyFormat();
+  if (params.audioOnlyFormat == TTCut::AOF_OriginalMKA) {
+    params.mkaOutputPath = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
+        QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
   }
 
-  // Dispatch by chosen output format (working set, per-cut/per-project)
-  switch (TTSettings::instance()->workingAudioOnlyFormat()) {
-    case TTCut::AOF_OriginalES: {
-      QString dir = QFileInfo(trackFiles.first()).absolutePath();
-      log->infoMsg(__FILE__, __LINE__,
-                   QString("Audio-only cut complete: %1 ES file(s) in %2")
-                     .arg(trackFiles.size()).arg(dir));
-      mLastCutOutputSummary = tr("%1 audio file(s) in %2").arg(trackFiles.size()).arg(dir);
-      break;
-    }
+  mpAudioOnlyCutTask = new TTAudioOnlyCutTask(this, avItem);
+  mpAudioOnlyCutTask->init(params);
 
-    case TTCut::AOF_OriginalMKA: {
-      QString mkaPath = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
-                                  QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
-      if (QFileInfo(mkaPath).exists()) QFile::remove(mkaPath);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onAudioOnlyCutFinished);
+  connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
-      emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageMux);
-      emit statusReport(0, StatusReportArgs::Step, tr("Muxing audio tracks into MKA..."), 0);
-      qApp->processEvents();
+  mpThreadTaskPool->init(1);
+  mpThreadTaskPool->start(mpAudioOnlyCutTask);
+}
 
-      TTMkvMergeProvider mkvProv;
-      if (!mkvProv.muxAudioOnly(mkaPath, trackFiles, trackLanguages)) {
-        log->errorMsg(__FILE__, __LINE__,
-                      QString("MKA mux failed: %1").arg(mkvProv.lastError()));
-        mLastCutOutputSummary = tr("MKA mux failed: %1").arg(mkvProv.lastError());
-      } else {
-        log->infoMsg(__FILE__, __LINE__, QString("Audio-only cut complete: %1").arg(mkaPath));
-        for (const QString& f : trackFiles) QFile::remove(f);
-        mLastCutOutputSummary = mkaPath;
-      }
-      break;
-    }
+//! Audio-only cut task finished (pool exit, GUI thread)
+void TTAVData::onAudioOnlyCutFinished()
+{
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onAudioOnlyCutFinished);
+  disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onCutAborted);
 
-    case TTCut::AOF_MP3:
-    case TTCut::AOF_AAC: {
-      QString dir = QFileInfo(trackFiles.first()).absolutePath();
-      log->warningMsg(__FILE__, __LINE__,
-                      "MP3/AAC re-encoding not implemented yet — leaving original ES files");
-      mLastCutOutputSummary = tr("MP3/AAC re-encoding not implemented yet — original ES files in %1").arg(dir);
-      break;
-    }
-  }
+  // Close the operation bracket opened in doAudioOnlyCut(). onThreadPoolExit()
+  // runs before this slot (connected in the constructor, so it fires first)
+  // and already consumed the flag; the reset mirrors onH26xCutFinished() and
+  // keeps the invariant readable at both ends of the bracket.
+  mCutOperationActive = false;
 
-  emit statusReport(0, StatusReportArgs::Exit, tr("Audio cut complete"), 0);
+  if (mpAudioOnlyCutTask == 0) return;
+
+  const QString exitMessage   = mpAudioOnlyCutTask->exitMessage();
+  const QString outputSummary = mpAudioOnlyCutTask->outputSummary();
+  const QList<float> drifts   = mpAudioOnlyCutTask->drifts();
+  // lastError() is part of the shape shared with the other cut tasks but
+  // stays unused here: doAudioOnlyCut() never assigned TTAVData::
+  // mLastCutError, only mLastCutOutputSummary - preserved as-is (see
+  // TTAudioOnlyCutTask::lastError()).
+
+  mpAudioOnlyCutTask->deleteLater();
+  mpAudioOnlyCutTask = 0;
+
+  // Drift belongs to TTAVData and is emitted here, on the GUI thread, in the
+  // same relative order (before the closing Exit) as the synchronous version
+  // had right after cutAudioTracks() returned.
+  emit cutAudioDriftCalculated(drifts);
+
+  mLastCutOutputSummary = outputSummary;
+  emit statusReport(0, StatusReportArgs::Exit, exitMessage, 0);
   emit cutFinished();
 }
 
+// This forwarder is reached from two kinds of caller: the one remaining
+// synchronous GUI-thread provider (mplex, run inline in onCutFinished for MPG
+// output), which needs the event loop pumped so the progress window repaints
+// while it blocks the GUI thread, and the cut tasks' worker threads
+// (TTH26xCutTask, TTAudioOnlyCutTask, TTMuxTask), which must not. On a worker,
+// processEvents() would pump *that* thread's queue - it would not repaint
+// anything, but it would dispatch its deferred deletions at an arbitrary
+// point inside the cut. The receivers get the signal through their own queued
+// connections either way.
 void TTAVData::onStatusReport(int state, const QString& msg, quint64 value)
 {
   emit statusReport(0, state, msg, value);
-  qApp->processEvents();
+  if (QThread::currentThread() == qApp->thread())
+    qApp->processEvents();
 }
 
+// Mux progress. Since the MKV mux of both cut paths runs in a pool task
+// (TTMuxTask for MPEG-2, TTH26xCutTask for H.26x), this is only ever called
+// from a worker thread - the processEvents() the GUI-thread version used to
+// do here would be dead code (and on a worker it would pump the wrong
+// queue; see onStatusReport). The receivers get the report through their own
+// queued connections.
 void TTAVData::onMuxProgress(int percent, const QString& msg)
 {
   emit statusReport(0, StatusReportArgs::Step, msg, percent);
-  qApp->processEvents();
 }
 
 void TTAVData::deleteElementaryStreams(const QString& videoFilePath,
@@ -2498,9 +2723,18 @@ QList<float> TTAVData::cutAudioTracks(
     bool ok = ff.cutAudioStream(stream->filePath(), outFile,
                                 plan.keepList, normalizeAcmod, targetAcmods,
                                 perTrackCb, shouldAbort);
-    if (!ok)
-      log->errorMsg(__FILE__, __LINE__,
-                    QString("Audio cut failed for track %1").arg(idx + 1));
+    if (!ok) {
+      // A deliberate cancel returns false through the same path as a real
+      // failure (TTFFmpegWrapper::cutAudioStream). Only the latter is an
+      // error - logging a user cancel at error level would put a failure line
+      // in the persistent log for something the user asked for.
+      if (shouldAbort && shouldAbort())
+        log->infoMsg(__FILE__, __LINE__,
+                     QString("Audio cut for track %1 aborted by user").arg(idx + 1));
+      else
+        log->errorMsg(__FILE__, __LINE__,
+                      QString("Audio cut failed for track %1").arg(idx + 1));
+    }
     onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), ok);
   }
   return firstDrifts;

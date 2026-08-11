@@ -3455,12 +3455,22 @@ Ausgabedatei:
 <context>
     <name>TTMplexProvider</name>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="175"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="220"/>
+        <source>Mplex cancelled</source>
+        <translation>Mplex abgebrochen</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="225"/>
         <source>Mplex finished</source>
         <translation>Mplex abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="276"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="268"/>
+        <source>Cancel requested - stopping the mplex process</source>
+        <translation>Abbruch angefordert - Mplex-Prozess wird beendet</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="391"/>
         <source>Starting mplex process</source>
         <translation>Mplex-Prozess gestartet</translation>
     </message>
