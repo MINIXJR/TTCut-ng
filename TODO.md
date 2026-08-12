@@ -197,6 +197,26 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     nachher `failed=0 dumps=0`), dazu `tools/diag/test_seqheader_missing`
     (vorher rc=134, nachher NULL).
 
+- **`test_previewcut_abort` scheitert mit MPEG-2-Material** (2026-08-12,
+  offen, beim Abschluss der Temp-Kollisions-Arbeit gemessen)
+  - Mit `tux_mpeg2_576i_pal_test.m2v`/`.mp2` scheitern zwei der vier Fälle:
+    `none` mit „cutPreviewFinished never fired" (Klammern `init=1 exit=0
+    cancel=1`, Text „Preview cancelled", im Protokoll ein `CutPreviewTask ...
+    catched TTException`) und `fail` mit „a real failure was reported as
+    Canceled". `video` und `audio` laufen durch.
+  - **Vorbestehend, keine Folge des Temp-Fixes**: auf `67e21d83` in einem
+    eigens gebauten Vergleichs-Worktree dieselben zwei Fehlschläge mit
+    denselben Meldungen.
+  - Mit H.264-Material (`tux_h264_1080p_progressive_test.264`/`.ac3`) laufen
+    alle vier Fälle durch — der Harnisch ist bisher offenbar nur damit
+    gefahren worden.
+  - Zwei mögliche Lesarten, ungeprüft: Der Harnisch trifft für MPEG-2 die
+    falschen Erwartungen (dann gehört das in seinen Kopfkommentar), oder der
+    Vorschau-Abbruch meldet auf dem MPEG-2-Pfad einen echten Fehler als
+    Abbruch (dann ist es derselbe Fehlerbild-Typ wie beim Schnitt-Ausgang,
+    siehe `project_cut_outcome_reporting`). Erster Schritt: nachsehen, welche
+    `TTException` der `CutPreviewTask` dort fängt.
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
     `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie
