@@ -1,0 +1,29 @@
+# clangd 21.1.8 segfaults while parsing any file that includes
+# data/ttavdata.h. Measured 2026-08-12: six of six diagnostic harnesses that
+# include that header crash the language server (SIGSEGV in the parser, at a
+# closing parenthesis inside a lambda body); no harness without it does. The
+# crash is not a regression from the July upgrade - every affected file is
+# younger than the installed clangd - and it could not be reduced to a small
+# example in five attempts, so it needs the full translation unit rather than
+# one construct.
+#
+# Index.Background: Skip only stops clangd's automatic background indexing
+# of these files (the pass that used to crash repeatedly and leave a core
+# dump behind on every project-wide (re)index). It does NOT prevent the
+# crash if a file matching the pattern is opened and manually parsed in an
+# editor - that still segfaults clangd. Consequence without this file:
+# background indexing kills clangd, it restarts, dies again, and leaves a
+# ~350 MB core dump behind each time (2.5 GB accumulated in fifteen minutes
+# during the session that found it) - core dumps that `git status` does not
+# show, because this repo sets status.showUntrackedFiles=no.
+#
+# The exclusion is deliberately narrow: tools/diag/ holds acceptance harnesses,
+# not code anyone navigates daily. The application itself keeps full language
+# support. Remove this block once upstream fixes the crash - the parser bug is
+# in clangd, not in our code, and the compiler builds all of these files
+# without complaint.
+If:
+  PathMatch: tools/diag/.*\.cpp
+
+Index:
+  Background: Skip
