@@ -1,7 +1,9 @@
 ---
-base_commit: a710821c97d05b373ac90995908e4c55e3091ba2
-last_verified: 2026-08-02
+base_commit: 7f472967
+last_verified: 2026-08-12
 sources:
+  - data/ttanalysislog.cpp
+  - data/ttanalysislog.h
   - data/ttsearchtask.cpp
   - data/ttsearchtask.h
   - data/ttsearchtask_aspectscan.cpp
@@ -119,8 +121,9 @@ flowchart TB
 | `VWORK → displayPositionAfter → IDX` | Der Bitstrom-Zähler wird über den Kopf-Index des ersten Bildes nach dem Sequenzkopf in einen Rang der anzeigesortierten `TTVideoIndexList` übersetzt. | War bis `2026-07-30` nicht vorhanden; der rohe Zähler landete als Markerposition in `onVideoSliderChanged`. Gemessen (`tools/diag/test_streampoint_order`): TELE5 576p25 alle 626 Sequenzköpfe um +2 daneben, Comedy Central 268 von 350 (überwiegend +3, bis +6); RTLZWEI fährt geschlossene GOPs und war zufällig richtig. **Nachrechnen (`base_number + temporal_reference`) genügt nicht** — Feldbild-Paare lassen Rang und `display_order`-Wert auseinanderlaufen (65 von 7507 bzw. 14 von 136319 Einträgen). Der lineare Suchlauf ist vertretbar, weil er nur bei einem echten Wechsel läuft. |
 | `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
 | `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
-| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. |
+| `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. Seit `37d20e13` zusätzlich über einen **optionalen** Ausgabeparameter den Grund (`TTAspectReason`: `None`, `NoBars`, `BarsTooWide`, `CentreTooDark`, `Unusable`). | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. Der Grund existiert für die Abschlussbilanz im Detailbereich, die die `NoStatement`-Proben aufschlüsselt; der Vorgabewert `nullptr` hält die zweiargumentigen Aufrufe (u. a. `refineTransition`, ~15 Prüffälle im Harness) gültig. **Zählen darf nur der Hauptlauf**: `refineTransition()` ruft `classifyBatch()` ein zweites Mal über dieselbe Gegend und übergibt bewusst keinen Gründe-Vektor, sonst wären die Proben doppelt gezählt. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
+| `PURE → ASPECT` (`TTAspectCandidate`, seit `ea4d544c`) | Zusätzlich zum bestätigten Wechsel gibt die Hysterese **verworfene** Kandidatenläufe heraus — abzuholen mit `takeDiscardedCandidate()` nach jedem `feed()`, Einzelplatz mit Löschen beim Lesen. `feed()` behält seine Signatur. | Aufgezeichnet wird nur ein Lauf, der den **bestätigten** Zustand herausgefordert hätte (`mCandidate != mConfirmed`); Schwanken innerhalb des bestätigten Zustands erzeugt nichts. `heldFrames` ist `letzte − erste Probe des Laufs`, nicht `brechende − erste` — dafür führt die Klasse `mCandidateLast` mit, das auf **allen drei** Pfaden nachgezogen wird (Grundzustand, Kandidatenwechsel, Fortsetzung). Ein Lauf, der einen Wechsel auslöst, wird nicht zusätzlich als verworfen gemeldet. Der Scan zeigt Läufe mit `heldFrames == 0` **nicht** an (Einzelausreißer des Klassifizierers, gemessen 11 von 15 auf einer 90-min-Aufnahme mit 1 s Abstand), zählt sie aber getrennt in der Bilanz. |
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
@@ -151,7 +154,10 @@ sind seither getrennt verdrahtet — Header-Seitenverhältnis an
 ## Der Klassifizierer im Detail
 
 `classifyAspectSample()` (`data/ttaspectdetect.cpp`), reine Funktion, ohne Qt-GUI
-testbar (`tools/diag/test_aspectdetect`):
+testbar (`tools/diag/test_aspectdetect`). Die Schritte 4 und 5 sind zugleich die
+Gründe, die der optionale dritte Parameter herausgibt (`BarsTooWide`,
+`CentreTooDark`); Schritt 3 liefert `NoBars`, ein Nullbild oder ein Bild unter
+20 × 20 `Unusable`:
 
 1. Messband = mittlere 40 % der Bildhöhe (`0.30 h … 0.70 h`).
 2. Spalte gilt als schwarz, wenn ≥ 90 % der jeden zweiten abgetasteten Zeilen
@@ -169,6 +175,49 @@ testbar (`tools/diag/test_aspectdetect`):
 
 Der Schwellwert ist ein **Bild**-Wert (swscale-Ausgabe, Schwarz = 0), nicht der
 Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
+
+## Was der Detailbereich erfährt
+
+Seit `3c756b9b`..`833e4a46` erklären sich alle drei Analysen im Detailbereich
+des Fortschrittsdialogs, statt nur einen Zählerstand zu zeigen. Der Weg dorthin
+ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
+`TTAnalysisLog` → `AddProcessLine`"); hier nur, was für diese Karte zählt:
+
+- Jeder Worker hält einen `TTAnalysisLog` (`data/ttanalysislog.{h,cpp}`, kein
+  `QObject`), dessen Senke `onStatusReport(AddProcessLine, …)` ruft — der
+  einzige Statuszustand **ohne** Fortschrittswirkung. Kein `Step` wurde dafür
+  hinzugefügt oder verändert; belegt durch einen zeichengenauen Vergleich der
+  `Start`/`Step`/`Finished`-Folge gegen eine vor der Änderung gezogene
+  Aufzeichnung (`tools/diag/test_aspectscan` schreibt sie mit).
+- Ereigniszeilen sind gedeckelt (`resetCap()` zwischen den zwei Abschnitten des
+  Audio-Workers), Kopf- und Bilanzzeilen nicht. Was der Deckel schluckt, hängt
+  als Zahl an der Bilanz. Der Bildformat-Scan hält dafür **zwei** Protokollierer
+  auf derselben Senke (`7f472967`): `mLog` für Kopf, bestätigte Übergänge und
+  Bilanz (20 Zeilen), `mNoiseLog` für verworfene Kandidaten (10). Mit einem
+  gemeinsamen Budget konnte eine unruhige Aufnahme jede Zeile für Beinahe-Treffer
+  ausgeben, bevor ein einziger bestätigter Übergang geschrieben war — die
+  Übergänge sind aber das Ergebnis, die Verwürfe nur die Begründung.
+- **Der Bildformat-Scan hat keine eigene Bilanzzeile mehr**: seine Bilanz *ist*
+  die `Finished`-Meldung (`417c3aad`). Vorher standen beide da und sagten
+  dasselbe, und auf dem Abbruchpfad erschien die Bilanz im Bereich **nach** dem
+  Schlussstrich des Laufs, obwohl `operation()` sie zuerst absetzt. Die
+  Umordnung ist nicht aufgeklärt — die beiden anderen Worker senden dasselbe
+  Meldungspaar in richtiger Reihenfolge. Eine Meldung kann sich nicht selbst
+  überholen, damit ist der Punkt gegenstandslos; taucht der Effekt anderswo
+  auf, ist das hier der Anhaltspunkt.
+- Läufe, die von vornherein nichts finden **können**, sagen das: kein
+  MPEG-2-Strom für die Sequenzkopf-Analyse, keine AC3-Kopfdaten für die
+  Kanalwechsel-Erkennung (MP2 wird in `detectAudioChanges()` übersprungen —
+  Lücke sichtbar gemacht, nicht geschlossen), und alle acht Ausstiege der
+  Stille-Erkennung über `silenceUnavailable()`, das zugleich die sonst
+  irreführende Zeile „0 Bereiche gefunden" unterdrückt.
+- **Blind bleibt, wer gar nicht erst gebaut wird.** `onAnalyzeStreamPoints()`
+  legt einen Worker nur an, wenn seine Voraussetzung erfüllt ist; ohne
+  Tonspur, ohne Header-Liste (also bei H.264/H.265 für die Sequenzkopf-
+  Analyse) oder mit leerer Indexliste schweigt der Bereich zu dieser Analyse
+  vollständig. Offener Punkt: eine Zeile dafür müsste **vor** dem ersten
+  `Start` gesendet werden, und `TTCutMainWindow::onStatusReport` verwirft
+  alles, solange `progressBar == 0`.
 
 ## Fallstricke
 
@@ -265,5 +314,7 @@ Videobereichs-Y-Wert des Stroms (Schwarz ≈ 16).
 | `tools/diag/test_aspectscan` | `<datei> <fps> <stichprobe_s> [erwarteter_frame]` | Voll-Scan über H.264/H.265 |
 | `tools/diag/test_aspectscan_mpeg2` | `<datei> <stichprobe_s> [erwartete_anzahl]` | dito für MPEG-2 — **andere Argumentreihenfolge**, kein fps |
 | `tools/diag/test_pillarbox` | `<datei> [erster] [letzter] [schritt] [schwelle]` | Einzelbild-Klassifikation über den echten Dekodierpfad — **kein** fps-Argument |
+| `tools/diag/test_analysislog` | ohne Argumente | Deckelung, `resetCap()` und Positionsformat des Protokollierers |
+| `tools/diag/test_silence_unavailable` | `[datei_ohne_tonspur]` | zwei der acht Ausstiege der Stille-Erkennung: Begründung kommt, „0 Bereiche gefunden" bleibt weg |
 | `tools/diag/test_pool_abort` | `[anzahl] [millisekunden]` | Abbruch-Absturz aus `e247dbda` |
 | `tools/diag/test_task_cleanup_order` | `[wiederholungen]` | Aufräum-Reihenfolge aus `f8fe7dd6` — **braucht einen ASAN-Bau**, Aufrufzeile steht in der Datei |
