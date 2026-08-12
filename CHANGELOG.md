@@ -6,6 +6,23 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Changed
 
+- **The progress dialog's details pane now explains the landing-zone
+  analysis instead of only counting samples.** Each of the three analyses
+  logs the settings it is running with, every confirmed finding with its
+  timecode and frame number, and a closing summary. The pillarbox scan
+  additionally reports every candidate it discarded, with how long the run
+  held and how long it needed — so a stretch that looks like a format change
+  but was rejected is now visible instead of silently absent. The summary
+  breaks the samples down into 16:9, 4:3 pillarbox and "no statement", and
+  splits the latter by the reason it was rejected (bars too wide, centre too
+  dark, unusable). Runs that cannot find anything by construction now say so:
+  a stream that is not MPEG-2 for the sequence-header aspect check, an audio
+  track without AC3 headers for the channel-change check, a missing audio
+  header list. Previously all of these were indistinguishable from a run that
+  simply found nothing. Progress bar, percentage and remaining-time estimate
+  are unaffected — the new output uses a status kind that carries no progress
+  meaning.
+
 - **The application now builds against Qt 6 (6.7 minimum, developed against
   6.10) instead of Qt 5.15.** `find_package(Qt6 ...)` replaces the Qt5
   lookup in `CMakeLists.txt`; the linked components are Core, Widgets, Gui,

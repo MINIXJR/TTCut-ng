@@ -17,6 +17,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QLocale>
 
 TTAspectScanTask::TTAspectScanTask(const QString& videoFilePath,
                                    TTAVTypes::AVStreamType streamType,
@@ -35,7 +36,10 @@ TTAspectScanTask::TTAspectScanTask(const QString& videoFilePath,
     mSampleStride(qMax(1, qRound(sampleSeconds * (double)(frameRate > 0.0f ? frameRate : 25.0f)))),
     mLog([this](const QString& s) {
            onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
-         }, 20)
+         }, 20),
+    mNoiseLog([this](const QString& s) {
+           onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
+         }, 10)
 {
   // See kHysteresisWindowSeconds: clamp defensively so a stride wider than
   // the hysteresis window can never silently defeat it. The shipped UI caps
@@ -132,7 +136,7 @@ void TTAspectScanTask::operation()
     // setupWorkers() already logs the path-specific failure reason.
     log->errorMsg(__FILE__, __LINE__,
                   QString("TTAspectScanTask: failed to open decoders"));
-    mLog.line(tr("Pillarbox scan: failed to open decoders - skipped"));
+    mLog.line(tr("Aspect format analysis: failed to open decoders - skipped"));
     onStatusReport(StatusReportArgs::Finished, tr("Aspect format analysis failed"), 0);
     emit pointsDetected(points);
     return;
@@ -152,11 +156,11 @@ void TTAspectScanTask::operation()
   const int plannedSamples = qMax(1, mFrameCount / mSampleStride);
   onStatusReport(StatusReportArgs::Start, tr("Aspect format analysis..."), plannedSamples);
 
-  mLog.line(tr("Pillarbox scan: threshold %1, sample every %2 s, "
+  mLog.line(tr("Aspect format: threshold %1, sample every %2 s, "
                "hysteresis %3 s, %4 samples planned")
                 .arg(mLuminanceThreshold)
-                .arg(QString::number(mSampleStride / (double)mFrameRate, 'f', 1))
-                .arg(QString::number(kHysteresisWindowSeconds, 'f', 0))
+                .arg(QLocale().toString(mSampleStride / (double)mFrameRate, 'f', 1))
+                .arg(QLocale().toString(kHysteresisWindowSeconds, 'f', 0))
                 .arg(plannedSamples));
 
   TTAspectHysteresis hysteresis(qMax(1, qRound(kHysteresisWindowSeconds * mFrameRate)));
@@ -199,11 +203,22 @@ void TTAspectScanTask::operation()
       TTAspectCandidate discarded{};
       if (hysteresis.takeDiscardedCandidate(discarded)) {
         mCountDiscarded++;
-        mLog.event(tr("%1: candidate %2 discarded - held %3 s, needs %4 s")
-                       .arg(ttFormatStreamPosition(discarded.firstFrame, mFrameRate))
-                       .arg(discarded.toPillarbox ? QString("4:3pb") : QString("16:9"))
-                       .arg(QString::number(discarded.heldFrames / (double)mFrameRate, 'f', 1))
-                       .arg(QString::number(kHysteresisWindowSeconds, 'f', 0)));
+        // A run that held for zero frames is a single sample out of line - a
+        // classifier outlier, not a near miss at a format change. Reporting
+        // those spends the event budget on noise: a 1 s sample interval on a
+        // 90 min recording produced six of them, a third of the budget, and
+        // on busier material they would crowd out the confirmed transitions
+        // entirely. They stay in the summary, counted separately, so the
+        // number remains honest.
+        if (discarded.heldFrames > 0) {
+          mNoiseLog.event(tr("%1: candidate %2 discarded - held %3 s, needs %4 s")
+                         .arg(ttFormatStreamPosition(discarded.firstFrame, mFrameRate))
+                         .arg(discarded.toPillarbox ? QString("4:3pb") : QString("16:9"))
+                         .arg(QLocale().toString(discarded.heldFrames / (double)mFrameRate, 'f', 1))
+                         .arg(QLocale().toString(kHysteresisWindowSeconds, 'f', 0)));
+        } else {
+          mCountDiscardedOutliers++;
+        }
       }
 
       if (confirmed) {
@@ -216,8 +231,8 @@ void TTAspectScanTask::operation()
             0.0f, 0.0f));
         mLog.event(tr("%1: confirmed %2 (refined from sample frame %3)")
                        .arg(ttFormatStreamPosition(marker, mFrameRate))
-                       .arg(transition.toPillarbox ? QString("16:9 -> 4:3pb")
-                                                   : QString("4:3pb -> 16:9"))
+                       .arg(transition.toPillarbox ? QString("16:9 \u2192 4:3pb")
+                                                   : QString("4:3pb \u2192 16:9"))
                        .arg(transition.firstFrame));
         if (TTSettings::instance()->logCutPipeline())
             qDebug() << "AspectScan: transition at frame" << marker
@@ -246,26 +261,36 @@ void TTAspectScanTask::operation()
 
   const int noStatement = mCountBarsTooWide + mCountCentreDark + mCountUnusable;
   QString summary = mIsAborted
-      ? tr("Pillarbox scan cancelled after %1 of %2 samples")
+      ? tr("Aspect format analysis cancelled: %1 of %2 samples")
             .arg(mCheckedSamples).arg(plannedSamples)
-      : tr("Pillarbox scan: %1 samples").arg(mCheckedSamples);
+      : tr("Aspect format analysis complete: %1 samples").arg(mCheckedSamples);
 
+  // The counts trail their nouns ("transitions: 1") instead of leading them
+  // ("1 transitions"): this line carries eight numbers, so Qt's %n plural
+  // mechanism - which allows exactly one per string - is not available here.
   summary += tr(" - %1x 16:9, %2x 4:3pb, %3x no statement "
                 "(%4 bars too wide, %5 centre too dark, %6 unusable); "
-                "%7 transitions, %8 candidates discarded")
+                "transitions: %7, discarded candidates: %8 "
+                "(thereof %9 single-sample outliers)")
                  .arg(mCountNoPillarbox).arg(mCountPillarbox).arg(noStatement)
                  .arg(mCountBarsTooWide).arg(mCountCentreDark).arg(mCountUnusable)
-                 .arg(points.size()).arg(mCountDiscarded);
+                 .arg(points.size()).arg(mCountDiscarded).arg(mCountDiscardedOutliers);
 
-  if (mLog.suppressed() > 0)
-    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+  const int suppressed = mLog.suppressed() + mNoiseLog.suppressed();
+  if (suppressed > 0)
+    summary += tr(" (%1 more events suppressed)").arg(suppressed);
 
-  mLog.line(summary);
-
-  onStatusReport(StatusReportArgs::Finished,
-                 mIsAborted ? tr("Aspect format analysis cancelled")
-                            : tr("Aspect format analysis complete"),
-                 plannedSamples);
+  // The summary IS the closing message, rather than a detail line just before
+  // it. Two reasons, both seen in the GUI acceptance run: sent separately, the
+  // short closing line and the summary said the same thing twice ("Aspect
+  // format analysis cancelled" followed by "Aspect format analysis cancelled
+  // after 2481 of 5452 samples"); and on the cancel path the summary arrived
+  // in the pane AFTER the closing bracket of the whole scan, although it is
+  // emitted first here. One message cannot overtake itself.
+  // Finished only appends a detail line (TTProgressBar::onSetProgress), it
+  // does not set the action line, so a long text is fine. The value stays
+  // plannedSamples - the progress domain is untouched.
+  onStatusReport(StatusReportArgs::Finished, summary, plannedSamples);
 
   // Partial results are delivered on cancel; the widget labels the list
   // as incomplete.

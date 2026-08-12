@@ -43,6 +43,13 @@ public slots:
 
 private:
   QList<TTStreamPoint> detectSilencePoints();
+
+  //! Report why silence detection could not run, remember that it did not,
+  //! and return an empty result. Without this the caller would go on to
+  //! print "0 regions found", which is indistinguishable from a track that
+  //! genuinely holds no silence - the very ambiguity this pane exists to
+  //! remove.
+  QList<TTStreamPoint> silenceUnavailable(const QString& reason);
   QList<TTStreamPoint> detectAudioChanges();
   void collectSilenceResult(AVFrame* filtFrame, QList<TTStreamPoint>& results);
 
@@ -53,6 +60,7 @@ private:
   float                mSilenceMinDuration;
   bool                 mDetectAudioChange;
   TTAudioHeaderList*   mAudioHeaderList;
+  bool                 mSilenceEngineFailed = false;
   TTAnalysisLog        mLog;
 };
 

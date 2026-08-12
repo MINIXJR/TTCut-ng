@@ -390,6 +390,63 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Detailausgabe der Landezonen-Analyse war unvollständig** → **GELÖST
+  (2026-08-11, branch `feature/landezonen-detailausgabe`,
+  `3c756b9b`..`8714169f` + Übersetzungs-/Doku-Commit)**
+  - War: Der Detailbereich zeigte während der Analyse nur einen Zählerstand
+    (`Aspect format: N of M samples`, alle 20 Proben). Ob etwas erkannt wurde,
+    und vor allem *warum nicht*, war nicht ablesbar — ein Lauf ohne Fund war
+    nicht von einem Lauf zu unterscheiden, in dem die Erkennung gar nicht
+    ansprang. Die interessanten Zahlen existierten bereits, gingen aber nur
+    per `qDebug()` hinter `logCutPipeline()` heraus, also im Normalbetrieb
+    nirgendwohin.
+  - Betroffen waren alle **drei** parallel laufenden Worker, nicht nur der im
+    TODO genannte Pillarbox-Scan: `TTAspectScanTask`,
+    `TTStreamPointVideoWorker` (Seitenverhältnis aus MPEG-2-Sequenzköpfen)
+    und `TTStreamPointAudioWorker` (Stille, Tonformatwechsel).
+  - Umsetzung: neuer GUI-freier Protokollierer `TTAnalysisLog`
+    (`data/ttanalysislog.{h,cpp}`, Deckelung bei 20 Ereigniszeilen je
+    Abschnitt, Positionsformat wie in der Landezonen-Liste). Transport über
+    `StatusReportArgs::AddProcessLine` — der einzige Statuszustand ohne
+    Fortschrittswirkung: er passiert `TTThreadTask` und `TTThreadTaskPool`
+    ohne Berührung der Schrittzähler und erreicht `TTProgressBar` nur als
+    `appendDetailLine()`. Dafür geben zwei bestehende Bausteine erstmals
+    heraus, was sie bisher verschluckten: `classifyAspectSample()` seinen
+    Ablehnungsgrund (`TTAspectReason`, optionaler Ausgabeparameter mit
+    Vorgabewert, damit die ~15 bestehenden Aufrufe gültig bleiben) und
+    `TTAspectHysteresis` ihre verworfenen Kandidaten
+    (`takeDiscardedCandidate()`, `feed()`-Signatur unverändert).
+  - **Beleg für „Fortschritt unverändert":** Vor der ersten Codeänderung
+    wurde mit `tools/diag/test_aspectscan` eine Referenzaufzeichnung aller
+    Statusmeldungen über `03x01_-_Drunter_und_drüber.264` gezogen (45 Zeilen:
+    1× `Start` mit Wert 899, 43× `Step`, 1× `Finished`). Nach der Änderung
+    war derselbe Vergleich **zeichengleich leer**; nur `AddProcessLine`-Zeilen
+    kamen hinzu. Der Harness schreibt die Meldungen seit `3c756b9b` selbst
+    mit (`STATUS|<state>|<value>|<msg>`), der Vergleich ist also wiederholbar.
+  - **Nebenbefund, den die neue Ausgabe sofort beantwortete:** Der Lauf über
+    `03x01` findet genau *einen* Übergang (16:9 → 4:3pb bei 00:16:34). Ob ein
+    Rückübergang fehlte, war vorher nicht zu klären. Die Bilanz zeigt
+    192 Proben 16:9 (≈ 16 min, exakt bis zum Übergang) und 669 Proben 4:3pb
+    (≈ 56 min): die Aufnahme endet im 4:3-Format, es fehlt nichts.
+  - **Sichtbar gemachte Lücke, nicht geschlossen:** `detectAudioChanges()`
+    wertet ausschließlich AC3-`acmod` aus, MP2-Kopfdaten werden übersprungen
+    (`ttstreampoint_audioworker.cpp`, Kommentar „Skip for now"). Bei einer
+    MP2-Tonspur meldet der Dialog das jetzt ausdrücklich, statt wie ein Lauf
+    ohne Funde auszusehen.
+  - Prüfmittel: `tools/diag/test_analysislog` (neu; Deckelung, `resetCap()`,
+    Positionsformat inkl. Bildrate 0), `tools/diag/test_aspectdetect`
+    (erweitert: alle fünf Ablehnungsgründe, verworfene Kandidaten inkl. des
+    Einzelproben-Laufs mit Haltedauer 0 — dieser Fall war zunächst nur
+    `(void)`-gecastet und wurde in einer Nachbesserungsrunde nachgezogen,
+    mit Gegenprobe: 7 Fehlschläge bei deaktivierter Aufzeichnung),
+    `tools/diag/test_streampoint_order` (gegen echtes MPEG-2-Material mit
+    4:3→16:9-Wechsel, Markerpositionen 20305/99695 unverändert).
+  - Falle für später: `lupdate` **muss** `ui/` mit scannen. Ohne dieses
+    Verzeichnis meldet es 267 Oberflächentexte als verschwunden, und ein
+    `-no-obsolete` im selben Lauf hätte sie gelöscht. Aus demselben Grund
+    wurde `-no-obsolete` hier bewusst weggelassen — die Datei trägt 64
+    Alteinträge, deren Aufräumen nicht in diesen Zweig gehört.
+
 - **„Abbrechen" wirkte nur auf den MPEG-2-Videoschnitt** → **GELÖST
   (2026-08-10, branch `feature/cut-abort`, `f5a22762`..`f9352969`, 17 Commits)**
   - War: Der Abbruch erreichte ausschließlich Pool-Aufgaben. Der H.26x-Schnitt

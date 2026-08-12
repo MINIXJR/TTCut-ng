@@ -9,6 +9,7 @@
 
 #include "ttanalysislog.h"
 
+#include <QCoreApplication>
 #include <QTime>
 #include <QtGlobal>
 
@@ -46,11 +47,15 @@ int TTAnalysisLog::suppressed() const
 
 QString ttFormatStreamPosition(int frame, float frameRate)
 {
+  // A free function in a non-QObject file cannot use tr(); without the
+  // explicit context these two strings would never reach the .ts file at
+  // all, and the frame number would stay English inside an otherwise
+  // translated line.
   if (frameRate <= 0.0f)
-    return QString("frame %1").arg(frame);
+    return QCoreApplication::translate("TTAnalysisLog", "frame %1").arg(frame);
 
   const int ms = qRound(frame / frameRate * 1000.0f);
-  return QString("%1 (frame %2)")
+  return QCoreApplication::translate("TTAnalysisLog", "%1 (frame %2)")
       .arg(QTime(0, 0).addMSecs(ms).toString("hh:mm:ss"))
       .arg(frame);
 }

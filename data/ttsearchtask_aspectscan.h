@@ -78,7 +78,14 @@ private:
   int   mCountCentreDark  = 0;
   int   mCountUnusable    = 0;   //!< incl. failed decodes
   int   mCountDiscarded   = 0;
+  int   mCountDiscardedOutliers = 0;   //!< thereof single-sample outliers
+  //! Findings (header, confirmed transitions, summary). Confirmed transitions
+  //! are the result of the scan, so they get their own budget: sharing one
+  //! with the discarded candidates let a noisy recording spend every line on
+  //! near misses before a single transition was printed.
   TTAnalysisLog mLog;
+  //! Discarded candidate runs - diagnosis, deliberately the smaller budget.
+  TTAnalysisLog mNoiseLog;
 };
 
 #endif // TTSEARCHTASK_ASPECTSCAN_H

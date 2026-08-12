@@ -204,7 +204,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
   } else if (results.isEmpty()) {
     summary += tr(" - no sequence header with aspect information");
   } else {
-    summary += tr(" - %1 changes").arg(results.size());
+    summary += tr(" - %n change(s)", "", results.size());
   }
   if (mLog.suppressed() > 0)
     summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());

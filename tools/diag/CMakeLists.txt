@@ -164,6 +164,22 @@ function(diag_tool name)
   endif()
 endfunction()
 
+set(SILENCE_SRC
+  ${ROOT}/data/ttstreampoint_audioworker.cpp
+  ${ROOT}/data/ttstreampoint.cpp
+  ${ROOT}/data/ttanalysislog.cpp
+  ${ROOT}/common/ttthreadtask.cpp
+  ${ROOT}/common/ttmessagelogger.cpp
+  ${ROOT}/common/ttsettings.cpp
+  ${ROOT}/common/istatusreporter.cpp
+  ${ROOT}/avstream/ttavheader.cpp
+  ${ROOT}/avstream/ttheaderlist.cpp
+  ${ROOT}/avstream/ttaudioheaderlist.cpp
+  ${ROOT}/avstream/ttac3audioheader.cpp
+  ${ROOT}/avstream/ttcommon.cpp
+  ${ROOT}/common/ttexception.cpp
+  ${ROOT}/avstream/ttfilebuffer.cpp)
+
 # --- default TOOLS set (built by the `diag` umbrella target) ---
 diag_tool(test_nalu_parser        SOURCES ${NALU_FULL_SRC})
 diag_tool(test_au_types           SOURCES ${NALU_FULL_SRC})
@@ -179,6 +195,7 @@ diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
 diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
 diag_tool(test_aspectdetect       SOURCES ${ROOT}/data/ttaspectdetect.cpp)
 diag_tool(test_analysislog        SOURCES ${ROOT}/data/ttanalysislog.cpp)
+diag_tool(test_silence_unavailable AV SOURCES ${SILENCE_SRC})
 diag_tool(test_aspectscan  AV MPEG2 SOURCES ${ASPECTSCAN_SRC})
 diag_tool(test_aspectscan_mpeg2 AV MPEG2 SOURCES ${MPEG2ASPECTSCAN_SRC})
 diag_tool(test_pool_abort         SOURCES ${POOLABORT_SRC})
@@ -248,7 +265,8 @@ add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
-  test_analysislog test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
+  test_analysislog test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
+  test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_window_geometry
   test_progressestimator)
 

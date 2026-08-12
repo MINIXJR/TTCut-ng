@@ -63,20 +63,24 @@ void TTStreamPointAudioWorker::operation()
     onStatusReport(StatusReportArgs::Step, tr("Silence detection..."), mStepCount);
     mLog.line(tr("Silence detection: threshold %1 dB, min duration %2 s")
                   .arg(mSilenceThresholdDb)
-                  .arg(QString::number(mSilenceMinDuration, 'f', 1)));
+                  .arg(QLocale().toString(mSilenceMinDuration, 'f', 1)));
     QList<TTStreamPoint> silencePoints = detectSilencePoints();
     allPoints.append(silencePoints);
     if (TTSettings::instance()->logCutPipeline())
         qDebug() << "StreamPointAudio: Found" << silencePoints.size() << "silence regions";
     // Silence detection decodes the whole audio track, so it is a realistic
     // place to hit Cancel - the summary has to say the number is partial.
-    QString silenceSummary = mIsAborted
-        ? tr("Silence detection cancelled: %1 regions found so far")
-              .arg(silencePoints.size())
-        : tr("Silence detection: %1 regions found").arg(silencePoints.size());
-    if (mLog.suppressed() > 0)
-      silenceSummary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
-    mLog.line(silenceSummary);
+    // Nothing to summarise when the engine never ran - silenceUnavailable()
+    // has already said why, and "0 regions found" would contradict it.
+    if (!mSilenceEngineFailed) {
+      QString silenceSummary = mIsAborted
+          ? tr("Silence detection cancelled: %n region(s) found so far", "",
+               silencePoints.size())
+          : tr("Silence detection: %n region(s) found", "", silencePoints.size());
+      if (mLog.suppressed() > 0)
+        silenceSummary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+      mLog.line(silenceSummary);
+    }
     mLog.resetCap();   // the format section gets its own budget
     mStepCount = 1;
   }
@@ -108,6 +112,13 @@ void TTStreamPointAudioWorker::onUserAbort()
   mIsAborted = true;
 }
 
+QList<TTStreamPoint> TTStreamPointAudioWorker::silenceUnavailable(const QString& reason)
+{
+  mSilenceEngineFailed = true;
+  mLog.line(tr("Silence detection skipped: %1").arg(reason));
+  return QList<TTStreamPoint>();
+}
+
 // ---------------------------------------------------------------------------
 // Silence detection via libavfilter silencedetect
 // ---------------------------------------------------------------------------
@@ -121,24 +132,26 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
                            nullptr, nullptr) < 0) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("StreamPointAudio: Cannot open %1").arg(mAudioFilePath));
-    return results;
+    return silenceUnavailable(tr("the audio file could not be opened"));
   }
   if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("the stream information could not be read"));
   }
 
   int audioIdx = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
   if (audioIdx < 0) {
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("the file contains no audio stream"));
   }
 
   AVStream* aStream = fmtCtx->streams[audioIdx];
   const AVCodec* codec = avcodec_find_decoder(aStream->codecpar->codec_id);
   if (!codec) {
+    const QString codecName =
+        QString::fromUtf8(avcodec_get_name(aStream->codecpar->codec_id));
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("no decoder available for %1").arg(codecName));
   }
 
   AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
@@ -146,7 +159,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
     avcodec_free_context(&codecCtx);
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("the audio decoder could not be opened"));
   }
 
   // Build filter graph: abuffersrc -> silencedetect -> abuffersink
@@ -178,7 +191,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     avfilter_graph_free(&filterGraph);
     avcodec_free_context(&codecCtx);
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("the audio filter input could not be created"));
   }
 
   AVFilterInOut* inputs = avfilter_inout_alloc();
@@ -207,7 +220,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     avfilter_graph_free(&filterGraph);
     avcodec_free_context(&codecCtx);
     avformat_close_input(&fmtCtx);
-    return results;
+    return silenceUnavailable(tr("the silence filter could not be configured"));
   }
   avfilter_inout_free(&inputs);
   avfilter_inout_free(&outputs);
@@ -223,7 +236,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     avcodec_free_context(&codecCtx);
     avfilter_graph_free(&filterGraph);
     avformat_close_input(&fmtCtx);
-    return {};
+    return silenceUnavailable(tr("not enough memory for the audio buffers"));
   }
 
   while (av_read_frame(fmtCtx, pkt) >= 0 && !mIsAborted) {
@@ -316,12 +329,17 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
     // Update the last silence point (created by silence_start) with duration
     TTStreamPoint& last = results.last();
     if (last.type() == StreamPointType::Silence) {
+      // Display value, not a filter argument: follow the user's locale, like
+      // the spin box the threshold comes from. Only the avfilter argument
+      // above must stay QLocale::c(). The description is stored in the
+      // project file but read back as plain text (ttcutprojectdata.cpp),
+      // never parsed as a number, so a comma is safe there.
       last.setDescription(tr("Silence (%1 dB, %2s)")
         .arg(mSilenceThresholdDb)
-        .arg(QLocale::c().toString(duration, 'f', 1)));
+        .arg(QLocale().toString(duration, 'f', 1)));
       mLog.event(tr("%1: silence %2 s")
                      .arg(ttFormatStreamPosition(last.frameIndex(), mVideoFrameRate))
-                     .arg(QLocale::c().toString(duration, 'f', 1)));
+                     .arg(QLocale().toString(duration, 'f', 1)));
     }
   }
 }
@@ -387,7 +405,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
   QString summary = tr("Audio format detection: %1 AC3 frames").arg(ac3Headers);
   summary += results.isEmpty()
       ? tr(" - channel layout constant, no changes")
-      : tr(" - %1 changes").arg(results.size());
+      : tr(" - %n change(s)", "", results.size());
   if (mLog.suppressed() > 0)
     summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
   mLog.line(summary);
