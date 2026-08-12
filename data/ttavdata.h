@@ -307,6 +307,31 @@ class TTAVData : public QObject
     qint64  mLastCutSourceMs = 0;
     qint64  mLastCutResultMs = 0;
 
+    //! How a cut operation ended.
+    enum class CutOutcome { Success, Failed, Cancelled };
+
+    //! Closes a cut operation: records the outcome, then reports it.
+    //!
+    //! The order is the point. TTCutMainWindow::onStatusReport reads
+    //! lastCutError() while handling Exit to decide whether the run was
+    //! regular, and TTProgressEstimator writes a calibration factor for a
+    //! regular one. Setting the field after the signal - which the H.26x path
+    //! did - makes every failed cut look regular and teaches the estimator
+    //! from a broken run.
+    //!
+    //! Does NOT touch mCutOperationActive: which path sets and which consumes
+    //! that flag is delicate (see docs/code-map/progress-reporting.md) and
+    //! stays with the caller.
+    //!
+    //! message   - text of the closing bracket (progress window).
+    //! errorText - text for mLastCutError (error dialog); when empty, the
+    //!             bracket text is used, which is what callers with only one
+    //!             wording pass. Some engines (e.g. TTH26xCutTask) keep a
+    //!             longer error-dialog text separate from the shorter
+    //!             progress-window text - pass both so neither is lost.
+    void finishCutOperation(CutOutcome outcome, const QString& message,
+                             const QString& errorText = QString());
+
     // True while a final cut is running (onDoCut MPEG-2 branch until
     // onCutFinished/onCutAborted, doH264Cut until onH26xCutFinished).
     // Suppresses the thread pool's own

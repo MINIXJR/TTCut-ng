@@ -205,9 +205,26 @@ void TTAudioOnlyCutTask::runAudioCut()
 
   if (trackFiles.isEmpty()) {
     log->errorMsg(__FILE__, __LINE__, "Audio-only cut produced no output files");
+    mError         = TTAVData::tr("Audio-only cut produced no output files");
     mOutputSummary = TTAVData::tr("Audio cut failed");
     mExitMessage   = TTAVData::tr("Audio cut failed");
     return;
+  }
+
+  // Some, but not all, requested tracks failed (cutAudioTracks() already
+  // logged an errorMsg() per failed track - see TTAVData::cutAudioTracks()).
+  // trackFiles.isEmpty() above already covers "all failed"; the two checks
+  // are mutually exclusive by construction (that branch returns), so this
+  // one only ever fires on a genuine partial failure and never overwrites
+  // or is overwritten by the all-failed message.
+  const int requestedTrackCount = mpAVItem->audioCount();
+  if (trackFiles.size() < requestedTrackCount) {
+    log->errorMsg(__FILE__, __LINE__,
+                  QString("Audio-only cut: only %1 of %2 track(s) produced an output file")
+                      .arg(trackFiles.size()).arg(requestedTrackCount));
+    mError       = TTAVData::tr("Only %1 of %2 audio track(s) could be cut")
+                       .arg(trackFiles.size()).arg(requestedTrackCount);
+    mExitMessage = TTAVData::tr("Audio cut failed");
   }
 
   // Dispatch by chosen output format (working set, per-cut/per-project;
@@ -238,7 +255,10 @@ void TTAudioOnlyCutTask::runAudioCut()
         if (mMkvProvider.wasAborted() || cancelRequested()) abortNow();
         log->errorMsg(__FILE__, __LINE__,
                       QString("MKA mux failed: %1").arg(mMkvProvider.lastError()));
-        mOutputSummary = TTAVData::tr("MKA mux failed: %1").arg(mMkvProvider.lastError());
+        const QString muxError = TTAVData::tr("MKA mux failed: %1").arg(mMkvProvider.lastError());
+        mError         = muxError;
+        mOutputSummary = muxError;
+        mExitMessage   = TTAVData::tr("Audio cut failed");
       } else {
         log->infoMsg(__FILE__, __LINE__, QString("Audio-only cut complete: %1").arg(mParams.mkaOutputPath));
         for (const QString& f : trackFiles) QFile::remove(f);
@@ -257,10 +277,14 @@ void TTAudioOnlyCutTask::runAudioCut()
     }
   }
 
-  // Quirk carried over from the synchronous version on purpose (not "fixed"
-  // here): the closing Exit text is the same success wording even when the
-  // MKA mux above failed - only outputSummary() then differs. No poll point
+  // Exit bracket text: both failure branches above (partial-track failure,
+  // failed MKA mux) already set mExitMessage to the short "Audio cut failed"
+  // form - same text the "no output files at all" branch uses via its own
+  // early return. Only fall back to the success wording here when neither
+  // branch ran; mError/mOutputSummary keep carrying the reason-specific
+  // detail regardless of which of the two set mExitMessage. No poll point
   // after this, deliberately: the run is complete and there is nothing left
   // to cancel (same rule as TTH26xCutTask/TTMuxTask after a successful mux).
-  mExitMessage = TTAVData::tr("Audio cut complete");
+  if (mExitMessage.isEmpty())
+    mExitMessage = TTAVData::tr("Audio cut complete");
 }

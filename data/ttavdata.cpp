@@ -1628,7 +1628,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     delete cutVideoTask;
     cutVideoTask = nullptr;
     mCutOperationActive = false;
-    emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+    finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
     return;
   }
 
@@ -1827,20 +1827,8 @@ void TTAVData::onH26xCutFinished()
   mpH26xCutTask->deleteLater();
   mpH26xCutTask = 0;
 
-  // Exit is emitted BEFORE mLastCutError is recorded, which is the order the
-  // synchronous version had. TTCutMainWindow::onStatusReport reads
-  // lastCutError() while handling Exit to decide whether the run counts as a
-  // regular finish, so a failed H.26x cut currently arrives there as a regular
-  // one. Preserved deliberately (this task's gate is behavioural equality);
-  // changing it is a separate decision. Note the MPEG-2 path does NOT have the
-  // quirk - onCutFinished() sets mLastCutError during the mux and emits Exit
-  // afterwards - and doAudioOnlyCut() never assigns mLastCutError at all, it
-  // reports failures through mLastCutOutputSummary.
-  emit statusReport(0, StatusReportArgs::Exit, exitMessage, 0);
-
   if (!error.isEmpty()) {
-    mLastCutError = error;
-    emit cutFinished();
+    finishCutOperation(CutOutcome::Failed, exitMessage, error);
     return;
   }
 
@@ -1856,9 +1844,57 @@ void TTAVData::onH26xCutFinished()
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "About to emit cutFinished() signal, cutVideoName =" << TTSettings::instance()->cutVideoName();
-  emit cutFinished();
+  finishCutOperation(CutOutcome::Success, exitMessage);
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "cutFinished() signal emitted";
+}
+
+//! Closes a cut operation: records the outcome, then reports it. See the
+//! header comment on TTAVData::finishCutOperation for the ordering rationale.
+void TTAVData::finishCutOperation(CutOutcome outcome, const QString& message,
+                                   const QString& errorText)
+{
+  // Local copy, taken before anything below can mutate mLastCutError: at
+  // least one caller (onCutFinished(), MPEG-2 path) passes mLastCutError
+  // itself as `message` (finishCutOperation(Failed, mLastCutError)), which
+  // binds the reference to the very member the next few lines assign to.
+  // Harmless today (the assignment below is then effectively a = a), but a
+  // reference that can alias its own future write target is fragile - copy
+  // it out instead of relying on that not mattering.
+  const QString msg = message;
+
+  // 1. Record the outcome BEFORE any signal - see the header comment.
+  //    errorText carries the longer error-dialog wording when the caller has
+  //    one; otherwise the bracket text doubles as the error text.
+  if (outcome == CutOutcome::Failed)
+    mLastCutError = errorText.isEmpty() ? msg : errorText;
+  else if (outcome == CutOutcome::Success)
+    mLastCutError.clear();
+  // Cancelled leaves the field untouched. This is meant for a deliberate
+  // user abort, but onCutAborted() - the only caller that passes Cancelled -
+  // is reached today by genuine errors too: TTThreadTask::run()'s
+  // catch(TTException) sends the same aborted(this) signal as its
+  // catch(TTAbortException) (see onCutAborted()'s own comment at
+  // :2285-2293). Telling the two apart needs a second, reason-carrying
+  // signal from TTThreadTask - not yet added; see TODO.md, Medium Priority,
+  // "Eine echte TTException ... wird als Cut cancelled gemeldet". Until
+  // then, a previously recorded mLastCutError can survive a run that was
+  // actually a real failure misreported as Cancelled.
+
+  // 2. Report it.
+  emit statusReport(0,
+      outcome == CutOutcome::Cancelled ? StatusReportArgs::Canceled
+                                       : StatusReportArgs::Exit,
+      msg, 0);
+
+  // 3. cutFinished() follows the outcome, not a parameter. Measured on the
+  //    pre-change tree: every Exit site emitted it (ttavdata.cpp:1843, :1859,
+  //    :2210, :2405), no Canceled site did (:1631, :2089, :2281). The
+  //    coupling is exhaustive, so a per-caller flag would carry the same
+  //    derivable value everywhere. Should a future path need to differ, add
+  //    the parameter then.
+  if (outcome != CutOutcome::Cancelled)
+    emit cutFinished();
 }
 
 //! Audio video cut finished
@@ -2047,6 +2083,8 @@ void TTAVData::onCutFinished()
         }
 
         const bool mplexAborted = mplexProvider->wasAborted();
+        if (!mplexProvider->succeeded())
+          mLastCutError = mplexProvider->lastError();
         delete mplexProvider;
 
         if (mplexAborted) {
@@ -2086,7 +2124,7 @@ void TTAVData::onCutFinished()
           // pool run that ended just before this slot. Written out so the
           // bracket state is stated locally instead of inferred.
           mCutOperationActive = false;
-          emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+          finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
           return;
         }
       }
@@ -2205,9 +2243,10 @@ void TTAVData::finishMpeg2Cut()
   // own status brackets and report the single final Exit (success or the
   // recorded error text).
   mCutOperationActive = false;
-  emit statusReport(0, StatusReportArgs::Exit,
-      mLastCutError.isEmpty() ? tr("Cut complete") : mLastCutError, 0);
-  emit cutFinished();
+  if (mLastCutError.isEmpty())
+    finishCutOperation(CutOutcome::Success, tr("Cut complete"));
+  else
+    finishCutOperation(CutOutcome::Failed, mLastCutError);
 }
 
 void TTAVData::onCutAborted()
@@ -2278,7 +2317,7 @@ void TTAVData::onCutAborted()
   // this slot and must still see the flag set to suppress its own "exiting
   // thread pool" Exit. onThreadPoolExit consumes (resets) the flag.
   if (mCutOperationActive) {
-    emit statusReport(0, StatusReportArgs::Canceled, tr("Cut cancelled"), 0);
+    finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
   }
 }
 
@@ -2387,10 +2426,11 @@ void TTAVData::onAudioOnlyCutFinished()
   const QString exitMessage   = mpAudioOnlyCutTask->exitMessage();
   const QString outputSummary = mpAudioOnlyCutTask->outputSummary();
   const QList<float> drifts   = mpAudioOnlyCutTask->drifts();
-  // lastError() is part of the shape shared with the other cut tasks but
-  // stays unused here: doAudioOnlyCut() never assigned TTAVData::
-  // mLastCutError, only mLastCutOutputSummary - preserved as-is (see
-  // TTAudioOnlyCutTask::lastError()).
+  // Empty on success and on a deliberate abort; set to a reason-carrying text
+  // by TTAudioOnlyCutTask::runAudioCut() on a genuine failure (no track
+  // produced an output file, or the MKA mux failed) - see lastError() in
+  // ttaudioonlycuttask.h.
+  const QString error         = mpAudioOnlyCutTask->lastError();
 
   mpAudioOnlyCutTask->deleteLater();
   mpAudioOnlyCutTask = 0;
@@ -2401,8 +2441,10 @@ void TTAVData::onAudioOnlyCutFinished()
   emit cutAudioDriftCalculated(drifts);
 
   mLastCutOutputSummary = outputSummary;
-  emit statusReport(0, StatusReportArgs::Exit, exitMessage, 0);
-  emit cutFinished();
+  if (error.isEmpty())
+    finishCutOperation(CutOutcome::Success, exitMessage);
+  else
+    finishCutOperation(CutOutcome::Failed, exitMessage, error);
 }
 
 // This forwarder is reached from two kinds of caller: the one remaining

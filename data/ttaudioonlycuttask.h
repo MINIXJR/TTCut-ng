@@ -53,16 +53,29 @@ class TTAudioOnlyCutTask : public TTThreadTask
     // Results, valid after the pool's exit signal (worker done):
     //! Descriptive result text (mLastCutOutputSummary in TTAVData).
     QString      outputSummary() const { return mOutputSummary; }
-    //! Empty on every path this task takes today: the synchronous
-    //! doAudioOnlyCut() it replaces never assigned TTAVData::mLastCutError,
-    //! only mLastCutOutputSummary - that quirk is carried forward unchanged
-    //! (see operation()). Kept for interface parity with the other cut tasks.
+    //! Empty on success and on a deliberate user abort (TTAbortException
+    //! bypasses every assignment site below via abortNow()/abortIfRequested()
+    //! - see runAudioCut()). Set to a translatable, reason-carrying text on a
+    //! genuine failure: no track produced an output file, only some of the
+    //! requested tracks did (the other tracks' individual errorMsg()s from
+    //! TTAVData::cutAudioTracks() do not reach here on their own - this is
+    //! what surfaces that they happened), or the MKA mux failed. The first
+    //! two are mutually exclusive by construction; either can still be
+    //! overwritten by the MKA-mux-failure text below it if that stage also
+    //! fails (single field, most-recent genuine failure wins - same rule
+    //! outputSummary() below already followed before this task). This field
+    //! is what TTAVData::onAudioOnlyCutFinished() checks via isEmpty() to
+    //! decide CutOutcome::Success vs. Failed.
     QString      lastError()     const { return mError; }
     //! Text of the closing Exit bracket, emitted by TTAVData::
-    //! onAudioOnlyCutFinished(). Unlike TTH26xCutTask, doAudioOnlyCut() used
-    //! the SAME Exit text ("Audio cut complete") regardless of a sub-failure
-    //! (e.g. a failed MKA mux) - only outputSummary() carries the failure
-    //! detail then. Preserved as-is.
+    //! onAudioOnlyCutFinished(). Short and reason-agnostic ("Audio cut
+    //! failed"/"Audio cut complete") by design - the reason-specific detail
+    //! belongs in lastError() above, not here. All three failure branches in
+    //! runAudioCut() (no track produced an output file, a partial-track
+    //! failure, a failed MKA mux) set BOTH mError and mExitMessage together;
+    //! the unconditional-looking assignment at the end of runAudioCut() is
+    //! actually guarded (mExitMessage.isEmpty()) and only supplies the
+    //! success text when none of those branches ran.
     QString      exitMessage()   const { return mExitMessage; }
     //! First requested track's drift samples, for TTAVData::
     //! cutAudioDriftCalculated - emitted by the GUI-side finish slot, not

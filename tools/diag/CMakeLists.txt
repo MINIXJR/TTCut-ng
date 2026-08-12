@@ -230,6 +230,11 @@ diag_tool(test_mpeg2order      AV WIDGETS SOURCES ${MKVORDER_SRC})
 # an undefined reference" guard cannot apply here anyway.
 diag_tool(test_h26xcut_abort   AV WIDGETS SOURCES)
 target_link_libraries(test_h26xcut_abort PRIVATE ttcut-core)
+# Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s H.26x
+# branch too (the entry point this harness checks the Exit/lastCutError
+# ordering on), so it needs the whole core library rather than a curated list.
+diag_tool(test_cut_outcome     AV WIDGETS SOURCES)
+target_link_libraries(test_cut_outcome PRIVATE ttcut-core)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
 # the whole core library, not a curated source list.
@@ -276,15 +281,15 @@ add_custom_target(diag DEPENDS
 # is not a hypothetical: diag_tool() writes its executables into this SOURCE
 # directory, .gitignore hides them (tools/diag/test_*) and the repository sets
 # status.showUntrackedFiles=no - a stale binary is invisible to `git status`
-# and runs happily. Naming the seven (now nine) targets by hand on the build
+# and runs happily. Naming the seven (now ten) targets by hand on the build
 # line already cost one full matrix run.
 #
 # A target of its own so the abort matrix has one short name to build, but NOT
 # a separate island: `diag` depends on it below, so `--target diag` really does
 # build everything. The two names exist for different jobs - `diag` links
 # curated per-tool source lists so that a new GUI/mpv dependency in the cut
-# path shows up as an undefined reference (see the file header), while six of
-# these nine link the whole ttcut-core and cannot provide that guard. Keeping
+# path shows up as an undefined reference (see the file header), while seven of
+# these ten link the whole ttcut-core and cannot provide that guard. Keeping
 # them in their own target preserves the distinction (and lets a matrix run
 # rebuild just them); making `diag` depend on it means nobody has to know the
 # second name to get a complete build. The price is the longer `diag` build -
@@ -292,6 +297,7 @@ add_custom_target(diag DEPENDS
 add_custom_target(diag-abort DEPENDS
   test_smartcut_abort test_audiocut_abort test_mkvmux_abort
   test_h26xcut_abort test_mpeg2cut_abort test_audioonlycut_abort
-  test_previewcut_abort test_cutsequence_abort test_progressbar_reshow)
+  test_previewcut_abort test_cutsequence_abort test_progressbar_reshow
+  test_cut_outcome)
 
 add_dependencies(diag diag-abort)

@@ -57,6 +57,12 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     void requestAbort() { mAbortRequested.store(true, std::memory_order_relaxed); }
     bool wasAborted() const { return mWasAborted; }
 
+    //! False when the external muxer ended with a non-zero exit code or did
+    //! not end normally. Before this the exit code was discarded, so a failed
+    //! multiplex still reported "Cut complete" to the user.
+    bool    succeeded() const { return mSucceeded; }
+    QString lastError() const { return mLastError; }
+
   private:
     QString     createOutputFilePath(const QString& videoFilePath);
     QStringList createMplexArguments(const QString& videoFilePath, const QStringList& audioFilePaths, bool escapeFileNames);
@@ -90,6 +96,8 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     // TTMkvMergeProvider.
     std::atomic<bool>   mAbortRequested { false };
     bool                mWasAborted     = false;
+    bool                mSucceeded      = true;   //!< set by onProcFinished()
+    QString             mLastError;
 };
 
 #endif //TTMPLEXPROVIDER

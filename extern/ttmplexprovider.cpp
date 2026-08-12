@@ -135,9 +135,13 @@ void TTMplexProvider::mplexPart(int index)
 {
   mCurrentMuxIndex = index;
   int  update      = EVENT_LOOP_INTERVALL;
-  // mWasAborted is an output, not an input: cleared at this run's entry point
-  // (see the header for why mAbortRequested has no clearing point of its own).
+  // mWasAborted/mSucceeded/mLastError are outputs, not inputs: cleared at this
+  // run's entry point (see the header for why mAbortRequested has no clearing
+  // point of its own). Without this a second mplexPart() call on the same
+  // provider would carry the previous run's result forward.
   mWasAborted      = false;
+  mSucceeded       = true;
+  mLastError.clear();
   delete proc;             // free any QProcess from a previous startMplex
   proc             = new QProcess();
 
@@ -366,12 +370,42 @@ void TTMplexProvider::onProcError(QProcess::ProcessError procError)
 {
   // stopProcess() ends the child on purpose and QProcess reports that as
   // QProcess::Crashed. A deliberate cancel must not write an error line (the
-  // standing rule for the whole cut-abort feature), so record it at debug
-  // level instead; the cancel itself is reported by mplexPart().
+  // standing rule for the whole cut-abort feature) and must not be recorded
+  // as a failed multiplex either. Same reasoning as the mWasAborted check at
+  // the top of onProcFinished(): this has to come before any
+  // mSucceeded/mLastError assignment, not just before the log call, or a
+  // signal-terminated abort would read back as a failure.
   if (mWasAborted) {
     log->debugMsg(__FILE__, __LINE__,
         QString("QProcess error %1 after a user cancel - expected").arg(procError));
     return;
+  }
+
+  // Only FailedToStart and Crashed are conclusive here - both mean the
+  // process is not going to produce a usable exit code, either because it
+  // never ran or because it is already gone. Timedout/ReadError/WriteError/
+  // UnknownError are just channel noise: a stalled waitFor*() call or a
+  // hiccup reading mplex's merged stdout/stderr does not mean the mux
+  // itself failed. Leaving mSucceeded untouched for those defers the
+  // verdict to onProcFinished(): if mplex still exits normally with code 0,
+  // the run stays a success, exactly as it did before mSucceeded existed -
+  // no regression from adding a second writer to a field that never resets
+  // to true once cleared.
+  if (procError == QProcess::FailedToStart) {
+    // The common real-world case: mplex is an optional dependency (see
+    // CLAUDE.md) and is simply not installed on many machines.
+    // QProcess::finished() is never emitted for it (the process never ran),
+    // so this is the only place that can record the failure.
+    mSucceeded = false;
+    mLastError = tr("The multiplexer (mplex) could not be started - "
+                     "check that it is installed and in PATH");
+  } else if (procError == QProcess::Crashed) {
+    mSucceeded = false;
+    if (mLastError.isEmpty())
+      // Leave a more specific message alone if one is already recorded (e.g.
+      // onProcFinished() runs after this and refines it to "did not finish
+      // normally").
+      mLastError = tr("The multiplexer process reported an error (%1)").arg(procError);
   }
 
   log->errorMsg(__FILE__, __LINE__, QString("QProcess error %1").arg(procError));
@@ -394,16 +428,32 @@ void TTMplexProvider::onProcStarted()
 }
 
 //! This signal is emitted when the process finishes
-void TTMplexProvider::onProcFinished(int, QProcess::ExitStatus exitStatus)
+void TTMplexProvider::onProcFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
   // A cancelled mux has no elementary streams to consume: they are deleted by
   // the abort cleanup, not kept as the input of a finished mux. Stated
   // explicitly rather than left to the exit-status check below (a terminated
   // process reports CrashExit, so that check already covers it today) because
   // the two conditions mean different things.
+  //
+  // This early return must stay ahead of the exit-code/exit-status
+  // evaluation below, not just ahead of the deleteElementaryStreams() call:
+  // stopProcess() ends mplex with SIGTERM/SIGKILL, which QProcess reports as
+  // CrashExit - exactly what "did not finish normally" below tests for. A
+  // deliberate cancel must not be recorded as a failed multiplex.
   if (mWasAborted) return;
 
-  if (exitStatus != QProcess::NormalExit) return;
+  if (exitStatus != QProcess::NormalExit) {
+    mSucceeded = false;
+    mLastError = tr("The multiplexer did not finish normally");
+    return;
+  }
+
+  if (exitCode != 0) {
+    mSucceeded = false;
+    mLastError = tr("The multiplexer failed with exit code %1").arg(exitCode);
+  }
+
   if (!TTSettings::instance()->workingMuxDeleteES()) return;
 
   // Only delete ES files for the current mux item, not all items in the list
