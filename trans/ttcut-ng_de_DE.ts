@@ -180,8 +180,8 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <location filename="../data/ttavdata.cpp" line="1471"/>
         <location filename="../data/ttavdata.cpp" line="1485"/>
         <location filename="../data/ttavdata.cpp" line="1631"/>
-        <location filename="../data/ttavdata.cpp" line="2089"/>
-        <location filename="../data/ttavdata.cpp" line="2281"/>
+        <location filename="../data/ttavdata.cpp" line="2127"/>
+        <location filename="../data/ttavdata.cpp" line="2320"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
@@ -215,28 +215,28 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Schneiden fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2149"/>
+        <location filename="../data/ttavdata.cpp" line="2187"/>
         <location filename="../data/tth26xcuttask.cpp" line="473"/>
         <source>Muxing failed: %1</source>
         <translation>Multiplexen fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2148"/>
+        <location filename="../data/ttavdata.cpp" line="2186"/>
         <source>MKV muxing failed</source>
         <translation>MKV-Multiplexen fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2118"/>
+        <location filename="../data/ttavdata.cpp" line="2156"/>
         <source>Muxing failed: the mux task was gone</source>
         <translation>Multiplexen fehlgeschlagen: die Mux-Aufgabe war nicht mehr vorhanden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2209"/>
+        <location filename="../data/ttavdata.cpp" line="2247"/>
         <source>Cut complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2711"/>
+        <location filename="../data/ttavdata.cpp" line="2753"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
@@ -300,12 +300,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2341"/>
+        <location filename="../data/ttavdata.cpp" line="2380"/>
         <source>Initializing audio cut...</source>
         <translation>Audio-Schnitt initialisieren...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2347"/>
+        <location filename="../data/ttavdata.cpp" line="2386"/>
         <source>Cutting audio tracks...</source>
         <translation>Audiospuren werden geschnitten...</translation>
     </message>
@@ -316,32 +316,44 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
     </message>
     <message>
         <location filename="../data/ttaudioonlycuttask.cpp" line="208"/>
+        <source>Audio-only cut produced no output files</source>
+        <translation>Reiner Audioschnitt hat keine Ausgabedatei erzeugt</translation>
+    </message>
+    <message>
         <location filename="../data/ttaudioonlycuttask.cpp" line="209"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="210"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="227"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="261"/>
         <source>Audio cut failed</source>
         <translation>Audio-Schnitt fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttaudioonlycuttask.cpp" line="222"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="225"/>
+        <source>Only %1 of %2 audio track(s) could be cut</source>
+        <translation>Nur %1 von %2 Audiospur(en) konnten geschnitten werden</translation>
+    </message>
+    <message>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="239"/>
         <source>%1 audio file(s) in %2</source>
         <translation>%1 Audiodatei(en) in %2</translation>
     </message>
     <message>
-        <location filename="../data/ttaudioonlycuttask.cpp" line="230"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="247"/>
         <source>Muxing audio tracks into MKA...</source>
         <translation>Audiospuren werden in MKA gemuxt...</translation>
     </message>
     <message>
-        <location filename="../data/ttaudioonlycuttask.cpp" line="241"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="258"/>
         <source>MKA mux failed: %1</source>
         <translation>MKA-Mux fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttaudioonlycuttask.cpp" line="255"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="275"/>
         <source>MP3/AAC re-encoding not implemented yet — original ES files in %1</source>
         <translation>MP3/AAC-Neukodierung noch nicht implementiert — Original-ES-Dateien in %1</translation>
     </message>
     <message>
-        <location filename="../data/ttaudioonlycuttask.cpp" line="265"/>
+        <location filename="../data/ttaudioonlycuttask.cpp" line="289"/>
         <source>Audio cut complete</source>
         <translation>Audio-Schnitt abgeschlossen</translation>
     </message>
@@ -435,12 +447,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 <context>
     <name>TTAspectScanTask</name>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="137"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="140"/>
         <source>Aspect format analysis failed</source>
         <translation>Bildformat-Analyse fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="154"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="157"/>
         <source>Aspect format analysis...</source>
         <translation>Bildformat-Analyse …</translation>
     </message>
@@ -449,37 +461,37 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation type="vanished">Pillarbox-Suche: Schwelle %1, Probe alle %2 s, Haltezeit %3 s, %4 Proben geplant</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="136"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="139"/>
         <source>Aspect format analysis: failed to open decoders - skipped</source>
         <translation>Bildformat-Analyse: Dekoder ließen sich nicht öffnen – übersprungen</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="156"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="159"/>
         <source>Aspect format: threshold %1, sample every %2 s, hysteresis %3 s, %4 samples planned</source>
         <translation>Bildformat: Schwelle %1, Stichprobe alle %2 s, Haltezeit %3 s, %4 Stichproben geplant</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="211"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="214"/>
         <source>%1: candidate %2 discarded - held %3 s, needs %4 s</source>
         <translation>%1: Kandidat %2 verworfen – hielt %3 s, nötig sind %4 s</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="229"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="232"/>
         <source>%1: confirmed %2 (refined from sample frame %3)</source>
         <translation>%1: %2 bestätigt (eingegrenzt ab Frame %3)</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="248"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="251"/>
         <source>Aspect format: %1 of %2 samples</source>
         <translation>Bildformat: %1 von %2 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="261"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="264"/>
         <source>Aspect format analysis cancelled: %1 of %2 samples</source>
         <translation>Bildformat-Analyse abgebrochen: %1 von %2 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="263"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="266"/>
         <source>Aspect format analysis complete: %1 samples</source>
         <translation>Bildformat-Analyse abgeschlossen: %1 Stichproben</translation>
     </message>
@@ -492,12 +504,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation type="vanished">Bildformat: %1 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="268"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="271"/>
         <source> - %1x 16:9, %2x 4:3pb, %3x no statement (%4 bars too wide, %5 centre too dark, %6 unusable); transitions: %7, discarded candidates: %8 (thereof %9 single-sample outliers)</source>
         <translation> – %1x 16:9, %2x 4:3pb, %3x ohne Aussage (%4 Balken zu breit, %5 Bildmitte zu dunkel, %6 unbrauchbar); Übergänge: %7, verworfene Kandidaten: %8 (davon %9 Einzelausreißer)</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="147"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="150"/>
         <source>Aspect format analysis cancelled</source>
         <translation>Bildformat-Analyse abgebrochen</translation>
     </message>
@@ -518,7 +530,7 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation type="vanished"> – %1x 16:9, %2x 4:3pb, %3x ohne Aussage (%4 Balken zu breit, %5 Bildmitte zu dunkel, %6 unbrauchbar); Übergänge: %7, verworfene Kandidaten: %8</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="277"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="281"/>
         <source> (%1 more events suppressed)</source>
         <translation> (%1 weitere Meldungen unterdrückt)</translation>
     </message>
@@ -1993,27 +2005,27 @@ Ausgabedatei:
 <context>
     <name>TTCutPreviewTask</name>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="193"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="217"/>
         <source>create cut preview clips</source>
         <translation>Erstelle Vorschau-Clips</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="204"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="228"/>
         <source>Creating preview clip %1 of %2</source>
         <translation>Vorschau-Clip %1 von %2 erstellen</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="366"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="385"/>
         <source>Preview clip %1 of %2 created</source>
         <translation>Vorschau-Clip %1 von %2 erstellt</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="399"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="412"/>
         <source>preview cuts done</source>
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="550"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="563"/>
         <source>The preview could not be created: this recording is too damaged for frame-accurate cutting.
 
 %1</source>
@@ -3059,7 +3071,7 @@ Ausgabedatei:
 <context>
     <name>TTCutTask</name>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="204"/>
+        <location filename="../data/ttcutvideotask.cpp" line="224"/>
         <source>No cut stream specified!</source>
         <translation>Kein Schnitt-Stream angegeben!</translation>
     </message>
@@ -3227,22 +3239,22 @@ Ausgabedatei:
 <context>
     <name>TTCutVideoTask</name>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="89"/>
+        <location filename="../data/ttcutvideotask.cpp" line="108"/>
         <source>No target file path given for video cut!</source>
         <translation>Kein Zielpfad für den Videoschnitt angegeben!</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="96"/>
+        <location filename="../data/ttcutvideotask.cpp" line="115"/>
         <source>Cut 1 of %1</source>
         <translation>Schnitt 1 von %1</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="145"/>
+        <location filename="../data/ttcutvideotask.cpp" line="164"/>
         <source>Cut %1 of %2</source>
         <translation>Schnitt %1 von %2</translation>
     </message>
     <message>
-        <location filename="../data/ttcutvideotask.cpp" line="118"/>
+        <location filename="../data/ttcutvideotask.cpp" line="137"/>
         <source>Operation aborted!</source>
         <translation>Vorgang abgebrochen!</translation>
     </message>
@@ -3543,24 +3555,44 @@ Ausgabedatei:
 <context>
     <name>TTMplexProvider</name>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="220"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="224"/>
         <source>Mplex cancelled</source>
         <translation>Mplex abgebrochen</translation>
     </message>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="225"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="229"/>
         <source>Mplex finished</source>
         <translation>Mplex abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="268"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="272"/>
         <source>Cancel requested - stopping the mplex process</source>
         <translation>Abbruch angefordert - Mplex-Prozess wird beendet</translation>
     </message>
     <message>
-        <location filename="../extern/ttmplexprovider.cpp" line="391"/>
+        <location filename="../extern/ttmplexprovider.cpp" line="400"/>
+        <source>The multiplexer (mplex) could not be started - check that it is installed and in PATH</source>
+        <translation>Der Multiplexer (mplex) konnte nicht gestartet werden - prüfen Sie, ob er installiert und im PATH ist</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="408"/>
+        <source>The multiplexer process reported an error (%1)</source>
+        <translation>Der Multiplexer-Prozess hat einen Fehler gemeldet (%1)</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="425"/>
         <source>Starting mplex process</source>
         <translation>Mplex-Prozess gestartet</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="448"/>
+        <source>The multiplexer did not finish normally</source>
+        <translation>Der Multiplexer wurde nicht normal beendet</translation>
+    </message>
+    <message>
+        <location filename="../extern/ttmplexprovider.cpp" line="454"/>
+        <source>The multiplexer failed with exit code %1</source>
+        <translation>Der Multiplexer ist mit Exitcode %1 fehlgeschlagen</translation>
     </message>
 </context>
 <context>

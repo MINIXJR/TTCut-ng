@@ -89,17 +89,22 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
   festgehalten. Reihenfolge grob nach Nutzerwirkung.
-  - **`Exit` wird gemeldet, bevor `mLastCutError` gesetzt ist** (H.26x- und
-    Audio-only-Pfad). `TTCutMainWindow::onStatusReport` liest beim
-    Behandeln von `Exit` `lastCutError()`, um zu entscheiden, ob die
-    Operation regulär endete — ein **fehlgeschlagener** Schnitt gilt damit
-    als regulärer Abschluss, und die Restzeit-Schätzung schreibt aus einem
-    kaputten Lauf einen Kalibrierfaktor. Beim Umbau in Aufgabe 5 bewusst
-    unverändert gelassen (dort war Verhaltensgleichheit das Prüfkriterium).
   - **Eine echte `TTException` aus einer Schnitt-Aufgabe wird als „Cut
     cancelled" gemeldet** und löst kein `cutFinished()` aus: ein echter
     Fehler sieht aus wie ein Nutzer-Abbruch, und ein `--auto-cut`-Lauf auf
     diesem Pfad wartet ewig.
+    **Wurzel gefunden 2026-08-12:** `TTThreadTask::run()`
+    (`common/ttthreadtask.cpp:171-189`) fängt beide Ausnahmearten getrennt —
+    `catch(TTAbortException&)` und `catch(TTException&)` — und sendet aus
+    **beiden** dasselbe Signal `aborted(this)`. `TTAbortException` erbt von
+    `TTException` (`common/ttexception.h:93`); die Unterscheidung liegt also
+    im Typsystem und im Kontrollfluss vor und wird genau dort weggeworfen,
+    wo sie gebraucht würde. Behebung: ein zweites Signal
+    (`failed(task, grund)`), im unteren `catch` gesendet — klein zu ändern,
+    aufwendig zu prüfen, weil `TTThreadTask` die Basisklasse **jeder**
+    Aufgabe ist (Öffnen, Suche, Analyse, Schnitt, Vorschau, Mux). Die
+    Aufrufer-Seite ist seit `c7436a07` sauber: alle Schnittpfade melden ihr
+    Ergebnis über `TTAVData::finishCutOperation()`.
   - **`TTThreadTask::abort()` sendet `aborted()` selbst dann**, wenn der
     Abbruch eintrifft, während `finished()` schon in der Warteschlange
     liegt — eine tatsächlich fertig gewordene Aufgabe kann sich damit als
@@ -148,6 +153,29 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     erzwingbar über eine Faden-Zugehörigkeitsprüfung in
     `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
     haben.
+
+- **Teilfehlschläge beim Spurenschnitt werden nur auf einem von drei Pfaden
+  erkannt** (Schlussprüfung `feature/cut-outcome-reporting`, 2026-08-12)
+  - `TTAVData::cutAudioTracks()` überspringt eine fehlgeschlagene Spur intern
+    still (`continue` bei Index außerhalb des Bereichs, fehlendem Stream oder
+    leerem Schnittplan - `ttavdata.cpp:2731`, `:2734`, `:2741`) und meldet das
+    nach außen nur über die Größe der zurückgegebenen Dateiliste. Nur der
+    Audio-only-Pfad (`data/ttaudioonlycuttask.cpp`, seit `c7436a07`)
+    vergleicht `trackFiles.size()` gegen die angeforderte Spurenzahl und
+    setzt bei Abweichung `mError`/`mExitMessage` ("Only %1 of %2 audio
+    track(s) could be cut"). Die beiden anderen Aufrufer prüfen das nicht:
+    `TTAVData::onDoCut()` beim MPEG-2-Pfad (`ttavdata.cpp:1566`) und
+    `TTH26xCutTask::runCut()` (`data/tth26xcuttask.cpp:329`) melden Erfolg,
+    auch wenn eine oder mehrere Spuren nie geschnitten wurden.
+  - Folge: Beide Pfade schreiben trotzdem einen Kalibrierfaktor für die
+    Restzeitschätzung, obwohl die zugrunde liegende Arbeitsmenge Spuren
+    enthielt, die tatsächlich nie bearbeitet wurden - der Faktor wird auf
+    einer falschen Basis berechnet.
+  - Vorlage für die Behebung ist der Audio-only-Pfad selbst: dieselbe
+    Größenvergleich-Prüfung (Rückgabeliste vs. angeforderte Spurenzahl, s.o.)
+    müsste an beiden übrigen Aufrufstellen ergänzt und über
+    `finishCutOperation()` gemeldet werden. Nicht in `feature/cut-outcome-
+    reporting` behoben - hätte den Zweig gesprengt.
 
 - **Landezonen-Analysen, die gar nicht erst starten, erklären sich nicht**
   (Nachfolgepunkt der Detailausgabe, Schlussprüfung 2026-08-11)
@@ -360,14 +388,6 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Extract and convert to SRT or keep as PGS for MKV output
 
 ## Low Priority
-
-- **mplex-/Elementary-Fehlschlag meldet „Cut complete"** (Final-Review-Fund
-  2026-08-07, vorbestehend, durch die neue Abschlussmeldung sichtbar geworden):
-  In `TTAVData::onCutFinished` setzt nur der MKV-Zweig bei Mux-Fehlern
-  `mLastCutError`; der mplex-Zweig (`case 0`) und der Elementary-Zweig
-  (`case 3`) nie. Ein fehlgeschlagener mplex-Mux endet daher mit dem
-  End-`Exit` „Cut complete". Fix: Rückgabewert von `mplexPart()` auswerten
-  und `mLastCutError` setzen. Legacy-Pfad, im MKV-Workflow nicht erreichbar.
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
   (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die

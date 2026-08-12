@@ -6,6 +6,20 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **A failed cut no longer reports itself as a successful one.** The
+  H.264/H.265 path recorded the failure only after announcing that the
+  operation had ended, so the progress dialog counted a failed run as a
+  regular finish - and the remaining-time estimate then learned its timing
+  from a run that never completed. Three more paths never recorded a failure
+  at all: an audio-only cut reported none of its failures, an MPG multiplex
+  that failed still said "Cut complete", and a multiplexer that could not be
+  started at all - the common case, since mplex is optional and often not
+  installed - was not noticed either. Every cut path now records the outcome
+  before announcing it, through one shared exit point, and the error dialog
+  gets the detailed reason instead of the short progress-window wording.
+  Partial failures are visible too: cutting three audio tracks and losing one
+  now says so instead of reporting success.
+
 - **Cancelling a cut preview no longer leaks the decoder engine.** The engine
   was released on three code paths but not on the one taken when the cancel
   landed between two preview clips, which lost it together with every decoded

@@ -390,6 +390,57 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Ein fehlgeschlagener Schnitt meldete sich als gelungener** → **GELÖST
+  (2026-08-12, branch `feature/cut-outcome-reporting`, 11 Commits)**
+  - War: Sechs Abschlussstellen in `TTAVData` schlossen eine Schnittoperation
+    ab, und jede regelte für sich, in welcher Reihenfolge sie Fehlerfeld,
+    Meldung und `cutFinished()` behandelt — teils gar nicht. Der H.26x-Pfad
+    setzte `mLastCutError` **nach** dem `Exit`; `TTCutMainWindow::onStatusReport`
+    liest es genau dort, um zu entscheiden, ob der Lauf regulär endete, und
+    `TTProgressEstimator` schreibt für einen regulären Lauf einen
+    Kalibrierfaktor. Ein misslungener Schnitt verzog also die Restzeit-
+    schätzung aller folgenden Läufe.
+  - **Gemessen statt abgeleitet:** Ein schreibgeschütztes Zielverzeichnis
+    erzeugt einen echten Fehlschlag (`Cannot create output file`,
+    `extern/ttessmartcut.cpp:589`). Der Lauf endete mit `Exit` und dem Text
+    „Cutting failed", während `mLastCutError` erst drei Zeilen später
+    zugewiesen wurde.
+  - Fix: `TTAVData::finishCutOperation(CutOutcome, message, errorText)` legt
+    Reihenfolge und Feldbelegung an **einer** Stelle fest — Ergebnis vor
+    Meldung. Alle sechs Abschlussstellen rufen nur noch sie.
+    `mCutOperationActive` bleibt bewusst beim Aufrufer, weil die
+    Klammer-Logik daran hängt (`docs/code-map/progress-reporting.md`).
+  - Dabei geschlossen, was vorher **nie** ein Fehlerfeld setzte: der
+    Audio-only-Pfad (die Aufgabe wies ihr Feld an keiner Stelle zu — belegt
+    mit `grep -c mError` = 0, ihr eigener Header sagte es), der mplex-Zweig
+    und — nach einer Messung, die das Gegenteil zeigte — der **Startfehler**
+    des Multiplexers: Bei fehlendem `mplex` schlägt `QProcess::start` fehl,
+    Qt sendet **kein** `finished()`, die Exit-Code-Auswertung wird nie
+    erreicht. Da mplex optional ist, war das der häufigste Fehlerfall
+    überhaupt. Auch Teilfehlschläge sind jetzt sichtbar („Only 1 of 2 audio
+    track(s) could be cut", echt ausgelöst).
+  - **Prüfmittel:** `tools/diag/test_cut_outcome` (neu) greift `lastCutError()`
+    **im** `Exit`-Moment ab, nicht danach. Er war vor der Behebung rot und
+    danach grün — der Umschlag ist der Beleg. Zwei weitere Zusicherungen kamen
+    dazu, nachdem sich zeigte, dass „Feld ist gefüllt" zu schwach war: Es muss
+    sich vom kurzen Klammertext unterscheiden **und** den ausführlichen Grund
+    tragen. Gegengewicht waren die vier bestehenden Abbruch-Harnesse, die
+    unverändert grün blieben — inklusive der `mux`-Phase, die die neue
+    Abbruch-Absicherung unter echter Zeitlage prüft.
+  - **Lehre, die diese Arbeit teuer gemacht hat:** Vier Detailannahmen des
+    Plans waren falsch, alle vier aus dem TODO-Text übernommen statt am Code
+    geprüft — die zwei H.26x-Texte waren vertauscht (`tth26xcuttask.h:64-68`
+    dokumentiert das Gegenteil), `TTAudioOnlyCutTask::lastError()` war immer
+    leer, der Elementary-Zweig hat gar keine Fehlerquelle, und der
+    vorgeschlagene „Rückgabewert von `mplexPart()`" existiert nicht
+    (`void mplexPart(int)`). Gefunden hat sie jedes Mal die zweistufige
+    Prüfung, indem sie die im Quelltext dokumentierten Verträge las statt der
+    Behauptung im Auftrag. Der TODO-Eintrag zeigte auf die richtige Ecke —
+    aber auf keine einzige richtige Zeile.
+  - **Offen geblieben (Teil B):** Ein echter Fehler meldet sich weiterhin als
+    Abbruch, weil `TTThreadTask::run()` aus beiden `catch`-Zweigen dasselbe
+    Signal sendet. Wurzel und Behebungsweg stehen in `TODO.md`.
+
 - **Vorschau und MPEG-2-Schnitt gaben nicht frei, was sie anlegten** →
   **GELÖST (2026-08-12)**
   - War: `TTCutPreviewTask::operation()` löschte den geteilten Smart-Cut-Motor
