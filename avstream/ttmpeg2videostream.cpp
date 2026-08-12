@@ -37,7 +37,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <QDir>
+#include <QScopeGuard>
 #include <QStack>
+#include <QTemporaryDir>
 #include <QThread>
 
 /*! ////////////////////////////////////////////////////////////////////////////
@@ -828,7 +830,31 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   // frame size (width x height) and aspect ratio
   TTSequenceHeader* seq_head  = getSequenceHeader(current_index);
 
-  QDir      tempDir( TTSettings::instance()->tempDirPath() );
+  if (seq_head == nullptr) {
+    QString msg = QString("No sequence header for frame %1 - cannot re-encode "
+                          "this part").arg(current_index);
+    log->fatalMsg(__FILE__, __LINE__, msg);
+    throw TTInvalidOperationException(msg);
+  }
+
+  // A directory of its own per call. The names below used to sit directly in
+  // tempDirPath(), where every concurrently running instance - a second
+  // harness, a second window - wrote the same two files and the cleanup at
+  // the end removed every encode.* it found, a sibling's included. Reading
+  // back a foreign file produced a header list without a sequence header,
+  // and that used to abort the process (see firstSequenceHeader()).
+  QTemporaryDir encodeTempDir(QDir(TTSettings::instance()->tempDirPath())
+                                .filePath("ttcut-encode-XXXXXX"));
+
+  if (!encodeTempDir.isValid()) {
+    QString msg = QString("Could not create a temporary directory below %1: %2")
+                    .arg(TTSettings::instance()->tempDirPath(),
+                         encodeTempDir.errorString());
+    log->fatalMsg(__FILE__, __LINE__, msg);
+    throw TTInvalidOperationException(msg);
+  }
+
+  QDir      tempDir( encodeTempDir.path() );
   QString   aviOutFile   = "encode.avi";
   QString   mpeg2OutFile = "encode";          // extension is added by transcode (!)
   QFileInfo aviFileInfo(tempDir, aviOutFile);
@@ -849,7 +875,18 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   encParams.setVideoInterlaced(!pic_head->progressive_frame);
   encParams.setVideoTopFieldFirst(pic_head->top_field_first);
 
-  TTTranscodeProvider* transcode_prov = new TTTranscodeProvider(encParams);
+  TTTranscodeProvider* transcode_prov  = new TTTranscodeProvider(encParams);
+  TTMpeg2VideoStream*  new_mpeg_stream = nullptr;
+
+  // Runs on every way out. It has to: the encode failure below throws, and so
+  // does the missing-sequence-header check above - both used to leak the
+  // provider, the stream and (before the QTemporaryDir) the files as well.
+  auto releaseParts = qScopeGuard([&] {
+    disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
+               this,           &TTMpeg2VideoStream::statusReport);
+    delete new_mpeg_stream;
+    delete transcode_prov;
+  });
 
   connect(transcode_prov, &TTTranscodeProvider::statusReport,
           this,           &TTMpeg2VideoStream::statusReport,
@@ -866,7 +903,7 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   }
 
   mpeg2FileInfo.setFile(tempDir, "encode.m2v");
-  TTMpeg2VideoStream* new_mpeg_stream = new TTMpeg2VideoStream(mpeg2FileInfo);
+  new_mpeg_stream = new TTMpeg2VideoStream(mpeg2FileInfo);
 
   new_mpeg_stream->createHeaderList();
   new_mpeg_stream->createIndexList();
@@ -875,15 +912,8 @@ void TTMpeg2VideoStream::encodePart(int start, int end, TTCutParameter* cr)
   int cutOut = (end-start ==  0) ? 0 : end-start;
   new_mpeg_stream->cut(0, cutOut, cr);
 
-  // remove temporary files
-  QDir encodeDir(mpeg2FileInfo.absolutePath());
-  QStringList encodeFiles = encodeDir.entryList(QStringList() << "encode.*", QDir::Files);
-  for (const QString& f : encodeFiles)
-    encodeDir.remove(f);
-
-  disconnect(transcode_prov, &TTTranscodeProvider::statusReport,
-  		       this,           &TTMpeg2VideoStream::statusReport);
-
-  delete transcode_prov;
-  delete new_mpeg_stream;
+  // The temporary files go with encodeTempDir when it leaves scope; the
+  // provider and the stream go with releaseParts. Deleting "encode.*" by
+  // pattern in the shared directory - which is what stood here - could hit a
+  // concurrent instance's files.
 }
