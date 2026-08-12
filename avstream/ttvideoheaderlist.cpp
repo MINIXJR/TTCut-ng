@@ -111,21 +111,21 @@ TTSequenceHeader* TTVideoHeaderList::sequenceHeaderAt(int index)
  */
 TTSequenceHeader* TTVideoHeaderList::firstSequenceHeader()
 {
-  int    index = -1;
-  quint8 type  = 0xFF;
-
   if (size() == 0)
   	throw TTInvalidOperationException("Invalid");
 
-  do
+  // The bound is checked BEFORE at() reads: a list without any sequence
+  // header used to run index up to count() and trip the Q_ASSERT in
+  // QList::at, which aborts the process. Returning NULL is what the
+  // signature already allowed and what TTVideoStream::frameRate() and
+  // bitRate() expect - they fall back to 25.0 resp. 0.0.
+  for (int index = 0; index < count(); index++)
   {
-    index++;
-    type = at(index)->headerType();
-  } while (index < count() && type != TTMpeg2VideoHeader::sequence_start_code);
+    if (at(index)->headerType() == TTMpeg2VideoHeader::sequence_start_code)
+      return (TTSequenceHeader*)at(index);
+  }
 
-  return (at(index)->headerType() == TTMpeg2VideoHeader::sequence_start_code)
-    ? (TTSequenceHeader*)at( index )
-    : NULL;
+  return NULL;
 }
 
 /*! ////////////////////////////////////////////////////////////////////////////

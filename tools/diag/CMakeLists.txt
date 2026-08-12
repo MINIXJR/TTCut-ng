@@ -201,6 +201,7 @@ diag_tool(test_aspectscan_mpeg2 AV MPEG2 SOURCES ${MPEG2ASPECTSCAN_SRC})
 diag_tool(test_pool_abort         SOURCES ${POOLABORT_SRC})
 diag_tool(test_streampoint_order AV MPEG2 SOURCES ${STREAMPOINTORDER_SRC})
 diag_tool(test_mpeg2_seek  AV MPEG2 SOURCES ${MPEG2CUT_SRC})
+diag_tool(test_seqheader_missing AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
 diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
@@ -272,7 +273,7 @@ add_custom_target(diag DEPENDS
   test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
   test_analysislog test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_pillarbox test_pool_abort
-  test_streampoint_order test_mpeg2_seek test_window_geometry
+  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_window_geometry
   test_progressestimator)
 
 # --- the cut-abort harness suite -------------------------------------------
