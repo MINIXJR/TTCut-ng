@@ -177,25 +177,33 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `finishCutOperation()` gemeldet werden. Nicht in `feature/cut-outcome-
     reporting` behoben - hätte den Zweig gesprengt.
 
-- **`test_mpeg2cut_abort` stürzt ab, obwohl es PASS meldet** (2026-08-12, beim
-  Sitzungsabschluss gefunden)
-  - Drei Core-Dumps von `tools/diag/test_mpeg2cut_abort` (je ~50 MB) lagen im
-    Projektwurzelverzeichnis, entstanden während der mplex-Arbeiten. Die
-    zugehörigen Läufe (`mplexabort`, `mplexlate`, `mplexearly`) hatten alle
-    **PASS** gemeldet und ihren Rückgabewert 0 geliefert — der Absturz passiert
-    also nach dem Urteil, vermutlich beim Beenden (statische Destruktoren,
-    Qt-Objekte, offene libav-Zustände).
-  - Warum das zählt: Ein Prüfwerkzeug, das sein Urteil abgibt und dann
-    abstürzt, ist als Beleg nur eingeschränkt brauchbar. Solange nicht klar
-    ist, was da abstürzt, kann niemand ausschließen, dass der Absturz mit dem
-    geprüften Zustand zusammenhängt statt nur mit dem Aufräumen danach.
-  - Die Dumps waren in `git status` unsichtbar (`showUntrackedFiles=no`) und
-    sind auf Nutzerentscheid gelöscht. Zum Nachstellen: die drei mplex-Fälle
-    gegen echtes MPEG-2-Material laufen lassen und danach `ls core.*` prüfen —
-    nicht auf den Rückgabewert schauen, der ist 0.
-  - Erster Schritt wäre ein Lauf unter ASAN oder ein `bt` aus einem frischen
-    Dump; das Neubau-Kommando für den ASAN-Bau steht weiter oben in dieser
-    Datei.
+- **Gemeinsame Temp-Namen in `encodePart()`** (2026-08-12, erledigt)
+  - `TTMpeg2VideoStream::encodePart()` legte `encode.avi`/`encode.m2v` direkt
+    unter `TTSettings::tempDirPath()` an und räumte am Ende jede `encode.*`
+    dort weg — auch die einer gleichzeitig laufenden Instanz. Vier
+    gleichzeitige `test_mpeg2cut_abort`-Läufe scheiterten 3–5 von 12 Malen mit
+    Speicherabzug; einzeln liefen rund 60 Durchgänge fehlerfrei.
+  - Der Absturz selbst kam aus `TTVideoHeaderList::firstSequenceHeader()`: die
+    Schleife griff mit `at(index)` zu, bevor sie `index < count()` prüfte.
+    Nachdem sie `NULL` lieferte statt abzubrechen, wurde daraus ein
+    Nullzeiger-Zugriff in `encodePart()` (8 von 12 Läufen, rc=139) — beides
+    ist behoben, die Funktion prüft `getSequenceHeader()` jetzt.
+  - **Richtigstellung zum früheren Eintrag:** Der Absturz passiert *nicht*
+    nach dem PASS. Er trifft den Kontrolllauf („restart after cancel") mitten
+    im Video-Schnitt, Rückgabewert 134. Die Annahme „meldet PASS, stirbt beim
+    Beenden" war eine Deutung ohne Beleg — ein Speicherabzug nennt die Phase
+    nicht.
+  - Gate: `tools/diag/gate_encode_tempdir.sh` (vorher `failed=8 dumps=5`,
+    nachher `failed=0 dumps=0`), dazu `tools/diag/test_seqheader_missing`
+    (vorher rc=134, nachher NULL).
+
+- **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
+  - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
+    `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie
+    `gui/ttcurrentframe.cpp:970` (`ttcut-ng_playback_temp.mkv`). Zwei
+    gleichzeitig offene Fenster benutzen dieselben Namen.
+  - Kein gemessener Fehlerfall — deshalb nicht mitgefixt. Wer es angeht:
+    dasselbe Muster wie in `encodePart()` (`QTemporaryDir` je Vorgang).
 
 - **Landezonen-Analysen, die gar nicht erst starten, erklären sich nicht**
   (Nachfolgepunkt der Detailausgabe, Schlussprüfung 2026-08-11)

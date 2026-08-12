@@ -6,6 +6,18 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **Two TTCut-ng processes no longer spoil each other's MPEG-2 cut.** Every
+  re-encode at a cut point wrote its intermediate files under one fixed name
+  in the temporary directory, and cleaned up afterwards by deleting every file
+  of that name it found - including the ones a second process was still
+  writing. The affected run then read back foreign data and died. Each
+  re-encode now works in a directory of its own.
+
+- **A video stream without a sequence header is reported, not fatal.** The
+  search for the first sequence header read past the end of its list when
+  there was none, which terminated the program. It now says what is missing
+  and the cut fails with a message.
+
 - **A failed cut no longer reports itself as a successful one.** The
   H.264/H.265 path recorded the failure only after announcing that the
   operation had ended, so the progress dialog counted a failed run as a

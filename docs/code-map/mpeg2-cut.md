@@ -1,6 +1,6 @@
 ---
-base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
-last_verified: 2026-08-02
+base_commit: 7ac2fe72
+last_verified: 2026-08-12
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -70,7 +70,7 @@ flowchart TD
     EP2 --> TP
     TP --> DEC["TTMpeg2Decoder<br/>(libmpeg2)"]
     TP --> ENC["libavcodec mpeg2video<br/>max_b_frames = 0"]
-    ENC --> TMP["encode.m2v (temp)"]
+    ENC --> TMP["encode.m2v<br/>in a QTemporaryDir of this call"]
     TMP --> REC["new TTMpeg2VideoStream(encode.m2v)<br/>createHeaderList / createIndexList<br/>sortDisplayOrder"]
     REC -->|"RECURSION"| CUT
 
@@ -95,6 +95,7 @@ flowchart TD
 | `transferCutObjects()` → `rewriteTempRefData()` | Subtracts `tempRefDelta` from `temporal_reference` and rewrites the 10-bit field in place, re-packing `picture_coding_type` and 3 bits of `vbv_delay` in the same two bytes. |
 | `transferCutObjects()` → `removeOrphanedBFrames()` | Pushes a `TTBreakObject` (stop/restart offsets) so B-frames whose references were cut away are skipped by advancing `bufferStartOffset` past them. `sequence_end_code` is elided the same way. |
 | `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate, fps) come from the **sequence header at `current_index`**, interlace/TFF from the picture header — not from the segment being encoded. |
+| `encodePart()` → temp files | Every call creates its own `QTemporaryDir` (`ttcut-encode-XXXXXX`) below `TTSettings::tempDirPath()` and writes `encode.avi`/`encode.m2v` there. Until 2026-08-12 both names sat directly in the shared directory and the cleanup deleted every `encode.*` it found — a concurrent instance's files included. Reading back a foreign file yielded a header list without a sequence header and killed the process; `tools/diag/gate_encode_tempdir.sh` is the gate for it. |
 | `encodePart()` → `cut()` (recursion) | The re-encoded `encode.m2v` is reopened as a fresh `TTMpeg2VideoStream`, display-sorted, and **cut again** with `cut(0, end-start)`. Termination relies on the encoder emitting an I-frame at position 0 (`max_b_frames = 0`), so `getCutStartObject` finds `pictureCodingType(0) == 1` and does not recurse further. |
 | `TTCutParameter::numPicturesWritten` | Accumulates across **all** cuts of a session (`firstCall()` once, `lastCall()` once, one `TTCutParameter` for the whole cut list). Feeds the rewritten GOP time codes, which is why it must count output frames. |
 | `TTThreadTaskPool::exit` → `TTAVData::onCutFinished()` → `emit cutFinished()` | The MPEG-2 cut ends in a **slot**, not synchronously like `doH264Cut()`/`doAudioOnlyCut()`. The slot muxes and then announces the finished cut; the signal drives both the GUI completion dialog and `QApplication::quit()` under `--auto-cut`. Until `9da00f13` the `emit` was missing entirely, so MPEG-2 cuts showed no completion dialog and a headless run never terminated. Emitted **regardless of mux success** — a failure sets `TTAVData::mLastCutError`, which the dialog reads to show a warning instead of a success message. |
