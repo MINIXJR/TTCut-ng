@@ -13,6 +13,7 @@
 #include "ttsearchtask.h"
 #include "ttstreampoint.h"
 #include "ttaspectdetect.h"
+#include "ttanalysislog.h"
 
 //! Full-stream scan for aspect-format (pillarbox) changes.
 //!
@@ -47,7 +48,11 @@ private:
   QVector<int> collectSampleBatch(int& pos);
 
   //! Decode and classify a batch in parallel. Result index matches batch index.
-  QVector<TTAspectSample> classifyBatch(const QVector<int>& batch);
+  //! When reasons is non-null it is resized to the batch size and receives the
+  //! per-sample reason. Written per index from the worker threads - never
+  //! aggregate inside the parallel lambda.
+  QVector<TTAspectSample> classifyBatch(const QVector<int>& batch,
+                                        QVector<TTAspectReason>* reasons = nullptr);
 
   //! Narrow a confirmed transition to the exact I-frame. Checks every I-frame
   //! strictly between oldStatePos and newStatePos; returns newStatePos when the
@@ -67,6 +72,13 @@ private:
   int   mLuminanceThreshold;
   int   mSampleStride;      //!< frames between two samples
   int   mCheckedSamples = 0;
+  int   mCountNoPillarbox = 0;
+  int   mCountPillarbox   = 0;
+  int   mCountBarsTooWide = 0;
+  int   mCountCentreDark  = 0;
+  int   mCountUnusable    = 0;   //!< incl. failed decodes
+  int   mCountDiscarded   = 0;
+  TTAnalysisLog mLog;
 };
 
 #endif // TTSEARCHTASK_ASPECTSCAN_H

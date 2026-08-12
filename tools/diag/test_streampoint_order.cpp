@@ -173,7 +173,7 @@ int main(int argc, char** argv)
     // ---------------------------------------------------------------------
     QList<TTStreamPoint> points;
     TTStreamPointVideoWorker worker(TTAVTypes::mpeg2_demuxed_video,
-                                    headerList, indexList);
+                                    headerList, indexList, vs.frameRate());
     QObject::connect(&worker, &TTStreamPointVideoWorker::pointsDetected,
                      [&points](const QList<TTStreamPoint>& p) { points = p; });
     worker.runSynchron();

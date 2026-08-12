@@ -101,6 +101,42 @@ static void testClassifier()
           "175/472 px bars (bleed inside a real segment) -> NoStatement, not NoPillarbox");
 }
 
+static void testReasons()
+{
+    TTAspectReason why = TTAspectReason::None;
+
+    // Genuine pillarbox: no rejection reason.
+    check(classifyAspectSample(makeFrame(160, 128), 20, &why) == TTAspectSample::Pillarbox
+          && why == TTAspectReason::None,
+          "pillarbox -> reason None");
+
+    // No bars at all.
+    check(classifyAspectSample(makeFrame(0, 128), 20, &why) == TTAspectSample::NoPillarbox
+          && why == TTAspectReason::NoBars,
+          "no bars -> reason NoBars");
+
+    // Measured on a real recording: dark night scene, both bars beyond the
+    // 1.5x limit (maxBar = 1280*3/16 = 240).
+    check(classifyAspectSample(makeFrameLR(318, 211, 128), 20, &why) == TTAspectSample::NoStatement
+          && why == TTAspectReason::BarsTooWide,
+          "318/211 px bars -> reason BarsTooWide");
+
+    // Valid bar geometry, but the centre is as dark as a black frame.
+    check(classifyAspectSample(makeFrame(160, 20), 20, &why) == TTAspectSample::NoStatement
+          && why == TTAspectReason::CentreTooDark,
+          "valid bars with dark centre -> reason CentreTooDark");
+
+    // Null image carries nothing at all.
+    check(classifyAspectSample(QImage(), 20, &why) == TTAspectSample::NoStatement
+          && why == TTAspectReason::Unusable,
+          "null image -> reason Unusable");
+
+    // The pointer stays optional: the existing call form must still compile
+    // and behave identically.
+    check(classifyAspectSample(makeFrame(160, 128), 20) == TTAspectSample::Pillarbox,
+          "two-argument call form still works");
+}
+
 static void testHysteresis()
 {
     // 500 frames of hysteresis == 10 s at 50 fps.
@@ -160,11 +196,68 @@ static void testHysteresis()
     }
 }
 
+static void testDiscardedCandidates()
+{
+    // 500 frames of hysteresis == 10 s at 50 fps, as in the shipped scan.
+    TTAspectHysteresis h(500);
+    TTAspectTransition t{};
+    TTAspectCandidate  c{};
+
+    // Baseline: 16:9 confirmed.
+    h.feed(0, TTAspectSample::NoPillarbox, t);
+    check(!h.takeDiscardedCandidate(c),
+          "baseline sample discards nothing");
+
+    // A 4:3pb run that dies after 200 frames (4 s) - too short for 500.
+    h.feed(1000, TTAspectSample::Pillarbox, t);
+    h.feed(1100, TTAspectSample::Pillarbox, t);
+    h.feed(1200, TTAspectSample::Pillarbox, t);
+    check(!h.takeDiscardedCandidate(c),
+          "a running candidate is not reported while it still lives");
+
+    h.feed(1300, TTAspectSample::NoPillarbox, t);   // breaks the run
+    check(h.takeDiscardedCandidate(c),
+          "the broken candidate is reported");
+    check(c.firstFrame == 1000, "discarded candidate starts at 1000");
+    check(c.toPillarbox, "discarded candidate was heading for 4:3pb");
+    check(c.heldFrames == 200, "held 1000..1200 == 200 frames, not up to 1300");
+
+    check(!h.takeDiscardedCandidate(c),
+          "taking the candidate clears it");
+
+    // Noise inside the already confirmed state is not a challenge and must
+    // stay silent.
+    h.feed(1400, TTAspectSample::Pillarbox, t);
+    h.feed(1500, TTAspectSample::NoPillarbox, t);
+    check(h.takeDiscardedCandidate(c),
+          "a one-sample challenge is recorded too");
+    check(c.firstFrame == 1400, "one-sample challenge starts at 1400");
+    check(c.toPillarbox, "one-sample challenge was heading for 4:3pb");
+    check(c.heldFrames == 0, "a one-sample run held 0 frames");
+    h.feed(1600, TTAspectSample::NoPillarbox, t);
+    check(!h.takeDiscardedCandidate(c),
+          "samples matching the confirmed state discard nothing");
+
+    // A candidate that holds long enough still fires a transition, and does
+    // not additionally report itself as discarded.
+    TTAspectHysteresis h2(500);
+    TTAspectTransition t2{};
+    TTAspectCandidate  c2{};
+    h2.feed(0, TTAspectSample::NoPillarbox, t2);
+    h2.feed(2000, TTAspectSample::Pillarbox, t2);
+    const bool fired = h2.feed(2600, TTAspectSample::Pillarbox, t2);
+    check(fired, "a candidate held for 600 frames confirms the transition");
+    check(!h2.takeDiscardedCandidate(c2),
+          "a confirmed candidate is not also reported as discarded");
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
     testClassifier();
+    testReasons();
     testHysteresis();
+    testDiscardedCandidates();
     printf("%s (%d failures)\n", gFailures == 0 ? "ALL PASS" : "FAILURES", gFailures);
     return gFailures == 0 ? 0 : 1;
 }

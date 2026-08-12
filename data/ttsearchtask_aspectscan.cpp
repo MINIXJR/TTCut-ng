@@ -10,6 +10,7 @@
 #include "ttsearchtask_aspectscan.h"
 
 #include "../avstream/ttvideoindexlist.h"
+#include "../common/istatusreporter.h"
 #include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
 
@@ -31,7 +32,10 @@ TTAspectScanTask::TTAspectScanTask(const QString& videoFilePath,
                  frameCount, preBuiltFrameIndex),
     mFrameRate(frameRate > 0.0f ? frameRate : 25.0f),
     mLuminanceThreshold(luminanceThreshold),
-    mSampleStride(qMax(1, qRound(sampleSeconds * (double)(frameRate > 0.0f ? frameRate : 25.0f))))
+    mSampleStride(qMax(1, qRound(sampleSeconds * (double)(frameRate > 0.0f ? frameRate : 25.0f)))),
+    mLog([this](const QString& s) {
+           onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
+         }, 20)
 {
   // See kHysteresisWindowSeconds: clamp defensively so a stride wider than
   // the hysteresis window can never silently defeat it. The shipped UI caps
@@ -61,9 +65,13 @@ QVector<int> TTAspectScanTask::collectSampleBatch(int& pos)
   return batch;
 }
 
-QVector<TTAspectSample> TTAspectScanTask::classifyBatch(const QVector<int>& batch)
+QVector<TTAspectSample> TTAspectScanTask::classifyBatch(const QVector<int>& batch,
+                                                        QVector<TTAspectReason>* reasons)
 {
   QVector<TTAspectSample> out(batch.size(), TTAspectSample::NoStatement);
+  // Sized up front so every worker writes only its own index: the lambda runs
+  // on mWorkerCount threads, so anything shared here would be a data race.
+  QVector<TTAspectReason> why(batch.size(), TTAspectReason::Unusable);
 
   parallelMap(batch.size(), [&](int i) {
     QImage frame = (i < mSubWrappers.size() && mSubWrappers[i])
@@ -72,12 +80,13 @@ QVector<TTAspectSample> TTAspectScanTask::classifyBatch(const QVector<int>& batc
     if (frame.isNull()) {
       if (TTSettings::instance()->logFFmpegDecoder())
           qDebug() << "AspectScan: decode failure at frame" << batch[i];
-      return;   // stays NoStatement
+      return;   // stays NoStatement / Unusable
     }
     out[i] = classifyAspectSample(frame.convertToFormat(QImage::Format_Grayscale8),
-                                  mLuminanceThreshold);
+                                  mLuminanceThreshold, &why[i]);
   });
 
+  if (reasons) *reasons = why;
   return out;
 }
 
@@ -123,6 +132,7 @@ void TTAspectScanTask::operation()
     // setupWorkers() already logs the path-specific failure reason.
     log->errorMsg(__FILE__, __LINE__,
                   QString("TTAspectScanTask: failed to open decoders"));
+    mLog.line(tr("Pillarbox scan: failed to open decoders - skipped"));
     onStatusReport(StatusReportArgs::Finished, tr("Aspect format analysis failed"), 0);
     emit pointsDetected(points);
     return;
@@ -142,6 +152,13 @@ void TTAspectScanTask::operation()
   const int plannedSamples = qMax(1, mFrameCount / mSampleStride);
   onStatusReport(StatusReportArgs::Start, tr("Aspect format analysis..."), plannedSamples);
 
+  mLog.line(tr("Pillarbox scan: threshold %1, sample every %2 s, "
+               "hysteresis %3 s, %4 samples planned")
+                .arg(mLuminanceThreshold)
+                .arg(QString::number(mSampleStride / (double)mFrameRate, 'f', 1))
+                .arg(QString::number(kHysteresisWindowSeconds, 'f', 0))
+                .arg(plannedSamples));
+
   TTAspectHysteresis hysteresis(qMax(1, qRound(kHysteresisWindowSeconds * mFrameRate)));
 
   int  pos           = mIndexList->moveToIndexPos(0, 1);
@@ -154,10 +171,21 @@ void TTAspectScanTask::operation()
     QVector<int> batch = collectSampleBatch(pos);
     if (batch.isEmpty()) break;
 
-    QVector<TTAspectSample> samples = classifyBatch(batch);
+    QVector<TTAspectReason> reasons;
+    QVector<TTAspectSample> samples = classifyBatch(batch, &reasons);
     if (mIsAborted) break;
 
     for (int i = 0; i < batch.size(); ++i) {
+      // Tally first: NoStatement samples are skipped for detection but are
+      // exactly what the summary has to explain.
+      switch (reasons.value(i, TTAspectReason::Unusable)) {
+        case TTAspectReason::None:          mCountPillarbox++;   break;
+        case TTAspectReason::NoBars:        mCountNoPillarbox++; break;
+        case TTAspectReason::BarsTooWide:   mCountBarsTooWide++; break;
+        case TTAspectReason::CentreTooDark: mCountCentreDark++;  break;
+        case TTAspectReason::Unusable:      mCountUnusable++;    break;
+      }
+
       if (samples[i] == TTAspectSample::NoStatement) continue;
       const bool isPillarbox = (samples[i] == TTAspectSample::Pillarbox);
 
@@ -166,7 +194,19 @@ void TTAspectScanTask::operation()
       if (havePrev && isPillarbox != prevState) pendingOldPos = prevPos;
 
       TTAspectTransition transition{};
-      if (hysteresis.feed(batch[i], samples[i], transition)) {
+      const bool confirmed = hysteresis.feed(batch[i], samples[i], transition);
+
+      TTAspectCandidate discarded{};
+      if (hysteresis.takeDiscardedCandidate(discarded)) {
+        mCountDiscarded++;
+        mLog.event(tr("%1: candidate %2 discarded - held %3 s, needs %4 s")
+                       .arg(ttFormatStreamPosition(discarded.firstFrame, mFrameRate))
+                       .arg(discarded.toPillarbox ? QString("4:3pb") : QString("16:9"))
+                       .arg(QString::number(discarded.heldFrames / (double)mFrameRate, 'f', 1))
+                       .arg(QString::number(kHysteresisWindowSeconds, 'f', 0)));
+      }
+
+      if (confirmed) {
         const int marker = refineTransition(pendingOldPos, transition.firstFrame,
                                             transition.toPillarbox);
         points.append(TTStreamPoint(
@@ -174,6 +214,11 @@ void TTAspectScanTask::operation()
             transition.toPillarbox ? QString("16:9 → 4:3pb")
                                    : QString("4:3pb → 16:9"),
             0.0f, 0.0f));
+        mLog.event(tr("%1: confirmed %2 (refined from sample frame %3)")
+                       .arg(ttFormatStreamPosition(marker, mFrameRate))
+                       .arg(transition.toPillarbox ? QString("16:9 -> 4:3pb")
+                                                   : QString("4:3pb -> 16:9"))
+                       .arg(transition.firstFrame));
         if (TTSettings::instance()->logCutPipeline())
             qDebug() << "AspectScan: transition at frame" << marker
                      << (transition.toPillarbox ? "-> 4:3pb" : "-> 16:9")
@@ -198,6 +243,24 @@ void TTAspectScanTask::operation()
       qDebug() << "AspectScan:" << mCheckedSamples << "samples in" << ms << "ms"
                << QString("(%1 workers, stride %2, %3 transitions)")
                       .arg(mWorkerCount).arg(mSampleStride).arg(points.size());
+
+  const int noStatement = mCountBarsTooWide + mCountCentreDark + mCountUnusable;
+  QString summary = mIsAborted
+      ? tr("Pillarbox scan cancelled after %1 of %2 samples")
+            .arg(mCheckedSamples).arg(plannedSamples)
+      : tr("Pillarbox scan: %1 samples").arg(mCheckedSamples);
+
+  summary += tr(" - %1x 16:9, %2x 4:3pb, %3x no statement "
+                "(%4 bars too wide, %5 centre too dark, %6 unusable); "
+                "%7 transitions, %8 candidates discarded")
+                 .arg(mCountNoPillarbox).arg(mCountPillarbox).arg(noStatement)
+                 .arg(mCountBarsTooWide).arg(mCountCentreDark).arg(mCountUnusable)
+                 .arg(points.size()).arg(mCountDiscarded);
+
+  if (mLog.suppressed() > 0)
+    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+
+  mLog.line(summary);
 
   onStatusReport(StatusReportArgs::Finished,
                  mIsAborted ? tr("Aspect format analysis cancelled")

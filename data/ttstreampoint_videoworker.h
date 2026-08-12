@@ -11,6 +11,7 @@
 #define TTSTREAMPOINT_VIDEOWORKER_H
 
 #include "../common/ttthreadtask.h"
+#include "ttanalysislog.h"
 #include "ttstreampoint.h"
 
 #include <QList>
@@ -31,8 +32,11 @@ public:
   // turns the header position of a sequence header into the position the
   // navigation works with; see detectAspectChanges(). May be null, in which
   // case the marker keeps its bitstream position.
+  //
+  // videoFrameRate turns marker positions into the hh:mm:ss form the
+  // landing-zone list uses; <= 0 falls back to plain frame numbers.
   TTStreamPointVideoWorker(int streamType, TTVideoHeaderList* videoHeaderList,
-                           TTVideoIndexList* videoIndexList);
+                           TTVideoIndexList* videoIndexList, float videoFrameRate);
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);
@@ -51,6 +55,8 @@ private:
   int                  mStreamType;
   TTVideoHeaderList*   mVideoHeaderList;
   TTVideoIndexList*    mVideoIndexList;
+  float                mVideoFrameRate;
+  TTAnalysisLog        mLog;
 };
 
 #endif // TTSTREAMPOINT_VIDEOWORKER_H

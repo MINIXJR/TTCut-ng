@@ -41,14 +41,22 @@ float centreMeanLuma(const uchar* y, int stride, int x0, int x1, int y0, int y1)
 
 } // namespace
 
-TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold)
+TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold,
+                                    TTAspectReason* why)
 {
-  if (gray.isNull() || gray.format() != QImage::Format_Grayscale8)
+  auto setWhy = [why](TTAspectReason r) { if (why) *why = r; };
+
+  if (gray.isNull() || gray.format() != QImage::Format_Grayscale8) {
+    setWhy(TTAspectReason::Unusable);
     return TTAspectSample::NoStatement;
+  }
 
   const int w = gray.width();
   const int h = gray.height();
-  if (w < 20 || h < 20) return TTAspectSample::NoStatement;
+  if (w < 20 || h < 20) {
+    setWhy(TTAspectReason::Unusable);
+    return TTAspectSample::NoStatement;
+  }
 
   const uchar* y      = gray.constBits();
   const int    stride = gray.bytesPerLine();
@@ -70,8 +78,10 @@ TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold)
     else break;
   }
 
-  if (leftBar < minBar || rightBar < minBar)
+  if (leftBar < minBar || rightBar < minBar) {
+    setWhy(TTAspectReason::NoBars);
     return TTAspectSample::NoPillarbox;
+  }
 
   // A bar that is far wider than any aspect conversion could produce is dark
   // picture content, not a bar. Pillarboxing 4:3 into 16:9 leaves
@@ -93,8 +103,10 @@ TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold)
   // instead of using it to break a run. Otherwise the bleed above would tear
   // a genuine 4:3 segment into three.
   const int maxBar = w * 3 / 16;
-  if (leftBar > maxBar || rightBar > maxBar)
+  if (leftBar > maxBar || rightBar > maxBar) {
+    setWhy(TTAspectReason::BarsTooWide);
     return TTAspectSample::NoStatement;
+  }
 
   // Mirror of TTFFmpegWrapper::isFrameBlack, which ignores the outer 10 % and
   // calls a frame black at a mean luminance <= 20: a fully black frame would
@@ -103,10 +115,16 @@ TTAspectSample classifyAspectSample(const QImage& gray, int luminanceThreshold)
   // raw-Y video-range value (black ~ 16).
   const int cx0 = leftBar;
   const int cx1 = w - rightBar;
-  if (cx1 - cx0 < minBar) return TTAspectSample::NoStatement;
-  if (centreMeanLuma(y, stride, cx0, cx1, y0, y1) <= 20.0f)
+  if (cx1 - cx0 < minBar) {
+    setWhy(TTAspectReason::Unusable);
     return TTAspectSample::NoStatement;
+  }
+  if (centreMeanLuma(y, stride, cx0, cx1, y0, y1) <= 20.0f) {
+    setWhy(TTAspectReason::CentreTooDark);
+    return TTAspectSample::NoStatement;
+  }
 
+  setWhy(TTAspectReason::None);
   return TTAspectSample::Pillarbox;
 }
 
@@ -127,15 +145,27 @@ bool TTAspectHysteresis::feed(int pos, TTAspectSample sample, TTAspectTransition
     mConfirmed      = isPillarbox;
     mCandidate      = isPillarbox;
     mCandidateFirst = pos;
+    mCandidateLast  = pos;
     return false;
   }
 
-  // A different state starts a new candidate run.
+  // A different state starts a new candidate run. If the run that ends here
+  // was challenging the confirmed state, it died short of the window - record
+  // it so the caller can report why nothing was found at this position.
   if (isPillarbox != mCandidate) {
+    if (mCandidate != mConfirmed) {
+      mDiscarded.firstFrame  = mCandidateFirst;
+      mDiscarded.toPillarbox = mCandidate;
+      mDiscarded.heldFrames  = mCandidateLast - mCandidateFirst;
+      mHaveDiscarded         = true;
+    }
     mCandidate      = isPillarbox;
     mCandidateFirst = pos;
+    mCandidateLast  = pos;
     return false;
   }
+
+  mCandidateLast = pos;
 
   if (mCandidate != mConfirmed && (pos - mCandidateFirst) >= mHysteresisFrames) {
     mConfirmed      = mCandidate;
@@ -145,4 +175,12 @@ bool TTAspectHysteresis::feed(int pos, TTAspectSample sample, TTAspectTransition
   }
 
   return false;
+}
+
+bool TTAspectHysteresis::takeDiscardedCandidate(TTAspectCandidate& out)
+{
+  if (!mHaveDiscarded) return false;
+  out            = mDiscarded;
+  mHaveDiscarded = false;
+  return true;
 }

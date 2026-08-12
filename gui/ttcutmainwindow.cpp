@@ -907,7 +907,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
     // videoIndex is display-sorted (TTOpenVideoTask sorts right after building
     // it); the worker needs it to report markers in navigation positions.
     TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
-      vs->streamType(), videoHeaders, videoIndex);
+      vs->streamType(), videoHeaders, videoIndex, vs->frameRate());
 
     connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
             this, &TTCutMainWindow::onVideoPointsDetected);

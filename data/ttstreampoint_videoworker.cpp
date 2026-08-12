@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampoint_videoworker.h"
+#include "ttanalysislog.h"
 #include "../avstream/ttvideoheaderlist.h"
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttmpeg2videoheader.h"
@@ -19,11 +20,15 @@
 
 TTStreamPointVideoWorker::TTStreamPointVideoWorker(
     int streamType, TTVideoHeaderList* videoHeaderList,
-    TTVideoIndexList* videoIndexList)
+    TTVideoIndexList* videoIndexList, float videoFrameRate)
   : TTThreadTask("StreamPointVideoAnalysis"),
     mStreamType(streamType),
     mVideoHeaderList(videoHeaderList),
-    mVideoIndexList(videoIndexList)
+    mVideoIndexList(videoIndexList),
+    mVideoFrameRate(videoFrameRate),
+    mLog([this](const QString& s) {
+           onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
+         }, 20)
 {
 }
 
@@ -35,6 +40,7 @@ void TTStreamPointVideoWorker::operation()
 
   if (!mIsAborted) {
     onStatusReport(StatusReportArgs::Step, tr("Aspect ratio analysis..."), 0);
+    mLog.line(tr("Aspect ratio (sequence headers): scanning"));
     QList<TTStreamPoint> aspectPoints = detectAspectChanges();
     allPoints.append(aspectPoints);
     if (TTSettings::instance()->logCutPipeline())
@@ -116,11 +122,14 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
     return results;
 
   // MPEG-2 only — sequence headers contain aspect_ratio_information
-  if (mStreamType != TTAVTypes::mpeg2_demuxed_video)
+  if (mStreamType != TTAVTypes::mpeg2_demuxed_video) {
+    mLog.line(tr("Aspect ratio: not an MPEG-2 stream - skipped"));
     return results;
+  }
 
   int prevAspect = -1;
   int pictureCount = 0;
+  int sequenceHeaders = 0;
 
   // Iterate all headers (sequence, GOP, picture are interleaved)
   for (int i = 0; i < mVideoHeaderList->size() && !mIsAborted; ++i) {
@@ -133,6 +142,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
 
     if (hdr->headerType() == TTMpeg2VideoHeader::sequence_start_code) {
       TTSequenceHeader* seqHdr = static_cast<TTSequenceHeader*>(hdr);
+      sequenceHeaders++;
       int aspect = seqHdr->aspectRatio();
 
       if (prevAspect >= 0 && aspect != prevAspect) {
@@ -154,6 +164,9 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
                       "marker keeps its bitstream position %2")
                 .arg(i).arg(pictureCount));
           }
+          mLog.event(tr("no index entry for the picture after sequence header %1"
+                        " - marker keeps its bitstream position %2")
+                         .arg(i).arg(pictureCount));
           position = pictureCount;
         }
 
@@ -166,6 +179,9 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
           QString("%1 \u2192 %2").arg(prevStr, newStr),
           0.0f, 0.0f);
         results.append(pt);
+        mLog.event(tr("%1: aspect %2 -> %3")
+                       .arg(ttFormatStreamPosition(position, mVideoFrameRate))
+                       .arg(prevStr, newStr));
       }
       prevAspect = aspect;
     }
@@ -174,6 +190,25 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "detectAspectChanges:" << pictureCount << "pictures scanned,"
                << results.size() << "changes found";
+
+  QString summary = mIsAborted
+      ? tr("Aspect ratio cancelled after %1 sequence headers, %2 pictures")
+            .arg(sequenceHeaders).arg(pictureCount)
+      : tr("Aspect ratio: %1 sequence headers, %2 pictures")
+            .arg(sequenceHeaders).arg(pictureCount);
+  if (results.isEmpty() && prevAspect >= 0) {
+    const QString aspectStr = (prevAspect == 2) ? QString("4:3")
+                            : (prevAspect == 3) ? QString("16:9")
+                                                : QString::number(prevAspect);
+    summary += tr(" - aspect constant %1, no changes").arg(aspectStr);
+  } else if (results.isEmpty()) {
+    summary += tr(" - no sequence header with aspect information");
+  } else {
+    summary += tr(" - %1 changes").arg(results.size());
+  }
+  if (mLog.suppressed() > 0)
+    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+  mLog.line(summary);
 
   return results;
 }

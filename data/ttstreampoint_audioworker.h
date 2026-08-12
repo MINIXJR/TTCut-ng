@@ -11,6 +11,7 @@
 #define TTSTREAMPOINT_AUDIOWORKER_H
 
 #include "../common/ttthreadtask.h"
+#include "ttanalysislog.h"
 #include "ttstreampoint.h"
 
 #include <QList>
@@ -52,6 +53,7 @@ private:
   float                mSilenceMinDuration;
   bool                 mDetectAudioChange;
   TTAudioHeaderList*   mAudioHeaderList;
+  TTAnalysisLog        mLog;
 };
 
 #endif // TTSTREAMPOINT_AUDIOWORKER_H

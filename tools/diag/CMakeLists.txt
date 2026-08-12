@@ -88,6 +88,7 @@ set(ASPECTSCAN_SRC
   ${ROOT}/data/ttsearchtask_aspectscan.cpp
   ${ROOT}/data/ttsearchtask.cpp
   ${ROOT}/data/ttaspectdetect.cpp
+  ${ROOT}/data/ttanalysislog.cpp
   ${ROOT}/data/ttstreampoint.cpp
   ${ROOT}/common/ttthreadtask.cpp
   ${ROOT}/avstream/ttvideoindexlist.cpp
@@ -107,6 +108,7 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/data/ttsearchtask_aspectscan.cpp
   ${ROOT}/data/ttsearchtask.cpp
   ${ROOT}/data/ttaspectdetect.cpp
+  ${ROOT}/data/ttanalysislog.cpp
   ${ROOT}/data/ttstreampoint.cpp
   ${ROOT}/common/ttthreadtask.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
@@ -118,6 +120,7 @@ set(STREAMPOINTORDER_SRC
   ${MPEG2CUT_SRC}
   ${ROOT}/data/ttstreampoint_videoworker.cpp
   ${ROOT}/data/ttstreampoint.cpp
+  ${ROOT}/data/ttanalysislog.cpp
   ${ROOT}/common/ttthreadtask.cpp)
 
 set(MKVORDER_SRC
@@ -175,6 +178,7 @@ diag_tool(test_startcode_scan     SOURCES ${FILEBUF_SRC})
 diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
 diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
 diag_tool(test_aspectdetect       SOURCES ${ROOT}/data/ttaspectdetect.cpp)
+diag_tool(test_analysislog        SOURCES ${ROOT}/data/ttanalysislog.cpp)
 diag_tool(test_aspectscan  AV MPEG2 SOURCES ${ASPECTSCAN_SRC})
 diag_tool(test_aspectscan_mpeg2 AV MPEG2 SOURCES ${MPEG2ASPECTSCAN_SRC})
 diag_tool(test_pool_abort         SOURCES ${POOLABORT_SRC})
@@ -244,7 +248,7 @@ add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
-  test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
+  test_analysislog test_aspectscan test_aspectscan_mpeg2 test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_window_geometry
   test_progressestimator)
 

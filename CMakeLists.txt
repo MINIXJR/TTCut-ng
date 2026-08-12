@@ -78,6 +78,7 @@ set(TTCUT_HEADERS
   common/ttcalibrationstore.h
   common/ttprogressestimator.h
   data/ttaspectdetect.h
+  data/ttanalysislog.h
   data/ttaudiolist.h
   data/ttsubtitlelist.h
   data/ttcutlist.h
@@ -190,6 +191,7 @@ set(TTCUT_CORE_SOURCES
   common/ttcalibrationstore.cpp
   common/ttprogressestimator.cpp
   data/ttaspectdetect.cpp
+  data/ttanalysislog.cpp
   data/ttaudiolist.cpp
   data/ttsubtitlelist.cpp
   data/ttcutlist.cpp

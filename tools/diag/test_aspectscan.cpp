@@ -31,6 +31,7 @@
 #include "avstream/ttavheader.h"
 #include "avstream/ttavtypes.h"
 #include "extern/ttffmpegwrapper.h"
+#include "common/ttthreadtask.h"
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -109,6 +110,14 @@ int main(int argc, char** argv)
                           indexList.count(), fps, 20, sampleS, w.frameIndex());
     QObject::connect(&task, &TTAspectScanTask::pointsDetected,
                      [&points](const QList<TTStreamPoint>& p) { points = p; });
+    // Record all status messages: the step sequence is the invariant
+    // against which detail output is tested (only AddProcessLine may be added).
+    // Format: <state>|<value>|<msg>
+    QObject::connect(&task, &TTThreadTask::statusReport,
+                     [](TTThreadTask*, int state, const QString& msg, quint64 value) {
+                         printf("STATUS|%d|%llu|%s\n", state,
+                                (unsigned long long)value, qPrintable(msg));
+                     });
     task.runSynchron();
 
     for (const TTStreamPoint& p : points)

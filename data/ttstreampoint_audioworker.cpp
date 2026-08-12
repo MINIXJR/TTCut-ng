@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampoint_audioworker.h"
+#include "ttanalysislog.h"
 #include "../avstream/ttaudioheaderlist.h"
 #include "../avstream/ttac3audioheader.h"
 #include "../avstream/ttavtypes.h"
@@ -39,7 +40,10 @@ TTStreamPointAudioWorker::TTStreamPointAudioWorker(
     mSilenceThresholdDb(silenceThresholdDb),
     mSilenceMinDuration(silenceMinDuration),
     mDetectAudioChange(detectAudioChange),
-    mAudioHeaderList(audioHeaderList)
+    mAudioHeaderList(audioHeaderList),
+    mLog([this](const QString& s) {
+           onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
+         }, 20)
 {
 }
 
@@ -57,10 +61,23 @@ void TTStreamPointAudioWorker::operation()
     if (TTSettings::instance()->logCutPipeline())
         qDebug() << "StreamPointAudio: Detecting silence...";
     onStatusReport(StatusReportArgs::Step, tr("Silence detection..."), mStepCount);
+    mLog.line(tr("Silence detection: threshold %1 dB, min duration %2 s")
+                  .arg(mSilenceThresholdDb)
+                  .arg(QString::number(mSilenceMinDuration, 'f', 1)));
     QList<TTStreamPoint> silencePoints = detectSilencePoints();
     allPoints.append(silencePoints);
     if (TTSettings::instance()->logCutPipeline())
         qDebug() << "StreamPointAudio: Found" << silencePoints.size() << "silence regions";
+    // Silence detection decodes the whole audio track, so it is a realistic
+    // place to hit Cancel - the summary has to say the number is partial.
+    QString silenceSummary = mIsAborted
+        ? tr("Silence detection cancelled: %1 regions found so far")
+              .arg(silencePoints.size())
+        : tr("Silence detection: %1 regions found").arg(silencePoints.size());
+    if (mLog.suppressed() > 0)
+      silenceSummary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+    mLog.line(silenceSummary);
+    mLog.resetCap();   // the format section gets its own budget
     mStepCount = 1;
   }
 
@@ -282,7 +299,7 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
     int frameIdx = qRound(silenceStart * mVideoFrameRate);
 
     TTStreamPoint pt(frameIdx, StreamPointType::Silence,
-      QString("Stille (%1 dB)").arg(mSilenceThresholdDb),
+      tr("Silence (%1 dB)").arg(mSilenceThresholdDb),
       static_cast<float>(mSilenceThresholdDb), 0.0f);
     results.append(pt);
     return;
@@ -299,9 +316,12 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
     // Update the last silence point (created by silence_start) with duration
     TTStreamPoint& last = results.last();
     if (last.type() == StreamPointType::Silence) {
-      last.setDescription(QString("Stille (%1 dB, %2s)")
+      last.setDescription(tr("Silence (%1 dB, %2s)")
         .arg(mSilenceThresholdDb)
         .arg(QLocale::c().toString(duration, 'f', 1)));
+      mLog.event(tr("%1: silence %2 s")
+                     .arg(ttFormatStreamPosition(last.frameIndex(), mVideoFrameRate))
+                     .arg(QLocale::c().toString(duration, 'f', 1)));
     }
   }
 }
@@ -310,12 +330,15 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
 {
   QList<TTStreamPoint> results;
 
-  if (!mAudioHeaderList || mAudioHeaderList->size() == 0)
+  if (!mAudioHeaderList || mAudioHeaderList->size() == 0) {
+    mLog.line(tr("Audio format detection: no audio header list - skipped"));
     return results;
+  }
 
   // Detect channel configuration changes in AC3 streams
   // by tracking acmod field across consecutive headers
   int prevChannels = -1;
+  int ac3Headers = 0;
 
   for (int i = 0; i < mAudioHeaderList->size() && !mIsAborted; ++i) {
     TTAudioHeader* hdr = mAudioHeaderList->audioHeaderAt(i);
@@ -324,6 +347,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
     // Try AC3 header (has acmod field)
     TTAC3AudioHeader* ac3Hdr = dynamic_cast<TTAC3AudioHeader*>(hdr);
     if (ac3Hdr) {
+      ac3Headers++;
       int acmod = ac3Hdr->acmod;
       int channels = AC3AudioCodingMode[acmod];
       if (ac3Hdr->lfeon) channels++;  // +1 for LFE (.1)
@@ -340,12 +364,33 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
           QString("Audio %1 \u2192 %2").arg(prevStr, newStr),
           0.0f, 0.0f);
         results.append(pt);
+        mLog.event(tr("%1: audio %2 -> %3")
+                       .arg(ttFormatStreamPosition(frameIdx, mVideoFrameRate))
+                       .arg(prevStr, newStr));
       }
       prevChannels = channels;
     }
     // MP2 headers don't have acmod — channel changes are less common
     // in DVB MP2 streams. Skip for now.
   }
+
+  if (ac3Headers == 0) {
+    // detectAudioChanges only reads AC3 acmod; MP2 headers carry no such
+    // field and are skipped. Without this line a run over an MP2 track looks
+    // exactly like a run that found nothing.
+    mLog.line(tr("Audio format detection: no AC3 headers in %1 frames - "
+                 "channel-change detection is AC3 only, skipped")
+                  .arg(mAudioHeaderList->size()));
+    return results;
+  }
+
+  QString summary = tr("Audio format detection: %1 AC3 frames").arg(ac3Headers);
+  summary += results.isEmpty()
+      ? tr(" - channel layout constant, no changes")
+      : tr(" - %1 changes").arg(results.size());
+  if (mLog.suppressed() > 0)
+    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
+  mLog.line(summary);
 
   return results;
 }
