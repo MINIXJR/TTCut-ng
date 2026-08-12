@@ -390,6 +390,42 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Vorschau und MPEG-2-Schnitt gaben nicht frei, was sie anlegten** →
+  **GELÖST (2026-08-12)**
+  - War: `TTCutPreviewTask::operation()` löschte den geteilten Smart-Cut-Motor
+    an **drei** Stellen (Init-Fehler, `catch`, Funktionsende) — und ein
+    vierter Ausgang hatte keine: der Abbruchwurf am Kopf der Clip-Schleife
+    (`:202`) liegt außerhalb des `try` und springt an allen dreien vorbei.
+    Wer *zwischen* zwei Vorschau-Clips abbrach, verlor den Motor samt aller
+    darin gehaltenen dekodierten Bilder (im TODO-Eintrag vom 2026-08-10 mit
+    ~535 MB gemessen). Dazu vier Objekte, die niemandem gehörten:
+    der `TTCutVideoTask` der Vorschau, deren Vorschau-Schnittliste, die
+    innere `TTCutTask` und — auf dem Abbruchpfad — der Dateipuffer des
+    MPEG-2-Schnitts samt offenem Deskriptor.
+  - Fix: Der Motor hängt an einem `qScopeGuard`, der die heikle Reihenfolge
+    (Verfolgungszeiger unter `mSmartCutMutex` nullen, **dann** löschen) an
+    einer statt an drei Stellen trägt und auf jedem Ausgang greift.
+    `TTCutPreviewTask` und `TTCutVideoTask` haben Destruktoren bekommen.
+    Nebenbei zwei uninitialisierte Zeiger in `TTCutVideoTask` beseitigt
+    (`mpTgtStream`, `mpCutParams`) — ohne die hätte der neue Destruktor auf
+    Müll gezeigt; sie waren vorher harmlos, weil sie niemand las.
+  - **Beleg (ASAN, `tools/diag/test_previewcut_abort`, Fall `audio`, Tux
+    1080p progressive):** die vier Fundstellen `ttcutpreviewtask.cpp:60`,
+    `ttcutvideotask.cpp:37` und `createPreviewCutList` im Leak-Bericht
+    vorher → **null** nachher. Die **Gesamtsumme taugt hier nicht als Maß**:
+    sie wird vom Grundrauschen des Harness bestimmt (der baut in `main`
+    Video- und Audiostream auf und gibt sie nie frei) und schwankte schon
+    vor dem Eingriff zwischen 4 205 480 und 4 253 944 B. Ein Referenzlauf
+    ohne jeden Abbruch (`none`) leckte genauso viel wie die Abbruchläufe —
+    erst das zeigte, dass die 4,2 MB nichts mit dem Defekt zu tun haben.
+  - **Nicht bewiesen:** Das 535-MB-Leck selbst wurde in sechs Läufen **nie
+    ausgelöst** — der Harness armiert den Abbruch an einer festen Dateigröße
+    (`size=262144 bytes at 1490 ms`) und landet damit reproduzierbar
+    *innerhalb* Clip 1, wo schon vorher der `catch` aufräumte. Belegt ist
+    also: die kleinen Lecks sind weg, und der Weg, auf dem das große
+    entstand, räumt jetzt auf wie alle anderen. Wer es messen will, muss den
+    Auslösepunkt des Harness an den Clip-Übergang hängen.
+
 - **Detailausgabe der Landezonen-Analyse war unvollständig** → **GELÖST
   (2026-08-11, branch `feature/landezonen-detailausgabe`,
   `3c756b9b`..`8714169f` + Übersetzungs-/Doku-Commit)**

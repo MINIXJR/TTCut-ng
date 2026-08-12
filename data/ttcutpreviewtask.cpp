@@ -61,6 +61,16 @@ TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
 }
 
 /**
+ * The task owns the cut task it builds here and the preview cut list that
+ * operation() derives; neither was released before.
+ */
+TTCutPreviewTask::~TTCutPreviewTask()
+{
+	delete cutVideoTask;
+	delete mpPreviewCutList;
+}
+
+/**
  * Operation abort requested
  *
  * Runs on the GUI thread while operation() runs on the pool. mpActiveSmartCut
@@ -122,6 +132,28 @@ void TTCutPreviewTask::operation()
 
 	// For H.264/H.265: create shared Smart Cut instance (parses ES file once)
 	TTESSmartCut* sharedSmartCut = nullptr;
+
+	// One place that knows the release order, and a guard that runs it on
+	// EVERY way out of this function. The order matters: the tracking pointer
+	// the GUI thread reaches for in onUserAbort() must be cleared under the
+	// mutex BEFORE the engine dies, never after.
+	//
+	// Previously three separate delete sites carried that order, and a fourth
+	// exit had none: the abort check at the top of the clip loop throws
+	// straight out of operation(), past all of them. Cancelling BETWEEN two
+	// preview clips therefore leaked the engine with every decoded frame it
+	// held - measured at ~535 MB (TODO entry of 2026-08-10). A guard covers
+	// that exit and any future one.
+	auto releaseEngine = [this](TTESSmartCut*& engine) {
+		if (!engine) return;
+		{
+			QMutexLocker lock(&mSmartCutMutex);
+			mpActiveSmartCut = nullptr;
+		}
+		delete engine;
+		engine = nullptr;
+	};
+	auto engineGuard = qScopeGuard([&] { releaseEngine(sharedSmartCut); });
 	if (isH264H265) {
 		TTVideoStream* vStream = mpCutList->at(0).avDataItem()->videoStream();
 		double frameRate = vStream->frameRate();
@@ -162,15 +194,7 @@ void TTCutPreviewTask::operation()
 			else
 				TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
 					QString("Preview: Shared Smart Cut init failed: %1").arg(sharedSmartCut->lastError()));
-			// Clear the tracking pointer BEFORE deleting the engine — never
-			// after, or onUserAbort() on the GUI thread could dereference a
-			// freed object in the (tiny) window between the two.
-			{
-				QMutexLocker lock(&mSmartCutMutex);
-				mpActiveSmartCut = nullptr;
-			}
-			delete sharedSmartCut;
-			sharedSmartCut = nullptr;
+			releaseEngine(sharedSmartCut);
 		} else {
 			const int previewPreset = TTSettings::instance()->previewPreset();
 			sharedSmartCut->setPresetOverride(previewPreset);
@@ -248,13 +272,8 @@ void TTCutPreviewTask::operation()
         // skip), then re-raise so TTThreadTask::run() reports it as a clean
         // abort.
         delete tmpCutList;
-        // Clear the tracking pointer BEFORE deleting the engine — same
-        // ordering requirement as the init-failure branch above.
-        {
-          QMutexLocker lock(&mSmartCutMutex);
-          mpActiveSmartCut = nullptr;
-        }
-        delete sharedSmartCut;
+        // The engine is released by engineGuard as the throw leaves
+        // operation() - same order, one place.
         throw;
       }
       hasAudio = (tmpCutList->at(0).avDataItem()->audioCount() > 0);
@@ -368,13 +387,7 @@ void TTCutPreviewTask::operation()
     delete tmpCutList;
   }
 
-  // Clear the tracking pointer BEFORE deleting the engine — same ordering
-  // requirement as the two earlier deletion sites above.
-  {
-    QMutexLocker lock(&mSmartCutMutex);
-    mpActiveSmartCut = nullptr;
-  }
-  delete sharedSmartCut;
+  releaseEngine(sharedSmartCut);
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";

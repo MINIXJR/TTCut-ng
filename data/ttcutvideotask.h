@@ -32,6 +32,7 @@ class TTCutVideoTask : public TTThreadTask
 
   public:
     TTCutVideoTask(TTAVData* avData);
+    ~TTCutVideoTask() override;
     void init(QString tgtFilePath, TTCutList* cutList);
     TTMuxListDataItem* muxListItem();
 

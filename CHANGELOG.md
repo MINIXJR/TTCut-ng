@@ -4,6 +4,16 @@ All notable changes to TTCut-ng are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Cancelling a cut preview no longer leaks the decoder engine.** The engine
+  was released on three code paths but not on the one taken when the cancel
+  landed between two preview clips, which lost it together with every decoded
+  frame it held. Cancelling an MPEG-2 cut likewise kept the target file buffer
+  with its file descriptor open, so a deleted video elementary stream vanished
+  from the directory but kept occupying disk until the program ended. Both
+  release properly now, along with three smaller objects that had no owner.
+
 ### Changed
 
 - **The progress dialog's details pane now explains the landing-zone

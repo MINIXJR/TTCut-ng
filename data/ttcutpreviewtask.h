@@ -31,6 +31,7 @@ class TTCutPreviewTask : public TTThreadTask
 
 	public:
 		TTCutPreviewTask(TTAVData* avData, TTCutList* cutList);
+		~TTCutPreviewTask() override;
 
 		static QString createPreviewFileName(int index, QString extension);
 

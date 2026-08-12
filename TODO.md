@@ -89,36 +89,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
   festgehalten. Reihenfolge grob nach Nutzerwirkung.
-  - **Abgebrochene Vorschau verliert den geteilten Smart-Cut-Motor samt
-    aller darin gehaltenen Bilder.** `TTCutPreviewTask::operation()` prüft am
-    Schleifenkopf `isAborted()` und wirft dort eine `TTAbortException`
-    (`data/ttcutpreviewtask.cpp:196`). Dieser Wurf liegt **außerhalb** des
-    `try` um `createH264PreviewClip()`, das den Motor im Fehlerfall löscht
-    (`:257`), und überspringt zugleich das `delete sharedSmartCut` am Ende von
-    `operation()` (`:377`); `cleanUp()` ist leer. Fällt der Abbruch also
-    zwischen zwei Vorschau-Clips, bleibt der Motor mitsamt seiner
-    dekodierten Bilder liegen. Gemessen mit ASAN auf
-    `tux_h264_1080p_progressive_test`, beide Male mit demselben Harness und
-    demselben Fall (`audio`), nur mit unterschiedlicher Landestelle:
-    **535 391 447 B in 62 183 Allokationen**, wenn der Abbruch zwischen
-    Clip 1 und Clip 2 landet, gegenüber **4 253 512 B**, wenn er innerhalb
-    von Clip 1 landet (dann greift der `catch`). Wurfstelle und Löschstelle
-    stammen beide aus Februar 2026 (`a65ccd22` / `1cf22691`) — vorbestehend.
-    Der Speicher wird erst beim Programmende frei; mehrere abgebrochene
-    Vorschauen in einer Sitzung summieren sich.
-    Reproduzieren: `tools/diag/test_previewcut_abort <es> <ac3> <wd> audio`
-    unter ASAN mehrfach laufen lassen — je nachdem, ob der Abbruch inner-
-    oder zwischen-Clip landet, unterscheidet sich die Leak-Summe um ~530 MB.
-  - **`TTCutVideoTask` gibt weder seinen `TTFileBuffer` noch seinen
-    `TTCutParameter` noch sich selbst frei** (ASAN-bestätigt, vorbestehend).
-    Sichtbare Folge seit dem Abbruch-Vorhaben: Löscht ein abgebrochener
-    MPEG-2-Schnitt sein Video-ES, wird die Datei entlinkt, während noch ein
-    Deskriptor offen ist — sie verschwindet aus dem Verzeichnis, ihre Blöcke
-    werden aber erst beim Programmende frei. Mehrere abgebrochene große
-    MPEG-2-Schnitte in einer Sitzung halten die Platte belegt, ohne dass
-    etwas zu sehen wäre. Behebung ist eine Eigentums-/Lebensdauer-Änderung
-    in einer Klasse mit drei Aufrufstellen (inkl. `TTCutPreviewTask`) —
-    etwa zehn Zeilen plus eigener Prüflauf.
   - **`Exit` wird gemeldet, bevor `mLastCutError` gesetzt ist** (H.26x- und
     Audio-only-Pfad). `TTCutMainWindow::onStatusReport` liest beim
     Behandeln von `Exit` `lastCutError()`, um zu entscheiden, ob die

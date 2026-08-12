@@ -34,7 +34,26 @@ TTCutVideoTask::TTCutVideoTask(TTAVData* avData) :
   mpAVData     = avData;
   mpCutList    = 0;
   mpCutStream  = 0;
+  mpTgtStream  = nullptr;   // was uninitialised - the destructor reads it
+  mpCutParams  = nullptr;
   mpCutTask    = new TTCutTask();
+}
+
+/**
+ * Owns three things and now releases all of them: the inner cut task from the
+ * constructor, and the target buffer plus cut parameters from operation().
+ * The buffer is deleted at the end of a successful run and its pointer
+ * cleared there, so the delete below only fires when operation() left early -
+ * an abort between cut-list entries, or an exception out of the cut itself.
+ * Before this, that path leaked the buffer with its file descriptor still
+ * open: a deleted video ES vanished from the directory but kept its blocks
+ * until the program ended.
+ */
+TTCutVideoTask::~TTCutVideoTask()
+{
+  delete mpCutTask;
+  delete mpCutParams;
+  delete mpTgtStream;
 }
 
 /**
@@ -68,8 +87,8 @@ void TTCutVideoTask::onUserAbort()
  */
 void TTCutVideoTask::cleanUp()
 {
-  //if (mpTgtStream != 0) delete mpTgtStream;
-  //if (mpCutParams != 0) delete mpCutParams;
+  // Ownership is handled in the destructor - cleanUp() runs on paths where
+  // the task object stays alive (see TTThreadTask::run()).
 }
 
 /**
@@ -148,6 +167,7 @@ void TTCutVideoTask::operation()
   log->debugMsg(__FILE__, __LINE__, QString("close target stream %1").arg(mTgtFilePath));
 
   delete mpTgtStream;
+  mpTgtStream = nullptr;   // so the destructor does not free it twice
 
   qDebug("cut video task -> emit finished signal!");
   emit finished(mMuxListItem);
