@@ -177,6 +177,26 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `finishCutOperation()` gemeldet werden. Nicht in `feature/cut-outcome-
     reporting` behoben - hätte den Zweig gesprengt.
 
+- **`test_mpeg2cut_abort` stürzt ab, obwohl es PASS meldet** (2026-08-12, beim
+  Sitzungsabschluss gefunden)
+  - Drei Core-Dumps von `tools/diag/test_mpeg2cut_abort` (je ~50 MB) lagen im
+    Projektwurzelverzeichnis, entstanden während der mplex-Arbeiten. Die
+    zugehörigen Läufe (`mplexabort`, `mplexlate`, `mplexearly`) hatten alle
+    **PASS** gemeldet und ihren Rückgabewert 0 geliefert — der Absturz passiert
+    also nach dem Urteil, vermutlich beim Beenden (statische Destruktoren,
+    Qt-Objekte, offene libav-Zustände).
+  - Warum das zählt: Ein Prüfwerkzeug, das sein Urteil abgibt und dann
+    abstürzt, ist als Beleg nur eingeschränkt brauchbar. Solange nicht klar
+    ist, was da abstürzt, kann niemand ausschließen, dass der Absturz mit dem
+    geprüften Zustand zusammenhängt statt nur mit dem Aufräumen danach.
+  - Die Dumps waren in `git status` unsichtbar (`showUntrackedFiles=no`) und
+    sind auf Nutzerentscheid gelöscht. Zum Nachstellen: die drei mplex-Fälle
+    gegen echtes MPEG-2-Material laufen lassen und danach `ls core.*` prüfen —
+    nicht auf den Rückgabewert schauen, der ist 0.
+  - Erster Schritt wäre ein Lauf unter ASAN oder ein `bt` aus einem frischen
+    Dump; das Neubau-Kommando für den ASAN-Bau steht weiter oben in dieser
+    Datei.
+
 - **Landezonen-Analysen, die gar nicht erst starten, erklären sich nicht**
   (Nachfolgepunkt der Detailausgabe, Schlussprüfung 2026-08-11)
   - Seit `88b911f9` sagt jede der drei Analysen im Detailbereich, warum sie
