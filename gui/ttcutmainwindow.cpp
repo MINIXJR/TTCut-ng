@@ -896,14 +896,26 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
 
   mStreamPointWorkersRunning = 0;
   mStreamPointAnalysisAborted = false;
+  mSkippedAnalysisNotes.clear();
 
   TTVideoHeaderList* videoHeaders = vs->headerList();
   TTVideoIndexList*  videoIndex   = vs->indexList();
 
   // Header-based aspect detection reads MPEG-2 sequence headers; only MPEG-2
   // streams have a header list at all.
-  if (TTSettings::instance()->spDetectAspectChange() &&
-      videoHeaders && videoHeaders->size() > 0) {
+  const bool haveHeaders = (videoHeaders && videoHeaders->size() > 0);
+  if (TTSettings::instance()->spDetectAspectChange() && !haveHeaders) {
+    // Enabled but unbuildable. Saying so here is the whole point: the worker
+    // carries a "not an MPEG-2 stream - skipped" line, but it is unreachable
+    // twice over - it is never constructed without a header list, and
+    // detectAspectChanges() returns on the empty list before it reaches that
+    // line. Without this note the detail area stays silent, and silence reads
+    // as "found nothing", which is the very ambiguity this area exists to
+    // remove.
+    mSkippedAnalysisNotes << tr("Aspect ratio (sequence headers): stream has no "
+                                "sequence headers (not MPEG-2) - skipped");
+  }
+  if (TTSettings::instance()->spDetectAspectChange() && haveHeaders) {
     // videoIndex is display-sorted (TTOpenVideoTask sorts right after building
     // it); the worker needs it to report markers in navigation positions.
     TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
@@ -923,8 +935,12 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   // Pillarbox detection decodes I-frames; it needs the index list, which every
   // codec has. The frame index comes from the preview wrapper, so the scan does
   // not re-scan the file (and, for H.26x, has a valid index at all).
-  if (TTSettings::instance()->spDetectPillarbox() &&
-      videoIndex && videoIndex->count() > 0) {
+  const bool haveIndex = (videoIndex && videoIndex->count() > 0);
+  if (TTSettings::instance()->spDetectPillarbox() && !haveIndex) {
+    mSkippedAnalysisNotes << tr("Pillarbox detection: the stream has no frame "
+                                "index - skipped");
+  }
+  if (TTSettings::instance()->spDetectPillarbox() && haveIndex) {
     QList<TTFrameInfo> preBuiltIndex;
     if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
       preBuiltIndex = preview->frameIndex();
@@ -981,11 +997,28 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
 
       mpStreamPointTaskPool->start(audioWorker);
       mStreamPointWorkersRunning++;
+    } else {
+      mSkippedAnalysisNotes << tr("Audio analysis (silence, format changes): no "
+                                  "audio track loaded - skipped");
     }
   }
 
   if (mStreamPointWorkersRunning > 0) {
     mpStreamPointWidget->setAnalysisRunning(true);
+  } else if (!mSkippedAnalysisNotes.isEmpty()) {
+    // Methods ARE enabled - they just cannot run on this material. Saying
+    // "no detection methods enabled" here sent the user to the settings tab
+    // to look for a checkbox that was already ticked.
+    //
+    // Logged as well, for the same reason as in onStatusReport(): with no
+    // worker there is no progress dialog and no details area, so the dialog
+    // below is the only trace - and it is gone the moment it is dismissed.
+    for (const QString& note : mSkippedAnalysisNotes)
+      TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__, note);
+    QMessageBox::information(this, tr("Stream Points"),
+      tr("No analysis could be run on this stream:\n\n%1")
+          .arg(mSkippedAnalysisNotes.join("\n")));
+    mSkippedAnalysisNotes.clear();
   } else {
     QMessageBox::information(this, tr("Stream Points"),
       tr("No detection methods enabled. Check Settings tab."));
@@ -1850,6 +1883,21 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
         connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
       }
       this->setEnabled(false);
+      // ...but not the progress dialog. It is a child of this window, and Qt
+      // disables children along with their parent - child windows included. A
+      // disabled dialog is painted in its disabled state, which no style
+      // animates, so the bar's pulse mode (setRange(0, 0) after 5 s without a
+      // Step) showed frozen stripes.
+      //
+      // This has to sit HERE, next to the disable, not in showBar(): Init
+      // arrives once per operation - and a cut produces several pool runs in a
+      // row (cut, then mux) - so anything set earlier is undone by the next
+      // Init. Measured: three Inits in one session, each re-disabling the
+      // dialog. That is why the pulse was ALWAYS static, not just on the first
+      // operation.
+      //
+      // Enabled is also what the Cancel button needs.
+      if (progressBar != 0) progressBar->setEnabled(true);
       break;
 
     case StatusReportArgs::Start:
@@ -1866,6 +1914,23 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
         connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
       }
       progressBar->showBar();
+      // The notes collected in onAnalyzeStreamPoints() (analyses that were
+      // enabled but could not run) go into the LOG right here - and into the
+      // details area only at the END of this function, never at this point.
+      //
+      // Why: TTProgressBar::onSetProgress()'s own Start branch calls
+      // resetForNewOperation() when the dialog is still in its finished state
+      // from the previous run, and that clears detailsView. Writing the notes
+      // here put them in the view moments before that clear removed them
+      // again - they reached the log but never the screen, which is exactly
+      // how this was reported ("ich sehe nix, keine Meldung") and why the
+      // details area appeared to begin with the first worker's own line.
+      if (!mSkippedAnalysisNotes.isEmpty()) {
+        for (const QString& note : mSkippedAnalysisNotes)
+          TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__, note);
+        mPendingSkipNotesForDialog = mSkippedAnalysisNotes;
+        mSkippedAnalysisNotes.clear();
+      }
       break;
 
     case StatusReportArgs::Exit:
@@ -1937,6 +2002,16 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       progressBar->onSetProgress(task, state, msg, r.totalPercent);
     } else {
       progressBar->onSetProgress(task, state, msg, rawPercent);
+    }
+
+    // After the dialog has seen this report - and therefore after any
+    // resetForNewOperation() it triggered - the skipped-analysis notes are
+    // safe to add. See the Start branch above for why they cannot go in
+    // earlier.
+    if (!mPendingSkipNotesForDialog.isEmpty()) {
+      for (const QString& note : mPendingSkipNotesForDialog)
+        progressBar->onSetProgress(0, StatusReportArgs::AddProcessLine, note, 0);
+      mPendingSkipNotesForDialog.clear();
     }
   }
 }

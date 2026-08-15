@@ -86,6 +86,26 @@ TTProgressBar::~TTProgressBar()
 void TTProgressBar::showBar()
 {
   setModal(false);
+
+  // Stay enabled even though the main window is not. This dialog is a child of
+  // TTCutMainWindow, which disables itself for the duration of an operation
+  // (setEnabled(false) in its Init branch) - and Qt disables children with it,
+  // child windows included. A disabled dialog is painted in its disabled state,
+  // and no style animates that: the pulse mode below (setRange(0, 0), used when
+  // no Step has arrived for 5 s) then showed frozen stripes instead of movement.
+  // Reported from the GUI as "soll das wirklich eine statische Anzeige sein?".
+  //
+  // It went unnoticed because resetForNewOperation() already calls
+  // setEnabled(true) - but only for a dialog that is in its finished state, so
+  // the FIRST long operation after program start had a disabled dialog and every
+  // later one an enabled one. Measured with tools/diag/test_pulse_animation:
+  // an indeterminate bar animates while enabled (even with a disabled parent)
+  // and stands still while disabled.
+  //
+  // Being enabled is also what the Cancel button needs - the same reason
+  // resetForNewOperation() does this.
+  setEnabled(true);
+
   show();
 
   qApp->processEvents();

@@ -161,6 +161,32 @@ void TTFrameSearchTask::onUserAbort()
 //! Task operation method
 void TTFrameSearchTask::operation()
 {
+  // Report the start BEFORE the expensive preparation below, not after it.
+  //
+  // The window is disabled the moment the pool emits its Init, but the
+  // progress dialog only appears when a task reports Start - and this task
+  // used to do that after opening its own decoder, building a frame index and
+  // seeking to the search position. Measured on a 210 954-frame H.264 stream:
+  // 13 s of locked, silent UI followed by a dialog for the remaining 8 s of a
+  // 21 s search. The user sees an application that looks hung and then briefly
+  // explains itself.
+  //
+  // Everything this needs is stream metadata (frame rate, frame count), so it
+  // can be computed before any decoder exists; the search loop below uses the
+  // same values.
+  QTime searchTime(0, 0, 0, 0);
+  int   searchFrameCount = ttTimeToFrames(
+      searchTime.addSecs(TTSettings::instance()->searchLength()),
+      mpSearchStream->frameRate());
+  // Clamp to remaining frames in stream - without this, MPEG-2's
+  // moveToFrameIndex() crashes on out-of-range positions and the worker
+  // terminates silently without emitting finished().
+  int   remainingFrames  = mpSearchStream->frameCount() - mSearchIndex;
+  if (searchFrameCount > remainingFrames) searchFrameCount = remainingFrames;
+  if (searchFrameCount < 0)               searchFrameCount = 0;
+
+  onStatusReport(this, StatusReportArgs::Start, tr("Searching frame"), searchFrameCount);
+
   initFrameSearch();
 
   TTMpeg2Decoder*  searchMpeg2   = nullptr;
@@ -189,16 +215,6 @@ void TTFrameSearchTask::operation()
     searchMpeg2->moveToFrameIndex(mSearchIndex);
   }
 
-  QTime   searchTime(0,0,0,0);
-  int     searchFrameCount = ttTimeToFrames(
-      searchTime.addSecs(TTSettings::instance()->searchLength()),
-      mpSearchStream->frameRate());
-  // Clamp to remaining frames in stream — without this, MPEG-2's
-  // moveToFrameIndex() crashes on out-of-range positions and the worker
-  // terminates silently without emitting finished().
-  int     remainingFrames  = mpSearchStream->frameCount() - mSearchIndex;
-  if (searchFrameCount > remainingFrames) searchFrameCount = remainingFrames;
-  if (searchFrameCount < 0)               searchFrameCount = 0;
   int     index            = 0;
   int     foundPosition    = 0;
   // Threshold based on frame size: allow ~10% average difference per pixel
@@ -207,8 +223,6 @@ void TTFrameSearchTask::operation()
   quint64 threshold        = (quint64)(mRefWidth * mRefHeight
                                        + 2 * (mRefWidth/2) * (mRefHeight/2)) * 625;
   quint64 minDelta         = threshold;
-
-  onStatusReport(this, StatusReportArgs::Start, tr("Searching frame"), searchFrameCount);
 
   do
   {

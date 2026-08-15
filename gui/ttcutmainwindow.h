@@ -164,6 +164,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
     bool                 mStreamPointAnalysisAborted = false;
+    //! Why an enabled stream-point analysis did not run at all. Collected in
+    //! onAnalyzeStreamPoints(), which is where that decision is made - a
+    //! worker that is never built cannot report anything itself. Handed to
+    //! the detail area once the progress bar exists (Start branch of
+    //! onStatusReport), or shown in the dialog when no worker runs at all.
+    QStringList          mSkippedAnalysisNotes;
+    //! Same notes, waiting to be put in the progress dialog's details area.
+    //! Held back until after the dialog has processed the status report that
+    //! may clear that area (resetForNewOperation) - see onStatusReport().
+    QStringList          mPendingSkipNotesForDialog;
     TTSettingsCalibrationStore mCalibStore;
     TTProgressEstimator*       mpProgressEstimator;
     QElapsedTimer              mEstimatorClock;   // monotone time source
