@@ -2936,9 +2936,12 @@ bool TTESSmartCut::decodeFramesIntoList(ReencodeContext& ctx)
         // Send packet to decoder, retry on EAGAIN
         AVPacket* packet = av_packet_alloc();
         if (!packet) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("av_packet_alloc failed"));
-            break;
+            // A break here only left the feed loop: the function went on to
+            // drain and reported success with frames missing from the list -
+            // the segment was silently truncated. Fail like every other error
+            // in this loop does.
+            setError(QString("av_packet_alloc failed"));
+            return false;
         }
         if (av_new_packet(packet, auData.size()) < 0) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -3883,9 +3886,11 @@ bool TTESSmartCut::runEncodePass(ReencodeContext& ctx)
 
         AVPacket* packet = av_packet_alloc();
         if (!packet) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("av_packet_alloc failed"));
-            break;
+            // Same reasoning as in decodeFramesIntoList: a break truncated
+            // the encode pass silently after part of the frame list was
+            // already processed, and the function still returned true.
+            setError(QString("av_packet_alloc failed"));
+            return false;
         }
         while (true) {
             ret = avcodec_receive_packet(mEncoder, packet);
