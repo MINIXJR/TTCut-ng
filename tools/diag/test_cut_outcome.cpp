@@ -12,7 +12,13 @@
 // output directory, which makes TTESSmartCut fail with "Cannot create output
 // file".
 //
-//   usage: test_cut_outcome <video-es> <audio-es> <workdir>
+//   usage: test_cut_outcome <video-es> <audio-es> <workdir> [cutIn cutOut ...]
+//
+// The cut bounds default to fractions of frameCount() rather than to fixed
+// frame numbers: the previous hard-coded 500..1499 / 3000..3999 only fitted
+// the 6000-frame 50fps H.264 source, and cut-out 3999 does not exist in the
+// 3000-frame 25fps MPEG-2 source. On a 6000-frame source the derived default
+// is arithmetically the old one, so existing H.264 results stay comparable.
 //
 // Build via `cmake --build build --target test_cut_outcome`.
 #include <QApplication>
@@ -124,8 +130,25 @@ int main(int argc, char** argv)
     TTSettings::instance()->setCutDirPath(roDir);
 
     TTCutList cutList;
-    cutList.append(avItem, 500, 1499);
-    cutList.append(avItem, 3000, 3999);
+    // Two cuts, derived from the stream length (see the usage note above).
+    // On 6000 frames this is exactly 500..1499 and 3000..3999.
+    const int frameCount = vStream->frameCount();
+    QList<QPair<int,int>> cuts;
+    for (int i = 4; i + 1 < argc; i += 2)
+        cuts.append(qMakePair(QString(argv[i]).toInt(), QString(argv[i+1]).toInt()));
+    if (cuts.isEmpty())
+        cuts << qMakePair(frameCount / 12, frameCount / 4 - 1)
+             << qMakePair(frameCount / 2,  (frameCount * 2) / 3 - 1);
+    for (const auto& c : cuts) {
+        if (c.first < 0 || c.second >= frameCount || c.first >= c.second) {
+            printf("FAIL: cut bounds %d..%d do not fit a %d-frame stream\n",
+                   c.first, c.second, frameCount);
+            return 1;
+        }
+        cutList.append(avItem, c.first, c.second);
+    }
+    printf("source: %d frames at %.3f fps, %d cut(s)\n",
+           frameCount, vStream->frameRate(), (int)cuts.count());
 
     // Quit once a terminal bracket (Exit or Canceled) has arrived. Give
     // trailing signals a couple of seconds before quitting, same rationale as
@@ -168,7 +191,14 @@ int main(int argc, char** argv)
     // run fail, which only the long text has.
     check(errorAtExitTime != bracketTextAtExitTime,
           "lastCutError() differs from the closing bracket's short text");
-    check(errorAtExitTime.contains("Cannot create output file"),
+    // Checked by the failing PATH, not by one engine's wording: the H.26x
+    // path fails inside TTESSmartCut ("Cannot create output file: <path>"),
+    // the MPEG-2 path inside TTFileBuffer::directWrite ("Could not write N
+    // bytes to <path>: Permission denied"). Both must name the directory this
+    // harness made read-only - that is what "the detailed reason" means here,
+    // and pinning the check to one engine's phrasing only ever tested the
+    // engine the harness happened to be run with.
+    check(errorAtExitTime.contains(roDir),
           "lastCutError() carries the detailed reason (with the failing path), not just the short bracket text");
 
     printf("%s\n", gFailures == 0 ? "ALL PASS" : "FAILURES");

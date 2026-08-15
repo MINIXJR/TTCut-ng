@@ -165,6 +165,89 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### MPEG-2-Schnitt
 
+- **MPEG-2-Vorschau meldete Fehlschläge als Erfolg, MPEG-2-Schnitt bemerkte
+  Schreibfehler gar nicht** → **FIXED** (2026-08-13)
+  - Ausgangspunkt war ein Harnisch-Fehlschlag, nicht ein Anwenderbericht:
+    `test_previewcut_abort` scheiterte mit MPEG-2-Material in zwei von vier
+    Fällen. Der TODO-Eintrag dazu nannte zwei mögliche Lesarten und hielt sie
+    für Alternativen — gemessen waren **beide zugleich** wahr, und der
+    Harnisch-Mangel verdeckte die Produktionsdefekte.
+  - **Harnisch (die Maskierung):** `cutList.append(avItem, 1000, 4000)` war
+    hart kodiert und passte nur zum 6000-Frame-H.264-Korpus. Auf dem
+    3000-Frame-MPEG-2-Korpus existiert Frame 4000 nicht;
+    `createPreviewCutList()` → `findIDRBefore(3500)` warf
+    `TTIndexOutOfRangeException` (gdb `catch throw`). Weil diese Ausnahme
+    zufällig genau die Signatur eines Abbruchs erzeugte (`cancel=1 exit=0
+    finished=0`), **bestanden die Fälle `video` und `audio` aus dem falschen
+    Grund** — zwei weitere Leertests der Art, die das Abbruch-Vorhaben schon
+    sechsmal gefunden hatte. Grenzen jetzt aus `frameCount()` abgeleitet und
+    per Argument überschreibbar, wie `test_mpeg2cut_abort` es längst tat; bei
+    6000 Frames ergibt die Ableitung rechnerisch die alten Werte, die
+    H.264-Messbasis bleibt also vergleichbar. Dieselbe harte Kodierung steckte
+    in `test_cut_outcome` (`3000, 3999`) und wurde mitbehoben.
+  - **`TTThreadTask::run()` verschluckte jeden Fehler** (`common/ttthreadtask.cpp`):
+    der `catch(const TTException&)` band die Ausnahme nicht einmal, protokollierte
+    also nichts — eine Ursache wie „Index 3500 exceeds list bounds: 3000" erschien
+    nirgends —, und anders als der `TTAbortException`-Zweig darüber warf er bei
+    `mIsSynchron` nicht weiter. Der `catch`, mit dem `TTCutPreviewTask` seinen
+    genesteten Schnitt seit jeher umgibt, konnte deshalb **nie** feuern. Gemessene
+    Folge: kein Vorschauclip wurde geschrieben, drei Fehler standen im Protokoll,
+    und die Vorschau meldete „fertig".
+  - **`TTFileBuffer::directWrite()` prüfte nichts** und versprach im Kommentar
+    „-1 if an error occured" — bei Rückgabetyp `quint64`, wo `-1` als
+    18446744073709551615 ankommt; eine Prüfung auf `< 0` hätte nie greifen
+    können, und kein Aufrufer prüfte überhaupt. Ein vollständiger MPEG-2-Schnitt
+    in ein nicht beschreibbares Verzeichnis erzeugte **102** Qt-Warnungen
+    („device not open"), und der Task meldete `finished`. Direkt danach stürzte
+    `TTAVData::onCutFinished()` über `mpCutList->at(0)` auf leerer Liste ab
+    (`ASSERT`, SIGABRT, rc=134; im Paket ohne `Q_ASSERT` wäre derselbe Zugriff
+    undefiniertes Verhalten). Mit der Prüfung in `directWrite` verschwindet
+    **beides**: der Schnitt endet beim ersten fehlgeschlagenen Schreibvorgang
+    mit „Could not write 42319 bytes to …: Permission denied", der Absturz
+    tritt nicht mehr auf. `TTAVStream::copySegment()` hält seinen Puffer jetzt
+    per `unique_ptr` — der neue Ausnahmeweg hätte ihn geleckt, der bestehende
+    Abbruchweg tat es bereits.
+  - **`onCutAborted()` meldete jeden Fehler als „Cut cancelled".** Der Code
+    kannte das Problem (der Kommentar über dem Aufräumblock beschreibt es
+    wörtlich und nutzt `mSyncPhaseAbort`, um die Dateien eines Fehllaufs *nicht*
+    zu löschen), nur die schließende Klammer machte den Unterschied nicht mit.
+    `TTThreadTask` merkt sich die Ursache jetzt in `mFailureMessage`, der Pool
+    reicht sie über `lastFailureMessage()` weiter, und `onCutAborted()` wählt
+    danach zwischen `CutOutcome::Cancelled` und `CutOutcome::Failed`.
+    **Abweichung vom TODO-Vorschlag:** dort stand „ein zweites Signal
+    (`failed(task, grund)`)" — verworfen, weil ein neues Signal alle 15
+    Verbraucher von `TTThreadTask::aborted` berührt hätte (elf in
+    `ttcutmainwindow.cpp`, vier im Pool), während die Fehlermeldung am Task
+    genau dem Muster folgt, das `TTCutPreviewTask::errorMessage()` schon
+    verwendet. Gleiches Ergebnis, kleinere Reichweite.
+  - **MPEG-2-Vorschau-Abbruch** (bis dahin als eigener offener Punkt geführt,
+    mit ausdrücklicher Warnung vor einer stückweisen Lösung): kein neues
+    Abbruchverfahren nötig, sondern eine Weiterleitungslücke.
+    `TTThreadTaskPool::onUserAbortRequest()` sendet nur an `mTaskQueue`, und
+    `startNested()` trägt seinen Task dort nicht ein — beim Endschnitt liegt
+    `TTCutVideoTask` per `start()` in der Queue und bekommt den Abbruch, in der
+    Vorschau läuft derselbe Task genestet und bekam ihn nie. Die Prüfungen
+    selbst gab es längst. `TTCutPreviewTask::onUserAbort()` reicht jetzt weiter
+    (ohne Mutex, anders als bei `mpActiveSmartCut`: `cutVideoTask` lebt vom
+    Konstruktor bis zum Destruktor), die Audiophase bekommt dasselbe
+    Abbruch-Prädikat wie der H.264-Zweig, der `ok`-Rückgabewert von
+    `cutAudioTracks` wird nicht mehr verworfen, und beide Ausgänge räumen die
+    Dateien des Clips ab. Messung vorher/nachher: Abbruch bei 36 ms, Clip 1 lief
+    trotzdem 2,4 s zu Ende und ließ drei Dateien liegen → Abbruch bei 268 ms,
+    Lauf endet nach 1107 ms **innerhalb** Clip 1, Temp-Verzeichnis leer.
+  - **Auch die Harnesse prüften material-spezifisch statt sachlich:** die
+    Dialogprüfung verlangte den H.26x-Wortlaut „too damaged" (für ein fehlendes
+    Verzeichnis eine falsche Diagnose — die MPEG-2-Meldung nennt stattdessen die
+    Ursache), und `test_cut_outcome` prüfte auf „Cannot create output file"
+    statt auf den fehlgeschlagenen **Pfad**, den seine eigene Begründung nennt.
+    Beide prüfen jetzt die Sache, nicht die Formulierung einer Engine.
+  - Prüfstand danach, beide Korpora: `test_previewcut_abort` 4/4 (MPEG-2 und
+    H.264; `audio` mit ausgewiesenem INCONCLUSIVE, weil die Audiophase schneller
+    ist als der 2-ms-Takt des Harnisch), `test_cut_outcome` 4/4 (beide),
+    `test_mpeg2cut_abort` 4/4, `test_h26xcut_abort` 4/4,
+    `test_audioonlycut_abort` 2/2. Spec:
+    `docs/superpowers/specs/2026-08-13-preview-abort-mpeg2-design.md`.
+
 - **MPEG-2: Cut-Out auf B-Frame verliert bis zu M−1 Frames** → **FIXED** (2026-07-12, `3b087ae`)
   - Der Block in `getCutEndObject()` (Display-Index + Bitstream-B-Zählung vermischt,
     unterdrückte den Tail-`encodePart()`) wurde ersatzlos entfernt. Die

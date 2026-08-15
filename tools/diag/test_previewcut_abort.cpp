@@ -15,15 +15,30 @@
 // A genuine failure ("fail" case) is NOT a cancel and still closes with the
 // pool's Exit.
 //
-// Usage: test_previewcut_abort <video-es> <audio-es> <workdir> <case>
+// Usage: test_previewcut_abort <video-es> <audio-es> <workdir> <case> [cutIn cutOut]
 //   case = none | video | audio | fail
 //
-// Setup: ONE cut item (frames 1000..4000 on the 50fps, 6000-frame Tux
-// progressive test source -> 60s span) with cutPreviewSeconds() raised to 40s
-// so BOTH derived preview clips (the cut-in window and the cut-out window)
-// get their full window without being clipped by stream bounds, and so the
-// video phase has enough real re-encode/copy work to arm a cancel inside it
-// reliably rather than by luck.
+// Setup: ONE cut item with cutPreviewSeconds() raised to 40s, so BOTH derived
+// preview clips (the cut-in window and the cut-out window) get their full
+// window without being clipped by stream bounds, and so the video phase has
+// enough real re-encode/copy work to arm a cancel inside it reliably rather
+// than by luck.
+//
+// The cut bounds default to frameCount()/6 .. frameCount()*2/3 rather than to
+// fixed frame numbers, and can be overridden by the optional trailing
+// arguments (same shape as test_mpeg2cut_abort). This harness previously used
+// a hard-coded 1000..4000, which silently only fitted the 6000-frame 50fps
+// H.264 source: run against the 3000-frame 25fps MPEG-2 source, cut-out 4000
+// does not exist, and createPreviewCutList()'s findIDRBefore(3500) threw
+// TTIndexOutOfRangeException. That threw-and-swallowed exception was reported
+// as "Preview cancelled" (see the log-level check below), which is what made
+// two of the four cases fail for a reason that had nothing to do with what
+// they test. On a 6000-frame source the derived default is arithmetically the
+// old 1000..4000, so H.264 results stay comparable.
+//
+// Both derived preview windows are cutPreviewSeconds()/2 = 20s wide, so the
+// default keeps them inside the stream (cut-in window 1/6..1/3 of the
+// duration, cut-out window 1/2..2/3) for any source of at least ~60s.
 //
 // Cases:
 //   none:  control run, no abort. Exactly one cutPreviewFinished(), two
@@ -152,13 +167,16 @@ int main(int argc, char** argv)
   app.setQuitOnLastWindowClosed(false);
 
   if (argc < 5) {
-    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail>\n", argv[0]);
+    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail> [cutIn cutOut]\n", argv[0]);
     return 2;
   }
   const QString videoFile = argv[1];
   const QString audioFile = argv[2];
   const QString workDir   = argv[3];
   const QString testCase  = argv[4];
+  // -1 = derive from frameCount() once the stream is open (see below).
+  const int argCutIn  = (argc > 5) ? QString(argv[5]).toInt() : -1;
+  const int argCutOut = (argc > 6) ? QString(argv[6]).toInt() : -1;
 
   if (testCase != "none" && testCase != "video" && testCase != "audio" && testCase != "fail")
     return fail("unknown case (use none|video|audio|fail)");
@@ -203,16 +221,33 @@ int main(int argc, char** argv)
   avItem->appendAudioEntry(aStream);
 
   TTCutList cutList;
-  // 3000 frames = 60s at 50fps: both derived preview windows (cut-in side,
-  // cut-out side) get the full cutPreviewSeconds() = 40s without being
-  // clipped against stream bounds (source is 6000 frames = 120s).
-  cutList.append(avItem, 1000, 4000);
+  const int frameCount = vStream->frameCount();
+  const int cutIn  = (argCutIn  >= 0) ? argCutIn  : frameCount / 6;
+  const int cutOut = (argCutOut >= 0) ? argCutOut : (frameCount * 2) / 3;
+  if (cutIn < 0 || cutOut >= frameCount || cutIn >= cutOut)
+    return fail(QString("cut bounds %1..%2 do not fit a %3-frame stream")
+                    .arg(cutIn).arg(cutOut).arg(frameCount));
+  printf("source: %d frames at %.3f fps, cut %d..%d\n",
+         frameCount, vStream->frameRate(), cutIn, cutOut);
+  cutList.append(avItem, cutIn, cutOut);
 
   const QString suffix       = QFileInfo(videoFile).suffix().toLower();
   const QString tempVideoFile = QDir(tempDir).absoluteFilePath("preview_video_temp." + suffix);
   const QString audioSuffix  = QFileInfo(audioFile).suffix();
   const QString cutAudioFile = QDir(tempDir).absoluteFilePath("preview_audio_temp." + audioSuffix);
-  const QString watchFile    = (testCase == "audio") ? cutAudioFile : tempVideoFile;
+  // Which file the arming poll below watches, and it differs per branch:
+  // preview_video_temp.<suffix> / preview_audio_temp.<ext> are names of the
+  // H.264/H.265 Smart Cut branch. The MPEG-2 branch has no such intermediate -
+  // it writes preview_001.<ext> directly (measured: that is all a completed
+  // MPEG-2 preview run leaves in the temp directory). Watching the H.264 name
+  // on MPEG-2 material meant waiting for a file that is never created, so the
+  // cancel was never armed (armedAt stayed -1) and the run completed
+  // undisturbed while reporting a cancel that had not happened.
+  const bool isMpeg2 = (suffix == "m2v");
+  const QString watchFile = isMpeg2
+      ? QDir(tempDir).absoluteFilePath(
+            (testCase == "audio") ? "preview_001." + audioSuffix : "preview_001.m2v")
+      : ((testCase == "audio") ? cutAudioFile : tempVideoFile);
 
   TTAVData avData;
   avData.setNonInteractive(true);
@@ -383,8 +418,18 @@ int main(int argc, char** argv)
     if (cancelCount != 0)         return fail("fail: a real failure was reported as Canceled");
     if (exitCount != 1)           return fail(QString("fail: expected one Exit, got %1").arg(exitCount));
     if (!dialogSeen.load())       return fail("fail: damaged-recording dialog was never raised");
-    if (!dialogText.contains("too damaged"))
+    // Both branches share the "could not be created" frame, but each has to
+    // carry its own reason on top of it - a frame text alone would pass even
+    // if the cause were dropped. The H.264/H.265 branch knows the failure came
+    // out of Smart Cut and says so; the MPEG-2 branch must not claim a damaged
+    // recording for what is a missing directory, so it is checked for the
+    // actual cause instead: the temp path this harness deliberately removed.
+    if (!dialogText.contains("could not be created"))
       return fail(QString("fail: unexpected dialog text \"%1\"").arg(dialogText));
+    const QString expectedCause = isMpeg2 ? tempDir : QStringLiteral("too damaged");
+    if (!dialogText.contains(expectedCause))
+      return fail(QString("fail: dialog text does not carry the cause (expected \"%1\"): \"%2\"")
+                      .arg(expectedCause, dialogText));
     printf("  dialog text: %s\n", qPrintable(dialogText));
     printf("PASS\n");
     return 0;

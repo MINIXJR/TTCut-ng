@@ -6,6 +6,62 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **A multiplex that loses the audio track now says so.** mplex ends a stream
+  it considers broken, carries on without it, exits successfully and reports
+  "completed" - so a 90-minute recording came out with 85 minutes of video and
+  4.7 minutes of audio, reported as a finished cut. The one warning that means
+  data loss is now treated as a failure, while mplex's routine complaints are
+  still ignored. The message names the cause: a damaged frame in the recording
+  itself, which ttcut-demux records in the .info file and shows as a timeline
+  marker, and which the MKV output tolerates.
+
+- **A failed multiplex keeps its elementary streams.** They were deleted even
+  when the multiplex had failed, so a retry meant cutting everything again
+  instead of just muxing again.
+
+- **Cancelling a preview no longer breaks the next one.** The cancel was pushed
+  into the video stream, which is shared and outlives the operation, and stayed
+  there when it arrived after the stream had finished its work. The next preview
+  then aborted itself and only the one after that worked.
+
+- **Progress is shown when a long step begins, not when it ends.** Searching for
+  a frame and creating previews reported their start only after opening a
+  decoder, building a frame index or parsing the elementary stream - so the
+  window sat locked and silent for up to 13 seconds before the progress dialog
+  appeared for the remainder.
+
+- **The muxer uses the cut list that was actually cut.** It read a different one
+  than the cut had used, which was harmless in the interface (both are the same
+  object there) but wrong for any other caller, and crashed outright on an empty
+  list.
+
+- **Analyses that cannot run explain themselves in the log, too.** The
+  explanation went only into the progress dialog's details area, which is hidden
+  unless it is switched on, and was wiped by the dialog's own reset a moment
+  after being written.
+
+- **A failed cut no longer writes nothing and calls it done.** Writing the cut
+  output was never checked for success. A cut into a directory it could not
+  write to produced a hundred warnings from Qt, wrote no data, and still
+  reported that it had finished - and the run that followed crashed. Failed
+  writes are now noticed where they happen, and the cut stops with the reason
+  and the file it could not write.
+
+- **A cut that fails is no longer reported as one the user cancelled.** Only a
+  cancel is now called a cancel; a cut that failed says so and shows why.
+
+- **Cancelling a preview of MPEG-2 material now takes effect immediately.** The
+  cancel only ever arrived between the two preview clips, so the clip being
+  worked on was always finished first - visibly so on longer previews - and its
+  files were left behind. It now stops within the clip, and the half-finished
+  files are removed instead of being picked up as a result.
+
+- **A preview that cannot be created says so instead of reporting success.**
+  On MPEG-2 material a failure during preview creation was silently passed
+  over: no preview clip was written, and the preview still reported itself as
+  complete. The failure is now reported with its reason. Previews of
+  H.264/H.265 material already behaved this way.
+
 - **Two TTCut-ng processes no longer spoil each other's MPEG-2 cut.** Every
   re-encode at a cut point wrote its intermediate files under one fixed name
   in the temporary directory, and cleaned up afterwards by deleting every file

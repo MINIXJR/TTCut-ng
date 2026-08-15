@@ -262,6 +262,12 @@ diag_tool(test_window_jump     AV MPEG2 WIDGETS SOURCES ${WINDOWJUMP_SRC})
 # the AUTOUIC-generated ui_ttprogressform.h, and that generated include
 # directory is exported by the ttcut-core target (see the root CMakeLists).
 diag_tool(test_progressbar_reshow WIDGETS SOURCES)
+diag_tool(test_filedialog_proxy   WIDGETS SOURCES)
+diag_tool(test_dialog_then_cut    AV WIDGETS SOURCES)
+diag_tool(test_stale_abort        AV WIDGETS SOURCES)
+diag_tool(test_pulse_animation    WIDGETS SOURCES)
+target_link_libraries(test_stale_abort PRIVATE ttcut-core)
+target_link_libraries(test_dialog_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 
 # test_pool_crossthread and test_task_cleanup_order are NOT CMake targets:

@@ -20,10 +20,56 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wiederverwendeter Speicher**: ungültiger vtable-Zeiger, `persistent.indexes`
     mit m_size 2 951 281, „Source-Model"-Zeiger zeigt in denselben Block.
     Backtrace-Dump: `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt`.
-  - TTCut-Code enthält **kein einziges** Proxy-Model und keinen QCompleter
-    (Grep 2026-08-07) — das Proxy ist Qt-intern. Direkt vor `onDoCut` wird
+  - ~~TTCut-Code enthält kein einziges Proxy-Model und keinen QCompleter
+    (Grep 2026-08-07) — das Proxy ist Qt-intern.~~ **Richtiggestellt
+    2026-08-13, gemessen:** Der Grep konnte es nicht finden, weil TTCut keins
+    *schreibt* — die **Dateidialoge bringen eins mit**. Gemessen mit
+    `tools/diag/test_filedialog_proxy` in dieser Sitzung (Wayland, ASAN):
+    ein Dateidialog lädt `KF6KIOFileWidgets`/`KIOWidgets`/`KIOCore` unter
+    `KDEPlasmaPlatformTheme` und legt ein **`KDirSortFilterProxyModel`** an —
+    abgeleitet von `QSortFilterProxyModel`, erbt also genau das
+    `_q_sourceModelDestroyed` aus Frame #1. Damit ist das Objekt benannt,
+    auf dem der Absturz operierte; die Schlussfolgerung „nicht zuordenbar"
+    beruhte auf einer Ausschlussbegründung, die so nicht trug.
+  - Dateidialoge kommen in der Absturz-Sequenz **dreimal** vor:
+    `getOpenFileName` beim Öffnen, `getExistingDirectory` im Cut-Dialog
+    (`gui/ttcutavcutdlg.cpp:249`, mit `qApp->processEvents()` direkt
+    dahinter) und ein `QFileDialog`-Objekt beim Frame-Speichern
+    (`gui/ttcurrentframe.cpp:517`). Direkt vor `onDoCut` wird
     `TTCutAVCutDlg` per `delete` zerstört (`ttcutmainwindow.cpp:1151`), davor
-    der Vorschau-Dialog (`delete cutPreview`, `:1100`).
+    der Vorschau-Dialog (`delete cutPreview`, `:1100`) — und `doH264Cut`
+    betritt über die Statusmeldungen von `cutAudioTracks`/`cutSubtitleTracks`
+    wieder die Ereignisschleife (`qApp->processEvents()`). Dort werden die
+    aufgeschobenen Löschungen aus diesen Abbauten ausgeführt; dorthin gehören
+    die im Backtrace fehlenden Frames. **Mechanismus kohärent, nicht
+    gezeigt.**
+  - **Vier ASAN-Läufe am 2026-08-13, alle sauber** — die Spur ist damit
+    eingegrenzt, nicht bestätigt:
+    | Lauf | enthält | Ergebnis |
+    |---|---|---|
+    | `test_filedialog_proxy`, 20 Zyklen | Dateidialog (KIO-Proxy) | sauber |
+    | `--auto-cut` auf 03x01 (Originalmaterial) | ganzer H.264-Schnitt + Mux | sauber, Ausgabe exakt 2810,016 s |
+    | `test_dialog_then_cut` | Dialog **und** Schnitt in einem Prozess | sauber, Ausgabe identisch |
+    | `test_dialog_then_cut` (Wiederholung) | dasselbe | sauber, Ausgabe identisch |
+    **Was in keinem dieser Läufe steckt** und in der Absturz-Sequenz vorkam:
+    der Vorschau-Dialog (`TTCutPreview`, bringt libmpv + `QOpenGLWidget` mit,
+    wird per `delete` zerstört), der Cut-Dialog, das vollständige Hauptfenster
+    mit seinen Views — und echte Mausklicks. Der Vorschau-Dialog ist der
+    auffälligste verbliebene Kandidat (`QOpenGLWidget` war in diesem Projekt
+    schon einmal Ursache, `f87ea06c`). Nächster Schritt bleibt die echte
+    GUI-Sequenz unter ASAN, die sich nicht ohne Bedienung fahren lässt.
+  - **Zeitangabe richtiggestellt:** Der Schnitt dieses Materials dauert **rund
+    eine Minute**, nicht eine Stunde (gemessen, Smart Cut ist fast reiner
+    Stream-Copy). „Crash ~60 s nach den Dialog-Schließungen" heißt also: der
+    Absturz kam am **Ende** des Schnitts, in der Mux-/Abschlussphase.
+  - **Was der Sondenlauf NICHT zeigte:** 20 Zyklen Dialog auf/zu/`delete` +
+    Wiedereintritt in die Ereignisschleife, unter ASAN, ohne Report. Die
+    schärfere Form (modal per `exec()`, Abbau mit laufenden KIO-Jobs — das,
+    was TTCut tatsächlich tut) **hängt**: die modale Schleife kehrt nie
+    zurück, weder `reject()` noch ein 1,5-s-Wächter holen sie zurück, KIO
+    meldet vorher einen toten Socket. Drei Versuche, dann abgebrochen. Wer
+    hier weitermacht: dieser Fall bleibt der erreichenswerte — aber nicht
+    über diesen Harnisch.
   - **Zuordnung offen:** Der Branch fasst keine Models an; dieselbe
     Use-after-free-Klasse trat am 2026-08-01 vorbestehend auf (qtwayland,
     → Memory `reference_core_dump_forensics`). Diese Bediensequenz
@@ -89,22 +135,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
   festgehalten. Reihenfolge grob nach Nutzerwirkung.
-  - **Eine echte `TTException` aus einer Schnitt-Aufgabe wird als „Cut
-    cancelled" gemeldet** und löst kein `cutFinished()` aus: ein echter
-    Fehler sieht aus wie ein Nutzer-Abbruch, und ein `--auto-cut`-Lauf auf
-    diesem Pfad wartet ewig.
-    **Wurzel gefunden 2026-08-12:** `TTThreadTask::run()`
-    (`common/ttthreadtask.cpp:171-189`) fängt beide Ausnahmearten getrennt —
-    `catch(TTAbortException&)` und `catch(TTException&)` — und sendet aus
-    **beiden** dasselbe Signal `aborted(this)`. `TTAbortException` erbt von
-    `TTException` (`common/ttexception.h:93`); die Unterscheidung liegt also
-    im Typsystem und im Kontrollfluss vor und wird genau dort weggeworfen,
-    wo sie gebraucht würde. Behebung: ein zweites Signal
-    (`failed(task, grund)`), im unteren `catch` gesendet — klein zu ändern,
-    aufwendig zu prüfen, weil `TTThreadTask` die Basisklasse **jeder**
-    Aufgabe ist (Öffnen, Suche, Analyse, Schnitt, Vorschau, Mux). Die
-    Aufrufer-Seite ist seit `c7436a07` sauber: alle Schnittpfade melden ihr
-    Ergebnis über `TTAVData::finishCutOperation()`.
   - **`TTThreadTask::abort()` sendet `aborted()` selbst dann**, wenn der
     Abbruch eintrifft, während `finished()` schon in der Warteschlange
     liegt — eine tatsächlich fertig gewordene Aufgabe kann sich damit als
@@ -197,25 +227,121 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     nachher `failed=0 dumps=0`), dazu `tools/diag/test_seqheader_missing`
     (vorher rc=134, nachher NULL).
 
-- **`test_previewcut_abort` scheitert mit MPEG-2-Material** (2026-08-12,
-  offen, beim Abschluss der Temp-Kollisions-Arbeit gemessen)
-  - Mit `tux_mpeg2_576i_pal_test.m2v`/`.mp2` scheitern zwei der vier Fälle:
-    `none` mit „cutPreviewFinished never fired" (Klammern `init=1 exit=0
-    cancel=1`, Text „Preview cancelled", im Protokoll ein `CutPreviewTask ...
-    catched TTException`) und `fail` mit „a real failure was reported as
-    Canceled". `video` und `audio` laufen durch.
-  - **Vorbestehend, keine Folge des Temp-Fixes**: auf `67e21d83` in einem
-    eigens gebauten Vergleichs-Worktree dieselben zwei Fehlschläge mit
-    denselben Meldungen.
-  - Mit H.264-Material (`tux_h264_1080p_progressive_test.264`/`.ac3`) laufen
-    alle vier Fälle durch — der Harnisch ist bisher offenbar nur damit
-    gefahren worden.
-  - Zwei mögliche Lesarten, ungeprüft: Der Harnisch trifft für MPEG-2 die
-    falschen Erwartungen (dann gehört das in seinen Kopfkommentar), oder der
-    Vorschau-Abbruch meldet auf dem MPEG-2-Pfad einen echten Fehler als
-    Abbruch (dann ist es derselbe Fehlerbild-Typ wie beim Schnitt-Ausgang,
-    siehe `project_cut_outcome_reporting`). Erster Schritt: nachsehen, welche
-    `TTException` der `CutPreviewTask` dort fängt.
+- **ttcut-demux reicht beschädigte Tonrahmen durch, statt sie zu ersetzen**
+  (2026-08-15, aus dem mplex-Befund; ProjectX-Vergleich gemessen)
+  - Ausgangsfall: Ein 90-min-Schnitt über MPG/mplex hatte 85 min Bild und
+    **4,7 min Ton**. Ursache liegt **nicht** in TTCut — der Tonschnitt ist
+    vollständig (gemessen: 5137 s, 214058 Pakete), der Schaden kommt aus der
+    Quelle. Die Meldung dazu ist inzwischen gebaut (`13f7af68`), der
+    Datenverlust selbst bleibt.
+  - **Die Quelldatei aus ttcut-demux hat eine echte Bruchstelle:** bei
+    Byte-Offset 6 796 224 endet die gültige MP2-Rahmenkette (nach 11799
+    Rahmen = 283,18 s), es folgen **468 Bytes**, die kein Rahmenkopf sind,
+    danach setzt die Kette wieder ein. libav überliest das mit „Header
+    missing", mplex erklärt den Strom für defekt und lässt die Tonspur ab dort
+    weg.
+  - **Erkannt wird der Defekt bereits** — der Punkt ist also nicht „Fehler
+    finden": `ttcut-demux` protokolliert
+    `[WARN] ffmpeg: Packet corrupt (stream = 1, …)` und schreibt in die
+    `.info`: `corrupt_frame_ranges=7095-7095`, `es_missing_ranges=7098-7099:120`,
+    `audio_gap_frames=7098`. `TTESInfo` liest das, und
+    `TTAVData` (`ttavdata.cpp:682`) macht daraus eine Zeitleisten-Marke.
+    Frame 7095 = 283,8 s, also genau die Bruchstelle.
+  - **Was ProjectX anders macht** (gemessen, nicht vermutet — 40-MB-Byte-
+    Ausschnitt der TS um die Defektstelle, `projectx -demux`): es prüft die
+    CRC jedes Tonrahmens, entfernt sie und **fügt fehlende Rahmen ein**
+    (`check & synchronize audio file` / `check CRC of AC-3 / MPEG-Audio L1,2`
+    / `remove CRC` / `add frames`); defekte Video-GOPs verwirft es
+    (`!> dropping GOP# 69 … errorcode: 24`). Ergebnis: **4075 Rahmen, 97,80 s,
+    keine Bruchstelle**, libav findet keinen Fehler. Dieselbe Stelle, aus
+    derselben TS — ProjectX' Ausgabe wäre durch mplex gegangen.
+  - Offen ist damit genau zwei Dinge, beide klein umrissen:
+    1. **Den beschädigten Bereich ersetzen statt durchreichen.** Ein
+       unvollständiger Rahmen gehört verworfen und die Zeit mit einem gültigen
+       Stille-Rahmen aufgefüllt — ttcut-demux fügt für Lücken schon Stille ein
+       (`Inserting silence for gaps…`), tut es hier aber nicht, weil der
+       Bereich als „vorhanden, nur korrupt" gilt.
+    2. **Die Marke benennt die falsche Spur.** Der Text lautet
+       „Bildstörungen: 7095–7095", obwohl der Schaden hier im **Ton** liegt
+       (`Packet corrupt (stream = 1)` = Audiospur). `corrupt_frame_ranges`
+       unterscheidet die Spur nicht — wer die Marke sieht, sucht am Bild.
+  - Messmaterial: TS liegt noch
+    (`…/2023-10-19.02.32.5-0.rec/00001.ts`), Ausschnitt und ProjectX-Ausgabe
+    unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/audiobug/`.
+
+- **`TTSearchTask` trägt nichts zum Fortschritt bei** (Restpunkt aus dem
+  Suchbefund vom 2026-08-15; der Hauptteil ist mit `0905aace` behoben)
+  - Behoben ist die Verzögerung: Such- und Vorschau-Aufgabe melden ihren Start
+    jetzt **vor** der teuren Vorbereitung. Gemessen vorher/nachher: bei der
+    Suche zweimal 13 s zwischen Sperre und Dialog, danach dieselbe Sekunde.
+  - Offen bleibt die Aussagekraft: **`TTSearchTask` (der Koordinator) sendet
+    keine einzige Statusmeldung** (0× Init/Start/Step/Finished/Exit), nur
+    `TTFrameSearchTask` meldet — und dort ist es **1× Start und 3× Step für
+    eine ganze Suche**. Der Balken bewegt sich also kaum, obwohl er jetzt
+    rechtzeitig erscheint. Wer es angeht: der Koordinator kennt die
+    Batch-Aufteilung und wäre die natürliche Stelle für einen Fortschritt über
+    alle Teil-Dekoder.
+
+- **H.265-UHD: Schieber-Bewegung rechnet im Oberflächen-Faden, Programm
+  reagiert minutenlang nicht; danach Absturz (SIGABRT)** (GUI-Abnahme
+  2026-08-15; vorbestehend — die Frame-Navigation ist von
+  `feature/mpeg2-preview-outcome` nicht angefasst)
+  - **Gemessen am laufenden Prozess** (kein Deadlock, sondern Rechenlast):
+    Hauptfaden 33 495 Ticks ≈ **335 s CPU** bei 5 min Laufzeit, alle anderen
+    37 Fäden 0–2 Ticks, `wchan=0`, `stat=Rl`, RSS 478 MB. Die gesamte Arbeit
+    liegt also im GUI-Faden; die Oberfläche kommt nicht dran, weil sie selbst
+    rechnet.
+  - Passt zur dokumentierten Eigenschaft (CLAUDE.md): die sequenzielle
+    Dekodier-Optimierung ist abgeschaltet, `decodeFrame()` springt **immer** —
+    jede Schieber-Bewegung heißt Sprung zum vorherigen Keyframe plus Dekodieren
+    bis zum Ziel. Bei UHD-HEVC mit langen GOPs ist das pro Bild teuer, und die
+    Bewegungen stapeln sich.
+  - **Der Absturz selbst ist NICHT erklärt.** Belegt ist nur `SIGABRT` (nicht
+    SIGSEGV) aus dem Core-Header. Bei aktiven `Q_ASSERT`s (`QT_FORCE_ASSERTS`)
+    kommen Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
+    Speicheranforderung in Frage. Kein Speichermangel auf Systemebene:
+    91 GB RAM, 82 GB verfügbar, keine OOM-Meldung.
+  - **Zwei Messfallen, die die Beweise gekostet haben:** Der 1,14-GB-Core war
+    **abgeschnitten** („segment extending past end of file"), weil der Prozess
+    beim Schreiben vom Zeitlimit der Hintergrund-Shell getötet wurde — bash
+    meldete „Getötet"/137, der eigentliche Grund war aber SIGABRT davor. Und
+    die `Q_ASSERT`-Meldung geht über den Nachrichten-Handler ins Logfile, das
+    beim Absturz nicht geschrieben und beim nächsten Start **überschrieben**
+    wird. Beide Spuren waren weg.
+  - Wer es angeht: `/usr/local/src/CLAUDE_TMP/TTCut-ng/abnahme/start-gdb.sh`
+    startet die Anwendung unter gdb, nimmt beim Absturz alle Fäden auf und
+    sichert das Anwendungsprotokoll sofort mit. Kein Core nötig.
+    `ptrace_scope=1` verhindert das Anhängen an einen fremd gestarteten
+    Prozess — die Anwendung muss also von gdb selbst gestartet werden.
+
+- **Der „Puls" des Fortschrittsbalkens bewegt sich nicht — Ursache
+  unbekannt** (GUI-Abnahme 2026-08-15; der Puls stammt aus der
+  Fortschrittsanzeige-Überholung `f5a22762`, nicht aus diesem Zweig)
+  - Nach 5 s ohne `Step` schaltet `TTProgressBar` auf `setRange(0, 0)`
+    (unbestimmter Modus), damit der Balken zeigt „läuft weiter, Ende
+    unbekannt". Beobachtet: statische helle/dunkle Streifen, keine Bewegung —
+    während die Debug-Uhr im Detailbereich **weiterläuft**, der 1-s-Herzschlag
+    also arbeitet.
+  - **Gemessen im laufenden Programm** (Messzeilen im Herzschlag, danach
+    entfernt): `indet=1 dlgEnabled=1 barEnabled=1 range=0..0 value=-1
+    visible=1` — der Puls-Modus ist aktiv, Dialog und Balken sind aktiviert,
+    das Fenster ist sichtbar. Und es bewegt sich trotzdem nichts.
+  - **Gegenprobe mit `tools/diag/test_pulse_animation`** (sechs Fälle
+    nebeneinander): ein unbestimmter Balken animiert bei aktiviertem Widget,
+    auch bei deaktiviertem Elternfenster (dann nur grau gezeichnet) und auch
+    mit `value=-1` nach `reset()`. Nicht animiert wird nur, was **deaktiviert**
+    ist. Damit ist keiner der gemessenen Unterschiede die Ursache.
+  - **Drei widerlegte Erklärungen** (nicht wieder aufwärmen): (1) „Dialog ist
+    deaktiviert, `resetForNewOperation()` repariert es beim zweiten Lauf" —
+    widerlegt, der Puls war IMMER statisch; (2) „`Init` deaktiviert wiederholt"
+    — Fix greift, Puls steht weiter; (3) „`value=-1` verhindert die Animation"
+    — Nachbau animiert damit. Die zwei `setEnabled(true)` (`72e2e260`,
+    `935af8f0`) bleiben trotzdem: der Abbrechen-Knopf braucht sie.
+  - Verbleibender bekannter Unterschied zum Nachbau: die Abnahme läuft unter
+    **AddressSanitizer**, der Nachbau nicht. Im normalen Build ist der Fall
+    nicht beobachtbar, weil die 5-s-Schwelle dort kaum erreicht wird. Nächster
+    Schritt wäre also, den Nachbau **unter ASAN** zu bauen und zu vergleichen —
+    eine Messung, keine vierte Erklärung.
 
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
