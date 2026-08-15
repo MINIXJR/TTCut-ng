@@ -572,17 +572,14 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
   `Canceled`. The preview also keeps the clips it had already finished
   (they are valid previews); only the clip being written when the cancel
   landed is removed.
-  One gap remains, deliberate:
-  - **A cancel during MPEG-2 *preview* generation does nothing.** The MPEG-2
-    preview's video phase runs through `TTThreadTaskPool::startNested()`,
-    which is deliberately never enqueued and therefore never receives the
-    pool's `onUserAbort()` broadcast (`data/ttcutpreviewtask.cpp:269`).
-    Preview cancel works for H.264/H.265 and is silently a no-op for
-    MPEG-2. Closing it means covering the whole MPEG-2 preview branch —
-    the video task, the audio track and the mux that follows it — not just
-    adding a predicate to the audio call, which would mux a truncated track
-    into a clip reported as "created".
-  Four further sharp edges worth knowing when testing:
+  The former deliberate gap — a cancel during MPEG-2 *preview* generation
+  was a silent no-op, because `startNested()` keeps its task out of the
+  queue `onUserAbortRequest()` broadcasts over — is CLOSED since
+  `0bd07c93` (2026-08-15): `TTCutPreviewTask::onUserAbort()` forwards the
+  cancel to the nested video task itself, and it takes effect within the
+  clip (measured: a cancel armed 36 ms into a clip used to let it finish
+  2.4 s later; now it stops inside it and removes the half-written files).
+  Four sharp edges worth knowing when testing:
   - A cancel arriving during **subtitle** cutting is acted on only at the
     end of that phase, not immediately (`cutSubtitleTracks` has no poll
     point of its own).
