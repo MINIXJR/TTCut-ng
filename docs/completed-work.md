@@ -18,6 +18,16 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Smart Cut (H.264 / H.265)
 
+- **`av_packet_alloc`-Fehlschlag schnitt das Segment still ab** → **GELÖST
+  (2026-08-15)**. Zwei Stellen (`decodeFramesIntoList`, `runEncodePass`)
+  antworteten mit `break` und die Funktion meldete Erfolg; jetzt
+  `setError` + `return false` wie jeder andere Fehler derselben Schleifen
+  (`flushEncoder` tat es schon richtig). Nur bei gescheiterter
+  Speicheranforderung erreichbar — deshalb ohne Repro, als Angleichung.
+  Regression: `test_h26xcut_abort` (none), `test_smartcut_abort` (Achtung:
+  braucht sein festes Ausgabeverzeichnis `CLAUDE_TMP/TTCut-ng/cut-abort/`;
+  nach einem Temp-Aufräumen schlägt er auch auf unverändertem Stand fehl).
+
 - **H.265 Smart Cut: RASL-Verlust an der Non-IDR/CRA-Naht (Defekt A,
   H.265-Teil)** → **DONE (2026-07-21, branch `feature/hevc-seam-rasl`)**
   - War: Der EOS an der Naht verwarf die RASL-Bilder des Copy-Start-CRA still

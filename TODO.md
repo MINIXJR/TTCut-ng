@@ -178,10 +178,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     aus — festgehalten, damit niemand erneut eines baut.
     `tools/diag/qc-autocut.sh` überspringt die Videospur deshalb bei
     mpeg2video und prüft dort nur Paketzahl, Dauer und Audiospur.
-  - **`runEncodePass`s Fehlerpfad bei `av_packet_alloc`** liefert `true`
-    zurück, nachdem die Bildliste bereits teilweise verarbeitet wurde —
-    der Rest leckt und das Segment wird still abgeschnitten. Nur bei einer
-    fehlgeschlagenen Speicheranforderung erreichbar.
   - **Arbeiter-Fäden lesen den `TTSettings`-Singleton direkt** — latent, kein
     Datenrennen im heutigen Programm, aber die Begründung dafür steht
     nirgends im Code. Warum es heute sicher ist: alle benutzten Zugriffe
