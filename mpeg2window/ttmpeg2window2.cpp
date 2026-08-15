@@ -215,6 +215,14 @@ void TTMPEG2Window2::drawSubtitleOnImage(QImage& image, const QString& text)
   doc.setTextWidth(image.width());
 
   // SRT line breaks -> <br/>; tags (<font color>, <i>, <b>) pass through.
+  //
+  // Deliberately passing tags through means a crafted .srt could also carry
+  // an <img> whose src points at a local file or data: URI - harmless in
+  // effect (no scripts, no network, no exfiltration; security review
+  // 2026-08-15 rated it below reporting threshold) but there is no reason to
+  // load ANY resource from subtitle text. The empty resource provider turns
+  // every such reference into a no-op while the formatting tags keep working.
+  doc.setResourceProvider([](const QUrl&) { return QVariant(); });
   QString html = text;
   html.replace("\r\n", "<br/>");
   html.replace("\n", "<br/>");
