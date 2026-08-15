@@ -473,6 +473,50 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Der „Puls" des Fortschrittsbalkens bewegte sich nicht** → **GELÖST
+  (2026-08-15)**
+  - War: Nach 5 s ohne `Step` schaltet `TTProgressBar` auf `setRange(0, 0)`
+    (unbestimmter Modus). Der Balken zeigte statische helle/dunkle Streifen,
+    während die Debug-Uhr im Detailbereich weiterlief — der 1-s-Herzschlag
+    arbeitete also, nur die Style-Animation fehlte.
+  - Ursache: `gui/ttcutmain.cpp` setzte ein anwendungsweites Stylesheet
+    (`QGroupBox::title { subcontrol-position: top center; }`). **Jedes**
+    Stylesheet auf der `QApplication` legt `QStyleSheetStyle` über den
+    Plattform-Style — für alle Widgets, nicht nur für `QGroupBox`. Unter den
+    KDE-Styles hört der unbestimmte `QProgressBar` damit auf zu animieren.
+  - **Gemessen** mit `tools/diag/test_pulse_stylesheet` (zählt `QEvent::Paint`
+    am Balken selbst, statt jemanden hinschauen zu lassen; 3–5 s je Lauf,
+    Wayland):
+
+    | Style | ohne Sheet | mit Sheet | mit Proxy | Produktionsklasse |
+    |---|---|---|---|---|
+    | Breeze | 63,5 | **1,0 statisch** | 63,7 | 63,7 |
+    | Oxygen | 63,8 | **1,0 statisch** | 63,8 | 63,5 |
+    | Fusion | 60,4 | 60,7 | 60,8 | 60,7 |
+    | Windows | 31,2 | 31,2 | 31,2 | 31,2 |
+
+    Der Fehler war also KDE-spezifisch: Fusion und Windows animieren auch mit
+    Stylesheet. Umgekehrt braucht **nur** Fusion die Zentrierung überhaupt —
+    Breeze zentriert Gruppentitel von sich aus (Bildbelege je Style über
+    `PULSE_GRAB`). Das Stylesheet zahlte den Preis dort, wo es nichts nützte.
+  - Fix: `gui/ttcentredtitlestyle.{h,cpp}` — ein `QProxyStyle`, der das
+    `textAlignment` der `QStyleOptionGroupBox` in `drawComplexControl` **und**
+    `subControlRect` auf `AlignHCenter` setzt (ohne das Rechteck wäre der Text
+    mittig gezeichnet, aber linksbündig beschnitten). `install()` erzeugt die
+    Basis mit `QStyleFactory::create(objectName)` neu, weil `setStyle()` den
+    bisherigen Style löscht und der Proxy ihn sonst als Wildzeiger hielte.
+    Liefert die Factory für den Namen nichts — denkbar bei einem
+    Fremdanbieter-Style —, wird **kein** Proxy gesetzt: ein `QProxyStyle` auf
+    `nullptr` fiele still auf den Standard-Style zurück und tauschte damit das
+    Aussehen des Nutzers aus. Lieber ein linksbündiger Titel. Der Zweig ist
+    mit `PULSE_FAKE_STYLENAME` gemessen (Style bleibt `breeze`, 63,5 Paints/s).
+  - **Vier widerlegte Erklärungen** (nicht wieder aufwärmen): deaktivierter
+    Dialog, wiederholtes `Init`, `value=-1` nach `reset()` — alle drei mit
+    `tools/diag/test_pulse_animation` widerlegt — und AddressSanitizer, der
+    als letzter verbliebener Unterschied galt: der Fehler tritt im normalen
+    Build genauso auf, sichtbar sobald man die 5-s-Schwelle vorübergehend auf
+    1 s senkt.
+
 - **Ein fehlgeschlagener Schnitt meldete sich als gelungener** → **GELÖST
   (2026-08-12, branch `feature/cut-outcome-reporting`, 11 Commits)**
   - War: Sechs Abschlussstellen in `TTAVData` schlossen eine Schnittoperation

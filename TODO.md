@@ -314,35 +314,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `ptrace_scope=1` verhindert das Anhängen an einen fremd gestarteten
     Prozess — die Anwendung muss also von gdb selbst gestartet werden.
 
-- **Der „Puls" des Fortschrittsbalkens bewegt sich nicht — Ursache
-  unbekannt** (GUI-Abnahme 2026-08-15; der Puls stammt aus der
-  Fortschrittsanzeige-Überholung `f5a22762`, nicht aus diesem Zweig)
-  - Nach 5 s ohne `Step` schaltet `TTProgressBar` auf `setRange(0, 0)`
-    (unbestimmter Modus), damit der Balken zeigt „läuft weiter, Ende
-    unbekannt". Beobachtet: statische helle/dunkle Streifen, keine Bewegung —
-    während die Debug-Uhr im Detailbereich **weiterläuft**, der 1-s-Herzschlag
-    also arbeitet.
-  - **Gemessen im laufenden Programm** (Messzeilen im Herzschlag, danach
-    entfernt): `indet=1 dlgEnabled=1 barEnabled=1 range=0..0 value=-1
-    visible=1` — der Puls-Modus ist aktiv, Dialog und Balken sind aktiviert,
-    das Fenster ist sichtbar. Und es bewegt sich trotzdem nichts.
-  - **Gegenprobe mit `tools/diag/test_pulse_animation`** (sechs Fälle
-    nebeneinander): ein unbestimmter Balken animiert bei aktiviertem Widget,
-    auch bei deaktiviertem Elternfenster (dann nur grau gezeichnet) und auch
-    mit `value=-1` nach `reset()`. Nicht animiert wird nur, was **deaktiviert**
-    ist. Damit ist keiner der gemessenen Unterschiede die Ursache.
-  - **Drei widerlegte Erklärungen** (nicht wieder aufwärmen): (1) „Dialog ist
-    deaktiviert, `resetForNewOperation()` repariert es beim zweiten Lauf" —
-    widerlegt, der Puls war IMMER statisch; (2) „`Init` deaktiviert wiederholt"
-    — Fix greift, Puls steht weiter; (3) „`value=-1` verhindert die Animation"
-    — Nachbau animiert damit. Die zwei `setEnabled(true)` (`72e2e260`,
-    `935af8f0`) bleiben trotzdem: der Abbrechen-Knopf braucht sie.
-  - Verbleibender bekannter Unterschied zum Nachbau: die Abnahme läuft unter
-    **AddressSanitizer**, der Nachbau nicht. Im normalen Build ist der Fall
-    nicht beobachtbar, weil die 5-s-Schwelle dort kaum erreicht wird. Nächster
-    Schritt wäre also, den Nachbau **unter ASAN** zu bauen und zu vergleichen —
-    eine Messung, keine vierte Erklärung.
-
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
     `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie

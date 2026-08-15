@@ -155,6 +155,19 @@ flowchart TD
 
 ## Assumptions, contracts & pitfalls
 
+- **The pulse depends on there being NO application-wide stylesheet.** Any
+  `QApplication::setStyleSheet()` — however small, and whichever widget class
+  it names — wraps the platform style in `QStyleSheetStyle` for **every**
+  widget, and under the KDE styles that stops the animation of an
+  indeterminate `QProgressBar`: the pulse then shows static stripes while the
+  1 s tick keeps running. Measured with `tools/diag/test_pulse_stylesheet`
+  (paints/s on the bar): Breeze 63.5 → 1.0, Oxygen 63.8 → 1.0, while Fusion
+  (60.4 → 60.7) and Windows (31.2 → 31.2) are unaffected, so the defect is
+  invisible outside KDE. This is why group box titles are centred by
+  `TTCentredTitleStyle` (a `QProxyStyle`) instead of a stylesheet
+  (`gui/ttcutmain.cpp`). Widget-level stylesheets are fine as long as neither
+  the bar nor an ancestor of it carries one — today none of `TTProgressBar`,
+  `ttprogressform.ui`, `TTCutMainWindow` or its `.ui` does.
 - **`TTThreadTask::onStatusReport`** — assumes each task emits `Start` with
   its total BEFORE any `Step`; `Step` values are absolute units, monotone
   per task. Guarantees the task pointer identifies the sender.

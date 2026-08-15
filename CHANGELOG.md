@@ -6,6 +6,15 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **The progress bar's pulse moves again.** When a step takes longer than five
+  seconds the bar switches to a moving "still working" indicator - but on KDE
+  it stood still and only showed static stripes. Cause was a one-line
+  application stylesheet used to centre group box titles: any stylesheet on the
+  application replaces the platform style for every widget, and the KDE styles
+  then stop animating such bars. The titles are now centred by a proxy style
+  instead, which leaves the drawing - and the animation - to the user's own
+  style. Measured on Breeze, Oxygen, Fusion and Windows.
+
 - **A multiplex that loses the audio track now says so.** mplex ends a stream
   it considers broken, carries on without it, exits successfully and reports
   "completed" - so a 90-minute recording came out with 85 minutes of video and
