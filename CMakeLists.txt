@@ -276,6 +276,7 @@ set(TTCUT_CORE_SOURCES
   gui/ttnavigatordisplay.cpp
   gui/ttstreamnavigator.cpp
   gui/ttcuttreeview.cpp
+  gui/ttcentredtitlestyle.cpp
   gui/ttprogressbar.cpp
   gui/ttcutpreview.cpp
   gui/ttcutaboutdlg.cpp

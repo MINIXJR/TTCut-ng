@@ -20,6 +20,7 @@
 #include <QtGlobal>
 
 // class declaration for the main window class
+#include "ttcentredtitlestyle.h"
 #include "ttcutmainwindow.h"
 
 #include "../common/ttmessagelogger.h"
@@ -90,13 +91,18 @@ int main( int argc, char **argv )
     // load() before any UI code reads a persisted value.
     (void)TTSettings::instance();
 
-    // Centre QGroupBox titles application-wide. Most styles (including
-    // current Breeze) default to left-aligned titles; we want the visual
-    // consistency of centred titles across all panels regardless of the
-    // user's KDE theme. Per-widget alignment properties in .ui files
-    // would still override this.
-    a.setStyleSheet(a.styleSheet() +
-                    "\nQGroupBox::title { subcontrol-position: top center; }");
+    // Centre QGroupBox titles application-wide: some styles (Fusion, the
+    // usual default outside KDE) left-align them, and we want the same look
+    // across all panels regardless of the user's theme.
+    //
+    // This used to be a one-line application stylesheet. It cannot be: any
+    // stylesheet on the QApplication wraps the platform style in
+    // QStyleSheetStyle for EVERY widget, and under the KDE styles that stops
+    // the animation of indeterminate QProgressBars - TTProgressBar's stall
+    // pulse stood still (Breeze measured at 1.0 instead of 63.5 repaints per
+    // second; tools/diag/test_pulse_stylesheet). The proxy style keeps the
+    // real style in charge of drawing and only rewrites the title alignment.
+    TTCentredTitleStyle::install();
 
     // Load qtbase translations (since Qt 5.x the per-module split replaced
     // the legacy qt_<locale>.qm bundle; in modern installs that legacy file
