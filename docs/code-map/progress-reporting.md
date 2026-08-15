@@ -155,6 +155,20 @@ flowchart TD
 
 ## Assumptions, contracts & pitfalls
 
+- **`TTThreadTask::abort()` acts on three states, not two.** "Running" sets
+  the flag the operation polls; "never started" (still in the pool queue)
+  emits `aborted()` right away, and `TTCutMainWindow` depends on that (a
+  search task the pool never ran emits `aborted`, never `finished`). The third
+  is **already finished**, added 2026-08-15: `run()` sets
+  `mIsFinished` immediately before `emit finished`, and `abort()` then returns
+  without signalling, logging a warning instead. Before that, a cancel landing
+  between the worker's `emit finished` and the GUI delivering it produced BOTH
+  terminal signals plus a second `cleanUp()` on the GUI thread, and the pool
+  reported the completed run as cancelled. **The flag is cleared on every
+  entry to `run()`**, because tasks get re-run: `TTCutVideoTask` drives one
+  `TTCutTask` instance through the whole cut list, and a flag left standing
+  would make every entry after the first unabortable. Harness:
+  `tools/diag/test_abort_after_finish` (three cases, incl. the re-run guard).
 - **The pulse depends on there being NO application-wide stylesheet.** Any
   `QApplication::setStyleSheet()` — however small, and whichever widget class
   it names — wraps the platform style in `QStyleSheetStyle` for **every**

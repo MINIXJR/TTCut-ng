@@ -135,10 +135,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
   festgehalten. Reihenfolge grob nach Nutzerwirkung.
-  - **`TTThreadTask::abort()` sendet `aborted()` selbst dann**, wenn der
-    Abbruch eintrifft, während `finished()` schon in der Warteschlange
-    liegt — eine tatsächlich fertig gewordene Aufgabe kann sich damit als
-    abgebrochen melden. Generisch, betrifft jede Aufgabe im Pool.
   - **Der MPEG-2-Neucodierer ist von Lauf zu Lauf nicht reproduzierbar**
     (`thread_count = 0`; zwei verschiedene Video-ES in sechs Läufen
     **desselben** unveränderten Binaries). Für die Ausgabequalität harmlos,

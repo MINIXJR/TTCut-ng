@@ -473,6 +473,46 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Ein Abbruch nach dem Abschluss meldete die fertige Aufgabe als
+  abgebrochen** → **GELÖST (2026-08-15)**
+  - War: `TTThreadTask::abort()` entschied allein an `!mIsRunning &&
+    !mIsAborted`. Dieser eine Zweig bediente zwei Zustände, die er nicht
+    unterscheiden konnte. **Nie gestartet** (Aufgabe hängt in der
+    Pool-Warteschlange) braucht `aborted()`, und `TTCutMainWindow` verlässt
+    sich darauf. **Schon fertig** sieht von dort identisch aus: `run()` hat
+    `mIsRunning = false` gesetzt, `cleanUp()` gerufen und `finished(this)`
+    abgesetzt, das als Ereignis in der Warteschlange des Oberflächen-Fadens
+    liegt. Ein Abbruch in diesem Fenster legte ein `aborted()` obendrauf und
+    ließ `cleanUp()` ein zweites Mal laufen, diesmal im anderen Faden.
+  - **Gemessen**, nicht gelesen: neue Sonde
+    `tools/diag/test_abort_after_finish` öffnet das Fenster gezielt statt
+    darum zu würfeln — der Hauptfaden wartet **ohne** `processEvents()` auf
+    das „operation ist zurück"-Flag der Aufgabe, dann erst kommt der Abbruch.
+    Vorher `finished=1 aborted=1 cleanUp=2`, nachher `finished=1 aborted=0
+    cleanUp=1`. Der Pool protokollierte vorher „Last thread task aborted" und
+    meldete den Lauf als abgebrochen, obwohl er durchgelaufen war.
+  - Fix: Abschluss-Merker (`std::atomic<bool> mIsFinished`), gesetzt in
+    `run()` unmittelbar **vor** `emit finished`; `abort()` kehrt dann sofort
+    zurück und schreibt eine Warnzeile ins Log statt still zu verpuffen
+    (`AfterFinish: abort request arrived after the task had finished -
+    ignored`) — damit der nächste Bericht „ich hab abgebrochen, es lief
+    trotzdem durch" aus dem Log beantwortbar ist.
+  - **Die Falle, die den naheliegenden Fix falsch macht:** Aufgaben werden
+    wiederverwendet. `TTCutVideoTask` startet **eine** `TTCutTask`-Instanz für
+    jeden Schnittlisteneintrag neu (`data/ttcutvideotask.cpp:170`). Ein
+    stehenbleibender Merker hätte ab dem zweiten Eintrag jeden Abbruch
+    verschluckt — genau der Defekt, den `1f372cca` behoben hat. Der Merker
+    wird deshalb bei jedem Eintritt in `run()` zurückgesetzt; Fall 3 der Sonde
+    prüft das. **Negativkontrolle gemessen**: ohne das Rücksetzen bleibt
+    Fall 3 auf `aborted=0`, das Kriterium kann also fehlschlagen.
+  - Regression, weil die Änderung die Basisklasse **jeder** Aufgabe betrifft,
+    alle bestanden: `test_pool_abort`, `test_stale_abort`,
+    `test_progressbar_reshow`, `test_cut_outcome`, `test_cutsequence_abort`,
+    `test_h26xcut_abort` (none/video/audio/mux), `test_mpeg2cut_abort`
+    (none/video/mux), `test_audioonlycut_abort` (none/audio). Nicht gelaufen:
+    der GUI-Dauerlauf `soak-abort.sh` (braucht XWayland und den Bildschirm,
+    und er zielt ohnehin auf den offenen `doH264Cut`-Absturz).
+
 - **Gleichbild-Suche baute den Bildindex ein zweites Mal** → **GELÖST
   (2026-08-15)**; der TODO-Punkt, aus dem das kam („`TTSearchTask` trägt nichts
   zum Fortschritt bei"), **beruhte auf einer falschen Zählung**

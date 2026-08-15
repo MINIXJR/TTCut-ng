@@ -6,6 +6,13 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **A cancel that arrives after the work is done no longer reports the run as
+  cancelled.** Pressing Cancel in the moment a task had just finished made it
+  announce both outcomes at once, so a completed operation could end up
+  reported as aborted - and its cleanup ran twice. Such a late cancel is now
+  ignored and noted in the log, while cancelling a task that has not started
+  yet, or one that is running, works as before.
+
 - **Searching for the same frame is about twice as fast.** The search opened
   the stream a second time and scanned it from end to end to build a frame
   index the application had already built when the file was opened. On a
