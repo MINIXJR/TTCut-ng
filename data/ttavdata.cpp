@@ -1572,6 +1572,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
   if (avItem->audioCount() > 0)
     emit statusReport(0, StatusReportArgs::Stage, QString(), StatusReportArgs::StageAudio);
+  int audioTracksCut = 0;   // counts ok==true callbacks; compared below
   cutAudioTracks(avItem, videoKeepList, normalizeAcmod,
       [&](int i, const QString& /*ext*/) {
         return createCutFileName(tgtFileName,
@@ -1585,7 +1586,10 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
         // file"), and the abort cleanup below can only remove what it knows
         // about. Mirrors TTH26xCutTask::doCut's mCreatedFiles handling.
         mCutProducedFiles << path;
-        if (ok) cutVideoTask->muxListItem()->appendAudioFile(path, lang);
+        if (ok) {
+          cutVideoTask->muxListItem()->appendAudioFile(path, lang);
+          audioTracksCut++;
+        }
       },
       [&](int i) {
         emit statusReport(0, StatusReportArgs::Step,
@@ -1638,6 +1642,26 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     cutVideoTask = nullptr;
     mCutOperationActive = false;
     finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
+    return;
+  }
+
+  // A missing track is a failure, not a footnote - same check as
+  // TTH26xCutTask::runCut() and the audio-only path (c7436a07).
+  // cutAudioTracks() skips failed tracks silently; audioTracksCut counted the
+  // ok callbacks above. Deliberately AFTER the sync-abort branch, so a cancel
+  // that raced the audio phase still reports as a cancel, and BEFORE the pool
+  // start, so neither the video cut nor the mux ever run: the produced track
+  // files stay on disk for a retry (a genuine error never cleans up), and no
+  // calibration factor is written (only a regular Exit writes one).
+  // Per-track reasons are in the log as errorMsg entries.
+  if (audioTracksCut < avItem->audioCount()) {
+    delete cutVideoTask;   // constructed above, never handed to the pool
+    cutVideoTask = nullptr;
+    mCutOperationActive = false;
+    finishCutOperation(CutOutcome::Failed, tr("Cutting failed"),
+        tr("Only %1 of %2 audio track(s) could be cut - "
+           "the finished streams were kept, see the log for the reason")
+            .arg(audioTracksCut).arg(avItem->audioCount()));
     return;
   }
 

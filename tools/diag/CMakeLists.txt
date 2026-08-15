@@ -238,6 +238,8 @@ target_link_libraries(test_h26xcut_abort PRIVATE ttcut-core)
 # branch too (the entry point this harness checks the Exit/lastCutError
 # ordering on), so it needs the whole core library rather than a curated list.
 diag_tool(test_cut_outcome     AV WIDGETS SOURCES)
+diag_tool(test_partial_track     AV WIDGETS SOURCES)
+target_link_libraries(test_partial_track PRIVATE ttcut-core)
 target_link_libraries(test_cut_outcome PRIVATE ttcut-core)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs

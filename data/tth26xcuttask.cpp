@@ -358,6 +358,24 @@ void TTH26xCutTask::runCut()
       [this] { return cancelRequested(); });
   abortIfRequested();
 
+  // A missing track is a failure, not a footnote. cutAudioTracks() skips a
+  // failed track silently (out-of-range index, missing stream, empty plan,
+  // or cutAudioStream returning false) and reports that only through the ok
+  // flag of the callback above - which is also why cutAudioFiles counts
+  // exactly the successful tracks. Without this check the cut muxed an MKV
+  // short of a track, reported success, and wrote a calibration factor on a
+  // wrong work basis (measured: tools/diag/test_partial_track). Stopping
+  // BEFORE the mux keeps the finished ES files - video and the successful
+  // tracks - for a retry; a genuine error never cleans up (standing rule).
+  // Per-track reasons are in the log as errorMsg entries.
+  if (cutAudioFiles.size() < mpAVItem->audioCount()) {
+    fail(TTAVData::tr("Cutting failed"),
+         TTAVData::tr("Only %1 of %2 audio track(s) could be cut - "
+                      "the finished streams were kept, see the log for the reason")
+             .arg(cutAudioFiles.size()).arg(mpAVItem->audioCount()));
+    return;
+  }
+
   // Collect audio languages from data model
   QStringList cutAudioLanguages;
   for (int i = 0; i < mpAVItem->audioCount(); i++) {
