@@ -67,6 +67,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 		void onGotoCutOut(int pos);
 		void onGotoFrame(int pos);
 		void onGotoFrame(int pos, int fast);
+void onGotoFramePreview(int pos);
 		void onMoveNumSteps(int);
 		void onMoveToHome();
 		void onMoveToEnd();

@@ -23,7 +23,10 @@ TTStreamNavigator::TTStreamNavigator(QWidget* parent)
   setupUi( this );
 
   connect(videoSlider, &QAbstractSlider::valueChanged, this, &TTStreamNavigator::onNewSliderValue);
-  connect(videoSlider, &QAbstractSlider::sliderMoved,  this, &TTStreamNavigator::onSliderMoved);
+  // No sliderMoved -> processEvents() connection any more: it re-entered the
+  // event loop in the middle of the synchronous per-event decode and pumped
+  // further slider events into the queue. The main window debounces slider
+  // positions now, which also keeps the UI painting during a drag.
 
   videoSlider->setPageStep(TTSettings::instance()->stepSliderClick());
   connect(TTSettings::instance(), &TTSettings::stepSliderClickChanged,
@@ -49,11 +52,6 @@ QSlider* TTStreamNavigator::slider()
 void TTStreamNavigator::onNewSliderValue(int val)
 {
   emit sliderValueChanged(val);
-}
-
-void TTStreamNavigator::onSliderMoved(__attribute__((unused))int val)
-{
-  qApp->processEvents();
 }
 
 void TTStreamNavigator::onRefreshDisplay()

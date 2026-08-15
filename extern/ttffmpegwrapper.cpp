@@ -1399,6 +1399,72 @@ int64_t TTFFmpegWrapper::decodeOrderTagForPacket(const AVPacket* packet)
     return tag;
 }
 
+QImage TTFFmpegWrapper::decodeNearestKeyframe(int displayPos, int* shownDisplayPos)
+{
+    if (shownDisplayPos) *shownDisplayPos = -1;
+    if (mFrameIndex.isEmpty()) return QImage();
+
+    // Display position -> decode-order AU, then walk back to the keyframe.
+    int targetAU = qBound(0, displayPos, int(mFrameIndex.size()) - 1);
+    if (mDisplayOrderMap.isValid() && displayPos >= 0
+        && displayPos < mDisplayOrderMap.displayCount())
+        targetAU = mDisplayOrderMap.displayToDecode(displayPos);
+    int keyAU = qBound(0, targetAU, int(mFrameIndex.size()) - 1);
+    while (keyAU > 0 && !mFrameIndex[keyAU].isKeyframe)
+        keyAU--;
+
+    const int keyDisplay = mDisplayOrderMap.isValid()
+                               ? mDisplayOrderMap.decodeToDisplay(keyAU)
+                               : keyAU;
+    if (shownDisplayPos) *shownDisplayPos = keyDisplay;
+
+    // The LRU cache is shared with decodeFrame() and keyed by display
+    // position - dragging back and forth over the same GOP is then free.
+    if (keyDisplay >= 0 && mFrameCache.contains(keyDisplay)) {
+        mFrameCacheLRU.removeOne(keyDisplay);
+        mFrameCacheLRU.append(keyDisplay);
+        return mFrameCache[keyDisplay];
+    }
+
+    // Borrow the search path's no-prefill seek: mSearchMode is only read by
+    // seekToFrame() to decide whether to prefill from the previous keyframe.
+    const bool savedSearchMode = mSearchMode;
+    mSearchMode = true;
+    const bool seekOk = seekToFrame(keyAU);
+    mSearchMode = savedSearchMode;
+    if (!seekOk) return QImage();
+
+    mDecoderFrameIndex = mCurrentFrameIndex;
+    mDecodeOrderTag    = mCurrentFrameIndex;
+
+    // The keyframe is the first packet sent, but with a B-hierarchy the
+    // decoder may want a few more packets before it emits output. It emits in
+    // display order, so the keyframe (lowest POC of its GOP) comes out first
+    // or nearly so - a small guard suffices and keeps a broken stream from
+    // turning the preview into the very drain this is meant to avoid.
+    QImage result;
+    int guard = 0;
+    while (guard++ < 64) {
+        if (!skipCurrentFrame()) break;
+        if (static_cast<int>(mDecodedFrame->pts) == keyAU) {
+            result = convertDecodedFrameToImage();
+            break;
+        }
+    }
+
+    if (!result.isNull() && keyDisplay >= 0) {
+        mFrameCache[keyDisplay] = result;
+        mFrameCacheLRU.append(keyDisplay);
+        while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
+            int evict = mFrameCacheLRU.takeFirst();
+            mFrameCache.remove(evict);
+        }
+        mCurrentFrameIndex = keyDisplay;
+        mDecoderFrameIndex = keyDisplay;
+    }
+    return result;
+}
+
 // ----------------------------------------------------------------------------
 // Skip current frame (decode for reference chain but skip RGB conversion)
 // Used by decodeFrame() to efficiently skip intermediate frames

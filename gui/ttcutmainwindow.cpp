@@ -317,6 +317,14 @@ TTCutMainWindow::TTCutMainWindow()
   // Connect signal from video slider
   // --------------------------------------------------------------------------
   connect(streamNavigator, &TTStreamNavigator::sliderValueChanged, this, &TTCutMainWindow::onVideoSliderChanged);
+  // Debounced decode for the slider; fires 50 ms after the last movement.
+  // A release must not wait for the debounce: deliver the exact frame at once.
+  mpSliderDebounce = new QTimer(this);
+  mpSliderDebounce->setSingleShot(true);
+  mpSliderDebounce->setInterval(50);
+  connect(mpSliderDebounce, &QTimer::timeout, this, &TTCutMainWindow::onSliderDecodeTimer);
+  connect(streamNavigator->slider(), &QAbstractSlider::sliderReleased,
+          this, &TTCutMainWindow::onSliderDecodeTimer);
 
   // Connect signals from cut-out frame widget
   // --------------------------------------------------------------------------
@@ -845,10 +853,35 @@ void TTCutMainWindow::onVideoSliderChanged(int sPos)
 {
   if (mpAVData->avCount() == 0) return;
 
-  if( TTSettings::instance()->fastSlider() )
-    currentFrame->onGotoFrame( sPos, 1 );
-  else
-    currentFrame->onGotoFrame( sPos, 0 );
+  // Record the newest position and let the debounce timer decode it. The
+  // decode is synchronous in this thread and costs up to seconds per call on
+  // UHD material (measured: H.264 1080p 70 ms, HEVC 4K 0.6 s, UHD 2.6 s per
+  // event); decoding every valueChanged of a drag multiplied that by the
+  // event count and froze the window. Stale intermediate positions are now
+  // simply never decoded.
+  mPendingSliderPos = sPos;
+  mpSliderDebounce->start();
+}
+
+void TTCutMainWindow::onSliderDecodeTimer()
+{
+  if (mpAVData->avCount() == 0) return;
+  const int sPos = mPendingSliderPos;
+  if (sPos < 0) return;
+  mPendingSliderPos = -1;
+
+  // While the handle is held down, show the nearest keyframe without the
+  // DPB prefill - fast enough to track the drag. The exact frame (full
+  // prefill, identical to every other decoder instance, WYSIWYG for cuts)
+  // follows from the sliderReleased-driven call, where isSliderDown() is
+  // already false.
+  if (streamNavigator->slider()->isSliderDown()) {
+    currentFrame->onGotoFramePreview(sPos);
+  } else if (TTSettings::instance()->fastSlider()) {
+    currentFrame->onGotoFrame(sPos, 1);
+  } else {
+    currentFrame->onGotoFrame(sPos, 0);
+  }
 
   navigation->checkCutPosition(mpCurrentAVDataItem);
 }

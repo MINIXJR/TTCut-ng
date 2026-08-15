@@ -59,6 +59,11 @@ class TTMPEG2Window2 : public QLabel
 
     void showVideoFrame();
     void showFrameAt(int index);
+    // Slider-drag preview: show the keyframe at/before index (H.26x: decoded
+    // without DPB prefill - see TTFFmpegWrapper::decodeNearestKeyframe). For
+    // MPEG-2 this is a plain showFrameAt (its decoder is cheap per frame).
+    // Returns the display position actually shown, or -1.
+    int  showKeyframeFastAt(int index);
     void showDecodedSlice();
 
     void saveCurrentFrame(QString fName, const char* format);

@@ -473,6 +473,38 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Schieber: Entprellung + Keyframe-Vorschau beim Ziehen** → **GELÖST
+  (2026-08-15, GUI-Abnahme durch den User auf UHD und H.264)**
+  - War (auch nach dem EAGAIN-Fix): `onVideoSliderChanged()` dekodierte
+    **jede** Rastung eines Zugs synchron im GUI-Faden — 50 Ereignisse ×
+    2,6 s auf UHD hieß Minuten Blockade; auf H.264 1080p immerhin 50 × 68 ms
+    ≈ 3,4 s. Dazu pumpte `onSliderMoved` → `processEvents()` mitten im
+    Dekodieren weitere Schieber-Ereignisse in die Warteschlange.
+  - Zur Frage „reichen N Bilder vor dem Ziel?": frei wählbar ist N nicht —
+    P/B-Bilder verweisen auf den Keyframe ihrer GOP, dekodiert wird zwingend
+    ab Keyframe, und das tat der Code schon. Teuer waren die Zwischenpositionen
+    und die DPB-Vorfüll-GOP (Sprung zum Keyframe **vor** dem Ziel-Keyframe).
+  - Fix, drei Bausteine:
+    1. **Entprellung** (`TTCutMainWindow`, 50-ms-Einzelschuss): `valueChanged`
+       merkt nur die neueste Position; veraltete Zwischenpositionen werden nie
+       dekodiert. `sliderReleased` feuert sofort.
+    2. **Keyframe-Vorschau beim Ziehen** (`TTFFmpegWrapper::
+       decodeNearestKeyframe` → `TTMPEG2Window2::showKeyframeFastAt` →
+       `TTCurrentFrame::onGotoFramePreview`): solange der Knopf gedrückt ist,
+       wird das Keyframe am/vor dem Ziel **ohne** Vorfüllung dekodiert — das
+       No-Prefill-Muster des Suchmodus, für I-Bilder dokumentiert sicher.
+       Beim Loslassen kommt das exakte Bild auf dem bisherigen Weg (volle
+       Vorfüllung, WYSIWYG für Schnitte). MPEG-2 nimmt beim Ziehen bewusst
+       den normalen Weg (libmpeg2 ist pro Bild billig).
+    3. `processEvents()` im Navigator entfernt (Wiedereintritt).
+  - Messwerte (`tools/diag/test_slider_decode_cost`, Median je Ereignis,
+    exakt → Vorschau): UHD-SES 2,6 s → **99 ms**; HEVC-4K-CRA 628 → 51 ms;
+    H.264 1080p 68 → 8 ms; MBAFF 30 → 5 ms; PAFF 28 → 4 ms. Gates
+    `test_stilldisplay` und `test_wrapper_map` (Tux-MBAFF) unverändert grün.
+  - Die dokumentierte Immer-Seek/DPB-Entscheidung für das **endgültige** Bild
+    ist unangetastet; die Vorschau ist ein zusätzlicher, ehrlich beschrifteter
+    Pfad (Positionsanzeige zeigt das wirklich angezeigte Keyframe).
+
 - **UHD-Schieber-Hänger: EAGAIN-Paketverlust in `skipCurrentFrame()`** →
   **GELÖST (2026-08-15)**
   - Symptom (GUI-Abnahme 2026-08-15): eine Schieber-Bewegung auf UHD-HEVC,

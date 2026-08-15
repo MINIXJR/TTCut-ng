@@ -6,6 +6,14 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **Dragging the position slider now tracks live.** While the handle is held
+  down, the picture follows in keyframe steps (a few milliseconds on HD, about
+  a tenth of a second on UHD); the exact frame appears once the slider is
+  released. Previously every intermediate position of a drag was decoded in
+  full on the spot, which froze the window for seconds on HD and - together
+  with the decoder bug above - for minutes on UHD. Positions skipped over
+  during a drag are no longer decoded at all.
+
 - **Stepping through UHD material no longer freezes the application for
   minutes.** On H.265 streams with hierarchical B-frames the decoder buffers
   more output than the display path collected, and a full decoder was answered

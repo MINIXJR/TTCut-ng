@@ -260,6 +260,28 @@ void TTMPEG2Window2::showFrameAt(int index)
   moveToVideoFrame(index);
 }
 
+int TTMPEG2Window2::showKeyframeFastAt(int index)
+{
+  if (!mUseFFmpeg) {
+    // MPEG-2: the libmpeg2 path decodes a GOP in a few tens of ms - the
+    // ordinary route is fast enough and keeps one code path.
+    moveToVideoFrame(index);
+    return currentIndex;
+  }
+
+  if (mpFFmpegWrapper == 0) return -1;
+
+  int shownPos = -1;
+  QImage img = mpFFmpegWrapper->decodeNearestKeyframe(index, &shownPos);
+  if (img.isNull()) return -1;
+
+  mCurrentFrame = img;
+  currentIndex  = shownPos;
+  mAspectIndex  = shownPos;
+  showVideoFrame();
+  return shownPos;
+}
+
 /*!
  * Open a video file and assign the mpeg2 decoder object
  */

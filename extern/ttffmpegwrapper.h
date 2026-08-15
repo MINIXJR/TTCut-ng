@@ -237,6 +237,18 @@ public:
     bool seekToFrame(int frameIndex);
     QImage decodeFrame(int frameIndex);
 
+    // Slider-drag preview: decode ONLY the keyframe at/before the given
+    // display position, without the previous-GOP DPB prefill (safe for
+    // keyframes - intra-coded, self-decodable; the search path has used the
+    // same shortcut since the setSearchMode() work). Cost is one seek plus a
+    // handful of packets instead of up to two GOPs; measured on UHD HEVC that
+    // is the difference between ~0.15 s and ~2.6 s per slider event. The
+    // exact target frame is NOT decoded here - the caller shows the keyframe
+    // while dragging and requests the precise frame (full prefill, WYSIWYG)
+    // once the slider is released. shownDisplayPos receives the display
+    // position of the frame actually delivered.
+    QImage decodeNearestKeyframe(int displayPos, int* shownDisplayPos);
+
     /**
      * Decode a frame and expose its YUV420P planes via TFrameInfo.
      *

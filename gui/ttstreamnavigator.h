@@ -33,7 +33,6 @@ class TTStreamNavigator : public QWidget, public Ui::TTStreamNavigatorWidget
 
   public slots:
     void onNewSliderValue(int value);
-    void onSliderMoved(int value);
     void onRefreshDisplay();
     void onAVItemChanged(TTAVItem* avDataItem);
 

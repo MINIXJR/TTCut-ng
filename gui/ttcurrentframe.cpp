@@ -465,6 +465,29 @@ void TTCurrentFrame::onGotoFrame(int pos, int fast)
   updateCurrentPosition(newFramePos);
 }
 
+//! Slider-drag preview: show the nearest keyframe quickly; the exact frame
+//! follows via onGotoFrame() once the slider is released. Keeps the stream's
+//! current index in sync so the position readout and cut checks stay honest
+//! about what is on screen.
+void TTCurrentFrame::onGotoFramePreview(int pos)
+{
+  if (pos < 0) return;
+
+  clearCutContext();
+
+  int shownPos = mpegWindow->showKeyframeFastAt(pos);
+  if (shownPos < 0) {
+    // Preview not possible (no wrapper, decode failure): fall back to the
+    // exact path rather than showing nothing.
+    onGotoFrame(pos, 0);
+    return;
+  }
+
+  videoStream->moveToIndexPos(shownPos, 0);
+  currentCutPosition = shownPos;
+  updateCurrentPosition(shownPos);
+}
+
 void TTCurrentFrame::onMoveNumSteps(int steps)
 {
   int position = videoStream->currentIndex()+steps;

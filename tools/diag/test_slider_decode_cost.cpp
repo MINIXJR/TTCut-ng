@@ -224,11 +224,25 @@ int main(int argc, char** argv)
     if (img.isNull()) printf("  WARNING: null image at %d\n", pos);
   }
 
+  // --- preview: the drag path - nearest keyframe, no DPB prefill ----------
+  std::vector<double> preview;
+  for (int i = 1; i <= steps; ++i) {
+    const int pos = (frames / (steps + 1)) * i + 7;   // deliberately off-key
+    int shown = -1;
+    t.restart();
+    QImage img = wrapper.decodeNearestKeyframe(pos, &shown);
+    preview.push_back(double(t.nsecsElapsed()) / 1e6);
+    if (img.isNull()) printf("  WARNING: preview null at %d\n", pos);
+  }
+
   const Stats ds = summarise(drag);
   const Stats js = summarise(jump);
+  const Stats ps = summarise(preview);
   printf("decodeFrame() cost per slider event:\n");
   report("drag", ds, steps);
   report("jump", js, steps);
+  printf("decodeNearestKeyframe() - the while-dragging path:\n");
+  report("prev", ps, steps);
 
   // The number that matters for the interface: a drag is not one event.
   printf("\nA drag emitting 50 valueChanged events costs about %.1f s of GUI\n"

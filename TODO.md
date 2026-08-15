@@ -312,13 +312,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     machte aus **einem** Schieber-Ereignis Minuten bis Stunden GUI-Rechenzeit.
     Gefixt (korrekte Send/Receive-Pumpe mit schwebendem Paket); UHD-Sprung
     jetzt 2,6 s statt nie.
-  - **Offen A — Reaktionsfähigkeit**: `onVideoSliderChanged()` dekodiert
-    weiterhin **synchron im GUI-Faden**, ein Ereignis kostet real (Sonde
-    `tools/diag/test_slider_decode_cost`, Median): H.264 1080p 70 ms, MBAFF
-    30 ms, HEVC-4K-CRA 630 ms, UHD-SES 2,6 s. Ein Zug mit 50 Ereignissen
-    blockiert entsprechend 3,5 s bis 130 s. Naheliegender Ansatz:
-    Ereignisse zusammenfassen (nur letzte Position dekodieren) —
-    tastet die dokumentierte Immer-Seek/DPB-Entscheidung nicht an.
+  - ~~Offen A — Reaktionsfähigkeit~~ **GELÖST 2026-08-15** (Entprellung +
+    Keyframe-Vorschau beim Ziehen; GUI-Abnahme durch den User auf UHD und
+    H.264, Details in `docs/completed-work.md`).
   - **Offen B — der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
     unerklärt (Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel

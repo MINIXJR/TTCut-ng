@@ -18,6 +18,7 @@
 #include "ui_ttcutmainwindow.h"
 
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QMutexLocker>
 
 #include "../common/ttcut.h"
@@ -135,7 +136,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		// Called from main() to load a project given on the command line.
 		void openProjectFile(QString fName);
 
+	private slots:
+		void onSliderDecodeTimer();
+
 	private:
+		// Slider debounce: valueChanged only records the newest position and
+		// (re)starts this timer; the decode happens when it fires. See
+		// onVideoSliderChanged() for why.
+		QTimer* mpSliderDebounce  = nullptr;
+		int     mPendingSliderPos = -1;
+
 		// Opens the settings dialog; category >= 0 selects a sidebar entry.
 		void openSettingsDialog(int category);
 		void closeProject();
