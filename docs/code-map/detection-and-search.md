@@ -1,6 +1,6 @@
 ---
-base_commit: 7f472967
-last_verified: 2026-08-12
+base_commit: 67341cd1bd193b716849d953d7aecbfef5d321a0
+last_verified: 2026-08-15
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -17,6 +17,8 @@ sources:
   - data/ttstreampoint_videoworker.cpp
   - data/ttstreampoint_audioworker.cpp
   - data/ttstreampointmodel.cpp
+  - data/ttframesearchtask.cpp
+  - data/ttframesearchtask.h
   - gui/ttstreampointwidget.cpp
   - gui/ttcutmainwindow.cpp
   - common/ttthreadtaskpool.cpp
@@ -152,7 +154,7 @@ flowchart TB
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
 | `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden seit `f8fe7dd6` beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
-| Marker → `onStreamPointJump(frameIndex)` | Ruft `TTCurrentFrame::onGotoFrame(frameIndex, 0)` und danach `checkCutPosition`. | **Nicht** `onVideoSliderChanged`: die reicht `fastSlider()` als zweites Argument weiter, und das ist ein **Bildtyp**, kein Geschwindigkeitsschalter — `1` heißt „ab hier den nächsten I-Frame suchen". Mit eingeschaltetem FastSlider landete ein Marker bei 7045 deshalb auf 7050, und die drei Fehlermarker eines Defekts (7045, 7048, 7048) fielen auf dasselbe Bild (`ad536d7c`). |
+| Marker → `onStreamPointJump(frameIndex)` | Ruft `TTCurrentFrame::onGotoFrame(frameIndex, 0)` und danach `checkCutPosition`. | **Nicht** `onVideoSliderChanged`: dessen `fastSlider()`-Weiterreichung als zweites Argument an `onGotoFrame` ist ein **Bildtyp**, kein Geschwindigkeitsschalter — `1` heißt „ab hier den nächsten I-Frame suchen". Mit eingeschaltetem FastSlider landete ein Marker bei 7045 deshalb auf 7050, und die drei Fehlermarker eines Defekts (7045, 7048, 7048) fielen auf dasselbe Bild (`ad536d7c`). Seit `ba393cb6` ruft `onVideoSliderChanged` `onGotoFrame` nicht mehr direkt, sondern merkt nur die Position und entprellt über einen 50-ms-Timer (`onSliderDecodeTimer`); erst der greift `fastSlider()` wie beschrieben ab — bei gehaltenem Schieber sogar über einen dritten Pfad, `TTCurrentFrame::onGotoFramePreview(pos)`, ohne Bildtyp-Argument. Marker-Sprünge sind davon nicht betroffen; Details der Entprellung in `frame-order.md`. |
 
 ## Varianten-Matrix
 
@@ -219,6 +221,16 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   gemeinsamen Budget konnte eine unruhige Aufnahme jede Zeile für Beinahe-Treffer
   ausgeben, bevor ein einziger bestätigter Übergang geschrieben war — die
   Übergänge sind aber das Ergebnis, die Verwürfe nur die Begründung.
+- **`Step`-Text muss sich ändern, um im Detailbereich zu landen.**
+  `TTProgressBar` hängt einen `Step` nur an den Detailbereich an, wenn sein
+  Text vom vorigen `Step`-Text abweicht (`mLastStepMsg`). Der Bildformat-Scan
+  trug seinen Stichprobenzähler im Text (`"Aspect format: %1 of %2 samples"`)
+  und unterlief die Abschaltung damit bei **jedem** Aufruf — 272 Zeilen für
+  5452 Proben, die wenigen wichtigen Zeilen darin ertrunken. Seit `aab25003`
+  ist der Text konstant (`"Checking aspect format..."`), der Zähler wandert
+  allein in den Zahlwert, den Balken und Prozentanzeige ohnehin schon zeigen.
+  Betrifft nur `TTAspectScanTask` — Video- und Audio-Worker meldeten schon
+  vorher konstanten Text.
 - **Der Bildformat-Scan hat keine eigene Bilanzzeile mehr**: seine Bilanz *ist*
   die `Finished`-Meldung (`417c3aad`). Vorher standen beide da und sagten
   dasselbe, und auf dem Abbruchpfad erschien die Bilanz im Bereich **nach** dem
@@ -233,13 +245,22 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   Lücke sichtbar gemacht, nicht geschlossen), und alle acht Ausstiege der
   Stille-Erkennung über `silenceUnavailable()`, das zugleich die sonst
   irreführende Zeile „0 Bereiche gefunden" unterdrückt.
-- **Blind bleibt, wer gar nicht erst gebaut wird.** `onAnalyzeStreamPoints()`
-  legt einen Worker nur an, wenn seine Voraussetzung erfüllt ist; ohne
-  Tonspur, ohne Header-Liste (also bei H.264/H.265 für die Sequenzkopf-
-  Analyse) oder mit leerer Indexliste schweigt der Bereich zu dieser Analyse
-  vollständig. Offener Punkt: eine Zeile dafür müsste **vor** dem ersten
-  `Start` gesendet werden, und `TTCutMainWindow::onStatusReport` verwirft
-  alles, solange `progressBar == 0`.
+- **Blind bleibt, wer gar nicht erst gebaut wird — inzwischen behoben.**
+  `onAnalyzeStreamPoints()` legt einen Worker nur an, wenn seine
+  Voraussetzung erfüllt ist; ohne Tonspur, ohne Header-Liste (also bei
+  H.264/H.265 für die Sequenzkopf-Analyse) oder mit leerer Indexliste schwieg
+  der Bereich früher zu dieser Analyse vollständig — eine still übersprungene
+  Analyse las sich wie „nichts gefunden". Seit `3b24be6a` sammelt
+  `mSkippedAnalysisNotes` (`QStringList`, `TTCutMainWindow`) eine Zeile pro
+  übersprungener, aber eingeschalteter Analyse. Läuft mindestens ein Worker,
+  gehen die Notizen ins Log **und** über `mPendingSkipNotesForDialog` in den
+  Detailbereich — aber erst **nach** dem `Start`-Zweig in `onStatusReport`,
+  nicht darin: `TTProgressBar::onSetProgress()` ruft bei `Start` unter
+  Umständen `resetForNewOperation()`, das den Detailbereich leert, und ein
+  Eintrag davor wäre sofort wieder gelöscht worden. Läuft **kein** Worker,
+  meldet ein eigener Dialog die Gründe statt der pauschalen „keine
+  Erkennungsmethode aktiviert" (die bei aktivierten, aber ungeeigneten
+  Methoden in die falsche Ecke — die Einstellungen — schickte).
 
 ## Fallstricke
 
@@ -277,6 +298,26 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   `tools/diag/test_pool_abort 16 400`). Die Schleife iteriert seither eine
   `QPointer`-Momentaufnahme, weil `TTThreadTask::abort()` selbst
   `processEvents()` ruft.
+- **Ein Abbruch nach dem Ende wird jetzt ignoriert statt doppelt verarbeitet.**
+  `TTThreadTask::abort()` unterschied bis `0af72ab1` nur zwei Flags
+  (`!mIsRunning && !mIsAborted`) und konnte „noch nicht gestartet" (Aufgabe
+  liegt noch in der Warteschlange, `aborted()` ist hier richtig) nicht von
+  „schon fertig" unterscheiden: `run()` hat `mIsRunning = false` gesetzt,
+  `cleanUp()` gerufen und `finished()` ausgelöst — das Signal wartet aber noch
+  in der Ereigniswarteschlange des GUI-Threads. Ein Abbruch, der in dieses
+  Fenster fiel, löste ein zusätzliches `aborted()` und ein zweites `cleanUp()`
+  auf dem anderen Thread aus; der Pool protokollierte „Last thread task
+  aborted" für einen längst abgeschlossenen Lauf. Ein neues, atomares Flag
+  `mIsFinished` (gesetzt **vor** `emit finished()`, gelesen von `abort()`)
+  lässt diesen Fall jetzt still — geloggt, nicht stillschweigend — abbrechen.
+  Das Flag wird bei **jedem** Eintritt in `run()` zurückgesetzt, nicht nur im
+  Konstruktor: Aufgaben werden wiederverwendet (`TTCutVideoTask` treibt eine
+  einzige `TTCutTask`-Instanz durch jeden Schnittlisteneintrag), ein
+  stehengebliebenes Flag hätte jeden Eintrag nach dem ersten unabbrechbar
+  gemacht — derselbe Defekt wie `1f372cca`, diesmal am Abschluss- statt am
+  Abbruchpfad. Harness `tools/diag/test_abort_after_finish`, drei Fälle
+  (Abbruch nach Ende, Abbruch vor Start, Abbruch während eines
+  Wiederholungslaufs).
 - **`cleanUp()` ist absichtlich leer.** Der Dekoder wird nur im Destruktor
   freigegeben (GUI-Thread über `deleteLater`). Ein Aufräumen im Arbeitsthread
   läuft ohne Happens-before-Kante gegen den Destruktor und kann doppelt
@@ -340,3 +381,5 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 | `tools/diag/test_silence_unavailable` | `[datei_ohne_tonspur]` | zwei der acht Ausstiege der Stille-Erkennung: Begründung kommt, „0 Bereiche gefunden" bleibt weg |
 | `tools/diag/test_pool_abort` | `[anzahl] [millisekunden]` | Abbruch-Absturz aus `e247dbda` |
 | `tools/diag/test_task_cleanup_order` | `[wiederholungen]` | Aufräum-Reihenfolge aus `f8fe7dd6` — **braucht einen ASAN-Bau**, Aufrufzeile steht in der Datei |
+| `tools/diag/test_abort_after_finish` | ohne Argumente | Spät-Abbruch nach Ende aus `0af72ab1`, drei Fälle inkl. Wiederverwendung |
+| `tools/diag/test_framesearch_progress` | `<es-datei> [refIndex] [searchIndex]` | Meldeverhalten und Indexübernahme der Gleichbild-Suche (`TTFrameSearchTask`) |

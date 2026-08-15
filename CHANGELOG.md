@@ -2,7 +2,101 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.80.0 (2026-08-15)
+
+**Qt 6, truthful progress and failure reporting, and a responsive slider**
+
+### Changed
+
+- **The progress dialog's details pane now explains the landing-zone
+  analysis instead of only counting samples.** Each of the three analyses
+  logs the settings it is running with, every confirmed finding with its
+  timecode and frame number, and a closing summary. The pillarbox scan
+  additionally reports every candidate it discarded, with how long the run
+  held and how long it needed — so a stretch that looks like a format change
+  but was rejected is now visible instead of silently absent. The summary
+  breaks the samples down into 16:9, 4:3 pillarbox and "no statement", and
+  splits the latter by the reason it was rejected (bars too wide, centre too
+  dark, unusable). Runs that cannot find anything by construction now say so:
+  a stream that is not MPEG-2 for the sequence-header aspect check, an audio
+  track without AC3 headers for the channel-change check, a missing audio
+  header list. Previously all of these were indistinguishable from a run that
+  simply found nothing. Progress bar, percentage and remaining-time estimate
+  are unaffected — the new output uses a status kind that carries no progress
+  meaning.
+
+- **The application now builds against Qt 6 (6.7 minimum, developed against
+  6.10) instead of Qt 5.15.** `find_package(Qt6 ...)` replaces the Qt5
+  lookup in `CMakeLists.txt`; the linked components are Core, Widgets, Gui,
+  Xml, OpenGL, and OpenGLWidgets. The `Network` component is gone — nothing
+  in the tree used it. The deprecation gate
+  (`QT_DISABLE_DEPRECATED_BEFORE`) is raised from `0x060000` to `0x060700`,
+  closing off everything Qt deprecated between 6.0 and 6.7. Debian packaging
+  (`debian/control`, `debian/rules`) builds against `qt6-base-dev` and
+  `qt6-l10n-tools`.
+
+- **Cancel now stops a running cut.** Pressing Cancel in the progress dialog
+  — or closing it with the window X or Esc, which do the same thing — aborts
+  the H.264/H.265 cut, the audio and muxing phases of an MPEG-2 cut, an
+  audio-only cut, and an H.264/H.265 cut preview. Previously only the MPEG-2
+  video phase reacted; everything else ran to the end no matter what, leaving
+  the main window disabled for the rest of the cut. The cancelled cut
+  removes the files it had already written, so nothing half-finished is left
+  behind for you to clean up, and it is reported as cancelled rather than as
+  a completed or failed cut. A cut that fails for a real reason still leaves
+  its partial files in place, so the cause can be examined. This includes the
+  final multiplexing step of an MPG (rather than MKV) output: the external
+  `mplex` process is stopped, and the partial `.mpg` is removed together with
+  the cut elementary streams that fed it. One thing is unchanged: cancelling
+  the preview of an MPEG-2 recording still has no effect.
+- Progress dialog details pane is now a live, timestamped status log
+  (including re-encoder/mplex output lines); with details open the dialog
+  stays open after the operation finishes (Cancel becomes Close)
+- Audio cutting reports real per-track progress instead of one jump per
+  finished track (all cut pipelines)
+- The progress dialog now covers the whole MPEG-2 final cut: audio cutting
+  (previously silent, before any dialog appeared) and muxing (previously
+  invisible, after the dialog was already hidden) are shown, and the cut
+  reports a proper completion status
+- Progress dialog: remaining-time estimate (measured, self-calibrating per
+  machine and material - no hardcoded codec factors), single 0-100 total
+  progress sweep per operation (video/audio/mux weighted by measured cost),
+  pulsing bar after 5 s without progress messages, debug wall clock behind
+  the details checkbox (replaces the frozen "Time elapsed" field)
+- Smart Cut: progress is now reported inside encode passes ("Encoding
+  segment N/M") and weighted by measured re-encode cost - long re-encodes
+  no longer look like hangs
+- File-open progress: H.264/H.265 raw frame-index scanning now tracks the
+  demuxer's byte position instead of an estimated frame count (a fixed
+  10000-frame estimate previously made progress hit 100% at ~3% of a real
+  2h recording and then fall silent for the rest of the scan); the H.26x
+  video-open task is now weighted in bytes like the audio-open tasks, so
+  building the video frame/GOP index - the dominant wall-time cost - moves
+  the open progress bar instead of being swamped by the faster audio scans;
+  a pool task's Step progress is now clamped monotonically non-decreasing,
+  so a late-delivered signal from an already-finished task can no longer
+  flicker the overall percentage backwards
+- Remaining-time estimate: shown in clock format ("about 01:30" instead of
+  "about 1.5 minutes"); a trailing ~15 s recent-rate window keeps the ETA
+  responsive to the current pace of a stage instead of an initial burst
+  (e.g. Smart Cut's stream-copy-first ordering) dragging a whole-stage
+  average down for minutes; the Smart Cut encode/copy cost ratio and the
+  video stage's own per-codec cost factor are now persisted across runs
+  (like the existing audio/mux factors), so from the second run of a given
+  cut kind onward a total ETA is shown from the very start instead of
+  "calculating..."; short, fully-calibrated operations (a few seconds) now
+  fall back to a coarse whole-plan ETA instead of showing "calculating..."
+  for their entire run
+- Progress dialog layout: the action line now spans its own full-width row;
+  the Remaining/Elapsed rows are left-aligned with each other (previously
+  one was indented); the debug wall clock moved from beside the bar to a
+  row below it; the redundant static "Complete" label was removed (the
+  percentage value next to it already reads "100%"); the dialog re-appears
+  on the next progress message if the user closes it while an operation is
+  still running, instead of leaving a disabled, apparently-dead main window
+  behind — this now also covers phases that report only process output and
+  no percentage (the mplex step for MPG output), where closing the dialog
+  used to hide it for the rest of the run
 
 ### Fixed
 
@@ -151,100 +245,6 @@ All notable changes to TTCut-ng are documented in this file.
   with its file descriptor open, so a deleted video elementary stream vanished
   from the directory but kept occupying disk until the program ended. Both
   release properly now, along with three smaller objects that had no owner.
-
-### Changed
-
-- **The progress dialog's details pane now explains the landing-zone
-  analysis instead of only counting samples.** Each of the three analyses
-  logs the settings it is running with, every confirmed finding with its
-  timecode and frame number, and a closing summary. The pillarbox scan
-  additionally reports every candidate it discarded, with how long the run
-  held and how long it needed — so a stretch that looks like a format change
-  but was rejected is now visible instead of silently absent. The summary
-  breaks the samples down into 16:9, 4:3 pillarbox and "no statement", and
-  splits the latter by the reason it was rejected (bars too wide, centre too
-  dark, unusable). Runs that cannot find anything by construction now say so:
-  a stream that is not MPEG-2 for the sequence-header aspect check, an audio
-  track without AC3 headers for the channel-change check, a missing audio
-  header list. Previously all of these were indistinguishable from a run that
-  simply found nothing. Progress bar, percentage and remaining-time estimate
-  are unaffected — the new output uses a status kind that carries no progress
-  meaning.
-
-- **The application now builds against Qt 6 (6.7 minimum, developed against
-  6.10) instead of Qt 5.15.** `find_package(Qt6 ...)` replaces the Qt5
-  lookup in `CMakeLists.txt`; the linked components are Core, Widgets, Gui,
-  Xml, OpenGL, and OpenGLWidgets. The `Network` component is gone — nothing
-  in the tree used it. The deprecation gate
-  (`QT_DISABLE_DEPRECATED_BEFORE`) is raised from `0x060000` to `0x060700`,
-  closing off everything Qt deprecated between 6.0 and 6.7. Debian packaging
-  (`debian/control`, `debian/rules`) builds against `qt6-base-dev` and
-  `qt6-l10n-tools`.
-
-- **Cancel now stops a running cut.** Pressing Cancel in the progress dialog
-  — or closing it with the window X or Esc, which do the same thing — aborts
-  the H.264/H.265 cut, the audio and muxing phases of an MPEG-2 cut, an
-  audio-only cut, and an H.264/H.265 cut preview. Previously only the MPEG-2
-  video phase reacted; everything else ran to the end no matter what, leaving
-  the main window disabled for the rest of the cut. The cancelled cut
-  removes the files it had already written, so nothing half-finished is left
-  behind for you to clean up, and it is reported as cancelled rather than as
-  a completed or failed cut. A cut that fails for a real reason still leaves
-  its partial files in place, so the cause can be examined. This includes the
-  final multiplexing step of an MPG (rather than MKV) output: the external
-  `mplex` process is stopped, and the partial `.mpg` is removed together with
-  the cut elementary streams that fed it. One thing is unchanged: cancelling
-  the preview of an MPEG-2 recording still has no effect.
-- Progress dialog details pane is now a live, timestamped status log
-  (including re-encoder/mplex output lines); with details open the dialog
-  stays open after the operation finishes (Cancel becomes Close)
-- Audio cutting reports real per-track progress instead of one jump per
-  finished track (all cut pipelines)
-- The progress dialog now covers the whole MPEG-2 final cut: audio cutting
-  (previously silent, before any dialog appeared) and muxing (previously
-  invisible, after the dialog was already hidden) are shown, and the cut
-  reports a proper completion status
-- Progress dialog: remaining-time estimate (measured, self-calibrating per
-  machine and material - no hardcoded codec factors), single 0-100 total
-  progress sweep per operation (video/audio/mux weighted by measured cost),
-  pulsing bar after 5 s without progress messages, debug wall clock behind
-  the details checkbox (replaces the frozen "Time elapsed" field)
-- Smart Cut: progress is now reported inside encode passes ("Encoding
-  segment N/M") and weighted by measured re-encode cost - long re-encodes
-  no longer look like hangs
-- File-open progress: H.264/H.265 raw frame-index scanning now tracks the
-  demuxer's byte position instead of an estimated frame count (a fixed
-  10000-frame estimate previously made progress hit 100% at ~3% of a real
-  2h recording and then fall silent for the rest of the scan); the H.26x
-  video-open task is now weighted in bytes like the audio-open tasks, so
-  building the video frame/GOP index - the dominant wall-time cost - moves
-  the open progress bar instead of being swamped by the faster audio scans;
-  a pool task's Step progress is now clamped monotonically non-decreasing,
-  so a late-delivered signal from an already-finished task can no longer
-  flicker the overall percentage backwards
-- Remaining-time estimate: shown in clock format ("about 01:30" instead of
-  "about 1.5 minutes"); a trailing ~15 s recent-rate window keeps the ETA
-  responsive to the current pace of a stage instead of an initial burst
-  (e.g. Smart Cut's stream-copy-first ordering) dragging a whole-stage
-  average down for minutes; the Smart Cut encode/copy cost ratio and the
-  video stage's own per-codec cost factor are now persisted across runs
-  (like the existing audio/mux factors), so from the second run of a given
-  cut kind onward a total ETA is shown from the very start instead of
-  "calculating..."; short, fully-calibrated operations (a few seconds) now
-  fall back to a coarse whole-plan ETA instead of showing "calculating..."
-  for their entire run
-- Progress dialog layout: the action line now spans its own full-width row;
-  the Remaining/Elapsed rows are left-aligned with each other (previously
-  one was indented); the debug wall clock moved from beside the bar to a
-  row below it; the redundant static "Complete" label was removed (the
-  percentage value next to it already reads "100%"); the dialog re-appears
-  on the next progress message if the user closes it while an operation is
-  still running, instead of leaving a disabled, apparently-dead main window
-  behind — this now also covers phases that report only process output and
-  no percentage (the mplex step for MPG output), where closing the dialog
-  used to hide it for the rest of the run
-
-### Fixed
 
 - **Aborting a running MPEG-2 final cut had no effect until the current
   cut-list entry finished.** `TTCutVideoTask::onUserAbort()` set only its

@@ -282,6 +282,18 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
     und beim Neustart überschrieben wird.
 
+- **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
+  niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der
+  Vorschau nicht initialisiert werden konnte, also auf stark beschädigten
+  Aufnahmen)
+  - `TTCutPreviewTask` legt dann je Clip eine lokale `TTESSmartCut` an, die
+    nie bei `mpActiveSmartCut` registriert wird; ihr `initialize()` (voller
+    ES-Parse) ist nicht abbrechbar, und das wiederholt sich für jeden Clip.
+    Der Code-Kommentar an `localSmartCut` (`data/ttcutpreviewtask.cpp`)
+    beschreibt Lücke und Lösungsform (Publish/Clear unter `mSmartCutMutex`
+    wie bei der geteilten Engine). Auch vermerkt in
+    `docs/code-map/smart-cut.md`.
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
     `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie

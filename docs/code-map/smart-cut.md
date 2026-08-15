@@ -1,9 +1,10 @@
 ---
-base_commit: f9352969a275edbd06ada29abcab304f52a42828
-last_verified: 2026-08-10
+base_commit: 67341cd1bd193b716849d953d7aecbfef5d321a0
+last_verified: 2026-08-15
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
+  - data/tth26xcuttask.h
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
   - extern/tthevcseam.cpp
@@ -41,6 +42,20 @@ carried forward from the 2026-08-02 verification (the cut-abort commits did
 not touch them — the only functional change inside a seam path was the
 `runEncodePass` double-free fix, `4547c300`, which corrected frame cleanup
 without altering what is written).
+
+**Scope of the 2026-08-15 update:** `f9352969`..`67341cd1` (cut-outcome-
+reporting and preview-ownership work) touched two things inside this map's
+scope. (1) `decodeFramesIntoList` and `runEncodePass` (`extern/ttessmartcut.cpp`,
+commit `851e2286`): an `av_packet_alloc` failure used to `break` out of the
+per-AU loop and let the function fall through to a normal `true` return,
+silently truncating the segment; both now call `setError()` and `return
+false` (`flushEncoder` already did). (2) `TTCutPreviewTask::operation()`
+(`data/ttcutpreviewtask.cpp`, commit `bf6fd1dd`): the engine-leak gap the
+"Who owns the engine" pitfall below used to describe as open is fixed — see
+that bullet for the new shape and the *different* gap it left behind. The
+seam, POC/`frame_num`, MMCO, SPS and variant-matrix sections were **not**
+re-derived (no source file behind them changed) and are carried forward
+unchanged.
 
 **Codec scope:** `NALU_CODEC_H264` and `NALU_CODEC_H265` only. There is one
 class for both; codec and stream-type differences are runtime branches, not
@@ -144,20 +159,35 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 - **Who owns the engine on the abort path** — the two callers differ, and
   getting it wrong leaks the whole engine with every decoded frame it still
   holds. `TTH26xCutTask` holds its engine **by value** (`TTESSmartCut
-  mSmartCut`, `tth26xcuttask.h:116`), so its lifetime is the task's and an
+  mSmartCut` in `data/tth26xcuttask.h`), so its lifetime is the task's and an
   abort exit needs no cleanup at all. `TTCutPreviewTask` shares **one** engine
-  across all preview clips (the ES is parsed once) and publishes it as
-  `mpActiveSmartCut` under `mSmartCutMutex` so `onUserAbort()` (GUI thread)
-  can call `requestAbort()` on it. The invariant that makes that race-free:
-  the worker always clears the pointer under the mutex **before** deleting
-  the pointee, never after — `createH264PreviewClip` uses a `qScopeGuard`
-  that only clears (it does not own the engine), while `operation()`'s three
-  deletion sites each clear first and then delete. **Known gap, pre-existing
-  and recorded in `TODO.md`:** the loop-top `isAborted()` throw in
-  `operation()` (`data/ttcutpreviewtask.cpp:196`) sits outside the `try` that
-  deletes the engine and skips the delete at the end of the function, so a
-  cancel landing *between* two preview clips leaks it — measured at ~530 MB
-  on the 1080p Tux sample.
+  (`sharedSmartCut`) across all preview clips (the ES is parsed once) and
+  publishes it as `mpActiveSmartCut` under `mSmartCutMutex` so `onUserAbort()`
+  (GUI thread) can call `requestAbort()` on it. `createH264PreviewClip` uses a
+  separate `qScopeGuard` (`clearActiveSmartCut`) that only clears the tracking
+  pointer for the duration of one `smartCutFrames()` call — it never deletes,
+  since the engine stays owned by `operation()`.
+
+  **Fixed (`bf6fd1dd`, 2026-08-12):** `operation()` used to clear-then-delete
+  the shared engine at three separate call sites (init failure, catch, end of
+  function) and had a fourth exit — the loop-top `isAborted()` throw — with
+  none, leaking the engine and every decoded frame it held on a cancel landing
+  *between* two preview clips (measured ~535 MB). Fixed by moving the
+  clear-then-delete order into one `releaseEngine` lambda and covering every
+  exit with a `qScopeGuard` (`engineGuard`); the explicit calls at the
+  init-failure branch and at the end of the function are now idempotent
+  no-ops once the guard has already run. `TTCutPreviewTask` also gained a
+  destructor releasing `cutVideoTask` and `mpPreviewCutList`, neither of
+  which had an owner before.
+
+  **New/still-open gap (pre-existing, documented in the source since the same
+  commit):** `createH264PreviewClip`'s **local fallback engine**
+  (`localSmartCut`, used only when `sharedSmartCut` failed to initialize) is
+  never published to `mpActiveSmartCut`, so `onUserAbort()` cannot reach it
+  and its `initialize()` — a full ES parse — is not cancellable. It runs once
+  per clip, so a recording damaged enough to fail the shared init produces N
+  uncancellable full-ES parses in a row, with a cancel only landing at the
+  clip-loop top in `operation()`.
 
 - **`analyzeCutPoints`** — assumes: a keyframe exists within the segment,
   otherwise it degrades to a full re-encode. The `endFrame` search window is
@@ -204,6 +234,14 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   packet↔frame 1:1 mapping (and therefore `mOutputDisplayOrder`) valid. The
   encoder is recreated per segment because libx264's lookahead cannot restart
   after a flush.
+
+- **`decodeFramesIntoList` / `runEncodePass` — `av_packet_alloc` failure
+  (FIXED `851e2286`, 2026-08-15)** — an allocation failure used to `break`
+  out of the per-AU/per-frame loop; the function then fell through to its
+  normal drain-and-`return true` path, silently truncating the segment while
+  still reporting success. Both call sites now `setError(...)` and `return
+  false` instead — the same shape `flushEncoder`'s own `av_packet_alloc`
+  check already had.
 
 - **`streamCopyFrames`** — **pitfall:** `neutralizeMmcoFrames > 0` sets
   `needsPatching`, which disables the bulk-write fast path *regardless of codec*,

@@ -1,6 +1,6 @@
 ---
-base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
-last_verified: 2026-08-02
+base_commit: 67341cd1bd193b716849d953d7aecbfef5d321a0
+last_verified: 2026-08-15
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c

@@ -1,9 +1,10 @@
 ---
-base_commit: 3fce0049ce2627e92724e82db7c15400159f64fd
-last_verified: 2026-08-02
+base_commit: 67341cd1bd193b716849d953d7aecbfef5d321a0
+last_verified: 2026-08-15
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
+  - gui/ttcutmainwindow.cpp
   - gui/ttgotoframedialog.cpp
   - gui/ttgotoframedialog.h
   - gui/ttcutoutframe.cpp
@@ -54,6 +55,10 @@ flowchart TD
     G["TTFFmpegWrapper::decodeFrame(pos)<br/>(extern/ttffmpegwrapper.cpp)<br/>Owner B — preview decoder"]
     H["seekToFrame(pos) — prev-keyframe DPB prefill<br/>decode N-1 skip frames → decodeCurrentFrame()<br/>record deliveredDecodeIndex"]
     I["QImage — RGB frame displayed<br/>stored in mCurrentFrame"]
+    SL["TTCutMainWindow::onVideoSliderChanged →<br/>onSliderDecodeTimer (debounced)<br/>(gui/ttcutmainwindow.cpp)"]
+    GP["TTCurrentFrame::onGotoFramePreview(pos)<br/>(gui/ttcurrentframe.cpp)"]
+    KF["TTMPEG2Window2::showKeyframeFastAt(index)<br/>(mpeg2window/ttmpeg2window2.cpp)"]
+    NK["TTFFmpegWrapper::decodeNearestKeyframe<br/>(displayPos, &amp;shownDisplayPos)<br/>(extern/ttffmpegwrapper.cpp)<br/>Owner B — no DPB prefill"]
     J["TTCutFrameNavigation::onSetCutIn<br/>(gui/ttcutframenavigation.cpp)<br/>cutInPosition = currentPosition<br/>emit setCutIn(pos)"]
     K["TTCutMainWindow::onAppendCutEntry<br/>(data/ttavdata.cpp)<br/>appendCutEntry(avItem, cutIn, cutOut)"]
     L["TTCutItem::mCutInIndex / mCutOutIndex<br/>(data/ttcutlist.h)<br/>raw integer stored — same domain as<br/>TTVideoStream::current_index"]
@@ -77,12 +82,18 @@ flowchart TD
     L --> M --> N --> O --> P
     N --> Q --> R
     P --> R
+    A --> SL
+    SL --> C
+    SL --> GP --> KF
+    KF --> NK --> I
+    KF --> F
 
     style I fill:#e8f4f8,stroke:#2980b9
     style L fill:#fef9e7,stroke:#f39c12
     style G fill:#fdecea,stroke:#c0392b
     style O fill:#fdecea,stroke:#c0392b
     style R fill:#fdecea,stroke:#c0392b
+    style NK fill:#fdecea,stroke:#c0392b
 ```
 
 ## Edge semantics
@@ -99,6 +110,12 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTVideoIndexList::moveToNextIndexPos(pos, type)` → TTVideoStream | next list position ≥ pos+1 matching frame type | **DECODE order** for H.26x (list built frame-by-frame from `mFrameIndex`, no POC sort); **display order** for MPEG-2 (list is sorted by `display_order` via `sortDisplayOrder()`) |
 | `TTCurrentFrame` → `TTMPEG2Window2::showFrameAt(newFramePos)` | integer `newFramePos` — the return value of the `moveTo*` call | **DECODE order** (H.26x); **display order** (MPEG-2) |
 | `TTMPEG2Window2::moveToVideoFrame(iFramePos)` → `TTFFmpegWrapper::decodeFrame(iFramePos)` | integer `iFramePos` interpreted as index into `mFrameIndex` (Owner B) | **DECODE order** — `mFrameIndex` was built by scanning packets sequentially (decode order) |
+| `TTCutMainWindow::onVideoSliderChanged(sPos)` → `onSliderDecodeTimer()` (debounced, gui/ttcutmainwindow.cpp) | `sPos`, held in `mPendingSliderPos`; every intermediate `valueChanged` during a drag is coalesced, only the newest survives to fire once the debounce timer elapses | same domain as every other slider position — **DECODE order** (H.26x) / **display order** (MPEG-2), unchanged by debouncing |
+| `onSliderDecodeTimer()` → `TTCurrentFrame::onGotoFramePreview(sPos)` (while `slider()->isSliderDown()`) vs. `onGotoFrame(sPos, …)` (on release) | `sPos` — same integer, routed to the fast preview path only while the handle is still held; the release always takes the exact `onGotoFrame` path (`TTSettings::fastSlider()` chooses `fast` 0/1 there, orthogonal to this preview/exact split) | same domain as the value carried |
+| `TTCurrentFrame::onGotoFramePreview(pos)` → `TTMPEG2Window2::showKeyframeFastAt(pos)` | `pos` as-is (same value `onGotoFrame` would receive) | **DECODE order** (H.26x) / **display order** (MPEG-2) — same domain as `showFrameAt` |
+| `TTMPEG2Window2::showKeyframeFastAt(index)` → `TTFFmpegWrapper::decodeNearestKeyframe(index, &shownDisplayPos)` [H.26x branch] | `index` interpreted the same way `decodeFrame`'s `frameIndex` is — a **display** position when the display-order map is valid (`displayToDecode()` converts to AU before the backward keyframe walk), else a raw decode-order `mFrameIndex` slot | **DISPLAY order** in, when the map is valid |
+| `TTMPEG2Window2::showKeyframeFastAt(index)` → `moveToVideoFrame(index)` [MPEG-2 branch] | `index`, unconverted — MPEG-2's decoder is cheap enough per frame that the fast path is just the ordinary `moveToVideoFrame` call, not a distinct keyframe-only decode | **DISPLAY order** (MPEG-2 list is already `sortDisplayOrder()`-sorted) |
+| `TTFFmpegWrapper::decodeNearestKeyframe(displayPos, &shownDisplayPos)` → caller | `QImage` of the keyframe **at or before** `displayPos` (backward walk over `mFrameIndex[].isKeyframe` in decode order from the mapped AU), plus `shownDisplayPos` = that keyframe's own display position (`decodeToDisplay(keyAU)`, or `keyAU` verbatim when the map is invalid) — **not** `displayPos` itself. `showKeyframeFastAt` propagates `shownDisplayPos` as its own return value, and callers (`onGotoFramePreview`) resync `videoStream`/`currentCutPosition` to that value, not the originally requested one. Decoded with `mSearchMode` forced true for the duration of the call (borrows the search path's no-DPB-prefill seek — safe because a keyframe is self-decodable) and saved/restored around it. Shares the `mFrameCache`/`mFrameCacheLRU` LRU cache with `decodeFrame()`, keyed by display position, so a keyframe already shown by either path is free on repeat | **DISPLAY order** out (`shownDisplayPos`); the returned frame is the nearest keyframe, not necessarily the requested position |
 | `TTFFmpegWrapper::decodeFrame(n)` → caller | `QImage` shown in the still-image widget | **Shows the DISPLAY-RANK frame, not decode-frame n (KNOT RESOLVED 2026-06-08)** — `decodeFrame(n)` seeks to the keyframe and runs a skip-loop that counts **decoder *output* frames (display order)** until `mDecoderFrameIndex == n`. So `n` is a *decode-order* index, but the content shown is the frame at *display rank* (n − seekKeyframe) within the GOP. Near GOP boundaries this looks display-accurate; the true AU shown is `deliveredDecodeIndex[n]`. |
 | `TTFFmpegWrapper::decodeFrame(n)` → `mFrameIndex[n].deliveredDecodeIndex` | true decode-order index of the picture actually emitted by `avcodec_receive_frame`; differs from n when B-frame reorder applies | DECODE order tag set at packet-send time; maps packet-send-order → delivered-display-frame |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCutItem::mCutInIndex` (via `appendCutEntry`) | `currentPosition` as plain `int` | **DECODE order** (same value that TTCurrentFrame received from `moveTo*`) |
@@ -125,6 +142,10 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 - **`TTNaluParser::mAccessUnits`** — assumes: populated in bitstream (decode) order. `TTAccessUnit::index == decodeIndex` (a sequential decode-order counter), NOT a POC-sorted display index (the header comment "display order based on POC" is wrong). **POC is NOT computed at all (verified 2026-06-08): `currentAU.poc` is hard-set to `-1` everywhere; `pic_order_cnt_type` is read from the SPS but no per-frame POC is derived.** So there is currently no display-order information available from the parser without either implementing POC or a decode pass. `findKeyframeBefore(n)` and `findKeyframeAfter(n)` scan linearly in decode order.
 
 - **`TTFFmpegWrapper::seekToFrame(n)`** — does NOT seek to the keyframe of the GOP that displays at position n. It seeks to the keyframe of the GOP that **decodes at or before** position n (one further keyframe back in non-search mode for DPB prefill). This is correct for decode-order access but means the visible frame may differ from the frame the user selected if B-frame reorder is large.
+
+- **`TTFFmpegWrapper::skipCurrentFrame()`** — the send/receive pump the skip-loops in `decodeFrame`/`decodeFrameYUV`/`decodeNearestKeyframe` all drive one output at a time. Contract (fixed, previously violated): on `avcodec_send_packet` returning `EAGAIN` (decoder output queue full — happens under a B-hierarchy), the packet is retained as `mPendingPacket` and a frame is drained via `avcodec_receive_frame` first — it is **never** discarded. The retained packet, already carrying its assigned decode-order tag (`decodeOrderTagForPacket`), is resent on the next call before any new packet is read from the file. Every call first tries `avcodec_receive_frame` before reading/sending anything, so output the decoder already buffered from a prior EAGAIN is taken as this call's result. `mPendingPacket` is freed (not resent) on `seekToFrame()` (a packet held from before the seek belongs to the pre-seek decode-order-tag domain — sending it into the just-flushed decoder would deliver one frame under a stale tag) and on `closeFile()`. Pitfall this replaces: the prior version dropped the packet on send-EAGAIN instead of retaining it, so under a B-hierarchy the decoder's output queue never drained via the correct API sequence — every remaining packet in the file was read and dropped one by one, the skip-loop's target decode-order tag never appeared, and one `decodeFrame()` call degraded into a full-file read-and-discard (measured: minutes on UHD HEVC).
+
+- **`TTFFmpegWrapper::decodeNearestKeyframe(displayPos, &shownDisplayPos)`** — assumes: `displayPos` is a display position (mapped to AU via the display-order map when valid, else treated as a raw decode index, matching `decodeFrame`'s own fallback). Guarantees: returns the keyframe **at or before** the mapped AU, walking backward over `mFrameIndex[].isKeyframe` in decode order — never the exact requested frame. `shownDisplayPos` is the display position of that keyframe, and it is the value callers must resync their own state to (`showKeyframeFastAt` returns it verbatim; `onGotoFramePreview` uses it, not the original `pos`, for `videoStream->moveToIndexPos()` / `currentCutPosition`). Pitfall: treating the return as "the frame at `displayPos`" is wrong by construction — it is a preview shortcut for slider-drag, paired with an exact `onGotoFrame()` call once the drag ends.
 
 - **`deliveredDecodeIndex`** — lazily filled on first `decodeFrame()` call; -1 until decoded. The `onPlayVideo()` path falls back to `currentIndex/frameRate` if -1, which points to the wrong time when B-frames are present.
 

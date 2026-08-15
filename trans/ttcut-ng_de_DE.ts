@@ -3199,7 +3199,7 @@ Ausgabedatei:
         <translation>Segment %1/%2 verarbeiten</translation>
     </message>
     <message>
-        <location filename="../extern/ttessmartcut.cpp" line="3880"/>
+        <location filename="../extern/ttessmartcut.cpp" line="3883"/>
         <source>Encoding segment %1/%2...</source>
         <translation>Kodiere Segment %1/%2...</translation>
     </message>
