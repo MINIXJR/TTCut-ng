@@ -473,6 +473,23 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Fortschrittszeilen fluteten den Detailbereich** → **GELÖST (2026-08-15;
+  User-Befund vom 2026-08-12, bewusst zurückgestellt gewesen)**
+  - War: der Bildformat-Scan meldete alle 20 Proben `Aspect format: %1 of %2
+    samples` — der Zähler im Text hebelte die Wiederholungs-Unterdrückung von
+    `TTProgressBar` aus (`msg != mLastStepMsg`), bei 5452 Stichproben 272
+    Detailzeilen je Lauf. Die anderen beiden Analysen melden seit jeher
+    konstante Texte und waren unschuldig — der TODO-Eintrag sprach von „drei
+    Tasks", betroffen war eine Stelle in einer Datei.
+  - Fix (`data/ttsearchtask_aspectscan.cpp`): Text konstant „Checking aspect
+    format...", Zählerstand nur noch im Zahlwert (war dort schon immer —
+    Balken und Prozentanzeige unverändert). Preis wie dokumentiert: die
+    Aktionszeile über dem Balken zeigt keinen Zählerstand mehr. Übersetzung
+    ergänzt (761/761).
+  - Beleg: `test_aspectscan` — alle Step-Meldungen gleicher Text, Zähler im
+    Wert (64/80/112/120), Abschluss-Statistikzeile unverändert; im Dialog
+    entsteht daraus genau eine Zeile.
+
 - **Teilfehlschläge beim Spurenschnitt meldeten sich als Erfolg** →
   **GELÖST (2026-08-15)**
   - War: `cutAudioTracks()` überspringt gescheiterte Spuren still (Index

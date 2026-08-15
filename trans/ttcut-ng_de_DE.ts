@@ -471,22 +471,17 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>%1: %2 bestätigt (eingegrenzt ab Frame %3)</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="251"/>
-        <source>Aspect format: %1 of %2 samples</source>
-        <translation>Bildformat: %1 von %2 Stichproben</translation>
-    </message>
-    <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="264"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="269"/>
         <source>Aspect format analysis cancelled: %1 of %2 samples</source>
         <translation>Bildformat-Analyse abgebrochen: %1 von %2 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="266"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="271"/>
         <source>Aspect format analysis complete: %1 samples</source>
         <translation>Bildformat-Analyse abgeschlossen: %1 Stichproben</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="271"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="276"/>
         <source> - %1x 16:9, %2x 4:3pb, %3x no statement (%4 bars too wide, %5 centre too dark, %6 unusable); transitions: %7, discarded candidates: %8 (thereof %9 single-sample outliers)</source>
         <translation> – %1x 16:9, %2x 4:3pb, %3x ohne Aussage (%4 Balken zu breit, %5 Bildmitte zu dunkel, %6 unbrauchbar); Übergänge: %7, verworfene Kandidaten: %8 (davon %9 Einzelausreißer)</translation>
     </message>
@@ -496,7 +491,12 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <translation>Bildformat-Analyse abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttsearchtask_aspectscan.cpp" line="281"/>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="257"/>
+        <source>Checking aspect format...</source>
+        <translation>Bildformat wird geprüft …</translation>
+    </message>
+    <message>
+        <location filename="../data/ttsearchtask_aspectscan.cpp" line="286"/>
         <source> (%1 more events suppressed)</source>
         <translation> (%1 weitere Meldungen unterdrückt)</translation>
     </message>

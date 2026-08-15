@@ -246,10 +246,15 @@ void TTAspectScanTask::operation()
     }
 
     mCheckedSamples += batch.size();
+    // Constant text on purpose: TTProgressBar appends every Step whose text
+    // DIFFERS from the previous one to the details log (mLastStepMsg). A
+    // counter in the text defeated that suppression - 272 log lines for a
+    // 5452-sample scan, drowning the few lines that matter. The counter
+    // travels in the value alone; the bar and the percent display next to it
+    // already show exactly what the text used to spell out.
     if (mCheckedSamples % 20 < batch.size())
       onStatusReport(StatusReportArgs::Step,
-                     tr("Aspect format: %1 of %2 samples")
-                         .arg(mCheckedSamples).arg(plannedSamples),
+                     tr("Checking aspect format..."),
                      qMin(mCheckedSamples, plannedSamples));
   }
 

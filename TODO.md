@@ -340,29 +340,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Beschrieben in `docs/code-map/detection-and-search.md`, Abschnitt „Was
     der Detailbereich erfährt".
 
-- **Fortschrittszeilen fluten den Detailbereich** (User-Befund 2026-08-12 bei
-  der Abnahme der Detailausgabe; bewusst zurückgestellt)
-  - Der Bildformat-Scan meldet alle 20 Proben einen Zählerstand, bei 5452
-    geplanten Stichproben also **272 Zeilen** je Lauf. Die wenigen
-    aussagekräftigen Zeilen gehen darin unter. Der Mehrwert ist gering:
-    „4360 von 5452" beantwortet, was Balken und Prozentanzeige daneben
-    bereits zeigen; im Protokoll bleibt allein der Zeitstempel.
-  - Ursache: `TTProgressBar::onSetProgress` hängt jede `Step`-Meldung als
-    Detailzeile an und unterdrückt Wiederholungen nur bei **identischem
-    Text** (`mLastStepMsg`). Ein mitlaufender Zählerstand ändert den Text bei
-    jeder Meldung, also greift die Unterdrückung nie. Sie wurde für
-    Meldungen wie „Segment 3 von 5" gebaut, die minutenlang gleich bleiben.
-  - Vorgeschlagener Weg (nicht umgesetzt): Die drei Analyse-Tasks melden als
-    Text konstant „Bildformat wird geprüft" und führen den Zählerstand nur
-    noch im Zahlwert mit. Dann greift die vorhandene Unterdrückung — eine
-    Zeile statt 272 —, Balken und Prozentanzeige bleiben unberührt, und der
-    Eingriff beschränkt sich auf die drei Tasks. Preis: Die Aktionszeile über
-    dem Balken zeigt keinen Zählerstand mehr, nur noch der Balken selbst.
-  - Verworfen wurden: Step-Meldungen generell nicht mehr protokollieren
-    (beträfe jede Operation, auch Schnitt und Muxen, wo die Verlaufszeilen
-    gelesen werden) und seltener melden (macht den Balken ruckelig und
-    verändert die Meldungsfolge, deren Unverändertheit aufwendig belegt ist).
-
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).

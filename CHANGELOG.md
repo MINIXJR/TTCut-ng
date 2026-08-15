@@ -6,6 +6,11 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **The aspect-format scan no longer floods the progress details.** It logged
+  its sample counter every 20 samples - 272 lines for a full scan, burying the
+  few lines that say something. The counter now drives only the progress bar;
+  the details log keeps a single line for the scan.
+
 - **A cut that loses an audio track now fails instead of pretending.** When
   one of several audio tracks could not be cut - a vanished file, a broken
   stream - the cut carried on, muxed the output without that track and
