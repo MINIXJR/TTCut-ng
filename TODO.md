@@ -301,37 +301,37 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     (`…/2023-10-19.02.32.5-0.rec/00001.ts`), Ausschnitt und ProjectX-Ausgabe
     unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/audiobug/`.
 
-- **H.265-UHD: Schieber-Bewegung rechnet im Oberflächen-Faden, Programm
-  reagiert minutenlang nicht; danach Absturz (SIGABRT)** (GUI-Abnahme
-  2026-08-15; vorbestehend — die Frame-Navigation ist von
-  `feature/mpeg2-preview-outcome` nicht angefasst)
-  - **Gemessen am laufenden Prozess** (kein Deadlock, sondern Rechenlast):
-    Hauptfaden 33 495 Ticks ≈ **335 s CPU** bei 5 min Laufzeit, alle anderen
-    37 Fäden 0–2 Ticks, `wchan=0`, `stat=Rl`, RSS 478 MB. Die gesamte Arbeit
-    liegt also im GUI-Faden; die Oberfläche kommt nicht dran, weil sie selbst
-    rechnet.
-  - Passt zur dokumentierten Eigenschaft (CLAUDE.md): die sequenzielle
-    Dekodier-Optimierung ist abgeschaltet, `decodeFrame()` springt **immer** —
-    jede Schieber-Bewegung heißt Sprung zum vorherigen Keyframe plus Dekodieren
-    bis zum Ziel. Bei UHD-HEVC mit langen GOPs ist das pro Bild teuer, und die
-    Bewegungen stapeln sich.
-  - **Der Absturz selbst ist NICHT erklärt.** Belegt ist nur `SIGABRT` (nicht
-    SIGSEGV) aus dem Core-Header. Bei aktiven `Q_ASSERT`s (`QT_FORCE_ASSERTS`)
-    kommen Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
-    Speicheranforderung in Frage. Kein Speichermangel auf Systemebene:
-    91 GB RAM, 82 GB verfügbar, keine OOM-Meldung.
-  - **Zwei Messfallen, die die Beweise gekostet haben:** Der 1,14-GB-Core war
-    **abgeschnitten** („segment extending past end of file"), weil der Prozess
-    beim Schreiben vom Zeitlimit der Hintergrund-Shell getötet wurde — bash
-    meldete „Getötet"/137, der eigentliche Grund war aber SIGABRT davor. Und
-    die `Q_ASSERT`-Meldung geht über den Nachrichten-Handler ins Logfile, das
-    beim Absturz nicht geschrieben und beim nächsten Start **überschrieben**
-    wird. Beide Spuren waren weg.
-  - Wer es angeht: `/usr/local/src/CLAUDE_TMP/TTCut-ng/abnahme/start-gdb.sh`
-    startet die Anwendung unter gdb, nimmt beim Absturz alle Fäden auf und
-    sichert das Anwendungsprotokoll sofort mit. Kein Core nötig.
-    `ptrace_scope=1` verhindert das Anhängen an einen fremd gestarteten
-    Prozess — die Anwendung muss also von gdb selbst gestartet werden.
+- **H.265-UHD: Schieber reagiert träge; Absturz (SIGABRT) unerklärt**
+  (Rest des Befunds von 2026-08-15; der Minuten-Hänger selbst ist GELÖST —
+  siehe `docs/completed-work.md`, „EAGAIN-Paketverlust")
+  - **Was der Hänger war**: `skipCurrentFrame()` verwarf bei
+    `avcodec_send_packet == EAGAIN` das Paket samt vergebenem Decode-Tag.
+    Bei B-Hierarchie blieb die Dekoder-Warteschlange voll, jedes weitere
+    Paket bis Dateiende wurde einzeln gelesen und verworfen, das Ziel-Tag
+    erschien nie, und die Wiederhol-plus-Rekursionskaskade in `decodeFrame()`
+    machte aus **einem** Schieber-Ereignis Minuten bis Stunden GUI-Rechenzeit.
+    Gefixt (korrekte Send/Receive-Pumpe mit schwebendem Paket); UHD-Sprung
+    jetzt 2,6 s statt nie.
+  - **Offen A — Reaktionsfähigkeit**: `onVideoSliderChanged()` dekodiert
+    weiterhin **synchron im GUI-Faden**, ein Ereignis kostet real (Sonde
+    `tools/diag/test_slider_decode_cost`, Median): H.264 1080p 70 ms, MBAFF
+    30 ms, HEVC-4K-CRA 630 ms, UHD-SES 2,6 s. Ein Zug mit 50 Ereignissen
+    blockiert entsprechend 3,5 s bis 130 s. Naheliegender Ansatz:
+    Ereignisse zusammenfassen (nur letzte Position dekodieren) —
+    tastet die dokumentierte Immer-Seek/DPB-Entscheidung nicht an.
+  - **Offen B — der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
+    unerklärt (Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
+    Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
+    geworden, aber unbewiesen: die Kaskade oben las die 502-MB-Datei
+    wiederholt komplett — was dabei an Puffern anfällt, war nie im Blick.
+    Nach dem Fix neu provozieren, bevor jemand tiefer gräbt:
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/abnahme/start-gdb.sh` (nimmt beim
+    Absturz alle Fäden auf und sichert das Log; `ptrace_scope=1` → von gdb
+    starten, nicht anhängen).
+  - **Zwei Messfallen aus der ersten Runde** (Beweise gingen verloren):
+    abgeschnittener Core durch Shell-Zeitlimit beim Schreiben; die
+    `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
+    und beim Neustart überschrieben wird.
 
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und

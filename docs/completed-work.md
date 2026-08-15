@@ -473,6 +473,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **UHD-Schieber-Hänger: EAGAIN-Paketverlust in `skipCurrentFrame()`** →
+  **GELÖST (2026-08-15)**
+  - Symptom (GUI-Abnahme 2026-08-15): eine Schieber-Bewegung auf UHD-HEVC,
+    Programm minutenlang nicht bedienbar; gemessen 335 s CPU im GUI-Faden bei
+    5 min Laufzeit, alle anderen Fäden bei null.
+  - **Widerlegte Erklärungen, jede gemessen** (Sonde
+    `tools/diag/test_slider_decode_cost`): (1) „viele billige Ereignisse
+    stapeln sich" — ein einzelnes Ereignis lief in den Timeout; (2) „Index
+    ohne Keyframes/Offsets → Seek auf Byte 0" — Index hat 155 Keyframes,
+    18478/18478 gültige Offsets; (3) „4K-Dekodieren ist eben langsam" —
+    ffmpeg dekodiert dieselbe Datei mit ~60 fps, sogar einfädig.
+  - **Ursache, per Tag-Logging gezeigt**: `avcodec_send_packet` liefert
+    EAGAIN (Ausgabe-Warteschlange voll — bei B-Hierarchie staut der Dekoder
+    mehr, als der Ein-Paket-ein-Frame-Takt abholt). Der Code tat
+    `if (ret < 0) continue;` — Paket **verworfen**, Decode-Tag verbraucht.
+    Die Warteschlange blieb voll, also traf jedes weitere Paket bis zum
+    Dateiende dasselbe EAGAIN: Log zeigt „packet with tag 4562 … DROPPED"
+    lückenlos bis EOF. Das Ziel-Tag des Skip-Loops erschien nie, `decodeFrame()`
+    wiederholte komplett und fiel dann **rekursiv** auf `frameIndex-1` zurück —
+    Minuten bis Stunden für einen Aufruf.
+  - Fix (`extern/ttffmpegwrapper.cpp`): korrekte libav-Pumpe. Erst
+    `avcodec_receive_frame` versuchen (bereitliegende Ausgabe ist das
+    Ergebnis dieses Aufrufs); bei Send-EAGAIN das Paket als
+    `mPendingPacket` halten und im nächsten Durchgang zuerst senden.
+    Schwebendes Paket wird bei Seek (fremdes Tag-Umfeld) und `closeFile()`
+    verworfen. Diagnose-Logging hinter `logFFmpegDecoder` bleibt drin.
+  - Belege: UHD-Einzelbild **2589 ms statt Timeout** (>240 s, real
+    Kaskade ohne Ende), volle Messung Median 2,6 s je Ereignis, Bild
+    geliefert. Regression unverändert grün: Tux H.264 progressiv 70 ms,
+    MBAFF 30 ms, HEVC-4K-CRA 630 ms (Werte wie vor dem Fix),
+    `test_wrapper_map` (mit Tux-MBAFF; der Default-Pfad des Harnisch zeigt
+    auf eine gelöschte Datei — Fehlschlag besteht auch ohne den Fix),
+    `test_stilldisplay`, `test_h264_leading`, `test_h26xcut_abort`,
+    `test_preview_then_cut`-Kette.
+  - Rest des UHD-Punkts (synchrones Dekodieren im GUI-Faden, SIGABRT)
+    bleibt in `TODO.md`.
+
 - **Ein Abbruch nach dem Abschluss meldete die fertige Aufgabe als
   abgebrochen** → **GELÖST (2026-08-15)**
   - War: `TTThreadTask::abort()` entschied allein an `!mIsRunning &&

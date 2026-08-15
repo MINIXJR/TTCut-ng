@@ -6,6 +6,17 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **Stepping through UHD material no longer freezes the application for
+  minutes.** On H.265 streams with hierarchical B-frames the decoder buffers
+  more output than the display path collected, and a full decoder was answered
+  by throwing the pending compressed packet away - after which every further
+  packet met the same full decoder, the requested frame could never be
+  delivered, and a single slider movement read the rest of the file start to
+  end several times over. The decoder is now drained before more data is
+  pushed in, and a packet the decoder cannot yet accept is kept for the next
+  round instead of being dropped. A jump into a 4K recording now decodes in
+  about two and a half seconds; HD material is unaffected.
+
 - **A cancel that arrives after the work is done no longer reports the run as
   cancelled.** Pressing Cancel in the moment a task had just finished made it
   announce both outcomes at once, so a completed operation could end up
