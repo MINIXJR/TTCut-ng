@@ -6,6 +6,14 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **A cut that loses an audio track now fails instead of pretending.** When
+  one of several audio tracks could not be cut - a vanished file, a broken
+  stream - the cut carried on, muxed the output without that track and
+  reported success; the remaining-time calibration was fed wrong numbers on
+  top. Such a cut now stops before the mux, names how many tracks made it
+  ("Only 1 of 2 audio tracks could be cut"), and keeps the finished streams
+  on disk for a retry.
+
 - **Dragging the position slider now tracks live.** While the handle is held
   down, the picture follows in keyframe steps (a few milliseconds on HD, about
   a tenth of a second on UHD); the exact frame appears once the slider is

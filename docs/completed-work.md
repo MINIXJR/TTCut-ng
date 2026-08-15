@@ -473,6 +473,39 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Teilfehlschläge beim Spurenschnitt meldeten sich als Erfolg** →
+  **GELÖST (2026-08-15)**
+  - War: `cutAudioTracks()` überspringt gescheiterte Spuren still (Index
+    außer Bereich, fehlender Stream, leerer Plan) und `cutAudioStream()` kann
+    `ok=false` liefern — nur der Audio-only-Pfad verglich seit `c7436a07` die
+    Spurenzahl. MPEG-2-Schnitt und `TTH26xCutTask` muxten ein MKV **ohne die
+    Spur**, meldeten Erfolg und schrieben einen Kalibrierfaktor auf falscher
+    Arbeitsbasis.
+  - **Laufzeit-Repro zuerst** (Regel [[feedback_repro_before_code]] — der
+    TODO-Eintrag war eine Code-Lesung): neuer Harnisch
+    `tools/diag/test_partial_track` erzeugt einen echten Teilfehlschlag —
+    zweite Tonspur als Kopie, Datei nach dem Kopflisten-Aufbau gelöscht,
+    `cutAudioStream` scheitert echt. Rot auf beiden Pfaden gemessen:
+    `lastCutError=''`, „mux stage seen" trotz fehlender Spur.
+  - Fix, Entscheid des Users: **Fehlschlag, Stopp vor dem Mux** (wie der
+    mplex-Präzedenzfall). H26x: Zählung `cutAudioFiles.size()` gegen
+    `audioCount()`, bei Abweichung `fail(...)` + `return` vor dem Mux —
+    die bestehende `mError`-Kette meldet `Failed`. MPEG-2: `ok`-Zählung in
+    der Rückruf-Lambda, Prüfung **nach** dem Sync-Abort-Zweig (Abbruch
+    behält Vorrang) und **vor** dem Pool-Start — weder Videoschnitt noch Mux
+    laufen an. Beide Pfade: Meldung „Only %1 of %2 audio track(s) could be
+    cut", fertige ES-Dateien bleiben liegen (echter Fehler räumt nicht auf),
+    kein Kalibrierfaktor (nur regulärer `Exit` schreibt einen). Übersetzung
+    ergänzt (761/761).
+  - Belege: Harnisch grün auf H.264 und MPEG-2 (Kontrolllauf mit 2/2 Spuren
+    unverändert erfolgreich, Mux-Stage gesehen; Teilfehlschlag: Fehlertext
+    „1 of 2", Mux-Stage nie erreicht, `_cut.264` + `_audio1.ac3` liegen).
+    Regression grün: `test_cut_outcome`, `test_h26xcut_abort` (audio),
+    `test_audioonlycut_abort` (none/audio), `test_cutsequence_abort`.
+  - Nicht im Umfang: `cutSubtitleTracks()` (meldet weiter nur über die
+    Dateiliste) und die Rest-Randnotiz, dass Empfänger außerhalb des
+    Pool-Wegs (Suchen) einen echten Fehler als Abbruch sehen.
+
 - **Schieber: Entprellung + Keyframe-Vorschau beim Ziehen** → **GELÖST
   (2026-08-15, GUI-Abnahme durch den User auf UHD und H.264)**
   - War (auch nach dem EAGAIN-Fix): `onVideoSliderChanged()` dekodierte

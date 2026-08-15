@@ -216,29 +216,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
     haben.
 
-- **Teilfehlschläge beim Spurenschnitt werden nur auf einem von drei Pfaden
-  erkannt** (Schlussprüfung `feature/cut-outcome-reporting`, 2026-08-12)
-  - `TTAVData::cutAudioTracks()` überspringt eine fehlgeschlagene Spur intern
-    still (`continue` bei Index außerhalb des Bereichs, fehlendem Stream oder
-    leerem Schnittplan - `ttavdata.cpp:2731`, `:2734`, `:2741`) und meldet das
-    nach außen nur über die Größe der zurückgegebenen Dateiliste. Nur der
-    Audio-only-Pfad (`data/ttaudioonlycuttask.cpp`, seit `c7436a07`)
-    vergleicht `trackFiles.size()` gegen die angeforderte Spurenzahl und
-    setzt bei Abweichung `mError`/`mExitMessage` ("Only %1 of %2 audio
-    track(s) could be cut"). Die beiden anderen Aufrufer prüfen das nicht:
-    `TTAVData::onDoCut()` beim MPEG-2-Pfad (`ttavdata.cpp:1566`) und
-    `TTH26xCutTask::runCut()` (`data/tth26xcuttask.cpp:329`) melden Erfolg,
-    auch wenn eine oder mehrere Spuren nie geschnitten wurden.
-  - Folge: Beide Pfade schreiben trotzdem einen Kalibrierfaktor für die
-    Restzeitschätzung, obwohl die zugrunde liegende Arbeitsmenge Spuren
-    enthielt, die tatsächlich nie bearbeitet wurden - der Faktor wird auf
-    einer falschen Basis berechnet.
-  - Vorlage für die Behebung ist der Audio-only-Pfad selbst: dieselbe
-    Größenvergleich-Prüfung (Rückgabeliste vs. angeforderte Spurenzahl, s.o.)
-    müsste an beiden übrigen Aufrufstellen ergänzt und über
-    `finishCutOperation()` gemeldet werden. Nicht in `feature/cut-outcome-
-    reporting` behoben - hätte den Zweig gesprengt.
-
 - **Gemeinsame Temp-Namen in `encodePart()`** (2026-08-12, erledigt)
   - `TTMpeg2VideoStream::encodePart()` legte `encode.avi`/`encode.m2v` direkt
     unter `TTSettings::tempDirPath()` an und räumte am Ende jede `encode.*`
