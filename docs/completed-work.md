@@ -473,6 +473,22 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Nie gestartete Landezonen-Analysen erklären sich jetzt** → **GELÖST
+  (2026-08-15, Commit `3b24be6a` im MPEG-2-Vorschau-Zweig; TODO-Eintrag von
+  der Schlussprüfung 2026-08-11 war danach veraltet und wurde erst beim
+  Abgleich am selben Abend zurückgezogen)**
+  - `onAnalyzeStreamPoints()` legt für jede aktivierte, aber auf diesem
+    Material nicht baubare Analyse eine Notiz an (Sequenzkopf-Analyse ohne
+    Header-Liste = jedes H.26x-Material; Pillarbox ohne Indexliste; Audio
+    ohne Tonspur). Läuft mindestens ein Worker, erscheinen die Notizen nach
+    dem ersten `Start` im Detailbereich (nach dem Dialog-Reset, der sie
+    sonst löschte — GUI-Abnahme-Nachkorrektur) und im Log; läuft keiner,
+    listet ein eigener Dialog die Gründe, statt fälschlich „No detection
+    methods enabled" zu behaupten.
+  - Der einst unerreichbare Worker-Text „kein MPEG-2-Strom – übersprungen"
+    ist durch die Notiz an der Aufrufstelle ersetzt; der Kommentar dort
+    dokumentiert die doppelte Unerreichbarkeit.
+
 - **Fortschrittszeilen fluteten den Detailbereich** → **GELÖST (2026-08-15;
   User-Befund vom 2026-08-12, bewusst zurückgestellt gewesen)**
   - War: der Bildformat-Scan meldete alle 20 Proben `Aspect format: %1 of %2
