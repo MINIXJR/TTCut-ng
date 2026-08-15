@@ -212,26 +212,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
     haben.
 
-- **Gemeinsame Temp-Namen in `encodePart()`** (2026-08-12, erledigt)
-  - `TTMpeg2VideoStream::encodePart()` legte `encode.avi`/`encode.m2v` direkt
-    unter `TTSettings::tempDirPath()` an und räumte am Ende jede `encode.*`
-    dort weg — auch die einer gleichzeitig laufenden Instanz. Vier
-    gleichzeitige `test_mpeg2cut_abort`-Läufe scheiterten 3–5 von 12 Malen mit
-    Speicherabzug; einzeln liefen rund 60 Durchgänge fehlerfrei.
-  - Der Absturz selbst kam aus `TTVideoHeaderList::firstSequenceHeader()`: die
-    Schleife griff mit `at(index)` zu, bevor sie `index < count()` prüfte.
-    Nachdem sie `NULL` lieferte statt abzubrechen, wurde daraus ein
-    Nullzeiger-Zugriff in `encodePart()` (8 von 12 Läufen, rc=139) — beides
-    ist behoben, die Funktion prüft `getSequenceHeader()` jetzt.
-  - **Richtigstellung zum früheren Eintrag:** Der Absturz passiert *nicht*
-    nach dem PASS. Er trifft den Kontrolllauf („restart after cancel") mitten
-    im Video-Schnitt, Rückgabewert 134. Die Annahme „meldet PASS, stirbt beim
-    Beenden" war eine Deutung ohne Beleg — ein Speicherabzug nennt die Phase
-    nicht.
-  - Gate: `tools/diag/gate_encode_tempdir.sh` (vorher `failed=8 dumps=5`,
-    nachher `failed=0 dumps=0`), dazu `tools/diag/test_seqheader_missing`
-    (vorher rc=134, nachher NULL).
-
 - **ttcut-demux reicht beschädigte Tonrahmen durch, statt sie zu ersetzen**
   (2026-08-15, aus dem mplex-Befund; ProjectX-Vergleich gemessen)
   - Ausgangsfall: Ein 90-min-Schnitt über MPG/mplex hatte 85 min Bild und

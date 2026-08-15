@@ -175,6 +175,29 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### MPEG-2-Schnitt
 
+- **Gemeinsame Temp-Namen in `encodePart()` + Nullzeiger in
+  `firstSequenceHeader()`** → **GELÖST (2026-08-12, master `f5f51d1f`; der
+  Eintrag stand danach noch als „erledigt" im TODO und wandert erst beim
+  Abgleich am 2026-08-15 hierher)**
+  - `TTMpeg2VideoStream::encodePart()` legte `encode.avi`/`encode.m2v` direkt
+    unter `TTSettings::tempDirPath()` an und räumte am Ende jede `encode.*`
+    dort weg — auch die einer gleichzeitig laufenden Instanz. Vier parallele
+    `test_mpeg2cut_abort`-Läufe scheiterten 3–5 von 12 Malen mit
+    Speicherabzug; einzeln liefen rund 60 Durchgänge fehlerfrei
+    (→ `reference_shared_tempdir_parallel_runs` im Memory: vor jeder Deutung
+    sporadischer Harness-Fehlschläge lesen). Fix: `QTemporaryDir` je Vorgang.
+  - Der Absturz selbst kam aus `TTVideoHeaderList::firstSequenceHeader()`:
+    `at(index)`-Zugriff vor der Bereichsprüfung; nach dem NULL-Fix wurde
+    daraus ein Nullzeiger-Zugriff in `encodePart()` (8 von 12 Läufen,
+    rc=139) — beides behoben, `getSequenceHeader()` wird geprüft.
+  - **Richtigstellung**: Der Absturz passiert *nicht* nach dem PASS, sondern
+    trifft den Kontrolllauf („restart after cancel") mitten im Video-Schnitt
+    (rc=134). „Meldet PASS, stirbt beim Beenden" war eine Deutung ohne Beleg.
+  - Gates: `tools/diag/gate_encode_tempdir.sh` (vorher `failed=8 dumps=5`,
+    nachher `failed=0 dumps=0`), `tools/diag/test_seqheader_missing`
+    (vorher rc=134, nachher NULL). Die Schwester-Baustellen (Vorschau- und
+    Wiedergabe-Temp-Namen) stehen weiter offen in `TODO.md`.
+
 - **MPEG-2-Vorschau meldete Fehlschläge als Erfolg, MPEG-2-Schnitt bemerkte
   Schreibfehler gar nicht** → **FIXED** (2026-08-13)
   - Ausgangspunkt war ein Harnisch-Fehlschlag, nicht ein Anwenderbericht:
