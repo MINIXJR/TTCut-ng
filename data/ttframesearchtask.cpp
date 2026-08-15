@@ -199,7 +199,20 @@ void TTFrameSearchTask::operation()
       delete searchWrapper;
       throw TTAbortException("TTFrameSearchTask: could not open search stream for FFmpeg decode");
     }
-    if (!searchWrapper->buildFrameIndex()) {
+    // Adopt the stream's existing frame index instead of scanning the file a
+    // second time - the same move the reference path above makes, which this
+    // branch was missing. The application has already built this index when it
+    // opened the stream, and rebuilding it dominated the search: measured with
+    // tools/diag/test_framesearch_progress on a 224 930-frame H.264 recording,
+    // 5553 ms of the 11 464 ms run passed between the Start report and the
+    // first compared frame, with nothing to see in the progress dialog.
+    // provideFrameIndexTo() returns false when the stream has no index yet
+    // (different item, never opened) - then the scan below is still needed.
+    bool searchIndexAdopted = false;
+    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpSearchStream)) {
+      searchIndexAdopted = h26x->provideFrameIndexTo(searchWrapper);
+    }
+    if (!searchIndexAdopted && !searchWrapper->buildFrameIndex()) {
       searchWrapper->closeFile();
       delete searchWrapper;
       throw TTAbortException("TTFrameSearchTask: buildFrameIndex failed for search stream");

@@ -265,12 +265,14 @@ diag_tool(test_progressbar_reshow WIDGETS SOURCES)
 diag_tool(test_filedialog_proxy   WIDGETS SOURCES)
 diag_tool(test_dialog_then_cut    AV WIDGETS SOURCES)
 diag_tool(test_stale_abort        AV WIDGETS SOURCES)
+diag_tool(test_framesearch_progress AV WIDGETS SOURCES)
 diag_tool(test_pulse_animation    WIDGETS SOURCES)
 diag_tool(test_pulse_stylesheet   WIDGETS SOURCES
   ${ROOT}/gui/ttcentredtitlestyle.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttsettings.cpp)
 target_link_libraries(test_stale_abort PRIVATE ttcut-core)
+target_link_libraries(test_framesearch_progress PRIVATE ttcut-core)
 target_link_libraries(test_dialog_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 
