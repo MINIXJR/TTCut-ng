@@ -229,6 +229,9 @@ void TTFFmpegWrapper::closeFile()
         mDecodedFrame = nullptr;
     }
 
+    if (mPendingPacket)
+        av_packet_free(&mPendingPacket);
+
     if (mSwsCtx) {
         sws_freeContext(mSwsCtx);
         mSwsCtx = nullptr;
@@ -749,6 +752,11 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     if (mVideoCodecCtx) {
         avcodec_flush_buffers(mVideoCodecCtx);
     }
+    // A packet held back by a send-EAGAIN belongs to the pre-seek tag domain;
+    // sending it into the flushed decoder would deliver one frame under a
+    // stale decode-order tag.
+    if (mPendingPacket)
+        av_packet_free(&mPendingPacket);
     mDecoderDrained = false;
 
     mCurrentFrameIndex = seekKeyframe;
@@ -831,13 +839,19 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 
         int guard = 0;
         const int guardMax = mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000;
+        const bool logTags = TTSettings::instance()->logFFmpegDecoder();
         while (guard++ < guardMax) {
             if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
+            if (logTags && (guard <= 5 || static_cast<int>(mDecodedFrame->pts) >= targetAU - 2))
+                qDebug() << "  skip-loop output" << guard << "pts-tag" << mDecodedFrame->pts
+                         << "(target" << targetAU << ")";
             if (static_cast<int>(mDecodedFrame->pts) == targetAU) {
                 result = convertDecodedFrameToImage();
                 break;
             }
         }
+        if (logTags && result.isNull())
+            qDebug() << "  skip-loop ended after" << guard << "outputs without hitting target" << targetAU;
         if (result.isNull() && attempt == 0) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
                 QString("decodeFrame: targetAU %1 (display %2) not delivered — retrying with fresh seek")
@@ -1398,30 +1412,91 @@ bool TTFFmpegWrapper::skipCurrentFrame()
         if (!mDecodedFrame) return false;
     }
 
+    const bool logRc = TTSettings::instance()->logFFmpegDecoder();
+
+    // A frame may already be waiting from packets sent on earlier calls - the
+    // decoder buffers reordered output (hierarchical B). Taking it first is
+    // this call's result and, more importantly, the ONLY correct reaction to
+    // a previous send_packet EAGAIN: the API's contract is "output full ->
+    // receive first, then resend the SAME packet". The old code dropped the
+    // packet instead; with a B-hierarchy the queue then stayed full, EVERY
+    // remaining packet of the file was read and dropped one by one, the
+    // skip-loop's target tag never appeared, and one decodeFrame() call
+    // degraded into minutes of read-and-discard (measured on UHD HEVC:
+    // "packet with tag 4562..EOF DROPPED", file read to the end twice, then
+    // the same again recursively for frame-1).
+    int ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+    if (ret == 0)
+        return true;
+
     AVPacket* packet = av_packet_alloc();
     if (!packet) return false;
 
     bool decoded = false;
 
-    // Keep sending packets until a frame is produced.
-    // For PAFF: decoder needs 2 field packets per frame (returns EAGAIN after first).
-    // For progressive: 1 packet = 1 frame.
-    while (av_read_frame(mFormatCtx, packet) >= 0) {
-        if (packet->stream_index == mVideoStreamIndex) {
+    // Feed until the decoder produces a frame: first the packet a previous
+    // EAGAIN left pending, then the file. For PAFF the decoder needs 2 field
+    // packets per frame (EAGAIN on receive after the first) - unchanged.
+    int readRc = 0;
+    for (;;) {
+        AVPacket* toSend = mPendingPacket;
+        if (toSend == nullptr) {
+            readRc = av_read_frame(mFormatCtx, packet);
+            if (readRc < 0)
+                break;                                    // EOF -> drain below
+            if (packet->stream_index != mVideoStreamIndex) {
+                av_packet_unref(packet);
+                continue;
+            }
             packet->pts = decodeOrderTagForPacket(packet);
-            int ret = avcodec_send_packet(mVideoCodecCtx, packet);
-            av_packet_unref(packet);
-            if (ret < 0) continue;
+            toSend = packet;
+        }
 
+        const int sendRc = avcodec_send_packet(mVideoCodecCtx, toSend);
+        if (sendRc == AVERROR(EAGAIN)) {
+            // Output queue full. Keep the packet - its tag is already
+            // assigned - and take a frame out; the packet goes in on the
+            // next call (or the next receive-fail loop round).
+            if (toSend != mPendingPacket) {
+                mPendingPacket = av_packet_alloc();
+                if (mPendingPacket == nullptr) { av_packet_unref(packet); break; }
+                av_packet_move_ref(mPendingPacket, packet);
+            }
             ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
             if (ret == 0) {
                 decoded = true;
                 break;
             }
-            // EAGAIN: decoder needs more data (e.g. PAFF second field) → keep reading
-        } else {
-            av_packet_unref(packet);
+            // send EAGAIN AND receive EAGAIN would violate the API contract;
+            // bail out instead of spinning.
+            if (logRc)
+                qDebug() << "  skipCurrentFrame: send AND receive EAGAIN -"
+                         << avErrorToString(ret);
+            break;
         }
+
+        if (toSend == mPendingPacket)
+            av_packet_free(&mPendingPacket);
+        else
+            av_packet_unref(packet);
+
+        if (sendRc < 0) {
+            // Real send error: this AU is lost, its tag stays consumed (as
+            // before) - but unlike EAGAIN this is rare and data-dependent.
+            if (logRc)
+                qDebug() << "  skipCurrentFrame: send_packet" << avErrorToString(sendRc)
+                         << "- packet with tag" << (mDecodeOrderTag - 1) << "DROPPED";
+            continue;
+        }
+
+        ret = avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame);
+        if (ret == 0) {
+            decoded = true;
+            break;
+        }
+        // EAGAIN: decoder needs more data (e.g. PAFF second field) -> keep feeding
+        if (ret != AVERROR(EAGAIN) && logRc)
+            qDebug() << "  skipCurrentFrame: receive_frame" << avErrorToString(ret);
     }
 
     // EOF drain: flush decoder pipeline to retrieve buffered frames
@@ -1439,6 +1514,9 @@ bool TTFFmpegWrapper::skipCurrentFrame()
         }
     }
 
+    if (!decoded && logRc)
+        qDebug() << "  skipCurrentFrame: read loop ended, av_read_frame rc ="
+                 << avErrorToString(readRc);
     av_packet_free(&packet);
     return decoded;
 }

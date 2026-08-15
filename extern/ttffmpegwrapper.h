@@ -327,6 +327,16 @@ private:
     int mCurrentFrameIndex;
     int mDecoderFrameIndex;     // Actual decoder position (last decoded frame)
     bool mDecoderDrained;       // True if decoder was flushed for EOF drain
+    // A packet that was read and tagged but could not be sent because the
+    // decoder's output queue was full (avcodec_send_packet == EAGAIN). It is
+    // sent first on the next skipCurrentFrame() call. Dropping it instead -
+    // which the old code did - loses the AU AND its decode-order tag, so the
+    // skip loop's target tag never appears and every caller degrades into a
+    // read-and-discard pass over the rest of the file (measured on UHD HEVC
+    // with a B-hierarchy: minutes per decodeFrame call). Cleared on seek
+    // (stale tag domain) and on closeFile().
+    AVPacket* mPendingPacket = nullptr;
+
     // Decode-order tag counter for decodeFrame(): each sent packet is tagged with
     // pts = mDecodeOrderTag++ (decode order from the seek keyframe). Since
     // avcodec_receive_frame() delivers in display order, the delivered frame
