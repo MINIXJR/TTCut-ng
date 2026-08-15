@@ -58,6 +58,9 @@ void TTThreadTaskPool::init(int estimateTaskCount)
   mEstimateTaskCount = estimateTaskCount;
   mTotalMap.clear();
   mProgressMap.clear();
+  // Once per operation: a failure recorded here must never outlive the run it
+  // belongs to, or the next cancelled operation would report the old reason.
+  mLastFailureMessage.clear();
 
   // Ensure the thread pool has enough threads for all tasks to run in parallel
   // (1 video + N audio + M subtitle). This allows audio/subtitle cutting to
@@ -253,6 +256,15 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
     this, &TTThreadTaskPool::onStatusReport);
 
   mTaskQueue.removeAll(task);
+
+  // Keep the reason, if there was one. aborted() carries no argument and says
+  // only "this task did not finish" - a user cancel and a genuine failure look
+  // identical from here on, and the operation's owner has to tell them apart
+  // to decide between "Cut cancelled" and an error report. Only a non-empty
+  // message overwrites: on a multi-task run the cancel that follows a failure
+  // must not erase the failure's reason.
+  if (!task->failureMessage().isEmpty())
+    mLastFailureMessage = task->failureMessage();
 
   qDebug() << "aborted " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
 

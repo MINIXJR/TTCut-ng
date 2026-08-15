@@ -180,12 +180,35 @@ void TTThreadTask::run()
       throw;
     }
   }
-  catch(const TTException&)
+  catch(const TTException& e)
   {
-    qDebug() << taskName() << "with UUID " << taskID() << " catched TTException";
+    // A real failure, NOT a user cancel - and the two must not become
+    // indistinguishable here. Two things used to go missing at this point:
+    //
+    // 1. The exception's own message. The catch did not even bind it, so a
+    //    reason like "Index 3500 exceeds list bounds: 3000" was dropped on
+    //    the floor - it appeared in no log, no dialog, nowhere. An operation
+    //    that failed for a nameable reason reported nothing at all.
+    // 2. The failure itself, whenever this task ran synchronously. The
+    //    TTAbortException branch above re-throws for mIsSynchron so the
+    //    caller of runSynchron() sees the abort; this branch did not, so a
+    //    nested task's failure never reached the task that started it.
+    //    TTCutPreviewTask has caught and re-raised TTException around its
+    //    nested cut since it was written - that catch could never fire.
+    //    Consequence, measured on the MPEG-2 preview: every clip failed to be
+    //    written, three errors were logged, and the preview still emitted
+    //    finished() and reported "done".
+    mFailureMessage = e.getMessage();
+    TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
+        QString("%1 failed: %2").arg(taskName(), mFailureMessage));
     mIsRunning = false;
     cleanUp();
     emit aborted(this);
+
+    if (mIsSynchron) {
+      qDebug() << taskName() << " with UUID " << taskID() << " redirect TTException";
+      throw;
+    }
   }
 }
 

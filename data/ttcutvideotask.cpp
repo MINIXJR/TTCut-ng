@@ -142,6 +142,20 @@ void TTCutVideoTask::operation()
 
     mpCutStream = cutItem.avDataItem()->videoStream();
 
+    // Clear a stale abort request before touching this stream - same reasoning
+    // as onDoCut()'s mSyncPhaseAbort reset, for the flag that lives one level
+    // down. onUserAbort() pushes the cancel into the stream
+    // (mpCutStream->setAbort(true)), but the stream is NOT per-operation: it
+    // comes from the AV item and is the long-lived object the display widgets
+    // share. Every mAbort check clears the flag as it throws
+    // (ttmpeg2videostream.cpp:121, 244, 568), so it only disappears if a check
+    // is still reached - and a cancel that arrives after the stream has
+    // finished its work reaches none. Reported from the GUI: cancel a preview,
+    // and the NEXT preview produced nothing while the one after that worked -
+    // the second run was aborting itself on the leftover flag and clearing it
+    // in the process. Regression test: tools/diag/test_stale_abort.
+    mpCutStream->setAbort(false);
+
 	  mpCutParams->setCutInIndex(cutIn);
 	  mpCutParams->setCutOutIndex(cutOut);
 

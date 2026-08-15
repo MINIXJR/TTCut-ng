@@ -240,6 +240,12 @@ class TTAVData : public QObject
     TTAVItem*         mpCurrentAVItem;
     TTAVList*         mpAVList;
     TTCutList*        mpCutList;
+    //! The cut list the RUNNING operation was started with. onDoCut() takes a
+    //! list as a parameter and only falls back to mpCutList when none is given
+    //! - so the two are not the same thing, and onCutFinished() must not read
+    //! mpCutList to describe what was just cut. Owned by the caller; valid for
+    //! the duration of one operation.
+    TTCutList*        mpRunningCutList = nullptr;
     bool mNonInteractive = false;  // --auto-cut: no modal dialogs
     TTMarkerList*     mpMarkerList;
     TTMuxListData*    mpMuxList;

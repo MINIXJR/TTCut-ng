@@ -41,6 +41,12 @@ public:
   bool isRunning() const;
   bool isAborted() const;
 
+  //! Reason this task failed, or empty for a clean run / plain user cancel.
+  //! Both outcomes end in aborted(), which on its own says only "did not
+  //! finish" - this is what lets the pool and the operation's owner tell a
+  //! genuine failure from a cancel, and gives them a text to show.
+  QString failureMessage() const { return mFailureMessage; }
+
 protected:
   virtual void operation() = 0;
   virtual void cleanUp() = 0;
@@ -66,6 +72,7 @@ protected:
   quint64 mStepCount; /**<current step count                         */
   TTMessageLogger* log; /**<message logger istance                     */
   QString mTaskName; /**<task name                                  */
+  QString mFailureMessage; /**<why the task failed, empty if it did not  */
   bool mIsSynchron;
   bool mIsRunning;
   bool mIsAborted;

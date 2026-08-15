@@ -454,6 +454,19 @@ void TTMplexProvider::onProcFinished(int exitCode, QProcess::ExitStatus exitStat
     mLastError = tr("The multiplexer failed with exit code %1").arg(exitCode);
   }
 
+  // A failed multiplex keeps its input. The elementary streams are the only
+  // thing that makes a retry cheap - without them the whole cut has to run
+  // again - and deleting the evidence of a failure is the same mistake the cut
+  // paths were fixed for ("on a real error leave the files in place").
+  //
+  // This covers two cases. The exit-code branch above sets mSucceeded without
+  // returning, so a mux that failed outright used to have its input deleted
+  // anyway. And a mux that abandoned a stream (see inspectMplexLine) exits with
+  // code 0, so neither check above catches it - measured on a recording with a
+  // damaged audio frame: the audio track ended after 4.7 of 85 minutes and the
+  // streams were removed regardless.
+  if (!mSucceeded) return;
+
   if (!TTSettings::instance()->workingMuxDeleteES()) return;
 
   // Only delete ES files for the current mux item, not all items in the list
@@ -500,7 +513,49 @@ void TTMplexProvider::procOutput()
     line = out.readLine();
     log->debugMsg(__FILE__, __LINE__, QString("* %1").arg(line));
     emit statusReport(StatusReportArgs::AddProcessLine, line, 0);
+    inspectMplexLine(line);
     qApp->processEvents();
   }
+}
+
+//! Look for the one class of mplex message that means silent data loss.
+//!
+//! mplex ends a stream it considers broken, carries on multiplexing the rest,
+//! exits with code 0 and says "completed". Neither onProcError() nor the exit
+//! code notices, so before this the run counted as a success and the user got
+//! a file that simply stops having sound partway through - measured on a
+//! 90-minute recording: 85 minutes of video, 4.7 minutes of audio, no error
+//! anywhere. The output was already scrolling past in the details area, one
+//! warning among a dozen harmless ones.
+//!
+//! Deliberately narrow. mplex's other warnings are noise by its own account:
+//! "Target data rate lower than computed requirement" is followed by mplex
+//! itself explaining that a 20 % discrepancy "is common and harmless". Turning
+//! every "++ WARN" into a failure would make the common case cry wolf, and a
+//! warning that always fires gets ignored - which is how this one slipped
+//! through in the first place.
+void TTMplexProvider::inspectMplexLine(const QString& line)
+{
+  // "++ WARN: Data follows end of last recogniseable MPEG audio frame - bad
+  // stream?" - mplex stops reading that stream here. Everything multiplexed
+  // after this point has no audio.
+  if (!line.contains(QLatin1String("recogniseable"), Qt::CaseInsensitive))
+    return;
+
+  mSucceeded = false;
+  if (mLastError.isEmpty()) {
+    mLastError = tr("The multiplexer stopped reading the audio stream and the "
+                    "output has no sound from that point on.\n\n"
+                    "mplex found data after the last audio frame it could "
+                    "recognise and treated the stream as broken. This usually "
+                    "means a damaged frame in the recording itself - "
+                    "ttcut-demux records those in the .info file as "
+                    "corrupt_frame_ranges, and they appear as markers on the "
+                    "timeline. The MKV output does not have this problem, "
+                    "because its muxer skips such a frame instead of giving up "
+                    "on the track.");
+  }
+  log->errorMsg(__FILE__, __LINE__,
+      QString("mplex abandoned a stream: %1").arg(line.trimmed()));
 }
 

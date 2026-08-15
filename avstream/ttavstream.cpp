@@ -27,6 +27,7 @@
 //
 // -----------------------------------------------------------------------------
 
+#include <memory>
 #include "ttavstream.h"
 
 #include "../common/ttexception.h"
@@ -147,7 +148,11 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
 {
   quint64 progress    = 0;
   quint64 buffer_size = 65536;
-  quint8* buffer      = new quint8[buffer_size];
+  // unique_ptr, not a raw new: two exits throw out of the loop below (the
+  // abort check, and TTFileBuffer::directWrite when the target cannot be
+  // written) and both used to leak this buffer.
+  std::unique_ptr<quint8[]> bufferOwner(new quint8[buffer_size]);
+  quint8* buffer      = bufferOwner.get();
   quint64 count       = end_adr-start_adr+1;
 
   stream_buffer->seekAbsolute( start_adr );
@@ -177,7 +182,7 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
   emit statusReport(StatusReportArgs::Finished, tr("Audio cut finished"), end_adr-start_adr+1);
   qApp->processEvents();
 
-  delete []buffer;
+  // buffer is owned by bufferOwner
 }
 
 

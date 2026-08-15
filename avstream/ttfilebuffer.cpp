@@ -14,6 +14,7 @@
 
 #include "ttfilebuffer.h"
 #include "ttcommon.h"
+#include "../common/ttexception.h"
 
 /* ////////////////////////////////////////////////////////////////////////////
  * Construct object with custom buffer size
@@ -349,13 +350,31 @@ QString TTFileBuffer::readLine(QString delimiter)
  */
 /* /////////////////////////////////////////////////////////////////////////////
  * Writes w_buffer with size w_length direct to stream and returns the number
- * of bytes that were actually written, or -1 if an error occured.
+ * of bytes actually written. Throws TTIOException if the write did not get
+ * through - a cut that cannot write its output has failed, and every caller
+ * here is inside a task that catches TTException.
+ *
+ * The old contract said "or -1 if an error occured", which could never work:
+ * the return type is unsigned, so QIODevice::write's -1 arrived as
+ * 18446744073709551615 and a caller testing for < 0 would never have seen it.
+ * No caller tested anything at all. Measured consequence: a full MPEG-2 cut
+ * into an unwritable directory produced 102 "QIODevice::write: device not
+ * open" warnings from Qt, and the task still reported that it had finished.
+ *
+ * A short write is treated like a failure too - for a plain file that is a
+ * full disk, and continuing would silently produce a truncated stream.
  */
 quint64 TTFileBuffer::directWrite(const quint8* w_buffer, int w_length)
 {
-  quint64 result = file->write((char*)w_buffer, w_length);
+  const qint64 result = file->write((char*)w_buffer, w_length);
 
-  return result;
+  if (result != (qint64)w_length) {
+    throw TTIOException(__FILE__, __LINE__,
+        QString("Could not write %1 bytes to %2: %3")
+            .arg(w_length).arg(file->fileName(), file->errorString()));
+  }
+
+  return (quint64)result;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

@@ -39,6 +39,12 @@ class TTThreadTaskPool : public QObject
     void  startNested(TTThreadTask* task);
     int   overallPercentage();
 
+    //! Reason the last task in this run failed, or empty if none did (clean
+    //! run, or plain user cancel). A failure and a cancel both end a task in
+    //! aborted(), so the operation's owner needs this to tell them apart and
+    //! to have a text to show. Reset by init(), i.e. once per operation.
+    QString lastFailureMessage() const { return mLastFailureMessage; }
+
   signals:
     void init();
     void aborted();
@@ -61,6 +67,7 @@ class TTThreadTaskPool : public QObject
 
 	private:
     QQueue<TTThreadTask*> mTaskQueue;
+    QString               mLastFailureMessage;
     QMap<QUuid, quint64>  mTotalMap;
     QMap<QUuid, quint64>  mProgressMap;
     TTMessageLogger*      log;

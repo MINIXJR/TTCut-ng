@@ -1458,6 +1458,15 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 
   if (cutList == 0) cutList = mpCutList;
 
+  // Remember WHICH list this operation runs on. onCutFinished() used to read
+  // mpCutList instead, which is only the same object when the caller passed
+  // nothing - the GUI's case. Any caller handing in its own list (the
+  // diagnostic harnesses do) had the muxer read frame rate, PAFF state and
+  // codec off a different, possibly empty list: with an empty mpCutList the
+  // at(0) below is an out-of-range access, which Q_ASSERT turns into an abort
+  // and a release build into undefined behaviour.
+  mpRunningCutList = cutList;
+
   computeCutLengths(cutList);
 
   // Reset last-cut metadata; non-audio-only path leaves it cleared.
@@ -1929,8 +1938,18 @@ void TTAVData::onCutFinished()
         // thread; the worker never reads mpCutList or the mux list again.
         TTMuxTaskParams params;
 
-        // Set frame duration for raw ES video (required for PTS assignment)
-        TTVideoStream* videoStream = mpCutList->at(0).avDataItem()->videoStream();
+        // Set frame duration for raw ES video (required for PTS assignment).
+        // The list this operation actually ran on - see mpRunningCutList.
+        TTCutList* runList = (mpRunningCutList != nullptr) ? mpRunningCutList : mpCutList;
+        if (runList == nullptr || runList->count() == 0) {
+          const QString msg = tr("The cut finished but its cut list is empty - "
+                                 "cannot mux without knowing what was cut.");
+          log->errorMsg(__FILE__, __LINE__, msg);
+          mLastCutError = msg;
+          finishMpeg2Cut();
+          return;
+        }
+        TTVideoStream* videoStream = runList->at(0).avDataItem()->videoStream();
         double frameRate = videoStream->frameRate();
         int frameDurationNs = (int)(1000000000.0 / frameRate);
         params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
@@ -2317,7 +2336,21 @@ void TTAVData::onCutAborted()
   // this slot and must still see the flag set to suppress its own "exiting
   // thread pool" Exit. onThreadPoolExit consumes (resets) the flag.
   if (mCutOperationActive) {
-    finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
+    // A cancel and a failure both arrive here - TTThreadTask::run() ends in
+    // aborted() either way (the comment above the cleanup block says as much,
+    // and used the same distinction to decide whether to delete this run's
+    // products). Only the closing bracket did not make the distinction, so a
+    // cut that failed for a nameable reason reported "Cut cancelled": the
+    // progress dialog said the user had cancelled, the error dialog stayed
+    // shut, and lastCutError() stayed empty - the very confusion the H.26x
+    // path was fixed for.
+    const QString failure = mpThreadTaskPool->lastFailureMessage();
+    if (failure.isEmpty()) {
+      finishCutOperation(CutOutcome::Cancelled, tr("Cut cancelled"));
+    } else {
+      finishCutOperation(CutOutcome::Failed, tr("Cut failed"),
+                         tr("The cut could not be completed:\n\n%1").arg(failure));
+    }
   }
 }
 

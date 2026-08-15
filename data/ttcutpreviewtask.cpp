@@ -89,6 +89,22 @@ void TTCutPreviewTask::onUserAbort()
     QMutexLocker lock(&mSmartCutMutex);
     if (mpActiveSmartCut) mpActiveSmartCut->requestAbort();
   }
+
+  // Forward to the nested MPEG-2 video task. TTThreadTaskPool::onUserAbortRequest()
+  // broadcasts over mTaskQueue only, and startNested() deliberately keeps its
+  // task out of that queue - so cutVideoTask never learned of a cancel, even
+  // though its own abort check (TTCutVideoTask::operation) has been in place
+  // all along. Measured before this: a cancel armed 36 ms into a clip still
+  // let that clip finish 2.4 s later, and only clip 2 was skipped.
+  //
+  // No mutex, unlike mpActiveSmartCut above: that pointer is created and
+  // destroyed by the worker while this runs on the GUI thread, whereas
+  // cutVideoTask is allocated in the constructor and freed in the destructor,
+  // so it is valid for this task's whole lifetime. onUserAbort() only sets
+  // flags (its own and the shared cut stream's), which is the same cross-thread
+  // contract TTCutVideoTask and TTCutTask already rely on.
+  if (cutVideoTask != 0) cutVideoTask->onUserAbort();
+
   abort();
 }
 
@@ -121,6 +137,16 @@ void TTCutPreviewTask::operation()
 	int  iPos;
 	bool hasAudio   = false;
 	int  numPreview = mpPreviewCutList->count() / 2 + 1;
+
+	// Report the start HERE, not after the Smart Cut engine has been built.
+	// The window is disabled the moment the pool emits its Init, but the
+	// progress dialog only appears once a task reports Start - and the
+	// TTESSmartCut::initialize() below parses the whole elementary stream,
+	// which its own comment describes as running "for seconds on a real
+	// recording". Reporting afterwards left the application locked and silent
+	// for that whole time. Same defect as TTFrameSearchTask had, same fix:
+	// everything this line needs (numPreview) is already known.
+	onStatusReport(this, StatusReportArgs::Start, tr("create cut preview clips"), numPreview);
 
 	// Detect stream type from first cut item
 	TTVideoStream* firstStream = mpCutList->at(0).avDataItem()->videoStream();
@@ -214,8 +240,6 @@ void TTCutPreviewTask::operation()
 	QElapsedTimer totalTimer;
 	totalTimer.start();
 
-	onStatusReport(this, StatusReportArgs::Start, tr("create cut preview clips"), numPreview);
-
   for (int i = 0; i < numPreview; i++) {
     if (isAborted())
       // Message-only constructor deliberately: the (caller, line) overload
@@ -278,10 +302,12 @@ void TTCutPreviewTask::operation()
       }
       hasAudio = (tmpCutList->at(0).avDataItem()->audioCount() > 0);
     } else {
-      // For MPEG-2: use traditional cutting workflow
+      // For MPEG-2: use traditional cutting workflow.
+      // videoExt lives outside the try: the catch blocks below need it to
+      // clean up this clip's files.
+      const QString videoExt = "m2v";
       try
       {
-        QString videoExt = "m2v";
         cutVideoTask->init(createPreviewFileName(i + 1, videoExt), tmpCutList);
         // This operation() runs in a pool thread; startNested() keeps the
         // pool's task queue in its own thread.
@@ -295,24 +321,45 @@ void TTCutPreviewTask::operation()
           hasAudio = true;
           // Cut the first audio track for preview (consolidated onto cutAudioTracks).
           //
-          // NOT wired to isAborted() here (unlike the H.264/H.265 path below):
-          // this MPEG-2 branch's video phase (cutVideoTask, above) already runs
-          // via TTThreadTaskPool::startNested(), which is deliberately not
-          // enqueued (see its own comment) and therefore never receives the
-          // pool's onUserAbort() broadcast — a cancel during MPEG-2 preview
-          // video generation is not currently forwarded at all. Adding the
-          // abort predicate only here, without also handling an aborted
-          // mid-track cutAudioStream (partial file cleanup, bailing out before
-          // the mux below still runs on it), would produce a worse outcome
-          // than today - a truncated audio track silently muxed into a clip
-          // reported as "created". Left as a follow-up covering the whole
-          // MPEG-2 preview branch, not attempted piecemeal here (out of this
-          // task's scope - see task-10-brief.md, which only covers the
-          // H.264/H.265 Smart Cut path).
+          // This used to pass no abort predicate on purpose. The reasoning was
+          // that the video phase above could not be cancelled either (it runs
+          // via startNested(), which keeps the task out of the pool queue that
+          // onUserAbortRequest() broadcasts over), so wiring up only the audio
+          // phase would end up muxing a truncated track into a clip still
+          // reported as "created" - worse than not cancelling at all. That was
+          // correct as long as it stayed piecemeal. It no longer applies: the
+          // cancel now reaches the video phase (TTCutPreviewTask::onUserAbort
+          // forwards to cutVideoTask), this phase polls the same flag, and both
+          // exits clean up the clip's files before leaving.
           const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
+          bool audioCutOk = true;
           mpAVData->cutAudioTracks(pvItem, {0}, videoKeepList, normalizeAcmod,
               [&](int, const QString& ext) { return createPreviewFileName(i + 1, ext); },
-              [&](int, const QString&, const QString&, bool) {});
+              // The 'ok' flag was discarded here. A failed audio cut (measured:
+              // "Audio cut failed for track 1") therefore went unnoticed and the
+              // clip was muxed and announced regardless.
+              [&](int, const QString&, const QString&, bool ok) { if (!ok) audioCutOk = false; },
+              {}, nullptr,
+              // Polled once per track and inside cutAudioStream's packet loop.
+              [this] { return isAborted(); });
+
+          // Ordering matters: a cancel arriving during the audio copy leaves a
+          // partial track behind, and cutAudioStream still finalizes the
+          // container before returning. Leaving before the mux is what keeps a
+          // truncated track from reaching a clip that then looks complete.
+          if (isAborted()) {
+            removePreviewClipFiles(i + 1, videoExt, tmpCutList, outputFile);
+            if (TTSettings::instance()->logCutPipeline())
+                qDebug() << "MPEG-2 preview audio cut aborted by user";
+            // Message-only constructor: the (caller, line) overload logs at
+            // fatal level, which would record a deliberate cancel as the most
+            // severe class of log event.
+            throw TTAbortException("user abort");
+          }
+          if (!audioCutOk) {
+            throw TTIOException(__FILE__, __LINE__,
+                tr("The audio track for preview clip %1 could not be cut.").arg(i + 1));
+          }
         }
 
         // Cut subtitle track 0 for preview (consolidated onto
@@ -371,13 +418,39 @@ void TTCutPreviewTask::operation()
               qDebug() << "MPEG-2 preview (no audio):" << outputFile;
         }
       }
-      catch (const TTException&)
+      catch (const TTAbortException&)
       {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("catched exception from cutVideoTask!"));
+        // User cancel. mErrorMessage stays EMPTY on purpose: that is how
+        // onCutPreviewAborted() tells a cancel from a failure, and a cancel
+        // must not raise the error dialog. Remove what this clip produced
+        // before the cancel landed - otherwise the preview dialog picks up a
+        // half-written clip as a valid result (same treatment as the
+        // H.264/H.265 branch gives its own intermediate files).
+        removePreviewClipFiles(i + 1, videoExt, tmpCutList, outputFile);
         delete tmpCutList;
         if (TTSettings::instance()->logCutPipeline())
-            qDebug() << "redirect exception from cutVideoTask...";
+            qDebug() << "MPEG-2 preview clip aborted by user";
+        throw;
+      }
+      catch (const TTException& e)
+      {
+        // A real failure. Until TTThreadTask::run() learned to re-raise
+        // TTException for synchronous tasks, this catch could never fire:
+        // the nested TTCutVideoTask/TTCutTask swallowed the exception and
+        // this branch ran on to mux a clip that had never been written, so
+        // the preview reported success for a run that produced nothing.
+        //
+        // Record the reason so onCutPreviewAborted() can tell it apart from a
+        // cancel and show it. Deliberately NOT the H.264 branch's "recording
+        // too damaged" wording: that branch knows the failure came out of
+        // Smart Cut, whereas anything can arrive here - a missing temp
+        // directory is not a damaged recording, and saying so would send the
+        // user looking in the wrong place.
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("catched exception from cutVideoTask: %1").arg(e.getMessage()));
+        mErrorMessage = tr("The preview could not be created:\n\n%1").arg(e.getMessage());
+        removePreviewClipFiles(i + 1, videoExt, tmpCutList, outputFile);
+        delete tmpCutList;
         throw;
       }
     }
@@ -764,6 +837,40 @@ TTCutList* TTCutPreviewTask::createPreviewCutList(TTCutList* cutList)
 		previewCutList->append(cutItem.avDataItem(), startIndex, endIndex);
 	}
 	return previewCutList;
+}
+
+/**
+ * Removes everything one MPEG-2 preview clip has written so far.
+ *
+ * The H.264/H.265 branch gets away with two QFile::remove() calls because its
+ * Smart Cut writes a single intermediate plus the muxed output. The MPEG-2
+ * branch produces one file per stream (video, audio, subtitle) and only muxes
+ * them at the very end, so a clip interrupted anywhere in between leaves up to
+ * four files behind. They must go: the preview dialog picks clips up by name,
+ * and a half-written preview_NNN.mkv - or a preview_NNN.m2v left for the next
+ * run - is indistinguishable from a complete one.
+ *
+ * Missing files are not an error here; QFile::remove() simply returns false
+ * for the phases that had not started yet.
+ */
+void TTCutPreviewTask::removePreviewClipFiles(int clipIndex, const QString& videoExt,
+                                              TTCutList* clipCutList, const QString& outputFile)
+{
+  QFile::remove(outputFile);
+  QFile::remove(createPreviewFileName(clipIndex, videoExt));
+
+  if (clipCutList == nullptr || clipCutList->count() == 0) return;
+
+  TTAVItem* avItem = clipCutList->at(0).avDataItem();
+  if (avItem == nullptr) return;
+
+  if (avItem->audioCount() > 0) {
+    TTAudioStream* audio = avItem->audioStreamAt(0);
+    if (audio != nullptr)
+      QFile::remove(createPreviewFileName(clipIndex, QFileInfo(audio->filePath()).suffix()));
+  }
+  if (avItem->subtitleCount() > 0)
+    QFile::remove(createPreviewFileName(clipIndex, "srt"));
 }
 
 /**

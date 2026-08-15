@@ -67,6 +67,8 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     QString     createOutputFilePath(const QString& videoFilePath);
     QStringList createMplexArguments(const QString& videoFilePath, const QStringList& audioFilePaths, bool escapeFileNames);
     void        deleteElementaryStreams(const QString& videoFilePath, const QStringList& audioFilePaths);
+    //! Examine one line of mplex output for silent data loss (see the .cpp).
+    void        inspectMplexLine(const QString& line);
 
     // Poll point for the cooperative abort (see requestAbort()).
     bool        checkAbort();
