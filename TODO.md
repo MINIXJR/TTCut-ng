@@ -43,6 +43,42 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     aufgeschobenen Löschungen aus diesen Abbauten ausgeführt; dorthin gehören
     die im Backtrace fehlenden Frames. **Mechanismus kohärent, nicht
     gezeigt.**
+  - **Stand 2026-08-15: der vollständige Pfad ist nachgebaut und bleibt
+    sauber.** Zwei neue Sonden schließen die Lücken, die 2026-08-13 noch
+    offen waren, beide unter ASAN auf dem Originalmaterial
+    (`03x01`, 224 949 Bilder) mit den Originalschnittgrenzen 49719..190218:
+    | Sonde | was zusätzlich im Prozess ist | Ergebnis |
+    |---|---|---|
+    | `test_preview_then_cut` | Vorschau-Dialog, `doCutPreview` mit echten Clips, `initPreview`, mpv lädt sie, modaler Abbau per `delete` | sauber, Schnitt 2810,016 s |
+    | `test_mainwindow_then_cut` | **echtes `TTCutMainWindow`** mit allen Views und Modellen, Projekt geladen, Cut-Dialog, Bedienung über die Knöpfe `pbPreview`/`pbCutAudioVideo` | sauber, Schnitt 2810,016 s |
+    Damit ist der Vorschau-Dialog als alleinige Ursache ausgeschlossen, und
+    auch das vollständige Zusammenspiel aus Hauptfenster, beiden Dialogen und
+    Schnitt zeigt nichts.
+  - **Was jetzt noch fehlt**: echte Mausereignisse. `QAbstractButton::click()`
+    löst `clicked` aus, ohne durch `QWidget::mouseReleaseEvent` zu gehen — und
+    genau dort begann der Original-Backtrace. Dazu die Zeitabhängigkeit: der
+    Absturz trat einmal in Monaten auf, ein Einzellauf trifft so etwas nicht.
+    Nächster sinnvoller Schritt wäre ein Dauerlauf des Harnisch (er ist jetzt
+    vollständig) oder echte Ereignisse per `QTest`/xdotool.
+  - **Zwei Fallen, die diese Runde gekostet hat — beide erzeugten einen
+    Absturz, der dem gesuchten ähnlich sah:**
+    1. Ein Wächter-Zeitgeber mit **rohem Zeiger** auf einen bereits gelöschten
+       Dialog feuerte im `processEvents()` von `doH264Cut` — Backtrace mit
+       `processEvents` und `doH264Cut` direkt darunter, also genau die Form,
+       auf die diese Jagd wartet. Abhilfe: `QPointer` und den Zeitgeber nach
+       `exec()` stoppen.
+    2. **`accept()` auf einer Plasma-nativen `QMessageBox` stürzt zuverlässig
+       ab** (`~QDialog` → `QDialogPrivate::setNativeDialogVisible` →
+       `QWidget::hide`), ein Knopfklick nicht. Einzelvariablen-Vergleich
+       gemessen: `PROBE_DISMISS=accept` → SEGV, `=click` → sauber. Kein
+       Produktfehler — kein Anwendungscode schließt Meldungen per `accept()`.
+  - **Harnisch-Hinweis**: erst drücken, wenn das Hauptfenster wieder
+    freigegeben ist. Ein Klick 2 s nach `openProjectFile()` (Öffnen dauert bei
+    dieser Datei 9,7 s, unter ASAN 21 s) ließ den Oberflächen-Faden über zehn
+    Minuten bei 100 % rechnen, ohne dass je ein Vorschau-Dialog erschien — mit
+    **und** ohne ASAN. Ursache nicht geklärt; für Anwender nicht erreichbar,
+    weil das Fenster währenddessen deaktiviert ist.
+
   - **Vier ASAN-Läufe am 2026-08-13, alle sauber** — die Spur ist damit
     eingegrenzt, nicht bestätigt:
     | Lauf | enthält | Ergebnis |
