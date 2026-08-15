@@ -473,6 +473,48 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Gleichbild-Suche baute den Bildindex ein zweites Mal** → **GELÖST
+  (2026-08-15)**; der TODO-Punkt, aus dem das kam („`TTSearchTask` trägt nichts
+  zum Fortschritt bei"), **beruhte auf einer falschen Zählung**
+  - Behauptet war: `TTFrameSearchTask` melde „1× Start und 3× Step für eine
+    ganze Suche", der Balken bewege sich deshalb kaum. Beides falsch. Die
+    Zählung stammte aus einer Stichprobe, der Satz über den Balken war eine
+    **Ableitung daraus, keine Beobachtung** — in der Oberfläche hat das nie
+    jemand gesehen. Neue Sonde `tools/diag/test_framesearch_progress` (führt
+    einen echten `TTFrameSearchTask` synchron aus und stempelt jede
+    Statusmeldung): die Vergleichsschleife meldet **einen `Step` pro Bild**,
+    auf echtem Material 2251 Stück, größte Lücke im Millisekundenbereich.
+  - Was die Messung stattdessen fand: zwischen `Start` und dem ersten
+    verglichenen Bild lagen auf einer 224 930-Bilder-Aufnahme **5553 ms ohne
+    jede Meldung** — 48 % der Laufzeit. Ursache war doppelte Arbeit, nicht
+    fehlende Meldung: `initFrameSearch()` übernahm für den **Referenz**-Strom
+    einen vorhandenen Bildindex (`TTH26xVideoStream::provideFrameIndexTo()`),
+    der **Such**-Strom rief 110 Zeilen weiter unten bedingungslos
+    `buildFrameIndex()` — ein voller zweiter Dateiscan desselben Materials,
+    dessen Index die Anwendung beim Öffnen schon gebaut hatte (dort 5506 ms,
+    von der Sonde getrennt ausgewiesen).
+  - Fix: derselbe Übernahmeversuch auch für den Suchstrom, mit Rückfall auf
+    den Scan, wenn der Strom noch keinen Index hat (anderes Element, nie
+    geöffnet). Eine Datei, `data/ttframesearchtask.cpp`.
+  - Belege vorher → nachher, `found index` als Gegenprobe unverändert:
+
+    | Material | Vorbereitung | Laufzeit | `found index` | Steps |
+    |---|---|---|---|---|
+    | echt, 224 930 Bilder | 5553 → **199 ms** | 11 464 → 5864 ms | 180 = 180 | 2251 |
+    | Tux H.264 1080p | 78 → 71 ms | 2997 → 3054 ms | 600 = 600 | 1451 |
+    | Tux HEVC 4K | 608 → 495 ms | 22 987 → 22 435 ms | 600 = 600 | 1450 |
+    | Tux MPEG-2 576i | 3 → 3 ms | 886 → 876 ms | 300 = 300 | 701 |
+
+    MPEG-2 ist nicht betroffen: dort läuft kein `TTFFmpegWrapper`, der
+    `TTMpeg2Decoder` nutzt die Listen des Stroms. Der HEVC-Rest von 495 ms ist
+    die Dekodierung des 4K-Referenzbildes, nicht der Index.
+  - **Nicht angefasst und kein Fehler:** die Schwarzbild-/Szenen-/Logo-Suche
+    (`TTSearchTask`) meldet bewusst nicht an den Dialog. Sie sendet ihr eigenes
+    `progress(int)` alle ~20 Bilder in die Statuszeile und hat ihren
+    Abbrechen-Knopf im Navigationsbereich; ein Dialog erscheint dort gar nicht,
+    weil `TTProgressBar` erst bei `Start` oder `Step` sichtbar wird. Der alte
+    TODO-Text warf beide Suchen zusammen.
+
 - **Der „Puls" des Fortschrittsbalkens bewegte sich nicht** → **GELÖST
   (2026-08-15)**
   - War: Nach 5 s ohne `Step` schaltet `TTProgressBar` auf `setRange(0, 0)`

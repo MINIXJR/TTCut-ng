@@ -269,19 +269,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     (`…/2023-10-19.02.32.5-0.rec/00001.ts`), Ausschnitt und ProjectX-Ausgabe
     unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/audiobug/`.
 
-- **`TTSearchTask` trägt nichts zum Fortschritt bei** (Restpunkt aus dem
-  Suchbefund vom 2026-08-15; der Hauptteil ist mit `0905aace` behoben)
-  - Behoben ist die Verzögerung: Such- und Vorschau-Aufgabe melden ihren Start
-    jetzt **vor** der teuren Vorbereitung. Gemessen vorher/nachher: bei der
-    Suche zweimal 13 s zwischen Sperre und Dialog, danach dieselbe Sekunde.
-  - Offen bleibt die Aussagekraft: **`TTSearchTask` (der Koordinator) sendet
-    keine einzige Statusmeldung** (0× Init/Start/Step/Finished/Exit), nur
-    `TTFrameSearchTask` meldet — und dort ist es **1× Start und 3× Step für
-    eine ganze Suche**. Der Balken bewegt sich also kaum, obwohl er jetzt
-    rechtzeitig erscheint. Wer es angeht: der Koordinator kennt die
-    Batch-Aufteilung und wäre die natürliche Stelle für einen Fortschritt über
-    alle Teil-Dekoder.
-
 - **H.265-UHD: Schieber-Bewegung rechnet im Oberflächen-Faden, Programm
   reagiert minutenlang nicht; danach Absturz (SIGABRT)** (GUI-Abnahme
   2026-08-15; vorbestehend — die Frame-Navigation ist von

@@ -44,6 +44,28 @@ Daneben stehen zwei Analysen, die **kein** Bild dekodieren und deshalb nicht von
 münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header) und
 `TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel).
 
+Und eine Bildanalyse steht **ausserhalb** dieser Familie: die Gleichbild-Suche
+`TTFrameSearchTask` (`data/ttframesearchtask.cpp`). Sie erbt direkt von
+`TTThreadTask`, läuft im `mpThreadTaskPool` statt im Stream-Point-Pool, wird vom
+CutOut-Fenster über `TTAVData::onDoFrameSearch()` ausgelöst und vergleicht
+YUV-Ebenen ganzer Bilder, statt ein Prädikat auf I-Bilder anzuwenden — anderer
+Algorithmus, eigene Schleife, eigener Dekoder. Zwei Unterschiede im Melde- und
+Index-Verhalten, die beim Lesen der Familie oben leicht falsch übertragen
+werden:
+
+- **Meldung:** `TTFrameSearchTask` meldet an den Fortschrittsdialog (`Start` und
+  ein `Step` **pro verglichenem Bild**; gemessen 2251 Steps auf 224 930 Bildern,
+  `tools/diag/test_framesearch_progress`). Die drei gerichteten Suchen oben tun
+  das **nicht** — sie senden ihr eigenes `progress(int)` alle ~20 Bilder in die
+  Statuszeile und haben ihren Abbrechen-Knopf im Navigationsbereich; ein
+  Fortschrittsdialog erscheint bei ihnen gar nicht, weil `TTProgressBar` erst
+  bei `Start` oder `Step` sichtbar wird.
+- **Bildindex:** beide Ströme der Gleichbild-Suche übernehmen einen vorhandenen
+  Index über `TTH26xVideoStream::provideFrameIndexTo()` und scannen nur, wenn
+  keiner da ist. Der Suchstrom tat das bis 2026-08-15 nicht und scannte immer —
+  5553 ms von 11 464 ms Suchlaufzeit auf echtem Material, siehe
+  `docs/completed-work.md`.
+
 **Der Bildindex wird wiederverwendet, wo es einen gibt.** Jeder Aufruf zieht ihn
 aus dem Vorschau-Wrapper
 (`currentFrame->videoWindow()->ffmpegWrapper()->frameIndex()`) und reicht ihn als

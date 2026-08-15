@@ -6,6 +6,14 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Fixed
 
+- **Searching for the same frame is about twice as fast.** The search opened
+  the stream a second time and scanned it from end to end to build a frame
+  index the application had already built when the file was opened. On a
+  90-minute recording that scan took 5.5 of the 11.5 seconds a search needed,
+  with a progress dialog that had nothing to report meanwhile. The search now
+  reuses the existing index and falls back to scanning only when there is none.
+  Results are unchanged - verified frame for frame on four recordings.
+
 - **The progress bar's pulse moves again.** When a step takes longer than five
   seconds the bar switches to a moving "still working" indicator - but on KDE
   it stood still and only showed static stripes. Cause was a one-line
