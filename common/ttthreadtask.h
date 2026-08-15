@@ -19,6 +19,8 @@
 #include <QObject>
 #include <QUuid>
 
+#include <atomic>
+
 #include "../common/istatusreporter.h"
 
 class TTMessageLogger;
@@ -76,6 +78,11 @@ protected:
   bool mIsSynchron;
   bool mIsRunning;
   bool mIsAborted;
+  /**<the task ran to completion; written by the worker thread just before
+      finished() is emitted, read by abort() on the GUI thread. std::atomic
+      because those are two different threads - the neighbours above predate
+      that concern and are left as they are. */
+  std::atomic<bool> mIsFinished{false};
 };
 
 #endif

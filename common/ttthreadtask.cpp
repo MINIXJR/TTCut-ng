@@ -114,6 +114,26 @@ void TTThreadTask::abort()
 {
   qDebug() << "Task " << taskName() << " with UUID " << taskID() << " get's abort request. Is running " << isRunning() << " is aborted " << mIsAborted;
 
+  // A task that already ran to completion must not report itself aborted.
+  // Without this the branch below cannot tell "never started" (still in the
+  // pool queue - aborted() is right and TTCutMainWindow depends on it) from
+  // "already finished": run() sets mIsRunning = false, calls cleanUp() and
+  // emits finished(this), which then waits in the GUI thread's event queue.
+  // A cancel landing in that window saw the same two flags and added an
+  // aborted() on top, plus a second cleanUp() on the other thread - the pool
+  // logged "Last thread task aborted" and the operation reported itself as
+  // cancelled although it had completed. Measured with
+  // tools/diag/test_abort_after_finish (finished=1 aborted=1 cleanUp=2).
+  //
+  // Logged rather than swallowed: the next report of "I pressed Cancel and it
+  // ran through anyway" should be answerable from the log.
+  if (mIsFinished.load()) {
+    log->warningMsg(__FILE__, __LINE__,
+        QString("%1: abort request arrived after the task had finished - ignored")
+            .arg(taskName()));
+    return;
+  }
+
   if (!mIsRunning && !mIsAborted) {
     emit aborted(this);
     qApp->processEvents();
@@ -158,6 +178,13 @@ void TTThreadTask::run()
     }
 
      //qDebug() << "run task " << taskName() << " with uuid " << taskID();
+    // Cleared on every entry, not just constructed false: a task may be run
+    // more than once. TTCutVideoTask re-starts ONE TTCutTask instance for
+    // every cut-list entry (data/ttcutvideotask.cpp), so a completion flag
+    // left standing from the previous entry would make abort() ignore every
+    // later cancel - the long-cut-unabortable defect of 1f372cca all over
+    // again. Covered by case 3 of tools/diag/test_abort_after_finish.
+    mIsFinished.store(false);
     mIsRunning = true;
     emit started(this);
 
@@ -166,6 +193,9 @@ void TTThreadTask::run()
     mIsRunning = false;
     //qDebug() << "emit finished for task " << taskName() << " with UUID " << taskID();
     cleanUp();
+    // Set BEFORE the signal: from the moment finished() is in flight, a cancel
+    // arriving on the GUI thread is too late to mean anything (see abort()).
+    mIsFinished.store(true);
     emit finished(this);
   }
   catch(const TTAbortException&)
