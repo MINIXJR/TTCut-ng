@@ -567,8 +567,14 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   QList<int> infoExtras = h26xVs ? mExtraFrameIndices : esInfo.esDoubledPtsAus();
   QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
 
+  bool hasAudioCorruptRanges = false;
+  for (int t = 0; t < esInfo.audioTrackCount(); ++t) {
+    if (!esInfo.audioTrack(t).corruptRanges.isEmpty()) { hasAudioCorruptRanges = true; break; }
+  }
+
   if (infoExtras.isEmpty() && mAudioGapIndices.isEmpty() &&
-      esInfo.esMissingRanges().isEmpty() && esInfo.corruptFrameRanges().isEmpty())
+      esInfo.esMissingRanges().isEmpty() && esInfo.corruptFrameRanges().isEmpty() &&
+      !hasAudioCorruptRanges)
       return;
 
   double frameRate = vStream ? vStream->frameRate() : 25.0;
@@ -688,10 +694,28 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
     corruptFrames += (r.end - r.start + 1);
   }
 
+  // Cluster pass 3b: per-track audio structural damage found by the
+  // ttcut-audiofix sanitizer (.info audio_N_corrupt_ranges). Junk bytes
+  // were already removed at demux time; the marker shows WHERE, so the
+  // user can cut around the audible defect. Ranges arrive pre-clustered.
+  int audioCorruptZones = 0, audioCorruptFrames = 0;
+  for (int t = 0; t < esInfo.audioTrackCount(); ++t) {
+    const QList<TTESRange> ranges = esInfo.audioTrack(t).corruptRanges;
+    for (const TTESRange& r : ranges) {
+      int pos = qMax(0, r.start - offsetFrames);
+      clusters.append(TTStreamPoint(pos, StreamPointType::Error,
+          QString("Tonstörungen: %1–%2 (Spur %3)")
+              .arg(r.start).arg(r.end).arg(t + 1)));
+      ++audioCorruptZones;
+      audioCorruptFrames += (r.end - r.start + 1);
+    }
+  }
+
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "extra-frame clusters:" << confirmedClusters
                << "confirmed field pairs," << unconfirmedClusters << "unconfirmed,"
-               << lossZones << "loss zones," << corruptZones << "corrupt zones";
+               << lossZones << "loss zones," << corruptZones << "corrupt zones,"
+               << audioCorruptZones << "audio corrupt zones";
 
   // Nothing to report: either a clean stream or only parser-confirmed field
   // pairs. Field pairs are legitimate interlaced coding and are intentionally
@@ -702,7 +726,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
 
   // Show dialog with group listing (combined defect + gap totals)
   int totalDefects = defectVideoFrames + mAudioGapIndices.size() +
-                      lossFrames + corruptFrames;
+                      lossFrames + corruptFrames + audioCorruptFrames;
   QString msg = tr("%1 defective frames in %2 groups detected.\n")
       .arg(totalDefects)
       .arg(clusters.size());

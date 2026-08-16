@@ -194,6 +194,7 @@ diag_tool(test_pillarbox       AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_stilldisplay    AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_startcode_scan     SOURCES ${FILEBUF_SRC})
 diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
+diag_tool(test_audiofix_esinfo    SOURCES ${ESINFO_SRC})
 diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
 diag_tool(test_aspectdetect       SOURCES ${ROOT}/data/ttaspectdetect.cpp)
 diag_tool(test_analysislog        SOURCES ${ROOT}/data/ttanalysislog.cpp)
@@ -291,7 +292,7 @@ target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
-  test_startcode_scan test_esinfo test_hevc_seam test_aspectdetect
+  test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_aspectdetect
   test_analysislog test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_window_geometry

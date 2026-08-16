@@ -157,6 +157,12 @@ bool TTESInfo::load(const QString& infoFilePath)
 // ----------------------------------------------------------------------------
 bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>& values)
 {
+    // Cap list/range sizes to bound memory use against malformed .info
+    // files. Shared by the "audio" (per-track corrupt_ranges) and
+    // "warnings" (es_doubled_pts_aus, audio_gap_frames, es_missing_ranges,
+    // corrupt_frame_ranges) branches below.
+    const int maxExtraFrames = 100000;
+
     if (section == "video") {
         mVideoFile = values.value("file");
         mVideoCodec = values.value("codec");
@@ -183,6 +189,32 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             track.trimmedMs = values.value(QString("audio_%1_trimmed_ms").arg(i), "0").toInt();
             track.silenceMs = values.value(QString("audio_%1_silence_ms").arg(i), "0").toInt();
             track.removedMs = values.value(QString("audio_%1_removed_ms").arg(i), "0").toInt();
+
+            // Parse per-track structural-damage ranges (from ttcut-demux
+            // sanitizer). Format: "start-end". No duration is reported ->
+            // ms is always -1. Hardened exactly like the global
+            // corrupt_frame_ranges block below (item cap, toInt ok-checks,
+            // inverted range rejected). audio_N_junk_bytes and
+            // audio_N_dropped_frames are human diagnostics only and are
+            // intentionally NOT parsed here.
+            QString rangesStr = values.value(QString("audio_%1_corrupt_ranges").arg(i));
+            if (!rangesStr.isEmpty()) {
+                const QStringList toks = rangesStr.split(',');
+                for (const QString& tok : toks) {
+                    if (track.corruptRanges.size() >= maxExtraFrames) break;
+                    bool okStart, okEnd;
+                    int start = tok.section('-', 0, 0).toInt(&okStart);
+                    int end   = tok.section('-', 1, 1).toInt(&okEnd);
+                    if (!okStart || !okEnd) continue;
+                    if (end < start) continue;
+                    TTESRange r;
+                    r.start = start;
+                    r.end   = end;
+                    r.ms    = -1;
+                    track.corruptRanges.append(r);
+                }
+            }
+
             mAudioTracks.append(track);
         }
     }
@@ -226,11 +258,9 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
     }
     else if (section == "warnings") {
         // Parse doubled-PTS candidate AU indices (comma-separated list).
-        // Cap list size to bound memory use against malformed .info files.
         // The legacy key es_extra_frames is intentionally NOT parsed: its
         // TS-AU numbering was consumed as merged-frame numbering, which
         // drifts on PAFF streams (see spec 2026-07-19).
-        const int maxExtraFrames = 100000;
         mEsTotalAus = values.value("es_total_aus", "-1").toInt();
         QString doubledStr = values.value("es_doubled_pts_aus", "");
         if (!doubledStr.isEmpty()) {

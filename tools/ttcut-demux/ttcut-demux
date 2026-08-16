@@ -375,6 +375,30 @@ compute_audio_gap_silence_ms() {
     echo "$silence_ms"
 }
 
+# audiofix_ranges_to_video_frames JUNK_CSV CRC_CSV FPS
+# Takes "IDX@MS:BYTES,..." (junk_regions) and "IDX@MS-IDX@MS,..." or
+# "IDX@MS,..." (crc_bad_frames — a single bad frame prints without the
+# trailing "-..." part), extracts all ms positions, converts to video
+# frames (ms/1000*fps) and clusters with the same <=2s rule as
+# corrupt_frame_ranges. Output: "S-E,S-E,...".
+audiofix_ranges_to_video_frames() {
+    local junk_csv="$1" crc_csv="$2" fps="$3"
+    { echo "$junk_csv" | tr ',' '\n' | grep -oP '@\K[0-9]+' ;
+      echo "$crc_csv"  | tr ',' '\n' | grep -oP '@\K[0-9]+' ; } |
+    sort -n | awk -v fps="$fps" '
+        { f = int($1/1000*fps + 0.5); frames[n++] = f }
+        END {
+            if (n == 0) exit
+            gap = 2*fps; s = frames[0]; e = frames[0]; out = ""
+            for (i = 1; i < n; i++) {
+                if (frames[i] - e <= gap) { e = frames[i] }
+                else { out = out (out?",":"") s "-" e; s = frames[i]; e = frames[i] }
+            }
+            out = out (out?",":"") s "-" e
+            print out
+        }'
+}
+
 # Emit truncate rows for video loss the audio did NOT share.
 # For each video gap, subtract the overlapping audio-gap time; a positive
 # remainder means the audio still carries content the video lost ->
@@ -1492,6 +1516,70 @@ with open('$OUTPUT_VIDEO','rb') as f:
         fi
     fi
 
+    #########################################################################
+    # AUDIO ES SANITIZE (ttcut-audiofix)
+    # Walk each extracted audio ES frame by frame: drop junk bytes between
+    # valid frames, report CRC-damaged frames. Runs BEFORE the Rev-2 audio-gap
+    # detection/repair section below so that repair operates on structurally
+    # clean material. Placed here (after the interlace field/frame-rate
+    # correction above, not right after AC3 header repair) so the ms->video-
+    # frame conversion for audio_${i}_corrupt_ranges uses the corrected
+    # FRAME_RATE — an interlaced ES can report double (field) rate until that
+    # correction runs. Any tool failure leaves the original file untouched.
+    #########################################################################
+    declare -A AUDIOFIX_CORRUPT_RANGES AUDIOFIX_JUNK_BYTES AUDIOFIX_DROPPED
+    if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
+        if command -v ttcut-audiofix &>/dev/null; then
+            step "Checking audio ES structure..."
+            # Decimal frame rate for the ms->video-frame conversion. The Rev-2
+            # gap section further below recomputes the same value into the
+            # global FRAME_RATE_DEC from the same (by-then-unchanged) FRAME_RATE
+            # — that recompute is a harmless no-op duplicate, kept so this block
+            # doesn't have to move past AC3 header repair per the original plan.
+            _AFIX_FR_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
+            _AFIX_FR_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
+            _AFIX_FR_DEN="${_AFIX_FR_DEN:-1}"
+            FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $_AFIX_FR_NUM / $_AFIX_FR_DEN}")
+            for i in "${!AUDIO_FILES[@]}"; do
+                AF="${AUDIO_FILES[$i]}"
+                case "$AF" in *.mp2|*.ac3|*.eac3) ;; *) continue ;; esac
+                set +e
+                AFIX_OUT=$(ttcut-audiofix -a "$AF" 2>/dev/null)
+                AFIX_RC=$?
+                set -e
+                if [ "$AFIX_RC" -eq 0 ]; then
+                    info "  $(basename "$AF"): structure OK"
+                    continue
+                elif [ "$AFIX_RC" -ge 2 ]; then
+                    warn "  $(basename "$AF"): ttcut-audiofix analyze failed (rc=$AFIX_RC), leaving untouched"
+                    continue
+                fi
+                TEMP_FIXED="${AF}.sanitized"
+                set +e
+                ttcut-audiofix -f "$AF" "$TEMP_FIXED" >/dev/null 2>&1
+                FIX_RC=$?
+                set -e
+                if [ "$FIX_RC" -le 1 ] && [ -s "$TEMP_FIXED" ]; then
+                    mv "$TEMP_FIXED" "$AF"
+                    JUNK=$(echo "$AFIX_OUT" | grep -oP '^junk_regions=\K.*' || true)
+                    CRCB=$(echo "$AFIX_OUT" | grep -oP '^crc_bad_frames=\K.*' || true)
+                    AUDIOFIX_JUNK_BYTES[$i]=$(echo "$JUNK" | tr ',' '\n' | grep -oP ':\K[0-9]+' | awk '{s+=$1} END{print s+0}')
+                    AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
+                    # ms positions (junk + CRC) -> video frames, clustered (<=2s)
+                    AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
+                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes), see audio_${i}_corrupt_ranges"
+                else
+                    rm -f "$TEMP_FIXED"
+                    warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
+                fi
+            done
+            echo ""
+        else
+            warn "ttcut-audiofix not found in PATH, skipping audio ES sanitize"
+            echo ""
+        fi
+    fi
+
     # Video duration = video PTS span, NOT the container span.
     # ffprobe format=duration (CONTAINER_VIDEO_DURATION) spans the latest
     # stream end minus the earliest stream start; with DVB audio leading the
@@ -2109,6 +2197,11 @@ EOF
         if [ -n "${AC3_FIX_RESULTS[$i]:-}" ]; then
             echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
             echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
+        fi
+        if [ -n "${AUDIOFIX_CORRUPT_RANGES[$i]:-}" ]; then
+            echo "audio_${i}_corrupt_ranges=${AUDIOFIX_CORRUPT_RANGES[$i]}" >> "$OUTPUT_INFO"
+            echo "audio_${i}_junk_bytes=${AUDIOFIX_JUNK_BYTES[$i]:-0}" >> "$OUTPUT_INFO"
+            echo "audio_${i}_dropped_frames=${AUDIOFIX_DROPPED[$i]:-0}" >> "$OUTPUT_INFO"
         fi
     done
 

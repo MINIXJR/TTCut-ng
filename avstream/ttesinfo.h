@@ -23,6 +23,15 @@
 #include <QMap>
 
 // ----------------------------------------------------------------------------
+// Frame range from .info file (mid-stream gap repair / corruption reporting)
+// ----------------------------------------------------------------------------
+struct TTESRange {
+    int start;   // First affected frame index (decode order)
+    int end;     // Last affected frame index (decode order, inclusive)
+    int ms;      // Duration in milliseconds, -1 when unknown
+};
+
+// ----------------------------------------------------------------------------
 // Audio track info from .info file
 // ----------------------------------------------------------------------------
 struct TTAudioTrackInfo {
@@ -33,6 +42,8 @@ struct TTAudioTrackInfo {
     int     trimmedMs  = 0;    // Milliseconds trimmed from start (from .info audio_N_trimmed_ms)
     int     silenceMs  = 0;    // Milliseconds of silence inserted for gap-fill repair (audio_N_silence_ms)
     int     removedMs  = 0;    // Milliseconds removed to correct A/V drift (audio_N_removed_ms)
+    QList<TTESRange> corruptRanges; // structural damage the sanitizer found
+                                    // (audio_N_corrupt_ranges); ms always -1
 };
 
 // ----------------------------------------------------------------------------
@@ -57,15 +68,6 @@ struct TTDecodeErrorRegion {
     int frame;          // Approximate frame number
     QString time;       // Approximate timestamp (HH:MM:SS.FF)
     int errorCount;     // Number of errors in this region
-};
-
-// ----------------------------------------------------------------------------
-// Frame range from .info file (mid-stream gap repair / corruption reporting)
-// ----------------------------------------------------------------------------
-struct TTESRange {
-    int start;   // First affected frame index (decode order)
-    int end;     // Last affected frame index (decode order, inclusive)
-    int ms;      // Duration in milliseconds, -1 when unknown
 };
 
 // ----------------------------------------------------------------------------
