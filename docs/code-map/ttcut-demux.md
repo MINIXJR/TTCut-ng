@@ -1,5 +1,5 @@
 ---
-base_commit: 70749afedaef798312eb4f5408de3de93b8fbfae
+base_commit: e56f2587cf27d2ad66b6985db0b6d9726efaefc3
 last_verified: 2026-08-16
 sources:
   - tools/ttcut-demux/ttcut-demux
@@ -129,6 +129,7 @@ flowchart LR
 | .info `audio_gap_frames` → TTAVData | → `mAudioGapIndices`, marker visualization only ("Audio-Gap:"), NOT used for audio time correction. Emitted as frame indices relative to `first_video_pts` (`(gap_pts − first_video_pts) × fps`). |
 | .info `es_missing_ranges` / `corrupt_frame_ranges` → TTAVData → STREAMPTS | Parsed by `TTESInfo` into `mEsMissingRanges` / `mCorruptRanges` (`TTESRange`, `avstream/ttesinfo.h`), consumed by `TTAVData`'s cluster pass 3 (`data/ttavdata.cpp`) alongside the extra-frame and audio-gap passes. Ranges arrive **pre-clustered** from the demuxer for both fields (`es_missing_ranges` and `corrupt_frame_ranges` both merge raw entries `≤2s`/`2×fps` frames apart, same rule) — TTAVData only emits the marker text, it does not re-cluster. Each `es_missing_ranges` entry emits `"Videoverlust: X–Y (T s) — Audio angepasst"`; a hole `> 2 s` additionally emits a second marker at the range end, `"Signalverlust-Ende (≈T s fehlen)"`, so long outages get a distinct end-of-loss landing zone rather than only a start marker. Each `corrupt_frame_ranges` entry emits `"Bildstörungen: X–Y"` (no duration — `ms == -1`). |
 | .info `[markers]` → TTESInfo | Verbatim copy of the VDR marks file (timestamp, frame, start/stop, `*` verified). Faithful (audited 2026-07-12). |
+| TS (ORIGINAL) → subtitle export (`--subs`, default off) | Opt-in since 2026-08-16 (`--subs`/`--no-subs`, long-option shim before getopts). Reads `SUBS_INPUT_ARGS` — the PRE-repair source args saved right before the repair remux, because the repaired TS maps only `0:v:0`+`0:a?` and carries NO subtitle streams. Emptiness pre-check = byte count of a 120 s ffmpeg stream-copy sample (mid-point, then file start); ffprobe `-read_intervals` enumerates ZERO packets on real DVB subtitle streams (measured: 678 KB/10 min via `-c copy` where ffprobe saw nothing) and silently skipped every stream before. DVB bitmap → `.mks` (`-f matroska`; the `.sup` muxer accepts only PGS), SubRip → `.srt`. `.info` `[subtitles]` keeps `count=0` when export is off. |
 
 ## Assumptions, contracts & pitfalls
 

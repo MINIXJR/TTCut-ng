@@ -388,6 +388,47 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Untertitel-Export als Option — und drei Schichten vorbestehender
+  Defekte, die ihn immer leer laufen ließen** (2026-08-16, branch
+  `feature/subs-option`)
+  - **Option**: `--subs`/`--no-subs` (Default AUS, Long-Option-Shim vor
+    getopts); DVB-Bitmap → `.mks`, eingebettetes SubRip → `.srt`;
+    `[subtitles]`-Sektion der `.info` bleibt bei „aus" mit `count=0`
+    gültig. GUI-Wahl je Lauf im User-Wrapper `VDR_Demux.sh`
+    (Skripte-Repo `7dcb314`).
+  - **Drei gemessene Altdefekte** (die bisherige Immer-an-Extraktion hat
+    für DVB-UT nachweislich nie etwas geliefert):
+    1. Der „empty, skipped"-Vorab-Check nutzte `ffprobe -read_intervals`,
+       das auf realen DVB-UT-Streams NULL Pakete aufzählt, wo
+       `ffmpeg -c copy` 678 KB/10 min extrahiert (Tatort 1994x05) —
+       jeder Stream galt als leer. Fix: Byte-Zählung einer
+       120-s-ffmpeg-Stream-Copy-Probe (Mitte, dann Dateianfang).
+    2. Extraktion las aus der Timestamp-reparierten TS — die mappt nur
+       `0:v:0`+`0:a?`, enthält also gar keine UT-Streams. Fix:
+       `SUBS_INPUT_ARGS` sichert die Original-Quelle vor der Reparatur.
+    3. ffmpegs `.sup`-Muxer akzeptiert nur PGS, kein `dvb_subtitle` —
+       selbst erreichte Extraktion schrieb eine leere Datei. Fix:
+       `.mks` mit `-f matroska`.
+  - **Positiv-Beweis**: Rookie-07x11-Korpus-Demux mit `--subs` →
+    `00001_deu.mks` 1,99 MB, `.info` `count=1`; Default-Lauf: keine
+    UT-Dateien, „Subtitle export disabled"-Zeile, A/V-ES byte-identisch
+    zum `--subs`-Lauf (Slice-Messung); `gate_audiofix.sh` 22/22.
+  - **Materiallage gemessen**: 15/21 lokale Aufnahmen mit echten
+    DVB-UT-Daten (237–440 KB je 2-min-Fenster); NAS-Stichprobe (26 von
+    3296): 1× Das Erste HD mit Daten, Privatsender überwiegend ohne.
+  - **Teletext bewusst NICHT umgesetzt** (Negativbefund): Voll-Scan aller
+    3296 NAS-Aufnahmen → 43 PMT-Einträge `dvb_teletext`, davon nur 4 mit
+    Datenpaketen (VDR schrieb die PMT mit, den PID meist nicht), und
+    **keiner** davon enthält UT-Tafeln — ccextractor „No captions" und
+    ffmpeg/libzvbi 0 Bytes selbst mit `-txt_page all` auf allen 4
+    (ProSieben/Nitro 2013, SIXX 2015, arte HD 2015). Wer Teletext erneut
+    erwägt: erst neues Material mit belegten UT-Tafeln beschaffen.
+  - **Messfalle für die Nachwelt**: `ffprobe -read_intervals`/-Paket-
+    Aufzählung ist auf DVB-Untertitel-Streams blind (0 Pakete bei
+    nachweislich vollen Streams, alle Varianten inkl. `-probesize 8M`,
+    `-show_packets`) — Datenpräsenz IMMER per
+    `ffmpeg -c copy -f mpegts - | wc -c` messen.
+
 - **ttcut-demux reicht beschädigte Tonrahmen durch, statt sie zu ersetzen**
   → **GEFIXT (2026-08-16, branch `feature/ttcut-audiofix`, Commits
   `a27954e7`..`70749afe`)**

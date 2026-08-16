@@ -6,6 +6,20 @@ All notable changes to TTCut-ng are documented in this file.
 
 ### Features
 
+- **ttcut-demux subtitle export is now a per-run option — and actually
+  works.** New flags `--subs` / `--no-subs` (default: off) control whether
+  subtitle streams are exported alongside the elementary streams: DVB
+  bitmap subtitles as a Matroska subtitle file (`.mks`, stream copy),
+  embedded SubRip tracks as `.srt`. Three defects had made the previous
+  always-on extraction silently produce nothing: the emptiness pre-check
+  used an ffprobe call that enumerates zero packets on real DVB subtitle
+  streams, extraction read from the timestamp-repaired TS which carries no
+  subtitle streams at all (`-map 0:v:0 -map 0:a?`), and the `.sup`
+  container cannot hold `dvb_subtitle` in the first place. All three are
+  fixed; the pre-check now byte-counts an ffmpeg stream-copy sample of the
+  original source. Note the behavior change: without `--subs` no subtitle
+  files are written anymore.
+
 - **ttcut-demux now repairs damaged audio elementary streams at demux time**
   instead of passing the damage through. A new standalone tool,
   `ttcut-audiofix`, walks each MP2/AC3/E-AC3 audio track frame by frame,

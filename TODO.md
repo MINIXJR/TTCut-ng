@@ -167,6 +167,21 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
+- **DVB-Bitmap-Untertitel entlang der Schnittliste in TTCut-ng schneiden**
+  (Folgevorhaben aus dem Untertitel-Export 2026-08-16; vereinbart, nicht
+  begonnen)
+  - ttcut-demux exportiert DVB-UT seit 2026-08-16 als `.mks` (`--subs`);
+    TTCut-ng selbst schneidet aber nur SRT (`TTSrtSubtitleStream`). Für
+    Bitmap-UT fehlt: Stream-Klasse, Schnitt entlang der Cut-Liste
+    (PTS-Fenster-Copy wie beim Audio-Stream-Copy-Schnitt) und Mux in die
+    Ausgabe-MKV.
+  - Referenz-Mechanik: `mkvmerge --split parts:START-END` schneidet die
+    UT-Spur verlustfrei (siehe `/home/fpwild/Skripte/Ts2MKV.sh`, dort
+    produktiv im Einsatz); in TTCut-ng wäre der libav-Weg analog zum
+    Audio-Schnitt (Pakete im Zeitfenster kopieren, PTS versetzen).
+  - Materiallage (gemessen 2026-08-16): 15 von 21 lokalen Aufnahmen tragen
+    echte DVB-UT-Daten; öffentlich-rechtliche Sender praktisch immer.
+
 - **`setEncoderCodec()`-Early-Return lässt `workingOutputContainer` und
   `Mpeg2Muxer` auseinanderlaufen** (2026-08-16, gemessen beim
   ttcut-audiofix-Realfall-Gate; dokumentiert im Kommentar von

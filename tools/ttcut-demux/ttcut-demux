@@ -9,7 +9,7 @@
 # Multi-core optimization: Video and audio streams are extracted in parallel,
 # audio padding also runs in parallel for all tracks.
 #
-# Usage: ttcut-demux [-e] [-A] [-n name] <input.ts> [output_dir]
+# Usage: ttcut-demux [-e] [-A] [--subs|--no-subs] [-n name] <input.ts> [output_dir]
 #
 # Output: elementary streams (.264/.265/.m2v + audio files + .info).
 # -e is accepted for compatibility (ES demux has always been the TTCut
@@ -731,13 +731,28 @@ detect_segment_boundaries() {
 ES_MODE=true   # ES demux is the only mode; -e is kept as a no-op for compatibility
 AC3FIX=true
 OUTPUT_NAME=""
-while getopts "ehAn:" opt; do
+EXPORT_SUBS=false   # subtitle export is opt-in (--subs); default: skip extraction
+# Long-option shim: getopts only handles short options, so map the
+# documented long forms onto their short equivalents before parsing.
+_SHIM_ARGS=()
+for _a in "$@"; do
+    case "$_a" in
+        --subs)    _SHIM_ARGS+=("-s") ;;
+        --no-subs) _SHIM_ARGS+=("-S") ;;
+        *)         _SHIM_ARGS+=("$_a") ;;
+    esac
+done
+set -- "${_SHIM_ARGS[@]}"
+unset _SHIM_ARGS _a
+while getopts "ehAsSn:" opt; do
     case $opt in
         e) ES_MODE=true ;;
         A) AC3FIX=false ;;
+        s) EXPORT_SUBS=true ;;
+        S) EXPORT_SUBS=false ;;
         n) OUTPUT_NAME="$OPTARG" ;;
         h)
-            echo "Usage: $0 [-e] [-A] [-n name] <input.ts> [output_dir]"
+            echo "Usage: $0 [-e] [-A] [--subs|--no-subs] [-n name] <input.ts> [output_dir]"
             echo ""
             echo "Demux and normalize H.264/H.265/MPEG-2 TS files for TTCut."
             echo "Similar to ProjectX for MPEG-2."
@@ -749,6 +764,10 @@ while getopts "ehAn:" opt; do
             echo "  -e  Elementary stream mode (the default; kept for compatibility)"
             echo "  -A  Disable AC3 header repair (enabled by default)"
             echo "      Fixes corrupt acmod field in DVB AC3 streams (stereo->5.1)"
+            echo "  --subs / -s     Export subtitle streams (DVB bitmap -> .mks,"
+            echo "                  embedded SubRip -> .srt). Default: off."
+            echo "  --no-subs / -S  Explicitly disable subtitle export (the default;"
+            echo "                  wrappers pass one of the two so runs are explicit)"
             echo "  -n  Set output basename (default: input filename)"
             echo "      Example: -n 'Tatort' → Tatort.264, Tatort_deu.ac3, Tatort.info"
             echo ""
@@ -771,7 +790,7 @@ shift $((OPTIND-1))
 
 # Check arguments
 if [ -z "$1" ]; then
-    echo "Usage: $0 [-e] [-A] [-n name] <input.ts> [output_dir]"
+    echo "Usage: $0 [-e] [-A] [--subs|--no-subs] [-n name] <input.ts> [output_dir]"
     echo "Use -h for help."
     exit 1
 fi
@@ -1083,6 +1102,15 @@ if [ ${#AUDIO_TRIM_SECS[@]} -gt 0 ]; then
 fi
 
 # Repair timestamps: generate new PTS, ignore corrupt DTS, shift to start at 0
+#
+# The repair remux maps only video+audio (-map 0:v:0 -map 0:a?), so the
+# repaired TS carries NO subtitle streams. Subtitle extraction must read the
+# pre-repair source - keep its input args here, from before $INPUT and
+# $FFMPEG_INPUT_ARGS are repointed at the repaired file below. MEASURED
+# 2026-08-16: extracting from the repaired file yielded "empty, skipped" on
+# every recording, while the same stream on the original carries hundreds of
+# KB per 5 min - DVB subtitle export never worked since the repair step.
+SUBS_INPUT_ARGS=("${FFMPEG_INPUT_ARGS[@]}")
 FFMPEG_LOG="$OUTDIR/.ffmpeg_repair.log"
 _CLEANUP_FILES+=("$FFMPEG_LOG")
 if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
@@ -2041,9 +2069,15 @@ with open('$OUTPUT_VIDEO','rb') as f:
     fi
     echo ""
 
-    # 3. Try to extract subtitles
+    # 3. Try to extract subtitles (opt-in via --subs; an empty SUBTITLE_FILES
+    # array keeps the .info [subtitles] section valid with count=0)
     SUBTITLE_FILES=()
-    if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+    if [ "$EXPORT_SUBS" != true ]; then
+        if [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
+            info "Subtitle export disabled (${#SUBTITLE_STREAMS[@]} stream(s) present, use --subs to extract)"
+            echo ""
+        fi
+    elif [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
         info "Attempting subtitle extraction..."
 
         # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
@@ -2059,26 +2093,39 @@ with open('$OUTPUT_VIDEO','rb') as f:
         for sub in "${SUBTITLE_STREAMS[@]}"; do
             IFS=':' read -r idx codec lang <<< "$sub"
 
-            # Quick check: does the stream contain data? (sample 120s from mid-point)
-            sub_packets=$(timeout 30 ffprobe -v error -read_intervals "${sub_midpoint}%+120" \
-                -select_streams 0:$idx -show_entries packet=size \
-                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
-            if [ -z "$sub_packets" ]; then
+            # Quick check: does the stream contain data? Sample 120s at the
+            # mid-point and, if that yields nothing, 120s from the start.
+            # MEASURED 2026-08-16: ffprobe -read_intervals enumerates ZERO
+            # packets on real DVB subtitle streams that a -c copy extract
+            # proves non-empty (678 KB/10 min) - the old ffprobe-based check
+            # therefore skipped every such stream as "empty". Byte-counting
+            # an ffmpeg stream-copy sample is the reliable probe.
+            sub_bytes=$(timeout 90 ffmpeg -v error -ss "$sub_midpoint" -t 120 \
+                "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f mpegts - 2>/dev/null | wc -c)
+            if [ "${sub_bytes:-0}" -eq 0 ]; then
+                # Subs may simply be absent during the mid-point window.
+                sub_bytes=$(timeout 90 ffmpeg -v error -t 120 \
+                    "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f mpegts - 2>/dev/null | wc -c)
+            fi
+            if [ "${sub_bytes:-0}" -eq 0 ]; then
                 info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
                 continue
             fi
 
             case "$codec" in
                 dvb_subtitle|dvbsub)
-                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.sup"
-                    info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap)"
-                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx -c copy "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    # Matroska subtitle-only container (.mks): ffmpeg's sup
+                    # muxer only accepts PGS, not dvb_subtitle (measured) -
+                    # the old .sup output could never be written.
+                    OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.mks"
+                    info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap, matroska)"
+                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f matroska "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
                     ;;
                 *)

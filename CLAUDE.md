@@ -228,6 +228,7 @@ Demux tool for H.264/H.265 TS files:
 - VDR marks support (loads .marks file)
 - Automatic filler NALU stripping for H.264/H.265 (via ffmpeg `filter_units` bitstream filter)
 - Audio ES sanitize per track via `ttcut-audiofix` (frame-walk sanitizer for MP2/AC3/E-AC3): removes junk bytes between valid frames, reports CRC-bad frames without touching them; reported ranges surface as per-track "Tonstörungen:" markers in TTCut-ng
+- Subtitle export as a per-run option (`--subs`/`--no-subs`, default off): DVB bitmap subtitles → `.mks` (Matroska, stream copy), embedded SubRip → `.srt`; sources the ORIGINAL TS (the repaired TS carries no subtitle streams)
 
 **VDR Multi-File Support:**
 - VDR splits recordings into 2GB segments: 00001.ts, 00002.ts, ...
