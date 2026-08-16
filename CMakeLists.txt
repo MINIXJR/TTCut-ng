@@ -349,5 +349,10 @@ add_executable(ttcut-ac3fix tools/ttcut-ac3fix/ttcut-ac3fix.c)
 set_target_properties(ttcut-ac3fix PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/ttcut-ac3fix)
 
+add_executable(ttcut-audiofix tools/ttcut-audiofix/ttcut-audiofix.c)
+set_target_properties(ttcut-audiofix PROPERTIES
+  C_STANDARD 99
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/ttcut-audiofix)
+
 add_subdirectory(tools/diag)
 add_subdirectory(tools/ttcut-burst-probe)

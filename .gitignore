@@ -41,6 +41,7 @@ core.*
 # Compiled tool binaries
 tools/ttcut-ac3fix/ttcut-ac3fix
 tools/ttcut-pts-analyze/ttcut-pts-analyze
+tools/ttcut-audiofix/ttcut-audiofix
 tools/diag/test_*
 tools/diag/dump_mpeg2_fields
 tools/diag/probe_copystart
