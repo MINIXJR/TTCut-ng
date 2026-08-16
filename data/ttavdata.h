@@ -108,6 +108,7 @@ class TTAVData : public QObject
     void      setPendingAudioLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs);
     void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
+    void      setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs);
     void      doCutPreview(TTCutList* cutList);
 
     int       totalProcess() const;
@@ -302,6 +303,7 @@ class TTAVData : public QObject
 
     // Pending delay overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
+    QMap<QPair<TTAVItem*, int>, int> mPendingSubtitleDelays;
 
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;

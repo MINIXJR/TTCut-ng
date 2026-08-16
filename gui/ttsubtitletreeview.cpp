@@ -25,6 +25,7 @@
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QMenu>
+#include <QSpinBox>
 #include <QStyle>
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -76,6 +77,7 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
     disconnect(this,     &TTSubtitleTreeView::removeItem,       mpAVItem, &TTAVItem::onRemoveSubtitleItem);
     disconnect(this,     &TTSubtitleTreeView::swapItems,        mpAVItem, &TTAVItem::onSwapSubtitleItems);
     disconnect(this,     &TTSubtitleTreeView::languageChanged,  mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
+    disconnect(this,     &TTSubtitleTreeView::delayChanged,     mpAVItem, &TTAVItem::onSubtitleDelayChanged);
 
     disconnect(mpAVItem, &TTAVItem::subtitleItemAppended,        this, &TTSubtitleTreeView::onAppendItem);
     disconnect(mpAVItem, qOverload<int>(&TTAVItem::subtitleItemRemoved), this, &TTSubtitleTreeView::onItemRemoved);
@@ -91,6 +93,7 @@ void TTSubtitleTreeView::onAVDataChanged(const TTAVItem* avData)
   connect(this,     &TTSubtitleTreeView::removeItem,        mpAVItem, &TTAVItem::onRemoveSubtitleItem);
   connect(this,     &TTSubtitleTreeView::swapItems,         mpAVItem, &TTAVItem::onSwapSubtitleItems);
   connect(this,     &TTSubtitleTreeView::languageChanged,   mpAVItem, &TTAVItem::onSubtitleLanguageChanged);
+  connect(this,     &TTSubtitleTreeView::delayChanged,      mpAVItem, &TTAVItem::onSubtitleDelayChanged);
 
   onReloadList(mpAVItem);
 }
@@ -120,7 +123,23 @@ void TTSubtitleTreeView::onAppendItem(const TTSubtitleItem& item)
 
   treeItem->setText(0, item.getFileName());
   treeItem->setText(1, item.getLength());
-  treeItem->setText(2, item.getDelay());
+
+  QSpinBox* delaySpin = new QSpinBox();
+  delaySpin->setRange(-9999, 9999);
+  delaySpin->setSuffix(" ms");
+  delaySpin->setToolTip(tr("Positive values show the subtitles later, negative values earlier (mkvmerge convention)"));
+  delaySpin->setValue(item.getDelayMs());
+  subtitleListView->setItemWidget(treeItem, 2, delaySpin);
+
+  connect(delaySpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, delaySpin](int value) {
+    for (int row = 0; row < subtitleListView->topLevelItemCount(); row++) {
+      QTreeWidgetItem* rowItem = subtitleListView->topLevelItem(row);
+      if (subtitleListView->itemWidget(rowItem, 2) == delaySpin) {
+        emit delayChanged(row, value);
+        break;
+      }
+    }
+  });
 
   QComboBox* combo = createLanguageCombo(item.getLanguage());
   subtitleListView->setItemWidget(treeItem, 3, combo);

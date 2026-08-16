@@ -241,6 +241,10 @@ target_link_libraries(test_h26xcut_abort PRIVATE ttcut-core)
 diag_tool(test_cut_outcome     AV WIDGETS SOURCES)
 diag_tool(test_partial_track     AV WIDGETS SOURCES)
 target_link_libraries(test_partial_track PRIVATE ttcut-core)
+# Drives TTAVData::cutSubtitleTracks() and planAudioCut() directly, so it
+# needs the whole core library (same rationale as test_h26xcut_abort).
+diag_tool(test_subtitle_delay    AV WIDGETS SOURCES)
+target_link_libraries(test_subtitle_delay PRIVATE ttcut-core)
 target_link_libraries(test_cut_outcome PRIVATE ttcut-core)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
@@ -296,7 +300,7 @@ add_custom_target(diag DEPENDS
   test_analysislog test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_window_geometry
-  test_progressestimator)
+  test_progressestimator test_subtitle_delay)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

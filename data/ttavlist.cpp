@@ -162,6 +162,15 @@ void TTAVItem::onSubtitleLanguageChanged(int index, const QString& language)
   mpSubtitleList->update(item, updated);
 }
 
+void TTAVItem::onSubtitleDelayChanged(int index, int delayMs)
+{
+  if (index < 0 || index >= subtitleCount()) return;
+  TTSubtitleItem item = mpSubtitleList->at(index);
+  TTSubtitleItem updated(item);
+  updated.setDelayMs(delayMs);
+  mpSubtitleList->update(item, updated);
+}
+
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */

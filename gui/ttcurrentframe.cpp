@@ -244,6 +244,11 @@ void TTCurrentFrame::clearSubtitleStream()
   mpegWindow->clearSubtitleStream();
 }
 
+void TTCurrentFrame::setSubtitleDelay(int delayMs)
+{
+  mpegWindow->setSubtitleDelay(delayMs);
+}
+
 void TTCurrentFrame::refreshCurrentFrame()
 {
   // Don't fight mpv while it owns the display — avoid tearing/flicker
@@ -690,6 +695,9 @@ void TTCurrentFrame::onPlayVideo()
   // the source timeline, which both the temp MKV and the direct MPEG-2 ES share.
   if (mAVItem->subtitleCount() > 0) {
     mPlayer->setSubtitleFile(mAVItem->subtitleStreamAt(0)->filePath());
+    // Same sign as mpv's --sub-delay (positive = show later), read fresh from
+    // the subtitle list on every PLAY so spinbox edits take effect.
+    mPlayer->setSubtitleDelay(mAVItem->subtitleListItemAt(0).getDelayMs());
   } else {
     mPlayer->clearSubtitleFile();
   }

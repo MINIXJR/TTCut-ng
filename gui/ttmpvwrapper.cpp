@@ -85,8 +85,11 @@ void TTMpvWrapper::load(const QString& file, double startSec,
     loadArgs << QString("--start=%1").arg(startSec, 0, 'f', 3);
   if (!audioFile.isEmpty())
     loadArgs << QString("--audio-file=%1").arg(audioFile);
-  if (!mSubtitleFile.isEmpty())
+  if (!mSubtitleFile.isEmpty()) {
     loadArgs << QString("--sub-file=%1").arg(mSubtitleFile);
+    if (mSubtitleDelayMs != 0)
+      loadArgs << QString("--sub-delay=%1").arg(mSubtitleDelayMs / 1000.0, 0, 'f', 3);
+  }
   // IMMER pausiert laden. mpv führt den --start-Seek beim Laden aus und bleibt
   // auf dem Zielframe stehen. Bei sofortigem Abspielen rendert die Render-API
   // während des Seeks kurz den Lande-Keyframe (= Frame vor dem Cut-In, also
@@ -172,6 +175,12 @@ void TTMpvWrapper::setSubtitleFile(const QString& path)
 void TTMpvWrapper::clearSubtitleFile()
 {
   mSubtitleFile.clear();
+  mSubtitleDelayMs = 0;
+}
+
+void TTMpvWrapper::setSubtitleDelay(int delayMs)
+{
+  mSubtitleDelayMs = delayMs;
 }
 
 // ---------------------------------------------------------------------------

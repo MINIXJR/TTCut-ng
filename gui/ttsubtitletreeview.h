@@ -41,6 +41,7 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
     void removeItem(int index);
     void swapItems(int oldIndex, int newIndex);
     void languageChanged(int index, const QString& language);
+    void delayChanged(int index, int delayMs);
 
   public slots:
     void onAVDataChanged(const TTAVItem* avData);

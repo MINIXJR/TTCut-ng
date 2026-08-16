@@ -56,6 +56,7 @@ public:
   void   setSpeed(double factor);            // ±-Faktor; <0 → play-dir=backward
   void   setSubtitleFile(const QString& path);
   void   clearSubtitleFile();
+  void   setSubtitleDelay(int delayMs);
 
   double playbackPosition() const            { return mPlaybackPosition; }
 
@@ -78,6 +79,7 @@ private slots:
 private:
   ITTMpvBackend* mBackend          = nullptr;
   QString        mSubtitleFile;
+  int            mSubtitleDelayMs = 0;  // mpv --sub-delay sign: positive = show later
   double         mPlaybackPosition = 0.0;
   bool           mPlaying          = false;
   bool           mAtEnd            = false;

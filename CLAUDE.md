@@ -149,7 +149,7 @@ For version-specific changes, see `CHANGELOG.md`.
 
 ### Per-Track Audio Delay & Audio-Drift
 
-- **Audio delay**: Editable per-track delay (±9999 ms, QSpinBox in audio list) applied during audio cutting (keepList PTS offset) for all codecs
+- **Audio delay**: Editable per-track delay (±9999 ms, QSpinBox in audio list) applied during audio cutting (keepList PTS offset) for all codecs. Sign follows the mkvmerge/mpv convention since v0.81.0: positive = track plays later (source window shifts earlier)
 - **Audio-Drift column**: Cut list shows accumulated audio frame boundary drift per cut, calculated during preview (first audio track only)
 - **TTESInfo**: Parses per-track `audio_N_trimmed_ms` and `audio_N_first_pts` from `.info` files
 - **Persistence**: Delay stored in `.ttcut` project file XML (`<Delay>` element, optional)
@@ -172,12 +172,13 @@ Key classes:
 - **Auto-loading**: SRT files matching the video filename are automatically loaded
 - **Preview overlay**: Subtitles displayed in the main video frame using QPainter
 - **mpv preview**: Subtitles passed to mpv via `--sub-file` parameter
-- **Cutting**: Subtitle streams are cut along with video/audio during editing
+- **Cutting**: Subtitle streams are cut along with video/audio during editing (`TTAVData::cutSubtitleTracks`)
+- **Subtitle delay**: Editable per-track delay (±9999 ms, QSpinBox in subtitle list, mkvmerge sign convention) applied to the overlay lookup, mpv playback (`--sub-delay`), the cut timestamps, and persisted as `<Delay>` in the `.ttcut` project file
 
 Key classes:
 - **TTSrtSubtitleStream** (avstream/ttsrtsubtitlestream.h): SRT file parser and stream handler
 - **TTSubtitleHeaderList** (avstream/ttsubtitleheaderlist.h): Manages subtitle entries with time-based search
-- **TTCutSubtitleTask** (data/ttcutsubtitletask.h): Task for cutting subtitle streams
+- **TTAVData::cutSubtitleTracks** (data/ttavdata.cpp): Cuts subtitle tracks along the keep list (replaced the former TTCutSubtitleTask class)
 - **TTSubtitleTreeView** (gui/ttsubtitletreeview.h): UI widget for subtitle file list
 
 ### H.264/H.265 Smart Cut Support

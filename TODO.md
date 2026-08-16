@@ -167,18 +167,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
-- **Untertitel-Delay editierbar machen (Attrappen-Spalte mit Leben füllen)**
-  (2026-08-16, beim UT-Export-Vorhaben aufgefallen)
-  - `TTSubtitleItem.subtitleDelay` ist hart `"0"` mit FIXME
-    (`data/ttsubtitlelist.cpp:67`); die Baumansicht zeigt die Spalte, aber
-    sie ist weder editierbar noch wirkt sie irgendwo — anders als das
-    Audio-Pendant (v0.66.0: QSpinBox, Schnitt-Anwendung, `.ttcut`-Persistenz).
-  - Spiegelbild des Audio-Delays bauen: QSpinBox in `TTSubtitleTreeView`,
-    Versatz in `getSubtitleTextAtCurrentFrame()` (Overlay), `--sub-delay`
-    an mpv, Versatz in `TTCutSubtitleTask` + `<Delay>` im `.ttcut`-XML.
-  - Leidensdruck klein für frisch demuxte Aufnahmen (OCR-SRT liegt seit dem
-    UT-Export exakt auf der ES-Zeitleiste); relevant für fremde SRTs.
-
 - **DVB-Bitmap-Untertitel entlang der Schnittliste in TTCut-ng schneiden**
   (Folgevorhaben aus dem Untertitel-Export 2026-08-16; vereinbart, nicht
   begonnen)

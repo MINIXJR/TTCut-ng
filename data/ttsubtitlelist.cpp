@@ -36,6 +36,7 @@ TTSubtitleItem::TTSubtitleItem(TTAVItem* avDataItem, TTSubtitleStream* sStream)
   mpAVDataItem   = avDataItem;
   subtitleStream = sStream;
   mOrder         = -1;
+  mDelayMs       = 0;
   mLanguage      = "und";
 
   setItemData();
@@ -51,7 +52,7 @@ TTSubtitleItem::TTSubtitleItem(const TTSubtitleItem& item)
   mOrder          = item.mOrder;
   subtitleStream  = item.subtitleStream;
   subtitleLength  = item.subtitleLength;
-  subtitleDelay   = item.subtitleDelay;
+  mDelayMs        = item.mDelayMs;
   mLanguage       = item.mLanguage;
 }
 
@@ -63,9 +64,6 @@ void TTSubtitleItem::setItemData()
   subtitleLength = QString("%1 (%2)")
                         .arg(subtitleStream->streamLengthTime().toString("hh:mm:ss.zzz"))
                         .arg(subtitleStream->headerList()->count());
-
-  // FIXME: use real delay value for subtitle delay
-  subtitleDelay  = "0";
 
   // Extract language from filename: Show_deu.srt, Show_deu_1.srt (else fall
   // back to system locale). Shared helper with TTAudioItem.
@@ -84,7 +82,7 @@ const TTSubtitleItem& TTSubtitleItem::operator=(const TTSubtitleItem& item)
   mpAVDataItem    = item.mpAVDataItem;
   subtitleStream  = item.subtitleStream;
   subtitleLength  = item.subtitleLength;
-  subtitleDelay   = item.subtitleDelay;
+  mDelayMs        = item.mDelayMs;
   mLanguage       = item.mLanguage;
 
   return *this;
@@ -134,11 +132,16 @@ QString TTSubtitleItem::getLength() const
 }
 
 /*!
- * delay
+ * delay (mkvmerge convention: positive = track plays later)
  */
-QString TTSubtitleItem::getDelay() const
+int TTSubtitleItem::getDelayMs() const
 {
-  return subtitleDelay;
+  return mDelayMs;
+}
+
+void TTSubtitleItem::setDelayMs(int ms)
+{
+  mDelayMs = ms;
 }
 
 QString TTSubtitleItem::getLanguage() const

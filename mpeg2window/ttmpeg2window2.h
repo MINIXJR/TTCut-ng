@@ -72,6 +72,7 @@ class TTMPEG2Window2 : public QLabel
 
     void setSubtitleStream(TTSubtitleStream* subtitleStream);
     void clearSubtitleStream();
+    void setSubtitleDelay(int delayMs);
 
     void setLogoSelectionMode(bool enable);
     void setLogoROIOverlay(const QRect& imageCoords);
@@ -117,6 +118,7 @@ class TTMPEG2Window2 : public QLabel
     int                 mAspectIndex;
     TTVideoStream*      mpVideoStream;
     TTSubtitleStream*   mpSubtitleStream;
+    int                 mSubtitleDelayMs;  // mkvmerge convention: positive = show later
     TTMessageLogger*    log;
     TTMpeg2Decoder*     mpeg2Decoder;
 

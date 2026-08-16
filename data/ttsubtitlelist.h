@@ -40,7 +40,8 @@ class TTSubtitleItem
     TTSubtitleStream* getSubtitleStream() const;
     QString           getFileName() const;
     QString           getLength() const;
-    QString           getDelay() const;
+    int               getDelayMs() const;
+    void              setDelayMs(int ms);
     QString           getLanguage() const;
     void              setLanguage(const QString& lang);
     TTAVItem*         avDataItem() const {return mpAVDataItem;}
@@ -57,7 +58,7 @@ class TTSubtitleItem
     TTSubtitleStream* subtitleStream;
     int               mOrder;
     QString           subtitleLength;
-    QString           subtitleDelay;
+    int               mDelayMs;   // mkvmerge convention: positive = track plays later
     QString           mLanguage;  // ISO 639-2/B (deu, eng, fra, ...)
 };
 

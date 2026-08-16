@@ -936,6 +936,15 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
       avItem->onSubtitleLanguageChanged(idx, lang);
     }
   }
+
+  // Apply saved delay from project file if available
+  if (mPendingSubtitleDelays.contains(key)) {
+    int delayMs = mPendingSubtitleDelays.take(key);
+    int idx = avItem->subtitleCount() - 1;
+    if (idx >= 0) {
+      avItem->onSubtitleDelayChanged(idx, delayMs);
+    }
+  }
 }
 
 /*!
@@ -1278,6 +1287,11 @@ void TTAVData::setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QSt
 void TTAVData::setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs)
 {
   mPendingAudioDelays.insert(qMakePair(avItem, order), delayMs);
+}
+
+void TTAVData::setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs)
+{
+  mPendingSubtitleDelays.insert(qMakePair(avItem, order), delayMs);
 }
 
 // /////////////////////////////////////////////////////////////////////////////
@@ -2671,8 +2685,11 @@ TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
                << "delayMs" << delayMs << "segments" << videoKeepList.size();
 
   for (int c = 0; c < videoKeepList.size(); c++) {
-    double videoStartSec = qMax(0.0, videoKeepList[c].first  + delaySec);
-    double videoEndSec   = qMax(videoStartSec, videoKeepList[c].second + delaySec);
+    // Delay sign follows the mkvmerge/mpv convention: a positive delay plays
+    // the track LATER, so the source window shifts EARLIER by that amount.
+    // (Flipped in v0.81.0 — before that a positive value advanced the track.)
+    double videoStartSec = qMax(0.0, videoKeepList[c].first  - delaySec);
+    double videoEndSec   = qMax(videoStartSec, videoKeepList[c].second - delaySec);
 
     double videoSegMs = (videoEndSec - videoStartSec) * 1000.0;
 
@@ -2902,8 +2919,9 @@ void TTAVData::cutSubtitleTracks(
       continue;
     }
     TTSubtitleStream* subStream = avItem->subtitleStreamAt(i);
-    QString target = outPath(i);
-    QString lang   = avItem->subtitleListItemAt(i).getLanguage();
+    QString target  = outPath(i);
+    QString lang    = avItem->subtitleListItemAt(i).getLanguage();
+    int     delayMs = avItem->subtitleListItemAt(i).getDelayMs();
 
     if (QFileInfo(target).exists()) {
       log->warningMsg(__FILE__, __LINE__,
@@ -2921,8 +2939,13 @@ void TTAVData::cutSubtitleTracks(
     try {
       tgtStream.open();
       for (int s = 0; s < keepList.size(); s++) {
-        int startMs = qRound(keepList[s].first  * 1000.0);
-        int endMs   = qRound(keepList[s].second * 1000.0) - 1;
+        // mkvmerge delay convention (positive = show later): shift the source
+        // window EARLIER by the delay. cut()'s output anchor is the window
+        // start (offsett = cutIn - start), so the shift bakes the delay into
+        // the written timestamps. A negative startMs is fine: searchTimeIndex
+        // clamps to the first entry, and no header starts before 0 anyway.
+        int startMs = qRound(keepList[s].first  * 1000.0) - delayMs;
+        int endMs   = qRound(keepList[s].second * 1000.0) - 1 - delayMs;
         subStream->cut(startMs, endMs, &cutParams);
         cutParams.setCutInIndex(cutParams.getCutOutIndex() + 1);
       }

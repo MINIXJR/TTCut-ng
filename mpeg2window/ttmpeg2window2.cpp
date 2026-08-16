@@ -41,6 +41,7 @@ TTMPEG2Window2::TTMPEG2Window2(QWidget *parent )
 
   mpVideoStream    = 0;
   mpSubtitleStream = 0;
+  mSubtitleDelayMs = 0;
   mpeg2Decoder     = 0;
   mpFFmpegWrapper  = 0;
   mUseFFmpeg       = false;
@@ -161,6 +162,16 @@ void TTMPEG2Window2::setSubtitleStream(TTSubtitleStream* subtitleStream)
 void TTMPEG2Window2::clearSubtitleStream()
 {
   mpSubtitleStream = 0;
+  mSubtitleDelayMs = 0;
+}
+
+/*!
+ * Set subtitle delay for overlay lookup (mkvmerge convention:
+ * positive = show the subtitles later)
+ */
+void TTMPEG2Window2::setSubtitleDelay(int delayMs)
+{
+  mSubtitleDelayMs = delayMs;
 }
 
 /*!
@@ -175,7 +186,9 @@ QString TTMPEG2Window2::getSubtitleTextAtCurrentFrame()
   float frameRate = mpVideoStream->frameRate();
   if (frameRate <= 0) frameRate = 25.0;
 
-  int currentTimeMs = (int)((currentIndex / frameRate) * 1000.0);
+  // Delay shifts the subtitles relative to the video (positive = later), so
+  // the lookup into the subtitle source runs d ms EARLIER than the video time.
+  int currentTimeMs = (int)((currentIndex / frameRate) * 1000.0) - mSubtitleDelayMs;
 
   // Get subtitle header list and search for subtitle at current time
   TTSubtitleHeaderList* headerList = mpSubtitleStream->headerList();

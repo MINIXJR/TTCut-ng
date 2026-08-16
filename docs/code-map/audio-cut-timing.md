@@ -93,7 +93,7 @@ flowchart TD
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` zählt per Binärsuche die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
 | `PROD → VKL` | Alle Final-Cut-Produzenten bauen die (start,end)-Sekundenliste **einheitlich** über `buildVideoKeepList`, ohne Delay. `TTAVData::onDoCut` (MPEG-2) baut `VKL` und ruft `cutAudioTracks` im selben Funktionskörper, synchron im GUI-Thread, noch bevor der Pool für die Video-Task startet. `TTAVData::doH264Cut`/`doAudioOnlyCut` bauen `VKL` ebenfalls im GUI-Thread, reichen sie aber nur noch als Wertkopie in `TTH26xCutParams`/`TTAudioOnlyCutParams` weiter — der eigentliche `cutAudioTracks`-Aufruf sitzt in `TTH26xCutTask::doCut` (`data/tth26xcuttask.cpp`) bzw. `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`), beide auf einem Pool-Worker-Thread. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview::regenerateSmartCutPreviewClip` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). `TTCutPreviewTask`s MPEG-2-Segment-Zweig und `TTCutPreview::regenerateMpeg2PreviewClip` nutzen dagegen `buildVideoKeepList` (extra-korrigiert), unverändert seit `base_commit`. |
-| `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` auf die Segmentzeiten addiert. Pro Tonspur eigener Wert. |
+| `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention seit v0.81.0: positiv = Spur spielt später, Quellfenster rückt früher; davor invers). Pro Tonspur eigener Wert. |
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer: MP2@48k = 24 ms, AC3@48k = 32 ms). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
 | `PLAN → DRIFT` | Kumulierter A/V-Versatz in ms nach jedem Segment (Audiolänge − Videolänge, Summe aller vorherigen). Im eingeschwungenen Zustand ±½ Audioframe. |
@@ -105,8 +105,8 @@ flowchart TD
 ## Annahmen & Kontrakte
 
 - **`planAudioCut`** setzt voraus, dass `videoKeepList` schon extra-korrigiert und
-  (für H.264/H.265) B-Frame-korrigiert ist. Es addiert nur den Delay und snappt
-  aufs Raster — es prüft die Eingabe nicht. Eine unkorrigierte Zeit landet direkt
+  (für H.264/H.265) B-Frame-korrigiert ist. Es zieht nur den Delay ab
+  (mkvmerge-Konvention) und snappt aufs Raster — es prüft die Eingabe nicht. Eine unkorrigierte Zeit landet direkt
   im Ton, ohne Warnung.
 - **`cutAudioStream`** setzt rasteralignierte Grenzen voraus (garantiert `planAudioCut`).
   Seine „komplett passen"-Regel verwirft ≤1 Frame je Segmentende; die
@@ -149,7 +149,14 @@ flowchart TD
   cutSubtitleTracks`** (All-Tracks- und Track-Index-Überladung, gleiches
   Callback-Schema `outPath`/`onCut`). Er ersetzt die frühere
   `TTCutSubtitleTask`-Klasse (entfernt) und teilt sich **dieselbe** `VKL`
-  mit `cutAudioTracks` — bleibt aber synchron (kein Pool, kein
+  mit `cutAudioTracks`. Seit v0.81.0 wendet er den Per-Track-Delay an
+  (`TTSubtitleItem::getDelayMs`, mkvmerge-Konvention wie beim Audio):
+  das Quellfenster je Segment wird um den Delay nach **früher** verschoben
+  (`startMs/endMs − delayMs`); der bestehende `offsett`-Anker in
+  `TTSrtSubtitleStream::cut` (Ausgabezeit = Quellzeit − Fensterstart)
+  backt den Versatz damit in die geschriebenen Zeitstempel ein. Ein
+  negativer `startMs` ist zulässig (`searchTimeIndex` läuft linear ab dem
+  ersten Eintrag). Er bleibt synchron (kein Pool, kein
   `shouldAbort`-Parameter) und schreibt keinen MPEG-2-Sequence-End-Trailer
   (`TTCutParameter::lastCall()` wird bewusst nicht aufgerufen). Ein
   Segment ohne Untertiteleinträge ergibt eine 0-Byte-Datei; die wird

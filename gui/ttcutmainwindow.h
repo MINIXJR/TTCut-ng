@@ -124,6 +124,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
     void onSubtitleItemAppended(const TTSubtitleItem& item);
+    void onSubtitleItemUpdated(const TTSubtitleItem& cItem, const TTSubtitleItem& uItem);
 
     void onOpenProjectFileFinished(const QString&);
     void onProjectModified();

@@ -85,6 +85,7 @@ class TTAVItem : public QObject
     void onRemoveSubtitleItem(int index);
     void onSwapSubtitleItems(int oldIndex, int newIndex);
     void onSubtitleLanguageChanged(int index, const QString& language);
+    void onSubtitleDelayChanged(int index, int delayMs);
 
   signals:
 		void updated(TTAVItem* avItem);

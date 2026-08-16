@@ -601,6 +601,39 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Untertitel-Delay editierbar + Delay-Vorzeichen auf mkvmerge-Konvention
+  gedreht** → **DONE (2026-08-16, Branch `feature/subtitle-delay`)**
+  - Die tote „Delay"-Spalte der Untertitelliste (hart `"0"` mit FIXME seit
+    ihrer Einführung) ist jetzt eine QSpinBox (±9999 ms) nach dem
+    Audio-Muster (v0.66.0). Wirkorte: Overlay-Lookup
+    (`getSubtitleTextAtCurrentFrame`, Videozeit − Delay), mpv-Wiedergabe
+    (`--sub-delay`, nur Current-Frame-Widget — die Schnittvorschau spielt
+    die bereits geschnittene SRT, dort wäre ein `--sub-delay` eine
+    Doppelanwendung), Schnitt (`cutSubtitleTracks`: Quellfenster −Delay,
+    Ausgabe-Anker `offsett` backt den Versatz ein), Persistenz
+    (`<Delay>` in der Subtitle-Sektion + `setPendingSubtitleDelay`).
+  - **Vorzeichen-Recherche:** Die Audio-Delay-Richtung (v0.66.0) war
+    nirgends entschieden oder dokumentiert (Spec `6c795bff`, Plan, Commit
+    `497a103a`, Wiki — alle ohne Richtungsaussage); der in der Spec
+    vorgesehene Matroska-Container-Delay wurde nie gebaut. Die
+    Ist-Richtung war ein Implementierungsartefakt von `planAudioCut` und
+    invers zu mkvmerge/mpv. User-Entscheid 2026-08-16: beide Spalten auf
+    mkvmerge-Konvention (positiv = Spur später); Bruch für gespeicherte
+    `.ttcut` mit Delay ≠ 0 akzeptiert (CHANGELOG-Hinweis).
+  - **Beleg:** Harness `tools/diag/test_subtitle_delay` (im `diag`-Target),
+    ALL PASS: SRT-Eintrag Quelle 10.0–11.0 s, Fenster 9.5–12.5 s →
+    Ausgabe 500..1500 ms (Delay 0), 1000..2000 ms (+500, später ✓),
+    0..1000 ms geklemmt (−500); `planAudioCut`-Fensterstart 10.016 s
+    (Delay 0), 9.504 s (+500, früher holen = später spielen ✓),
+    10.496 s (−500). Toleranz ±1 AC3-Frame (32 ms), Tux-AC3.
+  - Randwissen: negatives `startMs` im Untertitel-Fenster ist zulässig
+    (`searchTimeIndex` läuft linear ab Eintrag 0, kein Header vor 0);
+    `audio_N_trimmed_ms`/`first_pts` aus der `.info` haben null Konsumenten
+    und hängen nicht am Delay; `av_offset_ms` läuft getrennt über
+    `setAudioSyncOffset` und wird bewusst nicht verrechnet
+    (`ttmkvmergeprovider.cpp:549`).
+  - GUI-Abnahme durch den User bestanden (2026-08-16, eigenes Video).
+
 - **Nie gestartete Landezonen-Analysen erklären sich jetzt** → **GELÖST
   (2026-08-15, Commit `3b24be6a` im MPEG-2-Vorschau-Zweig; TODO-Eintrag von
   der Schlussprüfung 2026-08-11 war danach veraltet und wurde erst beim

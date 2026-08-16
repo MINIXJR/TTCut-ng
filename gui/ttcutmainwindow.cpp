@@ -1454,12 +1454,16 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   if (mpCurrentAVDataItem != 0) {
     disconnect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
                this, &TTCutMainWindow::onSubtitleItemAppended);
+    disconnect(mpCurrentAVDataItem, &TTAVItem::subtitleItemUpdated,
+               this, &TTCutMainWindow::onSubtitleItemUpdated);
   }
 
   mpCurrentAVDataItem = avItem;
 
   connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
           this, &TTCutMainWindow::onSubtitleItemAppended);
+  connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemUpdated,
+          this, &TTCutMainWindow::onSubtitleItemUpdated);
 
   // Update stream point model frame rate for time display
   if (avItem->videoStream()) {
@@ -1487,6 +1491,7 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   // a no-op here and onSubtitleItemAppended() wires it in once it lands.
   if (avItem->subtitleCount() > 0) {
     currentFrame->setSubtitleStream(avItem->subtitleStreamAt(0));
+    currentFrame->setSubtitleDelay(avItem->subtitleListItemAt(0).getDelayMs());
     // currentFrame->onAVDataChanged() above already showed the first still
     // frame — refresh so the overlay is on it right away, not only after the
     // next navigation.
@@ -1582,6 +1587,23 @@ void TTCutMainWindow::onSubtitleItemAppended(const TTSubtitleItem&)
   if (mpCurrentAVDataItem->subtitleCount() == 0) return;
 
   currentFrame->setSubtitleStream(mpCurrentAVDataItem->subtitleStreamAt(0));
+  currentFrame->setSubtitleDelay(mpCurrentAVDataItem->subtitleListItemAt(0).getDelayMs());
+  currentFrame->refreshCurrentFrame();
+}
+
+/*!
+ * onSubtitleItemUpdated
+ * Fires on any subtitle item change (delay spinbox, language combo, pending
+ * project-file values applied after the async load). The overlay only shows
+ * track 0 — re-push its delay and refresh the still frame so a delay edit is
+ * visible immediately.
+ */
+void TTCutMainWindow::onSubtitleItemUpdated(const TTSubtitleItem&, const TTSubtitleItem&)
+{
+  if (mpCurrentAVDataItem == 0) return;
+  if (mpCurrentAVDataItem->subtitleCount() == 0) return;
+
+  currentFrame->setSubtitleDelay(mpCurrentAVDataItem->subtitleListItemAt(0).getDelayMs());
   currentFrame->refreshCurrentFrame();
 }
 

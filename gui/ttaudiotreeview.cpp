@@ -134,6 +134,7 @@ void TTAudioTreeView::onAppendItem(const TTAudioItem& item)
   QSpinBox* delaySpin = new QSpinBox();
   delaySpin->setRange(-9999, 9999);
   delaySpin->setSuffix(" ms");
+  delaySpin->setToolTip(tr("Positive values play the track later, negative values earlier (mkvmerge convention)"));
   delaySpin->setValue(item.getDelayMs());
   audioListView->setItemWidget(treeItem, 6, delaySpin);
 

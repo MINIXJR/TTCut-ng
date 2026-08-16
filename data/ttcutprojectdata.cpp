@@ -113,7 +113,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->subtitleCount(); i++) {
     TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
-    writeSubtitleSection(video, sStream->filePath(), sItem.order(), sItem.getLanguage());
+    writeSubtitleSection(video, sStream->filePath(), sItem.order(), sItem.getLanguage(), sItem.getDelayMs());
   }
 }
 
@@ -529,7 +529,7 @@ TTLogoProjectData TTCutProjectData::deserializeLogoData()
 /* /////////////////////////////////////////////////////////////////////////////
  * Write subtitle section to XML
  */
-QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language)
+QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs)
 {
   QDomElement subtitle = xmlDocument->createElement("Subtitle");
   parent.appendChild(subtitle);
@@ -546,6 +546,12 @@ QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QS
     QDomElement lang = xmlDocument->createElement("Language");
     subtitle.appendChild(lang);
     lang.appendChild(xmlDocument->createTextNode(language));
+  }
+
+  if (delayMs != 0) {
+    QDomElement delay = xmlDocument->createElement("Delay");
+    subtitle.appendChild(delay);
+    delay.appendChild(xmlDocument->createTextNode(QString::number(delayMs)));
   }
 
   return subtitle;
@@ -569,16 +575,24 @@ void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAV
     return;
   }
 
-  // Read optional Language element (added in TTCut-ng 0.52+)
+  // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.81+)
   QString lang;
-  if (subtitleNodesList.size() > 2 && subtitleNodesList.at(2).nodeName() == "Language") {
-    lang = subtitleNodesList.at(2).toElement().text();
+  int delayMs = 0;
+  for (int n = 2; n < subtitleNodesList.size(); n++) {
+    if (subtitleNodesList.at(n).nodeName() == "Language") {
+      lang = subtitleNodesList.at(n).toElement().text();
+    } else if (subtitleNodesList.at(n).nodeName() == "Delay") {
+      delayMs = subtitleNodesList.at(n).toElement().text().toInt();
+    }
   }
 
   qDebug("TTCutProjectData::parseSubtitleSection -> before doOpenSubtitleStream...");
   avData->doOpenSubtitleStream(avItem, name, order);
   if (!lang.isEmpty()) {
     avData->setPendingSubtitleLanguage(avItem, order, lang);
+  }
+  if (delayMs != 0) {
+    avData->setPendingSubtitleDelay(avItem, order, delayMs);
   }
   qDebug("after doOpenSubtitleStream...");
 }
