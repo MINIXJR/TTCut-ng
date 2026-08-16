@@ -170,6 +170,12 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 - **DVB-Bitmap-Untertitel entlang der Schnittliste in TTCut-ng schneiden**
   (Folgevorhaben aus dem Untertitel-Export 2026-08-16; vereinbart, nicht
   begonnen)
+  - **ZURÜCKGESTELLT — User-Entscheid 2026-08-16: erstmal beobachten.**
+    Solange der OCR-SRT-Export gut funktioniert, besteht kein Bedarf; die
+    geschnittene SRT deckt den Anwendungsfall ab. Erst wieder aufgreifen,
+    wenn die OCR-Qualität in der Praxis nicht reicht (z. B. Sender, bei
+    denen die Glyph-Reparatur versagt) oder die verlustfreie Bitmap-Spur
+    in der Ausgabe-MKV konkret vermisst wird.
   - ttcut-demux exportiert DVB-UT seit 2026-08-16 als `.mks` (`--subs`);
     TTCut-ng selbst schneidet aber nur SRT (`TTSrtSubtitleStream`). Für
     Bitmap-UT fehlt: Stream-Klasse, Schnitt entlang der Cut-Liste
