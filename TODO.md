@@ -6,8 +6,10 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 ## High Priority
 
 - **SIGSEGV nach Smart Cut in `doH264Cut` — Use-after-free in Qt-Model-Internals
-  (2026-08-07, vertagt auf User-Entscheidung; blockiert den Merge von
-  `feature/progress-details`)**
+  (2026-08-07, vertagt auf User-Entscheidung; einmaliger Absturz, seither in
+  keiner GUI-Abnahme wieder aufgetreten — der frühere Zusatz „blockiert den
+  Merge von `feature/progress-details`" ist überholt, der Branch ist seit
+  2026-08-09 gemergt und released)**
   - Absturz bei der GUI-Abnahme: Öffnen (18:34) → Vorschau (18:36:38) →
     Schnitt-Dialog → GUI-Schnitt einer 85-min-H.264-Aufnahme; Crash ~18:38,
     direkt nach „Smart Cut complete" (Log endet dort), in der
@@ -293,7 +295,8 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
     `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie
-    `gui/ttcurrentframe.cpp:970` (`ttcut-ng_playback_temp.mkv`). Zwei
+    `gui/ttcurrentframe.cpp` (`createTempMkvForPlayback`,
+    `ttcut-ng_playback_temp.mkv`). Zwei
     gleichzeitig offene Fenster benutzen dieselben Namen.
   - Kein gemessener Fehlerfall — deshalb nicht mitgefixt. Wer es angeht:
     dasselbe Muster wie in `encodePart()` (`QTemporaryDir` je Vorgang).
@@ -544,7 +547,7 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - **Rename TTMPEG2Window2 → TTVideoFrameWidget**
   - Class name and files (`mpeg2window/ttmpeg2window2.*`) are misleading — the widget handles MPEG-2, H.264, and H.265
   - Rename class, files, and directory (e.g., `videoframe/ttvideoframewidget.*`)
-  - Update all includes, .pro file, .ui references, and moc references
+  - Update all includes, CMakeLists.txt, .ui references, and moc references
 - Implement plugin interface for external tools (encoders, muxers, players)
 - GPU-accelerated encoding (NVENC, VAAPI, QSV) for faster Smart Cut
 
