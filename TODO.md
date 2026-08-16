@@ -21,7 +21,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     -O2-Inlining, ±). Der Proxy-Private-Block ist **freigegebener,
     wiederverwendeter Speicher**: ungültiger vtable-Zeiger, `persistent.indexes`
     mit m_size 2 951 281, „Source-Model"-Zeiger zeigt in denselben Block.
-    Backtrace-Dump: `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt`.
+    Backtrace-Dump: war `CLAUDE_TMP/TTCut-ng/core500359_bt.txt` — **gelöscht
+    2026-08-16** (CLAUDE_TMP-Purge, Memory `reference_claude_tmp_purge_2026_08_16`);
+    die tragenden Frames stehen wörtlich in diesem Eintrag.
   - ~~TTCut-Code enthält kein einziges Proxy-Model und keinen QCompleter
     (Grep 2026-08-07) — das Proxy ist Qt-intern.~~ **Richtiggestellt
     2026-08-13, gemessen:** Der Grep konnte es nicht finden, weil TTCut keins
@@ -128,7 +130,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     nächsten Build); der Backtrace-Dump
     `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt` bleibt.
     Bei Wiederauftreten: Core sichern, Forensik-Referenz nutzen,
-    ASAN-Build neu erzeugen (`cmake -B build-asan -G Ninja
+    ASAN-Build neu erzeugen (Hinweis: auch der Backtrace-Dump ist seit dem
+    CLAUDE_TMP-Purge 2026-08-16 weg — die Frames oben sind der Restbestand)
+    (`cmake -B build-asan -G Ninja
     -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fsanitize=address
     -fno-omit-frame-pointer -g" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`).
 
@@ -271,10 +275,12 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
     geworden, aber unbewiesen: die Kaskade oben las die 502-MB-Datei
     wiederholt komplett — was dabei an Puffern anfällt, war nie im Blick.
-    Nach dem Fix neu provozieren, bevor jemand tiefer gräbt:
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/abnahme/start-gdb.sh` (nimmt beim
-    Absturz alle Fäden auf und sichert das Log; `ptrace_scope=1` → von gdb
-    starten, nicht anhängen).
+    Nach dem Fix neu provozieren, bevor jemand tiefer gräbt. Das Helferskript
+    `abnahme/start-gdb.sh` ist **gelöscht** (CLAUDE_TMP-Purge 2026-08-16) —
+    neu zu schreiben ist es in Minuten: TTCut-ng unter gdb starten (wegen
+    `ptrace_scope=1` nicht anhängen), beim Absturz alle Fäden dumpen und das
+    Logfile wegsichern (es wird beim Absturz nicht geschrieben und beim
+    Neustart überschrieben, siehe Messfallen unten).
   - **Zwei Messfallen aus der ersten Runde** (Beweise gingen verloren):
     abgeschnittener Core durch Shell-Zeitlimit beim Schreiben; die
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
@@ -367,8 +373,10 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     in Debian) + rhubarb. Für ein auslieferbares Feature bräuchte es entweder
     eine C++/libav-native Lippendetektion, ein gebündeltes Modell, oder das
     Feature bleibt optional (nur aktiv, wenn die Tools vorhanden sind).
-    Prototyp-Werkzeuge unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/`
-    (`lip_landmark.py`, `venv-mp/`, `lip_final.png`).
+    Die Prototyp-Werkzeuge (`lip_landmark.py`, `venv-mp/`, `lip_final.png`)
+    sind **gelöscht** (CLAUDE_TMP-Purge 2026-08-16) — die Messmethode ist im
+    Memory `reference_lipsync_measurement` dokumentiert, venv + Skript sind
+    daraus neu aufsetzbar.
   - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
     Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
 
@@ -660,9 +668,14 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
     ran KWin's forced-server-side-scale path (no fractional-scale
     protocol), Qt6 binds `wp_fractional_scale_manager_v1`. The trigger
     sets differ per path; Qt5 data must not be mixed into a Qt6 report.
-  - Tools/logs: `tools/diag/window-geometry.sh`,
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/kwin-*.{sh,log}`, `wayland-diff/`,
-    `kwin-bugreport/` (BEFUND.md — keep, do not clean up).
+  - Tools/logs: `tools/diag/window-geometry.sh` (im Repo, erhalten). The
+    CLAUDE_TMP material (`kwin-*.{sh,log}`, `wayland-diff/`, `kwin-bugreport/`
+    incl. BEFUND.md — despite its "keep" marker) was **destroyed in the
+    2026-08-16 CLAUDE_TMP purge** (no backup; see memory
+    `reference_claude_tmp_purge_2026_08_16`). The surviving record is the
+    investigation summary in `docs/completed-work.md` (GUI und Wiedergabe)
+    and the kwin-fractional-scale-bug memory — raw logs and helper scripts
+    would have to be re-created for an upstream report.
   - On recurrence: check for a KWin update first
     (`apt policy kwin-wayland`), then read the record.
 
