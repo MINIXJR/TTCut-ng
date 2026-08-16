@@ -2204,6 +2204,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
                                 GLYPH_HELPER="/usr/local/src/TTCut-ng/tools/ttcut-demux/ttcut-ocr-glyphs"
                                 GLYPH_DIR="/usr/local/src/TTCut-ng/tools/ttcut-demux/ocr-glyphs"
                             fi
+                            # Installed layout (Debian package): helper sits in
+                            # /usr/bin, the PNG templates under /usr/share.
+                            if [ ! -d "$GLYPH_DIR" ] && [ -d "/usr/share/ttcut-ng/ocr-glyphs" ]; then
+                                GLYPH_DIR="/usr/share/ttcut-ng/ocr-glyphs"
+                            fi
                             if [ -x "$GLYPH_HELPER" ] && [ -d "$GLYPH_DIR" ] && \
                                command -v python3 &>/dev/null && \
                                ls "$GLYPH_DIR"/*.png &>/dev/null; then

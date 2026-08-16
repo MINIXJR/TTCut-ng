@@ -21,6 +21,7 @@ Package: ttcut-ng
 Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: ffmpeg, mjpegtools, mpv, python3-numpy
+Suggests: ccextractor, python3-pil
 Conflicts: ttcut
 Replaces: ttcut
 Description: MPEG-2/H.264/H.265 frame-accurate video cutter
