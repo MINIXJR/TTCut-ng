@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## v0.81.0 (unreleased)
+## v0.81.0 (2026-08-16)
+
+**Audio ES Sanitizer, Subtitle Export with OCR, Editable Subtitle Delay**
 
 ### Features
 
@@ -12,16 +14,6 @@ All notable changes to TTCut-ng are documented in this file.
   the preview overlay, is passed to mpv playback as `--sub-delay`, is baked
   into the cut subtitle timestamps (final cut and cut preview), and is
   persisted as an optional `<Delay>` element in the `.ttcut` project file.
-
-### Changed
-
-- **Delay sign convention now follows mkvmerge/mpv: positive = track plays
-  later.** The audio delay applied the opposite (undocumented) sign since
-  its introduction in v0.66.0. Both delay columns (audio, subtitle) now use
-  the mkvmerge convention, stated in the spinbox tooltips. **Breaking:**
-  a non-zero audio `<Delay>` stored in an existing `.ttcut` project file
-  now means the opposite direction — negate the value when reopening such
-  a project.
 
 - **ttcut-demux subtitle export is now a per-run option — and actually
   works.** New flags `--subs` / `--no-subs` (default: off) control whether
@@ -51,6 +43,16 @@ All notable changes to TTCut-ng are documented in this file.
   glyph bitmap against a template library (`ocr-glyphs/`, extensible per
   broadcaster font with one `learn` call, no code change) and fixes the
   SRT edge tokens from pixel truth instead of OCR guesses.
+
+### Changed
+
+- **Delay sign convention now follows mkvmerge/mpv: positive = track plays
+  later.** The audio delay applied the opposite (undocumented) sign since
+  its introduction in v0.66.0. Both delay columns (audio, subtitle) now use
+  the mkvmerge convention, stated in the spinbox tooltips. **Breaking:**
+  a non-zero audio `<Delay>` stored in an existing `.ttcut` project file
+  now means the opposite direction — negate the value when reopening such
+  a project.
 
 ### Fixes
 
