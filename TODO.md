@@ -167,6 +167,23 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
+- **`setEncoderCodec()`-Early-Return lässt `workingOutputContainer` und
+  `Mpeg2Muxer` auseinanderlaufen** (2026-08-16, gemessen beim
+  ttcut-audiofix-Realfall-Gate; dokumentiert im Kommentar von
+  `tools/diag/gate_audiofix.sh` ~Z. 437)
+  - `runAutoCutMode()` ruft `TTSettings::setEncoderCodec(0)` für MPEG-2, um
+    `workingOutputContainer` aus `mMpeg2Muxer` nachzuziehen —
+    `setEncoderCodec()` hat aber einen Early-Return
+    (`if (mEncoderCodec == v) return;`), und der kompilierte Default ist
+    schon 0. Auf frischer Konfiguration feuert der Resync also nie:
+    eine Ini mit nur `Encoder\Mpeg2Muxer=0` ergab gemessen
+    `workingOutputContainer=1` (MKV) im Lauf-Log und in den beim Beenden
+    zurückgeschriebenen Settings. Wer mplex will, muss derzeit **beide**
+    Schlüssel (`Encoder\Mpeg2Muxer=0` UND `Muxer\OutputContainer=0`) setzen.
+  - Betrifft die App unabhängig vom audiofix-Feature; GUI-Pfad (Settings-
+    Dialog setzt beide?) noch nicht vermessen — vor einem Fix prüfen, wo
+    der Resync überall hängt.
+
 - **Vorbestehende Defekte, gefunden beim Abbruch-Vorhaben (2026-08-10)** —
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
@@ -211,48 +228,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     erzwingbar über eine Faden-Zugehörigkeitsprüfung in
     `TTSettings::instance()`) — oder es bewusst so lassen und hier stehen
     haben.
-
-- **ttcut-demux reicht beschädigte Tonrahmen durch, statt sie zu ersetzen**
-  (2026-08-15, aus dem mplex-Befund; ProjectX-Vergleich gemessen)
-  - Ausgangsfall: Ein 90-min-Schnitt über MPG/mplex hatte 85 min Bild und
-    **4,7 min Ton**. Ursache liegt **nicht** in TTCut — der Tonschnitt ist
-    vollständig (gemessen: 5137 s, 214058 Pakete), der Schaden kommt aus der
-    Quelle. Die Meldung dazu ist inzwischen gebaut (`13f7af68`), der
-    Datenverlust selbst bleibt.
-  - **Die Quelldatei aus ttcut-demux hat eine echte Bruchstelle:** bei
-    Byte-Offset 6 796 224 endet die gültige MP2-Rahmenkette (nach 11799
-    Rahmen = 283,18 s), es folgen **468 Bytes**, die kein Rahmenkopf sind,
-    danach setzt die Kette wieder ein. libav überliest das mit „Header
-    missing", mplex erklärt den Strom für defekt und lässt die Tonspur ab dort
-    weg.
-  - **Erkannt wird der Defekt bereits** — der Punkt ist also nicht „Fehler
-    finden": `ttcut-demux` protokolliert
-    `[WARN] ffmpeg: Packet corrupt (stream = 1, …)` und schreibt in die
-    `.info`: `corrupt_frame_ranges=7095-7095`, `es_missing_ranges=7098-7099:120`,
-    `audio_gap_frames=7098`. `TTESInfo` liest das, und
-    `TTAVData` (`ttavdata.cpp:682`) macht daraus eine Zeitleisten-Marke.
-    Frame 7095 = 283,8 s, also genau die Bruchstelle.
-  - **Was ProjectX anders macht** (gemessen, nicht vermutet — 40-MB-Byte-
-    Ausschnitt der TS um die Defektstelle, `projectx -demux`): es prüft die
-    CRC jedes Tonrahmens, entfernt sie und **fügt fehlende Rahmen ein**
-    (`check & synchronize audio file` / `check CRC of AC-3 / MPEG-Audio L1,2`
-    / `remove CRC` / `add frames`); defekte Video-GOPs verwirft es
-    (`!> dropping GOP# 69 … errorcode: 24`). Ergebnis: **4075 Rahmen, 97,80 s,
-    keine Bruchstelle**, libav findet keinen Fehler. Dieselbe Stelle, aus
-    derselben TS — ProjectX' Ausgabe wäre durch mplex gegangen.
-  - Offen ist damit genau zwei Dinge, beide klein umrissen:
-    1. **Den beschädigten Bereich ersetzen statt durchreichen.** Ein
-       unvollständiger Rahmen gehört verworfen und die Zeit mit einem gültigen
-       Stille-Rahmen aufgefüllt — ttcut-demux fügt für Lücken schon Stille ein
-       (`Inserting silence for gaps…`), tut es hier aber nicht, weil der
-       Bereich als „vorhanden, nur korrupt" gilt.
-    2. **Die Marke benennt die falsche Spur.** Der Text lautet
-       „Bildstörungen: 7095–7095", obwohl der Schaden hier im **Ton** liegt
-       (`Packet corrupt (stream = 1)` = Audiospur). `corrupt_frame_ranges`
-       unterscheidet die Spur nicht — wer die Marke sieht, sucht am Bild.
-  - Messmaterial: TS liegt noch
-    (`…/2023-10-19.02.32.5-0.rec/00001.ts`), Ausschnitt und ProjectX-Ausgabe
-    unter `/usr/local/src/CLAUDE_TMP/TTCut-ng/audiobug/`.
 
 - **H.265-UHD: Schieber reagiert träge; Absturz (SIGABRT) unerklärt**
   (Rest des Befunds von 2026-08-15; der Minuten-Hänger selbst ist GELÖST —

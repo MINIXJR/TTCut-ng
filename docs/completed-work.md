@@ -388,6 +388,60 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **ttcut-demux reicht beschädigte Tonrahmen durch, statt sie zu ersetzen**
+  → **GEFIXT (2026-08-16, branch `feature/ttcut-audiofix`, Commits
+  `a27954e7`..`70749afe`)**
+  - War (Befund 2026-08-15, ProjectX-Vergleich gemessen): ein 90-min-Schnitt
+    über MPG/mplex hatte 85 min Bild und nur 4,7 min Ton. Ursache lag in der
+    Quelle: bei Byte-Offset 6 796 224 endete die gültige MP2-Rahmenkette (nach
+    11799 Rahmen), es folgten 468 Bytes ohne Rahmenkopf, danach setzte die
+    Kette wieder ein — mplex erklärte den Strom für defekt und ließ die
+    Tonspur ab dort weg. Zusätzlich gefunden (Task 7): eine zweite, bis dahin
+    unentdeckte Bruchstelle am Aufnahmeende (390 Bytes Junk).
+  - **Fix**: neues eigenständiges C-Werkzeug `tools/ttcut-audiofix/ttcut-audiofix.c`
+    — läuft die ES frame-genau ab (MP2/AC3/E-AC3), entfernt Junk-Bytes
+    zwischen gültigen Rahmen, meldet CRC-defekte Rahmen (ohne sie
+    anzufassen), Fix-Modus mit Selbstprüfung, Exit 0/1/2 (sauber/behoben/
+    Fehler). Integriert in `tools/ttcut-demux/ttcut-demux`: pro Spur nach
+    der AC3-Header-Reparatur und der Interlace-FPS-Korrektur, vor der
+    Rev-3-Lückenreparatur. Fail-safe auf jedem Zweig: Werkzeug-Fehlschlag
+    lässt die Originaldatei unangetastet; fehlt `ttcut-audiofix` im PATH,
+    warnt das Skript und fährt fort.
+  - **Meldung**: neue `.info`-Felder je Spur `audio_N_corrupt_ranges`
+    (geclusterte Video-Frame-Bereiche aus Junk- und CRC-ms-Positionen, per
+    korrigierter FPS umgerechnet, `≤2s`-Clustering wie `corrupt_frame_ranges`),
+    `audio_N_junk_bytes`/`audio_N_dropped_frames` (Diagnose, bewusst nicht
+    geparst). `TTESInfo` parst `audio_N_corrupt_ranges` in
+    `TTAudioTrackInfo::corruptRanges` (gehärtet wie der globale
+    `corrupt_frame_ranges`-Block). `TTAVData`-Cluster-Pass 3b macht daraus
+    Zeitleisten-Marken „Tonstörungen: X–Y (Spur N)"; der Früh-Ausstieg-Wächter
+    der Cluster-Dialog-Funktion wurde erweitert, damit ein reiner Ton-Defekt
+    (kein Video-Befund) den Dialog trotzdem öffnet.
+  - **Belege (Task 10)**: derselbe Realfall (2023-10-19 RTLZWEI-Aufnahme)
+    lässt mplex jetzt bis zum Ende scannen („Scanned to end AU 119999", kein
+    Abbruch mehr); finales .mpg Video=4799,440s / Audio=4799,976s /
+    Diff=0,536s, vollständiger Audio-Decode fehlerfrei. Rohe Junk-Regionen im
+    unangetasteten Quellauszug: `0@0ms:178`, `11834@284016ms:468`,
+    `227212@5453088ms:390` (Summe 1036); demuxte `audio_0_junk_bytes=858` =
+    468 (die im ursprünglichen TODO-Befund dokumentierte Region) + 390 (neu
+    entdeckte Region am Aufnahmeende) — die 178-Byte-Startregion fällt in den
+    818-ms-Vorspann-Trim (plausibler Mechanismus, so gekennzeichnet, nicht
+    einzeln nachgewiesen). `.info` der Realaufnahme:
+    `audio_0_corrupt_ranges=7079-7079,136306-136306`; der alte, unveränderte
+    Video-Marker `corrupt_frame_ranges=7095-7095` bleibt bestehen (der
+    Bildschaden dort war real). Defekt-Slice (40 MB, isoliert getestet):
+    `audio_0_corrupt_ranges=1024-1024,2452-2452`, 990 Bytes Junk
+    (Slice-Rand-Artefakte eingeschlossen), `dropped_frames=1`.
+  - **Korpus-Nebenbefund (Task 7)**: die Comedy-Central-SDTV-Aufnahme
+    (`MPEG2_SD576i25_16-9_AV-async_MP2-deu+eng`) trägt echte Defekte — Junk
+    auf beiden Tonspuren plus abgeschnittenes Ende —, vom Sanitizer beim
+    Korpuslauf gefunden, nicht künstlich erzeugt.
+  - **Gate**: `tools/diag/gate_audiofix.sh`, 20 Checks im Default-Lauf
+    (~11 s) + 2 weitere mit `--full` (voller Realaufnahme-Demux plus
+    Auto-Cut/mplex End-zu-End). ASAN/UBSan über das gesamte Gate sauber,
+    0 Reports (Task 6).
+  - Offen: Anwender-GUI-Abnahme und Aufnahme in ein v-next-Release.
+
 - **Audio-Padding bricht bei relativem `output_dir` ab** → **DONE
   (2026-07-31, `40087a4c`, v0.77.0)**
   - War: Der concat-Demuxer löst `file`-Einträge relativ zum Verzeichnis der

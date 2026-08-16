@@ -2,6 +2,22 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.81.0 (unreleased)
+
+### Features
+
+- **ttcut-demux now repairs damaged audio elementary streams at demux time**
+  instead of passing the damage through. A new standalone tool,
+  `ttcut-audiofix`, walks each MP2/AC3/E-AC3 audio track frame by frame,
+  removes junk bytes found between valid frames, and reports (without
+  touching) any frame that fails its CRC. Previously such a break in the
+  frame chain could make libav's demuxer give up on the track partway
+  through a recording, silently truncating the audio far short of the
+  video. The affected regions are recorded per track in the `.info` file
+  and surface in TTCut-ng's cut-list timeline as "Tonstörungen: X–Y (Spur
+  N)" markers, correctly attributed to the audio track instead of being
+  mislabeled as a picture defect.
+
 ## v0.80.0 (2026-08-15)
 
 **Qt 6, truthful progress and failure reporting, and a responsive slider**
