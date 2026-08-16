@@ -2131,13 +2131,113 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
             case "$codec" in
                 dvb_subtitle|dvbsub)
+                    # One subs-only TS serves bitmap export AND OCR, rebased
+                    # to the ES timeline (PTS minus first video PTS) so both
+                    # outputs line up with the demuxed streams.
+                    SUBS_TS="$OUTDIR/.subs_only_${idx}.ts"
+                    _CLEANUP_FILES+=("$SUBS_TS")
+                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
+                        -map 0:$idx -c copy -f mpegts "$SUBS_TS" 2>&1 | grep -E "^(Output|Stream)" || true
+                    if [ ! -s "$SUBS_TS" ]; then
+                        info "  DVB subtitle $idx [$lang] - no data extracted, skipped"
+                        continue
+                    fi
+
                     # Matroska subtitle-only container (.mks): ffmpeg's sup
                     # muxer only accepts PGS, not dvb_subtitle (measured) -
                     # the old .sup output could never be written.
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.mks"
                     info "  DVB subtitle $idx [$lang] -> $OUTPUT_SUB (bitmap, matroska)"
-                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f matroska "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    # -map 0 + generous probe: on a subtitle-only TS ffmpeg's
+                    # default stream selection finds no stream (sparse codec
+                    # detection) and errors out with "does not contain any
+                    # stream" (measured).
+                    ffmpeg -y -v error -probesize 5M -analyzeduration 10M \
+                        -i "$SUBS_TS" -map 0 -c copy -f matroska "$OUTPUT_SUB" 2>&1 | head -3 || true
                     [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
+
+                    # OCR stage (Ts2MKV-proven pipeline): bitmap -> cuttable
+                    # text SRT that TTCut auto-loads. ccextractor zeroes its
+                    # clock on the FIRST cue (measured; -noautotimeref does
+                    # not change that), so the lead-in is handed back via
+                    # -delay from the first packet PTS of the subs-only TS.
+                    if command -v ccextractor &>/dev/null; then
+                        OCR_SRT="$OUTDIR/${BASENAME}_${lang}.srt"
+                        SUB_PTS0=$(ffprobe -v error -read_intervals "%+#1" \
+                            -show_entries packet=pts_time -of csv=p=0 "$SUBS_TS" 2>/dev/null | head -1 | tr -d ',')
+                        DELAY_MS=$(awk "BEGIN{printf \"%.0f\", ${SUB_PTS0:-0}*1000}")
+                        info "  OCR (ccextractor, deu) -> $OCR_SRT (delay ${DELAY_MS} ms)"
+                        set +e
+                        ccextractor -in=ts -codec dvbsub --ocrlang deu --oem 1 --ignoreptsjumps \
+                            -delay "$DELAY_MS" -o "$OCR_SRT" "$SUBS_TS" >/dev/null 2>&1
+                        set -e
+                        if [ -s "$OCR_SRT" ]; then
+                            # Invalid UTF-8 bytes make players fall back to
+                            # Latin-1 (Ts2MKV lesson); SubRip wants CRLF line
+                            # endings. SRT markup (<font color>, <i>, <b>) is
+                            # KEPT - TTCut renders it in the overlay since
+                            # 5c37972a (QTextDocument, resources disarmed via
+                            # 4d2f3348), and the colors carry speaker identity.
+                            _srt_before=$(wc -c < "$OCR_SRT")
+                            iconv -c -f UTF-8 -t UTF-8 "$OCR_SRT" > "$OCR_SRT.tmp" 2>/dev/null || true
+                            if [ -s "$OCR_SRT.tmp" ]; then mv "$OCR_SRT.tmp" "$OCR_SRT"; else rm -f "$OCR_SRT.tmp"; fi
+                            _srt_mid=$(wc -c < "$OCR_SRT")
+                            # CRLF normalization GROWS the file - measure the
+                            # invalid-byte removal before it, not after.
+                            sed -i 's/\r*$/\r/' "$OCR_SRT"
+                            [ "$_srt_before" -gt "$_srt_mid" ] && \
+                                info "  OCR SRT sanitized ($((_srt_before-_srt_mid)) invalid UTF-8 byte(s) removed)"
+
+                            # Deterministic glyph repair: tesseract cannot emit
+                            # glyphs outside its charset (music note) and
+                            # guesses junk (">", "}", "$"). The helper compares
+                            # each line's edge glyph bitmaps (spupng dump)
+                            # against the template library and fixes the SRT.
+                            # The dump MUST use the same time handling as the
+                            # OCR run (--ignoreptsjumps, same -delay): with
+                            # different flags the two ccextractor clocks drift
+                            # apart mid-recording (measured: 1.28 s at min 25).
+                            GLYPH_BASE="$(dirname "$(readlink -f "$0")")"
+                            GLYPH_HELPER="$GLYPH_BASE/ttcut-ocr-glyphs"
+                            GLYPH_DIR="$GLYPH_BASE/ocr-glyphs"
+                            if [ ! -x "$GLYPH_HELPER" ]; then
+                                GLYPH_HELPER="/usr/local/src/TTCut-ng/tools/ttcut-demux/ttcut-ocr-glyphs"
+                                GLYPH_DIR="/usr/local/src/TTCut-ng/tools/ttcut-demux/ocr-glyphs"
+                            fi
+                            if [ -x "$GLYPH_HELPER" ] && [ -d "$GLYPH_DIR" ] && \
+                               command -v python3 &>/dev/null && \
+                               ls "$GLYPH_DIR"/*.png &>/dev/null; then
+                                SPU_DIR="$OUTDIR/spu_glyphs_tmp_${idx}"
+                                _CLEANUP_DIRS+=("$SPU_DIR")
+                                mkdir -p "$SPU_DIR"
+                                # ccextractor treats everything after the LAST
+                                # dot of the WHOLE -o path as an extension and
+                                # strips it (measured: -o .../.spu_glyphs_5/cue
+                                # put the PNGs into .../.d/ while the XML kept
+                                # pointing at cue.d/). Run from inside the dir
+                                # with a dot-free relative name to be immune to
+                                # dots anywhere in the output path.
+                                SUBS_TS_ABS=$(realpath "$SUBS_TS")
+                                set +e
+                                ( cd "$SPU_DIR" && ccextractor -in=ts -codec dvbsub \
+                                    --no-spupngocr --out=spupng \
+                                    --ignoreptsjumps -delay "$DELAY_MS" \
+                                    -o cue "$SUBS_TS_ABS" ) >/dev/null 2>&1
+                                if [ -s "$SPU_DIR/cue" ]; then
+                                    "$GLYPH_HELPER" match --srt "$OCR_SRT" --spuxml "$SPU_DIR/cue" \
+                                        --templates "$GLYPH_DIR" --delay-ms 0 --apply 2>/dev/null | \
+                                        while IFS= read -r gl; do info "  glyph: $gl"; done
+                                fi
+                                set -e
+                            fi
+                            SUBTITLE_FILES+=("$OCR_SRT")
+                        else
+                            rm -f "$OCR_SRT"
+                            warn "  OCR produced no captions - keeping the bitmap track only"
+                        fi
+                    else
+                        warn "  ccextractor not found - OCR SRT skipped, bitmap only"
+                    fi
                     ;;
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"

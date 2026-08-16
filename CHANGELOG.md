@@ -19,6 +19,21 @@ All notable changes to TTCut-ng are documented in this file.
   fixed; the pre-check now byte-counts an ffmpeg stream-copy sample of the
   original source. Note the behavior change: without `--subs` no subtitle
   files are written anymore.
+- **DVB bitmap subtitles are OCRed to a cuttable text SRT.** With `--subs`,
+  ccextractor (German tesseract model, LSTM engine) converts the bitmap
+  track to `<name>_<lang>.srt` next to the lossless `.mks`; invalid UTF-8
+  bytes are dropped and line endings normalized, while the SRT markup
+  (`<font color>` speaker colors, `<i>`, `<b>`) is kept — TTCut renders it
+  in the subtitle overlay. Both
+  outputs are rebased to the elementary-stream timeline (first video PTS =
+  0), so the SRT lines up with the demuxed streams and TTCut-ng auto-loads
+  it for preview overlay and cutting. If OCR finds no captions, the bitmap
+  track alone is kept. Glyphs outside tesseract's charset — the music note
+  that OCR garbles into ">", "}", "$" — are repaired deterministically: a
+  helper (`ttcut-ocr-glyphs`) compares each line's leading and trailing
+  glyph bitmap against a template library (`ocr-glyphs/`, extensible per
+  broadcaster font with one `learn` call, no code change) and fixes the
+  SRT edge tokens from pixel truth instead of OCR guesses.
 
 ### Fixes
 

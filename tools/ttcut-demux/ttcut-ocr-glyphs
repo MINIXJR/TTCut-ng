@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""ttcut-ocr-glyphs - deterministic glyph repair for OCRed DVB subtitles.
+
+DVB subtitles are palette bitmaps; the same broadcaster renders special
+glyphs (music note etc.) pixel-identically every time, while tesseract can
+only guess characters outside its charset. This helper compares the leading
+and trailing glyph of every subtitle line (from a ccextractor spupng dump)
+against a template library and deterministically fixes the corresponding
+edge token in the OCRed SRT.
+
+Template library: a directory of PNG crops named  <name>__<REPLACEMENT>.png
+(e.g. "note__♪.png"). New glyph -> one `learn` call, no code change.
+
+Modes:
+  match --srt F --spuxml F --templates DIR --delay-ms N [--apply]
+  learn --spuxml F --cue N --edge start|end [--line K] --out FILE
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+INK_THRESHOLD = 128      # grayscale value above which a pixel counts as ink
+MATCH_RATIO = 0.93       # fraction of equal pixels required for a template hit
+SIZE_SLACK = 2           # max bbox size difference (px) template vs candidate
+TIME_SLACK_MS = 400      # SRT cue start vs spupng start tolerance
+GAP_FRACTION = 0.25      # gap >= band_height * this separates glyph groups
+
+
+def binarize(img):
+    return img.convert("L").point(lambda v: 255 if v > INK_THRESHOLD else 0)
+
+
+def ink_rows(img):
+    """Return [(top, bottom)] bands of rows containing ink (text lines)."""
+    w, h = img.size
+    px = img.load()
+    rows = [any(px[x, y] for x in range(w)) for y in range(h)]
+    bands, start = [], None
+    for y, has in enumerate(rows):
+        if has and start is None:
+            start = y
+        elif not has and start is not None:
+            bands.append((start, y))
+            start = None
+    if start is not None:
+        bands.append((start, h))
+    return bands
+
+
+def glyph_groups(band):
+    """Return [(left, right)] ink column groups separated by word-sized gaps."""
+    w, h = band.size
+    px = band.load()
+    cols = [any(px[x, y] for y in range(h)) for x in range(w)]
+    gap_limit = max(3, int(h * GAP_FRACTION))
+    groups, start, gap = [], None, 0
+    for x, has in enumerate(cols):
+        if has:
+            if start is None:
+                start = x
+            gap = 0
+        elif start is not None:
+            gap += 1
+            if gap >= gap_limit:
+                groups.append((start, x - gap + 1))
+                start, gap = None, 0
+    if start is not None:
+        groups.append((start, w))
+    return groups
+
+
+def crop_glyph(img, band_box, group):
+    """Tight ink bbox of one glyph group inside a line band."""
+    top, bottom = band_box
+    left, right = group
+    crop = img.crop((left, top, right, bottom))
+    bbox = crop.getbbox()
+    return crop.crop(bbox) if bbox else crop
+
+
+def edge_glyph(img, band_index, edge):
+    bands = ink_rows(img)
+    if band_index >= len(bands):
+        return None, len(bands)
+    top, bottom = bands[band_index]
+    band = img.crop((0, top, img.size[0], bottom))
+    groups = glyph_groups(band)
+    if not groups:
+        return None, len(bands)
+    group = groups[0] if edge == "start" else groups[-1]
+    return crop_glyph(img, (top, bottom), group), len(bands)
+
+
+def glyphs_equal(a, b):
+    wa, ha = a.size
+    wb, hb = b.size
+    if abs(wa - wb) > SIZE_SLACK or abs(ha - hb) > SIZE_SLACK:
+        return False
+    w, h = min(wa, wb), min(ha, hb)
+    pa, pb = a.load(), b.load()
+    same = sum(1 for y in range(h) for x in range(w)
+               if (pa[x, y] > 0) == (pb[x, y] > 0))
+    return same / float(w * h) >= MATCH_RATIO
+
+
+def load_templates(directory):
+    templates = []
+    for f in sorted(Path(directory).glob("*.png")):
+        stem = f.stem
+        if "__" not in stem:
+            continue
+        _, repl = stem.split("__", 1)
+        templates.append((f.name, repl, binarize(Image.open(f))))
+    return templates
+
+
+def parse_spuxml(path):
+    """[(start_seconds, png_path)] from ccextractor's spupng index."""
+    entries = []
+    base = Path(path).parent
+    pat = re.compile(r'<spu start="([0-9.]+)"[^>]*image="([^"]+)"')
+    for line in Path(path).read_text(errors="replace").splitlines():
+        m = pat.search(line)
+        if m:
+            entries.append((float(m.group(1)), base / m.group(2)))
+    return entries
+
+
+def parse_srt(path):
+    """[(start_ms, [line_index, ...])] plus the raw line list (CRLF kept)."""
+    raw = Path(path).read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    cues, i = [], 0
+    time_pat = re.compile(r"(\d+):(\d+):(\d+),(\d+)\s+-->")
+    while i < len(raw):
+        m = time_pat.match(raw[i])
+        if m:
+            start_ms = (int(m.group(1)) * 3600 + int(m.group(2)) * 60
+                        + int(m.group(3))) * 1000 + int(m.group(4))
+            i += 1
+            text_lines = []
+            while i < len(raw) and raw[i].strip():
+                text_lines.append(i)
+                i += 1
+            cues.append((start_ms, text_lines))
+        else:
+            i += 1
+    return cues, raw
+
+
+LEAD_PAT = re.compile(r"^(\s*(?:<[^>]+>\s*)*)([^\s<]{1,2})(\s+)")
+TAIL_PAT = re.compile(r"(\s+)([^\s>]{1,2})((?:\s*<[^>]+>)*\s*)$")
+WORD_PAT = re.compile(r"\w", re.UNICODE)
+
+
+def fix_line(line, edge, repl):
+    """Replace a junk edge token with repl, or insert repl if OCR dropped the
+    glyph entirely. Returns (new_line, action|None)."""
+    eol = ""
+    body = line
+    while body and body[-1] in "\r\n":
+        eol = body[-1] + eol
+        body = body[:-1]
+    if edge == "start":
+        m = LEAD_PAT.match(body)
+        if m:
+            token = m.group(2)
+            if token == repl:
+                return line, None
+            if not WORD_PAT.search(token):
+                body = body[:m.start(2)] + repl + body[m.end(2):]
+                return body + eol, "replaced %r" % token
+            body = body[:m.start(2)] + repl + " " + body[m.start(2):]
+            return body + eol, "inserted"
+        return line, None
+    m = TAIL_PAT.search(body)
+    if m:
+        token = m.group(2)
+        if token == repl:
+            return line, None
+        if not WORD_PAT.search(token):
+            body = body[:m.start(2)] + repl + body[m.end(2):]
+            return body + eol, "replaced %r" % token
+    # trailing token is a word (or no match): append after it, before tags
+    m2 = re.search(r"((?:\s*<[^>]+>)*\s*)$", body)
+    pos = m2.start(1)
+    body = body[:pos] + " " + repl + body[pos:]
+    return body + eol, "appended"
+
+
+def cmd_match(args):
+    templates = load_templates(args.templates)
+    if not templates:
+        print("no templates in %s" % args.templates)
+        return 0
+    spu = parse_spuxml(args.spuxml)
+    cues, raw = parse_srt(args.srt)
+    changes = 0
+    for start_s, png in spu:
+        if not png.exists():
+            continue
+        want_ms = int(start_s * 1000) + args.delay_ms
+        cue = min(cues, key=lambda c: abs(c[0] - want_ms), default=None)
+        if cue is None or abs(cue[0] - want_ms) > TIME_SLACK_MS or not cue[1]:
+            continue
+        img = None
+        for edge in ("start", "end"):
+            for band in range(len(cue[1])):
+                if img is None:
+                    img = binarize(Image.open(png))
+                glyph, nbands = edge_glyph(img, band, edge)
+                if glyph is None or band >= nbands:
+                    continue
+                for name, repl, tmpl in templates:
+                    if glyphs_equal(glyph, tmpl):
+                        idx = cue[1][band]
+                        new, action = fix_line(raw[idx], edge, repl)
+                        if action:
+                            raw[idx] = new
+                            changes += 1
+                            print("cue @%dms line %d %s: %s -> %s"
+                                  % (cue[0], band + 1, edge, name, action))
+                        break
+    if changes and args.apply:
+        Path(args.srt).write_text("".join(raw), encoding="utf-8")
+    print("glyph fixes: %d%s" % (changes, "" if args.apply else " (dry run)"))
+    return 0
+
+
+def cmd_learn(args):
+    spu = parse_spuxml(args.spuxml)
+    if not (1 <= args.cue <= len(spu)):
+        print("cue %d out of range (1..%d)" % (args.cue, len(spu)))
+        return 1
+    _, png = spu[args.cue - 1]
+    img = binarize(Image.open(png))
+    glyph, nbands = edge_glyph(img, args.line - 1, args.edge)
+    if glyph is None:
+        print("no glyph found (cue has %d line band(s))" % nbands)
+        return 1
+    glyph.save(args.out)
+    print("template written: %s (%dx%d, from %s)"
+          % (args.out, glyph.size[0], glyph.size[1], png.name))
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    sub = p.add_subparsers(dest="mode", required=True)
+    m = sub.add_parser("match")
+    m.add_argument("--srt", required=True)
+    m.add_argument("--spuxml", required=True)
+    m.add_argument("--templates", required=True)
+    m.add_argument("--delay-ms", type=int, default=0)
+    m.add_argument("--apply", action="store_true")
+    m.set_defaults(func=cmd_match)
+    l = sub.add_parser("learn")
+    l.add_argument("--spuxml", required=True)
+    l.add_argument("--cue", type=int, required=True)
+    l.add_argument("--edge", choices=["start", "end"], default="start")
+    l.add_argument("--line", type=int, default=1)
+    l.add_argument("--out", required=True)
+    l.set_defaults(func=cmd_learn)
+    args = p.parse_args()
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()
