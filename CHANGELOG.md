@@ -20,6 +20,14 @@ All notable changes to TTCut-ng are documented in this file.
   original source. Note the behavior change: without `--subs` no subtitle
   files are written anymore.
 
+### Fixes
+
+- **Ctrl-C now aborts a ttcut-demux run instead of skipping one step.**
+  ffmpeg catches SIGINT and exits normally, so the shell's deferred trap
+  let the script march on to the next processing step after every Ctrl-C.
+  An explicit INT/TERM handler now kills background jobs and exits with
+  status 130; temp cleanup still runs exactly once via the EXIT trap.
+
 - **ttcut-demux now repairs damaged audio elementary streams at demux time**
   instead of passing the damage through. A new standalone tool,
   `ttcut-audiofix`, walks each MP2/AC3/E-AC3 audio track frame by frame,

@@ -37,7 +37,24 @@ _cleanup_temps() {
     fi
     exit $rc
 }
-trap _cleanup_temps EXIT INT TERM
+trap _cleanup_temps EXIT
+
+# INT/TERM must abort the whole run, not just the current step. Bash defers
+# the trap until the foreground child returns, and ffmpeg catches SIGINT and
+# exits NORMALLY (trailer written, rc 255) - without an explicit abort exit
+# here, a Ctrl-C would only skip the current ffmpeg invocation and the
+# script would march on to the next step. Kill background jobs (parallel
+# extraction / padding subshells), then exit 130; the EXIT trap above does
+# the temp cleanup exactly once.
+_abort_demux() {
+    echo "" >&2
+    echo "[ABORT] Interrupted - stopping and cleaning up" >&2
+    local pids
+    pids=$(jobs -p 2>/dev/null)
+    [ -n "$pids" ] && kill $pids 2>/dev/null
+    exit 130
+}
+trap _abort_demux INT TERM
 
 # Colors for output (disabled when stdout is not a terminal)
 if [ -t 1 ]; then
