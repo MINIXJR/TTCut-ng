@@ -438,10 +438,25 @@ format_ranges_hms() {
 }
 
 # Emit truncate rows for video loss the audio did NOT share.
-# For each video gap, subtract the overlapping audio-gap time; a positive
-# remainder means the audio still carries content the video lost ->
+# For each video gap, subtract the FULL size of every intersecting audio gap;
+# a positive remainder means the audio still carries content the video lost ->
 # remove exactly that many ms (negative silence_ms row, absolute source
 # anchoring keeps per-hole rounding from accumulating).
+#
+# "Full size on intersect" (not just the geometric overlap) mirrors
+# compute_audio_gap_silence_ms() exactly, and for the same reason: one real
+# transmission outage hits video and audio at the same wall-clock time, but
+# video is muxed ahead of its PTS (PES muxer lead, typically 0.5-1s) while
+# audio is muxed close to its PTS - so the SAME outage shows up as two gap
+# windows shifted against each other that overlap only partially. Counting
+# only the overlap as "shared" charged the shifted remainder a second time:
+# the audio gap already paid for the full outage in
+# compute_audio_gap_silence_ms (silence = audio_gap - full video_gap), and
+# this function then truncated (video_gap - overlap) ON TOP -> audio ran
+# ~0.8s ahead of video after the outage (measured on the 2026-08-17 "Gerber"
+# recording; regression gate: tools/diag/gate_demux_gapsync.sh).
+# Like its mirror, this can over-count when one audio gap intersects two
+# video gaps - a structural limit of the pairwise model, accepted there too.
 # Args: $1=video gaps file  $2=audio gaps file (same track)  $3=classified out
 emit_video_only_truncations() {
     local v_gaps=$1 a_gaps=$2 out=$3
@@ -459,7 +474,7 @@ emit_video_only_truncations() {
             for (i = 0; i < na; i++) {
                 os = (as[i] > vs) ? as[i] : vs
                 oe = (ae[i] < ve) ? ae[i] : ve
-                if (oe > os) shared += (oe - os)
+                if (oe > os) shared += (ae[i] - as[i])
             }
             trunc_ms = (ve - vs - shared) * 1000
             # 20ms floor also absorbs the decode-order measurement bias (see detect_video_gaps NOTE)
@@ -637,7 +652,7 @@ repair_audio_with_silence_inserts() {
 
     local concat_list="$work_dir/concat.txt"
     : > "$concat_list"
-    local prev_end=0 seg_idx=0
+    local prev_end=0 seg_idx=0 applied_sum=0
     local n=${#gap_positions[@]}
     local i
     for ((i = 0; i < n; i++)); do
@@ -658,17 +673,25 @@ repair_audio_with_silence_inserts() {
                 warn "repair_audio_with_silence_inserts: silence gap ${dur}s exceeds 40s master, capping"
                 dur=40
             fi
-            # Insert silence: trim from the master (stream-copyable; codec
-            # frame granularity is well under the spec's tolerance)
-            local sil="$work_dir/sil${seg_idx}.${audio_ext}"
-            ffmpeg -y -hide_banner -loglevel error -i "$sil_master" \
-                -t "$dur" -c copy "$sil" || { rm -rf "$work_dir"; return 1; }
-            echo "file '$(basename "$sil")'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
+            # Insert silence by referencing the MASTER with an outpoint
+            # directive - never a per-gap trimmed file. A trim shorter than
+            # 2 codec frames (e.g. 8ms of MP2) yields a 1-frame file the
+            # mp3 demuxer cannot open ("Failed to find two consecutive
+            # MPEG audio frames"); the concat demuxer then aborts the list
+            # mid-way but ffmpeg still EXITS 0, silently truncating the
+            # track to the first segment (measured 2026-08-17 "Gerber":
+            # 16.464s left of a 7198s track). outpoint cuts packet-wise
+            # from the always-openable 40s master with the same frame
+            # granularity the old -t trim had.
+            printf "file '%s'\noutpoint %s\n" \
+                "$(basename "$sil_master")" "$dur" >> "$concat_list"
+            applied_sum=$(awk -v a="$applied_sum" -v d="$dur" 'BEGIN {printf "%.6f", a + d}')
             prev_end="$pos"
         else
             local abs_dur
             abs_dur=$(awk -v d="$dur" 'BEGIN {printf "%.6f", (d<0)?-d:d}')
             prev_end=$(awk -v p="$pos" -v a="$abs_dur" 'BEGIN {printf "%.6f", p+a}')
+            applied_sum=$(awk -v a="$applied_sum" -v d="$abs_dur" 'BEGIN {printf "%.6f", a - d}')
         fi
     done
     local seg="$work_dir/seg${seg_idx}.${audio_ext}"
@@ -680,6 +703,23 @@ repair_audio_with_silence_inserts() {
     ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 \
         -i "$concat_list" -c copy "$repaired" 2>>"$work_dir/repair.log" \
         || { rm -rf "$work_dir"; return 1; }
+
+    # A clean exit code does NOT prove the concat succeeded: a mid-list
+    # demux error ("Impossible to open ...") stops consuming the list but
+    # ffmpeg still exits 0 with whatever prefix it wrote. Validate the
+    # result duration against orig + sum of signed edits before replacing
+    # the original; 1s tolerance covers per-edit frame rounding.
+    local orig_dur rep_dur exp_dur
+    orig_dur=$(ffprobe -v error -show_entries format=duration \
+        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null || echo 0)
+    rep_dur=$(ffprobe -v error -show_entries format=duration \
+        -of default=noprint_wrappers=1:nokey=1 "$repaired" 2>/dev/null || echo 0)
+    exp_dur=$(awk -v o="$orig_dur" -v s="$applied_sum" 'BEGIN {printf "%.6f", o + s}')
+    if ! awk -v r="$rep_dur" -v e="$exp_dur" 'BEGIN {d = r - e; if (d < 0) d = -d; exit !(d <= 1.0)}'; then
+        warn "repair_audio_with_silence_inserts: result duration ${rep_dur}s deviates from expected ${exp_dur}s - keeping original"
+        rm -rf "$work_dir"
+        return 1
+    fi
 
     # Replace original
     mv "$repaired" "$audio_file"
