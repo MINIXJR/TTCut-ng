@@ -1443,7 +1443,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     ES_TOTAL_AUS=""
     ES_DOUBLED_PTS_CSV=""
     if command -v ttcut-pts-analyze >/dev/null 2>&1; then
-        info "Running PTS analysis on $ORIGINAL_INPUT ..."
+        step "Running PTS analysis on $ORIGINAL_INPUT ..."
         # stderr goes to its own log: mixing it into stdout (old 2>&1)
         # raced the block-buffered CSV line and truncated the captured
         # list mid-stream (measured: 731 of 1296 entries + garbage).
@@ -1537,8 +1537,10 @@ with open('$OUTPUT_VIDEO','rb') as f:
     fi
 
     # 2b. Check A/V duration mismatch (like ProjectX does)
-    # This detects progressive drift that occurs when audio and video have different durations
-    info "Checking A/V duration alignment..."
+    # This detects progressive drift that occurs when audio and video have
+    # different durations. The step announcement is printed further below,
+    # right before the duration measurement — the interlace correction and
+    # the audio ES sanitize run first and report under their own headings.
 
     # Parse frame rate fraction (e.g., "25/1" or "30000/1001")
     FRAME_RATE_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
@@ -1645,6 +1647,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
             echo ""
         fi
     fi
+
+    step "Checking A/V duration alignment..."
 
     # Video duration = video PTS span, NOT the container span.
     # ffprobe format=duration (CONTAINER_VIDEO_DURATION) spans the latest
@@ -2116,7 +2120,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             echo ""
         fi
     elif [ ${#SUBTITLE_STREAMS[@]} -gt 0 ]; then
-        info "Attempting subtitle extraction..."
+        step "Attempting subtitle extraction..."
 
         # Get duration for mid-point sampling (subtitles may not exist during pre-roll/ads)
         if [ "$VDR_MULTIFILE" = true ] && [ "$CLEANUP_REPAIRED" != true ]; then
@@ -2156,9 +2160,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     # to the ES timeline (PTS minus first video PTS) so both
                     # outputs line up with the demuxed streams.
                     SUBS_TS="$OUTDIR/.subs_only_${idx}.ts"
-                    _CLEANUP_FILES+=("$SUBS_TS")
-                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
-                        -map 0:$idx -c copy -f mpegts "$SUBS_TS" 2>&1 | grep -E "^(Output|Stream)" || true
+                    SUBS_EXTRACT_LOG="$OUTDIR/.subs_extract_${idx}.log"
+                    _CLEANUP_FILES+=("$SUBS_TS" "$SUBS_EXTRACT_LOG")
+                    ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
+                        -map 0:$idx -c copy -f mpegts "$SUBS_TS" > "$SUBS_EXTRACT_LOG" 2>&1 || true
+                    warn_ffmpeg_log "$SUBS_EXTRACT_LOG" "  "
                     if [ ! -s "$SUBS_TS" ]; then
                         info "  DVB subtitle $idx [$lang] - no data extracted, skipped"
                         continue
@@ -2173,8 +2179,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     # default stream selection finds no stream (sparse codec
                     # detection) and errors out with "does not contain any
                     # stream" (measured).
+                    MKS_MUX_LOG="$OUTDIR/.subs_mks_${idx}.log"
+                    _CLEANUP_FILES+=("$MKS_MUX_LOG")
                     ffmpeg -y -v error -probesize 5M -analyzeduration 10M \
-                        -i "$SUBS_TS" -map 0 -c copy -f matroska "$OUTPUT_SUB" 2>&1 | head -3 || true
+                        -i "$SUBS_TS" -map 0 -c copy -f matroska "$OUTPUT_SUB" > "$MKS_MUX_LOG" 2>&1 || true
+                    warn_ffmpeg_log "$MKS_MUX_LOG" "  "
                     [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
 
                     # OCR stage (Ts2MKV-proven pipeline): bitmap -> cuttable
@@ -2282,7 +2291,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # 4. Calculate A/V sync offset
     # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
     # The repaired file has timestamps normalized to 0, so we need the original for offset
-    info "Calculating A/V sync offset..."
+    step "Calculating A/V sync offset..."
 
     # Reuse the pre-repair measurement (probe_first_video_pts): for a single
     # file $INPUT and $ORIGINAL_INPUT were the same path; for VDR multi-file
@@ -2328,7 +2337,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
     # 5. Create info file with metadata
     OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
-    info "Creating info file: $OUTPUT_INFO"
+    step "Creating info file: $OUTPUT_INFO"
 
     # Calculate trimmed ms for info file
     AUDIO_TRIM_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_TRIM_SEC * 1000}")
@@ -2577,8 +2586,6 @@ EOF
         cp "$pgm_file" "$logo_dest"
         info "Logo PGM copied: $(basename "$pgm_file") -> $(basename "$logo_dest")"
     fi
-
-    echo ""
 
     # Summary
     echo ""
