@@ -416,6 +416,27 @@ audiofix_ranges_to_video_frames() {
         }'
 }
 
+# format_ranges_hms RANGES FPS
+# Render a frame-range CSV ("S-E,S-E,..." — an optional ":MS" suffix per
+# range, as in es_missing_ranges, is ignored) human-readable for the log:
+# "S-E (~H:MM:SS), ..." with the timestamp of each range start derived
+# from the video frame rate. With no usable fps the ranges pass through
+# without timestamps — the log line still names the frames.
+format_ranges_hms() {
+    local ranges="$1" fps="$2"
+    if ! awk -v f="$fps" 'BEGIN { exit (f+0 > 0) ? 0 : 1 }'; then
+        echo "$ranges" | tr ',' '\n' | sed 's/:.*//' | paste -sd, -
+        return
+    fi
+    echo "$ranges" | tr ',' '\n' | awk -F'[-:]' -v fps="$fps" '
+        NF >= 2 {
+            t = int($1 / fps)
+            printf "%s%s-%s (~%d:%02d:%02d)", n++ ? ", " : "", $1, $2,
+                   int(t/3600), int((t%3600)/60), t%60
+        }
+        END { if (n) print "" }'
+}
+
 # Emit truncate rows for video loss the audio did NOT share.
 # For each video gap, subtract the overlapping audio-gap time; a positive
 # remainder means the audio still carries content the video lost ->
@@ -1612,7 +1633,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
                     # ms positions (junk + CRC) -> video frames, clustered (<=2s)
                     AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
-                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes), see audio_${i}_corrupt_ranges in the .info file"
+                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes) at video frame(s) $(format_ranges_hms "${AUDIOFIX_CORRUPT_RANGES[$i]}" "$FRAME_RATE_DEC")"
                 else
                     rm -f "$TEMP_FIXED"
                     warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
@@ -1764,7 +1785,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
             EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_DURATION_MS / 1000.0) * $FRAME_RATE_DEC}")
             if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
-                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, see es_missing_ranges in the .info file (shown as defect markers in TTCut-ng)"
+                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, defect positions are reported below (and as markers in TTCut-ng)"
             fi
         fi
 
@@ -2470,6 +2491,7 @@ EOF
                   start_fs = fs; last_fs = fs; sum_ms = ms; state = 1 }
                 END { if (state) printf "%s%d-%d:%d", sep, start_fs, last_fs + 1, sum_ms }')
             echo "es_missing_ranges=$MISS_RANGES" >> "$OUTPUT_INFO"
+            warn "  Missing video frame(s) at $(format_ranges_hms "$MISS_RANGES" "$FRAME_RATE_DEC")"
         fi
     fi
 
@@ -2528,6 +2550,7 @@ EOF
         if [ -n "$CORRUPT_RANGES" ]; then
             write_warnings_header_if_needed
             echo "corrupt_frame_ranges=$CORRUPT_RANGES" >> "$OUTPUT_INFO"
+            warn "  Corrupt video frame(s) at $(format_ranges_hms "$CORRUPT_RANGES" "$FRAME_RATE_DEC")"
         fi
     fi
 
