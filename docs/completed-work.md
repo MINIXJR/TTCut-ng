@@ -388,6 +388,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Untertitel-Zeitachse: ES-Rebase war komplett wirkungslos — alle Cues
+  um die Länge des untertitelfreien Vorlaufs zu früh** → **GEFIXT
+  (2026-08-17, `5b2b0256`, released v0.81.1)**
+  - **Symptom** (User-Fund an 03x06): Untertitel „massiv versetzt", TS OK.
+    Gemessen: erster Untertitel im Original-TS bei 27117,848 s absolut,
+    `first_video_pts` 27079,308 s → korrekte ES-Position **38,540 s**; die
+    SRT begann aber bei 1,400 s, die `.mks` bei 0 → konstant **−37,14 s**
+    über die volle Länge (letzte Cue alt 01:19:20,485 / neu 01:19:57,625).
+  - **Mechanismus**: Der Subs-Only-TS enthält nur den Untertitelstrom.
+    ffmpegs Default-Rebase nimmt dessen erstes Paket als Startzeit,
+    `avoid_negative_ts` pinnt es fest, der mpegts-`muxdelay` addiert 1,4 s
+    — das beabsichtigte `-output_ts_offset -ORIG_VIDEO_PTS` war damit
+    vollständig neutralisiert: **jede** Aufnahme meldete „delay 1400 ms"
+    (der rauchende Colt in allen sechs Logs vom 2026-08-17). Die
+    ccextractor-`-delay`-Ableitung aus dem ersten Paket zementierte den
+    Fehler in die SRT. Maskiert auf Material, dessen Untertitel nahe am
+    Videostart beginnen (GUI-Abnahme 2026-08-16: Fehler ≈ 0; die übrigen
+    Folgen der Staffel: ~4 s bzw. ~0 — deckt sich exakt mit dem Modell
+    „Vorlauf − 1,4 s").
+  - **Fix**: `-copyts -muxdelay 0 -avoid_negative_ts disabled` an der
+    Subs-Only-Extraktion (Offset wird ehrliche Subtraktion) und `-copyts`
+    am `.mks`-Schritt (sonst re-nullt die Matroska-Stufe). Verifiziert per
+    Voll-Demux 03x06: „delay 38540 ms", SRT-Cue 1 = 00:00:38,540 mit
+    korrektem Text, `.mks`-Pakete identisch, Versatz am Dateiende exakt 0.
+  - Details der Flag-Semantik in `docs/code-map/ttcut-demux.md`
+    (Untertitel-Export-Zeile).
+
 - **Untertitel-Export als Option — und drei Schichten vorbestehender
   Defekte, die ihn immer leer laufen ließen** (2026-08-16, branch
   `feature/subs-option`)
@@ -600,6 +627,34 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - Scaling-Investigation: Sweet Spot 4-8 Worker, siehe `project_hevc_search_perf_investigation.md`
 
 ### GUI und Wiedergabe
+
+- **„Wiedergabe-MKV dauert 6 Minuten, Fenster reagiert nicht" — Muxer war
+  unschuldig, Ursache Konsole-cgroup-Limit** → **AUFGEKLÄRT (2026-08-17)**
+  - Messkette: In-App-Mux 22 MB/s; `bench_playback_mux` standalone 55 MB/s
+    von btrfs, aber 545 MB/s von tmpfs und linear bis 5,2 GB; `dd` liest
+    dieselbe Datei mit 4,8 GB/s; Prozess dauernd State R, 485 µs pro
+    32-KB-read, physische Reads 2,5× der logischen (Cache-Thrash).
+  - Ursache: Konsole 26.04 Speicher-Monitoring (`konsolerc
+    [MemorySettings] MemoryLimitValue=1000`) schreibt `memory.high=1 GB`
+    direkt in die cgroup jedes Terminal-Tabs (auch Dolphins eingebettetes
+    Terminal; `systemctl --user show` zeigt trotzdem `infinity`). Jeder
+    daraus gestartete Prozess erbt das Korsett; das 8-GB-tmpfs-Schreiben
+    des Wiedergabe-MKV erzwang Dauer-Reclaim.
+  - Gegenbeweis: identischer Lauf unter `systemd-run --user --scope
+    -p MemoryHigh=infinity` → 53 s → **2,1 s (1478 MB/s), Faktor 25**.
+    Erklärt auch „finaler Schnitt ist schneller": der schreibt auf btrfs
+    (Dirty Pages fließen ab), die Wiedergabe in tmpfs (shmem bleibt in der
+    cgroup). Werkzeug: `tools/diag/bench_playback_mux` (`ed8f8db8`);
+    Messfallen-Memory `reference_konsole_memory_high_cgroup`.
+  - Verbleibender struktureller Rest (GUI-Thread-Blockade ~6 s) → TODO.md
+    „Wiedergabe-Mux blockiert den GUI-Thread".
+  - Nebenbefund derselben Sitzung: Roh-ES-Wiedergabe in mpv ist kein
+    Ersatz für das Temp-MKV — libav meldet raw H.264 als timestamp-los
+    (Seek „generally broken", gemessen: `--start` scheitert selbst bei
+    60 s; Framerate ohne `--demuxer-lavf-o=framerate=50` um Faktor 2
+    falsch); Timestamp-Sidecar-Dateien liest kein Player (mkvmerge
+    `--timestamps` ist eine Muxer-Eingabe, MP4-`dref` hätte nur eine
+    Lese-Hälfte in libav).
 
 - **Untertitel-Delay editierbar + Delay-Vorzeichen auf mkvmerge-Konvention
   gedreht** → **DONE (2026-08-16, Branch `feature/subtitle-delay`)**

@@ -307,6 +307,20 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Kein gemessener Fehlerfall — deshalb nicht mitgefixt. Wer es angeht:
     dasselbe Muster wie in `encodePart()` (`QTemporaryDir` je Vorgang).
 
+- **Wiedergabe-Mux blockiert den GUI-Thread** (2026-08-17, mittlere/niedrige
+  Priorität)
+  - `TTCurrentFrame::createTempMkvForPlayback()` (`gui/ttcurrentframe.cpp`)
+    läuft synchron auf dem GUI-Thread: kein Fortschritt, kein Abbruch, das
+    Fenster meldet „reagiert nicht", bis der Mux fertig ist. Seit dem
+    Konsole-cgroup-Fund (siehe `docs/completed-work.md`, Untertitel-/
+    Wiedergabe-Einträge 2026-08-17) sind das ~6 s pro Quelle (vorher
+    minutenlang) — deshalb herabgestuft, aber strukturell offen.
+  - Lösungsform: wie die Schnitt-Tasks in den Task-Pool verlagern
+    (Fortschritt + Abbruch inklusive); hängt mit dem geteilten Temp-Namen
+    `ttcut-ng_playback_temp.mkv` zusammen (Eintrag „Weitere geteilte
+    Temp-Namen" oben).
+  - Messwerkzeug: `tools/diag/bench_playback_mux` (Mux-Durchsatz standalone).
+
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).

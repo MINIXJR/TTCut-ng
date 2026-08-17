@@ -2,6 +2,36 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.81.1 (2026-08-17)
+
+**Subtitle Timeline Fix, Dotted-Title Fix, Clearer Demux Logs**
+
+### Fixes
+- **Subtitle export timeline**: the OCR SRT and the bitmap `.mks` were shifted
+  early by the length of the recording's subtitle-free lead-in (measured 37 s
+  on real material) — ffmpeg's input rebase nullified the intended ES-timeline
+  offset in the subtitle-only extraction. Both tracks now carry true
+  ES-timeline timestamps (`-copyts`); recordings whose subtitles start near
+  the video begin were unaffected.
+- **Cut output name**: titles containing dots (e.g. a VDR-masked trailing
+  `..#2E`, or `Mission 1.5`) lost their last dot-segment every time the cut
+  dialog rebuilt the output filename; only known container/ES extensions are
+  stripped now.
+- **Cut-list buttons**: the action-button column could overlap and clip when
+  shrinking the main window — hand-written minimum sizes underrode the real
+  layout minimum (window minimum height grows ~40 px as a result).
+- **vdr-demux-example.sh**: `vdr_unmask` now also decodes `#2E` (dot), and the
+  end-of-run log listing no longer drops logs of runs longer than five minutes.
+
+### Changes
+- **ttcut-demux log output**: defect positions (audio junk, missing and
+  corrupt video frames) are written directly into the log as frame ranges
+  with timestamps instead of pointing at the `.info` file; every processing
+  section starts with a `[STEP]` line; subtitle-extraction ffmpeg output runs
+  through the shared warning filter.
+- New diag tools: `bench_playback_mux` (playback-mux throughput),
+  `test_cutlist_minsize`, `test_output_name` (regression harnesses).
+
 ## v0.81.0 (2026-08-16)
 
 **Audio ES Sanitizer, Subtitle Export with OCR, Editable Subtitle Delay**
