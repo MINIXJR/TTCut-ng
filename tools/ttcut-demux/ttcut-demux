@@ -2159,10 +2159,25 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     # One subs-only TS serves bitmap export AND OCR, rebased
                     # to the ES timeline (PTS minus first video PTS) so both
                     # outputs line up with the demuxed streams.
+                    # -copyts is essential: without it ffmpeg first rebases
+                    # the output to the input start time, and since this
+                    # output holds ONLY the subtitle stream, that start time
+                    # is the first subtitle packet itself - avoid_negative_ts
+                    # then pins it to ~0 regardless of its true position and
+                    # -output_ts_offset is nullified (measured on 03x06:
+                    # every recording came out with first packet = 1.400s
+                    # muxdelay instead of the real 38.540s, shifting all
+                    # subtitles ~37s early). With -copyts the offset is a
+                    # plain subtraction: source PTS - first video PTS.
+                    # A subtitle from before the video start would wrap in
+                    # mpegts (no negative PTS) - acceptable, it has no video
+                    # to belong to anyway.
                     SUBS_TS="$OUTDIR/.subs_only_${idx}.ts"
                     SUBS_EXTRACT_LOG="$OUTDIR/.subs_extract_${idx}.log"
                     _CLEANUP_FILES+=("$SUBS_TS" "$SUBS_EXTRACT_LOG")
-                    ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
+                    ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" \
+                        -copyts -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
+                        -muxdelay 0 -avoid_negative_ts disabled \
                         -map 0:$idx -c copy -f mpegts "$SUBS_TS" > "$SUBS_EXTRACT_LOG" 2>&1 || true
                     warn_ffmpeg_log "$SUBS_EXTRACT_LOG" "  "
                     if [ ! -s "$SUBS_TS" ]; then
@@ -2181,8 +2196,10 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     # stream" (measured).
                     MKS_MUX_LOG="$OUTDIR/.subs_mks_${idx}.log"
                     _CLEANUP_FILES+=("$MKS_MUX_LOG")
+                    # -copyts again: keep the ES-timeline position instead of
+                    # rebasing the .mks to start at the first subtitle.
                     ffmpeg -y -v error -probesize 5M -analyzeduration 10M \
-                        -i "$SUBS_TS" -map 0 -c copy -f matroska "$OUTPUT_SUB" > "$MKS_MUX_LOG" 2>&1 || true
+                        -copyts -i "$SUBS_TS" -map 0 -c copy -f matroska "$OUTPUT_SUB" > "$MKS_MUX_LOG" 2>&1 || true
                     warn_ffmpeg_log "$MKS_MUX_LOG" "  "
                     [ -s "$OUTPUT_SUB" ] && SUBTITLE_FILES+=("$OUTPUT_SUB") || rm -f "$OUTPUT_SUB"
 
