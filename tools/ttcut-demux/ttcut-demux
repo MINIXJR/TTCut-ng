@@ -649,6 +649,13 @@ repair_audio_with_silence_inserts() {
     ffmpeg -y -hide_banner -loglevel error \
         -f lavfi -t 40 -i "anullsrc=r=${sample_rate}:cl=${sil_layout}" \
         -c:a "$codec" -b:a "$bitrate" "$sil_master" || { rm -rf "$work_dir"; return 1; }
+    # Codec frame duration, probed from the master itself (MP2@48k 24ms,
+    # AC3 32ms, ...) - used to round each silence insert to the NEAREST
+    # whole-frame amount below. Empty/zero on probe failure -> no rounding.
+    local sil_frame_dur
+    sil_frame_dur=$(ffprobe -v error -select_streams a:0 -show_entries \
+        packet=duration_time -of csv=p=0 "$sil_master" 2>/dev/null | head -1)
+    sil_frame_dur="${sil_frame_dur%,}"
 
     local concat_list="$work_dir/concat.txt"
     : > "$concat_list"
@@ -680,12 +687,28 @@ repair_audio_with_silence_inserts() {
             # MPEG audio frames"); the concat demuxer then aborts the list
             # mid-way but ffmpeg still EXITS 0, silently truncating the
             # track to the first segment (measured 2026-08-17 "Gerber":
-            # 16.464s left of a 7198s track). outpoint cuts packet-wise
-            # from the always-openable 40s master with the same frame
-            # granularity the old -t trim had.
-            printf "file '%s'\noutpoint %s\n" \
-                "$(basename "$sil_master")" "$dur" >> "$concat_list"
-            applied_sum=$(awk -v a="$applied_sum" -v d="$dur" 'BEGIN {printf "%.6f", a + d}')
+            # 16.464s left of a 7198s track).
+            # Stream-copy quantizes to whole codec frames either way; round
+            # to the NEAREST frame count (a plain outpoint=dur rounds UP,
+            # costing up to a full frame of sync error per insert). n=0:
+            # skip the insert entirely - the sub-half-frame remainder is a
+            # smaller error than one full frame of silence. The half-frame
+            # margin on the outpoint keeps float jitter in packet dts from
+            # flipping the packet count at exact frame-multiple boundaries.
+            local n_frames ins_dur
+            if awk -v f="$sil_frame_dur" 'BEGIN {exit !(f > 0)}'; then
+                n_frames=$(awk -v d="$dur" -v f="$sil_frame_dur" 'BEGIN {printf "%d", int(d/f + 0.5)}')
+                ins_dur=$(awk -v n="$n_frames" -v f="$sil_frame_dur" 'BEGIN {printf "%.6f", n * f}')
+            else
+                n_frames=1
+                ins_dur="$dur"
+            fi
+            if [ "$n_frames" -gt 0 ]; then
+                printf "file '%s'\noutpoint %s\n" "$(basename "$sil_master")" \
+                    "$(awk -v n="$n_frames" -v f="$sil_frame_dur" -v d="$ins_dur" \
+                        'BEGIN {printf "%.6f", (f > 0) ? (n - 0.5) * f : d}')" >> "$concat_list"
+                applied_sum=$(awk -v a="$applied_sum" -v d="$ins_dur" 'BEGIN {printf "%.6f", a + d}')
+            fi
             prev_end="$pos"
         else
             local abs_dur

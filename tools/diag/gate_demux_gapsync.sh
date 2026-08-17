@@ -118,12 +118,15 @@ grep -q "^repair_audio_with_silence_inserts() {" "$WORK/.fns_repair.sh" || { ech
 warn() { echo "WARN: $1"; }
 # shellcheck disable=SC1090
 source "$WORK/.fns_repair.sh"
-# Check 5: alleinstehende 8ms-Insertion (Gerber-Fall) — Datei muss ~120s bleiben
-check_repair_e2e "sil8ms"  "116.464000 117.712000 1248 8"    120.0 0.2
-# Check 6: 32ms-Insertion (2 MP2-Frames, war schon vorher ok — Regression)
-check_repair_e2e "sil32ms" "116.464000 117.736000 1272 32"   120.1 0.2
-# Check 7: Truncation-Edit (war schon vorher ok — Regression): -812ms
-check_repair_e2e "trunc"   "116.044000 117.292000 1248 -812" 119.2 0.2
+# Silence-Menge wird auf das NAECHSTE Framevielfache gerundet (nearest,
+# nicht aufgerundet) — minimiert den Sync-Restfehler pro Edit auf ±1/2
+# Frame (MP2-Frame = 24 ms):
+# Check 5: 8ms-Soll -> nearest 0 Frames: kein Eintrag, Dauer exakt 120s
+check_repair_e2e "sil8ms"  "116.464000 117.712000 1248 8"    120.000 0.005
+# Check 6: 32ms-Soll -> nearest 1 Frame (24ms): Dauer 120.024s
+check_repair_e2e "sil32ms" "116.464000 117.736000 1272 32"   120.024 0.005
+# Check 7: Truncation-Edit -812ms (Schnitt quantisiert auf Framegrenzen)
+check_repair_e2e "trunc"   "116.044000 117.292000 1248 -812" 119.188 0.026
 
 # --- Check 4: Disjunkte Ereignisse (separater Audio-Ausfall + Video-Gap) ---
 # Audio-Gap weit weg vom Video-Gap: beide unabhaengig voll verrechnen
