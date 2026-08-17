@@ -1612,7 +1612,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
                     # ms positions (junk + CRC) -> video frames, clustered (<=2s)
                     AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
-                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes), see audio_${i}_corrupt_ranges"
+                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes), see audio_${i}_corrupt_ranges in the .info file"
                 else
                     rm -f "$TEMP_FIXED"
                     warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
@@ -1764,7 +1764,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
             EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_DURATION_MS / 1000.0) * $FRAME_RATE_DEC}")
             if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
-                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, check the defect markers"
+                warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, see es_missing_ranges in the .info file (shown as defect markers in TTCut-ng)"
             fi
         fi
 
