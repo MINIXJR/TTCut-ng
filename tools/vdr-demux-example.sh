@@ -25,6 +25,12 @@
 
 set -e
 
+# Run start time — reference point for the "created by this run" filters
+# (find -newermt) at the end of the script. A fixed point instead of
+# -mmin -5, because a run over several recordings easily exceeds five
+# minutes and the early logs would drop out of the listing and the popup.
+SCRIPT_START=$(date +%s)
+
 # Konfiguration — adapt these paths to your system
 IN_PFAD="$HOME/Videos/VDR"
 OUT_PFAD="$HOME/Videos/TTCut_Output"
@@ -291,7 +297,7 @@ echo ""
 if [ -d "$OUT_PFAD" ]; then
     echo "Erstellte Dateien:"
     find "$OUT_PFAD" -maxdepth 1 -type f \( -name "*.264" -o -name "*.265" -o -name "*.m2v" -o -name "*.info" -o -name "*.log" \) \
-        -mmin -5 -exec ls -lh {} \; 2>/dev/null | head -20
+        -newermt "@$SCRIPT_START" -exec ls -lh {} \; 2>/dev/null | head -20
     echo ""
 fi
 
@@ -328,7 +334,7 @@ fi
 # Log-Dateien in Editor öffnen (optional)
 if command -v kdialog &>/dev/null; then
     # Use mapfile + -print0 to handle filenames with spaces/glob chars safely.
-    mapfile -d '' -t LOG_FILES < <(find "$OUT_PFAD" -maxdepth 1 -name "*.log" -mmin -5 -print0 2>/dev/null)
+    mapfile -d '' -t LOG_FILES < <(find "$OUT_PFAD" -maxdepth 1 -name "*.log" -newermt "@$SCRIPT_START" -print0 2>/dev/null | sort -z)
     if [ ${#LOG_FILES[@]} -gt 0 ]; then
         if kdialog --yesno "Log-Dateien anzeigen? (${#LOG_FILES[@]} Datei(en))" --title "VDR Demux" 2>/dev/null; then
             kwrite "${LOG_FILES[@]}" &
