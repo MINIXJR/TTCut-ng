@@ -300,8 +300,7 @@ void TTCutAVCutDlg::getCommonData()
   // codec-specific ES extension (.m2v / .h264 / .h265). Strip the UI
   // container extension here and re-attach the ES one. Read the container
   // from the live UI (setOutputContainer happens in setGlobalData() below).
-  QFileInfo fi(displayName);
-  QString base = fi.completeBaseName();
+  QString base = stripKnownExtension(displayName);
   int container = cbMuxerProg->currentData().toInt();
   TTSettings::instance()->setCutVideoName(base + "." + expectedEsExtension(container,
                                                          TTSettings::instance()->encoderCodec()));
@@ -497,6 +496,27 @@ QString TTCutAVCutDlg::expectedEsExtension(int container, int codec)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Strip the extension from a name only when it is one this dialog itself
+ * attaches (container or intermediate ES). A blind
+ * QFileInfo::completeBaseName() cuts at the last dot regardless and eats
+ * the tail of any title that contains dots — a VDR-masked trailing dot
+ * ("...#2E") or a plain "Mission 1.5" both lost their last segment.
+ */
+QString TTCutAVCutDlg::stripKnownExtension(const QString& fileName)
+{
+  static const QStringList known = {
+    QStringLiteral("mkv"), QStringLiteral("mpg"), QStringLiteral("m2v"),
+    QStringLiteral("h264"), QStringLiteral("264"),
+    QStringLiteral("h265"), QStringLiteral("265")
+  };
+  const int dot = fileName.lastIndexOf(QLatin1Char('.'));
+  if (dot < 0)
+    return fileName;
+  return known.contains(fileName.mid(dot + 1).toLower()) ? fileName.left(dot)
+                                                         : fileName;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Rebuild leOutputFile from the current widget state:
  *   basename (± "_cut" suffix) + "." + container extension.
  * A manual base name typed by the user is preserved; only the "_cut" suffix
@@ -504,8 +524,7 @@ QString TTCutAVCutDlg::expectedEsExtension(int container, int codec)
  */
 void TTCutAVCutDlg::updateOutputFilename()
 {
-  QFileInfo fi(leOutputFile->text());
-  QString base = fi.completeBaseName();
+  QString base = stripKnownExtension(leOutputFile->text());
 
   bool hasSuffix  = base.endsWith(QStringLiteral("_cut"));
   bool wantSuffix = cbAddSuffix->isChecked();

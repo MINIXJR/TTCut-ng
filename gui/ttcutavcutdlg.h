@@ -37,6 +37,10 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
     void setCommonData();
     void getCommonData();
 
+    // Strips only extensions this dialog itself attaches; public for the
+    // test_output_name diag harness.
+    static QString stripKnownExtension(const QString& fileName);
+
   protected slots:
     void onDlgStart();
     void onDlgCancel();
