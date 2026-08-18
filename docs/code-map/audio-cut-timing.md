@@ -1,6 +1,6 @@
 ---
-base_commit: 5f51c1dd1acbef9196183f91694edd877f180c9c
-last_verified: 2026-08-16
+base_commit: b3d97c88a4d4089d74d96f38c4fabfcd4238ef1a
+last_verified: 2026-08-18
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -223,7 +223,10 @@ flowchart TD
   Defekt-Meldung, nicht der Cut-Zeitrechnung. `countExtraFramesBefore` liest allein
   `mExtraFrameIndices`. Nicht verwechseln.
 - **Delay ist pro Track, Drift-Anzeige nur Track 0.** Bei unterschiedlichen
-  Per-Track-Delays zeigt Spalte 4 nur die erste Spur.
+  Per-Track-Delays zeigt Spalte 4 nur die erste Spur. Wer Track 0 ist,
+  bestimmt seit `b3d97c88` allein die initiale Ladesortierung (Projekt-Load:
+  gespeicherte `<Order>`); danach ist die Reihenfolge user-kontrolliert —
+  eine manuelle Umsortierung ändert damit auch die Drift-Anzeige-Spur.
 
 ## Redundanz / Konsolidierungskandidaten
 

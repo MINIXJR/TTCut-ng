@@ -1,5 +1,5 @@
 ---
-base_commit: 5b2b02563deb130d2276123805d151de8bfe7fe8
+base_commit: b3d97c88a4d4089d74d96f38c4fabfcd4238ef1a
 last_verified: 2026-08-17
 sources:
   - tools/ttcut-demux/ttcut-demux

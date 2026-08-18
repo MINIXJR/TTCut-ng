@@ -2,6 +2,40 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.81.2 (2026-08-18)
+
+**Cut Dialog Settings Persistence, Stable Audio Track Order, Demux Gap Fix**
+
+### Fixes
+- **Cut dialog settings survive the session**: values changed in the cut
+  dialog (output path, suffix, container choice, encoder overrides) were only
+  written to disk at program exit; opening the next recording or File-New
+  silently reverted them, so a changed cut path had to be re-selected for
+  every recording. They are now persisted the moment the cut starts (Cancel
+  still discards).
+- **Manual audio track order sticks**: rearranging audio tracks with the
+  up/down buttons was undone by the next background operation (opening a
+  file, search, preview, cut) — an internal re-sort ran after every thread
+  pool run. Automatic ordering (AC3 first, language preference) now applies
+  only while a video is initially loading; afterwards the order belongs to
+  the user. Projects save the visible track order and restore exactly that
+  order on reload (previously the stored order was the discovery order and
+  the language preference re-sorted it on every load).
+- **ttcut-demux: audio ran ~0.8 s ahead after a shared A/V transmission
+  outage**: one real outage hits video and audio at the same wall-clock
+  time, but the PES muxer lead shifts the two gap windows against each
+  other — the truncation path treated the shifted remainder as extra audio
+  and cut it a second time. Also fixed on the way: a sub-frame silence
+  insert could silently destroy a track (concat abort left a 16 s torso,
+  padded with hours of silence; a duration validation now guards every
+  repair), and silence inserts are rounded to the nearest codec frame
+  (measured max sync error after a repaired outage: 54 ms → 22 ms).
+
+### Changes
+- New diag harness: `test_audio_order_reset` (drives the real main window:
+  track reorder across tab switches, pool runs and project save/reload, plus
+  the cut-dialog persistence flow).
+
 ## v0.81.1 (2026-08-17)
 
 **Subtitle Timeline Fix, Dotted-Title Fix, Clearer Demux Logs**

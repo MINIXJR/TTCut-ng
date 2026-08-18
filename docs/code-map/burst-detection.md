@@ -1,6 +1,6 @@
 ---
-base_commit: 5f51c1dd1acbef9196183f91694edd877f180c9c
-last_verified: 2026-08-16
+base_commit: b3d97c88a4d4089d74d96f38c4fabfcd4238ef1a
+last_verified: 2026-08-18
 sources:
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
@@ -97,7 +97,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 |---|---|
 | `SET → WRAP` | `TTSettings::burstMinDeltaDb()`, Default 20 dB. **`<= 0` ⇒ Frühausstieg im Wrapper, ohne die Audiodatei zu öffnen** (verifiziert: 0 `openat`). Werte 1–19 wirken erst seit `a7d1c0e`; vorher blockierte die im Detektor hartcodierte 20 dB die untere Reglerhälfte. |
 | `WRAP → DET` | `boundaryTime` in Sekunden der **Quell**-Zeitachse, aus dem Video-Frame-Index: CutIn `(cutInIndex − extraIn)/frameRate`, CutOut `(cutOutIndex + 1 − extraOut)/frameRate`. Das `+1` legt die Grenze hinter den letzten behaltenen Frame; `extraIn/Out` = `countExtraFramesBefore` (MPEG-2-Field-Extras, siehe `mpeg2-cut.md`). Dazu `minDeltaDb` durchgereicht. |
-| `SRC → DET` | Dekodierte Samples des **Quell**-AC3 (Track 0), nicht des geschnittenen Outputs — daher unabhängig von Smart-Cut-, Mux- und PTS-Pfaden. |
+| `SRC → DET` | Dekodierte Samples des **Quell**-AC3 (Track 0 = Position 0 der Audio-Liste), nicht des geschnittenen Outputs — daher unabhängig von Smart-Cut-, Mux- und PTS-Pfaden. Wer Track 0 ist, bestimmt seit `b3d97c88` allein die initiale Ladesortierung (AC3 > Sprachpräferenz; Projekt-Load: gespeicherte `<Order>`) — danach ist die Reihenfolge dauerhaft user-kontrolliert (Up/Down-Knöpfe), der frühere Re-Sort bei jedem Pool-Exit ist weg. Der per-Append-Sort in `onOpenAudioFinished` garantiert weiterhin, dass Track 0 schon **vor** dem Pool-Exit die präferierte Spur ist (Burst-Detection beim initialen VDR-Cut-Add). |
 | `DET → RES` | `bool present` + `burstRmsDb`/`contextRmsDb` (**nur bei Treffer gesetzt**). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). Peak statt First-Hit, weil die Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms ⇒ `present` invariant); der Erkennungs-Fix war die Schwellen-Vereinheitlichung. |
 | `RES → BURST`, `RES → PREV`, `RES → FINAL` | Dasselbe `CutBurstInfo` an alle drei Konsumenten, kein Nachfilter mehr (`a7d1c0e`). Deshalb zeigen Schnittliste, Preview-Dialog und Final-Warndialog **zwangsläufig dieselbe `present`-Entscheidung** — „Icon fehlt" und „Warnung fehlt" haben immer dieselbe Ursache. |
 | `HDR → ACMOD` | `acmod` aus der **In-Memory** `TTAudioHeaderList` (`TTAC3AudioHeader`): kein File-I/O, kein libav — anders als der Burst-Pfad. Rand-acmod am CutIn-/CutOut-Frame vs. Mehrheits-acmod (Stichprobe erste/letzte ~100 AC3-Frames des Segments). Nur AC3 (`dynamic_cast`), sonst stiller Rückweg. |
@@ -113,7 +113,9 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 ## Annahmen & Verträge
 
 - Detektor: Quell-Audio Track 0; boundaryTime in Sekunden der Quell-Zeitachse
-  (Audio-Start = Video-Frame 0, ttcut-demux-Trim).
+  (Audio-Start = Video-Frame 0, ttcut-demux-Trim). Track 0 ist nach dem
+  initialen Laden user-kontrolliert (seit `b3d97c88`, siehe `SRC → DET`) —
+  eine manuelle Umsortierung ändert also auch die Burst-Analyse-Spur.
 - `burstMinDeltaDb == 0` schaltet die **Erkennung** ab (Frühausstieg vor dem Dateizugriff; im Settings-Tooltip dokumentiert). Früher (vor `a7d1c0e`) übersprang 0 nur den Nachfilter und wirkte damit wie 20.
 - Der `minDeltaDb <= 0`-Ausstieg steht **zweimal**: in beiden Wrappern (spart den
   Dateizugriff) und als Guard gleich am Anfang von `detectAudioBurst` selbst
