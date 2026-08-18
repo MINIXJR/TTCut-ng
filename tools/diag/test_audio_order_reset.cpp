@@ -22,6 +22,39 @@
 //
 //   usage: test_audio_order_reset <project.ttcut> <subtitle.srt> <workdir>
 //
+// Test material recipe (self-contained from the tux cache; the project needs
+// TWO audio tracks with distinct languages, the NON-preferred one FIRST so
+// step 0 proves the initial sort, plus a <Cut> block for phase B's real cut):
+//
+//   TMP=<scratch>; CACHE=tools/test-videos/cache
+//   cp $CACHE/tux_mpeg2_576i_pal_test.mp2 $TMP/tux_audio_eng.mp2
+//   cp $CACHE/tux_mpeg2_576i_pal_test.mp2 $TMP/tux_audio_deu.mp2
+//   cp $CACHE/tux_h264_1080p_progressive_test.srt $TMP/probe.srt
+//   cat > $TMP/two_tracks.ttcut <<EOF
+//   <!DOCTYPE TTCut-Projectfile>
+//   <TTCut-Projectfile>
+//    <Version>1.0</Version>
+//    <Video>
+//     <Order>0</Order>
+//     <Name>$CACHE/tux_mpeg2_576i_pal_test.m2v</Name>
+//     <Audio><Order>0</Order><Name>$TMP/tux_audio_eng.mp2</Name><Language>eng</Language></Audio>
+//     <Audio><Order>1</Order><Name>$TMP/tux_audio_deu.mp2</Name><Language>deu</Language></Audio>
+//     <Cut><Order>0</Order><CutIn>200</CutIn><CutOut>400</CutOut></Cut>
+//    </Video>
+//   </TTCut-Projectfile>
+//   EOF
+//
+// Run on a COPY of the .ttcut (the round-trip step saves back into it), with
+// a fresh XDG_CONFIG_HOME and QT_QPA_PLATFORM=offscreen:
+//
+//   cp $TMP/two_tracks.ttcut $TMP/work/roundtrip.ttcut
+//   XDG_CONFIG_HOME=$TMP/config QT_QPA_PLATFORM=offscreen \
+//     tools/diag/test_audio_order_reset $TMP/work/roundtrip.ttcut \
+//       $TMP/probe.srt $TMP/work
+//
+// Expected (fixed build): step 0 shows the .ttcut order (eng first — project
+// order wins), steps 2-5 and phase B all report [kept].
+//
 // Build: cmake --build build --target test_audio_order_reset
 #include <QApplication>
 #include <QDialog>
