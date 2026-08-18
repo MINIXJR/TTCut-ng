@@ -1200,8 +1200,6 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   if (mpAVData->avCount() == 0 || cutData->count() == 0 )
     return;
 
-  TTSettings::instance()->save();
-
   // Detect source video codec and set encoder codec to match
   TTVideoStream* vStream = mpCurrentAVDataItem->videoStream();
   TTAVTypes::AVStreamType streamType = vStream->streamType();
@@ -1237,6 +1235,14 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
 
   // dialog exit with start
   delete cutAVDlg;
+
+  // Persist the settings the dialog just wrote (output path, suffix,
+  // per-codec container sticky, encoder values) NOW, at cut start. This
+  // used to run BEFORE the dialog, so its changes only reached disk at
+  // program exit — and closeProject()'s TTSettings::load() (next project
+  // open / File-New) silently reverted them in the meantime (user report
+  // 2026-08-18). After Accepted only: Cancel must not persist anything.
+  TTSettings::instance()->save();
 
   // Connect to cutFinished signal for notification. Re-armed rather than
   // blindly connected: the disconnect sits in onCutFinished(), which a
