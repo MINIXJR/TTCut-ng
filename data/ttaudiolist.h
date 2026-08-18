@@ -87,6 +87,7 @@ class TTAudioList : public QObject
     int   count();
     void  clear();
     void  sortByOrder();
+    void  sortByProjectOrder();
     void  swap(int a, int b);
     void  print();
 

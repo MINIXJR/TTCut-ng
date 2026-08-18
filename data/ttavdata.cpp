@@ -897,15 +897,26 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
     }
   }
 
-  // Re-sort the audio list now that language is set — TTAudioItem::operator<
-  // priorisiert AC3 > audioLanguagePreference > Discovery-Order. Ohne diese
-  // Sortierung würde audioStreamAt(0) bis zum onThreadPoolExit (= Ende aller
-  // Tasks) noch auf den falschen Track zeigen, was die Burst-Detection beim
-  // initialen VDR-Cut-Add auf der falschen Sprachspur laufen ließe
-  // (z.B. eng.mp2 statt deu.mp2 bei deu/eng-Quellen + audioLanguagePreference="deu").
-  TTAudioList* audioList = avItem->audioDataList();
-  if (audioList && audioList->count() > 1) {
-    audioList->sortByOrder();
+  // Sort ONLY during the item's initial load batch — afterwards the order
+  // belongs to the user (reorder buttons), and no later pool run may touch
+  // it again (user report 2026-08-18: reorder was reset by every pool exit).
+  //
+  // Project-loaded tracks (order >= 0, only parseAudioSection passes one)
+  // restore the .ttcut <Order> sequence — the saved order is the user's and
+  // wins over the language preference. Discovery-loaded tracks (order == -1)
+  // sort AC3 > audioLanguagePreference > discovery order. The per-append
+  // sort (not a single sort at pool exit) is deliberate: audioStreamAt(0)
+  // must point at the right track BEFORE the pool drains, or the burst
+  // detection at the initial VDR-cut-add runs on the wrong language track
+  // (e.g. eng.mp2 instead of deu.mp2 with audioLanguagePreference="deu").
+  if (!avItem->initialAudioLoadDone()) {
+    TTAudioList* audioList = avItem->audioDataList();
+    if (audioList && audioList->count() > 1) {
+      if (order >= 0)
+        audioList->sortByProjectOrder();
+      else
+        audioList->sortByOrder();
+    }
   }
 }
 
@@ -1087,12 +1098,13 @@ void TTAVData::onThreadPoolExit()
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
              this,             &TTAVData::onOpenAVStreamsAborted);
 
-  // Sort audio lists by priority (AC3 first, locale language first)
+  // End of the initial load window: audio auto-sorting (see
+  // onOpenAudioFinished) stops here for every item that finished loading.
+  // The former unconditional re-sort at this point reset a user's manual
+  // track order on EVERY pool run (subtitle open, search, preview, cut) —
+  // its loading-order job moved to onOpenAudioFinished with dae43fed.
   for (int i = 0; i < mpAVList->count(); i++) {
-    TTAudioList* audioList = mpAVList->at(i)->audioDataList();
-    if (audioList->count() > 1) {
-      audioList->sortByOrder();
-    }
+    mpAVList->at(i)->setInitialAudioLoadDone();
   }
 
   // onThreadTaskPool::onThreadTaskAborted emits aborted() then exit() back to

@@ -97,7 +97,12 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->audioCount(); i++) {
     TTAudioItem aItem   = vItem->audioListItemAt(i);
     TTAudioStream*      aStream = aItem.getAudioStream();
-    writeAudioSection(video, aStream->filePath(), aItem.order(), aItem.getLanguage(), aItem.getDelayMs());
+    // Write the VISIBLE list position as <Order>, not aItem.order(): the
+    // reorder buttons swap list positions without touching mOrder, so the
+    // stored order would otherwise still be the discovery order and a
+    // manual arrangement would not survive save/reload (sortByProjectOrder
+    // restores exactly this number).
+    writeAudioSection(video, aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
   }
 
   for (int i = 0; i < vItem->cutCount(); i++) {

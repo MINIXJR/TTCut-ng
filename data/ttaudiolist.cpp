@@ -327,6 +327,21 @@ void TTAudioList::sortByOrder()
 }
 
 /*!
+ * sortByProjectOrder
+ * Restore the <Order> sequence saved in a .ttcut project file. Async open
+ * tasks finish in arbitrary order, so the list holds arrival order here;
+ * the saved order is the user's, so it wins over the language preference
+ * (user decision 2026-08-18).
+ */
+void TTAudioList::sortByProjectOrder()
+{
+  std::stable_sort(data.begin(), data.end(),
+      [](const TTAudioItem& a, const TTAudioItem& b) {
+        return a.order() < b.order();
+      });
+}
+
+/*!
  * indexOf
  */
 /*!

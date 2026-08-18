@@ -77,6 +77,13 @@ class TTAVItem : public QObject
     void appendMarker(const TTMarkerItem& cItem);
     void removeMarker(const TTMarkerItem& cItem);
 
+    //! Audio auto-sort (language preference resp. project order, see
+    //! TTAVData::onOpenAudioFinished) runs only while the item's initial
+    //! load batch is still on the thread pool. TTAVData::onThreadPoolExit()
+    //! latches this flag; afterwards the track order belongs to the user.
+    bool initialAudioLoadDone() const     { return mInitialAudioLoadDone; }
+    void setInitialAudioLoadDone()        { mInitialAudioLoadDone = true; }
+
   public slots:
     void onRemoveAudioItem(int index);
     void onSwapAudioItems(int oldIndex, int newIndex);
@@ -111,6 +118,7 @@ class TTAVItem : public QObject
 
   private:
   	bool             mIsInList;
+    bool             mInitialAudioLoadDone = false;
     TTVideoStream*   mpVideoStream;
     TTAudioList*     mpAudioList;
     TTSubtitleList*  mpSubtitleList;
