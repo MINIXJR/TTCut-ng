@@ -220,7 +220,7 @@ else bad "AC3 fix junk+crc (rc=$RC crc=$CB3, byte-identisch=$(cmp -s "$FIXJC" "$
 
 # E-AC3-Material einmalig aus der SES-UHD-Demo extrahieren (Cache in $WORK)
 EAC3="$WORK/ses_demo.eac3"
-SES="/media/Daten/Video_Tmp/temp/Test-Schnitt-TTCut-ng/UHDTV/HEVC_Main10-HDR10_2160p50_IDRonly-noRASL-noB_EAC3-2.0-deu_SES-UHD-Demo/2026-06-22.17.15.87-0.rec/00001.ts"
+SES="/net/nase2021/Video/Sonstiges/TTCut-ng-Test-Files/UHDTV/HEVC_Main10-HDR10_2160p50_IDRonly-noRASL-noB_EAC3-2.0-deu_SES-UHD-Demo/2026-06-22.17.15.87-0.rec/00001.ts"
 [ -s "$EAC3" ] || ffmpeg -v error -i "$SES" -map 0:a:0 -c copy "$EAC3"
 
 # Byte-Offset von Rahmen N und N+1 (0-basiert) ueber Syncword-Kette
@@ -376,7 +376,7 @@ grep -q 'audio_._corrupt_ranges' "$CLEAN_B"/*.info && CLEAN_OK=0
 # the mplex-outcome check below, and paths into $WORK are set; everything
 # else falls back to TTSettings' compiled-in defaults.
 if [ "$RUN_FULL" -eq 1 ]; then
-    REALTS="/media/Daten/Video_Tmp/temp/Test-Schnitt-TTCut-ng/SDTV/MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI/2023-10-19.02.32.5-0.rec/00001.ts"
+    REALTS="/net/nase2021/Video/Sonstiges/TTCut-ng-Test-Files/SDTV/MPEG2_SD576i25_aspect-switch-4-3-to-16-9_MP2-deu_RTLZWEI/2023-10-19.02.32.5-0.rec/00001.ts"
     FULLDIR="$WORK/full"
     if [ ! -s "$REALTS" ]; then
         bad "real-recording end-to-end: source TS not found ($REALTS) -- dev-machine-only corpus"
