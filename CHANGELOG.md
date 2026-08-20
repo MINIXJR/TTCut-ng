@@ -2,7 +2,7 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.82.0 (2026-08-20)
 
 **AC3 Audio Anomaly Detection and Repair**
 
@@ -53,6 +53,12 @@ All notable changes to TTCut-ng are documented in this file.
   in the project file) instead of only a video frame plus a duration, so the
   repair dialog proposes exactly the range that was found. Markers from older
   projects still work — they fall back to the previous estimate.
+- **Window title names the open project**: the main window title now reads
+  "<project> - TTCut-ng - <version>" while a project is open (with the
+  existing " *" for unsaved changes), instead of showing only the version.
+  The project name was never part of the title — this closes a gap, not a
+  regression. Opening a plain video file, or closing the project, keeps the
+  plain version string.
 - **Failed audio tracks say why**: when a cut can only produce some of the
   audio tracks, the failure message now names the reason per track (e.g. "the
   repair range 63894-63901 spans a cut-segment boundary — adjust the repair

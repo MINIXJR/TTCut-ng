@@ -217,6 +217,12 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
     // Dirty tracking
     bool                 mProjectModified;
+    //! Base name of the project currently open, for the window title only.
+    //! Deliberately NOT TTSettings::projectFileName(): that one is the save
+    //! target and is only set when saving (opening a project leaves it empty),
+    //! and changing that would change the overwrite semantics of File->Save.
+    //! Empty when no project is open (plain video file, or after close).
+    QString              mProjectDisplayName;
 
 		// recent files menu
 		enum

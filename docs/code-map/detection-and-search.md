@@ -1,6 +1,6 @@
 ---
-base_commit: b3d97c88a4d4089d74d96f38c4fabfcd4238ef1a
-last_verified: 2026-08-16
+base_commit: 101909927833d2f23945c45809e780543c52ace0
+last_verified: 2026-08-20
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -19,10 +19,17 @@ sources:
   - data/ttstreampointmodel.cpp
   - data/ttframesearchtask.cpp
   - data/ttframesearchtask.h
+  - data/ttaudioanomalyscantask.h
+  - data/ttaudioanomalyscantask.cpp
+  - data/ttaudiorepairitem.h
   - gui/ttstreampointwidget.cpp
   - gui/ttcutmainwindow.cpp
+  - gui/ttaudiorepairdialog.h
+  - gui/ttaudiorepairdialog.cpp
   - common/ttthreadtaskpool.cpp
   - common/ttthreadtask.cpp
+  - common/ttsettings.h
+  - common/ttsettings.cpp
   - data/ttcutpreviewtask.cpp
   - data/ttcutvideotask.cpp
 ---
@@ -41,10 +48,19 @@ Die Familie zerfällt nach **Ergebnisform**, nicht nach Codec:
 | **Gerichtete Suche** — „nächster Treffer ab hier" | `found(pos, wasAborted)` | erstem Treffer | `TTBlackFrameSearchTask`, `TTSceneChangeSearchTask`, `TTLogoSearchTask` |
 | **Voll-Scan** — „alle Wechsel im Strom" | `pointsDetected(QList<TTStreamPoint>)` | Dateiende | `TTAspectScanTask` |
 
-Daneben stehen zwei Analysen, die **kein** Bild dekodieren und deshalb nicht von
+Daneben stehen drei Analysen, die **kein** Bild dekodieren und deshalb nicht von
 `TTSearchTask` erben, aber in denselben Aufgaben-Pool und dieselbe Marker-Liste
-münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header) und
-`TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel).
+münden: `TTStreamPointVideoWorker` (MPEG-2-Sequenz-Header),
+`TTStreamPointAudioWorker` (Stille, AC3-Formatwechsel) und seit
+`2026-08-19/20` `TTAudioAnomalyScanTask` (`data/ttaudioanomalyscantask.{h,cpp}`)
+— sequenzieller Scan einer AC3-Spur auf CRC-gültige, aber strukturell
+defekte Center+LFE-Bursts in Material, dessen LFE sonst digital still ist
+(`docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`,
+Komponente 1). Erbt wie die anderen beiden direkt `TTThreadTask`, verbindet
+sich identisch (`finished`/`aborted` → `onAnalysisWorkerFinished`, zählt in
+`mStreamPointWorkersRunning`) und liefert `pointsDetected(QList<TTStreamPoint>)`
+an denselben Slot wie der Voll-Scan (`TTCutMainWindow::onVideoPointsDetected`)
+— kein eigener Slot.
 
 Und eine Bildanalyse steht **ausserhalb** dieser Familie: die Gleichbild-Suche
 `TTFrameSearchTask` (`data/ttframesearchtask.cpp`). Sie erbt direkt von
@@ -87,6 +103,7 @@ flowchart TB
         IDX["TTVideoIndexList<br/>Anzeige-Ordnung"]
     end
 
+    LOADEXIT["Ladepipeline-Exits<br/>onAVDataReloaded() /<br/>onAVItemChanged()"]
     MW["TTCutMainWindow<br/>onAnalyzeStreamPoints /<br/>onSearchBlackFrame …"]
     WIDGET["TTStreamPointWidget<br/>Trefferliste, Start, Abbruch"]
     POOLQ["TTThreadTaskPool<br/>mTaskQueue"]
@@ -107,6 +124,7 @@ flowchart TB
     subgraph NODEC["Ohne Bilddekodierung"]
         VWORK["TTStreamPointVideoWorker<br/>MPEG-2-Sequenz-Header"]
         AWORK["TTStreamPointAudioWorker<br/>Stille + acmod"]
+        ANOMALY["TTAudioAnomalyScanTask<br/>AC3 C+LFE-Burst"]
     end
 
     subgraph OUT["Ergebnis (GUI-Thread)"]
@@ -116,6 +134,7 @@ flowchart TB
     end
 
     WIDGET -. "analyzeRequested / abortRequested" .-> MW
+    LOADEXIT -. "0-ms-Timer → maybeStartAutoAnomalyScan()" .-> MW
     PREV -- "preBuiltFrameIndex" --> MW
     IDX -- "Positionen" --> MW
     MW -. "start()" .-> POOLQ
@@ -136,6 +155,10 @@ flowchart TB
     BAR -. "cancel → onAbortStreamPoints" .-> POOLQ
 ```
 
+Richtung gemessen (2026-08-20, nach Einbau der drei neuen Knoten/Kanten):
+`TD` viewBox-Verhältnis 0,80, `LR` 5,66 — `TD`/`TB` bleibt klar näher an 1,
+beibehalten.
+
 ## Kanten-Semantik
 
 | Kante | Bedeutung | Fallstrick |
@@ -151,10 +174,14 @@ flowchart TB
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
+| `ANOMALY → pointsDetected` | Weicht vom `SCAN`-Verhalten oben **bewusst ab**: bei Abbruch sendet `TTAudioAnomalyScanTask::operation()` eine **leere** Liste, keine Teilergebnisse. | Ein Abbruch darf nicht wie ein vollständiger Lauf mit kurzer Trefferliste aussehen (Spec Komponente 1, „Sichtbarkeit"). `pointsDetected` feuert bei ihr nur genau einmal, ganz am Ende von `operation()`. |
+| `LOADEXIT → MW` (`maybeStartAutoAnomalyScan()`) | Zwei unabhängige Einsprünge — `TTAVData::onAVDataReloaded()` (jeder Pool-Exit) und `TTCutMainWindow::onAVItemChanged()` (setzt `mpCurrentAVDataItem`) — beide über `QTimer::singleShot(0, …)`, damit der Scan erst nach der restlichen Ladekette einreiht statt mitten in ihr. | Notwendig, weil `TTAVData::onOpenVideoFinished` den modalen „Defective Frames"-Dialog vor `currentAVItemChanged()` zeigen kann; der Pool-Exit wartet nicht auf diesen Dialog, `onAVDataReloaded()` kann also mit `mpCurrentAVDataItem == nullptr` feuern (gemessen 2026-08-20 auf realem 1,6-GB-Material). Welcher der beiden Einsprünge tatsächlich startet, hängt vom Material ab; die Wächter in `maybeStartAutoAnomalyScan()` (`anomalyScanStarted()`, laufende Analyse, vorhandene `AudioAnomaly`-Marker, `audioAnomalyScanEnabled()`, `mProjectLoadInProgress`) machen jeden weiteren Aufruf zum No-op. Ruft intern `startAudioAnomalyScan()` — denselben Helfer wie der Button-Pfad über `WIDGET`/`MW`; kein zweiter Verdrahtungscode. |
+| `NODEC → MODEL` (`ANOMALY`-Anteil) | `TTAudioAnomalyScanTask` liefert `TTStreamPoint`s vom Typ `AudioAnomaly` mit **zwei** Koordinaten: `frameIndex`/`duration` (Video-Anzeigeindex, `duration` endexklusiv in Sekunden — dieselbe Konvention wie alle anderen Markertypen) **und** `audioFrameFrom()`/`audioFrameTo()` (exakter AC3-Quell-Frame-Bereich, **beide Grenzen inklusiv** — dieselbe Konvention wie `TTAudioRepairItem`). | Die Video-Koordinate ist eine verlustbehaftete Projektion (Rundung auf 40-ms-Videoraster gegen das 32-ms-Audioraster); der Reparaturdialog verwendet deshalb `audioFrameFrom/To`, nicht `frameIndex/duration`, sobald sie vorhanden sind (`hasAudioFrameRange()`). Ein aus einer älteren Projektdatei geladener `AudioAnomaly`-Marker hat `-1/-1` (unbekannt) und muss auf die Schätzung zurückfallen. |
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
 | `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden seit `f8fe7dd6` beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
 | Marker → `onStreamPointJump(frameIndex)` | Ruft `TTCurrentFrame::onGotoFrame(frameIndex, 0)` und danach `checkCutPosition`. | **Nicht** `onVideoSliderChanged`: dessen `fastSlider()`-Weiterreichung als zweites Argument an `onGotoFrame` ist ein **Bildtyp**, kein Geschwindigkeitsschalter — `1` heißt „ab hier den nächsten I-Frame suchen". Mit eingeschaltetem FastSlider landete ein Marker bei 7045 deshalb auf 7050, und die drei Fehlermarker eines Defekts (7045, 7048, 7048) fielen auf dasselbe Bild (`ad536d7c`). Seit `ba393cb6` ruft `onVideoSliderChanged` `onGotoFrame` nicht mehr direkt, sondern merkt nur die Position und entprellt über einen 50-ms-Timer (`onSliderDecodeTimer`); erst der greift `fastSlider()` wie beschrieben ab — bei gehaltenem Schieber sogar über einen dritten Pfad, `TTCurrentFrame::onGotoFramePreview(pos)`, ohne Bildtyp-Argument. Marker-Sprünge sind davon nicht betroffen; Details der Entprellung in `frame-order.md`. |
+| `MODEL → onContextMenu` (`AudioAnomaly`-Zweig) | Kein Teil des Erkennungs-Datenflusses oben, sondern ein GUI-Thread-Konsument der fertigen Markerliste: `TTStreamPointWidget::onContextMenu` bietet bei einem `AudioAnomaly`-Marker (nur wenn eine AC3-Spur existiert) „Repair…"/„Edit repair…"/„Remove repair" an, öffnet `TTAudioRepairDialog` und schreibt/löscht dabei `TTAudioRepairItem`-Einträge am `TTAVItem`; liest/schreibt den Markertext über `TTStreamPointModel::pointAt()`/`setDescriptionAt()`. | Bewusst außerhalb dieses Diagramms belassen (Scope = Erkennung/Suche, nicht Reparatur) — die Reparatur-Pipeline selbst (`ACMOD → REPAIR → CUT`) ist in `audio-cut-timing.md` kartiert. Repair-vs-Scan-Track-Konsistenz: beide Seiten ermitteln die Spur über `TTAVItem::firstAc3TrackIndex()`, kein zweiter Auswahlmechanismus. |
 
 ## Varianten-Matrix
 

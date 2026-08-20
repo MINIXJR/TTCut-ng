@@ -549,7 +549,9 @@ void TTCutMainWindow::onFileSave()
     return;
   }
 
-  setProjectModified(false);
+  mProjectDisplayName =
+      QFileInfo(TTSettings::instance()->projectFileName()).completeBaseName();
+  setProjectModified(false);   // also refreshes the window title
 }
 
 
@@ -1580,7 +1582,9 @@ void TTCutMainWindow::setProjectModified(bool modified)
 
 void TTCutMainWindow::updateWindowTitle()
 {
-  QString title = TTCut::versionString;
+  QString title = mProjectDisplayName.isEmpty()
+      ? TTCut::versionString
+      : QString("%1 - %2").arg(mProjectDisplayName, TTCut::versionString);
   if (mProjectModified)
     title += " *";
   setWindowTitle(title);
@@ -1643,7 +1647,8 @@ void TTCutMainWindow::closeProject()
   // Clear cut video name so next cut dialog derives it from video filename
   TTSettings::instance()->setCutVideoName("");
 
-  setProjectModified(false);
+  mProjectDisplayName.clear();
+  setProjectModified(false);   // also refreshes the window title
 
   connect(cutList,  &TTCutTreeView::selectionChanged,    this, &TTCutMainWindow::onCutSelectionChanged);
   connect(mpAVData, &TTAVData::currentAVItemChanged,     this, &TTCutMainWindow::onAVItemChanged);
@@ -1708,7 +1713,8 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   if (mpCurrentAVDataItem == 0) return;
 
   insertRecentFile(fName);
-  setProjectModified(false);
+  mProjectDisplayName = QFileInfo(fName).completeBaseName();
+  setProjectModified(false);   // also refreshes the window title
 
   // Refresh cut list to update acmod icons (audio streams are now loaded)
   mpAVData->emitCutDataReloaded();

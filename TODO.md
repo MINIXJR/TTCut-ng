@@ -523,6 +523,26 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   (autoregressive Vorhersage aus Randsamples, nur für kurze Störungen) und
   Raumton-Ersatz (Nachbarschafts-Atmo, Center aus gedämpfter L+R-Summe,
   Rauschsynthese nach Spektralprofil) brauchen eigene Parameter + Hörtests.
+- **Sprachunabhängiges Suffix-Abschneiden beruht auf einer Handliste**
+  (Restbefund R6, per Code-Prüfung abgesichert, nicht gemessen).
+  `TTStreamPoint::repairPlannedSuffixVariants()` /
+  `repairDisabledSuffixVariants()` (`data/ttstreampoint.{h,cpp}`) führen jede
+  bekannte Sprachvariante der Marker-Zusätze literal auf (aktuell EN + de_DE),
+  damit ein in Sprache A angehängter Zusatz beim Neu-Antasten in Sprache B
+  erkannt und nicht verdoppelt wird. Jede neue `.ts`-Übersetzung braucht dort
+  einen manuellen Eintrag — wird er vergessen, entsteht genau das doppelte
+  Suffix, das der Fix verhindern soll. Kein Testfall wechselt zur Laufzeit die
+  Oberflächensprache und prüft das Abschneiden. Sauberer wäre, den Zustand am
+  Datenmodell zu führen statt im Anzeigetext.
+- **Wächter gegen Scan-Re-Entrancy im Screenshot-Modus ist nicht scharf
+  erprobt** (Restbefund R2, ebenfalls nur code-geprüft).
+  `TTCutMainWindow::onAnalyzeStreamPoints()` bricht bei
+  `mStreamPointWorkersRunning > 0` ab, weil `runScreenshotMode()` die Methode
+  direkt aufruft und dabei auf einen noch laufenden Auto-Scan aus
+  `maybeStartAutoAnomalyScan()` treffen kann (sonst würde der Worker-Zähler
+  genullt und „Analyse fertig" zu früh gemeldet). Kein Screenshot-Lauf hat das
+  Rennen tatsächlich provoziert; über die normale GUI ist der Pfad nicht
+  erreichbar.
 - **Scanner als Standalone-Ableger für VDR_Demux.sh-Batch** (Nutzeranregung):
   der Scan läuft heute nur als Hintergrund-Task in TTCut-ng nach dem Laden;
   ein CLI-Ableger könnte den gesamten Korpus batch-scannen, ohne jede Datei
