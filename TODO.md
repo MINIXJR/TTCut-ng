@@ -523,6 +523,17 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   (autoregressive Vorhersage aus Randsamples, nur für kurze Störungen) und
   Raumton-Ersatz (Nachbarschafts-Atmo, Center aus gedämpfter L+R-Summe,
   Rauschsynthese nach Spektralprofil) brauchen eigene Parameter + Hörtests.
+- **Begriffskollision „Tonstörung" vs. „Tonanomalie"** (beim Wiki-Audit zu
+  v0.82.0 aufgefallen). Drei Namen für zwei Dinge: die Einstellung heißt im
+  Dialog **„Tonstörung (AC3 5.1)"** (`ui/ttcutsettingsstreampoints.ui`), der
+  vom Scan erzeugte Marker heißt **„Tonanomalie: C+LFE-Störimpuls …"**, und
+  **„Tonstörungen: X–Y (Spur N)"** ist der Text der davon unabhängigen
+  Marker, die `ttcut-audiofix` beim Demux für CRC-defekte Frames setzt. Der
+  Nutzer sieht damit „Tonstörung" an zwei Stellen mit verschiedener
+  Bedeutung. Vorschlag: Einstellungs-Label auf „Tonanomalie (AC3 5.1)"
+  ziehen (nur `.ui` + Übersetzung, keine Code-Logik). Nicht mehr in v0.82.0
+  gemacht, weil die Version bereits veröffentlicht war; das Wiki erklärt die
+  Lage bis dahin.
 - **Sprachunabhängiges Suffix-Abschneiden beruht auf einer Handliste**
   (Restbefund R6, per Code-Prüfung abgesichert, nicht gemessen).
   `TTStreamPoint::repairPlannedSuffixVariants()` /
