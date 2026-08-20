@@ -26,6 +26,7 @@
 #include <QImage>
 
 #include "../avstream/ttdisplayordermap.h"
+#include "ttaudiorepair.h"
 
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
@@ -292,12 +293,18 @@ public:
     // deliberate abort routes through the function's normal cleanup path,
     // returns false, and sets lastError() to "aborted by user" (distinguishable
     // from a real failure without a separate wasAborted() flag).
+    // repairTable (optional) replaces the payload of any packet whose frame
+    // number (packet time snapped to the 32 ms AC3 grid) is a key in the
+    // table, writing the substitute bytes with the same PTS offset/accounting
+    // as the stream-copy path and skipping the acmod re-encode check for that
+    // frame entirely. Existing callers are unaffected (defaults to no lookup).
     bool cutAudioStream(const QString& inputFile, const QString& outputFile,
                         const QList<QPair<double, double>>& cutList,
                         bool normalizeAcmod = false,
                         const QList<int>& targetAcmods = QList<int>(),
                         const std::function<void(int)>& progressCb = nullptr,
-                        const std::function<bool()>& shouldAbort = {});
+                        const std::function<bool()>& shouldAbort = {},
+                        const TTAudioRepair::FrameTable* repairTable = nullptr);
 
     // Detect audio burst near a boundary (returns true if burst found).
     // A burst is reported when the PEAK of the boundary chunks exceeds the

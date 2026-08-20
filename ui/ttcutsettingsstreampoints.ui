@@ -3,7 +3,7 @@
  <class>TTCutSettingsStreamPoints</class>
  <widget class="QGroupBox" name="TTCutSettingsStreamPoints">
   <property name="geometry">
-   <rect><x>0</x><y>0</y><width>500</width><height>380</height></rect>
+   <rect><x>0</x><y>0</y><width>520</width><height>540</height></rect>
   </property>
   <property name="title"><string>Stream Points</string></property>
   <layout class="QVBoxLayout">
@@ -68,9 +68,80 @@
       </widget>
      </item>
 
+     <item row="6" column="0" colspan="2">
+      <widget class="QCheckBox" name="cbAudioAnomaly">
+       <property name="text"><string>Audio anomaly (AC3 5.1)</string></property>
+       <property name="styleSheet"><string notr="true">padding-left: 20px;</string></property>
+       <property name="toolTip"><string>Scans AC3 5.1 tracks for CRC-valid transmission glitches: center-channel bursts with an LFE pulse in material whose LFE is otherwise digitally silent. Runs automatically after loading and with every stream point analysis.</string></property>
+      </widget>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="laAnomalyLfeRms">
+       <property name="text"><string>LFE threshold (dB):</string></property>
+       <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QDoubleSpinBox" name="sbAnomalyLfeRms">
+       <property name="minimum"><double>-90.000000000000000</double></property>
+       <property name="maximum"><double>-20.000000000000000</double></property>
+       <property name="singleStep"><double>1.000000000000000</double></property>
+       <property name="decimals"><number>1</number></property>
+       <property name="suffix"><string> dB</string></property>
+       <property name="toolTip"><string>An AC3 frame counts as LFE-active above this RMS level. Higher values report less.</string></property>
+      </widget>
+     </item>
+     <item row="8" column="0">
+      <widget class="QLabel" name="laAnomalyContrast">
+       <property name="text"><string>Center contrast factor:</string></property>
+       <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
+      </widget>
+     </item>
+     <item row="8" column="1">
+      <widget class="QDoubleSpinBox" name="sbAnomalyContrast">
+       <property name="minimum"><double>1.000000000000000</double></property>
+       <property name="maximum"><double>50.000000000000000</double></property>
+       <property name="singleStep"><double>0.500000000000000</double></property>
+       <property name="decimals"><number>1</number></property>
+       <property name="toolTip"><string>How far the center-channel sample jump must exceed the local median to confirm a candidate. Lower values report more.</string></property>
+      </widget>
+     </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="laAnomalyNullPercent">
+       <property name="text"><string>LFE silence share (%):</string></property>
+       <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QDoubleSpinBox" name="sbAnomalyNullPercent">
+       <property name="minimum"><double>50.000000000000000</double></property>
+       <property name="maximum"><double>100.000000000000000</double></property>
+       <property name="singleStep"><double>0.500000000000000</double></property>
+       <property name="decimals"><number>1</number></property>
+       <property name="suffix"><string> %</string></property>
+       <property name="toolTip"><string>Precondition: at least this share of the 5.1 frames must have a silent LFE, otherwise the track is reported as unsuitable and nothing is detected.</string></property>
+      </widget>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="laAnomalyMinPeak">
+       <property name="text"><string>LFE minimum peak (dB):</string></property>
+       <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QDoubleSpinBox" name="sbAnomalyMinPeak">
+       <property name="minimum"><double>-90.000000000000000</double></property>
+       <property name="maximum"><double>0.000000000000000</double></property>
+       <property name="singleStep"><double>1.000000000000000</double></property>
+       <property name="decimals"><number>1</number></property>
+       <property name="suffix"><string> dB</string></property>
+       <property name="toolTip"><string>A finding must reach at least this LFE peak level. Guards against inaudible residues being reported.</string></property>
+      </widget>
+     </item>
+
      <!-- Blank row: without it the Video heading sits as close to the last
           audio control as that control sits to its own heading. -->
-     <item row="6" column="0" colspan="2">
+     <item row="11" column="0" colspan="2">
       <spacer name="spacerAudioVideo">
        <property name="orientation"><enum>Qt::Vertical</enum></property>
        <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
@@ -78,19 +149,19 @@
       </spacer>
      </item>
 
-     <item row="7" column="0" colspan="2">
+     <item row="12" column="0" colspan="2">
       <widget class="QLabel" name="laVideoSection">
        <property name="text"><string>Video</string></property>
        <property name="styleSheet"><string notr="true">QLabel { font-weight: bold; }</string></property>
       </widget>
      </item>
-     <item row="8" column="0" colspan="2">
+     <item row="13" column="0" colspan="2">
       <widget class="QLabel" name="laVideoMpeg2Only">
        <property name="text"><string>MPEG-2 only</string></property>
        <property name="styleSheet"><string notr="true">QLabel { font-style: italic; padding-left: 10px; }</string></property>
       </widget>
      </item>
-     <item row="9" column="0" colspan="2">
+     <item row="14" column="0" colspan="2">
       <widget class="QCheckBox" name="cbAspectChange">
        <property name="text"><string>Aspect ratio (4:3/16:9)</string></property>
        <property name="styleSheet"><string notr="true">padding-left: 20px;</string></property>
@@ -98,39 +169,39 @@
       </widget>
      </item>
 
-     <item row="10" column="0" colspan="2">
+     <item row="15" column="0" colspan="2">
       <widget class="QLabel" name="laVideoAllCodecs">
        <property name="text"><string>All codecs</string></property>
        <property name="styleSheet"><string notr="true">QLabel { font-style: italic; padding-left: 10px; }</string></property>
       </widget>
      </item>
-     <item row="11" column="0" colspan="2">
+     <item row="16" column="0" colspan="2">
       <widget class="QCheckBox" name="cbPillarbox">
        <property name="text"><string>Pillarbox detection (4:3 in 16:9)</string></property>
        <property name="styleSheet"><string notr="true">padding-left: 20px;</string></property>
        <property name="toolTip"><string>Detects 4:3 content inside a 16:9 frame by measuring the black bars. Works for MPEG-2, H.264 and H.265.</string></property>
       </widget>
      </item>
-     <item row="12" column="0">
+     <item row="17" column="0">
       <widget class="QLabel" name="laPillarboxThreshold">
        <property name="text"><string>Threshold (luminance):</string></property>
        <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
       </widget>
      </item>
-     <item row="12" column="1">
+     <item row="17" column="1">
       <widget class="QSpinBox" name="sbPillarboxThreshold">
        <property name="minimum"><number>5</number></property>
        <property name="maximum"><number>50</number></property>
        <property name="toolTip"><string>A column counts as black below this brightness. Higher values detect more, but risk false hits in dark scenes.</string></property>
       </widget>
      </item>
-     <item row="13" column="0">
+     <item row="18" column="0">
       <widget class="QLabel" name="laPillarboxSample">
        <property name="text"><string>Sample distance (s):</string></property>
        <property name="styleSheet"><string notr="true">padding-left: 40px;</string></property>
       </widget>
      </item>
-     <item row="13" column="1">
+     <item row="18" column="1">
       <widget class="QDoubleSpinBox" name="sbPillarboxSample">
        <property name="minimum"><double>0.200000000000000</double></property>
        <property name="maximum"><double>10.000000000000000</double></property>

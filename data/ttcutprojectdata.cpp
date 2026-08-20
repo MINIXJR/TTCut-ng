@@ -14,14 +14,18 @@
 
 #include "ttcutprojectdata.h"
 #include "ttavdata.h"
+#include "ttaudiorepairitem.h"
 #include "ttsubtitlelist.h"
 #include "ttstreampoint.h"
 #include "../avstream/ttavstream.h"
 #include "../common/ttexception.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
+#include "../common/ttmessagelogger.h"
+#include "../avstream/ttac3audioheader.h"
 
 #include <QDir>
+#include <QFile>
 
 namespace {
 // Validate a file-path read from a .ttcut project. Project files may carry
@@ -48,6 +52,45 @@ static QString resolveProjectPath(const QString& name, const QFileInfo* projectF
     // Relative: anchor against the project file directory.
     if (!projectFile) return QString();
     return QDir(projectFile->absolutePath()).absoluteFilePath(name);
+}
+
+// Determine the real AC3 frame byte size of 'path' by reading its first sync
+// frame header, the same frmsizecod lookup TTAC3AudioStream::readAudioHeader()
+// and TTFFmpegWrapper::analyzeAcmod() use (avstream/ttac3audioheader.h's
+// AC3FrameLength[fscod][frmsizecod], a word count -> *2 for bytes). The frame
+// size scales with the stream's bit rate (384 kbit/s@48kHz = 1536 B, but
+// 448 kbit/s = 1792 B and 192 kbit/s = 768 B are both real corpus material,
+// see extern/ttaudiorepair.cpp) and must never be hardcoded. Assumes CBR (the
+// whole file uses the same frmsizecod) -- buildRepairTable() re-checks this
+// per-frame across the actual repair range and aborts the track if it isn't,
+// so a wrong assumption here never causes an out-of-bounds read/write, only
+// an incorrectly enabled/disabled repair item that a later, exact check
+// would still catch downstream.
+// Returns the frame byte size, or -1 (with *error set) if no valid AC3 sync
+// frame could be found in the file's first bytes.
+static qint64 ac3FrameByteSize(const QString& path, QString* error)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        if (error) *error = QStringLiteral("could not open file");
+        return -1;
+    }
+    // A valid AC3 ES starts with a sync frame at offset 0; scan a small
+    // prefix in case of leading junk bytes rather than requiring an exact
+    // offset-0 match.
+    static constexpr qint64 kScanLimit = 65536;
+    QByteArray buf = file.read(kScanLimit);
+    for (qint64 pos = 0; pos + 8 <= buf.size(); ++pos) {
+        const uchar* d = reinterpret_cast<const uchar*>(buf.constData()) + pos;
+        if (d[0] != 0x0B || d[1] != 0x77) continue;
+        quint8 fscod      = (d[4] >> 6) & 0x03;
+        quint8 frmsizecod = d[4] & 0x3F;
+        if (fscod >= 3 || frmsizecod >= 38) continue;  // reserved/invalid, keep scanning
+        qint64 bytes = static_cast<qint64>(AC3FrameLength[fscod][frmsizecod]) * 2;
+        if (bytes > 0) return bytes;
+    }
+    if (error) *error = QStringLiteral("no valid AC3 sync frame found");
+    return -1;
 }
 }  // namespace
 
@@ -102,7 +145,14 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
     // stored order would otherwise still be the discovery order and a
     // manual arrangement would not survive save/reload (sortByProjectOrder
     // restores exactly this number).
-    writeAudioSection(video, aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
+    QDomElement audio = writeAudioSection(video, aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
+
+    // Repair items are tagged with the same visible list position (trackIndex()),
+    // not nested under the audio list itself - filter by it here.
+    for (const TTAudioRepairItem& repair : vItem->audioRepairList()) {
+      if (repair.trackIndex() != i) continue;
+      writeRepairSection(audio, repair.frameFrom(), repair.frameTo(), repair.channelMask(), repair.method());
+    }
   }
 
   for (int i = 0; i < vItem->cutCount(); i++) {
@@ -221,14 +271,111 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
     return;
   }
 
-  // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.66+)
+  // Read optional Language, Delay and Repair elements (added in TTCut-ng
+  // 0.52+, 0.66+ and unreleased). Repair may occur multiple times; any other
+  // child element (future additions) is silently ignored here.
   QString lang;
   int delayMs = 0;
+  QList<TTAudioRepairItem> repairs;
   for (int n = 2; n < audioNodesList.size(); n++) {
-    if (audioNodesList.at(n).nodeName() == "Language") {
-      lang = audioNodesList.at(n).toElement().text();
-    } else if (audioNodesList.at(n).nodeName() == "Delay") {
-      delayMs = audioNodesList.at(n).toElement().text().toInt();
+    QDomNode node = audioNodesList.at(n);
+    if (node.nodeName() == "Language") {
+      lang = node.toElement().text();
+    } else if (node.nodeName() == "Delay") {
+      delayMs = node.toElement().text().toInt();
+    } else if (node.nodeName() == "Repair") {
+      QDomNodeList repairNodes = node.childNodes();
+      qint64  frameFrom = 0;
+      qint64  frameTo = 0;
+      quint8  channelMask = 0;
+      QString method = QStringLiteral("silence-fade");
+      for (int r = 0; r < repairNodes.size(); r++) {
+        QDomElement relem = repairNodes.at(r).toElement();
+        if (relem.isNull()) continue;
+        if (relem.tagName() == "FrameFrom")      frameFrom = relem.text().toLongLong();
+        else if (relem.tagName() == "FrameTo")   frameTo = relem.text().toLongLong();
+        else if (relem.tagName() == "Channels")  channelMask = static_cast<quint8>(relem.text().toUInt());
+        else if (relem.tagName() == "Method")    method = relem.text();
+      }
+      // trackIndex = order: the visible <Order> position this Audio section
+      // was saved at, which is exactly the position sortByProjectOrder()
+      // restores the track to once loading finishes (see the comment in
+      // TTAVData::onOpenAudioFinished).
+      repairs.append(TTAudioRepairItem(order, frameFrom, frameTo, channelMask, method));
+    }
+  }
+
+  // Load-time validation: a repair range saved against one AC3 file can point
+  // past the end of a differently-sized file now sitting at that path (the
+  // recording was re-demuxed/replaced after the project was saved). This is
+  // defense-in-depth, not the only guard: buildRepairTable() re-validates the
+  // range against the real file during the cut and aborts that track cleanly
+  // if it's still out of bounds, so a stale range here was never going to
+  // read/write outside the file either way. Catching it at load time instead
+  // just surfaces the problem immediately - the entry is disabled, not
+  // dropped (see TTAudioRepairItem::mEnabled), so it stays visible in the
+  // repair list and the user can fix or delete it rather than discovering it
+  // only when a cut aborts. The entry is NOT hidden: the marker's context
+  // menu still offers "Edit repair..." for it, TTAVData::cutAudioTracks()
+  // logs a warning for every disabled item it skips instead of skipping
+  // silently, and TTCutMainWindow marks the corresponding AudioAnomaly
+  // marker's text (final review I4).
+  if (!repairs.isEmpty()) {
+    qint64 audioFileSize = QFileInfo(name).size();
+    QString frameSizeError;
+    // The real per-frame byte size, not a hardcoded constant: it scales with
+    // the stream's bit rate (see ac3FrameByteSize() above).
+    qint64 frameBytes = ac3FrameByteSize(name, &frameSizeError);
+    for (TTAudioRepairItem& repair : repairs) {
+      // Structural sanity first (final review M5): a hand-edited or
+      // truncated project file can carry a negative or reversed range. Those
+      // never reach the file-size check meaningfully - a negative frameFrom
+      // would make buildRepairTable read from the start of the file, a
+      // reversed range would silently produce an empty table - so reject
+      // them here, with the same "disable, never drop" rule as below.
+      if (repair.frameFrom() < 0 || repair.frameTo() < repair.frameFrom()) {
+        repair.setEnabled(false);
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("TTCutProjectData::parseAudioSection -> repair range %1-%2 on '%3' "
+                    "is not a valid frame range (negative, or end before start) - "
+                    "disabling this repair entry")
+                .arg(repair.frameFrom())
+                .arg(repair.frameTo())
+                .arg(name));
+        continue;
+      }
+      if (frameBytes <= 0) {
+        // Can't determine the real frame size (file missing/unreadable/no
+        // valid AC3 header) - never silently wave the item through under an
+        // assumed size, and never silently drop it either; disable with a
+        // reason so the user can investigate.
+        repair.setEnabled(false);
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("TTCutProjectData::parseAudioSection -> could not determine "
+                    "the AC3 frame size of '%1' (%2) - disabling repair entry "
+                    "%3-%4 instead of validating it against an assumed size")
+                .arg(name, frameSizeError)
+                .arg(repair.frameFrom())
+                .arg(repair.frameTo()));
+        continue;
+      }
+      // frameTo is INCLUSIVE, so the range needs frames 0..frameTo to be
+      // fully present: (frameTo + 1) * frameBytes bytes. The old
+      // `frameTo * frameBytes >= size` test asked whether the last frame
+      // STARTS inside the file and therefore accepted a range whose last
+      // frame is cut off by the file's end (final review M4).
+      if ((repair.frameTo() + 1) * frameBytes > audioFileSize) {
+        repair.setEnabled(false);
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("TTCutProjectData::parseAudioSection -> repair range %1-%2 "
+                    "on '%3' reaches past the file's end (%4 bytes, %5 bytes/"
+                    "frame) - disabling this repair entry")
+                .arg(repair.frameFrom())
+                .arg(repair.frameTo())
+                .arg(name)
+                .arg(audioFileSize)
+                .arg(frameBytes));
+      }
     }
   }
 
@@ -240,6 +387,9 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   }
   if (delayMs != 0) {
     avData->setPendingAudioDelay(avItem, order, delayMs);
+  }
+  if (!repairs.isEmpty()) {
+    avData->setPendingAudioRepairs(avItem, order, repairs);
   }
   qDebug("after doOpenAudioStream...");
 }
@@ -339,6 +489,33 @@ QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QStri
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
+QDomElement TTCutProjectData::writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method)
+{
+  QDomElement repair = xmlDocument->createElement("Repair");
+  parent.appendChild(repair);
+
+  QDomElement from = xmlDocument->createElement("FrameFrom");
+  repair.appendChild(from);
+  from.appendChild(xmlDocument->createTextNode(QString::number(frameFrom)));
+
+  QDomElement to = xmlDocument->createElement("FrameTo");
+  repair.appendChild(to);
+  to.appendChild(xmlDocument->createTextNode(QString::number(frameTo)));
+
+  QDomElement channels = xmlDocument->createElement("Channels");
+  repair.appendChild(channels);
+  channels.appendChild(xmlDocument->createTextNode(QString::number(channelMask)));
+
+  QDomElement methodElem = xmlDocument->createElement("Method");
+  repair.appendChild(methodElem);
+  methodElem.appendChild(xmlDocument->createTextNode(method));
+
+  return repair;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ *
+ */
 QDomElement TTCutProjectData::writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order)
 {
   QDomElement cut = xmlDocument->createElement("Cut");
@@ -412,6 +589,21 @@ void TTCutProjectData::serializeStreamPoints(const QList<TTStreamPoint>& points)
     QDomElement durElem = xmlDocument->createElement("Duration");
     elem.appendChild(durElem);
     durElem.appendChild(xmlDocument->createTextNode(QString::number(pt.duration(), 'f', 2)));
+
+    // Exact AC3 frame range of an AudioAnomaly finding (final review I3),
+    // both bounds inclusive. Written only when known, so nothing changes for
+    // any other marker type; an older TTCut-ng ignores the two extra child
+    // elements on load (unknown elements are skipped) and simply falls back
+    // to the frameIndex/duration estimate, which is what it always did.
+    if (pt.hasAudioFrameRange()) {
+      QDomElement afFrom = xmlDocument->createElement("AudioFrameFrom");
+      elem.appendChild(afFrom);
+      afFrom.appendChild(xmlDocument->createTextNode(QString::number(pt.audioFrameFrom())));
+
+      QDomElement afTo = xmlDocument->createElement("AudioFrameTo");
+      elem.appendChild(afTo);
+      afTo.appendChild(xmlDocument->createTextNode(QString::number(pt.audioFrameTo())));
+    }
   }
 }
 
@@ -434,6 +626,7 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
       int frame = 0;
       QString type, desc;
       float confidence = 0.0f, duration = 0.0f;
+      qint64 audioFrameFrom = -1, audioFrameTo = -1;
 
       for (int j = 0; j < children.size(); j++) {
         QDomElement child = children.at(j).toElement();
@@ -449,10 +642,21 @@ QList<TTStreamPoint> TTCutProjectData::deserializeStreamPoints()
           confidence = child.text().toFloat();
         else if (child.tagName() == "Duration")
           duration = child.text().toFloat();
+        else if (child.tagName() == "AudioFrameFrom")
+          audioFrameFrom = child.text().toLongLong();
+        else if (child.tagName() == "AudioFrameTo")
+          audioFrameTo = child.text().toLongLong();
       }
 
-      points.append(TTStreamPoint(frame, TTStreamPoint::stringToType(type),
-                                   desc, confidence, duration));
+      TTStreamPoint pt(frame, TTStreamPoint::stringToType(type),
+                        desc, confidence, duration);
+      // Only a well-formed inclusive pair counts; anything else (one element
+      // missing, negative, reversed - a hand-edited project file) leaves the
+      // point on the frameIndex/duration estimate instead of feeding a bogus
+      // range into a repair.
+      if (audioFrameFrom >= 0 && audioFrameTo >= audioFrameFrom)
+        pt.setAudioFrameRange(audioFrameFrom, audioFrameTo);
+      points.append(pt);
     }
   }
 

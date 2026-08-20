@@ -107,6 +107,7 @@ class TTAVData : public QObject
 
     void      setPendingAudioLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs);
+    void      setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<TTAudioRepairItem>& repairs);
     void      setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QString& lang);
     void      setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs);
     void      doCutPreview(TTCutList* cutList);
@@ -181,6 +182,7 @@ class TTAVData : public QObject
     void dataReady();
 
     void readProjectFileFinished(const QString&);
+    void readProjectFileAborted();
     void streamPointsLoaded(const QList<TTStreamPoint>& points);
     void logoDataLoaded(const TTLogoProjectData& logoData);
     void vdrMarkersLoaded(const QList<TTStreamPoint>& points);
@@ -305,6 +307,10 @@ class TTAVData : public QObject
     QMap<QPair<TTAVItem*, int>, int> mPendingAudioDelays;
     QMap<QPair<TTAVItem*, int>, int> mPendingSubtitleDelays;
 
+    // Pending audio repair items from project file (applied after async
+    // stream open, same mechanism as mPendingAudioDelays).
+    QMap<QPair<TTAVItem*, int>, QList<TTAudioRepairItem>> mPendingAudioRepairs;
+
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;
     QString mLastCutOutputSummary;
@@ -386,10 +392,21 @@ class TTAVData : public QObject
     // finishMpeg2Cut() on the success path. GUI thread only.
     QStringList mCutProducedFiles;
 
+    //! Per-track failure reasons of the last cutAudioTracks() call, in
+    //! user-facing wording - see audioCutFailureReasons(). GUI thread /
+    //! cut-task thread, same single-threaded usage as the call itself.
+    QStringList mAudioCutFailureReasons;
+
   public:
     // Count extra frames before a given frame index (for audio time correction)
     int countExtraFramesBefore(int frameIndex) const;
     const QList<int>& extraFrameIndices() const { return mExtraFrameIndices; }
+
+    // Clustered audio-gap video-frame ranges (same gapFrames tolerance as
+    // the "Audio-Gap:" marker clustering in showExtraFrameClusterDialog),
+    // for TTAudioAnomalyScanTask's gap-overlap annotation. Empty when the
+    // current item has no audio gaps.
+    QList<QPair<int,int>> audioGapFrameRanges(double frameRate) const;
 
     // Burst detection result for a single cut boundary, after threshold filter.
     struct CutBurstInfo {
@@ -442,6 +459,22 @@ class TTAVData : public QObject
     // lives inside cutAudioStream). outPath names the per-track output file;
     // onCut registers it (mux list / file list / preview). Returns the first
     // requested track's drifts for the caller's drift signal.
+    // Audio anomaly repairs: for each track, enabled items from
+    // avItem->audioRepairList() (filtered by trackIndex()) whose ENTIRE frame
+    // range lies inside one of this track's kept windows get a replacement-
+    // frame table built via TTAudioRepair::buildRepairTable (AC3 only;
+    // targetAcmod is the containing segment's target, or -1 when acmod
+    // normalization is off/not AC3) and merged into one table forwarded to
+    // cutAudioStream's repairTable parameter. An item whose frames fall in no
+    // kept window is skipped (never written, building its table would be
+    // dead work and could needlessly fail on an out-of-range acmod change).
+    // An item whose range touches a kept window but is not fully contained in
+    // it (spans a cut-segment boundary, possibly into a differently-targeted
+    // window) is treated like a table-build error, since the target acmod is
+    // a single scalar per buildRepairTable call and cannot represent two
+    // different targets for one item. A table-build error (or a boundary
+    // span) aborts the TRACK (ok=false via onCut, logged) -- never a silent
+    // skip of the repair, per the feature's error contract.
     QList<float> cutAudioTracks(
         TTAVItem* avItem,
         const QList<int>& trackIndices,
@@ -473,6 +506,15 @@ class TTAVData : public QObject
         const std::function<void(int trackIdx)>& beforeCut = {},
         const std::function<void(int trackIdx, int percent)>& onProgress = nullptr,
         const std::function<bool()>& shouldAbort = {});
+
+    //! User-facing reasons for the tracks the LAST cutAudioTracks() call could
+    //! not cut, one line per failed track ("Audio track 2: the repair range
+    //! 63894-63901 spans a cut-segment boundary - adjust ..."). Empty after a
+    //! fully successful call; a user cancel is not a failure and adds nothing.
+    //! Callers put these into the partial-failure message they show, so the
+    //! actionable half of the reason does not stay in the log file alone
+    //! (final review M14). Valid until the next cutAudioTracks() call.
+    QStringList audioCutFailureReasons() const { return mAudioCutFailureReasons; }
 
     //! Cut the given subtitle tracks of avItem against the video keep list
     //! (seconds, end-exclusive). Synchronous, no task pool, no MPEG-2

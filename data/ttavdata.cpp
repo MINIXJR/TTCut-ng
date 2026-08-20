@@ -35,6 +35,7 @@
 
 #include "../extern/ttmplexprovider.h"
 #include "../extern/ttmkvmergeprovider.h"
+#include "../extern/ttaudiorepair.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttavheader.h"
@@ -783,6 +784,27 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   mpAVList->append(avItem);
 
+  // The pool-exit initial-load-done loop (onThreadPoolExit(), below) can
+  // already have run by the time avItem lands in mpAVList: this handler can
+  // be blocked for an arbitrarily long time in showExtraFrameClusterDialog()
+  // above (a modal QMessageBox), while the pool's own exit() only tracks
+  // task completion and does not wait for it. Measured on real material
+  // (fprintf trace, 2026-08-20, audio-anomaly-LFE-center-burst DVB
+  // recording, which has a genuine audio_0_corrupt_ranges entry and so
+  // always shows that dialog): TTThreadTaskPool::onThreadTaskFinished's
+  // "remaining tasks 0" and TTAVData::onThreadPoolExit() both ran INSIDE
+  // the dialog's nested event loop, before avItem was appended above - so
+  // onThreadPoolExit's "for every item in mpAVList: setInitialAudioLoadDone()"
+  // never touched this item, and nothing else ever sets the flag. Without
+  // this, initialAudioLoadDone() stays false for the rest of the session,
+  // permanently blocking the automatic anomaly scan (and any other future
+  // caller gated on it) for exactly the kind of material - repaired,
+  // defect-flagged DVB recordings - the audio-anomaly-repair feature exists
+  // for. If the pool has already drained by the time we get here, the
+  // initial batch is trivially complete for this item too.
+  if (mpThreadTaskPool && mpThreadTaskPool->isDrained())
+    avItem->setInitialAudioLoadDone();
+
   // Add pending VDR markers as cut entries AND stream points (after video stream is set)
   if (mpPendingVdrMarkers.contains(avItem)) {
     QList<QPair<int, int>> cutPairs = mpPendingVdrMarkers.take(avItem);
@@ -894,6 +916,19 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
     int idx = avItem->audioCount() - 1;
     if (idx >= 0) {
       avItem->onAudioDelayChanged(idx, delayMs);
+    }
+  }
+
+  // Apply saved repair items from project file if available. Unlike
+  // language/delay these aren't stored per-audio-item, so they don't need
+  // the append-position idx above: TTAudioRepairItem::trackIndex() already
+  // holds the visible <Order> position from the project file, and that is
+  // exactly the position this track ends up at once sortByProjectOrder()
+  // runs below.
+  if (mPendingAudioRepairs.contains(key)) {
+    const QList<TTAudioRepairItem> repairs = mPendingAudioRepairs.take(key);
+    for (const TTAudioRepairItem& repair : repairs) {
+      avItem->appendAudioRepair(repair);
     }
   }
 
@@ -1276,6 +1311,7 @@ void TTAVData::onReadProjectFileAborted()
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
   emit currentAVItemChanged(0);
+  emit readProjectFileAborted();
 
   if (mpProjectData != 0) {
     delete mpProjectData;
@@ -1299,6 +1335,11 @@ void TTAVData::setPendingSubtitleLanguage(TTAVItem* avItem, int order, const QSt
 void TTAVData::setPendingAudioDelay(TTAVItem* avItem, int order, int delayMs)
 {
   mPendingAudioDelays.insert(qMakePair(avItem, order), delayMs);
+}
+
+void TTAVData::setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<TTAudioRepairItem>& repairs)
+{
+  mPendingAudioRepairs.insert(qMakePair(avItem, order), repairs);
 }
 
 void TTAVData::setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs)
@@ -1708,10 +1749,16 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     delete cutVideoTask;   // constructed above, never handed to the pool
     cutVideoTask = nullptr;
     mCutOperationActive = false;
-    finishCutOperation(CutOutcome::Failed, tr("Cutting failed"),
-        tr("Only %1 of %2 audio track(s) could be cut - "
-           "the finished streams were kept, see the log for the reason")
-            .arg(audioTracksCut).arg(avItem->audioCount()));
+    // The per-track reasons come along (final review M14): the actionable one
+    // ("the repair range N-M spans a cut-segment boundary - adjust ...") is
+    // useless in a log file the user never opens.
+    QString detail = tr("Only %1 of %2 audio track(s) could be cut - "
+                        "the finished streams were kept.")
+                         .arg(audioTracksCut).arg(avItem->audioCount());
+    const QStringList reasons = audioCutFailureReasons();
+    if (!reasons.isEmpty()) detail += "\n\n" + reasons.join("\n");
+    else                    detail += "\n" + tr("See the log for the reason.");
+    finishCutOperation(CutOutcome::Failed, tr("Cutting failed"), detail);
     return;
   }
 
@@ -2628,6 +2675,38 @@ int TTAVData::countExtraFramesBefore(int frameIndex) const
 }
 
 // *****************************************************************************
+// Clustered audio-gap video-frame ranges, same clustering rule (gapFrames
+// tolerance from extraFrameClusterGapSec) and the same raw (unclustered by
+// the display offset) start/end pair as emitGapCluster() in
+// showExtraFrameClusterDialog() above. Duplicated rather than shared with
+// that lambda-local helper: this is the only other caller today
+// (TTAudioAnomalyScanTask's gap-overlap annotation) and it needs the raw
+// ranges, not the TTStreamPoint markers the dialog builds.
+// *****************************************************************************
+QList<QPair<int,int>> TTAVData::audioGapFrameRanges(double frameRate) const
+{
+  QList<QPair<int,int>> ranges;
+  if (mAudioGapIndices.isEmpty()) return ranges;
+  if (frameRate <= 0.0) frameRate = 25.0;
+
+  int gapFrames = qRound(TTSettings::instance()->extraFrameClusterGapSec() * frameRate);
+
+  int clusterStart = mAudioGapIndices.first();
+  int clusterEnd = clusterStart;
+  for (int i = 1; i < mAudioGapIndices.size(); ++i) {
+    if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
+      clusterEnd = mAudioGapIndices[i];
+    } else {
+      ranges.append({clusterStart, clusterEnd});
+      clusterStart = mAudioGapIndices[i];
+      clusterEnd = clusterStart;
+    }
+  }
+  ranges.append({clusterStart, clusterEnd});
+  return ranges;
+}
+
+// *****************************************************************************
 // Audio-burst detection helpers shared by cut list, preview dialog, and the
 // final-cut warning. All sites must probe the same boundary time, including
 // the extra-frame correction; otherwise threshold checks land on different
@@ -2827,6 +2906,13 @@ QList<float> TTAVData::cutAudioTracks(
 {
   QList<float> firstDrifts;
   TTMessageLogger* log = TTMessageLogger::getInstance();
+  // Per-track failure reasons for THIS call, in user-facing wording. The
+  // callers' partial-failure message used to say "see the log for the
+  // reason", which for the actionable case ("repair range spans a cut-segment
+  // boundary - adjust the range or the cut points") meant the one sentence
+  // that tells the user what to do never left the log file (final review
+  // M14). Cleared here so a previous run's reasons can never be reported.
+  mAudioCutFailureReasons.clear();
   if (!avItem || trackIndices.isEmpty()) return firstDrifts;
 
   for (int idx : trackIndices) {
@@ -2868,24 +2954,114 @@ QList<float> TTAVData::cutAudioTracks(
     QList<int> targetAcmods =
         computeTargetAcmods(stream->filePath(), ext, plan.keepList, normalizeAcmod);
 
+    // Audio anomaly repairs: build one replacement-frame table per enabled
+    // item on this track and merge them (buildRepairTable is AC3-only, so
+    // this only runs for .ac3 tracks). A repair whose frames fall in NO keep
+    // window is skipped rather than built: cutAudioStream's lookup can never
+    // match frames it never writes, so building that table would be dead
+    // work — and could needlessly fail on an acmod change outside the kept
+    // range, which buildRepairTable rejects hard.
+    TTAudioRepair::FrameTable repairTable;
+    bool repairFailed = false;
+    QString repairFailMsg;
+    if (ext.compare(QStringLiteral("ac3"), Qt::CaseInsensitive) == 0) {
+      TTAudioHeader* hdr = stream->headerAt(0);
+      double audioFrameSec = (hdr && hdr->frame_time > 0) ? hdr->frame_time / 1000.0 : 0.032;
+
+      for (const TTAudioRepairItem& item : avItem->audioRepairList()) {
+        if (item.trackIndex() != idx) continue;
+        if (!item.isEnabled()) {
+          // Disabled by the project-file load validation (range past the end
+          // of the audio file, unreadable file, malformed range). Skipping is
+          // right - the range cannot be applied - but it used to happen
+          // without a single word anywhere, so a cut quietly produced audio
+          // with the glitch still in it (final review I4).
+          log->warningMsg(__FILE__, __LINE__,
+                QString("Audio track %1: repair %2-%3 is disabled (it did not pass the "
+                        "project-load validation, see the warning logged then) and is "
+                        "NOT applied to this cut")
+                    .arg(idx + 1).arg(item.frameFrom()).arg(item.frameTo()));
+          continue;
+        }
+
+        // buildRepairTable only rejects a SOURCE acmod change inside the
+        // item's range -- the TARGET acmod is a single scalar per call, so
+        // an item whose frame range touches two keep windows with different
+        // targetAcmods would silently get the wrong target layout applied
+        // to whichever part falls outside the window we happened to look up.
+        // Require the entire item range to lie inside exactly one keep
+        // window; an item touching more than one (or poking out of the one
+        // it starts in) is treated like a buildRepairTable failure -- never
+        // silently mis-targeted.
+        double itemStartSec = item.frameFrom() * audioFrameSec;
+        double itemEndSec = (item.frameTo() + 1) * audioFrameSec; // exclusive
+        int segIdx = -1;
+        bool touchesAnyWindow = false;
+        for (int s = 0; s < plan.keepList.size(); s++) {
+          double segStart = plan.keepList[s].first;
+          double segEnd = plan.keepList[s].second;
+          if (itemStartSec >= segEnd || itemEndSec <= segStart) continue; // no overlap
+          touchesAnyWindow = true;
+          if (itemStartSec >= segStart && itemEndSec <= segEnd) {
+            segIdx = s;
+            break;
+          }
+        }
+        if (segIdx < 0) {
+          if (!touchesAnyWindow) continue; // never written by cutAudioStream -- skip
+          repairFailed = true;
+          // tr(), not QStringLiteral: this one is actionable and is shown to
+          // the user via mAudioCutFailureReasons (final review M14).
+          repairFailMsg = tr("the repair range %1-%2 spans a cut-segment boundary - "
+                             "adjust the repair range or the cut points")
+                              .arg(item.frameFrom()).arg(item.frameTo());
+          break;
+        }
+
+        int targetAcmod = (normalizeAcmod && segIdx < targetAcmods.size())
+                               ? targetAcmods[segIdx] : -1;
+
+        QString itemErr;
+        TTAudioRepair::FrameTable itemTable = TTAudioRepair::buildRepairTable(
+            stream->filePath(), item, targetAcmod, &itemErr);
+        if (!itemErr.isEmpty()) {
+          repairFailed = true;
+          repairFailMsg = itemErr;
+          break;
+        }
+        repairTable.insert(itemTable);
+      }
+    }
+    if (repairFailed) {
+      log->errorMsg(__FILE__, __LINE__,
+                    QString("Audio repair failed for track %1: %2").arg(idx + 1).arg(repairFailMsg));
+      mAudioCutFailureReasons << tr("Audio track %1: %2").arg(idx + 1).arg(repairFailMsg);
+      onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), false);
+      continue;
+    }
+
     TTFFmpegWrapper ff;
     std::function<void(int)> perTrackCb;
     if (onProgress)
       perTrackCb = [&onProgress, idx](int p) { onProgress(idx, p); };
     bool ok = ff.cutAudioStream(stream->filePath(), outFile,
                                 plan.keepList, normalizeAcmod, targetAcmods,
-                                perTrackCb, shouldAbort);
+                                perTrackCb, shouldAbort,
+                                repairTable.isEmpty() ? nullptr : &repairTable);
     if (!ok) {
       // A deliberate cancel returns false through the same path as a real
       // failure (TTFFmpegWrapper::cutAudioStream). Only the latter is an
       // error - logging a user cancel at error level would put a failure line
       // in the persistent log for something the user asked for.
-      if (shouldAbort && shouldAbort())
+      if (shouldAbort && shouldAbort()) {
         log->infoMsg(__FILE__, __LINE__,
                      QString("Audio cut for track %1 aborted by user").arg(idx + 1));
-      else
+      } else {
         log->errorMsg(__FILE__, __LINE__,
                       QString("Audio cut failed for track %1").arg(idx + 1));
+        mAudioCutFailureReasons << tr("Audio track %1: the audio cut itself failed "
+                                      "(see the log for the libav error)").arg(idx + 1);
+      }
     }
     onCut(idx, outFile, avItem->audioListItemAt(idx).getLanguage(), ok);
   }

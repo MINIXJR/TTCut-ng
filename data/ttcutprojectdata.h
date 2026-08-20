@@ -66,6 +66,7 @@ class TTCutProjectData
     void createDocumentStructure();
     QDomElement writeVideoSection(const QString& filePath, int order);
     QDomElement writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs = 0);
+    QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     QDomElement writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order);
     QDomElement writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs = 0);

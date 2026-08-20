@@ -28,6 +28,14 @@ TTCutSettingsStreamPoints::TTCutSettingsStreamPoints(QWidget* parent)
   connect(cbPillarbox, &QCheckBox::toggled, laPillarboxThreshold, &QWidget::setEnabled);
   connect(cbPillarbox, &QCheckBox::toggled, sbPillarboxSample,    &QWidget::setEnabled);
   connect(cbPillarbox, &QCheckBox::toggled, laPillarboxSample,    &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, sbAnomalyLfeRms,      &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, laAnomalyLfeRms,      &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, sbAnomalyContrast,    &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, laAnomalyContrast,    &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, sbAnomalyNullPercent, &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, laAnomalyNullPercent, &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, sbAnomalyMinPeak,     &QWidget::setEnabled);
+  connect(cbAudioAnomaly, &QCheckBox::toggled, laAnomalyMinPeak,     &QWidget::setEnabled);
 
   connect(btnResetDefaults, &QPushButton::clicked,
           this, &TTCutSettingsStreamPoints::resetToDefaults);
@@ -39,12 +47,19 @@ void TTCutSettingsStreamPoints::resetToDefaults()
 {
   // Compile-time defaults — must match common/ttsettings.h
   // (mSpDetectSilence/mSpSilenceThresholdDb/mSpSilenceMinDuration/
-  // mSpDetectAudioChange/mSpDetectAspectChange/mSpDetectPillarbox/
+  // mSpDetectAudioChange/mAudioAnomalyScanEnabled/mAnomalyLfeRmsDb/
+  // mAnomalyCenterContrast/mAnomalyLfeNullPercent/mAnomalyLfeMinPeakDb/
+  // mSpDetectAspectChange/mSpDetectPillarbox/
   // mSpPillarboxThreshold/mSpPillarboxSampleSeconds).
   cbSilence->setChecked(true);
   sbSilenceThreshold->setValue(-75);
   sbSilenceMinDuration->setValue(0.3);
   cbAudioChange->setChecked(true);
+  cbAudioAnomaly->setChecked(true);
+  sbAnomalyLfeRms->setValue(-55.0);
+  sbAnomalyContrast->setValue(4.0);
+  sbAnomalyNullPercent->setValue(99.0);
+  sbAnomalyMinPeak->setValue(-22.0);
   cbAspectChange->setChecked(true);
   cbPillarbox->setChecked(true);
   sbPillarboxThreshold->setValue(20);
@@ -58,6 +73,11 @@ void TTCutSettingsStreamPoints::setTabData()
   sbSilenceThreshold->setValue(s->spSilenceThresholdDb());
   sbSilenceMinDuration->setValue(s->spSilenceMinDuration());
   cbAudioChange->setChecked(s->spDetectAudioChange());
+  cbAudioAnomaly->setChecked(s->audioAnomalyScanEnabled());
+  sbAnomalyLfeRms->setValue(s->anomalyLfeRmsDb());
+  sbAnomalyContrast->setValue(s->anomalyCenterContrast());
+  sbAnomalyNullPercent->setValue(s->anomalyLfeNullPercent());
+  sbAnomalyMinPeak->setValue(s->anomalyLfeMinPeakDb());
   cbAspectChange->setChecked(s->spDetectAspectChange());
   cbPillarbox->setChecked(s->spDetectPillarbox());
   sbPillarboxThreshold->setValue(s->spPillarboxThreshold());
@@ -74,6 +94,14 @@ void TTCutSettingsStreamPoints::setTabData()
   laPillarboxThreshold->setEnabled(cbPillarbox->isChecked());
   sbPillarboxSample->setEnabled(cbPillarbox->isChecked());
   laPillarboxSample->setEnabled(cbPillarbox->isChecked());
+  sbAnomalyLfeRms->setEnabled(cbAudioAnomaly->isChecked());
+  laAnomalyLfeRms->setEnabled(cbAudioAnomaly->isChecked());
+  sbAnomalyContrast->setEnabled(cbAudioAnomaly->isChecked());
+  laAnomalyContrast->setEnabled(cbAudioAnomaly->isChecked());
+  sbAnomalyNullPercent->setEnabled(cbAudioAnomaly->isChecked());
+  laAnomalyNullPercent->setEnabled(cbAudioAnomaly->isChecked());
+  sbAnomalyMinPeak->setEnabled(cbAudioAnomaly->isChecked());
+  laAnomalyMinPeak->setEnabled(cbAudioAnomaly->isChecked());
 }
 
 void TTCutSettingsStreamPoints::saveTabData()
@@ -83,6 +111,11 @@ void TTCutSettingsStreamPoints::saveTabData()
   s->setSpSilenceThresholdDb(sbSilenceThreshold->value());
   s->setSpSilenceMinDuration(sbSilenceMinDuration->value());
   s->setSpDetectAudioChange(cbAudioChange->isChecked());
+  s->setAudioAnomalyScanEnabled(cbAudioAnomaly->isChecked());
+  s->setAnomalyLfeRmsDb(sbAnomalyLfeRms->value());
+  s->setAnomalyCenterContrast(sbAnomalyContrast->value());
+  s->setAnomalyLfeNullPercent(sbAnomalyNullPercent->value());
+  s->setAnomalyLfeMinPeakDb(sbAnomalyMinPeak->value());
   s->setSpDetectAspectChange(cbAspectChange->isChecked());
   s->setSpDetectPillarbox(cbPillarbox->isChecked());
   s->setSpPillarboxThreshold(sbPillarboxThreshold->value());

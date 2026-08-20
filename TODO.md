@@ -484,6 +484,50 @@ ffmpeg -i input.aac -c:a ac3 -b:a 384k output.ac3
 - Support DVB-SUB (bitmap subtitles) and Teletext subtitles
 - Extract and convert to SRT or keep as PGS for MKV output
 
+### Audio-Anomalie-Reparatur — bewusste Folgearbeiten
+
+Aus `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`
+(Nicht-Ziele) und den Task-Reviews des Vorhabens. Nichts davon blockiert
+v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
+
+- **Lückenhafte `<Order>`-Werte in handbearbeiteten Projektdateien sind bei
+  der Repair-Spur-Zuordnung unvalidiert** (Task-3-Review-Befund, hierher
+  verschoben statt in Task 8 mitgelöst): `TTAudioRepairItem::trackIndex()`
+  übernimmt die gespeicherte `<Order>` ungeprüft als spätere Listenposition;
+  ein Projekt mit nicht-fortlaufenden oder doppelten `<Order>`-Werten (von
+  Hand editiert, nicht über die App gespeichert) kann eine Reparatur der
+  falschen Spur zuordnen, ohne Warnung.
+- **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
+  M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
+  `TTAVItem::firstAc3TrackIndex()` liefert den Scan-Ort, und das Kontextmenü
+  des Markers ordnet jede Reparatur derselben Spur zu. Bei einer Aufnahme mit
+  zwei AC3-Spuren (z. B. deutsch + Originalton) bleibt die zweite unbeachtet —
+  eine Störung dort wird weder gefunden noch repariert, ohne Hinweis. Für den
+  Ausbau: Scan-Task pro AC3-Spur starten (der Task kennt seinen `trackIndex`
+  bereits), Markertext um die Spur ergänzen (steht schon drin), und im
+  Reparatur-Dialog die Spur wählbar machen statt sie aus
+  `firstAc3TrackIndex()` abzuleiten.
+- **Ersatzframe-Bau meldet OOM und Schreibfehler nicht getrennt** (M1/M2 aus
+  dem Final-Review, bewusst offen gelassen). `TTAudioRepair::buildRepairTable()`
+  baut die komplette Tabelle im Speicher (`QMap<qint64, QByteArray>`); bei sehr
+  langen Bereichen ist der Verbrauch unbegrenzt, und eine fehlgeschlagene
+  Allokation innerhalb von libav wird als gewöhnlicher Fehler gemeldet, nicht
+  als „zu wenig Speicher". Der Schnitt bricht in beiden Fällen sauber ab (die
+  Fehlerkette stimmt), aber die Meldung führt den Nutzer nicht zur Ursache.
+  Sinnvoll erst zusammen mit einer Obergrenze für die Bereichslänge.
+- **Stereo-/MP2-Scan**: die LFE-Insel-Heuristik ist AC3-5.1-spezifisch und
+  bewusst nicht auf Stereo/MP2 übertragen (Spec-Entscheidung: Fehlalarmrisiko
+  ohne eigene Kalibrierung).
+- **Weitere Ersatzverfahren**: v1 kennt nur „Stille mit Randfades"
+  (`Method`-Feld ist für Erweiterung vorgesehen). Interpolation
+  (autoregressive Vorhersage aus Randsamples, nur für kurze Störungen) und
+  Raumton-Ersatz (Nachbarschafts-Atmo, Center aus gedämpfter L+R-Summe,
+  Rauschsynthese nach Spektralprofil) brauchen eigene Parameter + Hörtests.
+- **Scanner als Standalone-Ableger für VDR_Demux.sh-Batch** (Nutzeranregung):
+  der Scan läuft heute nur als Hintergrund-Task in TTCut-ng nach dem Laden;
+  ein CLI-Ableger könnte den gesamten Korpus batch-scannen, ohne jede Datei
+  einzeln in der GUI zu öffnen.
+
 ## Low Priority
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**

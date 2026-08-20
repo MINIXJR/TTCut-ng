@@ -2,6 +2,62 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**AC3 Audio Anomaly Detection and Repair**
+
+### Added
+- **Audio anomaly scan**: after loading an AC3 5.1 audio track, TTCut-ng
+  automatically scans it for CRC-valid transmission glitches that
+  structure-only tools (ttcut-audiofix, ProjectX) cannot see — center-channel
+  bursts paired with an LFE pulse in material whose LFE is otherwise digital
+  silence. Findings show up as `AudioAnomaly` markers on the timeline
+  (distinct from the existing `Error` markers from ttcut-audiofix); the scan
+  runs in the background and is abortable like any other stream point
+  analysis. It also runs as part of an explicit stream point analysis, and it
+  is skipped when the project already carries anomaly markers, so reopening a
+  project does not collect a second set.
+- **Anomaly scan settings**: Settings → Stream Points carries the scan's
+  switch and its four thresholds (LFE threshold, center contrast factor, LFE
+  silence share, LFE minimum peak), including "Reset to defaults". Switching
+  the scan off also stops the automatic run after loading. Only 48 kHz tracks
+  are scanned — the detection grid is one 32 ms AC3 frame, which does not hold
+  at any other sample rate; a track with a different rate is reported as not
+  scanned instead of being measured against the wrong grid.
+- **Repair… context menu**: right-clicking an `AudioAnomaly` marker opens a
+  dialog to plan a destruction-free repair — channel selection (pre-filled
+  from the scan), start/end fine adjustment, and Before/After audition of the
+  affected range through mpv. Repairs live only in the project (source files
+  are never touched); Undo is deleting the entry.
+- **`.ttcut` project format**: a new optional `<Repair>` element per audio
+  track records planned repairs (frame range, channel mask, method).
+  Existing projects load unchanged; a project saved by an older TTCut-ng
+  version drops any `<Repair>` entries it doesn't know about (documented
+  limitation, no migration).
+- **Repair applied during cut**: planned repairs are baked into the audio
+  stream at cut time — affected AC3 frames are decoded, the marked channels
+  replaced with silence with a short edge fade, and re-encoded in the
+  segment's target channel layout before the packet is written. Everything
+  outside a repaired range is untouched (measured byte-identical to a cut
+  without repairs). If a repair cannot be built (missing encoder, decode
+  failure) the cut aborts before any audio is written rather than silently
+  cutting the unrepaired glitch through.
+- **Load-time validation**: a repair range that no longer fits the
+  referenced audio file (e.g. the recording was re-demuxed after the project
+  was saved), or that is structurally impossible (end before start, negative
+  start), is disabled on load with a warning — never silently applied and
+  never dropped. Its marker says so ("repair DISABLED"), and a cut logs a
+  warning for every disabled repair it skips.
+- **Marker carries the exact AC3 frame range**: an `AudioAnomaly` marker
+  stores the scanner's own frame numbers (`<AudioFrameFrom>`/`<AudioFrameTo>`
+  in the project file) instead of only a video frame plus a duration, so the
+  repair dialog proposes exactly the range that was found. Markers from older
+  projects still work — they fall back to the previous estimate.
+- **Failed audio tracks say why**: when a cut can only produce some of the
+  audio tracks, the failure message now names the reason per track (e.g. "the
+  repair range 63894-63901 spans a cut-segment boundary — adjust the repair
+  range or the cut points") instead of pointing at the log file.
+
 ## v0.81.2 (2026-08-18)
 
 **Cut Dialog Settings Persistence, Stable Audio Track Order, Demux Gap Fix**

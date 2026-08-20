@@ -26,6 +26,9 @@
 #include "ttcutmainwindow.h"
 #include "ttquickjumpdialog.h"
 #include "ttstreampointwidget.h"
+// approxAc3RangeForMarker() - marker <-> repair-item matching for the
+// disabled-repair annotation in onStreamPointsLoaded().
+#include "ttaudiorepairdialog.h"
 
 #include "../common/ttexception.h"
 #include "../common/ttthreadtask.h"
@@ -40,6 +43,7 @@
 #include "../data/ttsearchtask_scenechange.h"
 #include "../data/ttsearchtask_logo.h"
 #include "../data/ttsearchtask_aspectscan.h"
+#include "../data/ttaudioanomalyscantask.h"
 
 #include "ttcutavcutdlg.h"
 #include "ttcutsettingsdlg.h"
@@ -355,7 +359,7 @@ TTCutMainWindow::TTCutMainWindow()
   connect(mpAVData, &TTAVData::avDataReloaded,       this, &TTCutMainWindow::onAVDataReloaded);
   connect(mpAVData, &TTAVData::foundEqualFrame,      currentFrame, qOverload<int>(&TTCurrentFrame::onGotoFrame));
   connect(mpAVData, &TTAVData::streamPointsLoaded,
-          this, &TTCutMainWindow::onVideoPointsDetected);
+          this, &TTCutMainWindow::onStreamPointsLoaded);
   connect(mpAVData, &TTAVData::vdrMarkersLoaded,
           this, &TTCutMainWindow::onVideoPointsDetected);
   connect(mpAVData, &TTAVData::logoDataLoaded,
@@ -924,6 +928,19 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
   if (!vs) return;
 
+  // Guard against re-entrancy while stream-point workers are already running
+  // on mpStreamPointTaskPool (shared with the automatic audio-anomaly scan,
+  // see maybeStartAutoAnomalyScan()). The normal GUI path cannot hit this:
+  // TTStreamPointWidget shows an "Abort" button instead of re-emitting
+  // analyzeRequested() while a scan is in flight. runScreenshotMode() calls
+  // this method directly, though, and can land here while an auto scan
+  // triggered right after the video finished loading is still running -
+  // blindly zeroing mStreamPointWorkersRunning below would then leave that
+  // scan's workers orphaned (their onAnalysisWorkerFinished() decrements
+  // past zero) and report "analysis finished" before it actually is. See R2
+  // in .superpowers/sdd/2026-08-19-audio-anomaly-repair/.
+  if (mStreamPointWorkersRunning > 0) return;
+
   // Clear previous auto-detected points
   mpStreamPointModel->clearAutoDetected();
 
@@ -1002,6 +1019,18 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
     mStreamPointWorkersRunning++;
   }
 
+  // AC3 5.1 anomaly scan (audio-anomaly-repair, Task 6): background scan for
+  // CRC-valid but structurally defective center+LFE bursts. AC3-only (the
+  // LFE-island rule needs it); only runs when an AC3 track is loaded.
+  // Normally this scan has already run automatically right after the streams
+  // finished loading (maybeStartAutoAnomalyScan()); running it here again is
+  // deliberate - an explicit analysis clears the auto-detected markers first,
+  // so the anomaly markers have to be produced again with it.
+  if (TTSettings::instance()->audioAnomalyScanEnabled()) {
+    if (!startAudioAnomalyScan())
+      mSkippedAnalysisNotes << tr("Audio anomaly scan: no AC3 track loaded - skipped");
+  }
+
   // Audio worker (silence, audio format changes)
   if (TTSettings::instance()->spDetectSilence() || TTSettings::instance()->spDetectAudioChange()) {
     // Use first audio stream if available
@@ -1058,6 +1087,155 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   }
 }
 
+/*!
+ * Dispatch the AC3 anomaly scan for the current AV item onto the stream-point
+ * task pool. Returns false (and starts nothing) when there is no AC3 track to
+ * scan - the caller decides whether that deserves a note. Shared by the
+ * explicit stream-point analysis and by the automatic start after loading, so
+ * both wire the task up identically.
+ */
+bool TTCutMainWindow::startAudioAnomalyScan()
+{
+  if (!mpCurrentAVDataItem) return false;
+  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
+  if (!vs) return false;
+
+  // Shared with TTStreamPointWidget's repair context menu (audio-anomaly-
+  // repair Task 7) via TTAVItem::firstAc3TrackIndex() - both must agree on
+  // which track a scan/repair belongs to.
+  const int ac3TrackIndex = mpCurrentAVDataItem->firstAc3TrackIndex();
+  if (ac3TrackIndex < 0) return false;
+
+  TTAudioStream* ac3Track = mpCurrentAVDataItem->audioStreamAt(ac3TrackIndex);
+  if (!ac3Track) return false;
+
+  TTAudioAnomalyScanTask* anomalyTask = new TTAudioAnomalyScanTask(
+    ac3Track->filePath(), ac3TrackIndex, vs->frameRate(),
+    mpAVData->extraFrameIndices(), mpAVData->audioGapFrameRanges(vs->frameRate()));
+
+  connect(anomalyTask, &TTAudioAnomalyScanTask::pointsDetected,
+          this, &TTCutMainWindow::onVideoPointsDetected);
+  connect(anomalyTask, &TTThreadTask::finished,
+          this, &TTCutMainWindow::onAnalysisWorkerFinished);
+  connect(anomalyTask, &TTThreadTask::aborted,
+          this, &TTCutMainWindow::onAnalysisWorkerFinished);
+  connect(anomalyTask, &TTThreadTask::finished, anomalyTask, &QObject::deleteLater);
+  connect(anomalyTask, &TTThreadTask::aborted,  anomalyTask, &QObject::deleteLater);
+
+  mpStreamPointTaskPool->start(anomalyTask);
+  mStreamPointWorkersRunning++;
+  mpCurrentAVDataItem->setAnomalyScanStarted();
+  return true;
+}
+
+/*!
+ * Automatic start of the AC3 anomaly scan once video and audio tracks have
+ * finished loading - what the design decided ("Auslösung: automatisch nach dem
+ * Laden, abschaltbar (Setting)") and what the CHANGELOG has been claiming; the
+ * scan used to hang off the stream-point analysis action alone (final review
+ * I2). Gated by TTSettings::audioAnomalyScanEnabled() (default on, switchable
+ * in Settings -> Stream Points).
+ *
+ * Reached through TWO entry points, both via a zero-timer so the scan is
+ * queued after the rest of the load chain rather than in the middle of it:
+ *
+ *  1. onAVDataReloaded() - fires on every thread-pool exit
+ *     (TTThreadTaskPool::exit() -> TTAVData::onThreadPoolExit()), including
+ *     the one that ends an open or a project load. This fires on a fixed
+ *     schedule (all pool tasks done) that has nothing to do with whether
+ *     TTAVData has finished ITS OWN per-item bookkeeping yet.
+ *  2. onAVItemChanged() - fires when mpCurrentAVDataItem is set to the newly
+ *     opened item (TTAVData::currentAVItemChanged()).
+ *
+ * Both are needed on the video-open path (onOpenProjectFileFinished() below
+ * is a separate, project-load-only third entry). TTAVData::onOpenVideoFinished
+ * is the ONLY place that sets its mpCurrentAVItem and emits
+ * currentAVItemChanged() for a plain open - and, before it gets there, it can
+ * call showExtraFrameClusterDialog(), which shows a MODAL QMessageBox
+ * ("Defective Frames Detected") whenever the .info file reports doubled-PTS
+ * clusters, audio gaps, or audio/video corruption. That dialog blocks
+ * onOpenVideoFinished for as long as the user takes to dismiss it - which can
+ * be arbitrarily long, and in a headless run with nothing to click it never
+ * returns. The thread pool's own exit() does NOT wait on any of this (it only
+ * tracks task completion), so onThreadPoolExit() -> onAVDataReloaded() fires
+ * and calls this gate WHILE mpCurrentAVDataItem is still null - measured
+ * directly (fprintf trace + gate instrumentation on the real 1.6 GB
+ * audio-anomaly-LFE-center-burst material, 2026-08-20): onOpenVideoFinished
+ * is entered, but the trace point placed right before its avDataReloaded()
+ * call never fires, while onAVDataReloaded() and this gate each run exactly
+ * once, with mpCurrentAVDataItem == nullptr both times. Once the dialog is
+ * dismissed (interactively) and onOpenVideoFinished resumes, the pool has
+ * long since exited and nothing re-invoked this gate under the old,
+ * single-entry-point code - a permanent miss, not merely a delayed hit. The
+ * plain small tux test material carries no .info corruption/defect entries,
+ * so showExtraFrameClusterDialog() returns before ever showing a dialog,
+ * onOpenVideoFinished runs straight through, and onAVItemChanged() sets the
+ * current item well before the pool's own exit() - which is why that
+ * material always passed while the real DVB recording (repaired by
+ * ttcut-audiofix, which is what put audio_0_corrupt_ranges into its .info)
+ * did not. Whichever of the two entry points runs after both
+ * mpCurrentAVDataItem and initialAudioLoadDone() are set is the one that
+ * actually starts the scan; the guards below (particularly
+ * anomalyScanStarted()) make every other call a harmless no-op.
+ *
+ * initialAudioLoadDone() has the SAME dialog-stall exposure from a second,
+ * independent angle: TTAVData::onThreadPoolExit() marks it done by looping
+ * over mpAVList, but onOpenVideoFinished() only appends avItem to that list
+ * AFTER the dialog - so on the real material above, that loop ran (inside
+ * the dialog's own nested event loop, alongside the pool exit just
+ * described) before avItem existed in mpAVList, and nothing else ever sets
+ * the flag. Fixed at the source in onOpenVideoFinished() itself (see its
+ * comment right after the mpAVList->append() call) rather than here, since
+ * the two triggers above are no help if the flag they wait for can never
+ * become true in the first place.
+ *
+ * The zero-timer is NOT enough for a project load: measured (log transcript,
+ * 2026-08-20), the scan started BEFORE TTAVData::onReadProjectFileFinished()
+ * restored the project's own stream points, which would have produced a second
+ * set of anomaly markers next to the saved ones - the model does not
+ * deduplicate. That is what mProjectLoadInProgress below is for; the project
+ * path re-enters here from onOpenProjectFileFinished().
+ *
+ * Runs at most once per AV item (TTAVItem::anomalyScanStarted()), never on top
+ * of a running analysis, and never when AudioAnomaly markers are already on
+ * screen (restored from the project, or left by an earlier scan).
+ */
+void TTCutMainWindow::maybeStartAutoAnomalyScan()
+{
+  if (!TTSettings::instance()->audioAnomalyScanEnabled()) return;
+  // A project load restores its saved markers AFTER the pool exit that would
+  // trigger us; scanning now would duplicate them. openProjectFile() sets the
+  // flag, onOpenProjectFileFinished() clears it and re-runs this check.
+  if (mProjectLoadInProgress) return;
+  if (!mpCurrentAVDataItem || !mpCurrentAVDataItem->videoStream()) return;
+  // Audio tracks open asynchronously; before this flag is latched the item
+  // may not have its AC3 track yet.
+  if (!mpCurrentAVDataItem->initialAudioLoadDone()) return;
+  if (mpCurrentAVDataItem->anomalyScanStarted()) return;
+  if (mStreamPointWorkersRunning > 0) return;
+  if (mpCurrentAVDataItem->firstAc3TrackIndex() < 0) return;
+
+  for (int i = 0; i < mpStreamPointModel->rowCount(); i++) {
+    if (mpStreamPointModel->pointAt(i).type() == StreamPointType::AudioAnomaly) {
+      // Already known for this material - the project carried the findings,
+      // or a scan produced them earlier in this session. Latch the flag so
+      // this check is not repeated on every pool exit.
+      mpCurrentAVDataItem->setAnomalyScanStarted();
+      return;
+    }
+  }
+
+  mStreamPointAnalysisAborted = false;
+  if (startAudioAnomalyScan()) {
+    // Same visibility/abort mechanics as the explicit analysis: the marker
+    // widget shows the running state and offers Cancel, and the task's own
+    // status reports drive the progress dialog.
+    mpStreamPointWidget->setAnalysisRunning(true);
+    TTMessageLogger::getInstance()->infoMsg(__FILE__, __LINE__,
+        "Audio anomaly scan started automatically after loading");
+  }
+}
+
 void TTCutMainWindow::onAbortStreamPoints()
 {
   mStreamPointAnalysisAborted = true;
@@ -1111,6 +1289,73 @@ void TTCutMainWindow::onVideoPointsDetected(const QList<TTStreamPoint>& points)
 void TTCutMainWindow::onAudioPointsDetected(const QList<TTStreamPoint>& points)
 {
   mpStreamPointModel->addPoints(points);
+}
+
+/*!
+ * Stream points restored from a project file. Same as onVideoPointsDetected,
+ * except that AudioAnomaly markers whose repair the load validation had to
+ * DISABLE (range no longer fits the audio file, unreadable file, malformed
+ * range - see TTCutProjectData::parseAudioSection) get that fact written into
+ * their text.
+ *
+ * Without this the disabled state existed only in the log: the marker still
+ * read "(repair planned)" - the project stores the description - while the
+ * cut would skip it (final review I4).
+ */
+void TTCutMainWindow::onStreamPointsLoaded(const QList<TTStreamPoint>& points)
+{
+  QList<TTStreamPoint> annotated = points;
+  int anomalyMarkers = 0, markedDisabled = 0;
+
+  if (mpCurrentAVDataItem) {
+    for (const TTStreamPoint& pt : annotated)
+      if (pt.type() == StreamPointType::AudioAnomaly) anomalyMarkers++;
+
+    const QList<TTAudioRepairItem> repairs = mpCurrentAVDataItem->audioRepairList();
+    bool anyDisabled = false;
+    for (const TTAudioRepairItem& r : repairs) if (!r.isEnabled()) anyDisabled = true;
+
+    if (anyDisabled) {
+      double fps = mpCurrentAVDataItem->videoStream()
+                     ? mpCurrentAVDataItem->videoStream()->frameRate() : 25.0;
+      const QList<int> extras = mpAVData->extraFrameIndices();
+      const QString disabled = tr(" (repair DISABLED - it no longer fits the audio file)");
+
+      for (TTStreamPoint& pt : annotated) {
+        if (pt.type() != StreamPointType::AudioAnomaly) continue;
+        qint64 from = 0, to = 0;
+        TTAudioRepairDialog::approxAc3RangeForMarker(pt, fps, extras, from, to);
+        for (const TTAudioRepairItem& r : repairs) {
+          if (r.isEnabled()) continue;
+          if (r.frameTo() < from || r.frameFrom() > to) continue;   // no overlap
+          QString desc = pt.description();
+          // Strip whatever language variant of the "planned" suffix is
+          // actually stored (residuals R6) - it may not be the one tr()
+          // resolves to in THIS session's UI language, e.g. after a
+          // language switch or when reloading a project saved elsewhere.
+          for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
+            if (desc.endsWith(v)) { desc.chop(v.length()); break; }
+          // Same cross-language guard for the disabled suffix itself: a
+          // marker reloaded from a project last annotated in a different UI
+          // language already carries it, just spelled differently.
+          bool alreadyDisabled = false;
+          for (const QString& v : TTStreamPoint::repairDisabledSuffixVariants())
+            if (desc.endsWith(v)) { alreadyDisabled = true; break; }
+          if (!alreadyDisabled) desc += disabled;
+          pt.setDescription(desc);
+          markedDisabled++;
+          break;
+        }
+      }
+    }
+  }
+
+  log->infoMsg(__FILE__, __LINE__,
+      QString("Project stream points restored: %1 marker(s), %2 audio anomaly, "
+              "%3 marked as disabled repair")
+          .arg(annotated.size()).arg(anomalyMarkers).arg(markedDisabled));
+
+  mpStreamPointModel->addPoints(annotated);
 }
 
 void TTCutMainWindow::onAnalysisWorkerFinished()
@@ -1346,6 +1591,11 @@ void TTCutMainWindow::updateWindowTitle()
  */
 void TTCutMainWindow::closeProject()
 {
+  // A project read that never reached onOpenProjectFileFinished (aborted,
+  // unreadable file) would otherwise leave the automatic anomaly scan blocked
+  // for the rest of the session - TTAVData's abort path ends here.
+  mProjectLoadInProgress = false;
+
   // Abort any running search worker BEFORE stream teardown — the worker holds
   // pointers to TTVideoIndexList / TTVideoHeaderList owned by the stream.
   // Wait for the QThreadPool runnable to actually return before we let
@@ -1379,6 +1629,8 @@ void TTCutMainWindow::closeProject()
   navigationEnabled(false);
 
   mpStreamPointModel->clear();
+  mpStreamPointWidget->setAVItem(nullptr);
+  mpStreamPointWidget->setExtraFrameIndices(QList<int>());
   mpAVData->clear();
   mpCurrentAVDataItem = 0;  // AVItem was deleted by clear(), null the dangling pointer
 
@@ -1425,7 +1677,21 @@ void TTCutMainWindow::openProjectFile(QString fName)
   QFileInfo fInfo(fName );
   TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
 
+  // Hold the automatic anomaly scan back until the project has been restored
+  // completely. The pool exit that ends the stream opening fires
+  // avDataReloaded() BEFORE TTAVData::onReadProjectFileFinished() restores the
+  // saved stream points (measured: the scan started, the markers arrived
+  // after), so without this a project that already carries AudioAnomaly
+  // findings would collect a second set of them.
+  mProjectLoadInProgress = true;
   connect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
+  // Mirrors the finished connection above for the abort/error path (unreadable
+  // or corrupt .ttcut) — TTAVData::onReadProjectFileAborted() never emits
+  // readProjectFileFinished(), so without this mProjectLoadInProgress stayed
+  // true for the rest of the session and maybeStartAutoAnomalyScan() silently
+  // refused to run again (both its call sites check the flag first). See R1
+  // in .superpowers/sdd/2026-08-19-audio-anomaly-repair/.
+  connect(mpAVData, &TTAVData::readProjectFileAborted, this, &TTCutMainWindow::onOpenProjectFileAborted);
   mpAVData->readProjectFile(fInfo);
 }
 
@@ -1434,6 +1700,11 @@ void TTCutMainWindow::openProjectFile(QString fName)
  */
 void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
 {
+  // Released here, at the end of the restore, and followed by the scan check
+  // the pool exit was not allowed to run (see openProjectFile()).
+  mProjectLoadInProgress = false;
+  QTimer::singleShot(0, this, &TTCutMainWindow::maybeStartAutoAnomalyScan);
+
   if (mpCurrentAVDataItem == 0) return;
 
   insertRecentFile(fName);
@@ -1443,6 +1714,20 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
   mpAVData->emitCutDataReloaded();
 
   disconnect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
+  disconnect(mpAVData, &TTAVData::readProjectFileAborted, this, &TTCutMainWindow::onOpenProjectFileAborted);
+}
+
+/**
+ * Open project file aborted or failed (unreadable/corrupt .ttcut). Mirrors
+ * onOpenProjectFileFinished()'s flag release so mProjectLoadInProgress never
+ * stays latched for the rest of the session — see R1 in
+ * .superpowers/sdd/2026-08-19-audio-anomaly-repair/.
+ */
+void TTCutMainWindow::onOpenProjectFileAborted()
+{
+  mProjectLoadInProgress = false;
+  disconnect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
+  disconnect(mpAVData, &TTAVData::readProjectFileAborted, this, &TTCutMainWindow::onOpenProjectFileAborted);
 }
 
 void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
@@ -1465,6 +1750,13 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   }
 
   mpCurrentAVDataItem = avItem;
+  // Audio-repair context menu (Task 7) needs the current AVItem to look up
+  // its AC3 track and existing TTAudioRepairItem entries, and the extra-
+  // frame-indices list (review fix 1) to invert TTAudioAnomalyScanTask::
+  // videoFrameForTime() correctly - same list the scan dispatch itself
+  // uses below.
+  mpStreamPointWidget->setAVItem(mpCurrentAVDataItem);
+  mpStreamPointWidget->setExtraFrameIndices(mpAVData->extraFrameIndices());
 
   connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
           this, &TTCutMainWindow::onSubtitleItemAppended);
@@ -1512,6 +1804,13 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   streamNavigator->onAVItemChanged(mpCurrentAVDataItem);
 
   navigationEnabled( true );
+
+  // Second entry point into the auto-anomaly-scan gate - see
+  // maybeStartAutoAnomalyScan() for why onAVDataReloaded() alone is not
+  // reliable on the video-open path (pool-exit-vs-current-item race).
+  // Deferred the same way, so mInitialAudioLoadDone/the rest of this
+  // function's setup finishes first.
+  QTimer::singleShot(0, this, &TTCutMainWindow::maybeStartAutoAnomalyScan);
 
   // Clear previous logo profile
   mLogoDetector->clearProfile();
@@ -1575,6 +1874,10 @@ void TTCutMainWindow::onAVDataReloaded()
     audioFileList->onReloadList(mpCurrentAVDataItem);
     subtitleFileList->onReloadList(mpCurrentAVDataItem);
   }
+
+  // Automatic AC3 anomaly scan, deferred by one event-loop turn - see
+  // maybeStartAutoAnomalyScan() for why it cannot run straight from here.
+  QTimer::singleShot(0, this, &TTCutMainWindow::maybeStartAutoAnomalyScan);
 }
 
 /*!

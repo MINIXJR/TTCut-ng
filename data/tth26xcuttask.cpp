@@ -369,10 +369,15 @@ void TTH26xCutTask::runCut()
   // tracks - for a retry; a genuine error never cleans up (standing rule).
   // Per-track reasons are in the log as errorMsg entries.
   if (cutAudioFiles.size() < mpAVItem->audioCount()) {
-    fail(TTAVData::tr("Cutting failed"),
-         TTAVData::tr("Only %1 of %2 audio track(s) could be cut - "
-                      "the finished streams were kept, see the log for the reason")
-             .arg(cutAudioFiles.size()).arg(mpAVItem->audioCount()));
+    // Per-track reasons in user wording, not just in the log (final review
+    // M14) - see TTAVData::audioCutFailureReasons().
+    QString detail = TTAVData::tr("Only %1 of %2 audio track(s) could be cut - "
+                                  "the finished streams were kept.")
+                         .arg(cutAudioFiles.size()).arg(mpAVItem->audioCount());
+    const QStringList reasons = mpAVData->audioCutFailureReasons();
+    if (!reasons.isEmpty()) detail += "\n\n" + reasons.join("\n");
+    else                    detail += "\n" + TTAVData::tr("See the log for the reason.");
+    fail(TTAVData::tr("Cutting failed"), detail);
     return;
   }
 

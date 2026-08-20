@@ -101,11 +101,43 @@ void TTAVItem::appendAudioEntry(const TTAudioItem& aItem)
 void TTAVItem::onRemoveAudioItem(int index)
 {
 	mpAudioList->remove(mpAudioList->at(index));
+
+  // TTAudioRepairItem tags itself with a track index and has no setter for
+  // it (data/ttaudiorepairitem.h), so removing a track invalidates every
+  // repair's stored index at or after the removed position - rebuild them
+  // via the full constructor (isEnabled() carried over explicitly, the
+  // constructor always defaults it to true).
+  QList<TTAudioRepairItem> updatedRepairs;
+  for (const TTAudioRepairItem& repair : mAudioRepairs) {
+    if (repair.trackIndex() == index) continue; // belonged to the removed track
+    int newTrack = repair.trackIndex() > index ? repair.trackIndex() - 1 : repair.trackIndex();
+    TTAudioRepairItem rebuilt(newTrack, repair.frameFrom(), repair.frameTo(),
+                               repair.channelMask(), repair.method());
+    rebuilt.setEnabled(repair.isEnabled());
+    updatedRepairs.append(rebuilt);
+  }
+  mAudioRepairs = updatedRepairs;
 }
 
 void TTAVItem::onSwapAudioItems(int oldIndex, int newIndex)
 {
 	mpAudioList->swap(oldIndex, newIndex);
+
+  // Same reasoning as onRemoveAudioItem: a repair is tagged by track index,
+  // so swapping two tracks must swap the indices any repair on those two
+  // tracks carries - otherwise a save after a reorder (TTAudioTreeView
+  // swapItems, since v0.81.2) attributes the repair to the wrong audio file.
+  QList<TTAudioRepairItem> updatedRepairs;
+  for (const TTAudioRepairItem& repair : mAudioRepairs) {
+    int track = repair.trackIndex();
+    if (track == oldIndex)      track = newIndex;
+    else if (track == newIndex) track = oldIndex;
+    TTAudioRepairItem rebuilt(track, repair.frameFrom(), repair.frameTo(),
+                               repair.channelMask(), repair.method());
+    rebuilt.setEnabled(repair.isEnabled());
+    updatedRepairs.append(rebuilt);
+  }
+  mAudioRepairs = updatedRepairs;
 }
 
 void TTAVItem::onAudioLanguageChanged(int index, const QString& language)
@@ -274,6 +306,15 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 		//if (audio1.getMode()       != audio2.getMode())
 		//	throw TTInvalidOperationException(tr("Audio files to cut must have the same mode!"));
 	}
+}
+
+int TTAVItem::firstAc3TrackIndex() const
+{
+  for (int i = 0; i < audioCount(); ++i) {
+    TTAudioStream* candidate = audioStreamAt(i);
+    if (candidate && candidate->streamType() == TTAVTypes::ac3_audio) return i;
+  }
+  return -1;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

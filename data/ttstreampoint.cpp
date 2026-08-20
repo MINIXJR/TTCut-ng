@@ -35,7 +35,8 @@ bool TTStreamPoint::isAutoDetected() const
          mType == StreamPointType::AudioChange ||
          mType == StreamPointType::SceneChange ||
          mType == StreamPointType::AspectChange ||
-         mType == StreamPointType::PillarboxChange;
+         mType == StreamPointType::PillarboxChange ||
+         mType == StreamPointType::AudioAnomaly;
 }
 
 bool TTStreamPoint::operator<(const TTStreamPoint& other) const
@@ -60,6 +61,7 @@ QString TTStreamPoint::typeToString(StreamPointType type)
     case StreamPointType::AspectChange:    return "AspectChange";
     case StreamPointType::PillarboxChange: return "PillarboxChange";
     case StreamPointType::Error:          return "Error";
+    case StreamPointType::AudioAnomaly:   return "AudioAnomaly";
   }
   return "ManualMarker";
 }
@@ -74,5 +76,30 @@ StreamPointType TTStreamPoint::stringToType(const QString& str)
   if (str == "AspectChange")    return StreamPointType::AspectChange;
   if (str == "PillarboxChange") return StreamPointType::PillarboxChange;
   if (str == "Error")           return StreamPointType::Error;
+  if (str == "AudioAnomaly")    return StreamPointType::AudioAnomaly;
   return StreamPointType::ManualMarker;
+}
+
+QStringList TTStreamPoint::repairPlannedSuffixVariants()
+{
+  // Source EN string (TTStreamPointWidget::onContextMenu()) plus every
+  // shipped translation (trans/ttcut-ng_de_DE.ts, contexts TTCutMainWindow
+  // and TTStreamPointWidget, both " (Reparatur geplant)"). Add a line here
+  // whenever a new translation of that source string ships.
+  static const QStringList variants = {
+    QStringLiteral(" (repair planned)"),
+    QStringLiteral(" (Reparatur geplant)")
+  };
+  return variants;
+}
+
+QStringList TTStreamPoint::repairDisabledSuffixVariants()
+{
+  // Source EN string (TTCutMainWindow::onStreamPointsLoaded()) plus every
+  // shipped translation (trans/ttcut-ng_de_DE.ts, context TTCutMainWindow).
+  static const QStringList variants = {
+    QStringLiteral(" (repair DISABLED - it no longer fits the audio file)"),
+    QStringLiteral(" (Reparatur ABGESCHALTET – sie passt nicht mehr zur Tondatei)")
+  };
+  return variants;
 }

@@ -44,6 +44,11 @@ set(MKVMUX_SRC ${SEAM_SRC} ${ROOT}/extern/ttmkvmergeprovider.cpp)
 set(FILEBUF_SRC
   ${ROOT}/avstream/ttfilebuffer.cpp
   ${ROOT}/common/ttmessagelogger.cpp
+  # ttfilebuffer.cpp throws TTIOException, whose base class TTException has
+  # out-of-line ctor/dtor/typeinfo - without this the only user of this list
+  # (test_startcode_scan) fails to LINK, which in turn breaks the documented
+  # `cmake --build build --target diag` build instruction for every tool.
+  ${ROOT}/common/ttexception.cpp
   ${ROOT}/common/ttsettings.cpp)
 
 set(ESINFO_SRC
@@ -116,6 +121,15 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
 
+set(ANOMALYSCAN_SRC
+  ${ROOT}/data/ttaudioanomalyscantask.cpp
+  ${ROOT}/data/ttstreampoint.cpp
+  ${ROOT}/common/ttthreadtask.cpp
+  ${ROOT}/common/ttmessagelogger.cpp
+  ${ROOT}/common/ttsettings.cpp
+  ${ROOT}/common/istatusreporter.cpp
+  ${ROOT}/common/ttexception.cpp)
+
 set(STREAMPOINTORDER_SRC
   ${MPEG2CUT_SRC}
   ${ROOT}/data/ttstreampoint_videoworker.cpp
@@ -164,6 +178,9 @@ function(diag_tool name)
   endif()
 endfunction()
 
+set(AUDIOREPAIR_SRC
+  ${ROOT}/extern/ttaudiorepair.cpp)
+
 set(SILENCE_SRC
   ${ROOT}/data/ttstreampoint_audioworker.cpp
   ${ROOT}/data/ttstreampoint.cpp
@@ -196,10 +213,19 @@ diag_tool(test_startcode_scan     SOURCES ${FILEBUF_SRC})
 diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
 diag_tool(test_audiofix_esinfo    SOURCES ${ESINFO_SRC})
 diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
+diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
+# Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
+# cut-segment-boundary error path needs the actual per-track loop, not just
+# TTFFmpegWrapper::cutAudioStream in isolation), so it needs the whole core
+# library (same rationale as test_subtitle_delay).
+diag_tool(test_audiorepair_cut AV WIDGETS SOURCES)
+target_link_libraries(test_audiorepair_cut PRIVATE ttcut-core)
 diag_tool(test_aspectdetect       SOURCES ${ROOT}/data/ttaspectdetect.cpp)
 diag_tool(test_analysislog        SOURCES ${ROOT}/data/ttanalysislog.cpp)
+diag_tool(test_streampoint_anomaly SOURCES ${ROOT}/data/ttstreampoint.cpp)
 diag_tool(test_silence_unavailable AV SOURCES ${SILENCE_SRC})
 diag_tool(test_aspectscan  AV MPEG2 SOURCES ${ASPECTSCAN_SRC})
+diag_tool(test_anomalyscan AV SOURCES ${ANOMALYSCAN_SRC})
 diag_tool(test_aspectscan_mpeg2 AV MPEG2 SOURCES ${MPEG2ASPECTSCAN_SRC})
 diag_tool(test_pool_abort         SOURCES ${POOLABORT_SRC})
 diag_tool(test_abort_after_finish SOURCES ${POOLABORT_SRC})
@@ -247,6 +273,23 @@ target_link_libraries(test_partial_track PRIVATE ttcut-core)
 diag_tool(test_subtitle_delay    AV WIDGETS SOURCES)
 target_link_libraries(test_subtitle_delay PRIVATE ttcut-core)
 target_link_libraries(test_cut_outcome PRIVATE ttcut-core)
+# Drives TTAVData::openAVStreams()/writeProjectFile()/readProjectFile() end to
+# end (the .ttcut <Repair> round trip), so it needs the whole core library
+# too (same rationale as test_subtitle_delay).
+diag_tool(test_audiorepair_persist AV WIDGETS SOURCES)
+target_link_libraries(test_audiorepair_persist PRIVATE ttcut-core)
+# Drives TTAudioRepairDialog (the repair dialog itself, Task 7) against a
+# real TTAVData-opened AVItem, so it needs the whole core library too (same
+# rationale as test_audiorepair_persist).
+diag_tool(test_repairdialog_model AV WIDGETS SOURCES)
+target_link_libraries(test_repairdialog_model PRIVATE ttcut-core)
+# Review fix 2 round 2: proves TTAudioRepairDialog's mpv-Play-button error-
+# popup gate across two real loads plus a provoked load failure. Needs a
+# real GL-capable platform for mpv's render context (same reason
+# test_mainwindow_then_cut refuses offscreen) - deliberately NOT in the
+# `diag` DEPENDS list below, same as that harness.
+diag_tool(test_repairdialog_mpv_lifecycle AV WIDGETS SOURCES)
+target_link_libraries(test_repairdialog_mpv_lifecycle PRIVATE ttcut-core)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
 # the whole core library, not a curated source list.
@@ -278,6 +321,7 @@ diag_tool(test_dialog_then_cut    AV WIDGETS SOURCES)
 diag_tool(test_preview_then_cut   AV WIDGETS SOURCES)
 diag_tool(test_mainwindow_then_cut AV WIDGETS SOURCES)
 diag_tool(test_audio_order_reset  AV MPEG2 WIDGETS SOURCES)
+diag_tool(test_auto_anomaly_scan_trigger AV MPEG2 WIDGETS SOURCES)
 diag_tool(test_stale_abort        AV WIDGETS SOURCES)
 diag_tool(test_framesearch_progress AV WIDGETS SOURCES)
 diag_tool(test_pulse_animation    WIDGETS SOURCES)
@@ -293,6 +337,7 @@ target_link_libraries(test_dialog_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_preview_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_mainwindow_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_audio_order_reset PRIVATE ttcut-core)
+target_link_libraries(test_auto_anomaly_scan_trigger PRIVATE ttcut-core)
 target_link_libraries(test_cutlist_minsize PRIVATE ttcut-core)
 target_link_libraries(test_output_name PRIVATE ttcut-core)
 target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
@@ -304,10 +349,12 @@ add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_aspectdetect
-  test_analysislog test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
+  test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
+  test_anomalyscan
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_window_geometry
-  test_progressestimator test_subtitle_delay)
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
+  test_audiorepair_cut test_repairdialog_model)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

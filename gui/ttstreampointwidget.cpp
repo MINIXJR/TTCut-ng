@@ -8,7 +8,11 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampointwidget.h"
+#include "ttaudiorepairdialog.h"
 #include "../data/ttstreampointmodel.h"
+#include "../data/ttavlist.h"
+#include "../data/ttaudiorepairitem.h"
+#include "../avstream/ttavstream.h"
 #include "../common/ttcut.h"
 
 #include <QListView>
@@ -175,7 +179,12 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
   QAction* actDelete = nullptr;
   QAction* actCutIn = nullptr;
   QAction* actCutOut = nullptr;
+  QAction* actRepair = nullptr;
+  QAction* actEditRepair = nullptr;
+  QAction* actRemoveRepair = nullptr;
   int frameIndex = 0;
+  int repairTrackIndex = -1;
+  int repairIndex = -1;
 
   if (index.isValid()) {
     frameIndex = mModel->data(index, TTStreamPointModel::FrameIndexRole).toInt();
@@ -183,6 +192,37 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
     menu.addSeparator();
     actCutIn = menu.addAction(tr("Set as Cut-In"));
     actCutOut = menu.addAction(tr("Set as Cut-Out"));
+
+    // Audio repair (audio-anomaly-repair Task 7): only for AudioAnomaly
+    // markers, and only once an AC3 track and a current AVItem exist (the
+    // marker widget has neither immediately after project close).
+    auto type = static_cast<StreamPointType>(mModel->data(index, TTStreamPointModel::TypeRole).toInt());
+    if (type == StreamPointType::AudioAnomaly && mpAvItem) {
+      repairTrackIndex = mpAvItem->firstAc3TrackIndex();
+      if (repairTrackIndex >= 0) {
+        const TTStreamPoint pt = mModel->pointAt(index.row());
+        const double frameRate = mpAvItem->videoStream() ? mpAvItem->videoStream()->frameRate() : 25.0;
+        qint64 approxFrom = 0, approxTo = 0;
+        TTAudioRepairDialog::approxAc3RangeForMarker(pt, frameRate, mExtraFrameIndices, approxFrom, approxTo);
+
+        const QList<TTAudioRepairItem> repairs = mpAvItem->audioRepairList();
+        for (int i = 0; i < repairs.size(); ++i) {
+          const TTAudioRepairItem& r = repairs.at(i);
+          if (r.trackIndex() != repairTrackIndex) continue;
+          if (r.frameTo() < approxFrom || r.frameFrom() > approxTo) continue; // no overlap
+          repairIndex = i;
+          break;
+        }
+
+        menu.addSeparator();
+        if (repairIndex >= 0) {
+          actEditRepair = menu.addAction(tr("Edit repair..."));
+          actRemoveRepair = menu.addAction(tr("Remove repair"));
+        } else {
+          actRepair = menu.addAction(tr("Repair..."));
+        }
+      }
+    }
     menu.addSeparator();
   }
 
@@ -200,6 +240,27 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
     emit setCutIn(frameIndex);
   } else if (chosen == actCutOut) {
     emit setCutOut(frameIndex);
+  } else if (chosen == actRepair || chosen == actEditRepair) {
+    const TTStreamPoint pt = mModel->pointAt(index.row());
+    TTAudioRepairDialog dlg(mpAvItem, pt, repairTrackIndex, mExtraFrameIndices, this);
+    connect(&dlg, &TTAudioRepairDialog::jumpToFrameRequested, this, &TTStreamPointWidget::jumpToFrame);
+    if (dlg.exec() == QDialog::Accepted) {
+      QString desc = pt.description();
+      // Check every known-language variant (residuals R6) - a marker
+      // reloaded from a project saved in a different UI language already
+      // carries a suffix tr() in THIS session would not recognize.
+      bool alreadyPlanned = false;
+      for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
+        if (desc.endsWith(v)) { alreadyPlanned = true; break; }
+      if (!alreadyPlanned) desc += tr(" (repair planned)");
+      mModel->setDescriptionAt(index.row(), desc);
+    }
+  } else if (chosen == actRemoveRepair) {
+    mpAvItem->removeAudioRepairAt(repairIndex);
+    QString desc = mModel->pointAt(index.row()).description();
+    for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
+      if (desc.endsWith(v)) { desc.chop(v.length()); break; }
+    mModel->setDescriptionAt(index.row(), desc);
   } else if (chosen == actDeleteAll) {
     emit deleteAllRequested();
   }

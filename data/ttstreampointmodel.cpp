@@ -105,6 +105,20 @@ void TTStreamPointModel::clearAutoDetected()
   endResetModel();
 }
 
+TTStreamPoint TTStreamPointModel::pointAt(int row) const
+{
+  if (row < 0 || row >= mPoints.size()) return TTStreamPoint();
+  return mPoints.at(row);
+}
+
+void TTStreamPointModel::setDescriptionAt(int row, const QString& description)
+{
+  if (row < 0 || row >= mPoints.size()) return;
+  mPoints[row].setDescription(description);
+  QModelIndex idx = index(row);
+  emit dataChanged(idx, idx, {Qt::DisplayRole, DescriptionRole});
+}
+
 void TTStreamPointModel::insertSorted(const TTStreamPoint& point)
 {
   int pos = 0;

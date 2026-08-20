@@ -45,6 +45,15 @@ class TTThreadTaskPool : public QObject
     //! to have a text to show. Reset by init(), i.e. once per operation.
     QString lastFailureMessage() const { return mLastFailureMessage; }
 
+    //! True once every task from the current batch has been removed from
+    //! the queue - the same condition onThreadTaskFinished() checks to
+    //! decide whether to emit exit(). A caller whose own per-task completion
+    //! handler can be delayed (e.g. behind a modal dialog) needs this to
+    //! tell whether exit() - and any bookkeeping hung off it - has ALREADY
+    //! run for this batch by the time the handler gets back to it (see
+    //! TTAVData::onOpenVideoFinished()).
+    bool isDrained() const { return mTaskQueue.isEmpty(); }
+
   signals:
     void init();
     void aborted();

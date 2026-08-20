@@ -224,6 +224,10 @@ void TTAudioOnlyCutTask::runAudioCut()
                       .arg(trackFiles.size()).arg(requestedTrackCount));
     mError       = TTAVData::tr("Only %1 of %2 audio track(s) could be cut")
                        .arg(trackFiles.size()).arg(requestedTrackCount);
+    // Per-track reasons in user wording, not just in the log (final review
+    // M14) - see TTAVData::audioCutFailureReasons().
+    const QStringList reasons = mpAVData->audioCutFailureReasons();
+    if (!reasons.isEmpty()) mError += "\n\n" + reasons.join("\n");
     mExitMessage = TTAVData::tr("Audio cut failed");
   }
 

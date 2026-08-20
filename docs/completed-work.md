@@ -1499,6 +1499,118 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nutzen denselben Plan
   - Tote Funktionen `getStartIndex`/`getEndIndex` und `TTCutAudioTask` entfernt
 
+- **Tonanomalie-Erkennung und -Reparatur (AC3 5.1)** → **DONE (2026-08-19,
+  branch `feature/audio-anomaly-repair`)**. Spec:
+  `docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md`.
+  Automatischer Hintergrund-Scan nach CRC-gültigen Zuspielfehlern
+  (Center-Burst + LFE-Puls in sonst LFE-stillem Material), Reparatur-Dialog
+  mit Vorher/Nachher-Probehören, zerstörungsfreie Anwendung im Schnittpfad
+  über eine Ersatzframe-Tabelle (`extern/ttaudiorepair.{h,cpp}`) und
+  `.ttcut`-Persistenz (`<Repair>`-Element, Lade-Validierung deaktiviert statt
+  löscht Einträge hinter dem Dateiende).
+  - **Kalibrier-Ergebnis** (Prototyp-Lauf über den 5.1-AC3-Korpus, Referenzfall
+    ProSieben 02x06 „Das Vermächtnis"): Schwellen LFE-RMS −55 dBFS,
+    Kontrastfaktor 4,0 (Center-Diff-Sprung gegen lokalen Median),
+    LFE-Nullanteil-Vorbedingung 99 %, Mindest-Peak −22 dBFS. Am Korpusfall
+    gefunden: beide user-bestätigten Defekte (Video-Frame ~51120
+    Center-Burst/LFE-Puls, ~24221 Abspann-Knacks) plus 1 Fehlalarm.
+    Feinsegmentierung meldet 8 AC3-Frames (256 ms) statt der 39 Frames
+    (1,2 s) der rohen LFE-Aktivinsel — sie schneidet den unhörbaren
+    Abklingschwanz heraus, siehe nächster Punkt.
+  - **Korrigierte Falschmessung:** die ursprünglich notierten „1,2 s
+    Störung" waren der unhörbare LFE-Abklingschwanz bis rund −90 dBFS
+    (Mess-Schwelle beim ersten Prototyp lag bei 1e-6 ≈ −120 dBFS und zählte
+    ihn mit); User-Verifikation in Audacity ergab eine echte Störungsdauer
+    von ~110 ms. Die Feinsegmentierung (Komponente 1, Schritt 4 der Spec)
+    wurde genau deshalb ergänzt: sie markiert die tatsächlichen
+    Burst-Blöcke (Center-Diff-Kontrast ODER LFE über Lautschwelle, ±1
+    AC3-Frame Marge), nicht die gesamte LFE-Aktivinsel.
+  - **Messfalle AC3-Overlap-Verzögerung** (Task-4-Review-Erkenntnis): der
+    AC3-Decoder überlappt aufeinanderfolgende MDCT-Blöcke (256 Samples,
+    ~5,3 ms bei 48 kHz); eine Messung direkt am dekodierten PCM ohne diesen
+    Versatz zu berücksichtigen, sieht am Rand eines Ersatzbereichs den
+    Einblend-Fade der Nachbarframes und hält ihn für ein Leck der
+    Reparatur in eine unberührte Spur — genau dieser Fehler passierte
+    einmal während der Entwicklung. Am Ende des E2E-Gates (unten) sichtbar:
+    die AC3-Bytes sind außerhalb des Reparaturbereichs exakt identisch,
+    das dekodierte PCM im allerersten Frame danach zeigt trotzdem eine
+    Differenz von <0,1 dB — Überlappungseffekt aus dem geänderten
+    Vorgängerframe, keine Content-Abweichung.
+  - **Ende-zu-Ende-Gate** (`--auto-cut`, isoliertes `XDG_CONFIG_HOME`,
+    Projekt `02x06_-_Das_Vermächtnis.ttcut`, Cut 0 = Video-Frame
+    24240–51244, Repair-Eintrag AC3-Frames 63894–63901/Channels
+    12(C+LFE)/silence-fade): Ausgabe-AC3 exakt 8 Frames Differenz zum
+    Referenzlauf ohne `<Repair>` (Paket-MD5 über alle 77987 Frames,
+    Ausgabe-Frames 33594–33601 — passt zur Eingabe-Frame-Zahl 8), alle
+    übrigen 77979 Frames MD5-identisch. Im Reparaturfenster: LFE-Peak
+    −8,88 dBFS → −93,04 dBFS (RMS −25,91 → −116,57 dBFS, praktisch
+    digital null), Center-Burst-Peak −2,76 dBFS → −22,25 dBFS (RMS −21,06
+    → −46,25 dBFS). Der Restwert von −22,25 dBFS Peak / −46,25 dBFS RMS ist
+    NICHT unvollständige Maskierung, sondern die 5-ms-Raised-Cosine-
+    Ausblendung am Fensteranfang (voller Pegel bis 0 über die ersten 240
+    Samples bei 48 kHz, siehe `applyMaskAndFade` in
+    `extern/ttaudiorepair.cpp`) — die über das ganze Fenster gemittelte
+    Peak/RMS-Messung zieht diesen kurzen Übergang mit rein. Unabhängig
+    nachgemessen: der echte Burst-Peak (Sample-Offset 9652 im Fenster, außerhalb
+    der Fade-Flanke) liegt im reparierten Ergebnis bei ~1e-6 ≈ −120 dBFS.
+    Segmentnaht unverändert (im MD5-Vergleich enthalten,
+    keine weitere Abweichung außerhalb des Reparaturfensters).
+  - Tests: `tools/diag/test_audiorepair_persist` (Rundlauf, Reorder-/
+    Remove-Regression, Lade-Validierung — Fälle 6 und 7), Scanner- und
+    Ersatzframe-Harnesses aus den Vortasks.
+  - **Final-Review-Welle (2026-08-20)** — die Fassung, die tatsächlich
+    benutzbar ist:
+    - **Dialog schloss sich beim ersten „Play"** (Critical): das
+      `TTMpvRenderWidget` (ein `QOpenGLWidget`) wurde erst beim Klick ins
+      Layout gehängt; Qt erzeugt dafür das native Fenster neu und ruft intern
+      `hide()`, und `QDialogPrivate::hide_helper()` beendet die laufende
+      `exec()`-Schleife bei JEDEM `hide()`. Ergebnis: `exec()` kehrte mitten
+      im Klick mit Rejected zurück, das Stack-Objekt wurde zerstört, während
+      mpv lud. Behoben, indem der Player wie in `TTCutPreview` im Konstruktor
+      gebaut wird — außer unter `QT_QPA_PLATFORM=offscreen`, wo mpv keinen
+      GL-Kontext bekommt (der Grund für die ursprüngliche Faulheit bleibt so
+      erhalten). Beleg: `tools/diag/test_repairdialog_mpv_lifecycle` fährt
+      jetzt `dlg.exec()` (vorher `show()` + `QApplication::exec()`, was das
+      Problem umging statt es zu zeigen) und schlägt fehl, wenn `exec()` vor
+      dem dritten Play-Klick zurückkehrt.
+    - **Auslösung wie im Brainstorming entschieden**: der Scan hing nur an
+      der Landezonen-Analyse, obwohl Spec und CHANGELOG „automatisch nach dem
+      Laden" sagten. Jetzt startet er automatisch, sobald Video und Tonspuren
+      geladen sind (`TTCutMainWindow::maybeStartAutoAnomalyScan()`, über
+      `onAVDataReloaded()` mit Null-Timer). Messfalle dabei: beim
+      **Projekt**-Laden feuert der Pool-Exit `avDataReloaded()` VOR
+      `TTAVData::onReadProjectFileFinished()`, das die gespeicherten Marker
+      zurückholt — der Scan lief also los, bevor die Marker da waren, und
+      hätte sie verdoppelt (im Log nachgemessen, nicht vermutet). Deshalb die
+      Sperre `mProjectLoadInProgress` plus Nachlauf in
+      `onOpenProjectFileFinished()`.
+    - **Schwellen im GUI**: die fünf Werte stehen jetzt in der
+      Landezonen-Einstellungsseite (`gui/ttcutsettingsstreampoints.cpp`,
+      inkl. `resetToDefaults()`), vorher waren es reine QSettings-Schlüssel.
+    - **Frame-Genauigkeit im Rundlauf**: `TTStreamPoint` trägt den
+      AC3-Bereich des Fundes direkt (`audioFrameFrom()`/`audioFrameTo()`,
+      beide inklusiv, optional auch in der `.ttcut`-Datei). Vorher rechnete
+      der Dialog aus Videoframe + Dauer zurück — drei Quantisierungen
+      (40 ms-Videoraster gegen 32 ms-Tonraster, Dauer exklusiv gegen
+      `frameTo()` inklusiv, Dauer auf 2 Nachkommastellen gerundet) ergaben bis
+      zu ±1 AC3-Frame. Konvention in beiden Headern festgeschrieben; der
+      Rundlauf-Testfall in `test_repairdialog_model` prüft exakt (und den
+      Altprojekt-Weg auf ±1).
+    - **Toter Regressionstest** (I1): der acmod-Wechsel-Fall hing an einer
+      Korpusdatei, die es nicht mehr gibt ⇒ SKIP, und das Programm meldete
+      trotzdem ALL PASS. Fixture jetzt synthetisch
+      (`tools/diag/make_acmod_change_sample.sh`, 5.1- und 2.0-Abschnitt bei
+      GLEICHER Bitrate, damit die CBR-Prüfung nicht vorher zuschlägt), und ein
+      SKIP kann sich nicht mehr als Erfolg tarnen (Exit 3, „NOT VERIFIED").
+    - Kleinkram mit Belegen: EOF-Bereich wird nicht mehr als
+      „implementation bug" gemeldet; Lade-Validierung fängt das abgeschnittene
+      letzte Frame (`(frameTo+1)*frameBytes > size`) sowie negative/verdrehte
+      Bereiche; Abtastrate ≠ 48 kHz bricht den Scan ab statt falsch zu
+      rechnen; die Segmentgrenzen-Meldung erreicht über
+      `TTAVData::audioCutFailureReasons()` den Nutzer; vorbestehender
+      Linkfehler von `test_startcode_scan` (fehlendes `ttexception.cpp`)
+      behoben, damit `cmake --build build --target diag` überhaupt durchläuft.
+
 ### Projektdatei
 
 - **Projektdatei-Endung: .prj → .ttcut** → **DONE** (v0.63.0)

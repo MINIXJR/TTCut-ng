@@ -469,6 +469,36 @@ void TTSettings::setSpPillarboxSampleSeconds(double v)
   mSpPillarboxSampleSeconds = v;
 }
 
+void TTSettings::setAudioAnomalyScanEnabled(bool v)
+{
+  if (mAudioAnomalyScanEnabled == v) return;
+  mAudioAnomalyScanEnabled = v;
+}
+
+void TTSettings::setAnomalyLfeRmsDb(double v)
+{
+  if (mAnomalyLfeRmsDb == v) return;
+  mAnomalyLfeRmsDb = v;
+}
+
+void TTSettings::setAnomalyCenterContrast(double v)
+{
+  if (mAnomalyCenterContrast == v) return;
+  mAnomalyCenterContrast = v;
+}
+
+void TTSettings::setAnomalyLfeNullPercent(double v)
+{
+  if (mAnomalyLfeNullPercent == v) return;
+  mAnomalyLfeNullPercent = v;
+}
+
+void TTSettings::setAnomalyLfeMinPeakDb(double v)
+{
+  if (mAnomalyLfeMinPeakDb == v) return;
+  mAnomalyLfeMinPeakDb = v;
+}
+
 void TTSettings::setExtraFrameClusterGapSec(int v)
 {
   if (mExtraFrameClusterGapSec == v) return;
@@ -597,6 +627,11 @@ void TTSettings::load()
   mSpDetectPillarbox    = settings.value("DetectPillarbox/",    mSpDetectPillarbox).toBool();
   mSpPillarboxThreshold = settings.value("PillarboxThreshold/", mSpPillarboxThreshold).toInt();
   mSpPillarboxSampleSeconds = settings.value("PillarboxSampleSeconds/", mSpPillarboxSampleSeconds).toDouble();
+  mAudioAnomalyScanEnabled = settings.value("AudioAnomalyScanEnabled/", mAudioAnomalyScanEnabled).toBool();
+  mAnomalyLfeRmsDb         = settings.value("AnomalyLfeRmsDb/",         mAnomalyLfeRmsDb).toDouble();
+  mAnomalyCenterContrast   = settings.value("AnomalyCenterContrast/",   mAnomalyCenterContrast).toDouble();
+  mAnomalyLfeNullPercent   = settings.value("AnomalyLfeNullPercent/",   mAnomalyLfeNullPercent).toDouble();
+  mAnomalyLfeMinPeakDb     = settings.value("AnomalyLfeMinPeakDb/",     mAnomalyLfeMinPeakDb).toDouble();
   settings.endGroup();
 
   settings.beginGroup("Common");
@@ -847,6 +882,11 @@ void TTSettings::save()
   settings.setValue("DetectPillarbox/",    mSpDetectPillarbox);
   settings.setValue("PillarboxThreshold/", mSpPillarboxThreshold);
   settings.setValue("PillarboxSampleSeconds/", mSpPillarboxSampleSeconds);
+  settings.setValue("AudioAnomalyScanEnabled/", mAudioAnomalyScanEnabled);
+  settings.setValue("AnomalyLfeRmsDb/",         mAnomalyLfeRmsDb);
+  settings.setValue("AnomalyCenterContrast/",   mAnomalyCenterContrast);
+  settings.setValue("AnomalyLfeNullPercent/",   mAnomalyLfeNullPercent);
+  settings.setValue("AnomalyLfeMinPeakDb/",     mAnomalyLfeMinPeakDb);
   settings.endGroup();
 
   settings.beginGroup("Common");

@@ -1720,7 +1720,8 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
                                       bool normalizeAcmod,
                                       const QList<int>& targetAcmods,
                                       const std::function<void(int)>& progressCb,
-                                      const std::function<bool()>& shouldAbort)
+                                      const std::function<bool()>& shouldAbort,
+                                      const TTAudioRepair::FrameTable* repairTable)
 {
     if (!QFile::exists(inputFile)) {
         setError(QString("Audio file not found: %1").arg(inputFile));
@@ -1930,6 +1931,52 @@ bool TTFFmpegWrapper::cutAudioStream(const QString& inputFile,
             if (!segmentStarted) {
                 ptsOffset = nextOutputPts - pkt->pts;
                 segmentStarted = true;
+            }
+
+            // Repair lookup: replace the packet's payload before any acmod
+            // handling. Frame number = packet time snapped to the 32 ms grid
+            // (CBR raster) -- same grid TTAudioRepairItem's frame numbers use.
+            // A hit writes the substitute bytes with the same PTS-offset/
+            // accounting as the stream-copy path below and skips the acmod
+            // re-encode check entirely: repaired frames never go through it.
+            if (repairTable && !repairTable->isEmpty()) {
+                qint64 frameNo = qRound64(pktTime / frameDurSec);
+                auto it = repairTable->constFind(frameNo);
+                if (it != repairTable->constEnd()) {
+                    AVPacket* rp = av_packet_alloc();
+                    bool allocOk = rp && av_new_packet(rp, it->size()) == 0;
+                    if (allocOk) {
+                        memcpy(rp->data, it->constData(), it->size());
+                        rp->pts = pkt->pts + ptsOffset;
+                        rp->dts = rp->pts;
+                        rp->duration = pkt->duration;
+                        rp->stream_index = 0;
+                        rp->pos = -1;
+
+                        ret = av_write_frame(outFmtCtx, rp);
+                        if (ret < 0) {
+                            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                                QString("  Warning: av_write_frame (repair) failed at %1").arg(pktTime));
+                        } else {
+                            nextOutputPts = rp->pts + frameDuration;
+                            ++totalPacketsWritten;
+                            lastWrittenPtsTicks = rp->pts;
+                            writtenSec += frameDurSec;
+                            reportProgress();
+                        }
+                        av_packet_free(&rp);
+                        av_packet_unref(pkt);
+                        continue;
+                    }
+                    // Packet allocation failed (OOM). Do NOT drop the frame --
+                    // that would leave a gap in the output. Fall through to
+                    // the normal paths below with the original, unmodified
+                    // packet, exactly like the acmod-reencode branch falls
+                    // back to needsReencode=false on its own init failures.
+                    if (rp) av_packet_free(&rp);
+                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                        QString("  Warning: repair packet allocation failed at %1 -- writing original frame instead").arg(pktTime));
+                }
             }
 
             // Check if this frame needs acmod re-encoding

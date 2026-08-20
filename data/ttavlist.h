@@ -23,6 +23,7 @@
 #include "ttmarkerlist.h"
 #include "ttaudiolist.h"
 #include "ttsubtitlelist.h"
+#include "ttaudiorepairitem.h"
 
 
 class TTVideoStream;
@@ -61,8 +62,25 @@ class TTAVItem : public QObject
 
     void canCutWith(const TTAVItem* avItem, int cutIn, int cutOut);
 
+    //! Index of the first AC3 track, or -1 if none is loaded. AC3-only
+    //! (streamType() == TTAVTypes::ac3_audio) because the audio-anomaly
+    //! scan (TTAudioAnomalyScanTask) only ever scans one AC3 track this
+    //! same way - shared here so the scan dispatch (TTCutMainWindow::
+    //! onAnalyzeStreamPoints) and the repair context menu (TTStreamPoint
+    //! Widget, audio-anomaly-repair Task 7) agree on which track a repair
+    //! belongs to without duplicating the lookup.
+    int firstAc3TrackIndex() const;
+
     void appendAudioEntry(TTAudioStream* aStream, int order=-1);
     void appendAudioEntry(const TTAudioItem& aItem);
+
+    //! Planned audio repairs (silence/interpolate fixes for detected
+    //! anomalies), one flat list per AV item; each entry carries its own
+    //! trackIndex() rather than being nested under the audio list itself.
+    QList<TTAudioRepairItem> audioRepairList() const     { return mAudioRepairs; }
+    void appendAudioRepair(const TTAudioRepairItem& item) { mAudioRepairs.append(item); }
+    void removeAudioRepairAt(int index)                   { if (index >= 0 && index < mAudioRepairs.size()) mAudioRepairs.removeAt(index); }
+    void clearAudioRepairs()                              { mAudioRepairs.clear(); }
 
     void appendSubtitleEntry(TTSubtitleStream* sStream, int order=-1);
     void appendSubtitleEntry(const TTSubtitleItem& sItem);
@@ -83,6 +101,15 @@ class TTAVItem : public QObject
     //! latches this flag; afterwards the track order belongs to the user.
     bool initialAudioLoadDone() const     { return mInitialAudioLoadDone; }
     void setInitialAudioLoadDone()        { mInitialAudioLoadDone = true; }
+
+    //! Has the AC3 anomaly scan been started for THIS item yet? Latched by
+    //! TTCutMainWindow when it dispatches the scan - by the automatic start
+    //! after loading as well as by an explicit stream-point analysis - so
+    //! the automatic start fires exactly once per item and never on top of a
+    //! scan that is already running or already done (the analysis clears its
+    //! own markers first, an automatic re-run would only duplicate them).
+    bool anomalyScanStarted() const       { return mAnomalyScanStarted; }
+    void setAnomalyScanStarted()          { mAnomalyScanStarted = true; }
 
   public slots:
     void onRemoveAudioItem(int index);
@@ -119,11 +146,13 @@ class TTAVItem : public QObject
   private:
   	bool             mIsInList;
     bool             mInitialAudioLoadDone = false;
+    bool             mAnomalyScanStarted   = false;
     TTVideoStream*   mpVideoStream;
     TTAudioList*     mpAudioList;
     TTSubtitleList*  mpSubtitleList;
     TTCutList*       mpCutList;
     TTMarkerList*    mpMarkerList;
+    QList<TTAudioRepairItem> mAudioRepairs;
 };
 
 /* /////////////////////////////////////////////////////////////////////////////

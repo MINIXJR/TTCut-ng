@@ -42,6 +42,14 @@ public:
   void clearAutoDetected();
 
   const QList<TTStreamPoint>& points() const { return mPoints; }
+  //! Copy of the point at row, or a default-constructed TTStreamPoint if
+  //! row is out of range. Used by callers (context menus, dialogs) that
+  //! need the full point rather than one role at a time.
+  TTStreamPoint pointAt(int row) const;
+  //! Updates one point's description in place (e.g. to append/remove the
+  //! "(repair planned)" suffix after an audio repair is planned/removed)
+  //! without touching frameIndex/type/confidence/duration or re-sorting.
+  void setDescriptionAt(int row, const QString& description);
 
   // Bulk insert (from worker results), re-sorts after
   void addPoints(const QList<TTStreamPoint>& points);

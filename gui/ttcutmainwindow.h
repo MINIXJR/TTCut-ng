@@ -96,6 +96,14 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onSetCutOut(int index);
 		void onSetStreamPointMarker();
 		void onAnalyzeStreamPoints();
+		//! Automatic AC3 anomaly scan after the streams finished loading
+		//! (design: "Auslösung: automatisch nach dem Laden, abschaltbar").
+		//! Deferred by a zero-timer out of onAVDataReloaded() AND out of
+		//! onAVItemChanged() - both feed into this one gate, see the
+		//! implementation comment for why two entry points are needed and
+		//! for the ordering and the once-per-item and no-duplicate-markers
+		//! guards.
+		void maybeStartAutoAnomalyScan();
 		void onAbortStreamPoints();
 		void onStreamPointJump(int frameIndex);
 		void onStreamPointDelete(int row);
@@ -103,6 +111,10 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void onStreamPointSetCutIn(int frameIndex);
 		void onStreamPointSetCutOut(int frameIndex);
 		void onVideoPointsDetected(const QList<TTStreamPoint>& points);
+		//! Stream points restored from a project file - adds them like
+		//! onVideoPointsDetected, but marks AudioAnomaly markers whose
+		//! repair the load validation disabled.
+		void onStreamPointsLoaded(const QList<TTStreamPoint>& points);
 		void onAudioPointsDetected(const QList<TTStreamPoint>& points);
 		void onAnalysisWorkerFinished();
 		void onQuickJump();
@@ -127,6 +139,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onSubtitleItemUpdated(const TTSubtitleItem& cItem, const TTSubtitleItem& uItem);
 
     void onOpenProjectFileFinished(const QString&);
+    void onOpenProjectFileAborted();
     void onProjectModified();
     void runScreenshotMode();
     void runAutoCutMode(QString projectFile, QString outputPath);
@@ -158,6 +171,11 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
 		QString formatRemaining(const TTProgressEstimator::Result& r) const;
 		QString progressStageName(int stage) const;
+		//! Start the AC3 anomaly scan for the current AV item on the
+		//! stream-point pool. Returns false when there is no AC3 track to
+		//! scan (nothing started). Shared by the explicit analysis and the
+		//! automatic post-load start.
+		bool    startAudioAnomalyScan();
 
 	private:
 		TTAVData*        mpAVData;
@@ -175,6 +193,11 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTThreadTaskPool*    mpStreamPointTaskPool;
     int                  mStreamPointWorkersRunning;
     bool                 mStreamPointAnalysisAborted = false;
+    //! True between openProjectFile() and onOpenProjectFileFinished(). Blocks
+    //! the automatic anomaly scan while a project is still being restored -
+    //! its saved stream points arrive after the pool exit that would trigger
+    //! the scan, so scanning earlier duplicates them.
+    bool                 mProjectLoadInProgress = false;
     //! Why an enabled stream-point analysis did not run at all. Collected in
     //! onAnalyzeStreamPoints(), which is where that decision is made - a
     //! worker that is never built cannot report anything itself. Handed to

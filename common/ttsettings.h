@@ -261,6 +261,25 @@ public:
   double  spPillarboxSampleSeconds() const { return mSpPillarboxSampleSeconds; }
   void    setSpPillarboxSampleSeconds(double v);
 
+  // Background AC3 5.1 anomaly scan (audio-anomaly-repair, Task 6). Same
+  // /Settings/StreamPoints group and getter/setter shape as the sp* fields
+  // above. Defaults are the calibrated values from the spike/checkpoint
+  // phase (docs/superpowers/specs/2026-08-19-audio-anomaly-repair-design.md).
+  bool    audioAnomalyScanEnabled() const  { return mAudioAnomalyScanEnabled; }
+  void    setAudioAnomalyScanEnabled(bool v);
+
+  double  anomalyLfeRmsDb() const          { return mAnomalyLfeRmsDb; }
+  void    setAnomalyLfeRmsDb(double v);
+
+  double  anomalyCenterContrast() const    { return mAnomalyCenterContrast; }
+  void    setAnomalyCenterContrast(double v);
+
+  double  anomalyLfeNullPercent() const    { return mAnomalyLfeNullPercent; }
+  void    setAnomalyLfeNullPercent(double v);
+
+  double  anomalyLfeMinPeakDb() const      { return mAnomalyLfeMinPeakDb; }
+  void    setAnomalyLfeMinPeakDb(double v);
+
   int     extraFrameClusterGapSec() const    { return mExtraFrameClusterGapSec; }
   void    setExtraFrameClusterGapSec(int v);
 
@@ -468,6 +487,11 @@ private:
   bool  mSpDetectPillarbox        = true;
   int   mSpPillarboxThreshold     = 20;
   double mSpPillarboxSampleSeconds = 1.0;
+  bool  mAudioAnomalyScanEnabled   = true;
+  double mAnomalyLfeRmsDb          = -55.0;
+  double mAnomalyCenterContrast    = 4.0;
+  double mAnomalyLfeNullPercent    = 99.0;
+  double mAnomalyLfeMinPeakDb      = -22.0;
   int   mExtraFrameClusterGapSec    = 5;
   int   mExtraFrameClusterOffsetSec = 2;
 
