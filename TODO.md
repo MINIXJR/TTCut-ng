@@ -128,7 +128,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     vorbestehend auf, qtwayland). `core.500359` und der ASAN-Build
     wurden am 2026-08-09 auf User-Entscheid gelöscht (veralten mit dem
     nächsten Build); der Backtrace-Dump
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt` bleibt.
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt` [Material verloren 2026-08-16] bleibt.
     Bei Wiederauftreten: Core sichern, Forensik-Referenz nutzen,
     ASAN-Build neu erzeugen (Hinweis: auch der Backtrace-Dump ist seit dem
     CLAUDE_TMP-Purge 2026-08-16 weg — die Frames oben sind der Restbestand)

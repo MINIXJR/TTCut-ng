@@ -25,7 +25,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   (`flushEncoder` tat es schon richtig). Nur bei gescheiterter
   Speicheranforderung erreichbar — deshalb ohne Repro, als Angleichung.
   Regression: `test_h26xcut_abort` (none), `test_smartcut_abort` (Achtung:
-  braucht sein festes Ausgabeverzeichnis `CLAUDE_TMP/TTCut-ng/cut-abort/`;
+  braucht sein festes Ausgabeverzeichnis `CLAUDE_TMP/TTCut-ng/cut-abort/` [Material verloren 2026-08-16];
   nach einem Temp-Aufräumen schlägt er auch auf unverändertem Stand fehl).
 
 - **H.265 Smart Cut: RASL-Verlust an der Non-IDR/CRA-Naht (Defekt A,
@@ -112,7 +112,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
       60–120-ms-Glitch).
   - Repro: `tools/diag/test_smartcut_seam`, `tools/diag/test_mkvmux`; Karte
     [docs/code-map/smart-cut.md](docs/code-map/smart-cut.md); Artefakte
-    `CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
+    `CLAUDE_TMP/TTCut-ng/eos_nonidr/` [Material verloren 2026-08-16].
 
 - **H.264 Smart Cut: SPS-Unification zerstört progressive Quellen** →
   **FIXED** (2026-07-16, Defekt B) — Slice-Rewriter ließ bei poc_type-2-Encoder
@@ -292,7 +292,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     ≥0,97); Futurama M=4 alle B-Lagen exakt (Worst Case verlor 3 = M−1); GUI-Cut
     via `--auto-cut` byte-identisch zur Engine. Spec/Protokolle:
     `docs/superpowers/specs/2026-07-12-mpeg2-cutout-bframe-fix-design.md` (lokal),
-    `CLAUDE_TMP/TTCut-ng/dupcase/REGRESSION-*.md`.
+    `CLAUDE_TMP/TTCut-ng/dupcase/REGRESSION-*.md` [Material verloren 2026-08-16].
   - Map: [docs/code-map/mpeg2-cut.md](docs/code-map/mpeg2-cut.md)
 
 - **MPEG-2-Re-Encoder: Einzelbild-Encode kann beschädigten letzten Slice liefern**
@@ -353,7 +353,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Kein Korrektheitsfehler → **kein Fix**.
   - **Ordnungs-Vermischung: gemessen folgenlos** (2026-07-31, Harness
     `tools/diag/test_extra_index_rank`, Protokoll
-    `CLAUDE_TMP/TTCut-ng/fieldrank/MESSUNG.md`). `mExtraIndices` speichert
+    `CLAUDE_TMP/TTCut-ng/fieldrank/MESSUNG.md` [Material verloren 2026-08-16]). `mExtraIndices` speichert
     Bitstrom-Ordnung (`current_pic_num`, `ttmpeg2videostream.cpp:163`), wird nach
     `sortDisplayOrder()` (`ttopenvideotask.cpp:144`) aber gegen Anzeigepositionen
     gelesen. Die früher hier vermutete „±1–2 Frame Ungenauigkeit der
@@ -584,7 +584,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     auf (das ist bereits `work_dir`), wodurch der Präfix verdoppelt wurde.
     War vorher immer durch den früheren Überlappungs-Crash maskiert.
     Fix: nur `basename` in die Concat-Liste schreiben.
-  - Gates (`/usr/local/src/CLAUDE_TMP/TTCut-ng/demuxrepair/gateruns/`,
+  - Gates (`/usr/local/src/CLAUDE_TMP/TTCut-ng/demuxrepair/gateruns/` [Material verloren 2026-08-16],
     `g1_final`/`g2_final`): 07x11 0 FAILED-Zeilen (39/39 Silence-Inserts
     angewendet, Delta -92ms), 07x12 0 FAILED-Zeilen (496/496 angewendet,
     Delta -35040ms → **-23ms**, alle 4 Großlücken weiterhin in
@@ -606,7 +606,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Dialog beim Projekt-Reload.
   - Verifiziert: Video-ES byte-identisch, Audio-vor-Padding byte-identisch,
     es_extra_frames unverändert, H.264-Regression läuft, Benders-Audio bit-identisch.
-    Protokoll `CLAUDE_TMP/TTCut-ng/demuxfix/REDEMUX.md`.
+    Protokoll `CLAUDE_TMP/TTCut-ng/demuxfix/REDEMUX.md` [Material verloren 2026-08-16].
   - `/usr/bin/ttcut-demux` aktualisiert (byte-identisch mit dem Repo-Stand, geprüft 2026-07-12).
 
 - **Decode error detection for H.264/H.265 streams during demux** → **DONE** (v0.63.0)
@@ -1174,7 +1174,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     keinen End-Exit im Erfolgspfad. Fensterkreuz (X) ging in drei
     Import-Dialogen ("Defekte Frames erkannt", "Stream-Integritätswarnung")
     nicht (zwei AcceptRole-Buttons → kein RejectRole/Escape-Button; Repro
-    `CLAUDE_TMP/TTCut-ng/msgbox_close_repro.cpp`).
+    `CLAUDE_TMP/TTCut-ng/msgbox_close_repro.cpp` [Material verloren 2026-08-16]).
   - Fix: zentrales Zeitstempel-Log in `TTProgressBar` (Details-Panel als
     Live-Statuslog, inkl. Re-Encoder-/mplex-Ausgabe); bei angehaktem
     „Details anzeigen" bleibt der Dialog nach Abschluss offen
@@ -1273,7 +1273,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - Abnahme: stillgrab/aspecttrace 4:3 = 1,333, 16:9 = 1,778 auf beiden
     Pfaden, invalidate+resize stabil; User-GUI-Abnahme 16:9 (Play→Stop,
     Resize) + 4:3 PASS. Harnesses in
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/`.
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/` [Material verloren 2026-08-16].
 
 - **Vorschau: Play-Button blieb auf „Start" trotz laufender Wiedergabe
   (VOR-Klick)** → **GEFIXT (2026-08-06, `908a672f`)**
@@ -1308,7 +1308,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     mpv-Wiedergabe erschienen libav-Meldungen im ffmpeg-Default-Format auf
     stderr, obwohl der `logLibav()`-gegatete Callback installiert war.
   - Hypothese bestätigt und präzisiert (Laufzeit-Beleg `avlog_mpv_diag`,
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/`): libmpv übernimmt den
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/avlog-diag/` [Material verloren 2026-08-16]): libmpv übernimmt den
     prozessglobalen av_log-Callback schon bei `mpv_create()` (nicht erst beim
     Playback) und stellt bei `mpv_terminate_destroy()` ffmpegs
     *Default*-Callback wieder her — nicht den der Anwendung.
@@ -1832,7 +1832,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
       `qtbase5-dev`/`qttools5-dev-tools` → `qt6-base-dev`/`qt6-l10n-tools`;
       `debian/rules` entsprechend angepasst).
   - **QC-Gate: PASS 3/3** (2026-08-04, `qc-qt6.sh`, Log
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/qc-result-20260804.log`) —
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/qc-result-20260804.log` [Material verloren 2026-08-16]) —
     Kandidat (Qt6-Binary) gegen den `qt5-final`-Baseline-Binary, je Codec
     Dauer/Paketzahlen identisch und Video- **und** Audio-Paketlisten
     bit-identisch:
@@ -1859,7 +1859,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     `CMakeLists.txt`.
   - Belege: `.superpowers/sdd/2026-08-03-qt6-migration/` (Task-Briefs
     /-Reports je Schritt), QC-Werkzeug und -Log unter
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/`.
+    `/usr/local/src/CLAUDE_TMP/TTCut-ng/qt6-qc/` [Material verloren 2026-08-16].
 
 - **Subagent-Driven Development: Build-Permissions für Subagents** → **Konfiguriert 2026-05-19**
   - `.claude/settings.local.json` (lokal, gitignored) erweitert um `Bash(make:*)`,
