@@ -274,12 +274,26 @@ detect_video_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
+        # ffprobe's csv writer appends an empty trailing field to the stream
+        # row for SOME streams, and the numeric test below rejects the
+        # "1000.845000," that results. Measured on a VDR .ts: the video row
+        # comes back "program,stream,1000.845000," while the audio row of the
+        # same file is clean "program,stream,1000.000000"; a raw .m2v carries
+        # the comma too, a raw .264 does not. So every probe of v:0 here fell
+        # into the "ffprobe failed" branch and the splice gap was never
+        # measured on any multi-file recording, while the audio function's
+        # own track probes were unaffected - its fallback to video timing was
+        # not. Stripping is a no-op where no comma appears, so it is applied
+        # to every one of them. Same comma the count-check further down
+        # strips; format= entries never carry it.
         # ffprobe emits the stream= row twice for a raw .ts segment (global
         # stream list + per-program stream list both match "v:0"); take the
         # first line only (same defensive pattern as START_PTS/NEW_VIDEO_PTS
         # above, and as detect_segment_boundaries()'s existing head -1).
         seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_start="${seg_start%,}"
         seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_dur="${seg_dur%,}"
         if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             # %f formatting via awk (not bash's printf builtin, which is
             # locale-sensitive - a comma-decimal locale turns "3663.6" into
@@ -312,9 +326,23 @@ detect_audio_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
+        # ffprobe's csv writer appends an empty trailing field to the stream
+        # row for SOME streams, and the numeric test below rejects the
+        # "1000.845000," that results. Measured on a VDR .ts: the video row
+        # comes back "program,stream,1000.845000," while the audio row of the
+        # same file is clean "program,stream,1000.000000"; a raw .m2v carries
+        # the comma too, a raw .264 does not. So every probe of v:0 here fell
+        # into the "ffprobe failed" branch and the splice gap was never
+        # measured on any multi-file recording, while the audio function's
+        # own track probes were unaffected - its fallback to video timing was
+        # not. Stripping is a no-op where no comma appears, so it is applied
+        # to every one of them. Same comma the count-check further down
+        # strips; format= entries never carry it.
         # See detect_video_gaps_multifile() above: take the first line only.
         seg_start=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_start="${seg_start%,}"
         seg_dur=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+        seg_dur="${seg_dur%,}"
         # A badly damaged segment can leave this track's own duration
         # unprobeable ("N/A" - same root cause as detect_segment_boundaries()'s
         # N/A fallback above: observed on the real 5-segment fixture for the
@@ -327,7 +355,9 @@ detect_audio_gaps_multifile() {
         if [[ ! "$seg_start" =~ ^[0-9]+\.?[0-9]*$ || ! "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             echo "detect_audio_gaps_multifile: track $stream_idx duration unavailable on segment $i (${VDR_SEGMENTS[$i]}) - falling back to video timing for splice-gap purposes" >&2
             seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+            seg_start="${seg_start%,}"
             seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
+            seg_dur="${seg_dur%,}"
         fi
         if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             # See detect_video_gaps_multifile() above: awk formatting only,
@@ -422,19 +452,42 @@ audiofix_ranges_to_video_frames() {
 # "S-E (~H:MM:SS), ..." with the timestamp of each range start derived
 # from the video frame rate. With no usable fps the ranges pass through
 # without timestamps — the log line still names the frames.
+# Width of the range text itself (the caller's message prefix sits in front of
+# the first line) and the indent that marks every continuation line. A badly
+# damaged recording produced a single 7189-character line here - unreadable in
+# an editor, and it is the caller's last log line that the VDR wrapper puts in
+# its progress dialog. Breaks are placed BETWEEN ranges, never inside one, so
+# a wrapped list still reads as a list.
+RANGES_WRAP_COLS=80
+RANGES_WRAP_INDENT="           "
+
 format_ranges_hms() {
     local ranges="$1" fps="$2"
     if ! awk -v f="$fps" 'BEGIN { exit (f+0 > 0) ? 0 : 1 }'; then
-        echo "$ranges" | tr ',' '\n' | sed 's/:.*//' | paste -sd, -
+        echo "$ranges" | tr ',' '\n' | sed 's/:.*//' | awk -v w="$RANGES_WRAP_COLS" -v ind="$RANGES_WRAP_INDENT" '
+            $0 != "" {
+                if (n++ == 0) { line = $0; next }
+                if (length(line) + 2 + length($0) > w) { out = out line ",\n" ind; line = $0 }
+                else { line = line ", " $0 }
+            }
+            END { if (n) printf "%s%s\n", out, line }'
         return
     fi
-    echo "$ranges" | tr ',' '\n' | awk -F'[-:]' -v fps="$fps" '
+    echo "$ranges" | tr ',' '\n' | awk -F'[-:]' -v fps="$fps" \
+        -v w="$RANGES_WRAP_COLS" -v ind="$RANGES_WRAP_INDENT" '
         NF >= 2 {
             t = int($1 / fps)
-            printf "%s%s-%s (~%d:%02d:%02d)", n++ ? ", " : "", $1, $2,
-                   int(t/3600), int((t%3600)/60), t%60
+            item = sprintf("%s-%s (~%d:%02d:%02d)", $1, $2,
+                           int(t/3600), int((t%3600)/60), t%60)
+            if (n++ == 0) { line = item; next }
+            if (length(line) + 2 + length(item) > w) {
+                out = out line ",\n" ind
+                line = item
+            } else {
+                line = line ", " item
+            }
         }
-        END { if (n) print "" }'
+        END { if (n) printf "%s%s\n", out, line }'
 }
 
 # Emit truncate rows for video loss the audio did NOT share.
@@ -484,6 +537,150 @@ emit_video_only_truncations() {
     ' "$v_gaps" >> "$out"
 }
 
+# True playing time of a raw audio elementary stream, in seconds.
+#
+# Deliberately NOT ffprobe's format=duration: a raw ES has no container to
+# ask, so ffprobe extrapolates the FIRST frame's bitrate across the whole file
+# size. One bitrate switch - stereo 192k to 5.1 384k, i.e. the jump between a
+# programme and its ad break - and the answer is off by whatever share of the
+# file runs at the other rate. Measured on the Tux corpus AC3 (66.9% of frames
+# at 192k, 33.1% at 384k): 2391.104s reported against 1797.056s real, +33%.
+# That number feeds the drift arithmetic and the repair validation below, so a
+# wrong one there discards a good repair or skips a needed pad.
+#
+# Reading the last packet's timestamp instead costs ~0.17s on a 57MB track
+# (against ~0.08s for the wrong answer) and needs no frame duration passed in,
+# so a sample-rate change cannot mislead it either. On damaged material it
+# stays within a single codec frame of the truth - measured against
+# constructed ground truth: junk bytes between frames +24ms, a half-written
+# final frame +24ms, a 1000-frame hole exact - three orders of magnitude under
+# the 1s tolerance the repair validation works with.
+#
+# Echoes the duration, or "0" (and returns non-zero) if the track is unreadable.
+audio_es_duration() {
+    local last
+    last=$(ffprobe -v error -select_streams a:0 \
+        -show_entries packet=pts_time,duration_time -of csv=p=0 "$1" 2>/dev/null | tail -1)
+    if [ -z "$last" ]; then
+        echo "0"
+        return 1
+    fi
+    awk -v l="$last" 'BEGIN {
+        n = split(l, f, ",")
+        if (n < 1 || f[1] == "" || f[1] == "N/A") { print "0"; exit 1 }
+        d = (n < 2 || f[2] == "" || f[2] == "N/A") ? 0 : f[2]
+        printf "%.6f\n", f[1] + d
+    }'
+}
+
+# Round a source time UP to the next whole codec-frame boundary.
+#
+# The two ways of cutting a span out of an elementary stream quantize in
+# OPPOSITE directions: ffmpeg's output-side "-i file -ss X -to Y" keeps the
+# packets with pts >= X and pts < Y (the frame at or AFTER the point), while
+# the concat demuxer's inpoint lands on the frame at or BEFORE it. Feeding
+# raw cut points to inpoint therefore gains roughly one extra frame per
+# segment - measured 287 extra frames over 300 segments on the MP2 gate,
+# which the duration validation in repair_audio_with_silence_inserts would
+# reject outright. Pre-rounding every cut point onto the frame grid makes the
+# one-pass concat select exactly the packet set the per-segment calls did
+# (measured byte-identical on both gates).
+quantize_up_to_frame() {
+    awk -v x="$1" -v f="$2" 'BEGIN {
+        k = int(x / f)
+        if (x / f - k > 1e-9) k = k + 1
+        printf "%.6f", k * f
+    }'
+}
+
+# ---- Overall progress for a supervising wrapper ----
+#
+# A single 0..100 for THIS recording, written to a file the wrapper polls.
+# It replaces the wrapper's own guess (bytes written into the output
+# directory over 2.2x the input size), which froze for minutes whenever the
+# work happened elsewhere - the gap repair writes into a hidden work dir -
+# and was shown twice, raw in the label and again folded into the bar.
+#
+# The band widths are NOT fixed, because no fixed set fits: on a 6730-gap
+# recording the repair measured 83% of a 184s run, on a clean one it is
+# zero and the extraction is everything. So the repair band is sized once
+# the gap count is known (progress_plan below), and collapses to nothing
+# when there is nothing to repair.
+#
+# Two constants carry the modelling, both from one measured run
+# (Futurama 06x03, 1.5 GB, 6730 gaps, warm page cache) and both approximate
+# - a cold cache shifts the ratio. They only skew how fast the bar moves
+# through a phase; it stays monotone and never freezes either way.
+PROGRESS_MS_PER_GAP=23          # 6730 gaps took 153s of repair
+PROGRESS_SECS_PER_GB=10         # pad + info file took ~16s for 1.5 GB
+
+PROGRESS_FILE=""
+PROGRESS_LAST=-1
+PROGRESS_PRE_END=40             # everything up to and including gap detection
+PROGRESS_REPAIR_BASE=40         # where the repair band starts
+PROGRESS_REPAIR_END=40          # and where it ends; equal = no repair
+
+# Size the repair band once the gap count is known.
+#
+# It cannot be sized earlier - the count only exists after gap detection -
+# so the phases before it report on a nominal 0..PROGRESS_PRE_END scale and
+# whatever has been reached becomes the base here. The REMAINDER is then
+# split between the repair and the tail by their estimated cost, which keeps
+# the whole thing monotone by construction and needs no guess about the
+# repair before anything is known about it. With no gaps the band is empty
+# and the tail simply takes over.
+progress_plan() {
+    local gaps=$1 in_bytes=$2
+    local repair_s tail_s
+    repair_s=$(awk -v g="$gaps" -v m="$PROGRESS_MS_PER_GAP" 'BEGIN {printf "%.3f", g * m / 1000.0}')
+    tail_s=$(awk -v b="$in_bytes" -v r="$PROGRESS_SECS_PER_GB" \
+        'BEGIN {s = b / 1073741824.0 * r; if (s < 3) s = 3; printf "%.3f", s}')
+    PROGRESS_REPAIR_BASE=$PROGRESS_LAST
+    [ "$PROGRESS_REPAIR_BASE" -lt 0 ] && PROGRESS_REPAIR_BASE=0
+    PROGRESS_REPAIR_END=$(awk -v base="$PROGRESS_REPAIR_BASE" -v r="$repair_s" -v t="$tail_s" \
+        'BEGIN { f = r / (r + t); if (f > 0.9) f = 0.9; printf "%d", base + (100 - base) * f }')
+}
+
+progress_set() {
+    local pct=$1
+    [ -n "$PROGRESS_FILE" ] || return 0
+    [ "$pct" -gt 100 ] && pct=100
+    [ "$pct" -lt 0 ] && pct=0
+    # Monotone: never pull the bar backwards, whatever a re-estimate says.
+    [ "$pct" -le "$PROGRESS_LAST" ] && return 0
+    PROGRESS_LAST=$pct
+    printf '%s\n' "$pct" > "$PROGRESS_FILE" 2>/dev/null || true
+}
+
+# Map a 0..100 within the repair onto the overall scale.
+progress_set_repair() {
+    progress_set $(( PROGRESS_REPAIR_BASE + $1 * (PROGRESS_REPAIR_END - PROGRESS_REPAIR_BASE) / 100 ))
+}
+
+# Progress line for the gap repair, throttled to one line per five per cent.
+#
+# Covers the WHOLE repair, not just its ffmpeg call. Measured on a 3364-gap
+# track: 76s in total, of which the first 38s go into reading the classified
+# rows, coalescing them and building the concat list - all of it silent
+# before this existed, so the caller's log line (which the VDR wrapper shows
+# in its progress dialog) stood unchanged for half the phase.
+#
+# Bands, from that same measurement: intake 0-20, coalesce 20-25, assembly
+# 25-50, concat 50-100. Capped at 99 - the "applied" line reports completion.
+_REPAIR_PCT_LAST=-1
+_REPAIR_TRACK_IDX=0
+_REPAIR_TRACK_N=1
+repair_progress() {
+    local p=$1 label=$2
+    [ "$p" -gt 99 ] && p=99
+    [ "$p" -lt 0 ] && p=0
+    [ "$p" -ge $((_REPAIR_PCT_LAST + 5)) ] || return 0
+    _REPAIR_PCT_LAST=$p
+    info "    ${label}: repairing... ${p}%"
+    # Two tracks share one band, so track i contributes its own half.
+    progress_set_repair $(( (_REPAIR_TRACK_IDX * 100 + p) / _REPAIR_TRACK_N ))
+}
+
 # Repair audio file by splitting at gap positions and inserting silence.
 # Multi-gap support: N gaps -> N+1 audio segments + N silence segments.
 #
@@ -520,7 +717,15 @@ repair_audio_with_silence_inserts() {
     local -a gap_durations  # signed seconds
     local accumulated_collapse=0
 
+    _REPAIR_PCT_LAST=-1
+    local rp_label rp_rows rp_row=0
+    rp_label=$(basename "$audio_file")
+    rp_rows=$(grep -c . "$gap_file" 2>/dev/null || echo 0)
+    [ "$rp_rows" -gt 0 ] || rp_rows=1
+
     while IFS=' ' read -r src_start src_end gap_ms silence_ms; do
+        rp_row=$((rp_row + 1))
+        repair_progress $((rp_row * 20 / rp_rows)) "$rp_label"
         [ -z "$src_start" ] && continue
         # silence_ms exactly 0 means pure A+V loss (no patching needed)
         if [ "${silence_ms:-0}" = "0" ]; then
@@ -657,24 +862,72 @@ repair_audio_with_silence_inserts() {
         packet=duration_time -of csv=p=0 "$sil_master" 2>/dev/null | head -1)
     sil_frame_dur="${sil_frame_dur%,}"
 
+    # Frame grid of the SOURCE track. Probed from the source and not reused
+    # from sil_frame_dur above: the master is a re-encode that only happens
+    # to share the grid, and the cut points below belong to the source.
+    local src_frame_dur
+    src_frame_dur=$(ffprobe -v error -select_streams a:0 -show_entries \
+        packet=duration_time -of csv=p=0 "$audio_file" 2>/dev/null | head -1)
+    src_frame_dur="${src_frame_dur%,}"
+
+    # One-pass assembly: reference the SOURCE FILE directly with inpoint/
+    # outpoint directives, the same way the silence master is already
+    # referenced, instead of extracting every [prev_end, pos) span into its
+    # own file first. The old form spawned one ffmpeg per gap with the seek
+    # as an OUTPUT option ("-i file -ss pos"), so each call re-demuxed the
+    # track from byte 0 up to pos - quadratic over the list, and measurably
+    # so: the rate fell from 450 to 356 segments/min as pos grew from 958s to
+    # 1548s on the recording that prompted this (3364 gaps in one track of
+    # two, ~9 minutes each). Measured on identical input, this function
+    # against its predecessor: 50.7s -> 11.7s (400 MP2 gaps), 32.6s -> 7.0s
+    # (300 AC3 gaps), output byte-identical both times.
+    # Dropping the per-segment files also drops the failure mode where
+    # ffmpeg writes a 0-byte segment and still exits 0, which the concat
+    # demuxer then chokes on mid-list (see the duration validation below).
+    # Aligning the cut points needs the frame grid; without it, fall back to
+    # the per-segment path, which is correct on its own - just slow.
+    local use_onepass=false src_abs=""
+    if awk -v f="${src_frame_dur:-0}" 'BEGIN {exit !(f > 0)}' 2>/dev/null; then
+        use_onepass=true
+        src_abs=$(readlink -f "$audio_file")
+        # The list entry carries the real path now, and that path ends in the
+        # user's -n basename ("Tatort - Der Fall O'Brien"). An apostrophe in
+        # it closes the concat demuxer's quoted string early: measured, the
+        # entry silently becomes "Der Fall OBrien_deu.ac3" and the whole list
+        # fails to open. Escape it the way the demuxer expects - close, quote,
+        # reopen. The old per-segment entries were generated basenames and
+        # never carried user text, so this could not bite before.
+        src_abs=${src_abs//\'/\'\\\'\'}
+    fi
+
     local concat_list="$work_dir/concat.txt"
     : > "$concat_list"
     local prev_end=0 seg_idx=0 applied_sum=0
     local n=${#gap_positions[@]}
     local i
     for ((i = 0; i < n; i++)); do
+        repair_progress $((25 + i * 25 / (n > 0 ? n : 1))) "$rp_label"
         local pos="${gap_positions[$i]}" dur="${gap_durations[$i]}"
         # Original segment [prev_end, pos) as a stream-copy
-        local seg="$work_dir/seg${seg_idx}.${audio_ext}"
-        ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
-            -ss "$prev_end" -to "$pos" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
-        # ffmpeg's concat demuxer resolves relative "file" entries relative
-        # to the DIRECTORY OF THE LIST FILE ITSELF, not the process CWD.
-        # concat_list lives inside work_dir, and so do the segments - so a
-        # work_dir-prefixed path here gets work_dir prepended TWICE by
-        # ffmpeg (observed: "./.gap_repair_PID/./.gap_repair_PID/seg0.mp2",
-        # "Impossible to open"). Write the basename only.
-        echo "file '$(basename "$seg")'" >> "$concat_list"; seg_idx=$((seg_idx + 1))
+        if $use_onepass; then
+            printf "file '%s'\ninpoint %s\noutpoint %s\n" "$src_abs" \
+                "$(quantize_up_to_frame "$prev_end" "$src_frame_dur")" \
+                "$(quantize_up_to_frame "$pos" "$src_frame_dur")" >> "$concat_list"
+        else
+            local seg="$work_dir/seg${seg_idx}.${audio_ext}"
+            ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
+                -ss "$prev_end" -to "$pos" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
+            # ffmpeg's concat demuxer resolves relative "file" entries relative
+            # to the DIRECTORY OF THE LIST FILE ITSELF, not the process CWD.
+            # concat_list lives inside work_dir, and so do the segments - so a
+            # work_dir-prefixed path here gets work_dir prepended TWICE by
+            # ffmpeg (observed: "./.gap_repair_PID/./.gap_repair_PID/seg0.mp2",
+            # "Impossible to open"). Write the basename only. The one-pass
+            # branch above writes an ABSOLUTE path instead - it points outside
+            # work_dir, and the concat call passes -safe 0 for exactly that.
+            echo "file '$(basename "$seg")'" >> "$concat_list"
+        fi
+        seg_idx=$((seg_idx + 1))
         if awk "BEGIN {exit !($dur > 0)}"; then
             if awk "BEGIN {exit !($dur > 40)}"; then
                 warn "repair_audio_with_silence_inserts: silence gap ${dur}s exceeds 40s master, capping"
@@ -717,27 +970,57 @@ repair_audio_with_silence_inserts() {
             applied_sum=$(awk -v a="$applied_sum" -v d="$abs_dur" 'BEGIN {printf "%.6f", a - d}')
         fi
     done
-    local seg="$work_dir/seg${seg_idx}.${audio_ext}"
-    ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
-        -ss "$prev_end" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
-    echo "file '$(basename "$seg")'" >> "$concat_list"
+    # Tail segment [prev_end, EOF) - no outpoint, it runs to the end.
+    if $use_onepass; then
+        printf "file '%s'\ninpoint %s\n" "$src_abs" \
+            "$(quantize_up_to_frame "$prev_end" "$src_frame_dur")" >> "$concat_list"
+    else
+        local seg="$work_dir/seg${seg_idx}.${audio_ext}"
+        ffmpeg -y -hide_banner -loglevel error -i "$audio_file" \
+            -ss "$prev_end" -c copy "$seg" || { rm -rf "$work_dir"; return 1; }
+        echo "file '$(basename "$seg")'" >> "$concat_list"
+    fi
 
+    # Expected result duration. Needed twice: as the yardstick for the
+    # progress percentage below, and by the validation after the concat -
+    # so it is measured once, here, before the long-running call.
+    local orig_dur rep_dur exp_dur
+    orig_dur=$(audio_es_duration "$audio_file")
+    exp_dur=$(awk -v o="$orig_dur" -v s="$applied_sum" 'BEGIN {printf "%.6f", o + s}')
+
+    # The concat is ONE ffmpeg call over the whole list, and it says nothing
+    # until it is done - measured at ~70s per track on a recording with 3364
+    # gaps, during which every caller watching the log (the VDR wrapper puts
+    # the last line in its progress dialog) sees the same line and cannot
+    # tell a slow repair from a hung one. Run it in the background against
+    # -progress and report how far it has got.
     local repaired="$work_dir/repaired.${audio_ext}"
-    ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 \
-        -i "$concat_list" -c copy "$repaired" 2>>"$work_dir/repair.log" \
-        || { rm -rf "$work_dir"; return 1; }
+    local prog_file="$work_dir/progress.txt"
+    : > "$prog_file"
+    ffmpeg -y -hide_banner -loglevel error -progress "$prog_file" -nostats \
+        -f concat -safe 0 -i "$concat_list" -c copy "$repaired" \
+        2>>"$work_dir/repair.log" &
+    local ff_pid=$! ff_rc=0 out_us pct
+    while kill -0 "$ff_pid" 2>/dev/null; do
+        sleep 2
+        # out_time_us counts the output timeline in microseconds; against the
+        # expected duration that is a percentage. Capped at 99 so a rounding
+        # overshoot never announces completion before the call returns.
+        out_us=$(grep '^out_time_us=' "$prog_file" 2>/dev/null | tail -1 | cut -d= -f2)
+        [ -n "$out_us" ] || continue
+        pct=$(awk -v u="$out_us" -v d="$exp_dur" \
+            'BEGIN { p = (d > 0) ? int(u / (d * 10000.0)) : 0; if (p > 99) p = 99; if (p < 0) p = 0; print p }')
+        repair_progress $((50 + pct / 2)) "$rp_label"
+    done
+    wait "$ff_pid" || ff_rc=$?
+    [ "$ff_rc" -eq 0 ] || { rm -rf "$work_dir"; return 1; }
 
     # A clean exit code does NOT prove the concat succeeded: a mid-list
     # demux error ("Impossible to open ...") stops consuming the list but
     # ffmpeg still exits 0 with whatever prefix it wrote. Validate the
     # result duration against orig + sum of signed edits before replacing
     # the original; 1s tolerance covers per-edit frame rounding.
-    local orig_dur rep_dur exp_dur
-    orig_dur=$(ffprobe -v error -show_entries format=duration \
-        -of default=noprint_wrappers=1:nokey=1 "$audio_file" 2>/dev/null || echo 0)
-    rep_dur=$(ffprobe -v error -show_entries format=duration \
-        -of default=noprint_wrappers=1:nokey=1 "$repaired" 2>/dev/null || echo 0)
-    exp_dur=$(awk -v o="$orig_dur" -v s="$applied_sum" 'BEGIN {printf "%.6f", o + s}')
+    rep_dur=$(audio_es_duration "$repaired")
     if ! awk -v r="$rep_dur" -v e="$exp_dur" 'BEGIN {d = r - e; if (d < 0) d = -d; exit !(d <= 1.0)}'; then
         warn "repair_audio_with_silence_inserts: result duration ${rep_dur}s deviates from expected ${exp_dur}s - keeping original"
         rm -rf "$work_dir"
@@ -966,6 +1249,12 @@ fi
 
 # Create output directory if needed
 mkdir -p "$OUTDIR"
+
+# Progress file for a supervising wrapper. Registered for cleanup, so it is
+# gone when the run ends - including on an abort, which the EXIT trap covers.
+PROGRESS_FILE="$OUTDIR/.${BASENAME}.progress"
+_CLEANUP_FILES+=("$PROGRESS_FILE")
+progress_set 0
 
 # Write concat-demuxer list file for VDR multi-file recordings. ffmpeg's
 # concat: protocol mishandles PTS resets at segment boundaries (audio
@@ -1263,6 +1552,7 @@ echo ""
 # ELEMENTARY STREAM MODE
 #############################################################################
 if $ES_MODE; then
+    progress_set 10
     step "Extracting Elementary Streams..."
 
     # Detect available CPU cores for parallel processing
@@ -1506,6 +1796,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     ES_TOTAL_AUS=""
     ES_DOUBLED_PTS_CSV=""
     if command -v ttcut-pts-analyze >/dev/null 2>&1; then
+        progress_set 25
         step "Running PTS analysis on $ORIGINAL_INPUT ..."
         # stderr goes to its own log: mixing it into stdout (old 2>&1)
         # raced the block-buffered CSV line and truncated the captured
@@ -1711,6 +2002,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         fi
     fi
 
+    progress_set 32
     step "Checking A/V duration alignment..."
 
     # Video duration = video PTS span, NOT the container span.
@@ -1804,8 +2096,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     AV_DRIFT_RATE=0
     if [ ${#AUDIO_FILES[@]} -gt 0 ]; then
         FIRST_AUDIO="${AUDIO_FILES[0]}"
-        AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+        AUDIO_DURATION=$(audio_es_duration "$FIRST_AUDIO")
         AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
 
         # Calculate drift
@@ -1843,8 +2134,10 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # ffprobe's csv writer appends a trailing comma for a raw .m2v
         # elementary stream (verified: "stream,2964," vs. "stream,184960" for
         # a raw .264 - reproduces even for the plain index/codec_name entries,
-        # so it's a raw-mpegvideo-demuxer csv quirk, not a frame-vs-packet
-        # count difference). "2964," fails bash's [ -eq ] integer test
+        # so it's a demuxer-side csv quirk, not a frame-vs-packet count
+        # difference). Not limited to raw mpegvideo: mpegts does it too,
+        # which is why detect_video_gaps_multifile() has to strip the same
+        # comma. "2964," fails bash's [ -eq ] integer test
         # silently (exit 2, swallowed by the 2>/dev/null), so this whole
         # count-check was a no-op for every MPEG-2 run. Strip it before the
         # numeric test.
@@ -1877,9 +2170,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
         GAP_FILES=()
         CLASSIFIED_FILES=()
         HAS_ANY_SILENCE_NEEDED=false
+        progress_set 34
         AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end silence_ms"
         declare -A TRACK_SILENCE_MS TRACK_REMOVED_MS  # per-track repair balance for .info
         for i in "${!AUDIO_FILES[@]}"; do
+            # Jede Spur wird einmal ganz durchlaufen; auf einer sauberen
+            # Aufnahme ist das der laengste Abschnitt vor dem Ende, und ohne
+            # diese Meldung stand der Balken hier gemessene 15s still.
+            progress_set $(( 34 + (i + 1) * 6 / ${#AUDIO_FILES[@]} ))
             IFS=':' read -r idx _ _ <<< "${AUDIO_STREAMS[$i]}"
             GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
             CLASSIFIED_FILE="$OUTDIR/.classified_track_${i}.txt"
@@ -1977,17 +2275,82 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 done < "$cf"
             done
             info "  Audio gaps detected across all tracks: $N_NO_SILENCE pure A+V, $N_WITH_SILENCE needing silence"
+
+            # Overall damage verdict. The per-defect lines above say WHERE
+            # the holes are; on a recording that lost transmission for good
+            # they scroll past by the thousand and the fact that the whole
+            # thing is beyond saving gets lost in them. Two independent
+            # measures, either one is enough to trip it: the share of video
+            # frames that never arrived, and how densely the audio holes sit.
+            # Reference case (Futurama 06x03, 2026-08-23): 15.6% of frames
+            # missing and ~150 gaps/min - both far past the thresholds. This
+            # only reports; the run continues and still produces its output,
+            # because where the line between "damaged" and "worthless" falls
+            # is the viewer's call, not the demuxer's.
+            DEFECT_LOSS_PCT_LIMIT=5
+            DEFECT_GAPS_PER_MIN_LIMIT=20
+            # Per TRACK, not summed over all of them. N_NO_SILENCE and
+            # N_WITH_SILENCE count rows across every CLASSIFIED_FILE, so one
+            # broadcast outage lands once per audio track: on the reference
+            # recording that turned ~3419 gaps into 6839 and doubled the rate
+            # to 123/min for two tracks. The outage happened once, so the
+            # figure has to be per track to mean anything.
+            DEFECT_TRACKS=${#AUDIO_FILES[@]}
+            [ "$DEFECT_TRACKS" -gt 0 ] || DEFECT_TRACKS=1
+            DEFECT_TOTAL_GAPS=$(( (N_NO_SILENCE + N_WITH_SILENCE) / DEFECT_TRACKS ))
+            DEFECT_LOSS_PCT=0
+            if [ "${EXPECTED_FRAMES:-0}" -gt 0 ] 2>/dev/null; then
+                DEFECT_LOSS_PCT=$(awk -v e="$EXPECTED_FRAMES" -v c="${COUNTED_FRAMES:-0}" \
+                    'BEGIN {d = e - c; if (d < 0) d = 0; printf "%.1f", d * 100.0 / e}')
+            fi
+            DEFECT_GAPS_PER_MIN=0
+            if [ "${VIDEO_DURATION_MS:-0}" -gt 0 ] 2>/dev/null; then
+                # Whole gaps, no decimal: "123.0 gaps/min" claims a precision a
+                # per-minute count does not have. The loss share next to it
+                # keeps its digit - there 15.6% against 16% is a real
+                # difference. Note the rounding happens BEFORE the threshold
+                # test below, so the limit applies to the number that is
+                # printed; a true 20.4 now reads 20 and does not trip.
+                DEFECT_GAPS_PER_MIN=$(awk -v g="$DEFECT_TOTAL_GAPS" -v ms="$VIDEO_DURATION_MS" \
+                    'BEGIN {printf "%.0f", g * 60000.0 / ms}')
+            fi
+            if awk -v l="$DEFECT_LOSS_PCT" -v lm="$DEFECT_LOSS_PCT_LIMIT" \
+                   -v g="$DEFECT_GAPS_PER_MIN" -v gm="$DEFECT_GAPS_PER_MIN_LIMIT" \
+                   'BEGIN {exit !(l > lm || g > gm)}'; then
+                warn "SEVERELY DAMAGED RECORDING: ${DEFECT_LOSS_PCT}% of video frames missing (limit ${DEFECT_LOSS_PCT_LIMIT}%), ${DEFECT_GAPS_PER_MIN} audio gaps/min per track (limit ${DEFECT_GAPS_PER_MIN_LIMIT})"
+                warn "  The result is very likely unusable - check it before cutting. Demux continues."
+            fi
         fi
+
+        # Bandplanung, unabhaengig davon OB Luecken gefunden wurden: auf einer
+        # sauberen Aufnahme lief dieser Zweig frueher gar nicht, der Balken
+        # blieb auf dem Wert vor der Erkennung stehen und sprang erst ganz am
+        # Ende weiter (gemessen: 33% bis kurz vor "fertig"). Mit
+        # N_WITH_SILENCE=0 faellt das Reparaturband auf null, und der Rest
+        # verteilt sich auf die Endphase - genau das gewuenschte Verhalten.
+        PROGRESS_IN_BYTES=$(du -cb "${VDR_SEGMENTS[@]:-$INPUT}" 2>/dev/null | tail -1 | cut -f1)
+        progress_set "$PROGRESS_PRE_END"
+        progress_plan "${N_WITH_SILENCE:-0}" "${PROGRESS_IN_BYTES:-0}"
 
         if $HAS_ANY_SILENCE_NEEDED; then
             info "  Inserting silence for gaps with audio loss exceeding video loss..."
+            _REPAIR_TRACK_N=${#AUDIO_FILES[@]}
+            [ "$_REPAIR_TRACK_N" -gt 0 ] || _REPAIR_TRACK_N=1
             for i in "${!AUDIO_FILES[@]}"; do
-                # Check if any gap in this track needs silence (silence_ms > 0)
+                _REPAIR_TRACK_IDX=$i
+                # Count the gaps that need silence (silence_ms != 0) rather
+                # than just proving one exists: the count is announced before
+                # the repair starts, so a caller tailing the log - the VDR
+                # wrapper puts the last line in its progress dialog - can see
+                # what is being worked on instead of the same stale line for
+                # minutes. The old code found the count a second time after
+                # the repair had succeeded; one pass answers both.
                 NEEDS_REPAIR=false
+                N_TRACK_GAPS=0
                 while IFS=' ' read -r _gs _ge _gms sms; do
                     if [ "${sms:-0}" != "0" ]; then
                         NEEDS_REPAIR=true
-                        break
+                        N_TRACK_GAPS=$(( N_TRACK_GAPS + 1 ))
                     fi
                 done < "${CLASSIFIED_FILES[$i]}"
 
@@ -1995,12 +2358,9 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     AUDIO_FILE="${AUDIO_FILES[$i]}"
                     FIRST_AUDIO_PTS_TRACK="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
                     EFFECTIVE_FIRST_AUDIO_PTS=$(awk "BEGIN {a=$FIRST_AUDIO_PTS_TRACK; v=${FIRST_VIDEO_PTS:-0}; printf \"%.6f\", (a > v) ? a : v}")
+                    info "    $(basename "$AUDIO_FILE") (track $((i + 1))/${#AUDIO_FILES[@]}): repairing $N_TRACK_GAPS gap(s)..."
                     if repair_audio_with_silence_inserts "$AUDIO_FILE" "${CLASSIFIED_FILES[$i]}" "$EFFECTIVE_FIRST_AUDIO_PTS"; then
-                        N_REPAIRED=0
-                        while IFS=' ' read -r _gs _ge _gms sms; do
-                            [ "${sms:-0}" != "0" ] && N_REPAIRED=$(( N_REPAIRED + 1 ))
-                        done < "${CLASSIFIED_FILES[$i]}"
-                        info "    $(basename "$AUDIO_FILE"): $N_REPAIRED silence-insertion(s) applied"
+                        info "    $(basename "$AUDIO_FILE"): $N_TRACK_GAPS silence-insertion(s) applied"
                     else
                         warn "    $(basename "$AUDIO_FILE"): silence-insert FAILED — leaving original"
                         # Repair didn't happen — don't let the .info claim
@@ -2018,8 +2378,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # Recalculate AV_DRIFT_MS after repair so the end-pad block below
             # operates on the residual drift only.
             FIRST_AUDIO="${AUDIO_FILES[0]}"
-            AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
-                -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+            AUDIO_DURATION=$(audio_es_duration "$FIRST_AUDIO")
             AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
             AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
             info "  After silence-insertion: Audio=${AUDIO_DURATION_MS}ms, residual drift=${AV_DRIFT_MS}ms"
@@ -2032,6 +2391,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # If video is longer than audio, pad audio with silence (like ProjectX does)
         # This ensures A/V sync throughout the file
         if [ "$AV_DRIFT_MS" -gt 20 ]; then
+            progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 2 / 10 ))
             info "  Padding ${#AUDIO_FILES[@]} audio track(s) in parallel to match video duration..."
 
             # Calculate target duration in seconds
@@ -2064,8 +2424,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 ORIG_BITRATE="$APROBE_BITRATE"
                 ORIG_CHANNELS="$APROBE_CHANNELS"
                 ORIG_SAMPLE_RATE="$APROBE_SAMPLE_RATE"
-                ORIG_DURATION=$(ffprobe -v error -show_entries format=duration \
-                    -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
+                ORIG_DURATION=$(audio_es_duration "$AUDIO_FILE")
 
                 # Calculate padding duration
                 PAD_DURATION=$(awk "BEGIN {d = $TARGET_AUDIO_DUR - $ORIG_DURATION; printf \"%.6f\", (d > 0) ? d : 0}")
@@ -2129,16 +2488,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
                 if [ $PAD_EXIT -eq 0 ] && [ -s "$TEMP_PADDED" ]; then
                     # Get original duration for comparison
-                    ORIG_DUR=$(ffprobe -v error -show_entries format=duration \
-                        -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
+                    ORIG_DUR=$(audio_es_duration "$AUDIO_FILE")
                     ORIG_DUR_MS=$(awk "BEGIN {printf \"%.0f\", $ORIG_DUR * 1000}")
 
                     # Replace original with padded version
                     mv "$TEMP_PADDED" "$AUDIO_FILE"
 
                     # Calculate how much was added
-                    NEW_DURATION=$(ffprobe -v error -show_entries format=duration \
-                        -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "0")
+                    NEW_DURATION=$(audio_es_duration "$AUDIO_FILE")
                     NEW_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $NEW_DURATION * 1000}")
                     ADDED_MS=$((NEW_DURATION_MS - ORIG_DUR_MS))
 
@@ -2155,8 +2512,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
             # Recalculate drift after padding
             FIRST_AUDIO="${AUDIO_FILES[0]}"
-            AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration \
-                -of default=noprint_wrappers=1:nokey=1 "$FIRST_AUDIO" 2>/dev/null || echo "0")
+            AUDIO_DURATION=$(audio_es_duration "$FIRST_AUDIO")
             AUDIO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $AUDIO_DURATION * 1000}")
             AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
             # Recalculate drift rate with corrected values
@@ -2371,6 +2727,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # 4. Calculate A/V sync offset
     # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
     # The repaired file has timestamps normalized to 0, so we need the original for offset
+    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 4 / 10 ))
     step "Calculating A/V sync offset..."
 
     # Reuse the pre-repair measurement (probe_first_video_pts): for a single
@@ -2417,6 +2774,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
     # 5. Create info file with metadata
     OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
+    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 6 / 10 ))
     step "Creating info file: $OUTPUT_INFO"
 
     # Calculate trimmed ms for info file
@@ -2691,3 +3049,7 @@ fi
 if [ "${CLEANUP_REPAIRED:-false}" = "true" ] && [ -f "$REPAIRED_INPUT" ]; then
     rm -f "$REPAIRED_INPUT"
 fi
+
+# Done. The file itself goes away with _CLEANUP_FILES on exit; a wrapper
+# polling it sees 100 for as long as it takes to notice the process ended.
+progress_set 100
