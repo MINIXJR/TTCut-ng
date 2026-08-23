@@ -83,6 +83,29 @@ vdr_unmask() {
     printf '%s' "$s"
 }
 
+# Logdatei einfärben statt sie farbig zu erzeugen.
+#
+# ttcut-demux schaltet seine eigenen Farben ab, sobald stdout kein Terminal
+# ist (`[ -t 1 ]`) — und hier IST stdout die Logdatei. Das spätere `cat` gibt
+# darum reinen Text aus, auch wenn wir selbst am Terminal sitzen. Die
+# Auszeichnung deshalb erst beim Ausgeben nachziehen: die Logdatei bleibt
+# frei von Escape-Sequenzen und damit in einem Editor lesbar.
+#
+# Reihenfolge der Ausdrücke zählt — die Schadenszeile soll rot werden, nicht
+# gelb wie eine gewöhnliche Warnung; nach der ersten Ersetzung beginnt die
+# Zeile mit ESC, sodass der allgemeine WARN-Ausdruck nicht mehr greift.
+colorize_log() {
+    if [ -z "$RED" ]; then
+        cat "$1"
+        return
+    fi
+    local r y n
+    r=$(printf '%b' "$RED"); y=$(printf '%b' "$YELLOW"); n=$(printf '%b' "$NC")
+    sed -E -e "s/^\\[WARN\\](.*SEVERELY DAMAGED.*)$/${r}[WARN]\\1${n}/" \
+           -e "s/^\\[ERROR\\]/${r}[ERROR]${n}/" \
+           -e "s/^\\[WARN\\]/${y}[WARN]${n}/" "$1"
+}
+
 # ---- kdialog Fortschritts-Popup ----
 # kdialog --progressbar liefert "service objectpath" mit Leerzeichen — daher
 # beim Setzen aufsplitten und einzeln gequotet an qdbus weiterreichen.
@@ -198,6 +221,8 @@ progress_start "Vorbereitung..." "$TOTAL_STEPS"
 #############################################################################
 step "Schritt 1: Demuxen mit ttcut-demux..."
 
+# Aufnahmen, die ttcut-demux als schwer beschädigt gemeldet hat.
+DAMAGED_LIST=()
 DEMUX_COUNT=0
 DEMUX_ERRORS=0
 
@@ -242,15 +267,35 @@ for ts_datei in "${TS_FILES[@]}"; do
         marks_info=" (mit VDR markers)"
     fi
 
-    # ttcut-demux handles multi-file detection and concat automatically
+    # ttcut-demux handles multi-file detection and concat automatically.
+    #
+    # Run in the foreground here for clarity. The author's own wrapper puts it
+    # in its own process group and polls instead, which lets it read the
+    # ".<name>.progress" file ttcut-demux writes (a 0..100 for the recording)
+    # and drive a real progress bar off it - not reproducible without that
+    # poll loop, so this example simply waits.
     if "$TTCUT_DEMUX" -n "$show_name" "$ts_datei" "$OUT_PFAD" > "$LOG_FILE" 2>&1; then
-        cat "$LOG_FILE"
+        colorize_log "$LOG_FILE"
         info "  OK: $show_name$marks_info"
         DEMUX_COUNT=$((DEMUX_COUNT + 1))
     else
-        cat "$LOG_FILE"
+        colorize_log "$LOG_FILE"
         error "  FEHLER bei: $show_name"
         DEMUX_ERRORS=$((DEMUX_ERRORS + 1))
+    fi
+
+    # Schadensurteil von ttcut-demux einsammeln, damit der Abschlussdialog
+    # sagen kann, WELCHE Aufnahme nichts taugt — im Log geht die Zeile
+    # zwischen Tausenden Defektmeldungen unter.
+    # "|| true" ist Pflicht: dieses Skript laeuft unter set -e, und eine
+    # Zuweisung aus einem fehlgeschlagenen Kommando beendet es sofort. grep
+    # liefert 1, wenn es NICHTS findet - also bei jeder unbeschaedigten
+    # Aufnahme.
+    DAMAGE_LINE=$(grep -m1 'SEVERELY DAMAGED RECORDING' "$LOG_FILE" 2>/dev/null || true)
+    if [ -n "$DAMAGE_LINE" ]; then
+        DMG_PCT=$(sed -E 's/.*RECORDING: ([0-9.]+)% .*/\1/' <<<"$DAMAGE_LINE")
+        DMG_GPM=$(sed -E 's|.*, ([0-9.]+) audio gaps/min.*|\1|' <<<"$DAMAGE_LINE")
+        DAMAGED_LIST+=("$show_name — ${DMG_PCT/./,} % Bilder fehlen, ${DMG_GPM/./,} Tonlücken/min je Spur")
     fi
     echo ""
     CURRENT_STEP=$((CURRENT_STEP + 1))
@@ -314,9 +359,26 @@ echo ""
 
 progress_close
 
-# Frage ob TTCut gestartet werden soll
+# Abschlussfrage. Die Schadensliste steht im Kopftext derselben Frage statt
+# in einem eigenen Popup — sonst muss man bei einem unbeaufsichtigten Lauf
+# zwei Fenster wegklicken, um zum selben Ergebnis zu kommen.
+FINAL_TEXT=""
+if [ ${#DAMAGED_LIST[@]} -gt 0 ]; then
+    FINAL_TEXT="${#DAMAGED_LIST[@]} Aufnahme(n) schwer beschädigt:"
+    for entry in "${DAMAGED_LIST[@]}"; do
+        FINAL_TEXT="$FINAL_TEXT
+   $entry"
+    done
+    FINAL_TEXT="$FINAL_TEXT
+
+Das Ergebnis ist voraussichtlich unbrauchbar.
+
+"
+fi
+FINAL_TEXT="${FINAL_TEXT}TTCut starten?"
+
 if command -v kdialog &>/dev/null; then
-    if kdialog --yesno "TTCut starten?" --title "VDR Demux" 2>/dev/null; then
+    if kdialog --yesno "$FINAL_TEXT" --title "VDR Demux" 2>/dev/null; then
         info "Starte TTCut..."
         if [ -x "$TTCUT" ] || command -v "$TTCUT" &>/dev/null; then
             # Wayland-Kompatibilität
@@ -326,6 +388,7 @@ if command -v kdialog &>/dev/null; then
         fi
     fi
 else
+    [ ${#DAMAGED_LIST[@]} -gt 0 ] && { echo ""; echo "$FINAL_TEXT"; }
     read -p "TTCut starten? [j/N] " antwort
     if [[ "$antwort" =~ ^[jJyY] ]]; then
         QT_QPA_PLATFORM=xcb "$TTCUT" &
