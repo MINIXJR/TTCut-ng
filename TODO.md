@@ -561,6 +561,16 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Voller TODO-Abgleich steht aus** (2026-08-23, offen, niedrige Priorität).
+  Beim Release v0.82.1 hat der Abgleich nach Skill-Step 4.5 nur die von diesem
+  Release berührten Bereiche geprüft (`ttcut-demux`, Lückenerkennung,
+  Fortschritt) statt aller 45 Einträge. Begründung damals: seit v0.82.0 — drei
+  Tage zuvor, mit eigenem Vollabgleich — wurde außer `tools/` nichts angefasst,
+  ein Eintrag zur Anwendung konnte durch dieses Release also nicht erledigt
+  worden sein. Das deckt aber nicht ab, was durch **frühere** Refactors
+  miterledigt wurde, ohne dass es jemand nachgetragen hat. Beim nächsten
+  Release den Vollabgleich nachholen statt ihn erneut einzugrenzen.
+
 - **PTS-Umlauf macht die Lückenerkennung an dieser Stelle blind**
   (2026-08-23, offen, niedrige Priorität — Sonderfall per User-Einschätzung).
   Der 33-Bit-Zeitstempel läuft alle 2³³/90000 = 95443,718 s (26,5 h) auf 0

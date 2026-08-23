@@ -381,8 +381,7 @@ if command -v kdialog &>/dev/null; then
     if kdialog --yesno "$FINAL_TEXT" --title "VDR Demux" 2>/dev/null; then
         info "Starte TTCut..."
         if [ -x "$TTCUT" ] || command -v "$TTCUT" &>/dev/null; then
-            # Wayland-Kompatibilität
-            QT_QPA_PLATFORM=xcb "$TTCUT" &
+            "$TTCUT" &
         else
             error "TTCut nicht gefunden: $TTCUT"
         fi
@@ -391,7 +390,7 @@ else
     [ ${#DAMAGED_LIST[@]} -gt 0 ] && { echo ""; echo "$FINAL_TEXT"; }
     read -p "TTCut starten? [j/N] " antwort
     if [[ "$antwort" =~ ^[jJyY] ]]; then
-        QT_QPA_PLATFORM=xcb "$TTCUT" &
+        "$TTCUT" &
     fi
 fi
 
