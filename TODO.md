@@ -561,6 +561,32 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **PTS-Umlauf macht die Lückenerkennung an dieser Stelle blind**
+  (2026-08-23, offen, niedrige Priorität — Sonderfall per User-Einschätzung).
+  Der 33-Bit-Zeitstempel läuft alle 2³³/90000 = 95443,718 s (26,5 h) auf 0
+  zurück. Beide Lückenerkennungen rechnen mit Differenzen roher Zeitstempel:
+  `detect_video_gaps` prüft `curr_dts - prev_dts > threshold`, die
+  Multifile-Varianten `nächster_Anfang - vorheriges_Ende > threshold`. Am
+  Umlauf ist diese Differenz stark **negativ**, die Prüfung greift nicht — es
+  wird nie eine Lücke erfunden, aber eine echte an dieser Stelle übersehen.
+
+  Belegt an `SDTV/MPEG2_SD576i25_16-9_multifile-2part-ptswrap_MP2-deu+eng_Comedy-Central`
+  im Testkorpus (Details in dessen `BESCHREIBUNG.md`): letzte PTS von Segment 0
+  bei 95386,744 s, Umlauf bei 95443,718 s, erste PTS von Segment 1 bei
+  201,426 s. Herausgerechnet wären das 258,4 s verschluckte Sendezeit. Der
+  A/V-relevante Anteil ist davon **nicht** betroffen —
+  `detect_segment_boundaries` vergleicht Dauern je Segment statt absoluter
+  Zeitstempel und meldet die Grenze korrekt mit 312 ms Versatz; die 258 s
+  verlieren Bild und Ton gleichermaßen.
+
+  **Falle vor dem Beheben:** würde die Splice-Lücke durch eine
+  Umlaufbehandlung sichtbar, käme sie über `detect_audio_gaps_multifile` in
+  dieselbe klassifizierte Datei, in die `detect_segment_boundaries` seine
+  Grenzzeile schon schreibt — dieselbe Segmentgrenze würde zweimal korrigiert.
+  Das ist die Doppelverrechnung, die schon einmal 0,8 s Tonvorlauf verursacht
+  hat. Zuerst klären, welche der beiden Funktionen die Segmentgrenze allein
+  verantwortet, dann erst rechnen.
+
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
   (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die
   beiden Finalschnitt-Pfade benennen ihre Elementary-Stream-Ausgaben nach
