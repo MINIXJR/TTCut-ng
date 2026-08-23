@@ -561,6 +561,24 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Belege gehören nicht nach `CLAUDE_TMP`** (2026-08-23, offen, niedrige
+  Priorität). Beim Sitzungsabschluss gemessen: von 42 Pfaden, auf die
+  `TODO.md`, `docs/` und das Gedächtnis in `/usr/local/src/CLAUDE_TMP/TTCut-ng/`
+  verweisen, existierten **41 nicht mehr** — vernichtet beim Purge am
+  2026-08-16. Das Verzeichnis ist von der Sicherung ausgeschlossen
+  (`excludes-root.txt`), überlebt also weder ein `rm -rf` noch einen
+  Plattenverlust.
+
+  71 der 76 einzelnen Verweise waren bereits als verloren gekennzeichnet; die
+  restlichen fünf sind es seit heute. Gerettet wurde dabei das einzige noch
+  lebende Stück: `av_sync_check/measure_sync.py` liegt jetzt als
+  `tools/diag/measure_av_sync.py` im Repo.
+
+  **Offen ist die Regel dahinter**: Messwerkzeuge, Baselines und Repro-Material,
+  auf die TODO oder Memory verweisen, müssen beim Entstehen an einen gesicherten
+  Ort — ins Repo oder unter `/home/` —, nicht ins Temp-Verzeichnis. Solange das
+  nicht festgelegt ist, wiederholt sich der Verlust beim nächsten Aufräumen.
+
 - **Voller TODO-Abgleich steht aus** (2026-08-23, offen, niedrige Priorität).
   Beim Release v0.82.1 hat der Abgleich nach Skill-Step 4.5 nur die von diesem
   Release berührten Bereiche geprüft (`ttcut-demux`, Lückenerkennung,
