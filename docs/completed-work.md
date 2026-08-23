@@ -388,6 +388,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **Lückenreparatur auf einen Durchlauf umgebaut** → **DONE (v0.82.1,
+  2026-08-23)**. Auslöser: eine Aufnahme mit 6730 Lücken lief ~18 Minuten ohne
+  Rückmeldung. Details in den Commits `a7aecee0` (Engine) und `1656df85`
+  (Beispielskript); Datenfluss in `docs/code-map/ttcut-demux.md`.
+
+  **Gate — so wird es nachgebaut.** Die Testmedien werden erzeugt, nicht
+  aufbewahrt; die vier Befehle sind der eigentliche Beleg:
+
+  ```bash
+  # Kontrolldateien mit berechenbarer Sollgröße
+  ffmpeg -f lavfi -i "sine=f=440:r=48000:d=1800,volume=0.5" -ac 2 -c:a mp2 -b:a 256k ctrl.mp2
+  ffmpeg -f lavfi -i "sine=f=440:r=48000:d=1500,volume=0.5" -ac 2 -c:a ac3 -b:a 192k ctrl.ac3
+  # echtes AC3 mit Bitratenwechsel (67 % 192k / 33 % 384k, deckt den
+  # format=duration-Fehler auf): aus dem Korpus, Tux_Video/tux_video_deu.ac3
+
+  # Lückenliste: 400 Zeilen mit allen drei Zeilentypen
+  awk 'BEGIN{for(i=0;i<400;i++){s=20+i*4.0; e=s+0.2; sms=200;
+        if(i%7==0)sms=0; if(i%11==0)sms=-150;
+        printf "%.6f %.6f %.0f %.0f\n",s,e,200,sms}}' > gaps.txt
+
+  # Splice-Segmente mit gebauter 7,800-s-Lücke (belegt den Komma-Fix)
+  ffmpeg -i <quelle.ts> -t 10 -c copy -output_ts_offset 1000 -muxdelay 0 -muxpreload 0 segA.ts
+  ffmpeg -i <quelle.ts> -t 10 -c copy -output_ts_offset 1017 -muxdelay 0 -muxpreload 0 segB.ts
+  ```
+
+  Geprüft wird die **echte** Funktion, aus alter und neuer Fassung
+  herausgeschnitten (`awk '/^repair_audio_with_silence_inserts\(\) \{/,/^\}/'`
+  plus `probe_audio_props`, `audio_es_duration`, `quantize_up_to_frame`,
+  `repair_progress`), beide auf derselben Kopie laufen lassen, Kriterium
+  **Byte-Identität**. Messwerte: 50,7 s → 11,7 s (400 MP2-Lücken), 32,6 s → 7,0 s
+  (300 AC3-Lücken); Splice: alt 0 Zeilen und 2 „ffprobe failed", neu genau
+  `1010.045000 1017.845000 7800`.
+
+  Falle beim Nachbauen: eine Probe, die als `t1 && echo ok` aufgerufen wird,
+  läuft im Bedingungskontext — dort schaltet bash `set -e` ab, und der Test
+  winkt die kaputte Fassung durch.
+
 - **Untertitel-Zeitachse: ES-Rebase war komplett wirkungslos — alle Cues
   um die Länge des untertitelfreien Vorlaufs zu früh** → **GEFIXT
   (2026-08-17, `5b2b0256`, released v0.81.1)**
