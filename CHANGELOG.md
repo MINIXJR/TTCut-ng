@@ -2,6 +2,60 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.82.1 (2026-08-23)
+
+**Gap repair rebuilt in the demux tool**
+
+This release touches `tools/` only — the application behaves exactly as in
+v0.82.0. Everything below is in `ttcut-demux`, which the package installs to
+`/usr/bin`, and in the wrapper example beside it.
+
+### Fixed
+- **Gap repair no longer scales quadratically.** Each gap spawned its own
+  ffmpeg call with the seek as an output option, so every call re-demuxed the
+  track from the start to the cut point — measured 450 falling to 356
+  segments/min as the position advanced. The surviving spans are now concat
+  `inpoint`/`outpoint` entries against the source itself, assembled in one
+  pass. On a recording with 6730 gaps the phase fell from roughly 18 minutes
+  to 2.5; the audio it produces is byte-identical.
+- **Track durations are read from packet timestamps, not extrapolated from
+  the bitrate.** For a raw elementary stream `ffprobe format=duration` scales
+  the first frame's bitrate over the file size, so a single 192k→384k switch —
+  stereo to 5.1, i.e. programme to ad break — threw it off by that share
+  (2391 s reported against 1797 s real). Two decisions rode on that number: a
+  correct gap repair was discarded because the check compared two
+  differently-wrong values, and the end pad was skipped on a track that looked
+  a third longer than it was.
+- **Splice gaps between VDR segments are measured again.** ffprobe appends an
+  empty trailing field to the stream row for some streams, so every probe of
+  the video stream failed a numeric test and multi-file recordings always took
+  the "ffprobe failed" path. The gap between segments — real broadcast time
+  the concat demuxer drops silently — went unmeasured on every one of them.
+- **Defect range lists are wrapped** instead of running to a single line of up
+  to 7189 characters.
+
+### Added
+- **Damage verdict.** After gap classification a recording that is beyond
+  saving says so in one line, tripped by either the share of video frames that
+  never arrived (>5%) or the density of audio gaps (>20/min per track). It
+  reports only; the run continues and still produces its output.
+- **Progress reporting.** `ttcut-demux` writes a 0..100 for the recording to
+  `.<name>.progress`, so a supervising wrapper need not guess from bytes on
+  disk. The repair band is sized at runtime from the gap count, because no
+  fixed weighting fits both a recording where the repair is most of the run
+  and a clean one where it is nothing. The file is removed when the run ends,
+  including on an abort.
+- **`tools/vdr-demux-example.sh`** collects the verdict per recording, puts it
+  into the closing dialog, and colours ERROR and the verdict when printing the
+  log — the log file itself stays free of escape sequences.
+
+### Known limitation
+- A 33-bit PTS wrap (every 26.5 h) makes both gap detectors blind at exactly
+  that point: the timestamp difference goes strongly negative and no threshold
+  is reached. It can never invent a gap, only miss one. The A/V-relevant part
+  is unaffected — `detect_segment_boundaries` compares per-segment durations
+  and is immune. Tracked in `TODO.md` (Low) with material in the test corpus.
+
 ## v0.82.0 (2026-08-20)
 
 **AC3 Audio Anomaly Detection and Repair**

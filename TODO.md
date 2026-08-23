@@ -322,7 +322,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Messwerkzeug: `tools/diag/bench_playback_mux` (Mux-Durchsatz standalone).
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
-  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~1800 Zeilen) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
+  - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~3050 Zeilen, Stand v0.82.1) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
   - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
   - ttcut-demux blieb auf bash+CLI hängen.
   - **Probleme**: stream-copy concat über libav-CLI ist fragil bei mp2/ac3 Splice-Punkten (Frame-Misalignment, Header-missing-Errors). Re-encode als Workaround funktioniert (siehe Audio-Gap-Fix 2026-05-10), aber libav-direkt wäre PTS-genauer und ohne Subprocess-Overhead.
