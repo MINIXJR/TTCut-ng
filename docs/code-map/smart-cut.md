@@ -1,5 +1,5 @@
 ---
-base_commit: 101909927833d2f23945c45809e780543c52ace0
+base_commit: 7068942c9294e96ea6bcfa8c18bfb69a523449ff
 last_verified: 2026-08-16
 sources:
   - common/ttexception.cpp
@@ -46,12 +46,12 @@ without altering what is written).
 **Scope of the 2026-08-15 update:** `f9352969`..`67341cd1` (cut-outcome-
 reporting and preview-ownership work) touched two things inside this map's
 scope. (1) `decodeFramesIntoList` and `runEncodePass` (`extern/ttessmartcut.cpp`,
-commit `851e2286`): an `av_packet_alloc` failure used to `break` out of the
+commit `851e2286`): an `av_packet_alloc` failure must not `break` out of the
 per-AU loop and let the function fall through to a normal `true` return,
 silently truncating the segment; both now call `setError()` and `return
 false` (`flushEncoder` already did). (2) `TTCutPreviewTask::operation()`
 (`data/ttcutpreviewtask.cpp`, commit `bf6fd1dd`): the engine-leak gap the
-"Who owns the engine" pitfall below used to describe as open is fixed — see
+"Who owns the engine" pitfall below describes — see
 that bullet for the new shape and the *different* gap it left behind. The
 seam, POC/`frame_num`, MMCO, SPS and variant-matrix sections were **not**
 re-derived (no source file behind them changed) and are carried forward
@@ -128,7 +128,7 @@ flowchart TD
 | `stream-copy → tail` seam | Clean by construction: the tail's first frame is a **forced IDR**, which resets `PrevRefFrameNum`. No `frameNumDelta`, no MMCO, no SPS unification needed across this boundary — unlike the head seam. |
 | `streamCopyFrames` / `runEncodePass` → `mOutputDisplayOrder` | One entry per written AU, in write order, holding the **source display index**. Any anomaly (encoder emits more packets than frames submitted) invalidates the whole vector; the muxer then falls back to legacy linear PTS. |
 | `mOutputDisplayOrder` → `TTMkvMergeProvider` | Output-local display rank, used to assign MKV display PTS. Empty vector = "trust the muxer's linear timeline instead". |
-| `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` used to swallow it and kept looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
+| `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` must not swallow it and keep looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
 | `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **8 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
 | `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`common/ttexception.cpp:31`). A cancelled cut therefore produces no error, warning or fatal line at all. |
 | `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (`ttessmartcut.cpp:301`). |
@@ -168,7 +168,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   pointer for the duration of one `smartCutFrames()` call — it never deletes,
   since the engine stays owned by `operation()`.
 
-  **Fixed (`bf6fd1dd`, 2026-08-12):** `operation()` used to clear-then-delete
+  **Fixed (`bf6fd1dd`, 2026-08-12):** `operation()` must not clear-then-delete
   the shared engine at three separate call sites (init failure, catch, end of
   function) and had a fourth exit — the loop-top `isAborted()` throw — with
   none, leaking the engine and every decoded frame it held on a cancel landing
@@ -223,9 +223,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 
 - **`selectFramesByDisplayOrder`** — guarantees: `AVFrame::pts` carries the
   source AU index. The frame selection filters by the display lower bound
-  (`disp >= startDisplay`), not by any AU-index cutoff. (The write-only
-  `ctx.realStartAU` leftover this section used to flag was removed in
-  `1c0bd2b`; CLAUDE.md no longer mentions it.)
+  (`disp >= startDisplay`), not by any AU-index cutoff.
 
 - **`decodeFramesIntoList`** — assumes `thread_count = 1` on the decoder.
   Frame-threading reassigns PTS and would break the AU-index-in-`pts` contract.
@@ -236,7 +234,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   after a flush.
 
 - **`decodeFramesIntoList` / `runEncodePass` — `av_packet_alloc` failure
-  (FIXED `851e2286`, 2026-08-15)** — an allocation failure used to `break`
+  (FIXED `851e2286`, 2026-08-15)** — an allocation failure must not `break`
   out of the per-AU/per-frame loop; the function then fell through to its
   normal drain-and-`return true` path, silently truncating the segment while
   still reporting success. Both call sites now `setError(...)` and `return
@@ -358,20 +356,9 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 
 ## Redundancy / consolidation candidates
 
-- **[REMOVED `3191d98`]** Dead branch — `processSegment` "PAFF fallback": was
-  guarded by `else if (isPAFF() && codecType() == NALU_CODEC_H264)` after
-  `if (useSpsUnification)`, where `useSpsUnification = H264 && (isPAFF ||
-  !pocBridgeable)` is always true when `isPAFF && H264` → the else-if was
-  unreachable. Deleted, together with its exclusive dead helpers `convertAUToIDR`
-  and `convertSliceNalToIDR` (no remaining callers). 372 lines removed, no
-  behaviour change.
 
-- **[REMOVED `1c0bd2b`]** Dead field — `ReencodeContext::realStartAU`: was
-  written in three places, read only inside one `qDebug()`. Removed; the
-  `mDisplayMap.displayToDecode()` lookup is inlined into that debug line so the
-  diagnostic output is preserved.
 
-- **[RESOLVED `df20bb3` — with a corrected finding]** ~~Three~~ **Two** encoder→copy
+- **Two** encoder→copy
   `frame_num` bridge computations (unification branch, standard branch) — the
   inter-segment block in `smartCutFrames` is a **different** computation
   (source→source, cumulative across segments, load-bearing `int&` semantics) and
@@ -384,10 +371,10 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   bit-identical on all non-IDR material; on a purpose-built IDR-copy-start
   project the bitstream changes as intended with byte-identical decoded frames.
 
-- **[RESOLVED `24fea34`]** The four EOS-emit sites (`processSegment` unification/
+- The four EOS-emit sites (`processSegment` unification/
   standard/tail epilogue, `smartCutFrames` inter-segment) now call
   `writeEos(outFile)`; the codec dispatch (H.264 type 11 / H.265 type 37) lives
-  once. The unification branch's formerly unconditional H.264 write is unchanged
+  once. The unification branch's H.264 write is unconditional
   in effect (that branch is H.264-only).
 
 - **Parameter-set writing after EOS is asymmetric**: the standard branch (and,

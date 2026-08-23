@@ -1,5 +1,5 @@
 ---
-base_commit: 101909927833d2f23945c45809e780543c52ace0
+base_commit: 7068942c9294e96ea6bcfa8c18bfb69a523449ff
 last_verified: 2026-08-16
 sources:
   - gui/ttcurrentframe.cpp
@@ -125,7 +125,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | `TTNaluParser::accessUnitPtr(index, size)` → Smart Cut write path | byte offset + size of NAL units at decode position `index` | **DECODE order** → byte position in file (correct for stream-copy) |
 | `TTCutFrameNavigation::checkCutPosition(avData, pos)` ← `TTCutMainWindow::onNewFramePos(pos)` | explicit `pos` parameter; stored as `currentPosition` | **DECODE order** (same pos returned by `moveToXxx` in TTCurrentFrame) |
 | `TTCurrentFrame::onPlayVideo()` → `mPlayer->load(…, startSec)` | `startSec` corrected via `deliveredDecodeIndex / frameRate` for H.26x | **DISPLAY order** — `deliveredDecodeIndex` is the decode tag of the frame actually shown, mapping it to its correct display-time in the temp MKV |
-| `TTESSmartCut::streamCopyFrames/reencodeFrames/bufferAndWriteEncoderPacket` → `TTESSmartCut::mOutputDisplayOrder` (via `appendOutputDisplay`) | one `mDisplayMap.decodeToDisplay(au)` value appended per written frame, in ES write order (call sites: `streamCopyFrames` for stream-copy — bulk-write and per-frame paths — and `bufferAndWriteEncoderPacket` for encoder packets via `ctx.encodeAuOrder`; the former dead-code "PAFF fallback" IDR-injection call site in `processSegment` was removed as unreachable, `3191d98`) | **DISPLAY order** (source-domain, absolute) — `ctx.encodeAuOrder` is filled in `reencodeFrames`, capturing each submitted frame's source AU (`AVFrame::pts`) at submission time so it survives `runEncodePass()` freeing `framesToEncode`; with `bf=0` the encoder returns packets 1:1 in submission order, so `ctx.packetsReceived` indexes `encodeAuOrder` correctly even though most x264 packets only arrive during `flushEncoder()` |
+| `TTESSmartCut::streamCopyFrames/reencodeFrames/bufferAndWriteEncoderPacket` → `TTESSmartCut::mOutputDisplayOrder` (via `appendOutputDisplay`) | one `mDisplayMap.decodeToDisplay(au)` value appended per written frame, in ES write order (call sites: `streamCopyFrames` for stream-copy — bulk-write and per-frame paths — and `bufferAndWriteEncoderPacket` for encoder packets via `ctx.encodeAuOrder`) | **DISPLAY order** (source-domain, absolute) — `ctx.encodeAuOrder` is filled in `reencodeFrames`, capturing each submitted frame's source AU (`AVFrame::pts`) at submission time so it survives `runEncodePass()` freeing `framesToEncode`; with `bf=0` the encoder returns packets 1:1 in submission order, so `ctx.packetsReceived` indexes `encodeAuOrder` correctly even though most x264 packets only arrive during `flushEncoder()` |
 | `TTESSmartCut::outputDisplayOrder()` → caller → `TTMkvMergeProvider::setVideoDisplayOrder()` | `QVector<int>` — source display indices re-numbered to a compact, gap-free, order-preserving RANK (sort + `QHash` rank lookup) | **DISPLAY order**, output-local (segments leave gaps in source display numbering, so the absolute source index is not usable as a packet-count-based array index in the muxer) — returns an **empty** `QVector` (fallback) on: a negative `decodeToDisplay()` result (HEVC dropped-RASL slot, guarded in `appendOutputDisplay`), an encoder-packet/submitted-frame-count mismatch (`bufferAndWriteEncoderPacket`), or a duplicate source display index (`outputDisplayOrder`) — all three warn loudly via `TTMessageLogger` |
 | `TTMkvMergeProvider::assignEsTimestamps(in)` | `pkt->pts = displayOrder[frameCount] × frameDur`; `pkt->dts = (frameCount − reorderOffset) × frameDur` | **PTS: DISPLAY order (true display time); DTS: approximated decode order** — `reorderOffset = max(i − displayOrder[i])` over the whole list (computed once in `setupVideoInput`) so `dts ≤ pts` always holds by lowering DTS, never raising PTS (raising PTS would shift video against the untouched audio streams); a resulting negative start DTS is normalized by `avoid_negative_ts` across **all** muxed streams together, not just video. Called once per output **frame** (`in.frameCount`) — PAFF field pairs are merged into one call by `processPAFFFieldPair()` first, matching `TTNaluParser`'s own field-pair merge 1:1 in count. Empty `displayOrder` (MPEG-2 task path: `data/ttavdata.cpp` MPEG-2 branch never calls `setVideoDisplayOrder`; playback temp MKV: `TTCurrentFrame::createTempMkvForPlayback` calls `setVideoDisplayOrder` **only** for an H.26x stream with a valid display map — MPEG-2 playback or an invalid/empty H.26x map leave it empty, see the display-PTS bullet under *Redundancy*; or any invalidated H.26x run) falls back line-for-line to the pre-existing `pts = dts = frameCount × frameDur` linear stamping |
 
@@ -143,7 +143,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 
 - **`TTFFmpegWrapper::seekToFrame(n)`** — does NOT seek to the keyframe of the GOP that displays at position n. It seeks to the keyframe of the GOP that **decodes at or before** position n (one further keyframe back in non-search mode for DPB prefill). This is correct for decode-order access but means the visible frame may differ from the frame the user selected if B-frame reorder is large.
 
-- **`TTFFmpegWrapper::skipCurrentFrame()`** — the send/receive pump the skip-loops in `decodeFrame`/`decodeFrameYUV`/`decodeNearestKeyframe` all drive one output at a time. Contract (fixed, previously violated): on `avcodec_send_packet` returning `EAGAIN` (decoder output queue full — happens under a B-hierarchy), the packet is retained as `mPendingPacket` and a frame is drained via `avcodec_receive_frame` first — it is **never** discarded. The retained packet, already carrying its assigned decode-order tag (`decodeOrderTagForPacket`), is resent on the next call before any new packet is read from the file. Every call first tries `avcodec_receive_frame` before reading/sending anything, so output the decoder already buffered from a prior EAGAIN is taken as this call's result. `mPendingPacket` is freed (not resent) on `seekToFrame()` (a packet held from before the seek belongs to the pre-seek decode-order-tag domain — sending it into the just-flushed decoder would deliver one frame under a stale tag) and on `closeFile()`. Pitfall this replaces: the prior version dropped the packet on send-EAGAIN instead of retaining it, so under a B-hierarchy the decoder's output queue never drained via the correct API sequence — every remaining packet in the file was read and dropped one by one, the skip-loop's target decode-order tag never appeared, and one `decodeFrame()` call degraded into a full-file read-and-discard (measured: minutes on UHD HEVC).
+- **`TTFFmpegWrapper::skipCurrentFrame()`** — the send/receive pump the skip-loops in `decodeFrame`/`decodeFrameYUV`/`decodeNearestKeyframe` all drive one output at a time. Contract: on `avcodec_send_packet` returning `EAGAIN` (decoder output queue full — happens under a B-hierarchy), the packet is retained as `mPendingPacket` and a frame is drained via `avcodec_receive_frame` first — it is **never** discarded. The retained packet, already carrying its assigned decode-order tag (`decodeOrderTagForPacket`), is resent on the next call before any new packet is read from the file. Every call first tries `avcodec_receive_frame` before reading/sending anything, so output the decoder already buffered from a prior EAGAIN is taken as this call's result. `mPendingPacket` is freed (not resent) on `seekToFrame()` (a packet held from before the seek belongs to the pre-seek decode-order-tag domain — sending it into the just-flushed decoder would deliver one frame under a stale tag) and on `closeFile()`. Pitfall this replaces: the prior version dropped the packet on send-EAGAIN instead of retaining it, so under a B-hierarchy the decoder's output queue never drained via the correct API sequence — every remaining packet in the file was read and dropped one by one, the skip-loop's target decode-order tag never appeared, and one `decodeFrame()` call degraded into a full-file read-and-discard (measured: minutes on UHD HEVC).
 
 - **`TTFFmpegWrapper::decodeNearestKeyframe(displayPos, &shownDisplayPos)`** — assumes: `displayPos` is a display position (mapped to AU via the display-order map when valid, else treated as a raw decode index, matching `decodeFrame`'s own fallback). Guarantees: returns the keyframe **at or before** the mapped AU, walking backward over `mFrameIndex[].isKeyframe` in decode order — never the exact requested frame. `shownDisplayPos` is the display position of that keyframe, and it is the value callers must resync their own state to (`showKeyframeFastAt` returns it verbatim; `onGotoFramePreview` uses it, not the original `pos`, for `videoStream->moveToIndexPos()` / `currentCutPosition`). Pitfall: treating the return as "the frame at `displayPos`" is wrong by construction — it is a preview shortcut for slider-drag, paired with an exact `onGotoFrame()` call once the drag ends.
 
@@ -200,7 +200,7 @@ seek/DPB-prefill delay accounting does not always match the cut's `decodeFramesI
 >
 > **Cut-OUT (frame-accurate, 2026-06-19) — `TTESSmartCut` tail re-encode:**
 > `streamCopyFrames` copies a contiguous **decode-order** AU range, so B-frames that
-> *display* after the cut-out but decode within the range used to leak in (extra
+> *display* after the cut-out but decode within the range must not leak in (extra
 > trailing frames + accumulating A/V drift). `analyzeCutPoints` now pulls the
 > stream-copy back to the last keyframe before the first display-late AU
 > (`tailStartFrame`) and `processSegment` appends a **tail GOP re-encode**
@@ -405,7 +405,7 @@ byte-identical output, unaffected by this fix.
 
 ## Redundancy / consolidation candidates
 
-- **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `mFFmpeg->buildFrameIndex()`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Both previously scanned the entire file. Resolved in v0.72.0 by Owner A → Owner B index sharing via `provideFrameIndexTo()` (Qt COW, O(1)). Owner C (search sub-decoders) also adopts via the same mechanism. No longer redundant.
+- **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `mFFmpeg->buildFrameIndex()`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Owner A → Owner B index sharing via `provideFrameIndexTo()` (Qt COW, O(1)). Owner C (search sub-decoders) also adopts via the same mechanism. No longer redundant.
 
 - **Decode-order-to-display-order conversion**: PARTIALLY RESOLVED (`95da7f3`).
   `playbackSecondsForCurrentStill()` (used by `onPlayVideo`) is live and keys
@@ -415,17 +415,5 @@ byte-identical output, unaffected by this fix.
   satisfy pts == display index with no offset. The linear fallback branch
   keeps the pre-fix formula verbatim (invalid/empty map only). Measured:
   playback MKV output order 50% non-monotonic → 0.
-  **[REMOVED `18d7871`]** `streamIndexForPlaybackSlot()` — the introducing
-  commit's message described it as wired into `onPlaybackPositionChanged`/
-  `onPlaybackFinished`, but its own diff never added a call site; the method
-  was reference-free from the moment it was written and was deleted as dead
-  code by the audit (batch G+H+I). Verified against current code
-  (2026-07-18): both functions still derive `framePos`/`newFrame` linearly
-  from `seconds × frameRate` (plus the MPEG-2 `extraIndices()` fixup in
-  `onPlaybackFinished`), with **no** `TTDisplayOrderMap` conversion for
-  H.26x — so of the "three ad-hoc corrections" this bullet originally
-  flagged, only the `onPlayVideo` one is actually consolidated; the
-  `onPlaybackPositionChanged`/`onPlaybackFinished` conversion remains in its
-  original ad-hoc linear form.
 
 - **MPEG-2 field-picture extra-index correction** appears in both `onPlayVideo()` and `onPlaybackFinished()` (binary-search into `mpeg2vs->extraIndices()`). Same logic, duplicated. Consolidation candidate: a method on `TTMpeg2VideoStream` that converts between raw index and display-frame index.

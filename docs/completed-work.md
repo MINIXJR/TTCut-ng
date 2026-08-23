@@ -1484,6 +1484,51 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Burst-Erkennung: behobene Defekte** → **DONE** (Detailtexte 2026-08-23 aus
+  `docs/code-map/burst-detection.md` hierher verschoben — die Map führt nur noch
+  den aktuellen Zustand)
+
+  - **Absoluter statt kontextrelativer Filter** (`48cf828`, empirisch belegt
+    2026-07-04): Der frühere ABSOLUTE Filter (Default −30) verwarf reale
+    DVB-Bursts (−37,5/−36,5/−27,3 dB bei −79…−87 dB Kontext = 50-dB-Sprung),
+    die Skala war kontraintuitiv (−1 = unempfindlichste Stellung), und es gab
+    keinen Listen-Refresh bei Threshold-Änderung. Alle drei durch
+    kontextrelativen Filter + `refreshBurstIcons` ersetzt; alter Key
+    `BurstThresholdDb/` im Orphan-Cleanup.
+
+  - **acmod-Zusatz ging nach dem Settings-Dialog verloren** (`666ed08`):
+    `refreshBurstIcons()` rief `updateAcmodIcon` nicht → der acmod-Zusatz in
+    Spalte 5 verschwand nach jedem Schließen des Settings-Dialogs (auch bei
+    „Abbrechen"), bis der Cut neu angelegt/aktualisiert wurde. GUI-verifiziert
+    mit einem Cut über beide acmod-Wechsel von `TEST_deu.ac3` (2075/15624),
+    bewusst ohne Burst an den Grenzen: Spalte 5 trug nur „AC3 start+end" und
+    wurde komplett leer. Behoben durch `updateHintColumn()` als einzigen Eingang.
+
+  - **Doppelte Relativschwelle** (`a7d1c0e`): `applyBurstDeltaFilter` prüfte die
+    Relativschwelle ein zweites Mal, die der Detektor bereits hartcodiert
+    (20 dB) enthielt — ein Filter kann nur abweisen, also war jeder Wert < 20
+    wirkungslos. Schwelle seither Parameter im Detektor, der Nachfilter entfiel.
+
+  - **Burst-Darstellung im Preview-Dialog dreifach offen codiert**
+    (`80a8460f`/`7310407d`): die Beschriftung des Shift-Knopfs stand an drei
+    Stellen, sein Icon dagegen nur im Konstruktor — ein Cut-**In**-Burst zeigte
+    deshalb „1 Frame" neben einem **Links**-Pfeil. Ebenso stand derselbe
+    Stylesheet-String dreimal, plus ein Farb-Reset, der nur eine frühere grüne
+    Meldung rückgängig machte. Seither besitzt `configureBurstShiftButton(isCutOut)`
+    Beschriftung, Icon und Tooltip.
+
+  - **Final-Warndialog doppelt** (`27f8f29`): audio-only-Pfad und Normalpfad
+    waren nahezu identisch; beide seither in `confirmBurstWarnings()`
+    konsolidiert, mit GUI/headless-Verzweigung über `mNonInteractive`.
+
+  - **Tote Felder `AcmodInfo::cutInChangeTime`/`cutOutChangeTime`** (2026-07-12,
+    `f4d4e66`): nie berechnet, nirgends gelesen — auf User-Entscheid ersatzlos
+    entfernt, denn für den Anwendungsfall zählt nur, ob am Schnittpunkt ein
+    Burst liegt, nicht wo der Formatwechsel ist. Falls die Angabe „Distanz des
+    Formatwechsels zur Schnittgrenze" je gewünscht wird: über die
+    `TTAudioHeaderList` ohne File-I/O berechenbar (das war die ursprüngliche
+    Idee hinter den Feldern).
+
 - **Manual audio delay/offset per track** → **DONE** (v0.66.0)
 
 - **Schnittliste "Audio-Versatz" Spalte überarbeiten** → **DONE** (v0.66.0)
@@ -1666,7 +1711,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     (`73acdf0`), die verwaiste statische `histogramDifference`-Kopie in
     `ttmpeg2window2.cpp` (`17b2ca99`, v0.75.0) und die toten
     `AcmodInfo::cutInChangeTime`/`cutOutChangeTime` (`f4d4e66`; Umsetzungsweg
-    in `docs/code-map/burst-detection.md` konserviert). **Offen geblieben** ist
+    oben unter „Burst-Erkennung: behobene Defekte“). **Offen geblieben** ist
     allein die doppelte Mehrheits-acmod-Logik — steht in `TODO.md`.
 
 - **Security Audit Findings beheben** → **25/25 FIXED** (2026-03-28, commits aea1809 + 66eacb2)

@@ -1,5 +1,5 @@
 ---
-base_commit: 101909927833d2f23945c45809e780543c52ace0
+base_commit: 7068942c9294e96ea6bcfa8c18bfb69a523449ff
 last_verified: 2026-08-19
 sources:
   - data/ttavdata.cpp
@@ -94,18 +94,18 @@ flowchart TD
 
 | von → nach | Daten / Reihenfolge / Invariante |
 |---|---|
-| `INFO → EXTRA` | H.264/H.265: `.info`-Felder `es_total_aus` + `es_doubled_pts_aus` → `mExtraFrameIndices`, über den gemeinsamen Helfer `loadExtraFrameIndices(target, esInfo, vStream)` (no-op, falls `target` schon gefüllt). **Der Altschlüssel `es_extra_frames` wird seit `ea08e20f` bewusst NICHT mehr gelesen** — seine Nummerierung war mehrdeutig. Die Kandidaten sind **roh-AU-nummeriert** (ein AU je PES-Paket, PAFF-Felder getrennt) und werden über die raw→merged-Karte in den Anzeigeraum übersetzt (siehe `frame-order.md`); Vorbedingung ist `es_total_aus == rawAuCount()`, sonst werden sie verworfen und gewarnt. Kollabierte zweite Felder und Positionen ohne Anzeigeplatz fallen dabei heraus, nur echte Defekte bleiben übrig. Für MPEG-2 nur Fallback, wenn der Parser keine Feldpaare liefert. Aufsteigend sortiert. Geladen **ausschließlich in `onOpenVideoFinished`** (nicht mehr im synchronen `openAVStreams` — der Parser-Index ist dort noch leer, siehe `fc2a573`) und erneut im Cut-Pfad (`onDoCut`), falls leer. |
-| `MP2X → EXTRA` | Für MPEG-2 hat seit `b69dfcf` der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor den `.info`-Kandidaten (Roh-AU-Raum, PTS-Heuristik) — Prioritätsumkehr ggü. vorher. **Die beiden Räume fallen bei MPEG-2 zusammen** (gemessen 2026-07-26 an Comedy Central SD576i25, 1,29 GB TS: `ttcut-pts-analyze`s `doubled_pts_aus` und `extraIndices()` sind elementweise identisch — 150 Positionen, 444…74288). Der Vorrang ist also eine **Verlässlichkeits**-, keine Raum-Entscheidung: der Bitstream-Parser liest die Feldbild-Struktur direkt, die `.info`-Kandidaten stammen aus einer PTS-Heuristik. Bei H.264-PAFF fallen die Räume dagegen auseinander (jedes Halbbild eine eigene AU) — dort greift die raw→merged-Übersetzung. `loadMpeg2FieldExtras` wurde entfernt; die MPEG-2-Parser-Bevorzugung sitzt jetzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
+| `INFO → EXTRA` | H.264/H.265: `.info`-Felder `es_total_aus` + `es_doubled_pts_aus` → `mExtraFrameIndices`, über den gemeinsamen Helfer `loadExtraFrameIndices(target, esInfo, vStream)` (no-op, falls `target` schon gefüllt). **Der Altschlüssel `es_extra_frames` wird bewusst NICHT gelesen** — seine Nummerierung war mehrdeutig. Die Kandidaten sind **roh-AU-nummeriert** (ein AU je PES-Paket, PAFF-Felder getrennt) und werden über die raw→merged-Karte in den Anzeigeraum übersetzt (siehe `frame-order.md`); Vorbedingung ist `es_total_aus == rawAuCount()`, sonst werden sie verworfen und gewarnt. Kollabierte zweite Felder und Positionen ohne Anzeigeplatz fallen dabei heraus, nur echte Defekte bleiben übrig. Für MPEG-2 nur Fallback, wenn der Parser keine Feldpaare liefert. Aufsteigend sortiert. Geladen **ausschließlich in `onOpenVideoFinished`** (nicht mehr im synchronen `openAVStreams` — der Parser-Index ist dort noch leer, siehe `fc2a573`) und erneut im Cut-Pfad (`onDoCut`), falls leer. |
+| `MP2X → EXTRA` | Für MPEG-2 hat der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor den `.info`-Kandidaten (Roh-AU-Raum, PTS-Heuristik). **Die beiden Räume fallen bei MPEG-2 zusammen** (gemessen 2026-07-26 an Comedy Central SD576i25, 1,29 GB TS: `ttcut-pts-analyze`s `doubled_pts_aus` und `extraIndices()` sind elementweise identisch — 150 Positionen, 444…74288). Der Vorrang ist also eine **Verlässlichkeits**-, keine Raum-Entscheidung: der Bitstream-Parser liest die Feldbild-Struktur direkt, die `.info`-Kandidaten stammen aus einer PTS-Heuristik. Bei H.264-PAFF fallen die Räume dagegen auseinander (jedes Halbbild eine eigene AU) — dort greift die raw→merged-Übersetzung. Die MPEG-2-Parser-Bevorzugung sitzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` zählt per Binärsuche die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
 | `PROD → VKL` | Alle Final-Cut-Produzenten bauen die (start,end)-Sekundenliste **einheitlich** über `buildVideoKeepList`, ohne Delay. `TTAVData::onDoCut` (MPEG-2) baut `VKL` und ruft `cutAudioTracks` im selben Funktionskörper, synchron im GUI-Thread, noch bevor der Pool für die Video-Task startet. `TTAVData::doH264Cut`/`doAudioOnlyCut` bauen `VKL` ebenfalls im GUI-Thread, reichen sie aber nur noch als Wertkopie in `TTH26xCutParams`/`TTAudioOnlyCutParams` weiter — der eigentliche `cutAudioTracks`-Aufruf sitzt in `TTH26xCutTask::doCut` (`data/tth26xcuttask.cpp`) bzw. `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`), beide auf einem Pool-Worker-Thread. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview::regenerateSmartCutPreviewClip` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). `TTCutPreviewTask`s MPEG-2-Segment-Zweig und `TTCutPreview::regenerateMpeg2PreviewClip` nutzen dagegen `buildVideoKeepList` (extra-korrigiert), unverändert seit `base_commit`. |
-| `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention seit v0.81.0: positiv = Spur spielt später, Quellfenster rückt früher; davor invers). Pro Tonspur eigener Wert. |
+| `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention: positiv = Spur spielt später, Quellfenster rückt früher). Pro Tonspur eigener Wert. |
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer: MP2@48k = 24 ms, AC3@48k = 32 ms). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
 | `PLAN → DRIFT` | Kumulierter A/V-Versatz in ms nach jedem Segment (Audiolänge − Videolänge, Summe aller vorherigen). Im eingeschwungenen Zustand ±½ Audioframe. |
 | `KEEP → CUT` | Rasteralignierte (start,end). `cutAudioStream` behält nur Frames, die **komplett** ins Segment passen (`pktTime + frameDur > endTime` → stop) → verliert ≤1 Frame je Segmentende; genau das kompensiert `planAudioCut` per `numFrames`. `cutAudioStream` hat zwei neue optionale Parameter, beide von `cutAudioTracks` durchgereicht: `progressCb(int percent)` (0..100, aus geschriebener Sekundenmenge / `totalKeepSec`, nur bei Wertänderung, garantiert 100 am Ende außer bei Abbruch) und `shouldAbort()` (im Paket-Lesezyklus jedes Segments gepollt; bei `true` wird `mLastError = "aborted by user"` gesetzt, kein `setError()`-Log auf Warn-Ebene, Funktion räumt regulär auf und liefert `false`). Ein Abbruch ist damit von einem echten Fehler nur über die Textkonstante unterscheidbar (`TTFFmpegWrapper::lastError()`). |
 | `ACMOD → CUT` | Ziel-`acmod` pro Segment (nur AC3, aus `analyzeAcmod` über die geplanten Fenster). Frames mit abweichendem `acmod` werden dekodiert → umkanaliert (`swr`) → neu kodiert; sonst Stream-Copy. |
-| `ACMOD → REPAIR` / `REPAIR → CUT` | `cutAudioTracks` baut die Tabelle **nach** `computeTargetAcmods`, pro Spur und AC3 only: je aktiviertem `TTAudioRepairItem` (`isEnabled()`, `trackIndex() == idx`) ein Aufruf `TTAudioRepair::buildRepairTable(stream->filePath(), item, targetAcmod, &err)`, gemergt in eine `FrameTable`. `targetAcmod` ist der Ziel-acmod **desjenigen Keep-Segments**, in dem der komplette Item-Bereich liegt — das Item muss vollständig in genau einem `plan.keepList`-Fenster liegen. In `cutAudioStream` sitzt der Lookup **vor** der acmod-Prüfung im Paket-Loop: Frame-Nr. = Paketzeit aufs 32-ms-Raster gerundet → `repairTable->constFind(frameNo)` → Treffer schreibt die Ersatzbytes mit dem laufenden PTS-Offset und `continue`t, ohne den acmod-Reencode-Zweig je zu erreichen. Kein Treffer fällt in die normale Stream-Copy/Reencode-Logik. **Fehlerpfad = Spur-Abbruch, nicht Gesamtabbruch:** `buildRepairTable`-Fehler (Encoder fehlt, Decode-Fehler, Quell-acmod wechselt innerhalb des Item-Bereichs) setzt `repairFailed`; die Spur wird **vor** `cutAudioStream` übersprungen (`onCut(idx, outFile, lang, false); continue`) — dieselbe Teilfehlschlag-Meldung wie ein normaler Spurfehler, kein Byte dieser Spur wird geschrieben. **Ein Item-Bereich, der eine Segmentgrenze überspannt oder nicht vollständig in einem Fenster liegt** (`segIdx < 0` trotz `touchesAnyWindow`), zählt ebenso als `repairFailed` (Meldung „repair range spans a cut-segment boundary"); ein Item, dessen Bereich in **keinem** Fenster liegt (weggeschnitten), wird still übersprungen — `cutAudioStream` hätte diese Frames ohnehin nie geschrieben. Ein OOM bei der Ersatzpaket-Allokation fällt auf das unreparierte Originalpaket zurück (geloggte Warnung), statt eine Lücke zu schreiben. **Ergänzt 2026-08-20 (Final-Review):** ein durch die Lade-Validierung DEAKTIVIERTES Item (`isEnabled() == false`) wird weiterhin übersprungen, aber mit einer Warnzeile pro Item (vorher wortlos); und jeder Spur-Fehlschlag legt seinen Grund in `TTAVData::audioCutFailureReasons()` ab, aus der die Teilfehlschlag-Meldung der drei Schnittpfade (MPEG-2 `onDoCut`, `TTH26xCutTask`, `TTAudioOnlyCutTask`) ihren Text zieht — die handlungsanweisende Segmentgrenzen-Meldung stand vorher nur im Log. |
+| `ACMOD → REPAIR` / `REPAIR → CUT` | `cutAudioTracks` baut die Tabelle **nach** `computeTargetAcmods`, pro Spur und AC3 only: je aktiviertem `TTAudioRepairItem` (`isEnabled()`, `trackIndex() == idx`) ein Aufruf `TTAudioRepair::buildRepairTable(stream->filePath(), item, targetAcmod, &err)`, gemergt in eine `FrameTable`. `targetAcmod` ist der Ziel-acmod **desjenigen Keep-Segments**, in dem der komplette Item-Bereich liegt — das Item muss vollständig in genau einem `plan.keepList`-Fenster liegen. In `cutAudioStream` sitzt der Lookup **vor** der acmod-Prüfung im Paket-Loop: Frame-Nr. = Paketzeit aufs 32-ms-Raster gerundet → `repairTable->constFind(frameNo)` → Treffer schreibt die Ersatzbytes mit dem laufenden PTS-Offset und `continue`t, ohne den acmod-Reencode-Zweig je zu erreichen. Kein Treffer fällt in die normale Stream-Copy/Reencode-Logik. **Fehlerpfad = Spur-Abbruch, nicht Gesamtabbruch:** `buildRepairTable`-Fehler (Encoder fehlt, Decode-Fehler, Quell-acmod wechselt innerhalb des Item-Bereichs) setzt `repairFailed`; die Spur wird **vor** `cutAudioStream` übersprungen (`onCut(idx, outFile, lang, false); continue`) — dieselbe Teilfehlschlag-Meldung wie ein normaler Spurfehler, kein Byte dieser Spur wird geschrieben. **Ein Item-Bereich, der eine Segmentgrenze überspannt oder nicht vollständig in einem Fenster liegt** (`segIdx < 0` trotz `touchesAnyWindow`), zählt ebenso als `repairFailed` (Meldung „repair range spans a cut-segment boundary"); ein Item, dessen Bereich in **keinem** Fenster liegt (weggeschnitten), wird still übersprungen — `cutAudioStream` hätte diese Frames ohnehin nie geschrieben. Ein OOM bei der Ersatzpaket-Allokation fällt auf das unreparierte Originalpaket zurück (geloggte Warnung), statt eine Lücke zu schreiben. **Ergänzt 2026-08-20 (Final-Review):** ein durch die Lade-Validierung DEAKTIVIERTES Item (`isEnabled() == false`) wird weiterhin übersprungen, aber mit einer Warnzeile pro Item; und jeder Spur-Fehlschlag legt seinen Grund in `TTAVData::audioCutFailureReasons()` ab, aus der die Teilfehlschlag-Meldung der drei Schnittpfade (MPEG-2 `onDoCut`, `TTH26xCutTask`, `TTAudioOnlyCutTask`) ihren Text zieht — die handlungsanweisende Segmentgrenzen-Meldung erscheint in der Oberfläche, nicht nur im Log. |
 | `CUT → OUT` | Einzeldurchlauf über alle Segmente. Fortlaufender PTS-Versatz (`ptsOffset = nextOutputPts − pkt->pts` je Segmentanfang) macht die Ausgabe lückenlos (entfernt die Zwischensegment-Lücke). Ausgabeformat aus Dateiendung. |
 | `DRIFT → COL4` | Drift-ms pro Schnitt → Cut-Listen-Spalte 4 (`TTCutTreeView::onAudioDriftUpdated`, setzt Spalte 4). **Zwei** Signale speisen denselben Slot: `audioDriftCalculated` (Vorschau, `TTCutPreviewTask`) und `cutAudioDriftCalculated` (Final-Cut, `TTAVData`). Nur Track 0. |
 
@@ -120,12 +120,12 @@ flowchart TD
   `numFrames`-Wahl in `planAudioCut` ist genau darauf ausgelegt.
 - **`countExtraFramesBefore`** setzt `mExtraFrameIndices` aufsteigend sortiert voraus
   (Binärsuche).
-- **`cutAudioTracks`** prüft `trackIndices` seit `1d5b956` gegen `avItem->audioCount()`,
+- **`cutAudioTracks`** prüft `trackIndices` gegen `avItem->audioCount()`,
   bevor es `audioStreamAt`/`audioListItemAt` aufruft (beide asserten bei einem
   Index außerhalb des Bereichs). Ein außerhalb liegender Index wird geloggt und
   übersprungen statt die App abstürzen zu lassen — relevant, weil `cutAudioTracks`
   public ist und Aufrufer veraltete Indizes reichen könnten.
-- **`outPath` ist seit `6026f0ab` eine reine Pfadfunktion.** Vorher löschten
+- **`outPath` ist eine reine Pfadfunktion.** Frühere Fassungen löschten
   einzelne Aufrufer-Lambdas eine vorhandene Vorgänger-Ausgabe und meldeten
   Fortschritt aus dem Pfad-Lambda heraus. Beides ist jetzt in `cutAudioTracks`
   zentralisiert: die Stale-Output-Löschung läuft für alle Aufrufer gleich (mit
@@ -140,8 +140,7 @@ flowchart TD
 - **MPEG-2-Endschnitt cuttet Audio+Untertitel VOR der Video-Pool-Task.**
   `TTAVData::onDoCut` (MPEG-2-Zweig) ruft `cutAudioTracks` und danach
   `TTAVData::cutSubtitleTracks` synchron im GUI-Thread auf, **bevor**
-  `mpThreadTaskPool->start(cutVideoTask)` läuft — vorher lief das nach der
-  Video-Task. Der Pool hat während dieser Phase noch nichts zu canceln;
+  `mpThreadTaskPool->start(cutVideoTask)` läuft. Der Pool hat während dieser Phase noch nichts zu canceln;
   `onUserAbortRequest()` setzt stattdessen `mSyncPhaseAbort`
   (`std::atomic<bool>`), das die `shouldAbort`-Prädikate von `cutAudioTracks`
   und die Prüfung direkt nach dem `cutSubtitleTracks`-Aufruf pollen. Ein
@@ -149,14 +148,12 @@ flowchart TD
   `finishCutOperation(CutOutcome::Cancelled, ...)`, ohne dass Pool-Start,
   `onCutFinished` oder `onCutAborted` je erreicht werden. `doH264Cut`
   (`TTH26xCutTask::doCut`) und `doAudioOnlyCut` (`TTAudioOnlyCutTask::
-  runAudioCut`) hatten diese Reihenfolge schon vorher (Audio+Untertitel vor
-  Mux, als Teil derselben Pool-Task) — nur der MPEG-2-Zweig hat seine
-  Reihenfolge geändert.
+  runAudioCut`) haben dieselbe Reihenfolge (Audio+Untertitel vor Mux,
+    als Teil derselben Pool-Task).
 - **`cutAudioTracks` hat jetzt einen Untertitel-Zwilling: `TTAVData::
   cutSubtitleTracks`** (All-Tracks- und Track-Index-Überladung, gleiches
-  Callback-Schema `outPath`/`onCut`). Er ersetzt die frühere
-  `TTCutSubtitleTask`-Klasse (entfernt) und teilt sich **dieselbe** `VKL`
-  mit `cutAudioTracks`. Seit v0.81.0 wendet er den Per-Track-Delay an
+  Callback-Schema `outPath`/`onCut`). Er teilt sich **dieselbe** `VKL`
+  mit `cutAudioTracks`. Er wendet den Per-Track-Delay an
   (`TTSubtitleItem::getDelayMs`, mkvmerge-Konvention wie beim Audio):
   das Quellfenster je Segment wird um den Delay nach **früher** verschoben
   (`startMs/endMs − delayMs`); der bestehende `offsett`-Anker in
@@ -203,7 +200,7 @@ flowchart TD
   → −10,9 s. Kein Fehler: Schnitt und Burst-Prüfung nutzen dieselbe Formel, sind
   also einig. Ein Konsument, der die Korrektur vergäße, läge Sekunden daneben.
 - **Die Reparaturbilanz des Demuxers erreicht diese Kette NICHT.** `TTESInfo`
-  parst seit `7c60cfba` pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
+  parst pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
   `audio_N_removed_ms` (entferntes Audio zur A/V-Korrektur) nach
   `TTESAudioTrack::silenceMs`/`removedMs`, abrufbar über `audioSilenceMs(track)`
   / `audioRemovedMs(track)`. **In der App ruft diese Getter niemand auf** (Stand
@@ -231,7 +228,7 @@ flowchart TD
   `mExtraFrameIndices`. Nicht verwechseln.
 - **Delay ist pro Track, Drift-Anzeige nur Track 0.** Bei unterschiedlichen
   Per-Track-Delays zeigt Spalte 4 nur die erste Spur. Wer Track 0 ist,
-  bestimmt seit `b3d97c88` allein die initiale Ladesortierung (Projekt-Load:
+  bestimmt allein die initiale Ladesortierung (Projekt-Load:
   gespeicherte `<Order>`); danach ist die Reihenfolge user-kontrolliert —
   eine manuelle Umsortierung ändert damit auch die Drift-Anzeige-Spur.
 
@@ -246,7 +243,7 @@ flowchart TD
   `doAudioOnlyCut` (Stage 1), der `TTCutPreviewTask`-Vollcut, die `TTCutPreview`-GUI-
   Vorschau und die Drift-only-Stelle — alle über `buildVideoKeepList`. `doH264Cut`
   baute die Keep-List anfangs noch mit eigenem `(index−extra)/fps`-Code (die 6. offene
-  Kopie dieser Umrechnung); seit `1d5b956` (Review-Fix auf dem Konsolidierungsbranch)
+  Kopie dieser Umrechnung);
   ruft auch sie `buildVideoKeepList` direkt auf, kein Sonderfall mehr. Die Producer
   liefern nur noch Keep-List-Quelle, `trackIndices` und Ausgabe-Lambdas.
   Seit `4c56d9d9` entfällt auch `trackIndices` im Regelfall: eine

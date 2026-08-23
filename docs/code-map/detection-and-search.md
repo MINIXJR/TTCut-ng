@@ -1,5 +1,5 @@
 ---
-base_commit: 101909927833d2f23945c45809e780543c52ace0
+base_commit: 7068942c9294e96ea6bcfa8c18bfb69a523449ff
 last_verified: 2026-08-20
 sources:
   - data/ttanalysislog.cpp
@@ -170,7 +170,7 @@ beibehalten.
 | `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
 | `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. Seit `37d20e13` zusätzlich über einen **optionalen** Ausgabeparameter den Grund (`TTAspectReason`: `None`, `NoBars`, `BarsTooWide`, `CentreTooDark`, `Unusable`). | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. Der Grund existiert für die Abschlussbilanz im Detailbereich, die die `NoStatement`-Proben aufschlüsselt; der Vorgabewert `nullptr` hält die zweiargumentigen Aufrufe (u. a. `refineTransition`, ~15 Prüffälle im Harness) gültig. **Zählen darf nur der Hauptlauf**: `refineTransition()` ruft `classifyBatch()` ein zweites Mal über dieselbe Gegend und übergibt bewusst keinen Gründe-Vektor, sonst wären die Proben doppelt gezählt. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
-| `PURE → ASPECT` (`TTAspectCandidate`, seit `ea4d544c`) | Zusätzlich zum bestätigten Wechsel gibt die Hysterese **verworfene** Kandidatenläufe heraus — abzuholen mit `takeDiscardedCandidate()` nach jedem `feed()`, Einzelplatz mit Löschen beim Lesen. `feed()` behält seine Signatur. | Aufgezeichnet wird nur ein Lauf, der den **bestätigten** Zustand herausgefordert hätte (`mCandidate != mConfirmed`); Schwanken innerhalb des bestätigten Zustands erzeugt nichts. `heldFrames` ist `letzte − erste Probe des Laufs`, nicht `brechende − erste` — dafür führt die Klasse `mCandidateLast` mit, das auf **allen drei** Pfaden nachgezogen wird (Grundzustand, Kandidatenwechsel, Fortsetzung). Ein Lauf, der einen Wechsel auslöst, wird nicht zusätzlich als verworfen gemeldet. Der Scan zeigt Läufe mit `heldFrames == 0` **nicht** an (Einzelausreißer des Klassifizierers, gemessen 11 von 15 auf einer 90-min-Aufnahme mit 1 s Abstand), zählt sie aber getrennt in der Bilanz. |
+| `PURE → ASPECT` (`TTAspectCandidate`) | Zusätzlich zum bestätigten Wechsel gibt die Hysterese **verworfene** Kandidatenläufe heraus — abzuholen mit `takeDiscardedCandidate()` nach jedem `feed()`, Einzelplatz mit Löschen beim Lesen. `feed()` behält seine Signatur. | Aufgezeichnet wird nur ein Lauf, der den **bestätigten** Zustand herausgefordert hätte (`mCandidate != mConfirmed`); Schwanken innerhalb des bestätigten Zustands erzeugt nichts. `heldFrames` ist `letzte − erste Probe des Laufs`, nicht `brechende − erste` — dafür führt die Klasse `mCandidateLast` mit, das auf **allen drei** Pfaden nachgezogen wird (Grundzustand, Kandidatenwechsel, Fortsetzung). Ein Lauf, der einen Wechsel auslöst, wird nicht zusätzlich als verworfen gemeldet. Der Scan zeigt Läufe mit `heldFrames == 0` **nicht** an (Einzelausreißer des Klassifizierers, gemessen 11 von 15 auf einer 90-min-Aufnahme mit 1 s Abstand), zählt sie aber getrennt in der Bilanz. |
 | `ASPECT.refineTransition` | Zweiter, engerer Durchlauf über **jeden** I-Frame zwischen der letzten Probe des alten Zustands und `firstFrame`; liefert den ersten Frame mit dem gesuchten Zustand. | Ohne den Nachlauf wäre der Marker nur auf den Stichprobenabstand genau. Der Nachlauf läuft nur über I-Frames — auf Bildgenauigkeit *zwischen* zwei I-Frames kommt er nicht. |
 | `DIR → found(pos, wasAborted)` | Ein Signal für beide Ausgänge: `pos ≥ 0` Treffer, `pos = -1` kein Treffer. Das zweite Argument trennt „nichts gefunden" von „abgebrochen". | Bei `-1` springt die GUI auf `mLastSearchStartPos` zurück, damit der Abbruch die Anzeige nicht verschiebt. |
 | `SCAN → pointsDetected` | Wird **auch bei Abbruch** ausgesendet, mit den bis dahin gefundenen Punkten. | Bewusst: Teilergebnisse sind brauchbar. Die Statuszeile des Widgets kennzeichnet den Lauf über `setAnalysisRunning(false, aborted)` als unvollständig. |
@@ -179,7 +179,7 @@ beibehalten.
 | `NODEC → MODEL` (`ANOMALY`-Anteil) | `TTAudioAnomalyScanTask` liefert `TTStreamPoint`s vom Typ `AudioAnomaly` mit **zwei** Koordinaten: `frameIndex`/`duration` (Video-Anzeigeindex, `duration` endexklusiv in Sekunden — dieselbe Konvention wie alle anderen Markertypen) **und** `audioFrameFrom()`/`audioFrameTo()` (exakter AC3-Quell-Frame-Bereich, **beide Grenzen inklusiv** — dieselbe Konvention wie `TTAudioRepairItem`). | Die Video-Koordinate ist eine verlustbehaftete Projektion (Rundung auf 40-ms-Videoraster gegen das 32-ms-Audioraster); der Reparaturdialog verwendet deshalb `audioFrameFrom/To`, nicht `frameIndex/duration`, sobald sie vorhanden sind (`hasAudioFrameRange()`). Ein aus einer älteren Projektdatei geladener `AudioAnomaly`-Marker hat `-1/-1` (unbekannt) und muss auf die Schätzung zurückfallen. |
 | `POOLQ → BAR` (`statusReport`) | Die Aufgaben dieser Familie melden `Start`/`Step`/`Finished` — `Init` sendet nur `TTAVData` auf den Schnitt-Pfaden. Der `Start`-Zweig in `onStatusReport` öffnet den Dialog. | Zwei Aufgaben ⇒ zwei `Start`. Das Kreuz des Dialogs bricht deshalb ab (`closeEvent → onBtnCancelClicked`, `7d6dad0d`): reines Verstecken hätte die zweite `Start`-Meldung wieder aufgezogen. |
 | `BAR.cancel → onAbortStreamPoints` | Nicht direkt an den Pool, sondern über die Fenstermethode, damit `mStreamPointAnalysisAborted` gesetzt wird. | Ohne dieses Flag meldet das Widget einen abgebrochenen Lauf als normal beendet. |
-| `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden seit `f8fe7dd6` beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
+| `finished` **und** `aborted` → `deleteLater` | `TTThreadTask::run()` wirft `TTAbortException`, wenn die Aufgabe schon vor dem Start abgebrochen wurde — dann kommt **nur** `aborted`, nie `finished`. | Nur `finished` zu verbinden leckt jede vor dem Start abgebrochene Aufgabe. Alle vier Aufgaben verbinden beide Signale. Bei den drei gerichteten Suchen war das Leck die kleinere Hälfte: ohne `found` bleibt auch `mpRunningSearch` gesetzt und blockiert jede weitere Suche. |
 | Marker → `onStreamPointJump(frameIndex)` | Ruft `TTCurrentFrame::onGotoFrame(frameIndex, 0)` und danach `checkCutPosition`. | **Nicht** `onVideoSliderChanged`: dessen `fastSlider()`-Weiterreichung als zweites Argument an `onGotoFrame` ist ein **Bildtyp**, kein Geschwindigkeitsschalter — `1` heißt „ab hier den nächsten I-Frame suchen". Mit eingeschaltetem FastSlider landete ein Marker bei 7045 deshalb auf 7050, und die drei Fehlermarker eines Defekts (7045, 7048, 7048) fielen auf dasselbe Bild (`ad536d7c`). Seit `ba393cb6` ruft `onVideoSliderChanged` `onGotoFrame` nicht mehr direkt, sondern merkt nur die Position und entprellt über einen 50-ms-Timer (`onSliderDecodeTimer`); erst der greift `fastSlider()` wie beschrieben ab — bei gehaltenem Schieber sogar über einen dritten Pfad, `TTCurrentFrame::onGotoFramePreview(pos)`, ohne Bildtyp-Argument. Marker-Sprünge sind davon nicht betroffen; Details der Entprellung in `frame-order.md`. |
 | `MODEL → onContextMenu` (`AudioAnomaly`-Zweig) | Kein Teil des Erkennungs-Datenflusses oben, sondern ein GUI-Thread-Konsument der fertigen Markerliste: `TTStreamPointWidget::onContextMenu` bietet bei einem `AudioAnomaly`-Marker (nur wenn eine AC3-Spur existiert) „Repair…"/„Edit repair…"/„Remove repair" an, öffnet `TTAudioRepairDialog` und schreibt/löscht dabei `TTAudioRepairItem`-Einträge am `TTAVItem`; liest/schreibt den Markertext über `TTStreamPointModel::pointAt()`/`setDescriptionAt()`. | Bewusst außerhalb dieses Diagramms belassen (Scope = Erkennung/Suche, nicht Reparatur) — die Reparatur-Pipeline selbst (`ACMOD → REPAIR → CUT`) ist in `audio-cut-timing.md` kartiert. Repair-vs-Scan-Track-Konsistenz: beide Seiten ermitteln die Spur über `TTAVItem::firstAc3TrackIndex()`, kein zweiter Auswahlmechanismus. |
 
@@ -256,8 +256,7 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   5452 Proben, die wenigen wichtigen Zeilen darin ertrunken. Seit `aab25003`
   ist der Text konstant (`"Checking aspect format..."`), der Zähler wandert
   allein in den Zahlwert, den Balken und Prozentanzeige ohnehin schon zeigen.
-  Betrifft nur `TTAspectScanTask` — Video- und Audio-Worker meldeten schon
-  vorher konstanten Text.
+  Betrifft nur `TTAspectScanTask`; Video- und Audio-Worker melden konstanten Text.
 - **Der Bildformat-Scan hat keine eigene Bilanzzeile mehr**: seine Bilanz *ist*
   die `Finished`-Meldung (`417c3aad`). Vorher standen beide da und sagten
   dasselbe, und auf dem Abbruchpfad erschien die Bilanz im Bereich **nach** dem
@@ -275,9 +274,7 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 - **Blind bleibt, wer gar nicht erst gebaut wird — inzwischen behoben.**
   `onAnalyzeStreamPoints()` legt einen Worker nur an, wenn seine
   Voraussetzung erfüllt ist; ohne Tonspur, ohne Header-Liste (also bei
-  H.264/H.265 für die Sequenzkopf-Analyse) oder mit leerer Indexliste schwieg
-  der Bereich früher zu dieser Analyse vollständig — eine still übersprungene
-  Analyse las sich wie „nichts gefunden". Seit `3b24be6a` sammelt
+  H.264/H.265 für die Sequenzkopf-Analyse) oder mit leerer Indexliste sammelt
   `mSkippedAnalysisNotes` (`QStringList`, `TTCutMainWindow`) eine Zeile pro
   übersprungener, aber eingeschalteter Analyse. Läuft mindestens ein Worker,
   gehen die Notizen ins Log **und** über `mPendingSkipNotesForDialog` in den
@@ -326,7 +323,7 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   `QPointer`-Momentaufnahme, weil `TTThreadTask::abort()` selbst
   `processEvents()` ruft.
 - **Ein Abbruch nach dem Ende wird jetzt ignoriert statt doppelt verarbeitet.**
-  `TTThreadTask::abort()` unterschied bis `0af72ab1` nur zwei Flags
+  `TTThreadTask::abort()` unterscheidet mehr als zwei Flags
   (`!mIsRunning && !mIsAborted`) und konnte „noch nicht gestartet" (Aufgabe
   liegt noch in der Warteschlange, `aborted()` ist hier richtig) nicht von
   „schon fertig" unterscheiden: `run()` hat `mIsRunning = false` gesetzt,
@@ -349,7 +346,7 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   freigegeben (GUI-Thread über `deleteLater`). Ein Aufräumen im Arbeitsthread
   läuft ohne Happens-before-Kante gegen den Destruktor und kann doppelt
   freigeben.
-- **`run()` räumt vor dem Endsignal auf** — seit `f8fe7dd6`, vorher umgekehrt.
+- **`run()` räumt vor dem Endsignal auf.**
   Wer `finished`/`aborted` an `deleteLater` hängt (jeder Nutzer dieser Familie),
   gab dem GUI-Thread damit die Erlaubnis, die Aufgabe zu zerstören, während der
   Arbeitsthread noch den virtuellen `cleanUp()`-Aufruf über den vptr absetzte.
