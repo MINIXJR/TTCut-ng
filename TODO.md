@@ -601,11 +601,21 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Belegt an `SDTV/MPEG2_SD576i25_16-9_multifile-2part-ptswrap_MP2-deu+eng_Comedy-Central`
   im Testkorpus (Details in dessen `BESCHREIBUNG.md`): letzte PTS von Segment 0
   bei 95386,744 s, Umlauf bei 95443,718 s, erste PTS von Segment 1 bei
-  201,426 s. Herausgerechnet wären das 258,4 s verschluckte Sendezeit. Der
-  A/V-relevante Anteil ist davon **nicht** betroffen —
-  `detect_segment_boundaries` vergleicht Dauern je Segment statt absoluter
-  Zeitstempel und meldet die Grenze korrekt mit 312 ms Versatz; die 258 s
-  verlieren Bild und Ton gleichermaßen.
+  201,426 s. Bild und Ton verlieren die 258 s gleichermassen, der Sync leidet
+  also nicht — nur die Meldung fehlt.
+
+  **Nachgemessen 2026-08-24, nach dem Störzonen-Umbau.** Herausgerechnet sind es
+  258,480 s Video- und 258,744 s Audio-Lücke, Bilanz +264 ms. Der frühere Grund,
+  es nicht anzufassen (die Grenze würde doppelt korrigiert, weil
+  `detect_segment_boundaries` dort ohnehin eine Zeile schrieb), ist mit dieser
+  Funktion entfallen. An ihre Stelle tritt ein anderer, grösserer:
+  `build_disturbance_zones()` sortiert **alle** Fenster global nach Startzeit.
+  Eine wrap-korrigierte Nahtlücke läge bei 95386…95645, jede Lücke innerhalb des
+  Folgesegments bei 201…3140 — die Naht sortierte ans Ende, und der Offset würde
+  in falscher Reihenfolge akkumuliert. Genau die Fehlerklasse, die der Umbau
+  beseitigt hat. Eine Behandlung muss deshalb **alle** Segment-PTS auf eine
+  durchgehende Achse normalisieren, nicht nur die Splice-Differenz. Deutlich
+  mehr Aufwand als „ein Vorzeichen richtigstellen".
 
   **Falle vor dem Beheben:** würde die Splice-Lücke durch eine
   Umlaufbehandlung sichtbar, käme sie über `detect_audio_gaps_multifile` in
