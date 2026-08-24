@@ -2,6 +2,44 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**Disturbance-zone model for the demux gap repair**
+
+Touches `tools/ttcut-demux` only.
+
+### Fixed
+- **A signal-loss segment boundary was counted twice.** A broadcast outage
+  spanning a VDR segment split produced one video-gap row and one audio-gap
+  row for the same real-world event; both fed the same repair offset, so the
+  outage's duration was subtracted twice from the position where later
+  repairs landed. Measured on a real recording ("03x15"): every repair after
+  the splice landed 26.4 s too early, and the audio ended up a constant
+  808 ms behind the picture from the splice to the end of an 82-minute
+  recording — invisible in `duration_drift_ms` because the end-of-file
+  padding normalizes both tracks' total length regardless of where the drift
+  actually sits.
+- **Fix**: gap rows across all tracks are merged into disturbance zones
+  (`build_disturbance_zones`) before repair; each zone balances its own
+  audio-vs-video loss once (`build_zone_edits`), so a mid-recording outage
+  detected on both the video and the audio track shifts the repair position
+  by that outage's duration exactly once.
+
+### Added
+- **`es_lost_ms`** in the `.info` file: picture time missing from the output
+  elementary stream relative to its own PTS span, i.e. loss visible *within*
+  a continuous run of recorded material (VDR segment splices are a separate
+  kind of gap and are not included). Above 1000 ms it is also logged as
+  `Material loss: N s missing at ... - picture jumps there, audio stays in
+  sync`.
+- **`tools/diag/gate_demux_zonesync.sh`**: acceptance gate for the zone
+  model, checking zone merging, balance math and the repair threshold
+  against real measured gap data.
+- **`tools/diag/measure_es_offset.py`**: finds a byte pattern from a
+  reference audio ES at several points in a test audio ES and reports the
+  time delta at each — a mid-stream sync check that end-of-file drift
+  numbers cannot catch (see above).
+
 ## v0.82.1 (2026-08-23)
 
 **Gap repair rebuilt in the demux tool**

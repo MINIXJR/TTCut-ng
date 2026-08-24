@@ -223,6 +223,10 @@ step "Schritt 1: Demuxen mit ttcut-demux..."
 
 # Aufnahmen, die ttcut-demux als schwer beschädigt gemeldet hat.
 DAMAGED_LIST=()
+# Aufnahmen mit Materialverlust unterhalb der Schwelle für DAMAGED_LIST
+# (Bild springt an der Störstelle, Ton bleibt synchron) — eigene Liste,
+# da anderer Befund als "schwer beschädigt".
+LOSS_LIST=()
 DEMUX_COUNT=0
 DEMUX_ERRORS=0
 
@@ -296,6 +300,10 @@ for ts_datei in "${TS_FILES[@]}"; do
         DMG_PCT=$(sed -E 's/.*RECORDING: ([0-9.]+)% .*/\1/' <<<"$DAMAGE_LINE")
         DMG_GPM=$(sed -E 's|.*, ([0-9.]+) audio gaps/min.*|\1|' <<<"$DAMAGE_LINE")
         DAMAGED_LIST+=("$show_name — ${DMG_PCT/./,} % Bilder fehlen, ${DMG_GPM/./,} Tonlücken/min je Spur")
+    fi
+
+    if grep -q "^\[WARN\] Material loss:" "$LOG_FILE" 2>/dev/null; then
+        LOSS_LIST+=("$show_name: $(grep -m1 -oP '^\[WARN\] Material loss: \K[^-]+' "$LOG_FILE" | sed 's/ *$//')")
     fi
     echo ""
     CURRENT_STEP=$((CURRENT_STEP + 1))
@@ -375,6 +383,18 @@ Das Ergebnis ist voraussichtlich unbrauchbar.
 
 "
 fi
+if [ ${#LOSS_LIST[@]} -gt 0 ]; then
+    FINAL_TEXT="${FINAL_TEXT}${#LOSS_LIST[@]} Aufnahme(n) mit Materialverlust:"
+    for entry in "${LOSS_LIST[@]}"; do
+        FINAL_TEXT="$FINAL_TEXT
+   $entry"
+    done
+    FINAL_TEXT="$FINAL_TEXT
+
+Das Bild springt an diesen Stellen. Der Ton bleibt synchron.
+
+"
+fi
 FINAL_TEXT="${FINAL_TEXT}TTCut starten?"
 
 if command -v kdialog &>/dev/null; then
@@ -387,7 +407,7 @@ if command -v kdialog &>/dev/null; then
         fi
     fi
 else
-    [ ${#DAMAGED_LIST[@]} -gt 0 ] && { echo ""; echo "$FINAL_TEXT"; }
+    { [ ${#DAMAGED_LIST[@]} -gt 0 ] || [ ${#LOSS_LIST[@]} -gt 0 ]; } && { echo ""; echo "$FINAL_TEXT"; }
     read -p "TTCut starten? [j/N] " antwort
     if [[ "$antwort" =~ ^[jJyY] ]]; then
         "$TTCUT" &
