@@ -589,6 +589,44 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   miterledigt wurde, ohne dass es jemand nachgetragen hat. Beim nächsten
   Release den Vollabgleich nachholen statt ihn erneut einzugrenzen.
 
+- **Restversatz an Störzonen: welche Gaplänge ist die richtige?**
+  (2026-08-24, offen, niedrige Priorität — Größenordnung einer halben
+  Framedauer bis ~150 ms je nach Codec.)
+
+  Nach dem Störzonen-Umbau bleibt auf der Referenzaufnahme
+  `SDTV/…RTLup-Remington-Steele-03x15` ein konstanter Versatz von ~150 ms an
+  der Segmentnaht: Bild vor der Naht 1079 Frames = 43 160 ms, Ton dort
+  43 300–43 320 ms. Ursache ist, mit welcher Größe die Gaplänge gemessen wird.
+  `detect_video_gaps` löst auf **DTS** aus, gibt als Grenzen aber **PTS** aus,
+  und `build_disturbance_zones` bildet den Verlust aus der Differenz der
+  Grenzen — bei B-Frame-Reorder sind das zwei verschiedene Zahlen.
+
+  **Ein Umstellen auf die DTS-Länge wurde versucht und wieder verworfen**
+  (2026-08-24). Auf MPEG-2 ist DTS klar richtig: 1079 Pakete + 665 Frames
+  Lücke = 1744 gegen 1745 aus der PTS-Spanne, ein Frame Abweichung; mit der
+  PTS-Länge sind es vier. Der Fix senkte den Restversatz dort messbar von
+  ~150 ms auf 19–40 ms. Auf H.264 kehrt sich das aber um — gemessen an
+  `HDTV/…The-Rookie-07x12`, 133 Lücken über fünf Segmente:
+
+  | Segment | PTS-Spanne | Pakete+DTS | Pakete+PTS |
+  |---|---|---|---|
+  | 00001 | 2780,960 s | +0,280 | **+0,160** |
+  | 00002 | 16,200 s | −0,040 | **±0,000** |
+  | 00004 | 0,440 s | +0,080 | **−0,020** |
+
+  Dort ist PTS durchweg näher, und die DTS-Länge würde die Video-Lücken um
+  120 ms überschätzen — also zu viel Ton kürzen. Der Fix hätte den Fehler von
+  MPEG-2 auf H.26x verschoben statt ihn zu beseitigen.
+
+  Eine codec-abhängige Fallunterscheidung wäre messbar besser, wurde aber
+  bewusst nicht gebaut: die Ursache des Unterschieds ist unverstanden, und
+  eine Regel ohne verstandenen Grund bricht beim nächsten Codec wieder.
+  Auffällig ist, dass auf H.264 **beide** Größen systematisch überschätzen
+  (~0,2 Frames je Lücke, Segment 00001: real fehlen 559 Frames, PTS sagt 567,
+  DTS 573). Das deutet darauf hin, dass die richtige Größe eine dritte ist —
+  die tatsächlich fehlende Framezahl. Die sauber zu bestimmen wäre der
+  eigentliche Einstiegspunkt für einen neuen Anlauf.
+
 - **PTS-Umlauf macht die Lückenerkennung an dieser Stelle blind**
   (2026-08-23, offen, niedrige Priorität — Sonderfall per User-Einschätzung).
   Der 33-Bit-Zeitstempel läuft alle 2³³/90000 = 95443,718 s (26,5 h) auf 0
