@@ -253,14 +253,12 @@ detect_video_gaps() {
 # gap in the file, even though real content in between was never captured),
 # so it is reported the same way.
 #
-# This is a separate concern from detect_segment_boundaries(): that function
-# compares each segment's container-level PTS SPAN (last-first) between
-# audio and video, which does not shrink for an internal hole (the span still
-# covers the full segment even if frames are missing inside it) and is blind
-# to the size of the gap BETWEEN segments (it just sums each segment's own
-# span). It exists to catch the small, systematic audio-trim-carry drift
-# across boundaries and keeps doing that job unmodified; this function
-# instead finds actual packet-level content loss at exact positions.
+# This function finds actual packet-level content loss at exact positions.
+# An earlier, separate function additionally compared each segment's
+# container-level PTS SPAN (last-first) between audio and video to catch
+# small, systematic audio-trim-carry drift across boundaries; it was removed
+# with the disturbance-zone model (build_disturbance_zones/build_zone_edits),
+# which balances each zone once instead of accumulating per-row offsets.
 detect_video_gaps_multifile() {
     local out_file=$1 threshold_s=$2
     : > "$out_file"
@@ -289,7 +287,7 @@ detect_video_gaps_multifile() {
         # ffprobe emits the stream= row twice for a raw .ts segment (global
         # stream list + per-program stream list both match "v:0"); take the
         # first line only (same defensive pattern as START_PTS/NEW_VIDEO_PTS
-        # above, and as detect_segment_boundaries()'s existing head -1).
+        # above).
         seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
         seg_start="${seg_start%,}"
         seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
@@ -344,8 +342,8 @@ detect_audio_gaps_multifile() {
         seg_dur=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
         seg_dur="${seg_dur%,}"
         # A badly damaged segment can leave this track's own duration
-        # unprobeable ("N/A" - same root cause as detect_segment_boundaries()'s
-        # N/A fallback above: observed on the real 5-segment fixture for the
+        # unprobeable ("N/A" - ffprobe's fast container-index duration probe
+        # returning N/A: observed on the real 5-segment fixture for the
         # AC3/mis tracks in the heaviest-corrupted segment). Falling back to
         # "" here would break the prev_end chain and silently drop the splice
         # gaps on BOTH sides of this segment. Fall back to the segment's own
@@ -375,51 +373,74 @@ detect_audio_gaps_multifile() {
     sort -n -o "$out_file" "$out_file"
 }
 
-# Compute how many milliseconds of silence to insert at an audio gap to keep
-# A/V sync after the gap. The silence amount equals the amount of audio content
-# missing that the video did NOT also lose.
+# Verschmilzt Video- und Audio-Gap-Fenster zu Stoerzonen.
 #
-# Algorithm:
-#   silence_ms = max(0, audio_gap_size_ms - lost_video_seconds_in_audio_gap_range * 1000)
-#   Where lost_video_seconds = sum of (overlap of each video-gap with the audio-gap range)
+# Eine Stoerzone ist ein Fenster auf der Quell-PTS-Achse, in dem mindestens
+# einer der Stroeme Material verloren hat. Ein realer Sendeausfall trifft
+# beide Stroeme zur selben Realzeit, aber der PES-Muxer-Vorlauf des Videos
+# (0.5-1 s) verschiebt die Fenster gegeneinander - derselbe Ausfall erscheint
+# als zwei Fenster. Frueher erzeugte das zwei Zeilen, die BEIDE den
+# Positions-Offset erhoehten: ein Ausfall zaehlte doppelt (gemessen 2026-08-24
+# auf "03x15": 26.328 + 26.480 statt ~26.4 s, jede spaetere Reparatur landete
+# 26.4 s zu frueh, Ton lief 808 ms hinter dem Bild).
 #
-# Args:
-#   $1 = audio gap start (source-PTS)
-#   $2 = audio gap end   (source-PTS)
-#   $3 = video gaps file (output of detect_video_gaps)
-#   $4 = frame rate (decimal, e.g. "25" — only used for symmetry; not strictly needed here)
+# Verschmelzen ist die sichere Richtung: die Bilanz einer Zone ist die Summe
+# der Verluste je Strom, und Summen bleiben korrekt, egal wie grob gruppiert
+# wird. Zu fein gruppieren erzeugt den Defekt; zu grob kostet hoechstens einen
+# kleinen Versatz ueber die wenigen Sekunden zwischen zwei Zonen.
 #
-# Output (stdout): silence to insert in milliseconds, integer
-compute_audio_gap_silence_ms() {
-    local a_start=$1 a_end=$2 v_gaps_file=$3 _fps=$4
-    local audio_gap_ms lost_video_ms silence_ms
+# Args: $1=Video-Gaps  $2=Audio-Gaps (eine Spur)  $3=Toleranz s  $4=Ausgabe
+# Ausgabe je Zone: "zone_start zone_end video_lost_s audio_lost_s"
+build_disturbance_zones() {
+    local v_gaps=$1 a_gaps=$2 tol=$3 out=$4
+    : > "$out"
+    { [ -s "$v_gaps" ] && awk '{printf "%.6f %.6f v\n", $1, $2}' "$v_gaps"
+      [ -s "$a_gaps" ] && awk '{printf "%.6f %.6f a\n", $1, $2}' "$a_gaps"
+      true; } \
+    | sort -g -k1,1 \
+    | awk -v tol="$tol" '
+        NR==1 { zs=$1; ze=$2 }
+        NR>1 && $1 - ze > tol {
+            printf "%.6f %.6f %.6f %.6f\n", zs, ze, vl, al
+            zs=$1; ze=$2; vl=0; al=0
+        }
+        { if ($2 > ze) ze=$2
+          if ($3=="v") vl += $2-$1; else al += $2-$1 }
+        END { if (NR>0) printf "%.6f %.6f %.6f %.6f\n", zs, ze, vl, al }
+      ' > "$out"
+}
 
-    audio_gap_ms=$(awk "BEGIN {printf \"%.0f\", ($a_end - $a_start) * 1000}")
-
-    if [ ! -s "$v_gaps_file" ]; then
-        lost_video_ms=0
-    else
-        lost_video_ms=$(awk -v as="$a_start" -v ae="$a_end" '
-            {
-                v_start = $1
-                v_end   = $2
-                # Check if this video gap INTERSECTS with the audio gap range
-                # (overlap > 0 → intersects). If so, count the FULL video gap size,
-                # not just the overlap. The video stream loses (v_end - v_start) of
-                # content regardless of how it overlaps with audio gap range.
-                o_start = (v_start > as) ? v_start : as
-                o_end   = (v_end   < ae) ? v_end   : ae
-                if (o_end > o_start) lost += (v_end - v_start) * 1000
-            }
-            END { printf "%.0f", lost + 0 }
-        ' "$v_gaps_file")
-    fi
-
-    silence_ms=$(( audio_gap_ms - lost_video_ms ))
-    if [ "$silence_ms" -lt 0 ]; then
-        silence_ms=0
-    fi
-    echo "$silence_ms"
+# Rechnet Stoerzonen in Reparatur-Edits um.
+#
+# balance = audio_lost - video_lost:
+#   > 0  Ton hat mehr verloren  -> Stille einfuegen
+#   < 0  Bild hat mehr verloren -> Ton kuerzen (Sync-Regel)
+#   = 0  echter A+V-Ausfall     -> nichts zu tun, der Sync traegt sich selbst
+#
+# Der Offset acc waechst AUSSCHLIESSLICH um audio_lost. pos ist eine Position
+# im getrimmten Ton-ES, und dorthin uebersetzt nur Ton-Verlust. Video-Verluste
+# koennen den Offset nicht mehr erreichen - genau daran scheiterte das alte
+# Zeilenmodell.
+#
+# Schwelle 20 ms: identisch zur bisherigen Untergrenze der frueheren,
+# zeilenweisen Video-only-Kuerzung. Darunter rundet die Frame-Quantisierung
+# der Assembly ohnehin auf 0 Frames, und eine alleinstehende Sub-Frame-
+# Insertion hat 2026-08-17 eine Tonspur zerstoert (1-Frame-Datei, die der
+# mp3-Demuxer nicht oeffnen kann).
+#
+# Args: $1=Zonendatei  $2=erster PTS des GETRIMMTEN Ton-ES
+# Ausgabe je Edit: "pos_s balance_ms"
+build_zone_edits() {
+    local zones=$1 first_pts=$2
+    [ -s "$zones" ] || return 0
+    awk -v fp="$first_pts" -v thr=20 '
+        { zs=$1; vl=$3; al=$4
+          bal_ms = (al - vl) * 1000
+          pos = zs - fp - acc
+          if (pos < 0) pos = 0
+          if (bal_ms >= thr || bal_ms <= -thr) printf "%.6f %.0f\n", pos, bal_ms
+          acc += al }
+    ' "$zones"
 }
 
 # audiofix_ranges_to_video_frames JUNK_CSV CRC_CSV FPS
@@ -488,53 +509,6 @@ format_ranges_hms() {
             }
         }
         END { if (n) printf "%s%s\n", out, line }'
-}
-
-# Emit truncate rows for video loss the audio did NOT share.
-# For each video gap, subtract the FULL size of every intersecting audio gap;
-# a positive remainder means the audio still carries content the video lost ->
-# remove exactly that many ms (negative silence_ms row, absolute source
-# anchoring keeps per-hole rounding from accumulating).
-#
-# "Full size on intersect" (not just the geometric overlap) mirrors
-# compute_audio_gap_silence_ms() exactly, and for the same reason: one real
-# transmission outage hits video and audio at the same wall-clock time, but
-# video is muxed ahead of its PTS (PES muxer lead, typically 0.5-1s) while
-# audio is muxed close to its PTS - so the SAME outage shows up as two gap
-# windows shifted against each other that overlap only partially. Counting
-# only the overlap as "shared" charged the shifted remainder a second time:
-# the audio gap already paid for the full outage in
-# compute_audio_gap_silence_ms (silence = audio_gap - full video_gap), and
-# this function then truncated (video_gap - overlap) ON TOP -> audio ran
-# ~0.8s ahead of video after the outage (measured on the 2026-08-17 "Gerber"
-# recording; regression gate: tools/diag/gate_demux_gapsync.sh).
-# Like its mirror, this can over-count when one audio gap intersects two
-# video gaps - a structural limit of the pairwise model, accepted there too.
-# Args: $1=video gaps file  $2=audio gaps file (same track)  $3=classified out
-emit_video_only_truncations() {
-    local v_gaps=$1 a_gaps=$2 out=$3
-    [ -s "$v_gaps" ] || return 0
-    awk -v agf="$a_gaps" '
-        BEGIN {
-            na = 0
-            while ((getline line < agf) > 0) {
-                split(line, f, " "); as[na] = f[1]; ae[na] = f[2]; na++
-            }
-        }
-        {
-            vs = $1; ve = $2
-            shared = 0
-            for (i = 0; i < na; i++) {
-                os = (as[i] > vs) ? as[i] : vs
-                oe = (ae[i] < ve) ? ae[i] : ve
-                if (oe > os) shared += (ae[i] - as[i])
-            }
-            trunc_ms = (ve - vs - shared) * 1000
-            # 20ms floor also absorbs the decode-order measurement bias (see detect_video_gaps NOTE)
-            if (trunc_ms >= 20)   # unter 1 Video-Frame: ignorieren
-                printf "%.6f %.6f %.0f -%.0f\n", vs, ve, (ve-vs)*1000, trunc_ms
-        }
-    ' "$v_gaps" >> "$out"
 }
 
 # True playing time of a raw audio elementary stream, in seconds.
@@ -1030,84 +1004,6 @@ repair_audio_with_silence_inserts() {
     # Replace original
     mv "$repaired" "$audio_file"
     rm -rf "$work_dir"
-    return 0
-}
-
-# Detect audio/video duration mismatches at segment boundaries in a VDR
-# multi-file recording. For each internal segment transition, compute the
-# difference between cumulative audio duration (with first-segment trim) and
-# cumulative video duration. Emit one row per mismatched boundary in the same
-# 4-field format CLASSIFIED_FILES uses (src_start src_end gap_ms silence_ms),
-# so that the existing repair_audio_with_silence_inserts and audio_gap_frames=
-# emission paths consume the entries unmodified.
-#
-# Sign convention: silence_ms > 0 means audio shorter than video at boundary
-# (insert silence); silence_ms < 0 means audio longer than video (truncate).
-#
-# Arguments:
-#   $1 = stream specifier for audio track inside the source TS (e.g. "a:0", "1")
-#   $2 = audio_trim_sec for the first segment
-#   $3 = first_audio_pts (audio's first PTS in source coordinates)
-#   $4 = THRESHOLD_MS (mismatches below this absolute value are skipped; default 5)
-#
-# Output: rows on stdout, one per emitted boundary.
-detect_segment_boundaries() {
-    local stream_idx="$1"
-    local audio_trim_sec="$2"
-    local first_audio_pts="$3"
-    local threshold_ms="${4:-5}"
-
-    local cum_audio
-    cum_audio=$(awk "BEGIN {printf \"%.6f\", -$audio_trim_sec}")
-    local cum_video=0
-    local n=${#VDR_SEGMENTS[@]}
-    local i a_dur v_dur diff_ms src_start
-
-    for ((i = 0; i < n; i++)); do
-        local seg="${VDR_SEGMENTS[$i]}"
-        a_dur=$(ffprobe -v error -select_streams "$stream_idx" \
-            -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 \
-            "$seg" 2>/dev/null | head -1)
-        v_dur=$(ffprobe -v error -select_streams v:0 \
-            -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 \
-            "$seg" 2>/dev/null | head -1)
-        # ffprobe's fast container-index duration probe can return "N/A" for a
-        # track in a badly damaged segment (observed on a real 5-segment
-        # signal-loss recording: the AC3/mp2 track's duration was N/A in the
-        # segment with the heaviest corruption). Aborting the whole function
-        # here (as before) silently discards every later boundary too - on
-        # that recording it dropped the two biggest gaps (317s, 4.8s) from
-        # audio correction entirely. Instead, fall back to the OTHER stream's
-        # duration for the unmeasurable one (assume that segment contributed
-        # no additional drift) so the cumulative totals stay usable and later
-        # boundaries are still checked. Only bail on this segment if BOTH are
-        # unmeasurable.
-        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ && ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            echo "detect_segment_boundaries: ffprobe failed on segment $i ($seg) for both streams - skipping segment" >&2
-            continue
-        fi
-        if [[ ! "$a_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            echo "detect_segment_boundaries: audio duration unavailable on segment $i ($seg) - assuming no drift for this segment" >&2
-            a_dur="$v_dur"
-        fi
-        if [[ ! "$v_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            echo "detect_segment_boundaries: video duration unavailable on segment $i ($seg) - assuming no drift for this segment" >&2
-            v_dur="$a_dur"
-        fi
-        cum_audio=$(awk "BEGIN {printf \"%.6f\", $cum_audio + $a_dur}")
-        cum_video=$(awk "BEGIN {printf \"%.6f\", $cum_video + $v_dur}")
-
-        if [ $i -lt $((n - 1)) ]; then
-            diff_ms=$(awk "BEGIN {printf \"%.0f\", ($cum_video - $cum_audio) * 1000}")
-            local abs_diff_ms
-            abs_diff_ms=${diff_ms#-}
-            if [ "$abs_diff_ms" -gt "$threshold_ms" ]; then
-                src_start=$(awk "BEGIN {printf \"%.6f\", $first_audio_pts + $cum_audio}")
-                echo "$src_start $src_start $abs_diff_ms $diff_ms"
-                cum_audio=$(awk "BEGIN {printf \"%.6f\", $cum_audio + ($diff_ms / 1000.0)}")
-            fi
-        fi
-    done
     return 0
 }
 
@@ -2086,9 +1982,43 @@ with open('$OUTPUT_VIDEO','rb') as f:
         fi
     fi
 
-    VIDEO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * 1000}")
-    # Calculate approximate frame count from duration (for info file)
-    VIDEO_FRAME_COUNT=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
+    # Loud count-check: counted packets in the output ES vs. what the
+    # measured PTS-span duration implies. A silent hole (dropped packets
+    # that leave no PTS discontinuity signature, e.g. right after a
+    # damaged GOP) would otherwise produce a clean-looking .info; this is
+    # a second, independent signal that does not depend on gap detection.
+    COUNTED_FRAMES=$(ffprobe -v error -count_packets -select_streams v:0 \
+        -show_entries stream=nb_read_packets -of csv=p=0 "$OUTPUT_VIDEO" 2>/dev/null)
+    # ffprobe's csv writer appends a trailing comma for a raw .m2v
+    # elementary stream (verified: "stream,2964," vs. "stream,184960" for
+    # a raw .264 - reproduces even for the plain index/codec_name entries,
+    # so it's a demuxer-side csv quirk, not a frame-vs-packet count
+    # difference). Not limited to raw mpegvideo: mpegts does it too,
+    # which is why detect_video_gaps_multifile() has to strip the same
+    # comma. "2964," fails bash's [ -eq ] integer test
+    # silently (exit 2, swallowed by the 2>/dev/null), so this whole
+    # count-check was a no-op for every MPEG-2 run. Strip it before the
+    # numeric test.
+    COUNTED_FRAMES="${COUNTED_FRAMES%,}"
+
+    # Sendezeit: was die Aufnahme an Realzeit umfasst, Loecher eingeschlossen.
+    VIDEO_SPAN_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * 1000}")
+
+    # ES-Dauer: was tatsaechlich im erzeugten Video-ES steht. Referenz fuer
+    # Drift, Padding und .info - der Ton wird hierauf ausgerichtet, nicht auf
+    # die Sendezeit. Beide Groessen getrennt zu halten ist noetig, nicht
+    # kosmetisch: wuerde VIDEO_DURATION_MS einfach die Spanne ersetzen, waere
+    # EXPECTED_FRAMES == COUNTED_FRAMES und der count-check unten - der
+    # unabhaengige Melder fuer stille Loecher ohne PTS-Sprung - koennte nie
+    # mehr feuern.
+    if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
+        VIDEO_DURATION_MS=$(awk "BEGIN {printf \"%.0f\", $COUNTED_FRAMES * 1000.0 * $FRAME_RATE_DEN / $FRAME_RATE_NUM}")
+        VIDEO_FRAME_COUNT="$COUNTED_FRAMES"
+    else
+        warn "  Frame count unavailable - falling back to PTS span for the ES duration"
+        VIDEO_DURATION_MS="$VIDEO_SPAN_MS"
+        VIDEO_FRAME_COUNT=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION * $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
+    fi
 
     # Check first audio file for duration comparison
     AUDIO_DURATION_MS=0
@@ -2124,26 +2054,8 @@ with open('$OUTPUT_VIDEO','rb') as f:
         _FR_DEN="${_FR_DEN:-1}"
         FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $_FR_NUM / $_FR_DEN}")
 
-        # Loud count-check: counted packets in the output ES vs. what the
-        # measured PTS-span duration implies. A silent hole (dropped packets
-        # that leave no PTS discontinuity signature, e.g. right after a
-        # damaged GOP) would otherwise produce a clean-looking .info; this is
-        # a second, independent signal that does not depend on gap detection.
-        COUNTED_FRAMES=$(ffprobe -v error -count_packets -select_streams v:0 \
-            -show_entries stream=nb_read_packets -of csv=p=0 "$OUTPUT_VIDEO" 2>/dev/null)
-        # ffprobe's csv writer appends a trailing comma for a raw .m2v
-        # elementary stream (verified: "stream,2964," vs. "stream,184960" for
-        # a raw .264 - reproduces even for the plain index/codec_name entries,
-        # so it's a demuxer-side csv quirk, not a frame-vs-packet count
-        # difference). Not limited to raw mpegvideo: mpegts does it too,
-        # which is why detect_video_gaps_multifile() has to strip the same
-        # comma. "2964," fails bash's [ -eq ] integer test
-        # silently (exit 2, swallowed by the 2>/dev/null), so this whole
-        # count-check was a no-op for every MPEG-2 run. Strip it before the
-        # numeric test.
-        COUNTED_FRAMES="${COUNTED_FRAMES%,}"
         if [ -n "$COUNTED_FRAMES" ] && [ "$COUNTED_FRAMES" -eq "$COUNTED_FRAMES" ] 2>/dev/null; then
-            EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_DURATION_MS / 1000.0) * $FRAME_RATE_DEC}")
+            EXPECTED_FRAMES=$(awk "BEGIN {printf \"%.0f\", ($VIDEO_SPAN_MS / 1000.0) * $FRAME_RATE_DEC}")
             if [ $((EXPECTED_FRAMES - COUNTED_FRAMES)) -gt 1 ]; then
                 warn "Video ES is missing $((EXPECTED_FRAMES - COUNTED_FRAMES)) frames mid-stream (counted $COUNTED_FRAMES, PTS span implies $EXPECTED_FRAMES) - audio was adjusted, defect positions are reported below (and as markers in TTCut-ng)"
             fi
@@ -2171,8 +2083,23 @@ with open('$OUTPUT_VIDEO','rb') as f:
         CLASSIFIED_FILES=()
         HAS_ANY_SILENCE_NEEDED=false
         progress_set 34
-        AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end silence_ms"
+        AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end 0" - one per
+        # detected audio gap (see the loop over $GAP_FILE below), independent
+        # of whether the zone it falls in needed a repair edit; the 3rd
+        # field's meaning ("0") is explained there.
         declare -A TRACK_SILENCE_MS TRACK_REMOVED_MS  # per-track repair balance for .info
+        declare -A EFFECTIVE_FIRST_AUDIO_PTS_ARR  # per-track, reused by the repair loop below
+        # Zone counts for the severity verdict below. Counted as ZONES, not
+        # CLASSIFIED_FILE rows: under the zone model a zone with |balance| <
+        # the 20ms threshold in build_zone_edits() never produces a row at
+        # all (it needs no repair), so counting rows would silently drop
+        # every symmetric A+V outage from the tally - exactly the recordings
+        # the severity check exists to catch. $ZONES_FILE (all zones) and
+        # build_zone_edits' output (zones that got an edit) are both still
+        # in scope inside this loop, before the per-track temp files are
+        # cleaned up at exit; sum them here while they're available.
+        N_NO_SILENCE=0
+        N_WITH_SILENCE=0
         for i in "${!AUDIO_FILES[@]}"; do
             # Jede Spur wird einmal ganz durchlaufen; auf einer sauberen
             # Aufnahme ist das der laengste Abschnitt vor dem Ende, und ohne
@@ -2188,63 +2115,71 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
             fi
             GAP_FILES[$i]="$GAP_FILE"
-            : > "$CLASSIFIED_FILE"
             CLASSIFIED_FILES[$i]="$CLASSIFIED_FILE"
 
+            # Melde-Pfad, getrennt vom Reparatur-Pfad: audio_gap_frames zeigt,
+            # WO der Ton Luecken hatte - unabhaengig davon, ob die Zonenbilanz
+            # eine Reparatur ausgeloest hat. Ein symmetrischer A+V-Ausfall
+            # braucht keine Reparatur, ist aber sehr wohl eine Stoerstelle,
+            # die in TTCut-ng als Landezone sichtbar sein muss.
+            #
+            # Drittes Feld bewusst 0, nicht die Gap-Laenge: der Emissionspfad
+            # (~Zeile 2794) rechnet daraus die BREITE des Markers in Frames
+            # und schreibt jeden einzelnen Frame-Index in die CSV. Mit der
+            # echten Gap-Laenge ergaebe allein der 26s-Ausfall der Referenz-
+            # aufnahme 03x15 660 Indizes und die Segmentnaht weitere 2700 -
+            # die .info-Zeile waere unbrauchbar und liefe in den
+            # maxExtraFrames-Cap von ttesinfo.cpp. Mit 0 markiert jeder Gap
+            # nur seinen Startframe; wie lang der Verlust war, steht ohnehin
+            # in es_missing_ranges.
             if [ -s "$GAP_FILE" ]; then
-                while IFS=' ' read -r gs ge gms; do
-                    silence_ms=$(compute_audio_gap_silence_ms "$gs" "$ge" "$VIDEO_GAPS_FILE" "$FRAME_RATE_DEC")
-                    echo "$gs $ge $gms $silence_ms" >> "$CLASSIFIED_FILE"
-                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$gs $ge $silence_ms")
-                    if [ "$silence_ms" -gt 0 ]; then
-                        HAS_ANY_SILENCE_NEEDED=true
-                    fi
+                while IFS=' ' read -r g_start g_end g_ms; do
+                    [ -z "$g_start" ] && continue
+                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$g_start $g_end 0")
                 done < "$GAP_FILE"
             fi
 
-            # Video-nur-Verlust: Audio muss mitgekuerzt werden (Sync-Regel).
-            # emit_video_only_truncations appends to a dedicated temp file
-            # (rather than reading rows back out of CLASSIFIED_FILE) so the
-            # newly-emitted rows are known exactly, with no dependency on
-            # how many lines CLASSIFIED_FILE already held.
-            TRUNC_FILE="$OUTDIR/.trunc_track_${i}.txt"
-            _CLEANUP_FILES+=("$TRUNC_FILE")
-            : > "$TRUNC_FILE"
-            emit_video_only_truncations "$VIDEO_GAPS_FILE" "$GAP_FILE" "$TRUNC_FILE"
-            if [ -s "$TRUNC_FILE" ]; then
-                cat "$TRUNC_FILE" >> "$CLASSIFIED_FILE"
-                while IFS=' ' read -r ts te tg tms; do
-                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$ts $te $tms")
-                    HAS_ANY_SILENCE_NEEDED=true
-                done < "$TRUNC_FILE"
-            fi
+            # Erster PTS des GETRIMMTEN Ton-ES. Der Trim schneidet den
+            # Vorlauf weg, mit dem der Ton vor dem Video beginnt - die
+            # Positionen in build_zone_edits() beziehen sich auf das
+            # getrimmte ES, nicht auf den Originalton.
+            #
+            # Frueher: max(FIRST_AUDIO_PTS_TRACK, ${FIRST_VIDEO_PTS:-0}).
+            # Richtig gemeint, aber wirkungslos - FIRST_VIDEO_PTS wird
+            # erst weiter unten gesetzt, der Ausdruck lieferte immer den
+            # ungetrimmten Audio-PTS und verschob jede Position um den
+            # Trim (gemessen 2026-08-24 auf "03x15": 450 ms).
+            FIRST_AUDIO_PTS_TRACK="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
+            EFFECTIVE_FIRST_AUDIO_PTS=$(awk \
+                "BEGIN {printf \"%.6f\", $FIRST_AUDIO_PTS_TRACK + ${AUDIO_TRIM_SECS[$i]:-0}}")
+            EFFECTIVE_FIRST_AUDIO_PTS_ARR[$i]="$EFFECTIVE_FIRST_AUDIO_PTS"
 
-            # Add per-segment-boundary entries for VDR multi-file recordings.
-            # Each boundary mismatch (audio segment shorter or longer than
-            # corresponding video segment) yields one row that the same
-            # repair_audio_with_silence_inserts and audio_gap_frames= emission
-            # paths handle alongside the audio-gap-fix entries above.
-            if [ "$VDR_MULTIFILE" = true ]; then
-                local_track_trim="${AUDIO_TRIM_SECS[$i]:-0}"
-                local_track_pts="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
-                while IFS=' ' read -r b_start b_end b_gap b_silence; do
-                    [ -z "$b_start" ] && continue
-                    [ -z "$b_silence" ] && continue
-                    echo "$b_start $b_end $b_gap $b_silence" >> "$CLASSIFIED_FILE"
-                    AUDIO_GAP_FRAMES_SOURCE_PTS+=("$b_start $b_end $b_silence")
-                    if [ "$b_silence" -ne 0 ]; then
-                        HAS_ANY_SILENCE_NEEDED=true
-                    fi
-                done < <(detect_segment_boundaries "$idx" "$local_track_trim" "$local_track_pts" 5)
-            fi
+            ZONES_FILE="$OUTDIR/.zones_track_${i}.txt"
+            _CLEANUP_FILES+=("$ZONES_FILE")
+            build_disturbance_zones "$VIDEO_GAPS_FILE" "$GAP_FILE" 2.0 "$ZONES_FILE"
 
-            # CLASSIFIED_FILE now interleaves audio-gap rows, video-only
-            # truncation rows, and (for VDR multi-file) segment-boundary
-            # rows, appended in that order — not necessarily ascending by
-            # src_start. repair_audio_with_silence_inserts() processes rows
-            # sequentially with an accumulated-collapse offset, so it
-            # requires ascending source order.
-            sort -n -o "$CLASSIFIED_FILE" "$CLASSIFIED_FILE"
+            # Zonen -> CLASSIFIED_FILE. src_end == src_start: der Offset wird
+            # jetzt in build_zone_edits() gefuehrt, repair_audio_with_silence_
+            # inserts() darf ihn nicht ein zweites Mal aufaddieren.
+            : > "$CLASSIFIED_FILE"
+            while IFS=' ' read -r z_pos z_bal; do
+                [ -z "$z_pos" ] && continue
+                Z_SRC=$(awk -v p="$z_pos" -v f="$EFFECTIVE_FIRST_AUDIO_PTS" \
+                    'BEGIN {printf "%.6f", p + f}')
+                echo "$Z_SRC $Z_SRC ${z_bal#-} $z_bal" >> "$CLASSIFIED_FILE"
+                HAS_ANY_SILENCE_NEEDED=true
+            done < <(build_zone_edits "$ZONES_FILE" "$EFFECTIVE_FIRST_AUDIO_PTS")
+
+            # Zone tally for the severity verdict (see the comment on
+            # N_NO_SILENCE/N_WITH_SILENCE above the loop): every zone in
+            # $ZONES_FILE either produced a CLASSIFIED_FILE row (edit
+            # needed) or didn't (balance under threshold - pure A+V loss).
+            TRACK_ZONE_COUNT=0
+            TRACK_EDIT_COUNT=0
+            [ -s "$ZONES_FILE" ] && TRACK_ZONE_COUNT=$(grep -c . "$ZONES_FILE")
+            [ -s "$CLASSIFIED_FILE" ] && TRACK_EDIT_COUNT=$(grep -c . "$CLASSIFIED_FILE")
+            N_WITH_SILENCE=$(( N_WITH_SILENCE + TRACK_EDIT_COUNT ))
+            N_NO_SILENCE=$(( N_NO_SILENCE + TRACK_ZONE_COUNT - TRACK_EDIT_COUNT ))
 
             # Per-track audio repair balance for .info (audio_${i}_silence_ms /
             # audio_${i}_removed_ms): sum the signed sms column (4th field) of
@@ -2261,19 +2196,13 @@ with open('$OUTPUT_VIDEO','rb') as f:
             fi
         done
 
-        if [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
-            N_NO_SILENCE=0
-            N_WITH_SILENCE=0
-            for cf in "${CLASSIFIED_FILES[@]}"; do
-                [ -s "$cf" ] || continue
-                while IFS=' ' read -r _gs _ge _gms sms; do
-                    if [ "${sms:-0}" = "0" ]; then
-                        N_NO_SILENCE=$(( N_NO_SILENCE + 1 ))
-                    else
-                        N_WITH_SILENCE=$(( N_WITH_SILENCE + 1 ))
-                    fi
-                done < "$cf"
-            done
+        # Gated on zone counts, not on AUDIO_GAP_FRAMES_SOURCE_PTS: the two
+        # can diverge. AUDIO_GAP_FRAMES_SOURCE_PTS is filled only from
+        # $GAP_FILE (audio gaps), so a recording whose loss is entirely
+        # video-only (audio ran through, video-lost balance -> truncation
+        # edit needed) has zones and a nonzero N_WITH_SILENCE but adds
+        # nothing there - the severity verdict below must still see it.
+        if [ $(( N_NO_SILENCE + N_WITH_SILENCE )) -gt 0 ]; then
             info "  Audio gaps detected across all tracks: $N_NO_SILENCE pure A+V, $N_WITH_SILENCE needing silence"
 
             # Overall damage verdict. The per-defect lines above say WHERE
@@ -2290,8 +2219,9 @@ with open('$OUTPUT_VIDEO','rb') as f:
             DEFECT_LOSS_PCT_LIMIT=5
             DEFECT_GAPS_PER_MIN_LIMIT=20
             # Per TRACK, not summed over all of them. N_NO_SILENCE and
-            # N_WITH_SILENCE count rows across every CLASSIFIED_FILE, so one
-            # broadcast outage lands once per audio track: on the reference
+            # N_WITH_SILENCE count disturbance ZONES across every audio
+            # track's $ZONES_FILE, so one broadcast outage lands once per
+            # audio track: on the reference
             # recording that turned ~3419 gaps into 6839 and doubled the rate
             # to 123/min for two tracks. The outage happened once, so the
             # figure has to be per track to mean anything.
@@ -2356,8 +2286,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
                 if $NEEDS_REPAIR; then
                     AUDIO_FILE="${AUDIO_FILES[$i]}"
-                    FIRST_AUDIO_PTS_TRACK="${ORIG_AUDIO_PTS_ARR[$i]:-0}"
-                    EFFECTIVE_FIRST_AUDIO_PTS=$(awk "BEGIN {a=$FIRST_AUDIO_PTS_TRACK; v=${FIRST_VIDEO_PTS:-0}; printf \"%.6f\", (a > v) ? a : v}")
+                    EFFECTIVE_FIRST_AUDIO_PTS="${EFFECTIVE_FIRST_AUDIO_PTS_ARR[$i]}"
                     info "    $(basename "$AUDIO_FILE") (track $((i + 1))/${#AUDIO_FILES[@]}): repairing $N_TRACK_GAPS gap(s)..."
                     if repair_audio_with_silence_inserts "$AUDIO_FILE" "${CLASSIFIED_FILES[$i]}" "$EFFECTIVE_FIRST_AUDIO_PTS"; then
                         info "    $(basename "$AUDIO_FILE"): $N_TRACK_GAPS silence-insertion(s) applied"
@@ -2383,6 +2312,14 @@ with open('$OUTPUT_VIDEO','rb') as f:
             AV_DRIFT_MS=$(awk "BEGIN {printf \"%.0f\", $VIDEO_DURATION_MS - $AUDIO_DURATION_MS}")
             info "  After silence-insertion: Audio=${AUDIO_DURATION_MS}ms, residual drift=${AV_DRIFT_MS}ms"
         elif [ ${#AUDIO_GAP_FRAMES_SOURCE_PTS[@]} -gt 0 ]; then
+            # AUDIO_GAP_FRAMES_SOURCE_PTS is filled from every detected
+            # audio gap (see the loop over $GAP_FILE above), independent of
+            # whether its zone needed a repair edit. HAS_ANY_SILENCE_NEEDED
+            # only goes true when build_zone_edits() actually emits one, so
+            # this branch is reachable again: a recording whose only outages
+            # are zero-balance zones (real, symmetric A+V loss - the exact
+            # 03x15 reference case, one zone at -16ms, under the 20ms
+            # threshold) has audio gaps to report but no repair to run.
             info "  All audio gaps perfectly synchronized with video gaps — no silence insertion needed"
         fi
 
@@ -2940,6 +2877,35 @@ EOF
             echo "es_missing_ranges=$MISS_RANGES" >> "$OUTPUT_INFO"
             warn "  Missing video frame(s) at $(format_ranges_hms "$MISS_RANGES" "$FRAME_RATE_DEC")"
         fi
+    fi
+
+    # es_lost_ms: total picture loss, summed from the DETECTED video gaps,
+    # not from the span difference: the repair stage runs with
+    # -fflags +genpts+igndts and smooths the PTS jump at the segment seam
+    # before VIDEO_SPAN_MS is measured. The difference therefore only sees
+    # the loss INSIDE a segment (measured 2026-08-24 on "03x15": 27178
+    # instead of 135520 ms). The gap file knows both parts. Audio stays in
+    # sync (padded to fill the same gaps), so this is a picture-only defect
+    # the user should be told about, distinct from the AV drift reported
+    # above.
+    ES_LOST_MS=0
+    if [ -s "$VIDEO_GAPS_FILE" ]; then
+        ES_LOST_MS=$(awk '{s += $2 - $1} END {printf "%.0f", s * 1000}' "$VIDEO_GAPS_FILE")
+    fi
+    echo "es_lost_ms=$ES_LOST_MS" >> "$OUTPUT_INFO"
+    if [ "$ES_LOST_MS" -gt 1000 ]; then
+        # Zweiter Halbsatz ist Absicht: ohne ihn liest sich die Meldung wie ein
+        # Sync-Fehler, und genau den gibt es hier nicht mehr.
+        LOSS_POS_COUNT=$(echo "$MISS_RANGES" | tr ',' '\n' | grep -c .)
+        if [ "$LOSS_POS_COUNT" -gt 0 ]; then
+            LOSS_POS_TEXT="$LOSS_POS_COUNT position(s)"
+        else
+            # MISS_RANGES can be empty while es_lost_ms is still >0 (VIDEO_GAPS_FILE
+            # present but its rows didn't cluster into a named range) - "0
+            # position(s)" would misreport a defect as absent.
+            LOSS_POS_TEXT="an unlisted position"
+        fi
+        warn "Material loss: $(awk "BEGIN {printf \"%.1f\", $ES_LOST_MS/1000}") s missing at $LOSS_POS_TEXT - picture jumps there, audio stays in sync"
     fi
 
     # corrupt_frame_ranges: frames present in the output ES but flagged
