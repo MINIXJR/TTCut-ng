@@ -223,9 +223,9 @@ step "Schritt 1: Demuxen mit ttcut-demux..."
 
 # Aufnahmen, die ttcut-demux als schwer beschädigt gemeldet hat.
 DAMAGED_LIST=()
-# Aufnahmen mit Materialverlust unterhalb der Schwelle für DAMAGED_LIST
-# (Bild springt an der Störstelle, Ton bleibt synchron) — eigene Liste,
-# da anderer Befund als "schwer beschädigt".
+# Aufnahmen mit Materialverlust: das Bild springt an der Störstelle, der Ton
+# bleibt synchron. Eigene Liste neben DAMAGED_LIST, weil es ein anderer Befund
+# ist — beide können auf dieselbe Aufnahme zutreffen.
 LOSS_LIST=()
 DEMUX_COUNT=0
 DEMUX_ERRORS=0
