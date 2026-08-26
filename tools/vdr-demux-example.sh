@@ -211,8 +211,10 @@ info "Zielverzeichnis: $OUT_PFAD"
 info "${#SELECTED_DIRS[@]} von ${#REC_DIRS[@]} Aufnahme(n) ausgewählt"
 echo ""
 
-# Fortschritt: N (Demux pro Aufnahme) + 1 (Aufräumen) + 1 (Fertig)
-TOTAL_STEPS=$((${#SELECTED_DIRS[@]} + 2))
+# Fortschritt: 100 Punkte je Aufnahme, dazu 2+2 für Aufräumen und Fertig.
+# Die beiden Nachlaufschritte dauern zusammen unter einer Sekunde und dürfen
+# nicht so viel Balken bekommen wie ein ganzer Demux-Durchgang.
+TOTAL_STEPS=$((${#SELECTED_DIRS[@]} * 100 + 4))
 CURRENT_STEP=0
 progress_start "Vorbereitung..." "$TOTAL_STEPS"
 
@@ -248,10 +250,10 @@ done
 info "  ${#TS_FILES[@]} Aufnahmen gefunden"
 
 # Fortschritt neu berechnen mit tatsächlicher Dateianzahl
-TOTAL_STEPS=$((${#TS_FILES[@]} + 2))
+TOTAL_STEPS=$((${#TS_FILES[@]} * 100 + 4))
 progress_close
 progress_start "Demuxe ${#TS_FILES[@]} Aufnahme(n)..." "$TOTAL_STEPS"
-progress_update "$CURRENT_STEP" "Demuxe ${#TS_FILES[@]} Aufnahme(n)..."
+progress_update $((CURRENT_STEP * 100)) "Demuxe ${#TS_FILES[@]} Aufnahme(n)..."
 
 # Verarbeite gesammelte Dateien
 for ts_datei in "${TS_FILES[@]}"; do
@@ -261,7 +263,7 @@ for ts_datei in "${TS_FILES[@]}"; do
     show_name="$(vdr_unmask "$(basename "$(dirname "$rec_dir")")")"
 
     info "Demuxe: $show_name ($(basename "$ts_datei"))"
-    progress_update "$CURRENT_STEP" "Demuxe: $show_name"$'\n'"(${DEMUX_COUNT}/${#TS_FILES[@]})"
+    progress_update $((CURRENT_STEP * 100)) "Demuxe: $show_name"$'\n'"(${DEMUX_COUNT}/${#TS_FILES[@]})"
 
     LOG_FILE="$OUT_PFAD/${show_name}.log"
 
@@ -316,7 +318,7 @@ echo ""
 # SCHRITT 2: Unerwünschte Audio-Spuren löschen
 #############################################################################
 step "Schritt 2: Unerwünschte Audio-Spuren löschen..."
-progress_update "$CURRENT_STEP" "Aufräumen..."
+progress_update $((${#TS_FILES[@]} * 100 + 2)) "Aufräumen..."
 
 # Optional: delete unwanted audio tracks (e.g., *_mis.ac3, *_mul.mp2)
 # Uncomment and adapt patterns as needed:
@@ -333,13 +335,12 @@ while IFS= read -r -d '' pad_dir; do
 done < <(find "$OUT_PFAD" -maxdepth 1 -type d -name ".pad_logs_*" -print0 2>/dev/null)
 [ "$pad_cleaned" -gt 0 ] && info "  $pad_cleaned .pad_logs Verzeichnisse aufgeräumt"
 echo ""
-CURRENT_STEP=$((CURRENT_STEP + 1))
 
 #############################################################################
 # SCHRITT 3: Zusammenfassung und TTCut starten
 #############################################################################
 step "Schritt 3: Zusammenfassung"
-progress_update "$CURRENT_STEP" "Fertig — $DEMUX_COUNT Aufnahme(n) demuxed"
+progress_update $((${#TS_FILES[@]} * 100 + 4)) "Fertig — $DEMUX_COUNT Aufnahme(n) demuxed"
 echo ""
 
 info "=== Demux abgeschlossen ==="

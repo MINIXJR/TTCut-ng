@@ -588,8 +588,20 @@ quantize_up_to_frame() {
 PROGRESS_MS_PER_GAP=23          # 6730 gaps took 153s of repair
 PROGRESS_SECS_PER_GB=10         # pad + info file took ~16s for 1.5 GB
 
+# The fixed marks below the repair band are spaced by measured duration, from
+# a gapless 10.4 GB run on an idle machine (2026-08-26, 63s total): analysis
+# 6s (no mark - several ffprobe calls with nothing to poll), remux 8s, ES
+# extraction 8s, PTS analysis 13s, A/V check 6s, per-track gap detection 5s.
+# The tail marks were spaced the same way: gap analysis 9s, padding 7s,
+# offset plus info file under a second. Before that the tail sat at 2/10,
+# 4/10 and 6/10 of the remaining band and all three fell into the last few
+# seconds, so the upper half of the scale was never walked at all.
+# Measure on an IDLE machine: a parallel transcode stretched the same run to
+# 242s and shifted the phases against each other by up to a factor of eight.
+
 PROGRESS_FILE=""
 PROGRESS_LAST=-1
+PROGRESS_REMUX_END=8            # where the timestamp-repair remux band ends
 PROGRESS_PRE_END=40             # everything up to and including gap detection
 PROGRESS_REPAIR_BASE=40         # where the repair band starts
 PROGRESS_REPAIR_END=40          # and where it ends; equal = no repair
@@ -1399,11 +1411,37 @@ fi
 SUBS_INPUT_ARGS=("${FFMPEG_INPUT_ARGS[@]}")
 FFMPEG_LOG="$OUTDIR/.ffmpeg_repair.log"
 _CLEANUP_FILES+=("$FFMPEG_LOG")
-if ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
+# This remux is the longest single call of a run without gaps - measured 72s
+# on a 10.4 GB recording - and it used to say nothing at all while it ran:
+# progress_set 0 stands above it, progress_set 10 only after it returns, so a
+# supervising wrapper showed 0% for a third of the whole run. Same treatment
+# as the gap repair below: background the call against -progress and map
+# out_time_us onto the band. -nostats stays OFF here - the frame=/size= line
+# the log parse below picks up is exactly that stats output.
+REPAIR_PROGRESS_FILE="$OUTDIR/.ffmpeg_repair.progress"
+_CLEANUP_FILES+=("$REPAIR_PROGRESS_FILE")
+: > "$REPAIR_PROGRESS_FILE"
+ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     -c copy \
     -avoid_negative_ts make_zero \
+    -progress "$REPAIR_PROGRESS_FILE" \
     -map 0:v:0 -map 0:a? \
-    "$REPAIRED_INPUT" > "$FFMPEG_LOG" 2>&1; then
+    "$REPAIRED_INPUT" > "$FFMPEG_LOG" 2>&1 &
+REPAIR_FF_PID=$!
+while kill -0 "$REPAIR_FF_PID" 2>/dev/null; do
+    sleep 2
+    # out_time_us is the output timeline in microseconds; against the source
+    # duration measured above that is a fraction of the remux.
+    RP_OUT_US=$(grep '^out_time_us=' "$REPAIR_PROGRESS_FILE" 2>/dev/null | tail -1 | cut -d= -f2)
+    [ -n "$RP_OUT_US" ] || continue
+    progress_set "$(awk -v u="$RP_OUT_US" -v d="$CONTAINER_VIDEO_DURATION" -v e="$PROGRESS_REMUX_END" \
+        'BEGIN { p = (d > 0) ? u / (d * 1000000.0) * e : 0
+                 if (p > e) p = e; if (p < 0) p = 0; printf "%d", p }')"
+done
+# wait returns the child's exit code, so capture it rather than test wait itself.
+REPAIR_FF_RC=0
+wait "$REPAIR_FF_PID" || REPAIR_FF_RC=$?
+if [ "$REPAIR_FF_RC" -eq 0 ]; then
     # Show progress line
     grep -E "^(frame=|size=)" "$FFMPEG_LOG" | tail -1 | while IFS= read -r line; do info "$line"; done
     # Show any warnings/errors from ffmpeg
@@ -1448,7 +1486,7 @@ echo ""
 # ELEMENTARY STREAM MODE
 #############################################################################
 if $ES_MODE; then
-    progress_set 10
+    progress_set 8
     step "Extracting Elementary Streams..."
 
     # Detect available CPU cores for parallel processing
@@ -1692,7 +1730,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     ES_TOTAL_AUS=""
     ES_DOUBLED_PTS_CSV=""
     if command -v ttcut-pts-analyze >/dev/null 2>&1; then
-        progress_set 25
+        progress_set 16
         step "Running PTS analysis on $ORIGINAL_INPUT ..."
         # stderr goes to its own log: mixing it into stdout (old 2>&1)
         # raced the block-buffered CSV line and truncated the captured
@@ -1898,7 +1936,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         fi
     fi
 
-    progress_set 32
+    progress_set 29
     step "Checking A/V duration alignment..."
 
     # Video duration = video PTS span, NOT the container span.
@@ -2082,7 +2120,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         GAP_FILES=()
         CLASSIFIED_FILES=()
         HAS_ANY_SILENCE_NEEDED=false
-        progress_set 34
+        progress_set 35
         AUDIO_GAP_FRAMES_SOURCE_PTS=()  # entries: "src_start src_end 0" - one per
         # detected audio gap (see the loop over $GAP_FILE below), independent
         # of whether the zone it falls in needed a repair edit; the 3rd
@@ -2104,7 +2142,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # Jede Spur wird einmal ganz durchlaufen; auf einer sauberen
             # Aufnahme ist das der laengste Abschnitt vor dem Ende, und ohne
             # diese Meldung stand der Balken hier gemessene 15s still.
-            progress_set $(( 34 + (i + 1) * 6 / ${#AUDIO_FILES[@]} ))
+            progress_set $(( 35 + (i + 1) * 5 / ${#AUDIO_FILES[@]} ))
             IFS=':' read -r idx _ _ <<< "${AUDIO_STREAMS[$i]}"
             GAP_FILE="$OUTDIR/.gaps_track_${i}.txt"
             CLASSIFIED_FILE="$OUTDIR/.classified_track_${i}.txt"
@@ -2328,7 +2366,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
         # If video is longer than audio, pad audio with silence (like ProjectX does)
         # This ensures A/V sync throughout the file
         if [ "$AV_DRIFT_MS" -gt 20 ]; then
-            progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 2 / 10 ))
+            progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 5 / 10 ))
             info "  Padding ${#AUDIO_FILES[@]} audio track(s) in parallel to match video duration..."
 
             # Calculate target duration in seconds
@@ -2664,7 +2702,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # 4. Calculate A/V sync offset
     # Get first packet PTS for video and audio from the ORIGINAL input (before repair)
     # The repaired file has timestamps normalized to 0, so we need the original for offset
-    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 4 / 10 ))
+    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 8 / 10 ))
     step "Calculating A/V sync offset..."
 
     # Reuse the pre-repair measurement (probe_first_video_pts): for a single
@@ -2711,7 +2749,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
     # 5. Create info file with metadata
     OUTPUT_INFO="$OUTDIR/${BASENAME}.info"
-    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 6 / 10 ))
+    progress_set $(( PROGRESS_REPAIR_END + (100 - PROGRESS_REPAIR_END) * 9 / 10 ))
     step "Creating info file: $OUTPUT_INFO"
 
     # Calculate trimmed ms for info file

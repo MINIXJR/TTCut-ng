@@ -155,6 +155,35 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
+- **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
+  (2026-08-26, vertagt auf User-Entscheid: „aber nicht heute")
+  - Während der Wiedergabe läuft das `QStackedLayout` in `TTCurrentFrame` auf
+    **StackAll**, d. h. Render-Widget und Standbild-Widget (`mpegWindow`) sind
+    gleichzeitig sichtbar (`gui/ttcurrentframe.cpp:78-92`). Der Stapel
+    existiert allein als Umgehung des KWin-Repaint-Fehlers.
+  - Die Vorschau kommt ohne aus: dort *ist* mpv die Anzeige, ein einzelnes
+    Render-Widget in `videoFrame`, kein Standbild-Fallback
+    (`gui/ttcutpreview.cpp:57-69`).
+  - **Anlass**, gemessen 2026-08-26 an einer 720p50-H.264-Aufnahme: Die
+    Wiedergabe in „Aktueller Frame" ruckelte, die Vorschau derselben Quelle
+    nicht — beide unter derselben Last (paralleles HandBrake-Transcode mit
+    1971 % CPU, load 25). Mit dem Ende des Transcodes verschwand das Ruckeln.
+  - **Ausgeschlossen** (jeweils gemessen): Framerate und Zeitstempel der
+    Wiedergabe-MKV (20 ms Abstand, `r_frame_rate=50/1`), Dekodierleistung
+    (0 verworfene Frames bei Echtzeit-Wiedergabe, 24,7× Reserve bei reiner
+    Dekodierung), mpv-Konfiguration (beide Player teilen sich
+    `gui/ttmpvlibbackend.cpp` samt `hwdec=no`).
+  - **Offen und ausdrücklich ungemessen:** ob die Zusatzstufe des Stapels
+    (Render-to-Texture plus Komposition pro Frame statt direkter Darstellung)
+    tatsächlich die Reserve kostet, die der Vorschau das Ruckeln erspart.
+    Nächster Schritt wäre, die Last künstlich nachzustellen und beide Fenster
+    gegeneinander laufen zu lassen.
+  - **Zu klären ist dann:** Braucht es die Überlagerung überhaupt noch, oder
+    gibt es eine bessere — auch gern kompliziertere — Lösung für den
+    KWin-Repaint-Fehler, die ohne zweites gleichzeitig sichtbares Widget
+    auskommt. Siehe auch `Known Limitations` und das KWin-Thema in
+    `reference_kwin_fractional_scale_bug` (Memory).
+
 - **DVB-Bitmap-Untertitel entlang der Schnittliste in TTCut-ng schneiden**
   (Folgevorhaben aus dem Untertitel-Export 2026-08-16; vereinbart, nicht
   begonnen)
