@@ -1,5 +1,5 @@
 ---
-base_commit: 8fa8bb100581245f91d44bd47b8ef520d99c10d8
+base_commit: 2ee0ccc2bf0b4eca8844adcaf4a4b0447f45c33d
 last_verified: 2026-08-24
 sources:
   - tools/ttcut-demux/ttcut-demux
@@ -289,21 +289,25 @@ detected-but-unrepaired.
   summed gap ms), `corrupt_frame_ranges` (frames present but flagged corrupt,
   wrap-corrected DTS-tick clustering), `audio_${i}_silence_ms` /
   `audio_${i}_removed_ms` (per-track repair balance), `es_lost_ms` (picture
-  time missing from the output ES relative to its own PTS span — see below),
+  time missing from the output ES, summed over the detected video gaps — see below),
   plus the independent count-check warn for silent (no-PTS-jump) holes.
-- **`es_lost_ms`**: `VIDEO_SPAN_MS` (the video PTS span of the repaired ES —
-  wall-clock, includes any loss *within* a continuously-recorded run) minus
-  `VIDEO_DURATION_MS` (frame count actually present × frame duration — what
-  the output ES holds). The two are kept as separate variables deliberately:
-  collapsing them would make `EXPECTED_FRAMES == COUNTED_FRAMES` and disable
-  the independent silent-hole count-check that reads them. `es_lost_ms` is
-  scoped to loss *inside* a recorded run; a VDR segment splice is a
-  discontinuity between two recordings, not a hole in one continuous PTS
-  span, so splice time is not part of this number (it is still visible in
-  `es_missing_ranges`, whose per-range ms annotation is the disturbance
-  zone's raw gap sum and does include it). Above 1000 ms, `es_lost_ms` is
-  also logged as `Material loss: N s missing at ... - picture jumps there,
-  audio stays in sync`.
+- **`es_lost_ms`**: sum of the third field over every row of
+  `VIDEO_GAPS_FILE` — the same source `es_missing_ranges` sums, so the two
+  always report the same loss, splice gaps included. **Not** the difference
+  `VIDEO_SPAN_MS − VIDEO_DURATION_MS`: the repair stage runs ffmpeg with
+  `-fflags +genpts+igndts`, which irons out the PTS jump at a segment seam
+  before the span is measured, so that difference only ever sees loss inside
+  one segment (measured 2026-08-24 on the "03x15" fixture: 27178 ms against
+  a real 135640 ms).
+- **`VIDEO_SPAN_MS` vs `VIDEO_DURATION_MS`**: broadcast span from the PTS
+  window against `COUNTED_FRAMES × frame duration`, i.e. what the output ES
+  actually holds. The latter is the padding target, so a recording missing
+  pictures no longer gets that time appended as silence. Kept as two
+  variables deliberately: collapsing them would make
+  `EXPECTED_FRAMES == COUNTED_FRAMES` and permanently silence the
+  independent silent-hole count-check that reads them. Above 1000 ms,
+  `es_lost_ms` is also logged as `Material loss: N s missing at ... -
+  picture jumps there, audio stays in sync`.
 - **Gate**: `tools/diag/gate_demux_zonesync.sh` extracts `build_disturbance_zones`
   and `build_zone_edits` from the live script (via `awk`, no `source` of the
   whole file — that would run `main`) and checks zone merging, balance math

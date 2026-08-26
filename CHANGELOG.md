@@ -2,7 +2,7 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.82.2 (2026-08-24)
 
 **Disturbance-zone model for the demux gap repair**
 
@@ -27,11 +27,12 @@ Touches `tools/ttcut-demux` only.
 
 ### Added
 - **`es_lost_ms`** in the `.info` file: picture time missing from the output
-  elementary stream relative to its own PTS span, i.e. loss visible *within*
-  a continuous run of recorded material (VDR segment splices are a separate
-  kind of gap and are not included). Above 1000 ms it is also logged as
-  `Material loss: N s missing at ... - picture jumps there, audio stays in
-  sync`.
+  elementary stream, summed over every detected video gap — including the
+  gap across a VDR segment splice. It reports the same loss as
+  `es_missing_ranges`, from the same source, so the two always agree. Above
+  1000 ms it is also logged as `Material loss: N s missing at ... - picture
+  jumps there, audio stays in sync`, and both `VDR_Demux.sh` and
+  `tools/vdr-demux-example.sh` show it in their closing dialog.
 - **`tools/diag/gate_demux_zonesync.sh`**: acceptance gate for the zone
   model, checking zone merging, balance math and the repair threshold
   against real measured gap data.
@@ -39,6 +40,17 @@ Touches `tools/ttcut-demux` only.
   reference audio ES at several points in a test audio ES and reports the
   time delta at each — a mid-stream sync check that end-of-file drift
   numbers cannot catch (see above).
+
+### Changed
+- `tools/vdr-demux-example.sh` no longer starts TTCut with
+  `QT_QPA_PLATFORM=xcb`. The override has been unnecessary since v0.71.0,
+  when the libmpv render backend made the app run on Wayland natively; xcb
+  remains a fallback for a misbehaving compositor, not the default.
+- `tools/diag/measure_av_sync.py` — the cross-correlation A/V sync check
+  (elementary-stream audio against the original TS at sample points) now
+  lives in the repository. It was the one surviving script of 42 paths that
+  documentation and notes pointed at inside the temp directory, which is
+  excluded from backups.
 
 ## v0.82.1 (2026-08-23)
 

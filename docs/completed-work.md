@@ -18,6 +18,37 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Smart Cut (H.264 / H.265)
 
+- **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — Befunde B, D, E** → **GELÖST
+  (2026-07-19)**. Wurzel war der TS↔ES-AU-Nummerierungs-Drift der
+  `es_extra_frames`, Spec
+  `docs/superpowers/specs/2026-07-19-es-extras-field-awareness-design.md`.
+  Verschoben aus `TODO.md` beim v0.82.2-Abgleich; offen blieb dort nur der
+  PAFF-**Playback**-Fehler unter mpv.
+  - **Befund B — Decode-Hänger** beim Navigieren auf ein PAFF-Feldpaar-AU
+    (`46d3dcb`): Index-Adopter erben jetzt den PAFF-Zustand des Owners
+    (`adoptStreamMetadata`); Diag `test_adopt_paff`. Die Crash-Variante
+    (SIGABRT in `avcodec_send_packet`) ist als Folge des beseitigten
+    EOF-Drains plausibel, aber nicht formal bewiesen (GUI-Soak ohne Crash
+    bestanden). Der Core-Dump `core.456277` wurde am 2026-07-31 gelöscht; ein
+    Backtrace wäre ohnehin unbrauchbar, weil das Binary seit dem 19.07.
+    vielfach neu gebaut ist. Nachprüfbar nur über einen neuen Repro-Lauf auf
+    dem 08x04-Korpus.
+  - **Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**
+    (`8dfda6d`): der SPS-Unification-Rewriter schrieb/las die
+    CABAC-Alignment-Bits unbedingt; endete der umgeschriebene Slice-Header
+    exakt byte-aligniert (08x04: 42+6 = 48 Bits am ersten IDR), schob ein
+    falsches 0xFF-Byte die Payload weg → Slice still verworfen, Frame grau
+    concealed, bf=0-P-Frames trugen das Grau bis zum Copy-IDR. Alignment
+    jetzt spec-bedingt (H.264 7.3.4) auf Lese- und Schreibseite; Details in
+    `docs/code-map/smart-cut.md`, Diag `tools/diag/test_feed_decode`.
+  - **Befund D — H.264/H.265-Standbild-Aspect fehlt**: `showVideoFrame()`
+    korrigiert im FFmpeg-Zweig jeden SAR≠1:1 in Upscale-Richtung
+    (Breite×SAR, z.B. 720×576 SAR 16:11 → 1047×576), Quelle
+    `TTFFmpegWrapper::sampleAspectRatio()` (Codec-Kontext,
+    codecpar-Fallback). MPEG-2-Pfad unverändert. Spec
+    `docs/superpowers/specs/2026-07-19-h26x-still-aspect-design.md`, Diag
+    `tools/diag/test_sar`.
+
 - **`av_packet_alloc`-Fehlschlag schnitt das Segment still ab** → **GELÖST
   (2026-08-15)**. Zwei Stellen (`decodeFramesIntoList`, `runEncodePass`)
   antworteten mit `break` und die Funktion meldete Erfolg; jetzt
@@ -664,6 +695,24 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - Scaling-Investigation: Sweet Spot 4-8 Worker, siehe `project_hevc_search_perf_investigation.md`
 
 ### GUI und Wiedergabe
+
+- **TTMpv-Wrapper: zwei Folge-Verbesserungen aus den Player-Reviews** →
+  **GELÖST**. Verschoben aus `TODO.md` beim v0.82.2-Abgleich; die beiden
+  übrigen Punkte des Eintrags (Stop-Rest-Versatz ~5 Frames, erster PLAY ~5 s)
+  bleiben dort offen.
+  - **`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame
+    ungenau** → überholt/erledigt (2026-07-25): die vorgeschlagene synchrone
+    Lesung ist längst implementiert. `TTMpvLibBackend::shutdown()` macht ein
+    synchrones `pause` + synchrone `time-pos`-Lesung und propagiert sie nach
+    `mPlaybackPosition`; `onPlaybackFinished()` nimmt als Stop-Frame
+    `lastRenderedTimePos()`. Die verbleibende Ungenauigkeit ist allein der
+    ~5-Frame-Pipeline-Versatz, kein Sync-Problem.
+  - **`createTempMkvForPlayback` ohne Absicherung gegen `frameRate==0` und
+    ohne Destruktor-Cleanup** → erledigt (2026-07-25, `25c966eb`):
+    `frameRate <= 0` bricht mit Warn-Log ab und liefert einen leeren Pfad
+    (der Aufrufer behandelt das als „Wiedergabe nicht möglich");
+    `~TTCurrentFrame()` ruft `cleanupTempPlaybackFile()`. Der Temp-Dateiname
+    ist seit v0.71.0 eindeutig (`ttcut-ng_playback_temp.mkv`).
 
 - **„Wiedergabe-MKV dauert 6 Minuten, Fenster reagiert nicht" — Muxer war
   unschuldig, Ursache Konsole-cgroup-Limit** → **AUFGEKLÄRT (2026-08-17)**
@@ -1709,6 +1758,24 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 - **Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen** → Completed (v0.62.1)
 
 ### Werkzeuge und Infrastruktur
+
+- **Voller TODO-Abgleich nachgeholt** → **ERLEDIGT (2026-08-24, Release
+  v0.82.2)**. Beim Release v0.82.1 war der Abgleich nach Skill-Step 4.5 auf
+  die von jenem Release berührten Bereiche eingegrenzt worden
+  (`ttcut-demux`, Lückenerkennung, Fortschritt) statt auf alle 45 Einträge.
+  Die Begründung deckte nicht ab, was durch **frühere** Refactors
+  miterledigt wurde, ohne dass es jemand nachtrug.
+  Nachgeholt: alle 45 Einträge einzeln gegen den Code geprüft (nicht gegen
+  `git log`, weil ein Eintrag auch durch einen alten Refactor erledigt sein
+  kann). Ergebnis: 1 erledigt, 9 teilweise, 33 offen, 2 veraltete
+  Referenzen. Vollständiger Bericht:
+  `docs/superpowers/release-v0.82.2/todo-abgleich-v0.82.2.md` (gitignored,
+  aber auf gesicherter Platte — CLAUDE_TMP ist es nicht).
+  Die zwei veralteten Referenzen waren: der MP3/AAC-Warntext sitzt seit dem
+  Task-Pool-Umbau in `data/ttaudioonlycuttask.cpp` statt in
+  `TTAVData::doAudioOnlyCut`, und der PTS-Umlauf-Eintrag beschrieb
+  `detect_segment_boundaries` weiter im Präsens, obwohl der
+  Störzonen-Umbau die Funktion entfernt hatte.
 
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**

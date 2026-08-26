@@ -136,36 +136,18 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fsanitize=address
     -fno-omit-frame-pointer -g" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`).
 
-- **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — verbleibende Befunde**
-  (Wurzel — TS↔ES-AU-Nummerierungs-Drift der es_extra_frames — GELÖST 2026-07-19,
-  siehe Spec `docs/superpowers/specs/2026-07-19-es-extras-field-awareness-design.md`):
-  - ~~**Befund B — Decode-Hänger** beim Navigieren auf ein PAFF-Feldpaar-AU~~
-    → **GEFIXT 2026-07-19** (`46d3dcb`): Index-Adopter erben jetzt den
-    PAFF-Zustand des Owners (`adoptStreamMetadata`); Diag `test_adopt_paff`.
-    Restpunkte: die Crash-Variante (SIGABRT in `avcodec_send_packet`) ist als
-    Folge des beseitigten EOF-Drains plausibel, aber nicht formal bewiesen
-    (GUI-Soak ohne Crash bestanden). **Der Core-Dump `core.456277` ist am
-    2026-07-31 gelöscht worden** — ein Backtrace wäre ohnehin unbrauchbar
-    gewesen, weil das Binary seit dem 19.07. vielfach neu gebaut ist und keine
-    passenden Symbole mehr existieren. Nachprüfbar also nur noch über einen
-    neuen Repro-Lauf auf dem 08x04-Korpus, nicht mehr aus vorhandenem Material.
-    PAFF-**Playback**-Fehler beim Play (mpv `reference picture missing during
-    reorder`) besteht fort — separates Follow-up (libmpv Phase 2).
-  - ~~**Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**~~
-    → **GEFIXT 2026-07-19** (`8dfda6d`): der SPS-Unification-Rewriter
-    schrieb/las die CABAC-Alignment-Bits unbedingt; endete der umgeschriebene
-    Slice-Header exakt byte-aligniert (08x04: 42+6 = 48 Bits am ersten IDR),
-    schob ein falsches 0xFF-Byte die Payload weg → Slice still verworfen,
-    Frame grau concealed, bf=0-P-Frames trugen das Grau bis zum Copy-IDR.
-    Alignment jetzt spec-bedingt (H.264 7.3.4) auf Lese- und Schreibseite;
-    Details in `docs/code-map/smart-cut.md`, Diag `tools/diag/test_feed_decode`.
-  - ~~**Befund D — H.264/H.265-Standbild-Aspect fehlt**~~ → **GEFIXT 2026-07-19**:
-    `showVideoFrame()` korrigiert im FFmpeg-Zweig jetzt jeden SAR≠1:1 in
-    Upscale-Richtung (Breite×SAR, z.B. 720×576 SAR 16:11 → 1047×576), Quelle
-    `TTFFmpegWrapper::sampleAspectRatio()` (Codec-Kontext, codecpar-Fallback).
-    MPEG-2-Pfad unverändert. Spec
-    `docs/superpowers/specs/2026-07-19-h26x-still-aspect-design.md`,
-    Diag `tools/diag/test_sar`.
+- **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — PAFF-Wiedergabe**
+  Die Befunde B, D und E sind gefixt (2026-07-19, `46d3dcb` / `8dfda6d`),
+  ebenso die Wurzel (TS↔ES-AU-Nummerierungs-Drift der `es_extra_frames`) —
+  Belege in `docs/completed-work.md`, Smart Cut.
+
+  **Offen ist allein die PAFF-Wiedergabe:** beim Play meldet mpv
+  `reference picture missing during reorder`. Follow-up zu libmpv Phase 2.
+  Nebenpunkt: die Crash-Variante von Befund B (SIGABRT in
+  `avcodec_send_packet`) ist als Folge des beseitigten EOF-Drains plausibel,
+  aber nicht formal bewiesen und nur über einen neuen Repro-Lauf auf dem
+  08x04-Korpus nachprüfbar — der alte Core-Dump ist gelöscht.
+
 
 - **Logo für TTCut-ng**
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
@@ -267,9 +249,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     machte aus **einem** Schieber-Ereignis Minuten bis Stunden GUI-Rechenzeit.
     Gefixt (korrekte Send/Receive-Pumpe mit schwebendem Paket); UHD-Sprung
     jetzt 2,6 s statt nie.
-  - ~~Offen A — Reaktionsfähigkeit~~ **GELÖST 2026-08-15** (Entprellung +
-    Keyframe-Vorschau beim Ziehen; GUI-Abnahme durch den User auf UHD und
-    H.264, Details in `docs/completed-work.md`).
   - **Offen B — der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
     unerklärt (Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
@@ -411,7 +390,9 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 - **MP3/AAC re-encoding für Audio-Only-Output**
   - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
-  - Code-Stelle `TTAVData::doAudioOnlyCut` (data/ttavdata.cpp) warnt "not implemented yet"
+  - Code-Stelle `data/ttaudioonlycuttask.cpp` warnt "not implemented yet"
+    (bis zum Task-Pool-Umbau sass die Meldung in `TTAVData::doAudioOnlyCut`;
+    Pfad beim v0.82.2-Abgleich korrigiert)
   - Bei Implementation: `sbAudioOnlyBitrate`-UI wieder einblenden
 
 - **Batch-Mux-Workflow per CLI für alle Codecs**
@@ -579,15 +560,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Ort — ins Repo oder unter `/home/` —, nicht ins Temp-Verzeichnis. Solange das
   nicht festgelegt ist, wiederholt sich der Verlust beim nächsten Aufräumen.
 
-- **Voller TODO-Abgleich steht aus** (2026-08-23, offen, niedrige Priorität).
-  Beim Release v0.82.1 hat der Abgleich nach Skill-Step 4.5 nur die von diesem
-  Release berührten Bereiche geprüft (`ttcut-demux`, Lückenerkennung,
-  Fortschritt) statt aller 45 Einträge. Begründung damals: seit v0.82.0 — drei
-  Tage zuvor, mit eigenem Vollabgleich — wurde außer `tools/` nichts angefasst,
-  ein Eintrag zur Anwendung konnte durch dieses Release also nicht erledigt
-  worden sein. Das deckt aber nicht ab, was durch **frühere** Refactors
-  miterledigt wurde, ohne dass es jemand nachgetragen hat. Beim nächsten
-  Release den Vollabgleich nachholen statt ihn erneut einzugrenzen.
 
 - **Restversatz an Störzonen: welche Gaplänge ist die richtige?**
   (2026-08-24, offen, niedrige Priorität — Größenordnung einer halben
@@ -655,13 +627,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   durchgehende Achse normalisieren, nicht nur die Splice-Differenz. Deutlich
   mehr Aufwand als „ein Vorzeichen richtigstellen".
 
-  **Falle vor dem Beheben:** würde die Splice-Lücke durch eine
-  Umlaufbehandlung sichtbar, käme sie über `detect_audio_gaps_multifile` in
-  dieselbe klassifizierte Datei, in die `detect_segment_boundaries` seine
-  Grenzzeile schon schreibt — dieselbe Segmentgrenze würde zweimal korrigiert.
-  Das ist die Doppelverrechnung, die schon einmal 0,8 s Tonvorlauf verursacht
-  hat. Zuerst klären, welche der beiden Funktionen die Segmentgrenze allein
-  verantwortet, dann erst rechnen.
 
 - **Cut-ES-Dateinamen zwischen den Codec-Pfaden vereinheitlichen**
   (User-Wunsch 2026-08-05, bei der Untertitel-Abnahme aufgefallen). Die
@@ -693,13 +658,9 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   `gate_pool_crossthread.sh:28-33` und Qt5Core/Qt5Widgets direkt).
 
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
-  - ~~`TTMpvWrapper::stop()` „best-effort", gestoppter Frame ~1 Frame ungenau~~ →
-    **ÜBERHOLT/erledigt (2026-07-25):** die vorgeschlagene synchrone Lesung ist längst
-    implementiert. `TTMpvLibBackend::shutdown()` macht ein synchrones `pause` + synchrone
-    `time-pos`-Lesung und propagiert sie nach `mPlaybackPosition`; `onPlaybackFinished()`
-    nimmt als Stop-Frame `lastRenderedTimePos()` (die time-pos des zuletzt gemalten
-    Frames). Verbleibende Ungenauigkeit ist allein der ~5-Frame-Pipeline-Versatz unten,
-    kein Sync-Problem.
+  Zwei der vier Punkte sind erledigt (synchrone Stop-Lesung; `frameRate==0`-
+  Absicherung + Destruktor-Cleanup) — Belege in `docs/completed-work.md`,
+  GUI und Wiedergabe. Offen bleiben:
   - **Stop-Rest-Versatz ~5 Frames (Known Issue, tiefere Analyse offen)** — siehe
     Abschnitt „Known Limitations". Bei `vo=libmpv` hängt das in die FBO gerenderte Bild
     der mpv-Clock um eine feste Pipeline-Tiefe (~16 Frames) hinterher. Der eingebaute
@@ -712,13 +673,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     hängt, Play/Stop-Button toggelt nicht mehr, render.h §93-94) → nicht gangbar ohne
     separaten Render-Thread. Tiefere Lösung Prio low: ggf. mit künftiger libmpv-Version
     (echte „angezeigter-Frame"-Property) oder Render-Thread-Architektur erneut bewerten.
-  - ~~`createTempMkvForPlayback` (`gui/ttcurrentframe.cpp`): keine Absicherung gegen
-    `frameRate==0` (Division → UB); kein Destruktor-Cleanup (Temp-MKV bleibt liegen,
-    wenn das Fenster während H.264/H.265-Wiedergabe geschlossen wird).~~
-    → **ERLEDIGT (2026-07-25, `25c966eb`)**: `frameRate <= 0` bricht mit Warn-Log
-    ab und liefert einen leeren Pfad (der Aufrufer behandelt das als „Wiedergabe
-    nicht möglich"); `~TTCurrentFrame()` ruft `cleanupTempPlaybackFile()`.
-    (Temp-Dateiname ist seit v0.71.0 eindeutig: `ttcut-ng_playback_temp.mkv`.)
   - **Erster PLAY pro Quelle ~5 s** (H.264/H.265): die ganze ES wird vor der
     Wiedergabe in eine temp-MKV gemuxt. Seit v0.71.0 wird die MKV über
     STOP→PLAY gecacht (Re-PLAY sofort), aber der erste Mux bleibt. Hebel:
