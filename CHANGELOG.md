@@ -2,6 +2,24 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+**Quick-jump dialog no longer freezes after picking a picture**
+
+### Fixed
+- **The quick-jump dialog froze the whole interface after a picture was
+  selected, sometimes for minutes.** On interlaced H.264 recordings, thumbnails
+  also stayed blank. The decoder was handed a frame index without the stream
+  metadata that goes with it; on field-coded material it then searched for a
+  frame it could never recognise and read the file to its end before giving up —
+  71 seconds per attempt on a 54-minute recording, repeated for the preceding
+  frame. Closing the dialog waited for that work to finish, which is what locked
+  the window. The same frame now decodes in 13 ms, and a decode that does fail
+  gives up in well under a second.
+- **Aborting a decode now takes effect immediately** instead of only between
+  frames, so closing the dialog while thumbnails are still loading no longer
+  blocks the interface.
+
 ## v0.82.2 (2026-08-24)
 
 **Disturbance-zone model for the demux gap repair**

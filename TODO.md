@@ -278,6 +278,15 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     machte aus **einem** Schieber-Ereignis Minuten bis Stunden GUI-Rechenzeit.
     Gefixt (korrekte Send/Receive-Pumpe mit schwebendem Paket); UHD-Sprung
     jetzt 2,6 s statt nie.
+  - **Gemessen 2026-08-28** (Regressionslauf zum Frame-Index-Bündel, UHD
+    `Designermode`, 178 224 AUs): `decodeFrame()` kostet auf diesem Material
+    im Median **1262 ms** (Ziehen) bzw. **1390 ms** (Sprung); eine Ziehbewegung
+    mit 50 Ereignissen sind damit rund **63 s** GUI-Zeit. Der Restbefund
+    „Schieber reagiert träge" ist also **echte Dekodierkosten**, keine Schleife
+    mehr — die Bündel-/Schleifenarbeit von 2026-08-28 ändert daran nichts und
+    war dafür auch nicht gedacht. Wer das angeht, muss die Zahl der synchronen
+    `onGotoFrame()`-Aufrufe pro Ziehbewegung senken (Entprellen/Abbrechen),
+    nicht die Dekodierung schneller machen.
   - **Offen B — der SIGABRT** aus der GUI-Abnahme 2026-08-15 ist weiter
     unerklärt (Zusicherung, ungefangene Ausnahme oder fehlgeschlagene
     Allokation; kein Speichermangel: 91 GB RAM, 82 GB frei). Plausibel
@@ -285,14 +294,41 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wiederholt komplett — was dabei an Puffern anfällt, war nie im Blick.
     Nach dem Fix neu provozieren, bevor jemand tiefer gräbt. Das Helferskript
     `abnahme/start-gdb.sh` ist **gelöscht** (CLAUDE_TMP-Purge 2026-08-16) —
-    neu zu schreiben ist es in Minuten: TTCut-ng unter gdb starten (wegen
-    `ptrace_scope=1` nicht anhängen), beim Absturz alle Fäden dumpen und das
-    Logfile wegsichern (es wird beim Absturz nicht geschrieben und beim
-    Neustart überschrieben, siehe Messfallen unten).
+    neu zu schreiben ist es in Minuten: TTCut-ng unter gdb starten, beim
+    Absturz alle Fäden dumpen und das Logfile wegsichern (es wird beim
+    Absturz nicht geschrieben und beim Neustart überschrieben, siehe
+    Messfallen unten).
   - **Zwei Messfallen aus der ersten Runde** (Beweise gingen verloren):
     abgeschnittener Core durch Shell-Zeitlimit beim Schreiben; die
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
     und beim Neustart überschrieben wird.
+
+- **`decodeFrameYUV()` hat noch die alte unbegrenzte Skip-Schleife** (Fund aus
+  dem Abschluss-Review zum Frame-Index-Bündel, 2026-08-28)
+  - Der nicht-sequenzielle Zweig in `extern/ttffmpegwrapper.cpp` setzt
+    `guardMax = mFrameIndex.size()` (bzw. 100000 ohne Index) und prüft
+    innerhalb der Schleife kein `isCancelled()` — Zeile für Zeile die
+    Geschwisterschleife, die am 2026-08-28 in `decodeFrame()` auf die
+    Suchdistanz begrenzt und abbrechbar gemacht wurde (siehe
+    `docs/completed-work.md`). Genutzt von `data/ttframesearchtask.cpp`.
+  - Die Metadaten-Ursache ist für diese Aufrufer geschlossen — sie kommen
+    über `provideFrameIndexTo()` an denselben Bündel-Index heran wie
+    `decodeFrame()`, aber die EOF-Drain-Form der Schleife selbst besteht
+    fort, versteckt in einer Suche, die viele Frames durchläuft und ihren
+    Abbruch nur zwischen den Frames prüft, nicht während eines einzelnen
+    `decodeFrameYUV()`-Aufrufs.
+  - Entweder dieselbe Begrenzung (Suchdistanz + Abbruchprüfung) hier
+    nachziehen, oder begründen, warum `decodeFrameYUV()` sie nicht braucht.
+
+- **`TTH26xVideoStream::ffmpegFrameIndex()` ist toter Code** (Fund aus dem
+  Abschluss-Review zum Frame-Index-Bündel, 2026-08-28)
+  - Kein Aufrufer mehr außerhalb der eigenen Deklaration/Definition
+    (`avstream/tth26xvideostream.h`/`.cpp`) — beide Subklassen greifen direkt
+    auf `mFFmpeg->frameIndex()` zu. Die Methode steht weiterhin unter dem
+    Header-Kommentar, der sie als kanonischen Zugriffsweg vorstellt, direkt
+    über dem Bündel-Mechanismus (`ffmpegFrameIndexBundle()`/
+    `provideFrameIndexTo()`), der sie ersetzt hat.
+  - Entfernen oder dem nächsten Dead-Code-Audit überlassen.
 
 - **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
   niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der

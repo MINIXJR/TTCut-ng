@@ -1,6 +1,6 @@
 ---
-base_commit: 7068942c9294e96ea6bcfa8c18bfb69a523449ff
-last_verified: 2026-08-20
+base_commit: 2c8677404ae69fe3d39417b151ee88634b824830
+last_verified: 2026-08-28
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -86,9 +86,10 @@ werden:
 
 **Der Bildindex wird wiederverwendet, wo es einen gibt.** Jeder Aufruf zieht ihn
 aus dem Vorschau-Wrapper
-(`currentFrame->videoWindow()->ffmpegWrapper()->frameIndex()`) und reicht ihn als
-`preBuiltFrameIndex` durch; nur wenn der leer ist, baut jeder Sub-Dekoder sich
-selbst einen. Das spart den erneuten Aufbau — und ist für H.264/H.265
+(`currentFrame->videoWindow()->ffmpegWrapper()->frameIndexBundle()`) und reicht ihn
+als `preBuiltFrameIndex` durch — seit 2026-08-28 ein `TTFrameIndexBundle`, das die
+H.264-Strommetadaten mitträgt statt nur der Liste; nur wenn es leer ist, baut jeder
+Sub-Dekoder sich selbst einen. Das spart den erneuten Aufbau — und ist für H.264/H.265
 **Voraussetzung**, nicht Optimierung (siehe Fallstricke).
 
 ## Datenfluss
@@ -135,7 +136,7 @@ flowchart TB
 
     WIDGET -. "analyzeRequested / abortRequested" .-> MW
     LOADEXIT -. "0-ms-Timer → maybeStartAutoAnomalyScan()" .-> MW
-    PREV -- "preBuiltFrameIndex" --> MW
+    PREV -- "TTFrameIndexBundle" --> MW
     IDX -- "Positionen" --> MW
     MW -. "start()" .-> POOLQ
     POOLQ -. "run() → operation()" .-> BASE
@@ -163,7 +164,7 @@ beibehalten.
 
 | Kante | Bedeutung | Fallstrick |
 |---|---|---|
-| `PREV → MW → Task` (`preBuiltFrameIndex`) | Kopie der `QList<TTFrameInfo>` des Vorschau-Wrappers. Leer ⇒ jeder Sub-Dekoder ruft `buildFrameIndex()` selbst. | Bei H.26x ist die Liste die **einzige** Quelle für Anzeige↔Dekodier-Zuordnung. Ein Worker ohne Index gibt aus `decodeFrame()` leere `QImage` zurück — genau der zweite der beiden Ur-Defekte der Pillarbox-Erkennung. |
+| `PREV → MW → Task` (`preBuiltFrameIndex`) | `TTFrameIndexBundle` des Vorschau-Wrappers: die `QList<TTFrameInfo>` **plus** `isPAFF`/`frameMbsOnlyFlag`/`log2MaxFrameNum` (Qt-COW, O(1)). Leer ⇒ jeder Sub-Dekoder ruft `buildFrameIndex()` selbst. | Bei H.26x ist die Liste die **einzige** Quelle für Anzeige↔Dekodier-Zuordnung. Ein Worker ohne Index gibt aus `decodeFrame()` leere `QImage` zurück — genau der zweite der beiden Ur-Defekte der Pillarbox-Erkennung. |
 | `IDX → collectNextBatch/collectSampleBatch` | Positionen stammen aus `moveToNextIndexPos`/`moveToPrevIndexPos`, also **Anzeige**-Positionen für alle Codecs. | Nicht in Dekodier-/AU-Indizes umrechnen. Die Kette (Positionsauswahl → `decodeFrame` → `found`/`pointsDetected` → `onVideoSliderChanged`) ist durchgehend anzeigeordnungs-konsistent. `TTStreamPointVideoWorker` zählt zwar `picture_start_code`-Header in Bitstrom-Reihenfolge, **schlägt die gemeldete Position aber in der anzeigesortierten Indexliste nach** (`displayPositionAfter`) — siehe die Zeile darunter. |
 | `VWORK → displayPositionAfter → IDX` | Der Bitstrom-Zähler wird über den Kopf-Index des ersten Bildes nach dem Sequenzkopf in einen Rang der anzeigesortierten `TTVideoIndexList` übersetzt. | War bis `2026-07-30` nicht vorhanden; der rohe Zähler landete als Markerposition in `onVideoSliderChanged`. Gemessen (`tools/diag/test_streampoint_order`): TELE5 576p25 alle 626 Sequenzköpfe um +2 daneben, Comedy Central 268 von 350 (überwiegend +3, bis +6); RTLZWEI fährt geschlossene GOPs und war zufällig richtig. **Nachrechnen (`base_number + temporal_reference`) genügt nicht** — Feldbild-Paare lassen Rang und `display_order`-Wert auseinanderlaufen (65 von 7507 bzw. 14 von 136319 Einträgen). Der lineare Suchlauf ist vertretbar, weil er nur bei einem echten Wechsel läuft. |
 | `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
@@ -189,7 +190,7 @@ beibehalten.
 |---|---|---|
 | Dekoder | 1 × `TTMpeg2Decoder` (libmpeg2, RGB32) | N × `TTFFmpegWrapper` |
 | Parallelität | keine (`mWorkerCount = 1`, Inline-Zweig) | N (Voreinstellung ≤ 4) |
-| Bildindex | `TTVideoIndexList` + `TTVideoHeaderList` aus dem Parser | `preBuiltFrameIndex` bzw. `buildFrameIndex()` |
+| Bildindex | `TTVideoIndexList` + `TTVideoHeaderList` aus dem Parser | `preBuiltFrameIndex` (`TTFrameIndexBundle`) bzw. `buildFrameIndex()` |
 | Header-Liste | vorhanden (`ttmpeg2videostream.cpp:73`) | **null** — `TTH26xVideoStream` legt keine an |
 | Seitenverhältnis über Header | ja (`TTStreamPointVideoWorker`, liest `aspect_ratio_information`) | nein — Elementarströme tragen keine Sequenz-Header |
 | Pillarbox über Bildanalyse | ja | ja |
