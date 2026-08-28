@@ -42,6 +42,10 @@ void TTCutSettingsNavigation::setTabData()
   sbCtrlDistance->setValue(TTSettings::instance()->stepPlusCtrl());
   sbMouseWheel->setValue(TTSettings::instance()->stepMouseWheel());
   sbQuickJumpInterval->setValue(TTSettings::instance()->quickJumpIntervalSec());
+  // Range comes from TTSettings, not from the .ui, so the bound exists once.
+  sbQuickJumpThumbHeight->setRange(TTSettings::kQuickJumpThumbHeightMin,
+                                   TTSettings::kQuickJumpThumbHeightMax);
+  sbQuickJumpThumbHeight->setValue(TTSettings::instance()->quickJumpThumbHeight());
   cbQuickSearch->setChecked(TTSettings::instance()->fastSlider());
 }
 
@@ -54,5 +58,6 @@ void TTCutSettingsNavigation::saveTabData()
   TTSettings::instance()->setStepPlusCtrl(sbCtrlDistance->value());
   TTSettings::instance()->setStepMouseWheel(sbMouseWheel->value());
   TTSettings::instance()->setQuickJumpIntervalSec(sbQuickJumpInterval->value());
+  TTSettings::instance()->setQuickJumpThumbHeight(sbQuickJumpThumbHeight->value());
   TTSettings::instance()->setFastSlider(cbQuickSearch->isChecked());
 }

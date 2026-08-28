@@ -213,6 +213,17 @@ public:
   int     quickJumpIntervalSec() const { return mQuickJumpIntervalSec; }
   void    setQuickJumpIntervalSec(int v);
 
+  // Thumbnail height in the quick-jump dialog. The width is not stored: it
+  // follows from the stream's aspect ratio, so tiles never get distorted.
+  // The default and the range live here and nowhere else — the settings page
+  // ranges its spin box from them and the dialog clamps against them.
+  static constexpr int kQuickJumpThumbHeightDefault = 100;
+  static constexpr int kQuickJumpThumbHeightMin     = 60;
+  static constexpr int kQuickJumpThumbHeightMax     = 300;
+
+  int     quickJumpThumbHeight() const { return mQuickJumpThumbHeight; }
+  void    setQuickJumpThumbHeight(int v);
+
   const QString& screenshotDir() const     { return mScreenshotDir; }
   void    setScreenshotDir(const QString& v);
 
@@ -467,6 +478,7 @@ private:
   bool        mNormalizeAcmod       = true;
   QStringList mAudioLanguagePreference;     // empty = use system locale
   int         mQuickJumpIntervalSec = 30;
+  int         mQuickJumpThumbHeight = kQuickJumpThumbHeightDefault;
   QString     mScreenshotDir;               // empty by default
   QString     mScreenshotProject;           // empty by default
 

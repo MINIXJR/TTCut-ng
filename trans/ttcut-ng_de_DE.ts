@@ -2868,27 +2868,43 @@ Ausgabedatei:
         <translation>Intervall für den Zeitsprung-Dialog in Sekunden.</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="117"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="114"/>
+        <source>Thumbnail height (pixels):</source>
+        <translation>Vorschaubild-Höhe (Pixel):</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="115"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="124"/>
+        <source>Height of the preview images in the Time Jump dialog. The width follows the video&apos;s aspect ratio. Larger images mean fewer of them per page.</source>
+        <translation>Höhe der Vorschaubilder im Zeitsprung-Dialog. Die Breite ergibt sich aus dem Seitenverhältnis des Videos. Größere Bilder bedeuten weniger Bilder pro Seite.</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="123"/>
+        <source> px</source>
+        <translation> px</translation>
+    </message>
+    <message>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="132"/>
         <source>Position Slider</source>
         <translation>Position-Slider</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="121"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="136"/>
         <source>Snap to I-frames only while dragging</source>
         <translation>Beim Ziehen nur zu I-Frames springen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="122"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="137"/>
         <source>While dragging the position slider in the main window, snap only to the nearest I-frame (faster) instead of the exact frame position (frame-accurate, but slower while dragging).</source>
         <translation>Beim Ziehen des Position-Sliders im Hauptfenster nur zum nächsten I-Frame springen (schneller) statt zur exakten Frame-Position (Frame-genau, aber langsamer beim Slider-Drag).</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="136"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="151"/>
         <source>Reset to defaults</source>
         <translation>Auf Standard zurücksetzen</translation>
     </message>
     <message>
-        <location filename="../ui/ttcutsettingsnavigation.ui" line="137"/>
+        <location filename="../ui/ttcutsettingsnavigation.ui" line="152"/>
         <source>Reset the values in this category to their factory defaults. Changes are applied only when you click OK.</source>
         <translation>Setzt die Werte dieser Kategorie auf Werkseinstellungen zurück. Änderungen werden erst beim Klick auf OK angewendet.</translation>
     </message>
@@ -3490,13 +3506,13 @@ Ausgabedatei:
 <context>
     <name>TTFFmpegWrapper</name>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="2754"/>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="2765"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="2782"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="2793"/>
         <source>Indexing frame %1...</source>
         <translation>Frame %1 indizieren...</translation>
     </message>
     <message>
-        <location filename="../extern/ttffmpegwrapper.cpp" line="560"/>
+        <location filename="../extern/ttffmpegwrapper.cpp" line="561"/>
         <source>Indexed %1 frames</source>
         <translation>%1 Frames indiziert</translation>
     </message>
@@ -3918,42 +3934,42 @@ Unterstützte Formate:
 <context>
     <name>TTQuickJumpDialog</name>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="78"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="81"/>
         <source>Time warp — keyframes</source>
         <translation>Zeitsprung — Keyframes</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="149"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="157"/>
         <source>Back</source>
         <translation>Zurück</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="153"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="161"/>
         <source>Forward</source>
         <translation>Vor</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="156"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="164"/>
         <source>Interval:</source>
         <translation>Intervall:</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="160"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="168"/>
         <source>All</source>
         <translation>Alle</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="162"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="170"/>
         <source>Show keyframes every N seconds (0=all)</source>
         <translation>Keyframes alle N Sekunden anzeigen (0=alle)</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="179"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="187"/>
         <source>Double-click thumbnail to jump to frame</source>
         <translation>Doppelklick auf Vorschaubild um zum Frame zu springen</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpdialog.cpp" line="233"/>
+        <location filename="../gui/ttquickjumpdialog.cpp" line="241"/>
         <source>Page %1 / %2</source>
         <translation>Seite %1 / %2</translation>
     </message>
@@ -3966,7 +3982,7 @@ Unterstützte Formate:
         <translation>Vorschaubilder werden dekodiert</translation>
     </message>
     <message>
-        <location filename="../gui/ttquickjumpworker.cpp" line="117"/>
+        <location filename="../gui/ttquickjumpworker.cpp" line="122"/>
         <source>Thumbnails complete</source>
         <translation>Vorschaubilder fertig</translation>
     </message>

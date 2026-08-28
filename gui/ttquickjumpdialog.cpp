@@ -36,9 +36,7 @@
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 
-static const int THUMB_HEIGHT = 83;
-
-static int computeThumbWidth(TTVideoStream* vs)
+static int computeThumbWidth(TTVideoStream* vs, int thumbHeight)
 {
   int type = vs->streamType();
   bool isMpeg2 = (type == TTAVTypes::mpeg2_demuxed_video);
@@ -48,17 +46,17 @@ static int computeThumbWidth(TTVideoStream* vs)
     TTSequenceHeader* seq = vs->currentSequenceHeader();
     if (seq) {
       int ar = seq->aspectRatio();
-      if (ar == 3) return THUMB_HEIGHT * 16 / 9;   // 16:9
-      if (ar == 4) return THUMB_HEIGHT * 221 / 100; // 2.21:1
-      if (ar == 2) return THUMB_HEIGHT * 4 / 3;     // 4:3
+      if (ar == 3) return thumbHeight * 16 / 9;   // 16:9
+      if (ar == 4) return thumbHeight * 221 / 100; // 2.21:1
+      if (ar == 2) return thumbHeight * 4 / 3;     // 4:3
       // Fallback: pixel dimensions
       if (seq->verticalSize() > 0)
-        return THUMB_HEIGHT * seq->horizontalSize() / seq->verticalSize();
+        return thumbHeight * seq->horizontalSize() / seq->verticalSize();
     }
   }
 
   // H.264/H.265: pixels are square (SAR=1:1) — 16:9 for HD/UHD
-  return THUMB_HEIGHT * 16 / 9;
+  return thumbHeight * 16 / 9;
 }
 
 TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
@@ -78,8 +76,14 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
   setWindowTitle(tr("Time warp — keyframes"));
   setWindowModality(Qt::WindowModal);
 
-  int thumbWidth = computeThumbWidth(videoStream);
-  mDelegate = new TTQuickJumpDelegate(thumbWidth, THUMB_HEIGHT, this);
+  // Clamped against the range TTSettings defines, so a hand-edited config
+  // cannot collapse every tile to nothing or blow the page up to one image.
+  // The height drives the width (aspect ratio), so it is the only stored value.
+  int thumbHeight = qBound(TTSettings::kQuickJumpThumbHeightMin,
+                           TTSettings::instance()->quickJumpThumbHeight(),
+                           TTSettings::kQuickJumpThumbHeightMax);
+  int thumbWidth = computeThumbWidth(videoStream, thumbHeight);
+  mDelegate = new TTQuickJumpDelegate(thumbWidth, thumbHeight, this);
   mModel = new TTQuickJumpModel(videoStream, this);
 
   // Apply anchor and interval from global settings

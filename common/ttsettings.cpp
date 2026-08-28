@@ -385,6 +385,12 @@ void TTSettings::setQuickJumpIntervalSec(int v)
   mQuickJumpIntervalSec = v;
 }
 
+void TTSettings::setQuickJumpThumbHeight(int v)
+{
+  if (mQuickJumpThumbHeight == v) return;
+  mQuickJumpThumbHeight = v;
+}
+
 void TTSettings::setScreenshotDir(const QString& v)
 {
   if (mScreenshotDir == v) return;
@@ -648,6 +654,7 @@ void TTSettings::load()
   mNormalizeAcmod         = settings.value("NormalizeAcmod/",         mNormalizeAcmod).toBool();
   mAudioLanguagePreference = settings.value("AudioLanguagePreference/", QStringList{}).toStringList();
   mQuickJumpIntervalSec   = settings.value("QuickJumpInterval/",      mQuickJumpIntervalSec).toInt();
+  mQuickJumpThumbHeight   = settings.value("QuickJumpThumbHeight/",    mQuickJumpThumbHeight).toInt();
   // ----- Extra Frame fields (Task 11) ---------------------------------
   // Two extraFrame* fields share /Settings/Common with the Audio/QuickJump
   // block. Legacy keys are `ExtraFrameClusterGap/` and
@@ -898,6 +905,7 @@ void TTSettings::save()
   settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
   settings.setValue("AudioLanguagePreference/", mAudioLanguagePreference);
   settings.setValue("QuickJumpInterval/",       mQuickJumpIntervalSec);
+  settings.setValue("QuickJumpThumbHeight/",    mQuickJumpThumbHeight);
   // ----- Extra Frame fields (Task 11) ---------------------------------
   // Legacy keys (no `Sec` suffix on disk) — see load().
   settings.setValue("ExtraFrameClusterGap/",    mExtraFrameClusterGapSec);

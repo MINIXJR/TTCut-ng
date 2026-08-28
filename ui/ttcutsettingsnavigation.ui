@@ -109,6 +109,22 @@
         <property name="toolTip"><string>Interval for the Time Jump dialog, in seconds.</string></property>
        </widget>
       </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="laQJThumbHeight">
+        <property name="text"><string>Thumbnail height (pixels):</string></property>
+        <property name="toolTip"><string>Height of the preview images in the Time Jump dialog. The width follows the video's aspect ratio. Larger images mean fewer of them per page.</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="sbQuickJumpThumbHeight">
+        <!-- Range is set in TTCutSettingsNavigation::setTabData() from
+             TTSettings::kQuickJumpThumbHeight{Min,Max} so the bound exists
+             in exactly one place. Do not add minimum/maximum here. -->
+        <property name="singleStep"><number>10</number></property>
+        <property name="suffix"><string> px</string></property>
+        <property name="toolTip"><string>Height of the preview images in the Time Jump dialog. The width follows the video's aspect ratio. Larger images mean fewer of them per page.</string></property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
