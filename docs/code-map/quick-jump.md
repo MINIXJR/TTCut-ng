@@ -1,8 +1,10 @@
 ---
-base_commit: 2c8677404ae69fe3d39417b151ee88634b824830
+base_commit: 37f8b44c557f6886a1762a2df8696a2675fa93c4
 last_verified: 2026-08-28
 sources:
   - gui/ttcutmainwindow.cpp
+  - gui/ttcutsettingsnavigation.cpp
+  - common/ttsettings.h
   - gui/ttquickjumpdialog.h
   - gui/ttquickjumpdialog.cpp
   - gui/ttquickjumpmodel.h
@@ -40,6 +42,7 @@ flowchart TD
     POOL["TTThreadTaskPool<br/>owned by the dialog"]
     WORKER["TTQuickJumpWorker<br/>TTThreadTask, pool thread"]
     IDXLIST["TTVideoIndexList<br/>stream index, I-frame scan"]
+    SET["TTSettings<br/>interval, thumbnail height"]
     OWNER["TTH26xVideoStream<br/>frame-index owner"]
     WRAP["TTFFmpegWrapper<br/>worker-local decoder"]
     MPEG2["TTMpeg2Decoder<br/>worker-local, MPEG-2 only"]
@@ -48,6 +51,7 @@ flowchart TD
     SEL["selectedFrameIndex()"]
 
     MW --> DLG
+    SET --> DLG
     DLG --> MODEL
     MODEL --> DEL
     IDXLIST --> MODEL
@@ -73,6 +77,8 @@ flowchart TD
 | `TTCutMainWindow::onQuickJump` → `TTQuickJumpDialog` | The dialog is a **stack object**. `exec()` returns, the frame is fetched, then the function's closing brace destroys the dialog — on the GUI thread, inside the button click that opened it. |
 | `TTVideoIndexList` → `TTQuickJumpModel` | `buildKeyframeIndex()` walks `moveToNextIndexPos(pos, 1)` collecting **I-frame positions only** — never arbitrary frames. Positions are stream-index positions, which the decode path later treats as DISPLAY positions. |
 | `TTQuickJumpModel` interval filter | `setIntervalSeconds(n)`: `n <= 0` keeps every I-frame; `n > 0` thins them to roughly one per `n` seconds, anchored on the last I-frame at or before `mAnchorFrame`. A **small** interval therefore means *more* tiles, not different kinds of frames. |
+| `TTSettings` → `TTQuickJumpDialog` | Two values, both read **once at construction**: `quickJumpIntervalSec()` and `quickJumpThumbHeight()`. Changing either in the settings takes effect the next time the dialog opens, not in an open one. The height is clamped to `kQuickJumpThumbHeightMin/Max`, so a hand-edited config cannot collapse the tiles. |
+| `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()` via the stream's aspect ratio. Only the height is stored anywhere — the width is always derived, which is what keeps tiles undistorted. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
 | `TTH26xVideoStream` → `TTQuickJumpWorker` | `ffmpegFrameIndexBundle()` — index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`) in one `TTFrameIndexBundle`. The bundle exists so the two cannot be separated; see pitfalls. |
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
@@ -85,6 +91,11 @@ flowchart TD
 
 ## Assumptions and contracts
 
+- **The thumbnail height's default and range live in exactly one place**
+  (`TTSettings::kQuickJumpThumbHeight{Default,Min,Max}`). The settings page
+  ranges its spin box from them, the dialog clamps against them, and the
+  `.ui` carries no `minimum`/`maximum` of its own — deliberately, with a
+  comment saying so.
 - **The dialog owns its pool.** Nothing outside it may keep a pointer to a
   worker past `abortCurrentWorker()`; the worker deletes itself through the
   pool's autodelete.
