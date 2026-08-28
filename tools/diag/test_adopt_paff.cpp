@@ -46,10 +46,7 @@ int main(int argc, char** argv)
   // Adopter: same file, index + metadata adopted (provideFrameIndexTo sequence).
   TTFFmpegWrapper adopter;
   if (!adopter.openFile(file)) { fprintf(stderr, "adopter open failed\n"); return 2; }
-  adopter.setFrameIndex(owner.frameIndex());
-  adopter.adoptStreamMetadata(owner.isPAFF(),
-                              owner.h264FrameMbsOnlyFlag(),
-                              owner.h264Log2MaxFrameNum());
+  adopter.setFrameIndex(owner.frameIndexBundle());
   check(adopter.isPAFF(), "adopter inherited PAFF state");
   check(!adopter.h264FrameMbsOnlyFlag(), "adopter inherited frame_mbs_only_flag=0");
 

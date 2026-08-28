@@ -69,7 +69,7 @@ int main(int argc, char** argv)
         // setFrameIndex must reproduce the same map.
         TTFFmpegWrapper shared;
         if (!shared.openFile(mbaff)) { printf("FAIL  shared open\n"); return 1; }
-        shared.setFrameIndex(wrapper.frameIndex());
+        shared.setFrameIndex(wrapper.frameIndexBundle());
         if (wmap.count() == 162530) {
             expectEq("shared displayToDecode(36384)",
                      shared.displayOrderMap().displayToDecode(36384), 36385);

@@ -45,6 +45,7 @@ tools/ttcut-audiofix/ttcut-audiofix
 tools/diag/test_*
 tools/diag/dump_mpeg2_fields
 tools/diag/probe_copystart
+tools/diag/bench_playback_mux
 !tools/diag/*.cpp
 !tools/diag/*.sh
 

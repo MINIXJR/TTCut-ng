@@ -84,7 +84,7 @@ int main(int argc, char** argv)
     TTAspectScanTask task(vs.filePath(), TTAVTypes::mpeg2_demuxed_video,
                           indexList, headerList,
                           indexList->count(), vs.frameRate(), 20, sampleS,
-                          QList<TTFrameInfo>());
+                          TTFrameIndexBundle());
     QObject::connect(&task, &TTAspectScanTask::pointsDetected,
                      [&points](const QList<TTStreamPoint>& p) { points = p; });
     task.runSynchron();

@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 
     QList<TTStreamPoint> points;
     TTAspectScanTask task(file, streamType, &indexList, nullptr,
-                          indexList.count(), fps, 20, sampleS, w.frameIndex());
+                          indexList.count(), fps, 20, sampleS, w.frameIndexBundle());
     QObject::connect(&task, &TTAspectScanTask::pointsDetected,
                      [&points](const QList<TTStreamPoint>& p) { points = p; });
     // Record all status messages: the step sequence is the invariant

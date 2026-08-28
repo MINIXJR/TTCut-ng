@@ -26,8 +26,13 @@
 //                                 print the poc/keyframe neighbourhood - this
 //                                 is what identified the EAGAIN packet drop
 //          INDEX=stream|wrapper   how the frame index is obtained
-//                                 (default stream - what the GUI's display
-//                                  path does)
+//                                 (default stream - what the GUI's display path does)
+//
+// A third route used to exist: the quick-jump worker adopted the bare index
+// list without the owner's stream metadata. On 06x03 display 3566 that route
+// measured 72 675 ms against 13 ms for the routes below. It is gone — the
+// index is a TTFrameIndexBundle now and cannot be handed over without its
+// metadata (spec 2026-08-28-frame-index-bundle-design.md).
 //
 // The two index routes are NOT interchangeable and the difference dwarfs
 // everything else on UHD material:
@@ -101,7 +106,8 @@ int main(int argc, char** argv)
     return 2;
   }
 
-  const bool viaStream = (qgetenv("INDEX") != "wrapper");
+  const QByteArray indexMode = qgetenv("INDEX");
+  const bool viaStream   = (indexMode != "wrapper");
 
   TTFFmpegWrapper wrapper;
   QElapsedTimer t;
@@ -134,8 +140,9 @@ int main(int argc, char** argv)
 
     t.restart();
     bool adopted = false;
-    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(stream))
+    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(stream)) {
       adopted = h26x->provideFrameIndexTo(&wrapper);
+    }
     indexMs = t.elapsed();
     if (!adopted) {
       fprintf(stderr, "FAIL: the stream would not hand over its index - rerun\n"
@@ -180,9 +187,14 @@ int main(int argc, char** argv)
       printf("  ^^ EVERY seek degrades to a decode from the start of the file.\n");
   }
 
+  // FRAME=<n> aims every shape at one specific DISPLAY position instead of the
+  // quarter mark - needed to re-measure a frame that failed in the GUI.
+  const int base = qgetenv("FRAME").isEmpty()
+                     ? frames / 4
+                     : QString::fromLatin1(qgetenv("FRAME")).toInt();
+
   if (!qgetenv("DECODE_DEBUG").isEmpty()) {
     TTSettings::instance()->setLogFFmpegDecoder(true);
-    const int base = frames / 4;
     printf("map around display %d:\n", base);
     for (int i = base - 3; i <= base + 3; ++i)
       printf("  display %d -> targetAU (see decode below); index[%d]: poc=%d key=%d idr=%d\n",
@@ -197,7 +209,6 @@ int main(int argc, char** argv)
   }
 
   // A first decode warms whatever caches exist; it is not part of either shape.
-  const int base = frames / 4;
   t.restart();
   QImage warm = wrapper.decodeFrame(base);
   printf("first decode: %lld ms  (%dx%d)\n\n",
