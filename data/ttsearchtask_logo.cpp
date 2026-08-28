@@ -26,7 +26,7 @@ TTLogoSearchTask::TTLogoSearchTask(const QString& videoFilePath,
                                    int startPos, int direction, int frameCount,
                                    const TTLogoDetector* detector,
                                    float threshold,
-                                   const QList<TTFrameInfo>& preBuiltFrameIndex)
+                                   const TTFrameIndexBundle& preBuiltFrameIndex)
   : TTSearchTask("LogoSearch", videoFilePath, streamType,
                  indexList, headerList, startPos, direction, frameCount,
                  preBuiltFrameIndex),

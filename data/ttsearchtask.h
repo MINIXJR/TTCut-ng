@@ -39,7 +39,7 @@ public:
                int startPos,
                int direction,    // +1 forward, -1 backward
                int frameCount,
-               const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
+               const TTFrameIndexBundle& preBuiltFrameIndex = TTFrameIndexBundle());
   ~TTSearchTask() override;
 
 signals:
@@ -127,7 +127,7 @@ private:
 
   QString                   mFilePath;
   TTAVTypes::AVStreamType   mStreamType;
-  QList<TTFrameInfo>        mPreBuiltFrameIndex;
+  TTFrameIndexBundle        mPreBuiltFrameIndex;
 
   TTFFmpegWrapper*          mFFmpegWrapper = nullptr;
   TTMpeg2Decoder*           mMpeg2Decoder  = nullptr;

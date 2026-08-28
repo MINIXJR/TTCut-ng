@@ -259,15 +259,16 @@ void TTQuickJumpDialog::startThumbnailWorker()
 
   int streamType = mVideoStream->streamType();
 
-  // Index sharing (spec 2026-06-05): pulls the frame index directly from Owner A
-  // (videoStream->ffmpegFrameIndex()) to avoid another ~2 s scan in the worker.
-  QList<TTFrameInfo> prebuiltIndex;
+  // Index sharing (spec 2026-06-05): pulls the index directly from Owner A to
+  // avoid another ~2 s scan in the worker. As a bundle (spec 2026-08-28), so
+  // the stream metadata travels with it.
+  TTFrameIndexBundle prebuiltIndex;
   if (streamType == TTAVTypes::h264_video) {
     TTH264VideoStream* h264 = static_cast<TTH264VideoStream*>(mVideoStream);
-    prebuiltIndex = h264->ffmpegFrameIndex();
+    prebuiltIndex = h264->ffmpegFrameIndexBundle();
   } else if (streamType == TTAVTypes::h265_video) {
     TTH265VideoStream* h265 = static_cast<TTH265VideoStream*>(mVideoStream);
-    prebuiltIndex = h265->ffmpegFrameIndex();
+    prebuiltIndex = h265->ffmpegFrameIndexBundle();
   }
 
   mCurrentWorker = new TTQuickJumpWorker(

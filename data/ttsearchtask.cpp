@@ -28,7 +28,7 @@ TTSearchTask::TTSearchTask(const QString& taskName,
                            TTVideoIndexList* indexList,
                            TTVideoHeaderList* headerList,
                            int startPos, int direction, int frameCount,
-                           const QList<TTFrameInfo>& preBuiltFrameIndex)
+                           const TTFrameIndexBundle& preBuiltFrameIndex)
   : TTThreadTask(taskName),
     mIndexList(indexList),
     mHeaderList(headerList),

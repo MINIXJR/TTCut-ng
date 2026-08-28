@@ -60,14 +60,21 @@ public:
 
     // --- Canonical frame-index owner ("Owner A") ---
     // This stream builds the FFmpeg frame index ONCE at stream-open
-    // (createHeaderList). Other wrappers of the same file should adopt it instead
-    // of rescanning themselves (~2 s/scan). Consumers:
-    //   - Quickjump (ttquickjumpdialog.cpp) pulls directly via ffmpegFrameIndex().
-    //   - mpegWindow (ttmpeg2window2.cpp) adopts via provideFrameIndexTo();
+    // (createHeaderList). Other wrappers of the same file adopt it instead of
+    // rescanning themselves (~2 s/scan). Every adopter takes the index as a
+    // TTFrameIndexBundle, so the stream metadata cannot be left behind:
+    //   - Quickjump (ttquickjumpdialog.cpp) via ffmpegFrameIndexBundle().
+    //   - mpegWindow (ttmpeg2window2.cpp) via provideFrameIndexTo();
     //     Black/Scene/Logo search + analysisWrapper pull transitively from there.
-    //   - framesearch (ttframesearchtask.cpp) adopts via provideFrameIndexTo().
-    // See spec docs/superpowers/specs/2026-06-05-frame-index-unification-design.md
+    //   - framesearch (ttframesearchtask.cpp) via provideFrameIndexTo().
+    // See specs 2026-06-05-frame-index-unification-design.md and
+    // 2026-08-28-frame-index-bundle-design.md.
     const QList<TTFrameInfo>& ffmpegFrameIndex() const;
+
+    // The index together with the metadata the wrapper measured. Consumers that
+    // hand an index across a thread or object boundary MUST use this, not
+    // ffmpegFrameIndex() — see TTFrameIndexBundle.
+    TTFrameIndexBundle ffmpegFrameIndexBundle() const;
 
     // Hands this stream's already-built index (Owner A) to `consumer`, which has
     // opened the SAME file. File identity is guaranteed by the caller through

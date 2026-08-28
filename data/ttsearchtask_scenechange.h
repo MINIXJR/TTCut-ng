@@ -22,7 +22,7 @@ public:
                           TTVideoHeaderList* headerList,
                           int startPos, int direction, int frameCount,
                           float threshold,
-                          const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
+                          const TTFrameIndexBundle& preBuiltFrameIndex = TTFrameIndexBundle());
 
 protected:
   void operation() override;

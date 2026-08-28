@@ -34,7 +34,7 @@ public:
                    float frameRate,
                    int luminanceThreshold,
                    double sampleSeconds,
-                   const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
+                   const TTFrameIndexBundle& preBuiltFrameIndex = TTFrameIndexBundle());
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);

@@ -77,11 +77,15 @@ protected:
   QString mFailureMessage; /**<why the task failed, empty if it did not  */
   bool mIsSynchron;
   bool mIsRunning;
-  bool mIsAborted;
+  // Written by the GUI thread (onUserAbort), read by the worker thread — and,
+  // since the decode loop checks it, read in a tight loop. A plain bool is a
+  // data race there and the compiler may hoist the load out of the loop.
+  std::atomic<bool> mIsAborted;
   /**<the task ran to completion; written by the worker thread just before
       finished() is emitted, read by abort() on the GUI thread. std::atomic
-      because those are two different threads - the neighbours above predate
-      that concern and are left as they are. */
+      because those are two different threads - mIsSynchron and mIsRunning
+      above are plain bools that predate that concern and are left as they
+      are. */
   std::atomic<bool> mIsFinished{false};
 };
 

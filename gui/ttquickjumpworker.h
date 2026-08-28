@@ -28,7 +28,7 @@ public:
   TTQuickJumpWorker(const QString& filePath, int streamType,
                     const QList<int>& frameIndices, const QSize& thumbSize,
                     TTVideoIndexList* indexList, TTVideoHeaderList* headerList,
-                    const QList<TTFrameInfo>& prebuiltFrameIndex = QList<TTFrameInfo>());
+                    const TTFrameIndexBundle& prebuiltFrameIndex = TTFrameIndexBundle());
 
 signals:
   void thumbnailReady(int frameIndex, const QImage& thumbnail);
@@ -47,7 +47,7 @@ private:
   QSize               mThumbSize;
   TTVideoIndexList*   mIndexList;
   TTVideoHeaderList*  mHeaderList;
-  QList<TTFrameInfo>  mPrebuiltFrameIndex;
+  TTFrameIndexBundle  mPrebuiltFrameIndex;
 };
 
 #endif // TTQUICKJUMPWORKER_H

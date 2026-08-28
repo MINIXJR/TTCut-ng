@@ -300,6 +300,11 @@ const QList<TTFrameInfo>& TTH26xVideoStream::ffmpegFrameIndex() const
     return mFFmpeg->frameIndex();
 }
 
+TTFrameIndexBundle TTH26xVideoStream::ffmpegFrameIndexBundle() const
+{
+    return mFFmpeg->frameIndexBundle();
+}
+
 // See header doc + spec 2026-06-05. QList<TTFrameInfo> is Qt copy-on-write:
 // setFrameIndex only copies the COW header here; a later lazy
 // deliveredDecodeIndex write in the consumer detaches its own copy → no data
@@ -308,16 +313,10 @@ bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
 {
     if (!consumer)
         return false;
-    const QList<TTFrameInfo>& idx = ffmpegFrameIndex();
-    if (idx.isEmpty())
+    const TTFrameIndexBundle bundle = ffmpegFrameIndexBundle();
+    if (bundle.isEmpty())
         return false;                 // not built yet → caller builds itself
-    consumer->setFrameIndex(idx);
-    // Stream-level metadata travels with the index: without it the adopter's
-    // PAFF field tagging is disabled and decodeFrame() hangs on field-pair
-    // targets (53 s EOF drain; Befund B, spec 2026-07-19).
-    consumer->adoptStreamMetadata(mFFmpeg->isPAFF(),
-                                  mFFmpeg->h264FrameMbsOnlyFlag(),
-                                  mFFmpeg->h264Log2MaxFrameNum());
+    consumer->setFrameIndex(bundle);  // index + stream metadata in one step
     return true;
 }
 

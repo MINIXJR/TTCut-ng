@@ -23,7 +23,7 @@ TTBlackFrameSearchTask::TTBlackFrameSearchTask(const QString& videoFilePath,
                                                TTVideoHeaderList* headerList,
                                                int startPos, int direction, int frameCount,
                                                float ratioThreshold,
-                                               const QList<TTFrameInfo>& preBuiltFrameIndex)
+                                               const TTFrameIndexBundle& preBuiltFrameIndex)
   : TTSearchTask("BlackFrameSearch", videoFilePath, streamType,
                  indexList, headerList, startPos, direction, frameCount,
                  preBuiltFrameIndex),

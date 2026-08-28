@@ -22,7 +22,7 @@ TTQuickJumpWorker::TTQuickJumpWorker(
     const QString& filePath, int streamType,
     const QList<int>& frameIndices, const QSize& thumbSize,
     TTVideoIndexList* indexList, TTVideoHeaderList* headerList,
-    const QList<TTFrameInfo>& prebuiltFrameIndex)
+    const TTFrameIndexBundle& prebuiltFrameIndex)
   : TTThreadTask("QuickJumpThumbnails"),
     mFilePath(filePath),
     mStreamType(streamType),
@@ -56,13 +56,18 @@ void TTQuickJumpWorker::operation()
   } else {
     // TTFFmpegWrapper is QObject-based -- MUST be created in worker thread (here)
     ffmpegWrapper = new TTFFmpegWrapper();
+    // Let an abort reach into a running decode; mIsAborted is only checked
+    // between frames otherwise, and one decode can take seconds.
+    ffmpegWrapper->setCancelToken(&mIsAborted);
     if (!ffmpegWrapper->openFile(mFilePath)) {
       TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
           QString("QuickJump: Failed to open file: %1").arg(ffmpegWrapper->lastError()));
       delete ffmpegWrapper;
       return;
     }
-    // Use prebuilt frame index if available (avoids 6s rebuild for H.264/H.265)
+    // Use the owner's prebuilt index if available (avoids a ~2 s rescan). The
+    // bundle carries the stream metadata with it; without that, decodeFrame()
+    // drains to EOF on PAFF field-pair targets.
     if (!mPrebuiltFrameIndex.isEmpty()) {
       ffmpegWrapper->setFrameIndex(mPrebuiltFrameIndex);
     } else {

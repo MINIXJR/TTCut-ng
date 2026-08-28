@@ -80,6 +80,7 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mIsElementaryStream(false)
     , mAnalysisMode(false)
     , mSearchMode(false)
+    , mCancelToken(nullptr)
     , mIsPAFF(false)
     , mH264Log2MaxFrameNum(4)
     , mH264FrameMbsOnlyFlag(true)
@@ -778,6 +779,11 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
 // ----------------------------------------------------------------------------
 QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
 {
+    return decodeFrameInternal(frameIndex, 0);
+}
+
+QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
+{
     // Bounds check — frameIndex is a DISPLAY position. When the display-order
     // map is valid the visible range is [0, displayCount()) (= n minus dropped
     // RASL leading pics for HEVC); otherwise it is the raw decode dimension.
@@ -838,9 +844,32 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
         mDecodeOrderTag    = mCurrentFrameIndex;
 
         int guard = 0;
-        const int guardMax = mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000;
+        // The target AU must appear between the seek point and shortly after
+        // it — reorder and field pairing move it by a GOP at most, never by
+        // the length of the file. The old bound (the whole index) turned every
+        // undelivered target into a full decode to EOF: 41 s per attempt on
+        // 06x03, twice, then again for the neighbour frame.
+        // seekStart is where the loop actually starts decoding, i.e.
+        // mCurrentFrameIndex after seekToFrame() — not targetAU, not frameIndex.
+        const int seekStart = mCurrentFrameIndex;
+        // Placeholder only — the scan below always assigns a real value,
+        // either the second keyframe past the target or (fewer than two
+        // left) end of file. Never read at this initial value.
+        int headroomEnd = targetAU;
+        int keyframesSeen = 0;
+        for (int i = targetAU + 1; i < mFrameIndex.size(); ++i) {
+            if (!mFrameIndex[i].isKeyframe) continue;
+            headroomEnd = i;
+            if (++keyframesSeen == 2) break;   // second keyframe beyond the target
+        }
+        if (keyframesSeen < 2)
+            headroomEnd = mFrameIndex.size() - 1;   // fewer than two left: end of file
+        const int guardMax = qBound(1,
+                                    (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
+                                    mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000);
         const bool logTags = TTSettings::instance()->logFFmpegDecoder();
         while (guard++ < guardMax) {
+            if (isCancelled()) return QImage();   // caller gave up; not a failure
             if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
             if (logTags && (guard <= 5 || static_cast<int>(mDecodedFrame->pts) >= targetAU - 2))
                 qDebug() << "  skip-loop output" << guard << "pts-tag" << mDecodedFrame->pts
@@ -865,13 +894,12 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
     if (!result.isNull() && frameIndex >= 0 && frameIndex < mFrameIndex.size())
         mFrameIndex[frameIndex].deliveredDecodeIndex = targetAU;
 
-    // Fallback: try one frame earlier if target frame cannot be decoded
-    if (result.isNull() && frameIndex > 0) {
+    // Fallback: try exactly one frame earlier if the target cannot be decoded.
+    if (result.isNull() && frameIndex > 0 && fallbackDepth == 0 && !isCancelled()) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
             QString("decodeFrame: retry failed — trying frame %1").arg(frameIndex - 1));
-        // Recursive call with frameIndex-1 (will seek fresh)
-        mDecoderDrained = true;  // Force seek in recursive call
-        result = decodeFrame(frameIndex - 1);
+        mDecoderDrained = true;  // force a seek in the neighbour attempt
+        result = decodeFrameInternal(frameIndex - 1, 1);
         if (!result.isNull()) {
             // Return the nearby frame but don't cache it under the wrong index
             return result;
@@ -889,7 +917,7 @@ QImage TTFFmpegWrapper::decodeFrame(int frameIndex)
             int evict = mFrameCacheLRU.takeFirst();
             mFrameCache.remove(evict);
         }
-    } else {
+    } else if (!isCancelled()) {
         if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode decodeFrame: failure at frame" << frameIndex
                      << "(possibly non-IDR I-slice with DPB inconsistency)";
@@ -2881,7 +2909,7 @@ void TTFFmpegWrapper::buildDisplayOrderMap()
     if (!mDisplayOrderMap.isValid()) identity("rank validation failed");
 }
 
-void TTFFmpegWrapper::setFrameIndex(const QList<TTFrameInfo>& index)
+void TTFFmpegWrapper::setFrameIndexEntries(const QList<TTFrameInfo>& index)
 {
     mFrameIndex = index;
     // Adopted index is already merged: the raw->merged view is identity here
@@ -2889,4 +2917,20 @@ void TTFFmpegWrapper::setFrameIndex(const QList<TTFrameInfo>& index)
     mRawPacketCount = mFrameIndex.size();
     mRawToMerged.clear();
     buildDisplayOrderMap();   // poc/isIDR/isDroppedLeading travel inside TTFrameInfo entries
+}
+
+void TTFFmpegWrapper::setFrameIndex(const TTFrameIndexBundle& bundle)
+{
+    adoptStreamMetadata(bundle.isPAFF, bundle.frameMbsOnlyFlag, bundle.log2MaxFrameNum);
+    setFrameIndexEntries(bundle.index);   // rebuilds the display map from the adopted entries
+}
+
+TTFrameIndexBundle TTFFmpegWrapper::frameIndexBundle() const
+{
+    TTFrameIndexBundle b;
+    b.index             = mFrameIndex;
+    b.isPAFF            = mIsPAFF;
+    b.frameMbsOnlyFlag  = mH264FrameMbsOnlyFlag;
+    b.log2MaxFrameNum   = mH264Log2MaxFrameNum;
+    return b;
 }

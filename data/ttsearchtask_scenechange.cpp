@@ -26,7 +26,7 @@ TTSceneChangeSearchTask::TTSceneChangeSearchTask(const QString& videoFilePath,
                                                  TTVideoHeaderList* headerList,
                                                  int startPos, int direction, int frameCount,
                                                  float threshold,
-                                                 const QList<TTFrameInfo>& preBuiltFrameIndex)
+                                                 const TTFrameIndexBundle& preBuiltFrameIndex)
   : TTSearchTask("SceneChangeSearch", videoFilePath, streamType,
                  indexList, headerList, startPos, direction, frameCount,
                  preBuiltFrameIndex),

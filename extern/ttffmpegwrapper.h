@@ -16,6 +16,7 @@
 #ifndef TTFFMPEGWRAPPER_H
 #define TTFFMPEGWRAPPER_H
 
+#include <atomic>
 #include <climits>
 #include <functional>
 #include <QString>
@@ -94,6 +95,23 @@ struct TTFrameInfo {
     // Internal scratch for buildFrameIndex's PAFF post-processing pass:
     int  paffFrameNum  = -1;     // -1 = not a field; else frame_num for matching
     bool isBottomField = false;  // valid only when isFieldCoded == true
+};
+
+// A frame index alone is incomplete. isPAFF / frameMbsOnlyFlag /
+// log2MaxFrameNum are produced ONLY by buildFrameIndex() (SPS parse + packet
+// scan). An adopter that receives the bare list keeps the constructor defaults,
+// its decode-order tagging then counts PAFF field packets as frames, and
+// decodeFrame() never sees a field-pair target AU — it drains the file to EOF
+// (measured 72 675 ms on 06x03 display 3566, against 13 ms with metadata).
+// Bundling them is what stops an index from travelling without its metadata.
+// The defaults below MUST match the constructor's (ttffmpegwrapper.cpp:270).
+struct TTFrameIndexBundle {
+    QList<TTFrameInfo> index;
+    bool isPAFF           = false;
+    bool frameMbsOnlyFlag = true;
+    int  log2MaxFrameNum  = 4;
+
+    bool isEmpty() const { return index.isEmpty(); }
 };
 
 // ----------------------------------------------------------------------------
@@ -175,7 +193,18 @@ public:
     // Build frame index (for H.264/H.265)
     bool buildFrameIndex(int videoStreamIndex = -1);
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
-    void setFrameIndex(const QList<TTFrameInfo>& index);   // rebuilds display map
+    // Adopt index AND the owner's stream metadata in one step. This is the
+    // only public way to install an index; the bare list variant is private.
+    void setFrameIndex(const TTFrameIndexBundle& bundle);
+    // This wrapper's index plus the metadata it measured, ready for adoption.
+    TTFrameIndexBundle frameIndexBundle() const;
+    // Optional abort flag, owned by the caller (a worker's mIsAborted). Checked
+    // once per skip-loop iteration; when set, decodeFrame() returns a null
+    // QImage without logging an error and without a neighbour attempt — a
+    // cancel is not a failure. nullptr (default) disables the check.
+    void setCancelToken(const std::atomic<bool>* flag) { mCancelToken = flag; }
+    bool isCancelled() const
+    { return mCancelToken && mCancelToken->load(std::memory_order_relaxed); }
     const TTDisplayOrderMap& displayOrderMap() const { return mDisplayOrderMap; }
     int frameCount() const { return mFrameIndex.size(); }
     bool isPAFF() const { return mIsPAFF; }
@@ -186,20 +215,6 @@ public:
     // Codec context first (populated once a frame was decoded), stream
     // codecpar as fallback; 1.0 when unset/invalid.
     double sampleAspectRatio() const;
-
-    // Adopt stream-level metadata measured by the index OWNER during
-    // buildFrameIndex (SPS parse + packet scan). Adopters via setFrameIndex()
-    // never run that pass; without this their decode-order tagging counts
-    // PAFF field packets as frames (decodeOrderTagForPacket's field gate is
-    // off), so decodeFrame() never sees a field-pair target AU and drains the
-    // whole file to EOF. Call right after setFrameIndex() — see
-    // TTH26xVideoStream::provideFrameIndexTo().
-    void adoptStreamMetadata(bool isPAFF, bool frameMbsOnlyFlag, int log2MaxFrameNum)
-    {
-        mIsPAFF = isPAFF;
-        mH264FrameMbsOnlyFlag = frameMbsOnlyFlag;
-        mH264Log2MaxFrameNum = log2MaxFrameNum;
-    }
 
     // --- Raw->merged AU map (PAFF) ---
     // buildFrameIndex scans one packet per AU ("raw"); for H.264 PAFF,
@@ -333,6 +348,27 @@ signals:
     void progressChanged(int percent, const QString& message);
 
 private:
+    // Install the index entries and rebuild the display map. Private on purpose:
+    // an index without its stream metadata makes decodeFrame() drain to EOF on
+    // PAFF field-pair targets. Public adoption goes through the bundle overload.
+    void setFrameIndexEntries(const QList<TTFrameInfo>& index);
+
+    // Adopt the stream-level values the index owner measured during
+    // buildFrameIndex (SPS parse + packet scan). Private: reachable only via
+    // setFrameIndex(const TTFrameIndexBundle&), so it can no longer be forgotten.
+    void adoptStreamMetadata(bool isPAFF, bool frameMbsOnlyFlag, int log2MaxFrameNum)
+    {
+        mIsPAFF = isPAFF;
+        mH264FrameMbsOnlyFlag = frameMbsOnlyFlag;
+        mH264Log2MaxFrameNum = log2MaxFrameNum;
+    }
+
+    // decodeFrame's body. fallbackDepth limits the neighbour retry to a single
+    // step: the comment always said "try one frame earlier", but the recursion
+    // was unbounded and would walk down to frame 0 — harmless only as long as
+    // each level took 40 s. It does not any more.
+    QImage decodeFrameInternal(int frameIndex, int fallbackDepth);
+
     // Libav contexts
     AVFormatContext* mFormatCtx;
     AVCodecContext* mVideoCodecCtx;
@@ -380,6 +416,7 @@ private:
     int         mSwsCtxYUVWidth  = 0;
     int         mSwsCtxYUVHeight = 0;
 
+    const std::atomic<bool>* mCancelToken;   // not owned; nullptr = no cancelling
     bool mIsPAFF;                       // PAFF stream detected
     int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing
     bool mH264FrameMbsOnlyFlag;         // from SPS, true = no field coding

@@ -25,7 +25,7 @@ public:
                    int startPos, int direction, int frameCount,
                    const TTLogoDetector* detector,
                    float threshold,
-                   const QList<TTFrameInfo>& preBuiltFrameIndex = QList<TTFrameInfo>());
+                   const TTFrameIndexBundle& preBuiltFrameIndex = TTFrameIndexBundle());
 
 protected:
   void operation() override;

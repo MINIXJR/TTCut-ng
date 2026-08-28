@@ -993,9 +993,9 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
                                 "index - skipped");
   }
   if (TTSettings::instance()->spDetectPillarbox() && haveIndex) {
-    QList<TTFrameInfo> preBuiltIndex;
+    TTFrameIndexBundle preBuiltIndex;
     if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-      preBuiltIndex = preview->frameIndex();
+      preBuiltIndex = preview->frameIndexBundle();
 
     TTAspectScanTask* aspectTask = new TTAspectScanTask(
       vs->filePath(), vs->streamType(), videoIndex, videoHeaders,
@@ -2520,9 +2520,9 @@ void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float thre
   // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
   // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
   // scan in the search worker.
-  QList<TTFrameInfo> preBuiltIndex;
+  TTFrameIndexBundle preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndex();
+    preBuiltIndex = preview->frameIndexBundle();
 
   auto* task = new TTBlackFrameSearchTask(
       vs->filePath(),
@@ -2600,9 +2600,9 @@ void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float thr
   // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
   // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
   // scan in the search worker.
-  QList<TTFrameInfo> preBuiltIndex;
+  TTFrameIndexBundle preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndex();
+    preBuiltIndex = preview->frameIndexBundle();
 
   auto* task = new TTSceneChangeSearchTask(
       vs->filePath(),
@@ -2742,7 +2742,7 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
       if (analysisWrapper->openFile(vs->filePath())) {
         TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
         if (previewWrapper)
-          analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+          analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
         else
           analysisWrapper->buildFrameIndex();
       } else {
@@ -2803,7 +2803,7 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
     if (analysisWrapper->openFile(vs->filePath())) {
       TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
       if (previewWrapper)
-        analysisWrapper->setFrameIndex(previewWrapper->frameIndex());
+        analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
       else
         analysisWrapper->buildFrameIndex();
     } else {
@@ -2874,9 +2874,9 @@ void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
   // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
   // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
   // scan in the search worker.
-  QList<TTFrameInfo> preBuiltIndex;
+  TTFrameIndexBundle preBuiltIndex;
   if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndex();
+    preBuiltIndex = preview->frameIndexBundle();
 
   auto* task = new TTLogoSearchTask(
       vs->filePath(),

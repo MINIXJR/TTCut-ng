@@ -430,7 +430,7 @@ void TTAudioAnomalyScanTask::operation()
   qint64 lastReported = 0;
   QVector<FrameStat> stats = collectFrameStats(
       mAudioFilePath, &decodeFailures,
-      [this]() { return mIsAborted; },
+      [this]() { return mIsAborted.load(); },
       [this, &lastReported](qint64 idx) {
         // ~32 ms per frame -> one Step report roughly every 2 s of audio.
         if (idx - lastReported >= 64) {

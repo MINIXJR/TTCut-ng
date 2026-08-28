@@ -78,6 +78,20 @@ void TTThreadTaskPool::init(int estimateTaskCount)
  */
 void TTThreadTaskPool::cleanUpQueue()
 {
+  // Blocks the calling thread — which is the GUI thread when a dialog owning a
+  // pool is destroyed (~TTQuickJumpDialog → ~TTThreadTaskPool). The wait is
+  // deliberate: without it the pool dies while a running task can still signal
+  // into it. Do NOT give it a deadline; an expired deadline trades a visible
+  // freeze for an occasional crash.
+  // What keeps it short is the caller aborting first (abortCurrentWorker before
+  // delete mTaskPool) AND the abort reaching into a running decode
+  // (TTFFmpegWrapper::setCancelToken). Before that existed, a single quick-jump
+  // thumbnail could hold the GUI here for minutes (spec 2026-08-28).
+  // This bounds only the dialog's own worker, though: the wait is on the
+  // *global* pool, which every TTThreadTaskPool in the app shares, so an
+  // unrelated task already running there (e.g. TTAudioAnomalyScanTask, which
+  // auto-starts, has no cancel token, and is untouched by abortCurrentWorker)
+  // still bounds this wait by its own remaining runtime.
   QThreadPool::globalInstance()->waitForDone();
 
   QMutableListIterator<TTThreadTask*> t(mTaskQueue);

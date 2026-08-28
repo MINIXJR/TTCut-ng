@@ -27,7 +27,7 @@ TTAspectScanTask::TTAspectScanTask(const QString& videoFilePath,
                                    float frameRate,
                                    int luminanceThreshold,
                                    double sampleSeconds,
-                                   const QList<TTFrameInfo>& preBuiltFrameIndex)
+                                   const TTFrameIndexBundle& preBuiltFrameIndex)
   : TTSearchTask("AspectScan", videoFilePath, streamType,
                  indexList, headerList, 0 /*startPos*/, +1 /*direction*/,
                  frameCount, preBuiltFrameIndex),
