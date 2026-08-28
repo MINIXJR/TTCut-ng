@@ -1,5 +1,5 @@
 ---
-base_commit: 37f8b44c557f6886a1762a2df8696a2675fa93c4
+base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
 last_verified: 2026-08-28
 sources:
   - gui/ttcutmainwindow.cpp

@@ -10,7 +10,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # build-package.sh greps the version out of this line - keep it single-line.
-project(ttcut-ng VERSION 0.82.2 LANGUAGES C CXX)
+project(ttcut-ng VERSION 0.82.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

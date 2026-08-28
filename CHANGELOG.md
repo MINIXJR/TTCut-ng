@@ -2,9 +2,24 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.82.5 (2026-08-28)
 
-**Quick-jump dialog no longer freezes after picking a picture**
+**Quick-jump dialog no longer freezes, and its thumbnails are adjustable**
+
+### Added
+- **The thumbnail height in the quick-jump dialog is now configurable**
+  (Settings → Navigation → Time Jump), between 60 and 300 pixels. The default
+  is 100, so the tiles are larger than before even without changing anything.
+  Only the height is set: the width follows the video's aspect ratio, so
+  pictures are never distorted. Larger tiles mean fewer of them per page.
+
+### Changed
+- **`ttcut-demux` reports real progress during the timestamp repair.** That
+  remux is the first long step of a run and previously reported nothing while
+  it worked, so a supervising script sat at 0 % for the whole phase. The fixed
+  marks are also spaced by measured duration now: the bar used to jump from
+  40 to 76 near the end and never walked its upper half; it now moves from the
+  fourth second on and reaches 94 before the tail.
 
 ### Fixed
 - **The quick-jump dialog froze the whole interface after a picture was

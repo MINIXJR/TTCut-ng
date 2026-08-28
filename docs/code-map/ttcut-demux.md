@@ -1,6 +1,6 @@
 ---
-base_commit: 2ee0ccc2bf0b4eca8844adcaf4a4b0447f45c33d
-last_verified: 2026-08-24
+base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
+last_verified: 2026-08-28
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c
@@ -103,6 +103,7 @@ flowchart LR
 |---|---|
 | TS → CONTAINER_VIDEO_DURATION | `ffprobe format=duration` of the source = **container span** (latest stream end − earliest stream start). With audio leading video (typical VDR), this exceeds the video display duration by the audio lead. Since `d7a046b` used only as a **seek hint** for the end-window probe, no longer as the duration. |
 | VIDEO_DURATION = video PTS span (FIXED `d7a046b`) | Measured on the repaired TS: `last_video_pts + frame_dur − first_video_pts`, where `first_video_pts` = the video stream's **start_time** (first *decodable* frame — excludes open-GOP leading Bs, which every decoder drops and which the old min-packet-PTS wrongly included). Falls back to the container span (with a warning) only if the repair failed or the probe is empty. Futurama: 3419800 ms = 85495 frames, exact vs ffprobe count_frames (was container 3420269). |
+| REPAIR → progress band | The remux is the run's first long call and used to report nothing while it ran: `progress_set 0` stood above it and `progress_set 10` only after it returned, so a supervising wrapper showed 0 % for the whole phase. It now runs in the background against `-progress` and maps `out_time_us` onto its band, the same way the gap repair does. `-nostats` stays OFF so the `frame=` line the log parser reads survives. The fixed marks after it are spaced by **measured** duration, not by step count: before, the PTS analysis took 13 s but moved the bar 7 points while the ES extraction took 8 s and moved it 15, and the three tail marks all landed in the last seconds — the bar jumped 40 → 76 and the upper half was never walked (measured on a gapless 10.4 GB run, 63 s, idle machine). |
 | VIDEO_DURATION → `VIDEO_FRAME_COUNT` | `duration × fps`, rounded — derived, logged with a `~` prefix. Now exact (85495) because the duration is the true video span. |
 | VIDEO_DURATION → end padding | `TARGET_AUDIO_DUR = VIDEO_DURATION` when `AV_DRIFT_MS > 20`. The audio side of that drift comes from `audio_es_duration`, not `format=duration` — on a bitrate-switching track the latter can report a third too much, `AV_DRIFT_MS` goes negative and the pad is skipped on a track that actually needed it. Pads to the true video duration → over-pad reduced from ~469 ms (old container basis) to ~one audio-frame granularity (Futurama: +960 ms for a 939 ms real gap). Post-pad drift now computed against the real reference. |
 | PTS0 → per-track trim | Per audio track: `video_pts − track_pts`, trimmed via decoder-side `-ss` **after** `-i` (input-side seek silently no-ops for TS audio copy). Only positive leads > 10 ms trim; negative logs "may need padding" and trims 0. |

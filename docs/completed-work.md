@@ -33,6 +33,48 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Backtrace wäre ohnehin unbrauchbar, weil das Binary seit dem 19.07.
     vielfach neu gebaut ist. Nachprüfbar nur über einen neuen Repro-Lauf auf
     dem 08x04-Korpus.
+  - **Befund B kam zurück — und wurde am 2026-08-28 strukturell geschlossen**
+    (`d8ed08e5`, gemergt als `a1aa31e4`). Der Fix vom 19.07. gab die
+    Strommetadaten nur über `provideFrameIndexTo()` weiter und hielt in seiner
+    Spec fest: *„All adopters share the one adoption path, so all are
+    covered."* Das war schon beim Schreiben unwahr — **fünf** Stellen riefen
+    `setFrameIndex()` nackt auf: der Zeitsprung-Worker
+    (`gui/ttquickjumpworker.cpp`), der Suchtask und seine N Sub-Dekoder
+    (`data/ttsearchtask.cpp`) und die zwei Analyse-Wrapper
+    (`gui/ttcutmainwindow.cpp`). Der Header nannte den Quickjump-Sonderweg
+    sogar ausdrücklich.
+    - **Symptom:** Der Zeitsprung-Dialog fror nach Auswahl eines Bildes
+      minutenlang ein; bei Intervall 1 blieben Kacheln leer.
+    - **Messung:** `06x03` (H.264 PAFF, 80 613 Frames), Anzeigebild 3566 →
+      **72 675 ms** über den Quickjump-Weg gegen **13 ms** über die beiden
+      metadatenführenden Wege. Danach 13 ms; ein absichtlich falsch
+      versorgter Adopter scheitert in **325 ms** statt 71 062 ms.
+    - **Wurzel der Blockade:** `~TTQuickJumpDialog` gibt den Task-Pool frei,
+      dessen `cleanUpQueue()` auf `QThreadPool::waitForDone()` wartet — im
+      GUI-Thread, aus dem Destruktor eines **Stack-Objekts** in
+      `TTCutMainWindow::onQuickJump`. Der Live-Backtrace zeigte den
+      Hauptthread bei **0 CPU** genau dort; das widerlegte sowohl die
+      Ressourcen- als auch die Deadlock-Hypothese.
+    - **Vier Defekte zusammen:** (A) fehlende Metadaten; (B) `guardMax` =
+      Streamlänge statt Suchdistanz, also ein voller Lauf bis Dateiende je
+      Fehlversuch; (C) `decodeFrame()` nicht abbrechbar, `mIsAborted` war ein
+      nacktes `bool`; (D) das blockierende Warten. **D bleibt bewusst ohne
+      Zeitgrenze** — eine abgelaufene Frist zerstört den Pool, während eine
+      Task noch hineinsignalisiert.
+    - **Struktureller Schutz:** `TTFrameIndexBundle` trägt Index und
+      Metadaten als einen Wert, `setFrameIndexEntries` ist privat. Ein
+      Adopter *kann* den Index nicht mehr ohne Metadaten bekommen — der
+      Rückfall ist ein Compilerfehler, keine Regel zum Merken.
+    - **Belege:** Diag `test_index_bundle_adopt` (auch mit
+      `BREAK_METADATA=1`), `test_decode_cancel`, `test_adopt_paff`; Regression
+      über MPEG-2, H.264 progressiv, H.265 UHD und ein zweites PAFF-Sample,
+      alle ohne `WARNING: null image`. Spec
+      `docs/superpowers/specs/2026-08-28-frame-index-bundle-design.md`, Karte
+      `docs/code-map/quick-jump.md`.
+    - **Offen geblieben** (in `TODO.md`): `decodeFrameYUV()` trägt dieselbe
+      unbegrenzte Schleife weiter; `TTH26xVideoStream::ffmpegFrameIndex()` ist
+      jetzt tot; `cleanUpQueue()` wartet auf den **globalen** Pool, ein
+      Tonanomalie-Scan ohne Abbruchsignal begrenzt die Wartezeit weiterhin.
   - **Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**
     (`8dfda6d`): der SPS-Unification-Rewriter schrieb/las die
     CABAC-Alignment-Bits unbedingt; endete der umgeschriebene Slice-Header
