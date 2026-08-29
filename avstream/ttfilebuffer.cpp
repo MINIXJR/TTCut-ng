@@ -302,7 +302,15 @@ int TTFileBuffer::readByte(quint8* byteArray, int length)
   {
     qDebug("StreamEOF during readByte!");
     qDebug("length: %d / start: %lld / end: %lld", length, startReadPos, readPos-startReadPos);
-    readPos = writePos;
+    // readPos stays where the EOF stopped it. The old code reset it to
+    // writePos, which clears the very condition atEnd() tests
+    // (isAtEnd && readPos > writePos): a caller looping on !atEnd() then
+    // re-read the same trailing byte forever. Seen on a recording whose last
+    // byte is 0xB8 - the header-list parser took it for a group_start_code,
+    // built a GOP header, hit EOF reading its 4 data bytes, landed here, and
+    // started over. 26.7 million log lines in 45 s, one leaked header object
+    // per turn. Leaving readPos alone also makes the return value honest:
+    // the bytes actually read, not a constant 0.
     return (readPos - startReadPos);
   }
   return (readPos - startReadPos);

@@ -232,6 +232,7 @@ diag_tool(test_abort_after_finish SOURCES ${POOLABORT_SRC})
 diag_tool(test_streampoint_order AV MPEG2 SOURCES ${STREAMPOINTORDER_SRC})
 diag_tool(test_mpeg2_seek  AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_seqheader_missing AV MPEG2 SOURCES ${MPEG2CUT_SRC})
+diag_tool(test_headerlist_eof   AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
 diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
@@ -356,7 +357,7 @@ add_custom_target(diag DEPENDS
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_anomalyscan
   test_pillarbox test_pool_abort
-  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_window_geometry
+  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
   test_audiorepair_cut test_repairdialog_model)
 

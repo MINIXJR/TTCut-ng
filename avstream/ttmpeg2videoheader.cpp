@@ -73,7 +73,9 @@ bool TTSequenceHeader::readHeader( TTFileBuffer* mpeg2_stream )
   try
   {
     // read 8 byte from stream, starting at current offset
-    mpeg2_stream->readByte( header_data, 8 ) ;
+    // A short read means EOF inside the header: the object would carry
+    // parsed stack garbage, so report failure instead of a phantom header.
+    if (mpeg2_stream->readByte( header_data, 8 ) != 8) return false;
 
     // fill sequence header
     header_offset = mpeg2_stream->position() - 12;
@@ -109,7 +111,9 @@ bool TTSequenceHeader::readHeader( TTFileBuffer* mpeg2_stream )
 
     // Read 6 bytes of extension data (enough for progressive_sequence)
     quint8 ext_data[6];
-    mpeg2_stream->readByte( ext_data, 6 );
+    // Truncated extension: the sequence header itself was read in full and
+    // is genuine, so keep it with the defaults rather than discarding it.
+    if (mpeg2_stream->readByte( ext_data, 6 ) != 6) return true;
 
     // Check the extension_id nibble (upper 4 bits of byte 0)
     if ((ext_data[0] & 0xF0) != 0x10) return true;  // not sequence_extension — keep defaults
@@ -283,7 +287,7 @@ bool TTGOPHeader::readHeader( TTFileBuffer* mpeg2_stream )
 
   try
   {
-    mpeg2_stream->readByte( header_data,4 );
+    if (mpeg2_stream->readByte( header_data, 4 ) != 4) return false;
 
     header_offset = mpeg2_stream->position() - 8;
      parseBasicData( header_data );
@@ -343,7 +347,7 @@ bool TTPicturesHeader::readHeader( TTFileBuffer* mpeg2_stream )
 
   try
   {
-    mpeg2_stream->readByte( header_data, 4 );
+    if (mpeg2_stream->readByte( header_data, 4 ) != 4) return false;
 
     header_offset = mpeg2_stream->position() - 8;
     parseBasicData( header_data );
@@ -369,7 +373,7 @@ bool TTPicturesHeader::readHeader( TTFileBuffer* mpeg2_stream )
     while ( value != 0x01 || count_zeros < 2 );
 
     mpeg2_stream->seekForward( 1 );
-    mpeg2_stream->readByte( header_data, 5 );
+    if (mpeg2_stream->readByte( header_data, 5 ) != 5) return false;
     parseExtensionData( header_data );
 
     return true;

@@ -280,8 +280,13 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
 
       if ( newHeader != 0 )
       {
-        newHeader->readHeader( stream_buffer );
-        header_list->add( newHeader );
+        // A header that could not be read in full carries parsed garbage —
+        // it used to be added regardless, so a stream ending mid-data left a
+        // phantom entry pointing at bytes that hold no start code.
+        if ( newHeader->readHeader( stream_buffer ) )
+          header_list->add( newHeader );
+        else
+          delete newHeader;
       }
 
       // Throttle status updates to reduce UI flickering
