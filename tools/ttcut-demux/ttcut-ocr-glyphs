@@ -10,10 +10,17 @@ edge token in the OCRed SRT.
 
 Template library: a directory of PNG crops named  <name>__<REPLACEMENT>.png
 (e.g. "note__♪.png"). New glyph -> one `learn` call, no code change.
+A template may carry a sidecar <same stem>.txt listing the WORD characters
+tesseract is known to guess for that glyph ("2JF" for the music note). Only
+those are consumed at a line edge, and only where they stand alone ("J Weine
+nicht" yes, "Ja, ich komme" no), because the OCR may have dropped the glyph and
+the line may really start with that letter. Non-word characters need no entry -
+they are always junk once the bitmap has proved the glyph is there.
 
 Modes:
   match --srt F --spuxml F --templates DIR --delay-ms N [--apply]
   learn --spuxml F --cue N --edge start|end [--line K] --out FILE
+  --selftest   check the edge-repair rules, no test material needed
 """
 
 import argparse
@@ -108,13 +115,24 @@ def glyphs_equal(a, b):
 
 
 def load_templates(directory):
+    """[(filename, replacement, binarized image, confusion set)].
+
+    The optional sidecar names the OCR's known WORD-character guesses for this
+    glyph, one per character, whitespace and "#" comments ignored.
+    """
     templates = []
     for f in sorted(Path(directory).glob("*.png")):
         stem = f.stem
         if "__" not in stem:
             continue
         _, repl = stem.split("__", 1)
-        templates.append((f.name, repl, binarize(Image.open(f))))
+        confusions = set()
+        sidecar = f.with_suffix(".txt")
+        if sidecar.exists():
+            text = sidecar.read_text(encoding="utf-8", errors="replace")
+            body = "".join(l.split("#", 1)[0] for l in text.splitlines())
+            confusions = set("".join(body.split()))
+        templates.append((f.name, repl, binarize(Image.open(f)), confusions))
     return templates
 
 
@@ -151,44 +169,60 @@ def parse_srt(path):
     return cues, raw
 
 
-LEAD_PAT = re.compile(r"^(\s*(?:<[^>]+>\s*)*)([^\s<]{1,2})(\s+)")
-TAIL_PAT = re.compile(r"(\s+)([^\s>]{1,2})((?:\s*<[^>]+>)*\s*)$")
+LEAD_TAGS = re.compile(r"^\s*(?:<[^>]+>\s*)*")
+TAIL_TAGS = re.compile(r"(?:\s*<[^>]+>)*\s*$")
 WORD_PAT = re.compile(r"\w", re.UNICODE)
 
 
-def fix_line(line, edge, repl):
-    """Replace a junk edge token with repl, or insert repl if OCR dropped the
-    glyph entirely. Returns (new_line, action|None)."""
+def _standalone(neighbour):
+    """True if a listed confusion stands alone: nothing or a space beside it.
+
+    "J Weine nicht" is the glyph; "Ja, ich komme" is a word the OCR may have
+    written because it dropped the glyph - only the former may be consumed.
+    """
+    return neighbour == "" or neighbour.isspace()
+
+
+def fix_line(line, edge, repl, confusions=frozenset()):
+    """Put repl at a line edge the bitmap proved carries the glyph.
+
+    The template match already established that the first (last) glyph of the
+    line IS the symbol, so whatever character the OCR produced there is junk
+    and gets replaced - the text is never the source of that decision. One
+    case stays ambiguous: a word character may equally mean the OCR dropped
+    the glyph and the line really starts with that letter. Those are consumed
+    only when the template's confusion list names them AND they stand alone -
+    a listed "J" is taken in "J Weine nicht", left alone in "Ja, ich komme".
+    Otherwise repl is inserted and the text is left intact.
+
+    Returns (new_line, action|None); None means the line already had repl.
+    """
     eol = ""
     body = line
     while body and body[-1] in "\r\n":
         eol = body[-1] + eol
         body = body[:-1]
+
     if edge == "start":
-        m = LEAD_PAT.match(body)
-        if m:
-            token = m.group(2)
-            if token == repl:
-                return line, None
-            if not WORD_PAT.search(token):
-                body = body[:m.start(2)] + repl + body[m.end(2):]
-                return body + eol, "replaced %r" % token
-            body = body[:m.start(2)] + repl + " " + body[m.start(2):]
-            return body + eol, "inserted"
-        return line, None
-    m = TAIL_PAT.search(body)
-    if m:
-        token = m.group(2)
-        if token == repl:
+        pre = LEAD_TAGS.match(body).group(0)
+        rest = body[len(pre):]
+        if not rest or rest.startswith(repl):
             return line, None
-        if not WORD_PAT.search(token):
-            body = body[:m.start(2)] + repl + body[m.end(2):]
-            return body + eol, "replaced %r" % token
-    # trailing token is a word (or no match): append after it, before tags
-    m2 = re.search(r"((?:\s*<[^>]+>)*\s*)$", body)
-    pos = m2.start(1)
-    body = body[:pos] + " " + repl + body[pos:]
-    return body + eol, "appended"
+        char = rest[0]
+        if WORD_PAT.match(char) and not (
+                char in confusions and _standalone(rest[1:2])):
+            return pre + repl + " " + rest + eol, "inserted"
+        return pre + repl + " " + rest[1:].lstrip() + eol, "replaced %r" % char
+
+    m = TAIL_TAGS.search(body)
+    post, rest = m.group(0), body[:m.start()]
+    if not rest or rest.endswith(repl):
+        return line, None
+    char = rest[-1]
+    if WORD_PAT.match(char) and not (
+            char in confusions and _standalone(rest[-2:-1])):
+        return rest + " " + repl + post + eol, "appended"
+    return rest[:-1].rstrip() + " " + repl + post + eol, "replaced %r" % char
 
 
 def cmd_match(args):
@@ -214,10 +248,10 @@ def cmd_match(args):
                 glyph, nbands = edge_glyph(img, band, edge)
                 if glyph is None or band >= nbands:
                     continue
-                for name, repl, tmpl in templates:
+                for name, repl, tmpl, conf in templates:
                     if glyphs_equal(glyph, tmpl):
                         idx = cue[1][band]
-                        new, action = fix_line(raw[idx], edge, repl)
+                        new, action = fix_line(raw[idx], edge, repl, conf)
                         if action:
                             raw[idx] = new
                             changes += 1
@@ -247,9 +281,69 @@ def cmd_learn(args):
     return 0
 
 
+def cmd_selftest(_args=None):
+    """Exercise fix_line() on both edges - no test material needed."""
+    F = '<font color="#fff">'
+    C = set("2JF")
+    N = "\u266a"
+    # (edge, line, confusions, expected line or None for "unchanged", action)
+    cases = [
+        # separated junk, the case the repair was originally built for
+        ("start", F + "* Voi</font>\r\n", C, F + N + " Voi</font>\r\n", "replaced '*'"),
+        # non-word junk glued to the word - no word can be lost here
+        ("start", F + '"Es finden</font>\r\n', C, F + N + " Es finden</font>\r\n",
+         'replaced \'"\''),
+        ("start", "*nur an mein Glueck.\r\n", C, N + " nur an mein Glueck.\r\n",
+         "replaced '*'"),
+        # listed word characters, standing alone
+        ("start", F + "2 Du bist</font>\r\n", C, F + N + " Du bist</font>\r\n",
+         "replaced '2'"),
+        ("start", "J Weine nicht,\r\n", C, N + " Weine nicht,\r\n", "replaced 'J'"),
+        # listed, but glued: the OCR may have dropped the glyph and the line may
+        # really start with that letter - insert, never eat the text
+        ("start", "Ja, ich komme\r\n", C, N + " Ja, ich komme\r\n", "inserted"),
+        ("start", "2'til the tears\r\n", C, N + " 2'til the tears\r\n", "inserted"),
+        # word character that is not listed
+        ("start", "Oops, I did it again,\r\n", C, N + " Oops, I did it again,\r\n",
+         "inserted"),
+        # no sidecar at all -> punctuation-only behaviour
+        ("start", "2 Wanderer unterwegs\r\n", set(), N + " 2 Wanderer unterwegs\r\n",
+         "inserted"),
+        # idempotence and degenerate lines
+        ("start", F + N + " Du bist</font>\r\n", C, None, None),
+        ("start", F + "</font>\r\n", C, None, None),
+        # line endings: CRLF, LF and none at all
+        ("start", "* Voi\n", C, N + " Voi\n", "replaced '*'"),
+        ("start", "* Voi", C, N + " Voi", "replaced '*'"),
+        # trailing edge, same rules
+        ("end", "Du bist *</font>\r\n", C, "Du bist " + N + "</font>\r\n",
+         "replaced '*'"),
+        ("end", "Du bist*</font>\r\n", C, "Du bist " + N + "</font>\r\n",
+         "replaced '*'"),
+        ("end", "Du bist J\r\n", C, "Du bist " + N + "\r\n", "replaced 'J'"),
+        ("end", "Du bistJ\r\n", C, "Du bistJ " + N + "\r\n", "appended"),
+        ("end", "Du bist</font>\r\n", C, "Du bist " + N + "</font>\r\n", "appended"),
+        ("end", "Du bist " + N + "</font>\r\n", C, None, None),
+    ]
+    fails = 0
+    for edge, line, conf, want_line, want_act in cases:
+        got_line, got_act = fix_line(line, edge, N, conf)
+        want_line = line if want_line is None else want_line
+        ok = got_line == want_line and got_act == want_act
+        fails += not ok
+        print("%-4s %-5s %r" % ("ok" if ok else "FAIL", edge, line))
+        if not ok:
+            print("          got      %r / %r" % (got_line, got_act))
+            print("          expected %r / %r" % (want_line, want_act))
+    print("%d/%d passed" % (len(cases) - fails, len(cases)))
+    return 1 if fails else 0
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    sub = p.add_subparsers(dest="mode", required=True)
+    p.add_argument("--selftest", action="store_true",
+                   help="run the built-in fix_line cases and exit")
+    sub = p.add_subparsers(dest="mode")
     m = sub.add_parser("match")
     m.add_argument("--srt", required=True)
     m.add_argument("--spuxml", required=True)
@@ -265,6 +359,10 @@ def main():
     l.add_argument("--out", required=True)
     l.set_defaults(func=cmd_learn)
     args = p.parse_args()
+    if args.selftest:
+        sys.exit(cmd_selftest())
+    if not args.mode:
+        p.error("a mode is required (or --selftest)")
     sys.exit(args.func(args))
 
 

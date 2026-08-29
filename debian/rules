@@ -20,6 +20,9 @@ override_dh_auto_install:
 	install -D -m 0755 tools/ttcut-demux/ttcut-ocr-glyphs $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-ocr-glyphs
 	install -d $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/ocr-glyphs
 	install -m 0644 tools/ttcut-demux/ocr-glyphs/*.png $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/ocr-glyphs/
+	# Sidecars carry the per-glyph OCR confusion lists - without them
+	# the packaged helper falls back to punctuation-only repair.
+	install -m 0644 tools/ttcut-demux/ocr-glyphs/*.txt $(CURDIR)/debian/ttcut-ng/usr/share/ttcut-ng/ocr-glyphs/
 	install -D -m 0755 tools/ttcut-pts-analyze/ttcut-pts-analyze $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-pts-analyze
 	install -D -m 0755 tools/ttcut-quality-check/ttcut-quality-check.py $(CURDIR)/debian/ttcut-ng/usr/bin/ttcut-quality-check
 	install -D -m 0644 ttcut.desktop $(CURDIR)/debian/ttcut-ng/usr/share/applications/ttcut-ng.desktop

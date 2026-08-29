@@ -1,0 +1,2 @@
+# Word characters tesseract guesses for this note; see ttcut-ocr-glyphs.
+2JF
