@@ -248,6 +248,44 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### MPEG-2-Schnitt
 
+- **Video laden hängt endlos, wenn die Datei auf 0xB8 endet** → **GEFIXT**
+  (2026-08-29, Branch `fix/filebuffer-eof-loop`)
+  - Symptom: „Laden dauert ewig". Tatsächlich Endlosschleife —
+    `~/.cache/ttcut-ng/logfile.log.1` auf 2,5 GB gewachsen, Prozess bei 7,9 GB
+    RSS, beides weiter steigend, `read_bytes` seit Sekunden bei 0.
+  - Ursachenkette: die Datei endet ohne `sequence_end_code`, ihr letztes Byte
+    ist 0xB8 = `group_start_code`. `createHeaderList()` baut daraus einen
+    GOP-Header; dessen `readHeader()` will 4 Datenbytes, bekommt keine; der
+    Fangblock in `TTFileBuffer::readByte(quint8*, int)` setzte `readPos =
+    writePos` und löschte damit genau die Bedingung, die `atEnd()` prüft
+    (`isAtEnd && readPos > writePos`). Die Schleife begann von vorn — pro
+    Runde zwei qDebug-Zeilen und ein Header-Objekt.
+  - Der Pfad wurde erst durch `add2ac84` (2026-07-13) erreichbar, dessen
+    Commit-Text die Annahme festhielt, `readByte(array)` fange die Exception
+    als „regular end-of-stream path" ab. Genau diese Annahme war falsch.
+  - Nebenbefund derselben Zeile: der Rückgabewert war systematisch **ein Byte
+    zu klein** (`writePos` statt der echten Leseposition) — betraf die
+    Stream-Typ-Erkennung in `ttavtypes.cpp` und die `bytesProcessed <= 0`-Prüfung
+    im Kopierpfad.
+  - Zweiter Defekt, dadurch sichtbar geworden: `createHeaderList()` wertete den
+    Rückgabewert von `readHeader()` nie aus, `TTGOPHeader::readHeader()` merkte
+    eine Teillesung gar nicht (die 4-Byte-Überladung wirft nicht) und parste
+    uninitialisierten Stack. Ein Phantom-Header blieb also selbst nach dem
+    Terminierungs-Fix in der Liste — gemessen: Eintrag #172, Typ 0xb8 bei
+    Offset 3999993, wo in der Datei `35 0d bb 88` steht.
+  - Messfalle: **TEST.m2v trifft den Defekt nie.** Sie endet sauber auf
+    `00 00 01 b7` (`sequence_end_code`), weshalb die vorhandene Cut-Matrix
+    durchlief. Zufälliges Abschneiden reicht ebenfalls nicht (`end: 2` statt
+    `end: 0`) — die Repro braucht gezielt ein letztes Byte, das als
+    Start-Code-Typ durchgeht. `gate_headerlist_eof.sh` schneidet deshalb am
+    ersten 0xB8 jenseits 4 MB.
+  - Belege: `gate_headerlist_eof.sh` vorher `TERMINATES: FAIL` (16,5 Mio
+    stderr-Zeilen in 30 s), nachher `VERDICT: PASS` mit 172 statt 173
+    Einträgen. Originaldatei des Nutzers (678 MB): 0,67 s, 59 483 Header, alle
+    auf echten Start-Codes, 2 statt 26,7 Mio stderr-Zeilen. Cut-Matrix aus
+    `add2ac84` (Singles 4/10/22, Paare 9–10/10–11, Bereiche 0..3/0..10)
+    unverändert exakt, 0 Decoderfehler.
+
 - **Gemeinsame Temp-Namen in `encodePart()` + Nullzeiger in
   `firstSequenceHeader()`** → **GELÖST (2026-08-12, master `f5f51d1f`; der
   Eintrag stand danach noch als „erledigt" im TODO und wandert erst beim

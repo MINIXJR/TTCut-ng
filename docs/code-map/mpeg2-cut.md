@@ -129,16 +129,34 @@ pixel-identically, and the audio cut-time correction subtracts them.
 
 ## Assumptions, contracts & pitfalls
 
-- **`TTFileBuffer::readByte()` throws `StreamEOF` past the last valid byte**
-  (since `add2ac8`, 2026-07-13). Before that it silently returned stale
-  ring-buffer cells beyond `writePos`; the header-list parser then fabricated
-  a phantom `picture_start_code` 3 bytes before EOF, and `getByteCount()`
-  (whose "last header → `stream_buffer->size()`" rule only applies when the
-  phantom is absent) truncated the final slice of a re-encoded segment —
-  decoders reported `ac-tex damaged` at the last macroblock. The header-list
-  parsers rely on the exception as their regular end-of-stream path.
-  `nextStartCodeTS()` additionally stops when fewer than 4 valid bytes remain.
-  Scanner regression tool: `tools/diag/test_startcode_scan <file>`.
+- **The end-of-stream contract runs through three layers, and each one has to
+  hold.** `readByte()` throws `StreamEOF` past the last valid byte instead of
+  returning stale ring-buffer cells beyond `writePos` — a stale cell let the
+  header-list parser fabricate a phantom `picture_start_code` 3 bytes before
+  EOF, and `getByteCount()` (whose "last header → `stream_buffer->size()`" rule
+  only applies when the phantom is absent) then truncated the final slice of a
+  re-encoded segment. `nextStartCodeTS()` stops scanning when fewer than 4
+  valid bytes remain.
+
+  The exception is **not** by itself an end-of-stream signal for the parsers.
+  `readByte(quint8*, int)` catches it and returns the bytes actually read —
+  and it must leave `readPos` untouched, because `atEnd()` tests
+  `isAtEnd && readPos > writePos`. Moving `readPos` back to `writePos` there
+  clears that condition, and a caller looping on `!atEnd()` never terminates:
+  a file whose last byte doubles as a start-code type (0xB8 → `group_start_code`)
+  made `createHeaderList()` re-read that byte forever, one leaked header object
+  per turn.
+
+  Termination is therefore the caller's: `createHeaderList()` loops on
+  `atEnd()`, and every `readHeader()` reports a short read as `false` so the
+  half-read object is deleted instead of entering the list with parsed stack
+  garbage. A truncated *sequence extension* is the one exception — the header
+  itself was read in full, so it keeps its defaults and returns `true`.
+
+  Regression tools: `tools/diag/gate_headerlist_eof.sh <bin> <source.m2v>`
+  (prepares a file ending on 0xB8, checks termination and that every list entry
+  sits on a real start code), `tools/diag/test_startcode_scan <file>` (scanner
+  in isolation).
 
 - **`getCutStartObject()` — no I-frame at/after a non-I cut-in.**
   `moveToNextIndexPos(cutInPos, 1)` returns **-1** when the source ends inside
