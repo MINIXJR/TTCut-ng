@@ -39,10 +39,10 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `getOpenFileName` beim Öffnen, `getExistingDirectory` im Cut-Dialog
     (`gui/ttcutavcutdlg.cpp:249`, mit `qApp->processEvents()` direkt
     dahinter) und ein `QFileDialog`-Objekt beim Frame-Speichern
-    (`gui/ttcurrentframe.cpp:517`). Direkt vor `onDoCut` wird
-    `TTCutAVCutDlg` per `delete` zerstört (`ttcutmainwindow.cpp:1151`), davor
-    der Vorschau-Dialog (`delete cutPreview`, `:1100`) — und `doH264Cut`
-    betritt über die Statusmeldungen von `cutAudioTracks`/`cutSubtitleTracks`
+    (`gui/ttcurrentframe.cpp:545`). Direkt vor `onDoCut` wird
+    `TTCutAVCutDlg` per `delete` zerstört (`ttcutmainwindow.cpp:1484`, dort
+    `cutAVDlg`), davor der Vorschau-Dialog (`delete cutPreview`, `:1435`)
+    — und `doH264Cut` betritt über die Statusmeldungen von `cutAudioTracks`/`cutSubtitleTracks`
     wieder die Ereignisschleife (`qApp->processEvents()`). Dort werden die
     aufgeschobenen Löschungen aus diesen Abbauten ausgeführt; dorthin gehören
     die im Backtrace fehlenden Frames. **Mechanismus kohärent, nicht
@@ -574,8 +574,10 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Dialog **„Tonstörung (AC3 5.1)"** (`ui/ttcutsettingsstreampoints.ui`), der
   vom Scan erzeugte Marker heißt **„Tonanomalie: C+LFE-Störimpuls …"**, und
   **„Tonstörungen: X–Y (Spur N)"** ist der Text der davon unabhängigen
-  Marker, die `ttcut-audiofix` beim Demux für CRC-defekte Frames setzt. Der
-  Nutzer sieht damit „Tonstörung" an zwei Stellen mit verschiedener
+  Marker, die `ttcut-audiofix` beim Demux für echten Strukturschaden setzt
+  (Junk-Regionen mitten im Strom und CRC-defekte Frames; die angeschnittenen
+  Rahmen an den Rändern jeder Aufnahme erzeugen seit v0.82.6 keinen Marker
+  mehr). Der Nutzer sieht damit „Tonstörung" an zwei Stellen mit verschiedener
   Bedeutung. Vorschlag: Einstellungs-Label auf „Tonanomalie (AC3 5.1)"
   ziehen (nur `.ui` + Übersetzung, keine Code-Logik). Nicht mehr in v0.82.0
   gemacht, weil die Version bereits veröffentlicht war; das Wiki erklärt die

@@ -2,6 +2,50 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## v0.82.6 (2026-08-30)
+
+**Loading no longer hangs, and the audio no longer cries wolf**
+
+### Fixed
+- **Opening a video could hang the application indefinitely.** A stream whose
+  last byte happens to be `0xB8` — `group_start_code` — sent the MPEG-2 header
+  parser into an endless loop: it kept re-reading that byte, filling the log
+  file at about 22 MB/s and growing the process by roughly one leaked header
+  object per turn. Reported as "loading takes ages"; it never finished at all.
+  A 678 MB recording that used to hang now loads in 0.67 seconds. The stream
+  buffer's end-of-file state is no longer cleared by a partial read, and a
+  header that could not be read in full is discarded instead of entering the
+  list with parsed garbage.
+- **Nearly every recording showed a "Tonstörungen" marker near the end.** It
+  was neither a defect nor at the end: a recording is cut off mid audio frame,
+  and that partial frame was reported as damage at a position derived from the
+  audio timeline, landing some frames before the end of the video. `.info`
+  files now carry `audio_N_corrupt_ranges` only when real damage was found, so
+  the marker means something again. The byte counters (`audio_N_junk_bytes`,
+  `audio_N_dropped_frames`) still account for everything removed.
+- **The demux log warned three times per recording about the same non-issue.**
+  A recording is also cut off mid PES packet, which ffmpeg reports as
+  `PES packet size mismatch` / `Packet corrupt`. When all such reports for an
+  audio track sit within two seconds of either end, one info line replaces
+  them. A report further into the recording still surfaces in full, and video
+  packet reports are untouched — those continue to drive the "Bildstörungen"
+  markers.
+- **Subtitle OCR mangled lines starting with a music note.** The glyph repair
+  in `ttcut-ocr-glyphs` recognised the note only in one broadcaster's
+  rendering, and where it did match, it inserted the note in front of the
+  misread character instead of replacing it. Lines now come out as the bitmap
+  shows them.
+
+### Changed
+- `ttcut-audiofix` reports the partial frames at the start and end of a
+  recording as `edge_junk_bytes` rather than listing them as junk regions.
+  They are still removed. An older `ttcut-demux` ignores the new field and
+  behaves exactly as before.
+- `ttcut-ac3fix` distinguishes a partial frame at the file edge from real
+  trailing garbage, and now counts the bytes it discards while scanning — its
+  byte figure used to be a leftover buffer count of under seven bytes
+  regardless of how much was actually unusable.
+
 ## v0.82.5 (2026-08-28)
 
 **Quick-jump dialog no longer freezes, and its thumbnails are adjustable**

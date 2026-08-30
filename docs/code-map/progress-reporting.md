@@ -1,6 +1,6 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-16
+base_commit: 21419018b5a94fede26281039d7865abb9935d5f
+last_verified: 2026-08-30
 sources:
   - common/istatusreporter.h
   - data/ttanalysislog.cpp

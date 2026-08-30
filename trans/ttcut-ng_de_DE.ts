@@ -3648,48 +3648,48 @@ Ausgabedatei:
         <translation>Headerliste-Erstellung vom Benutzer abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="289"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="294"/>
         <source>Found %1 headers</source>
         <translation>%1 Header gefunden</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="301"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="306"/>
         <source>MPEG-2 header list created</source>
         <translation>MPEG-2 Headerliste erstellt</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="439"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="444"/>
         <source>No sequence header for I-Frame at index %1</source>
         <translation>Kein Sequenz-Header für I-Frame bei Index %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="446"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="451"/>
         <source>No GOP Header found for I-Frame at index %1</source>
         <translation>Kein GOP-Header für I-Frame bei Index %1 gefunden</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="472"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="477"/>
         <source>No I- or P-Frame found at cut out position: %1</source>
         <translation>Kein I- oder P-Frame an Cut-Out Position gefunden: %1</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="554"/>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="706"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="559"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="711"/>
         <source>Transfer objects</source>
         <translation>Übertrage Objekte</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="564"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="569"/>
         <source>%1 bytes from stream buffer read</source>
         <translation>%1 Bytes aus Stream-Puffer gelesen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="570"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="575"/>
         <source>Transfer cut objects aborted!</source>
         <translation>Übertragung der Schnittobjekte abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpeg2videostream.cpp" line="711"/>
+        <location filename="../avstream/ttmpeg2videostream.cpp" line="716"/>
         <source>Transfer complete</source>
         <translation>Übertragung abgeschlossen</translation>
     </message>
