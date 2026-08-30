@@ -148,10 +148,53 @@ probe_audio_props() {
 readonly FFMPEG_WARN_PATTERN='error|warning|invalid|corrupt|failed|suppress|too many|repeated|mismatch'
 
 # Echo matching lines of log file $1 as warnings, prefixed with $2 (optional).
+# $3 (optional): extended regex; matching lines are skipped.
 warn_ffmpeg_log() {
-    local logfile=$1 prefix=${2:-}
+    local logfile=$1 prefix=${2:-} skip=${3:-}
     grep -iE "$FFMPEG_WARN_PATTERN" "$logfile" 2>/dev/null | \
-        while IFS= read -r line; do warn "${prefix}ffmpeg: $line"; done
+        while IFS= read -r line; do
+            [ -n "$skip" ] && [[ "$line" =~ $skip ]] && continue
+            warn "${prefix}ffmpeg: $line"
+        done
+}
+
+# Lines ffmpeg emits for one damaged packet. Only the middle one carries a
+# position, so they are silenced as a group or not at all.
+readonly FFMPEG_PACKET_CORRUPT_PATTERN='PES packet size mismatch|Packet corrupt \(stream|corrupt input packet in stream'
+# How far from either end of the recording still counts as its edge. The
+# partial packet a recording is cut off in measures 0.3-0.8 s from the end on
+# real material; 2 s is generous towards that and still nowhere near the
+# middle of a recording.
+readonly FFMPEG_EDGE_WINDOW_S=2
+
+# ffmpeg_audio_corruption_is_edge_only LOGFILE START_PTS DURATION_S
+#
+# True when the log holds at least one "Packet corrupt (stream = N, dts = M)"
+# for an AUDIO stream (N != 0) and EVERY one of them sits within
+# FFMPEG_EDGE_WINDOW_S of either end of the recording - i.e. the recording was
+# cut mid-packet, which is normal and not worth a warning. False when any of
+# them sits further in (then the whole group is reported as before, since the
+# context-less companion lines cannot be attributed to one packet or another),
+# and false when there are none at all - nothing to silence.
+#
+# Video (stream 0) is deliberately ignored: those packets already drive
+# corrupt_frame_ranges further down.
+ffmpeg_audio_corruption_is_edge_only() {
+    local logfile=$1 start_pts=$2 duration=$3
+    [ -r "$logfile" ] || return 1
+    [ -n "$start_pts" ] && [ -n "$duration" ] || return 1
+
+    local ticks
+    ticks=$(grep -oE 'Packet corrupt \(stream = [1-9][0-9]*, dts = [0-9]+' "$logfile" 2>/dev/null \
+            | grep -oE '[0-9]+$' || true)
+    [ -n "$ticks" ] || return 1
+
+    # A flag rather than "exit 1" in the body: awk's exit jumps to END, whose
+    # own exit would overwrite the status and report every log as edge-only.
+    echo "$ticks" | awk -v s="$start_pts" -v d="$duration" -v w="$FFMPEG_EDGE_WINDOW_S" '
+        { off = $1 / 90000.0 - s
+          if (off > w && off < d - w) inside = 1 }
+        END { exit (inside ? 1 : 0) }'
 }
 
 # Detect audio packet gaps in source TS via ffprobe.
@@ -1444,8 +1487,15 @@ wait "$REPAIR_FF_PID" || REPAIR_FF_RC=$?
 if [ "$REPAIR_FF_RC" -eq 0 ]; then
     # Show progress line
     grep -E "^(frame=|size=)" "$FFMPEG_LOG" | tail -1 | while IFS= read -r line; do info "$line"; done
-    # Show any warnings/errors from ffmpeg
-    warn_ffmpeg_log "$FFMPEG_LOG"
+    # Show any warnings/errors from ffmpeg. A recording is cut off mid-packet
+    # at both ends, so ffmpeg reports that partial packet on nearly every one;
+    # when that is all there is, say so once instead of warning three times.
+    if ffmpeg_audio_corruption_is_edge_only "$FFMPEG_LOG" "${START_PTS:-}" "${CONTAINER_VIDEO_DURATION:-}"; then
+        warn_ffmpeg_log "$FFMPEG_LOG" "" "$FFMPEG_PACKET_CORRUPT_PATTERN"
+        info "Audio: partial packet at the recording edge (normal, recording cut mid-packet)"
+    else
+        warn_ffmpeg_log "$FFMPEG_LOG"
+    fi
     # Preserve "Packet corrupt (stream = 0, dts = N)" markers for
     # corrupt_frame_ranges= (.info emission, later) before the log is
     # deleted below. This whole-TS remux pass is where the damaged region

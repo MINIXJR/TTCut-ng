@@ -256,6 +256,13 @@ static int process_ac3_file(const ac3fix_options_t *opts)
     int progress_last = -1;
     double frame_duration = 1536.0 / 48000.0;  /* AC3 frame duration at 48kHz */
     double current_time = 0;
+    /* Size of the last frame parsed, used to tell a partial frame at the end
+     * of the file from real trailing garbage. 0 until one has been seen. */
+    size_t last_frame_size = 0;
+    /* Bytes skipped because they belong to no valid frame. Counted because
+     * the scan drops them one at a time, so the leftover in the buffer at EOF
+     * is always under 7 bytes and says nothing about how much was garbage. */
+    size_t skipped_junk = 0;
 
     while ((bytes_read = fread(buffer + buffer_pos, 1, buffer_size - buffer_pos, in_fp)) > 0
            || buffer_pos > 0) {
@@ -267,6 +274,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             /* Look for sync word */
             if (buffer[processed] != 0x0B || buffer[processed + 1] != 0x77) {
                 processed++;
+                skipped_junk++;
                 continue;
             }
 
@@ -274,6 +282,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             ac3_frame_info_t info;
             if (!parse_ac3_header(buffer + processed, buffer_pos - processed, &info)) {
                 processed++;
+                skipped_junk++;
                 continue;
             }
 
@@ -343,6 +352,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
                 }
             }
 
+            last_frame_size = info.frame_size;
             processed += info.frame_size;
             file_pos += info.frame_size;
             current_time += frame_duration;
@@ -362,9 +372,18 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             buffer_pos -= processed;
         }
 
-        /* If no progress and buffer is getting full, we have a problem */
+        /* If no progress and buffer is getting full, we have a problem.
+         * Less than one frame left is the partial frame every recording ends
+         * in - VDR cuts mid-frame - and not worth a warning. More than that
+         * is real trailing garbage. */
         if (bytes_read == 0 && buffer_pos > 0) {
-            fprintf(stderr, "\nWarning: %zu bytes at end of file could not be parsed\n", buffer_pos);
+            size_t unusable = skipped_junk + buffer_pos;
+            if (last_frame_size > 0 && unusable < last_frame_size)
+                fprintf(stderr, "\nPartial frame at file edges (%zu bytes), recording cut mid-frame\n",
+                        unusable);
+            else
+                fprintf(stderr, "\nWarning: %zu bytes could not be parsed (%zu of them at end of file)\n",
+                        unusable, buffer_pos);
             break;
         }
     }

@@ -550,6 +550,46 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Umrechnungsfunktion in allen vier Kombinationen geprüft — reine
     CRC-Funde ohne Junk erzeugen weiterhin Bereiche.
 
+- **ffmpeg-Warnungen über das angeschnittene letzte PES-Paket** → **GEFIXT**
+  (2026-08-30, Branch `fix/audiofix-edge-junk`)
+  - Direkte Folgemeldung zum Tonstörungs-Marker: sieben von neun frischen
+    Demuxes trugen je fünf `[WARN] ffmpeg:`-Zeilen (`PES packet size
+    mismatch`, `Packet corrupt (stream = 1, …)`, `corrupt input packet`).
+  - Gemessen über DTS gegen `start_pts` und Aufnahmelänge: **alle** lagen
+    0,3–0,8 s vor Schluss (2098,9/2099,4 · 2699,5/2700,0 · 2098,9/2099,4 ·
+    2098,5/2098,8 · 2099,3/2100,0 · 2698,6/2699,4 · 2099,5/2100,0). Die zwei
+    Aufnahmen ohne Warnung endeten zufällig auf einer Paketgrenze. Dasselbe
+    Randphänomen wie beim Tonrahmen, eine Ebene höher.
+  - Fix: `ffmpeg_audio_corruption_is_edge_only()` prüft die
+    `Packet corrupt (stream = N, dts = M)`-Zeilen der Tonspuren gegen ein
+    2-Sekunden-Fenster an beiden Enden. Nur wenn **alle** darin liegen,
+    entfällt die Gruppe zugunsten einer Info-Zeile. Das „alle oder keine"
+    ist erzwungen: von den drei Zeilen je Paket trägt nur eine eine Position,
+    die beiden anderen sind nicht zuordenbar. Bildspur unberührt.
+  - **awk-Falle:** `exit 1` im Rumpf springt in den `END`-Block, dessen
+    eigenes `exit 0` den Status überschreibt — jedes Log galt als
+    randbereinigt. Erst ein Flag mit Auswertung in `END` funktioniert. Das
+    Gate hat es gefunden (MIDDLE/MIXED).
+  - **Gate-Falle:** Die Prüffunktion wird per `sed` aus dem Skript gezogen.
+    Ohne die `readonly`-Konstanten ist das Fenster leer, alles kommt als
+    „noedge" heraus, und die drei Fälle, die genau das erwarten, bestehen aus
+    dem falschen Grund. Das Gate prüft die Konstanten jetzt einzeln nach.
+  - `ttcut-ac3fix` (mit abgedeckt): Die Warnung
+    `N bytes at end of file could not be parsed` meldete denselben Rand,
+    wurde aber von niemandem gelesen (`ttcut-demux:1780` fängt die Ausgabe
+    ein und sucht nur `Inconsistent frames:`; die Fix-Phase zeigt nur
+    `| tail -1`). Sie unterscheidet jetzt Rand von Schaden — **wozu erst ein
+    Zähler nötig war**: der Scan verwarf Müllbytes einzeln per `processed++`,
+    ohne sie zu zählen, sodass am Dateiende immer unter 7 Bytes übrig blieben.
+    Ohne den Zähler wäre die Größenprüfung eine Attrappe gewesen: 3072 Bytes
+    Zufallsmüll meldeten „6 bytes". Verifiziert in drei Fällen: 700 Bytes
+    angeschnittener Rahmen → neutral, 3072 Bytes Müll → Warnung mit der
+    echten Zahl, saubere Datei → stumm.
+  - Belege: `gate_ffmpeg_edge_packets.sh` 6/6 (EDGE_END, EDGE_START, MIDDLE,
+    MIXED, VIDEO, NONE). Demux-Lauf auf 04x29: **0 WARN-Zeilen** statt 5,
+    stattdessen zwei Info-Zeilen; `.info` mit denselben Werten wie im Lauf
+    davor (`junk_bytes=258`, `dropped_frames=1`, Drift 0, `es_lost_ms=0`).
+
 - **Lückenreparatur auf einen Durchlauf umgebaut** → **DONE (v0.82.1,
   2026-08-23)**. Auslöser: eine Aufnahme mit 6730 Lücken lief ~18 Minuten ohne
   Rückmeldung. Details in den Commits `a7aecee0` (Engine) und `1656df85`
