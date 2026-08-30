@@ -499,6 +499,97 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **„Tonstörungen"-Marker auf praktisch jeder Aufnahme** → **GEFIXT**
+  (2026-08-30, Branch `fix/audiofix-edge-junk`)
+  - Meldung des Nutzers: „die Audiospuren haben meistens am Ende einen
+    Fehler". Der Marker war echt, der gemeldete Schaden nicht.
+  - Ursache: Eine VDR-Aufnahme beginnt und endet mitten im Tonrahmen. Dieser
+    angeschnittene Rest ist per Definition kein gültiger Rahmen
+    (`ttcut-audiofix.c:111`, „Rahmen ragt ueber EOF"), landete deshalb in
+    `junk_regions` wie jeder Defekt, wurde von
+    `audiofix_ranges_to_video_frames()` in `audio_N_corrupt_ranges`
+    umgerechnet und in TTCut-ng als Marker gezeigt.
+  - Warum er nie ganz am Ende saß: Das Audio-ES endet um die
+    Längendifferenz früher als das Video, und die Position wird in eine
+    **Videoframe**-Nummer umgerechnet. Über neun Aufnahmen gemessen stimmte
+    der Abstand zum Dateiende auf ≤16 ms mit der jeweiligen Längendifferenz
+    überein — weniger als eine Videoframe-Dauer (40 ms), also reine Rundung:
+    400/384, 440/456, 320/312, 760/744, 560/576, 520/528, 840/840, 600/600,
+    480/480 ms.
+  - Direkter Byte-Beleg (rohe ES-Extraktion, vor jeder Sanitize): das Muster
+    war ausnahmslos `0@0:<n>` plus `<total_frames>@<Ende>:<m>`, nie etwas
+    dazwischen, und die Bytes dazwischen gingen exakt auf — 576,0000
+    Bytes/Rahmen in allen neun MP2-Fällen, ohne Rest.
+  - **Kein MP2-Problem.** AC3 zeigt dasselbe: eine bei Byte 500 beginnende
+    und mitten im Rahmen endende Kopie von `TEST_deu.ac3` meldet
+    `0@0:1036,199@6368:1200` — Frameindex 199 = `total_frames`, beide
+    kleiner als die AC3-Rahmengröße 1536. Zwei rohe Extraktionen aus einem
+    anderen TS (AC3 und MP2 derselben Quelle) waren dagegen beide sauber und
+    gingen exakt auf: das Muster hängt an der Aufnahme, nicht am Codec.
+  - Fix: `ttcut-audiofix` weist Randregionen getrennt als `edge_junk_bytes`
+    aus (Rand = vor dem ersten oder nach dem letzten gültigen Rahmen **und**
+    kleiner als ein Rahmen). Entfernt werden sie weiterhin, und der
+    Exit-Code bleibt 1 — sonst hätte `ttcut-demux` bei `rc=0` („structure
+    OK") gar nicht mehr repariert und der Rest stünde nach dem Padding
+    mitten in der Datei. `ttcut-demux` speist `corrupt_ranges` nur noch aus
+    echten Funden, zählt aber weiter alle entfernten Bytes in
+    `junk_bytes`, und loggt ohne echten Fund `info` statt `warn`.
+  - Zwei Fallen dabei: (1) `junk_bytes` und `dropped_frames` hingen an
+    derselben `if`-Bedingung wie `corrupt_ranges` und verschwanden im ersten
+    Anlauf mit — die Bedingungen sind jetzt getrennt. (2) Das Gate meldete
+    zunächst „source clean" für eine **nicht existierende** Datei, weil eine
+    fehlende Datei ebenfalls leere `junk_regions` liefert; es prüft jetzt
+    Lesbarkeit und Exit-Code.
+  - Belege: `gate_audiofix_edge.sh` grün für AC3 (Rahmengröße 1536) und MP2
+    (576), mit drei Urteilen EDGE/MIDDLE/OVERSIZE. Die neun echten
+    Aufnahmen liefern nach dem Fix `junk_regions=` leer und
+    `edge_junk_bytes` 264–620 bei unverändertem `rc=1`. Vollständiger
+    Demux-Lauf auf 04x11: `.info` ohne `corrupt_ranges`, mit
+    `junk_bytes=520` und `dropped_frames=1`; Log
+    `structure OK (trimmed 520 bytes of partial frame at the recording edges)`.
+    Umrechnungsfunktion in allen vier Kombinationen geprüft — reine
+    CRC-Funde ohne Junk erzeugen weiterhin Bereiche.
+
+- **ffmpeg-Warnungen über das angeschnittene letzte PES-Paket** → **GEFIXT**
+  (2026-08-30, Branch `fix/audiofix-edge-junk`)
+  - Direkte Folgemeldung zum Tonstörungs-Marker: sieben von neun frischen
+    Demuxes trugen je fünf `[WARN] ffmpeg:`-Zeilen (`PES packet size
+    mismatch`, `Packet corrupt (stream = 1, …)`, `corrupt input packet`).
+  - Gemessen über DTS gegen `start_pts` und Aufnahmelänge: **alle** lagen
+    0,3–0,8 s vor Schluss (2098,9/2099,4 · 2699,5/2700,0 · 2098,9/2099,4 ·
+    2098,5/2098,8 · 2099,3/2100,0 · 2698,6/2699,4 · 2099,5/2100,0). Die zwei
+    Aufnahmen ohne Warnung endeten zufällig auf einer Paketgrenze. Dasselbe
+    Randphänomen wie beim Tonrahmen, eine Ebene höher.
+  - Fix: `ffmpeg_audio_corruption_is_edge_only()` prüft die
+    `Packet corrupt (stream = N, dts = M)`-Zeilen der Tonspuren gegen ein
+    2-Sekunden-Fenster an beiden Enden. Nur wenn **alle** darin liegen,
+    entfällt die Gruppe zugunsten einer Info-Zeile. Das „alle oder keine"
+    ist erzwungen: von den drei Zeilen je Paket trägt nur eine eine Position,
+    die beiden anderen sind nicht zuordenbar. Bildspur unberührt.
+  - **awk-Falle:** `exit 1` im Rumpf springt in den `END`-Block, dessen
+    eigenes `exit 0` den Status überschreibt — jedes Log galt als
+    randbereinigt. Erst ein Flag mit Auswertung in `END` funktioniert. Das
+    Gate hat es gefunden (MIDDLE/MIXED).
+  - **Gate-Falle:** Die Prüffunktion wird per `sed` aus dem Skript gezogen.
+    Ohne die `readonly`-Konstanten ist das Fenster leer, alles kommt als
+    „noedge" heraus, und die drei Fälle, die genau das erwarten, bestehen aus
+    dem falschen Grund. Das Gate prüft die Konstanten jetzt einzeln nach.
+  - `ttcut-ac3fix` (mit abgedeckt): Die Warnung
+    `N bytes at end of file could not be parsed` meldete denselben Rand,
+    wurde aber von niemandem gelesen (`ttcut-demux:1780` fängt die Ausgabe
+    ein und sucht nur `Inconsistent frames:`; die Fix-Phase zeigt nur
+    `| tail -1`). Sie unterscheidet jetzt Rand von Schaden — **wozu erst ein
+    Zähler nötig war**: der Scan verwarf Müllbytes einzeln per `processed++`,
+    ohne sie zu zählen, sodass am Dateiende immer unter 7 Bytes übrig blieben.
+    Ohne den Zähler wäre die Größenprüfung eine Attrappe gewesen: 3072 Bytes
+    Zufallsmüll meldeten „6 bytes". Verifiziert in drei Fällen: 700 Bytes
+    angeschnittener Rahmen → neutral, 3072 Bytes Müll → Warnung mit der
+    echten Zahl, saubere Datei → stumm.
+  - Belege: `gate_ffmpeg_edge_packets.sh` 6/6 (EDGE_END, EDGE_START, MIDDLE,
+    MIXED, VIDEO, NONE). Demux-Lauf auf 04x29: **0 WARN-Zeilen** statt 5,
+    stattdessen zwei Info-Zeilen; `.info` mit denselben Werten wie im Lauf
+    davor (`junk_bytes=258`, `dropped_frames=1`, Drift 0, `es_lost_ms=0`).
+
 - **Lückenreparatur auf einen Durchlauf umgebaut** → **DONE (v0.82.1,
   2026-08-23)**. Auslöser: eine Aufnahme mit 6730 Lücken lief ~18 Minuten ohne
   Rückmeldung. Details in den Commits `a7aecee0` (Engine) und `1656df85`
