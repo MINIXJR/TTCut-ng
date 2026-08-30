@@ -337,6 +337,10 @@ static const codec_ops_t *all_ops[] = { &mp2_ops, &ac3_ops, NULL };
 typedef struct {
     uint64_t total_frames, total_samples, junk_bytes, dropped_frames, crc_bad;
     uint32_t samplerate; /* aus dem ERSTEN gueltigen Rahmen; 0 solange keiner geparst wurde */
+    uint32_t ref_frame_size; /* Groesse des ERSTEN gueltigen Rahmens; Schwelle fuer
+                              * angeschnittene Raender. DVB liefert CBR, damit ist sie
+                              * exakt; bei VBR ist sie eine Naeherung, was fuer ein
+                              * "kleiner als ein Rahmen" genuegt. 0 = kein Rahmen geparst. */
     uint8_t  bsid;        /* aus dem ERSTEN gueltigen Rahmen (AC3: <=8 vs. E-AC3 11-16) */
     /* Report-Listen: dynamische Arrays (malloc/realloc), Deckel MAX_REPORT_ITEMS */
     struct { uint64_t frame_idx; uint64_t ms; uint32_t bytes; } *junk;  size_t njunk;
@@ -441,7 +445,10 @@ static int walk(const codec_ops_t *ops, const uint8_t *p, size_t len,
              * von der Plausibilitaets-Baseline (die weiter BASELINE_FRAMES
              * braucht) - sonst melden Muell/CRC-Funde vor Rahmen 3 faelschlich
              * ms=0. */
-            if (st->total_frames == 0) { st->samplerate = fi.samplerate; st->bsid = fi.bsid; }
+            if (st->total_frames == 0) {
+                st->samplerate = fi.samplerate; st->bsid = fi.bsid;
+                st->ref_frame_size = (uint32_t)fs;
+            }
             if (!have_baseline && st->total_frames + 1 >= BASELINE_FRAMES)
                 { baseline = fi; have_baseline = true; }
             if (!ops->check_crc(p + pos, (size_t)fs, &fi))
@@ -483,13 +490,33 @@ static void print_report(const codec_ops_t *ops, const walk_stats_t *st)
     printf("total_frames=%" PRIu64 "\n", st->total_frames);
     printf("total_ms=%" PRIu64 "\n", current_ms(st));
 
+    /* Ein VDR-Mitschnitt beginnt und endet mitten im Rahmen; der angeschnittene
+     * Rest ist kein gueltiger Rahmen und landete darum wie jeder Defekt in
+     * junk_regions -> ttcut-demux machte daraus audio_N_corrupt_ranges und
+     * TTCut-ng zeigte auf praktisch jeder Aufnahme einen "Tonstoerungen"-
+     * Marker. Solche Raender werden hier getrennt ausgewiesen: entfernt werden
+     * sie weiterhin (der Exit-Code bleibt unberuehrt, sonst repariert
+     * ttcut-demux gar nicht mehr), gemeldet werden sie nicht mehr als Defekt.
+     * Rand heisst: vor dem ersten oder nach dem letzten gueltigen Rahmen UND
+     * kleiner als ein Rahmen. Ist mehr als ein Rahmen betroffen, war das kein
+     * sauberer Schnitt, sondern Schaden - der bleibt sichtbar. */
+    uint64_t edge_bytes = 0;
+
     printf("junk_regions=");
+    bool first_junk = true;
     for (size_t i = 0; i < st->njunk; i++) {
-        if (i) printf(",");
+        const uint64_t idx = st->junk[i].frame_idx;
+        const bool at_edge = (idx == 0 || idx == st->total_frames)
+                          && st->ref_frame_size > 0
+                          && st->junk[i].bytes < st->ref_frame_size;
+        if (at_edge) { edge_bytes += st->junk[i].bytes; continue; }
+        if (!first_junk) printf(",");
+        first_junk = false;
         printf("%" PRIu64 "@%" PRIu64 ":%u",
                st->junk[i].frame_idx, st->junk[i].ms, st->junk[i].bytes);
     }
     printf("\n");
+    printf("edge_junk_bytes=%" PRIu64 "\n", edge_bytes);
 
     printf("dropped_frames=%" PRIu64 "\n", st->dropped_frames);
 

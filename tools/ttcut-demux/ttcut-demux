@@ -1919,11 +1919,25 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     mv "$TEMP_FIXED" "$AF"
                     JUNK=$(echo "$AFIX_OUT" | grep -oP '^junk_regions=\K.*' || true)
                     CRCB=$(echo "$AFIX_OUT" | grep -oP '^crc_bad_frames=\K.*' || true)
-                    AUDIOFIX_JUNK_BYTES[$i]=$(echo "$JUNK" | tr ',' '\n' | grep -oP ':\K[0-9]+' | awk '{s+=$1} END{print s+0}')
+                    # A recording starts and ends mid-frame; ttcut-audiofix
+                    # reports those two partial frames as edge_junk_bytes rather
+                    # than in junk_regions. They are removed like any junk (that
+                    # is why they count towards the byte total below), but they
+                    # are not damage and must not reach audio_N_corrupt_ranges -
+                    # otherwise TTCut-ng marks a "Tonstoerung" on every single
+                    # recording. Empty when an older ttcut-audiofix is in PATH,
+                    # which then behaves exactly as before.
+                    EDGEB=$(echo "$AFIX_OUT" | grep -oP '^edge_junk_bytes=\K[0-9]+' || echo 0)
+                    MIDB=$(echo "$JUNK" | tr ',' '\n' | grep -oP ':\K[0-9]+' | awk '{s+=$1} END{print s+0}')
+                    AUDIOFIX_JUNK_BYTES[$i]=$(( MIDB + ${EDGEB:-0} ))
                     AUDIOFIX_DROPPED[$i]=$(echo "$AFIX_OUT" | grep -oP '^dropped_frames=\K[0-9]+' || echo 0)
                     # ms positions (junk + CRC) -> video frames, clustered (<=2s)
                     AUDIOFIX_CORRUPT_RANGES[$i]=$(audiofix_ranges_to_video_frames "$JUNK" "$CRCB" "$FRAME_RATE_DEC")
-                    warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes) at video frame(s) $(format_ranges_hms "${AUDIOFIX_CORRUPT_RANGES[$i]}" "$FRAME_RATE_DEC")"
+                    if [ -n "${AUDIOFIX_CORRUPT_RANGES[$i]}" ]; then
+                        warn "  $(basename "$AF"): junk removed (${AUDIOFIX_JUNK_BYTES[$i]} bytes) at video frame(s) $(format_ranges_hms "${AUDIOFIX_CORRUPT_RANGES[$i]}" "$FRAME_RATE_DEC")"
+                    else
+                        info "  $(basename "$AF"): structure OK (trimmed ${AUDIOFIX_JUNK_BYTES[$i]} bytes of partial frame at the recording edges)"
+                    fi
                 else
                     rm -f "$TEMP_FIXED"
                     warn "  $(basename "$AF"): sanitize failed (rc=$FIX_RC), leaving untouched"
@@ -2810,9 +2824,16 @@ EOF
             echo "audio_${i}_ac3_fixed=true" >> "$OUTPUT_INFO"
             echo "audio_${i}_ac3_fixed_frames=${AC3_FIX_RESULTS[$i]}" >> "$OUTPUT_INFO"
         fi
+        # corrupt_ranges is what TTCut-ng turns into a "Tonstoerung" marker, so
+        # it carries real damage only. The byte counters are human diagnostics
+        # (TTESInfo deliberately does not parse them) and are written whenever
+        # the sanitizer removed anything at all - including the partial frames
+        # at the recording edges, which are trimmed but are not damage.
         if [ -n "${AUDIOFIX_CORRUPT_RANGES[$i]:-}" ]; then
             echo "audio_${i}_corrupt_ranges=${AUDIOFIX_CORRUPT_RANGES[$i]}" >> "$OUTPUT_INFO"
-            echo "audio_${i}_junk_bytes=${AUDIOFIX_JUNK_BYTES[$i]:-0}" >> "$OUTPUT_INFO"
+        fi
+        if [ "${AUDIOFIX_JUNK_BYTES[$i]:-0}" != "0" ]; then
+            echo "audio_${i}_junk_bytes=${AUDIOFIX_JUNK_BYTES[$i]}" >> "$OUTPUT_INFO"
             echo "audio_${i}_dropped_frames=${AUDIOFIX_DROPPED[$i]:-0}" >> "$OUTPUT_INFO"
         fi
     done

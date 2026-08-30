@@ -499,6 +499,57 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### ttcut-demux
 
+- **„Tonstörungen"-Marker auf praktisch jeder Aufnahme** → **GEFIXT**
+  (2026-08-30, Branch `fix/audiofix-edge-junk`)
+  - Meldung des Nutzers: „die Audiospuren haben meistens am Ende einen
+    Fehler". Der Marker war echt, der gemeldete Schaden nicht.
+  - Ursache: Eine VDR-Aufnahme beginnt und endet mitten im Tonrahmen. Dieser
+    angeschnittene Rest ist per Definition kein gültiger Rahmen
+    (`ttcut-audiofix.c:111`, „Rahmen ragt ueber EOF"), landete deshalb in
+    `junk_regions` wie jeder Defekt, wurde von
+    `audiofix_ranges_to_video_frames()` in `audio_N_corrupt_ranges`
+    umgerechnet und in TTCut-ng als Marker gezeigt.
+  - Warum er nie ganz am Ende saß: Das Audio-ES endet um die
+    Längendifferenz früher als das Video, und die Position wird in eine
+    **Videoframe**-Nummer umgerechnet. Über neun Aufnahmen gemessen stimmte
+    der Abstand zum Dateiende auf ≤16 ms mit der jeweiligen Längendifferenz
+    überein — weniger als eine Videoframe-Dauer (40 ms), also reine Rundung:
+    400/384, 440/456, 320/312, 760/744, 560/576, 520/528, 840/840, 600/600,
+    480/480 ms.
+  - Direkter Byte-Beleg (rohe ES-Extraktion, vor jeder Sanitize): das Muster
+    war ausnahmslos `0@0:<n>` plus `<total_frames>@<Ende>:<m>`, nie etwas
+    dazwischen, und die Bytes dazwischen gingen exakt auf — 576,0000
+    Bytes/Rahmen in allen neun MP2-Fällen, ohne Rest.
+  - **Kein MP2-Problem.** AC3 zeigt dasselbe: eine bei Byte 500 beginnende
+    und mitten im Rahmen endende Kopie von `TEST_deu.ac3` meldet
+    `0@0:1036,199@6368:1200` — Frameindex 199 = `total_frames`, beide
+    kleiner als die AC3-Rahmengröße 1536. Zwei rohe Extraktionen aus einem
+    anderen TS (AC3 und MP2 derselben Quelle) waren dagegen beide sauber und
+    gingen exakt auf: das Muster hängt an der Aufnahme, nicht am Codec.
+  - Fix: `ttcut-audiofix` weist Randregionen getrennt als `edge_junk_bytes`
+    aus (Rand = vor dem ersten oder nach dem letzten gültigen Rahmen **und**
+    kleiner als ein Rahmen). Entfernt werden sie weiterhin, und der
+    Exit-Code bleibt 1 — sonst hätte `ttcut-demux` bei `rc=0` („structure
+    OK") gar nicht mehr repariert und der Rest stünde nach dem Padding
+    mitten in der Datei. `ttcut-demux` speist `corrupt_ranges` nur noch aus
+    echten Funden, zählt aber weiter alle entfernten Bytes in
+    `junk_bytes`, und loggt ohne echten Fund `info` statt `warn`.
+  - Zwei Fallen dabei: (1) `junk_bytes` und `dropped_frames` hingen an
+    derselben `if`-Bedingung wie `corrupt_ranges` und verschwanden im ersten
+    Anlauf mit — die Bedingungen sind jetzt getrennt. (2) Das Gate meldete
+    zunächst „source clean" für eine **nicht existierende** Datei, weil eine
+    fehlende Datei ebenfalls leere `junk_regions` liefert; es prüft jetzt
+    Lesbarkeit und Exit-Code.
+  - Belege: `gate_audiofix_edge.sh` grün für AC3 (Rahmengröße 1536) und MP2
+    (576), mit drei Urteilen EDGE/MIDDLE/OVERSIZE. Die neun echten
+    Aufnahmen liefern nach dem Fix `junk_regions=` leer und
+    `edge_junk_bytes` 264–620 bei unverändertem `rc=1`. Vollständiger
+    Demux-Lauf auf 04x11: `.info` ohne `corrupt_ranges`, mit
+    `junk_bytes=520` und `dropped_frames=1`; Log
+    `structure OK (trimmed 520 bytes of partial frame at the recording edges)`.
+    Umrechnungsfunktion in allen vier Kombinationen geprüft — reine
+    CRC-Funde ohne Junk erzeugen weiterhin Bereiche.
+
 - **Lückenreparatur auf einen Durchlauf umgebaut** → **DONE (v0.82.1,
   2026-08-23)**. Auslöser: eine Aufnahme mit 6730 Lücken lief ~18 Minuten ohne
   Rückmeldung. Details in den Commits `a7aecee0` (Engine) und `1656df85`
