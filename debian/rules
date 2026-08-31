@@ -1,11 +1,18 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
 
-# Plain cmake (Make backend), not cmake+ninja: the package declares
-# debhelper (>= 11) and the ninja variant needs >= 12.4. Ninja is the dev
-# workflow; the package result is identical.
 %:
-	dh $@ --buildsystem=cmake --builddirectory=build-deb
+	dh $@ --buildsystem=cmake+ninja --builddirectory=build-deb
+
+# No ctest suite (tests are the standalone tools/diag harnesses); the ninja
+# buildsystem would otherwise run 'ninja test', which has no such target.
+override_dh_auto_test:
+
+# Native package: dh would ship only debian/changelog. Pass CHANGELOG.md so the
+# full user-facing history is installed as changelog.gz (debian/changelog then
+# becomes changelog.Debian.gz, matching the pre-native layout).
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGELOG.md
 
 override_dh_auto_build:
 	# Compile translation files

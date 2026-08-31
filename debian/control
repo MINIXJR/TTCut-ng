@@ -2,8 +2,11 @@ Source: ttcut-ng
 Section: video
 Priority: optional
 Maintainer: MINIXJR <35893755+MINIXJR@users.noreply.github.com>
-Build-Depends: debhelper (>= 11),
+Rules-Requires-Root: no
+Build-Depends: debhelper-compat (= 13),
                cmake,
+               ninja-build,
+               pkgconf,
                qt6-base-dev,
                qt6-l10n-tools,
                libmpeg2-4-dev,
@@ -14,12 +17,12 @@ Build-Depends: debhelper (>= 11),
                libavfilter-dev,
                libswresample-dev,
                libmpv-dev
-Standards-Version: 4.5.0
+Standards-Version: 4.7.4
 Homepage: https://github.com/MINIXJR/TTCut-ng
 
 Package: ttcut-ng
 Architecture: linux-any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3
 Recommends: ffmpeg, mjpegtools, mpv, python3-numpy
 Suggests: ccextractor, python3-pil
 Conflicts: ttcut
