@@ -1930,6 +1930,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Paketbau kopierte 1,9 GB Ballast pro Release** → **GEFIXT** (2026-08-31,
+  Branch `fix/package-build-excludes`)
+  - Ein Bauverzeichnis belegte 2,4 GB, das erzeugte `.deb` 1,2 MB. Anteile am
+    v0.82.6-Verzeichnis: `tools/diag/` 1,7 GB (~80 Harnesses à ~60 MB, jeder
+    linkt `ttcut-core` statisch mit Debug-Symbolen), `build-asan/` 206 MB,
+    `build-deb/` 438 MB (berechtigt).
+  - Ursache: `rsync -a` kopiert den **Arbeitsbaum, nicht den git-Index**.
+    Gitignoriertes ist in `git status` unsichtbar und wird trotzdem kopiert.
+    Der Ballast wird vom Paket nie gebraucht und blieb in jedem zur
+    Rollback-Sicherung behaltenen Bauverzeichnis liegen.
+  - **Falle 1:** `tools/diag/` ganz auszuschliessen zerbricht den Bau —
+    `CMakeLists.txt` macht `add_subdirectory(tools/diag)`, die CMake-Konfiguration
+    scheitert (gemessen: `EXIT=2`). Nur die Binaries dürfen weg, die Quellen
+    müssen bleiben; die `--include`-Regeln stehen deshalb vor den `--exclude`-Regeln
+    (rsync nimmt die erste passende).
+  - **Falle 2:** `--filter=':- .gitignore'` wäre die elegante Lösung und ein
+    stiller Schaden. Die Datei listet auch `trans/*.qm`, und **nichts im Bau
+    erzeugt die neu** (kein `lrelease` im CMakeLists) — sie wird aus dem
+    Quellbaum ins Paket kopiert. Die deutsche Übersetzung wäre verschwunden,
+    ohne dass der Bau fehlschlägt.
+  - Belege: Bauverzeichnis 2,4 GB → **498 MB**; Paketinhalt gegen die vorher
+    gesicherte Referenz verglichen — 27 Einträge identisch in Pfad, Rechten und
+    Eigentümer, einziger Unterschied der `dch`-Zeitstempel in
+    `changelog.Debian.gz` (5 Bytes); `Installed-Size` und `Depends` identisch;
+    `ttcut-ng_de_DE.qm` mit denselben 138606 Bytes und 1652 Strings im Paket.
+
+
 - **Voller TODO-Abgleich nachgeholt** → **ERLEDIGT (2026-08-24, Release
   v0.82.2)**. Beim Release v0.82.1 war der Abgleich nach Skill-Step 4.5 auf
   die von jenem Release berührten Bereiche eingegrenzt worden
