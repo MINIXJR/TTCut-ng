@@ -39,15 +39,21 @@ echo "==> Git branch: $GIT_BRANCH"
 echo "==> Distribution: $DISTRO"
 echo ""
 
-# Build version includes git info: VERSION+gitDATE-COUNT-HASH
-BUILD_VERSION="${VERSION}+git${GIT_DATE}-${GIT_COMMIT_COUNT}-${GIT_HASH}"
+# Build version includes git info: VERSION+gitDATE.COUNT.HASH
+# Dots, not hyphens: debian/source/format is "3.0 (native)", and a native
+# version must not contain a hyphen or a Debian revision. The old scheme
+# (…-COUNT-HASH-1~distro) only went unnoticed because -b never invokes
+# dpkg-source. Dot-separated versions sort above the old hyphenated ones
+# (dpkg orders '-' before '.'), so upgrades from old packages work.
+BUILD_VERSION="${VERSION}+git${GIT_DATE}.${GIT_COMMIT_COUNT}.${GIT_HASH}"
 BUILD_DIR="${BUILD_BASE_DIR}/${PACKAGE_NAME}-${BUILD_VERSION}"
 
-# Package version always includes git info
-PACKAGE_VERSION="${BUILD_VERSION}-1~${DISTRO}"
+# Distro marker moves into the upstream version (no revision on native packages)
+PACKAGE_VERSION="${BUILD_VERSION}~${DISTRO}"
 
-# Prompt for changelog description
-read -p "Enter changelog description (or press Enter for 'Git snapshot'): " CHANGELOG_MSG
+# Prompt for changelog description (|| catches EOF on non-interactive stdin,
+# which would otherwise abort the script via set -e)
+read -p "Enter changelog description (or press Enter for 'Git snapshot'): " CHANGELOG_MSG || CHANGELOG_MSG=""
 
 # Default message if empty
 if [ -z "$CHANGELOG_MSG" ]; then
@@ -79,10 +85,11 @@ echo "==> Copying source to build directory..."
 # configuration. The --include rules must precede the --exclude ones, since
 # rsync applies the first matching rule.
 #
-# Do NOT replace this with --filter=':- .gitignore'. That file also lists
-# trans/*.qm, and nothing in the build regenerates it — the compiled
-# translation would silently vanish from the package and the application would
-# come up untranslated.
+# --filter=':- .gitignore' was considered and rejected in favor of these
+# explicit rules, which are byte-verified against a reference package. (An
+# earlier version of this comment claimed the filter would silently drop the
+# compiled translation — wrong: debian/rules regenerates trans/*.qm via
+# lrelease. Any change here still warrants a package-content comparison.)
 rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
          --exclude='/Makefile' --exclude='*.pro.user' \
          --exclude='/build/' --exclude='/build-deb/' --exclude='/build-asan/' \
