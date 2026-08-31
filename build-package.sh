@@ -66,9 +66,32 @@ DEBFULLNAME="MINIXJR" DEBEMAIL="35893755+MINIXJR@users.noreply.github.com" \
 
 # Copy source to build directory
 echo "==> Copying source to build directory..."
+# rsync copies the working tree, not the git index, so anything gitignored is
+# invisible in `git status` yet still gets copied. Two things used to dominate
+# the copy: the ~80 compiled harnesses in tools/diag (~60 MB each — every one
+# statically links ttcut-core, with debug symbols) and build-asan, a leftover
+# sanitizer build. Together roughly 1.9 GB of a 2.4 GB build directory, copied
+# on every release, never used by the package, and left behind in every build
+# directory kept for rollback.
+#
+# The harness BINARIES go, their sources stay: CMakeLists.txt does
+# add_subdirectory(tools/diag), so dropping the directory outright fails
+# configuration. The --include rules must precede the --exclude ones, since
+# rsync applies the first matching rule.
+#
+# Do NOT replace this with --filter=':- .gitignore'. That file also lists
+# trans/*.qm, and nothing in the build regenerates it — the compiled
+# translation would silently vanish from the package and the application would
+# come up untranslated.
 rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
          --exclude='/Makefile' --exclude='*.pro.user' \
-         --exclude='/build/' --exclude='/build-deb/' \
+         --exclude='/build/' --exclude='/build-deb/' --exclude='/build-asan/' \
+         --include='/tools/diag/*.cpp' --include='/tools/diag/*.sh' \
+         --include='/tools/diag/*.py' --include='/tools/diag/*.txt' \
+         --exclude='/tools/diag/test_*' \
+         --exclude='/tools/diag/dump_mpeg2_fields' \
+         --exclude='/tools/diag/probe_copystart' \
+         --exclude='/tools/diag/bench_playback_mux' \
          --exclude='/tools/test-videos/cache/' \
          --exclude='/docs/' \
          "$SOURCE_DIR/" "$BUILD_DIR/"
