@@ -73,7 +73,7 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
       `docs/code-map/quick-jump.md`.
     - **Offen geblieben** (in `TODO.md`): `decodeFrameYUV()` trägt dieselbe
       unbegrenzte Schleife weiter; `TTH26xVideoStream::ffmpegFrameIndex()` ist
-      jetzt tot; `cleanUpQueue()` wartet auf den **globalen** Pool, ein
+      jetzt tot (entfernt im Dead-Code-Audit 2026-09-02); `cleanUpQueue()` wartet auf den **globalen** Pool, ein
       Tonanomalie-Scan ohne Abbruchsignal begrenzt die Wartezeit weiterhin.
   - **Befund E — Smart-Cut-Re-Encode liefert uniform graue Frames**
     (`8dfda6d`): der SPS-Unification-Rewriter schrieb/las die

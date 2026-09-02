@@ -50,7 +50,6 @@ class TTMessageLogger
     void infoMsg(QString caller, int line, const char* msg, ...);
     void warningMsg(QString caller, int line, const char* msg, ...);
     void errorMsg(QString caller, int line, const char* msg, ...);
-    void fatalMsg(QString caller, int line, const char* msg, ...);
     void debugMsg(QString caller, int line, const char* msg, ...);
 
     enum MsgType

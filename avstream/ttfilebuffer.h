@@ -51,7 +51,6 @@ public:
 
   // migration stuff
 
-  quint64 directWrite(quint8 byte1);
   quint64 directWrite(const quint8* w_buffer, int w_length);
 
  protected:

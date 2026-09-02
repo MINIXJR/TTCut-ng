@@ -295,11 +295,6 @@ const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
     return mFFmpeg ? mFFmpeg->displayOrderMap() : empty;
 }
 
-const QList<TTFrameInfo>& TTH26xVideoStream::ffmpegFrameIndex() const
-{
-    return mFFmpeg->frameIndex();
-}
-
 TTFrameIndexBundle TTH26xVideoStream::ffmpegFrameIndexBundle() const
 {
     return mFFmpeg->frameIndexBundle();

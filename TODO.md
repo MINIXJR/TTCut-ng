@@ -320,16 +320,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Entweder dieselbe Begrenzung (Suchdistanz + Abbruchprüfung) hier
     nachziehen, oder begründen, warum `decodeFrameYUV()` sie nicht braucht.
 
-- **`TTH26xVideoStream::ffmpegFrameIndex()` ist toter Code** (Fund aus dem
-  Abschluss-Review zum Frame-Index-Bündel, 2026-08-28)
-  - Kein Aufrufer mehr außerhalb der eigenen Deklaration/Definition
-    (`avstream/tth26xvideostream.h`/`.cpp`) — beide Subklassen greifen direkt
-    auf `mFFmpeg->frameIndex()` zu. Die Methode steht weiterhin unter dem
-    Header-Kommentar, der sie als kanonischen Zugriffsweg vorstellt, direkt
-    über dem Bündel-Mechanismus (`ffmpegFrameIndexBundle()`/
-    `provideFrameIndexTo()`), der sie ersetzt hat.
-  - Entfernen oder dem nächsten Dead-Code-Audit überlassen.
-
 - **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
   niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der
   Vorschau nicht initialisiert werden konnte, also auf stark beschädigten

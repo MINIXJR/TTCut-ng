@@ -185,11 +185,9 @@ class TTSubtitleHeader : public TTAVHeader
   QTime   startTime();
   int     startMSec();
   void    setStartTime(QTime start);
-  void    setStartTime(int mSec);
   QTime   endTime();
   int     endMSec();
   void    setEndTime(QTime end);
-  void    setEndTime(int mSec);
 
  protected:
   QString mText;
