@@ -47,8 +47,6 @@ class TTMPEGAudioStream : public TTAudioStream
   void searchNextSyncByte();
   void parseAudioHeader( quint8* data, int offset, TTMpegAudioHeader* audio_header );
 
-  virtual void cut(int start, int end, TTCutParameter* cp);
-
   void    readAudioHeader( TTMpegAudioHeader* audio_header );
 
   virtual int createHeaderList( );

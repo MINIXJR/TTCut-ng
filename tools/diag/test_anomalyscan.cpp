@@ -27,7 +27,6 @@
 #include <cstdlib>
 
 #include "data/ttaudioanomalyscantask.h"
-#include "common/ttthreadtask.h"
 #include "common/ttsettings.h"
 
 using FrameStat = TTAudioAnomalyScanTask::FrameStat;

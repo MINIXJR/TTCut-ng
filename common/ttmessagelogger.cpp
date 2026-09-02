@@ -180,14 +180,6 @@ void TTMessageLogger::errorMsg(QString caller, int line, const char* msg, ...)
     logMsg(ERROR, caller, line, s);
 }
 
-void TTMessageLogger::fatalMsg(QString caller, int line, const char* msg, ...)
-{
-    va_list ap; va_start(ap, msg);
-    QString s = formatVa(msg, ap);
-    va_end(ap);
-    logMsg(FATAL, caller, line, s);
-}
-
 void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
 {
     va_list ap; va_start(ap, msg);

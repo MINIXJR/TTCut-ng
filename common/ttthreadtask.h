@@ -39,7 +39,6 @@ public:
   void runSynchron();
   QString taskName() const;
   QUuid taskID() const;
-  int processValue() const;
   bool isRunning() const;
   bool isAborted() const;
 

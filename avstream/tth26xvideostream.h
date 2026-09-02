@@ -69,11 +69,10 @@ public:
     //   - framesearch (ttframesearchtask.cpp) via provideFrameIndexTo().
     // See specs 2026-06-05-frame-index-unification-design.md and
     // 2026-08-28-frame-index-bundle-design.md.
-    const QList<TTFrameInfo>& ffmpegFrameIndex() const;
-
-    // The index together with the metadata the wrapper measured. Consumers that
-    // hand an index across a thread or object boundary MUST use this, not
-    // ffmpegFrameIndex() — see TTFrameIndexBundle.
+    //
+    // The index together with the metadata the wrapper measured. Consumers
+    // that hand an index across a thread or object boundary MUST use this
+    // bundle, never the bare list — see TTFrameIndexBundle.
     TTFrameIndexBundle ffmpegFrameIndexBundle() const;
 
     // Hands this stream's already-built index (Owner A) to `consumer`, which has

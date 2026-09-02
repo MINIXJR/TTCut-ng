@@ -29,7 +29,6 @@
 #include <cstdlib>
 
 #include "avstream/ttmpeg2videostream.h"
-#include "avstream/ttvideoheaderlist.h"
 #include "avstream/ttvideoindexlist.h"
 #include "mpeg2window/ttmpeg2window2.h"
 

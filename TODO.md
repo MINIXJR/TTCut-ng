@@ -320,16 +320,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Entweder dieselbe Begrenzung (Suchdistanz + Abbruchprüfung) hier
     nachziehen, oder begründen, warum `decodeFrameYUV()` sie nicht braucht.
 
-- **`TTH26xVideoStream::ffmpegFrameIndex()` ist toter Code** (Fund aus dem
-  Abschluss-Review zum Frame-Index-Bündel, 2026-08-28)
-  - Kein Aufrufer mehr außerhalb der eigenen Deklaration/Definition
-    (`avstream/tth26xvideostream.h`/`.cpp`) — beide Subklassen greifen direkt
-    auf `mFFmpeg->frameIndex()` zu. Die Methode steht weiterhin unter dem
-    Header-Kommentar, der sie als kanonischen Zugriffsweg vorstellt, direkt
-    über dem Bündel-Mechanismus (`ffmpegFrameIndexBundle()`/
-    `provideFrameIndexTo()`), der sie ersetzt hat.
-  - Entfernen oder dem nächsten Dead-Code-Audit überlassen.
-
 - **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
   niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der
   Vorschau nicht initialisiert werden konnte, also auf stark beschädigten
@@ -608,27 +598,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   einzeln in der GUI zu öffnen.
 
 ## Low Priority
-
-- **Der Audio-Schnittpfad `TTAVStream::copySegment()` ist toter Code**
-  (2026-08-31, beim Randmeldungs-Vorhaben aufgefallen)
-  - `TTMPEGAudioStream::cut()` und `TTAC3AudioStream::cut()` überschreiben die
-    rein virtuelle `TTAVStream::cut()` und rufen als einzige `copySegment()`
-    auf — aufgerufen wird aber keine der beiden. Im ganzen Projekt gibt es vier
-    `cut(...)`-Aufrufstellen, und keine trifft Audio: Video in
-    `ttmpeg2videostream.cpp` und `ttcutvideotask.cpp`, Untertitel in
-    `ttavdata.cpp`, dazu der Harness `test_mpeg2_cutout.cpp`. Der Audio-Schnitt
-    läuft seit dem libav-Umbau über `TTFFmpegWrapper::cutAudioStream()`.
-  - `copySegment()` selbst bleibt am Leben: `TTMpeg2VideoStream::checkIFrameSequence()`
-    ruft es für den Sequenzheader-Block auf. Nur der Audio-Weg dorthin ist tot.
-  - Folgenlos, aber irreführend: `copySegment()` wertet den Rückgabewert von
-    `readByte()` nicht aus und schreibt immer die volle angeforderte Länge —
-    am Dateiende also ungelesene Pufferreste. Über den lebenden Video-Aufruf
-    ist das unerreichbar (beide Adressen sind Header-Offsets aus der Liste und
-    liegen per Konstruktion in der Datei), über den toten Audio-Weg wäre es
-    ein echter Defekt gewesen.
-  - Für den nächsten Dead-Code-Audit: die beiden `cut()`-Überschreibungen
-    entfernen und prüfen, ob `TTAVStream::cut()` danach noch rein virtuell
-    sein muss.
 
 - **Belege gehören nicht nach `CLAUDE_TMP`** (2026-08-23, offen, niedrige
   Priorität). Beim Sitzungsabschluss gemessen: von 42 Pfaden, auf die

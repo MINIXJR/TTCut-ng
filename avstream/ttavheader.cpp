@@ -283,11 +283,6 @@ void TTSubtitleHeader::setStartTime(QTime start)
   mStartMSec = start.msecsSinceStartOfDay();
 }
 
-void TTSubtitleHeader::setStartTime(int mSec)
-{
-  mStartMSec = mSec;
-}
-
 QTime TTSubtitleHeader::endTime()
 {
   return QTime::fromMSecsSinceStartOfDay(mEndMSec);
@@ -301,10 +296,5 @@ int TTSubtitleHeader::endMSec()
 void TTSubtitleHeader::setEndTime(QTime end)
 {
   mEndMSec = end.msecsSinceStartOfDay();
-}
-
-void TTSubtitleHeader::setEndTime(int mSec)
-{
-  mEndMSec = mSec;
 }
 

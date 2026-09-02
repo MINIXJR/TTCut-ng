@@ -90,14 +90,6 @@ void TTAVItem::appendAudioEntry(TTAudioStream* aStream, int order)
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTAVItem::appendAudioEntry(const TTAudioItem& aItem)
-{
-	mpAudioList->append(aItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
 void TTAVItem::onRemoveAudioItem(int index)
 {
 	mpAudioList->remove(mpAudioList->at(index));
@@ -168,14 +160,6 @@ void TTAVItem::appendSubtitleEntry(TTSubtitleStream* sStream, int order)
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTAVItem::appendSubtitleEntry(const TTSubtitleItem& sItem)
-{
-	mpSubtitleList->append(sItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
 void TTAVItem::onRemoveSubtitleItem(int index)
 {
 	mpSubtitleList->remove(mpSubtitleList->at(index));
@@ -215,15 +199,6 @@ void TTAVItem::appendCutEntry(int cutIn, int cutOut, int order)
 /* ///////////////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTAVItem::appendCutEntry(const TTCutItem& cItem)
-{
-	checkCut(cItem.cutIn(), cItem.cutOut());
-	mpCutList->append(cItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
 void TTAVItem::removeCutEntry(const TTCutItem& cItem)
 {
 	mpCutList->remove(cItem);
@@ -235,14 +210,6 @@ void TTAVItem::removeCutEntry(const TTCutItem& cItem)
 void TTAVItem::updateCutEntry(const TTCutItem& cItem, int cutIn,	int cutOut)
 {
 	TTCutItem uItem(this, cutIn, cutOut);
-	mpCutList->update(cItem, uItem);
-}
-
-/* ///////////////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTAVItem::updateCutEntry(const TTCutItem& cItem,const TTCutItem& uItem)
-{
 	mpCutList->update(cItem, uItem);
 }
 
@@ -335,11 +302,6 @@ void TTAVItem::checkCut(int , int )
 void TTAVItem::appendMarker(int markerPos, int order)
 {
 	mpMarkerList->append(this, markerPos, order);
-}
-
-void TTAVItem::appendMarker(const TTMarkerItem& cItem)
-{
-	mpMarkerList->append(cItem);
 }
 
 void TTAVItem::removeMarker(const TTMarkerItem& cItem)

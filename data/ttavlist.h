@@ -72,7 +72,6 @@ class TTAVItem : public QObject
     int firstAc3TrackIndex() const;
 
     void appendAudioEntry(TTAudioStream* aStream, int order=-1);
-    void appendAudioEntry(const TTAudioItem& aItem);
 
     //! Planned audio repairs (silence/interpolate fixes for detected
     //! anomalies), one flat list per AV item; each entry carries its own
@@ -83,16 +82,12 @@ class TTAVItem : public QObject
     void clearAudioRepairs()                              { mAudioRepairs.clear(); }
 
     void appendSubtitleEntry(TTSubtitleStream* sStream, int order=-1);
-    void appendSubtitleEntry(const TTSubtitleItem& sItem);
 
     void appendCutEntry(int cutIn, int cutOut, int order=-1);
-    void appendCutEntry(const TTCutItem& cItem);
     void removeCutEntry(const TTCutItem& cItem);
     void updateCutEntry(const TTCutItem& cItem, int cutIn, int cutOut);
-    void updateCutEntry(const TTCutItem& cItem, const TTCutItem& uItem);
 
     void appendMarker(int markerPos, int order=-1);
-    void appendMarker(const TTMarkerItem& cItem);
     void removeMarker(const TTMarkerItem& cItem);
 
     //! Audio auto-sort (language preference resp. project order, see

@@ -37,10 +37,8 @@
 #include "../extern/ttmkvmergeprovider.h"
 #include "../extern/ttaudiorepair.h"
 #include "../avstream/ttesinfo.h"
-#include "../avstream/ttesinfo.h"
 #include "../avstream/ttavheader.h"
 #include "../extern/ttffmpegwrapper.h"
-#include "../extern/ttessmartcut.h"
 #include "../avstream/tth26xvideostream.h"
 
 #include "ttopenvideotask.h"
