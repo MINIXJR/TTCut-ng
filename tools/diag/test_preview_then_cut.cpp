@@ -61,7 +61,6 @@
 #include "avstream/ttavstream.h"
 #include "avstream/ttavtypes.h"
 #include "avstream/ttvideoindexlist.h"
-#include "common/istatusreporter.h"
 #include "common/ttmessagelogger.h"
 #include "common/ttsettings.h"
 #include "data/ttavdata.h"

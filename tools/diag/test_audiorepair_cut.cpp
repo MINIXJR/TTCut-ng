@@ -54,7 +54,6 @@ extern "C" {
 #include "../../extern/ttffmpegwrapper.h"
 #include "../../extern/ttaudiorepair.h"
 #include "../../data/ttaudiorepairitem.h"
-#include "../../avstream/ttavheader.h"
 #include "../../avstream/ttavstream.h"
 #include "../../avstream/ttavtypes.h"
 #include "../../data/ttavdata.h"

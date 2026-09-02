@@ -97,7 +97,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "common/ttmessagelogger.h"
 #include "common/ttsettings.h"
 #include "data/ttstreampoint.h"
 #include "data/ttstreampointmodel.h"

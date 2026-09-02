@@ -57,7 +57,6 @@
 
 #include "avstream/ttavtypes.h"
 #include "avstream/tth26xvideostream.h"
-#include "avstream/ttvideoindexlist.h"
 #include "common/ttsettings.h"
 #include "extern/ttffmpegwrapper.h"
 
