@@ -77,7 +77,6 @@ public:
 public:
   virtual int  createHeaderList() = 0;
   virtual int  createIndexList() = 0;
-  virtual void cut(int start, int end, TTCutParameter* cp) = 0;
   virtual void copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint64 end_adr);
 
 protected:
@@ -133,6 +132,11 @@ class TTVideoStream : public TTAVStream
  public:
   TTVideoStream( const QFileInfo &f_info );
   virtual ~TTVideoStream();
+
+  // Audio is not cut through this interface: audio tracks go through
+  // TTFFmpegWrapper::cutAudioStream() (libav stream copy), so only the
+  // video and subtitle subtrees declare cut().
+  virtual void cut(int start, int end, TTCutParameter* cp) = 0;
 
   // header- and index-list
   TTVideoHeaderList* headerList();
@@ -200,6 +204,8 @@ class TTSubtitleStream : public TTAVStream
 public:
   TTSubtitleStream(const QFileInfo &f_info);
   virtual ~TTSubtitleStream();
+
+  virtual void cut(int start, int end, TTCutParameter* cp) = 0;
 
   // header list
   TTSubtitleHeaderList* headerList();

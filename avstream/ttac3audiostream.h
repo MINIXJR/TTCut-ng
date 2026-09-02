@@ -48,8 +48,6 @@ class TTAC3AudioStream : public TTAudioStream
   void searchNextSyncByte();
   void readAudioHeader(TTAC3AudioHeader* audio_header);
 
-  virtual void cut(int start, int end, TTCutParameter* cp);
-
   virtual int  createHeaderList();
   virtual int  createIndexList(){return 0;};
   QTime        streamLengthTime();

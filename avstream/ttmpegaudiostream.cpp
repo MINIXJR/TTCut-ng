@@ -30,7 +30,6 @@
 #include "ttaudioheaderlist.h"
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
-#include "../data/ttcutparameter.h"
 
 #include <QElapsedTimer>
 #include <math.h>
@@ -253,21 +252,3 @@ int TTMPEGAudioStream::createHeaderList( )
 
   return header_list->count();
 }
-
-//! Cut the audio stream
-void TTMPEGAudioStream::cut(int start, int end, TTCutParameter* cp)
-{
-  TTMpegAudioHeader* audio_header = (TTMpegAudioHeader*)header_list->audioHeaderAt(0);
-  frame_time = audio_header->frame_time;
-
-  quint64 start_offset = header_list->audioHeaderAt(start)->headerOffset();
-  quint64 end_offset   = header_list->audioHeaderAt(end)->headerOffset()-1;
-
-  log->debugMsg(__FILE__, __LINE__, QString("cut audio start %1 offset %2 end %3 offset %4").
-      arg(start).arg(start_offset).
-      arg(end).arg(end_offset));
-
-  copySegment(cp->getTargetStreamBuffer(), start_offset, end_offset );
-}
-
-

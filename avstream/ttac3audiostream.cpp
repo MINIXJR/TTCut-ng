@@ -33,7 +33,6 @@
 
 #include "../common/istatusreporter.h"
 #include "../common/ttexception.h"
-#include "../data/ttcutparameter.h"
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
@@ -220,13 +219,3 @@ int TTAC3AudioStream::createHeaderList()
 
   return header_list->count();
 }
-
-//! Cut the audio stream
-void TTAC3AudioStream::cut(int start, int end, TTCutParameter* cp)
-{
-  quint64 start_offset = header_list->audioHeaderAt(start)->headerOffset();
-  quint64 end_offset   = header_list->audioHeaderAt(end)->headerOffset()-1;
-
-  copySegment(cp->getTargetStreamBuffer(), start_offset, end_offset );
-}
-

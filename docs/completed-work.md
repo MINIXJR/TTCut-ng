@@ -1741,6 +1741,28 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Toter Audio-Schnittpfad über `TTAVStream::cut()`** → **ENTFERNT
+  (Dead-Code-Audit 2026-09-02)**. Fund vom 2026-08-31 beim
+  Randmeldungs-Vorhaben: `TTMPEGAudioStream::cut()` und
+  `TTAC3AudioStream::cut()` überschrieben die rein virtuelle
+  `TTAVStream::cut()` und riefen als einzige `copySegment()` auf, aufgerufen
+  wurde aber keine der beiden. Hierarchie-Trace im Audit: vier
+  `cut(...)`-Aufrufstellen (`ttmpeg2videostream.cpp`, `ttcutvideotask.cpp`,
+  `ttavdata.cpp` für Untertitel, Harness `test_mpeg2_cutout.cpp`) mit den
+  statischen Empfängertypen `TTMpeg2VideoStream*`, `TTVideoStream*` und
+  `TTSubtitleStream*`; Audio hängt in einem getrennten Teilbaum unter
+  `TTAVStream` und ist über keinen davon erreichbar. Der Audio-Schnitt läuft
+  seit dem libav-Umbau über `TTFFmpegWrapper::cutAudioStream()`.
+  - Umbau: `cut()` ist aus `TTAVStream` heraus und als rein virtuelle
+    Methode in `TTVideoStream` und `TTSubtitleStream` gewandert; die
+    Audioklassen bleiben ohne `cut()` instanziierbar. `copySegment()` bleibt
+    (Aufrufer `TTMpeg2VideoStream::checkIFrameSequence()`).
+  - Mitgenommener Hinweis: `copySegment()` wertet den Rückgabewert von
+    `readByte()` nicht aus und schreibt immer die volle angeforderte Länge.
+    Über den verbliebenen Video-Aufruf unerreichbar (beide Adressen sind
+    Header-Offsets aus der Liste und liegen per Konstruktion in der Datei);
+    über den toten Audio-Weg wäre es ein echter Defekt gewesen.
+
 - **Burst-Erkennung: behobene Defekte** → **DONE** (Detailtexte 2026-08-23 aus
   `docs/code-map/burst-detection.md` hierher verschoben — die Map führt nur noch
   den aktuellen Zustand)
