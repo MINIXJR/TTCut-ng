@@ -79,6 +79,7 @@ typedef struct {
     /* Format change tracking */
     uint64_t format_changes;
     int last_acmod;
+    double duration_s;   /* frames seen so far, as time at 48 kHz */
 } ac3fix_stats_t;
 
 /* AC3 frame info */
@@ -202,64 +203,82 @@ static void print_ac3_banner(const ac3fix_options_t *opts)
     printf("\n");
 }
 
-/* Process AC3 file */
-static int process_ac3_file(const ac3fix_options_t *opts)
-{
-    FILE *in_fp = NULL;
-    FILE *out_fp = NULL;
-    uint8_t *buffer = NULL;
-    size_t buffer_size = 0;
-    size_t buffer_pos = 0;
-    size_t file_pos = 0;
-    ac3fix_stats_t stats = {0};
-    stats.last_acmod = -1;
-    int ret = 0;
+/* Files and read buffer of one run. */
+typedef struct {
+    FILE *in_fp;
+    FILE *out_fp;        /* NULL in analyze-only mode */
+    uint8_t *buffer;
+    size_t buffer_size;
+    long file_size;
+} ac3fix_io_t;
 
-    /* Open input file */
-    in_fp = fopen(opts->input_file, "rb");
-    if (!in_fp) {
+static void close_ac3_files(ac3fix_io_t *io)
+{
+    if (io->buffer)
+        free(io->buffer);
+    if (io->in_fp)
+        fclose(io->in_fp);
+    if (io->out_fp)
+        fclose(io->out_fp);
+    memset(io, 0, sizeof(*io));
+}
+
+/* Opens the input, measures it, allocates the read buffer and opens the
+ * output unless analyze-only. Returns 1 after a message on any failure,
+ * with everything opened so far closed again. */
+static int open_ac3_files(const ac3fix_options_t *opts, ac3fix_io_t *io)
+{
+    memset(io, 0, sizeof(*io));
+
+    io->in_fp = fopen(opts->input_file, "rb");
+    if (!io->in_fp) {
         fprintf(stderr, "Error: Cannot open input file: %s\n", opts->input_file);
         return 1;
     }
 
-    /* Get file size */
-    fseek(in_fp, 0, SEEK_END);
-    long file_size = ftell(in_fp);
-    fseek(in_fp, 0, SEEK_SET);
+    fseek(io->in_fp, 0, SEEK_END);
+    io->file_size = ftell(io->in_fp);
+    fseek(io->in_fp, 0, SEEK_SET);
 
-    if (file_size <= 0) {
+    if (io->file_size <= 0) {
         fprintf(stderr, "Error: Input file is empty or unreadable\n");
-        ret = 1;
-        goto cleanup;
+        close_ac3_files(io);
+        return 1;
     }
 
-    /* Allocate read buffer (64KB) */
-    buffer_size = 65536;
-    buffer = malloc(buffer_size);
-    if (!buffer) {
+    io->buffer_size = 65536;
+    io->buffer = malloc(io->buffer_size);
+    if (!io->buffer) {
         fprintf(stderr, "Error: Cannot allocate buffer\n");
-        ret = 1;
-        goto cleanup;
+        close_ac3_files(io);
+        return 1;
     }
 
-    /* Open output file if not analyze-only */
     if (!opts->analyze_only && opts->output_file) {
-        out_fp = fopen(opts->output_file, "wb");
-        if (!out_fp) {
+        io->out_fp = fopen(opts->output_file, "wb");
+        if (!io->out_fp) {
             fprintf(stderr, "Error: Cannot open output file: %s\n", opts->output_file);
-            ret = 1;
-            goto cleanup;
+            close_ac3_files(io);
+            return 1;
         }
     }
+    return 0;
+}
 
-    print_ac3_banner(opts);
-
-    /* Process file frame by frame */
+/* Walks the input frame by frame: counts frames per acmod, reports format
+ * changes, patches inconsistent stereo headers in force-fix mode and
+ * writes every frame to the output when there is one. Bytes that belong
+ * to no frame are skipped and reported at the end. Returns 1 after a
+ * write error, 0 otherwise. */
+static int walk_ac3_frames(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix_stats_t *stats)
+{
+    uint8_t *buffer = io->buffer;
+    size_t buffer_pos = 0;
+    size_t file_pos = 0;
     uint8_t frame_buffer[4096];  /* Max AC3 frame is ~3840 bytes */
     size_t bytes_read;
     int progress_last = -1;
     double frame_duration = 1536.0 / 48000.0;  /* AC3 frame duration at 48kHz */
-    double current_time = 0;
     /* Size of the last frame parsed, used to tell a partial frame at the end
      * of the file from real trailing garbage. 0 until one has been seen. */
     size_t last_frame_size = 0;
@@ -268,7 +287,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
      * is always under 7 bytes and says nothing about how much was garbage. */
     size_t skipped_junk = 0;
 
-    while ((bytes_read = fread(buffer + buffer_pos, 1, buffer_size - buffer_pos, in_fp)) > 0
+    while ((bytes_read = fread(buffer + buffer_pos, 1, io->buffer_size - buffer_pos, io->in_fp)) > 0
            || buffer_pos > 0) {
         buffer_pos += bytes_read;
         size_t processed = 0;
@@ -296,21 +315,21 @@ static int process_ac3_file(const ac3fix_options_t *opts)
                 break;
             }
 
-            stats.total_frames++;
+            stats->total_frames++;
 
             /* Track format changes */
-            if (stats.last_acmod != -1 && info.acmod != stats.last_acmod) {
-                stats.format_changes++;
+            if (stats->last_acmod != -1 && info.acmod != stats->last_acmod) {
+                stats->format_changes++;
                 if (opts->show_segments) {
                     char time_buf[32];
-                    format_time(current_time, time_buf, sizeof(time_buf));
+                    format_time(stats->duration_s, time_buf, sizeof(time_buf));
                     printf("Format change at %s (frame %" PRIu64 "): %s -> %s\n",
-                           time_buf, stats.total_frames,
-                           ac3_acmod_names[stats.last_acmod],
+                           time_buf, stats->total_frames,
+                           ac3_acmod_names[stats->last_acmod],
                            ac3_acmod_names[info.acmod]);
                 }
             }
-            stats.last_acmod = info.acmod;
+            stats->last_acmod = info.acmod;
 
             /* Copy frame to frame buffer */
             memcpy(frame_buffer, buffer + processed, info.frame_size);
@@ -318,51 +337,50 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             bool should_fix = false;
 
             if (info.acmod == AC3_ACMOD_STEREO) {
-                stats.stereo_frames++;
+                stats->stereo_frames++;
 
                 if (is_inconsistent_header(&info, opts->min_bitrate)) {
-                    stats.inconsistent_frames++;
+                    stats->inconsistent_frames++;
 
                     /* In force_fix mode, fix all inconsistent frames */
                     if (opts->force_fix) {
                         should_fix = true;
-                        stats.fixed_frames++;
+                        stats->fixed_frames++;
 
                         if (opts->verbose) {
                             char time_buf[32];
-                            format_time(current_time, time_buf, sizeof(time_buf));
+                            format_time(stats->duration_s, time_buf, sizeof(time_buf));
                             printf("Frame %" PRIu64 " @ %s: %d kbps stereo -> 5.1 (FIX)\n",
-                                   stats.total_frames, time_buf, info.bitrate);
+                                   stats->total_frames, time_buf, info.bitrate);
                         }
                     }
                 }
             } else if (info.acmod == AC3_ACMOD_3F2R) {
-                stats.surround_frames++;
+                stats->surround_frames++;
             } else {
-                stats.other_frames++;
+                stats->other_frames++;
             }
 
             /* Apply fix if needed */
-            if (should_fix && out_fp) {
+            if (should_fix && io->out_fp) {
                 patch_ac3_header(frame_buffer, info.frame_size, AC3_ACMOD_3F2R);
             }
 
             /* Write frame to output */
-            if (out_fp) {
-                if (fwrite(frame_buffer, 1, info.frame_size, out_fp) != info.frame_size) {
-                    fprintf(stderr, "\nError: Write failed at frame %" PRIu64 "\n", stats.total_frames);
-                    ret = 1;
-                    goto cleanup;
+            if (io->out_fp) {
+                if (fwrite(frame_buffer, 1, info.frame_size, io->out_fp) != info.frame_size) {
+                    fprintf(stderr, "\nError: Write failed at frame %" PRIu64 "\n", stats->total_frames);
+                    return 1;
                 }
             }
 
             last_frame_size = info.frame_size;
             processed += info.frame_size;
             file_pos += info.frame_size;
-            current_time += frame_duration;
+            stats->duration_s += frame_duration;
 
             /* Progress indicator */
-            int progress = (int)((file_pos * 100) / file_size);
+            int progress = (int)((file_pos * 100) / io->file_size);
             if (progress != progress_last && progress % 10 == 0) {
                 fprintf(stderr, "\rProgress: %d%%", progress);
                 fflush(stderr);
@@ -391,49 +409,63 @@ static int process_ac3_file(const ac3fix_options_t *opts)
             break;
         }
     }
+    return 0;
+}
 
-    fprintf(stderr, "\rProgress: 100%%\n\n");
-
-    /* Print statistics */
+/* Statistics block and, in analyze mode, the repair recommendation. */
+static void print_ac3_stats(const ac3fix_options_t *opts, const ac3fix_stats_t *stats)
+{
     char duration_buf[32];
-    format_time(current_time, duration_buf, sizeof(duration_buf));
+    format_time(stats->duration_s, duration_buf, sizeof(duration_buf));
 
     printf("Statistics:\n");
     printf("-----------\n");
     printf("Duration:            %s\n", duration_buf);
-    printf("Total frames:        %" PRIu64 "\n", stats.total_frames);
-    if (stats.total_frames > 0) {
-        printf("5.1 surround frames: %" PRIu64 " (%.1f%%)\n", stats.surround_frames,
-               100.0 * stats.surround_frames / stats.total_frames);
-        printf("Stereo frames:       %" PRIu64 " (%.1f%%)\n", stats.stereo_frames,
-               100.0 * stats.stereo_frames / stats.total_frames);
+    printf("Total frames:        %" PRIu64 "\n", stats->total_frames);
+    if (stats->total_frames > 0) {
+        printf("5.1 surround frames: %" PRIu64 " (%.1f%%)\n", stats->surround_frames,
+               100.0 * stats->surround_frames / stats->total_frames);
+        printf("Stereo frames:       %" PRIu64 " (%.1f%%)\n", stats->stereo_frames,
+               100.0 * stats->stereo_frames / stats->total_frames);
     }
-    if (stats.other_frames > 0)
-        printf("Other frames:        %" PRIu64 "\n", stats.other_frames);
-    printf("Format changes:      %" PRIu64 "\n", stats.format_changes);
+    if (stats->other_frames > 0)
+        printf("Other frames:        %" PRIu64 "\n", stats->other_frames);
+    printf("Format changes:      %" PRIu64 "\n", stats->format_changes);
     printf("\n");
     printf("Inconsistent frames: %" PRIu64 " (>=%d kbps + stereo header)\n",
-           stats.inconsistent_frames, opts->min_bitrate);
+           stats->inconsistent_frames, opts->min_bitrate);
 
     if (opts->force_fix) {
-        printf("Fixed frames:        %" PRIu64 "\n", stats.fixed_frames);
+        printf("Fixed frames:        %" PRIu64 "\n", stats->fixed_frames);
     }
 
-    if (stats.inconsistent_frames > 0 && opts->analyze_only) {
+    if (stats->inconsistent_frames > 0 && opts->analyze_only) {
         printf("\nRecommendation: Run with --force-fix to repair %" PRIu64 " frames\n",
-               stats.inconsistent_frames);
+               stats->inconsistent_frames);
         printf("Example: %s --force-fix %s output.ac3\n",
                "ttcut-ac3fix", opts->input_file);
     }
+}
 
-cleanup:
-    if (buffer)
-        free(buffer);
-    if (in_fp)
-        fclose(in_fp);
-    if (out_fp)
-        fclose(out_fp);
+/* Process AC3 file */
+static int process_ac3_file(const ac3fix_options_t *opts)
+{
+    ac3fix_io_t io;
+    ac3fix_stats_t stats = {0};
+    stats.last_acmod = -1;
 
+    if (open_ac3_files(opts, &io))
+        return 1;
+
+    print_ac3_banner(opts);
+
+    int ret = walk_ac3_frames(opts, &io, &stats);
+    if (ret == 0) {
+        fprintf(stderr, "\rProgress: 100%%\n\n");
+        print_ac3_stats(opts, &stats);
+    }
+
+    close_ac3_files(&io);
     return ret;
 }
 
