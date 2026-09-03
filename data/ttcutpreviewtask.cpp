@@ -27,7 +27,7 @@
 #include "../data/ttavdata.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttcutvideotask.h"
-#include "../data/ttmuxlistdata.h"
+#include "../extern/ttmuxlistdata.h"
 #include "../extern/ttmkvmergeprovider.h"
 
 extern "C" {
@@ -37,6 +37,7 @@ extern "C" {
 #include "../extern/ttaudiocutter.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/tth26xvideostream.h"
+#include "../avstream/ttcommon.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>

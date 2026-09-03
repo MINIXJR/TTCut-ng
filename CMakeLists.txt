@@ -94,7 +94,6 @@ set(TTCUT_HEADERS
   data/ttsearchtask_aspectscan.h
   data/ttaudioanomalyscantask.h
   avstream/ttcutparameter.h
-  data/ttmuxlistdata.h
   data/ttavdata.h
   data/ttavlist.h
   data/ttcutprojectdata.h
@@ -148,6 +147,8 @@ set(TTCUT_HEADERS
   extern/ttessmartcut.h
   extern/tthevcseam.h
   extern/ttaudiorepair.h
+  extern/ttaudiorepairitem.h
+  extern/ttmuxlistdata.h
   extern/ttmkvmergeprovider.h
   gui/ttcutsettingsmuxer.h
   gui/ttcutsettingsencoder.h
@@ -215,7 +216,6 @@ set(TTCUT_CORE_SOURCES
   data/ttsearchtask_aspectscan.cpp
   data/ttaudioanomalyscantask.cpp
   avstream/ttcutparameter.cpp
-  data/ttmuxlistdata.cpp
   data/ttavdata.cpp
   data/ttavlist.cpp
   data/ttcutprojectdata.cpp
@@ -265,6 +265,7 @@ set(TTCUT_CORE_SOURCES
   extern/ttessmartcut.cpp
   extern/tthevcseam.cpp
   extern/ttaudiorepair.cpp
+  extern/ttmuxlistdata.cpp
   extern/ttmkvmergeprovider.cpp
   gui/ttcutsettingsmuxer.cpp
   gui/ttcutsettingsencoder.cpp

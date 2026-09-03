@@ -87,6 +87,7 @@
 #include "../ui/pixmaps/apply_18.xpm"
 #include "../ui/pixmaps/addtolist_18.xpm"
 #include "../ui/pixmaps/fileclose_18.xpm"
+#include "../avstream/ttcommon.h"
 
 #include <QStringList>
 #include <QString>

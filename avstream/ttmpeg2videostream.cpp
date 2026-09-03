@@ -31,6 +31,7 @@
 #include "../common/istatusreporter.h"
 #include "../common/ttsettings.h"
 #include "ttcutparameter.h"
+#include "ttcommon.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>

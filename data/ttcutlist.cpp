@@ -19,6 +19,7 @@
 #include "../avstream/ttavheader.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttmpeg2videostream.h"
+#include "../avstream/ttcommon.h"
 
 #include <QDateTime>
 #include <QFileInfo>

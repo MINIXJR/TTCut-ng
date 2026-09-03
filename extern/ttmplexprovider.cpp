@@ -15,6 +15,7 @@
 #include "ttmplexprovider.h"
 
 #include "../common/ttsettings.h"
+#include "../avstream/ttcommon.h"
 
 #include <QDebug>
 #include <QDir>

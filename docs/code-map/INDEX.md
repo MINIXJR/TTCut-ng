@@ -26,6 +26,24 @@ detail maps above are the authoritative source; the existing
 `memory/architecture_*.md` notes (TTSettings, TTSearchTask, cutVideoName split)
 also cover specific areas.
 
+## Module dependencies
+
+Measured on the `#include "../<module>/…"` edges (2026-09-03, after the
+TTFFmpegWrapper split and the module-edge cleanup): `common` has no outgoing
+edge and is the foundation; `data` and `gui` sit on top and are cited by
+nothing below them. The one remaining cycle is the triangle
+**avstream → extern → mpeg2decoder → avstream**: the stream classes own their
+decoder/indexer/cutter (`TTH26xVideoStream` holds `TTFFmpegWrapper` and the
+`TTFrameIndexBundle`, `TTMpeg2VideoStream` holds `TTTranscodeProvider`),
+`TTTranscodeProvider` decodes through `TTMpeg2Decoder`, and the decoder reads
+the header and index lists from `avstream`. That ownership is the documented
+design (quick-jump.md, mpeg2-cut.md); dissolving it is a separate project
+(spec `docs/superpowers/specs/2026-09-03-stream-ownership-design.md`,
+prepared, not approved). Removed on 2026-09-03: `common → avstream`
+(`ttcut.h` re-exported `ttcommon.h`) and `extern → data` (the two DTO headers
+`ttaudiorepairitem.h`, `ttmuxlistdata.h` now live next to their consumers in
+`extern/`).
+
 ## Project-wide redundancy patterns
 
 Collected from detail maps as they are created. From `frame-order.md`:

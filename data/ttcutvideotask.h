@@ -16,7 +16,7 @@
 #define TTCUTVIDEOTASK_H
 
 #include "../common/ttthreadtask.h"
-#include "../data/ttmuxlistdata.h"
+#include "../extern/ttmuxlistdata.h"
 
 class TTAVData;
 class TTFileBuffer;

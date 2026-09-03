@@ -22,7 +22,7 @@
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
 #include "ttavdata.h"
-#include "ttmuxlistdata.h"
+#include "../extern/ttmuxlistdata.h"
 #include "ttcutprojectdata.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../avstream/ttfilebuffer.h"

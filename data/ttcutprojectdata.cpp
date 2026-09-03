@@ -14,7 +14,7 @@
 
 #include "ttcutprojectdata.h"
 #include "ttavdata.h"
-#include "ttaudiorepairitem.h"
+#include "../extern/ttaudiorepairitem.h"
 #include "ttsubtitlelist.h"
 #include "ttstreampoint.h"
 #include "../avstream/ttavstream.h"

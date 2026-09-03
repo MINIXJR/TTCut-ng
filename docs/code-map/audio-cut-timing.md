@@ -20,7 +20,7 @@ sources:
   - data/ttaudioonlycuttask.h
   - extern/ttaudiorepair.h
   - extern/ttaudiorepair.cpp
-  - data/ttaudiorepairitem.h
+  - extern/ttaudiorepairitem.h
 ---
 
 # Audio-Cut-Zeitkette (video-frame-index → audio-frame-aligned cut)
