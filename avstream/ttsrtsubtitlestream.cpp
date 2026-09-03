@@ -32,7 +32,7 @@
 
 #include "../common/istatusreporter.h"
 #include "../common/ttexception.h"
-#include "../data/ttcutparameter.h"
+#include "ttcutparameter.h"
 
 #include <QStringDecoder>
 
@@ -219,8 +219,7 @@ int TTSrtSubtitleStream::createHeaderList()
   {
   }
 
-  log->debugMsg(__FILE__, __LINE__, QString("header list created: %1").arg(header_list->count()));
-  log->debugMsg(__FILE__, __LINE__, QString("abs stream length:   %1").arg(streamLengthTime().toString("hh:mm:ss.zzz")));
+  logHeaderListCreated(header_list->count(), "hh:mm:ss.zzz");
 
   return header_list->count();
 }

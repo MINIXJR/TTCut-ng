@@ -81,7 +81,7 @@ class TTAudioType : public TTAVTypes
 {
  public:
   TTAudioType( QString f_name );
-  ~TTAudioType();
+  ~TTAudioType() override;
 
   TTAudioStream* createAudioStream();
 

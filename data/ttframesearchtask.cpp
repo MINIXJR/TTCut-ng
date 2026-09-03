@@ -25,6 +25,7 @@
 #include "../avstream/tth264videostream.h"
 #include "../avstream/tth265videostream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
+#include "../mpeg2decoder/ttmpeg2decoder.h"
 
 //! Search for an equal frame
 TTFrameSearchTask::TTFrameSearchTask(TTVideoStream* referenceStream, int referenceIndex,

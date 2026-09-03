@@ -82,8 +82,8 @@ class TTSequenceHeader : public TTMpeg2VideoHeader
  public:
   TTSequenceHeader();
 
-  bool readHeader( TTFileBuffer* mpeg2_stream );
-  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset );
+  bool readHeader( TTFileBuffer* mpeg2_stream ) override;
+  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset ) override;
   void parseBasicData( quint8* data, int offset=0);
 
   int     horizontalSize();
@@ -117,8 +117,8 @@ class TTSequenceEndHeader : public TTMpeg2VideoHeader
  public:
   TTSequenceEndHeader();
 
-  bool readHeader( TTFileBuffer* mpeg2_stream );
-  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset );
+  bool readHeader( TTFileBuffer* mpeg2_stream ) override;
+  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset ) override;
   void parseBasicData( quint8* data, int offset=0);
 };
 
@@ -130,8 +130,8 @@ class TTGOPHeader : public TTMpeg2VideoHeader
 public:
    TTGOPHeader();
 
-  bool readHeader( TTFileBuffer* mpeg2_stream );
-  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset );
+  bool readHeader( TTFileBuffer* mpeg2_stream ) override;
+  bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset ) override;
   void parseBasicData( quint8* data, int offset=0 );
 
    // from group_of_pictures_header [B8]
@@ -155,8 +155,8 @@ class TTPicturesHeader : public TTMpeg2VideoHeader
  public:
   TTPicturesHeader();
 
-  bool    readHeader( TTFileBuffer* mpeg2_stream );
-  bool    readHeader( TTFileBuffer* mpeg2_stream, quint64 offset );
+  bool    readHeader( TTFileBuffer* mpeg2_stream ) override;
+  bool    readHeader( TTFileBuffer* mpeg2_stream, quint64 offset ) override;
   void    parseBasicData( quint8* data, int offset=0 );
   void    parseExtensionData( quint8* data, int offset=0 );
 

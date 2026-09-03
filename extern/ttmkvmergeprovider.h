@@ -22,6 +22,7 @@
 #include <QObject>
 #include <QMap>
 #include <atomic>
+#include "../avstream/ttavtypes.h"
 
 // Libav forward decls — keep heavy headers out of this public header.
 struct AVFormatContext;
@@ -87,6 +88,8 @@ public:
     // (implicit enum-to-int conversion). Stored as int to keep libav headers
     // out of this public header.
     void setVideoCodecId(int codecId) { mVideoCodecId = codecId; }
+    // libav codec id for a TTCut video stream type (H.265, H.264, else MPEG-2).
+    static int videoCodecIdFor(TTAVTypes::AVStreamType type);
 
     // Display order of the video ES packets (from TTESSmartCut::
     // outputDisplayOrder()). Empty list = legacy linear PTS assignment.

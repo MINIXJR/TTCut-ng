@@ -32,6 +32,47 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+// ----------------------------------------------------------------------------
+// Annex-B byte helpers shared by the bitstream surgery below
+// ----------------------------------------------------------------------------
+
+// Index of the next start code (00 00 00 / 00 00 01) at or after `from`, i.e.
+// the end of the NAL that begins before `from`; `size` when there is none.
+static int findNalEnd(const uint8_t* data, int size, int from)
+{
+    for (int i = from; i + 2 < size; i++) {
+        if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1))
+            return i;
+    }
+    return size;
+}
+
+// Length of the Annex-B start code a NAL buffer begins with (3 or 4), 0 when
+// the buffer does not start with one.
+static int startCodeLength(const QByteArray& nal)
+{
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(nal.constData());
+    if (nal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1) return 4;
+    if (nal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1) return 3;
+    return 0;
+}
+
+// RBSP of the first slice NAL (type 1 or 5) of an Annex-B access unit;
+// empty when the AU holds no slice.
+static QByteArray firstSliceRbsp(const QByteArray& auData)
+{
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
+    const int size = auData.size();
+    for (int nalStart = TTNaluParser::findStartCodePayload(data, size, 0); nalStart >= 0;
+         nalStart = TTNaluParser::findStartCodePayload(data, size, nalStart)) {
+        uint8_t nalType = data[nalStart] & 0x1F;
+        if (nalType != 1 && nalType != 5) continue;
+        int nalEnd = findNalEnd(data, size, nalStart + 1);
+        return TTNaluParser::removeEmulationPrevention(auData.mid(nalStart, nalEnd - nalStart));
+    }
+    return QByteArray();
+}
+
 // Helper: libav error code to QString (mirrors avErrStr in ttmkvmergeprovider).
 // Used by every error-path qDebug / setError site in this file.
 static QString avErrStr(int errnum)
@@ -1571,7 +1612,6 @@ static QByteArray patchSpsNalsInAccessUnit(const QByteArray& auData, int maxReor
 }
 
 // Forward declarations for bitstream helpers (defined after writeParameterSets)
-static QByteArray removeEmulationPrevention(const QByteArray& nal);
 static QByteArray addEmulationPrevention(const QByteArray& rbsp);
 static uint32_t spsReadBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
 static void spsWriteBits(uint8_t* data, int dataSize, int& bitPos, uint32_t value, int numBits);
@@ -1591,20 +1631,15 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
     H264SpsInfo info = { -1, -1, -1, true, -1, -1, 8 };
 
     // Find and strip start code
-    int startCodeLen = 0;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(spsNal.constData());
-    if (spsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
-        startCodeLen = 4;
-    else if (spsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
-        startCodeLen = 3;
-    else
+    const int startCodeLen = startCodeLength(spsNal);
+    if (startCodeLen == 0)
         return info;
 
     QByteArray nalBody = spsNal.mid(startCodeLen);
     if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 7)
         return info;
 
-    QByteArray rbsp = removeEmulationPrevention(nalBody);
+    QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
     int dataSize = rbsp.size();
     int bitPos = 0;
@@ -1778,51 +1813,16 @@ static void writePocLsbInSlice(uint8_t* rbspData, int rbspSize,
 // Returns poc_lsb value, or -1 if not applicable.
 // ----------------------------------------------------------------------------
 static int readPocLsbFromAU(const QByteArray& auData, int frameNumBitWidth,
-                             int pocLsbBitWidth, bool frameMbsOnly)
+                            int pocLsbBitWidth, bool frameMbsOnly)
 {
     if (pocLsbBitWidth <= 0 || frameNumBitWidth <= 0 || auData.isEmpty())
         return -1;
-
-    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
-
-    // Find first slice NAL (type 1 or 5)
-    int pos = 0;
-    while (pos < auData.size()) {
-        int scStart = -1;
-        for (int i = pos; i + 3 < auData.size(); i++) {
-            if (data[i] == 0 && data[i+1] == 0) {
-                if (i + 3 < auData.size() && data[i+2] == 0 && data[i+3] == 1) {
-                    scStart = i; break;
-                }
-                if (data[i+2] == 1) {
-                    scStart = i; break;
-                }
-            }
-        }
-        if (scStart < 0) break;
-
-        int scLen = (data[scStart+2] == 0) ? 4 : 3;
-        int nalStart = scStart + scLen;
-        if (nalStart >= auData.size()) break;
-
-        uint8_t nalType = data[nalStart] & 0x1F;
-        if (nalType == 1 || nalType == 5) {
-            int nalEnd = auData.size();
-            for (int i = nalStart + 1; i + 2 < auData.size(); i++) {
-                if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
-                    nalEnd = i; break;
-                }
-            }
-            QByteArray nalBody = auData.mid(nalStart, nalEnd - nalStart);
-            QByteArray rbsp = removeEmulationPrevention(nalBody);
-            return readPocLsbFromSlice(
-                reinterpret_cast<const uint8_t*>(rbsp.constData()),
-                rbsp.size(), frameNumBitWidth, pocLsbBitWidth, frameMbsOnly);
-        }
-
-        pos = nalStart + 1;
-    }
-    return -1;
+    const QByteArray rbsp = firstSliceRbsp(auData);
+    if (rbsp.isEmpty())
+        return -1;
+    return readPocLsbFromSlice(
+        reinterpret_cast<const uint8_t*>(rbsp.constData()),
+        rbsp.size(), frameNumBitWidth, pocLsbBitWidth, frameMbsOnly);
 }
 
 // ----------------------------------------------------------------------------
@@ -1877,16 +1877,11 @@ static QByteArray patchPocLsbInPacket(const QByteArray& packetData,
         return packetData;  // no slice NAL found
 
     // Find end of this slice NAL
-    int nalEnd = packetData.size();
-    for (int i = lastSliceNalStart + 1; i + 2 < packetData.size(); i++) {
-        if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
-            nalEnd = i; break;
-        }
-    }
+    int nalEnd = findNalEnd(data, packetData.size(), lastSliceNalStart + 1);
 
     // Extract NAL body, remove EP3, patch poc_lsb, re-add EP3
     QByteArray nalBody = packetData.mid(lastSliceNalStart, nalEnd - lastSliceNalStart);
-    QByteArray rbsp = removeEmulationPrevention(nalBody);
+    QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
 
     // Verify we can read poc_lsb before patching
     int oldPocLsb = readPocLsbFromSlice(
@@ -2006,13 +2001,7 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
         int scLen = (data[scStart+2] == 0) ? 4 : 3;
 
         // Find end of this NAL (next start code or end of data)
-        int nalEnd = auData.size();
-        for (int i = scStart + scLen + 1; i + 2 < auData.size(); i++) {
-            if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
-                nalEnd = i;
-                break;
-            }
-        }
+        int nalEnd = findNalEnd(data, auData.size(), scStart + scLen + 1);
 
         // Get NAL body (after start code)
         QByteArray nalBody = auData.mid(scStart + scLen, nalEnd - scStart - scLen);
@@ -2021,7 +2010,7 @@ static QByteArray patchFrameNumInAU(const QByteArray& auData, int frameNumBitWid
 
             if (nalType == 1 || nalType == 5) {
                 // Slice NAL — remove emulation prevention, patch, re-add
-                QByteArray rbsp = removeEmulationPrevention(nalBody);
+                QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
                 int frameNum = readFrameNumFromSlice(
                     reinterpret_cast<const uint8_t*>(rbsp.constData()),
                     rbsp.size(), frameNumBitWidth);
@@ -2060,49 +2049,12 @@ static int readFrameNumFromAU(const QByteArray& auData, int frameNumBitWidth)
 {
     if (frameNumBitWidth <= 0 || auData.isEmpty())
         return -1;
-
-    const uint8_t* data = reinterpret_cast<const uint8_t*>(auData.constData());
-
-    // Find first slice NAL (type 1 or 5) in the AU
-    int pos = 0;
-    while (pos < auData.size()) {
-        int scStart = -1;
-        for (int i = pos; i + 3 < auData.size(); i++) {
-            if (data[i] == 0 && data[i+1] == 0) {
-                if (i + 3 < auData.size() && data[i+2] == 0 && data[i+3] == 1) {
-                    scStart = i; break;
-                }
-                if (data[i+2] == 1) {
-                    scStart = i; break;
-                }
-            }
-        }
-        if (scStart < 0) break;
-
-        int scLen = (data[scStart+2] == 0) ? 4 : 3;
-        int nalStart = scStart + scLen;
-        if (nalStart >= auData.size()) break;
-
-        uint8_t nalType = data[nalStart] & 0x1F;
-        if (nalType == 1 || nalType == 5) {
-            // Found a slice — remove emulation prevention, read frame_num
-            int nalEnd = auData.size();
-            for (int i = nalStart + 1; i + 2 < auData.size(); i++) {
-                if (data[i] == 0 && data[i+1] == 0 && (data[i+2] == 0 || data[i+2] == 1)) {
-                    nalEnd = i; break;
-                }
-            }
-            QByteArray nalBody = auData.mid(nalStart, nalEnd - nalStart);
-            QByteArray rbsp = removeEmulationPrevention(nalBody);
-            return readFrameNumFromSlice(
-                reinterpret_cast<const uint8_t*>(rbsp.constData()),
-                rbsp.size(), frameNumBitWidth);
-        }
-
-        // Skip to next NAL
-        pos = nalStart + 1;
-    }
-    return -1;
+    const QByteArray rbsp = firstSliceRbsp(auData);
+    if (rbsp.isEmpty())
+        return -1;
+    return readFrameNumFromSlice(
+        reinterpret_cast<const uint8_t*>(rbsp.constData()),
+        rbsp.size(), frameNumBitWidth);
 }
 
 // ----------------------------------------------------------------------------
@@ -2156,16 +2108,10 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
         }
 
         // Find end of this NAL
-        int nalEnd = auSize;
-        for (int i = nalStart + 1; i + 2 < auSize; i++) {
-            if (data[i] == 0 && data[i+1] == 0 &&
-                (data[i+2] == 0 || data[i+2] == 1)) {
-                nalEnd = i; break;
-            }
-        }
+        int nalEnd = findNalEnd(data, auSize, nalStart + 1);
 
         QByteArray nalBody = result.mid(nalStart, nalEnd - nalStart);
-        QByteArray rbsp = removeEmulationPrevention(nalBody);
+        QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
         const uint8_t* r = reinterpret_cast<const uint8_t*>(rbsp.constData());
         int rSize = rbsp.size();
 
@@ -4069,24 +4015,6 @@ bool TTESSmartCut::writePendingPacket(ReencodeContext& ctx)
 // H.264 SPS bitstream helpers for patching max_num_reorder_frames
 // ----------------------------------------------------------------------------
 
-// Remove emulation prevention bytes (00 00 03 -> 00 00) from NAL to get RBSP
-static QByteArray removeEmulationPrevention(const QByteArray& nal)
-{
-    QByteArray rbsp;
-    rbsp.reserve(nal.size());
-    for (int i = 0; i < nal.size(); ++i) {
-        if (i + 2 < nal.size() &&
-            (uint8_t)nal[i] == 0x00 && (uint8_t)nal[i+1] == 0x00 && (uint8_t)nal[i+2] == 0x03) {
-            rbsp.append(nal[i]);
-            rbsp.append(nal[i+1]);
-            i += 2;  // skip the 0x03
-        } else {
-            rbsp.append(nal[i]);
-        }
-    }
-    return rbsp;
-}
-
 // Add emulation prevention bytes (00 00 XX -> 00 00 03 XX for XX <= 0x03) in RBSP
 static QByteArray addEmulationPrevention(const QByteArray& rbsp)
 {
@@ -4219,7 +4147,7 @@ static QByteArray rewriteEncoderSliceForSourceSps(
     }
 
     // Remove emulation prevention → RBSP
-    QByteArray oldRbsp = removeEmulationPrevention(nalBody);
+    QByteArray oldRbsp = TTNaluParser::removeEmulationPrevention(nalBody);
     const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldRbsp.constData());
     int oldSize = oldRbsp.size();
 
@@ -4639,13 +4567,8 @@ static QByteArray extractPpsFromPacket(const QByteArray& packetData)
 // ----------------------------------------------------------------------------
 static QByteArray patchPpsId(const QByteArray& ppsNal, uint32_t newPpsId)
 {
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(ppsNal.constData());
-    int startCodeLen = 0;
-    if (ppsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
-        startCodeLen = 4;
-    else if (ppsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
-        startCodeLen = 3;
-    else
+    const int startCodeLen = startCodeLength(ppsNal);
+    if (startCodeLen == 0)
         return QByteArray();
 
     QByteArray startCode = ppsNal.left(startCodeLen);
@@ -4653,7 +4576,7 @@ static QByteArray patchPpsId(const QByteArray& ppsNal, uint32_t newPpsId)
     if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 8)
         return QByteArray();
 
-    QByteArray oldRbsp = removeEmulationPrevention(nalBody);
+    QByteArray oldRbsp = TTNaluParser::removeEmulationPrevention(nalBody);
     const uint8_t* oldData = reinterpret_cast<const uint8_t*>(oldRbsp.constData());
     int oldSize = oldRbsp.size();
 
@@ -4789,20 +4712,15 @@ static H264PpsInfo parseH264PpsInfo(const QByteArray& ppsNal)
     H264PpsInfo info = { true, false, true, false, false, 0, 0, 0, false };  // safe defaults
 
     // Find and strip start code
-    int startCodeLen = 0;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(ppsNal.constData());
-    if (ppsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
-        startCodeLen = 4;
-    else if (ppsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
-        startCodeLen = 3;
-    else
+    const int startCodeLen = startCodeLength(ppsNal);
+    if (startCodeLen == 0)
         return info;
 
     QByteArray nalBody = ppsNal.mid(startCodeLen);
     if (nalBody.isEmpty() || ((uint8_t)nalBody[0] & 0x1F) != 8)
         return info;  // not PPS
 
-    QByteArray rbsp = removeEmulationPrevention(nalBody);
+    QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
     int dataSize = rbsp.size();
     int bitPos = 8;  // skip NAL header
@@ -4881,13 +4799,8 @@ static void skipHrdParameters(const uint8_t* data, int dataSize, int& bitPos)
 static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReorderFrames, bool isPAFF)
 {
     // Find and strip start code
-    int startCodeLen = 0;
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(spsNal.constData());
-    if (spsNal.size() >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
-        startCodeLen = 4;
-    else if (spsNal.size() >= 3 && p[0] == 0 && p[1] == 0 && p[2] == 1)
-        startCodeLen = 3;
-    else
+    const int startCodeLen = startCodeLength(spsNal);
+    if (startCodeLen == 0)
         return QByteArray();  // no start code
 
     QByteArray nalBody = spsNal.mid(startCodeLen);
@@ -4897,7 +4810,7 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
         return QByteArray();
 
     // Remove emulation prevention bytes to get RBSP
-    QByteArray rbsp = removeEmulationPrevention(nalBody);
+    QByteArray rbsp = TTNaluParser::removeEmulationPrevention(nalBody);
     const uint8_t* data = reinterpret_cast<const uint8_t*>(rbsp.constData());
     int dataSize = rbsp.size();
     int bitPos = 0;

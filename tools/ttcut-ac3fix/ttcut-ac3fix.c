@@ -79,8 +79,6 @@ typedef struct {
     /* Format change tracking */
     uint64_t format_changes;
     int last_acmod;
-    uint64_t segment_start_frame;
-    double segment_start_time;
 } ac3fix_stats_t;
 
 /* AC3 frame info */

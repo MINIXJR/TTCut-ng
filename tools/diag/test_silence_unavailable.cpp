@@ -19,6 +19,7 @@
 #include "common/istatusreporter.h"
 #include "common/ttthreadtask.h"
 #include "data/ttstreampoint_audioworker.h"
+#include <algorithm>
 
 static int gFailures = 0;
 
@@ -46,9 +47,9 @@ static QStringList runAndCollect(const QString& audioPath)
 
 static bool anyContains(const QStringList& lines, const char* needle)
 {
-    for (const QString& l : lines)
-        if (l.contains(QString::fromUtf8(needle))) return true;
-    return false;
+    const QString n = QString::fromUtf8(needle);
+    return std::any_of(lines.begin(), lines.end(),
+                       [&](const QString& l) { return l.contains(n); });
 }
 
 int main(int argc, char** argv)

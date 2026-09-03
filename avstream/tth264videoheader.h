@@ -196,14 +196,6 @@ public:
 
     // String representation of frame type
 
-    // Can this frame be used as cut-in point?
-    bool isCutInPoint() const { return mIsIDR; }
-
-    // Can this frame be used as cut-out point?
-    // (Any frame can be cut-out, but non-IDR requires re-encoding)
-    bool isCutOutPoint() const { return true; }
-    bool requiresReencode() const { return !mIsIDR; }
-
 private:
     H264SliceType mSliceType;
     bool mIsIDR;

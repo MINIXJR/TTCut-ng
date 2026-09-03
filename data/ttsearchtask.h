@@ -13,6 +13,7 @@
 #include "../common/ttthreadtask.h"
 #include "../avstream/ttavtypes.h"
 #include "../extern/ttffmpegwrapper.h"   // for TTFrameInfo
+#include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QImage>
 #include <QList>

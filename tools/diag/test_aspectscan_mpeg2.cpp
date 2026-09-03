@@ -44,6 +44,7 @@
 #include "avstream/ttavtypes.h"
 #include "data/ttsearchtask_aspectscan.h"
 #include "data/ttstreampoint.h"
+#include "mpeg2decoder/ttmpeg2decoder.h"
 
 int main(int argc, char** argv)
 {

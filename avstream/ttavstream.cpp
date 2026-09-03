@@ -35,7 +35,7 @@
 #include "ttcommon.h"
 #include "ttfilebuffer.h"
 
-#include "../data/ttcutparameter.h"
+#include "ttcutparameter.h"
 #include "../common/ttmessagelogger.h"
 
 #include "ttaudioheaderlist.h"
@@ -144,6 +144,12 @@ quint64 TTAVStream::streamLengthByte()
 
 // copy a segment (start, end) from source- to target-stream
 // -----------------------------------------------------------------------------
+void TTAVStream::logHeaderListCreated(int count, const char* timeFormat)
+{
+  log->debugMsg(__FILE__, __LINE__, QString("header list created: %1").arg(count));
+  log->debugMsg(__FILE__, __LINE__, QString("abs stream length:   %1").arg(streamLengthTime().toString(timeFormat)));
+}
+
 void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint64 end_adr)
 {
   quint64 progress    = 0;

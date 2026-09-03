@@ -76,7 +76,7 @@ set(MPEG2CUT_SRC
   ${ROOT}/avstream/ttavheader.cpp
   ${ROOT}/avstream/ttavstream.cpp
   ${ROOT}/avstream/ttcommon.cpp
-  ${ROOT}/data/ttcutparameter.cpp
+  ${ROOT}/avstream/ttcutparameter.cpp
   ${ROOT}/common/ttexception.cpp
   ${ROOT}/avstream/ttfilebuffer.cpp
   ${ROOT}/avstream/ttheaderlist.cpp

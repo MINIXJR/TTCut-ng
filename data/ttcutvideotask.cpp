@@ -17,7 +17,7 @@
 #include "../common/ttexception.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../avstream/ttfilebuffer.h"
-#include "../data/ttcutparameter.h"
+#include "../avstream/ttcutparameter.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavdata.h"
 #include "../data/ttcutlist.h"

@@ -26,7 +26,7 @@
 #include "ttcutprojectdata.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../avstream/ttfilebuffer.h"
-#include "ttcutparameter.h"
+#include "../avstream/ttcutparameter.h"
 #include "../common/ttthreadtaskpool.h"
 #include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
@@ -2074,13 +2074,8 @@ void TTAVData::onCutFinished()
         params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
         params.isPAFF              = videoStream->isPAFF();
         params.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
-        AVCodecID codecId;
-        switch (videoStream->streamType()) {
-          case TTAVTypes::h265_video:  codecId = AV_CODEC_ID_HEVC;       break;
-          case TTAVTypes::h264_video:  codecId = AV_CODEC_ID_H264;       break;
-          default:                     codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-        }
-        params.videoCodecId = codecId;
+        params.videoCodecId = static_cast<AVCodecID>(
+            TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType()));
 
         // Apply A/V sync offset if present
         if (mAvSyncOffsetMs != 0) {
@@ -2851,7 +2846,7 @@ QList<QPair<double, double>> TTAVData::buildVideoKeepList(TTCutList* cutList,
 // *****************************************************************************
 QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString& ext,
                                          const QList<QPair<double, double>>& keepList,
-                                         bool normalizeAcmod) const
+                                         bool normalizeAcmod)
 {
   QList<int> targetAcmods;
   if (normalizeAcmod && ext.toLower() == "ac3") {

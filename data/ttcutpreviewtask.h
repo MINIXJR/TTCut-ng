@@ -52,7 +52,7 @@ class TTCutPreviewTask : public TTThreadTask
     void audioDriftCalculated(const QList<float>& driftsMs);
 
 	private:
-		TTCutList* createPreviewCutList(TTCutList* cutList);
+		static TTCutList* createPreviewCutList(TTCutList* cutList);
 		void createH264PreviewClip(TTCutList* cutList, const QString& outputFile,
 		                           TTESSmartCut* sharedSmartCut = nullptr);
 		void removePreviewClipFiles(int clipIndex, const QString& videoExt,

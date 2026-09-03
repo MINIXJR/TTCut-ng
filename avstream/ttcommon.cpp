@@ -194,8 +194,9 @@ TTTimeCode ttFrameToTimeCode( int frame_nr, float fps)
 
 
 TTTimeCode::TTTimeCode()
+  : drop_frame_flag(false), hours(0), minutes(0), seconds(0), pictures(0),
+    marker_bit(false)
 {
-
 }
 
 QString ttFrameTypeTag(int frameType)

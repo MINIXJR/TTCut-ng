@@ -450,7 +450,7 @@ class TTAVData : public QObject
     //! private, as it used to be) so TTAudioOnlyCutTask's worker thread can
     //! call it too - it is pure aside from reading the TTSettings singleton,
     //! the same thing cutAudioTracks/cutSubtitleTracks already do from there.
-    QString createCutFileName(QString cutBaseFileName, QString sourceFileName, int index);
+    static QString createCutFileName(QString cutBaseFileName, QString sourceFileName, int index);
 
     // Cut the given audio tracks of avItem against videoKeepList. Encapsulates
     // the per-track loop, per-track delay, planAudioCut (audio-frame snapping +
@@ -550,9 +550,9 @@ class TTAVData : public QObject
   private:
     // AC3-only per-segment target acmod list (majority acmod per kept window).
     // Empty unless normalizeAcmod && ext == "ac3".
-    QList<int> computeTargetAcmods(const QString& audioFile, const QString& ext,
+    static QList<int> computeTargetAcmods(const QString& audioFile, const QString& ext,
                                    const QList<QPair<double, double>>& keepList,
-                                   bool normalizeAcmod) const;
+                                   bool normalizeAcmod);
     // Source (at(0) video duration) + result (Σ kept-segment lengths) in ms
     // from the cut list, into mLastCutSourceMs/mLastCutResultMs (0 if unknown).
     void computeCutLengths(TTCutList* cutList);

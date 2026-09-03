@@ -135,7 +135,7 @@ public:
 class TTVideoIndex
 {
  public:
-   TTVideoIndex(){};
+   TTVideoIndex() : display_order(0), header_list_index(0), picture_coding_type(0) {}
 
    void setDisplayOrder(int value);
    int  getDisplayOrder();

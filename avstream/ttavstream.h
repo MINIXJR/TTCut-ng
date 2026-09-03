@@ -80,6 +80,8 @@ public:
   virtual void copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint64 end_adr);
 
 protected:
+  // Debug trail every createHeaderList() ends with: count and stream length.
+  void logHeaderListCreated(int count, const char* timeFormat = "hh:mm:ss");
 	TTAVTypes::AVStreamType stream_type;
   QFileInfo*              stream_info;
   TTFileBuffer*           stream_buffer;

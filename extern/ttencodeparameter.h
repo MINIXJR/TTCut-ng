@@ -24,26 +24,26 @@ class TTEncodeParameter
     TTEncodeParameter(){};
     ~TTEncodeParameter(){};
 
-    void      setAVIFileInfo(const QFileInfo& value)   { aviFInfo = value; }
-    QFileInfo aviFileInfo()                            { return aviFInfo; }
-    void      setMpeg2FileInfo(const QFileInfo& value) { mpeg2FInfo = value; }
-    QFileInfo mpeg2FileInfo()                          { return mpeg2FInfo; }
-    void      setVideoWidth(int value)                 { vWidth = value; }
-    int       videoWidth()                             { return vWidth; }
-    void      setVideoHeight(int value)                { vHeight = value; }
-    int       videoHeight()                            { return vHeight; }
-    void      setVideoFPS(float value)                 { vFPS = value; }
-    float     videoFPS()                               { return vFPS; }
-    void      setVideoAspectCode(int value)            { vAspectCode = value; }
-    int       videoAspectCode()                        { return vAspectCode; }
-    void      setVideoBitrate(float value)             { vBitrate = value; }
-    float     videoBitrate()                           { return vBitrate; }
-    void      setVideoMaxBitrate(float value)          { vMaxBitrate = value; }
-    float     videoMaxBitrate()                        { return vMaxBitrate; }
-    void      setVideoInterlaced(bool value)           { vInterlaced = value; }
-    bool      videoInterlaced()                        { return vInterlaced; }
-    void      setVideoTopFieldFirst(bool value)        { vTopFieldFirst = value; }
-    bool      videoTopFieldFirst()                     { return vTopFieldFirst; }
+    void      setAVIFileInfo(const QFileInfo& value)   { mAviFileInfo = value; }
+    QFileInfo aviFileInfo()                            { return mAviFileInfo; }
+    void      setMpeg2FileInfo(const QFileInfo& value) { mMpeg2FileInfo = value; }
+    QFileInfo mpeg2FileInfo()                          { return mMpeg2FileInfo; }
+    void      setVideoWidth(int value)                 { mVideoWidth = value; }
+    int       videoWidth()                             { return mVideoWidth; }
+    void      setVideoHeight(int value)                { mVideoHeight = value; }
+    int       videoHeight()                            { return mVideoHeight; }
+    void      setVideoFPS(float value)                 { mVideoFps = value; }
+    float     videoFPS()                               { return mVideoFps; }
+    void      setVideoAspectCode(int value)            { mVideoAspectCode = value; }
+    int       videoAspectCode()                        { return mVideoAspectCode; }
+    void      setVideoBitrate(float value)             { mVideoBitrate = value; }
+    float     videoBitrate()                           { return mVideoBitrate; }
+    void      setVideoMaxBitrate(float value)          { mVideoMaxBitrate = value; }
+    float     videoMaxBitrate()                        { return mVideoMaxBitrate; }
+    void      setVideoInterlaced(bool value)           { mVideoInterlaced = value; }
+    bool      videoInterlaced()                        { return mVideoInterlaced; }
+    void      setVideoTopFieldFirst(bool value)        { mVideoTopFieldFirst = value; }
+    bool      videoTopFieldFirst()                     { return mVideoTopFieldFirst; }
     int       start() { return mStartIndex; }
     void       setStart(int value) { mStartIndex = value; }
     int       end() { return mEndIndex; }
@@ -52,18 +52,18 @@ class TTEncodeParameter
     void      print(char* prefix);
 
   private:
-    QFileInfo aviFInfo;
-    QFileInfo mpeg2FInfo;
+    QFileInfo mAviFileInfo;
+    QFileInfo mMpeg2FileInfo;
     int       mStartIndex;
     int       mEndIndex;
-    int       vWidth;
-    int       vHeight;
-    float     vFPS;
-    int       vAspectCode;
-    float     vBitrate;
-    float     vMaxBitrate;
-    bool      vInterlaced;
-    bool      vTopFieldFirst;
+    int       mVideoWidth;
+    int       mVideoHeight;
+    float     mVideoFps;
+    int       mVideoAspectCode;
+    float     mVideoBitrate;
+    float     mVideoMaxBitrate;
+    bool      mVideoInterlaced;
+    bool      mVideoTopFieldFirst;
 };
 
 #endif //TTENCODEPARAMETER_H

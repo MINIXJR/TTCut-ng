@@ -36,35 +36,7 @@ extern "C"
 #include "../avstream/ttvideoheaderlist.h"
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttmpeg2videoheader.h"
-
-/* /////////////////////////////////////////////////////////////////////////////
- * constants for mpeg2 pixel format
- */
-enum TPixelFormat
-{
-  formatRGB24 = 1,  // RGB interleaved; default
-  formatRGB32 = 2,
-  formatRGB8  = 3,
-  formatYV12  = 4,
-  formatYUV24 = 5   // YUV planes
-};
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Frame info struct
- */
-typedef struct
-{
-  quint8* Y;
-  quint8* U;
-  quint8* V;
-  int      width;
-  int      height;
-  int      size;
-  int      type;
-  int      chroma_width;
-  int      chroma_height;
-  int      chroma_size;
-} TFrameInfo;
+#include "../avstream/ttframeinfo.h"
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Sequence properties struct
@@ -77,17 +49,6 @@ typedef struct
   unsigned int vbv_buffer_size;
   unsigned int frame_period;
 } TSequenceInfo;
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Stream properties struct
- */
-typedef struct
-{
-  quint64 size;
-  quint64 position;
-  int     frame;
-  int     videoPTS;
-} TStreamInfo;
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Initial buffer size
@@ -151,9 +112,9 @@ class TTMpeg2DecoderException
       StreamOpen
     };
 
-    TTMpeg2DecoderException(ExceptionType type);
+    explicit TTMpeg2DecoderException(ExceptionType type);
 
-    QString message();
+    QString message() const;
 
   protected:
     ExceptionType ex_type;

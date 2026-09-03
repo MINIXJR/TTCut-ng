@@ -165,11 +165,21 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 		void closeProject();
 		void navigationEnabled(bool enabled);
 		void updateRecentFileActions();
-		void insertRecentFile(const QString& fName);
+		// Constructor stages, one per comment section of the original constructor
+		void setupImagesAndIcons();
+		void restoreWindowGeometry();
+		void connectMenuSignals();
+		void connectNavigationSignals();
+		void connectStreamPointSignals();
+		void connectVideoSliderSignals();
+		void connectFrameAndCutListSignals();
+		void connectAVDataSignals();
+		static void insertRecentFile(const QString& fName);
 		void setProjectModified(bool modified);
 		void updateWindowTitle();
-		void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
+		static void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
 		QString formatRemaining(const TTProgressEstimator::Result& r) const;
+		static QString formatDurationMs(qint64 ms);  // h:mm:ss or m:ss
 		QString progressStageName(int stage) const;
 		//! Start the AC3 anomaly scan for the current AV item on the
 		//! stream-point pool. Returns false when there is no AC3 track to

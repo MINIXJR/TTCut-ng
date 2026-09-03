@@ -159,12 +159,8 @@ static AVFormatContext* openInput(const QString& filePath, int& ret)
 // detect re-encoded frames as field packets, causing frame merging corruption.
 static bool parseInlineSpsLog2MaxFrameNum(const uint8_t* data, int size, int& log2MaxFrameNum)
 {
-    for (int p = 0; p < size - 5; p++) {
-        if (data[p] != 0 || data[p+1] != 0) continue;
-        int s = -1;
-        if (data[p+2] == 1) s = p + 3;
-        else if (data[p+2] == 0 && p+3 < size && data[p+3] == 1) s = p + 4;
-        if (s < 0 || s >= size) continue;
+    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
+         s = TTNaluParser::findStartCodePayload(data, size, s)) {
         uint8_t nt = data[s] & 0x1F;
         if (nt != 7) continue;  // Not SPS
 
@@ -696,15 +692,9 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
         const uint8_t* nd = in.pkt->data;
         int nsz = in.pkt->size;
         bool nextIsVcl = false;
-        for (int p = 0; p < nsz - 3; p++) {
-            if (nd[p] == 0 && nd[p+1] == 0) {
-                int s = -1;
-                if (nd[p+2] == 1) s = p + 3;
-                else if (nd[p+2] == 0 && p+3 < nsz && nd[p+3] == 1) s = p + 4;
-                if (s >= 0 && s < nsz && isVclNalByte(codec, nd + s)) {
-                    nextIsVcl = true; break;
-                }
-            }
+        for (int s = TTNaluParser::findStartCodePayload(nd, nsz, 0); s >= 0;
+             s = TTNaluParser::findStartCodePayload(nd, nsz, s)) {
+            if (isVclNalByte(codec, nd + s)) { nextIsVcl = true; break; }
         }
         if (nextIsVcl) break;
         if (TTSettings::instance()->logMkvMux())
@@ -1034,15 +1024,9 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 
                 // Find VCL NAL and parse field_pic_flag (H.264-only path)
                 int nalStart = -1;
-                for (int p = 0; p < sz - 4; p++) {
-                    if (d[p] == 0 && d[p+1] == 0) {
-                        int s = -1;
-                        if (d[p+2] == 1) s = p + 3;
-                        else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
-                        if (s >= 0 && s < sz && isVclNalByte(AV_CODEC_ID_H264, d + s)) {
-                            nalStart = s; break;
-                        }
-                    }
+                for (int s = TTNaluParser::findStartCodePayload(d, sz, 0); s >= 0;
+                     s = TTNaluParser::findStartCodePayload(d, sz, s)) {
+                    if (isVclNalByte(AV_CODEC_ID_H264, d + s)) { nalStart = s; break; }
                 }
                 if (nalStart < 0 && sz >= 1 && isVclNalByte(AV_CODEC_ID_H264, d)) {
                     nalStart = 0;
@@ -1063,15 +1047,9 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 const uint8_t* d = in.pkt->data;
                 int sz = in.pkt->size;
                 const AVCodecID codec = static_cast<AVCodecID>(mVideoCodecId);
-                for (int p = 0; p < sz - 3; p++) {
-                    if (d[p] == 0 && d[p+1] == 0) {
-                        int s = -1;
-                        if (d[p+2] == 1) s = p + 3;
-                        else if (d[p+2] == 0 && p+3 < sz && d[p+3] == 1) s = p + 4;
-                        if (s >= 0 && s < sz && isVclNalByte(codec, d + s)) {
-                            hasVclNal = true; break;
-                        }
-                    }
+                for (int s = TTNaluParser::findStartCodePayload(d, sz, 0); s >= 0;
+                     s = TTNaluParser::findStartCodePayload(d, sz, s)) {
+                    if (isVclNalByte(codec, d + s)) { hasVclNal = true; break; }
                 }
                 if (!hasVclNal && sz >= 1 && isVclNalByte(codec, d)) {
                     hasVclNal = true;
@@ -1180,6 +1158,15 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
 // Audio-only matroska output (.mka): copies all input audio streams into a
 // single matroska container with optional language tags. Stream-copy only.
 // -----------------------------------------------------------------------------
+int TTMkvMergeProvider::videoCodecIdFor(TTAVTypes::AVStreamType type)
+{
+    switch (type) {
+      case TTAVTypes::h265_video: return AV_CODEC_ID_HEVC;
+      case TTAVTypes::h264_video: return AV_CODEC_ID_H264;
+      default:                    return AV_CODEC_ID_MPEG2VIDEO;
+    }
+}
+
 bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
                                       const QStringList& audioFiles,
                                       const QStringList& audioLanguages)
@@ -1225,9 +1212,16 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
             if (mi.ownsCtx && mi.fmtCtx) avformat_close_input(&mi.fmtCtx);
         }
     };
+    // Every exit path below goes through this (same pattern as mux()).
+    // avio_closep() tolerates a pb that was never opened.
+    auto closeAll = [&]() {
+        cleanupInputs();
+        if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
+        avformat_free_context(outCtx);
+    };
 
     if (inputs.isEmpty()) {
-        avformat_free_context(outCtx);
+        closeAll();
         setError("muxAudioOnly: no usable audio streams");
         return false;
     }
@@ -1235,8 +1229,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     if (!(outCtx->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&outCtx->pb, outputFile.toUtf8().constData(), AVIO_FLAG_WRITE);
         if (ret < 0) {
-            cleanupInputs();
-            avformat_free_context(outCtx);
+            closeAll();
             setError(QString("muxAudioOnly: cannot open output: %1").arg(avErrStr(ret)));
             return false;
         }
@@ -1244,9 +1237,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
 
     ret = avformat_write_header(outCtx, nullptr);
     if (ret < 0) {
-        cleanupInputs();
-        if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
-        avformat_free_context(outCtx);
+        closeAll();
         setError(QString("muxAudioOnly: write_header failed: %1").arg(avErrStr(ret)));
         return false;
     }
@@ -1262,9 +1253,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
             if (checkAbort()) {
                 // av_packet_free() unrefs the packet itself.
                 av_packet_free(&pkt);
-                cleanupInputs();
-                if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
-                avformat_free_context(outCtx);
+                closeAll();
                 return false;
             }
             if (pkt->stream_index != mi.srcIdx) {
@@ -1278,9 +1267,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
             if (wfRet < 0) {
                 setError(QString("muxAudioOnly: write_frame failed: %1").arg(avErrStr(wfRet)));
                 av_packet_free(&pkt);
-                cleanupInputs();
-                if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
-                avformat_free_context(outCtx);
+                closeAll();
                 return false;
             }
             av_packet_unref(pkt);
@@ -1290,9 +1277,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
 
     av_write_trailer(outCtx);
 
-    cleanupInputs();
-    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
-    avformat_free_context(outCtx);
+    closeAll();
 
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "muxAudioOnly complete:" << outputFile

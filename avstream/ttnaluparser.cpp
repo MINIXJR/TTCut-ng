@@ -476,7 +476,19 @@ bool TTNaluParser::parseH264NalUnit(const QByteArray& data, TTNalUnit& nal)
 // a NAL unit body. Required before parsing any field that lives past the
 // first ~3 bytes of the NAL, since 00 00 03 escapes can otherwise shift the
 // bit position and produce wrong field values.
-static QByteArray ttNaluRemoveEpb(const QByteArray& nal)
+int TTNaluParser::findStartCodePayload(const uint8_t* data, int size, int from)
+{
+    for (int pos = from < 0 ? 0 : from; pos + 2 < size; ++pos) {
+        if (data[pos] != 0 || data[pos + 1] != 0) continue;
+        int s = -1;
+        if (data[pos + 2] == 1) s = pos + 3;
+        else if (data[pos + 2] == 0 && pos + 3 < size && data[pos + 3] == 1) s = pos + 4;
+        if (s >= 0 && s < size) return s;
+    }
+    return -1;
+}
+
+QByteArray TTNaluParser::removeEmulationPrevention(const QByteArray& nal)
 {
     QByteArray rbsp;
     rbsp.reserve(nal.size());
@@ -500,7 +512,7 @@ void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
     // Strip emulation-prevention bytes before parsing — scaling lists and
     // VUI HRD parameters can extend past EP escapes, and reading them
     // bit-aligned without stripping shifts every following field.
-    QByteArray data = ttNaluRemoveEpb(rawNal);
+    QByteArray data = removeEmulationPrevention(rawNal);
     if (data.size() < 5) return;
 
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
