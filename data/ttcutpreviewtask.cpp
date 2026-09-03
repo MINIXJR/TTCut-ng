@@ -34,7 +34,7 @@ extern "C" {
 #include <libavcodec/codec_id.h>
 }
 #include "../extern/ttessmartcut.h"
-#include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttaudiocutter.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/tth26xvideostream.h"
 
@@ -676,7 +676,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
     if (normalizeAcmod && audioExt.toLower() == "ac3") {
       for (int s = 0; s < audioKeepList.size(); s++) {
-        TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+        TTAudioCutter::AcmodInfo aInfo = TTAudioCutter::analyzeAcmod(
             audioFile, audioKeepList[s].first, audioKeepList[s].second);
         targetAcmods.append(aInfo.mainAcmod);
       }
@@ -684,21 +684,21 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
     QElapsedTimer audioTimer;
     audioTimer.start();
-    TTFFmpegWrapper ffmpeg;
-    // shouldAbort is polled inside cutAudioStream's per-segment packet loop,
+    TTAudioCutter cutter;
+    // shouldAbort is polled inside TTAudioCutter::cut's per-segment packet loop,
     // so a cancel stops it at the next packet instead of only being noticed
     // once the whole track has been copied. isAborted() is TTThreadTask's own
     // flag, read here on the same worker thread that is about to act on it -
     // same cross-thread contract TTCutVideoTask/TTCutTask already rely on
     // (onUserAbort() on the GUI thread only ever sets it, never reads it back).
-    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, audioKeepList,
+    if (cutter.cut(audioFile, cutAudioFile, audioKeepList,
                               normalizeAcmod, targetAcmods, nullptr,
                               [this] { return isAborted(); })) {
       cutAudioFiles.append(cutAudioFile);
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
     } else if (isAborted()) {
-      // Plain user cancel: cutAudioStream still finalizes the container
+      // Plain user cancel: TTAudioCutter::cut still finalizes the container
       // before returning false, so cutAudioFile is a partial/empty file on
       // disk (same behavior TTAVData::cutAudioTracks's own comment documents
       // for the consolidated path). Stop here rather than falling through to

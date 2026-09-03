@@ -1,4 +1,4 @@
-// Diagnostic harness: drive TTFFmpegWrapper::cutAudioStream with explicit
+// Diagnostic harness: drive TTAudioCutter::cut with explicit
 // (start,end) second ranges on a raw audio ES and write the result, so the
 // output can be cross-correlated against the source independently of the
 // GUI / planAudioCut / mux stages. Forces logFFmpegDecoder for the
@@ -14,7 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "common/ttsettings.h"
-#include "extern/ttffmpegwrapper.h"
+#include "extern/ttaudiocutter.h"
 
 int main(int argc, char** argv)
 {
@@ -33,8 +33,8 @@ int main(int argc, char** argv)
     for (const auto& s : keep)
         fprintf(stderr, "segment: %.4f .. %.4f\n", s.first, s.second);
 
-    TTFFmpegWrapper w;
-    bool ok = w.cutAudioStream(argv[1], argv[2], keep);
+    TTAudioCutter cutter;
+    bool ok = cutter.cut(argv[1], argv[2], keep);
     fprintf(stderr, "cutAudioStream %s\n", ok ? "OK" : "FAIL");
     return ok ? 0 : 1;
 }

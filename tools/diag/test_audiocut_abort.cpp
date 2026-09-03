@@ -2,7 +2,7 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <cstdio>
-#include "extern/ttffmpegwrapper.h"
+#include "extern/ttaudiocutter.h"
 
 static int fail(const char* what) { fprintf(stderr, "FAIL: %s\n", what); return 1; }
 
@@ -15,15 +15,15 @@ int main(int argc, char** argv)
 
     // (a) abort immediately: predicate true from the start
     {
-        TTFFmpegWrapper ff;
-        if (ff.cutAudioStream(argv[1], out, keep, false, {}, {}, []{ return true; }))
+        TTAudioCutter cutter;
+        if (cutter.cut(argv[1], out, keep, false, {}, {}, []{ return true; }))
             return fail("(a) succeeded despite abort predicate");
         QFile::remove(out);
     }
     // (b) no predicate: normal run still works
     {
-        TTFFmpegWrapper ff;
-        if (!ff.cutAudioStream(argv[1], out, keep, false, {}, {}))
+        TTAudioCutter cutter;
+        if (!cutter.cut(argv[1], out, keep, false, {}, {}))
             return fail("(b) clean run failed");
         if (QFile(out).size() == 0) return fail("(b) empty output");
         QFile::remove(out);

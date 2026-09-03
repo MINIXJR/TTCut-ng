@@ -141,6 +141,8 @@ set(TTCUT_HEADERS
   extern/tttranscode.h
   extern/ttmplexprovider.h
   extern/ttffmpegwrapper.h
+  extern/ttavutil.h
+  extern/ttaudiocutter.h
   extern/ttessmartcut.h
   extern/tthevcseam.h
   extern/ttaudiorepair.h
@@ -255,6 +257,8 @@ set(TTCUT_CORE_SOURCES
   extern/tttranscode.cpp
   extern/ttmplexprovider.cpp
   extern/ttffmpegwrapper.cpp
+  extern/ttavutil.cpp
+  extern/ttaudiocutter.cpp
   extern/ttessmartcut.cpp
   extern/tthevcseam.cpp
   extern/ttaudiorepair.cpp

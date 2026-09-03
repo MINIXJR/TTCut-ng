@@ -1,4 +1,4 @@
-# Standalone probe for TTFFmpegWrapper::detectAudioBurst. Deliberately
+# Standalone probe for TTAudioCutter::detectBurst. Deliberately
 # EXCLUDE_FROM_ALL: it recompiles ttffmpegwrapper.cpp, which would slow
 # every application build for a tool used during verification. Build with:
 #   cmake --build build --target ttcut-burst-probe
@@ -12,6 +12,8 @@ set(ROOT ${CMAKE_SOURCE_DIR})
 add_executable(ttcut-burst-probe EXCLUDE_FROM_ALL
   main.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttaudiocutter.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp

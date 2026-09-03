@@ -23,6 +23,8 @@ set(DISPMAP_SRC
 set(WRAPPER_SRC
   ${DISPMAP_SRC}
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttaudiocutter.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
@@ -37,7 +39,7 @@ set(STILLFRAME_SRC
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttcalibrationstore.cpp)
 
-set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp)
+set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/extern/ttavutil.cpp ${ROOT}/extern/ttaudiocutter.cpp)
 
 set(MKVMUX_SRC ${SEAM_SRC} ${ROOT}/extern/ttmkvmergeprovider.cpp)
 
@@ -118,6 +120,8 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/common/ttthreadtask.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttaudiocutter.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
 
@@ -147,6 +151,8 @@ set(WINDOWJUMP_SRC
   ${ROOT}/mpeg2window/ttmpeg2window2.cpp
   ${ROOT}/common/ttcut.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttaudiocutter.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
