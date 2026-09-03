@@ -48,7 +48,7 @@ TTMpegAudioHeader::TTMpegAudioHeader()
   if (str_sample_rate.isEmpty()) str_sample_rate = "unknown";
 }
 
-QString& TTMpegAudioHeader::descString()
+const QString& TTMpegAudioHeader::descString()
 {
   switch ( version )
   {
@@ -89,7 +89,7 @@ QString& TTMpegAudioHeader::descString()
   return str_description;
 }
 
-QString& TTMpegAudioHeader::modeString()
+const QString& TTMpegAudioHeader::modeString()
 {
   switch ( mode )
   {
@@ -116,10 +116,9 @@ int TTMpegAudioHeader::bitRate()
   return 1000*mpeg_bit_raten[version][layer][bitrate_index];
 }
  
-QString& TTMpegAudioHeader::bitRateString()
+const QString& TTMpegAudioHeader::bitRateString()
 {
-  str_bit_rate = QString("%1 KBit/s").arg(bitRate());
-  //str_bit_rate->sprintf( "%d KBit/s", bitRate() );
+  str_bit_rate = QString("%1 kbit/s").arg(bitRate() / 1000);
 
   return str_bit_rate;
 }
@@ -138,12 +137,11 @@ QString& TTMpegAudioHeader::bitRateString()
   return result;
 }
 
- QString& TTMpegAudioHeader::sampleRateString()
- {
-   str_sample_rate = QString("%1").arg(sampleRate());
-   //str_sample_rate->sprintf( "%d",sampleRate() );
+const QString& TTMpegAudioHeader::sampleRateString()
+{
+  str_sample_rate = QString("%1 Hz").arg(sampleRate());
 
   return str_sample_rate;
- }
+}
 
 
