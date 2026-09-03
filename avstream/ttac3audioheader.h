@@ -114,12 +114,12 @@ class TTAC3AudioHeader : public TTAudioHeader
 public:
   TTAC3AudioHeader();
 
-  QString& descString();
-  QString& modeString();
+  const QString& descString() override;
+  const QString& modeString() override;
   int      bitRate();
-  QString& bitRateString();
+  const QString& bitRateString() override;
   int      sampleRate();
-  QString& sampleRateString();
+  const QString& sampleRateString() override;
 
   //private:
   int     crc1;

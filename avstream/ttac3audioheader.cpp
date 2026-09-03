@@ -49,12 +49,12 @@ TTAC3AudioHeader::TTAC3AudioHeader()
 }
 
 
-QString& TTAC3AudioHeader::descString()
+const QString& TTAC3AudioHeader::descString()
 {
   return str_description;
 }
 
-QString& TTAC3AudioHeader::modeString()
+const QString& TTAC3AudioHeader::modeString()
 {
   //QString num_string;
 
@@ -80,9 +80,9 @@ int TTAC3AudioHeader::bitRate()
   return 1000*AC3BitRate[frmsizecod];
 }
 
-QString& TTAC3AudioHeader::bitRateString()
+const QString& TTAC3AudioHeader::bitRateString()
 {
-  str_bit_rate = QString("%1 KBit/s").arg(bitRate());
+  str_bit_rate = QString("%1 kbit/s").arg(bitRate() / 1000);
 
   return str_bit_rate;
 }
@@ -92,9 +92,9 @@ int TTAC3AudioHeader::sampleRate()
   return AC3SampleRate[fscod];
 }
 
-QString& TTAC3AudioHeader::sampleRateString()
+const QString& TTAC3AudioHeader::sampleRateString()
 {
-  str_sample_rate = QString("%1").arg(sampleRate());
+  str_sample_rate = QString("%1 Hz").arg(sampleRate());
   
   return str_sample_rate;
 }
