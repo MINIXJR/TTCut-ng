@@ -10,6 +10,7 @@
 #include "tth26xvideostream.h"
 #include "ttvideoindexlist.h"
 #include "ttesinfo.h"
+#include "../extern/ttframeindexer.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../common/ttexception.h"
@@ -89,19 +90,6 @@ int TTH26xVideoStream::createHeaderList()
         return -1;
     }
 
-    // Forward FFmpeg progress to statusReport (buildFrameIndex is the slow part).
-    // Must be done after openStream() since that is what creates mFFmpeg.
-    // percent (0-100, from ffmpeg) is first mapped onto the milestone scale
-    // used by this method's own Step calls (10/82/90, see below), then that
-    // mapped value is scaled onto the byte-domain `total` so all Step values
-    // emitted by this task share one consistent unit.
-    connect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this,
-            [this, total](int percent, const QString&) {
-        int mapped = 10 + percent * 70 / 100;
-        quint64 value = static_cast<quint64>(mapped) * total / 100;
-        emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), value);
-    });
-
     mLog->infoMsg(__FILE__, __LINE__,
         QString("Creating %1 header list...").arg(codecLabel()));
     emit statusReport(StatusReportArgs::Step,
@@ -146,15 +134,25 @@ int TTH26xVideoStream::createHeaderList()
 
     emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 10 * total / 100);
 
-    if (!mFFmpeg->buildFrameIndex(videoStreamIdx)) {
+    // The indexer's progress percent (0-100) is first mapped onto the milestone
+    // scale used by this method's own Step calls (10/82/90, see below), then
+    // that mapped value is scaled onto the byte-domain `total` so all Step
+    // values emitted by this task share one consistent unit.
+    TTFrameIndexer indexer;
+    const bool indexed = indexer.build(filePath(), videoStreamIdx,
+        [this, total](int percent, const QString&) {
+            int mapped = 10 + percent * 70 / 100;
+            quint64 value = static_cast<quint64>(mapped) * total / 100;
+            emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), value);
+        });
+    if (!indexed) {
         mLog->errorMsg(__FILE__, __LINE__,
-            QString("Failed to build frame index: %1").arg(mFFmpeg->lastError()));
-        disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+            QString("Failed to build frame index: %1").arg(indexer.lastError()));
         emit statusReport(StatusReportArgs::Error, tr("Failed to build frame index"), 0);
         return -1;
     }
-
-    disconnect(mFFmpeg, &TTFFmpegWrapper::progressChanged, this, nullptr);
+    mFrameIndexBundle = indexer.bundle();
+    mFFmpeg->setFrameIndex(mFrameIndexBundle);
 
     // PAFF correction (H.264 only — H.265 returns false from the hook)
     if (isPAFFCorrectionApplicable() && mFFmpeg->isPAFF() && frame_rate > 30) {
@@ -165,8 +163,9 @@ int TTH26xVideoStream::createHeaderList()
         setSPSFrameRate(static_cast<double>(frame_rate));
     }
 
+    // The GOP table is part of the bundle the indexer produced; the Step report
+    // stays so the progress sequence is unchanged.
     emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82 * total / 100);
-    mFFmpeg->buildGOPIndex();
 
     emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90 * total / 100);
     buildAccessUnits();
@@ -174,7 +173,7 @@ int TTH26xVideoStream::createHeaderList()
     int n = accessUnitCount();
     mLog->infoMsg(__FILE__, __LINE__,
         QString("%1 header list created: %2 frames, %3 GOPs")
-            .arg(codecLabel()).arg(n).arg(mFFmpeg->gopCount()));
+            .arg(codecLabel()).arg(n).arg(mFrameIndexBundle.gops.size()));
 
     // total (bytes), not a literal 100: TTThreadTask::onStatusReport() divides
     // this by mTotalSteps (== total, set from the Start value above) to derive
@@ -297,7 +296,7 @@ const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
 
 TTFrameIndexBundle TTH26xVideoStream::ffmpegFrameIndexBundle() const
 {
-    return mFFmpeg->frameIndexBundle();
+    return mFrameIndexBundle;
 }
 
 // See header doc + spec 2026-06-05. QList<TTFrameInfo> is Qt copy-on-write:
@@ -317,18 +316,25 @@ bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
 
 int TTH26xVideoStream::rawAuCount() const
 {
-    return mFFmpeg ? mFFmpeg->rawPacketCount() : 0;
+    return mFrameIndexBundle.rawPacketCount;
 }
 
+// raw AU -> merged frame. An empty map means "no PAFF merge happened", i.e.
+// raw numbering IS merged numbering. A negative entry marks the collapsed
+// bottom field of a merged pair and stores its frame as ~v.
 int TTH26xVideoStream::mapRawAuToDisplayIndex(int raw) const
 {
     if (!mFFmpeg) return -1;
-    const int merged = mFFmpeg->rawToMergedIndex(raw);
-    if (merged < 0) return -1;
+    if (raw < 0 || raw >= mFrameIndexBundle.rawPacketCount) return -1;
+    const int v = mFrameIndexBundle.rawToMerged.isEmpty()
+                      ? raw : mFrameIndexBundle.rawToMerged[raw];
+    const int merged = (v >= 0) ? v : ~v;
     return mFFmpeg->displayOrderMap().decodeToDisplay(merged);
 }
 
 bool TTH26xVideoStream::rawAuIsCollapsedField(int raw) const
 {
-    return mFFmpeg ? mFFmpeg->rawIsCollapsedField(raw) : false;
+    if (raw < 0 || raw >= mFrameIndexBundle.rawPacketCount) return false;
+    if (mFrameIndexBundle.rawToMerged.isEmpty()) return false;
+    return mFrameIndexBundle.rawToMerged[raw] < 0;
 }

@@ -25,6 +25,7 @@ set(WRAPPER_SRC
   ${ROOT}/extern/ttffmpegwrapper.cpp
   ${ROOT}/extern/ttavutil.cpp
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
@@ -39,7 +40,7 @@ set(STILLFRAME_SRC
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttcalibrationstore.cpp)
 
-set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/extern/ttavutil.cpp ${ROOT}/extern/ttaudiocutter.cpp)
+set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/extern/ttavutil.cpp ${ROOT}/extern/ttaudiocutter.cpp ${ROOT}/extern/ttframeindexer.cpp)
 
 set(MKVMUX_SRC ${SEAM_SRC} ${ROOT}/extern/ttmkvmergeprovider.cpp)
 
@@ -122,6 +123,7 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/extern/ttffmpegwrapper.cpp
   ${ROOT}/extern/ttavutil.cpp
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
 
@@ -153,6 +155,7 @@ set(WINDOWJUMP_SRC
   ${ROOT}/extern/ttffmpegwrapper.cpp
   ${ROOT}/extern/ttavutil.cpp
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
@@ -245,6 +248,7 @@ diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
 diag_tool(test_audiocut        AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_audiocut_abort  AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_audioprogress   AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})

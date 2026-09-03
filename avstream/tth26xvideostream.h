@@ -21,6 +21,7 @@
 
 #include "ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttframeindex.h"
 #include "../common/ttmessagelogger.h"
 
 #include <QFileInfo>
@@ -70,7 +71,7 @@ public:
     // See specs 2026-06-05-frame-index-unification-design.md and
     // 2026-08-28-frame-index-bundle-design.md.
     //
-    // The index together with the metadata the wrapper measured. Consumers
+    // The index together with the metadata the indexer measured. Consumers
     // that hand an index across a thread or object boundary MUST use this
     // bundle, never the bare list — see TTFrameIndexBundle.
     TTFrameIndexBundle ffmpegFrameIndexBundle() const;
@@ -78,9 +79,9 @@ public:
     // Hands this stream's already-built index (Owner A) to `consumer`, which has
     // opened the SAME file. File identity is guaranteed by the caller through
     // object identity (it holds this stream object).
-    //   true  = adopted → consumer needs NO buildFrameIndex().
-    //   false = index still empty/not built → caller must call
-    //           consumer->buildFrameIndex() itself.
+    //   true  = adopted → consumer needs no index of its own.
+    //   false = index still empty/not built → caller must run a
+    //           TTFrameIndexer itself and install the result.
     bool provideFrameIndexTo(TTFFmpegWrapper* consumer) const;
 
     // Raw->merged AU translation for .info doubled-PTS candidates (raw AU
@@ -113,6 +114,12 @@ protected:
 
 protected:
     TTFFmpegWrapper* mFFmpeg;
+    // The canonical index for this file, built once by TTFrameIndexer in
+    // createHeaderList(). The wrapper gets a copy through setFrameIndex(), but
+    // this stream stays the owner: only the bundle kept here carries the GOP
+    // table and the raw->merged map (a wrapper re-exporting an adopted index
+    // leaves both empty).
+    TTFrameIndexBundle mFrameIndexBundle;
     TTMessageLogger* mLog;
 };
 

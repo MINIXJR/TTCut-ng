@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cmath>
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 
 int main(int argc, char** argv)
 {
@@ -17,10 +18,12 @@ int main(int argc, char** argv)
     TTFFmpegWrapper::initializeFFmpeg();
     TTFFmpegWrapper w;
     if (!w.openFile(argv[1])) { fprintf(stderr, "openFile failed\n"); return 1; }
-    if (!w.buildFrameIndex(w.findBestVideoStream())) {
-        fprintf(stderr, "buildFrameIndex failed\n");
+    TTFrameIndexer ix;
+    if (!ix.build(argv[1], w.findBestVideoStream(), nullptr)) {
+        fprintf(stderr, "frame index build failed: %s\n", qPrintable(ix.lastError()));
         return 1;
     }
+    w.setFrameIndex(ix.bundle());
 
     QImage img = w.decodeFrame(0);
     double sar = w.sampleAspectRatio();

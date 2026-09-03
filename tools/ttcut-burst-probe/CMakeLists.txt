@@ -14,6 +14,7 @@ add_executable(ttcut-burst-probe EXCLUDE_FROM_ALL
   ${ROOT}/extern/ttffmpegwrapper.cpp
   ${ROOT}/extern/ttavutil.cpp
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp

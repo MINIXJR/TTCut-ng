@@ -23,6 +23,7 @@
 #include <cstdlib>
 
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -91,7 +92,7 @@ int main(int argc, char** argv)
     const int thres = (argc > 5) ? atoi(argv[5]) : 20;
 
     // TTDIAG_NOINDEX=1 reproduces the worker's setup: openFile() only, no
-    // buildFrameIndex()/buildGOPIndex(). Frame positions then have to be given
+    // frame index at all. Frame positions then have to be given
     // explicitly via firstFrame/lastFrame because the index is empty.
     const bool noIndex = qEnvironmentVariableIntValue("TTDIAG_NOINDEX") == 1;
 
@@ -106,7 +107,7 @@ int main(int argc, char** argv)
         return 1;
     }
     if (noIndex) {
-        printf("NOINDEX mode: frames=%d (no buildFrameIndex)\n", w.frameCount());
+        printf("NOINDEX mode: frames=%d (no frame index)\n", w.frameCount());
         for (int i = first; i <= last; i += (step > 0 ? step : 1)) {
             QImage frame = w.decodeFrame(i);
             printf("%8d  %s\n", i,
@@ -114,15 +115,17 @@ int main(int argc, char** argv)
         }
         return 0;
     }
-    if (!w.buildFrameIndex()) {
-        fprintf(stderr, "buildFrameIndex failed\n");
+    TTFrameIndexer ixr;
+    if (!ixr.build(file, -1, nullptr)) {
+        fprintf(stderr, "frame index build failed: %s\n", qPrintable(ixr.lastError()));
         return 1;
     }
-    w.buildGOPIndex();
+    const TTFrameIndexBundle bundle = ixr.bundle();
+    w.setFrameIndex(bundle);
 
     const QList<TTFrameInfo>& idx = w.frameIndex();
     const TTDisplayOrderMap&  map = w.displayOrderMap();
-    printf("frames=%d gops=%d\n", idx.size(), w.gopCount());
+    printf("frames=%d gops=%d\n", idx.size(), (int)bundle.gops.size());
 
     int nI = 0;
     for (const auto& fi : idx)

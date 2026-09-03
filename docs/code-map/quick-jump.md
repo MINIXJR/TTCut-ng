@@ -19,6 +19,8 @@ sources:
   - avstream/tth26xvideostream.cpp
   - extern/ttffmpegwrapper.h
   - extern/ttffmpegwrapper.cpp
+  - extern/ttframeindexer.h
+  - extern/ttframeindexer.cpp
 ---
 
 # Quick Jump dialog (Zeitsprung)
@@ -43,6 +45,7 @@ flowchart TD
     WORKER["TTQuickJumpWorker<br/>TTThreadTask, pool thread"]
     IDXLIST["TTVideoIndexList<br/>stream index, I-frame scan"]
     SET["TTSettings<br/>interval, thumbnail height"]
+    IXER["TTFrameIndexer<br/>packet scan, PAFF merge, GOP table"]
     OWNER["TTH26xVideoStream<br/>frame-index owner"]
     WRAP["TTFFmpegWrapper<br/>worker-local decoder"]
     MPEG2["TTMpeg2Decoder<br/>worker-local, MPEG-2 only"]
@@ -50,6 +53,7 @@ flowchart TD
     THUMB["thumbnailReady(frameIndex, QImage)"]
     SEL["selectedFrameIndex()"]
 
+    IXER --> OWNER
     MW --> DLG
     SET --> DLG
     DLG --> MODEL
@@ -80,10 +84,11 @@ flowchart TD
 | `TTSettings` → `TTQuickJumpDialog` | Two values, both read **once at construction**: `quickJumpIntervalSec()` and `quickJumpThumbHeight()`. Changing either in the settings takes effect the next time the dialog opens, not in an open one. The height is clamped to `kQuickJumpThumbHeightMin/Max`, so a hand-edited config cannot collapse the tiles. |
 | `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()` via the stream's aspect ratio. Only the height is stored anywhere — the width is always derived, which is what keeps tiles undistorted. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
-| `TTH26xVideoStream` → `TTQuickJumpWorker` | `ffmpegFrameIndexBundle()` — index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`) in one `TTFrameIndexBundle`. The bundle exists so the two cannot be separated; see pitfalls. |
+| `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle` and hands a copy to its wrapper. No decoder instance is involved in building it. |
+| `TTH26xVideoStream` → `TTQuickJumpWorker` | `ffmpegFrameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. |
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |
-| `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. |
+| `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. With no bundle handed in, the worker runs its own `TTFrameIndexer` over `mFilePath` and installs the result — `setFrameIndex()` is the only way an index enters a wrapper. |
 | `TTQuickJumpWorker` → `TTMpeg2Decoder` | MPEG-2 takes a completely separate decoder; no bundle, no cancel token, no wrapper involvement. |
 | `TTFFmpegWrapper::decodeFrame(n)` | `n` is a **display** position. Internally mapped to a decode-order AU via `displayOrderMap()`; the delivered frame is that AU, not the n-th decoder output. |
 | worker → `thumbnailReady(frameIndex, QImage)` | A `QImage`, never a `QPixmap` (`QPixmap` is not thread-safe). Conversion happens in the model, on the GUI thread. A **null** image is the documented "decode failed" signal, not an error condition to be logged twice. |
@@ -121,7 +126,8 @@ flowchart TD
 ## Known pitfalls
 
 - **An index without its metadata drains the file to EOF.** The three stream
-  values are produced only by `buildFrameIndex()` (SPS parse plus packet scan).
+  values are produced only by `TTFrameIndexer::build()` (SPS parse plus packet
+  scan).
   An adopter that receives the bare list keeps the constructor defaults, its
   decode-order tagging then counts PAFF field packets as frames, and a
   field-pair target AU never appears. Measured on `06x03` display 3566:

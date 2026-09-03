@@ -22,6 +22,7 @@
 #include "../common/istatusreporter.h"
 #include "../avstream/ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttframeindexer.h"
 #include "../avstream/tth264videostream.h"
 #include "../avstream/tth265videostream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
@@ -91,10 +92,14 @@ void TTFrameSearchTask::initFrameSearch()
     if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpReferenceStream)) {
       refIndexAdopted = h26x->provideFrameIndexTo(refWrapper);
     }
-    if (!refIndexAdopted && !refWrapper->buildFrameIndex()) {
-      refWrapper->closeFile();
-      delete refWrapper;
-      throw TTAbortException("TTFrameSearchTask: buildFrameIndex failed for reference stream");
+    if (!refIndexAdopted) {
+      TTFrameIndexer indexer;
+      if (!indexer.build(mpReferenceStream->filePath(), -1, nullptr)) {
+        refWrapper->closeFile();
+        delete refWrapper;
+        throw TTAbortException("TTFrameSearchTask: frame index build failed for reference stream");
+      }
+      refWrapper->setFrameIndex(indexer.bundle());
     }
     refWrapper->setSearchMode(false);
 
@@ -213,10 +218,14 @@ void TTFrameSearchTask::operation()
     if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpSearchStream)) {
       searchIndexAdopted = h26x->provideFrameIndexTo(searchWrapper);
     }
-    if (!searchIndexAdopted && !searchWrapper->buildFrameIndex()) {
-      searchWrapper->closeFile();
-      delete searchWrapper;
-      throw TTAbortException("TTFrameSearchTask: buildFrameIndex failed for search stream");
+    if (!searchIndexAdopted) {
+      TTFrameIndexer indexer;
+      if (!indexer.build(mpSearchStream->filePath(), -1, nullptr)) {
+        searchWrapper->closeFile();
+        delete searchWrapper;
+        throw TTAbortException("TTFrameSearchTask: frame index build failed for search stream");
+      }
+      searchWrapper->setFrameIndex(indexer.bundle());
     }
     searchWrapper->setSearchMode(false);
   } else {

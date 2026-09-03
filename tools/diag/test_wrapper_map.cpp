@@ -12,6 +12,7 @@
 #include <QString>
 #include "../../avstream/ttdisplayordermap.h"
 #include "../../extern/ttffmpegwrapper.h"
+#include "../../extern/ttframeindexer.h"
 
 static int failures = 0;
 
@@ -53,10 +54,12 @@ int main(int argc, char** argv)
     // Part 2: wrapper-integrated map (run with: test_wrapper_map <mbaff> wrapper)
     if (argc > 2 && QString(argv[2]) == "wrapper") {
         TTFFmpegWrapper wrapper;
-        if (!wrapper.openFile(mbaff) || !wrapper.buildFrameIndex(-1)) {
+        TTFrameIndexer ix;
+        if (!wrapper.openFile(mbaff) || !ix.build(mbaff, -1, nullptr)) {
             printf("FAIL  wrapper open/index\n");
             return 1;
         }
+        wrapper.setFrameIndex(ix.bundle());
         const TTDisplayOrderMap& wmap = wrapper.displayOrderMap();
         expectEq("wrapper map count", wmap.count(), wrapper.frameIndex().size());
         if (wmap.count() == 162530) {

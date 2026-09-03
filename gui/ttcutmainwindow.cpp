@@ -61,6 +61,7 @@
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttaudioheaderlist.h"
+#include "../extern/ttframeindexer.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -2487,10 +2488,13 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
       analysisWrapper->setAnalysisMode(true);
       if (analysisWrapper->openFile(vs->filePath())) {
         TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-        if (previewWrapper)
+        if (previewWrapper) {
           analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
-        else
-          analysisWrapper->buildFrameIndex();
+        } else {
+          TTFrameIndexer indexer;
+          if (indexer.build(vs->filePath(), -1, nullptr))
+            analysisWrapper->setFrameIndex(indexer.bundle());
+        }
       } else {
         delete analysisWrapper;
         analysisWrapper = nullptr;
@@ -2548,10 +2552,13 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
     analysisWrapper->setAnalysisMode(true);
     if (analysisWrapper->openFile(vs->filePath())) {
       TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-      if (previewWrapper)
+      if (previewWrapper) {
         analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
-      else
-        analysisWrapper->buildFrameIndex();
+      } else {
+        TTFrameIndexer indexer;
+        if (indexer.build(vs->filePath(), -1, nullptr))
+          analysisWrapper->setFrameIndex(indexer.bundle());
+      }
     } else {
       delete analysisWrapper;
       analysisWrapper = nullptr;
