@@ -24,25 +24,25 @@ class TTAVItem;
 //! Runable task for opening audio streams
 class TTOpenAudioTask : public TTThreadTask
 {
-	Q_OBJECT;
+  Q_OBJECT;
 
-	public:
-		TTOpenAudioTask(TTAVItem* avItem, QString filePath, int order);
+  public:
+    TTOpenAudioTask(TTAVItem* avItem, QString filePath, int order);
 
   protected:
     void cleanUp();
     void operation();
 
-	public slots:
-		void onUserAbort();
+  public slots:
+    void onUserAbort();
 
-	signals:
-		void finished(TTAVItem*, TTAudioStream*, int);
+  signals:
+    void finished(TTAVItem*, TTAudioStream*, int);
 
-	private:
+  private:
     TTAVItem*      mpAVItem;
     int            mOrder;
-		QString        mFilePath;
-		TTAudioStream* mpAudioStream;
+    QString        mFilePath;
+    TTAudioStream* mpAudioStream;
     TTAudioType*   mpAudioType;
 };

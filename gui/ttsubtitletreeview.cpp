@@ -14,6 +14,7 @@
 
 
 #include "ttsubtitletreeview.h"
+#include "tttreeviewutil.h"
 
 #include "../data/ttsubtitlelist.h"
 #include "../data/ttavlist.h"
@@ -46,11 +47,10 @@ TTSubtitleTreeView::TTSubtitleTreeView(QWidget* parent)
   header->resizeSection(3, 100);
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  pbSubtitleFileOpen->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
-  pbSubtitleEntryUp->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  pbSubtitleEntryDown->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  pbSubtitleEntryDelete->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
+  pbSubtitleFileOpen->setIcon(ttThemeIcon("document-open", QStyle::SP_DialogOpenButton));
+  pbSubtitleEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
+  pbSubtitleEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
+  pbSubtitleEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
 
   createActions();
 
@@ -124,21 +124,12 @@ void TTSubtitleTreeView::onAppendItem(const TTSubtitleItem& item)
   treeItem->setText(0, item.getFileName());
   treeItem->setText(1, item.getLength());
 
-  QSpinBox* delaySpin = new QSpinBox();
-  delaySpin->setRange(-9999, 9999);
-  delaySpin->setSuffix(" ms");
-  delaySpin->setToolTip(tr("Positive values show the subtitles later, negative values earlier (mkvmerge convention)"));
-  delaySpin->setValue(item.getDelayMs());
+  QSpinBox* delaySpin = ttMakeDelaySpin(item.getDelayMs(), tr("Positive values show the subtitles later, negative values earlier (mkvmerge convention)"));
   subtitleListView->setItemWidget(treeItem, 2, delaySpin);
 
   connect(delaySpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, delaySpin](int value) {
-    for (int row = 0; row < subtitleListView->topLevelItemCount(); row++) {
-      QTreeWidgetItem* rowItem = subtitleListView->topLevelItem(row);
-      if (subtitleListView->itemWidget(rowItem, 2) == delaySpin) {
-        emit delayChanged(row, value);
-        break;
-      }
-    }
+    int row = ttRowOfItemWidget(subtitleListView, 2, delaySpin);
+    if (row >= 0) emit delayChanged(row, value);
   });
 
   QComboBox* combo = createLanguageCombo(item.getLanguage());
@@ -238,26 +229,16 @@ void TTSubtitleTreeView::onReloadList(const TTAVItem* avData)
  */
 void TTSubtitleTreeView::createActions()
 {
-  QStyle* style = QApplication::style();
-
-  itemNewAction = new QAction(tr("&Insert subtitlefile"), this);
-  itemNewAction->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
-  itemNewAction->setStatusTip(tr("Open a new subtitlefile and insert to list"));
+  itemNewAction = ttMakeAction(this, tr("&Insert subtitlefile"), "document-open", QStyle::SP_DialogOpenButton, tr("Open a new subtitlefile and insert to list"));
   connect(itemNewAction, &QAction::triggered, this, &TTSubtitleTreeView::openFile);
 
-  itemUpAction = new QAction(tr("Move &up"), this);
-  itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  itemUpAction->setStatusTip(tr("Move selected subtitlefile one position upward"));
+  itemUpAction = ttMakeAction(this, tr("Move &up"), "go-up", QStyle::SP_ArrowUp, tr("Move selected subtitlefile one position upward"));
   connect(itemUpAction, &QAction::triggered, this, &TTSubtitleTreeView::onItemUp);
 
-  itemDeleteAction = new QAction(tr("&Delete"), this);
-  itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
-  itemDeleteAction->setStatusTip(tr("Remove selected subtitlefile from list"));
+  itemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected subtitlefile from list"));
   connect(itemDeleteAction, &QAction::triggered, this, &TTSubtitleTreeView::onRemoveItem);
 
-  itemDownAction = new QAction(tr("Move d&own"), this);
-  itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  itemDownAction->setStatusTip(tr("Move selected subtitlefile one position downward"));
+  itemDownAction = ttMakeAction(this, tr("Move d&own"), "go-down", QStyle::SP_ArrowDown, tr("Move selected subtitlefile one position downward"));
   connect(itemDownAction, &QAction::triggered, this, &TTSubtitleTreeView::onItemDown);
 }
 
@@ -267,13 +248,8 @@ QComboBox* TTSubtitleTreeView::createLanguageCombo(const QString& currentLang)
   TTCut::populateLanguageCombo(combo, currentLang);
 
   connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, combo](int idx) {
-    for (int row = 0; row < subtitleListView->topLevelItemCount(); row++) {
-      QTreeWidgetItem* item = subtitleListView->topLevelItem(row);
-      if (subtitleListView->itemWidget(item, 3) == combo) {
-        emit languageChanged(row, combo->itemData(idx).toString());
-        break;
-      }
-    }
+    int row = ttRowOfItemWidget(subtitleListView, 3, combo);
+    if (row >= 0) emit languageChanged(row, combo->itemData(idx).toString());
   });
 
   return combo;

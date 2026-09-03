@@ -26,11 +26,15 @@ gen() {  # $1=vcodec $2=out
 gen libx264    "$FIX/clean_h264.ts"
 gen mpeg2video "$FIX/clean_mpeg2.ts"
 
+# PID of the first stream matching the selector. ffprobe 8.x prints duplicate
+# id lines + trailing commas for mpegts — sanitize.
+probe_stream_id() {  # $1=selector $2=ts
+    ffprobe -v error -select_streams "$1" -show_entries stream=id -of csv=p=0 "$2" | head -1 | tr -d ','
+}
 pids() {  # $1=ts -> setzt VPID APID APID2 (Video, erste Audio, zweite Audio)
-    # ffprobe 8.x prints duplicate id lines + trailing commas for mpegts — sanitize
-    VPID=$(ffprobe -v error -select_streams v:0 -show_entries stream=id -of csv=p=0 "$1" | head -1 | tr -d ',')
-    APID=$(ffprobe -v error -select_streams a:0 -show_entries stream=id -of csv=p=0 "$1" | head -1 | tr -d ',')
-    APID2=$(ffprobe -v error -select_streams a:1 -show_entries stream=id -of csv=p=0 "$1" | head -1 | tr -d ',')
+    VPID=$(probe_stream_id v:0 "$1")
+    APID=$(probe_stream_id a:0 "$1")
+    APID2=$(probe_stream_id a:1 "$1")
 }
 for base in clean_h264 clean_mpeg2; do
     pids "$FIX/$base.ts"

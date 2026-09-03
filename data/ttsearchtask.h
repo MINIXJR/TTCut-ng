@@ -22,6 +22,9 @@
 #include <QString>
 #include <QThreadPool>
 #include <QVector>
+#include <QElapsedTimer>
+#include <QDebug>
+#include "../common/ttsettings.h"
 
 class TTVideoIndexList;
 class TTVideoHeaderList;
@@ -98,6 +101,42 @@ protected:
       mDecodePool->start(runnable);
     }
     done.acquire(count);
+  }
+
+  // Directed-search loop shared by the black-frame, logo and scene-change
+  // searches. Walks I-frames from `pos` in mDirection in worker-sized
+  // batches; `step(batch)` evaluates one batch and returns the first hit
+  // position (or -1: no hit, or aborted). Reports progress about every 20
+  // frames, logs the throughput under logTag with the caller's timer,
+  // emits found() and tears the workers down. The caller has already run
+  // setupWorkers() and established its initial state.
+  template<class Step>
+  void runDirectedSearch(int pos, const char* logTag, const QElapsedTimer& t, Step&& step)
+  {
+    int checked = 0;
+    int foundPos = -1;
+
+    while (pos >= 0 && pos < mFrameCount && !mIsAborted) {
+      QVector<int> batch = collectNextBatch(pos);
+      if (batch.isEmpty()) break;
+
+      foundPos = step(batch);
+      if (mIsAborted) break;
+      if (foundPos >= 0) break;
+
+      checked += batch.size();
+      if (checked % 20 < batch.size()) emit progress(checked);
+    }
+
+    qint64 ms = t.elapsed();
+    if (TTSettings::instance()->logCutPipeline())
+        qDebug() << logTag << checked << "I-frames in" << ms << "ms"
+                 << (checked > 0
+                       ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
+                       : QString());
+
+    emit found(foundPos, mIsAborted);
+    teardownWorkers();
   }
 
   // TTThreadTask interface. Subclasses MUST override operation().

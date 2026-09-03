@@ -51,9 +51,9 @@ From `smart-cut.md`:
   write-only `ReencodeContext::realStartAU` field.~~ Removed (`3191d98`, `1c0bd2b`).
 
 From `detection-and-search.md`:
-- The three directed searches (`_blackframe`, `_logo`, `_scenechange`) share an
-  identical `operation()` body — only the per-frame verdict differs. Candidate
-  for a `matchesAt(pos, workerIndex)` template method on `TTSearchTask`.
+- ~~The three directed searches (`_blackframe`, `_logo`, `_scenechange`) share an
+  identical `operation()` body.~~ Consolidated (code audit 2026-09-03) onto
+  `TTSearchTask::runDirectedSearch`; equivalence gate `tools/diag/test_directed_search`.
 - The same 10%-border mask + `step = 2` sampling rule exists three times:
   `TTSearchTask::isFrameBlackAt`, `TTSearchTask::buildHistogramAt` (both MPEG-2
   fallbacks of what `TTFFmpegWrapper` does for H.26x) and `centreMeanLuma` in

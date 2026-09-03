@@ -53,7 +53,7 @@ PACKAGE_VERSION="${BUILD_VERSION}~${DISTRO}"
 
 # Prompt for changelog description (|| catches EOF on non-interactive stdin,
 # which would otherwise abort the script via set -e)
-read -p "Enter changelog description (or press Enter for 'Git snapshot'): " CHANGELOG_MSG || CHANGELOG_MSG=""
+read -r -p "Enter changelog description (or press Enter for 'Git snapshot'): " CHANGELOG_MSG || CHANGELOG_MSG=""
 
 # Default message if empty
 if [ -z "$CHANGELOG_MSG" ]; then
@@ -109,7 +109,7 @@ echo "==> Package version: $PACKAGE_VERSION"
 echo "==> Building package..."
 
 # Build package
-dpkg-buildpackage -b -uc -us -j$(nproc)
+dpkg-buildpackage -b -uc -us -j"$(nproc)"
 
 # Check for created package
 DEB_FILE="${BUILD_BASE_DIR}/${PACKAGE_NAME}_${PACKAGE_VERSION}_$(dpkg --print-architecture).deb"

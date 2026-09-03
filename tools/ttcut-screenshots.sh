@@ -84,42 +84,33 @@ if [[ ! -f "$VIDEO_FILE" || "$SVG_FILE" -nt "$VIDEO_FILE" ]]; then
     TMP_AC3_DIR="$TESTDATA_DIR/ac3_parts"
     mkdir -p "$TMP_AC3_DIR"
 
-    # Segment 1: 0-25s stereo tone
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=440:duration=25:sample_rate=48000" \
-        -c:a ac3 -b:a 192k -ac 2 "$TMP_AC3_DIR/seg1.ac3"
+    # gen_ac3_segment <out> <seconds> <stereo|5.1> <tone|silence> [frequency]
+    gen_ac3_segment() {
+        local out=$1 secs=$2 layout=$3 kind=$4 freq=${5:-440}
+        local -a src enc
+        if [ "$kind" = tone ]; then
+            src=(-f lavfi -i "sine=frequency=$freq:duration=$secs:sample_rate=48000")
+        else
+            src=(-f lavfi -i "anullsrc=r=48000:cl=$layout" -t "$secs")
+        fi
+        if [ "$layout" = 5.1 ]; then
+            enc=(-c:a ac3 -b:a 384k)
+            [ "$kind" = tone ] && enc=(-af "pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0" "${enc[@]}")
+        else
+            enc=(-c:a ac3 -b:a 192k)
+            [ "$kind" = tone ] && enc+=(-ac 2)
+        fi
+        ffmpeg -y -hide_banner -loglevel warning "${src[@]}" "${enc[@]}" "$out"
+    }
 
-    # Segment 2: 25-30s stereo silence
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 5 \
-        -c:a ac3 -b:a 192k "$TMP_AC3_DIR/seg2.ac3"
-
-    # Segment 3: 30-55s 5.1 tone
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=330:duration=25:sample_rate=48000" \
-        -af "pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0" \
-        -c:a ac3 -b:a 384k "$TMP_AC3_DIR/seg3.ac3"
-
-    # Segment 4: 55-60s 5.1 silence
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "anullsrc=r=48000:cl=5.1" -t 5 \
-        -c:a ac3 -b:a 384k "$TMP_AC3_DIR/seg4.ac3"
-
-    # Segment 5: 60-90s stereo tone
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=440:duration=30:sample_rate=48000" \
-        -c:a ac3 -b:a 192k -ac 2 "$TMP_AC3_DIR/seg5.ac3"
-
-    # Segment 6: 90-95s stereo silence
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 5 \
-        -c:a ac3 -b:a 192k "$TMP_AC3_DIR/seg6.ac3"
-
-    # Segment 7: 95-120s 5.1 tone
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=330:duration=25:sample_rate=48000" \
-        -af "pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0" \
-        -c:a ac3 -b:a 384k "$TMP_AC3_DIR/seg7.ac3"
+    # Timeline: tone / silence alternating, stereo and 5.1 (acmod changes)
+    gen_ac3_segment "$TMP_AC3_DIR/seg1.ac3" 25 stereo tone 440     # 0-25s
+    gen_ac3_segment "$TMP_AC3_DIR/seg2.ac3"  5 stereo silence      # 25-30s
+    gen_ac3_segment "$TMP_AC3_DIR/seg3.ac3" 25 5.1    tone 330     # 30-55s
+    gen_ac3_segment "$TMP_AC3_DIR/seg4.ac3"  5 5.1    silence      # 55-60s
+    gen_ac3_segment "$TMP_AC3_DIR/seg5.ac3" 30 stereo tone 440     # 60-90s
+    gen_ac3_segment "$TMP_AC3_DIR/seg6.ac3"  5 stereo silence      # 90-95s
+    gen_ac3_segment "$TMP_AC3_DIR/seg7.ac3" 25 5.1    tone 330     # 95-120s
 
     # Concatenate all segments (AC3 frames are self-contained)
     cat "$TMP_AC3_DIR"/seg{1,2,3,4,5,6,7}.ac3 > "$AUDIO_FILE"

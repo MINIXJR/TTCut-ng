@@ -14,6 +14,7 @@
 
 
 #include "ttvideotreeview.h"
+#include "tttreeviewutil.h"
 
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -48,11 +49,10 @@ TTVideoTreeView::TTVideoTreeView(QWidget* parent)
   allowSelectionChanged = true;
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  pbVideoFileOpen->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
-  pbEntryUp->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  pbEntryDown->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  pbEntryDelete->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
+  pbVideoFileOpen->setIcon(ttThemeIcon("document-open", QStyle::SP_DialogOpenButton));
+  pbEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
+  pbEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
+  pbEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
 
   createActions();
 
@@ -275,26 +275,16 @@ void TTVideoTreeView::onReloadList()
  */
 void TTVideoTreeView::createActions()
 {
-  QStyle* style = QApplication::style();
-
-  itemNewAction = new QAction(tr("&Insert videofile"), this);
-  itemNewAction->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
-  itemNewAction->setStatusTip(tr("Open a new videofile and insert to list"));
+  itemNewAction = ttMakeAction(this, tr("&Insert videofile"), "document-open", QStyle::SP_DialogOpenButton, tr("Open a new videofile and insert to list"));
   connect(itemNewAction, &QAction::triggered, this, &TTVideoTreeView::openFile);
 
-  itemUpAction = new QAction(tr("Move &up"), this);
-  itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  itemUpAction->setStatusTip(tr("Move selected file one position upward"));
+  itemUpAction = ttMakeAction(this, tr("Move &up"), "go-up", QStyle::SP_ArrowUp, tr("Move selected file one position upward"));
   connect(itemUpAction, &QAction::triggered, this, &TTVideoTreeView::onItemUp);
 
-  itemDeleteAction = new QAction(tr("&Delete"), this);
-  itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
-  itemDeleteAction->setStatusTip(tr("Remove selected file from list"));
+  itemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected file from list"));
   connect(itemDeleteAction, &QAction::triggered, this, &TTVideoTreeView::onRemoveItem);
 
-  itemDownAction = new QAction(tr("Move d&own"), this);
-  itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  itemDownAction->setStatusTip(tr("Move selected file one position downward"));
+  itemDownAction = ttMakeAction(this, tr("Move d&own"), "go-down", QStyle::SP_ArrowDown, tr("Move selected file one position downward"));
   connect(itemDownAction, &QAction::triggered, this, &TTVideoTreeView::onItemDown);
 }
 

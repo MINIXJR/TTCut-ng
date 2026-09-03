@@ -27,6 +27,7 @@ typedef struct {
     uint32_t frame_size;      /* bytes */
     uint32_t samples;         /* samples this frame represents (0 = dependent substream, no time) */
     uint32_t samplerate;
+    uint32_t bitrate_kbps;    /* MP2: from the header; the CRC span depends on it */
     uint8_t  layer, version, bsid, acmod;
     bool     crc_present;
 } frame_info_t;
@@ -103,6 +104,7 @@ static ssize_t mp2_parse_frame(const uint8_t *p, size_t len, frame_info_t *out)
     out->frame_size  = 144 * bitrate / sr + padding;
     out->samples     = 1152;
     out->samplerate  = sr;
+    out->bitrate_kbps = mp2_bitrate_kbps[br_idx];
     out->layer       = 2;
     out->version     = 1;
     out->bsid        = 0;
@@ -132,10 +134,8 @@ static bool mp2_check_crc(const uint8_t *p, size_t fs, const frame_info_t *fi)
 
     int mode     = (p[3] >> 6) & 0x03;   /* 0 stereo, 1 joint stereo, 2 dual, 3 mono */
     int mode_ext = (p[3] >> 4) & 0x03;
-    int br_idx   = (p[2] >> 4) & 0x0F;
-    int sr_idx   = (p[2] >> 2) & 0x03;
-    int bitrate  = mp2_bitrate_kbps[br_idx];
-    int sr       = mp2_samplerate[sr_idx];
+    int bitrate  = (int)fi->bitrate_kbps;  /* parsed by mp2_parse_frame */
+    int sr       = (int)fi->samplerate;
     if (bitrate <= 0 || sr <= 0) return false;   /* mp2_parse_frame already excludes this */
 
     int nch       = (mode == 3) ? 1 : 2;
@@ -383,19 +383,28 @@ static const codec_ops_t *detect_codec(const uint8_t *p, size_t len, size_t *sta
     return NULL;
 }
 
+/* Haengt ein Element an eine gedeckelte Report-Liste an und liefert den
+ * Zeiger darauf; NULL ueber MAX_REPORT_ITEMS hinaus oder wenn die Allokation
+ * fehlschlaegt (die laufende Summe des Aufrufers steht dann trotzdem). */
+static void *report_append(void **list, size_t *n, size_t elem_size)
+{
+    if (*n >= MAX_REPORT_ITEMS) return NULL;
+    void *tmp = realloc(*list, (*n + 1) * elem_size);
+    if (!tmp) return NULL;
+    *list = tmp;
+    return (char *)tmp + (*n)++ * elem_size;
+}
+
 /* Haengt einen Muellbereich an. Ueber MAX_REPORT_ITEMS hinaus wird nur noch
  * die Summe (junk_bytes) fortgeschrieben, die Liste bleibt gedeckelt. */
 static void record_junk(walk_stats_t *st, uint64_t frame_idx, uint64_t ms, uint32_t bytes)
 {
     st->junk_bytes += bytes;
-    if (st->njunk >= MAX_REPORT_ITEMS) return;
-    void *tmp = realloc(st->junk, (st->njunk + 1) * sizeof(*st->junk));
-    if (!tmp) return; /* Allokation fehlgeschlagen: Summe steht, Eintrag entfaellt */
-    st->junk = tmp;
-    st->junk[st->njunk].frame_idx = frame_idx;
-    st->junk[st->njunk].ms        = ms;
-    st->junk[st->njunk].bytes     = bytes;
-    st->njunk++;
+    void *slot = report_append((void **)&st->junk, &st->njunk, sizeof(*st->junk));
+    if (!slot) return;
+    st->junk[st->njunk - 1].frame_idx = frame_idx;
+    st->junk[st->njunk - 1].ms        = ms;
+    st->junk[st->njunk - 1].bytes     = bytes;
 }
 
 /* Haengt einen CRC-defekten Rahmen an. Gleicher Deckel-Mechanismus wie
@@ -403,13 +412,10 @@ static void record_junk(walk_stats_t *st, uint64_t frame_idx, uint64_t ms, uint3
 static void record_crc_bad(walk_stats_t *st, uint64_t frame_idx, uint64_t ms)
 {
     st->crc_bad++;
-    if (st->ncrc >= MAX_REPORT_ITEMS) return;
-    void *tmp = realloc(st->crcbad, (st->ncrc + 1) * sizeof(*st->crcbad));
-    if (!tmp) return;
-    st->crcbad = tmp;
-    st->crcbad[st->ncrc].frame_idx = frame_idx;
-    st->crcbad[st->ncrc].ms        = ms;
-    st->ncrc++;
+    void *slot = report_append((void **)&st->crcbad, &st->ncrc, sizeof(*st->crcbad));
+    if (!slot) return;
+    st->crcbad[st->ncrc - 1].frame_idx = frame_idx;
+    st->crcbad[st->ncrc - 1].ms        = ms;
 }
 
 /* Aktuelle Zeitposition in ms, aus den bereits gezaehlten Samples und der

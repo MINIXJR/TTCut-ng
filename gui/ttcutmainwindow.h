@@ -50,80 +50,80 @@ class TTThreadTaskPool;
 //class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindow
 class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 {
-	Q_OBJECT
+  Q_OBJECT
 
-		public:
-		TTCutMainWindow();
-		~TTCutMainWindow();
+    public:
+    TTCutMainWindow();
+    ~TTCutMainWindow();
 
-		void keyPressEvent(QKeyEvent* e);
+    void keyPressEvent(QKeyEvent* e);
 
-	public slots:
+  public slots:
     void onOpenVideoFile();
     void onOpenAudioFile();
     void onOpenSubtitleFile();
-		void onFileNew();
-		void onFileOpen();
-		void onFileSave();
-		void onFileSaveAs();
-		void onFileRecent();
-		void onFileExit();
-		void closeEvent(QCloseEvent* event);
-		void onActionSave();
-		void onActionSettings();
-		void onStreamPointSettingsRequested();
+    void onFileNew();
+    void onFileOpen();
+    void onFileSave();
+    void onFileSaveAs();
+    void onFileRecent();
+    void onFileExit();
+    void closeEvent(QCloseEvent* event);
+    void onActionSave();
+    void onActionSettings();
+    void onStreamPointSettingsRequested();
 
-		void onHelpAbout();
-		void onHelpKeyboardShortcuts();
+    void onHelpAbout();
+    void onHelpKeyboardShortcuts();
 
-		void onReadVideoStream(QString fName);
-		void onReadAudioStream(QString fName);
-		void onReadSubtitleStream(QString fName);
+    void onReadVideoStream(QString fName);
+    void onReadAudioStream(QString fName);
+    void onReadSubtitleStream(QString fName);
 
-		void onVideoSliderChanged(int value);
+    void onVideoSliderChanged(int value);
 
-		void onNewFramePos(int);
+    void onNewFramePos(int);
 
-		void onAppendCutEntry(int cutIn, int cutOut);
+    void onAppendCutEntry(int cutIn, int cutOut);
 
-		void onCutPreview(TTCutList* cutList, bool skipFirst = false, bool skipLast = false);
-		void onCutPreviewFinished(TTCutList* cutList);
+    void onCutPreview(TTCutList* cutList, bool skipFirst = false, bool skipLast = false);
+    void onCutPreviewFinished(TTCutList* cutList);
 
-		void onAudioVideoCut(bool cutAudioOnly, TTCutList* cutList);
-		void onCutFinished();
+    void onAudioVideoCut(bool cutAudioOnly, TTCutList* cutList);
+    void onCutFinished();
 
-		void onCutSelectionChanged(const TTCutItem&, int column);
-		void onSetCutOut(int index);
-		void onSetStreamPointMarker();
-		void onAnalyzeStreamPoints();
-		//! Automatic AC3 anomaly scan after the streams finished loading
-		//! (design: "Auslösung: automatisch nach dem Laden, abschaltbar").
-		//! Deferred by a zero-timer out of onAVDataReloaded() AND out of
-		//! onAVItemChanged() - both feed into this one gate, see the
-		//! implementation comment for why two entry points are needed and
-		//! for the ordering and the once-per-item and no-duplicate-markers
-		//! guards.
-		void maybeStartAutoAnomalyScan();
-		void onAbortStreamPoints();
-		void onStreamPointJump(int frameIndex);
-		void onStreamPointDelete(int row);
-		void onStreamPointDeleteAll();
-		void onStreamPointSetCutIn(int frameIndex);
-		void onStreamPointSetCutOut(int frameIndex);
-		void onVideoPointsDetected(const QList<TTStreamPoint>& points);
-		//! Stream points restored from a project file - adds them like
-		//! onVideoPointsDetected, but marks AudioAnomaly markers whose
-		//! repair the load validation disabled.
-		void onStreamPointsLoaded(const QList<TTStreamPoint>& points);
-		void onAudioPointsDetected(const QList<TTStreamPoint>& points);
-		void onAnalysisWorkerFinished();
-		void onQuickJump();
-		void onSearchBlackFrame(int startPos, int direction, float threshold);
-	void onAbortBlackSearch();
-	void onBlackSearchFinished(int foundPos, bool wasAborted);
-	void onSearchSceneChange(int startPos, int direction, float threshold);
-	void onAbortSceneSearch();
-	void onSceneSearchFinished(int foundPos, bool wasAborted);
+    void onCutSelectionChanged(const TTCutItem&, int column);
+    void onSetCutOut(int index);
+    void onSetStreamPointMarker();
+    void onAnalyzeStreamPoints();
+    //! Automatic AC3 anomaly scan after the streams finished loading
+    //! (design: "Auslösung: automatisch nach dem Laden, abschaltbar").
+    //! Deferred by a zero-timer out of onAVDataReloaded() AND out of
+    //! onAVItemChanged() - both feed into this one gate, see the
+    //! implementation comment for why two entry points are needed and
+    //! for the ordering and the once-per-item and no-duplicate-markers
+    //! guards.
+    void maybeStartAutoAnomalyScan();
+    void onAbortStreamPoints();
+    void onStreamPointJump(int frameIndex);
+    void onStreamPointDelete(int row);
+    void onStreamPointDeleteAll();
+    void onStreamPointSetCutIn(int frameIndex);
+    void onStreamPointSetCutOut(int frameIndex);
+    void onVideoPointsDetected(const QList<TTStreamPoint>& points);
+    //! Stream points restored from a project file - adds them like
+    //! onVideoPointsDetected, but marks AudioAnomaly markers whose
+    //! repair the load validation disabled.
+    void onStreamPointsLoaded(const QList<TTStreamPoint>& points);
+    void onAudioPointsDetected(const QList<TTStreamPoint>& points);
+    void onAnalysisWorkerFinished();
+    void onQuickJump();
+    void onSearchBlackFrame(int startPos, int direction, float threshold);
+  void onAbortBlackSearch();
+  void onBlackSearchFinished(int foundPos, bool wasAborted);
+  void onSearchSceneChange(int startPos, int direction, float threshold);
+  void onAbortSceneSearch();
+  void onSceneSearchFinished(int foundPos, bool wasAborted);
     void onSelectLogoROI();
     void onCancelLogoROI();
     void onLoadLogoFile();
@@ -133,7 +133,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onAbortLogoSearch();
     void onLogoSearchFinished(int foundPos, bool wasAborted);
 
-		void onAVItemChanged(TTAVItem* avItem);
+    void onAVItemChanged(TTAVItem* avItem);
     void onAVDataReloaded();
     void onSubtitleItemAppended(const TTSubtitleItem& item);
     void onSubtitleItemUpdated(const TTSubtitleItem& cItem, const TTSubtitleItem& uItem);
@@ -144,56 +144,56 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void runScreenshotMode();
     void runAutoCutMode(QString projectFile, QString outputPath);
 
-		void onStatusReport(TTThreadTask* task, int state, const QString& msg,	quint64 value);
+    void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
-	public:
-		// Called from main() to load a project given on the command line.
-		void openProjectFile(QString fName);
+  public:
+    // Called from main() to load a project given on the command line.
+    void openProjectFile(QString fName);
 
-	private slots:
-		void onSliderDecodeTimer();
+  private slots:
+    void onSliderDecodeTimer();
 
-	private:
-		// Slider debounce: valueChanged only records the newest position and
-		// (re)starts this timer; the decode happens when it fires. See
-		// onVideoSliderChanged() for why.
-		QTimer* mpSliderDebounce  = nullptr;
-		int     mPendingSliderPos = -1;
+  private:
+    // Slider debounce: valueChanged only records the newest position and
+    // (re)starts this timer; the decode happens when it fires. See
+    // onVideoSliderChanged() for why.
+    QTimer* mpSliderDebounce  = nullptr;
+    int     mPendingSliderPos = -1;
 
-		// Opens the settings dialog; category >= 0 selects a sidebar entry.
-		void openSettingsDialog(int category);
-		void closeProject();
-		void navigationEnabled(bool enabled);
-		void updateRecentFileActions();
-		// Constructor stages, one per comment section of the original constructor
-		void setupImagesAndIcons();
-		void restoreWindowGeometry();
-		void connectMenuSignals();
-		void connectNavigationSignals();
-		void connectStreamPointSignals();
-		void connectVideoSliderSignals();
-		void connectFrameAndCutListSignals();
-		void connectAVDataSignals();
-		static void insertRecentFile(const QString& fName);
-		void setProjectModified(bool modified);
-		void updateWindowTitle();
-		static void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
-		QString formatRemaining(const TTProgressEstimator::Result& r) const;
-		static QString formatDurationMs(qint64 ms);  // h:mm:ss or m:ss
-		QString progressStageName(int stage) const;
-		//! Start the AC3 anomaly scan for the current AV item on the
-		//! stream-point pool. Returns false when there is no AC3 track to
-		//! scan (nothing started). Shared by the explicit analysis and the
-		//! automatic post-load start.
-		bool    startAudioAnomalyScan();
+    // Opens the settings dialog; category >= 0 selects a sidebar entry.
+    void openSettingsDialog(int category);
+    void closeProject();
+    void navigationEnabled(bool enabled);
+    void updateRecentFileActions();
+    // Constructor stages, one per comment section of the original constructor
+    void setupImagesAndIcons();
+    void restoreWindowGeometry();
+    void connectMenuSignals();
+    void connectNavigationSignals();
+    void connectStreamPointSignals();
+    void connectVideoSliderSignals();
+    void connectFrameAndCutListSignals();
+    void connectAVDataSignals();
+    static void insertRecentFile(const QString& fName);
+    void setProjectModified(bool modified);
+    void updateWindowTitle();
+    static void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
+    QString formatRemaining(const TTProgressEstimator::Result& r) const;
+    static QString formatDurationMs(qint64 ms);  // h:mm:ss or m:ss
+    QString progressStageName(int stage) const;
+    //! Start the AC3 anomaly scan for the current AV item on the
+    //! stream-point pool. Returns false when there is no AC3 track to
+    //! scan (nothing started). Shared by the explicit analysis and the
+    //! automatic post-load start.
+    bool    startAudioAnomalyScan();
 
-	private:
-		TTAVData*        mpAVData;
-		TTAVItem*        mpCurrentAVDataItem;
-		TTProgressBar*   progressBar;
-		TTCutList*       mpPreviewOriginalCutList;
-	bool             mPreviewSkipFirst;
-	bool             mPreviewSkipLast;
+  private:
+    TTAVData*        mpAVData;
+    TTAVItem*        mpCurrentAVDataItem;
+    TTProgressBar*   progressBar;
+    TTCutList*       mpPreviewOriginalCutList;
+  bool             mPreviewSkipFirst;
+  bool             mPreviewSkipLast;
 
     TTMessageLogger* log;
 
@@ -234,12 +234,12 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! Empty when no project is open (plain video file, or after close).
     QString              mProjectDisplayName;
 
-		// recent files menu
-		enum
-		{
-			MaxRecentFiles = 5
-		};
-		QAction* recentFileAction[MaxRecentFiles];
+    // recent files menu
+    enum
+    {
+      MaxRecentFiles = 5
+    };
+    QAction* recentFileAction[MaxRecentFiles];
 };
 
 #endif //TTCUTMAINWINDOW_H

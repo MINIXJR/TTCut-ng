@@ -64,13 +64,7 @@ void TTLogoSearchTask::operation()
           ? mIndexList->moveToNextIndexPos(firstPos, 1)
           : mIndexList->moveToPrevIndexPos(firstPos, 1);
 
-  int checked = 0;
-  int foundPos = -1;
-
-  while (pos >= 0 && pos < mFrameCount && !mIsAborted) {
-    QVector<int> batch = collectNextBatch(pos);
-    if (batch.isEmpty()) break;
-
+  runDirectedSearch(pos, "LogoSearch:", t, [&](const QVector<int>& batch) -> int {
     QVector<bool> matches(batch.size(), false);
 
     parallelMap(batch.size(), [&](int i) {
@@ -83,24 +77,11 @@ void TTLogoSearchTask::operation()
       matches[i] = (present != mInitialLogoPresent);
     });
 
-    if (mIsAborted) break;
+    if (mIsAborted) return -1;
 
     for (int i = 0; i < batch.size(); ++i) {
-      if (matches[i]) { foundPos = batch[i]; break; }
+      if (matches[i]) return batch[i];
     }
-    if (foundPos >= 0) break;
-
-    checked += batch.size();
-    if (checked % 20 < batch.size()) emit progress(checked);
-  }
-
-  qint64 ms = t.elapsed();
-  if (TTSettings::instance()->logCutPipeline())
-      qDebug() << "LogoSearch:" << checked << "I-frames in" << ms << "ms"
-               << (checked > 0
-                     ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
-                     : QString());
-
-  emit found(foundPos, mIsAborted);
-  teardownWorkers();
+    return -1;
+  });
 }

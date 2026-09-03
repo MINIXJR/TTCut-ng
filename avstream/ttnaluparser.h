@@ -328,6 +328,9 @@ private:
     bool parseNalUnit(int64_t offset, int startCodeLen, TTNalUnit& nal);
     bool parseSliceHeader(const QByteArray& data, TTNalUnit& nal);
     void buildAccessUnits();
+    void mergeFieldPairsPAFF();
+    const TTNalUnit* firstSliceNal(const TTAccessUnit& au) const;
+    const TTNalUnit* firstFieldSliceNal(const TTAccessUnit& au) const;
     void buildGOPs();
 
     // H.264 specific parsing

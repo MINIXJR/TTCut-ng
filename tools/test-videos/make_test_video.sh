@@ -73,44 +73,48 @@ render_tux() {
     fi
 }
 
-# ---------- Audio generators ----------
-# Optional second arg: duration in seconds (default 120).
-gen_audio_ac3() {
-    local out=$1
-    local duration=${2:-120}
+# ---------- Audio generator ----------
+# gen_audio <ac3|mp2> <out> [duration]  — 1 kHz stereo tone, 120 s by default.
+gen_audio() {
+    local codec=$1 out=$2
+    local duration=${3:-120}
     ffmpeg -y -hide_banner -loglevel warning \
         -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=${duration}" \
-        -ac 2 -c:a ac3 -b:a 192k \
-        "$out"
-}
-
-gen_audio_mp2() {
-    local out=$1
-    local duration=${2:-120}
-    ffmpeg -y -hide_banner -loglevel warning \
-        -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=${duration}" \
-        -ac 2 -c:a mp2 -b:a 192k \
+        -ac 2 -c:a "$codec" -b:a 192k \
         "$out"
 }
 
 # ---------- Project file writer ----------
+# write_ttcut_project <basename> <video_ext> <audio_ext|""> [video_path]
+# An empty audio_ext writes a video-only project; video_path overrides the
+# default ${OUTDIR}/${basename}.${video_ext} (multi-file recordings point at
+# their first .ts segment).
 write_ttcut_project() {
     local basename=$1 video_ext=$2 audio_ext=$3
-    cat > "${basename}.ttcut" <<EOF
+    local video_path=${4:-${OUTDIR}/${basename}.${video_ext}}
+    {
+        cat <<EOF
 <!DOCTYPE TTCut-Projectfile>
 <TTCut-Projectfile>
  <Version>1.0</Version>
  <Video>
   <Order>0</Order>
-  <Name>${OUTDIR}/${basename}.${video_ext}</Name>
+  <Name>${video_path}</Name>
+EOF
+        if [[ -n "$audio_ext" ]]; then
+            cat <<EOF
   <Audio>
    <Order>0</Order>
    <Name>${OUTDIR}/${basename}.${audio_ext}</Name>
    <Language>deu</Language>
   </Audio>
+EOF
+        fi
+        cat <<EOF
  </Video>
 </TTCut-Projectfile>
 EOF
+    } > "${basename}.ttcut"
 }
 
 # ---------- Tux timeline filter graph ----------
@@ -176,76 +180,105 @@ DUPLICATE_FILTERGRAPH="
 [seg_a1][1:v][seg_a2][3:v]concat=n=4:v=1:a=0[outv]
 "
 
-# ---------- HEVC 4K CRA-only Open-GOP ----------
-generate_hevc4k_cra() {
-    local BASE="tux_hevc4k_cra_test"
-    if output_already_present "${BASE}.265"; then
-        echo "==> HEVC 4K already present: ${BASE}.265 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "265" "ac3"
+# ---------- Shared encode step ----------
+# encode_variant <base> <video_ext> <ac3|mp2> <tux|duplicate> <W> <H> <R> <label> <codec args...>
+# Cache check, Tux render, audio, the ffmpeg encode with the shared timeline
+# header, project file and "Done" line — everything the codec variants have
+# in common; the codec-specific encoder arguments follow the label.
+# Sets ENCODE_SKIPPED=1 when the output was already present (so a caller can
+# skip its post-encode checks), 0 after an encode. Called plainly, never in a
+# || list: errexit must still abort the script when ffmpeg fails.
+ENCODE_SKIPPED=0
+encode_variant() {
+    local BASE=$1 vext=$2 acodec=$3 timeline=$4 W=$5 H=$6 R=$7 label=$8
+    shift 8
+    ENCODE_SKIPPED=0
+    if output_already_present "${BASE}.${vext}"; then
+        echo "==> ${label} already present: ${BASE}.${vext} (use --force to regenerate)"
+        write_ttcut_project "$BASE" "$vext" "$acodec"
+        ENCODE_SKIPPED=1
         return 0
     fi
-    echo "==> Generating HEVC 4K (Main 10, CRA-only Open-GOP)..."
+    echo "==> Generating ${label}..."
     render_tux
-    gen_audio_ac3 "${BASE}.ac3"
+    local duration=120 args_fn=build_tux_timeline_args graph=$TUX_FILTERGRAPH
+    if [[ $timeline == duplicate ]]; then
+        duration=30; args_fn=build_duplicate_timeline_args; graph=$DUPLICATE_FILTERGRAPH
+    fi
+    gen_audio "$acodec" "${BASE}.${acodec}" "$duration"
+    # shellcheck disable=SC2046  # the timeline builder emits separate ffmpeg arguments
     ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_tux_timeline_args 3840 2160 50) \
-        -filter_complex "$TUX_FILTERGRAPH" \
+        $("$args_fn" "$W" "$H" "$R") \
+        -filter_complex "$graph" \
         -map "[outv]" \
-        -c:v libx265 -preset fast -pix_fmt yuv420p10le -profile:v main10 \
-        -x265-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=1:open-gop=1:scenecut=0:repeat-headers=1:log-level=error" \
-        -an "${BASE}.265"
-    write_ttcut_project "$BASE" "265" "ac3"
-    echo "    Done: ${BASE}.265 / ${BASE}.ac3 / ${BASE}.ttcut"
+        "$@" \
+        -an "${BASE}.${vext}"
+    write_ttcut_project "$BASE" "$vext" "$acodec"
+    echo "    Done: ${BASE}.${vext} / ${BASE}.${acodec} / ${BASE}.ttcut"
 }
 
-# ---------- TODO functions for other codecs (filled in subsequent tasks) ----------
-generate_h264_1080p_progressive() {
-    local BASE="tux_h264_1080p_progressive_test"
-    if output_already_present "${BASE}.264"; then
-        echo "==> H.264 1080p progressive already present: ${BASE}.264 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "264" "ac3"
+# verify_stream_flag <file> <grep -E pattern> <present|absent> <warning>
+# Warns when the trace_headers dump of the first second matches (present)
+# or fails to match (absent) the pattern.
+verify_stream_flag() {
+    local file=$1 pattern=$2 expect=$3 warning=$4 hit=0
+    if ffmpeg -v debug -i "$file" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1 \
+        | grep -qE "$pattern"; then hit=1; fi
+    if [[ ($expect == present && $hit -eq 1) || ($expect == absent && $hit -eq 0) ]]; then
+        echo "    WARNING: $warning" >&2
+    fi
+}
+
+# generate_mpeg2_fieldpic <base> <source_base> <source_generator> <label>
+# Field-picture variant: inject field pictures every 50 frames into an
+# existing frame-coded PAL stream, reusing its audio.
+generate_mpeg2_fieldpic() {
+    local BASE=$1 SRC_BASE=$2 src_fn=$3 label=$4
+    if output_already_present "${BASE}.m2v"; then
+        echo "==> ${label} already present: ${BASE}.m2v (use --force to regenerate)"
+        write_ttcut_project "$BASE" "m2v" "mp2"
         return 0
     fi
-    echo "==> Generating H.264 1080p progressive 50fps (High Profile)..."
-    render_tux
-    gen_audio_ac3 "${BASE}.ac3"
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_tux_timeline_args 1920 1080 50) \
-        -filter_complex "$TUX_FILTERGRAPH" \
-        -map "[outv]" \
-        -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1" \
-        -an "${BASE}.264"
-    write_ttcut_project "$BASE" "264" "ac3"
-    if ffmpeg -v debug -i "${BASE}.264" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1 \
-        | grep -qE 'frame_mbs_only_flag.*0|MbInterlace|field_pic_flag.*1'; then
-        echo "    WARNING: H.264 1080p output appears interlaced (expected progressive)" >&2
+    echo "==> Generating ${label} (inject every 50 frames)..."
+    if [[ ! -s "${SRC_BASE}.m2v" ]]; then
+        "$src_fn"
     fi
-    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+    python3 "$SCRIPTDIR/inject_fieldpictures.py" "${SRC_BASE}.m2v" "${BASE}.m2v" --every 50
+    if [[ ! -s "${BASE}.mp2" ]]; then
+        cp "${SRC_BASE}.mp2" "${BASE}.mp2"
+    fi
+    write_ttcut_project "$BASE" "m2v" "mp2"
+    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+}
+
+# ---------- HEVC 4K CRA-only Open-GOP ----------
+generate_hevc4k_cra() {
+    encode_variant tux_hevc4k_cra_test 265 ac3 tux 3840 2160 50 \
+        "HEVC 4K (Main 10, CRA-only Open-GOP)" \
+        -c:v libx265 -preset fast -pix_fmt yuv420p10le -profile:v main10 \
+        -x265-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=1:open-gop=1:scenecut=0:repeat-headers=1:log-level=error"
+}
+
+# ---------- H.264 variants ----------
+generate_h264_1080p_progressive() {
+    local BASE="tux_h264_1080p_progressive_test"
+    encode_variant "$BASE" 264 ac3 tux 1920 1080 50 \
+        "H.264 1080p progressive 50fps (High Profile)" \
+        -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
+        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1"
+    [[ $ENCODE_SKIPPED -eq 1 ]] && return 0
+    verify_stream_flag "${BASE}.264" 'frame_mbs_only_flag.*0|MbInterlace|field_pic_flag.*1' present \
+        "H.264 1080p output appears interlaced (expected progressive)"
 }
 generate_h264_1080i_mbaff() {
     local BASE="tux_h264_1080i_mbaff_test"
-    if output_already_present "${BASE}.264"; then
-        echo "==> H.264 1080i MBAFF already present: ${BASE}.264 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "264" "ac3"
-        return 0
-    fi
-    echo "==> Generating H.264 1080i MBAFF 25fps (50 fields)..."
-    render_tux
-    gen_audio_ac3 "${BASE}.ac3"
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_tux_timeline_args 1920 1080 25) \
-        -filter_complex "$TUX_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant "$BASE" 264 ac3 tux 1920 1080 25 \
+        "H.264 1080i MBAFF 25fps (50 fields)" \
         -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=25:min-keyint=25:bframes=4:b-pyramid=normal:scenecut=0:repeat-headers=1:interlaced=1:tff=1" \
-        -an "${BASE}.264"
-    write_ttcut_project "$BASE" "264" "ac3"
-    if ! ffmpeg -v debug -i "${BASE}.264" -c copy -bsf:v trace_headers -t 1 -f null - 2>&1 \
-        | grep -qE 'mb_adaptive_frame_field_flag.*1'; then
-        echo "    WARNING: H.264 MBAFF output is missing mb_adaptive_frame_field_flag=1" >&2
-    fi
-    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+        -x264-params "keyint=25:min-keyint=25:bframes=4:b-pyramid=normal:scenecut=0:repeat-headers=1:interlaced=1:tff=1"
+    [[ $ENCODE_SKIPPED -eq 1 ]] && return 0
+    verify_stream_flag "${BASE}.264" 'mb_adaptive_frame_field_flag.*1' absent \
+        "H.264 MBAFF output is missing mb_adaptive_frame_field_flag=1"
 }
 generate_h264_1080i_paff() {
     local BASE="tux_h264_1080i_paff_test"
@@ -260,7 +293,7 @@ generate_h264_1080i_paff() {
         return 0
     fi
     render_tux
-    gen_audio_ac3 "${BASE}.ac3"
+    gen_audio ac3 "${BASE}.ac3"
 
     local RAW="${BASE}.yuv"
     echo "    Step 1/3: dump raw YUV (~7 GB)..."
@@ -272,7 +305,8 @@ generate_h264_1080i_paff() {
         "$RAW"
 
     echo "    Step 2/3: JM encode (this is slow — expect 30+ min)..."
-    local START=$(date +%s)
+    local START
+    START=$(date +%s)
     timeout 7200 "$JM_LENCOD" -d "$JM_CFG_DIR/encoder_main.cfg" -f "$SCRIPTDIR/paff.cfg" \
         -p InputFile="$RAW" -p OutputFile="${BASE}.264" \
         > "${BASE}.jm.log" 2>&1 || {
@@ -300,69 +334,26 @@ generate_h264_1080i_paff() {
     echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
 }
 generate_mpeg2_576i_pal() {
-    local BASE="tux_mpeg2_576i_pal_test"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 PAL DVB-SD already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 PAL DVB-SD 720x576 25fps interlaced..."
-    render_tux
-    gen_audio_mp2 "${BASE}.mp2"
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_tux_timeline_args 720 576 25) \
-        -filter_complex "$TUX_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_mpeg2_576i_pal_test m2v mp2 tux 720 576 25 \
+        "MPEG-2 PAL DVB-SD 720x576 25fps interlaced" \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 \
         -flags +ilme+ildct -top 1 \
         -b:v 5M -minrate 5M -maxrate 9M -bufsize 1835008 \
         -force_key_frames "0,30,31,60,61,90,91" \
-        -g 12 \
-        -an "${BASE}.m2v"
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+        -g 12
 }
 # ---------- MPEG-2 576i field-picture variant ----------
 generate_mpeg2_576i_fieldpic() {
-    local BASE="tux_mpeg2_576i_fieldpic_test"
-    local SRC="tux_mpeg2_576i_pal_test.m2v"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 576i field-picture already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 576i field-picture variant (inject every 50 frames)..."
-    if [[ ! -s "$SRC" ]]; then
-        generate_mpeg2_576i_pal
-    fi
-    python3 "$SCRIPTDIR/inject_fieldpictures.py" "$SRC" "${BASE}.m2v" --every 50
-    if [[ ! -s "${BASE}.mp2" ]]; then
-        cp "tux_mpeg2_576i_pal_test.mp2" "${BASE}.mp2"
-    fi
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+    generate_mpeg2_fieldpic tux_mpeg2_576i_fieldpic_test tux_mpeg2_576i_pal_test \
+        generate_mpeg2_576i_pal "MPEG-2 576i field-picture variant"
 }
 generate_mpeg2_720p() {
-    local BASE="tux_mpeg2_720p_test"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 720p progressive already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 720p progressive 50fps..."
-    render_tux
-    gen_audio_mp2 "${BASE}.mp2"
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_tux_timeline_args 1280 720 50) \
-        -filter_complex "$TUX_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_mpeg2_720p_test m2v mp2 tux 1280 720 50 \
+        "MPEG-2 720p progressive 50fps" \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 16:9 \
         -b:v 8M -minrate 8M -maxrate 12M -bufsize 1835008 \
         -force_key_frames "0,30,31,60,61,90,91" \
-        -g 50 \
-        -an "${BASE}.m2v"
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+        -g 50
 }
 
 # ============================================================================
@@ -381,138 +372,53 @@ generate_mpeg2_720p() {
 
 # ---------- HEVC 4K CRA-only Open-GOP, duplicate ----------
 generate_hevc4k_cra_duplicate() {
-    local BASE="tux_hevc4k_cra_duplicate"
-    if output_already_present "${BASE}.265"; then
-        echo "==> HEVC 4K duplicate already present: ${BASE}.265 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "265" "ac3"
-        return 0
-    fi
-    echo "==> Generating HEVC 4K duplicate (Main 10, CRA-only Open-GOP, 30s)..."
-    render_tux
-    gen_audio_ac3 "${BASE}.ac3" 30
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_duplicate_timeline_args 3840 2160 50) \
-        -filter_complex "$DUPLICATE_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_hevc4k_cra_duplicate 265 ac3 duplicate 3840 2160 50 \
+        "HEVC 4K duplicate (Main 10, CRA-only Open-GOP, 30s)" \
         -c:v libx265 -preset fast -pix_fmt yuv420p10le -profile:v main10 \
-        -x265-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=1:open-gop=1:scenecut=0:repeat-headers=1:log-level=error" \
-        -an "${BASE}.265"
-    write_ttcut_project "$BASE" "265" "ac3"
-    echo "    Done: ${BASE}.265 / ${BASE}.ac3 / ${BASE}.ttcut"
+        -x265-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=1:open-gop=1:scenecut=0:repeat-headers=1:log-level=error"
 }
 
 # ---------- H.264 1080p progressive, duplicate ----------
 generate_h264_1080p_progressive_duplicate() {
-    local BASE="tux_h264_1080p_progressive_duplicate"
-    if output_already_present "${BASE}.264"; then
-        echo "==> H.264 1080p progressive duplicate already present: ${BASE}.264 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "264" "ac3"
-        return 0
-    fi
-    echo "==> Generating H.264 1080p progressive duplicate 50fps (High Profile, 30s)..."
-    render_tux
-    gen_audio_ac3 "${BASE}.ac3" 30
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_duplicate_timeline_args 1920 1080 50) \
-        -filter_complex "$DUPLICATE_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_h264_1080p_progressive_duplicate 264 ac3 duplicate 1920 1080 50 \
+        "H.264 1080p progressive duplicate 50fps (High Profile, 30s)" \
         -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1" \
-        -an "${BASE}.264"
-    write_ttcut_project "$BASE" "264" "ac3"
-    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+        -x264-params "keyint=50:min-keyint=50:bframes=4:b-pyramid=normal:open-gop=1:scenecut=0:repeat-headers=1:force-cfr=1"
 }
 
 # ---------- H.264 1080i MBAFF, duplicate ----------
 generate_h264_1080i_mbaff_duplicate() {
-    local BASE="tux_h264_1080i_mbaff_duplicate"
-    if output_already_present "${BASE}.264"; then
-        echo "==> H.264 1080i MBAFF duplicate already present: ${BASE}.264 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "264" "ac3"
-        return 0
-    fi
-    echo "==> Generating H.264 1080i MBAFF duplicate 25fps (50 fields, 30s)..."
-    render_tux
-    gen_audio_ac3 "${BASE}.ac3" 30
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_duplicate_timeline_args 1920 1080 25) \
-        -filter_complex "$DUPLICATE_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_h264_1080i_mbaff_duplicate 264 ac3 duplicate 1920 1080 25 \
+        "H.264 1080i MBAFF duplicate 25fps (50 fields, 30s)" \
         -c:v libx264 -preset fast -pix_fmt yuv420p -profile:v high \
-        -x264-params "keyint=25:min-keyint=25:bframes=4:b-pyramid=normal:scenecut=0:repeat-headers=1:interlaced=1:tff=1" \
-        -an "${BASE}.264"
-    write_ttcut_project "$BASE" "264" "ac3"
-    echo "    Done: ${BASE}.264 / ${BASE}.ac3 / ${BASE}.ttcut"
+        -x264-params "keyint=25:min-keyint=25:bframes=4:b-pyramid=normal:scenecut=0:repeat-headers=1:interlaced=1:tff=1"
 }
 
 # ---------- MPEG-2 PAL DVB-SD, duplicate ----------
 generate_mpeg2_576i_pal_duplicate() {
-    local BASE="tux_mpeg2_576i_pal_duplicate"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 PAL DVB-SD duplicate already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 PAL DVB-SD duplicate 720x576 25fps (30s)..."
-    render_tux
-    gen_audio_mp2 "${BASE}.mp2" 30
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_duplicate_timeline_args 720 576 25) \
-        -filter_complex "$DUPLICATE_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_mpeg2_576i_pal_duplicate m2v mp2 duplicate 720 576 25 \
+        "MPEG-2 PAL DVB-SD duplicate 720x576 25fps (30s)" \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 \
         -flags +ilme+ildct -top 1 \
         -b:v 5M -minrate 5M -maxrate 9M -bufsize 1835008 \
         -force_key_frames "0,10,12,22" \
-        -g 12 \
-        -an "${BASE}.m2v"
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+        -g 12
 }
 
 # ---------- MPEG-2 576i field-picture variant, duplicate ----------
 generate_mpeg2_576i_fieldpic_duplicate() {
-    local BASE="tux_mpeg2_576i_fieldpic_duplicate"
-    local SRC="tux_mpeg2_576i_pal_duplicate.m2v"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 576i field-picture duplicate already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 576i field-picture duplicate (inject every 50 frames, 30s)..."
-    if [[ ! -s "$SRC" ]]; then
-        generate_mpeg2_576i_pal_duplicate
-    fi
-    python3 "$SCRIPTDIR/inject_fieldpictures.py" "$SRC" "${BASE}.m2v" --every 50
-    if [[ ! -s "${BASE}.mp2" ]]; then
-        cp "tux_mpeg2_576i_pal_duplicate.mp2" "${BASE}.mp2"
-    fi
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+    generate_mpeg2_fieldpic tux_mpeg2_576i_fieldpic_duplicate tux_mpeg2_576i_pal_duplicate \
+        generate_mpeg2_576i_pal_duplicate "MPEG-2 576i field-picture duplicate (30s)"
 }
 
 # ---------- MPEG-2 720p progressive, duplicate ----------
 generate_mpeg2_720p_duplicate() {
-    local BASE="tux_mpeg2_720p_duplicate"
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> MPEG-2 720p duplicate already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
-        return 0
-    fi
-    echo "==> Generating MPEG-2 720p progressive duplicate 50fps (30s)..."
-    render_tux
-    gen_audio_mp2 "${BASE}.mp2" 30
-    ffmpeg -y -hide_banner -loglevel warning -stats \
-        $(build_duplicate_timeline_args 1280 720 50) \
-        -filter_complex "$DUPLICATE_FILTERGRAPH" \
-        -map "[outv]" \
+    encode_variant tux_mpeg2_720p_duplicate m2v mp2 duplicate 1280 720 50 \
+        "MPEG-2 720p progressive duplicate 50fps (30s)" \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 16:9 \
         -b:v 8M -minrate 8M -maxrate 12M -bufsize 1835008 \
         -force_key_frames "0,10,12,22" \
-        -g 50 \
-        -an "${BASE}.m2v"
-    write_ttcut_project "$BASE" "m2v" "mp2"
-    echo "    Done: ${BASE}.m2v / ${BASE}.mp2 / ${BASE}.ttcut"
+        -g 50
 }
 
 # ---------- MPEG-2 576i synthetic multifile variant ----------
@@ -580,18 +486,8 @@ generate_mpeg2_576i_multifile() {
     # the directory as "generated" on subsequent runs.
     echo "Synthetic multi-file test recording" > "$marker"
 
-    # Also write a .ttcut project file pointing at 00001.ts
-    local proj="$OUTDIR/tux_mpeg2_576i_multifile_test.ttcut"
-    cat > "$proj" <<TTCUT
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$seg1</Name>
- </Video>
-</TTCut-Projectfile>
-TTCUT
+    # Also write a .ttcut project file pointing at 00001.ts (video only)
+    write_ttcut_project tux_mpeg2_576i_multifile_test ts "" "$seg1"
 
     echo "    Done: 00001.ts ($(du -h "$seg1" | cut -f1)) + 00002.ts ($(du -h "$seg2" | cut -f1))"
 }

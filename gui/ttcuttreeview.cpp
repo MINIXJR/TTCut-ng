@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "../data/ttcutlist.h"
+#include "tttreeviewutil.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../data/ttavdata.h"
@@ -59,11 +60,11 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   // Use theme icons with Qt standard icon fallback for cross-platform support
   // Video editing industry color scheme
   QStyle* style = QApplication::style();
-  pbEntryUp->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  pbEntryDown->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  pbEntryDelete->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
+  pbEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
+  pbEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
+  pbEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
   pbEntryDelete->setStyleSheet("QPushButton { color: #cc4444; }");  // Red for destructive
-  pbEntryCopy->setIcon(QIcon::fromTheme("edit-copy", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
+  pbEntryCopy->setIcon(ttThemeIcon("edit-copy", QStyle::SP_FileDialogNewFolder));
 
   // Cut/Preview button accent palette.
   // Backgrounds picked for >=5:1 contrast with white text (WCAG AA) so the
@@ -820,50 +821,30 @@ void TTCutTreeView::onAudioDriftUpdated(const QList<float>& driftsMs)
  */
 void TTCutTreeView::createActions()
 {
-  QStyle* style = QApplication::style();
-
-  itemUpAction = new QAction(tr("Move &up"), this);
-  itemUpAction->setIcon(QIcon::fromTheme("go-up", style->standardIcon(QStyle::SP_ArrowUp)));
-  itemUpAction->setStatusTip(tr("Move selected cut one position upward"));
+  itemUpAction = ttMakeAction(this, tr("Move &up"), "go-up", QStyle::SP_ArrowUp, tr("Move selected cut one position upward"));
   connect(itemUpAction, &QAction::triggered, this, &TTCutTreeView::onEntryUp);
 
-  itemDeleteAction = new QAction(tr("&Delete"), this);
-  itemDeleteAction->setIcon(QIcon::fromTheme("edit-delete", style->standardIcon(QStyle::SP_TrashIcon)));
-  itemDeleteAction->setStatusTip(tr("Remove selected cut from list"));
+  itemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected cut from list"));
   connect(itemDeleteAction, &QAction::triggered, this, &TTCutTreeView::onEntryDelete);
 
-  itemDuplicateAction = new QAction(tr("Duplicate Cut"), this);
-  itemDuplicateAction->setIcon(QIcon::fromTheme("edit-copy", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
-  itemDuplicateAction->setStatusTip(tr("Duplicate the selected cut"));
+  itemDuplicateAction = ttMakeAction(this, tr("Duplicate Cut"), "edit-copy", QStyle::SP_FileDialogNewFolder, tr("Duplicate the selected cut"));
   connect(itemDuplicateAction, &QAction::triggered, this, &TTCutTreeView::onEntryDuplicate);
 
-  itemDownAction = new QAction(tr("Move d&own"), this);
-  itemDownAction->setIcon(QIcon::fromTheme("go-down", style->standardIcon(QStyle::SP_ArrowDown)));
-  itemDownAction->setStatusTip(tr("Move selected cut one position downward"));
+  itemDownAction = ttMakeAction(this, tr("Move d&own"), "go-down", QStyle::SP_ArrowDown, tr("Move selected cut one position downward"));
   connect(itemDownAction, &QAction::triggered, this, &TTCutTreeView::onEntryDown);
 
-  itemEditAction = new QAction(tr("Edit &cut"), this);
-  itemEditAction->setIcon(QIcon::fromTheme("document-edit", style->standardIcon(QStyle::SP_FileDialogDetailedView)));
-  itemEditAction->setStatusTip(tr("Edit selected cut"));
+  itemEditAction = ttMakeAction(this, tr("Edit &cut"), "document-edit", QStyle::SP_FileDialogDetailedView, tr("Edit selected cut"));
   connect(itemEditAction, &QAction::triggered, this, &TTCutTreeView::onEntryEdit);
 
-  itemPreviewAction = new QAction(tr("Preview cut"), this);
-  itemPreviewAction->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogApplyButton)));
-  itemPreviewAction->setStatusTip(tr("Preview selected cut"));
+  itemPreviewAction = ttMakeAction(this, tr("Preview cut"), "edit-cut", QStyle::SP_DialogApplyButton, tr("Preview selected cut"));
   connect(itemPreviewAction, &QAction::triggered, this, &TTCutTreeView::onEntryPreview);
 
-  itemCutAction = new QAction(tr("Cut selected entries"), this);
-  itemCutAction->setIcon(QIcon::fromTheme("edit-cut", style->standardIcon(QStyle::SP_DialogSaveButton)));
-  itemCutAction->setStatusTip(tr("Cut the selected entries"));
+  itemCutAction = ttMakeAction(this, tr("Cut selected entries"), "edit-cut", QStyle::SP_DialogSaveButton, tr("Cut the selected entries"));
   connect(itemCutAction, &QAction::triggered, this, &TTCutTreeView::onEntryCut);
 
-  gotoCutInAction = new QAction(tr("Goto Cut-In"), this);
-  gotoCutInAction->setIcon(QIcon::fromTheme("go-first", style->standardIcon(QStyle::SP_MediaSkipBackward)));
-  gotoCutInAction->setStatusTip(tr("Goto selected cut-in position"));
+  gotoCutInAction = ttMakeAction(this, tr("Goto Cut-In"), "go-first", QStyle::SP_MediaSkipBackward, tr("Goto selected cut-in position"));
   connect(gotoCutInAction, &QAction::triggered, this, &TTCutTreeView::onGotoCutIn);
 
-  gotoCutOutAction = new QAction(tr("Goto Cut-Out"), this);
-  gotoCutOutAction->setIcon(QIcon::fromTheme("go-last", style->standardIcon(QStyle::SP_MediaSkipForward)));
-  gotoCutOutAction->setStatusTip(tr("Goto selected cut-out position"));
+  gotoCutOutAction = ttMakeAction(this, tr("Goto Cut-Out"), "go-last", QStyle::SP_MediaSkipForward, tr("Goto selected cut-out position"));
   connect(gotoCutOutAction, &QAction::triggered, this, &TTCutTreeView::onGotoCutOut);
 }

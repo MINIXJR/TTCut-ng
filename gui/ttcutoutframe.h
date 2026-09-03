@@ -24,35 +24,35 @@ class TTAVItem;
 
 class TTCutOutFrame: public QWidget, Ui::TTCutOutFrameWidget
 {
-	Q_OBJECT
+  Q_OBJECT
 
-	public:
-		TTCutOutFrame(QWidget* parent = 0);
-		~TTCutOutFrame();
+  public:
+    TTCutOutFrame(QWidget* parent = 0);
+    ~TTCutOutFrame();
 
-		void setTitle(const QString & title);
-		void controlEnabled(bool enabled);
+    void setTitle(const QString & title);
+    void controlEnabled(bool enabled);
 
-	public slots:
-		void onAVDataChanged(TTAVItem* avData);
-		void onCutOutChanged(const TTCutItem& cutItem);
-		void onGotoCutOut(int pos);
-		void onPrevCutOutPos();
-		void onNextCutOutPos();
-		void onSearchFrame();
+  public slots:
+    void onAVDataChanged(TTAVItem* avData);
+    void onCutOutChanged(const TTCutItem& cutItem);
+    void onGotoCutOut(int pos);
+    void onPrevCutOutPos();
+    void onNextCutOutPos();
+    void onSearchFrame();
 
-	signals:
-	  void searchEqualFrame(TTAVItem* avItem, int startIndex);
+  signals:
+    void searchEqualFrame(TTAVItem* avItem, int startIndex);
 
-	private:
-		void updateCurrentPosition(int pos = -1);
+  private:
+    void updateCurrentPosition(int pos = -1);
 
-	private:
-		TTAVItem*           currentAVItem;
-		int                 currentCutItemIndex;
-		TTVideoStream*      videoStream;
-		int                 currentPosition;
-		bool                isCutOut;
+  private:
+    TTAVItem*           currentAVItem;
+    int                 currentCutItemIndex;
+    TTVideoStream*      videoStream;
+    int                 currentPosition;
+    bool                isCutOut;
 };
 
 #endif //TTCUTOUTFRAME_H

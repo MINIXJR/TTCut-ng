@@ -924,7 +924,32 @@ void TTNaluParser::buildAccessUnits()
     if (TTSettings::instance()->logAVStream())
         qDebug() << "  Built" << mAccessUnits.size() << "access units";
 
-    // Pass 2: Merge field pairs (PAFF)
+    mergeFieldPairsPAFF();
+}
+
+// First slice NAL of an access unit, or nullptr.
+const TTNalUnit* TTNaluParser::firstSliceNal(const TTAccessUnit& au) const
+{
+    for (int idx : au.nalIndices) {
+        if (mNalUnits[idx].isSlice) return &mNalUnits[idx];
+    }
+    return nullptr;
+}
+
+// First field-coded slice NAL of an access unit, or nullptr.
+const TTNalUnit* TTNaluParser::firstFieldSliceNal(const TTAccessUnit& au) const
+{
+    for (int idx : au.nalIndices) {
+        if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) return &mNalUnits[idx];
+    }
+    return nullptr;
+}
+
+// Pass 2 of buildAccessUnits(): merge H.264 PAFF field pairs (top field AU
+// followed by the bottom field AU with the same frame_num) into one frame
+// AU, renumber, and set mIsPAFF accordingly.
+void TTNaluParser::mergeFieldPairsPAFF()
+{
     bool hasFieldSlices = false;
     if (mCodecType == NALU_CODEC_H264) {
         bool spsAllowsFields = false;
@@ -942,40 +967,17 @@ void TTNaluParser::buildAccessUnits()
                 TTAccessUnit& topAU = mAccessUnits[i];
                 TTAccessUnit& botAU = mAccessUnits[i + 1];
 
-                bool topIsField = false;
-                bool botIsField = false;
-                int topFrameNum = -1;
-                int botFrameNum = -1;
+                const TTNalUnit* topSlice = firstSliceNal(topAU);
+                const TTNalUnit* botSlice = firstSliceNal(botAU);
+                bool topIsField = topSlice ? topSlice->isField : false;
+                bool botIsField = botSlice ? botSlice->isField : false;
+                int topFrameNum = topSlice ? topSlice->frameNum : -1;
+                int botFrameNum = botSlice ? botSlice->frameNum : -1;
 
-                for (int idx : topAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice) {
-                        topIsField = mNalUnits[idx].isField;
-                        topFrameNum = mNalUnits[idx].frameNum;
-                        break;
-                    }
-                }
-                for (int idx : botAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice) {
-                        botIsField = mNalUnits[idx].isField;
-                        botFrameNum = mNalUnits[idx].frameNum;
-                        break;
-                    }
-                }
-
-                bool topIsTop = false;
-                bool botIsBot = false;
-                for (int idx : topAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
-                        topIsTop = !mNalUnits[idx].isBottomField;
-                        break;
-                    }
-                }
-                for (int idx : botAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
-                        botIsBot = mNalUnits[idx].isBottomField;
-                        break;
-                    }
-                }
+                const TTNalUnit* topField = firstFieldSliceNal(topAU);
+                const TTNalUnit* botField = firstFieldSliceNal(botAU);
+                bool topIsTop = topField ? !topField->isBottomField : false;
+                bool botIsBot = botField ? botField->isBottomField : false;
 
                 if (topIsField && botIsField && topIsTop && botIsBot &&
                     topFrameNum >= 0 && topFrameNum == botFrameNum) {
