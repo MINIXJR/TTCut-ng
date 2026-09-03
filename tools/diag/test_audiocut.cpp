@@ -35,6 +35,6 @@ int main(int argc, char** argv)
 
     TTAudioCutter cutter;
     bool ok = cutter.cut(argv[1], argv[2], keep);
-    fprintf(stderr, "cutAudioStream %s\n", ok ? "OK" : "FAIL");
+    fprintf(stderr, "TTAudioCutter::cut %s\n", ok ? "OK" : "FAIL");
     return ok ? 0 : 1;
 }

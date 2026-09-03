@@ -5,7 +5,7 @@ DVB-Material. Ergänzt `ttcut-burst-probe`:
 
 | Werkzeug | Zweck |
 |---|---|
-| `ttcut-burst-probe` (C++) | Ruft `TTFFmpegWrapper::detectAudioBurst` direkt auf — die *echte* Entscheidung an *einer* Schnittgrenze. |
+| `ttcut-burst-probe` (C++) | Ruft `TTAudioCutter::detectBurst` direkt auf — die *echte* Entscheidung an *einer* Schnittgrenze. |
 | `burst_analysis.py` | Bildet Fenster- und Chunk-Logik nach und scannt einen *ganzen Stream* nach Kandidatenstellen. Findet, was das C++-Tool dann verifiziert. |
 
 Es ersetzt den Detektor nicht: `astats` liefert das RMS pro Audioframe, der Rest

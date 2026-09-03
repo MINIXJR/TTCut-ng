@@ -132,10 +132,7 @@ bool TTFrameIndexer::setupIndexingPass(int videoStreamIndex)
 
     // For raw ES files, seek to byte 0 instead of using av_seek_frame.
     // av_seek_frame doesn't work well with raw h264/hevc demuxers.
-    QString suffix = QFileInfo(QString::fromUtf8(mFormatCtx->url)).suffix().toLower();
-    bool isES = (suffix == "264" || suffix == "h264" ||
-                 suffix == "265" || suffix == "h265" || suffix == "hevc" ||
-                 suffix == "m2v" || suffix == "mpv");
+    const bool isES = ttIsElementaryStreamPath(QString::fromUtf8(mFormatCtx->url));
 
     if (isES && mFormatCtx->pb) {
         avio_seek(mFormatCtx->pb, 0, SEEK_SET);

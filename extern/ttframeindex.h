@@ -90,6 +90,28 @@ struct TTFrameIndexBundle {
     int  log2MaxFrameNum  = 4;
 
     bool isEmpty() const { return index.isEmpty(); }
+
+    // --- Raw->merged AU map (PAFF) ---
+    // buildFrameIndex scans one packet per AU ("raw"); for H.264 PAFF,
+    // mergePAFFFieldsInIndex then collapses top+bottom field pairs, so the
+    // final frameIndex() is "merged". .info doubled-PTS candidates are
+    // raw-AU-numbered; these accessors translate. Only the index OWNER has
+    // the map — wrappers that adopt an index via setFrameIndex() never ran
+    // the merge and see identity (they adopt the already-merged list).
+    // Encoding: rawToMerged entry >= 0 -> merged index; entry < 0 ->
+    // collapsed bottom field, merged index = ~entry. Empty = identity.
+    int rawToMergedIndex(int raw) const
+    {
+        if (raw < 0 || raw >= rawPacketCount) return -1;
+        if (rawToMerged.isEmpty()) return raw;          // identity
+        const int v = rawToMerged.at(raw);
+        return v >= 0 ? v : ~v;
+    }
+    bool rawIsCollapsedField(int raw) const
+    {
+        if (raw < 0 || raw >= rawPacketCount) return false;
+        return !rawToMerged.isEmpty() && rawToMerged.at(raw) < 0;
+    }
 };
 
 #endif // TTFRAMEINDEX_H

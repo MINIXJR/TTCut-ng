@@ -353,14 +353,14 @@ void TTH26xCutTask::runCut()
         reportStep(TTAVData::tr("Cutting audio track %1 of %2...")
                        .arg(i+1).arg(mpAVItem->audioCount()), overall);
       },
-      // Abort predicate (Task 3): polled inside cutAudioStream's read loop and
+      // Abort predicate (Task 3): polled inside TTAudioCutter::cut's read loop and
       // between tracks, so a cancel stops the audio phase at the next packet.
       [this] { return cancelRequested(); });
   abortIfRequested();
 
   // A missing track is a failure, not a footnote. cutAudioTracks() skips a
   // failed track silently (out-of-range index, missing stream, empty plan,
-  // or cutAudioStream returning false) and reports that only through the ok
+  // or TTAudioCutter::cut returning false) and reports that only through the ok
   // flag of the callback above - which is also why cutAudioFiles counts
   // exactly the successful tracks. Without this check the cut muxed an MKV
   // short of a track, reported success, and wrote a calibration factor on a

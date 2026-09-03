@@ -377,7 +377,7 @@ class TTAVData : public QObject
     // are still on the stack. Reset at the top of onDoCut()/doH264Cut()/
     // doAudioOnlyCut() so a stale request from a previous operation can't
     // kill the next one. std::atomic to match the shouldAbort predicate
-    // shape TTFFmpegWrapper::cutAudioStream polls (Task 3); the write and
+    // shape TTAudioCutter::cut polls (Task 3); the write and
     // every read happen on the GUI thread, nested via processEvents(), not
     // across threads.
     std::atomic<bool> mSyncPhaseAbort { false };
@@ -422,7 +422,7 @@ class TTAVData : public QObject
 
     // Audio-cut plan with audio-frame-boundary snapping and feed-forward drift
     // compensation. keepList holds (startTime, endTime) pairs in seconds whose
-    // boundaries align with the source audio's frame grid; cutAudioStream's
+    // boundaries align with the source audio's frame grid; TTAudioCutter::cut's
     // skip/stop rules then keep exactly the planned frames per segment.
     // drifts holds the cumulative A/V offset in ms after each segment (audio
     // length minus video length, sum of all preceding segments). Bounded to
@@ -454,9 +454,9 @@ class TTAVData : public QObject
 
     // Cut the given audio tracks of avItem against videoKeepList. Encapsulates
     // the per-track loop, per-track delay, planAudioCut (audio-frame snapping +
-    // feed-forward drift), AC3 acmod target computation, and cutAudioStream.
+    // feed-forward drift), AC3 acmod target computation, and TTAudioCutter::cut.
     // Codec-neutral: only forwards normalizeAcmod (codec-specific normalization
-    // lives inside cutAudioStream). outPath names the per-track output file;
+    // lives inside TTAudioCutter::cut). outPath names the per-track output file;
     // onCut registers it (mux list / file list / preview). Returns the first
     // requested track's drifts for the caller's drift signal.
     // Audio anomaly repairs: for each track, enabled items from
@@ -465,7 +465,7 @@ class TTAVData : public QObject
     // frame table built via TTAudioRepair::buildRepairTable (AC3 only;
     // targetAcmod is the containing segment's target, or -1 when acmod
     // normalization is off/not AC3) and merged into one table forwarded to
-    // cutAudioStream's repairTable parameter. An item whose frames fall in no
+    // TTAudioCutter::cut's repairTable parameter. An item whose frames fall in no
     // kept window is skipped (never written, building its table would be
     // dead work and could needlessly fail on an out-of-range acmod change).
     // An item whose range touches a kept window but is not fully contained in
@@ -487,10 +487,10 @@ class TTAVData : public QObject
         // outPath a pure path computation; existing output is deleted centrally.
         const std::function<void(int trackIdx)>& beforeCut = {},
         // Optional per-track progress hook (0..100), forwarded to
-        // cutAudioStream's own progress callback.
+        // TTAudioCutter::cut's own progress callback.
         const std::function<void(int trackIdx, int percent)>& onProgress = nullptr,
         // Optional abort predicate, polled once per track before it starts
-        // and forwarded into cutAudioStream's own in-loop poll.
+        // and forwarded into TTAudioCutter::cut's own in-loop poll.
         const std::function<bool()>& shouldAbort = {});
 
     // Convenience overload for the common case: cut ALL of avItem's audio

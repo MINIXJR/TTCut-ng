@@ -2,7 +2,7 @@
 """
 burst_analysis.py — Vermessung der TTCut-ng Audio-Burst-Erkennung.
 
-Bildet die Fenster- und Chunk-Logik von TTFFmpegWrapper::detectAudioBurst nach,
+Bildet die Fenster- und Chunk-Logik von TTAudioCutter::detectBurst nach,
 um Schwellwerte an realem Material zu belegen statt zu schaetzen. Ergaenzt
 `ttcut-burst-probe`: Das C++-Tool prueft EINE Grenze mit dem echten Detektor,
 dieses Skript scannt einen ganzen Stream und findet Kandidatenstellen.
@@ -30,14 +30,14 @@ import subprocess
 import sys
 
 CTX_SEC = 0.200          # Kontextfenster im Detektor
-RMS_FLOOR_DB = -120.0    # detectAudioBurst: rms <= 0 -> -120 dB
+RMS_FLOOR_DB = -120.0    # TTAudioCutter::detectBurst: rms <= 0 -> -120 dB
 
 
 def read_rms(path, start=None, duration=None):
     """RMS pro Audio-Frame via ffmpeg astats. -> [(t_sec, rms_db), ...]
 
     astats' Overall.RMS_level ist 20*log10(sqrt(sum(v^2)/N)) ueber alle Kanaele
-    in dBFS -- dieselbe Formel wie detectAudioBurst.
+    in dBFS -- dieselbe Formel wie TTAudioCutter::detectBurst.
     """
     cmd = ["ffmpeg", "-v", "error"]
     if start is not None:

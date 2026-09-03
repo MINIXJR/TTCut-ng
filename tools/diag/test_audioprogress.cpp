@@ -29,7 +29,7 @@ int main(int argc, char** argv)
     TTAudioCutter cutter;
     bool ok = cutter.cut(argv[1], argv[2], keep, false, QList<int>(),
                                [&](int p) { percents.append(p); });
-    fprintf(stderr, "cutAudioStream %s, %d callback calls\n",
+    fprintf(stderr, "TTAudioCutter::cut %s, %d callback calls\n",
             ok ? "OK" : "FAIL", (int)percents.size());
     if (!ok) return 1;
 

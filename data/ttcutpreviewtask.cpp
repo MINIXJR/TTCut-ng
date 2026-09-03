@@ -340,11 +340,11 @@ void TTCutPreviewTask::operation()
               // clip was muxed and announced regardless.
               [&](int, const QString&, const QString&, bool ok) { if (!ok) audioCutOk = false; },
               {}, nullptr,
-              // Polled once per track and inside cutAudioStream's packet loop.
+              // Polled once per track and inside TTAudioCutter::cut's packet loop.
               [this] { return isAborted(); });
 
           // Ordering matters: a cancel arriving during the audio copy leaves a
-          // partial track behind, and cutAudioStream still finalizes the
+          // partial track behind, and TTAudioCutter::cut still finalizes the
           // container before returning. Leaving before the mux is what keeps a
           // truncated track from reaching a clip that then looks complete.
           if (isAborted()) {
@@ -459,7 +459,7 @@ void TTCutPreviewTask::operation()
 
   // Report the cumulative A/V drift after each segment as produced by the
   // audio cut planner (audio-frame-aligned with feed-forward compensation).
-  // This matches what cutAudioStream actually outputs — no separate model.
+  // This matches what TTAudioCutter::cut actually outputs — no separate model.
   QList<float> audioDrifts;
   if (mpCutList->count() > 0) {
     TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
@@ -692,8 +692,8 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     // same cross-thread contract TTCutVideoTask/TTCutTask already rely on
     // (onUserAbort() on the GUI thread only ever sets it, never reads it back).
     if (cutter.cut(audioFile, cutAudioFile, audioKeepList,
-                              normalizeAcmod, targetAcmods, nullptr,
-                              [this] { return isAborted(); })) {
+                   normalizeAcmod, targetAcmods, nullptr,
+                   [this] { return isAborted(); })) {
       cutAudioFiles.append(cutAudioFile);
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;

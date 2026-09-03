@@ -189,7 +189,7 @@ void TTAudioOnlyCutTask::runAudioCut()
         reportStep(TTAVData::tr("Cutting audio track %1 of %2...")
                        .arg(i+1).arg(mpAVItem->audioCount()), overall);
       },
-      // Abort predicate: polled inside cutAudioStream's read loop and
+      // Abort predicate: polled inside TTAudioCutter::cut's read loop and
       // between tracks, so a cancel stops the audio phase at the next
       // packet - same wiring as TTH26xCutTask's audio phase.
       [this] { return cancelRequested(); });
@@ -197,7 +197,7 @@ void TTAudioOnlyCutTask::runAudioCut()
   mDrifts = firstTrackDrifts;
 
   // Poll point: a cancel mid-track-loop breaks cutAudioTracks() out early
-  // (the loop stops, and the in-progress track's cutAudioStream already
+  // (the loop stops, and the in-progress track's TTAudioCutter::cut already
   // returned false via its own abort check). Caught here regardless of how
   // many tracks had already completed, so a cancel is never misread as the
   // "no output files" failure below.

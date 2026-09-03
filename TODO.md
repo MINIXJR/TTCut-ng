@@ -357,7 +357,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~3050 Zeilen, Stand v0.82.1) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.
-  - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): cutAudioStream(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
+  - Der Rest der TTCut-ng-Pipeline ist bereits auf libav umgezogen (v0.60.0): TTAudioCutter::cut(), TTMkvMergeProvider, TTFFmpegWrapper, etc. — kein ffmpeg-CLI mehr (nur noch mplex für MPEG-2-Multiplex).
   - ttcut-demux blieb auf bash+CLI hängen.
   - **Probleme**: stream-copy concat über libav-CLI ist fragil bei mp2/ac3 Splice-Punkten (Frame-Misalignment, Header-missing-Errors). Re-encode als Workaround funktioniert (siehe Audio-Gap-Fix 2026-05-10), aber libav-direkt wäre PTS-genauer und ohne Subprocess-Overhead.
   - **Migration-Pfade**:
@@ -923,7 +923,7 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 - **Multi-frame audio burst at cut boundaries**: DVB advertising audio can bleed 2-3+
   audio frames before the video transition. Two *distinct* gaps, easily conflated:
-  1. **Detection is edge-only.** `TTFFmpegWrapper::detectAudioBurst()` analyses a 200 ms
+  1. **Detection is edge-only.** `TTAudioCutter::detectBurst()` analyses a 200 ms
      window around the boundary but tests only the outermost two chunks
      (`checkStart = rmsValues.size() - 2` for CutOut, the first two for CutIn). A
      multi-frame burst that *reaches* the boundary **is** detected — it overlaps those two

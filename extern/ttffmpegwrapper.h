@@ -107,6 +107,9 @@ public:
     const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
     // Adopt index AND the owner's stream metadata in one step. This is the
     // only public way to install an index; the bare list variant is private.
+    // Ordering contract: the wrapper must be open (openFile()) before this is
+    // called — the display-order map rebuilt here reads the codec context for
+    // the H.264 cold-start marking.
     void setFrameIndex(const TTFrameIndexBundle& bundle);
     // This wrapper's index plus the metadata it measured, ready for adoption.
     TTFrameIndexBundle frameIndexBundle() const;

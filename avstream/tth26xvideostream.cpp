@@ -319,22 +319,18 @@ int TTH26xVideoStream::rawAuCount() const
     return mFrameIndexBundle.rawPacketCount;
 }
 
-// raw AU -> merged frame. An empty map means "no PAFF merge happened", i.e.
-// raw numbering IS merged numbering. A negative entry marks the collapsed
-// bottom field of a merged pair and stores its frame as ~v.
+// raw AU -> merged frame. See TTFrameIndexBundle::rawToMergedIndex for the
+// encoding; an empty map means "no PAFF merge happened", i.e. raw numbering
+// IS merged numbering.
 int TTH26xVideoStream::mapRawAuToDisplayIndex(int raw) const
 {
     if (!mFFmpeg) return -1;
-    if (raw < 0 || raw >= mFrameIndexBundle.rawPacketCount) return -1;
-    const int v = mFrameIndexBundle.rawToMerged.isEmpty()
-                      ? raw : mFrameIndexBundle.rawToMerged[raw];
-    const int merged = (v >= 0) ? v : ~v;
+    const int merged = mFrameIndexBundle.rawToMergedIndex(raw);
+    if (merged < 0) return -1;
     return mFFmpeg->displayOrderMap().decodeToDisplay(merged);
 }
 
 bool TTH26xVideoStream::rawAuIsCollapsedField(int raw) const
 {
-    if (raw < 0 || raw >= mFrameIndexBundle.rawPacketCount) return false;
-    if (mFrameIndexBundle.rawToMerged.isEmpty()) return false;
-    return mFrameIndexBundle.rawToMerged[raw] < 0;
+    return mFrameIndexBundle.rawIsCollapsedField(raw);
 }

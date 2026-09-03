@@ -25,7 +25,7 @@
 //      invocation -- exactly the route the Cancel button takes
 //      (TTProgressBar::cancel -> TTAVData::onUserAbortRequest). The audio
 //      phase's own qApp->processEvents() call is what lets the queued
-//      invocation run before cutAudioStream's next per-packet abort poll.
+//      invocation run before TTAudioCutter::cut's next per-packet abort poll.
 //   5. For phase "video": arms on the Step between cut-list segments ("Cut 1
 //      of N"), i.e. the pool's own pre-existing abort path (unchanged by
 //      Task 7) -- exercised here only to prove TTCutVideoTask's fatal-log fix

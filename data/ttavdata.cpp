@@ -2950,7 +2950,7 @@ QList<float> TTAVData::cutAudioTracks(
     // Audio anomaly repairs: build one replacement-frame table per enabled
     // item on this track and merge them (buildRepairTable is AC3-only, so
     // this only runs for .ac3 tracks). A repair whose frames fall in NO keep
-    // window is skipped rather than built: cutAudioStream's lookup can never
+    // window is skipped rather than built: TTAudioCutter::cut's lookup can never
     // match frames it never writes, so building that table would be dead
     // work — and could needlessly fail on an acmod change outside the kept
     // range, which buildRepairTable rejects hard.
@@ -3038,9 +3038,9 @@ QList<float> TTAVData::cutAudioTracks(
     if (onProgress)
       perTrackCb = [&onProgress, idx](int p) { onProgress(idx, p); };
     bool ok = cutter.cut(stream->filePath(), outFile,
-                                plan.keepList, normalizeAcmod, targetAcmods,
-                                perTrackCb, shouldAbort,
-                                repairTable.isEmpty() ? nullptr : &repairTable);
+                         plan.keepList, normalizeAcmod, targetAcmods,
+                         perTrackCb, shouldAbort,
+                         repairTable.isEmpty() ? nullptr : &repairTable);
     if (!ok) {
       // A deliberate cancel returns false through the same path as a real
       // failure (TTAudioCutter::cut). Only the latter is an
