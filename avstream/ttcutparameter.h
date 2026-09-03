@@ -18,9 +18,9 @@
 
 #include <QVector>
 
-#include "../avstream/ttcommon.h"
-#include "../avstream/ttfilebuffer.h"
-#include "../avstream/ttvideoheaderlist.h"
+#include "ttcommon.h"
+#include "ttfilebuffer.h"
+#include "ttvideoheaderlist.h"
 
 /*//////////////////////////////////////////////////////////////////////////////
  * TTCutParameter
@@ -28,7 +28,7 @@
 class TTCutParameter
 {
   public:
-    TTCutParameter(TTFileBuffer* fBuffer);
+    explicit TTCutParameter(TTFileBuffer* fBuffer);
     ~TTCutParameter();
 
     TTFileBuffer* getTargetStreamBuffer();

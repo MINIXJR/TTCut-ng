@@ -155,6 +155,32 @@ bool TTESInfo::load(const QString& infoFilePath)
 // ----------------------------------------------------------------------------
 // Parse a section
 // ----------------------------------------------------------------------------
+// Parse "start-end[:ms],start-end[:ms],..." into ranges. A token that does
+// not parse, or whose end lies before its start (corrupted or hand-edited
+// .info), is skipped rather than trusted; at most maxCount ranges are taken.
+static QList<TTESRange> parseEsRangeList(const QString& str, int maxCount,
+                                         bool parseMs)
+{
+    QList<TTESRange> out;
+    if (str.isEmpty()) return out;
+    const QStringList toks = str.split(',');
+    for (const QString& tok : toks) {
+        if (out.size() >= maxCount) break;
+        const QString rangePart = parseMs ? tok.section(':', 0, 0) : tok;
+        bool okStart, okEnd;
+        int start = rangePart.section('-', 0, 0).toInt(&okStart);
+        int end   = rangePart.section('-', 1, 1).toInt(&okEnd);
+        if (!okStart || !okEnd) continue;
+        if (end < start) continue;
+        TTESRange r;
+        r.start = start;
+        r.end   = end;
+        r.ms    = (parseMs && tok.contains(':')) ? tok.section(':', 1, 1).toInt() : -1;
+        out.append(r);
+    }
+    return out;
+}
+
 bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>& values)
 {
     // Cap list/range sizes to bound memory use against malformed .info
@@ -197,23 +223,9 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
             // inverted range rejected). audio_N_junk_bytes and
             // audio_N_dropped_frames are human diagnostics only and are
             // intentionally NOT parsed here.
-            QString rangesStr = values.value(QString("audio_%1_corrupt_ranges").arg(i));
-            if (!rangesStr.isEmpty()) {
-                const QStringList toks = rangesStr.split(',');
-                for (const QString& tok : toks) {
-                    if (track.corruptRanges.size() >= maxExtraFrames) break;
-                    bool okStart, okEnd;
-                    int start = tok.section('-', 0, 0).toInt(&okStart);
-                    int end   = tok.section('-', 1, 1).toInt(&okEnd);
-                    if (!okStart || !okEnd) continue;
-                    if (end < start) continue;
-                    TTESRange r;
-                    r.start = start;
-                    r.end   = end;
-                    r.ms    = -1;
-                    track.corruptRanges.append(r);
-                }
-            }
+            track.corruptRanges += parseEsRangeList(
+                values.value(QString("audio_%1_corrupt_ranges").arg(i)),
+                maxExtraFrames - track.corruptRanges.size(), false);
 
             mAudioTracks.append(track);
         }
@@ -305,25 +317,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         // ranges alone are sufficient for consumers.
         QString missingRangesStr = values.value("es_missing_ranges", "");
         if (!missingRangesStr.isEmpty()) {
-            QStringList ranges = missingRangesStr.split(',');
-            for (const QString& tok : ranges) {
-                if (mEsMissingRanges.size() >= maxExtraFrames) break;
-                QString rangePart = tok.section(':', 0, 0);
-                bool okStart, okEnd;
-                int start = rangePart.section('-', 0, 0).toInt(&okStart);
-                int end   = rangePart.section('-', 1, 1).toInt(&okEnd);
-                if (!okStart || !okEnd) continue;
-                // Defense in depth: a malformed/inverted range from a
-                // corrupted or hand-edited .info must not reach consumers
-                // that assume start<=end (ttcut-demux's own emission
-                // already sanitizes this, but don't trust the file blindly).
-                if (end < start) continue;
-                TTESRange r;
-                r.start = start;
-                r.end   = end;
-                r.ms    = tok.contains(':') ? tok.section(':', 1, 1).toInt() : -1;
-                mEsMissingRanges.append(r);
-            }
+            mEsMissingRanges += parseEsRangeList(
+                missingRangesStr, maxExtraFrames - mEsMissingRanges.size(), true);
             if (!mEsMissingRanges.isEmpty())
                 if (TTSettings::instance()->logAVStream())
                     qDebug() << "Loaded" << mEsMissingRanges.size() << "missing-frame ranges from .info";
@@ -333,23 +328,8 @@ bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>
         // Format: "start-end". No duration is reported -> ms is always -1.
         QString corruptRangesStr = values.value("corrupt_frame_ranges", "");
         if (!corruptRangesStr.isEmpty()) {
-            QStringList ranges = corruptRangesStr.split(',');
-            for (const QString& tok : ranges) {
-                if (mCorruptRanges.size() >= maxExtraFrames) break;
-                bool okStart, okEnd;
-                int start = tok.section('-', 0, 0).toInt(&okStart);
-                int end   = tok.section('-', 1, 1).toInt(&okEnd);
-                if (!okStart || !okEnd) continue;
-                // Defense in depth: same reasoning as the es_missing_ranges
-                // guard above — reject an inverted range instead of trusting
-                // the .info file blindly.
-                if (end < start) continue;
-                TTESRange r;
-                r.start = start;
-                r.end   = end;
-                r.ms    = -1;
-                mCorruptRanges.append(r);
-            }
+            mCorruptRanges += parseEsRangeList(
+                corruptRangesStr, maxExtraFrames - mCorruptRanges.size(), false);
             if (!mCorruptRanges.isEmpty())
                 if (TTSettings::instance()->logAVStream())
                     qDebug() << "Loaded" << mCorruptRanges.size() << "corrupt-frame ranges from .info";

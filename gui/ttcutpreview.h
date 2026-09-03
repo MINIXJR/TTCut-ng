@@ -94,6 +94,8 @@ private:
     void checkBurstForCurrentCut(int iCut);
     void configureBurstShiftButton(bool isCutOut);
     void setBurstMessage(const QString& message, bool resolved);
+    void updateRealCutItem(const TTCutItem& copyItem, int oldIdx, int newIdx);
+    void applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx);
     void regeneratePreviewClip(int iCut);
     void regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
     void regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);

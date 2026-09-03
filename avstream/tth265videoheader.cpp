@@ -84,7 +84,6 @@ TTH265AccessUnit::TTH265AccessUnit()
     , mIsReference(false)
     , mGopIndex(0)
     , mTemporalId(0)
-    , mPocValue(0)
 {
 }
 

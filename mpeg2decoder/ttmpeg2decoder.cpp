@@ -354,7 +354,7 @@ int TTMpeg2Decoder::moveToFrameIndex(int framePosition)
 
   if (headerListIndex >= 0 && videoHeaderList->headerTypeAt(headerListIndex) == TTMpeg2VideoHeader::sequence_start_code)
   {
-    TTSequenceHeader* seqHeader = videoHeaderList->sequenceHeaderAt(headerListIndex);
+    const TTSequenceHeader* seqHeader = videoHeaderList->sequenceHeaderAt(headerListIndex);
     sequenceOffset = seqHeader->headerOffset();
   }
   //else
@@ -382,7 +382,7 @@ TTMpeg2DecoderException::TTMpeg2DecoderException(ExceptionType type)
 /* /////////////////////////////////////////////////////////////////////////////
  * Return the exception message
  */
-QString TTMpeg2DecoderException::message()
+QString TTMpeg2DecoderException::message() const
 {
   switch (ex_type)
   {

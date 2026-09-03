@@ -476,7 +476,19 @@ bool TTNaluParser::parseH264NalUnit(const QByteArray& data, TTNalUnit& nal)
 // a NAL unit body. Required before parsing any field that lives past the
 // first ~3 bytes of the NAL, since 00 00 03 escapes can otherwise shift the
 // bit position and produce wrong field values.
-static QByteArray ttNaluRemoveEpb(const QByteArray& nal)
+int TTNaluParser::findStartCodePayload(const uint8_t* data, int size, int from)
+{
+    for (int pos = from < 0 ? 0 : from; pos + 2 < size; ++pos) {
+        if (data[pos] != 0 || data[pos + 1] != 0) continue;
+        int s = -1;
+        if (data[pos + 2] == 1) s = pos + 3;
+        else if (data[pos + 2] == 0 && pos + 3 < size && data[pos + 3] == 1) s = pos + 4;
+        if (s >= 0 && s < size) return s;
+    }
+    return -1;
+}
+
+QByteArray TTNaluParser::removeEmulationPrevention(const QByteArray& nal)
 {
     QByteArray rbsp;
     rbsp.reserve(nal.size());
@@ -500,7 +512,7 @@ void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
     // Strip emulation-prevention bytes before parsing — scaling lists and
     // VUI HRD parameters can extend past EP escapes, and reading them
     // bit-aligned without stripping shifts every following field.
-    QByteArray data = ttNaluRemoveEpb(rawNal);
+    QByteArray data = removeEmulationPrevention(rawNal);
     if (data.size() < 5) return;
 
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
@@ -912,7 +924,32 @@ void TTNaluParser::buildAccessUnits()
     if (TTSettings::instance()->logAVStream())
         qDebug() << "  Built" << mAccessUnits.size() << "access units";
 
-    // Pass 2: Merge field pairs (PAFF)
+    mergeFieldPairsPAFF();
+}
+
+// First slice NAL of an access unit, or nullptr.
+const TTNalUnit* TTNaluParser::firstSliceNal(const TTAccessUnit& au) const
+{
+    for (int idx : au.nalIndices) {
+        if (mNalUnits[idx].isSlice) return &mNalUnits[idx];
+    }
+    return nullptr;
+}
+
+// First field-coded slice NAL of an access unit, or nullptr.
+const TTNalUnit* TTNaluParser::firstFieldSliceNal(const TTAccessUnit& au) const
+{
+    for (int idx : au.nalIndices) {
+        if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) return &mNalUnits[idx];
+    }
+    return nullptr;
+}
+
+// Pass 2 of buildAccessUnits(): merge H.264 PAFF field pairs (top field AU
+// followed by the bottom field AU with the same frame_num) into one frame
+// AU, renumber, and set mIsPAFF accordingly.
+void TTNaluParser::mergeFieldPairsPAFF()
+{
     bool hasFieldSlices = false;
     if (mCodecType == NALU_CODEC_H264) {
         bool spsAllowsFields = false;
@@ -930,40 +967,17 @@ void TTNaluParser::buildAccessUnits()
                 TTAccessUnit& topAU = mAccessUnits[i];
                 TTAccessUnit& botAU = mAccessUnits[i + 1];
 
-                bool topIsField = false;
-                bool botIsField = false;
-                int topFrameNum = -1;
-                int botFrameNum = -1;
+                const TTNalUnit* topSlice = firstSliceNal(topAU);
+                const TTNalUnit* botSlice = firstSliceNal(botAU);
+                bool topIsField = topSlice ? topSlice->isField : false;
+                bool botIsField = botSlice ? botSlice->isField : false;
+                int topFrameNum = topSlice ? topSlice->frameNum : -1;
+                int botFrameNum = botSlice ? botSlice->frameNum : -1;
 
-                for (int idx : topAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice) {
-                        topIsField = mNalUnits[idx].isField;
-                        topFrameNum = mNalUnits[idx].frameNum;
-                        break;
-                    }
-                }
-                for (int idx : botAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice) {
-                        botIsField = mNalUnits[idx].isField;
-                        botFrameNum = mNalUnits[idx].frameNum;
-                        break;
-                    }
-                }
-
-                bool topIsTop = false;
-                bool botIsBot = false;
-                for (int idx : topAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
-                        topIsTop = !mNalUnits[idx].isBottomField;
-                        break;
-                    }
-                }
-                for (int idx : botAU.nalIndices) {
-                    if (mNalUnits[idx].isSlice && mNalUnits[idx].isField) {
-                        botIsBot = mNalUnits[idx].isBottomField;
-                        break;
-                    }
-                }
+                const TTNalUnit* topField = firstFieldSliceNal(topAU);
+                const TTNalUnit* botField = firstFieldSliceNal(botAU);
+                bool topIsTop = topField ? !topField->isBottomField : false;
+                bool botIsBot = botField ? botField->isBottomField : false;
 
                 if (topIsField && botIsField && topIsTop && botIsBot &&
                     topFrameNum >= 0 && topFrameNum == botFrameNum) {

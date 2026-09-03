@@ -24,8 +24,6 @@ set -e
 _CLEANUP_FILES=()
 _CLEANUP_DIRS=()
 
-# Audio-gap detection (Rev 1, existing function uses hardcoded 5.0; constant for documentation)
-readonly GAP_THRESHOLD_AUDIO=5.0
 
 _cleanup_temps() {
     local rc=$?
@@ -271,6 +269,54 @@ detect_video_gaps() {
     ' >> "$out_file"
 }
 
+# Poll a background ffmpeg's -progress file every two seconds until the
+# process exits, handing each new out_time_us value (output timeline in
+# microseconds) to the named reporter function.
+_poll_ffmpeg_progress() {
+    local pid=$1 prog_file=$2 reporter=$3 out_us
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 2
+        out_us=$(grep '^out_time_us=' "$prog_file" 2>/dev/null | tail -1 | cut -d= -f2)
+        [ -n "$out_us" ] || continue
+        "$reporter" "$out_us"
+    done
+}
+
+# ffprobe stream field probe shared by the multi-file gap detectors and the
+# span/start-time probes below. Prints the first stream row's value with the
+# trailing comma stripped:
+#   ffprobe's csv writer appends an empty trailing field to the stream row
+#   for SOME streams, and the numeric tests in the callers reject the
+#   "1000.845000," that results. Measured on a VDR .ts: the video row comes
+#   back "program,stream,1000.845000," while the audio row of the same file
+#   is clean "program,stream,1000.000000"; a raw .m2v carries the comma too,
+#   a raw .264 does not. Stripping is a no-op where no comma appears, so it
+#   is applied to every probe. ffprobe also emits the stream= row twice for
+#   a raw .ts segment (global stream list + per-program stream list both
+#   match "v:0"); take the first line only.
+_probe_stream_field() {
+    local selector=$1 field=$2 file=$3 v
+    v=$(ffprobe -v error -select_streams "$selector" -show_entries "stream=$field" -of csv=p=0 "$file" 2>/dev/null | head -1)
+    printf '%s' "${v%,}"
+}
+
+# One segment of the splice-gap chain: emits a gap row when this segment
+# starts more than threshold_s after the previous one ended, then advances
+# _SPLICE_PREV_END. Callers reset _SPLICE_PREV_END to "" at loop start and
+# whenever a segment could not be probed (breaking the chain on purpose).
+# %f formatting via awk (not bash's printf builtin, which is locale-sensitive
+# - a comma-decimal locale turns "3663.6" into "3663,000000" here and
+# corrupts every downstream PTS compare).
+_SPLICE_PREV_END=""
+_splice_gap_step() {
+    local seg_start=$1 seg_dur=$2 threshold_s=$3 out_file=$4
+    if [ -n "$_SPLICE_PREV_END" ]; then
+        awk -v ps="$_SPLICE_PREV_END" -v ss="$seg_start" -v th="$threshold_s" \
+            'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
+    fi
+    _SPLICE_PREV_END=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
+}
+
 # VDR multi-file variant of detect_video_gaps(): scans every segment (not
 # just the first) and additionally reports the splice gap BETWEEN segments.
 #
@@ -306,7 +352,8 @@ detect_video_gaps_multifile() {
     local out_file=$1 threshold_s=$2
     : > "$out_file"
     local n=${#VDR_SEGMENTS[@]}
-    local i seg_gaps prev_end=""
+    local i seg_gaps
+    _SPLICE_PREV_END=""
     for ((i = 0; i < n; i++)); do
         seg_gaps="${out_file}.seg${i}"
         _CLEANUP_FILES+=("$seg_gaps")
@@ -315,38 +362,13 @@ detect_video_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
-        # ffprobe's csv writer appends an empty trailing field to the stream
-        # row for SOME streams, and the numeric test below rejects the
-        # "1000.845000," that results. Measured on a VDR .ts: the video row
-        # comes back "program,stream,1000.845000," while the audio row of the
-        # same file is clean "program,stream,1000.000000"; a raw .m2v carries
-        # the comma too, a raw .264 does not. So every probe of v:0 here fell
-        # into the "ffprobe failed" branch and the splice gap was never
-        # measured on any multi-file recording, while the audio function's
-        # own track probes were unaffected - its fallback to video timing was
-        # not. Stripping is a no-op where no comma appears, so it is applied
-        # to every one of them. Same comma the count-check further down
-        # strips; format= entries never carry it.
-        # ffprobe emits the stream= row twice for a raw .ts segment (global
-        # stream list + per-program stream list both match "v:0"); take the
-        # first line only (same defensive pattern as START_PTS/NEW_VIDEO_PTS
-        # above).
-        seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-        seg_start="${seg_start%,}"
-        seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-        seg_dur="${seg_dur%,}"
+        seg_start=$(_probe_stream_field v:0 start_time "${VDR_SEGMENTS[$i]}")
+        seg_dur=$(_probe_stream_field v:0 duration "${VDR_SEGMENTS[$i]}")
         if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            # %f formatting via awk (not bash's printf builtin, which is
-            # locale-sensitive - a comma-decimal locale turns "3663.6" into
-            # "3663,000000" here and corrupts every downstream PTS compare).
-            if [ -n "$prev_end" ]; then
-                awk -v ps="$prev_end" -v ss="$seg_start" -v th="$threshold_s" \
-                    'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
-            fi
-            prev_end=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
+            _splice_gap_step "$seg_start" "$seg_dur" "$threshold_s" "$out_file"
         else
             echo "detect_video_gaps_multifile: ffprobe failed on segment $i (${VDR_SEGMENTS[$i]}) - splice gap around it not measured" >&2
-            prev_end=""
+            _SPLICE_PREV_END=""
         fi
     done
     sort -n -o "$out_file" "$out_file"
@@ -358,7 +380,8 @@ detect_audio_gaps_multifile() {
     local stream_idx=$1 out_file=$2 threshold_s=$3
     : > "$out_file"
     local n=${#VDR_SEGMENTS[@]}
-    local i seg_gaps prev_end=""
+    local i seg_gaps
+    _SPLICE_PREV_END=""
     for ((i = 0; i < n; i++)); do
         seg_gaps="${out_file}.seg${i}"
         _CLEANUP_FILES+=("$seg_gaps")
@@ -367,23 +390,8 @@ detect_audio_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
-        # ffprobe's csv writer appends an empty trailing field to the stream
-        # row for SOME streams, and the numeric test below rejects the
-        # "1000.845000," that results. Measured on a VDR .ts: the video row
-        # comes back "program,stream,1000.845000," while the audio row of the
-        # same file is clean "program,stream,1000.000000"; a raw .m2v carries
-        # the comma too, a raw .264 does not. So every probe of v:0 here fell
-        # into the "ffprobe failed" branch and the splice gap was never
-        # measured on any multi-file recording, while the audio function's
-        # own track probes were unaffected - its fallback to video timing was
-        # not. Stripping is a no-op where no comma appears, so it is applied
-        # to every one of them. Same comma the count-check further down
-        # strips; format= entries never carry it.
-        # See detect_video_gaps_multifile() above: take the first line only.
-        seg_start=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-        seg_start="${seg_start%,}"
-        seg_dur=$(ffprobe -v error -select_streams "$stream_idx" -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-        seg_dur="${seg_dur%,}"
+        seg_start=$(_probe_stream_field "$stream_idx" start_time "${VDR_SEGMENTS[$i]}")
+        seg_dur=$(_probe_stream_field "$stream_idx" duration "${VDR_SEGMENTS[$i]}")
         # A badly damaged segment can leave this track's own duration
         # unprobeable ("N/A" - ffprobe's fast container-index duration probe
         # returning N/A: observed on the real 5-segment fixture for the
@@ -395,22 +403,14 @@ detect_audio_gaps_multifile() {
         # assumption the "no additional drift" fallback below makes).
         if [[ ! "$seg_start" =~ ^[0-9]+\.?[0-9]*$ || ! "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             echo "detect_audio_gaps_multifile: track $stream_idx duration unavailable on segment $i (${VDR_SEGMENTS[$i]}) - falling back to video timing for splice-gap purposes" >&2
-            seg_start=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-            seg_start="${seg_start%,}"
-            seg_dur=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of csv=p=0 "${VDR_SEGMENTS[$i]}" 2>/dev/null | head -1)
-            seg_dur="${seg_dur%,}"
+            seg_start=$(_probe_stream_field v:0 start_time "${VDR_SEGMENTS[$i]}")
+            seg_dur=$(_probe_stream_field v:0 duration "${VDR_SEGMENTS[$i]}")
         fi
         if [[ "$seg_start" =~ ^[0-9]+\.?[0-9]*$ && "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-            # See detect_video_gaps_multifile() above: awk formatting only,
-            # never bash's locale-sensitive printf builtin.
-            if [ -n "$prev_end" ]; then
-                awk -v ps="$prev_end" -v ss="$seg_start" -v th="$threshold_s" \
-                    'BEGIN { if ((ss - ps) > th) printf "%.6f %.6f %.0f\n", ps, ss, (ss - ps) * 1000 }' >> "$out_file"
-            fi
-            prev_end=$(awk -v s="$seg_start" -v d="$seg_dur" 'BEGIN {printf "%.6f", s + d}')
+            _splice_gap_step "$seg_start" "$seg_dur" "$threshold_s" "$out_file"
         else
             echo "detect_audio_gaps_multifile: ffprobe failed on segment $i track $stream_idx (${VDR_SEGMENTS[$i]}) - splice gap around it not measured" >&2
-            prev_end=""
+            _SPLICE_PREV_END=""
         fi
     done
     sort -n -o "$out_file" "$out_file"
@@ -1029,18 +1029,17 @@ repair_audio_with_silence_inserts() {
     ffmpeg -y -hide_banner -loglevel error -progress "$prog_file" -nostats \
         -f concat -safe 0 -i "$concat_list" -c copy "$repaired" \
         2>>"$work_dir/repair.log" &
-    local ff_pid=$! ff_rc=0 out_us pct
-    while kill -0 "$ff_pid" 2>/dev/null; do
-        sleep 2
-        # out_time_us counts the output timeline in microseconds; against the
-        # expected duration that is a percentage. Capped at 99 so a rounding
-        # overshoot never announces completion before the call returns.
-        out_us=$(grep '^out_time_us=' "$prog_file" 2>/dev/null | tail -1 | cut -d= -f2)
-        [ -n "$out_us" ] || continue
-        pct=$(awk -v u="$out_us" -v d="$exp_dur" \
+    local ff_pid=$! ff_rc=0
+    # Against the expected duration out_time_us is a percentage, capped at
+    # 99 so a rounding overshoot never announces completion before the
+    # call returns; the concat remux is the second half of the repair bar.
+    _report_concat_progress() {
+        local pct
+        pct=$(awk -v u="$1" -v d="$exp_dur" \
             'BEGIN { p = (d > 0) ? int(u / (d * 10000.0)) : 0; if (p > 99) p = 99; if (p < 0) p = 0; print p }')
         repair_progress $((50 + pct / 2)) "$rp_label"
-    done
+    }
+    _poll_ffmpeg_progress "$ff_pid" "$prog_file" _report_concat_progress
     wait "$ff_pid" || ff_rc=$?
     [ "$ff_rc" -eq 0 ] || { rm -rf "$work_dir"; return 1; }
 
@@ -1299,22 +1298,31 @@ if [ -n "$VIDEO_INFO" ]; then
     info "Video stream $idx: $codec_name ${width}x${height} @ ${frame_rate}"
 fi
 
+# Stream list of one type (a = audio, s = subtitles) as "index:codec:lang"
+# entries in the named associative array, keyed by stream index. ffprobe
+# lists a stream once per program it belongs to; an entry with a language
+# wins over the same index without one.
+_collect_streams_by_lang() {
+    local selector=$1
+    local -n _map=$2
+    local _ idx codec_name lang old_lang
+    while IFS=',' read -r _ idx codec_name lang; do
+        [ -z "$idx" ] && continue
+        if [ -n "${_map[$idx]}" ]; then
+            old_lang="${_map[$idx]##*:}"
+            if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
+                _map[$idx]="$idx:$codec_name:$lang"
+            fi
+        else
+            lang="${lang:-und}"
+            _map[$idx]="$idx:$codec_name:$lang"
+        fi
+    done < <(ffprobe -v error -select_streams "$selector" -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+}
+
 # Get audio streams with language (deduplicate by index, prefer entries with language)
 declare -A AUDIO_MAP
-while IFS=',' read -r _ idx codec_name lang; do
-    [ -z "$idx" ] && continue
-    # If we already have this index with a language, skip
-    if [ -n "${AUDIO_MAP[$idx]}" ]; then
-        # Only replace if current has no language and new one does
-        old_lang="${AUDIO_MAP[$idx]##*:}"
-        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
-            AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
-        fi
-    else
-        lang="${lang:-und}"
-        AUDIO_MAP[$idx]="$idx:$codec_name:$lang"
-    fi
-done < <(ffprobe -v error -select_streams a -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+_collect_streams_by_lang a AUDIO_MAP
 
 # Convert map to array, sorted by index
 for idx in $(echo "${!AUDIO_MAP[@]}" | tr ' ' '\n' | sort -n); do
@@ -1325,18 +1333,7 @@ done
 
 # Get subtitle streams with language (deduplicate by index, prefer entries with language)
 declare -A SUB_MAP
-while IFS=',' read -r _ idx codec_name lang; do
-    [ -z "$idx" ] && continue
-    if [ -n "${SUB_MAP[$idx]}" ]; then
-        old_lang="${SUB_MAP[$idx]##*:}"
-        if [ "$old_lang" = "und" ] && [ -n "$lang" ]; then
-            SUB_MAP[$idx]="$idx:$codec_name:$lang"
-        fi
-    else
-        lang="${lang:-und}"
-        SUB_MAP[$idx]="$idx:$codec_name:$lang"
-    fi
-done < <(ffprobe -v error -select_streams s -show_entries stream=index,codec_name:stream_tags=language -of csv "$INPUT" 2>&1 | grep "^stream,")
+_collect_streams_by_lang s SUB_MAP
 
 for idx in $(echo "${!SUB_MAP[@]}" | tr ' ' '\n' | sort -n); do
     SUBTITLE_STREAMS+=("${SUB_MAP[$idx]}")
@@ -1369,23 +1366,51 @@ case "$VIDEO_CODEC" in
         ;;
 esac
 
+# Container start_time of the first stream matching the selector (first
+# stream row only: a .ts lists the stream once per program).
+_probe_start_time() {
+    ffprobe -v error -select_streams "$1" -show_entries stream=start_time -of csv "$2" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2
+}
+
+# format=duration of a container, or the given default when ffprobe has
+# nothing numeric to say.
+_probe_container_duration() {
+    ffprobe -v error -show_entries format=duration \
+        -of default=noprint_wrappers=1:nokey=1 "$1" 2>/dev/null | grep -E '^[0-9]' || echo "$2"
+}
+
+# Smallest (head) or largest (tail) video packet PTS inside a
+# -read_intervals window of $INPUT.
+_probe_pts_extreme() {
+    ffprobe -v error -select_streams v:0 \
+        -read_intervals "$1" -show_entries packet=pts_time \
+        -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | "$2" -1
+}
+
+# "pts_time,pict_type" rows of the video frames inside a -read_intervals
+# window of $INPUT (the MPEG-2 leading-B probes below all read this).
+_probe_frame_types() {
+    ffprobe -v error -select_streams v:0 \
+        -read_intervals "$1" \
+        -show_entries frame=pts_time,pict_type \
+        -of csv=p=0 "$INPUT" 2>/dev/null
+}
+
 # Get original timestamps and duration for info (from container - fast!)
-START_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
-AUDIO_START_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+START_PTS=$(_probe_start_time v:0 "$INPUT")
+AUDIO_START_PTS=$(_probe_start_time a:0 "$INPUT")
 
 # Get duration — for VDR multi-file, sum individual segment durations
 # (ffprobe with concat protocol only reports first segment's duration)
 if [ "$VDR_MULTIFILE" = true ]; then
     CONTAINER_VIDEO_DURATION="0"
     for seg in "${VDR_SEGMENTS[@]}"; do
-        seg_dur=$(ffprobe -v error -show_entries format=duration \
-            -of default=noprint_wrappers=1:nokey=1 "$seg" 2>/dev/null | grep -E '^[0-9]' || echo "0")
+        seg_dur=$(_probe_container_duration "$seg" "0")
         CONTAINER_VIDEO_DURATION=$(awk "BEGIN {printf \"%.6f\", $CONTAINER_VIDEO_DURATION + $seg_dur}")
     done
     info "Total duration across ${#VDR_SEGMENTS[@]} segments: ${CONTAINER_VIDEO_DURATION}s"
 else
-    CONTAINER_VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration \
-        -of default=noprint_wrappers=1:nokey=1 "$INPUT" 2>/dev/null | grep -E '^[0-9]' || echo "")
+    CONTAINER_VIDEO_DURATION=$(_probe_container_duration "$INPUT" "")
     if [ -n "$CONTAINER_VIDEO_DURATION" ]; then
         info "Container duration: ${CONTAINER_VIDEO_DURATION}s"
     fi
@@ -1417,7 +1442,7 @@ AUDIO_TRIM_SEC="0"                 # Legacy: maximum trim (for B-frame skip base
 for i in "${!AUDIO_STREAMS[@]}"; do
     IFS=':' read -r idx codec lang <<< "${AUDIO_STREAMS[$i]}"
     TRACK_PTS=$(ffprobe -v error -select_streams $idx -show_entries packet=pts_time -of csv=p=0 "$INPUT" 2>/dev/null | head -1 | tr -d ',')
-    ORIG_AUDIO_PTS_ARR[$i]="${TRACK_PTS:-0}"
+    ORIG_AUDIO_PTS_ARR[i]="${TRACK_PTS:-0}"
 
     if [ -n "$ORIG_VIDEO_PTS" ] && [ -n "$TRACK_PTS" ]; then
         TRACK_AHEAD=$(awk "BEGIN {printf \"%.6f\", $ORIG_VIDEO_PTS - $TRACK_PTS}")
@@ -1425,15 +1450,15 @@ for i in "${!AUDIO_STREAMS[@]}"; do
 
         if awk "BEGIN {exit !($TRACK_AHEAD > 0.01)}"; then
             info "Audio track $idx ($codec [$lang]) starts ${TRACK_AHEAD_MS}ms before video - will trim"
-            AUDIO_TRIM_SECS[$i]="$TRACK_AHEAD"
+            AUDIO_TRIM_SECS[i]="$TRACK_AHEAD"
         elif awk "BEGIN {exit !($TRACK_AHEAD < -0.01)}"; then
             warn "Audio track $idx ($codec [$lang]): video starts ${TRACK_AHEAD_MS}ms before audio - may need padding"
-            AUDIO_TRIM_SECS[$i]="0"
+            AUDIO_TRIM_SECS[i]="0"
         else
-            AUDIO_TRIM_SECS[$i]="0"
+            AUDIO_TRIM_SECS[i]="0"
         fi
     else
-        AUDIO_TRIM_SECS[$i]="0"
+        AUDIO_TRIM_SECS[i]="0"
     fi
 done
 
@@ -1471,16 +1496,14 @@ ffmpeg -y -v warning -fflags +genpts+igndts "${FFMPEG_INPUT_ARGS[@]}" \
     -map 0:v:0 -map 0:a? \
     "$REPAIRED_INPUT" > "$FFMPEG_LOG" 2>&1 &
 REPAIR_FF_PID=$!
-while kill -0 "$REPAIR_FF_PID" 2>/dev/null; do
-    sleep 2
-    # out_time_us is the output timeline in microseconds; against the source
-    # duration measured above that is a fraction of the remux.
-    RP_OUT_US=$(grep '^out_time_us=' "$REPAIR_PROGRESS_FILE" 2>/dev/null | tail -1 | cut -d= -f2)
-    [ -n "$RP_OUT_US" ] || continue
-    progress_set "$(awk -v u="$RP_OUT_US" -v d="$CONTAINER_VIDEO_DURATION" -v e="$PROGRESS_REMUX_END" \
+# Against the source duration measured above out_time_us is a fraction of
+# the remux, mapped onto the progress range that ends at PROGRESS_REMUX_END.
+_report_remux_progress() {
+    progress_set "$(awk -v u="$1" -v d="$CONTAINER_VIDEO_DURATION" -v e="$PROGRESS_REMUX_END" \
         'BEGIN { p = (d > 0) ? u / (d * 1000000.0) * e : 0
                  if (p > e) p = e; if (p < 0) p = 0; printf "%d", p }')"
-done
+}
+_poll_ffmpeg_progress "$REPAIR_FF_PID" "$REPAIR_PROGRESS_FILE" _report_remux_progress
 # wait returns the child's exit code, so capture it rather than test wait itself.
 REPAIR_FF_RC=0
 wait "$REPAIR_FF_PID" || REPAIR_FF_RC=$?
@@ -1507,8 +1530,8 @@ if [ "$REPAIR_FF_RC" -eq 0 ]; then
 
     # Verify repaired file
     if [ -s "$REPAIRED_INPUT" ]; then
-        NEW_VIDEO_PTS=$(ffprobe -v error -select_streams v:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
-        NEW_AUDIO_PTS=$(ffprobe -v error -select_streams a:0 -show_entries stream=start_time -of csv "$REPAIRED_INPUT" 2>&1 | grep "^stream," | head -1 | cut -d',' -f2)
+        NEW_VIDEO_PTS=$(_probe_start_time v:0 "$REPAIRED_INPUT")
+        NEW_AUDIO_PTS=$(_probe_start_time a:0 "$REPAIRED_INPUT")
         info "Repaired video start time: ${NEW_VIDEO_PTS:-0}s"
         info "Repaired audio start time: ${NEW_AUDIO_PTS:-0}s"
 
@@ -1556,25 +1579,15 @@ if $ES_MODE; then
     if [ "$VIDEO_CODEC" = "mpeg2video" ]; then
         # Find the PTS of the first I-frame (picture type 1)
         # Use -read_intervals to only analyze first 10 seconds (MUCH faster!)
-        FIRST_I_PTS=$(ffprobe -v error -select_streams v:0 \
-            -read_intervals "%+10" \
-            -show_entries frame=pts_time,pict_type \
-            -of csv=p=0 "$INPUT" 2>/dev/null | \
-            grep ",I$" | head -1 | cut -d',' -f1)
+        FIRST_I_PTS=$(_probe_frame_types "%+10" | grep ",I$" | head -1 | cut -d',' -f1)
 
         if [ -n "$FIRST_I_PTS" ] && [ "$FIRST_I_PTS" != "0" ]; then
             # Check if first frame is NOT an I-frame (i.e., there are leading B-frames)
-            FIRST_FRAME_TYPE=$(ffprobe -v error -select_streams v:0 \
-                -read_intervals "%+1" \
-                -show_entries frame=pict_type \
-                -of csv=p=0 "$INPUT" 2>/dev/null | head -1)
+            FIRST_FRAME_TYPE=$(_probe_frame_types "%+1" | head -1 | cut -d',' -f2)
 
             if [ "$FIRST_FRAME_TYPE" != "I" ]; then
                 # Count B-frames before first I-frame (only need first 2 seconds)
-                B_FRAME_COUNT=$(ffprobe -v error -select_streams v:0 \
-                    -read_intervals "%+2" \
-                    -show_entries frame=pts_time,pict_type \
-                    -of csv=p=0 "$INPUT" 2>/dev/null | \
+                B_FRAME_COUNT=$(_probe_frame_types "%+2" | \
                     awk -F',' 'BEGIN{count=0} $2=="I"{exit} $2=="B"{count++} END{print count}')
 
                 VIDEO_START_TIME="$FIRST_I_PTS"
@@ -1588,7 +1601,7 @@ if $ES_MODE; then
     # If we skipped video by VIDEO_START_TIME, we need to also skip that much audio
     if [ "$VIDEO_START_TIME" != "0" ]; then
         for i in "${!AUDIO_TRIM_SECS[@]}"; do
-            AUDIO_TRIM_SECS[$i]=$(awk "BEGIN {printf \"%.6f\", ${AUDIO_TRIM_SECS[$i]} + $VIDEO_START_TIME}")
+            AUDIO_TRIM_SECS[i]=$(awk "BEGIN {printf \"%.6f\", ${AUDIO_TRIM_SECS[$i]} + $VIDEO_START_TIME}")
         done
         # Legacy variable for logging
         AUDIO_TRIM_SEC="${AUDIO_TRIM_SECS[0]}"
@@ -1654,7 +1667,7 @@ if $ES_MODE; then
         case "$VIDEO_CODEC" in
             h264)
                 ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-                    -map 0:$VIDEO_STREAM \
+                    -map "0:$VIDEO_STREAM" \
                     -c:v copy \
                     -bsf:v h264_mp4toannexb,filter_units=remove_types=12 \
                     -f h264 \
@@ -1662,7 +1675,7 @@ if $ES_MODE; then
                 ;;
             hevc|h265)
                 ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-                    -map 0:$VIDEO_STREAM \
+                    -map "0:$VIDEO_STREAM" \
                     -c:v copy \
                     -bsf:v hevc_mp4toannexb,filter_units=remove_types=38 \
                     -f hevc \
@@ -1674,14 +1687,14 @@ if $ES_MODE; then
                     FFMPEG_ARGS+=("-ss" "$VIDEO_START_TIME")
                 fi
                 ffmpeg -y "${FFMPEG_ARGS[@]}" "${FFMPEG_INPUT_ARGS[@]}" \
-                    -map 0:$VIDEO_STREAM \
+                    -map "0:$VIDEO_STREAM" \
                     -c:v copy \
                     -f mpeg2video \
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
             *)
                 ffmpeg -y "${FFMPEG_INPUT_ARGS[@]}" \
-                    -map 0:$VIDEO_STREAM \
+                    -map "0:$VIDEO_STREAM" \
                     -c:v copy \
                     "$OUTPUT_VIDEO" 2>&1
                 ;;
@@ -1746,7 +1759,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # Wait for all audio extractions
     AUDIO_ERRORS=0
     for i in "${!AUDIO_PIDS[@]}"; do
-        wait ${AUDIO_PIDS[$i]}
+        wait "${AUDIO_PIDS[$i]}"
         if [ $? -ne 0 ]; then
             ((AUDIO_ERRORS++))
             warn "  Audio $i extraction failed"
@@ -2033,23 +2046,17 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 "$INPUT" 2>/dev/null | grep -E '^[0-9]' | head -1)
             # Fallback to min packet PTS if start_time is unavailable.
             if [ -z "$SPAN_FIRST_PTS" ]; then
-                SPAN_FIRST_PTS=$(ffprobe -v error -select_streams v:0 \
-                    -read_intervals "%+2" -show_entries packet=pts_time \
-                    -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | head -1)
+                SPAN_FIRST_PTS=$(_probe_pts_extreme "%+2" head)
             fi
         fi
 
         # Last PTS: probe a window near the end (container span as seek hint),
         # widen once if the first window is empty.
         SPAN_SEEK=$(awk "BEGIN {s = ${CONTAINER_VIDEO_DURATION:-0} - 10; printf \"%.3f\", (s > 0) ? s : 0}")
-        SPAN_LAST_PTS=$(ffprobe -v error -select_streams v:0 \
-            -read_intervals "${SPAN_SEEK}%+15" -show_entries packet=pts_time \
-            -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | tail -1)
+        SPAN_LAST_PTS=$(_probe_pts_extreme "${SPAN_SEEK}%+15" tail)
         if [ -z "$SPAN_LAST_PTS" ]; then
             SPAN_SEEK=$(awk "BEGIN {s = ${CONTAINER_VIDEO_DURATION:-0} - 60; printf \"%.3f\", (s > 0) ? s : 0}")
-            SPAN_LAST_PTS=$(ffprobe -v error -select_streams v:0 \
-                -read_intervals "${SPAN_SEEK}%+60" -show_entries packet=pts_time \
-                -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | tail -1)
+            SPAN_LAST_PTS=$(_probe_pts_extreme "${SPAN_SEEK}%+60" tail)
         fi
 
         if [ -n "$SPAN_FIRST_PTS" ] && [ -n "$SPAN_LAST_PTS" ]; then
@@ -2181,7 +2188,6 @@ with open('$OUTPUT_VIDEO','rb') as f:
             detect_video_gaps "$ORIGINAL_INPUT" "$VIDEO_GAPS_FILE" "$VIDEO_GAP_THRESHOLD_S"
         fi
 
-        GAP_FILES=()
         CLASSIFIED_FILES=()
         HAS_ANY_SILENCE_NEEDED=false
         progress_set 35
@@ -2216,8 +2222,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
             else
                 detect_audio_gaps "$ORIGINAL_INPUT" "$idx" "$GAP_FILE" "$AUDIO_GAP_THRESHOLD_S"
             fi
-            GAP_FILES[$i]="$GAP_FILE"
-            CLASSIFIED_FILES[$i]="$CLASSIFIED_FILE"
+            CLASSIFIED_FILES[i]="$CLASSIFIED_FILE"
 
             # Melde-Pfad, getrennt vom Reparatur-Pfad: audio_gap_frames zeigt,
             # WO der Ton Luecken hatte - unabhaengig davon, ob die Zonenbilanz
@@ -2601,11 +2606,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
             # therefore skipped every such stream as "empty". Byte-counting
             # an ffmpeg stream-copy sample is the reliable probe.
             sub_bytes=$(timeout 90 ffmpeg -v error -ss "$sub_midpoint" -t 120 \
-                "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f mpegts - 2>/dev/null | wc -c)
+                "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
             if [ "${sub_bytes:-0}" -eq 0 ]; then
                 # Subs may simply be absent during the mid-point window.
                 sub_bytes=$(timeout 90 ffmpeg -v error -t 120 \
-                    "${SUBS_INPUT_ARGS[@]}" -map 0:$idx -c copy -f mpegts - 2>/dev/null | wc -c)
+                    "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" -c copy -f mpegts - 2>/dev/null | wc -c)
             fi
             if [ "${sub_bytes:-0}" -eq 0 ]; then
                 info "  Subtitle $idx [$lang] ($codec) - empty, skipped"
@@ -2636,7 +2641,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" \
                         -copyts -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
                         -muxdelay 0 -avoid_negative_ts disabled \
-                        -map 0:$idx -c copy -f mpegts "$SUBS_TS" > "$SUBS_EXTRACT_LOG" 2>&1 || true
+                        -map "0:$idx" -c copy -f mpegts "$SUBS_TS" > "$SUBS_EXTRACT_LOG" 2>&1 || true
                     warn_ffmpeg_log "$SUBS_EXTRACT_LOG" "  "
                     if [ ! -s "$SUBS_TS" ]; then
                         info "  DVB subtitle $idx [$lang] - no data extracted, skipped"
@@ -2752,7 +2757,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 subrip|srt|text)
                     OUTPUT_SUB="$OUTDIR/${BASENAME}_${lang}.srt"
                     info "  Subtitle $idx [$lang] -> $OUTPUT_SUB"
-                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map 0:$idx "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
+                    ffmpeg -y "${SUBS_INPUT_ARGS[@]}" -map "0:$idx" "$OUTPUT_SUB" 2>&1 | grep -E "^(Output|Stream)" || true
                     SUBTITLE_FILES+=("$OUTPUT_SUB")
                     ;;
                 *)
@@ -2805,7 +2810,6 @@ with open('$OUTPUT_VIDEO','rb') as f:
             AV_OFFSET_MS="0"
         fi
     else
-        AV_OFFSET="0"
         AV_OFFSET_MS="0"
         warn "  Could not determine A/V offset"
     fi
@@ -2926,7 +2930,7 @@ EOF
 
         ALL_GAP_FRAMES=()
         for entry in "${AUDIO_GAP_FRAMES_SOURCE_PTS[@]}"; do
-            IFS=' ' read -r gs ge silence_ms <<< "$entry"
+            IFS=' ' read -r gs _ silence_ms <<< "$entry"
             gs_frame=$(awk "BEGIN {printf \"%d\", ($gs - $FIRST_VIDEO_PTS) * $FRAME_RATE_NUM_LOCAL / $FRAME_RATE_DEN_LOCAL + 0.5}")
             [ "$gs_frame" -lt 0 ] && gs_frame=0
             # Compute end-frame from silence_ms (at least 1 frame for visibility)

@@ -362,12 +362,15 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 
 ## Redundanz / offene Punkte
 
-- Die drei gerichteten Suchen (`operation()` in `_blackframe`, `_logo`,
-  `_scenechange`) haben denselben Rumpf: `setupWorkers` → erste Position →
-  Schleife aus `collectNextBatch` + `parallelMap` + erster Treffer → `found` →
-  `teardownWorkers`. Unterschied ist ausschließlich das Urteil pro Bild (und
-  bei Logo/Szenenwechsel ein Anfangszustand aus Worker 0). Kandidat für eine
-  Schablonenmethode `bool matchesAt(int pos, int workerIndex)` in der Basis.
+- ~~Die drei gerichteten Suchen (`operation()` in `_blackframe`, `_logo`,
+  `_scenechange`) haben denselben Rumpf.~~ Zusammengeführt im Code-Audit
+  2026-09-03: `TTSearchTask::runDirectedSearch(pos, logTag, timer, step)`
+  (Schablone in `data/ttsearchtask.h`) hält Schleife, Fortschritt, Protokoll,
+  `found` und `teardownWorkers` einmal; die drei `operation()` stellen nur
+  noch `setupWorkers`, ihren Anfangszustand und das Urteil je Batch als
+  Lambda (Treffer-Position oder −1). Gleichwertigkeit belegt mit
+  `tools/diag/test_directed_search` (alter/neuer Stand identisch auf den
+  H.264-, HEVC- und MPEG-2-`_duplicate`-Fixtures, inkl. Abbruchpfad).
 - `TTSearchTask::isFrameBlackAt` und `buildHistogramAt` enthalten je eine
   MPEG-2-Zweitimplementierung dessen, was `TTFFmpegWrapper` für H.26x tut —
   inklusive der 10-%-Randmaske und der `step = 2`-Abtastung. Drei Kopien
@@ -408,3 +411,4 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 | `tools/diag/test_task_cleanup_order` | `[wiederholungen]` | Aufräum-Reihenfolge aus `f8fe7dd6` — **braucht einen ASAN-Bau**, Aufrufzeile steht in der Datei |
 | `tools/diag/test_abort_after_finish` | ohne Argumente | Spät-Abbruch nach Ende aus `0af72ab1`, drei Fälle inkl. Wiederverwendung |
 | `tools/diag/test_framesearch_progress` | `<es-datei> [refIndex] [searchIndex]` | Meldeverhalten und Indexübernahme der Gleichbild-Suche (`TTFrameSearchTask`) |
+| `tools/diag/test_directed_search` | `<es-datei> [start] [schwarz] [szene] [logo]` | die drei gerichteten Suchen vorwärts/rückwärts plus Selbstabbruch; Ausgabe ohne Zeiten, also zwischen zwei Bauständen diff-bar |

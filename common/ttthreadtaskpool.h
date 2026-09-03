@@ -28,14 +28,14 @@ class TTThreadTask;
 //! Class to manage various thread tasks
 class TTThreadTaskPool : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
-	public:
-		TTThreadTaskPool();
+    public:
+        TTThreadTaskPool();
     ~TTThreadTaskPool();
 
     void  init(int estimateTaskCount);
-		void  start(TTThreadTask* task, bool runSyncron=false, int priority=0);
+        void  start(TTThreadTask* task, bool runSyncron=false, int priority=0);
     void  startNested(TTThreadTask* task);
     int   overallPercentage();
 
@@ -61,20 +61,20 @@ class TTThreadTaskPool : public QObject
     void statusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
   public slots:
-		void onUserAbortRequest();
+        void onUserAbortRequest();
 
-	private slots:
-	  void onThreadTaskStarted(TTThreadTask* task);
-		void onThreadTaskFinished(TTThreadTask* task);
-		void onThreadTaskAborted(TTThreadTask* task);
-		void onThreadTaskDestroyed(QObject* task);
+    private slots:
+      void onThreadTaskStarted(TTThreadTask* task);
+        void onThreadTaskFinished(TTThreadTask* task);
+        void onThreadTaskAborted(TTThreadTask* task);
+        void onThreadTaskDestroyed(QObject* task);
     void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
-	private:
-		void cleanUpQueue();
+    private:
+        void cleanUpQueue();
     int  runningTaskCount();
 
-	private:
+    private:
     QQueue<TTThreadTask*> mTaskQueue;
     QString               mLastFailureMessage;
     QMap<QUuid, quint64>  mTotalMap;

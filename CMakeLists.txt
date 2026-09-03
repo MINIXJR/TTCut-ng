@@ -93,7 +93,7 @@ set(TTCUT_HEADERS
   data/ttsearchtask_logo.h
   data/ttsearchtask_aspectscan.h
   data/ttaudioanomalyscantask.h
-  data/ttcutparameter.h
+  avstream/ttcutparameter.h
   data/ttmuxlistdata.h
   data/ttavdata.h
   data/ttavlist.h
@@ -134,6 +134,7 @@ set(TTCUT_HEADERS
   avstream/ttsubtitleheaderlist.h
   avstream/ttvideoindexlist.h
   mpeg2decoder/ttmpeg2decoder.h
+  avstream/ttframeinfo.h
   mpeg2window/ttmpeg2window2.h
   extern/imuxprovider.h
   extern/ttencodeparameter.h
@@ -209,7 +210,7 @@ set(TTCUT_CORE_SOURCES
   data/ttsearchtask_logo.cpp
   data/ttsearchtask_aspectscan.cpp
   data/ttaudioanomalyscantask.cpp
-  data/ttcutparameter.cpp
+  avstream/ttcutparameter.cpp
   data/ttmuxlistdata.cpp
   data/ttavdata.cpp
   data/ttavlist.cpp
@@ -289,6 +290,7 @@ set(TTCUT_CORE_SOURCES
   gui/ttcutavcutdlg.cpp
   gui/ttgotoframedialog.cpp
   gui/ttcutmainwindow.cpp
+  gui/ttcutmainwindow_headless.cpp
   gui/ttquickjumpmodel.cpp
   gui/ttquickjumpdelegate.cpp
   gui/ttquickjumpworker.cpp

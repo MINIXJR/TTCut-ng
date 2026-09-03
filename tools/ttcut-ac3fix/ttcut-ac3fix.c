@@ -79,8 +79,6 @@ typedef struct {
     /* Format change tracking */
     uint64_t format_changes;
     int last_acmod;
-    uint64_t segment_start_frame;
-    double segment_start_time;
 } ac3fix_stats_t;
 
 /* AC3 frame info */
@@ -190,6 +188,20 @@ static void format_time(double seconds, char *buf, size_t bufsize)
     snprintf(buf, bufsize, "%02d:%02d:%06.3f", h, m, s);
 }
 
+/* Header of the report: what is processed and how. */
+static void print_ac3_banner(const ac3fix_options_t *opts)
+{
+    printf("TTCut AC3 Header Repair Tool\n");
+    printf("============================\n");
+    printf("Input:  %s\n", opts->input_file);
+    if (!opts->analyze_only && opts->output_file)
+        printf("Output: %s\n", opts->output_file);
+    printf("Mode:   %s\n", opts->analyze_only ? "Analyze only" :
+                          (opts->force_fix ? "Force fix all" : "Fix"));
+    printf("Min bitrate for fix: %d kbps\n", opts->min_bitrate);
+    printf("\n");
+}
+
 /* Process AC3 file */
 static int process_ac3_file(const ac3fix_options_t *opts)
 {
@@ -240,15 +252,7 @@ static int process_ac3_file(const ac3fix_options_t *opts)
         }
     }
 
-    printf("TTCut AC3 Header Repair Tool\n");
-    printf("============================\n");
-    printf("Input:  %s\n", opts->input_file);
-    if (!opts->analyze_only && opts->output_file)
-        printf("Output: %s\n", opts->output_file);
-    printf("Mode:   %s\n", opts->analyze_only ? "Analyze only" :
-                          (opts->force_fix ? "Force fix all" : "Fix"));
-    printf("Min bitrate for fix: %d kbps\n", opts->min_bitrate);
-    printf("\n");
+    print_ac3_banner(opts);
 
     /* Process file frame by frame */
     uint8_t frame_buffer[4096];  /* Max AC3 frame is ~3840 bytes */
@@ -462,33 +466,24 @@ static void print_usage(const char *progname)
     printf("  %s -F -v input.ac3 fixed.ac3      # Fix with verbose output\n", progname);
 }
 
-int main(int argc, char **argv)
+/* Command-line options into *opts. Returns -1 to continue, otherwise the
+ * exit code to leave with (0 after --help, 1 after a usage error). */
+static int parse_ac3fix_args(int argc, char **argv, ac3fix_options_t *opts)
 {
-    ac3fix_options_t opts = {
-        .input_file = NULL,
-        .output_file = NULL,
-        .analyze_only = false,
-        .verbose = false,
-        .force = false,
-        .force_fix = false,
-        .show_segments = false,
-        .min_bitrate = 384
-    };
-
     /* Parse arguments */
     int positional = 0;
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--analyze") == 0) {
-                opts.analyze_only = true;
+                opts->analyze_only = true;
             } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
-                opts.verbose = true;
+                opts->verbose = true;
             } else if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--force") == 0) {
-                opts.force = true;
+                opts->force = true;
             } else if (strcmp(argv[i], "-F") == 0 || strcmp(argv[i], "--force-fix") == 0) {
-                opts.force_fix = true;
+                opts->force_fix = true;
             } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--show-segments") == 0) {
-                opts.show_segments = true;
+                opts->show_segments = true;
             } else if (strcmp(argv[i], "-b") == 0 || strcmp(argv[i], "--bitrate") == 0) {
                 if (i + 1 < argc) {
                     int val = atoi(argv[++i]);
@@ -496,7 +491,7 @@ int main(int argc, char **argv)
                         fprintf(stderr, "Error: Invalid bitrate '%s' (valid: 32-640 kbps)\n", argv[i]);
                         return 1;
                     }
-                    opts.min_bitrate = (uint16_t)val;
+                    opts->min_bitrate = (uint16_t)val;
                 } else {
                     fprintf(stderr, "Error: -b requires an argument\n");
                     return 1;
@@ -510,13 +505,33 @@ int main(int argc, char **argv)
             }
         } else {
             if (positional == 0) {
-                opts.input_file = argv[i];
+                opts->input_file = argv[i];
             } else if (positional == 1) {
-                opts.output_file = argv[i];
+                opts->output_file = argv[i];
             }
             positional++;
         }
     }
+
+    return -1;
+}
+
+int main(int argc, char **argv)
+{
+    ac3fix_options_t opts = {
+        .input_file = NULL,
+        .output_file = NULL,
+        .analyze_only = false,
+        .verbose = false,
+        .force = false,
+        .force_fix = false,
+        .show_segments = false,
+        .min_bitrate = 384
+    };
+
+    int rc = parse_ac3fix_args(argc, argv, &opts);
+    if (rc >= 0)
+        return rc;
 
     /* Validate arguments */
     if (!opts.input_file) {

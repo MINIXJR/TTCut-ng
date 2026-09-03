@@ -537,6 +537,57 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
 /* /////////////////////////////////////////////////////////////////////////////
  * Shift the cut point by one frame to avoid the audio burst
  */
+// The burst shift moves one edge (mBurstIsCutOut selects which) of a cut
+// to newIdx; the copy in mpOriginalCutList identifies the cut by position.
+
+// Update the REAL model data via TTAVItem::updateCutEntry. The copy's
+// avDataItem() points to the real TTAVItem in the model; the real cut item
+// is found by matching its position.
+void TTCutPreview::updateRealCutItem(const TTCutItem& copyItem, int oldIdx, int newIdx)
+{
+  TTAVItem* avItem = copyItem.avDataItem();
+  if (!mpAVData || !avItem) return;
+  for (int i = 0; i < mpAVData->cutCount(); i++) {
+    TTCutItem realItem = mpAVData->cutItemAt(i);
+    if (realItem.cutInIndex() == copyItem.cutInIndex() &&
+        realItem.cutOutIndex() == copyItem.cutOutIndex() &&
+        realItem.avDataItem() == avItem) {
+      if (mBurstIsCutOut) {
+        avItem->updateCutEntry(realItem, realItem.cutInIndex(), newIdx);
+      } else {
+        avItem->updateCutEntry(realItem, newIdx, realItem.cutOutIndex());
+      }
+      if (TTSettings::instance()->logUI())
+          qDebug() << "Burst shift: Updated REAL model cut" << i
+                   << (mBurstIsCutOut ? "CutOut" : "CutIn")
+                   << "Frame" << oldIdx << "->" << newIdx;
+      break;
+    }
+  }
+}
+
+// Mirror the shifted edge into the preview's own two lists: the copy of the
+// original cut list and the preview entry the burst re-check reads.
+void TTCutPreview::applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx)
+{
+  TTCutItem updatedCopy(copyItem);
+  if (mBurstIsCutOut) {
+    updatedCopy.update(copyItem.cutInIndex(), newIdx);
+  } else {
+    updatedCopy.update(newIdx, copyItem.cutOutIndex());
+  }
+  mpOriginalCutList->update(copyItem, updatedCopy);
+
+  TTCutItem previewItem = mpCutList->at(mBurstSegmentIdx);
+  TTCutItem updatedPreview(previewItem);
+  if (mBurstIsCutOut) {
+    updatedPreview.update(previewItem.cutInIndex(), newIdx);
+  } else {
+    updatedPreview.update(newIdx, previewItem.cutOutIndex());
+  }
+  mpCutList->update(previewItem, updatedPreview);
+}
+
 void TTCutPreview::onBurstShift()
 {
   if (mBurstSegmentIdx < 0 || !mpCutList || !mpOriginalCutList) return;
@@ -571,48 +622,8 @@ void TTCutPreview::onBurstShift()
     newIdx = oldIdx + 1;
   }
 
-  // Update the REAL model data via TTAVItem::updateCutEntry
-  // The copy's avDataItem() points to the real TTAVItem in the model
-  TTAVItem* avItem = copyItem.avDataItem();
-  if (mpAVData && avItem) {
-    // Find the real cut item in the model by matching position
-    for (int i = 0; i < mpAVData->cutCount(); i++) {
-      TTCutItem realItem = mpAVData->cutItemAt(i);
-      if (realItem.cutInIndex() == copyItem.cutInIndex() &&
-          realItem.cutOutIndex() == copyItem.cutOutIndex() &&
-          realItem.avDataItem() == avItem) {
-        if (mBurstIsCutOut) {
-          avItem->updateCutEntry(realItem, realItem.cutInIndex(), newIdx);
-        } else {
-          avItem->updateCutEntry(realItem, newIdx, realItem.cutOutIndex());
-        }
-        if (TTSettings::instance()->logUI())
-            qDebug() << "Burst shift: Updated REAL model cut" << i
-                     << (mBurstIsCutOut ? "CutOut" : "CutIn")
-                     << "Frame" << oldIdx << "->" << newIdx;
-        break;
-      }
-    }
-  }
-
-  // Update the copy in our original cut list
-  TTCutItem updatedCopy(copyItem);
-  if (mBurstIsCutOut) {
-    updatedCopy.update(copyItem.cutInIndex(), newIdx);
-  } else {
-    updatedCopy.update(newIdx, copyItem.cutOutIndex());
-  }
-  mpOriginalCutList->update(copyItem, updatedCopy);
-
-  // Also update preview cut list entry so burst re-check uses new values
-  TTCutItem previewItem = mpCutList->at(mBurstSegmentIdx);
-  TTCutItem updatedPreview(previewItem);
-  if (mBurstIsCutOut) {
-    updatedPreview.update(previewItem.cutInIndex(), newIdx);
-  } else {
-    updatedPreview.update(newIdx, previewItem.cutOutIndex());
-  }
-  mpCutList->update(previewItem, updatedPreview);
+  updateRealCutItem(copyItem, oldIdx, newIdx);
+  applyBurstShiftToLists(copyItem, newIdx);
 
   if (TTSettings::instance()->logUI())
       qDebug() << "Burst shift:" << (mBurstIsCutOut ? "CutOut" : "CutIn")
@@ -786,15 +797,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
     int frameDurationNs = static_cast<int>(1000000000.0 / fps);
     TTMkvMergeProvider mkvProv;
     mkvProv.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-    {
-      AVCodecID codecId;
-      switch (vStream->streamType()) {
-        case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
-        case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
-        default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-      }
-      mkvProv.setVideoCodecId(codecId);
-    }
+    mkvProv.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(vStream->streamType()));
     if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
     mkvProv.mux(outputFile, videoFile, cutAudioFiles, QStringList());
   } else {
@@ -907,15 +910,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
   mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
-  {
-    AVCodecID codecId;
-    switch (vStream->streamType()) {
-      case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
-      case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
-      default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-    }
-    mkvProvider.setVideoCodecId(codecId);
-  }
+  mkvProvider.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(vStream->streamType()));
   // Display-PTS: SmartCut-supplied output order (empty = legacy linear PTS)
   mkvProvider.setVideoDisplayOrder(smartCut.outputDisplayOrder());
   if (avOffsetMs != 0) {

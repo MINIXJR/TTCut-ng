@@ -66,28 +66,11 @@ void TTMPEG2Window2::resizeEvent (QResizeEvent*)
 /*!
  * show the current video frame (picBuffer or FFmpeg QImage)
  */
-void TTMPEG2Window2::showVideoFrame()
+// Aspect correction applied before the widget scaling: MPEG-2 signals the
+// display aspect of the whole picture (DAR), H.26x the sample aspect (SAR);
+// both are corrected in the upscale direction so no detail is lost.
+void TTMPEG2Window2::computeDisplayScale(float& scaleFactorX, float& scaleFactorY) const
 {
-  QImage frameToShow;
-
-  if (mUseFFmpeg) {
-    // Use FFmpeg decoded frame
-    if (mCurrentFrame.isNull()) return;
-    frameToShow = mCurrentFrame;
-    videoWidth = frameToShow.width();
-    videoHeight = frameToShow.height();
-  } else {
-    // Use MPEG-2 decoder
-    if (mpeg2Decoder == 0) return;
-    if (frameInfo    == 0) return;
-    if (picBuffer    == 0) return;
-
-    frameToShow = QImage(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32);
-  }
-
-  float scaleFactorX = 1.0;
-  float scaleFactorY = 1.0;
-
   if (mpVideoStream != 0 && !mUseFFmpeg && videoWidth > 0 && videoHeight > 0) {
     // MPEG-2 aspect_ratio_information signals the DISPLAY aspect ratio of
     // the whole picture (2 = 4:3, 3 = 16:9, 4 = 2.21:1), unlike H.26x SAR.
@@ -136,6 +119,30 @@ void TTMPEG2Window2::showVideoFrame()
         scaleFactorY = (float)(1.0 / sar);  // heighten (SAR < 1, theoretical)
     }
   }
+}
+
+void TTMPEG2Window2::showVideoFrame()
+{
+  QImage frameToShow;
+
+  if (mUseFFmpeg) {
+    // Use FFmpeg decoded frame
+    if (mCurrentFrame.isNull()) return;
+    frameToShow = mCurrentFrame;
+    videoWidth = frameToShow.width();
+    videoHeight = frameToShow.height();
+  } else {
+    // Use MPEG-2 decoder
+    if (mpeg2Decoder == 0) return;
+    if (frameInfo    == 0) return;
+    if (picBuffer    == 0) return;
+
+    frameToShow = QImage(picBuffer, videoWidth, videoHeight, QImage::Format_RGB32);
+  }
+
+  float scaleFactorX = 1.0;
+  float scaleFactorY = 1.0;
+  computeDisplayScale(scaleFactorX, scaleFactorY);
 
   QImage scale = frameToShow.scaled(qRound(videoWidth*scaleFactorX), qRound(videoHeight*scaleFactorY), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
@@ -316,7 +323,7 @@ void TTMPEG2Window2::openVideoFile( QString fName, TTVideoIndexList* viIndex, TT
   {
   	mpeg2Decoder = new TTMpeg2Decoder(fName, viIndex, viHeader);
   }
-  catch (TTMpeg2DecoderException ex)
+  catch (const TTMpeg2DecoderException& ex)
   {
   	log->errorMsg(__FILE__, __LINE__, ex.message());
   }
@@ -363,7 +370,7 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
     // building our own if vStream is not an H.26x stream or its index is not
     // available yet.
     bool indexAdopted = false;
-    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(vStream)) {
       indexAdopted = h26x->provideFrameIndexTo(mpFFmpegWrapper);
     }
     if (!indexAdopted) {
@@ -449,7 +456,7 @@ void TTMPEG2Window2::moveToVideoFrame(int iFramePos)
 		mAspectIndex = iFramePos;
 		getFrameInfo();
 	}
-	catch (TTMpeg2DecoderException ex)
+	catch (const TTMpeg2DecoderException& ex)
 	{
 		log->errorMsg(__FILE__, __LINE__, ex.message());
 	}
@@ -513,10 +520,17 @@ QRect TTMPEG2Window2::currentPixmapRect() const
   return QRect(x, y, pmSize.width(), pmSize.height());
 }
 
+// Pixmap rectangle inside the widget, false when nothing is displayed yet.
+bool TTMPEG2Window2::pixmapGeometry(QRect& pmRect) const
+{
+  pmRect = currentPixmapRect();
+  return !(pmRect.isEmpty() || videoWidth <= 0 || videoHeight <= 0);
+}
+
 QRect TTMPEG2Window2::imageToWidgetRect(const QRect& imageRect) const
 {
-  QRect pmRect = currentPixmapRect();
-  if (pmRect.isEmpty() || videoWidth <= 0 || videoHeight <= 0) return QRect();
+  QRect pmRect;
+  if (!pixmapGeometry(pmRect)) return QRect();
 
   float scaleX = (float)pmRect.width() / videoWidth;
   float scaleY = (float)pmRect.height() / videoHeight;
@@ -531,8 +545,8 @@ QRect TTMPEG2Window2::imageToWidgetRect(const QRect& imageRect) const
 
 QRect TTMPEG2Window2::widgetToImageRect(const QRect& widgetRect) const
 {
-  QRect pmRect = currentPixmapRect();
-  if (pmRect.isEmpty() || videoWidth <= 0 || videoHeight <= 0) return QRect();
+  QRect pmRect;
+  if (!pixmapGeometry(pmRect)) return QRect();
 
   float scaleX = (float)videoWidth / pmRect.width();
   float scaleY = (float)videoHeight / pmRect.height();

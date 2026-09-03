@@ -27,6 +27,7 @@ extern "C" {
 
 #include <QDebug>
 #include <QLocale>
+#include <QScopeGuard>
 #include <clocale>
 
 TTStreamPointAudioWorker::TTStreamPointAudioWorker(
@@ -126,8 +127,29 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
 {
   QList<TTStreamPoint> results;
 
-  // Open audio file
+  // Every libav handle is released by one scope guard, whichever exit is
+  // taken; each free function tolerates a null handle, so a handle that was
+  // never created costs nothing.
   AVFormatContext* fmtCtx = nullptr;
+  AVCodecContext* codecCtx = nullptr;
+  AVFilterGraph* filterGraph = nullptr;
+  AVFilterInOut* inputs = nullptr;
+  AVFilterInOut* outputs = nullptr;
+  AVPacket* pkt = nullptr;
+  AVFrame* frame = nullptr;
+  AVFrame* filtFrame = nullptr;
+  const auto releaseAll = qScopeGuard([&]() {
+    av_frame_free(&filtFrame);
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    avfilter_inout_free(&inputs);
+    avfilter_inout_free(&outputs);
+    avfilter_graph_free(&filterGraph);
+    avcodec_free_context(&codecCtx);
+    avformat_close_input(&fmtCtx);
+  });
+
+  // Open audio file
   if (avformat_open_input(&fmtCtx, mAudioFilePath.toUtf8().constData(),
                            nullptr, nullptr) < 0) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -135,13 +157,11 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     return silenceUnavailable(tr("the audio file could not be opened"));
   }
   if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("the stream information could not be read"));
   }
 
   int audioIdx = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
   if (audioIdx < 0) {
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("the file contains no audio stream"));
   }
 
@@ -150,20 +170,17 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   if (!codec) {
     const QString codecName =
         QString::fromUtf8(avcodec_get_name(aStream->codecpar->codec_id));
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("no decoder available for %1").arg(codecName));
   }
 
-  AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
+  codecCtx = avcodec_alloc_context3(codec);
   avcodec_parameters_to_context(codecCtx, aStream->codecpar);
   if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
-    avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("the audio decoder could not be opened"));
   }
 
   // Build filter graph: abuffersrc -> silencedetect -> abuffersink
-  AVFilterGraph* filterGraph = avfilter_graph_alloc();
+  filterGraph = avfilter_graph_alloc();
   AVFilterContext* bufferSrcCtx = nullptr;
   AVFilterContext* bufferSinkCtx = nullptr;
 
@@ -188,14 +205,11 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
                                     nullptr, nullptr, filterGraph) < 0) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("StreamPointAudio: Failed to create audio buffer src/sink"));
-    avfilter_graph_free(&filterGraph);
-    avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("the audio filter input could not be created"));
   }
 
-  AVFilterInOut* inputs = avfilter_inout_alloc();
-  AVFilterInOut* outputs = avfilter_inout_alloc();
+  inputs = avfilter_inout_alloc();
+  outputs = avfilter_inout_alloc();
   outputs->name = av_strdup("in");
   outputs->filter_ctx = bufferSrcCtx;
   outputs->pad_idx = 0;
@@ -215,27 +229,16 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
       avfilter_graph_config(filterGraph, nullptr) < 0) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("StreamPointAudio: Failed to configure silencedetect filter"));
-    avfilter_inout_free(&inputs);
-    avfilter_inout_free(&outputs);
-    avfilter_graph_free(&filterGraph);
-    avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("the silence filter could not be configured"));
   }
   avfilter_inout_free(&inputs);
   avfilter_inout_free(&outputs);
 
   // Decode + filter loop
-  AVPacket* pkt = av_packet_alloc();
-  AVFrame* frame = av_frame_alloc();
-  AVFrame* filtFrame = av_frame_alloc();
+  pkt = av_packet_alloc();
+  frame = av_frame_alloc();
+  filtFrame = av_frame_alloc();
   if (!pkt || !frame || !filtFrame) {
-    av_packet_free(&pkt);
-    av_frame_free(&frame);
-    av_frame_free(&filtFrame);
-    avcodec_free_context(&codecCtx);
-    avfilter_graph_free(&filterGraph);
-    avformat_close_input(&fmtCtx);
     return silenceUnavailable(tr("not enough memory for the audio buffers"));
   }
 
@@ -274,13 +277,6 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     collectSilenceResult(filtFrame, results);
     av_frame_unref(filtFrame);
   }
-
-  av_frame_free(&filtFrame);
-  av_frame_free(&frame);
-  av_packet_free(&pkt);
-  avfilter_graph_free(&filterGraph);
-  avcodec_free_context(&codecCtx);
-  avformat_close_input(&fmtCtx);
 
   return results;
 }

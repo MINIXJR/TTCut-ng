@@ -420,16 +420,9 @@ void TTFFmpegWrapper::parseH264SpsFromExtradata(const uint8_t* data, int size)
     if (!data || size < 5) return;
 
     int nalStart = -1;
-    for (int pos = 0; pos < size - 4; pos++) {
-        if (data[pos] == 0 && data[pos+1] == 0) {
-            int start = -1;
-            if (data[pos+2] == 1) start = pos + 3;
-            else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) start = pos + 4;
-            if (start >= 0 && start < size && (data[start] & 0x1F) == 7) {
-                nalStart = start;
-                break;
-            }
-        }
+    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
+         s = TTNaluParser::findStartCodePayload(data, size, s)) {
+        if ((data[s] & 0x1F) == 7) { nalStart = s; break; }
     }
     if (nalStart < 0) return;
 
@@ -504,16 +497,10 @@ TTFFmpegWrapper::TTFieldInfo TTFFmpegWrapper::parseH264FieldInfoFromPacket(const
     if (!data || size < 4 || mH264FrameMbsOnlyFlag) return result;
 
     int nalStart = -1;
-    for (int pos = 0; pos < size - 4; pos++) {
-        if (data[pos] == 0 && data[pos+1] == 0) {
-            int start = -1;
-            if (data[pos+2] == 1) start = pos + 3;
-            else if (data[pos+2] == 0 && pos + 3 < size && data[pos+3] == 1) start = pos + 4;
-            if (start >= 0 && start < size) {
-                uint8_t nalType = data[start] & 0x1F;
-                if (nalType == 1 || nalType == 5) { nalStart = start; break; }
-            }
-        }
+    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
+         s = TTNaluParser::findStartCodePayload(data, size, s)) {
+        uint8_t nalType = data[s] & 0x1F;
+        if (nalType == 1 || nalType == 5) { nalStart = s; break; }
     }
 
     if (nalStart < 0 && size >= 3) {

@@ -76,7 +76,7 @@ set(MPEG2CUT_SRC
   ${ROOT}/avstream/ttavheader.cpp
   ${ROOT}/avstream/ttavstream.cpp
   ${ROOT}/avstream/ttcommon.cpp
-  ${ROOT}/data/ttcutparameter.cpp
+  ${ROOT}/avstream/ttcutparameter.cpp
   ${ROOT}/common/ttexception.cpp
   ${ROOT}/avstream/ttfilebuffer.cpp
   ${ROOT}/avstream/ttheaderlist.cpp
@@ -328,6 +328,7 @@ diag_tool(test_quickjump_thumbheight AV MPEG2 WIDGETS SOURCES)
 diag_tool(test_auto_anomaly_scan_trigger AV MPEG2 WIDGETS SOURCES)
 diag_tool(test_stale_abort        AV WIDGETS SOURCES)
 diag_tool(test_framesearch_progress AV WIDGETS SOURCES)
+diag_tool(test_directed_search AV WIDGETS SOURCES)
 diag_tool(test_pulse_animation    WIDGETS SOURCES)
 diag_tool(test_cutlist_minsize    AV WIDGETS SOURCES)
 diag_tool(test_output_name        AV WIDGETS SOURCES)
@@ -337,6 +338,7 @@ diag_tool(test_pulse_stylesheet   WIDGETS SOURCES
   ${ROOT}/common/ttsettings.cpp)
 target_link_libraries(test_stale_abort PRIVATE ttcut-core)
 target_link_libraries(test_framesearch_progress PRIVATE ttcut-core)
+target_link_libraries(test_directed_search PRIVATE ttcut-core)
 target_link_libraries(test_dialog_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_preview_then_cut PRIVATE ttcut-core)
 target_link_libraries(test_mainwindow_then_cut PRIVATE ttcut-core)

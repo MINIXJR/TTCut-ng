@@ -169,7 +169,7 @@ fi
 # Baue Auswahlliste: Tag=Verzeichnispfad, Label=Sendung — Datum
 CHECKLIST_ARGS=()
 for dir in "${REC_DIRS[@]}"; do
-    rel_path="${dir#$IN_PFAD/}"
+    rel_path="${dir#"$IN_PFAD"/}"
     show_name="$(vdr_unmask "$(basename "$(dirname "$dir")")")"
     rec_name="${rel_path#*/}"
     rec_date=$(echo "$rec_name" | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})\.([0-9]{2})\.([0-9]{2})\..*/\1 \2:\3/')
@@ -409,7 +409,7 @@ if command -v kdialog &>/dev/null; then
     fi
 else
     { [ ${#DAMAGED_LIST[@]} -gt 0 ] || [ ${#LOSS_LIST[@]} -gt 0 ]; } && { echo ""; echo "$FINAL_TEXT"; }
-    read -p "TTCut starten? [j/N] " antwort
+    read -r -p "TTCut starten? [j/N] " antwort
     if [[ "$antwort" =~ ^[jJyY] ]]; then
         "$TTCUT" &
     fi

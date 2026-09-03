@@ -19,9 +19,9 @@
 #include <cstdio>
 
 const int   TTMessageLogger::STD_LOG_MODE   = TTMessageLogger::SUMMARIZE;
-int         TTMessageLogger::logMode        = TTMessageLogger::STD_LOG_MODE;
-int         TTMessageLogger::logLevel       = TTMessageLogger::ALL;
-const char* TTMessageLogger::SUM_FILE_NAME  = "logfile.log";
+int         TTMessageLogger::sLogMode        = TTMessageLogger::STD_LOG_MODE;
+int         TTMessageLogger::sLogLevel       = TTMessageLogger::ALL;
+const char* TTMessageLogger::SUM_FILE_NAME  = "mLogFile.log";
 
 TTMessageLogger* TTMessageLogger::loggerInstance = nullptr;
 
@@ -37,7 +37,7 @@ QString defaultLogPath()
         cacheDir = QDir::tempPath();
     }
     QDir().mkpath(cacheDir + "/ttcut-ng");
-    return cacheDir + "/ttcut-ng/logfile.log";
+    return cacheDir + "/ttcut-ng/mLogFile.log";
 }
 
 QString formatVa(const char* fmt, va_list ap)
@@ -51,22 +51,22 @@ QString formatVa(const char* fmt, va_list ap)
 // Construction / singleton access
 // -----------------------------------------------------------------------------
 TTMessageLogger::TTMessageLogger(int mode)
-    : logfile(nullptr)
+    : mLogFile(nullptr)
     , mLogFilePath(defaultLogPath())
     , mLogFileOpenAttempted(false)
-    , logEnabled(true)
-    , logConsole(false)
-    , logExtended(false)
+    , mLogEnabled(true)
+    , mLogConsole(false)
+    , mLogExtended(false)
 {
-    logMode = mode;
+    sLogMode = mode;
 }
 
 TTMessageLogger::~TTMessageLogger()
 {
-    if (logfile) {
-        logfile->close();
-        delete logfile;
-        logfile = nullptr;
+    if (mLogFile) {
+        mLogFile->close();
+        delete mLogFile;
+        mLogFile = nullptr;
     }
 }
 
@@ -94,35 +94,35 @@ void TTMessageLogger::setLogFilePath(const QString& path)
     if (newPath == mLogFilePath) return;
 
     mLogFilePath = newPath;
-    if (logfile) {
-        logfile->close();
-        delete logfile;
-        logfile = nullptr;
+    if (mLogFile) {
+        mLogFile->close();
+        delete mLogFile;
+        mLogFile = nullptr;
     }
     mLogFileOpenAttempted = false;
 }
 
 void TTMessageLogger::enableLogFile(bool enable)
 {
-    // File-write toggle ONLY — does not touch logLevel any more
-    // (consumers configure logLevel via setLogLevel / setLogModeExtended).
-    logEnabled = enable;
+    // File-write toggle ONLY — does not touch sLogLevel any more
+    // (consumers configure sLogLevel via setLogLevel / setLogModeExtended).
+    mLogEnabled = enable;
 }
 
 void TTMessageLogger::setLogModeConsole(bool console)
 {
     if (console) {
-        logMode = SUMMARIZE | CONSOLE;
+        sLogMode = SUMMARIZE | CONSOLE;
     } else {
-        logMode = SUMMARIZE;
+        sLogMode = SUMMARIZE;
     }
-    logConsole = console;
+    mLogConsole = console;
 }
 
 void TTMessageLogger::setLogModeExtended(bool extended)
 {
-    logExtended = extended;
-    logLevel = (logExtended) ? ALL : MINIMAL;
+    mLogExtended = extended;
+    sLogLevel = (mLogExtended) ? ALL : MINIMAL;
 }
 
 // -----------------------------------------------------------------------------
@@ -195,7 +195,7 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
                               QString msgString, bool show)
 {
     // Serialize across threads: the new libav log callback runs on libav's
-    // own decode/encode worker threads, so concurrent writes to logfile and
+    // own decode/encode worker threads, so concurrent writes to mLogFile and
     // racey ensureLogFileOpen would otherwise interleave / double-init.
     std::lock_guard<std::mutex> lock(mLogMutex);
 
@@ -203,12 +203,12 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     QFileInfo fInfo(caller);
     QString msgCaller = fInfo.baseName();
 
-    if ((logLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
+    if ((sLogLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
 
-    if ((logLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
+    if ((sLogLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
                                   (msgType != WARNING))) return;
 
-    if ((logLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
+    if ((sLogLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
                                    (msgType != WARNING) && (msgType != INFO))) return;
 
     if (msgType == INFO)    msgTypeStr = "info";
@@ -223,7 +223,7 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     // TODO: implement message window display
     (void)show;
 
-    if (logMode & CONSOLE || msgType == ERROR) {
+    if (sLogMode & CONSOLE || msgType == ERROR) {
         // Direct stderr write (not qDebug) — with the Qt message handler
         // installed in main(), qDebug would re-enter ttQtMessageHandler →
         // debugMsg → logMsg(DEBUG, ...), duplicating every ERROR entry as
@@ -308,18 +308,18 @@ void TTMessageLogger::ensureLogFileOpen()
         delete f;
         return;
     }
-    logfile = f;
+    mLogFile = f;
 }
 
 void TTMessageLogger::writeMsg(QString msgString)
 {
-    if (!logEnabled) return;          // file writes suppressed (LOW-1 fix)
+    if (!mLogEnabled) return;          // file writes suppressed (LOW-1 fix)
 
     ensureLogFileOpen();              // lazy open (MEDIUM-2 fix)
-    if (!logfile) return;             // open failed earlier — silent skip
+    if (!mLogFile) return;             // open failed earlier — silent skip
 
     QByteArray bytes = msgString.toUtf8();
     bytes.append('\n');
-    logfile->write(bytes);
-    logfile->flush();
+    mLogFile->write(bytes);
+    mLogFile->flush();
 }

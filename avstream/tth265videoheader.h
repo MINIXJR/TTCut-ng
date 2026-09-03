@@ -202,7 +202,6 @@ public:
     // GOP structure
     int gopIndex() const { return mGopIndex; }
     int temporalId() const { return mTemporalId; }
-    int pocValue() const { return mPocValue; }  // Picture Order Count
 
     // Setters
     void setFrameIndex(int idx) { mFrameIndex = idx; }
@@ -214,7 +213,6 @@ public:
     void setIsReference(bool ref) { mIsReference = ref; }
     void setGopIndex(int idx) { mGopIndex = idx; }
     void setTemporalId(int tid) { mTemporalId = tid; }
-    void setPocValue(int poc) { mPocValue = poc; }
 
 
 private:
@@ -227,7 +225,6 @@ private:
     bool mIsReference;
     int mGopIndex;
     int mTemporalId;
-    int mPocValue;
 };
 
 #endif // TTH265VIDEOHEADER_H

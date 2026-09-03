@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QSettings>
 #include <QStandardPaths>
+#include <algorithm>
 
 TTWindowGeometry ttLoadWindowGeometry(QSettings& settings, const QString& group)
 {
@@ -23,8 +24,9 @@ TTWindowGeometry ttLoadWindowGeometry(QSettings& settings, const QString& group)
   // Every key must be present: a half-written group means a half-placed
   // window, which is worse than falling back to the default position.
   const QStringList required = {"x", "y", "width", "height"};
-  for (const QString& key : required)
-    if (!settings.contains(base + key)) return g;
+  if (std::any_of(required.begin(), required.end(),
+                  [&](const QString& key) { return !settings.contains(base + key); }))
+    return g;
 
   const int w = settings.value(base + "width").toInt();
   const int h = settings.value(base + "height").toInt();

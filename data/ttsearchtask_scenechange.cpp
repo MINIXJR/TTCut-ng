@@ -72,13 +72,7 @@ void TTSceneChangeSearchTask::operation()
 
   struct HistResult { int hist[256]; int total; };
 
-  int checked = 0;
-  int foundPos = -1;
-
-  while (pos >= 0 && pos < mFrameCount && !mIsAborted) {
-    QVector<int> batch = collectNextBatch(pos);
-    if (batch.isEmpty()) break;
-
+  runDirectedSearch(pos, "SceneChangeSearch:", t, [&](const QVector<int>& batch) -> int {
     QVector<HistResult> hists(batch.size());
     for (auto& h : hists) { std::memset(h.hist, 0, sizeof(h.hist)); h.total = 0; }
 
@@ -90,31 +84,18 @@ void TTSceneChangeSearchTask::operation()
       }
     });
 
-    if (mIsAborted) break;
+    if (mIsAborted) return -1;
 
     // Sequential diff against mPrevHist.
     for (int i = 0; i < batch.size(); ++i) {
       if (hists[i].total <= 0) continue;
       float d = histogramDifference(mPrevHist, hists[i].hist, mPrevTotal, hists[i].total);
-      if (d > mThreshold) { foundPos = batch[i]; break; }
+      if (d > mThreshold) return batch[i];
       std::memcpy(mPrevHist, hists[i].hist, sizeof(mPrevHist));
       mPrevTotal = hists[i].total;
     }
-    if (foundPos >= 0) break;
-
-    checked += batch.size();
-    if (checked % 20 < batch.size()) emit progress(checked);
-  }
-
-  qint64 ms = t.elapsed();
-  if (TTSettings::instance()->logCutPipeline())
-      qDebug() << "SceneChangeSearch:" << checked << "I-frames in" << ms << "ms"
-               << (checked > 0
-                     ? QString("(%1 fps, %2 workers)").arg(1000.0 * checked / ms, 0, 'f', 1).arg(mWorkerCount)
-                     : QString());
-
-  emit found(foundPos, mIsAborted);
-  teardownWorkers();
+    return -1;
+  });
 }
 
 float TTSceneChangeSearchTask::histogramDifference(const int histA[256], const int histB[256],

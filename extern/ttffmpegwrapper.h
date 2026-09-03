@@ -29,7 +29,7 @@
 #include "../avstream/ttdisplayordermap.h"
 #include "ttaudiorepair.h"
 
-#include "../mpeg2decoder/ttmpeg2decoder.h"
+#include "../avstream/ttframeinfo.h"
 
 // Forward declarations for libav types (avoid including C headers in .h)
 struct AVFormatContext;
@@ -44,42 +44,42 @@ struct SwsContext;
 // Stream information structure
 // ----------------------------------------------------------------------------
 struct TTStreamInfo {
-    int streamIndex;
-    int codecType;          // AVMEDIA_TYPE_VIDEO, AVMEDIA_TYPE_AUDIO, etc.
-    int codecId;            // AV_CODEC_ID_H264, AV_CODEC_ID_HEVC, etc.
+    int streamIndex = -1;
+    int codecType = -1;     // AVMEDIA_TYPE_VIDEO, AVMEDIA_TYPE_AUDIO, etc.
+    int codecId = 0;        // AV_CODEC_ID_H264, AV_CODEC_ID_HEVC, etc.
     QString codecName;      // "h264", "hevc", "mpeg2video", etc.
 
     // Video specific
-    int width;
-    int height;
-    double frameRate;
-    int64_t bitRate;
-    int profile;
-    int level;
+    int width = 0;
+    int height = 0;
+    double frameRate = 0.0;
+    int64_t bitRate = 0;
+    int profile = 0;
+    int level = 0;
 
     // Audio specific
-    int sampleRate;
-    int channels;
-    int bitsPerSample;
+    int sampleRate = 0;
+    int channels = 0;
+    int bitsPerSample = 0;
 
     // Common
-    int64_t duration;       // in stream timebase
-    int64_t numFrames;      // estimated frame count
+    int64_t duration = 0;   // in stream timebase
+    int64_t numFrames = 0;  // estimated frame count
 };
 
 // ----------------------------------------------------------------------------
 // Frame information for frame index
 // ----------------------------------------------------------------------------
 struct TTFrameInfo {
-    int64_t pts;            // Presentation timestamp
-    int64_t dts;            // Decode timestamp
-    int64_t fileOffset;     // Byte offset in file
-    int64_t packetSize;     // Packet size in bytes
-    int frameType;          // AV_PICTURE_TYPE_I, _P, _B
-    bool isKeyframe;        // IDR frame (H.264) or keyframe
-    int gopIndex;           // Which GOP this frame belongs to
-    int frameIndex;         // Sequential frame number
-    bool isFieldCoded;      // true if merged from two PAFF field packets
+    int64_t pts = 0;        // Presentation timestamp
+    int64_t dts = 0;        // Decode timestamp
+    int64_t fileOffset = 0; // Byte offset in file
+    int64_t packetSize = 0; // Packet size in bytes
+    int frameType = 0;      // AV_PICTURE_TYPE_I, _P, _B
+    bool isKeyframe = false; // IDR frame (H.264) or keyframe
+    int gopIndex = 0;       // Which GOP this frame belongs to
+    int frameIndex = 0;     // Sequential frame number
+    bool isFieldCoded = false; // true if merged from two PAFF field packets
     // True decode-order index of the frame that decodeFrame() delivers for this
     // (decode-order) position. Differs from frameIndex when B-frame reorder
     // shifts decode vs display order. Lazily filled on first decode; -1 = unknown.

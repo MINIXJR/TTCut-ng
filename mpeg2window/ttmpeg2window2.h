@@ -42,7 +42,7 @@ class TTMPEG2Window2 : public QLabel
   Q_OBJECT
 
   public:
-    TTMPEG2Window2( QWidget* parent=0 );
+    explicit TTMPEG2Window2( QWidget* parent=0 );
 
     void resizeEvent(QResizeEvent * event);
 
@@ -90,7 +90,9 @@ class TTMPEG2Window2 : public QLabel
 
   	void getFrameInfo();
     QString getSubtitleTextAtCurrentFrame();
-    void drawSubtitleOnImage(QImage& image, const QString& text);
+    static void drawSubtitleOnImage(QImage& image, const QString& text);
+    void computeDisplayScale(float& scaleFactorX, float& scaleFactorY) const;
+    bool pixmapGeometry(QRect& pmRect) const;
 
   private:
     // Logo ROI selection

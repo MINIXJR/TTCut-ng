@@ -81,19 +81,19 @@ class TTMessageLogger
   private:
     void   ensureLogFileOpen();   // lazy open on first writeMsg call
 
-    QFile*  logfile;
+    QFile*  mLogFile;
     QString mLogFilePath;
     bool    mLogFileOpenAttempted;
     std::mutex mLogMutex;            // serialize logMsg across threads
                                      // (libav callback runs on libav's
                                      // decode/encode worker threads)
     static TTMessageLogger* loggerInstance;
-    bool   logEnabled;
-    bool   logConsole;
-    bool   logExtended;
+    bool   mLogEnabled;
+    bool   mLogConsole;
+    bool   mLogExtended;
 
-    static       int   logMode;
-    static       int   logLevel;
+    static       int   sLogMode;
+    static       int   sLogLevel;
     static const int   STD_LOG_MODE;
     static const char* SUM_FILE_NAME;
 };

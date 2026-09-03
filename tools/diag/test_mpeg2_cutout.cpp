@@ -44,7 +44,7 @@
 #include "avstream/ttmpeg2videostream.h"
 #include "avstream/ttvideoindexlist.h"
 #include "avstream/ttfilebuffer.h"
-#include "data/ttcutparameter.h"
+#include "avstream/ttcutparameter.h"
 
 int main(int argc, char** argv)
 {

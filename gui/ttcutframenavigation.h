@@ -58,8 +58,8 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     void onNextSceneChange();
     void onCancelSceneSearch();
     void setSceneSearchRunning(bool running);
-    void onBlackThresholdChanged(double value);
-    void onSceneThresholdChanged(double value);
+    static void onBlackThresholdChanged(double value);
+    static void onSceneThresholdChanged(double value);
     void onSelectLogoROI();
     void onPrevLogo();
     void onNextLogo();

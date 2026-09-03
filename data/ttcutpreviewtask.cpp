@@ -22,7 +22,7 @@
 #include "../common/ttthreadtaskpool.h"
 #include "../common/istatusreporter.h"
 #include "../avstream/ttavtypes.h"
-#include "../data/ttcutparameter.h"
+#include "../avstream/ttcutparameter.h"
 #include "../data/ttcutlist.h"
 #include "../data/ttavdata.h"
 #include "../avstream/ttavstream.h"
@@ -398,15 +398,7 @@ void TTCutPreviewTask::operation()
           audioFiles.append(audioFile);
           TTMkvMergeProvider mkvProv;
           mkvProv.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-          {
-            AVCodecID codecId;
-            switch (vStream->streamType()) {
-              case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
-              case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
-              default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-            }
-            mkvProv.setVideoCodecId(codecId);
-          }
+          mkvProv.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(vStream->streamType()));
           if (avOffsetMs != 0) mkvProv.setAudioSyncOffset(avOffsetMs);
           mkvProv.mux(outputFile, videoFile, audioFiles, QStringList());
           if (TTSettings::instance()->logCutPipeline())
@@ -754,15 +746,7 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
   mkvProvider.setIsPAFF(vStream->isPAFF(), vStream->paffLog2MaxFrameNum());
-  {
-    AVCodecID codecId;
-    switch (vStream->streamType()) {
-      case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
-      case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
-      default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-    }
-    mkvProvider.setVideoCodecId(codecId);
-  }
+  mkvProvider.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(vStream->streamType()));
   // Display-PTS: SmartCut-supplied output order (empty = legacy linear PTS)
   mkvProvider.setVideoDisplayOrder(smartCut->outputDisplayOrder());
 

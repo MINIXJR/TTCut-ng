@@ -109,10 +109,49 @@ static const uint8_t *ts_payload(const uint8_t *pkt, int *payload_len)
         return NULL;
     }
 
+    /* hdr_len is 4 or, guarded above, < TS_PACKET_SIZE: the payload is never empty */
     *payload_len = TS_PACKET_SIZE - hdr_len;
-    if (*payload_len <= 0)
-        return NULL;
     return pkt + hdr_len;
+}
+
+/* PID of a TS packet, or -1 when the sync byte is missing. */
+static int ts_packet_pid(const uint8_t *pkt)
+{
+    if (pkt[0] != TS_SYNC_BYTE)
+        return -1;
+    return ((pkt[1] & 0x1F) << 8) | pkt[2];
+}
+
+/* Iterate the PSI section starts of one PID: from *off onwards, find the next
+ * packet of target_pid that carries a payload, skip the pointer_field when
+ * payload_unit_start_indicator is set, advance *off past that packet and
+ * return the section pointer with *remaining bytes; NULL when no further
+ * packet exists. */
+static const uint8_t *next_pid_section(const uint8_t *ts_data, int64_t ts_size,
+                                       int64_t *off, int target_pid, int *remaining)
+{
+    for (; *off + TS_PACKET_SIZE <= ts_size; *off += TS_PACKET_SIZE) {
+        const uint8_t *pkt = ts_data + *off;
+        if (ts_packet_pid(pkt) != target_pid)
+            continue;
+
+        int plen;
+        const uint8_t *payload = ts_payload(pkt, &plen);
+        if (!payload || plen < 1)
+            continue;
+
+        const uint8_t *p = payload;
+        int rem = plen;
+        if (pkt[1] & 0x40) {
+            int pointer = p[0];
+            p += 1 + pointer;
+            rem -= 1 + pointer;
+        }
+        *off += TS_PACKET_SIZE;
+        *remaining = rem;
+        return p;
+    }
+    return NULL;
 }
 
 /* Parse PAT to find PMT PID, then PMT to find video stream PID.
@@ -128,29 +167,10 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
         *stream_type_out = 0;
 
     /* Step 1: Find PAT (PID 0) and extract first non-NIT PMT PID */
-    for (int64_t off = 0; off + TS_PACKET_SIZE <= ts_size; off += TS_PACKET_SIZE) {
-        const uint8_t *pkt = ts_data + off;
-        if (pkt[0] != TS_SYNC_BYTE)
-            continue;
-
-        int pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        if (pid != PAT_PID)
-            continue;
-
-        int plen;
-        const uint8_t *payload = ts_payload(pkt, &plen);
-        if (!payload || plen < 1)
-            continue;
-
-        /* If payload_unit_start_indicator is set, skip pointer_field */
-        const uint8_t *p = payload;
-        int remaining = plen;
-        if (pkt[1] & 0x40) {
-            int pointer = p[0];
-            p += 1 + pointer;
-            remaining -= 1 + pointer;
-        }
-
+    int64_t off = 0;
+    const uint8_t *p;
+    int remaining;
+    while ((p = next_pid_section(ts_data, ts_size, &off, PAT_PID, &remaining)) != NULL) {
         if (remaining < 8)
             continue;
 
@@ -163,9 +183,8 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
         p += 3;
         remaining -= 3;
 
-        /* Skip transport_stream_id(2) + reserved/version/current(1) + section_number(1) + last_section_number(1) */
-        if (remaining < 5)
-            continue;
+        /* Skip transport_stream_id(2) + reserved/version/current(1) + section_number(1) + last_section_number(1);
+         * remaining >= 5 follows from the >= 8 check above */
         p += 5;
         remaining -= 5;
 
@@ -189,29 +208,8 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
         return -1;
 
     /* Step 2: Find PMT and extract video PID */
-    for (int64_t off = 0; off + TS_PACKET_SIZE <= ts_size; off += TS_PACKET_SIZE) {
-        const uint8_t *pkt = ts_data + off;
-        if (pkt[0] != TS_SYNC_BYTE)
-            continue;
-
-        int pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-        if (pid != pmt_pid)
-            continue;
-
-        int plen;
-        const uint8_t *payload = ts_payload(pkt, &plen);
-        if (!payload || plen < 1)
-            continue;
-
-        /* If payload_unit_start_indicator is set, skip pointer_field */
-        const uint8_t *p = payload;
-        int remaining = plen;
-        if (pkt[1] & 0x40) {
-            int pointer = p[0];
-            p += 1 + pointer;
-            remaining -= 1 + pointer;
-        }
-
+    off = 0;
+    while ((p = next_pid_section(ts_data, ts_size, &off, pmt_pid, &remaining)) != NULL) {
         if (remaining < 12)
             continue;
 
@@ -226,9 +224,8 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
         p += 3;
         remaining -= 3;
 
-        /* Skip program_number(2) + ver(1) + secnum(1) + lastsec(1) + PCR_PID(2) */
-        if (remaining < 9)
-            continue;
+        /* Skip program_number(2) + ver(1) + secnum(1) + lastsec(1) + PCR_PID(2);
+         * remaining >= 9 follows from the >= 12 check above */
         p += 7;
         remaining -= 7;
 
@@ -294,6 +291,47 @@ static int64_t parse_pes_timestamp(const uint8_t *p)
     return ts;
 }
 
+/* True for VDR's segment file names: NNNNN.ts (5-digit number). */
+static bool is_vdr_segment_name(const char *base)
+{
+    if (strlen(base) != 8 || strcmp(base + 5, ".ts") != 0)
+        return false;
+    for (int i = 0; i < 5; i++) {
+        if (base[i] < '0' || base[i] > '9')
+            return false;
+    }
+    return true;
+}
+
+/* Read PTS/DTS from the PES header at the start of a video PES packet and
+ * return the number of payload bytes the header occupies (0 when the payload
+ * does not start with a video PES header; pts/dts stay -1 then). */
+static int parse_video_pes_header(const uint8_t *payload, int plen,
+                                  int64_t *pts, int64_t *dts)
+{
+    /* Verify PES start code: 0x00 0x00 0x01 */
+    if (plen < 9 || payload[0] != 0x00 || payload[1] != 0x00 || payload[2] != 0x01)
+        return 0;
+
+    uint8_t stream_id = payload[3];
+    /* Video stream IDs: 0xE0-0xEF */
+    if (stream_id < 0xE0 || stream_id > 0xEF)
+        return 0;
+
+    int pes_header_data_length = payload[8];
+    int pts_dts_flags = (payload[7] >> 6) & 0x03;
+
+    if (pts_dts_flags == 2 && plen >= 14) {
+        /* PTS only */
+        *pts = parse_pes_timestamp(payload + 9);
+    } else if (pts_dts_flags == 3 && plen >= 19) {
+        /* PTS + DTS */
+        *pts = parse_pes_timestamp(payload + 9);
+        *dts = parse_pes_timestamp(payload + 14);
+    }
+    return 9 + pes_header_data_length;
+}
+
 /* Given a TS path like "/path/00001.ts", find all sibling VDR segments
  * (00002.ts, 00003.ts, ...) in the same directory.
  * Returns array of malloc'd path strings and count. Caller frees. */
@@ -314,19 +352,7 @@ static int find_vdr_segments(const char *first_ts, char ***segments, int *count)
     const char *dir = dirname(path_copy1);
     const char *base = basename(path_copy2);
 
-    /* Check if filename matches VDR pattern: NNNNN.ts (5-digit number) */
-    bool is_vdr = false;
-    if (strlen(base) == 8 && strcmp(base + 5, ".ts") == 0) {
-        is_vdr = true;
-        for (int i = 0; i < 5; i++) {
-            if (base[i] < '0' || base[i] > '9') {
-                is_vdr = false;
-                break;
-            }
-        }
-    }
-
-    if (!is_vdr) {
+    if (!is_vdr_segment_name(base)) {
         /* Not a VDR recording — return single entry */
         *segments = (char **)malloc(sizeof(char *));
         if (!*segments) {
@@ -439,11 +465,7 @@ static int collect_access_units(const char *ts_path, int video_pid,
 
         for (int64_t off = 0; off + TS_PACKET_SIZE <= ts_size; off += TS_PACKET_SIZE) {
             const uint8_t *pkt = ts_data + off;
-            if (pkt[0] != TS_SYNC_BYTE)
-                continue;
-
-            int pid = ((pkt[1] & 0x1F) << 8) | pkt[2];
-            if (pid != video_pid)
+            if (ts_packet_pid(pkt) != video_pid)
                 continue;
 
             /* Continuity counter check */
@@ -488,30 +510,7 @@ static int collect_access_units(const char *ts_path, int video_pid,
 
                 /* Parse PES header */
                 int64_t pts = -1, dts = -1;
-                int es_skip = 0;  /* bytes to skip in this packet's payload for PES header */
-
-                /* Verify PES start code: 0x00 0x00 0x01 */
-                if (plen >= 9 &&
-                    payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01) {
-                    uint8_t stream_id = payload[3];
-
-                    /* Video stream IDs: 0xE0-0xEF */
-                    if (stream_id >= 0xE0 && stream_id <= 0xEF) {
-                        int pes_header_data_length = payload[8];
-                        int pts_dts_flags = (payload[7] >> 6) & 0x03;
-
-                        if (pts_dts_flags == 2 && plen >= 14) {
-                            /* PTS only */
-                            pts = parse_pes_timestamp(payload + 9);
-                        } else if (pts_dts_flags == 3 && plen >= 19) {
-                            /* PTS + DTS */
-                            pts = parse_pes_timestamp(payload + 9);
-                            dts = parse_pes_timestamp(payload + 14);
-                        }
-
-                        es_skip = 9 + pes_header_data_length;
-                    }
-                }
+                int es_skip = parse_video_pes_header(payload, plen, &pts, &dts);
 
                 /* Initialize new AU */
                 aus[num_aus].pts = pts;
@@ -566,116 +565,84 @@ static int cmp_pts_entry(const void *a, const void *b)
     return (va > vb) - (va < vb);
 }
 
-/* Analyze DTS/PTS sequence to identify extra frames.
- *
- * Three detection methods, applied in order:
- * 1. DTS monotonicity: marks AUs with backward/duplicate DTS (when DTS present)
- * 2. PTS duplicate: marks AUs with exact PTS match within sliding window
- * 3. PTS grid analysis (primary for MPEG-2): detects regions where PTS spacing
- *    drops to half the nominal frame duration, indicating doubled frames from
- *    TS corruption during demux. Frames off the normal grid are marked extra.
- *
- * Handles PTS/DTS wrap (>1s backward jump = epoch reset, not anomaly).
- * Returns number of extra frames detected. */
-static int detect_extra_frames(AccessUnit *aus, int count, int verbose,
-                               bool skip_grid)
+/* Method 1: DTS monotonicity. Marks AUs whose DTS steps backwards or repeats;
+ * a jump of more than one second backwards is a PTS/DTS wrap or segment
+ * boundary, not an anomaly. Returns the number of extra frames marked. */
+static int detect_dts_monotonicity(AccessUnit *aus, int count, int verbose)
 {
-    if (count <= 1)
-        return 0;
+    int64_t last_valid_dts = -1;
+    int dts_extras = 0;
 
-    int extra_count = 0;
+    for (int i = 0; i < count; i++) {
+        if (aus[i].dts < 0)
+            continue;
 
-    /* --- Method 1: DTS monotonicity check --- */
-    {
-        int64_t last_valid_dts = -1;
-        int dts_extras = 0;
-
-        for (int i = 0; i < count; i++) {
-            if (aus[i].dts < 0)
-                continue;
-
-            if (last_valid_dts >= 0 && aus[i].dts <= last_valid_dts) {
-                if ((last_valid_dts - aus[i].dts) > 90000) {
-                    /* >1s backward jump = PTS/DTS wrap or segment boundary */
-                    if (verbose)
-                        fprintf(stderr, "  DTS epoch reset at AU #%d: %lld -> %lld\n",
-                                i, (long long)last_valid_dts, (long long)aus[i].dts);
-                    last_valid_dts = aus[i].dts;
-                } else {
-                    aus[i].extra = true;
-                    dts_extras++;
-                    if (verbose)
-                        fprintf(stderr, "  Extra frame AU #%d: DTS=%lld (non-monotonic, prev=%lld)\n",
-                                i, (long long)aus[i].dts, (long long)last_valid_dts);
-                }
-            } else {
+        if (last_valid_dts >= 0 && aus[i].dts <= last_valid_dts) {
+            if ((last_valid_dts - aus[i].dts) > 90000) {
+                /* >1s backward jump = PTS/DTS wrap or segment boundary */
+                if (verbose)
+                    fprintf(stderr, "  DTS epoch reset at AU #%d: %lld -> %lld\n",
+                            i, (long long)last_valid_dts, (long long)aus[i].dts);
                 last_valid_dts = aus[i].dts;
+            } else {
+                aus[i].extra = true;
+                dts_extras++;
+                if (verbose)
+                    fprintf(stderr, "  Extra frame AU #%d: DTS=%lld (non-monotonic, prev=%lld)\n",
+                            i, (long long)aus[i].dts, (long long)last_valid_dts);
+            }
+        } else {
+            last_valid_dts = aus[i].dts;
+        }
+    }
+
+    if (dts_extras > 0 && verbose)
+        fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (DTS monotonicity method)\n",
+                dts_extras);
+    return dts_extras;
+}
+
+/* Method 2: exact PTS duplicates within a sliding window of 16 AUs.
+ * Returns the number of extra frames marked. */
+static int detect_pts_duplicates(AccessUnit *aus, int count, int verbose)
+{
+    int dup_extras = 0;
+
+    for (int i = 1; i < count; i++) {
+        if (aus[i].pts < 0)
+            continue;
+
+        int window_start = (i - 16 > 0) ? i - 16 : 0;
+        for (int j = i - 1; j >= window_start; j--) {
+            if (aus[j].pts == aus[i].pts && aus[j].pts >= 0) {
+                aus[i].extra = true;
+                dup_extras++;
+                if (verbose)
+                    fprintf(stderr, "  Extra frame AU #%d: PTS=%lld (duplicate of AU #%d)\n",
+                            i, (long long)aus[i].pts, j);
+                break;
             }
         }
-
-        if (dts_extras > 0) {
-            extra_count = dts_extras;
-            if (verbose)
-                fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (DTS monotonicity method)\n",
-                        extra_count);
-            return extra_count;
-        }
     }
 
-    /* --- Method 2: PTS duplicate check (sliding window of 16) --- */
-    {
-        int dup_extras = 0;
+    if (dup_extras > 0 && verbose)
+        fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (PTS duplicate method)\n",
+                dup_extras);
+    return dup_extras;
+}
 
-        for (int i = 1; i < count; i++) {
-            if (aus[i].pts < 0)
-                continue;
-
-            int window_start = (i - 16 > 0) ? i - 16 : 0;
-            for (int j = i - 1; j >= window_start; j--) {
-                if (aus[j].pts == aus[i].pts && aus[j].pts >= 0) {
-                    aus[i].extra = true;
-                    dup_extras++;
-                    if (verbose)
-                        fprintf(stderr, "  Extra frame AU #%d: PTS=%lld (duplicate of AU #%d)\n",
-                                i, (long long)aus[i].pts, j);
-                    break;
-                }
-            }
-        }
-
-        if (dup_extras > 0) {
-            extra_count = dup_extras;
-            if (verbose)
-                fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (PTS duplicate method)\n",
-                        extra_count);
-            return extra_count;
-        }
-    }
-
-    /* --- Method 3 gate ---
-     * H.264/H.265 interlaced streams legitimately carry field-rate PTS
-     * (one PES packet per PAFF field, half-duration spacing). The grid
-     * heuristic cannot tell those from TS corruption, so it is skipped
-     * for H.26x; Methods 1/2 above still catch genuine PTS/DTS defects.
-     * (Measured 2026-07-19 on mixed MBAFF+PAFF material: 1296 grid hits,
-     * zero real defects.) */
-    if (skip_grid) {
-        if (verbose)
-            fprintf(stderr, "PTS grid analysis: skipped for H.264/H.265 "
-                    "(field-rate PTS is legitimate)\n");
-        return 0;
-    }
-
-    /* --- Method 3: PTS grid analysis --- */
-    /* Sort PTS values and detect regions where spacing drops to half the
-     * nominal frame duration. In those regions, frames that fall off the
-     * normal frame-duration grid are extra (doubled frames from TS corruption).
-     *
-     * Example: 25fps nominal = 3600 ticks. In corrupted regions, spacing
-     * drops to 1800 ticks (50 fields/s). Every other frame in such a run
-     * is extra — specifically the ones whose PTS doesn't align with the
-     * 3600-tick grid established by the surrounding normal frames. */
-
+/* Method 3: PTS grid analysis (primary for MPEG-2). Sort PTS values and detect
+ * regions where spacing drops to half the nominal frame duration. In those
+ * regions, frames that fall off the normal frame-duration grid are extra
+ * (doubled frames from TS corruption).
+ *
+ * Example: 25fps nominal = 3600 ticks. In corrupted regions, spacing
+ * drops to 1800 ticks (50 fields/s). Every other frame in such a run
+ * is extra - specifically the ones whose PTS doesn't align with the
+ * 3600-tick grid established by the surrounding normal frames.
+ * Returns the number of extra frames marked. */
+static int detect_pts_grid(AccessUnit *aus, int count, int verbose)
+{
     /* Collect AUs with valid PTS */
     int valid_count = 0;
     for (int i = 0; i < count; i++) {
@@ -708,7 +675,7 @@ static int detect_extra_frames(AccessUnit *aus, int count, int verbose,
      * Sample gaps and find the mode. Common values: 3600 (25fps), 3003 (29.97fps),
      * 1800 (50fps), 1501 (59.94fps). */
     int64_t gap_counts[8] = {0};
-    int64_t gap_values[8] = {3600, 3003, 1800, 1501, 3750, 7200, 6006, 0};
+    const int64_t gap_values[8] = {3600, 3003, 1800, 1501, 3750, 7200, 6006, 0};
     int num_gap_types = 7;
 
     for (int i = 1; i < valid_count && i < 10000; i++) {
@@ -801,12 +768,48 @@ static int detect_extra_frames(AccessUnit *aus, int count, int verbose,
 
     free(sorted);
 
-    extra_count = grid_extras;
     if (verbose)
         fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (PTS grid method, "
-                "half-duration=%lld ticks)\n", extra_count, (long long)half_duration);
+                "half-duration=%lld ticks)\n", grid_extras, (long long)half_duration);
 
-    return extra_count;
+    return grid_extras;
+}
+
+/* Analyze DTS/PTS sequence to identify extra frames.
+ *
+ * Three detection methods, applied in order; the first one that finds
+ * anything decides:
+ * 1. DTS monotonicity (when DTS present)
+ * 2. PTS duplicates within a sliding window
+ * 3. PTS grid analysis (primary for MPEG-2; skipped for H.26x, whose
+ *    interlaced streams legitimately carry field-rate PTS - measured
+ *    2026-07-19 on mixed MBAFF+PAFF material: 1296 grid hits, zero real
+ *    defects - Methods 1/2 still catch genuine PTS/DTS defects there)
+ *
+ * Handles PTS/DTS wrap (>1s backward jump = epoch reset, not anomaly).
+ * Returns number of extra frames detected. */
+static int detect_extra_frames(AccessUnit *aus, int count, int verbose,
+                               bool skip_grid)
+{
+    if (count <= 1)
+        return 0;
+
+    int extras = detect_dts_monotonicity(aus, count, verbose);
+    if (extras > 0)
+        return extras;
+
+    extras = detect_pts_duplicates(aus, count, verbose);
+    if (extras > 0)
+        return extras;
+
+    if (skip_grid) {
+        if (verbose)
+            fprintf(stderr, "PTS grid analysis: skipped for H.264/H.265 "
+                    "(field-rate PTS is legitimate)\n");
+        return 0;
+    }
+
+    return detect_pts_grid(aus, count, verbose);
 }
 
 /* ---- main ---- */

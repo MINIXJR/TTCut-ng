@@ -32,20 +32,19 @@ class TTTranscodeProvider : public IStatusReporter
   Q_OBJECT
 
   public:
-    TTTranscodeProvider(TTEncodeParameter& enc_par);
+    explicit TTTranscodeProvider(TTEncodeParameter& encPar);
     ~TTTranscodeProvider();
 
     bool encodePart(TTVideoStream* vStream, int start, int end);
 
-    TTEncodeParameter parameter() { return enc_par; }
 
   private:
     bool setupEncoder();
     void freeEncoder();
     bool encodeFrames(TTVideoStream* vs, int start, int end);
 
-    TTMessageLogger*  log;
-    TTEncodeParameter enc_par;
+    TTMessageLogger*  mLog;
+    TTEncodeParameter mEncPar;
     AVCodecContext*    mEncoder;
 };
 

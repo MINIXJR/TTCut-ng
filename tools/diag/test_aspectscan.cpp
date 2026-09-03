@@ -32,6 +32,7 @@
 #include "avstream/ttavtypes.h"
 #include "extern/ttffmpegwrapper.h"
 #include "common/ttthreadtask.h"
+#include "mpeg2decoder/ttmpeg2decoder.h"
 
 extern "C" {
 #include <libavutil/avutil.h>

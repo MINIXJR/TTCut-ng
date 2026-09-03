@@ -28,97 +28,97 @@ class TTSubtitleStream;
 
 class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
 {
-	Q_OBJECT
+  Q_OBJECT
 
-		public:
-		TTCurrentFrame(QWidget* parent = 0);
-		~TTCurrentFrame();
+    public:
+    TTCurrentFrame(QWidget* parent = 0);
+    ~TTCurrentFrame();
 
-		void setTitle(const QString & title);
-		void controlEnabled(bool enabled);
-		TTMPEG2Window2* videoWindow() { return mpegWindow; }
-		void saveCurrentFrame();
-		void setSubtitleStream(TTSubtitleStream* subtitleStream);
-		void clearSubtitleStream();
-		void setSubtitleDelay(int delayMs);
-		// Cheap re-render of the still frame already held by mpegWindow (no
-		// re-decode) so a newly wired subtitle overlay appears immediately.
-		// No-op while playback is running.
-		void refreshCurrentFrame();
+    void setTitle(const QString & title);
+    void controlEnabled(bool enabled);
+    TTMPEG2Window2* videoWindow() { return mpegWindow; }
+    void saveCurrentFrame();
+    void setSubtitleStream(TTSubtitleStream* subtitleStream);
+    void clearSubtitleStream();
+    void setSubtitleDelay(int delayMs);
+    // Cheap re-render of the still frame already held by mpegWindow (no
+    // re-decode) so a newly wired subtitle overlay appears immediately.
+    // No-op while playback is running.
+    void refreshCurrentFrame();
 
-		void wheelEvent(QWheelEvent * e);
+    void wheelEvent(QWheelEvent * e);
 
-	protected:
-		bool eventFilter(QObject* watched, QEvent* event) override;
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
-	public slots:
-		void onAVDataChanged(TTAVItem* avData);
-		void onCutInChanged(const TTCutItem& cutItem);
-		void onPlayVideo();
-		void onPrevIFrame();
-		void onNextIFrame();
-		void onPrevPFrame();
-		void onNextPFrame();
-		void onPrevBFrame();
-		void onNextBFrame();
-		void onWidgetPrevFrame();
-		void onWidgetNextFrame();
-		void onSetMarker();
-		void onGotoCutIn(int pos);
-		void onGotoCutOut(int pos);
-		void onGotoFrame(int pos);
-		void onGotoFrame(int pos, int fast);
+  public slots:
+    void onAVDataChanged(TTAVItem* avData);
+    void onCutInChanged(const TTCutItem& cutItem);
+    void onPlayVideo();
+    void onPrevIFrame();
+    void onNextIFrame();
+    void onPrevPFrame();
+    void onNextPFrame();
+    void onPrevBFrame();
+    void onNextBFrame();
+    void onWidgetPrevFrame();
+    void onWidgetNextFrame();
+    void onSetMarker();
+    void onGotoCutIn(int pos);
+    void onGotoCutOut(int pos);
+    void onGotoFrame(int pos);
+    void onGotoFrame(int pos, int fast);
 void onGotoFramePreview(int pos);
-		void onMoveNumSteps(int);
-		void onMoveToHome();
-		void onMoveToEnd();
+    void onMoveNumSteps(int);
+    void onMoveToHome();
+    void onMoveToEnd();
 
-	signals:
-		void newFramePosition(int);
+  signals:
+    void newFramePosition(int);
     void setMarker(int);
 
-	private:
-		void updateCurrentPosition(int pos = -1);
-		QString createTempMkvForPlayback();
-		void cleanupTempPlaybackFile();
-		QString playbackSourceFingerprint() const;
-		// Playback time<->index conversion authority (display-PTS aware).
-		double playbackSecondsForCurrentStill() const;
-		void ensurePlayerCreated();
-		void realizeRenderContext();
+  private:
+    void updateCurrentPosition(int pos = -1);
+    QString createTempMkvForPlayback();
+    void cleanupTempPlaybackFile();
+    QString playbackSourceFingerprint() const;
+    // Playback time<->index conversion authority (display-PTS aware).
+    double playbackSecondsForCurrentStill() const;
+    void ensurePlayerCreated();
+    void realizeRenderContext();
 
-	private:
-		void                clearCutContext();
-		void                setPlayingButtonState(bool playing);
+  private:
+    void                clearCutContext();
+    void                setPlayingButtonState(bool playing);
 
-	private slots:
-		void                onPlaybackFinished();
-		void                onPlaybackPositionChanged(double seconds);
-		void                onPlaySlower();
-		void                onPlayFaster();
+  private slots:
+    void                onPlaybackFinished();
+    void                onPlaybackPositionChanged(double seconds);
+    void                onPlaySlower();
+    void                onPlayFaster();
 
-	private:
-		void                applySpeedStep();
+  private:
+    void                applySpeedStep();
 
-	private:
-		bool                isControlEnabled;
-		TTVideoStream*      videoStream;
-		TTAVItem*           mAVItem;
-		TTAVItem*           currentCutAVItem;
-		int                 currentCutItemIndex;
-		int                 currentCutPosition;
-		TTMpvWrapper*       mPlayer = nullptr;
-		//! True once realizeRenderContext() built the mpv render context.
-		bool                mRenderContextRealized = false;
-		QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback (cached across STOP→PLAY)
-		QString             mCachedPlaybackFingerprint;  // source fingerprint of the cached temp MKV
-		// True when the cached temp MKV carries real display PTS (source
-		// display-order map was passed to the muxer). ALL playback time<->index
-		// conversions key off this flag - no mixed-scale states possible.
-		bool                mTempPlaybackHasDisplayPts = false;
-		int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
-		QWidget*            mFrameStackContainer = nullptr;
-		QStackedLayout*     mFrameStack = nullptr;
+  private:
+    bool                isControlEnabled;
+    TTVideoStream*      videoStream;
+    TTAVItem*           mAVItem;
+    TTAVItem*           currentCutAVItem;
+    int                 currentCutItemIndex;
+    int                 currentCutPosition;
+    TTMpvWrapper*       mPlayer = nullptr;
+    //! True once realizeRenderContext() built the mpv render context.
+    bool                mRenderContextRealized = false;
+    QString             mTempPlaybackFile;  // Temp MKV for H.264/H.265 playback (cached across STOP→PLAY)
+    QString             mCachedPlaybackFingerprint;  // source fingerprint of the cached temp MKV
+    // True when the cached temp MKV carries real display PTS (source
+    // display-order map was passed to the muxer). ALL playback time<->index
+    // conversions key off this flag - no mixed-scale states possible.
+    bool                mTempPlaybackHasDisplayPts = false;
+    int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
+    QWidget*            mFrameStackContainer = nullptr;
+    QStackedLayout*     mFrameStack = nullptr;
 };
 
 #endif //TTCURRENTFRAME_H

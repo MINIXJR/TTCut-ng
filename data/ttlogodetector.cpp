@@ -263,7 +263,7 @@ QVector<float> TTLogoDetector::sobelEdge(const QImage& gray) const
   return result;
 }
 
-float TTLogoDetector::computeNCC(const QVector<float>& a, const QVector<float>& b) const
+float TTLogoDetector::computeNCC(const QVector<float>& a, const QVector<float>& b)
 {
   int n = a.size();
   if (n == 0 || n != b.size()) return 0.0f;

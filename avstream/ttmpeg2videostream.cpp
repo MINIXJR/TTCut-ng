@@ -30,7 +30,7 @@
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 #include "../common/ttsettings.h"
-#include "../data/ttcutparameter.h"
+#include "ttcutparameter.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>

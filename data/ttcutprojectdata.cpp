@@ -437,6 +437,17 @@ void TTCutProjectData::parseMarkerSection(QDomNodeList markerNodesList, TTAVItem
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * One <tag>text</tag> child under parent — the shape every section writer
+ * below repeats per field.
+ */
+void TTCutProjectData::addTextElement(QDomElement& parent, const QString& tag, const QString& text)
+{
+  QDomElement elem = xmlDocument->createElement(tag);
+  parent.appendChild(elem);
+  elem.appendChild(xmlDocument->createTextNode(text));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  *
  */
 QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int order)
@@ -444,13 +455,9 @@ QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int ord
   QDomElement video = xmlDocument->createElement("Video");
   xmlRoot->appendChild(video);
 
-  QDomElement xmlOrder = xmlDocument->createElement("Order");
-  video.appendChild(xmlOrder);
-  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+  addTextElement(video, "Order", QString("%1").arg(order));
 
-  QDomElement name = xmlDocument->createElement("Name");
-  video.appendChild(name);
-  name.appendChild(xmlDocument->createTextNode(filePath));
+  addTextElement(video, "Name", filePath);
 
  return video;
 }
@@ -463,24 +470,16 @@ QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QStri
   QDomElement audio = xmlDocument->createElement("Audio");
   parent.appendChild(audio);
 
-  QDomElement xmlOrder = xmlDocument->createElement("Order");
-  audio.appendChild(xmlOrder);
-  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+  addTextElement(audio, "Order", QString("%1").arg(order));
 
-  QDomElement name = xmlDocument->createElement("Name");
-  audio.appendChild(name);
-  name.appendChild(xmlDocument->createTextNode(filePath));
+  addTextElement(audio, "Name", filePath);
 
   if (!language.isEmpty()) {
-    QDomElement lang = xmlDocument->createElement("Language");
-    audio.appendChild(lang);
-    lang.appendChild(xmlDocument->createTextNode(language));
+    addTextElement(audio, "Language", language);
   }
 
   if (delayMs != 0) {
-    QDomElement delay = xmlDocument->createElement("Delay");
-    audio.appendChild(delay);
-    delay.appendChild(xmlDocument->createTextNode(QString::number(delayMs)));
+    addTextElement(audio, "Delay", QString::number(delayMs));
   }
 
   return audio;
@@ -494,21 +493,13 @@ QDomElement TTCutProjectData::writeRepairSection(QDomElement& parent, qint64 fra
   QDomElement repair = xmlDocument->createElement("Repair");
   parent.appendChild(repair);
 
-  QDomElement from = xmlDocument->createElement("FrameFrom");
-  repair.appendChild(from);
-  from.appendChild(xmlDocument->createTextNode(QString::number(frameFrom)));
+  addTextElement(repair, "FrameFrom", QString::number(frameFrom));
 
-  QDomElement to = xmlDocument->createElement("FrameTo");
-  repair.appendChild(to);
-  to.appendChild(xmlDocument->createTextNode(QString::number(frameTo)));
+  addTextElement(repair, "FrameTo", QString::number(frameTo));
 
-  QDomElement channels = xmlDocument->createElement("Channels");
-  repair.appendChild(channels);
-  channels.appendChild(xmlDocument->createTextNode(QString::number(channelMask)));
+  addTextElement(repair, "Channels", QString::number(channelMask));
 
-  QDomElement methodElem = xmlDocument->createElement("Method");
-  repair.appendChild(methodElem);
-  methodElem.appendChild(xmlDocument->createTextNode(method));
+  addTextElement(repair, "Method", method);
 
   return repair;
 }
@@ -521,17 +512,11 @@ QDomElement TTCutProjectData::writeCutSection(QDomElement& parent, int cutIn, in
   QDomElement cut = xmlDocument->createElement("Cut");
   parent.appendChild(cut);
 
-  QDomElement xmlOrder = xmlDocument->createElement("Order");
-  cut.appendChild(xmlOrder);
-  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+  addTextElement(cut, "Order", QString("%1").arg(order));
 
-  QDomElement xmlCutIn = xmlDocument->createElement("CutIn");
-  cut.appendChild(xmlCutIn);
-  xmlCutIn.appendChild(xmlDocument->createTextNode(QString("%1").arg(cutIn)));
+  addTextElement(cut, "CutIn", QString("%1").arg(cutIn));
 
-  QDomElement xmlCutOut = xmlDocument->createElement("CutOut");
-  cut.appendChild(xmlCutOut);
-  xmlCutOut.appendChild(xmlDocument->createTextNode(QString("%1").arg(cutOut)));
+  addTextElement(cut, "CutOut", QString("%1").arg(cutOut));
 
   return cut;
 }
@@ -544,17 +529,11 @@ QDomElement TTCutProjectData::writeMarkerSection(QDomElement& parent, int marker
   QDomElement marker = xmlDocument->createElement("Marker");
   parent.appendChild(marker);
 
-  QDomElement xmlOrder = xmlDocument->createElement("Order");
-  marker.appendChild(xmlOrder);
-  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+  addTextElement(marker, "Order", QString("%1").arg(order));
 
-  QDomElement xmlMarkerPos = xmlDocument->createElement("MarkerPos");
-  marker.appendChild(xmlMarkerPos);
-  xmlMarkerPos.appendChild(xmlDocument->createTextNode(QString("%1").arg(markerPos)));
+  addTextElement(marker, "MarkerPos", QString("%1").arg(markerPos));
 
-  QDomElement xmlMarkerType = xmlDocument->createElement("MarkerType");
-  marker.appendChild(xmlMarkerType);
-  xmlMarkerType.appendChild(xmlDocument->createTextNode(QString("%1").arg(markerType)));
+  addTextElement(marker, "MarkerType", QString("%1").arg(markerType));
 
   return marker;
 }
@@ -570,25 +549,15 @@ void TTCutProjectData::serializeStreamPoints(const QList<TTStreamPoint>& points)
     QDomElement elem = xmlDocument->createElement("StreamPoint");
     xmlRoot->appendChild(elem);
 
-    QDomElement frameElem = xmlDocument->createElement("Frame");
-    elem.appendChild(frameElem);
-    frameElem.appendChild(xmlDocument->createTextNode(QString::number(pt.frameIndex())));
+    addTextElement(elem, "Frame", QString::number(pt.frameIndex()));
 
-    QDomElement typeElem = xmlDocument->createElement("Type");
-    elem.appendChild(typeElem);
-    typeElem.appendChild(xmlDocument->createTextNode(TTStreamPoint::typeToString(pt.type())));
+    addTextElement(elem, "Type", TTStreamPoint::typeToString(pt.type()));
 
-    QDomElement descElem = xmlDocument->createElement("Description");
-    elem.appendChild(descElem);
-    descElem.appendChild(xmlDocument->createTextNode(pt.description()));
+    addTextElement(elem, "Description", pt.description());
 
-    QDomElement confElem = xmlDocument->createElement("Confidence");
-    elem.appendChild(confElem);
-    confElem.appendChild(xmlDocument->createTextNode(QString::number(pt.confidence(), 'f', 2)));
+    addTextElement(elem, "Confidence", QString::number(pt.confidence(), 'f', 2));
 
-    QDomElement durElem = xmlDocument->createElement("Duration");
-    elem.appendChild(durElem);
-    durElem.appendChild(xmlDocument->createTextNode(QString::number(pt.duration(), 'f', 2)));
+    addTextElement(elem, "Duration", QString::number(pt.duration(), 'f', 2));
 
     // Exact AC3 frame range of an AudioAnomaly finding (final review I3),
     // both bounds inclusive. Written only when known, so nothing changes for
@@ -596,13 +565,9 @@ void TTCutProjectData::serializeStreamPoints(const QList<TTStreamPoint>& points)
     // elements on load (unknown elements are skipped) and simply falls back
     // to the frameIndex/duration estimate, which is what it always did.
     if (pt.hasAudioFrameRange()) {
-      QDomElement afFrom = xmlDocument->createElement("AudioFrameFrom");
-      elem.appendChild(afFrom);
-      afFrom.appendChild(xmlDocument->createTextNode(QString::number(pt.audioFrameFrom())));
+      addTextElement(elem, "AudioFrameFrom", QString::number(pt.audioFrameFrom()));
 
-      QDomElement afTo = xmlDocument->createElement("AudioFrameTo");
-      elem.appendChild(afTo);
-      afTo.appendChild(xmlDocument->createTextNode(QString::number(pt.audioFrameTo())));
+      addTextElement(elem, "AudioFrameTo", QString::number(pt.audioFrameTo()));
     }
   }
 }
@@ -674,17 +639,11 @@ void TTCutProjectData::serializeLogoData(const TTLogoProjectData& logoData)
   xmlRoot->appendChild(elem);
 
   if (logoData.isMarkad) {
-    QDomElement typeElem = xmlDocument->createElement("Source");
-    elem.appendChild(typeElem);
-    typeElem.appendChild(xmlDocument->createTextNode("markad"));
+    addTextElement(elem, "Source", "markad");
 
-    QDomElement pathElem = xmlDocument->createElement("Path");
-    elem.appendChild(pathElem);
-    pathElem.appendChild(xmlDocument->createTextNode(logoData.markadPath));
+    addTextElement(elem, "Path", logoData.markadPath);
   } else {
-    QDomElement typeElem = xmlDocument->createElement("Source");
-    elem.appendChild(typeElem);
-    typeElem.appendChild(xmlDocument->createTextNode("manual"));
+    addTextElement(elem, "Source", "manual");
 
     QDomElement roiElem = xmlDocument->createElement("ROI");
     elem.appendChild(roiElem);
@@ -743,24 +702,16 @@ QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QS
   QDomElement subtitle = xmlDocument->createElement("Subtitle");
   parent.appendChild(subtitle);
 
-  QDomElement xmlOrder = xmlDocument->createElement("Order");
-  subtitle.appendChild(xmlOrder);
-  xmlOrder.appendChild(xmlDocument->createTextNode(QString("%1").arg(order)));
+  addTextElement(subtitle, "Order", QString("%1").arg(order));
 
-  QDomElement name = xmlDocument->createElement("Name");
-  subtitle.appendChild(name);
-  name.appendChild(xmlDocument->createTextNode(filePath));
+  addTextElement(subtitle, "Name", filePath);
 
   if (!language.isEmpty()) {
-    QDomElement lang = xmlDocument->createElement("Language");
-    subtitle.appendChild(lang);
-    lang.appendChild(xmlDocument->createTextNode(language));
+    addTextElement(subtitle, "Language", language);
   }
 
   if (delayMs != 0) {
-    QDomElement delay = xmlDocument->createElement("Delay");
-    subtitle.appendChild(delay);
-    delay.appendChild(xmlDocument->createTextNode(QString::number(delayMs)));
+    addTextElement(subtitle, "Delay", QString::number(delayMs));
   }
 
   return subtitle;

@@ -33,11 +33,11 @@ extern "C" {
 /* ////////////////////////////////////////////////////////////////////////////
  * Constructor
  */
-TTTranscodeProvider::TTTranscodeProvider(TTEncodeParameter& enc_par)
+TTTranscodeProvider::TTTranscodeProvider(TTEncodeParameter& encPar)
                     : IStatusReporter()
 {
-  log           = TTMessageLogger::getInstance();
-  this->enc_par = enc_par;
+  mLog           = TTMessageLogger::getInstance();
+  mEncPar = encPar;
   mEncoder      = nullptr;
 }
 
@@ -58,22 +58,22 @@ bool TTTranscodeProvider::setupEncoder()
 
   const AVCodec* codec = avcodec_find_encoder_by_name("mpeg2video");
   if (!codec) {
-    log->errorMsg(__FILE__, __LINE__, "Cannot find mpeg2video encoder");
+    mLog->errorMsg(__FILE__, __LINE__, "Cannot find mpeg2video encoder");
     return false;
   }
 
   mEncoder = avcodec_alloc_context3(codec);
   if (!mEncoder) {
-    log->errorMsg(__FILE__, __LINE__, "Cannot allocate encoder context");
+    mLog->errorMsg(__FILE__, __LINE__, "Cannot allocate encoder context");
     return false;
   }
 
-  mEncoder->width  = enc_par.videoWidth();
-  mEncoder->height = enc_par.videoHeight();
+  mEncoder->width  = mEncPar.videoWidth();
+  mEncoder->height = mEncPar.videoHeight();
   mEncoder->pix_fmt = AV_PIX_FMT_YUV420P;
 
   // Time base and frame rate
-  float fps = enc_par.videoFPS();
+  float fps = mEncPar.videoFPS();
   mEncoder->time_base = (AVRational){1001, static_cast<int>(fps * 1001 + 0.5)};
   mEncoder->framerate = (AVRational){static_cast<int>(fps * 1000 + 0.5), 1000};
 
@@ -95,7 +95,7 @@ bool TTTranscodeProvider::setupEncoder()
   mEncoder->max_b_frames = 0;
 
   // Rate control: use original bitrate as constraint
-  float bitrateKbit = enc_par.videoBitrate();
+  float bitrateKbit = mEncPar.videoBitrate();
   if (bitrateKbit > 0) {
     mEncoder->rc_max_rate   = static_cast<int64_t>(bitrateKbit) * 1000;
     mEncoder->rc_buffer_size = static_cast<int>(bitrateKbit) * 2000;
@@ -103,9 +103,9 @@ bool TTTranscodeProvider::setupEncoder()
 
   // Sample aspect ratio from MPEG-2 aspect ratio code + dimensions
   // MPEG-2 aspect codes: 1=1:1(SAR), 2=4:3(DAR), 3=16:9(DAR), 4=2.21:1(DAR)
-  int w = enc_par.videoWidth();
-  int h = enc_par.videoHeight();
-  switch (enc_par.videoAspectCode()) {
+  int w = mEncPar.videoWidth();
+  int h = mEncPar.videoHeight();
+  switch (mEncPar.videoAspectCode()) {
     case 2:  // 4:3 DAR → SAR = (4/3) * (h/w)
       mEncoder->sample_aspect_ratio = (AVRational){4 * h, 3 * w};
       break;
@@ -118,9 +118,9 @@ bool TTTranscodeProvider::setupEncoder()
   }
 
   // Interlace flags
-  if (enc_par.videoInterlaced()) {
+  if (mEncPar.videoInterlaced()) {
     mEncoder->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
-    if (enc_par.videoTopFieldFirst())
+    if (mEncPar.videoTopFieldFirst())
       mEncoder->field_order = AV_FIELD_TT;
     else
       mEncoder->field_order = AV_FIELD_BB;
@@ -132,7 +132,7 @@ bool TTTranscodeProvider::setupEncoder()
   if (ret < 0) {
     char errbuf[AV_ERROR_MAX_STRING_SIZE];
     av_strerror(ret, errbuf, sizeof(errbuf));
-    log->errorMsg(__FILE__, __LINE__, QString("Cannot open mpeg2video encoder: %1").arg(errbuf));
+    mLog->errorMsg(__FILE__, __LINE__, QString("Cannot open mpeg2video encoder: %1").arg(errbuf));
     avcodec_free_context(&mEncoder);
     return false;
   }
@@ -140,7 +140,7 @@ bool TTTranscodeProvider::setupEncoder()
   if (TTSettings::instance()->logSmartCut()) {
       qDebug() << "MPEG-2 encoder setup:" << mEncoder->width << "x" << mEncoder->height
                << "qscale=" << TTSettings::instance()->encoderCrf() << "gop=" << gopSize
-               << "interlaced=" << enc_par.videoInterlaced()
+               << "interlaced=" << mEncPar.videoInterlaced()
                << "bitrate_cap=" << bitrateKbit << "kbit/s";
   }
 
@@ -174,10 +174,10 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
   decoder->decodeFirstMPEG2Frame(formatYV12);
 
   // Open output file
-  QString outputFile = enc_par.mpeg2FileInfo().absoluteFilePath() + ".m2v";
+  QString outputFile = mEncPar.mpeg2FileInfo().absoluteFilePath() + ".m2v";
   QFile outFile(outputFile);
   if (!outFile.open(QIODevice::WriteOnly)) {
-    log->errorMsg(__FILE__, __LINE__, QString("Cannot create output file: %1").arg(outputFile));
+    mLog->errorMsg(__FILE__, __LINE__, QString("Cannot create output file: %1").arg(outputFile));
     delete decoder;
     return false;
   }
@@ -185,7 +185,7 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
   // Allocate AVFrame (we reuse it, pointing data[] to decoder buffers)
   AVFrame* frame = av_frame_alloc();
   if (!frame) {
-    log->errorMsg(__FILE__, __LINE__, "Cannot allocate AVFrame");
+    mLog->errorMsg(__FILE__, __LINE__, "Cannot allocate AVFrame");
     outFile.close();
     delete decoder;
     return false;
@@ -197,7 +197,7 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
 
   AVPacket* packet = av_packet_alloc();
   if (!packet) {
-    log->errorMsg(__FILE__, __LINE__, "Cannot allocate AVPacket");
+    mLog->errorMsg(__FILE__, __LINE__, "Cannot allocate AVPacket");
     av_frame_free(&frame);
     outFile.close();
     delete decoder;
@@ -216,7 +216,7 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
     TFrameInfo* frameInfo = decoder->getFrameInfo();
 
     if (!frameInfo || !frameInfo->Y) {
-      log->errorMsg(__FILE__, __LINE__, QString("Failed to decode frame %1").arg(frameIndex));
+      mLog->errorMsg(__FILE__, __LINE__, QString("Failed to decode frame %1").arg(frameIndex));
       continue;
     }
 
@@ -238,7 +238,7 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
     if (ret < 0 && ret != AVERROR(EAGAIN)) {
       char errbuf[AV_ERROR_MAX_STRING_SIZE];
       av_strerror(ret, errbuf, sizeof(errbuf));
-      log->errorMsg(__FILE__, __LINE__, QString("avcodec_send_frame failed: %1").arg(errbuf));
+      mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_send_frame failed: %1").arg(errbuf));
       break;
     }
     framesSent++;
@@ -251,12 +251,12 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
       if (ret < 0) {
         char errbuf[AV_ERROR_MAX_STRING_SIZE];
         av_strerror(ret, errbuf, sizeof(errbuf));
-        log->errorMsg(__FILE__, __LINE__, QString("avcodec_receive_packet failed: %1").arg(errbuf));
+        mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_receive_packet failed: %1").arg(errbuf));
         break;
       }
 
       if (outFile.write(reinterpret_cast<char*>(packet->data), packet->size) != packet->size) {
-        log->errorMsg(__FILE__, __LINE__, "Failed to write encoded data");
+        mLog->errorMsg(__FILE__, __LINE__, "Failed to write encoded data");
         av_packet_unref(packet);
         goto cleanup;
       }
@@ -281,7 +281,7 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
       break;
 
     if (outFile.write(reinterpret_cast<char*>(packet->data), packet->size) != packet->size) {
-      log->errorMsg(__FILE__, __LINE__, "Failed to write encoded data (flush)");
+      mLog->errorMsg(__FILE__, __LINE__, "Failed to write encoded data (flush)");
       av_packet_unref(packet);
       goto cleanup;
     }

@@ -599,6 +599,15 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **`make_test_video.sh`: MPEG-2-PAL-Generator scheitert mit ffmpeg 9**
+  (2026-09-03, beim Code-Audit-Gate aufgefallen). `-top 1` ist in ffmpeg 9
+  keine Encoder-Option mehr („Codec AVOption top (top field first) is not a
+  encoding option"), der PAL-Encode bricht ab und mit ihm die davon
+  abhängigen Varianten (fieldpic, multifile, die PAL-Duplikate). Die
+  Cache-Dateien stammen von einem älteren ffmpeg und sind unberührt. Ersatz
+  wäre `-field_order tt` (oder der `setfield`-Filter); danach prüfen, ob der
+  Encode byte-gleich zum Cache bleibt.
+
 - **Belege gehören nicht nach `CLAUDE_TMP`** (2026-08-23, offen, niedrige
   Priorität). Beim Sitzungsabschluss gemessen: von 42 Pfaden, auf die
   `TODO.md`, `docs/` und das Gedächtnis in `/usr/local/src/CLAUDE_TMP/TTCut-ng/`

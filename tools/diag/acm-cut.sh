@@ -56,5 +56,5 @@ kill -9 "$PID" 2>/dev/null
 n=$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$OUT" 2>/dev/null | wc -l)
 echo "--- audio payload md5 ($n tracks) ---"
 for s in $(seq 0 $((n-1))); do
-  echo "a$s $(ffmpeg -v error -i "$OUT" -map a:$s -c copy -f md5 - 2>/dev/null)"
+  echo "a$s $(ffmpeg -v error -i "$OUT" -map "a:$s" -c copy -f md5 - 2>/dev/null)"
 done

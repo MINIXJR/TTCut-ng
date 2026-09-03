@@ -1036,15 +1036,7 @@ QString TTCurrentFrame::createTempMkvForPlayback()
   TTMkvMergeProvider mkvProvider;
   mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
   mkvProvider.setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
-  {
-    AVCodecID codecId;
-    switch (videoStream->streamType()) {
-      case TTAVTypes::h265_video: codecId = AV_CODEC_ID_HEVC;       break;
-      case TTAVTypes::h264_video: codecId = AV_CODEC_ID_H264;       break;
-      default:                    codecId = AV_CODEC_ID_MPEG2VIDEO; break;
-    }
-    mkvProvider.setVideoCodecId(codecId);
-  }
+  mkvProvider.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType()));
   if (avOffsetMs != 0) {
     mkvProvider.setAudioSyncOffset(avOffsetMs);
   }
