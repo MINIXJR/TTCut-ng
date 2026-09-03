@@ -183,189 +183,201 @@ static QList<TTESRange> parseEsRangeList(const QString& str, int maxCount,
 
 bool TTESInfo::parseSection(const QString& section, const QMap<QString, QString>& values)
 {
-    // Cap list/range sizes to bound memory use against malformed .info
-    // files. Shared by the "audio" (per-track corrupt_ranges) and
-    // "warnings" (es_doubled_pts_aus, audio_gap_frames, es_missing_ranges,
-    // corrupt_frame_ranges) branches below.
-    const int maxExtraFrames = 100000;
-
-    if (section == "video") {
-        mVideoFile = values.value("file");
-        mVideoCodec = values.value("codec");
-        mVideoWidth = values.value("width", "0").toInt();
-        mVideoHeight = values.value("height", "0").toInt();
-        mStartPts = values.value("start_pts", "0").toDouble();
-        mFillerStripped = (values.value("filler_stripped", "false") == "true");
-        mFillerSavedBytes = values.value("filler_saved_bytes", "0").toLongLong();
-
-        // Parse frame_rate (can be "50/1" or "25" or "29.97")
-        QString frameRateStr = values.value("frame_rate", "25/1");
-        parseFrameRate(frameRateStr);
-    }
-    else if (section == "audio") {
-        int count = qMin(values.value("count", "0").toInt(), 32);
-        mAudioTracks.clear();
-
-        for (int i = 0; i < count; ++i) {
-            TTAudioTrackInfo track;
-            track.file      = values.value(QString("audio_%1_file").arg(i));
-            track.codec     = values.value(QString("audio_%1_codec").arg(i));
-            track.language  = values.value(QString("audio_%1_lang").arg(i), "und");
-            track.firstPts  = values.value(QString("audio_%1_first_pts").arg(i), "0").toDouble();
-            track.trimmedMs = values.value(QString("audio_%1_trimmed_ms").arg(i), "0").toInt();
-            track.silenceMs = values.value(QString("audio_%1_silence_ms").arg(i), "0").toInt();
-            track.removedMs = values.value(QString("audio_%1_removed_ms").arg(i), "0").toInt();
-
-            // Parse per-track structural-damage ranges (from ttcut-demux
-            // sanitizer). Format: "start-end". No duration is reported ->
-            // ms is always -1. Hardened exactly like the global
-            // corrupt_frame_ranges block below (item cap, toInt ok-checks,
-            // inverted range rejected). audio_N_junk_bytes and
-            // audio_N_dropped_frames are human diagnostics only and are
-            // intentionally NOT parsed here.
-            track.corruptRanges += parseEsRangeList(
-                values.value(QString("audio_%1_corrupt_ranges").arg(i)),
-                maxExtraFrames - track.corruptRanges.size(), false);
-
-            mAudioTracks.append(track);
-        }
-    }
-    else if (section == "markers") {
-        int count = values.value("count", "0").toInt();
-        mMarkers.clear();
-
-        for (int i = 0; i < count; ++i) {
-            QString markerStr = values.value(QString("marker_%1").arg(i));
-            if (markerStr.isEmpty()) continue;
-
-            // Parse format: timestamp|frame|type|verified
-            // Example: 0:15:58.14|23964|mark|*
-            QStringList parts = markerStr.split('|');
-            if (parts.size() >= 3) {
-                TTMarkerInfo marker;
-                marker.timestamp = parts[0];
-                marker.frame = parts[1].toInt();
-                marker.type = parts[2];
-                marker.verified = (parts.size() > 3 && parts[3] == "*");
-                mMarkers.append(marker);
-            }
-        }
-
-        if (!mMarkers.isEmpty()) {
-            if (TTSettings::instance()->logAVStream())
-                qDebug() << "  VDR Markers:" << mMarkers.size();
-        }
-    }
-    else if (section == "timing") {
-        // A/V sync offset information
-        mFirstVideoPts = values.value("first_video_pts", "0").toDouble();
-        mFirstAudioPts = values.value("first_audio_pts", "0").toDouble();
-        mAvOffsetMs = values.value("av_offset_ms", "0").toInt();
-        mHasTimingInfo = true;
-
-        if (mAvOffsetMs != 0) {
-            if (TTSettings::instance()->logAVStream())
-                qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
-        }
-    }
-    else if (section == "warnings") {
-        // Parse doubled-PTS candidate AU indices (comma-separated list).
-        // The legacy key es_extra_frames is intentionally NOT parsed: its
-        // TS-AU numbering was consumed as merged-frame numbering, which
-        // drifts on PAFF streams (see spec 2026-07-19).
-        mEsTotalAus = values.value("es_total_aus", "-1").toInt();
-        QString doubledStr = values.value("es_doubled_pts_aus", "");
-        if (!doubledStr.isEmpty()) {
-            QStringList indices = doubledStr.split(',');
-            for (const QString& idx : indices) {
-                if (mEsDoubledPtsAus.size() >= maxExtraFrames) break;
-                bool ok;
-                int frameIdx = idx.trimmed().toInt(&ok);
-                if (ok) mEsDoubledPtsAus.append(frameIdx);
-            }
-            if (!mEsDoubledPtsAus.isEmpty())
-                if (TTSettings::instance()->logAVStream())
-                    qDebug() << "Loaded" << mEsDoubledPtsAus.size()
-                             << "doubled-PTS candidate AUs from .info"
-                             << "(total_aus" << mEsTotalAus << ")";
-        }
-
-        // Parse audio gap frame indices (analogous to es_extra_frames).
-        // Generated by ttcut-demux when audio packet gaps were detected
-        // in the source TS and silence was inserted at the gap position.
-        QString audioGapStr = values.value("audio_gap_frames", "");
-        if (!audioGapStr.isEmpty()) {
-            QStringList indices = audioGapStr.split(',');
-            for (const QString& idx : indices) {
-                if (mAudioGapFrames.size() >= maxExtraFrames) break;
-                bool ok;
-                int frameIdx = idx.trimmed().toInt(&ok);
-                if (ok) mAudioGapFrames.append(frameIdx);
-            }
-            std::sort(mAudioGapFrames.begin(), mAudioGapFrames.end());
-            if (!mAudioGapFrames.isEmpty())
-                if (TTSettings::instance()->logAVStream())
-                    qDebug() << "Loaded" << mAudioGapFrames.size() << "audio gap frame indices from .info";
-        }
-
-        // Parse mid-stream gap-fill ranges (from ttcut-demux repair).
-        // Format: "start-end:ms" (filled duration known) or "start-end" (ms
-        // unknown, e.g. legacy data) -> ms = -1.
-        // Note: the flat "es_missing_frames" CSV list (individual frame
-        // indices) is intentionally not parsed into a member — every index
-        // it lists is already covered by an es_missing_ranges range, so the
-        // ranges alone are sufficient for consumers.
-        QString missingRangesStr = values.value("es_missing_ranges", "");
-        if (!missingRangesStr.isEmpty()) {
-            mEsMissingRanges += parseEsRangeList(
-                missingRangesStr, maxExtraFrames - mEsMissingRanges.size(), true);
-            if (!mEsMissingRanges.isEmpty())
-                if (TTSettings::instance()->logAVStream())
-                    qDebug() << "Loaded" << mEsMissingRanges.size() << "missing-frame ranges from .info";
-        }
-
-        // Parse corrupt-but-retained frame ranges (from ttcut-demux repair).
-        // Format: "start-end". No duration is reported -> ms is always -1.
-        QString corruptRangesStr = values.value("corrupt_frame_ranges", "");
-        if (!corruptRangesStr.isEmpty()) {
-            mCorruptRanges += parseEsRangeList(
-                corruptRangesStr, maxExtraFrames - mCorruptRanges.size(), false);
-            if (!mCorruptRanges.isEmpty())
-                if (TTSettings::instance()->logAVStream())
-                    qDebug() << "Loaded" << mCorruptRanges.size() << "corrupt-frame ranges from .info";
-        }
-
-        // Legacy format: decode error regions (from old ffmpeg -err_detect check).
-        // Clamp region count against malformed .info files (DoS guard).
-        mDecodeErrors = values.value("decode_errors", "0").toInt();
-        mDecodeErrorRegionCount = qBound(0,
-            values.value("decode_error_regions", "0").toInt(), 4096);
-        mRecommendProjectX = (values.value("recommend_projectx", "false") == "true");
-        mHasWarnings = (mDecodeErrors > 0);
-
-        mDecodeErrorRegions.clear();
-        for (int i = 0; i < mDecodeErrorRegionCount; ++i) {
-            QString regionStr = values.value(QString("error_region_%1").arg(i));
-            if (regionStr.isEmpty()) continue;
-
-            // Format: frame|time|count
-            QStringList parts = regionStr.split('|');
-            if (parts.size() >= 3) {
-                TTDecodeErrorRegion region;
-                region.frame = parts[0].toInt();
-                region.time = parts[1];
-                region.errorCount = parts[2].toInt();
-                mDecodeErrorRegions.append(region);
-            }
-        }
-
-        if (mDecodeErrors > 0) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("%1 decode errors in %2 regions").arg(mDecodeErrors).arg(mDecodeErrorRegions.size()));
-        }
-    }
+    if (section == "video")         parseVideoSection(values);
+    else if (section == "audio")    parseAudioSection(values);
+    else if (section == "markers")  parseMarkersSection(values);
+    else if (section == "timing")   parseTimingSection(values);
+    else if (section == "warnings") parseWarningsSection(values);
 
     return true;
+}
+
+// Comma-separated frame indices; entries that are not integers are
+// skipped, at most maxCount are returned.
+QList<int> TTESInfo::parseIndexList(const QString& csv, int maxCount)
+{
+    QList<int> out;
+    const QStringList indices = csv.split(',');
+    for (const QString& idx : indices) {
+        if (out.size() >= maxCount) break;
+        bool ok;
+        int frameIdx = idx.trimmed().toInt(&ok);
+        if (ok) out.append(frameIdx);
+    }
+    return out;
+}
+
+void TTESInfo::parseVideoSection(const QMap<QString, QString>& values)
+{
+    mVideoFile = values.value("file");
+    mVideoCodec = values.value("codec");
+    mVideoWidth = values.value("width", "0").toInt();
+    mVideoHeight = values.value("height", "0").toInt();
+    mStartPts = values.value("start_pts", "0").toDouble();
+    mFillerStripped = (values.value("filler_stripped", "false") == "true");
+    mFillerSavedBytes = values.value("filler_saved_bytes", "0").toLongLong();
+
+    // Parse frame_rate (can be "50/1" or "25" or "29.97")
+    QString frameRateStr = values.value("frame_rate", "25/1");
+    parseFrameRate(frameRateStr);
+}
+
+void TTESInfo::parseAudioSection(const QMap<QString, QString>& values)
+{
+    int count = qMin(values.value("count", "0").toInt(), 32);
+    mAudioTracks.clear();
+
+    for (int i = 0; i < count; ++i) {
+        TTAudioTrackInfo track;
+        track.file      = values.value(QString("audio_%1_file").arg(i));
+        track.codec     = values.value(QString("audio_%1_codec").arg(i));
+        track.language  = values.value(QString("audio_%1_lang").arg(i), "und");
+        track.firstPts  = values.value(QString("audio_%1_first_pts").arg(i), "0").toDouble();
+        track.trimmedMs = values.value(QString("audio_%1_trimmed_ms").arg(i), "0").toInt();
+        track.silenceMs = values.value(QString("audio_%1_silence_ms").arg(i), "0").toInt();
+        track.removedMs = values.value(QString("audio_%1_removed_ms").arg(i), "0").toInt();
+
+        // Parse per-track structural-damage ranges (from ttcut-demux
+        // sanitizer). Format: "start-end". No duration is reported ->
+        // ms is always -1. Hardened exactly like the global
+        // corrupt_frame_ranges block (item cap, toInt ok-checks,
+        // inverted range rejected). audio_N_junk_bytes and
+        // audio_N_dropped_frames are human diagnostics only and are
+        // intentionally NOT parsed here.
+        track.corruptRanges += parseEsRangeList(
+            values.value(QString("audio_%1_corrupt_ranges").arg(i)),
+            kMaxExtraFrames - track.corruptRanges.size(), false);
+
+        mAudioTracks.append(track);
+    }
+}
+
+void TTESInfo::parseMarkersSection(const QMap<QString, QString>& values)
+{
+    int count = values.value("count", "0").toInt();
+    mMarkers.clear();
+
+    for (int i = 0; i < count; ++i) {
+        QString markerStr = values.value(QString("marker_%1").arg(i));
+        if (markerStr.isEmpty()) continue;
+
+        // Parse format: timestamp|frame|type|verified
+        // Example: 0:15:58.14|23964|mark|*
+        QStringList parts = markerStr.split('|');
+        if (parts.size() >= 3) {
+            TTMarkerInfo marker;
+            marker.timestamp = parts[0];
+            marker.frame = parts[1].toInt();
+            marker.type = parts[2];
+            marker.verified = (parts.size() > 3 && parts[3] == "*");
+            mMarkers.append(marker);
+        }
+    }
+
+    if (!mMarkers.isEmpty()) {
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "  VDR Markers:" << mMarkers.size();
+    }
+}
+
+void TTESInfo::parseTimingSection(const QMap<QString, QString>& values)
+{
+    // A/V sync offset information
+    mFirstVideoPts = values.value("first_video_pts", "0").toDouble();
+    mFirstAudioPts = values.value("first_audio_pts", "0").toDouble();
+    mAvOffsetMs = values.value("av_offset_ms", "0").toInt();
+    mHasTimingInfo = true;
+
+    if (mAvOffsetMs != 0) {
+        if (TTSettings::instance()->logAVStream())
+            qDebug() << "  A/V offset:" << mAvOffsetMs << "ms";
+    }
+}
+
+void TTESInfo::parseWarningsSection(const QMap<QString, QString>& values)
+{
+    // Parse doubled-PTS candidate AU indices (comma-separated list).
+    // The legacy key es_extra_frames is intentionally NOT parsed: its
+    // TS-AU numbering was consumed as merged-frame numbering, which
+    // drifts on PAFF streams (see spec 2026-07-19).
+    mEsTotalAus = values.value("es_total_aus", "-1").toInt();
+    QString doubledStr = values.value("es_doubled_pts_aus", "");
+    if (!doubledStr.isEmpty()) {
+        mEsDoubledPtsAus += parseIndexList(doubledStr, kMaxExtraFrames - mEsDoubledPtsAus.size());
+        if (!mEsDoubledPtsAus.isEmpty())
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "Loaded" << mEsDoubledPtsAus.size()
+                         << "doubled-PTS candidate AUs from .info"
+                         << "(total_aus" << mEsTotalAus << ")";
+    }
+
+    // Parse audio gap frame indices (analogous to es_extra_frames).
+    // Generated by ttcut-demux when audio packet gaps were detected
+    // in the source TS and silence was inserted at the gap position.
+    QString audioGapStr = values.value("audio_gap_frames", "");
+    if (!audioGapStr.isEmpty()) {
+        mAudioGapFrames += parseIndexList(audioGapStr, kMaxExtraFrames - mAudioGapFrames.size());
+        std::sort(mAudioGapFrames.begin(), mAudioGapFrames.end());
+        if (!mAudioGapFrames.isEmpty())
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "Loaded" << mAudioGapFrames.size() << "audio gap frame indices from .info";
+    }
+
+    // Parse mid-stream gap-fill ranges (from ttcut-demux repair).
+    // Format: "start-end:ms" (filled duration known) or "start-end" (ms
+    // unknown, e.g. legacy data) -> ms = -1.
+    // Note: the flat "es_missing_frames" CSV list (individual frame
+    // indices) is intentionally not parsed into a member — every index
+    // it lists is already covered by an es_missing_ranges range, so the
+    // ranges alone are sufficient for consumers.
+    QString missingRangesStr = values.value("es_missing_ranges", "");
+    if (!missingRangesStr.isEmpty()) {
+        mEsMissingRanges += parseEsRangeList(
+            missingRangesStr, kMaxExtraFrames - mEsMissingRanges.size(), true);
+        if (!mEsMissingRanges.isEmpty())
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "Loaded" << mEsMissingRanges.size() << "missing-frame ranges from .info";
+    }
+
+    // Parse corrupt-but-retained frame ranges (from ttcut-demux repair).
+    // Format: "start-end". No duration is reported -> ms is always -1.
+    QString corruptRangesStr = values.value("corrupt_frame_ranges", "");
+    if (!corruptRangesStr.isEmpty()) {
+        mCorruptRanges += parseEsRangeList(
+            corruptRangesStr, kMaxExtraFrames - mCorruptRanges.size(), false);
+        if (!mCorruptRanges.isEmpty())
+            if (TTSettings::instance()->logAVStream())
+                qDebug() << "Loaded" << mCorruptRanges.size() << "corrupt-frame ranges from .info";
+    }
+
+    // Legacy format: decode error regions (from old ffmpeg -err_detect check).
+    // Clamp region count against malformed .info files (DoS guard).
+    mDecodeErrors = values.value("decode_errors", "0").toInt();
+    mDecodeErrorRegionCount = qBound(0,
+        values.value("decode_error_regions", "0").toInt(), 4096);
+    mRecommendProjectX = (values.value("recommend_projectx", "false") == "true");
+    mHasWarnings = (mDecodeErrors > 0);
+
+    mDecodeErrorRegions.clear();
+    for (int i = 0; i < mDecodeErrorRegionCount; ++i) {
+        QString regionStr = values.value(QString("error_region_%1").arg(i));
+        if (regionStr.isEmpty()) continue;
+
+        // Format: frame|time|count
+        QStringList parts = regionStr.split('|');
+        if (parts.size() >= 3) {
+            TTDecodeErrorRegion region;
+            region.frame = parts[0].toInt();
+            region.time = parts[1];
+            region.errorCount = parts[2].toInt();
+            mDecodeErrorRegions.append(region);
+        }
+    }
+
+    if (mDecodeErrors > 0) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("%1 decode errors in %2 regions").arg(mDecodeErrors).arg(mDecodeErrorRegions.size()));
+    }
 }
 
 // ----------------------------------------------------------------------------
