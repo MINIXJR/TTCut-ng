@@ -1997,6 +1997,29 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   `detect_segment_boundaries` weiter im Präsens, obwohl der
   Störzonen-Umbau die Funktion entfernt hatte.
 
+- **Code-Audit (Struktur/DRY/Konventionen), erster Lauf** → **ERLEDIGT
+  2026-09-03** (Branch `cleanup/code-audit-2026-09-03`, Skill `code-audit`).
+  Sechs Batches, 106 Dateien, +2783/−2902 Zeilen: mechanische Befunde
+  (explicit/override/const, Initialisierer, tote Felder), acht gemeinsame
+  Helfer statt Kopien (`logHeaderListCreated`, `parseEsRangeList`,
+  `removeEmulationPrevention`/`findStartCodePayload`, `videoCodecIdFor`,
+  `addTextElement`, `runDirectedSearch`, `tttreeviewutil.h`, Bash-Sonden
+  in ttcut-demux), Modulgrenzen (ttcutparameter nach avstream, ttframeinfo.h
+  statt Decoder-Header in extern), Headless-Modi und Konstruktor von
+  TTCutMainWindow aufgeteilt, `TTNaluParser::mergeFieldPairsPAFF`,
+  `docs/conventions.md` mit neun gemessenen Regeln, letzte Tab-Dateien
+  expandiert. Gates: Schnitt paket- und hash-identisch zur Referenz auf fünf
+  Tux-Fixtures (MPEG-2, H.264 progressiv/PAFF/MBAFF, HEVC), 21 Screenshots
+  byteidentisch, ES-Ausgabe von ttcut-demux und Werkzeugausgaben
+  byteidentisch; neuer Harness `tools/diag/test_directed_search` (alter und
+  neuer Stand identisch). Bewusst nicht gemacht: `TTItemListStorage<T>` für
+  die vier Listenklassen — sie unterscheiden sich genau in der
+  Signal-Semantik, die eine Schablone verstecken würde. Urteile in
+  `docs/code-audit/verdicts.tsv` (358 Zeilen); offen als eigene Projekte:
+  Modul-Zyklus, TTFFmpegWrapper-Aufteilung, TTCutMainWindow-Rest,
+  `bitRateString()`-Hiding-Defekt. Scanner-Fallen dieses Laufs (cppcheck
+  ohne `--library=qt`, Harness-printf als „Mehrheit", Definitions-Regex auf
+  qualifizierte Aufrufe) sind im Skill behoben.
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**
   - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den
