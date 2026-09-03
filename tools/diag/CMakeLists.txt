@@ -212,6 +212,7 @@ diag_tool(test_stilldisplay    AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_startcode_scan     SOURCES ${FILEBUF_SRC})
 diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
 diag_tool(test_audiofix_esinfo    SOURCES ${ESINFO_SRC})
+diag_tool(test_esinfo_dump        SOURCES ${ESINFO_SRC})
 diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the

@@ -161,6 +161,17 @@ public:
 
 private:
     bool parseSection(const QString& section, const QMap<QString, QString>& values);
+    void parseVideoSection(const QMap<QString, QString>& values);
+    void parseAudioSection(const QMap<QString, QString>& values);
+    void parseMarkersSection(const QMap<QString, QString>& values);
+    void parseTimingSection(const QMap<QString, QString>& values);
+    void parseWarningsSection(const QMap<QString, QString>& values);
+    static QList<int> parseIndexList(const QString& csv, int maxCount);
+
+    // Cap on list/range sizes read from a .info file, against malformed
+    // input: per-track corrupt ranges, doubled-PTS AUs, audio gap frames,
+    // missing and corrupt frame ranges.
+    static constexpr int kMaxExtraFrames = 100000;
     bool parseFrameRate(const QString& frameRateStr);
 
     bool mLoaded;
