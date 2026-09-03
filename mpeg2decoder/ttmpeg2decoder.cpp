@@ -14,6 +14,7 @@
 
 
 #include "ttmpeg2decoder.h"
+#include "../avstream/ttcommon.h"
 
 static TFrameInfo frameInfo;
 

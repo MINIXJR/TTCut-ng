@@ -19,7 +19,7 @@
 #include "../common/istatusreporter.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcut.h"
-#include "../data/ttmuxlistdata.h"
+#include "ttmuxlistdata.h"
 
 #include <QCoreApplication>
 #include <QObject>

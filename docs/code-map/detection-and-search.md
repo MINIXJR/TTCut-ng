@@ -21,7 +21,7 @@ sources:
   - data/ttframesearchtask.h
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
-  - data/ttaudiorepairitem.h
+  - extern/ttaudiorepairitem.h
   - gui/ttstreampointwidget.cpp
   - gui/ttcutmainwindow.cpp
   - gui/ttaudiorepairdialog.h

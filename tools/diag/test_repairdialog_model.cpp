@@ -31,7 +31,7 @@
 #include "data/ttavlist.h"
 #include "data/ttaudioanomalyscantask.h"
 #include "data/ttstreampoint.h"
-#include "data/ttaudiorepairitem.h"
+#include "extern/ttaudiorepairitem.h"
 #include "avstream/ttavstream.h"
 #include "gui/ttaudiorepairdialog.h"
 

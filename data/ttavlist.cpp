@@ -95,7 +95,7 @@ void TTAVItem::onRemoveAudioItem(int index)
 	mpAudioList->remove(mpAudioList->at(index));
 
   // TTAudioRepairItem tags itself with a track index and has no setter for
-  // it (data/ttaudiorepairitem.h), so removing a track invalidates every
+  // it (extern/ttaudiorepairitem.h), so removing a track invalidates every
   // repair's stored index at or after the removed position - rebuild them
   // via the full constructor (isEnabled() carried over explicitly, the
   // constructor always defaults it to true).

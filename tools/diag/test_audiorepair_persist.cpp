@@ -1,7 +1,7 @@
 // Does an audio repair item planned on one track survive a .ttcut project
 // save/reload round trip?
 //
-// TTAudioRepairItem (data/ttaudiorepairitem.h) describes one planned repair
+// TTAudioRepairItem (extern/ttaudiorepairitem.h) describes one planned repair
 // on one audio track (frame range + channel mask + method). This harness
 // exercises the SAME write/read path the app uses (TTAVData::writeProjectFile
 // / readProjectFile -> TTCutProjectData), matching the existing <Delay>
@@ -66,7 +66,7 @@
 
 #include "avstream/ttavstream.h"
 #include "common/ttmessagelogger.h"
-#include "data/ttaudiorepairitem.h"
+#include "extern/ttaudiorepairitem.h"
 #include "data/ttavdata.h"
 #include "data/ttavlist.h"
 #include "data/ttcutprojectdata.h"

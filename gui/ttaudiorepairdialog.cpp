@@ -11,7 +11,7 @@
 
 #include "ttmpvwrapper.h"
 #include "../data/ttavlist.h"
-#include "../data/ttaudiorepairitem.h"
+#include "../extern/ttaudiorepairitem.h"
 #include "../avstream/ttavstream.h"
 #include "../extern/ttaudiorepair.h"
 #include "../common/ttsettings.h"

@@ -3,7 +3,7 @@
 #include <QMap>
 #include <QByteArray>
 #include <QString>
-#include "../data/ttaudiorepairitem.h"
+#include "ttaudiorepairitem.h"
 
 namespace TTAudioRepair {
 

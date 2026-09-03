@@ -47,7 +47,7 @@ extern "C" {
 }
 
 #include "../../extern/ttaudiorepair.h"
-#include "../../data/ttaudiorepairitem.h"
+#include "../../extern/ttaudiorepairitem.h"
 
 static int gFailures = 0;
 // Checks that could not run at all (missing material). Counted separately and

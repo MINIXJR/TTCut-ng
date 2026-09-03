@@ -23,7 +23,7 @@
 #include "ttmarkerlist.h"
 #include "ttaudiolist.h"
 #include "ttsubtitlelist.h"
-#include "ttaudiorepairitem.h"
+#include "../extern/ttaudiorepairitem.h"
 
 
 class TTVideoStream;

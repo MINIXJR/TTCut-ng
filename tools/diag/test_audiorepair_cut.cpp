@@ -53,7 +53,7 @@ extern "C" {
 
 #include "../../extern/ttaudiocutter.h"
 #include "../../extern/ttaudiorepair.h"
-#include "../../data/ttaudiorepairitem.h"
+#include "../../extern/ttaudiorepairitem.h"
 #include "../../avstream/ttavstream.h"
 #include "../../avstream/ttavtypes.h"
 #include "../../data/ttavdata.h"
