@@ -9,7 +9,7 @@
 //
 // This harness produces a REAL partial failure rather than a simulated one:
 // the item carries two audio tracks, and the second one's file is deleted
-// after its header list was built - TTFFmpegWrapper::cutAudioStream() then
+// after its header list was built - TTAudioCutter::cut() then
 // fails to open it, exactly as it would for a file lost mid-session.
 //
 // Two runs on one TTAVData (the cutsequence harness established that shape):

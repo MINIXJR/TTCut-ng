@@ -56,7 +56,7 @@ static QString resolveProjectPath(const QString& name, const QFileInfo* projectF
 
 // Determine the real AC3 frame byte size of 'path' by reading its first sync
 // frame header, the same frmsizecod lookup TTAC3AudioStream::readAudioHeader()
-// and TTFFmpegWrapper::analyzeAcmod() use (avstream/ttac3audioheader.h's
+// and TTAudioCutter::analyzeAcmod() use (avstream/ttac3audioheader.h's
 // AC3FrameLength[fscod][frmsizecod], a word count -> *2 for bytes). The frame
 // size scales with the stream's bit rate (384 kbit/s@48kHz = 1536 B, but
 // 448 kbit/s = 1792 B and 192 kbit/s = 768 B are both real corpus material,

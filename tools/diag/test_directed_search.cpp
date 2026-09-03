@@ -25,6 +25,7 @@
 #include "data/ttsearchtask_logo.h"
 #include "data/ttsearchtask_scenechange.h"
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 
 #include <cstdio>
 
@@ -123,7 +124,12 @@ int main(int argc, char** argv)
     wrapper.setAnalysisMode(true);
     QImage frame;
     if (wrapper.openFile(path)) {
-      if (bundle.isEmpty()) wrapper.buildFrameIndex(); else wrapper.setFrameIndex(bundle);
+      if (bundle.isEmpty()) {
+        TTFrameIndexer ix;
+        if (ix.build(path, -1, nullptr)) wrapper.setFrameIndex(ix.bundle());
+      } else {
+        wrapper.setFrameIndex(bundle);
+      }
       frame = wrapper.decodeFrame(startPos);
     }
     if (frame.isNull()) {

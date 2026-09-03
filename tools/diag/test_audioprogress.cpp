@@ -1,4 +1,4 @@
-// Diagnostic gate: progress-callback contract of cutAudioStream.
+// Diagnostic gate: progress-callback contract of TTAudioCutter::cut.
 // Cuts the given (start,end) ms ranges from a raw audio ES and validates the
 // percent stream delivered by the callback: strictly increasing, final value
 // 100, at most 101 invocations.
@@ -11,7 +11,7 @@
 #include <QList>
 #include <cstdio>
 #include <cstdlib>
-#include "extern/ttffmpegwrapper.h"
+#include "extern/ttaudiocutter.h"
 
 int main(int argc, char** argv)
 {
@@ -26,10 +26,10 @@ int main(int argc, char** argv)
         keep.append(qMakePair(atoll(argv[i]) / 1000.0, atoll(argv[i+1]) / 1000.0));
 
     QList<int> percents;
-    TTFFmpegWrapper w;
-    bool ok = w.cutAudioStream(argv[1], argv[2], keep, false, QList<int>(),
+    TTAudioCutter cutter;
+    bool ok = cutter.cut(argv[1], argv[2], keep, false, QList<int>(),
                                [&](int p) { percents.append(p); });
-    fprintf(stderr, "cutAudioStream %s, %d callback calls\n",
+    fprintf(stderr, "TTAudioCutter::cut %s, %d callback calls\n",
             ok ? "OK" : "FAIL", (int)percents.size());
     if (!ok) return 1;
 

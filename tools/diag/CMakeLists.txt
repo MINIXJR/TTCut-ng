@@ -23,9 +23,19 @@ set(DISPMAP_SRC
 set(WRAPPER_SRC
   ${DISPMAP_SRC}
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
+
+# TTAudioCutter's own dependencies, for the harnesses that call it directly
+# (none of them touch TTFFmpegWrapper, so WRAPPER_SRC would be overkill).
+set(AUDIOCUT_SRC
+  ${ROOT}/extern/ttaudiocutter.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/common/ttmessagelogger.cpp
+  ${ROOT}/common/ttsettings.cpp)
 
 set(STILLFRAME_SRC
   ${ROOT}/extern/ttessmartcut.cpp
@@ -37,7 +47,7 @@ set(STILLFRAME_SRC
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttcalibrationstore.cpp)
 
-set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp)
+set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/extern/ttavutil.cpp ${ROOT}/extern/ttframeindexer.cpp)
 
 set(MKVMUX_SRC ${SEAM_SRC} ${ROOT}/extern/ttmkvmergeprovider.cpp)
 
@@ -118,6 +128,8 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/common/ttthreadtask.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
 
@@ -147,6 +159,8 @@ set(WINDOWJUMP_SRC
   ${ROOT}/mpeg2window/ttmpeg2window2.cpp
   ${ROOT}/common/ttcut.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
+  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/extern/ttframeindexer.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
@@ -217,7 +231,7 @@ diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
 # cut-segment-boundary error path needs the actual per-track loop, not just
-# TTFFmpegWrapper::cutAudioStream in isolation), so it needs the whole core
+# TTAudioCutter::cut in isolation), so it needs the whole core
 # library (same rationale as test_subtitle_delay).
 diag_tool(test_audiorepair_cut AV WIDGETS SOURCES)
 target_link_libraries(test_audiorepair_cut PRIVATE ttcut-core)
@@ -238,10 +252,11 @@ diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
 diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
-diag_tool(test_audiocut        AV SOURCES ${WRAPPER_SRC})
-diag_tool(test_audiocut_abort  AV SOURCES ${WRAPPER_SRC})
-diag_tool(test_audioprogress   AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_audiocut        AV SOURCES ${AUDIOCUT_SRC})
+diag_tool(test_audiocut_abort  AV SOURCES ${AUDIOCUT_SRC})
+diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_adopt_paff      AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_index_bundle_adopt AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_sar             AV SOURCES ${WRAPPER_SRC})

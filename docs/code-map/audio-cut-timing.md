@@ -68,7 +68,7 @@ flowchart TD
   KEEP["keepList<br/>(audio-frame-aligned)"]
   ACMOD["targetAcmods<br/>(AC3 only)"]
   REPAIR["repair table (per track)<br/>TTAudioRepair::buildRepairTable"]
-  CUT["cutAudioStream"]
+  CUT["TTAudioCutter::cut"]
   OUT["cut audio file<br/>→ mux list / preview"]
   DRIFT["drifts (ms/segment)"]
   COL4["cut list drift column"]
@@ -103,9 +103,9 @@ flowchart TD
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer: MP2@48k = 24 ms, AC3@48k = 32 ms). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
 | `PLAN → DRIFT` | Kumulierter A/V-Versatz in ms nach jedem Segment (Audiolänge − Videolänge, Summe aller vorherigen). Im eingeschwungenen Zustand ±½ Audioframe. |
-| `KEEP → CUT` | Rasteralignierte (start,end). `cutAudioStream` behält nur Frames, die **komplett** ins Segment passen (`pktTime + frameDur > endTime` → stop) → verliert ≤1 Frame je Segmentende; genau das kompensiert `planAudioCut` per `numFrames`. `cutAudioStream` hat zwei neue optionale Parameter, beide von `cutAudioTracks` durchgereicht: `progressCb(int percent)` (0..100, aus geschriebener Sekundenmenge / `totalKeepSec`, nur bei Wertänderung, garantiert 100 am Ende außer bei Abbruch) und `shouldAbort()` (im Paket-Lesezyklus jedes Segments gepollt; bei `true` wird `mLastError = "aborted by user"` gesetzt, kein `setError()`-Log auf Warn-Ebene, Funktion räumt regulär auf und liefert `false`). Ein Abbruch ist damit von einem echten Fehler nur über die Textkonstante unterscheidbar (`TTFFmpegWrapper::lastError()`). |
-| `ACMOD → CUT` | Ziel-`acmod` pro Segment (nur AC3, aus `analyzeAcmod` über die geplanten Fenster). Frames mit abweichendem `acmod` werden dekodiert → umkanaliert (`swr`) → neu kodiert; sonst Stream-Copy. |
-| `ACMOD → REPAIR` / `REPAIR → CUT` | `cutAudioTracks` baut die Tabelle **nach** `computeTargetAcmods`, pro Spur und AC3 only: je aktiviertem `TTAudioRepairItem` (`isEnabled()`, `trackIndex() == idx`) ein Aufruf `TTAudioRepair::buildRepairTable(stream->filePath(), item, targetAcmod, &err)`, gemergt in eine `FrameTable`. `targetAcmod` ist der Ziel-acmod **desjenigen Keep-Segments**, in dem der komplette Item-Bereich liegt — das Item muss vollständig in genau einem `plan.keepList`-Fenster liegen. In `cutAudioStream` sitzt der Lookup **vor** der acmod-Prüfung im Paket-Loop: Frame-Nr. = Paketzeit aufs 32-ms-Raster gerundet → `repairTable->constFind(frameNo)` → Treffer schreibt die Ersatzbytes mit dem laufenden PTS-Offset und `continue`t, ohne den acmod-Reencode-Zweig je zu erreichen. Kein Treffer fällt in die normale Stream-Copy/Reencode-Logik. **Fehlerpfad = Spur-Abbruch, nicht Gesamtabbruch:** `buildRepairTable`-Fehler (Encoder fehlt, Decode-Fehler, Quell-acmod wechselt innerhalb des Item-Bereichs) setzt `repairFailed`; die Spur wird **vor** `cutAudioStream` übersprungen (`onCut(idx, outFile, lang, false); continue`) — dieselbe Teilfehlschlag-Meldung wie ein normaler Spurfehler, kein Byte dieser Spur wird geschrieben. **Ein Item-Bereich, der eine Segmentgrenze überspannt oder nicht vollständig in einem Fenster liegt** (`segIdx < 0` trotz `touchesAnyWindow`), zählt ebenso als `repairFailed` (Meldung „repair range spans a cut-segment boundary"); ein Item, dessen Bereich in **keinem** Fenster liegt (weggeschnitten), wird still übersprungen — `cutAudioStream` hätte diese Frames ohnehin nie geschrieben. Ein OOM bei der Ersatzpaket-Allokation fällt auf das unreparierte Originalpaket zurück (geloggte Warnung), statt eine Lücke zu schreiben. **Ergänzt 2026-08-20 (Final-Review):** ein durch die Lade-Validierung DEAKTIVIERTES Item (`isEnabled() == false`) wird weiterhin übersprungen, aber mit einer Warnzeile pro Item; und jeder Spur-Fehlschlag legt seinen Grund in `TTAVData::audioCutFailureReasons()` ab, aus der die Teilfehlschlag-Meldung der drei Schnittpfade (MPEG-2 `onDoCut`, `TTH26xCutTask`, `TTAudioOnlyCutTask`) ihren Text zieht — die handlungsanweisende Segmentgrenzen-Meldung erscheint in der Oberfläche, nicht nur im Log. |
+| `KEEP → CUT` | Rasteralignierte (start,end). `TTAudioCutter::cut` behält nur Frames, die **komplett** ins Segment passen (`pktTime + frameDur > endTime` → stop) → verliert ≤1 Frame je Segmentende; genau das kompensiert `planAudioCut` per `numFrames`. `TTAudioCutter::cut` hat zwei neue optionale Parameter, beide von `cutAudioTracks` durchgereicht: `progressCb(int percent)` (0..100, aus geschriebener Sekundenmenge / `totalKeepSec`, nur bei Wertänderung, garantiert 100 am Ende außer bei Abbruch) und `shouldAbort()` (im Paket-Lesezyklus jedes Segments gepollt; bei `true` wird `mLastError = "aborted by user"` gesetzt, kein `setError()`-Log auf Warn-Ebene, Funktion räumt regulär auf und liefert `false`). Ein Abbruch ist damit von einem echten Fehler nur über die Textkonstante unterscheidbar (`TTAudioCutter::lastError()`). |
+| `ACMOD → CUT` | Ziel-`acmod` pro Segment (nur AC3, aus `TTAudioCutter::analyzeAcmod` über die geplanten Fenster). Frames mit abweichendem `acmod` werden dekodiert → umkanaliert (`swr`) → neu kodiert; sonst Stream-Copy. |
+| `ACMOD → REPAIR` / `REPAIR → CUT` | `cutAudioTracks` baut die Tabelle **nach** `computeTargetAcmods`, pro Spur und AC3 only: je aktiviertem `TTAudioRepairItem` (`isEnabled()`, `trackIndex() == idx`) ein Aufruf `TTAudioRepair::buildRepairTable(stream->filePath(), item, targetAcmod, &err)`, gemergt in eine `FrameTable`. `targetAcmod` ist der Ziel-acmod **desjenigen Keep-Segments**, in dem der komplette Item-Bereich liegt — das Item muss vollständig in genau einem `plan.keepList`-Fenster liegen. In `TTAudioCutter::cut` sitzt der Lookup **vor** der acmod-Prüfung im Paket-Loop: Frame-Nr. = Paketzeit aufs 32-ms-Raster gerundet → `repairTable->constFind(frameNo)` → Treffer schreibt die Ersatzbytes mit dem laufenden PTS-Offset und `continue`t, ohne den acmod-Reencode-Zweig je zu erreichen. Kein Treffer fällt in die normale Stream-Copy/Reencode-Logik. **Fehlerpfad = Spur-Abbruch, nicht Gesamtabbruch:** `buildRepairTable`-Fehler (Encoder fehlt, Decode-Fehler, Quell-acmod wechselt innerhalb des Item-Bereichs) setzt `repairFailed`; die Spur wird **vor** `TTAudioCutter::cut` übersprungen (`onCut(idx, outFile, lang, false); continue`) — dieselbe Teilfehlschlag-Meldung wie ein normaler Spurfehler, kein Byte dieser Spur wird geschrieben. **Ein Item-Bereich, der eine Segmentgrenze überspannt oder nicht vollständig in einem Fenster liegt** (`segIdx < 0` trotz `touchesAnyWindow`), zählt ebenso als `repairFailed` (Meldung „repair range spans a cut-segment boundary"); ein Item, dessen Bereich in **keinem** Fenster liegt (weggeschnitten), wird still übersprungen — `TTAudioCutter::cut` hätte diese Frames ohnehin nie geschrieben. Ein OOM bei der Ersatzpaket-Allokation fällt auf das unreparierte Originalpaket zurück (geloggte Warnung), statt eine Lücke zu schreiben. **Ergänzt 2026-08-20 (Final-Review):** ein durch die Lade-Validierung DEAKTIVIERTES Item (`isEnabled() == false`) wird weiterhin übersprungen, aber mit einer Warnzeile pro Item; und jeder Spur-Fehlschlag legt seinen Grund in `TTAVData::audioCutFailureReasons()` ab, aus der die Teilfehlschlag-Meldung der drei Schnittpfade (MPEG-2 `onDoCut`, `TTH26xCutTask`, `TTAudioOnlyCutTask`) ihren Text zieht — die handlungsanweisende Segmentgrenzen-Meldung erscheint in der Oberfläche, nicht nur im Log. |
 | `CUT → OUT` | Einzeldurchlauf über alle Segmente. Fortlaufender PTS-Versatz (`ptsOffset = nextOutputPts − pkt->pts` je Segmentanfang) macht die Ausgabe lückenlos (entfernt die Zwischensegment-Lücke). Ausgabeformat aus Dateiendung. |
 | `DRIFT → COL4` | Drift-ms pro Schnitt → Cut-Listen-Spalte 4 (`TTCutTreeView::onAudioDriftUpdated`, setzt Spalte 4). **Zwei** Signale speisen denselben Slot: `audioDriftCalculated` (Vorschau, `TTCutPreviewTask`) und `cutAudioDriftCalculated` (Final-Cut, `TTAVData`). Nur Track 0. |
 
@@ -115,7 +115,7 @@ flowchart TD
   (für H.264/H.265) B-Frame-korrigiert ist. Es zieht nur den Delay ab
   (mkvmerge-Konvention) und snappt aufs Raster — es prüft die Eingabe nicht. Eine unkorrigierte Zeit landet direkt
   im Ton, ohne Warnung.
-- **`cutAudioStream`** setzt rasteralignierte Grenzen voraus (garantiert `planAudioCut`).
+- **`TTAudioCutter::cut`** setzt rasteralignierte Grenzen voraus (garantiert `planAudioCut`).
   Seine „komplett passen"-Regel verwirft ≤1 Frame je Segmentende; die
   `numFrames`-Wahl in `planAudioCut` ist genau darauf ausgelegt.
 - **`countExtraFramesBefore`** setzt `mExtraFrameIndices` aufsteigend sortiert voraus
@@ -132,7 +132,7 @@ flowchart TD
   einheitlichem Log auf `info`-Ebene), Fortschritt/UI läuft über den neuen,
   optionalen `beforeCut(trackIdx)`-Hook, der unmittelbar vor dem Schnitt der
   Spur feuert. Reihenfolge-Kontrakt: Plan → `outPath` → Löschung → `beforeCut`
-  → `computeTargetAcmods` → `cutAudioStream` → `onCut`. Ein Aufrufer, der in
+  → `computeTargetAcmods` → `TTAudioCutter::cut` → `onCut`. Ein Aufrufer, der in
   `outPath` wieder Seiteneffekte legt, läuft ihnen damit voraus.
 - **Synchron mit der Burst-Prüfung:** `detectCutOutBurst`/`detectCutInBurst`
   (`data/ttavdata.cpp`) nutzen dieselbe Grenzformel `(index[+1] − extra)/fps`.
@@ -237,7 +237,7 @@ flowchart TD
 - **[KONSOLIDIERT `b28a7bd`..`7849f66`]** Die Producer bauen die Sequenz nicht mehr
   jeder selbst. `TTAVData::cutAudioTracks` ist die eine Implementierung von
   Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner
-  `computeTargetAcmods`) → `cutAudioStream`; `TTAVData::buildVideoKeepList` ist die
+  `computeTargetAcmods`) → `TTAudioCutter::cut`; `TTAVData::buildVideoKeepList` ist die
   eine Stelle für `(index − extra)/fps` (löst zugleich die Audiozeit-Variante der in
   `frame-order.md` notierten Konvertierung). Migriert: `onDoCut`, `doH264Cut`,
   `doAudioOnlyCut` (Stage 1), der `TTCutPreviewTask`-Vollcut, die `TTCutPreview`-GUI-
@@ -272,7 +272,7 @@ flowchart TD
   Kanten-Semantik `PROD → VKL` und Annahmen-Abschnitt oben).
 - **Bewusst NICHT konsolidiert (Option A):** die zwei abweichenden Vorschau-Pfade —
   `TTCutPreviewTask::createH264PreviewClip` und `TTCutPreview::
-  regenerateSmartCutPreviewClip` (dessen 3-Arg-`cutAudioStream`-Aufruf, ohne
+  regenerateSmartCutPreviewClip` (dessen 3-Arg-`TTAudioCutter::cut`-Aufruf, ohne
   `cutAudioTracks`) — bauen ihre Keep-List **ohne** Extra-Frame-Korrektur (der
   3-Arg-Aufruf auch ohne Snapping/acmod). `TTCutPreviewTask`s MPEG-2-Segmentschleife
   und `TTCutPreview::regenerateMpeg2PreviewClip` sind **keine** Ausnahme — beide

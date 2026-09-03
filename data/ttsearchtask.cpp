@@ -14,6 +14,7 @@
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttframeindexer.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QDebug>
@@ -63,10 +64,13 @@ bool TTSearchTask::openDecoder()
       mFFmpegWrapper = nullptr;
       return false;
     }
-    if (!mPreBuiltFrameIndex.isEmpty())
+    if (!mPreBuiltFrameIndex.isEmpty()) {
       mFFmpegWrapper->setFrameIndex(mPreBuiltFrameIndex);
-    else
-      mFFmpegWrapper->buildFrameIndex();
+    } else {
+      TTFrameIndexer indexer;
+      if (indexer.build(mFilePath, -1, nullptr))
+        mFFmpegWrapper->setFrameIndex(indexer.bundle());
+    }
     return true;
   }
 
@@ -241,10 +245,13 @@ bool TTSearchTask::setupWorkers()
       teardownWorkers();   // delete previously-opened wrappers
       return false;
     }
-    if (!mPreBuiltFrameIndex.isEmpty())
+    if (!mPreBuiltFrameIndex.isEmpty()) {
       w->setFrameIndex(mPreBuiltFrameIndex);
-    else
-      w->buildFrameIndex();
+    } else {
+      TTFrameIndexer indexer;
+      if (indexer.build(mFilePath, -1, nullptr))
+        w->setFrameIndex(indexer.bundle());
+    }
     mSubWrappers.append(w);
   }
 

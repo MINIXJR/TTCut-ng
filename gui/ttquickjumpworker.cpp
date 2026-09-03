@@ -13,6 +13,7 @@
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttvideoheaderlist.h"
 #include "../common/ttmessagelogger.h"
+#include "../extern/ttframeindexer.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QDebug>
@@ -71,12 +72,14 @@ void TTQuickJumpWorker::operation()
     if (!mPrebuiltFrameIndex.isEmpty()) {
       ffmpegWrapper->setFrameIndex(mPrebuiltFrameIndex);
     } else {
-      if (!ffmpegWrapper->buildFrameIndex()) {
+      TTFrameIndexer indexer;
+      if (!indexer.build(mFilePath, -1, nullptr)) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("QuickJump: Failed to build frame index: %1").arg(ffmpegWrapper->lastError()));
+            QString("QuickJump: Failed to build frame index: %1").arg(indexer.lastError()));
         delete ffmpegWrapper;
         return;
       }
+      ffmpegWrapper->setFrameIndex(indexer.bundle());
     }
   }
 

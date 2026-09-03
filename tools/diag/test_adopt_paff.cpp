@@ -13,6 +13,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
+#include "../../extern/ttframeindexer.h"
 
 #include <QElapsedTimer>
 
@@ -40,7 +41,9 @@ int main(int argc, char** argv)
   TTFFmpegWrapper owner;
   if (!owner.openFile(file)) { fprintf(stderr, "owner open failed\n"); return 2; }
   int vs = owner.findBestVideoStream();
-  if (vs < 0 || !owner.buildFrameIndex(vs)) { fprintf(stderr, "owner index failed\n"); return 2; }
+  TTFrameIndexer ix;
+  if (vs < 0 || !ix.build(file, vs, nullptr)) { fprintf(stderr, "owner index failed\n"); return 2; }
+  owner.setFrameIndex(ix.bundle());
   check(owner.isPAFF(), "owner detected PAFF");
 
   // Adopter: same file, index + metadata adopted (provideFrameIndexTo sequence).

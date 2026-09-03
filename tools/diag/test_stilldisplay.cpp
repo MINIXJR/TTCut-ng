@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 
 int main(int argc, char** argv)
 {
@@ -17,7 +18,12 @@ int main(int argc, char** argv)
     TTFFmpegWrapper w;
     if (!w.openFile(argv[1])) { fprintf(stderr, "openFile failed\n"); return 1; }
     int vs = w.findBestVideoStream();
-    if (!w.buildFrameIndex(vs)) { fprintf(stderr, "buildFrameIndex failed\n"); return 1; }
+    TTFrameIndexer ix;
+    if (!ix.build(argv[1], vs, nullptr)) {
+        fprintf(stderr, "frame index build failed: %s\n", qPrintable(ix.lastError()));
+        return 1;
+    }
+    w.setFrameIndex(ix.bundle());
 
     int rc = 0;
     for (int a = 2; a < argc; ++a) {

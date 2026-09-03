@@ -60,7 +60,7 @@
 //          two samples. When that happens (armedAtMs stays -1) the case
 //          reports INCONCLUSIVE for the mid-loop claim specifically, instead
 //          of silently passing or hanging; the wiring itself (predicate
-//          passed into cutAudioStream, correct cleanup on an aborted return)
+//          passed into TTAudioCutter::cut, correct cleanup on an aborted return)
 //          is still exercised by every run that DOES arm, and by the video
 //          case's identical code path one phase earlier.
 //   fail:  genuine failure, not a cancel. tempDirPath is pointed at a

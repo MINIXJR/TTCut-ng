@@ -136,7 +136,7 @@ class TTVideoStream : public TTAVStream
   virtual ~TTVideoStream();
 
   // Audio is not cut through this interface: audio tracks go through
-  // TTFFmpegWrapper::cutAudioStream() (libav stream copy), so only the
+  // TTAudioCutter::cut() (libav stream copy), so only the
   // video and subtitle subtrees declare cut().
   virtual void cut(int start, int end, TTCutParameter* cp) = 0;
 

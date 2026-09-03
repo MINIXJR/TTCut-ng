@@ -15,6 +15,7 @@
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
+#include "../extern/ttframeindexer.h"
 
 #include <QDebug>
 #include <QMouseEvent>
@@ -375,10 +376,12 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
     }
     if (!indexAdopted) {
       qDebug() << "Building frame index for preview...";
-      if (!mpFFmpegWrapper->buildFrameIndex()) {
+      TTFrameIndexer indexer;
+      if (indexer.build(vStream->filePath(), -1, nullptr))
+        mpFFmpegWrapper->setFrameIndex(indexer.bundle());
+      else
         log->errorMsg(__FILE__, __LINE__,
-            QString("Failed to build frame index: %1").arg(mpFFmpegWrapper->lastError()));
-      }
+            QString("Failed to build frame index: %1").arg(indexer.lastError()));
     }
     qDebug() << (indexAdopted ? "Frame index adopted:" : "Frame index built:")
              << mpFFmpegWrapper->frameCount() << "frames"

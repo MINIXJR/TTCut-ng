@@ -22,7 +22,7 @@
 #include "../data/ttcutpreviewtask.h"
 #include "../data/ttcutvideotask.h"
 #include "../extern/ttessmartcut.h"
-#include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttaudiocutter.h"
 #include "../extern/ttmkvmergeprovider.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttavtypes.h"
@@ -878,7 +878,7 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   if (hasAudio) {
     QString audioFile = avItem->audioStreamAt(0)->filePath();
     // KNOWN DIVERGENCE: raw keep list — no extra-frame correction, no
-    // planAudioCut snapping, no acmod normalization (3-arg cutAudioStream).
+    // planAudioCut snapping, no acmod normalization (3-arg TTAudioCutter::cut).
     // Deliberately left as-is during the audio-cut consolidation because
     // changing it would alter preview output (see
     // docs/code-map/audio-cut-timing.md, redundancy section, "Option A").
@@ -894,8 +894,8 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
         .arg(TTSettings::instance()->tempDirPath())
         .arg(QFileInfo(audioFile).suffix());
 
-    TTFFmpegWrapper ffmpeg;
-    if (ffmpeg.cutAudioStream(audioFile, cutAudioFile, keepList)) {
+    TTAudioCutter cutter;
+    if (cutter.cut(audioFile, cutAudioFile, keepList)) {
       cutAudioFiles.append(cutAudioFile);
     }
   }

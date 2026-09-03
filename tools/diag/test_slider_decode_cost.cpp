@@ -40,7 +40,7 @@
 //             native memory-mapped NALU parser - and the wrapper adopts the
 //             result through provideFrameIndexTo(). This is what opening a
 //             file in the GUI does.
-//   wrapper   TTFFmpegWrapper::buildFrameIndex(), a libav packet scan. Used by
+//   wrapper   TTFrameIndexer::build(), a libav packet scan. Used by
 //             the quick-jump worker (gui/ttquickjumpworker.cpp:69), the search
 //             sub-decoders and the analysis wrappers whenever no built index
 //             is handed to them.
@@ -59,6 +59,7 @@
 #include "avstream/tth26xvideostream.h"
 #include "common/ttsettings.h"
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 
 namespace {
 
@@ -150,7 +151,9 @@ int main(int argc, char** argv)
     }
   } else {
     t.restart();
-    if (!wrapper.buildFrameIndex()) { fprintf(stderr, "FAIL: buildFrameIndex\n"); return 1; }
+    TTFrameIndexer ix;
+    if (!ix.build(file, -1, nullptr)) { fprintf(stderr, "FAIL: frame index build\n"); return 1; }
+    wrapper.setFrameIndex(ix.bundle());
     indexMs = t.elapsed();
   }
 

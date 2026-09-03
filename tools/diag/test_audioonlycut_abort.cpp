@@ -41,7 +41,7 @@
 //
 // Mid-phase evidence:
 //   audio: armed on the first "Cutting audio track" message with percent >=
-//          5, i.e. after cutAudioStream has already copied packets. A
+//          5, i.e. after TTAudioCutter::cut has already copied packets. A
 //          completed audio cut reaches ~100 percent and is followed by the
 //          MKA mux stage -- the harness requires the maximum observed audio
 //          percent to stay below 95 AND no "Muxing" message at all, which

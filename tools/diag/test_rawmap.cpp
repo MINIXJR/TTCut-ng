@@ -15,6 +15,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
+#include "../../extern/ttframeindexer.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,47 +47,54 @@ int main(int argc, char** argv)
     }
   }
 
+  const QString file = QString::fromLocal8Bit(argv[1]);
   TTFFmpegWrapper w;
-  if (!w.openFile(QString::fromLocal8Bit(argv[1]))) {
+  if (!w.openFile(file)) {
     fprintf(stderr, "open failed: %s\n", qPrintable(w.lastError())); return 2;
   }
   int vs = w.findBestVideoStream();
-  if (vs < 0 || !w.buildFrameIndex(vs)) {
-    fprintf(stderr, "index failed: %s\n", qPrintable(w.lastError())); return 2;
+  TTFrameIndexer ix;
+  if (vs < 0 || !ix.build(file, vs, nullptr)) {
+    fprintf(stderr, "index failed: %s\n", qPrintable(ix.lastError())); return 2;
   }
+  const TTFrameIndexBundle b = ix.bundle();
+  w.setFrameIndex(b);
 
-  const int raw    = w.rawPacketCount();
+  // The raw->merged map now lives on the bundle itself
+  // (TTFrameIndexBundle::rawToMergedIndex()/rawIsCollapsedField()), so the
+  // invariants asserted below keep their exact meaning.
+  const int raw    = b.rawPacketCount;
   const int merged = w.frameCount();
   int collapsed = 0;
   for (int r = 0; r < raw; ++r)
-    if (w.rawIsCollapsedField(r)) ++collapsed;
+    if (b.rawIsCollapsedField(r)) ++collapsed;
   printf("raw=%d merged=%d collapsed=%d paff=%d\n", raw, merged, collapsed, w.isPAFF() ? 1 : 0);
 
   check(raw >= merged, "raw >= merged");
   check(raw - collapsed == merged, "raw - collapsed == merged");
-  check(w.rawToMergedIndex(-1) == -1 && w.rawToMergedIndex(raw) == -1,
+  check(b.rawToMergedIndex(-1) == -1 && b.rawToMergedIndex(raw) == -1,
         "out-of-range raw maps to -1");
 
   // Map invariants: monotone non-decreasing, collapsed maps to its top's index
   bool monotone = true, pairing = true;
   int prev = -1;
   for (int r = 0; r < raw; ++r) {
-    int m = w.rawToMergedIndex(r);
+    int m = b.rawToMergedIndex(r);
     if (m < prev) monotone = false;
-    if (w.rawIsCollapsedField(r) && r > 0 && m != w.rawToMergedIndex(r - 1))
+    if (b.rawIsCollapsedField(r) && r > 0 && m != b.rawToMergedIndex(r - 1))
       pairing = false;
     prev = m;
   }
   check(monotone, "map monotone non-decreasing");
   check(pairing, "collapsed field maps to its top's merged index");
-  check(w.rawToMergedIndex(raw > 0 ? raw - 1 : 0) == merged - 1,
+  check(b.rawToMergedIndex(raw > 0 ? raw - 1 : 0) == merged - 1,
         "last raw maps to last merged");
 
   // First raw AU whose merged frame has no display slot (dropped RASL) —
   // consumed by the RASL guard gate.
   int firstNoDisp = -1;
   for (int r = 0; r < raw && firstNoDisp < 0; ++r) {
-    int m = w.rawToMergedIndex(r);
+    int m = b.rawToMergedIndex(r);
     if (m >= 0 && w.displayOrderMap().decodeToDisplay(m) < 0) firstNoDisp = r;
   }
   printf("first_dropped_rasl_raw=%d\n", firstNoDisp);

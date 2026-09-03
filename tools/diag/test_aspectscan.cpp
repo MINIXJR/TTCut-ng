@@ -31,6 +31,7 @@
 #include "avstream/ttavheader.h"
 #include "avstream/ttavtypes.h"
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 #include "common/ttthreadtask.h"
 #include "mpeg2decoder/ttmpeg2decoder.h"
 
@@ -84,11 +85,12 @@ int main(int argc, char** argv)
     }
 
     TTFFmpegWrapper w;
-    if (!w.openFile(file) || !w.buildFrameIndex()) {
-        fprintf(stderr, "open/buildFrameIndex failed\n");
+    TTFrameIndexer ix;
+    if (!w.openFile(file) || !ix.build(file, -1, nullptr)) {
+        fprintf(stderr, "open/frame index build failed\n");
         return 1;
     }
-    w.buildGOPIndex();
+    w.setFrameIndex(ix.bundle());
 
     // Same construction as TTH26xVideoStream::createIndexList.
     const QList<TTFrameInfo>& frames = w.frameIndex();

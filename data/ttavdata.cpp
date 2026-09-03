@@ -38,7 +38,7 @@
 #include "../extern/ttaudiorepair.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/ttavheader.h"
-#include "../extern/ttffmpegwrapper.h"
+#include "../extern/ttaudiocutter.h"
 #include "../avstream/tth26xvideostream.h"
 
 #include "ttopenvideotask.h"
@@ -1669,11 +1669,11 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
       },
       [&](int /*i*/, const QString& path, const QString& lang, bool ok) {
         // Register the path even when the cut did NOT succeed: an aborted
-        // audio cut leaves a partial file behind (TTFFmpegWrapper::
-        // cutAudioStream finalizes the container before returning false —
-        // see its own comment "the caller deletes the partial/empty output
-        // file"), and the abort cleanup below can only remove what it knows
-        // about. Mirrors TTH26xCutTask::doCut's mCreatedFiles handling.
+        // audio cut leaves a partial file behind (TTAudioCutter::cut
+        // finalizes the container before returning false — see its own
+        // comment "the caller deletes the partial/empty output file"), and
+        // the abort cleanup below can only remove what it knows about.
+        // Mirrors TTH26xCutTask::doCut's mCreatedFiles handling.
         mCutProducedFiles << path;
         if (ok) {
           cutVideoTask->muxListItem()->appendAudioFile(path, lang);
@@ -2710,8 +2710,8 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   CutBurstInfo info;
 
   // burstMinDeltaDb == 0 disables burst detection entirely. Bail out before
-  // touching the audio file: detectAudioBurst() would otherwise open and decode
-  // it only for the result to be discarded. Read fresh on every call -- the
+  // touching the audio file: TTAudioCutter::detectBurst() would otherwise open
+  // and decode it only for the result to be discarded. Read fresh on every call -- the
   // settings dialog triggers refreshHintIcons(), which re-evaluates all cuts.
   const int minDelta = TTSettings::instance()->burstMinDeltaDb();
   if (minDelta <= 0) return info;
@@ -2729,7 +2729,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
   int extraOut = countExtraFramesBefore(item.cutOutIndex() + 1);
   double cutOutTime = (item.cutOutIndex() + 1 - extraOut) / frameRate;
 
-  info.present = TTFFmpegWrapper::detectAudioBurst(
+  info.present = TTAudioCutter::detectBurst(
       audioFile, cutOutTime, true, minDelta, info.burstDb, info.contextDb);
 
   return info;
@@ -2739,12 +2739,12 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
 // Build the audio cut plan: per-segment (startTime, endTime) snapped to the
 // source audio's frame grid, with feed-forward drift compensation across
 // segments. Without this, each segment loses up to one audio frame at start
-// and end (cutAudioStream's "fit completely" rule), and the loss accumulates
-// monotonically over the whole timeline. With feed-forward, the cumulative
-// drift stays bounded ±½ audio-frame in steady state.
+// and end (TTAudioCutter::cut's "fit completely" rule), and the loss
+// accumulates monotonically over the whole timeline. With feed-forward, the
+// cumulative drift stays bounded ±½ audio-frame in steady state.
 //
 // The resulting (startTime, endTime) pairs are exact multiples of the audio
-// frame duration, so cutAudioStream's skip/stop rules keep precisely the
+// frame duration, so TTAudioCutter::cut's skip/stop rules keep precisely the
 // planned frames per segment.
 // *****************************************************************************
 TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
@@ -2841,7 +2841,7 @@ QList<QPair<double, double>> TTAVData::buildVideoKeepList(TTCutList* cutList,
 
 // *****************************************************************************
 // AC3-only per-segment target acmod list (majority acmod per kept window),
-// used by cutAudioStream to normalize acmod across segments. Empty for
+// used by TTAudioCutter::cut to normalize acmod across segments. Empty for
 // non-AC3 or when normalization is off.
 // *****************************************************************************
 QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString& ext,
@@ -2851,7 +2851,7 @@ QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString
   QList<int> targetAcmods;
   if (normalizeAcmod && ext.toLower() == "ac3") {
     for (int s = 0; s < keepList.size(); s++) {
-      TTFFmpegWrapper::AcmodInfo aInfo = TTFFmpegWrapper::analyzeAcmod(
+      TTAudioCutter::AcmodInfo aInfo = TTAudioCutter::analyzeAcmod(
           audioFile, keepList[s].first, keepList[s].second);
       targetAcmods.append(aInfo.mainAcmod);
     }
@@ -2882,7 +2882,7 @@ QList<float> TTAVData::cutAudioTracks(
 
 // Cut all requested audio tracks against a shared video keep list. Absorbs the
 // per-track loop, per-track delay, planAudioCut, AC3 acmod targets, and
-// cutAudioStream that the six producers used to duplicate. Output naming and
+// TTAudioCutter::cut that the six producers used to duplicate. Output naming and
 // registration are supplied by the caller (mux list / file list / preview).
 // Returns the first requested track's drifts (legacy "track 0" semantics).
 // *****************************************************************************
@@ -2950,7 +2950,7 @@ QList<float> TTAVData::cutAudioTracks(
     // Audio anomaly repairs: build one replacement-frame table per enabled
     // item on this track and merge them (buildRepairTable is AC3-only, so
     // this only runs for .ac3 tracks). A repair whose frames fall in NO keep
-    // window is skipped rather than built: cutAudioStream's lookup can never
+    // window is skipped rather than built: TTAudioCutter::cut's lookup can never
     // match frames it never writes, so building that table would be dead
     // work — and could needlessly fail on an acmod change outside the kept
     // range, which buildRepairTable rejects hard.
@@ -3001,7 +3001,7 @@ QList<float> TTAVData::cutAudioTracks(
           }
         }
         if (segIdx < 0) {
-          if (!touchesAnyWindow) continue; // never written by cutAudioStream -- skip
+          if (!touchesAnyWindow) continue; // never written by TTAudioCutter::cut -- skip
           repairFailed = true;
           // tr(), not QStringLiteral: this one is actionable and is shown to
           // the user via mAudioCutFailureReasons (final review M14).
@@ -3033,17 +3033,17 @@ QList<float> TTAVData::cutAudioTracks(
       continue;
     }
 
-    TTFFmpegWrapper ff;
+    TTAudioCutter cutter;
     std::function<void(int)> perTrackCb;
     if (onProgress)
       perTrackCb = [&onProgress, idx](int p) { onProgress(idx, p); };
-    bool ok = ff.cutAudioStream(stream->filePath(), outFile,
-                                plan.keepList, normalizeAcmod, targetAcmods,
-                                perTrackCb, shouldAbort,
-                                repairTable.isEmpty() ? nullptr : &repairTable);
+    bool ok = cutter.cut(stream->filePath(), outFile,
+                         plan.keepList, normalizeAcmod, targetAcmods,
+                         perTrackCb, shouldAbort,
+                         repairTable.isEmpty() ? nullptr : &repairTable);
     if (!ok) {
       // A deliberate cancel returns false through the same path as a real
-      // failure (TTFFmpegWrapper::cutAudioStream). Only the latter is an
+      // failure (TTAudioCutter::cut). Only the latter is an
       // error - logging a user cancel at error level would put a failure line
       // in the persistent log for something the user asked for.
       if (shouldAbort && shouldAbort()) {
@@ -3180,7 +3180,7 @@ TTAVData::CutBurstInfo TTAVData::detectCutInBurst(const TTCutItem& item) const
   int extraIn = countExtraFramesBefore(item.cutInIndex());
   double cutInTime = (item.cutInIndex() - extraIn) / frameRate;
 
-  info.present = TTFFmpegWrapper::detectAudioBurst(
+  info.present = TTAudioCutter::detectBurst(
       audioFile, cutInTime, false, minDelta, info.burstDb, info.contextDb);
 
   return info;

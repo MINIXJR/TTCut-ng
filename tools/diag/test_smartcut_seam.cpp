@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include "extern/ttessmartcut.h"
 #include "extern/ttffmpegwrapper.h"
+#include "extern/ttframeindexer.h"
 #include "common/ttsettings.h"
 
 #include <cstring>
@@ -45,12 +46,14 @@ int main(int argc, char** argv)
     }
 
     if (injectMap) {
+        TTFrameIndexer ix;
         if (!wrapper.openFile(es) || wrapper.findBestVideoStream() < 0 ||
-            !wrapper.buildFrameIndex(wrapper.findBestVideoStream())) {
+            !ix.build(es, wrapper.findBestVideoStream(), nullptr)) {
             fprintf(stderr, "injectmap: wrapper index failed: %s\n",
-                    qPrintable(wrapper.lastError()));
+                    qPrintable(ix.lastError()));
             return 1;
         }
+        wrapper.setFrameIndex(ix.bundle());
         sc.setDisplayOrderMap(wrapper.displayOrderMap());
         fprintf(stderr, "injectmap: wrapper map injected (%d frames, paff=%d)\n",
                 wrapper.frameCount(), wrapper.isPAFF() ? 1 : 0);

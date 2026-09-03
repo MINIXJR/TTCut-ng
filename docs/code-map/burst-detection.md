@@ -50,7 +50,7 @@ flowchart TD
     HDR["TTAudioHeaderList<br/>acmod"]
 
     WRAP["detectCutInBurst /<br/>detectCutOutBurst"]
-    DET["detectAudioBurst"]
+    DET["TTAudioCutter::detectBurst"]
     RES["CutBurstInfo"]
 
     BURST["updateBurstIcon"]
@@ -108,7 +108,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 | `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. Die Darstellung liegt in einer **eigenen, volle Breite spannenden Grid-Zeile**. Der Shift-Knopf behält seinen Platz auch im versteckten Zustand, damit das Videobild beim Clip-Wechsel nicht springt. |
 | `CUTRUN -.-> FINAL` | `confirmBurstWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Dialog dort doppelt. Bewertet die gesamte `TTCutList` erneut über dieselben Wrapper. |
 | `NONINT -.-> FINAL` | `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
-| `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `detectAudioBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `detectAudioBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
+| `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `TTAudioCutter::detectBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `TTAudioCutter::detectBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
 
 ## Annahmen & Verträge
 
@@ -118,10 +118,11 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   eine manuelle Umsortierung ändert also auch die Burst-Analyse-Spur.
 - `burstMinDeltaDb == 0` schaltet die **Erkennung** ab (Frühausstieg vor dem Dateizugriff; im Settings-Tooltip dokumentiert).
 - Der `minDeltaDb <= 0`-Ausstieg steht **zweimal**: in beiden Wrappern (spart den
-  Dateizugriff) und als Guard gleich am Anfang von `detectAudioBurst` selbst
-  (Kommentar dort: „Callers short-circuit on <= 0 before opening the file; guard
-  anyway"). Der Guard greift für Direktaufrufer, die an den Wrappern vorbeigehen —
-  `tools/ttcut-burst-probe` ruft `detectAudioBurst` unmittelbar auf.
+  Dateizugriff) und als Guard gleich am Anfang von `TTAudioCutter::detectBurst`
+  selbst (Kommentar dort: „Callers short-circuit on <= 0 before opening the file;
+  guard anyway"). Der Guard greift für Direktaufrufer, die an den Wrappern
+  vorbeigehen — `tools/ttcut-burst-probe` ruft `TTAudioCutter::detectBurst`
+  unmittelbar auf.
 - Der Detektor braucht **mindestens 3 RMS-Chunks**, sonst `false` + Warnung. Der
   „Median" ist `sorted[size/2]`, bei gerader Chunk-Zahl also das obere der beiden
   mittleren Elemente — für die Kontextschätzung unerheblich, beim Nachrechnen von
@@ -183,7 +184,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   Produzenten. `updateHintColumn()` kapselt die Reihenfolge, beseitigt die Ursache aber
   nicht. Sauberer wäre: beide liefern `{icon, text, tooltip}` zurück, ein Setter komponiert
   und schreibt **einmal**.
-- **acmod-Mehrheitslogik doppelt implementiert:** `TTFFmpegWrapper::analyzeAcmod`
+- **acmod-Mehrheitslogik doppelt implementiert:** `TTAudioCutter::analyzeAcmod`
   (scannt die AC3-Datei per Syncword, dient der Cut-Normalisierung `targetAcmods`)
   und `TTCutTreeView::updateAcmodIcon` (nutzt die In-Memory-`TTAudioHeaderList`,
   dient der Anzeige) bestimmen beide „Mehrheits-acmod aus ~100 Randframes" mit

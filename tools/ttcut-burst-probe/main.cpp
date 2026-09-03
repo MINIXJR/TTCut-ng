@@ -1,5 +1,5 @@
 /*
- * ttcut-burst-probe - call TTFFmpegWrapper::detectAudioBurst directly.
+ * ttcut-burst-probe - call TTAudioCutter::detectBurst directly.
  *
  * The burst detector could previously only be observed by clicking through the
  * GUI, so every statement about its thresholds was a claim rather than a
@@ -13,7 +13,7 @@
 #include <QString>
 #include <QTextStream>
 
-#include "extern/ttffmpegwrapper.h"
+#include "extern/ttaudiocutter.h"
 
 int main(int argc, char* argv[])
 {
@@ -57,11 +57,11 @@ int main(int argc, char* argv[])
         return 2;
     }
 
-    // detectAudioBurst only assigns these on a positive detection.
+    // detectBurst only assigns these on a positive detection.
     double burstDb = 0.0;
     double contextDb = 0.0;
 
-    const bool present = TTFFmpegWrapper::detectAudioBurst(
+    const bool present = TTAudioCutter::detectBurst(
         args.at(0), boundary, !parser.isSet(cutInOpt), minDelta, burstDb, contextDb);
 
     QTextStream out(stdout);

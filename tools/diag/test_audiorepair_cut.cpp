@@ -1,5 +1,5 @@
 // Diagnostic harness for the Task 5 audio-anomaly-repair cut-path
-// integration: TTFFmpegWrapper::cutAudioStream's repairTable lookup.
+// integration: TTAudioCutter::cut's repairTable lookup.
 //
 // Usage: test_audiorepair_cut
 //   Self-test on synthetic material. Builds
@@ -12,7 +12,7 @@
 //        repair range is byte-identical between A and B (the source-frame
 //        offset of output frame 0 is determined by byte-matching against the
 //        source on the fixture's own frame-byte grid, NOT assumed as a
-//        constant -- the cutAudioStream skip rule puts the segment's first
+//        constant -- the TTAudioCutter::cut skip rule puts the segment's first
 //        frame at source frame 313, not 312, for a 10.0s boundary); frames
 //        inside the range decode to LFE ~ 0 in B; B as a whole is
 //        structurally CRC-clean (every frame: sync 0B77, the source's own
@@ -28,7 +28,7 @@
 //        per-call scalar and cannot represent two different segment targets
 //        for one item, so cutAudioTracks must never silently build a table
 //        against the wrong one. Checked at the cutAudioTracks level (not
-//        cutAudioStream in isolation), since the segment lookup lives there.
+//        TTAudioCutter::cut in isolation), since the segment lookup lives there.
 //   Prints "ALL PASS"/"FAILED" and exits 0/1 accordingly.
 //
 // Build via `cmake --build build --target test_audiorepair_cut`.
@@ -51,7 +51,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-#include "../../extern/ttffmpegwrapper.h"
+#include "../../extern/ttaudiocutter.h"
 #include "../../extern/ttaudiorepair.h"
 #include "../../data/ttaudiorepairitem.h"
 #include "../../avstream/ttavstream.h"
@@ -197,7 +197,7 @@ static QByteArray fileMd5(const QString& path)
 // safely more than one audio frame (32 ms) away from either edge, so
 // planAudioCut's frame-boundary snapping cannot pull the split back outside
 // the item's range). Exercised at the TTAVData::cutAudioTracks level (not
-// cutAudioStream in isolation), since the segment lookup lives there.
+// TTAudioCutter::cut in isolation), since the segment lookup lives there.
 static void testSegmentBoundarySpan()
 {
     if (!QFileInfo::exists(kSampleFile)) {
@@ -279,8 +279,8 @@ int main(int argc, char** argv)
 
     // --- Step 1: reference cut A (no repair table) --------------------------
     QFile::remove(kOutA);
-    TTFFmpegWrapper ffA;
-    bool okA = ffA.cutAudioStream(kSampleFile, kOutA, keep);
+    TTAudioCutter cutterA;
+    bool okA = cutterA.cut(kSampleFile, kOutA, keep);
     check(okA, "reference cut A (no repair table) succeeded");
     if (!okA) { printf("\nFAILED (%d failures)\n", gFailures); return 1; }
 
@@ -293,8 +293,8 @@ int main(int argc, char** argv)
     check(table.size() == (kTo - kFrom + 1), "repair table has the expected entry count");
 
     QFile::remove(kOutB);
-    TTFFmpegWrapper ffB;
-    bool okB = ffB.cutAudioStream(kSampleFile, kOutB, keep, false, QList<int>(),
+    TTAudioCutter cutterB;
+    bool okB = cutterB.cut(kSampleFile, kOutB, keep, false, QList<int>(),
                                    nullptr, {}, &table);
     check(okB, "repaired cut B (with repair table) succeeded");
     if (!okA || !okB) { printf("\nFAILED (%d failures)\n", gFailures); return 1; }
@@ -318,7 +318,7 @@ int main(int argc, char** argv)
 
     // Determine the source-frame offset of output frame 0 by byte-matching
     // against the source on the frame grid -- do NOT assume a constant
-    // (the cutAudioStream skip rule for a 10.0s boundary lands on source
+    // (the TTAudioCutter::cut skip rule for a 10.0s boundary lands on source
     // frame 313, not 312: frame 312 covers [9.984, 10.016), and its start
     // 9.984 < startTime - 0.001 = 9.999 is skipped).
     qint64 offset = -1;
@@ -405,8 +405,8 @@ int main(int argc, char** argv)
     check(outsideErr.isEmpty(), QString("buildRepairTable (outside-window item): no error (got: %1)").arg(outsideErr));
 
     QFile::remove(kOutC);
-    TTFFmpegWrapper ffC;
-    bool okC = ffC.cutAudioStream(kSampleFile, kOutC, keep, false, QList<int>(),
+    TTAudioCutter cutterC;
+    bool okC = cutterC.cut(kSampleFile, kOutC, keep, false, QList<int>(),
                                    nullptr, {}, &outsideTable);
     check(okC, "cut C (table with no matching frames) succeeded");
     if (okC) {
