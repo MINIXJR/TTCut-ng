@@ -91,17 +91,13 @@ public:
 
     // Detect container type (used by Smart Cut)
 
-    // The frame index this wrapper works on. Built by TTFrameIndexer and
-    // installed through setFrameIndex(); the wrapper no longer scans itself.
-    const QList<TTFrameInfo>& frameIndex() const { return mFrameIndex; }
-    // Adopt index AND the owner's stream metadata in one step. This is the
-    // only public way to install an index; the bare list variant is private.
-    // Ordering contract: the wrapper must be open (openFile()) before this is
-    // called — the display-order map rebuilt here reads the codec context for
-    // the H.264 cold-start marking.
-    void setFrameIndex(const TTFrameIndexBundle& bundle);
-    // This wrapper's index plus the metadata it measured, ready for adoption.
-    TTFrameIndexBundle frameIndexBundle() const;
+    // The frame index this wrapper works on, adopted as a whole bundle through
+    // setFrameIndex(); the wrapper never scans itself. Every adopter of the same
+    // file reads the same entries and the same display-order map.
+    const QList<TTFrameInfo>& frameIndex() const { return mBundle.index; }
+    void setFrameIndex(const TTFrameIndexBundle& bundle) { mBundle = bundle; }
+    // The adopted bundle, unchanged, ready for the next adopter.
+    TTFrameIndexBundle frameIndexBundle() const { return mBundle; }
     // Optional abort flag, owned by the caller (a worker's mIsAborted). Checked
     // once per skip-loop iteration; when set, decodeFrame() returns a null
     // QImage without logging an error and without a neighbour attempt — a
@@ -109,11 +105,11 @@ public:
     void setCancelToken(const std::atomic<bool>* flag) { mCancelToken = flag; }
     bool isCancelled() const
     { return mCancelToken && mCancelToken->load(std::memory_order_relaxed); }
-    const TTDisplayOrderMap& displayOrderMap() const { return mDisplayOrderMap; }
-    int frameCount() const { return mFrameIndex.size(); }
-    bool isPAFF() const { return mIsPAFF; }
-    int h264Log2MaxFrameNum() const { return mH264Log2MaxFrameNum; }
-    bool h264FrameMbsOnlyFlag() const { return mH264FrameMbsOnlyFlag; }
+    const TTDisplayOrderMap& displayOrderMap() const { return mBundle.displayMap; }
+    int frameCount() const { return mBundle.index.size(); }
+    bool isPAFF() const { return mBundle.isPAFF; }
+    int h264Log2MaxFrameNum() const { return mBundle.log2MaxFrameNum; }
+    bool h264FrameMbsOnlyFlag() const { return mBundle.frameMbsOnlyFlag; }
 
     // Sample aspect ratio (SAR) of the video stream as width/height factor.
     // Codec context first (populated once a frame was decoded), stream
@@ -179,21 +175,6 @@ public:
     QString lastError() const { return mLastError; }
 
 private:
-    // Install the index entries and rebuild the display map. Private on purpose:
-    // an index without its stream metadata makes decodeFrame() drain to EOF on
-    // PAFF field-pair targets. Public adoption goes through the bundle overload.
-    void setFrameIndexEntries(const QList<TTFrameInfo>& index);
-
-    // Adopt the stream-level values the index owner measured during
-    // the index build (SPS parse + packet scan). Private: reachable only via
-    // setFrameIndex(const TTFrameIndexBundle&), so it can no longer be forgotten.
-    void adoptStreamMetadata(bool isPAFF, bool frameMbsOnlyFlag, int log2MaxFrameNum)
-    {
-        mIsPAFF = isPAFF;
-        mH264FrameMbsOnlyFlag = frameMbsOnlyFlag;
-        mH264Log2MaxFrameNum = log2MaxFrameNum;
-    }
-
     // decodeFrame's body. fallbackDepth limits the neighbour retry to a single
     // step: the comment always said "try one frame earlier", but the recursion
     // was unbounded and would walk down to frame 0 — harmless only as long as
@@ -248,21 +229,12 @@ private:
     int         mSwsCtxYUVHeight = 0;
 
     const std::atomic<bool>* mCancelToken;   // not owned; nullptr = no cancelling
-    bool mIsPAFF;                       // PAFF stream detected
-    int mH264Log2MaxFrameNum;           // from SPS, for frame_num parsing
-    bool mH264FrameMbsOnlyFlag;         // from SPS, true = no field coding
 
     // Decode-order tag for a packet (frame units, PAFF-aware). See .cpp.
     int64_t decodeOrderTagForPacket(const AVPacket* packet);
 
-    // Frame index and the display order derived from it
-    QList<TTFrameInfo> mFrameIndex;
-    TTDisplayOrderMap mDisplayOrderMap;
-
-    // Derive the display-order map from the poc/isIDR fields of mFrameIndex.
-    // Falls back to the identity map (with a warning) when POC data is
-    // missing or degenerate — identical to pre-map behavior.
-    void buildDisplayOrderMap();
+    // The adopted index bundle (entries, GOP table, PAFF metadata, display map).
+    TTFrameIndexBundle mBundle;
 
     // LRU frame cache
     QMap<int, QImage> mFrameCache;

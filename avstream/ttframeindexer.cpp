@@ -78,6 +78,7 @@ bool TTFrameIndexer::build(const QString& filePath, int videoStreamIndex,
     }
 
     buildGops();
+    buildDisplayMap(mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id);
 
     // Summary logging: TTFFmpegWrapper printed these from rewindContext(),
     // which the indexer has no use for (it closes the file instead).
@@ -576,4 +577,40 @@ void TTFrameIndexer::buildGops()
 
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "GOP index built:" << mBundle.gops.size() << "GOPs";
+}
+
+// ----------------------------------------------------------------------------
+// Display-order map from the finalized index
+// ----------------------------------------------------------------------------
+void TTFrameIndexer::buildDisplayMap(int avCodecId)
+{
+    // Identity fallback covers: MPEG-2, missing POC data, degenerate parser
+    // output. Identity == pre-map behavior.
+    auto identity = [this](const char* reason) {
+        QVector<int> ranks(mBundle.index.size());
+        for (int i = 0; i < ranks.size(); ++i) ranks[i] = i;
+        mBundle.displayMap.buildFromRanks(ranks);
+        if (reason && TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "display-order map: identity fallback -" << reason;
+    };
+
+    mBundle.displayMap = TTDisplayOrderMap();
+    if (mBundle.index.isEmpty()) return;
+    if (mBundle.index[0].poc == INT_MIN) { identity("no POC collected"); return; }
+
+    QVector<TTPocEntry> entries(mBundle.index.size());
+    bool allSame = true;
+    for (int i = 0; i < mBundle.index.size(); ++i) {
+        entries[i] = {mBundle.index[i].poc, mBundle.index[i].isIDR,
+                      mBundle.index[i].isDroppedLeading, mBundle.index[i].isKeyframe};
+        if (mBundle.index[i].poc != mBundle.index[0].poc) allSame = false;
+    }
+    if (allSame && mBundle.index.size() > 1) { identity("constant POC"); return; }
+
+    // H.264 open-GOP cold start: mark leading pics libav drops (mirrors the HEVC
+    // RASL handling done input-side via TTLeadingPicClassifier). No-op otherwise.
+    TTDisplayOrderMap::markH264ColdStartLeadingPics(entries, avCodecId);
+
+    mBundle.displayMap.build(entries);
+    if (!mBundle.displayMap.isValid()) identity("rank validation failed");
 }
