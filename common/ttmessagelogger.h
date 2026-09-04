@@ -97,4 +97,20 @@ class TTMessageLogger
     static const int   STD_LOG_MODE;
     static const char* SUM_FILE_NAME;
 };
+// Records an error text in a class's mLastError and logs it once under the
+// caller's file/line as "<className> error: <text>" — WARNING by default,
+// ERROR when asError is set. Shared by the libav-facing classes that each
+// keep their own last-error string (TTFFmpegWrapper, TTESSmartCut, ...).
+inline void ttSetLastError(QString& lastError, const char* file, int line,
+                           const char* className, const QString& error,
+                           bool asError = false)
+{
+  lastError = error;
+  const QString msg = QString("%1 error: %2").arg(className, error);
+  if (asError)
+    TTMessageLogger::getInstance()->errorMsg(file, line, msg);
+  else
+    TTMessageLogger::getInstance()->warningMsg(file, line, msg);
+}
+
 #endif //TTMESSAGELOGGER_H

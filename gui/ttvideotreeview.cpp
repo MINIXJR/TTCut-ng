@@ -143,7 +143,7 @@ void TTVideoTreeView::onAppendItem(const TTAVItem& item)
   }
 
   // Check for H.265
-  TTH265VideoStream* h265Stream = dynamic_cast<TTH265VideoStream*>(vStream);
+  const TTH265VideoStream* h265Stream = dynamic_cast<const TTH265VideoStream*>(vStream);
   if (h265Stream != nullptr && h265Stream->getSPS() != nullptr) {
     resolution = QString("%1x%2").arg(h265Stream->getSPS()->width()).arg(h265Stream->getSPS()->height());
     aspectRatio = "H.265";

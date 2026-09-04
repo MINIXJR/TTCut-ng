@@ -543,15 +543,8 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
                          QString* errorReason)
 {
     // Find the first CRA slice NAL (type 21) inside the AU data.
-    int i = 0;
-    while (i + 4 < auData.size()) {
-        int sc = 0;
-        if (auData.at(i) == 0 && auData.at(i + 1) == 0) {
-            if (auData.at(i + 2) == 1) sc = 3;
-            else if (auData.at(i + 2) == 0 && auData.at(i + 3) == 1) sc = 4;
-        }
-        if (sc == 0) { ++i; continue; }
-        int type = (quint8(auData.at(i + sc)) >> 1) & 0x3F;
+    int sc = 0, type = 0;
+    for (int i = 0; (i = ttHevcNextNal(auData, i, &sc, &type)) >= 0; i += sc + 1) {
         if (type == 21) {
             QByteArray rbsp = ttHevcDeescape(auData.mid(i + sc));
             THevcBitReader r(rbsp);
@@ -604,7 +597,6 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
             std::sort(retainPocs->begin(), retainPocs->end());
             return true;
         }
-        i += sc + 1;
     }
     if (errorReason) *errorReason = QStringLiteral("no CRA slice in AU");
     return false;
@@ -727,4 +719,20 @@ QByteArray rewriteHevcEncoderPacket(const QByteArray& packetData,
         i = end;
     }
     return out;
+}
+
+int ttHevcNextNal(const QByteArray& data, int from, int* scLen, int* nalType)
+{
+    for (int i = from; i + 4 < data.size(); ++i) {
+        int sc = 0;
+        if (data.at(i) == 0 && data.at(i + 1) == 0) {
+            if (data.at(i + 2) == 1) sc = 3;
+            else if (data.at(i + 2) == 0 && data.at(i + 3) == 1) sc = 4;
+        }
+        if (sc == 0) continue;
+        *scLen   = sc;
+        *nalType = (quint8(data.at(i + sc)) >> 1) & 0x3F;
+        return i;
+    }
+    return -1;
 }

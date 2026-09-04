@@ -630,6 +630,24 @@ bool TTAudioCutter::cut(const QString& inputFile,
 // Decodes ~200ms of audio around a boundary, calculates per-frame RMS,
 // and checks if boundary frames are significantly louder than context.
 // Returns true if a sudden loudness burst (>20dB above median) is detected.
+// Sum of squared samples over one decoded frame, planar or interleaved,
+// each sample of type T scaled by `scale` into [-1, 1].
+template <typename T>
+static double sumSquares(const AVFrame* frame, bool planar, int channels, double scale)
+{
+    double sumSq = 0.0;
+    for (int ch = 0; ch < channels; ch++) {
+        const T*  data   = reinterpret_cast<const T*>(frame->data[planar ? ch : 0]);
+        const int stride = planar ? 1 : channels;
+        const int offset = planar ? 0 : ch;
+        for (int s = 0; s < frame->nb_samples; s++) {
+            const double v = data[s * stride + offset] * scale;
+            sumSq += v * v;
+        }
+    }
+    return sumSq;
+}
+
 // ----------------------------------------------------------------------------
 // Absolute audibility floor: a chunk this quiet is inaudible in practice, however far
 // it sticks out of a near-silent context. Without it, noise in digital silence
@@ -815,49 +833,20 @@ bool TTAudioCutter::detectBurst(const QString& audioFile, double boundaryTime,
                 // Handle different sample formats
                 switch (decCtx->sample_fmt) {
                 case AV_SAMPLE_FMT_FLT:
-                case AV_SAMPLE_FMT_FLTP: {
-                    for (int ch = 0; ch < frameChannels; ch++) {
-                        const float* data = (const float*)frame->data[
-                            decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 1 : frameChannels;
-                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP) ? 0 : ch;
-                        for (int s = 0; s < frame->nb_samples; s++) {
-                            double v = data[s * stride + offset];
-                            sumSq += v * v;
-                        }
-                    }
+                case AV_SAMPLE_FMT_FLTP:
+                    sumSq = sumSquares<float>(frame, decCtx->sample_fmt == AV_SAMPLE_FMT_FLTP,
+                                              frameChannels, 1.0);
                     break;
-                }
                 case AV_SAMPLE_FMT_S16:
-                case AV_SAMPLE_FMT_S16P: {
-                    const double scale = 1.0 / 32768.0;
-                    for (int ch = 0; ch < frameChannels; ch++) {
-                        const int16_t* data = (const int16_t*)frame->data[
-                            decCtx->sample_fmt == AV_SAMPLE_FMT_S16P ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 1 : frameChannels;
-                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S16P) ? 0 : ch;
-                        for (int s = 0; s < frame->nb_samples; s++) {
-                            double v = data[s * stride + offset] * scale;
-                            sumSq += v * v;
-                        }
-                    }
+                case AV_SAMPLE_FMT_S16P:
+                    sumSq = sumSquares<int16_t>(frame, decCtx->sample_fmt == AV_SAMPLE_FMT_S16P,
+                                                frameChannels, 1.0 / 32768.0);
                     break;
-                }
                 case AV_SAMPLE_FMT_S32:
-                case AV_SAMPLE_FMT_S32P: {
-                    const double scale = 1.0 / 2147483648.0;
-                    for (int ch = 0; ch < frameChannels; ch++) {
-                        const int32_t* data = (const int32_t*)frame->data[
-                            decCtx->sample_fmt == AV_SAMPLE_FMT_S32P ? ch : 0];
-                        int stride = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 1 : frameChannels;
-                        int offset = (decCtx->sample_fmt == AV_SAMPLE_FMT_S32P) ? 0 : ch;
-                        for (int s = 0; s < frame->nb_samples; s++) {
-                            double v = data[s * stride + offset] * scale;
-                            sumSq += v * v;
-                        }
-                    }
+                case AV_SAMPLE_FMT_S32P:
+                    sumSq = sumSquares<int32_t>(frame, decCtx->sample_fmt == AV_SAMPLE_FMT_S32P,
+                                                frameChannels, 1.0 / 2147483648.0);
                     break;
-                }
                 default:
                     // Unsupported format — skip
                     av_frame_unref(frame);
@@ -930,7 +919,5 @@ done_reading:
 // ----------------------------------------------------------------------------
 void TTAudioCutter::setError(const QString& error)
 {
-    mLastError = error;
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("TTAudioCutter error: %1").arg(error));
+    ttSetLastError(mLastError, __FILE__, __LINE__, "TTAudioCutter", error);
 }

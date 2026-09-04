@@ -95,7 +95,6 @@ TTH264AccessUnit::TTH264AccessUnit()
     , mPoc(0)
     , mPts(0)
     , mDts(0)
-    , mGopIndex(0)
     , mFrameSize(0)
 {
     mNalType = NAL_SLICE;

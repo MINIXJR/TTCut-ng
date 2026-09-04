@@ -67,6 +67,12 @@ protected:
   // Close + delete all sub-decoders, destroy mDecodePool. Idempotent.
   void teardownWorkers();
 
+  // Common prologue of the directed searches: workers up, then the first
+  // index position one step from mStartPos in the search direction. On
+  // failure it has already emitted found(-1, false) (and torn the workers
+  // down again) and returns -1, so the caller just returns.
+  int establishStartPosition();
+
   // Collect up to mWorkerCount I-frame positions starting at and including
   // currentPos, walking via mIndexList in mDirection. Updates currentPos to
   // the position immediately after the last batch entry (so the caller can

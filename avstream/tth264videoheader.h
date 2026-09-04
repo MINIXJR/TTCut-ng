@@ -187,8 +187,6 @@ public:
     void setDts(int64_t dts) { mDts = dts; }
 
     // GOP index (which GOP this frame belongs to)
-    int gopIndex() const { return mGopIndex; }
-    void setGopIndex(int idx) { mGopIndex = idx; }
 
     // Frame size in bytes
     int64_t frameSize() const { return mFrameSize; }
@@ -203,7 +201,6 @@ private:
     int mPoc;
     int64_t mPts;
     int64_t mDts;
-    int mGopIndex;
     int64_t mFrameSize;
 };
 

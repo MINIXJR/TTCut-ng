@@ -30,6 +30,11 @@ TTMuxListDataItem::TTMuxListDataItem()
 
 TTMuxListDataItem::TTMuxListDataItem(const TTMuxListDataItem& item)
 {
+  copyFrom(item);
+}
+
+void TTMuxListDataItem::copyFrom(const TTMuxListDataItem& item)
+{
   this->videoFileName = item.videoFileName;
 
   this->audioFileNames.clear();
@@ -51,26 +56,7 @@ TTMuxListDataItem::TTMuxListDataItem(const TTMuxListDataItem& item)
 
 const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& item)
 {
-  if (this == &item) return *this;
-
-  this->videoFileName = item.videoFileName;
-
-  this->audioFileNames.clear();
-  this->audioLanguageList.clear();
-  for(int i=0; i<item.audioFileNames.count(); i++) {
-    this->audioFileNames.append(item.audioFileNames[i]);
-    if (i < item.audioLanguageList.count())
-      this->audioLanguageList.append(item.audioLanguageList[i]);
-  }
-
-  this->subtitleFileNames.clear();
-  this->subtitleLanguageList.clear();
-  for(int i=0; i<item.subtitleFileNames.count(); i++) {
-    this->subtitleFileNames.append(item.subtitleFileNames[i]);
-    if (i < item.subtitleLanguageList.count())
-      this->subtitleLanguageList.append(item.subtitleLanguageList[i]);
-  }
-
+  if (this != &item) copyFrom(item);
   return *this;
 }
 

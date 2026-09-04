@@ -22,6 +22,7 @@
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
 #include "ttavdata.h"
+#include "../avstream/ttcommon.h"
 #include "../extern/ttmuxlistdata.h"
 #include "ttcutprojectdata.h"
 #include "../avstream/ttmpeg2videostream.h"
@@ -2245,11 +2246,7 @@ void TTAVData::onCutFinished()
           // construction: this branch is reached exclusively through
           // wasAborted(), never through an mplex failure - a failed mux keeps
           // its files for diagnosis.
-          for (const QString& f : mCutProducedFiles) {
-            if (f.isEmpty() || !QFile::exists(f)) continue;
-            if (!QFile::remove(f))
-              log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
-          }
+          ttRemoveFiles(mCutProducedFiles, log);
           mCutProducedFiles.clear();
 
           // Mirror of finishMpeg2Cut()'s own reset, and a no-op for the same
@@ -2433,13 +2430,8 @@ void TTAVData::onCutAborted()
   // MPEG-2 branch of onDoCut() ever fills this one) and empty once the mux
   // task has taken it over (onCutFinished() hands it to TTMuxTaskParams::
   // cleanupOnAbort and clears it), so no path deletes the same file twice.
-  if (mSyncPhaseAbort.load(std::memory_order_relaxed)) {
-    for (const QString& f : mCutProducedFiles) {
-      if (f.isEmpty() || !QFile::exists(f)) continue;
-      if (!QFile::remove(f))
-        log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
-    }
-  }
+  if (mSyncPhaseAbort.load(std::memory_order_relaxed))
+    ttRemoveFiles(mCutProducedFiles, log);
   // Cleared either way: the operation is over, and a later abort must never
   // delete a previous run's products.
   mCutProducedFiles.clear();

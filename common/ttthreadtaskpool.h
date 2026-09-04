@@ -71,6 +71,10 @@ class TTThreadTaskPool : public QObject
     void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
     private:
+        // The four task->pool connections every started task gets, and their
+        // removal plus the queue entry once the task is done or aborted.
+        void wireTask(TTThreadTask* task);
+        void unwireTask(TTThreadTask* task);
         void cleanUpQueue();
     int  runningTaskCount();
 

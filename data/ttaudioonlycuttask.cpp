@@ -24,6 +24,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttaudioonlycuttask.h"
+#include "../avstream/ttcommon.h"
 
 #include "ttavdata.h"
 #include "ttavlist.h"
@@ -87,12 +88,7 @@ void TTAudioOnlyCutTask::cleanUp()
  */
 void TTAudioOnlyCutTask::abortCleanup()
 {
-  for (const QString& f : mCreatedFiles) {
-    if (f.isEmpty() || !QFile::exists(f)) continue;
-    if (!QFile::remove(f))
-      log->warningMsg(__FILE__, __LINE__,
-          QString("abort cleanup: could not remove %1").arg(f));
-  }
+  ttRemoveFiles(mCreatedFiles, log);
   mCreatedFiles.clear();
 }
 

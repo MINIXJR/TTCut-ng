@@ -123,6 +123,25 @@ void TTThreadTaskPool::cleanUpQueue()
   mProgressMap.clear();
 }
 
+void TTThreadTaskPool::wireTask(TTThreadTask* task)
+{
+  connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
+  connect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
+}
+
+void TTThreadTaskPool::unwireTask(TTThreadTask* task)
+{
+  disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
+  disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
+  disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
+  disconnect(task, &TTThreadTask::statusReport,
+    this, &TTThreadTaskPool::onStatusReport);
+  mTaskQueue.removeAll(task);
+}
+
 /**
  * Threadtask has emitted start signal
  *
@@ -138,12 +157,7 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
 {
   Q_ASSERT(thread() == QThread::currentThread());
 
-  connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-  connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-  connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-  connect(task, &TTThreadTask::statusReport,
-    this, &TTThreadTaskPool::onStatusReport);
+  wireTask(task);
 
   // Safety net for the task lifetime. The pool does not own the tasks; their
   // owners are free to delete them (the main window wires finished/aborted to
@@ -201,12 +215,7 @@ void TTThreadTaskPool::start(TTThreadTask* task, bool runSyncron, int priority)
  */
 void TTThreadTaskPool::startNested(TTThreadTask* task)
 {
-  connect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-  connect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-  connect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-  connect(task, &TTThreadTask::statusReport,
-    this, &TTThreadTaskPool::onStatusReport);
+  wireTask(task);
 
   // No destroyed() connection: that one only exists to take a dead task out of
   // the queue, and this task never enters it.
@@ -229,14 +238,7 @@ void TTThreadTaskPool::onThreadTaskStarted(TTThreadTask* task)
  */
 void TTThreadTaskPool::onThreadTaskFinished(TTThreadTask* task)
 {
-  disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-  disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-  disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-  disconnect(task, &TTThreadTask::statusReport,
-    this, &TTThreadTaskPool::onStatusReport);
-
-  mTaskQueue.removeAll(task);
+  unwireTask(task);
 
   qDebug() << "finished " << task->taskName() << " with UUID " << task->taskID() << " remaining tasks " << mTaskQueue.count();
 
@@ -262,14 +264,7 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
           arg(task->taskID()).
           arg(task->isRunning())));*/
 
-  disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-  disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-  disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-  disconnect(task, &TTThreadTask::statusReport,
-    this, &TTThreadTaskPool::onStatusReport);
-
-  mTaskQueue.removeAll(task);
+  unwireTask(task);
 
   // Keep the reason, if there was one. aborted() carries no argument and says
   // only "this task did not finish" - a user cancel and a genuine failure look

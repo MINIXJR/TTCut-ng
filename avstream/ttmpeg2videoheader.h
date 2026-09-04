@@ -59,6 +59,11 @@ public:
   virtual bool readHeader( TTFileBuffer* mpeg2_stream, quint64 offset ) = 0;
   virtual void parseBasicData( quint8* data, int offset=0 ) = 0;
 
+  // Reads bytes until a 00 00 01 start code prefix has been consumed or
+  // `limit` bytes were examined (corrupt data must not scan the whole file).
+  // Returns false on the limit; on true the next byte is the start code id.
+  static bool scanForStartCode( TTFileBuffer* mpeg2_stream, int limit );
+
 enum mpeg2StartCodes
   {
     picture_start_code            = 0x00,

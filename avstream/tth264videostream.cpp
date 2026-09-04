@@ -100,7 +100,6 @@ void TTH264VideoStream::buildAccessUnits()
         au->setFrameSize(frame.packetSize);
         au->setPts(frame.pts);
         au->setDts(frame.dts);
-        au->setGopIndex(frame.gopIndex);
         au->setIDR(frame.isKeyframe);
 
         if (frame.isKeyframe) {

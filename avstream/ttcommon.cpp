@@ -14,6 +14,7 @@
 #include <math.h>
 #include <QString>
 #include <QFileInfo>
+#include <QFile>
 
 // check if pointer is assigned
 bool ttAssigned( const void* pointer )
@@ -206,5 +207,14 @@ QString ttFrameTypeTag(int frameType)
     case 2: return QStringLiteral(" [P]");
     case 3: return QStringLiteral(" [B]");
     default: return QString();
+  }
+}
+
+void ttRemoveFiles( const QStringList& files, TTMessageLogger* log )
+{
+  for (const QString& f : files) {
+    if (f.isEmpty() || !QFile::exists(f)) continue;
+    if (!QFile::remove(f))
+      log->warningMsg(__FILE__, __LINE__, QString("abort cleanup: could not remove %1").arg(f));
   }
 }

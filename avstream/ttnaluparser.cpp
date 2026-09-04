@@ -1313,9 +1313,7 @@ int TTNaluParser::computeReorderDelay() const
 // ----------------------------------------------------------------------------
 void TTNaluParser::setError(const QString& error)
 {
-    mLastError = error;
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("TTNaluParser error: %1").arg(error));
+    ttSetLastError(mLastError, __FILE__, __LINE__, "TTNaluParser", error);
 }
 
 // ----------------------------------------------------------------------------

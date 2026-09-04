@@ -29,6 +29,7 @@
 #include "tthevcseam.h"
 
 // Forward declarations for libav types
+struct AVDictionary;
 struct AVFormatContext;
 struct AVCodecContext;
 struct AVFrame;
@@ -288,6 +289,16 @@ private:
     bool setupDecoder();
     bool setupEncoder();
     bool probeEncoderPocParams();
+    // Opens a throwaway encoder with GLOBAL_HEADER so its parameter sets
+    // land in extradata without encoding a frame; frame rate, bf=0 and
+    // single-threading as in setupEncoder(). Consumes *opts. Empty on
+    // failure. Shared by the H.264 POC probe and the HEVC seam probe.
+    QByteArray probeEncoderExtradata(const char* codecName, int width, int height,
+                                     int bitDepthLuma, bool interlaced,
+                                     AVDictionary** opts);
+    // The preset index setupEncoder() and the probes use: the per-cut
+    // override when set, else the settings value, clamped to the table.
+    int effectivePresetIndex() const;
     void freeDecoder();
     void freeEncoder();
 

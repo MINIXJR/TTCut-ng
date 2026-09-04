@@ -47,6 +47,19 @@ static int findNalEnd(const uint8_t* data, int size, int from)
     return size;
 }
 
+// Index of the next 00 00 01 / 00 00 00 01 start code at or after `from`,
+// with its length in *scLen; -1 when there is none.
+static int findNextStartCode(const uint8_t* data, int size, int from, int* scLen)
+{
+    for (int i = from; i + 2 < size; i++) {
+        if (data[i] == 0 && data[i+1] == 0) {
+            if (i + 3 < size && data[i+2] == 0 && data[i+3] == 1) { *scLen = 4; return i; }
+            if (data[i+2] == 1) { *scLen = 3; return i; }
+        }
+    }
+    return -1;
+}
+
 // Length of the Annex-B start code a NAL buffer begins with (3 or 4), 0 when
 // the buffer does not start with one.
 static int startCodeLength(const QByteArray& nal)
@@ -1620,6 +1633,8 @@ static int32_t spsReadSE(const uint8_t* data, int dataSize, int& bitPos);
 static void spsWriteUE(uint8_t* data, int dataSize, int& bitPos, uint32_t value);
 static void spsWriteSE(uint8_t* data, int dataSize, int& bitPos, int32_t value);
 static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int sizeOfScalingList);
+static void skipScalingMatrixIfPresent(const uint8_t* data, int dataSize, int& bitPos, uint32_t chromaFormatIdc);
+static void skipPredWeightList(const uint8_t* data, int dataSize, int& bitPos, int numRefs);
 
 // ----------------------------------------------------------------------------
 // Parse H.264 SPS fields needed for frame_num patching and POC domain fix.
@@ -1658,15 +1673,7 @@ static H264SpsInfo parseH264SpsInfo(const QByteArray& spsNal)
         info.bitDepthLuma = 8 + static_cast<int>(spsReadUE(data, dataSize, bitPos));  // bit_depth_luma_minus8
         spsReadUE(data, dataSize, bitPos);    // bit_depth_chroma_minus8
         spsReadBits(data, dataSize, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
-        uint32_t seq_scaling_matrix_present = spsReadBits(data, dataSize, bitPos, 1);
-        if (seq_scaling_matrix_present) {
-            int limit = (chroma_format_idc != 3) ? 8 : 12;
-            for (int i = 0; i < limit; i++) {
-                uint32_t present = spsReadBits(data, dataSize, bitPos, 1);
-                if (present)
-                    skipScalingList(data, dataSize, bitPos, (i < 6) ? 16 : 64);
-            }
-        }
+        skipScalingMatrixIfPresent(data, dataSize, bitPos, chroma_format_idc);
     }
 
     info.log2MaxFrameNumMinus4 = static_cast<int>(spsReadUE(data, dataSize, bitPos));
@@ -1847,18 +1854,8 @@ static QByteArray patchPocLsbInPacket(const QByteArray& packetData,
     int pos = 0;
 
     while (pos < packetData.size()) {
-        int scStart = -1;
         int scLen = 0;
-        for (int i = pos; i + 2 < packetData.size(); i++) {
-            if (data[i] == 0 && data[i+1] == 0) {
-                if (i + 3 < packetData.size() && data[i+2] == 0 && data[i+3] == 1) {
-                    scStart = i; scLen = 4; break;
-                }
-                if (data[i+2] == 1) {
-                    scStart = i; scLen = 3; break;
-                }
-            }
-        }
+        int scStart = findNextStartCode(data, packetData.size(), pos, &scLen);
         if (scStart < 0) break;
 
         int nalStart = scStart + scLen;
@@ -2190,36 +2187,9 @@ static QByteArray neutralizeMmcoInAU(const QByteArray& auData,
         if (hasWeightTable) {
             spsReadUE(r, rSize, bitPos);  // luma_log2_weight_denom
             spsReadUE(r, rSize, bitPos);  // chroma_log2_weight_denom
-            for (int i = 0; i <= numRefL0; i++) {
-                uint32_t lumaFlag = spsReadBits(r, rSize, bitPos, 1);
-                if (lumaFlag) {
-                    spsReadSE(r, rSize, bitPos);  // luma_weight
-                    spsReadSE(r, rSize, bitPos);  // luma_offset
-                }
-                uint32_t chromaFlag = spsReadBits(r, rSize, bitPos, 1);
-                if (chromaFlag) {
-                    spsReadSE(r, rSize, bitPos);  // cb_weight
-                    spsReadSE(r, rSize, bitPos);  // cb_offset
-                    spsReadSE(r, rSize, bitPos);  // cr_weight
-                    spsReadSE(r, rSize, bitPos);  // cr_offset
-                }
-            }
-            if (sliceTypeM5 == 1) {
-                for (int i = 0; i <= numRefL1; i++) {
-                    uint32_t lumaFlag = spsReadBits(r, rSize, bitPos, 1);
-                    if (lumaFlag) {
-                        spsReadSE(r, rSize, bitPos);
-                        spsReadSE(r, rSize, bitPos);
-                    }
-                    uint32_t chromaFlag = spsReadBits(r, rSize, bitPos, 1);
-                    if (chromaFlag) {
-                        spsReadSE(r, rSize, bitPos);
-                        spsReadSE(r, rSize, bitPos);
-                        spsReadSE(r, rSize, bitPos);
-                        spsReadSE(r, rSize, bitPos);
-                    }
-                }
-            }
+            skipPredWeightList(r, rSize, bitPos, numRefL0);
+            if (sliceTypeM5 == 1)
+                skipPredWeightList(r, rSize, bitPos, numRefL1);
         }
 
         // dec_ref_pic_marking
@@ -3122,6 +3092,48 @@ bool TTESSmartCut::setupDecoder()
 // assumption this probe does NOT rely on blindly: parseEncoderSpsFromPacket
 // compares the probe against the real per-segment encoder SPS and warns
 // loudly on mismatch.
+// x264/x265 preset names by settings index (setupEncoder and the two probes).
+static const char* const kEncoderPresetNames[] = {
+    "ultrafast", "superfast", "veryfast", "faster", "fast",
+    "medium", "slow", "slower", "veryslow"
+};
+
+int TTESSmartCut::effectivePresetIndex() const
+{
+    return (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
+                                  : qBound(0, TTSettings::instance()->encoderPreset(), 8);
+}
+
+QByteArray TTESSmartCut::probeEncoderExtradata(const char* codecName, int width, int height,
+                                               int bitDepthLuma, bool interlaced,
+                                               AVDictionary** opts)
+{
+    const AVCodec* codec = avcodec_find_encoder_by_name(codecName);
+    if (!codec) { av_dict_free(opts); return QByteArray(); }
+    AVCodecContext* probe = avcodec_alloc_context3(codec);
+    if (!probe) { av_dict_free(opts); return QByteArray(); }
+
+    probe->width  = width;
+    probe->height = height;
+    probe->pix_fmt = (bitDepthLuma >= 10) ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P;
+    probe->time_base = (AVRational){1, static_cast<int>(mFrameRate * 1000)};
+    probe->framerate = (AVRational){static_cast<int>(mFrameRate * 1000), 1000};
+    probe->max_b_frames = 0;
+    probe->thread_count = 1;
+    probe->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    if (interlaced) {
+        probe->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
+        probe->field_order = AV_FIELD_TT;
+    }
+
+    const int ret = avcodec_open2(probe, codec, opts);
+    av_dict_free(opts);
+    QByteArray extradata;
+    if (ret >= 0 && probe->extradata && probe->extradata_size > 0)
+        extradata = QByteArray(reinterpret_cast<const char*>(probe->extradata), probe->extradata_size);
+    avcodec_free_context(&probe);
+    return extradata;
+}
 // ----------------------------------------------------------------------------
 bool TTESSmartCut::probeEncoderPocParams()
 {
@@ -3135,38 +3147,10 @@ bool TTESSmartCut::probeEncoderPocParams()
     if (src.picWidth <= 0 || src.picHeight <= 0)
         return false;
 
-    const AVCodec* codec = avcodec_find_encoder_by_name("libx264");
-    if (!codec) return false;
-
-    AVCodecContext* probe = avcodec_alloc_context3(codec);
-    if (!probe) return false;
-
-    probe->width  = src.picWidth;
-    probe->height = src.picHeight;
-    probe->pix_fmt = (src.bitDepthLuma >= 10) ? AV_PIX_FMT_YUV420P10LE
-                                              : AV_PIX_FMT_YUV420P;
-    probe->time_base = (AVRational){1, static_cast<int>(mFrameRate * 1000)};
-    probe->framerate = (AVRational){static_cast<int>(mFrameRate * 1000), 1000};
-    probe->max_b_frames = 0;
-    probe->thread_count = 1;
-    probe->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    // Interlace approximation from the source SPS: MBAFF/PAFF sources carry
-    // frame_mbs_only_flag == 0 and are encoded with interlace flags set.
-    if (!src.frameMbsOnly) {
-        probe->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
-        probe->field_order = AV_FIELD_TT;
-    }
-
     // Same option sources as setupEncoder (H.264 branch).
     TTSettings* s = TTSettings::instance();
     int crf        = s->encoderCrf();
-    int presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, s->encoderPreset(), 8);
     int profileIdx = qBound(0, s->encoderProfile(), 5);
-    static const char* presetNames[] = {
-        "ultrafast", "superfast", "veryfast", "faster", "fast",
-        "medium", "slow", "slower", "veryslow"
-    };
     static const char* h264Profiles[] = {
         "baseline", "main", "high", "high10", "high422", "high444"
     };
@@ -3175,19 +3159,15 @@ bool TTESSmartCut::probeEncoderPocParams()
     AVDictionary* opts = nullptr;
     av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
     av_dict_set(&opts, "forced-idr", "1", 0);
-    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+    av_dict_set(&opts, "preset", kEncoderPresetNames[effectivePresetIndex()], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
 
-    int ret = avcodec_open2(probe, codec, &opts);
-    av_dict_free(&opts);
-    if (ret < 0 || !probe->extradata || probe->extradata_size <= 0) {
-        avcodec_free_context(&probe);
+    // Interlace approximation from the source SPS: MBAFF/PAFF sources carry
+    // frame_mbs_only_flag == 0 and are encoded with interlace flags set.
+    const QByteArray extradata = probeEncoderExtradata("libx264", src.picWidth, src.picHeight,
+                                                       src.bitDepthLuma, !src.frameMbsOnly, &opts);
+    if (extradata.isEmpty())
         return false;
-    }
-
-    QByteArray extradata(reinterpret_cast<const char*>(probe->extradata),
-                         probe->extradata_size);
-    avcodec_free_context(&probe);
 
     H264SpsInfo enc;
     if (!findH264SpsInPacket(extradata, enc) || enc.log2MaxFrameNumMinus4 < 0)
@@ -3244,60 +3224,27 @@ bool TTESSmartCut::probeHevcEncoderSeamSps(const THevcSpsSeamInfo& srcSps,
                                            const QString& x265Params,
                                            THevcSpsSeamInfo* encSps)
 {
-    const AVCodec* codec = avcodec_find_encoder_by_name("libx265");
-    if (!codec) return false;
-    AVCodecContext* probe = avcodec_alloc_context3(codec);
-    if (!probe) return false;
-
-    probe->width  = srcSps.picWidth;
-    probe->height = srcSps.picHeight;
-    probe->pix_fmt = (srcSps.bitDepthLuma >= 10) ? AV_PIX_FMT_YUV420P10LE
-                                                 : AV_PIX_FMT_YUV420P;
-    probe->time_base = (AVRational){1, static_cast<int>(mFrameRate * 1000)};
-    probe->framerate = (AVRational){static_cast<int>(mFrameRate * 1000), 1000};
-    probe->max_b_frames = 0;
-    probe->thread_count = 1;
-    probe->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
     TTSettings* s = TTSettings::instance();
     int crf       = s->encoderCrf();
-    int presetIdx = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                           : qBound(0, s->encoderPreset(), 8);
-    static const char* presetNames[] = {
-        "ultrafast", "superfast", "veryfast", "faster", "fast",
-        "medium", "slow", "slower", "veryslow"
-    };
     AVDictionary* opts = nullptr;
-    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+    av_dict_set(&opts, "preset", kEncoderPresetNames[effectivePresetIndex()], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
     av_dict_set(&opts, "profile",
                 srcSps.bitDepthLuma >= 10 ? "main10" : "main", 0);
     av_dict_set(&opts, "x265-params", x265Params.toUtf8().constData(), 0);
 
-    int ret = avcodec_open2(probe, codec, &opts);
-    av_dict_free(&opts);
-    if (ret < 0 || !probe->extradata || probe->extradata_size <= 0) {
-        avcodec_free_context(&probe);
+    const QByteArray extradata = probeEncoderExtradata("libx265", srcSps.picWidth, srcSps.picHeight,
+                                                       srcSps.bitDepthLuma, false, &opts);
+    if (extradata.isEmpty())
         return false;
-    }
-    QByteArray extradata(reinterpret_cast<const char*>(probe->extradata),
-                         probe->extradata_size);
-    avcodec_free_context(&probe);
 
     // Find the SPS NAL (type 33) in the annex-b extradata.
-    for (int i = 0; i + 4 < extradata.size(); ++i) {
-        int sc = 0;
-        if (extradata.at(i) == 0 && extradata.at(i + 1) == 0) {
-            if (extradata.at(i + 2) == 1) sc = 3;
-            else if (extradata.at(i + 2) == 0 && extradata.at(i + 3) == 1) sc = 4;
-        }
-        if (sc == 0) continue;
-        int type = (quint8(extradata.at(i + sc)) >> 1) & 0x3F;
+    int sc = 0, type = 0;
+    for (int i = 0; (i = ttHevcNextNal(extradata, i, &sc, &type)) >= 0; i += sc + 1) {
         if (type == 33) {
             *encSps = parseHevcSpsSeamInfo(extradata.mid(i));
             return encSps->valid;
         }
-        i += sc;
     }
     return false;
 }
@@ -3456,20 +3403,14 @@ bool TTESSmartCut::setupEncoder()
     // TTSettings::setEncoderCodec() and overwritten by Cut-Dialog overrides
     // or .ttcut project load. The generic profile range differs per codec,
     // so we still clamp against the codec-specific upper bound below.
-    int crf, presetIdx, profileIdx;
-
-    static const char* presetNames[] = {
-        "ultrafast", "superfast", "veryfast", "faster", "fast",
-        "medium", "slow", "slower", "veryslow"
-    };
+    int crf, profileIdx;
+    const int presetIdx = effectivePresetIndex();
 
     AVDictionary* opts = nullptr;
 
     if (mParser.codecType() == NALU_CODEC_H264) {
         TTSettings* s = TTSettings::instance();
         crf        = s->encoderCrf();
-        presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, s->encoderPreset(), 8);
         profileIdx = qBound(0, s->encoderProfile(), 5);
 
         static const char* h264Profiles[] = {
@@ -3500,8 +3441,6 @@ bool TTESSmartCut::setupEncoder()
         // H.265
         TTSettings* s = TTSettings::instance();
         crf        = s->encoderCrf();
-        presetIdx  = (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                            : qBound(0, s->encoderPreset(), 8);
         profileIdx = qBound(0, s->encoderProfile(), 4);
 
         static const char* h265Profiles[] = {
@@ -3537,13 +3476,13 @@ bool TTESSmartCut::setupEncoder()
         }
     }
 
-    av_dict_set(&opts, "preset", presetNames[presetIdx], 0);
+    av_dict_set(&opts, "preset", kEncoderPresetNames[presetIdx], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
 
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "TTESSmartCut: Encoder settings -"
                  << "codec:" << (mParser.codecType() == NALU_CODEC_H264 ? "H.264" : "H.265")
-                 << "preset:" << presetNames[presetIdx]
+                 << "preset:" << kEncoderPresetNames[presetIdx]
                  << "crf:" << crf
                  << "profile:" << profileIdx
                  << "decoder profile:" << (mDecoder ? mDecoder->profile : -1)
@@ -3655,19 +3594,12 @@ QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByt
         // First packet: capture encoder SPS/PPS (x265 sends its parameter
         // sets inline with the first keyframe packet).
         if (!mHevcSeamCtx.encHeadersParsed) {
-            for (int i = 0; i + 4 < rawData.size(); ++i) {
-                int sc = 0;
-                if (rawData.at(i) == 0 && rawData.at(i + 1) == 0) {
-                    if (rawData.at(i + 2) == 1) sc = 3;
-                    else if (rawData.at(i + 2) == 0 && rawData.at(i + 3) == 1) sc = 4;
-                }
-                if (sc == 0) continue;
-                int t = (quint8(rawData.at(i + sc)) >> 1) & 0x3F;
+            int sc = 0, t = 0;
+            for (int i = 0; (i = ttHevcNextNal(rawData, i, &sc, &t)) >= 0; i += sc + 1) {
                 if (t == 33)
                     mHevcSeamCtx.encSps = parseHevcSpsSeamInfo(rawData.mid(i));
                 else if (t == 34)
                     mHevcSeamCtx.encPps = parseHevcPpsSeamInfo(rawData.mid(i));
-                i += sc;
             }
             mHevcSeamCtx.encHeadersParsed =
                 mHevcSeamCtx.encSps.valid && mHevcSeamCtx.encPps.valid
@@ -4631,17 +4563,8 @@ static QByteArray rewriteEncoderPacketForSourceSps(
     int pos = 0;
 
     while (pos < packetData.size()) {
-        int scStart = -1, scLen = 0;
-        for (int i = pos; i + 2 < packetData.size(); i++) {
-            if (data[i] == 0 && data[i+1] == 0) {
-                if (i + 3 < packetData.size() && data[i+2] == 0 && data[i+3] == 1) {
-                    scStart = i; scLen = 4; break;
-                }
-                if (data[i+2] == 1) {
-                    scStart = i; scLen = 3; break;
-                }
-            }
-        }
+        int scLen = 0;
+        int scStart = findNextStartCode(data, packetData.size(), pos, &scLen);
         if (scStart < 0) {
             result.append(packetData.mid(pos));
             break;
@@ -4774,6 +4697,35 @@ static void skipScalingList(const uint8_t* data, int dataSize, int& bitPos, int 
     }
 }
 
+// seq_scaling_matrix_present_flag and, when set, the per-list presence flags
+// with their scaling lists (H.264 7.3.2.1.1). Leaves bitPos after the matrix.
+static void skipScalingMatrixIfPresent(const uint8_t* data, int dataSize, int& bitPos, uint32_t chromaFormatIdc)
+{
+    if (!spsReadBits(data, dataSize, bitPos, 1)) return;
+    const int limit = (chromaFormatIdc != 3) ? 8 : 12;
+    for (int i = 0; i < limit; i++) {
+        if (spsReadBits(data, dataSize, bitPos, 1))
+            skipScalingList(data, dataSize, bitPos, (i < 6) ? 16 : 64);
+    }
+}
+
+// pred_weight_table entries of one reference list (H.264 7.3.3.2): per
+// entry the luma weight/offset pair and the chroma weight/offset pairs,
+// each behind its presence flag.
+static void skipPredWeightList(const uint8_t* data, int dataSize, int& bitPos, int numRefs)
+{
+    for (int i = 0; i <= numRefs; i++) {
+        if (spsReadBits(data, dataSize, bitPos, 1)) {
+            spsReadSE(data, dataSize, bitPos);  // luma_weight
+            spsReadSE(data, dataSize, bitPos);  // luma_offset
+        }
+        if (spsReadBits(data, dataSize, bitPos, 1)) {
+            for (int k = 0; k < 4; k++)       // cb/cr weight and offset
+                spsReadSE(data, dataSize, bitPos);
+        }
+    }
+}
+
 // Skip H.264 HRD parameters in VUI
 static void skipHrdParameters(const uint8_t* data, int dataSize, int& bitPos)
 {
@@ -4833,15 +4785,7 @@ static QByteArray patchH264SpsReorderFrames(const QByteArray& spsNal, int maxReo
         spsReadUE(data, dataSize, bitPos);    // bit_depth_chroma_minus8
         spsReadBits(data, dataSize, bitPos, 1); // qpprime_y_zero_transform_bypass_flag
 
-        uint32_t seq_scaling_matrix_present = spsReadBits(data, dataSize, bitPos, 1);
-        if (seq_scaling_matrix_present) {
-            int limit = (chroma_format_idc != 3) ? 8 : 12;
-            for (int i = 0; i < limit; i++) {
-                uint32_t present = spsReadBits(data, dataSize, bitPos, 1);
-                if (present)
-                    skipScalingList(data, dataSize, bitPos, (i < 6) ? 16 : 64);
-            }
-        }
+        skipScalingMatrixIfPresent(data, dataSize, bitPos, chroma_format_idc);
     }
 
     spsReadUE(data, dataSize, bitPos);  // log2_max_frame_num_minus4
@@ -5154,9 +5098,7 @@ bool TTESSmartCut::writeParameterSets(QFile& outFile, int patchReorderFrames)
 // ----------------------------------------------------------------------------
 void TTESSmartCut::setError(const QString& error)
 {
-    mLastError = error;
-    TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
-        QString("TTESSmartCut error: %1").arg(error));
+    ttSetLastError(mLastError, __FILE__, __LINE__, "TTESSmartCut", error, true);
 }
 
 // ----------------------------------------------------------------------------
