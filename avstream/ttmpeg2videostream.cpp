@@ -26,6 +26,7 @@
 // -----------------------------------------------------------------------------
 
 #include "ttmpeg2videostream.h"
+#include "../extern/tttranscode.h"
 
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"

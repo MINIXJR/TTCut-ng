@@ -33,7 +33,6 @@
 #include "ttvideoindexlist.h"
 
 #include "../common/ttmessagelogger.h"
-#include "../extern/tttranscode.h"
 
 #include <QList>
 #include <QString>

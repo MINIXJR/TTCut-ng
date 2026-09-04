@@ -33,9 +33,9 @@ TTFFmpegWrapper split and the module-edge cleanup): `common` has no outgoing
 edge and is the foundation; `data` and `gui` sit on top and are cited by
 nothing below them. The one remaining cycle is
 **avstream → extern → mpeg2decoder → avstream** through a single edge on the
-first leg: `ttmpeg2videostream.h` includes `tttranscode.h`
+first leg: `ttmpeg2videostream.cpp` includes `tttranscode.h`
 (`TTMpeg2VideoStream::cut()` re-encodes partial GOPs through
-`TTTranscodeProvider`), `TTTranscodeProvider` decodes through `TTMpeg2Decoder`,
+`TTTranscodeProvider`; the header stopped re-exporting it on 2026-09-04), `TTTranscodeProvider` decodes through `TTMpeg2Decoder`,
 and the decoder reads the header and index lists from `avstream`. Removed on
 2026-09-04 (stream-ownership B1): `TTH26xVideoStream` no longer holds a
 `TTFFmpegWrapper` — it probes the file with `ttProbeVideo()` and owns the
