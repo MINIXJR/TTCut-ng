@@ -62,7 +62,6 @@ class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
 
   private:
   	const TTAVItem* mpAVItem;
-    QMenu*        contextMenu;
     QAction*      itemUpAction;
     QAction*      itemDownAction;
     QAction*      itemDeleteAction;

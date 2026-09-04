@@ -710,7 +710,7 @@ void TTCutTreeView::updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& 
 
     // Calculate audio frame index directly from video time and audio frame duration
     // (searchTimeIndex is O(n) linear scan — too slow for large files)
-    TTAC3AudioHeader* firstHdr = dynamic_cast<TTAC3AudioHeader*>(hdrList->audioHeaderAt(0));
+    const TTAC3AudioHeader* firstHdr = dynamic_cast<const TTAC3AudioHeader*>(hdrList->audioHeaderAt(0));
     if (!firstHdr) return;
     double audioFrameDurMs = firstHdr->frame_time;  // ms per AC3 frame (~32ms)
     if (audioFrameDurMs <= 0) audioFrameDurMs = 32.0;

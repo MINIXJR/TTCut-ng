@@ -215,7 +215,6 @@ public:
     const QList<TTNalUnit>& nalUnits() const { return mNalUnits; }
     int nalUnitCount() const { return mNalUnits.size(); }
 
-    const QList<TTAccessUnit>& accessUnits() const { return mAccessUnits; }
     int accessUnitCount() const { return mAccessUnits.size(); }
 
     const QList<TTGopInfo>& gops() const { return mGops; }

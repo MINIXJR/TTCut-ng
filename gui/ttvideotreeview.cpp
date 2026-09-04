@@ -136,7 +136,7 @@ void TTVideoTreeView::onAppendItem(const TTAVItem& item)
   }
 
   // Check for H.264
-  TTH264VideoStream* h264Stream = dynamic_cast<TTH264VideoStream*>(vStream);
+  const TTH264VideoStream* h264Stream = dynamic_cast<const TTH264VideoStream*>(vStream);
   if (h264Stream != nullptr && h264Stream->getSPS() != nullptr) {
     resolution = QString("%1x%2").arg(h264Stream->getSPS()->width()).arg(h264Stream->getSPS()->height());
     aspectRatio = "H.264";

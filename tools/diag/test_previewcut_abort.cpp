@@ -114,18 +114,17 @@
 namespace {
 
 struct Event {
-  int     state;
+  int     state = 0;
   QString msg;
-  quint64 value;
 };
 
 class Recorder
 {
 public:
-  void add(int state, const QString& msg, quint64 value)
+  void add(int state, const QString& msg)
   {
     QMutexLocker lock(&mMutex);
-    mEvents.append({ state, msg, value });
+    mEvents.append({ state, msg });
   }
   QList<Event> events()
   {
@@ -256,8 +255,8 @@ int main(int argc, char** argv)
   QObject::connect(&avData,
       qOverload<TTThreadTask*, int, const QString&, quint64>(&TTAVData::statusReport),
       &avData,
-      [&](TTThreadTask*, int state, const QString& msg, quint64 value) {
-        rec.add(state, msg, value);
+      [&](TTThreadTask*, int state, const QString& msg, quint64) {
+        rec.add(state, msg);
       },
       Qt::DirectConnection);
 

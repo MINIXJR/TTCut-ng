@@ -50,7 +50,7 @@ void ttSaveWindowGeometry(QSettings& settings, const QString& group,
   settings.setValue(base + "maximized", maximized);
 }
 
-TTWindowGeometry ttLoadDialogSize(QSettings& settings, const QString& group)
+TTWindowGeometry ttLoadDialogSize(const QSettings& settings, const QString& group)
 {
   TTWindowGeometry g;
   const QString base = group + QLatin1Char('/');

@@ -90,7 +90,7 @@ void TTFrameSearchTask::initFrameSearch()
     // mpReferenceStream IS the source stream object; refWrapper opened its
     // filePath() → file identity guaranteed by object identity.
     bool refIndexAdopted = false;
-    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpReferenceStream)) {
+    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(mpReferenceStream)) {
       const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
       if (!bundle.isEmpty()) { refWrapper->setFrameIndex(bundle); refIndexAdopted = true; }
     }

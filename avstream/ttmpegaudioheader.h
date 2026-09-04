@@ -121,7 +121,6 @@ public:
   bool   original_home;
   quint8 emphasis;
 
-  TTMessageLogger* log;
 };
 
 #endif //TTMPEGAUDIOHEADER_H

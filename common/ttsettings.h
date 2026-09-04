@@ -24,7 +24,7 @@ public:
   // and re-create on next instance() call.
   static TTSettings* instance();
 
-  TTSettings(QObject* parent = nullptr);
+  explicit TTSettings(QObject* parent = nullptr);
   ~TTSettings() override;
 
   // Persistence

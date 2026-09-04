@@ -46,7 +46,7 @@ class TTMPEG2Window2 : public QLabel
 
     void resizeEvent(QResizeEvent * event);
 
-    void openVideoFile(QString fName, TTVideoIndexList* viIndex=0, TTVideoHeaderList* viHeader=0);
+    void openVideoFile(const QString& fName, TTVideoIndexList* viIndex=0, TTVideoHeaderList* viHeader=0);
     void openVideoStream(TTVideoStream* vStream);
     void closeVideoStream();
 

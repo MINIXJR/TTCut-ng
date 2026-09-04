@@ -41,11 +41,11 @@ class TTCutPreviewTask : public TTThreadTask
     QString errorMessage() const { return mErrorMessage; }
 
   protected:
-    void cleanUp();
-    void operation();
+    void cleanUp() override;
+    void operation() override;
 
   public slots:
-    void onUserAbort();
+    void onUserAbort() override;
 
   signals:
     void finished(TTCutList* cutList);

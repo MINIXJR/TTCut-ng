@@ -82,7 +82,6 @@ TTH265AccessUnit::TTH265AccessUnit()
     , mIsIDR(false)
     , mIsRAP(false)
     , mIsReference(false)
-    , mGopIndex(0)
     , mTemporalId(0)
 {
 }

@@ -32,7 +32,7 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
   Q_OBJECT
 
   public:
-    TTSubtitleTreeView(QWidget* parent=0);
+    explicit TTSubtitleTreeView(QWidget* parent=0);
 
     void clear();
 
@@ -61,7 +61,6 @@ class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
 
   private:
     const TTAVItem* mpAVItem;
-    QMenu*        contextMenu;
     QAction*      itemUpAction;
     QAction*      itemDownAction;
     QAction*      itemDeleteAction;

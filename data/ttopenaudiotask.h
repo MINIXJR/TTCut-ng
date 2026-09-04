@@ -30,11 +30,11 @@ class TTOpenAudioTask : public TTThreadTask
     TTOpenAudioTask(TTAVItem* avItem, QString filePath, int order);
 
   protected:
-    void cleanUp();
-    void operation();
+    void cleanUp() override;
+    void operation() override;
 
   public slots:
-    void onUserAbort();
+    void onUserAbort() override;
 
   signals:
     void finished(TTAVItem*, TTAudioStream*, int);

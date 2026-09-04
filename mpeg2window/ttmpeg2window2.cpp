@@ -314,7 +314,7 @@ int TTMPEG2Window2::showKeyframeFastAt(int index)
 /*!
  * Open a video file and assign the mpeg2 decoder object
  */
-void TTMPEG2Window2::openVideoFile( QString fName, TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader )
+void TTMPEG2Window2::openVideoFile( const QString& fName, TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader )
 {
 	if (fName.isEmpty()) return;
 

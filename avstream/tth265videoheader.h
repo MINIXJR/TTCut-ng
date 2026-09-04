@@ -200,7 +200,6 @@ public:
     bool isReference() const { return mIsReference; }
 
     // GOP structure
-    int gopIndex() const { return mGopIndex; }
     int temporalId() const { return mTemporalId; }
 
     // Setters
@@ -211,7 +210,6 @@ public:
     void setIsIDR(bool idr) { mIsIDR = idr; }
     void setIsRAP(bool rap) { mIsRAP = rap; }
     void setIsReference(bool ref) { mIsReference = ref; }
-    void setGopIndex(int idx) { mGopIndex = idx; }
     void setTemporalId(int tid) { mTemporalId = tid; }
 
 
@@ -223,7 +221,6 @@ private:
     bool mIsIDR;
     bool mIsRAP;
     bool mIsReference;
-    int mGopIndex;
     int mTemporalId;
 };
 

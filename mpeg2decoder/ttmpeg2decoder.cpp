@@ -21,7 +21,7 @@ static TFrameInfo frameInfo;
 /* /////////////////////////////////////////////////////////////////////////////
  * Constructor with filename, index- and header-list
  */
-TTMpeg2Decoder::TTMpeg2Decoder(QString cFName, TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader, TPixelFormat pixelFormat)
+TTMpeg2Decoder::TTMpeg2Decoder(const QString& cFName, TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader, TPixelFormat pixelFormat)
 {
   mpeg2Stream        = NULL;
   mpeg2Decoder       = NULL;
@@ -171,7 +171,7 @@ int TTMpeg2Decoder::decodeNextFrame()
     switch (state)
     {
       case STATE_BUFFER:
-        readSize = mpeg2Stream->read((char*)streamBuffer, streamBufferSize );
+        readSize = mpeg2Stream->read(reinterpret_cast<char*>(streamBuffer), streamBufferSize );
 
         if (readSize > 0)
           isStreamEnd = false;

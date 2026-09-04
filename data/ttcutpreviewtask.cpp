@@ -56,9 +56,10 @@ extern "C" {
 TTCutPreviewTask::TTCutPreviewTask(TTAVData* avData, TTCutList* cutList) :
                   TTThreadTask("CutPreviewTask")
 {
-	mpAVData        = avData;
-	mpCutList       = cutList;
- 	cutVideoTask    = new TTCutVideoTask(mpAVData);
+	mpAVData         = avData;
+	mpCutList        = cutList;
+	mpPreviewCutList = nullptr;   // built in operation(); the destructor deletes it unconditionally
+	cutVideoTask     = new TTCutVideoTask(mpAVData);
 }
 
 /**

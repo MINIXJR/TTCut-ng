@@ -2898,7 +2898,6 @@ QList<float> TTAVData::cutAudioTracks(
     const std::function<bool()>& shouldAbort)
 {
   QList<float> firstDrifts;
-  TTMessageLogger* log = TTMessageLogger::getInstance();
   // Per-track failure reasons for THIS call, in user-facing wording. The
   // callers' partial-failure message used to say "see the log for the
   // reason", which for the actionable case ("repair range spans a cut-segment

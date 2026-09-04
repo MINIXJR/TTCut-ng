@@ -511,7 +511,6 @@ void TTCurrentFrame::onMoveToEnd()
 
 void TTCurrentFrame::updateCurrentPosition(int pos)
 {
-  QString szTemp;
   QString szTemp1, szTemp2;
   int actualPos   = (pos >= 0) ? pos : videoStream->currentIndex();
   int frame_type  = videoStream->frameType(actualPos);

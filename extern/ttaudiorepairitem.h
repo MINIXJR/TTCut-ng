@@ -22,9 +22,6 @@ public:
   QString method()      const { return mMethod; }
   bool    isEnabled()   const { return mEnabled; }
   void    setEnabled(bool e)       { mEnabled = e; }
-  void    setFrameFrom(qint64 f)   { mFrameFrom = f; }
-  void    setFrameTo(qint64 t)     { mFrameTo = t; }
-  void    setChannelMask(quint8 m) { mChannelMask = m; }
 
 private:
   int     mTrack = 0;

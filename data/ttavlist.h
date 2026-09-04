@@ -135,7 +135,6 @@ class TTAVItem : public QObject
     TTAudioList*    audioDataList()    { return mpAudioList; }
     TTSubtitleList* subtitleDataList() { return mpSubtitleList; }
     TTCutList*      cutDataList()      { return mpCutList; }
-    TTMarkerList*   markerList()       { return mpMarkerList; }
     void            checkCut(int cutIn, int cutOut);
 
   private:
