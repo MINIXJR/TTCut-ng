@@ -31,15 +31,19 @@ also cover specific areas.
 Measured on the `#include "../<module>/…"` edges (2026-09-03, after the
 TTFFmpegWrapper split and the module-edge cleanup): `common` has no outgoing
 edge and is the foundation; `data` and `gui` sit on top and are cited by
-nothing below them. The one remaining cycle is the triangle
-**avstream → extern → mpeg2decoder → avstream**: the stream classes own their
-decoder/indexer/cutter (`TTH26xVideoStream` holds `TTFFmpegWrapper` and the
-`TTFrameIndexBundle`, `TTMpeg2VideoStream` holds `TTTranscodeProvider`),
-`TTTranscodeProvider` decodes through `TTMpeg2Decoder`, and the decoder reads
-the header and index lists from `avstream`. That ownership is the documented
-design (quick-jump.md, mpeg2-cut.md); dissolving it is a separate project
-(spec `docs/superpowers/specs/2026-09-03-stream-ownership-design.md`,
-prepared, not approved). Removed on 2026-09-03: `common → avstream`
+nothing below them. The one remaining cycle is
+**avstream → extern → mpeg2decoder → avstream** through a single edge on the
+first leg: `ttmpeg2videostream.h` includes `tttranscode.h`
+(`TTMpeg2VideoStream::cut()` re-encodes partial GOPs through
+`TTTranscodeProvider`), `TTTranscodeProvider` decodes through `TTMpeg2Decoder`,
+and the decoder reads the header and index lists from `avstream`. Removed on
+2026-09-04 (stream-ownership B1): `TTH26xVideoStream` no longer holds a
+`TTFFmpegWrapper` — it probes the file with `ttProbeVideo()` and owns the
+`TTFrameIndexBundle`, whose display-order map `TTFrameIndexer` now builds; the
+indexer, the bundle types and `ttavutil` live in `avstream/`. Dissolving the
+last edge (B2) is a separate project (spec
+`docs/superpowers/specs/2026-09-03-stream-ownership-design.md`, "Deferred").
+Removed on 2026-09-03: `common → avstream`
 (`ttcut.h` re-exported `ttcommon.h`) and `extern → data` (the two DTO headers
 `ttaudiorepairitem.h`, `ttmuxlistdata.h` now live next to their consumers in
 `extern/`).

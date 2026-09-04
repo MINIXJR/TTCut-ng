@@ -3,17 +3,17 @@
 /* Diagnostic: verify that an index-ADOPTING wrapper decodes PAFF field-pair  */
 /* targets (Befund B). Wrapper A builds the frame index (owner); wrapper B    */
 /* opens the same file and adopts index + stream metadata exactly like        */
-/* TTH26xVideoStream::provideFrameIndexTo() does. Pre-fix, B's decode-order   */
-/* tagging counted field packets as frames, so decodeFrame() on a field-pair  */
-/* display target drained the file to EOF (2x53 s) and fell back to a         */
-/* neighbor frame (deliveredDecodeIndex left unset — the distinguishing       */
+/* every adopter of TTH26xVideoStream::frameIndexBundle() does. Pre-fix, B's  */
+/* decode-order tagging counted field packets as frames, so decodeFrame() on  */
+/* a field-pair display target drained the file to EOF (2x53 s) and fell back */
+/* to a neighbor frame (deliveredDecodeIndex left unset — the distinguishing  */
 /* signal). Usage: test_adopt_paff <es-file> <display-index> [expected-AU]    */
 /* Without expected-AU the target is derived from the display-order map       */
 /* (an explicit value additionally cross-checks the map).                     */
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
-#include "../../extern/ttframeindexer.h"
+#include "../../avstream/ttframeindexer.h"
 
 #include <QElapsedTimer>
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv)
   owner.setFrameIndex(ix.bundle());
   check(owner.isPAFF(), "owner detected PAFF");
 
-  // Adopter: same file, index + metadata adopted (provideFrameIndexTo sequence).
+  // Adopter: same file, index + metadata adopted (frameIndexBundle adoption sequence).
   TTFFmpegWrapper adopter;
   if (!adopter.openFile(file)) { fprintf(stderr, "adopter open failed\n"); return 2; }
   adopter.setFrameIndex(owner.frameIndexBundle());

@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <cmath>
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 
 int main(int argc, char** argv)
 {

@@ -91,6 +91,12 @@ private:
     // run). Was TTFFmpegWrapper::buildGOPIndex.
     void buildGops();
 
+    // Derive mBundle.displayMap from the poc/isIDR fields of the finalized
+    // index. Falls back to the identity map when POC data is missing or
+    // degenerate. Was TTFFmpegWrapper::buildDisplayOrderMap; the codec id
+    // gates the H.264 cold-start leading-picture marking.
+    void buildDisplayMap(int avCodecId);
+
     void setError(const QString& error);
 
     AVFormatContext*   mFormatCtx = nullptr;

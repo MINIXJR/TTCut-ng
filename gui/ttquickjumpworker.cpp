@@ -13,7 +13,7 @@
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttvideoheaderlist.h"
 #include "../common/ttmessagelogger.h"
-#include "../extern/ttframeindexer.h"
+#include "../avstream/ttframeindexer.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QDebug>

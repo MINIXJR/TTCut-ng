@@ -38,7 +38,7 @@
 // everything else on UHD material:
 //   stream    TTH26xVideoStream::createHeaderList()/createIndexList() - the
 //             native memory-mapped NALU parser - and the wrapper adopts the
-//             result through provideFrameIndexTo(). This is what opening a
+//             result through setFrameIndex(frameIndexBundle()). This is what opening a
 //             file in the GUI does.
 //   wrapper   TTFrameIndexer::build(), a libav packet scan. Used by
 //             the quick-jump worker (gui/ttquickjumpworker.cpp:69), the search
@@ -59,7 +59,7 @@
 #include "avstream/tth26xvideostream.h"
 #include "common/ttsettings.h"
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 
 namespace {
 
@@ -141,7 +141,8 @@ int main(int argc, char** argv)
     t.restart();
     bool adopted = false;
     if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(stream)) {
-      adopted = h26x->provideFrameIndexTo(&wrapper);
+      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
+      if (!bundle.isEmpty()) { wrapper.setFrameIndex(bundle); adopted = true; }
     }
     indexMs = t.elapsed();
     if (!adopted) {

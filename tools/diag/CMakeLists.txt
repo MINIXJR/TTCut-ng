@@ -23,8 +23,8 @@ set(DISPMAP_SRC
 set(WRAPPER_SRC
   ${DISPMAP_SRC}
   ${ROOT}/extern/ttffmpegwrapper.cpp
-  ${ROOT}/extern/ttavutil.cpp
-  ${ROOT}/extern/ttframeindexer.cpp
+  ${ROOT}/avstream/ttavutil.cpp
+  ${ROOT}/avstream/ttframeindexer.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
@@ -33,7 +33,7 @@ set(WRAPPER_SRC
 # (none of them touch TTFFmpegWrapper, so WRAPPER_SRC would be overkill).
 set(AUDIOCUT_SRC
   ${ROOT}/extern/ttaudiocutter.cpp
-  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttsettings.cpp)
 
@@ -47,7 +47,7 @@ set(STILLFRAME_SRC
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttcalibrationstore.cpp)
 
-set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/extern/ttavutil.cpp ${ROOT}/extern/ttframeindexer.cpp)
+set(SEAM_SRC ${STILLFRAME_SRC} ${ROOT}/extern/ttffmpegwrapper.cpp ${ROOT}/avstream/ttavutil.cpp ${ROOT}/avstream/ttframeindexer.cpp)
 
 set(MKVMUX_SRC ${SEAM_SRC} ${ROOT}/extern/ttmkvmergeprovider.cpp)
 
@@ -128,8 +128,8 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/common/ttthreadtask.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
-  ${ROOT}/extern/ttavutil.cpp
-  ${ROOT}/extern/ttframeindexer.cpp
+  ${ROOT}/avstream/ttavutil.cpp
+  ${ROOT}/avstream/ttframeindexer.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp)
 
@@ -159,8 +159,8 @@ set(WINDOWJUMP_SRC
   ${ROOT}/mpeg2window/ttmpeg2window2.cpp
   ${ROOT}/common/ttcut.cpp
   ${ROOT}/extern/ttffmpegwrapper.cpp
-  ${ROOT}/extern/ttavutil.cpp
-  ${ROOT}/extern/ttframeindexer.cpp
+  ${ROOT}/avstream/ttavutil.cpp
+  ${ROOT}/avstream/ttframeindexer.cpp
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
@@ -257,6 +257,7 @@ diag_tool(test_audiocut_abort  AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
+diag_tool(test_probe_video     AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_adopt_paff      AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_index_bundle_adopt AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_sar             AV SOURCES ${WRAPPER_SRC})
@@ -379,7 +380,9 @@ add_custom_target(diag DEPENDS
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
-  test_audiorepair_cut test_repairdialog_model)
+  test_audiorepair_cut test_repairdialog_model
+  test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
+  test_directed_search test_probe_video)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

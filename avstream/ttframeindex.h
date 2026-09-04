@@ -20,6 +20,8 @@
 #include <QList>
 #include <QVector>
 
+#include "ttdisplayordermap.h"
+
 // ----------------------------------------------------------------------------
 // Frame information for frame index
 // ----------------------------------------------------------------------------
@@ -78,8 +80,9 @@ struct TTFieldInfo {
 // Bundling them is what stops an index from travelling without its metadata.
 // The defaults below MUST match TTFFmpegWrapper's own member defaults
 // (ttffmpegwrapper.cpp:82 ff.).
-// gops, rawToMerged and rawPacketCount are filled by TTFrameIndexer only; a
-// wrapper re-exporting an adopted index leaves them empty.
+// gops, rawToMerged, rawPacketCount and displayMap are filled by
+// TTFrameIndexer only; a wrapper stores the adopted bundle whole and
+// re-exports it unchanged.
 struct TTFrameIndexBundle {
     QList<TTFrameInfo> index;
     QList<TTGOPInfo>   gops;            // GOP table derived from index (filled by TTFrameIndexer)
@@ -88,6 +91,10 @@ struct TTFrameIndexBundle {
     bool isPAFF           = false;
     bool frameMbsOnlyFlag = true;
     int  log2MaxFrameNum  = 4;
+    // Decode<->display order derived from poc/isIDR/isDroppedLeading of the
+    // entries (identity for streams without POC data, invalid when empty).
+    // Built once by TTFrameIndexer::build(); every adopter reads the same map.
+    TTDisplayOrderMap  displayMap;
 
     bool isEmpty() const { return index.isEmpty(); }
 

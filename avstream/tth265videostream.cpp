@@ -37,7 +37,6 @@ TTH265VideoStream::~TTH265VideoStream()
     mSPS = nullptr;
     delete mVPS;
     mVPS = nullptr;
-    // mFFmpeg cleanup is handled by ~TTH26xVideoStream
 }
 
 // -----------------------------------------------------------------------------
@@ -95,7 +94,7 @@ void TTH265VideoStream::buildAccessUnits()
     qDeleteAll(mAccessUnits);
     mAccessUnits.clear();
 
-    const QList<TTFrameInfo>& frameIndex = mFFmpeg->frameIndex();
+    const QList<TTFrameInfo>& frameIndex = mFrameIndexBundle.index;
 
     for (int i = 0; i < frameIndex.size(); ++i) {
         const TTFrameInfo& frame = frameIndex[i];

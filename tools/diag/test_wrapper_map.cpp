@@ -12,7 +12,7 @@
 #include <QString>
 #include "../../avstream/ttdisplayordermap.h"
 #include "../../extern/ttffmpegwrapper.h"
-#include "../../extern/ttframeindexer.h"
+#include "../../avstream/ttframeindexer.h"
 
 static int failures = 0;
 

@@ -61,7 +61,7 @@
 #include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttaudioheaderlist.h"
-#include "../extern/ttframeindexer.h"
+#include "../avstream/ttframeindexer.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"

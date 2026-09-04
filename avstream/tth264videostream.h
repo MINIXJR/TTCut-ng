@@ -35,7 +35,7 @@ public:
 
     // Stream identity
     virtual TTAVTypes::AVStreamType streamType() const override;
-    virtual bool isPAFF() const override { return mFFmpeg && mFFmpeg->isPAFF(); }
+    virtual bool isPAFF() const override { return mFrameIndexBundle.isPAFF; }
     virtual int  paffLog2MaxFrameNum() const override;
 
     // Typed accessors (kept for callers that need concrete H.264 types)

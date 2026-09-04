@@ -23,7 +23,7 @@
 #include <cstdlib>
 
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 
 extern "C" {
 #include <libavutil/avutil.h>

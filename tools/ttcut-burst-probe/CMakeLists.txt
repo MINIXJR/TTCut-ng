@@ -13,7 +13,7 @@ set(ROOT ${CMAKE_SOURCE_DIR})
 add_executable(ttcut-burst-probe EXCLUDE_FROM_ALL
   main.cpp
   ${ROOT}/extern/ttaudiocutter.cpp
-  ${ROOT}/extern/ttavutil.cpp
+  ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttsettings.cpp)
 

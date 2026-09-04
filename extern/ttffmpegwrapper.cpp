@@ -13,8 +13,8 @@
 // ----------------------------------------------------------------------------
 
 #include "ttffmpegwrapper.h"
-#include "ttavutil.h"
-#include "ttframeindexer.h"
+#include "../avstream/ttavutil.h"
+#include "../avstream/ttframeindexer.h"
 #include "ttessmartcut.h"
 #include "../avstream/ttdisplayordermap.h"
 #include "../common/ttcut.h"
@@ -79,9 +79,6 @@ TTFFmpegWrapper::TTFFmpegWrapper()
     , mAnalysisMode(false)
     , mSearchMode(false)
     , mCancelToken(nullptr)
-    , mIsPAFF(false)
-    , mH264Log2MaxFrameNum(4)
-    , mH264FrameMbsOnlyFlag(true)
     , mFrameCacheMaxSize(30)
 {
     initializeFFmpeg();
@@ -185,7 +182,7 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::closeFile()
 {
-    mFrameIndex.clear();
+    mBundle = TTFrameIndexBundle();
 
     if (mRgbFrame) {
         av_frame_free(&mRgbFrame);
@@ -235,9 +232,6 @@ void TTFFmpegWrapper::closeFile()
     mDecoderFrameIndex = -1;
     mDecoderDrained = false;
     mIsElementaryStream = false;
-    mIsPAFF = false;
-    mH264Log2MaxFrameNum = 4;
-    mH264FrameMbsOnlyFlag = true;
     clearFrameCache();
 }
 
@@ -301,31 +295,7 @@ TTVideoCodecType TTFFmpegWrapper::detectVideoCodec() const
         return CODEC_UNKNOWN;
     }
 
-    AVCodecParameters* codecpar = mFormatCtx->streams[mVideoStreamIndex]->codecpar;
-
-    switch (codecpar->codec_id) {
-        case AV_CODEC_ID_MPEG2VIDEO:
-            return CODEC_MPEG2;
-        case AV_CODEC_ID_H264:
-            return CODEC_H264;
-        case AV_CODEC_ID_HEVC:
-            return CODEC_H265;
-        default:
-            return CODEC_UNKNOWN;
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Convert codec type to string
-// ----------------------------------------------------------------------------
-QString TTFFmpegWrapper::codecTypeToString(TTVideoCodecType type)
-{
-    switch (type) {
-        case CODEC_MPEG2: return "MPEG-2";
-        case CODEC_H264:  return "H.264/AVC";
-        case CODEC_H265:  return "H.265/HEVC";
-        default:          return "Unknown";
-    }
+    return ttCodecTypeFromAvCodecId(mFormatCtx->streams[mVideoStreamIndex]->codecpar->codec_id);
 }
 
 // ----------------------------------------------------------------------------
@@ -333,8 +303,8 @@ QString TTFFmpegWrapper::codecTypeToString(TTVideoCodecType type)
 // ----------------------------------------------------------------------------
 TTFrameInfo TTFFmpegWrapper::frameAt(int index) const
 {
-    if (index >= 0 && index < mFrameIndex.size()) {
-        return mFrameIndex[index];
+    if (index >= 0 && index < mBundle.index.size()) {
+        return mBundle.index[index];
     }
     return TTFrameInfo();
 }
@@ -380,14 +350,14 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         return false;
     }
 
-    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) {
+    if (frameIndex < 0 || frameIndex >= mBundle.index.size()) {
         setError(QString("Frame index %1 out of range").arg(frameIndex));
         return false;
     }
 
     // Seek to the keyframe before this frame
     int keyframeIndex = frameIndex;
-    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe) {
+    while (keyframeIndex > 0 && !mBundle.index[keyframeIndex].isKeyframe) {
         keyframeIndex--;
     }
 
@@ -400,10 +370,10 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     // Saves ~one full GOP of decode work per call.
     if (!mSearchMode && keyframeIndex > 0) {
         int prevKey = keyframeIndex - 1;
-        while (prevKey > 0 && !mFrameIndex[prevKey].isKeyframe) {
+        while (prevKey > 0 && !mBundle.index[prevKey].isKeyframe) {
             prevKey--;
         }
-        if (mFrameIndex[prevKey].isKeyframe) {
+        if (mBundle.index[prevKey].isKeyframe) {
             seekKeyframe = prevKey;
         }
     }
@@ -411,7 +381,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
     int64_t ret;
     if (mIsElementaryStream && mFormatCtx->pb) {
         // For ES files, use byte-based seeking
-        int64_t byteOffset = mFrameIndex[seekKeyframe].fileOffset;
+        int64_t byteOffset = mBundle.index[seekKeyframe].fileOffset;
 
         // If fileOffset is -1 (unknown), seek to byte 0 for first keyframe
         if (byteOffset < 0) {
@@ -421,8 +391,8 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
                 // For other frames, try to find a valid offset
                 // Walk back to find a frame with valid offset
                 for (int i = seekKeyframe; i >= 0; i--) {
-                    if (mFrameIndex[i].fileOffset >= 0) {
-                        byteOffset = mFrameIndex[i].fileOffset;
+                    if (mBundle.index[i].fileOffset >= 0) {
+                        byteOffset = mBundle.index[i].fileOffset;
                         break;
                     }
                 }
@@ -444,7 +414,7 @@ bool TTFFmpegWrapper::seekToFrame(int frameIndex)
         }
     } else {
         // For container formats, use timestamp-based seeking
-        int64_t seekPts = mFrameIndex[seekKeyframe].pts;
+        int64_t seekPts = mBundle.index[seekKeyframe].pts;
         if (TTSettings::instance()->logFFmpegDecoder())
             qDebug() << "Container seek to PTS" << seekPts << "seekKeyframe:" << seekKeyframe << "targetKeyframe:" << keyframeIndex;
         ret = av_seek_frame(mFormatCtx, mVideoStreamIndex, seekPts, AVSEEK_FLAG_BACKWARD);
@@ -495,9 +465,9 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
     // RASL leading pics for HEVC); otherwise it is the raw decode dimension.
     // Both this guard and the map lookup below must agree on the upper bound.
     const int frameUpperBound =
-        (mDisplayOrderMap.isValid() && mDisplayOrderMap.displayCount() > 0)
-        ? mDisplayOrderMap.displayCount()
-        : mFrameIndex.size();
+        (mBundle.displayMap.isValid() && mBundle.displayMap.displayCount() > 0)
+        ? mBundle.displayMap.displayCount()
+        : mBundle.index.size();
     if (frameIndex < 0 || frameIndex >= frameUpperBound) {
         if (TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "decodeFrame: index" << frameIndex
@@ -526,12 +496,12 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
     // counted (frameIndex - seekKeyframe) decoder outputs, which yields the
     // display-RANK frame — off by the local B-frame reorder amount.
     int targetAU = frameIndex;
-    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.displayCount())
-        targetAU = mDisplayOrderMap.displayToDecode(frameIndex);
+    if (mBundle.displayMap.isValid() && frameIndex >= 0 && frameIndex < mBundle.displayMap.displayCount())
+        targetAU = mBundle.displayMap.displayToDecode(frameIndex);
 
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "decodeFrame: display" << frameIndex << "-> targetAU" << targetAU
-                 << "total_frames=" << mFrameIndex.size();
+                 << "total_frames=" << mBundle.index.size();
 
     // Always seek (consistent DPB state across decoder instances; the LRU cache
     // mitigates the cost). Decoder emits frames in DISPLAY order, each tagged
@@ -563,16 +533,16 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
         // left) end of file. Never read at this initial value.
         int headroomEnd = targetAU;
         int keyframesSeen = 0;
-        for (int i = targetAU + 1; i < mFrameIndex.size(); ++i) {
-            if (!mFrameIndex[i].isKeyframe) continue;
+        for (int i = targetAU + 1; i < mBundle.index.size(); ++i) {
+            if (!mBundle.index[i].isKeyframe) continue;
             headroomEnd = i;
             if (++keyframesSeen == 2) break;   // second keyframe beyond the target
         }
         if (keyframesSeen < 2)
-            headroomEnd = mFrameIndex.size() - 1;   // fewer than two left: end of file
+            headroomEnd = mBundle.index.size() - 1;   // fewer than two left: end of file
         const int guardMax = qBound(1,
                                     (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
-                                    mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000);
+                                    mBundle.index.size() > 0 ? mBundle.index.size() : 100000);
         const bool logTags = TTSettings::instance()->logFFmpegDecoder();
         while (guard++ < guardMax) {
             if (isCancelled()) return QImage();   // caller gave up; not a failure
@@ -597,8 +567,8 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
 
     // deliveredDecodeIndex is now exact: the delivered frame's decode AU == targetAU.
     // Used by the playback seek path (onPlayVideo) to land mpv on the shown frame.
-    if (!result.isNull() && frameIndex >= 0 && frameIndex < mFrameIndex.size())
-        mFrameIndex[frameIndex].deliveredDecodeIndex = targetAU;
+    if (!result.isNull() && frameIndex >= 0 && frameIndex < mBundle.index.size())
+        mBundle.index[frameIndex].deliveredDecodeIndex = targetAU;
 
     // Fallback: try exactly one frame earlier if the target cannot be decoded.
     if (result.isNull() && frameIndex > 0 && fallbackDepth == 0 && !isCancelled()) {
@@ -630,7 +600,7 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
         }
         TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
             QString("decodeFrame: FAILED to decode frame %1 and fallback (total_frames=%2)")
-                .arg(frameIndex).arg(mFrameIndex.size()));
+                .arg(frameIndex).arg(mBundle.index.size()));
     }
     return result;
 }
@@ -654,8 +624,8 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
     // Bounds check — frameIndex is a DISPLAY position (see data/ttsearchtask.cpp:274-282).
     // When the display-order map is valid the visible range is [0, displayCount()); otherwise
     // fall back to the raw decode dimension (H.264/MPEG-2 maps are strict permutations).
-    const int displayCount = mDisplayOrderMap.isValid()
-                           ? mDisplayOrderMap.displayCount() : mFrameIndex.size();
+    const int displayCount = mBundle.displayMap.isValid()
+                           ? mBundle.displayMap.displayCount() : mBundle.index.size();
     if (frameIndex < 0 || frameIndex >= displayCount) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
             QString("decodeFrameYUV: index %1 out of range (0 - %2)")
@@ -665,8 +635,8 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
 
     // Display position -> raw decode AU (identity if no map).
     int targetAU = frameIndex;
-    if (mDisplayOrderMap.isValid() && frameIndex >= 0 && frameIndex < mDisplayOrderMap.displayCount())
-        targetAU = mDisplayOrderMap.displayToDecode(frameIndex);
+    if (mBundle.displayMap.isValid() && frameIndex >= 0 && frameIndex < mBundle.displayMap.displayCount())
+        targetAU = mBundle.displayMap.displayToDecode(frameIndex);
 
     // Ensure mDecodedFrame is allocated
     if (!mDecodedFrame) {
@@ -696,7 +666,7 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
         mDecoderFrameIndex = mCurrentFrameIndex;
         mDecodeOrderTag    = mCurrentFrameIndex;
 
-        const int guardMax = mFrameIndex.size() > 0 ? mFrameIndex.size() : 100000;
+        const int guardMax = mBundle.index.size() > 0 ? mBundle.index.size() : 100000;
         int guard = 0;
         bool reached = false;
         while (guard++ < guardMax) {
@@ -889,12 +859,12 @@ QImage TTFFmpegWrapper::convertDecodedFrameToImage()
 // ----------------------------------------------------------------------------
 bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold)
 {
-    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) return false;
+    if (frameIndex < 0 || frameIndex >= mBundle.index.size()) return false;
     if (!mFormatCtx || !mVideoCodecCtx) return false;
 
     // Seek to keyframe for this frame
     int keyframeIndex = frameIndex;
-    while (keyframeIndex > 0 && !mFrameIndex[keyframeIndex].isKeyframe)
+    while (keyframeIndex > 0 && !mBundle.index[keyframeIndex].isKeyframe)
         keyframeIndex--;
 
     // Only seek if needed (decoder already past the keyframe)
@@ -1014,7 +984,7 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
     memset(hist, 0, 256 * sizeof(int));
     totalPixels = 0;
 
-    if (frameIndex < 0 || frameIndex >= mFrameIndex.size()) return false;
+    if (frameIndex < 0 || frameIndex >= mBundle.index.size()) return false;
     if (!mFormatCtx || !mVideoCodecCtx) return false;
 
     // Seek to keyframe, skip intermediate frames
@@ -1117,9 +1087,9 @@ int64_t TTFFmpegWrapper::decodeOrderTagForPacket(const AVPacket* packet)
     int64_t tag = mDecodeOrderTag;
 
     bool advance = true;
-    if (mIsPAFF && packet && packet->data && packet->size > 0) {
+    if (mBundle.isPAFF && packet && packet->data && packet->size > 0) {
         TTFieldInfo fi = TTFrameIndexer::parseH264FieldInfo(
-            packet->data, packet->size, mH264FrameMbsOnlyFlag, mH264Log2MaxFrameNum);
+            packet->data, packet->size, mBundle.frameMbsOnlyFlag, mBundle.log2MaxFrameNum);
         // Top field starts a frame but does not complete it — the following
         // bottom field shares the same frame-level decode index. So the TOP
         // field must NOT advance the tag (both fields return the same tag);
@@ -1137,19 +1107,19 @@ int64_t TTFFmpegWrapper::decodeOrderTagForPacket(const AVPacket* packet)
 QImage TTFFmpegWrapper::decodeNearestKeyframe(int displayPos, int* shownDisplayPos)
 {
     if (shownDisplayPos) *shownDisplayPos = -1;
-    if (mFrameIndex.isEmpty()) return QImage();
+    if (mBundle.index.isEmpty()) return QImage();
 
     // Display position -> decode-order AU, then walk back to the keyframe.
-    int targetAU = qBound(0, displayPos, int(mFrameIndex.size()) - 1);
-    if (mDisplayOrderMap.isValid() && displayPos >= 0
-        && displayPos < mDisplayOrderMap.displayCount())
-        targetAU = mDisplayOrderMap.displayToDecode(displayPos);
-    int keyAU = qBound(0, targetAU, int(mFrameIndex.size()) - 1);
-    while (keyAU > 0 && !mFrameIndex[keyAU].isKeyframe)
+    int targetAU = qBound(0, displayPos, int(mBundle.index.size()) - 1);
+    if (mBundle.displayMap.isValid() && displayPos >= 0
+        && displayPos < mBundle.displayMap.displayCount())
+        targetAU = mBundle.displayMap.displayToDecode(displayPos);
+    int keyAU = qBound(0, targetAU, int(mBundle.index.size()) - 1);
+    while (keyAU > 0 && !mBundle.index[keyAU].isKeyframe)
         keyAU--;
 
-    const int keyDisplay = mDisplayOrderMap.isValid()
-                               ? mDisplayOrderMap.decodeToDisplay(keyAU)
+    const int keyDisplay = mBundle.displayMap.isValid()
+                               ? mBundle.displayMap.decodeToDisplay(keyAU)
                                : keyAU;
     if (shownDisplayPos) *shownDisplayPos = keyDisplay;
 
@@ -1331,60 +1301,3 @@ void TTFFmpegWrapper::clearFrameCache()
     mFrameCacheLRU.clear();
 }
 
-// ----------------------------------------------------------------------------
-// Derive the display-order map from poc/isIDR collected during the scan
-// ----------------------------------------------------------------------------
-void TTFFmpegWrapper::buildDisplayOrderMap()
-{
-    // Identity fallback covers: MPEG-2 (.m2v via wrapper), missing POC data,
-    // degenerate parser output. Identity == pre-map behavior.
-    auto identity = [this](const char* reason) {
-        QVector<int> ranks(mFrameIndex.size());
-        for (int i = 0; i < ranks.size(); ++i) ranks[i] = i;
-        mDisplayOrderMap.buildFromRanks(ranks);
-        if (reason && TTSettings::instance()->logFFmpegDecoder())
-            qDebug() << "display-order map: identity fallback -" << reason;
-    };
-
-    if (mFrameIndex.isEmpty()) { mDisplayOrderMap = TTDisplayOrderMap(); return; }
-    if (mFrameIndex[0].poc == INT_MIN) { identity("no POC collected"); return; }
-
-    QVector<TTPocEntry> entries(mFrameIndex.size());
-    bool allSame = true;
-    for (int i = 0; i < mFrameIndex.size(); ++i) {
-        entries[i] = {mFrameIndex[i].poc, mFrameIndex[i].isIDR,
-                      mFrameIndex[i].isDroppedLeading, mFrameIndex[i].isKeyframe};
-        if (mFrameIndex[i].poc != mFrameIndex[0].poc) allSame = false;
-    }
-    if (allSame && mFrameIndex.size() > 1) { identity("constant POC"); return; }
-
-    // H.264 open-GOP cold start: mark leading pics libav drops (mirrors the HEVC
-    // RASL handling done input-side via TTLeadingPicClassifier). No-op otherwise.
-    const AVCodecID codecId = mVideoCodecCtx ? mVideoCodecCtx->codec_id : AV_CODEC_ID_NONE;
-    TTDisplayOrderMap::markH264ColdStartLeadingPics(entries, codecId);
-
-    mDisplayOrderMap.build(entries);
-    if (!mDisplayOrderMap.isValid()) identity("rank validation failed");
-}
-
-void TTFFmpegWrapper::setFrameIndexEntries(const QList<TTFrameInfo>& index)
-{
-    mFrameIndex = index;
-    buildDisplayOrderMap();   // poc/isIDR/isDroppedLeading travel inside TTFrameInfo entries
-}
-
-void TTFFmpegWrapper::setFrameIndex(const TTFrameIndexBundle& bundle)
-{
-    adoptStreamMetadata(bundle.isPAFF, bundle.frameMbsOnlyFlag, bundle.log2MaxFrameNum);
-    setFrameIndexEntries(bundle.index);   // rebuilds the display map from the adopted entries
-}
-
-TTFrameIndexBundle TTFFmpegWrapper::frameIndexBundle() const
-{
-    TTFrameIndexBundle b;
-    b.index             = mFrameIndex;
-    b.isPAFF            = mIsPAFF;
-    b.frameMbsOnlyFlag  = mH264FrameMbsOnlyFlag;
-    b.log2MaxFrameNum   = mH264Log2MaxFrameNum;
-    return b;
-}

@@ -1,11 +1,13 @@
 // Dumps one TTFrameIndexBundle field by field so two builds can be diffed.
 //   usage: test_frameindex_dump <file.264|file.265>
+// The trailing "d <decode> <display>" lines are the display-order map from
+// the bundle.
 #include <QCoreApplication>
 #include <QString>
 #include <cstdio>
 
-#include "extern/ttframeindex.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindex.h"
+#include "avstream/ttframeindexer.h"
 
 int main(int argc, char** argv)
 {
@@ -30,5 +32,10 @@ int main(int argc, char** argv)
     printf("g %d %d-%d pts=%lld..%lld closed=%d\n", g.gopIndex, g.startFrame, g.endFrame,
            (long long)g.startPts, (long long)g.endPts, g.isClosed ? 1 : 0);
   for (int i = 0; i < b.rawToMerged.size(); ++i) printf("r %d %d\n", i, b.rawToMerged[i]);
+
+  const TTDisplayOrderMap& m = b.displayMap;
+  printf("map valid=%d count=%d\n", m.isValid() ? 1 : 0, m.isValid() ? m.displayCount() : 0);
+  for (int i = 0; i < b.index.size(); ++i)
+    printf("d %d %d\n", i, m.isValid() ? m.decodeToDisplay(i) : i);
   return 0;
 }

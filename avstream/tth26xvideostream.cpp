@@ -10,7 +10,7 @@
 #include "tth26xvideostream.h"
 #include "ttvideoindexlist.h"
 #include "ttesinfo.h"
-#include "../extern/ttframeindexer.h"
+#include "ttframeindexer.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../common/ttexception.h"
@@ -20,18 +20,12 @@
 
 TTH26xVideoStream::TTH26xVideoStream(const QFileInfo& fInfo)
     : TTVideoStream(fInfo)
-    , mFFmpeg(nullptr)
 {
     mLog = TTMessageLogger::getInstance();
 }
 
 TTH26xVideoStream::~TTH26xVideoStream()
 {
-    if (mFFmpeg) {
-        mFFmpeg->closeFile();
-        delete mFFmpeg;
-        mFFmpeg = nullptr;
-    }
 }
 
 float TTH26xVideoStream::frameRate()
@@ -41,29 +35,27 @@ float TTH26xVideoStream::frameRate()
 
 bool TTH26xVideoStream::openStream()
 {
-    if (mFFmpeg != nullptr) {
-        return true;  // already open
+    if (mProbed) {
+        return true;  // already probed
     }
 
-    mFFmpeg = new TTFFmpegWrapper();
-    if (!mFFmpeg->openFile(filePath())) {
+    QString err;
+    TTVideoProbe probe;
+    if (!ttProbeVideo(filePath(), &probe, &err)) {
         mLog->errorMsg(__FILE__, __LINE__,
-            QString("Failed to open %1 stream: %2").arg(codecLabel(), mFFmpeg->lastError()));
-        delete mFFmpeg;
-        mFFmpeg = nullptr;
+            QString("Failed to open %1 stream: %2").arg(codecLabel(), err));
         return false;
     }
 
-    TTVideoCodecType detected = mFFmpeg->detectVideoCodec();
-    if (detected != expectedCodec()) {
+    if (probe.codecType != expectedCodec()) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("File is not %1, detected: %2")
-                .arg(codecLabel(), TTFFmpegWrapper::codecTypeToString(detected)));
-        delete mFFmpeg;
-        mFFmpeg = nullptr;
+                .arg(codecLabel(), ttCodecTypeToString(probe.codecType)));
         return false;
     }
 
+    mProbe  = probe;
+    mProbed = true;
     mLog->infoMsg(__FILE__, __LINE__,
         QString("Opened %1 stream: %2").arg(codecLabel(), filePath()));
     return true;
@@ -95,14 +87,14 @@ int TTH26xVideoStream::createHeaderList()
     emit statusReport(StatusReportArgs::Step,
         tr("Creating %1 header list...").arg(codecLabel()), 10 * total / 100);
 
-    int videoStreamIdx = mFFmpeg->findBestVideoStream();
+    const int videoStreamIdx = mProbe.videoStreamIndex;
     if (videoStreamIdx < 0) {
         mLog->errorMsg(__FILE__, __LINE__, "No video stream found");
         emit statusReport(StatusReportArgs::Error, tr("No video stream found"), 0);
         return -1;
     }
 
-    TTStreamInfo streamInfo = mFFmpeg->getStreamInfo(videoStreamIdx);
+    const TTStreamInfo& streamInfo = mProbe.info;
 
     // Reset and build SPS via derived
     resetSPS();
@@ -152,10 +144,9 @@ int TTH26xVideoStream::createHeaderList()
         return -1;
     }
     mFrameIndexBundle = indexer.bundle();
-    mFFmpeg->setFrameIndex(mFrameIndexBundle);
 
     // PAFF correction (H.264 only — H.265 returns false from the hook)
-    if (isPAFFCorrectionApplicable() && mFFmpeg->isPAFF() && frame_rate > 30) {
+    if (isPAFFCorrectionApplicable() && mFrameIndexBundle.isPAFF && frame_rate > 30) {
         mLog->infoMsg(__FILE__, __LINE__,
             QString("PAFF detected: correcting frame rate from %1 to %2 fps")
                 .arg(frame_rate).arg(frame_rate / 2.0f));
@@ -279,39 +270,24 @@ int TTH26xVideoStream::findIDRBefore(int frameIndex)
 
 int TTH26xVideoStream::decodeToDisplayIndex(int index) const
 {
-    return mFFmpeg ? mFFmpeg->displayOrderMap().decodeToDisplay(index) : index;
+    // An invalid (not yet built) map returns the input unchanged
+    // (ttdisplayordermap.cpp), which is what the old `mFFmpeg ? … : index` did.
+    return mFrameIndexBundle.displayMap.decodeToDisplay(index);
 }
 
 int TTH26xVideoStream::displayToDecodeIndex(int index) const
 {
-    return mFFmpeg ? mFFmpeg->displayOrderMap().displayToDecode(index) : index;
+    return mFrameIndexBundle.displayMap.displayToDecode(index);
 }
-
 
 const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
 {
-    static const TTDisplayOrderMap empty;
-    return mFFmpeg ? mFFmpeg->displayOrderMap() : empty;
+    return mFrameIndexBundle.displayMap;
 }
 
-TTFrameIndexBundle TTH26xVideoStream::ffmpegFrameIndexBundle() const
+TTFrameIndexBundle TTH26xVideoStream::frameIndexBundle() const
 {
     return mFrameIndexBundle;
-}
-
-// See header doc + spec 2026-06-05. QList<TTFrameInfo> is Qt copy-on-write:
-// setFrameIndex only copies the COW header here; a later lazy
-// deliveredDecodeIndex write in the consumer detaches its own copy → no data
-// races between parallel wrappers.
-bool TTH26xVideoStream::provideFrameIndexTo(TTFFmpegWrapper* consumer) const
-{
-    if (!consumer)
-        return false;
-    const TTFrameIndexBundle bundle = ffmpegFrameIndexBundle();
-    if (bundle.isEmpty())
-        return false;                 // not built yet → caller builds itself
-    consumer->setFrameIndex(bundle);  // index + stream metadata in one step
-    return true;
 }
 
 int TTH26xVideoStream::rawAuCount() const
@@ -324,10 +300,9 @@ int TTH26xVideoStream::rawAuCount() const
 // IS merged numbering.
 int TTH26xVideoStream::mapRawAuToDisplayIndex(int raw) const
 {
-    if (!mFFmpeg) return -1;
     const int merged = mFrameIndexBundle.rawToMergedIndex(raw);
     if (merged < 0) return -1;
-    return mFFmpeg->displayOrderMap().decodeToDisplay(merged);
+    return decodeToDisplayIndex(merged);
 }
 
 bool TTH26xVideoStream::rawAuIsCollapsedField(int raw) const
