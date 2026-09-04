@@ -19,8 +19,8 @@ sources:
   - avstream/tth26xvideostream.cpp
   - extern/ttffmpegwrapper.h
   - extern/ttffmpegwrapper.cpp
-  - extern/ttframeindexer.h
-  - extern/ttframeindexer.cpp
+  - avstream/ttframeindexer.h
+  - avstream/ttframeindexer.cpp
 ---
 
 # Quick Jump dialog (Zeitsprung)
@@ -85,7 +85,7 @@ flowchart TD
 | `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()` via the stream's aspect ratio. Only the height is stored anywhere — the width is always derived, which is what keeps tiles undistorted. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
 | `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle` and hands a copy to its wrapper. No decoder instance is involved in building it. |
-| `TTH26xVideoStream` → `TTQuickJumpWorker` | `ffmpegFrameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. |
+| `TTH26xVideoStream` → `TTQuickJumpWorker` | `frameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. Since 2026-09-04 the bundle also carries the display-order map. |
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |
 | `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. With no bundle handed in, the worker runs its own `TTFrameIndexer` over `mFilePath` and installs the result — `setFrameIndex()` is the only way an index enters a wrapper. |
@@ -132,9 +132,10 @@ flowchart TD
   decode-order tagging then counts PAFF field packets as frames, and a
   field-pair target AU never appears. Measured on `06x03` display 3566:
   **72 675 ms** against 13 ms with metadata. This defect was fixed once in July
-  2026 for `provideFrameIndexTo()`'s adopters and returned through the
-  quick-jump path, which pulled the index directly. `TTFrameIndexBundle` and the
-  private `setFrameIndexEntries` exist so it cannot return a third time.
+  2026 for the adopters of the stream's bundle and returned through the
+  quick-jump path, which pulled the index directly. `TTFrameIndexBundle` exists
+  so it cannot return a third time: since 2026-09-04 `setFrameIndex(bundle)` is
+  the wrapper's only entry point and stores the bundle whole.
 - **Two index domains.** The model collects I-frame positions from
   `TTVideoIndexList`; the decoder treats the same numbers as display positions
   and maps them to decode-order AUs itself. The two agree today, and a change to
@@ -157,9 +158,8 @@ flowchart TD
 
 ## Redundancy / consolidation candidates
 
-- **Index adoption is now single-path.** `provideFrameIndexTo()` and the direct
-  `ffmpegFrameIndexBundle()` pull both end in
-  `setFrameIndex(const TTFrameIndexBundle&)`. No consolidation left here; the
+- **Index adoption is now single-path.** Every adopter pulls
+  `frameIndexBundle()` and ends in `setFrameIndex(const TTFrameIndexBundle&)`. No consolidation left here; the
   earlier duplication was the defect.
 - **Two thumbnail-producing decoders** (`TTFFmpegWrapper`, `TTMpeg2Decoder`)
   split by codec inside `TTQuickJumpWorker::operation()`. This mirrors the split

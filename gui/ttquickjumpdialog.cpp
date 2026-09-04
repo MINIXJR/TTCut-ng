@@ -269,10 +269,10 @@ void TTQuickJumpDialog::startThumbnailWorker()
   TTFrameIndexBundle prebuiltIndex;
   if (streamType == TTAVTypes::h264_video) {
     TTH264VideoStream* h264 = static_cast<TTH264VideoStream*>(mVideoStream);
-    prebuiltIndex = h264->ffmpegFrameIndexBundle();
+    prebuiltIndex = h264->frameIndexBundle();
   } else if (streamType == TTAVTypes::h265_video) {
     TTH265VideoStream* h265 = static_cast<TTH265VideoStream*>(mVideoStream);
-    prebuiltIndex = h265->ffmpegFrameIndexBundle();
+    prebuiltIndex = h265->frameIndexBundle();
   }
 
   mCurrentWorker = new TTQuickJumpWorker(

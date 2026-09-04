@@ -33,7 +33,6 @@ TTH264VideoStream::~TTH264VideoStream()
     mAccessUnits.clear();
     delete mSPS;
     mSPS = nullptr;
-    // mFFmpeg cleanup is handled by ~TTH26xVideoStream
 }
 
 // -----------------------------------------------------------------------------
@@ -46,7 +45,7 @@ TTAVTypes::AVStreamType TTH264VideoStream::streamType() const
 
 int TTH264VideoStream::paffLog2MaxFrameNum() const
 {
-    return mFFmpeg ? mFFmpeg->h264Log2MaxFrameNum() : 4;
+    return mFrameIndexBundle.log2MaxFrameNum;
 }
 
 // -----------------------------------------------------------------------------
@@ -92,7 +91,7 @@ void TTH264VideoStream::buildAccessUnits()
     qDeleteAll(mAccessUnits);
     mAccessUnits.clear();
 
-    const QList<TTFrameInfo>& frameIndex = mFFmpeg->frameIndex();
+    const QList<TTFrameInfo>& frameIndex = mFrameIndexBundle.index;
     for (int i = 0; i < frameIndex.size(); ++i) {
         const TTFrameInfo& frame = frameIndex[i];
 

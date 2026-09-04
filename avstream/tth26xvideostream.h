@@ -10,7 +10,7 @@
 // ----------------------------------------------------------------------------
 // TTH26XVIDEOSTREAM
 // Abstract intermediate base shared by TTH264VideoStream and TTH265VideoStream.
-// Owns the ffmpeg wrapper lifecycle and the codec-agnostic flow of
+// Owns the file probe, the frame index bundle and the codec-agnostic flow of
 // createHeaderList / createIndexList / GOP forwarding. Codec-specific bits
 // (typed SPS, typed access units, RAP-vs-IDR semantics, PAFF correction)
 // are implemented by the derived classes via protected hooks.
@@ -20,7 +20,7 @@
 #define TTH26XVIDEOSTREAM_H
 
 #include "ttavstream.h"
-#include "../extern/ttffmpegwrapper.h"
+#include "ttavutil.h"
 #include "ttframeindex.h"
 #include "../common/ttmessagelogger.h"
 
@@ -53,36 +53,26 @@ public:
     int decodeToDisplayIndex(int index) const override;
     int displayToDecodeIndex(int index) const override;
 
-    // Display-order map (POC-based, frame granularity) from the open stream's
-    // wrapper. Used to inject into TTESSmartCut so cut positions map display->AU
-    // consistently (esp. PAFF, where buildFromFile's field-granularity fallback
-    // would mismatch the parser's frame count).
+    // Display-order map (POC-based, frame granularity) from the index bundle.
+    // Injected into TTESSmartCut so cut positions map display->AU consistently
+    // (esp. PAFF, where buildFromFile's field-granularity fallback would
+    // mismatch the parser's frame count).
     const TTDisplayOrderMap& displayOrderMap() const;
 
     // --- Canonical frame-index owner ("Owner A") ---
-    // This stream builds the FFmpeg frame index ONCE at stream-open
-    // (createHeaderList). Other wrappers of the same file adopt it instead of
-    // rescanning themselves (~2 s/scan). Every adopter takes the index as a
-    // TTFrameIndexBundle, so the stream metadata cannot be left behind:
-    //   - Quickjump (ttquickjumpdialog.cpp) via ffmpegFrameIndexBundle().
-    //   - mpegWindow (ttmpeg2window2.cpp) via provideFrameIndexTo();
-    //     Black/Scene/Logo search + analysisWrapper pull transitively from there.
-    //   - framesearch (ttframesearchtask.cpp) via provideFrameIndexTo().
-    // See specs 2026-06-05-frame-index-unification-design.md and
-    // 2026-08-28-frame-index-bundle-design.md.
+    // This stream builds the frame index ONCE at stream-open (createHeaderList).
+    // Every other wrapper of the same file adopts it through
+    // TTFFmpegWrapper::setFrameIndex(frameIndexBundle()) instead of rescanning
+    // (~2 s/scan): quick jump (ttquickjumpdialog.cpp), the preview window
+    // (ttmpeg2window2.cpp; Black/Scene/Logo search and the analysis wrappers
+    // pull transitively from there) and the frame search (ttframesearchtask.cpp).
+    // An empty bundle means "not built yet" — the caller then runs a
+    // TTFrameIndexer itself. See specs 2026-06-05-frame-index-unification,
+    // 2026-08-28-frame-index-bundle and 2026-09-03-stream-ownership.
     //
-    // The index together with the metadata the indexer measured. Consumers
-    // that hand an index across a thread or object boundary MUST use this
-    // bundle, never the bare list — see TTFrameIndexBundle.
-    TTFrameIndexBundle ffmpegFrameIndexBundle() const;
-
-    // Hands this stream's already-built index (Owner A) to `consumer`, which has
-    // opened the SAME file. File identity is guaranteed by the caller through
-    // object identity (it holds this stream object).
-    //   true  = adopted → consumer needs no index of its own.
-    //   false = index still empty/not built → caller must run a
-    //           TTFrameIndexer itself and install the result.
-    bool provideFrameIndexTo(TTFFmpegWrapper* consumer) const;
+    // Consumers that hand an index across a thread or object boundary MUST use
+    // this bundle, never the bare list — see TTFrameIndexBundle.
+    TTFrameIndexBundle frameIndexBundle() const;
 
     // Raw->merged AU translation for .info doubled-PTS candidates (raw AU
     // numbering; see the TTFFmpegWrapper map doc). Display index is -1 for
@@ -92,7 +82,8 @@ public:
     bool rawAuIsCollapsedField(int raw) const;
 
 protected:
-    // ffmpeg lifecycle (called from createHeaderList)
+    // Probes the file once (ttProbeVideo) and checks expectedCodec(); called
+    // from createHeaderList.
     bool openStream();
 
     // Hooks implemented by derived
@@ -104,7 +95,7 @@ protected:
     virtual void    setSPSFrameRate(double fps) = 0;
     virtual QString spsDescription() const = 0;           // for log line
 
-    virtual void    buildAccessUnits() = 0;               // populate typed AU list from mFFmpeg->frameIndex()
+    virtual void    buildAccessUnits() = 0;               // populate typed AU list from mFrameIndexBundle.index
     virtual int     accessUnitCount() const = 0;
     virtual bool    accessUnitIsIDR(int idx) const = 0;   // strict IDR (DPB reset)
     virtual bool    accessUnitIsRAP(int idx) const = 0;   // RAP (IDR plus CRA/BLA for H.265)
@@ -113,12 +104,13 @@ protected:
     virtual bool    isPAFFCorrectionApplicable() const { return false; }
 
 protected:
-    TTFFmpegWrapper* mFFmpeg;
+    // Result of openStream(): codec type, best video stream and its stream
+    // info. mProbed guards against probing twice.
+    TTVideoProbe mProbe;
+    bool         mProbed = false;
     // The canonical index for this file, built once by TTFrameIndexer in
-    // createHeaderList(). The wrapper gets a copy through setFrameIndex(), but
-    // this stream stays the owner: only the bundle kept here carries the GOP
-    // table and the raw->merged map (a wrapper re-exporting an adopted index
-    // leaves both empty).
+    // createHeaderList(): entries, GOP table, raw->merged map, PAFF metadata
+    // and the display-order map. Adopters receive a copy (Qt COW).
     TTFrameIndexBundle mFrameIndexBundle;
     TTMessageLogger* mLog;
 };

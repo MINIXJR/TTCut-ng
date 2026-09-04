@@ -295,18 +295,7 @@ TTVideoCodecType TTFFmpegWrapper::detectVideoCodec() const
         return CODEC_UNKNOWN;
     }
 
-    AVCodecParameters* codecpar = mFormatCtx->streams[mVideoStreamIndex]->codecpar;
-
-    switch (codecpar->codec_id) {
-        case AV_CODEC_ID_MPEG2VIDEO:
-            return CODEC_MPEG2;
-        case AV_CODEC_ID_H264:
-            return CODEC_H264;
-        case AV_CODEC_ID_HEVC:
-            return CODEC_H265;
-        default:
-            return CODEC_UNKNOWN;
-    }
+    return ttCodecTypeFromAvCodecId(mFormatCtx->streams[mVideoStreamIndex]->codecpar->codec_id);
 }
 
 // ----------------------------------------------------------------------------

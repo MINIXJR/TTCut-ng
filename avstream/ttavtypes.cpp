@@ -38,7 +38,7 @@
 #include "ttsrtsubtitlestream.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttexception.h"
-#include "../extern/ttffmpegwrapper.h"
+#include "ttavutil.h"
 
 #include <QString>
 #include <QFileInfo>
@@ -284,21 +284,20 @@ TTVideoStream* TTVideoType::createVideoStream()
 // Uses FFmpeg/libav to detect the actual codec type
 void TTVideoType::getVideoStreamType()
 {
-  // Try to detect codec using FFmpeg wrapper
-  TTFFmpegWrapper ffmpeg;
+  // Detect the codec with libav (ttProbeVideo opens, reads, closes)
+  TTVideoProbe probe;
+  QString err;
 
-  if (!ffmpeg.openFile(av_stream_info->filePath())) {
-    // Fallback to MPEG-2 if FFmpeg can't open the file
+  if (!ttProbeVideo(av_stream_info->filePath(), &probe, &err)) {
+    // Fallback to MPEG-2 if libav can't open the file
     log->warningMsg(__FILE__, __LINE__,
-        QString("FFmpeg could not open file, assuming MPEG-2: %1")
-            .arg(av_stream_info->filePath()));
+        QString("FFmpeg could not open file, assuming MPEG-2: %1 (%2)")
+            .arg(av_stream_info->filePath(), err));
     av_stream_type = mpeg2_demuxed_video;
     return;
   }
 
-  TTVideoCodecType codecType = ffmpeg.detectVideoCodec();
-
-  switch (codecType) {
+  switch (probe.codecType) {
     case CODEC_MPEG2:
       log->infoMsg(__FILE__, __LINE__,
           QString("Detected MPEG-2 video: %1").arg(av_stream_info->filePath()));
@@ -340,8 +339,6 @@ void TTVideoType::getVideoStreamType()
       }
       break;
   }
-
-  ffmpeg.closeFile();
 }
 
 

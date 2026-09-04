@@ -25,7 +25,7 @@
 #include "../avstream/ttframeindexer.h"
 #include "../avstream/tth264videostream.h"
 #include "../avstream/tth265videostream.h"
-#include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
+#include "../avstream/tth26xvideostream.h"  // frameIndexBundle (index sharing)
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../avstream/ttcommon.h"
 
@@ -91,7 +91,8 @@ void TTFrameSearchTask::initFrameSearch()
     // filePath() → file identity guaranteed by object identity.
     bool refIndexAdopted = false;
     if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpReferenceStream)) {
-      refIndexAdopted = h26x->provideFrameIndexTo(refWrapper);
+      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
+      if (!bundle.isEmpty()) { refWrapper->setFrameIndex(bundle); refIndexAdopted = true; }
     }
     if (!refIndexAdopted) {
       TTFrameIndexer indexer;
@@ -213,11 +214,12 @@ void TTFrameSearchTask::operation()
     // tools/diag/test_framesearch_progress on a 224 930-frame H.264 recording,
     // 5553 ms of the 11 464 ms run passed between the Start report and the
     // first compared frame, with nothing to see in the progress dialog.
-    // provideFrameIndexTo() returns false when the stream has no index yet
+    // frameIndexBundle() is empty when the stream has no index yet
     // (different item, never opened) - then the scan below is still needed.
     bool searchIndexAdopted = false;
     if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpSearchStream)) {
-      searchIndexAdopted = h26x->provideFrameIndexTo(searchWrapper);
+      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
+      if (!bundle.isEmpty()) { searchWrapper->setFrameIndex(bundle); searchIndexAdopted = true; }
     }
     if (!searchIndexAdopted) {
       TTFrameIndexer indexer;

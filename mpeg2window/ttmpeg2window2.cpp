@@ -14,7 +14,7 @@
 
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
-#include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
+#include "../avstream/tth26xvideostream.h"  // frameIndexBundle (index sharing)
 #include "../avstream/ttframeindexer.h"
 
 #include <QDebug>
@@ -363,7 +363,7 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
       return;
     }
 
-    // Index sharing (spec 2026-06-05): Owner A (vStream->mFFmpeg) already built
+    // Index sharing (spec 2026-06-05): Owner A (the H.26x stream) already built
     // the frame index at stream-open. Instead of running an identical second scan
     // of the same file here (~2 s), we adopt Owner A's index (Qt COW, cheap).
     // Consumers that in turn pull from THIS wrapper (Black/Scene/Logo search,
@@ -372,7 +372,8 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
     // available yet.
     bool indexAdopted = false;
     if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(vStream)) {
-      indexAdopted = h26x->provideFrameIndexTo(mpFFmpegWrapper);
+      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
+      if (!bundle.isEmpty()) { mpFFmpegWrapper->setFrameIndex(bundle); indexAdopted = true; }
     }
     if (!indexAdopted) {
       qDebug() << "Building frame index for preview...";

@@ -14,8 +14,8 @@ sources:
   - mpeg2window/ttmpeg2window2.h
   - extern/ttffmpegwrapper.cpp
   - extern/ttffmpegwrapper.h
-  - extern/ttframeindexer.cpp
-  - extern/ttframeindexer.h
+  - avstream/ttframeindexer.cpp
+  - avstream/ttframeindexer.h
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
   - extern/ttmkvmergeprovider.cpp
@@ -105,7 +105,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 | From → To | What crosses | Order domain |
 |---|---|---|
 | `TTFrameIndexer::mergePAFFFieldsInIndex` → `TTFrameIndexBundle::rawToMerged` → `TTH26xVideoStream::mapRawAuToDisplayIndex` | **A third index domain, distinct from both decode and display order:** `TTFrameIndexer::build` scans **one packet per raw AU** (PAFF top and bottom field are separate packets); the merge then collapses each field pair, so the bundle's `index` is *merged*. `.info` fields written by ttcut-demux (`es_doubled_pts_aus`) are numbered in **raw** AUs and must be translated before they can be compared against anything TTCut shows. Encoding: entry ≥ 0 → merged index; entry < 0 → collapsed bottom field with merged index `~entry`; empty vector = identity. **The map lives in the bundle the indexer produced, and only the index OWNER (`TTH26xVideoStream::mFrameIndexBundle`) keeps it** — a wrapper only ever receives the bundle through `setFrameIndex()` and re-exports it without `gops`/`rawToMerged`, because it never ran the merge itself. | **RAW AU order** on the input side (one entry per demuxed packet), **merged decode order** on the output side — neither is display order |
-| `TTH26xVideoStream::ffmpegFrameIndexBundle` / `provideFrameIndexTo` → `TTFFmpegWrapper::setFrameIndex(const TTFrameIndexBundle&)` | PAFF flag, `frame_mbs_only_flag` and `log2_max_frame_num` travel **inside** the adopted index as one `TTFrameIndexBundle`. Adopters never run the index pass themselves, so without them the decode-order tagging counts PAFF field packets as whole frames: `decodeFrame()` then never reaches a field-pair target AU and drains the file to EOF (measured 2×53 s in `46d3dcb1`; **recurred** through the quick-jump path and was measured again at 72 675 ms vs 13 ms, spec 2026-08-28). The pairing is no longer a call-ordering rule the caller must remember — installing the bare list is private (`setFrameIndexEntries`), so index and metadata cannot be separated. | n/a — carries stream properties, not indices; but it decides whether the adopter's **decode-order** tagging is correct |
+| `TTH26xVideoStream::frameIndexBundle` → `TTFFmpegWrapper::setFrameIndex(const TTFrameIndexBundle&)` | PAFF flag, `frame_mbs_only_flag` and `log2_max_frame_num` travel **inside** the adopted index as one `TTFrameIndexBundle`. Adopters never run the index pass themselves, so without them the decode-order tagging counts PAFF field packets as whole frames: `decodeFrame()` then never reaches a field-pair target AU and drains the file to EOF (measured 2×53 s in `46d3dcb1`; **recurred** through the quick-jump path and was measured again at 72 675 ms vs 13 ms, spec 2026-08-28). The pairing is no longer a call-ordering rule the caller must remember — `setFrameIndex(bundle)` is the only entry point and stores the bundle whole (2026-09-04), so index, metadata and display map cannot be separated. | n/a — carries stream properties, not indices; but it decides whether the adopter's **decode-order** tagging is correct |
 | `TTCurrentFrame::eventFilter` (click on the position label) → `TTGotoFrameDialog` → `onGotoFrame(selectedFrame, 0)` | Dialog inputs are `videoStream->currentIndex()`, `frameCount()` and `frameRate()`; the spin box clamps to `0..frameCount-1`, and the timecode field converts with `frame / fps` — the same arithmetic the position label itself uses (`frameTime()` → `ttFramesToTime`), so the two never disagree. **The dialog introduces no domain conversion of its own:** the number it returns re-enters through `onGotoFrame` → `moveToIndexPos`, i.e. exactly the path the slider takes, so it inherits whatever domain the navigation index already has. Guard difference worth knowing: `ttFramesToTime` silently substitutes 25 fps when `fps < 1`, while the dialog refuses the conversion at `fps <= 0` and leaves the timecode field empty (the frame spin box stays usable) | same domain as every other navigation index — **DECODE order** for H.26x, **display order** for MPEG-2 |
 | `TTCutFrameNavigation::onSetCutIn()` → `TTCurrentFrame` slot | `currentPosition` — the integer last stored by `checkCutPosition(avData, pos)` | **DECODE order** (see below) |
 | `TTVideoStream::moveToXxx()` → caller (TTCurrentFrame, TTCutOutFrame) | return value = `current_index` = position in `TTVideoIndexList` | **DECODE order** for H.26x; **display order** for MPEG-2 after `sortDisplayOrder()` |
@@ -133,7 +133,7 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 
 ## Assumptions, contracts & pitfalls
 
-- **`TTVideoIndexList` (H.26x)** — assumes: built from `mFFmpeg->frameIndex()` in the order packets were demuxed (decode order); `display_order` field is set to the same sequential counter as the list position (`vidIndex->setDisplayOrder(i)` in `createIndexList`), so `displayOrder(i) == i` always for H.26x. There is no POC-based reordering. Pitfall: the field is named `display_order` but for H.26x it carries a decode-order index.
+- **`TTVideoIndexList` (H.26x)** — built from `mFrameIndexBundle.index` in decode order (one entry per AU, `headerListIndex == decode AU`); `display_order` is the POC display rank from the bundle's map (`vidIndex->setDisplayOrder(decodeToDisplayIndex(i))` in `createIndexList`), and AUs without a display slot (dropped HEVC RASL pics, rank < 0) are skipped so `frameCount()` equals the decoder's output count. `sortDisplayOrder()` at open then makes list position == display position, the same semantics MPEG-2 gets from `temporal_reference`. (Corrected 2026-09-04: this row claimed `displayOrder(i) == i` with no POC reordering — that has been false since navigation went display-order in `7f494e0`.)
 
 - **`TTVideoIndexList` (MPEG-2)** — `sortDisplayOrder()` IS called after building the list; the list is then sorted by the `display_order` field from the MPEG-2 picture headers. Navigation then walks in display order. `current_index` and all returned positions are display-order indices.
 
@@ -296,7 +296,8 @@ self-contained → 0 drops), and for streams whose first trailing pic (`poc >=
 keyframePoc`) immediately follows (→ 0 drops). Needs a keyframe anchor, so `TTPocEntry`
 gained `bool key`, populated from `AV_PKT_FLAG_KEY` (buildFromFile) /
 `TTFrameInfo::isKeyframe` (wrapper). Called in **both** build paths before `build()`:
-`TTFFmpegWrapper::buildDisplayOrderMap()` (ttffmpegwrapper.cpp) and
+`TTFrameIndexer::buildDisplayMap()` (ttframeindexer.cpp; until 2026-09-04
+`TTFFmpegWrapper::buildDisplayOrderMap`, rebuilt per adopter) and
 `TTDisplayOrderMap::buildFromFile()` — so still/search/nav and the cut path get the
 same map. All downstream machinery (`displayRanksFromPoc` skips `isDroppedLeading`,
 `displayCount()`, `createIndexList`, `decodeFrame`/`decodeFrameYUV`,
@@ -407,7 +408,7 @@ byte-identical output, unaffected by this fix.
 
 ## Redundancy / consolidation candidates
 
-- **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `TTFrameIndexer::build()` → `mFrameIndexBundle`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Owner A → Owner B index sharing via `provideFrameIndexTo()` (Qt COW, O(1)). Since the indexer split, every producer of an index is `TTFrameIndexer` and every entry into a wrapper is `setFrameIndex()` — a wrapper cannot build an index at all. **Correction (2026-08-28):** the claim that the search sub-decoders adopted "via the same mechanism" was wrong — they, the quick-jump worker and the two analysis wrappers all called `setFrameIndex()` with a bare list and silently skipped the metadata, which is exactly how the EOF-drain defect returned after its July fix. All adopters now take a `TTFrameIndexBundle` and the bare entry point is private, so the single-mechanism claim is true as of this stamp rather than merely intended.
+- **Frame-index construction** (`TTH26xVideoStream::createHeaderList` → `TTFrameIndexer::build()` → `mFrameIndexBundle`) and (`TTMPEG2Window2::openVideoStream` → Owner B `mpFFmpegWrapper`): Owner A → Owner B index sharing via `setFrameIndex(frameIndexBundle())` (Qt COW, O(1)). Since the indexer split, every producer of an index is `TTFrameIndexer` and every entry into a wrapper is `setFrameIndex()` — a wrapper cannot build an index at all. **Correction (2026-08-28):** the claim that the search sub-decoders adopted "via the same mechanism" was wrong — they, the quick-jump worker and the two analysis wrappers all called `setFrameIndex()` with a bare list and silently skipped the metadata, which is exactly how the EOF-drain defect returned after its July fix. All adopters now take a `TTFrameIndexBundle` and the bare entry point is private, so the single-mechanism claim is true as of this stamp rather than merely intended.
 
 - **Decode-order-to-display-order conversion**: PARTIALLY RESOLVED (`95da7f3`).
   `playbackSecondsForCurrentStill()` (used by `onPlayVideo`) is live and keys

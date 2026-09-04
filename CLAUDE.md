@@ -105,7 +105,7 @@ TTAVStream
 - **TTH264VideoStream** (avstream/tth264videostream.h): H.264/AVC video stream class
 - **TTH265VideoStream** (avstream/tth265videostream.h): H.265/HEVC video stream class
 - **TTFFmpegWrapper** (extern/ttffmpegwrapper.h): Libav wrapper for H.264/H.265 frame decoding and container handling
-- **TTFrameIndexer** (extern/ttframeindexer.h): builds the H.264/H.265 frame index bundle (packet scan, PAFF merge, GOP table) that TTFFmpegWrapper adopts
+- **TTFrameIndexer** (avstream/ttframeindexer.h): builds the H.264/H.265 frame index bundle (packet scan, PAFF merge, GOP table, display-order map) that TTH26xVideoStream owns and every TTFFmpegWrapper adopts
 - **TTAudioCutter** (extern/ttaudiocutter.h): Audio ES cut by stream-copy, burst detection and AC3 acmod analysis
 - **TTCut** (common/ttcut.h): Singleton holding global settings and application state
 - **TTTranscodeProvider** (extern/tttranscode.h): MPEG-2 re-encoding at cut points via libavcodec API

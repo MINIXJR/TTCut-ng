@@ -64,6 +64,23 @@ enum TTVideoCodecType {
 // "MPEG-2" / "H.264/AVC" / "H.265/HEVC" / "Unknown"
 QString ttCodecTypeToString(TTVideoCodecType type);
 
+// AV_CODEC_ID_* -> TTVideoCodecType (MPEG-2, H.264, HEVC; else CODEC_UNKNOWN).
+TTVideoCodecType ttCodecTypeFromAvCodecId(int avCodecId);
+
+// What a stream class needs to know about a video file at open time.
+struct TTVideoProbe {
+    TTVideoCodecType codecType = CODEC_UNKNOWN;
+    int              videoStreamIndex = -1;   // av_find_best_stream(VIDEO); -1 = none
+    TTStreamInfo     info;                    // of videoStreamIndex; default when none
+};
+
+// Opens filePath, reads codec type, best video stream and its TTStreamInfo,
+// closes the file. Returns false only when the file cannot be opened or has
+// no stream info (*error then describes it); a file without a video stream
+// still returns true with videoStreamIndex == -1 and CODEC_UNKNOWN — the
+// same distinction TTFFmpegWrapper::openFile()/detectVideoCodec() make.
+bool ttProbeVideo(const QString& filePath, TTVideoProbe* out, QString* error);
+
 // Recognises raw H.264/H.265/MPEG-2 elementary streams by extension.
 bool ttIsElementaryStreamPath(const QString& filePath);
 // Returns the libav input format ('h264', 'hevc', 'mpegvideo') matching

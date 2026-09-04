@@ -79,7 +79,8 @@ werden:
   Fortschrittsdialog erscheint bei ihnen gar nicht, weil `TTProgressBar` erst
   bei `Start` oder `Step` sichtbar wird.
 - **Bildindex:** beide Ströme der Gleichbild-Suche übernehmen einen vorhandenen
-  Index über `TTH26xVideoStream::provideFrameIndexTo()` und scannen nur, wenn
+  Index über `TTH26xVideoStream::frameIndexBundle()` (`setFrameIndex` im
+  Aufrufer) und scannen nur, wenn
   keiner da ist. Der Suchstrom tat das bis 2026-08-15 nicht und scannte immer —
   5553 ms von 11 464 ms Suchlaufzeit auf echtem Material, siehe
   `docs/completed-work.md`.

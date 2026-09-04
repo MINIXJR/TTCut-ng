@@ -99,7 +99,7 @@ int main(int argc, char** argv)
 
   TTFrameIndexBundle bundle;
   if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(stream))
-    bundle = h26x->ffmpegFrameIndexBundle();
+    bundle = h26x->frameIndexBundle();
 
   printf("file=%s frames=%d start=%d\n", qPrintable(fi.fileName()), frames, startPos);
 

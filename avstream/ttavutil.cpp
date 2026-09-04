@@ -35,6 +35,34 @@ QString ttCodecTypeToString(TTVideoCodecType type)
     }
 }
 
+TTVideoCodecType ttCodecTypeFromAvCodecId(int avCodecId)
+{
+    switch (avCodecId) {
+        case AV_CODEC_ID_MPEG2VIDEO: return CODEC_MPEG2;
+        case AV_CODEC_ID_H264:       return CODEC_H264;
+        case AV_CODEC_ID_HEVC:       return CODEC_H265;
+        default:                     return CODEC_UNKNOWN;
+    }
+}
+
+bool ttProbeVideo(const QString& filePath, TTVideoProbe* out, QString* error)
+{
+    AVFormatContext* ctx = nullptr;
+    if (!ttOpenInput(&ctx, filePath, error))
+        return false;
+
+    TTVideoProbe probe;
+    probe.videoStreamIndex = av_find_best_stream(ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (probe.videoStreamIndex >= 0) {
+        probe.info      = ttStreamInfo(ctx, probe.videoStreamIndex);
+        probe.codecType = ttCodecTypeFromAvCodecId(probe.info.codecId);
+    }
+    avformat_close_input(&ctx);
+
+    if (out) *out = probe;
+    return true;
+}
+
 // ----------------------------------------------------------------------------
 // Elementary-stream detection (shared with TTMkvMergeProvider)
 // ----------------------------------------------------------------------------
