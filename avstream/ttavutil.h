@@ -50,6 +50,20 @@ struct TTStreamInfo {
     int64_t numFrames = 0;  // estimated frame count
 };
 
+// ----------------------------------------------------------------------------
+// Video codec types (moved here from ttffmpegwrapper.h 2026-09-04 so the
+// stream classes need no wrapper header for the enum)
+// ----------------------------------------------------------------------------
+enum TTVideoCodecType {
+    CODEC_UNKNOWN = 0,
+    CODEC_MPEG2,
+    CODEC_H264,
+    CODEC_H265
+};
+
+// "MPEG-2" / "H.264/AVC" / "H.265/HEVC" / "Unknown"
+QString ttCodecTypeToString(TTVideoCodecType type);
+
 // Recognises raw H.264/H.265/MPEG-2 elementary streams by extension.
 bool ttIsElementaryStreamPath(const QString& filePath);
 // Returns the libav input format ('h264', 'hevc', 'mpegvideo') matching

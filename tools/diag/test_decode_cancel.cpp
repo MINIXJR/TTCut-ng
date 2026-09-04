@@ -17,7 +17,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "../../extern/ttffmpegwrapper.h"
-#include "../../extern/ttframeindexer.h"
+#include "../../avstream/ttframeindexer.h"
 
 #include <QElapsedTimer>
 

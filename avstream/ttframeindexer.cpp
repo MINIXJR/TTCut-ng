@@ -16,9 +16,9 @@
 
 #include "ttframeindexer.h"
 #include "ttavutil.h"
-#include "../avstream/ttdisplayordermap.h"
-#include "../avstream/ttesinfo.h"
-#include "../avstream/ttnaluparser.h"
+#include "ttdisplayordermap.h"
+#include "ttesinfo.h"
+#include "ttnaluparser.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 

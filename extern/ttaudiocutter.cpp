@@ -8,7 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttaudiocutter.h"
-#include "ttavutil.h"
+#include "../avstream/ttavutil.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 

@@ -22,7 +22,7 @@
 #include "../common/istatusreporter.h"
 #include "../avstream/ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
-#include "../extern/ttframeindexer.h"
+#include "../avstream/ttframeindexer.h"
 #include "../avstream/tth264videostream.h"
 #include "../avstream/tth265videostream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)

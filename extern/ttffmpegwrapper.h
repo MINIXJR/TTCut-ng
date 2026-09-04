@@ -27,8 +27,8 @@
 #include "../avstream/ttdisplayordermap.h"
 
 #include "../avstream/ttframeinfo.h"
-#include "ttframeindex.h"
-#include "ttavutil.h"
+#include "../avstream/ttframeindex.h"
+#include "../avstream/ttavutil.h"
 
 // Forward declarations for libav types (avoid including C headers in .h)
 // AVFormatContext and AVInputFormat come from ttavutil.h.
@@ -37,16 +37,6 @@ struct AVStream;
 struct AVPacket;
 struct AVFrame;
 struct SwsContext;
-
-// ----------------------------------------------------------------------------
-// Video codec types
-// ----------------------------------------------------------------------------
-enum TTVideoCodecType {
-    CODEC_UNKNOWN = 0,
-    CODEC_MPEG2,
-    CODEC_H264,
-    CODEC_H265
-};
 
 // ----------------------------------------------------------------------------
 // Container types
@@ -98,7 +88,6 @@ public:
 
     // Detect video codec type
     TTVideoCodecType detectVideoCodec() const;
-    static QString codecTypeToString(TTVideoCodecType type);
 
     // Detect container type (used by Smart Cut)
 

@@ -15,7 +15,7 @@
 #include "ttmpeg2window2.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/tth26xvideostream.h"  // provideFrameIndexTo (index sharing)
-#include "../extern/ttframeindexer.h"
+#include "../avstream/ttframeindexer.h"
 
 #include <QDebug>
 #include <QMouseEvent>

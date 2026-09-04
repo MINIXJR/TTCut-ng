@@ -59,7 +59,7 @@
 #include "avstream/tth26xvideostream.h"
 #include "common/ttsettings.h"
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 
 namespace {
 

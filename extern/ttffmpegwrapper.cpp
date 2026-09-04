@@ -13,8 +13,8 @@
 // ----------------------------------------------------------------------------
 
 #include "ttffmpegwrapper.h"
-#include "ttavutil.h"
-#include "ttframeindexer.h"
+#include "../avstream/ttavutil.h"
+#include "../avstream/ttframeindexer.h"
 #include "ttessmartcut.h"
 #include "../avstream/ttdisplayordermap.h"
 #include "../common/ttcut.h"
@@ -312,19 +312,6 @@ TTVideoCodecType TTFFmpegWrapper::detectVideoCodec() const
             return CODEC_H265;
         default:
             return CODEC_UNKNOWN;
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Convert codec type to string
-// ----------------------------------------------------------------------------
-QString TTFFmpegWrapper::codecTypeToString(TTVideoCodecType type)
-{
-    switch (type) {
-        case CODEC_MPEG2: return "MPEG-2";
-        case CODEC_H264:  return "H.264/AVC";
-        case CODEC_H265:  return "H.265/HEVC";
-        default:          return "Unknown";
     }
 }
 

@@ -25,6 +25,16 @@ QString ttAvErrorToString(int errnum)
     return QString::fromUtf8(errbuf);
 }
 
+QString ttCodecTypeToString(TTVideoCodecType type)
+{
+    switch (type) {
+        case CODEC_MPEG2: return "MPEG-2";
+        case CODEC_H264:  return "H.264/AVC";
+        case CODEC_H265:  return "H.265/HEVC";
+        default:          return "Unknown";
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Elementary-stream detection (shared with TTMkvMergeProvider)
 // ----------------------------------------------------------------------------

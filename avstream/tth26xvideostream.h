@@ -21,7 +21,7 @@
 
 #include "ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
-#include "../extern/ttframeindex.h"
+#include "ttframeindex.h"
 #include "../common/ttmessagelogger.h"
 
 #include <QFileInfo>

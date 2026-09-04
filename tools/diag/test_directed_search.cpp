@@ -25,7 +25,7 @@
 #include "data/ttsearchtask_logo.h"
 #include "data/ttsearchtask_scenechange.h"
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 
 #include <cstdio>
 

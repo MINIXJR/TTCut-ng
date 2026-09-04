@@ -10,7 +10,7 @@
 #include "tth26xvideostream.h"
 #include "ttvideoindexlist.h"
 #include "ttesinfo.h"
-#include "../extern/ttframeindexer.h"
+#include "ttframeindexer.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../common/ttexception.h"
@@ -58,7 +58,7 @@ bool TTH26xVideoStream::openStream()
     if (detected != expectedCodec()) {
         mLog->errorMsg(__FILE__, __LINE__,
             QString("File is not %1, detected: %2")
-                .arg(codecLabel(), TTFFmpegWrapper::codecTypeToString(detected)));
+                .arg(codecLabel(), ttCodecTypeToString(detected)));
         delete mFFmpeg;
         mFFmpeg = nullptr;
         return false;

@@ -31,7 +31,7 @@
 #include "avstream/ttavheader.h"
 #include "avstream/ttavtypes.h"
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 #include "common/ttthreadtask.h"
 #include "mpeg2decoder/ttmpeg2decoder.h"
 

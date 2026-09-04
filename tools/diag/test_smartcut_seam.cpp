@@ -12,7 +12,7 @@
 #include <cstdlib>
 #include "extern/ttessmartcut.h"
 #include "extern/ttffmpegwrapper.h"
-#include "extern/ttframeindexer.h"
+#include "avstream/ttframeindexer.h"
 #include "common/ttsettings.h"
 
 #include <cstring>
