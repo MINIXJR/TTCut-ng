@@ -581,9 +581,10 @@ flowchart TD
   register-unconditionally/`abortCleanup()` pair in both) and
   `TTMuxTask`'s seeded copy. They differ in *who* discriminates cancel
   from error (`mSyncPhaseAbort` in the slot vs. reachability through
-  `abortIfRequested()` in the tasks), which is the part worth keeping;
-  the list handling itself is a candidate for one small helper.
-  **Open** — noted at the end of the cut-abort work, not attempted.
+  `abortIfRequested()` in the tasks), which is the part worth keeping.
+  **Done 2026-09-04** (code audit batch D): the list handling is
+  `ttRemoveFiles()` in `avstream/ttcommon.cpp`, called from all five
+  sites; who decides cancel-vs-error stayed where it was.
 - **Progress-bar creation + cancel wiring**: duplicated verbatim in the
   `Init` and `Start` branches of `TTCutMainWindow::onStatusReport`
   (stream-point scans skip `Init`). Candidate: `ensureProgressBar()`.

@@ -180,4 +180,8 @@ QByteArray ttHevcEscape(const QByteArray& rbsp);
 // Returns payload offset (3, 4) for a start-coded NAL, or 0 if none.
 int ttHevcStartCodeLen(const QByteArray& nal);
 
+// Index of the next Annex-B start code at or after `from` whose NAL header
+// byte is inside `data`; *scLen and *nalType describe it. -1 when none.
+int ttHevcNextNal(const QByteArray& data, int from, int* scLen, int* nalType);
+
 #endif // TTHEVCSEAM_H

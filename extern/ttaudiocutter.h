@@ -67,7 +67,7 @@ public:
     QString lastError() const { return mLastError; }
 
 private:
-    void setError(const QString& error);   // same body as TTFFmpegWrapper::setError
+    void setError(const QString& error);
     QString mLastError;
 };
 

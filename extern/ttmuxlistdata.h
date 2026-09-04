@@ -46,6 +46,9 @@ class TTMuxListDataItem
     const TTMuxListDataItem& operator=(const TTMuxListDataItem& item);
 
   private:
+    // Field-wise copy shared by the copy constructor and operator=; the
+    // language lists are copied only as far as the file lists reach.
+    void copyFrom(const TTMuxListDataItem& item);
     QString     videoFileName;
     QStringList audioFileNames;
     QStringList audioLanguageList;

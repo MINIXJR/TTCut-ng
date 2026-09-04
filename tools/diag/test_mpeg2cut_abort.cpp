@@ -136,7 +136,7 @@
 namespace {
 
 struct Event {
-  int     state;
+  int     state = 0;
   QString msg;
   quint64 value;
 };

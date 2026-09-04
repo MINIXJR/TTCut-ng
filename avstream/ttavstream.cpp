@@ -152,7 +152,6 @@ void TTAVStream::logHeaderListCreated(int count, const char* timeFormat)
 
 void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint64 end_adr)
 {
-  quint64 progress    = 0;
   quint64 buffer_size = 65536;
   // unique_ptr, not a raw new: two exits throw out of the loop below (the
   // abort check, and TTFileBuffer::directWrite when the target cannot be
@@ -177,7 +176,7 @@ void TTAVStream::copySegment(TTFileBuffer* cut_stream, quint64 start_adr, quint6
     cut_stream->directWrite(buffer, (quint64)buffer_size );
 
     count   -= buffer_size;
-    progress = end_adr-start_adr+1-count;
+    const quint64 progress = end_adr-start_adr+1-count;
     emit statusReport(StatusReportArgs::Step, tr("Cutting audio"), progress);
     qApp->processEvents();
   }

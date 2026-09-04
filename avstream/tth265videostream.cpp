@@ -105,7 +105,6 @@ void TTH265VideoStream::buildAccessUnits()
         au->setDts(frame.dts);
         au->setOffset(frame.fileOffset);
         au->setSize(static_cast<int>(frame.packetSize));
-        au->setGopIndex(frame.gopIndex);
 
         // Determine frame type
         if (frame.isKeyframe) {

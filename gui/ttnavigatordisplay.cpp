@@ -85,10 +85,8 @@ void TTNavigatorDisplay::drawCutList()
   int   cutIn;
   int   cutOut;
   QRect clientRect = rect();
-  int   startX = clientRect.x();
   int   startY = clientRect.y();
   int   height = clientRect.height();
-  int   segmentWidth = 0;
 
   if (maxValue > minValue) {
     scaleFactor = clientRect.width() / (double)(maxValue - minValue);
@@ -113,8 +111,8 @@ void TTNavigatorDisplay::drawCutList()
 
       cutIn    = item.cutInIndex();
       cutOut   = item.cutOutIndex();
-      startX   = clientRect.x() + (int)(cutIn * scaleFactor);
-      segmentWidth = (int)((cutOut - cutIn) * scaleFactor);
+      const int startX       = clientRect.x() + (int)(cutIn * scaleFactor);
+      const int segmentWidth = (int)((cutOut - cutIn) * scaleFactor);
 
       // Gradient fill for kept segments
       QLinearGradient gradient(startX, startY, startX, startY + height);

@@ -43,7 +43,7 @@ namespace {
 struct Report
 {
   qint64  atMs;
-  int     state;
+  int     state = 0;
   QString msg;
   quint64 value;
 };

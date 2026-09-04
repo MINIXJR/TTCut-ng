@@ -24,7 +24,7 @@ class TTStreamNavigator : public QWidget, public Ui::TTStreamNavigatorWidget
   Q_OBJECT
 
   public:
-    TTStreamNavigator(QWidget* parent);
+    explicit TTStreamNavigator(QWidget* parent);
 
     void setTitle(const QString& title);
     void controlEnabled(bool enabled);

@@ -46,6 +46,7 @@ TTAC3AudioHeader::TTAC3AudioHeader()
 {
     str_description = "AC-3";
     str_mode        = "unknown";
+    acmod           = 0;   // modeString() indexes AC3Mode[acmod] before parseBasicData() may have run
 }
 
 

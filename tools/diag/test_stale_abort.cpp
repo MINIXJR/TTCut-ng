@@ -53,7 +53,7 @@ void check(bool ok, const char* what)
 }
 
 // One cut run. Returns true if cutFinished() arrived.
-bool runCut(TTAVItem* avItem, const QString& workDir, const QString& target,
+bool runCut(TTAVItem* avItem, const QString& target,
             int cutIn, int cutOut, bool poisonFlagFirst)
 {
   TTAVData avData;
@@ -141,13 +141,13 @@ int main(int argc, char** argv)
   // Phase 1 - control: no stale flag, the cut must simply work. Without this
   // the phase below could "pass" on material that cannot be cut at all.
   printf("\n=== control: clean stream ===\n");
-  const bool cleanOk = runCut(avItem, workDir, QDir(workDir).absoluteFilePath("clean"),
+  const bool cleanOk = runCut(avItem, QDir(workDir).absoluteFilePath("clean"),
                               cutIn, cutOut, false);
   check(cleanOk, "a normal cut completes (control - proves the setup can cut)");
 
   // Phase 2 - the reported defect.
   printf("\n=== with a stale abort flag from a previous cancelled run ===\n");
-  const bool staleOk = runCut(avItem, workDir, QDir(workDir).absoluteFilePath("stale"),
+  const bool staleOk = runCut(avItem, QDir(workDir).absoluteFilePath("stale"),
                               cutIn, cutOut, true);
   check(staleOk, "a cut still completes after a previous run left the abort flag set");
 

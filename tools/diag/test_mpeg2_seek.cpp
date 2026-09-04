@@ -112,7 +112,7 @@ int main(int argc, char** argv)
 
         // The decoder hands back the RGB32 buffer through the Y pointer;
         // TTMPEG2Window2 wraps exactly that into its QImage.
-        TFrameInfo* info = decoder.getFrameInfo();
+        const TFrameInfo* info = decoder.getFrameInfo();
         if (!info || !info->Y) {
             printf("%-9d %-9d %-9d %-10s %-34s %s\n",
                    want, nav, decoded, "-", "-", "no frame buffer");

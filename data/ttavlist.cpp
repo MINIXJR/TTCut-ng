@@ -68,9 +68,9 @@ TTAVItem::~TTAVItem()
 /*!
  * setVideoStream
  */
-void TTAVItem::setVideoStream(TTVideoStream* videoStream)
+void TTAVItem::setVideoStream(TTVideoStream* stream)
 {
-  mpVideoStream = videoStream;
+  mpVideoStream = stream;
 }
 
 bool TTAVItem::isInList()

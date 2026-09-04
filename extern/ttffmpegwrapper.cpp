@@ -314,9 +314,7 @@ TTFrameInfo TTFFmpegWrapper::frameAt(int index) const
 // ----------------------------------------------------------------------------
 void TTFFmpegWrapper::setError(const QString& error)
 {
-    mLastError = error;
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("TTFFmpegWrapper error: %1").arg(error));
+    ttSetLastError(mLastError, __FILE__, __LINE__, "TTFFmpegWrapper", error);
 }
 
 // ----------------------------------------------------------------------------

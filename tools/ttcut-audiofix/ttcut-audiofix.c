@@ -400,7 +400,7 @@ static void *report_append(void **list, size_t *n, size_t elem_size)
 static void record_junk(walk_stats_t *st, uint64_t frame_idx, uint64_t ms, uint32_t bytes)
 {
     st->junk_bytes += bytes;
-    void *slot = report_append((void **)&st->junk, &st->njunk, sizeof(*st->junk));
+    const void *slot = report_append((void **)&st->junk, &st->njunk, sizeof(*st->junk));
     if (!slot) return;
     st->junk[st->njunk - 1].frame_idx = frame_idx;
     st->junk[st->njunk - 1].ms        = ms;
@@ -412,7 +412,7 @@ static void record_junk(walk_stats_t *st, uint64_t frame_idx, uint64_t ms, uint3
 static void record_crc_bad(walk_stats_t *st, uint64_t frame_idx, uint64_t ms)
 {
     st->crc_bad++;
-    void *slot = report_append((void **)&st->crcbad, &st->ncrc, sizeof(*st->crcbad));
+    const void *slot = report_append((void **)&st->crcbad, &st->ncrc, sizeof(*st->crcbad));
     if (!slot) return;
     st->crcbad[st->ncrc - 1].frame_idx = frame_idx;
     st->crcbad[st->ncrc - 1].ms        = ms;

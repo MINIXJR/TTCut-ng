@@ -155,6 +155,16 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
+- **`tools/diag/test_leadingclass` schlägt fehl (6 FAIL, seit wann unbekannt)**
+  (2026-09-04, Befund neben dem Code-Audit): `rasl_r_drop`, `rasl_n_drop`,
+  `rasl_after_eos_dropped` u. a. melden `got=0 want=1` — auf master
+  `dd0ac9a2` genauso wie auf dem Audit-Branch, also nicht durch den Umbau
+  des Annex-B-Walkers in `ttdisplayordermap.cpp` verursacht. Der Harness
+  füttert 7-Byte-Kunstpakete (`hevcPkt(...)`); entweder sind seine
+  Erwartungen seit einer HEVC-Änderung veraltet oder `classifyPacket()`
+  hat auf Kunstpaketen einen Fehler. Erst messen, wann es begann
+  (`git bisect` über `cmake --build build --target test_leadingclass`).
+
 - **Zwei überlagerte Widgets in „Aktueller Frame" — sind sie nötig?**
   (2026-08-26, vertagt auf User-Entscheid: „aber nicht heute")
   - Während der Wiedergabe läuft das `QStackedLayout` in `TTCurrentFrame` auf

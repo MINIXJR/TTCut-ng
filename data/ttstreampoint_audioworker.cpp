@@ -315,10 +315,10 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
   }
 
   // Check for silence_end → update last silence point with duration
-  AVDictionaryEntry* endTag = av_dict_get(filtFrame->metadata,
+  const AVDictionaryEntry* endTag = av_dict_get(filtFrame->metadata,
     "lavfi.silence_end", nullptr, 0);
   if (endTag && !results.isEmpty()) {
-    AVDictionaryEntry* durTag = av_dict_get(filtFrame->metadata,
+    const AVDictionaryEntry* durTag = av_dict_get(filtFrame->metadata,
       "lavfi.silence_duration", nullptr, 0);
     double duration = durTag ? QString::fromUtf8(durTag->value).replace(',', '.').toDouble() : 0;
 

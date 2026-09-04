@@ -63,7 +63,7 @@ const int initialDecoderBufferSize = 5129;
 class TTMpeg2Decoder
 {
  public:
-  TTMpeg2Decoder(QString cFName,
+  TTMpeg2Decoder(const QString& cFName,
                  TTVideoIndexList* viIndex, TTVideoHeaderList* viHeader,
                  TPixelFormat pixelFormat=formatRGB32);
   ~TTMpeg2Decoder();

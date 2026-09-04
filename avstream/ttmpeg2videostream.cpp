@@ -228,7 +228,6 @@ bool TTMpeg2VideoStream::closeStream()
 bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
 {
   quint8         headerType;
-  TTVideoHeader* newHeader;
   QElapsedTimer  time;
   QElapsedTimer  updateTime;
   const int      updateIntervalMs = 1000;  // Only update UI every 1 second
@@ -261,7 +260,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
         stream_buffer->readByte(headerType);
       }
 
-      newHeader = 0;
+      TTVideoHeader* newHeader = 0;
 
       // create the appropriate header object
       switch ( headerType )
@@ -302,7 +301,7 @@ bool TTMpeg2VideoStream::createHeaderListFromMpeg2()
   }
   catch (const TTFileBufferException&)
   {
-    qDebug("ttfilebuffer exception...");
+    log->warningMsg(__FILE__, __LINE__, "ttfilebuffer exception...");
   }
 
   emit statusReport(StatusReportArgs::Finished, tr("MPEG-2 header list created"), stream_buffer->size());
@@ -648,7 +647,7 @@ void TTMpeg2VideoStream::transferCutObjects(TTVideoHeader* startObject, TTVideoH
 
         case TTMpeg2VideoHeader::group_start_code:
           {
-            TTPicturesHeader* nextPic = (TTPicturesHeader*)header_list->getNextHeader(
+            const TTPicturesHeader* nextPic = (const TTPicturesHeader*)header_list->getNextHeader(
               currentObject, TTMpeg2VideoHeader::picture_start_code);
 
           if (closeNextGOP && (ttAssigned(nextPic)) && (nextPic->temporal_reference == 0))

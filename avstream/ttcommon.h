@@ -10,6 +10,9 @@
 
 #include <QString>
 #include <QDateTime>
+#include <QStringList>
+
+class TTMessageLogger;
 
 class TTTimeCode;
 
@@ -20,6 +23,9 @@ class TTTimeCode;
 bool    ttAssigned( const void* pointer );
 bool    ttFileExists( QString fName );
 bool    ttDeleteFile( QString fName );
+// Removes every existing file in the list, logging each one that will not
+// go; empty entries are skipped. Used by the abort-cleanup paths.
+void    ttRemoveFiles( const QStringList& files, TTMessageLogger* log );
 QString ttAddFileExt( QString fName, const char* cExt );
 QString ttChangeFileExt( QString fName, const char* cExt );
 QTime   ttMsecToTime( int msec );

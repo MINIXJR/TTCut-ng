@@ -35,19 +35,8 @@ void TTBlackFrameSearchTask::operation()
 {
   QElapsedTimer t; t.start();
 
-  if (!setupWorkers()) {
-    emit found(-1, false);
-    return;
-  }
-
-  int pos = (mDirection > 0)
-          ? mIndexList->moveToNextIndexPos(mStartPos, 1)
-          : mIndexList->moveToPrevIndexPos(mStartPos, 1);
-  if (pos < 0) {
-    emit found(-1, false);
-    teardownWorkers();
-    return;
-  }
+  int pos = establishStartPosition();
+  if (pos < 0) return;
 
   runDirectedSearch(pos, "BlackFrameSearch:", t, [&](const QVector<int>& batch) -> int {
     QVector<bool> matches(batch.size(), false);

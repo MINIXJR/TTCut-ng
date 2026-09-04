@@ -185,7 +185,7 @@ void TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
 int TTMPEGAudioStream::createHeaderList( )
 {
   TTMpegAudioHeader* audio_header;
-  TTMpegAudioHeader* prev_audio_header;
+  const TTMpegAudioHeader* prev_audio_header;
   QElapsedTimer updateTime;
   const int updateIntervalMs = 1000;
 
@@ -202,7 +202,7 @@ int TTMPEGAudioStream::createHeaderList( )
     {
     	if (mAbort) {
     		mAbort = false;
-        qDebug("TTMpegAudioStream::createHeaderList -> user abort");
+        log->infoMsg(__FILE__, __LINE__, "TTMpegAudioStream::createHeaderList -> user abort");
     		throw TTAbortException(tr("Index list creation aborted!"));
     	}
 

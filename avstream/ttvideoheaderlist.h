@@ -43,7 +43,7 @@ class TTVideoHeaderList : public TTHeaderList
 {
   public:
     TTVideoHeaderList(int size);
-    virtual ~TTVideoHeaderList();
+    ~TTVideoHeaderList() override;
 
     quint8            headerTypeAt(int index);
     TTVideoHeader*    headerAt(int index);

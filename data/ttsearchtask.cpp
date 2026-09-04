@@ -300,3 +300,21 @@ QVector<int> TTSearchTask::collectNextBatch(int& currentPos)
   currentPos = p;   // first position AFTER the batch (or -1 / out-of-range)
   return batch;
 }
+
+int TTSearchTask::establishStartPosition()
+{
+  if (!setupWorkers()) {
+    emit found(-1, false);
+    return -1;
+  }
+
+  const int pos = (mDirection > 0)
+                ? mIndexList->moveToNextIndexPos(mStartPos, 1)
+                : mIndexList->moveToPrevIndexPos(mStartPos, 1);
+  if (pos < 0) {
+    emit found(-1, false);
+    teardownWorkers();
+    return -1;
+  }
+  return pos;
+}

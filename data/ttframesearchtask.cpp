@@ -90,7 +90,7 @@ void TTFrameSearchTask::initFrameSearch()
     // mpReferenceStream IS the source stream object; refWrapper opened its
     // filePath() → file identity guaranteed by object identity.
     bool refIndexAdopted = false;
-    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpReferenceStream)) {
+    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(mpReferenceStream)) {
       const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
       if (!bundle.isEmpty()) { refWrapper->setFrameIndex(bundle); refIndexAdopted = true; }
     }
@@ -217,7 +217,7 @@ void TTFrameSearchTask::operation()
     // frameIndexBundle() is empty when the stream has no index yet
     // (different item, never opened) - then the scan below is still needed.
     bool searchIndexAdopted = false;
-    if (TTH26xVideoStream* h26x = dynamic_cast<TTH26xVideoStream*>(mpSearchStream)) {
+    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(mpSearchStream)) {
       const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
       if (!bundle.isEmpty()) { searchWrapper->setFrameIndex(bundle); searchIndexAdopted = true; }
     }

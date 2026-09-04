@@ -204,26 +204,38 @@ void TTPocCollector::finish()
     if (outSize > 0) onEmit();
 }
 
-bool TTPocCollector::packetIsIDR(const uint8_t* data, int size, int avCodecId)
+// Walks the Annex-B start codes of one packet and hands each NAL header
+// byte index to onNal(hdr); stops early when onNal returns true. Resumes
+// after the header byte (the next start code lies well past it on AU data).
+template <typename F>
+static void forEachAnnexBNalHeader(const uint8_t* data, int size, F&& onNal)
 {
-    // Walk Annex-B start codes; check NAL type: H.264 IDR = 5,
-    // HEVC IDR_W_RADL = 19 / IDR_N_LP = 20.
-    for (int i = 0; i + 3 < size; ++i) {
+    for (int i = 0; i + 2 < size; ++i) {
         if (data[i] == 0 && data[i + 1] == 0 &&
             (data[i + 2] == 1 ||
-             (data[i + 2] == 0 && i + 4 < size && data[i + 3] == 1))) {
+             (data[i + 2] == 0 && i + 3 < size && data[i + 3] == 1))) {
             const int hdr = (data[i + 2] == 1) ? i + 3 : i + 4;
             if (hdr >= size) break;
-            if (avCodecId == AV_CODEC_ID_H264) {
-                if ((data[hdr] & 0x1F) == 5) return true;
-            } else {
-                const int nalType = (data[hdr] >> 1) & 0x3F;
-                if (nalType == 19 || nalType == 20) return true;
-            }
-            i = hdr;  // continue after this start code
+            if (onNal(hdr)) return;
+            i = hdr;
         }
     }
-    return false;
+}
+
+bool TTPocCollector::packetIsIDR(const uint8_t* data, int size, int avCodecId)
+{
+    // NAL type: H.264 IDR = 5, HEVC IDR_W_RADL = 19 / IDR_N_LP = 20.
+    bool idr = false;
+    forEachAnnexBNalHeader(data, size, [&](int hdr) {
+        if (avCodecId == AV_CODEC_ID_H264) {
+            idr = ((data[hdr] & 0x1F) == 5);
+        } else {
+            const int nalType = (data[hdr] >> 1) & 0x3F;
+            idr = (nalType == 19 || nalType == 20);
+        }
+        return idr;
+    });
+    return idr;
 }
 
 // ----------------------------------------------------------------------------
@@ -337,19 +349,12 @@ bool TTLeadingPicClassifier::classifyPacket(const uint8_t* data, int size)
     // note any EOS/EOB NAL. HEVC NAL type = (header_byte >> 1) & 0x3F.
     int  vclType = -1;
     bool sawEos  = false;
-    for (int i = 0; i + 2 < size; ++i) {
-        if (data[i] == 0 && data[i + 1] == 0 &&
-            (data[i + 2] == 1 ||
-             (data[i + 2] == 0 && i + 3 < size && data[i + 3] == 1))) {
-            const int hdr = (data[i + 2] == 1) ? i + 3 : i + 4;
-            if (hdr >= size) break;
-            const int t = (data[hdr] >> 1) & 0x3F;
-            if (t == H265::NAL_EOS || t == H265::NAL_EOB) sawEos = true;
-            else if (t <= 31 && vclType < 0) vclType = t;   // first VCL slice (0..31)
-            i = hdr;   // resume after this NAL header (mirrors TTPocCollector::packetIsIDR);
-                       // the next start code lies well past hdr+1 on Annex-B AU data
-        }
-    }
+    forEachAnnexBNalHeader(data, size, [&](int hdr) {
+        const int t = (data[hdr] >> 1) & 0x3F;
+        if (t == H265::NAL_EOS || t == H265::NAL_EOB) sawEos = true;
+        else if (t <= 31 && vclType < 0) vclType = t;   // first VCL slice (0..31)
+        return false;
+    });
 
     if (sawEos) mPrevWasEos = true;
     if (vclType < 0) return false;   // non-VCL AU (standalone EOS / param sets)

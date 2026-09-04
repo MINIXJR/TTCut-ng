@@ -171,6 +171,14 @@ private:
                           MuxInput& outVin,
                           int64_t& videoDurationNs);
 
+    // Shared body of the two below: one media type per call.
+    static bool addMediaInputs(AVFormatContext* outCtx,
+                        const QStringList& files,
+                        const QStringList& languages,
+                        int mediaType,
+                        int& nextOutIdx,
+                        QList<MuxInput>& inputs,
+                        int audioSyncMs);
     bool addAudioInputs(AVFormatContext* outCtx,
                          const QStringList& audioFiles,
                          const QStringList& languages,

@@ -15,7 +15,8 @@ and to files that are being reworked anyway.
   (`avstream/tth26*`, `ttnaluparser`, `extern/ttessmartcut`, `ttffmpegwrapper`,
   `tthevcseam`, `ttmkvmergeprovider`, the settings pages and the C tools under
   `tools/`) uses four spaces consistently and stays that way; do not mix widths
-  inside a file.
+  inside a file. The scanner lists these files as outliers against `2`; the
+  verdict store carries them as `deliberate`.
 - **cpp/class_prefix**: `TT`
   Exception: pure interfaces carry an `I` prefix (`IStatusReporter`,
   `IMuxProvider`, `ITTMpvBackend`).
@@ -30,8 +31,12 @@ and to files that are being reworked anyway.
 - **cpp/logging**: `qdebug`
   `qDebug`/`qWarning`/`qCritical` — the Qt message handler installed in
   `gui/ttcutmain.cpp` routes them into `TTMessageLogger`, so direct
-  `log->xxxMsg()` calls are legacy. Verbose per-subsystem output stays behind
-  the `TTSettings` log switches (`logCutPipeline()`, `logAVStream()`, ...).
+  `log->xxxMsg()` calls are legacy. Files that still log through `log->`
+  throughout stay internally consistent (a stray `qDebug` in such a file
+  goes through `log->`, not the other way round); the scanner lists them as
+  outliers and the verdict store carries them as `deliberate`. Verbose
+  per-subsystem output stays behind the `TTSettings` log switches
+  (`logCutPipeline()`, `logAVStream()`, ...).
   The standalone C tools under `tools/` print with `printf`/`fprintf`.
 - **cpp/header_comment**: `//!`
   Doxygen line comments before declarations and definitions. The older

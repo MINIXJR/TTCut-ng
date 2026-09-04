@@ -205,7 +205,7 @@ class TTSubtitleStream : public TTAVStream
 {
 public:
   TTSubtitleStream(const QFileInfo &f_info);
-  virtual ~TTSubtitleStream();
+  ~TTSubtitleStream() override;
 
   virtual void cut(int start, int end, TTCutParameter* cp) = 0;
 

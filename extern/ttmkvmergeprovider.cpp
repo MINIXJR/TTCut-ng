@@ -465,9 +465,98 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
     return true;
 }
 
-// Open each audio file, create one output stream per usable input, append a
-// MuxInput to `inputs`. Shared between mux() (ES mode) and muxAudioOnly().
-// Skip+log on per-file errors — never fails the whole mux for one bad track.
+// Open each media file of one type, create one output stream per usable
+// input, append a MuxInput to `inputs`. Skip+log on per-file errors — never
+// fails the whole mux for one bad track. Language: explicit list first; for
+// audio the `_xxx` suffix of the file name is the fallback. Audio tracks are
+// flagged AV_DISPOSITION_DEFAULT (avcodec_parameters_copy() does not carry
+// the disposition, and without it only the first track would be default)
+// and carry the .info A/V sync offset; per-track user delay is already baked
+// into the cut audio file's keepList times, so it is NOT added here again.
+bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
+                                         const QStringList& files,
+                                         const QStringList& languages,
+                                         int mediaType,
+                                         int& nextOutIdx,
+                                         QList<MuxInput>& inputs,
+                                         int audioSyncMs)
+{
+    const bool  isAudio = (mediaType == AVMEDIA_TYPE_AUDIO);
+    const char* tag     = isAudio ? "addAudioInputs" : "addSubtitleInputs";
+    QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
+
+    for (int i = 0; i < files.size(); i++) {
+        if (!QFile::exists(files[i])) {
+            qWarning() << tag << ": file missing, skipping:" << files[i];
+            continue;
+        }
+
+        int ret = 0;
+        AVFormatContext* inCtx = openInput(files[i], ret);
+        if (!inCtx) {
+            qWarning() << tag << ": cannot open" << files[i] << ":" << avErrStr(ret);
+            continue;
+        }
+
+        int srcIdx = av_find_best_stream(inCtx, static_cast<AVMediaType>(mediaType),
+                                         -1, -1, nullptr, 0);
+        if (srcIdx < 0) {
+            qWarning() << tag << ": no" << (isAudio ? "audio" : "subtitle") << "stream in" << files[i];
+            avformat_close_input(&inCtx);
+            continue;
+        }
+
+        AVStream* out = avformat_new_stream(outCtx, nullptr);
+        if (!out) {
+            qWarning() << tag << ": avformat_new_stream failed";
+            avformat_close_input(&inCtx);
+            continue;
+        }
+        ret = avcodec_parameters_copy(out->codecpar, inCtx->streams[srcIdx]->codecpar);
+        if (ret < 0) {
+            qWarning() << tag << ": avcodec_parameters_copy failed for"
+                       << files[i] << ":" << avErrStr(ret);
+            avformat_close_input(&inCtx);
+            continue;
+        }
+        out->time_base = inCtx->streams[srcIdx]->time_base;
+        if (isAudio)
+            out->disposition |= AV_DISPOSITION_DEFAULT;
+
+        QString lang;
+        if (i < languages.size() && !languages[i].isEmpty()) {
+            lang = languages[i];
+        } else if (isAudio) {
+            QRegularExpressionMatch m = langRe.match(QFileInfo(files[i]).completeBaseName());
+            if (m.hasMatch()) lang = m.captured(1);
+        }
+        if (!lang.isEmpty())
+            av_dict_set(&out->metadata, "language", lang.toUtf8().constData(), 0);
+
+        MuxInput in;
+        in.fmtCtx  = inCtx;
+        in.srcIdx  = srcIdx;
+        in.outIdx  = nextOutIdx++;
+        in.syncMs  = isAudio ? audioSyncMs : 0;
+        in.ownsCtx = true;
+        in.pkt = av_packet_alloc();
+        if (!in.pkt) {
+            qWarning() << "av_packet_alloc failed for" << (isAudio ? "audio" : "subtitle") << "input";
+            avformat_close_input(&inCtx);
+            continue;
+        }
+        inputs.append(in);
+
+        if (TTSettings::instance()->logMkvMux()) {
+            if (isAudio)
+                qDebug() << "  Audio" << i << ":" << files[i] << "lang=" << lang << "outIdx=" << in.outIdx;
+            else
+                qDebug() << "  Subtitle" << i << ":" << files[i];
+        }
+    }
+    return true;
+}
+
 bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
                                          const QStringList& audioFiles,
                                          const QStringList& languages,
@@ -475,163 +564,17 @@ bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
                                          QList<MuxInput>& inputs,
                                          int audioSyncMs)
 {
-    QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
-
-    for (int i = 0; i < audioFiles.size(); i++) {
-        if (!QFile::exists(audioFiles[i])) {
-            qWarning() << "addAudioInputs: file missing, skipping:" << audioFiles[i];
-            continue;
-        }
-
-        int ret = 0;
-        AVFormatContext* audioCtx = openInput(audioFiles[i], ret);
-        if (!audioCtx) {
-            qWarning() << "addAudioInputs: cannot open" << audioFiles[i]
-                       << ":" << avErrStr(ret);
-            continue;
-        }
-
-        int audioIdx = av_find_best_stream(audioCtx, AVMEDIA_TYPE_AUDIO,
-                                            -1, -1, nullptr, 0);
-        if (audioIdx < 0) {
-            qWarning() << "addAudioInputs: no audio stream in" << audioFiles[i];
-            avformat_close_input(&audioCtx);
-            continue;
-        }
-
-        AVStream* audioOut = avformat_new_stream(outCtx, nullptr);
-        if (!audioOut) {
-            qWarning() << "addAudioInputs: avformat_new_stream failed";
-            avformat_close_input(&audioCtx);
-            continue;
-        }
-        ret = avcodec_parameters_copy(audioOut->codecpar,
-                                       audioCtx->streams[audioIdx]->codecpar);
-        if (ret < 0) {
-            qWarning() << "addAudioInputs: avcodec_parameters_copy failed for"
-                       << audioFiles[i] << ":" << avErrStr(ret);
-            avformat_close_input(&audioCtx);
-            continue;
-        }
-        audioOut->time_base = audioCtx->streams[audioIdx]->time_base;
-
-        // Flag every audio track as a default track. avcodec_parameters_copy()
-        // does not carry the stream disposition, so without this the matroska
-        // muxer marks only the first audio track as default and any later track
-        // (e.g. an AC3 track after an MP2 track) ends up without the default
-        // flag. Setting it on all audio tracks lets the player pick a track
-        // according to its own language/codec preferences.
-        audioOut->disposition |= AV_DISPOSITION_DEFAULT;
-
-        // Language metadata: explicit list first, regex fallback if list empty/short
-        QString lang;
-        if (i < languages.size() && !languages[i].isEmpty()) {
-            lang = languages[i];
-        } else {
-            QRegularExpressionMatch m = langRe.match(
-                QFileInfo(audioFiles[i]).completeBaseName());
-            if (m.hasMatch()) lang = m.captured(1);
-        }
-        if (!lang.isEmpty()) {
-            av_dict_set(&audioOut->metadata, "language",
-                         lang.toUtf8().constData(), 0);
-        }
-
-        MuxInput ain;
-        ain.fmtCtx = audioCtx;
-        ain.srcIdx = audioIdx;
-        ain.outIdx = nextOutIdx++;
-        // A/V sync offset from .info file (e.g. DVB stream A/V misalignment).
-        // Per-track user delay is already baked into the cut audio file's
-        // keepList times — do NOT add it here again.
-        ain.syncMs = audioSyncMs;
-        ain.ownsCtx = true;
-        ain.pkt = av_packet_alloc();
-        if (!ain.pkt) {
-            qWarning() << "av_packet_alloc failed for audio input";
-            avformat_close_input(&audioCtx);
-            continue;
-        }
-        inputs.append(ain);
-
-        if (TTSettings::instance()->logMkvMux())
-            qDebug() << "  Audio" << i << ":" << audioFiles[i]
-                     << "lang=" << lang << "outIdx=" << ain.outIdx;
-    }
-    return true;
+    return addMediaInputs(outCtx, audioFiles, languages, AVMEDIA_TYPE_AUDIO,
+                          nextOutIdx, inputs, audioSyncMs);
 }
 
-// Open each subtitle file, create one output stream per usable input, append
-// a MuxInput to `inputs`. Used only by mux() ES mode (not muxAudioOnly).
 bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
                                             const QStringList& subtitleFiles,
                                             int& nextOutIdx,
                                             QList<MuxInput>& inputs)
 {
-    for (int i = 0; i < subtitleFiles.size(); i++) {
-        if (!QFile::exists(subtitleFiles[i])) {
-            qWarning() << "addSubtitleInputs: file missing, skipping:" << subtitleFiles[i];
-            continue;
-        }
-
-        int ret = 0;
-        AVFormatContext* subCtx = openInput(subtitleFiles[i], ret);
-        if (!subCtx) {
-            qWarning() << "addSubtitleInputs: cannot open" << subtitleFiles[i]
-                       << ":" << avErrStr(ret);
-            continue;
-        }
-
-        int subIdx = av_find_best_stream(subCtx, AVMEDIA_TYPE_SUBTITLE,
-                                          -1, -1, nullptr, 0);
-        if (subIdx < 0) {
-            qWarning() << "addSubtitleInputs: no subtitle stream in" << subtitleFiles[i];
-            avformat_close_input(&subCtx);
-            continue;
-        }
-
-        AVStream* subOut = avformat_new_stream(outCtx, nullptr);
-        if (!subOut) {
-            qWarning() << "addSubtitleInputs: avformat_new_stream failed";
-            avformat_close_input(&subCtx);
-            continue;
-        }
-        ret = avcodec_parameters_copy(subOut->codecpar,
-                                       subCtx->streams[subIdx]->codecpar);
-        if (ret < 0) {
-            qWarning() << "addSubtitleInputs: avcodec_parameters_copy failed:"
-                       << avErrStr(ret);
-            avformat_close_input(&subCtx);
-            continue;
-        }
-        subOut->time_base = subCtx->streams[subIdx]->time_base;
-
-        QString lang;
-        if (i < mSubtitleLanguages.size() && !mSubtitleLanguages[i].isEmpty()) {
-            lang = mSubtitleLanguages[i];
-        }
-        if (!lang.isEmpty()) {
-            av_dict_set(&subOut->metadata, "language",
-                         lang.toUtf8().constData(), 0);
-        }
-
-        MuxInput sin;
-        sin.fmtCtx = subCtx;
-        sin.srcIdx = subIdx;
-        sin.outIdx = nextOutIdx++;
-        sin.ownsCtx = true;
-        sin.pkt = av_packet_alloc();
-        if (!sin.pkt) {
-            qWarning() << "av_packet_alloc failed for subtitle input";
-            avformat_close_input(&subCtx);
-            continue;
-        }
-        inputs.append(sin);
-
-        if (TTSettings::instance()->logMkvMux())
-            qDebug() << "  Subtitle" << i << ":" << subtitleFiles[i];
-    }
-    return true;
+    return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, AVMEDIA_TYPE_SUBTITLE,
+                          nextOutIdx, inputs, 0);
 }
 
 // PAFF: merge both field packets into a single MKV block.
@@ -1290,9 +1233,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
 // -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setError(const QString& error)
 {
-    mLastError = error;
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("TTMkvMergeProvider error: %1").arg(error));
+    ttSetLastError(mLastError, __FILE__, __LINE__, "TTMkvMergeProvider", error);
 }
 
 // -----------------------------------------------------------------------------

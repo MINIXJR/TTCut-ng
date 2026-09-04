@@ -12,6 +12,7 @@
 
 #include "ttcalibrationstore.h"
 
+#include <algorithm>
 #include <QtGlobal>
 #include <cmath>
 
@@ -81,10 +82,9 @@ void TTProgressEstimator::beginStage(int stage)
   if (mCurrentIdx >= 0 && mStages[mCurrentIdx].plan.stage == stage)
     return;   // repeated announce (processEvents nesting) is a no-op
 
-  int idx = -1;
-  for (int i = mCurrentIdx + 1; i < mStages.size(); ++i) {
-    if (mStages[i].plan.stage == stage) { idx = i; break; }
-  }
+  const auto next = std::find_if(mStages.cbegin() + (mCurrentIdx + 1), mStages.cend(),
+                                 [stage](const auto& s) { return s.plan.stage == stage; });
+  int idx = (next == mStages.cend()) ? -1 : int(next - mStages.cbegin());
 
   if (idx < 0) {
     // Unknown/backward stage: different operation kind - never mix, reset

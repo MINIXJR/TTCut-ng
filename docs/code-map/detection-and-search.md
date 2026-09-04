@@ -367,9 +367,11 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   `_scenechange`) haben denselben Rumpf.~~ Zusammengeführt im Code-Audit
   2026-09-03: `TTSearchTask::runDirectedSearch(pos, logTag, timer, step)`
   (Schablone in `data/ttsearchtask.h`) hält Schleife, Fortschritt, Protokoll,
-  `found` und `teardownWorkers` einmal; die drei `operation()` stellen nur
-  noch `setupWorkers`, ihren Anfangszustand und das Urteil je Batch als
-  Lambda (Treffer-Position oder −1). Gleichwertigkeit belegt mit
+  `found` und `teardownWorkers` einmal; seit dem Audit 2026-09-04 liefert
+  `TTSearchTask::establishStartPosition()` auch den Prolog (`setupWorkers`,
+  erste Position in Suchrichtung, `found(-1,false)` bei Fehlschlag), sodass
+  die drei `operation()` nur noch ihren Anfangszustand und das Urteil je
+  Batch als Lambda (Treffer-Position oder −1) stellen. Gleichwertigkeit belegt mit
   `tools/diag/test_directed_search` (alter/neuer Stand identisch auf den
   H.264-, HEVC- und MPEG-2-`_duplicate`-Fixtures, inkl. Abbruchpfad).
 - `TTSearchTask::isFrameBlackAt` und `buildHistogramAt` enthalten je eine

@@ -177,7 +177,7 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
   QMenu menu(this);
 
   QAction* actDelete = nullptr;
-  QAction* actCutIn = nullptr;
+  const QAction* actCutIn = nullptr;
   QAction* actCutOut = nullptr;
   QAction* actRepair = nullptr;
   QAction* actEditRepair = nullptr;

@@ -39,19 +39,8 @@ void TTSceneChangeSearchTask::operation()
 {
   QElapsedTimer t; t.start();
 
-  if (!setupWorkers()) {
-    emit found(-1, false);
-    return;
-  }
-
-  int firstPos = (mDirection > 0)
-               ? mIndexList->moveToNextIndexPos(mStartPos, 1)
-               : mIndexList->moveToPrevIndexPos(mStartPos, 1);
-  if (firstPos < 0) {
-    emit found(-1, false);
-    teardownWorkers();
-    return;
-  }
+  int firstPos = establishStartPosition();
+  if (firstPos < 0) return;
 
   // Build initial histogram via worker 0 (or MPEG-2 base helper).
   bool ok = (mSubWrappers.isEmpty())

@@ -57,6 +57,23 @@ TTMpeg2VideoHeader::TTMpeg2VideoHeader()
  * TTSequenceHeader: Sequence header [0x000001B3]
  * Default constructor, extends TTMpeg2VideoHeader
  */
+bool TTMpeg2VideoHeader::scanForStartCode( TTFileBuffer* mpeg2_stream, int limit )
+{
+  int    count_zeros = 0;
+  quint8 value;
+  do
+  {
+    mpeg2_stream->readByte(value);
+    if ( value == 0x00 )
+      count_zeros++;
+    else if ( value != 1 )
+      count_zeros = 0;
+    if (--limit <= 0) return false;
+  }
+  while ( value != 0x01 || count_zeros < 2 );
+  return true;
+}
+
 TTSequenceHeader::TTSequenceHeader() : TTMpeg2VideoHeader()
 {
   header_start_code     = sequence_start_code;
@@ -86,23 +103,7 @@ bool TTSequenceHeader::readHeader( TTFileBuffer* mpeg2_stream )
     // avoid scanning entire file on corrupt data. If no extension is found
     // (e.g. MPEG-1 stream or truncated), progressive_sequence keeps its
     // default value of false.
-    int count_zeros = 0;
-    int searchLimit = 1024;
-    quint8 value;
-    do
-    {
-      mpeg2_stream->readByte(value);
-      if ( value == 0x00 )
-      {
-        count_zeros++;
-      }
-      else if ( value != 1 )
-      {
-        count_zeros = 0;
-      }
-      if (--searchLimit <= 0) return true;  // no extension found — keep defaults
-    }
-    while ( value != 0x01 || count_zeros < 2 );
+    if (!scanForStartCode(mpeg2_stream, 1024)) return true;  // no extension found — keep defaults
 
     // value is 0x01, next byte is the start_code_identifier
     quint8 identifier;
@@ -354,23 +355,7 @@ bool TTPicturesHeader::readHeader( TTFileBuffer* mpeg2_stream )
 
     // search for next start code (picture coding extension)
     // Limit search to 1024 bytes to avoid scanning entire file on corrupt data
-    int count_zeros = 0;
-    int searchLimit = 1024;
-    quint8 value;
-    do
-    {
-      mpeg2_stream->readByte(value);
-      if ( value == 0x00 )
-      {
-        count_zeros++;
-      }
-      else if ( value != 1 )
-      {
-        count_zeros = 0;
-      }
-      if (--searchLimit <= 0) return false;
-    }
-    while ( value != 0x01 || count_zeros < 2 );
+    if (!scanForStartCode(mpeg2_stream, 1024)) return false;
 
     mpeg2_stream->seekForward( 1 );
     if (mpeg2_stream->readByte( header_data, 5 ) != 5) return false;

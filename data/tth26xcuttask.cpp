@@ -31,6 +31,7 @@
 // ----------------------------------------------------------------------------
 
 #include "tth26xcuttask.h"
+#include "../avstream/ttcommon.h"
 
 #include "ttavdata.h"
 #include "ttavlist.h"
@@ -101,12 +102,7 @@ void TTH26xCutTask::cleanUp()
  */
 void TTH26xCutTask::abortCleanup()
 {
-  for (const QString& f : mCreatedFiles) {
-    if (f.isEmpty() || !QFile::exists(f)) continue;
-    if (!QFile::remove(f))
-      log->warningMsg(__FILE__, __LINE__,
-          QString("abort cleanup: could not remove %1").arg(f));
-  }
+  ttRemoveFiles(mCreatedFiles, log);
   mCreatedFiles.clear();
 }
 

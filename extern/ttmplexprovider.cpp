@@ -313,7 +313,7 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
   // Positive -O value delays audio → correct for audio that is too early
   if (mAudioSyncOffsetMs != 0) {
     mplexArgs << "-O" << QString("%1ms").arg(mAudioSyncOffsetMs);
-    qDebug() << "TTMplexProvider: Using A/V sync offset" << mAudioSyncOffsetMs << "ms";
+    log->infoMsg(__FILE__, __LINE__, QString("TTMplexProvider: Using A/V sync offset %1 ms").arg(mAudioSyncOffsetMs));
   }
 
   auto shellEscape = [](const QString& s) -> QString {

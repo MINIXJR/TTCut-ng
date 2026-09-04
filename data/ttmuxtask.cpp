@@ -23,6 +23,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttmuxtask.h"
+#include "../avstream/ttcommon.h"
 
 #include "ttavdata.h"
 
@@ -101,12 +102,7 @@ void TTMuxTask::cleanUp()
  */
 void TTMuxTask::abortCleanup()
 {
-  for (const QString& f : mCreatedFiles) {
-    if (f.isEmpty() || !QFile::exists(f)) continue;
-    if (!QFile::remove(f))
-      log->warningMsg(__FILE__, __LINE__,
-          QString("abort cleanup: could not remove %1").arg(f));
-  }
+  ttRemoveFiles(mCreatedFiles, log);
   mCreatedFiles.clear();
 }
 

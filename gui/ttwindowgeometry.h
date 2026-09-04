@@ -40,7 +40,7 @@ void ttSaveWindowGeometry(QSettings& settings, const QString& group,
                           const QRect& normalRect, bool maximized);
 
 // [group] width, height — for dialogs that keep a size but not a position.
-TTWindowGeometry ttLoadDialogSize(QSettings& settings, const QString& group);
+TTWindowGeometry ttLoadDialogSize(const QSettings& settings, const QString& group);
 void ttSaveDialogSize(QSettings& settings, const QString& group, const QSize& size);
 
 // Shrink to the available area, then push the origin back inside it. Returns a
