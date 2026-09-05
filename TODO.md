@@ -155,21 +155,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
-- **`TTAudioCutter::cut` stürzt bei wechselnden Ziel-acmods zwischen Segmenten ab**
-  (2026-09-05, Befund beim Bau des Gates `tools/diag/test_audiocutter_paths`,
-  Code-Audit Batch E; nicht Gegenstand des Umbaus): mit `normalizeAcmod` und
-  `targetAcmods = {2, 2, 7}` auf einer Stereo/5.1/Stereo-Quelle (Fixture
-  `mixed.ac3` von `gate_ac3fix.sh`) SIGSEGV in `swr_convert`. Ursache im Code
-  sichtbar: Der AC3-Encoder wird beim ERSTEN umzukodierenden Frame mit dessen
-  Ziel-Layout angelegt und der Resampler mit dessen Eingangs-Layout — beide
-  bleiben für den ganzen Lauf. Kommt später ein Segment mit anderem Ziel oder
-  anderem Eingangs-Layout (2 statt 6 Kanäle), liest `swr_convert` sechs
-  Kanalebenen aus einem Stereo-Frame. Einzelrichtung (alle 2 oder alle 7)
-  läuft sauber (Gate B1/B2). Fix: Encoder und Resampler je Segment bzw. bei
-  Layoutwechsel neu anlegen (nach dem E2-Umbau sitzt alles in
-  `ensureAc3Codecs()`/`writeReencodedPacket()`); vorher mit dem Harness und
-  `{2, 2, 7}` reproduzieren.
-
 - **`make_test_video.sh mpeg2` scheitert am PAL-Encode (`-top 1`)**
   (2026-09-05; schon in Audit-Lauf 1 am 2026-09-03 mit rc=234 gesehen): das
   aktuelle ffmpeg meldet „Codec AVOption top (top field first) is not a

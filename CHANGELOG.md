@@ -5,6 +5,14 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **The audio cut could crash when the target channel layout differed
+  between cut ranges.** With AC3 layout normalisation on, a recording that
+  switches between stereo and 5.1 could make one range aim for stereo and
+  the next for 5.1; the encoder and resampler were set up once, from the
+  first re-encoded frame, and a later range with another layout ran into a
+  resampler expecting six channels. Both are now re-created whenever the
+  target or the input layout changes. Gate: `tools/diag/test_audiocutter_paths`
+  (run B3).
 - **Playback lost the subtitles (and the "start paused" option) when the
   recording's name contained a comma.** The player hands its per-file
   options to libmpv as one comma-separated list; a subtitle path such as
