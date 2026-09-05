@@ -254,6 +254,7 @@ diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
 diag_tool(test_audiocut        AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audiocut_abort  AV SOURCES ${AUDIOCUT_SRC})
+diag_tool(test_audiocutter_paths AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
@@ -382,7 +383,7 @@ add_custom_target(diag DEPENDS
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
-  test_directed_search test_probe_video)
+  test_directed_search test_probe_video test_audiocutter_paths)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

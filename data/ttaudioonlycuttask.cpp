@@ -43,9 +43,8 @@
  * Audio-only cut task
  */
 TTAudioOnlyCutTask::TTAudioOnlyCutTask(TTAVData* avData, TTAVItem* avItem) :
-                TTThreadTask("AudioOnlyCutTask")
+                TTAbortableTask(avData, "AudioOnlyCutTask")
 {
-  mpAVData = avData;
   mpAVItem = avItem;
 }
 
@@ -66,69 +65,9 @@ void TTAudioOnlyCutTask::init(const TTAudioOnlyCutParams& params)
  */
 void TTAudioOnlyCutTask::onUserAbort()
 {
-  mCancelRequested.store(true, std::memory_order_relaxed);
+  requestCancel();
   mMkvProvider.requestAbort();
   abort();   // TTThreadTask bookkeeping (mIsAborted; pool Canceled chain)
-}
-
-/**
- * Clean up after operation
- */
-void TTAudioOnlyCutTask::cleanUp()
-{
-}
-
-/**
- * Delete everything this run created.
- *
- * Abort only: on a real failure the products of the run stay on disk, which
- * is the behaviour the synchronous cut had. Failures to remove a file are
- * logged and skipped - an abort must always reach the Canceled bracket and
- * must never hang or fail on cleanup.
- */
-void TTAudioOnlyCutTask::abortCleanup()
-{
-  ttRemoveFiles(mCreatedFiles, log);
-  mCreatedFiles.clear();
-}
-
-/**
- * Leave operation() through the abort path.
- *
- * The message-only TTAbortException constructor is used on purpose. Its
- * (caller, line, msg) sibling logs the text through TTMessageLogger::
- * fatalMsg() - a deliberate cancel must not read as a failure (see
- * TTH26xCutTask::abortNow() for the measurement that established this).
- */
-void TTAudioOnlyCutTask::abortNow()
-{
-  abortCleanup();
-  throw TTAbortException("user abort");
-}
-
-/**
- * Poll point between two phases of the pipeline
- */
-void TTAudioOnlyCutTask::abortIfRequested()
-{
-  if (!cancelRequested()) return;
-  abortNow();
-}
-
-/**
- * Forward one Step report to the GUI.
- */
-void TTAudioOnlyCutTask::reportStep(const QString& msg, quint64 percent)
-{
-  mpAVData->onStatusReport(StatusReportArgs::Step, msg, percent);
-}
-
-/**
- * Announce a stage change (feeds the remaining-time estimator)
- */
-void TTAudioOnlyCutTask::reportStage(int stage)
-{
-  mpAVData->onStatusReport(StatusReportArgs::Stage, QString(), stage);
 }
 
 /**

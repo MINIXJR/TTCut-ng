@@ -33,13 +33,12 @@
  * Construct a new TTAudioFileList widget.
  */
 TTAudioTreeView::TTAudioTreeView(QWidget* parent)
-  :QWidget(parent)
+  :TTTrackTreeView(parent)
 {
   setupUi( this );
 
   mpAVItem = 0;
 
-  audioListView->setRootIsDecorated(false);
   QHeaderView* header = audioListView->header();
   header->resizeSection(0, 220);
   header->resizeSection(1, 220);
@@ -50,20 +49,11 @@ TTAudioTreeView::TTAudioTreeView(QWidget* parent)
   header->resizeSection(6,  60);
   header->resizeSection(7, 100);
 
-  // Use theme icons with Qt standard icon fallback for cross-platform support
-  pbAudioFileOpen->setIcon(ttThemeIcon("document-open", QStyle::SP_DialogOpenButton));
-  pbAudioEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
-  pbAudioEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
-  pbAudioEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
-
-  createActions();
-
-  // signal and slot connections
-  connect(pbAudioFileOpen,    &QPushButton::clicked, this, &TTAudioTreeView::openFile);
-  connect(pbAudioEntryUp,     &QPushButton::clicked, this, &TTAudioTreeView::onItemUp);
-  connect(pbAudioEntryDown,   &QPushButton::clicked, this, &TTAudioTreeView::onItemDown);
-  connect(pbAudioEntryDelete, &QPushButton::clicked, this, &TTAudioTreeView::onRemoveItem);
-  connect(audioListView,      &QTreeWidget::customContextMenuRequested, this, &TTAudioTreeView::onContextMenuRequest);
+  bindListWidgets(audioListView, pbAudioFileOpen, pbAudioEntryUp, pbAudioEntryDown, pbAudioEntryDelete,
+      { tr("&Insert audiofile"), tr("Open a new audiofile and insert to list"),
+        tr("Move selected audiofile one position upward"),
+        tr("Remove selected audiofile from list"),
+        tr("Move selected audiofile one position downward") });
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -102,22 +92,6 @@ void TTAudioTreeView::onAVDataChanged(const TTAVItem* avData)
   onReloadList(mpAVItem);
 }
 
-void TTAudioTreeView::clear()
-{
-	audioListView->clear();
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Enable or disable the widget
- */
-/* /////////////////////////////////////////////////////////////////////////////
- * onClearList
- */
-void TTAudioTreeView::onClearList()
-{
-  audioListView->clear();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * onAppendItem
  */
@@ -131,16 +105,8 @@ void TTAudioTreeView::onAppendItem(const TTAudioItem& item)
   treeItem->setText(3, item.getBitrate());
   treeItem->setText(4, item.getSamplerate());
   treeItem->setText(5, item.getMode());
-  QSpinBox* delaySpin = ttMakeDelaySpin(item.getDelayMs(), tr("Positive values play the track later, negative values earlier (mkvmerge convention)"));
-  audioListView->setItemWidget(treeItem, 6, delaySpin);
-
-  connect(delaySpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, delaySpin](int value) {
-    int row = ttRowOfItemWidget(audioListView, 6, delaySpin);
-    if (row >= 0) emit delayChanged(row, value);
-  });
-
-  QComboBox* combo = createLanguageCombo(item.getLanguage());
-  audioListView->setItemWidget(treeItem, 7, combo);
+  addDelaySpin(treeItem, 6, item.getDelayMs(), tr("Positive values play the track later, negative values earlier (mkvmerge convention)"));
+  addLanguageCombo(treeItem, 7, item.getLanguage());
 }
 
 /* //////////////////////////////////////////////////////////////////////////////
@@ -154,73 +120,6 @@ void TTAudioTreeView::onSwapItems(int, int)
     }
 }
 
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for item up button
- */
-void TTAudioTreeView::onItemUp()
-{
-  if (audioListView->currentItem() == 0)  return;
-
-    int index = audioListView->indexOfTopLevelItem(audioListView->currentItem());
-
-    if (index <= 0) return;
-
-    emit swapItems(index, index-1);
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for item down button
- */
-void TTAudioTreeView::onItemDown()
-{
-  if (audioListView->currentItem() == 0)  return;
-
-  int index = audioListView->indexOfTopLevelItem(audioListView->currentItem());
-
-  if (index >= audioListView->topLevelItemCount()-1) return;
-
-  emit swapItems(index, index+1);
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for remove item button
- */
-void TTAudioTreeView::onRemoveItem()
-{
-  if (audioListView->currentItem() == 0) return;
-
-  int index = audioListView->indexOfTopLevelItem(audioListView->currentItem());
-
-  emit removeItem(index);
-}
-
-/* //////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTAudioTreeView::onItemRemoved(int index)
-{
-  delete audioListView->takeTopLevelItem(index);
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * onContextMenuRequest
- * User requested a context menu
- */
-void TTAudioTreeView::onContextMenuRequest(const QPoint& point)
-{
-  if (audioListView->currentItem() == 0)
-    return;
-
-  QMenu contextMenu(this);
-  contextMenu.addAction(itemNewAction);
-  contextMenu.addSeparator();
-  contextMenu.addAction(itemUpAction);
-  contextMenu.addAction(itemDeleteAction);
-  contextMenu.addAction(itemDownAction);
-
-  contextMenu.exec(audioListView->mapToGlobal(point));
-}
-
 void TTAudioTreeView::onReloadList(const TTAVItem* avData)
 {
   onClearList();
@@ -228,37 +127,5 @@ void TTAudioTreeView::onReloadList(const TTAVItem* avData)
   for (int i = 0; i < avData->audioCount(); i++) {
     onAppendItem(avData->audioListItemAt(i));
   }
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * createAction
- * Create the actions used by the context menu.
- */
-void TTAudioTreeView::createActions()
-{
-  itemNewAction = ttMakeAction(this, tr("&Insert audiofile"), "document-open", QStyle::SP_DialogOpenButton, tr("Open a new audiofile and insert to list"));
-  connect(itemNewAction, &QAction::triggered, this, &TTAudioTreeView::openFile);
-
-  itemUpAction = ttMakeAction(this, tr("Move &up"), "go-up", QStyle::SP_ArrowUp, tr("Move selected audiofile one position upward"));
-  connect(itemUpAction, &QAction::triggered, this, &TTAudioTreeView::onItemUp);
-
-  itemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected audiofile from list"));
-  connect(itemDeleteAction, &QAction::triggered, this, &TTAudioTreeView::onRemoveItem);
-
-  itemDownAction = ttMakeAction(this, tr("Move d&own"), "go-down", QStyle::SP_ArrowDown, tr("Move selected audiofile one position downward"));
-  connect(itemDownAction, &QAction::triggered, this, &TTAudioTreeView::onItemDown);
-}
-
-QComboBox* TTAudioTreeView::createLanguageCombo(const QString& currentLang)
-{
-  QComboBox* combo = new QComboBox();
-  TTCut::populateLanguageCombo(combo, currentLang);
-
-  connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, combo](int idx) {
-    int row = ttRowOfItemWidget(audioListView, 7, combo);
-    if (row >= 0) emit languageChanged(row, combo->itemData(idx).toString());
-  });
-
-  return combo;
 }
 

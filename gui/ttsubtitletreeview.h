@@ -17,7 +17,7 @@
 
 #include "ui_subtitlefilelistwidget.h"
 
-#include "../common/ttcut.h"
+#include "tttracktreeview.h"
 
 class TTAVData;
 class TTAVItem;
@@ -27,43 +27,20 @@ class QMenu;
 class QAction;
 class QComboBox;
 
-class TTSubtitleTreeView : public QWidget, Ui::TTSubtitleFileListWidget
+class TTSubtitleTreeView : public TTTrackTreeView, Ui::TTSubtitleFileListWidget
 {
   Q_OBJECT
 
   public:
     explicit TTSubtitleTreeView(QWidget* parent=0);
 
-    void clear();
-
-  signals:
-    void openFile();
-    void removeItem(int index);
-    void swapItems(int oldIndex, int newIndex);
-    void languageChanged(int index, const QString& language);
-    void delayChanged(int index, int delayMs);
-
   public slots:
     void onAVDataChanged(const TTAVItem* avData);
-    void onItemUp();
-    void onItemDown();
-    void onRemoveItem();
-    void onItemRemoved(int index);
-    void onClearList();
-    void onContextMenuRequest(const QPoint& point);
     void onAppendItem(const TTSubtitleItem& item);
     void onSwapItems(int oldIndex, int newIndex);
     void onReloadList(const TTAVItem* avData);
 
   private:
-    void createActions();
-    QComboBox* createLanguageCombo(const QString& currentLang);
-
-  private:
     const TTAVItem* mpAVItem;
-    QAction*      itemUpAction;
-    QAction*      itemDownAction;
-    QAction*      itemDeleteAction;
-    QAction*      itemNewAction;
 };
 #endif

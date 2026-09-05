@@ -236,6 +236,21 @@ flowchart LR
    `FFMPEG_WARN_PATTERN` + `warn_ffmpeg_log` (superset pattern; may surface
    a few more log lines than before — log-only change).
 
+6. **2026-09-05 (code audit batch F, `927f0968`):** the remaining copied
+   blocks became helpers without a behaviour change — `_probe_first_packet_pts`
+   (video, per-track audio, subtitle PTS0), `_probe_field` (the
+   `-of default=noprint_wrappers` probes), `_parse_fraction` (NUM/DEN split;
+   the three re-parses of `$FRAME_RATE` after the interlace correction now
+   read `FRAME_RATE_NUM/DEN`, which are current there), `_splice_gap_step_or_warn`
+   (both multi-file scanners), `_map_to_sorted_array` (audio/subtitle stream
+   maps), `_emit_segment` (repair concat list, loop body and tail),
+   `_recalc_av_drift` (the three duration/drift measurements — the drift RATE
+   stays at its two call sites), `progress_set_tail` (mirrors
+   `progress_set_repair`), `COUNTED_FRAMES_VALID` (one guard for two `if`s),
+   and one ffmpeg call for the h264/hevc extraction (bsf/format per codec).
+   Gate: ES output byte-identical and logs identical on MPEG-2/H.264/HEVC TS
+   and a two-segment VDR `.rec`; `gate_demux_gapsync` 3/3, `gate_demux_zonesync` 9/9.
+
 Verified after all five: Futurama ES outputs byte-identical to the
 pre-refactor baseline (video, both audio tracks, logo, .info modulo
 timestamp/basename); a no-`-e` invocation produces the identical ES set.

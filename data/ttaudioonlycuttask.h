@@ -15,7 +15,7 @@
 #ifndef TTAUDIOONLYCUTTASK_H
 #define TTAUDIOONLYCUTTASK_H
 
-#include "../common/ttthreadtask.h"
+#include "ttabortabletask.h"
 #include "../extern/ttmkvmergeprovider.h"
 
 #include <QList>
@@ -42,7 +42,7 @@ struct TTAudioOnlyCutParams
 
 //! Pool task running the audio-only cut (per-track audio extraction, optional
 //! MKA mux) off the GUI thread. No video is touched by this path.
-class TTAudioOnlyCutTask : public TTThreadTask
+class TTAudioOnlyCutTask : public TTAbortableTask
 {
   Q_OBJECT
 
@@ -83,7 +83,6 @@ class TTAudioOnlyCutTask : public TTThreadTask
     QList<float> drifts()        const { return mDrifts; }
 
   protected:
-    void cleanUp() override;
     void operation() override;
 
   public slots:
@@ -92,20 +91,7 @@ class TTAudioOnlyCutTask : public TTThreadTask
   private:
     //! The pipeline itself; operation() only wraps it in the abort funnel.
     void runAudioCut();
-    void reportStep(const QString& msg, quint64 percent);
-    void reportStage(int stage);
-    //! Worker-side poll point: THROWS TTAbortException (via abortNow()) to
-    //! leave operation() if a cancel arrived, otherwise returns.
-    void abortIfRequested();
-    //! Unconditional abort exit (cleanup + TTAbortException). Used where an
-    //! engine already reported the cancel through its own false return.
-    [[noreturn]] void abortNow();
-    //! Delete everything this run created (abort only).
-    void abortCleanup();
-    bool cancelRequested() const
-        { return mCancelRequested.load(std::memory_order_relaxed); }
 
-    TTAVData*            mpAVData;
     //! The item whose audio streams the worker reads. Stays alive for the
     //! same reason documented on TTH26xCutTask::mpAVItem.
     TTAVItem*            mpAVItem;
@@ -114,10 +100,6 @@ class TTAudioOnlyCutTask : public TTThreadTask
     QString              mExitMessage;
     QString              mOutputSummary;
     QList<float>         mDrifts;
-    //! Every file this run produced, in creation order - the cleanup list for
-    //! an aborted cut. Registered unconditionally (success or not): a failed
-    //! or cancelled track still leaves a partial file on disk.
-    QStringList          mCreatedFiles;
 
     //! Member, not a local, so onUserAbort() (GUI thread) can reach it
     //! without a pointer race against the worker that creates and uses it.
@@ -125,11 +107,6 @@ class TTAudioOnlyCutTask : public TTThreadTask
     //! provider. Only actually used for AOF_OriginalMKA, but requestAbort()
     //! on an otherwise-idle provider is harmless for the other formats.
     TTMkvMergeProvider mMkvProvider;
-
-    //! Cancel flag of the task itself. Set by onUserAbort() on the GUI
-    //! thread, polled by the worker between phases and forwarded into
-    //! cutAudioTracks()'s own shouldAbort predicate.
-    std::atomic<bool>  mCancelRequested { false };
 };
 
 #endif

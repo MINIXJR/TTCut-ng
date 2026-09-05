@@ -234,6 +234,18 @@ flowchart TD
 
 ## Redundanz / Konsolidierungskandidaten
 
+- **[2026-09-05, Code-Audit Batch E2, `5d38ae80`]** `TTAudioCutter::cut` hält
+  seinen Zustand je Aufruf in einem `CutSession`-Struct (Container, Ausgabe-
+  Zeitachse, Fortschritts-/`[DRIFT]`-Buchhaltung, AC3-Umkodierkette) und ruft
+  aus der weiterhin EINEN Paketschleife `openCutSession`, `ensureAc3Codecs`,
+  `writeRepairedPacket`, `writeReencodedPacket`, `writeStreamCopyPacket`;
+  die dreifach kopierte „Paket ist im Muxer"-Buchhaltung ist
+  `CutSession::notePacketWritten`. Einzel-Pass und fortlaufender PTS unverändert.
+  Gate: `tools/diag/test_audiocutter_paths` (Stream-Copy, acmod→Stereo,
+  acmod→5.1, Reparaturtabelle, Abbruch) byteidentisch, `gate_cut_identity.sh`
+  auf fünf Tux-Fixtures identisch. **Befund dabei (TODO.md):** wechselnde
+  Ziel-acmods zwischen Segmenten stürzen in `swr_convert` ab — Encoder und
+  Resampler werden nur einmal, vom ersten umkodierten Frame, angelegt.
 - **[KONSOLIDIERT `b28a7bd`..`7849f66`]** Die Producer bauen die Sequenz nicht mehr
   jeder selbst. `TTAVData::cutAudioTracks` ist die eine Implementierung von
   Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner
