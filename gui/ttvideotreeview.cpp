@@ -35,11 +35,10 @@
  * Construct a new TTVideoFileList widget.
  */
 TTVideoTreeView::TTVideoTreeView(QWidget* parent)
-  :QWidget(parent)
+  :TTTrackTreeView(parent)
 {
   setupUi( this );
 
-  videoListView->setRootIsDecorated(false);
   QHeaderView* header = videoListView->header();
   header->resizeSection(0, 320);
   header->resizeSection(1, 220);
@@ -48,21 +47,12 @@ TTVideoTreeView::TTVideoTreeView(QWidget* parent)
   mAVData = 0;
   allowSelectionChanged = true;
 
-  // Use theme icons with Qt standard icon fallback for cross-platform support
-  pbVideoFileOpen->setIcon(ttThemeIcon("document-open", QStyle::SP_DialogOpenButton));
-  pbEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
-  pbEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
-  pbEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
-
-  createActions();
-
-  // signal and slot connections
-  connect(pbVideoFileOpen,  &QPushButton::clicked, this, &TTVideoTreeView::openFile);
-  connect(pbEntryUp,        &QPushButton::clicked, this, &TTVideoTreeView::onItemUp);
-  connect(pbEntryDown,      &QPushButton::clicked, this, &TTVideoTreeView::onItemDown);
-  connect(pbEntryDelete,    &QPushButton::clicked, this, &TTVideoTreeView::onRemoveItem);
-  connect(videoListView,    &QTreeWidget::itemSelectionChanged,        this, &TTVideoTreeView::onItemSelectionChanged);
-  connect(videoListView,    &QTreeWidget::customContextMenuRequested,  this, &TTVideoTreeView::onContextMenuRequest);
+  bindListWidgets(videoListView, pbVideoFileOpen, pbEntryUp, pbEntryDown, pbEntryDelete,
+      { tr("&Insert videofile"), tr("Open a new videofile and insert to list"),
+        tr("Move selected file one position upward"),
+        tr("Remove selected file from list"),
+        tr("Move selected file one position downward") });
+  connect(videoListView, &QTreeWidget::itemSelectionChanged, this, &TTVideoTreeView::onItemSelectionChanged);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -85,14 +75,6 @@ void TTVideoTreeView::setAVData(TTAVData* avData)
 /* /////////////////////////////////////////////////////////////////////////////
  * Enable or disable the widget
  */
-/* /////////////////////////////////////////////////////////////////////////////
- * onClearList
- */
-void TTVideoTreeView::onClearList()
-{
-  videoListView->clear();
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * onAppendItem
  */
@@ -174,48 +156,6 @@ void TTVideoTreeView::onItemSelectionChanged()
   emit selectionChanged(currentIndex);
 }
 
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for item up button
- */
-void TTVideoTreeView::onItemUp()
-{
-  if (mAVData == 0 || videoListView->currentItem() == 0)
-    return;
-
-  int index = videoListView->indexOfTopLevelItem(videoListView->currentItem());
-
-  if (index <= 0)
-    return;
-
-  emit swapItems(index, index-1);
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for item down button
- */
-void TTVideoTreeView::onItemDown()
-{
-  if (mAVData == 0 || videoListView->currentItem() == 0)
-    return;
-
-  int index = videoListView->indexOfTopLevelItem(videoListView->currentItem());
-
-  if (index >= videoListView->topLevelItemCount()-1)
-    return;
-
-  emit swapItems(index, index+1);
-}
-
-void TTVideoTreeView::onItemRemoved(int index)
-{
-	delete videoListView->takeTopLevelItem(index);
-
-	int indexNew = videoListView->indexOfTopLevelItem(videoListView->currentItem());
-
-  emit selectionChanged(indexNew);
-  allowSelectionChanged = true;
-}
-
 void TTVideoTreeView::onItemsSwapped(int oldIndex, int newIndex)
 {
   QTreeWidgetItem* listItem = videoListView->takeTopLevelItem(oldIndex);
@@ -225,39 +165,6 @@ void TTVideoTreeView::onItemsSwapped(int oldIndex, int newIndex)
 }
 
 
-/* /////////////////////////////////////////////////////////////////////////////
- * Event handler for delete item button
- */
-void TTVideoTreeView::onRemoveItem()
-{
- if (mAVData == 0 || videoListView->currentItem() == 0)
-    return;
-
-  allowSelectionChanged = false;
-  int index = videoListView->indexOfTopLevelItem(videoListView->currentItem());
-
-  emit removeItem(index);
-}
-
-
-/* /////////////////////////////////////////////////////////////////////////////
- * onContextMenuRequest
- * User requested a context menu
- */
-void TTVideoTreeView::onContextMenuRequest(const QPoint& point)
-{
-  if (videoListView->currentItem() == 0)
-    return;
-
-  QMenu contextMenu(this);
-  contextMenu.addAction(itemNewAction);
-  contextMenu.addSeparator();
-  contextMenu.addAction(itemUpAction);
-  contextMenu.addAction(itemDeleteAction);
-  contextMenu.addAction(itemDownAction);
-
-  contextMenu.exec(videoListView->mapToGlobal(point));
-}
 
 void TTVideoTreeView::onReloadList()
 {
@@ -270,21 +177,37 @@ void TTVideoTreeView::onReloadList()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * createAction
- * Create the actions used by the context menu.
+ * Up/down/remove act only once a TTAVData is attached (the list is filled
+ * from its signals); the base class does the selection handling.
  */
-void TTVideoTreeView::createActions()
+void TTVideoTreeView::onItemUp()
 {
-  itemNewAction = ttMakeAction(this, tr("&Insert videofile"), "document-open", QStyle::SP_DialogOpenButton, tr("Open a new videofile and insert to list"));
-  connect(itemNewAction, &QAction::triggered, this, &TTVideoTreeView::openFile);
-
-  itemUpAction = ttMakeAction(this, tr("Move &up"), "go-up", QStyle::SP_ArrowUp, tr("Move selected file one position upward"));
-  connect(itemUpAction, &QAction::triggered, this, &TTVideoTreeView::onItemUp);
-
-  itemDeleteAction = ttMakeAction(this, tr("&Delete"), "edit-delete", QStyle::SP_TrashIcon, tr("Remove selected file from list"));
-  connect(itemDeleteAction, &QAction::triggered, this, &TTVideoTreeView::onRemoveItem);
-
-  itemDownAction = ttMakeAction(this, tr("Move d&own"), "go-down", QStyle::SP_ArrowDown, tr("Move selected file one position downward"));
-  connect(itemDownAction, &QAction::triggered, this, &TTVideoTreeView::onItemDown);
+  if (mAVData == 0) return;
+  TTTrackTreeView::onItemUp();
 }
 
+void TTVideoTreeView::onItemDown()
+{
+  if (mAVData == 0) return;
+  TTTrackTreeView::onItemDown();
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Event handler for remove item button: the selection-change round trip is
+ * suppressed until onItemRemoved() has re-established the current row.
+ */
+void TTVideoTreeView::onRemoveItem()
+{
+  if (mAVData == 0 || currentRow() < 0)
+    return;
+
+  allowSelectionChanged = false;
+  TTTrackTreeView::onRemoveItem();
+}
+
+void TTVideoTreeView::onItemRemoved(int index)
+{
+  TTTrackTreeView::onItemRemoved(index);
+  emit selectionChanged(currentRow());
+  allowSelectionChanged = true;
+}

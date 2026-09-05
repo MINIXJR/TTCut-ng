@@ -20,6 +20,7 @@ extern "C" {
 }
 
 #include <QDebug>
+#include <QScopeGuard>
 #include <algorithm>
 #include <cmath>
 
@@ -272,22 +273,29 @@ QVector<TTAudioAnomalyScanTask::FrameStat> TTAudioAnomalyScanTask::collectFrameS
   QVector<FrameStat> stats;
   int failures = 0;
 
-  AVFormatContext* fmtCtx = nullptr;
-  if (avformat_open_input(&fmtCtx, audioFilePath.toUtf8().constData(), nullptr, nullptr) < 0) {
-    if (decodeFailures) *decodeFailures = failures;
-    return stats;
-  }
-  if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
+  AVFormatContext* fmtCtx   = nullptr;
+  AVCodecContext*  codecCtx = nullptr;
+  AVPacket*        pkt      = nullptr;
+  AVFrame*         frame    = nullptr;
+  // Every exit releases what was acquired (all four free functions accept a
+  // null handle) and hands the failure count back, so the early returns
+  // below carry no cleanup of their own. Same pattern as
+  // TTStreamPointAudioWorker::detectSilencePoints().
+  const auto releaseAll = qScopeGuard([&]() {
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    avcodec_free_context(&codecCtx);
     avformat_close_input(&fmtCtx);
     if (decodeFailures) *decodeFailures = failures;
+  });
+
+  if (avformat_open_input(&fmtCtx, audioFilePath.toUtf8().constData(), nullptr, nullptr) < 0)
     return stats;
-  }
+  if (avformat_find_stream_info(fmtCtx, nullptr) < 0)
+    return stats;
   const int audioIdx = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
-  if (audioIdx < 0) {
-    avformat_close_input(&fmtCtx);
-    if (decodeFailures) *decodeFailures = failures;
+  if (audioIdx < 0)
     return stats;
-  }
 
   AVStream* aStream = fmtCtx->streams[audioIdx];
 
@@ -305,30 +313,21 @@ QVector<TTAudioAnomalyScanTask::FrameStat> TTAudioAnomalyScanTask::collectFrameS
                 "scan's 32 ms AC3 frame grid only holds at 48000 Hz; skipping this track "
                 "instead of reporting positions computed against the wrong grid")
             .arg(audioFilePath).arg(aStream->codecpar->sample_rate));
-    avformat_close_input(&fmtCtx);
-    if (decodeFailures) *decodeFailures = failures;
     return stats;   // empty: operation() reports this as "not scanned"
   }
 
   const AVCodec* codec = avcodec_find_decoder(aStream->codecpar->codec_id);
-  if (!codec) {
-    avformat_close_input(&fmtCtx);
-    if (decodeFailures) *decodeFailures = failures;
+  if (!codec)
     return stats;
-  }
 
-  AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
+  codecCtx = avcodec_alloc_context3(codec);
   avcodec_parameters_to_context(codecCtx, aStream->codecpar);
   codecCtx->thread_count = 1;   // deterministic, matches other decode paths in this codebase
-  if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
-    avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
-    if (decodeFailures) *decodeFailures = failures;
+  if (avcodec_open2(codecCtx, codec, nullptr) < 0)
     return stats;
-  }
 
-  AVPacket* pkt = av_packet_alloc();
-  AVFrame*  frame = av_frame_alloc();
+  pkt   = av_packet_alloc();
+  frame = av_frame_alloc();
   qint64 frameIdx = 0;
   bool loggedFormatWarning = false;
 
@@ -409,12 +408,6 @@ QVector<TTAudioAnomalyScanTask::FrameStat> TTAudioAnomalyScanTask::collectFrameS
     }
   }
 
-  av_frame_free(&frame);
-  av_packet_free(&pkt);
-  avcodec_free_context(&codecCtx);
-  avformat_close_input(&fmtCtx);
-
-  if (decodeFailures) *decodeFailures = failures;
   return stats;
 }
 

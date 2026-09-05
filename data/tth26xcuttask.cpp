@@ -56,9 +56,8 @@ extern "C" {
  * H.26x final cut task
  */
 TTH26xCutTask::TTH26xCutTask(TTAVData* avData, TTAVItem* avItem) :
-                TTThreadTask("H26xCutTask")
+                TTAbortableTask(avData, "H26xCutTask")
 {
-  mpAVData = avData;
   mpAVItem = avItem;
 }
 
@@ -79,82 +78,10 @@ void TTH26xCutTask::init(const TTH26xCutParams& params)
  */
 void TTH26xCutTask::onUserAbort()
 {
-  mCancelRequested.store(true, std::memory_order_relaxed);
+  requestCancel();
   mSmartCut.requestAbort();
   mMkvProvider.requestAbort();
   abort();   // TTThreadTask bookkeeping (mIsAborted; pool Canceled chain)
-}
-
-/**
- * Clean up after operation
- */
-void TTH26xCutTask::cleanUp()
-{
-}
-
-/**
- * Delete everything this run created.
- *
- * Abort only: on a real failure the products of the run stay on disk, which is
- * the behaviour the synchronous cut had. Failures to remove a file are logged
- * and skipped - an abort must always reach the Canceled bracket and must never
- * hang or fail on cleanup.
- */
-void TTH26xCutTask::abortCleanup()
-{
-  ttRemoveFiles(mCreatedFiles, log);
-  mCreatedFiles.clear();
-}
-
-/**
- * Leave operation() through the abort path.
- *
- * TTThreadTask::run() catches TTAbortException, calls cleanUp() and emits
- * aborted() - which reaches TTAVData::onCutAborted() and closes the operation
- * with the Canceled bracket. No fail() text is recorded: a deliberate cancel is
- * not a failure, so neither the error dialog nor the log must show one.
- *
- * The message-only TTAbortException constructor is used on purpose. Its
- * (caller, line, msg) sibling logs the text through TTMessageLogger::fatalMsg()
- * - measured: a cancel wrote "[][..][tth26xcuttask:124] user abort" into the
- * persistent log, i.e. a fatal-level line for something the user asked for.
- * (TTCutVideoTask and TTCutPreviewTask still use that constructor; their
- * pre-existing fatal line on cancel is out of this task's scope.)
- */
-void TTH26xCutTask::abortNow()
-{
-  abortCleanup();
-  throw TTAbortException("user abort");
-}
-
-/**
- * Poll point between two phases of the pipeline
- */
-void TTH26xCutTask::abortIfRequested()
-{
-  if (!cancelRequested()) return;
-  abortNow();
-}
-
-/**
- * Forward one Step report to the GUI.
- *
- * TTAVData::onStatusReport re-emits TTAVData::statusReport with a null task
- * pointer, which is what the progress dialog treats as "value IS the percent" -
- * exactly what the synchronous code did. The signal crosses to the GUI thread
- * through the queued connection of its receivers, in emission order.
- */
-void TTH26xCutTask::reportStep(const QString& msg, quint64 percent)
-{
-  mpAVData->onStatusReport(StatusReportArgs::Step, msg, percent);
-}
-
-/**
- * Announce a stage change (feeds the remaining-time estimator)
- */
-void TTH26xCutTask::reportStage(int stage)
-{
-  mpAVData->onStatusReport(StatusReportArgs::Stage, QString(), stage);
 }
 
 /**

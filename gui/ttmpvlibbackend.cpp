@@ -195,10 +195,8 @@ void TTMpvLibBackend::shutdown()
   mNextObserveId = 1;
 }
 
-void TTMpvLibBackend::command(const QStringList& args)
+QStringList ttMpvLoadfileCommand(const QStringList& args)
 {
-  if (!mMpv || args.isEmpty()) return;
-
   // Sonderfall: loadfile bekommt vom Wrapper Per-File-Optionen im CLI-Format
   // ("--start=10.5", "--pause=yes", "--audio-file=...", "--sub-file=..."). Das
   // ist der Phase-1-Vertrag: der Process-Backend reichte sie als mpv-CLI-Args
@@ -215,10 +213,27 @@ void TTMpvLibBackend::command(const QStringList& args)
     rest << workArgs[0] << workArgs[1];   // "loadfile" + url
     for (int i = 2; i < workArgs.size(); ++i) {
       const QString& a = workArgs[i];
-      if (a.startsWith(QLatin1String("--")))
-        optsKv << a.mid(2);              // "--key=val" → "key=val"
-      else
+      if (!a.startsWith(QLatin1String("--"))) {
         rest << a;                       // flag/index/durchreichen
+        continue;
+      }
+      // "--key=val" → "key=%len%val". Die options-Liste ist kommagetrennt,
+      // und mpv zerlegt sie VOR dem Parsen der einzelnen Werte: ein Pfad mit
+      // Komma ("03x11_-_Da_glaub_i,_haben_wir_..._deu.srt", 2026-09-05) wurde
+      // am Komma abgeschnitten, der Rest als unbekannte Option verworfen -
+      // samt allen Optionen dahinter (--pause=yes eingeschlossen). mpvs
+      // Längenpräfix %n% (n = Bytes des Werts in UTF-8) nimmt den Wert
+      // wörtlich, was immer er enthält; Anführungszeichen scheitern an einem
+      // " im Pfad. Gemessen mit tools/diag/test_mpv_loadfile_args.
+      const QString kv = a.mid(2);
+      const int eq = kv.indexOf(QLatin1Char('='));
+      if (eq < 0) {
+        optsKv << kv;
+        continue;
+      }
+      const QString value = kv.mid(eq + 1);
+      optsKv << kv.left(eq) + QLatin1String("=%") + QString::number(value.toUtf8().size())
+                + QLatin1Char('%') + value;
     }
     if (!optsKv.isEmpty()) {
       // Signatur: loadfile <url> [<flag>] [<index>] [<options>].
@@ -233,6 +248,14 @@ void TTMpvLibBackend::command(const QStringList& args)
     }
     workArgs = rest;
   }
+  return workArgs;
+}
+
+void TTMpvLibBackend::command(const QStringList& args)
+{
+  if (!mMpv || args.isEmpty()) return;
+
+  const QStringList workArgs = ttMpvLoadfileCommand(args);
 
   // argv-Array für mpv_command_async aufbauen: jeweils const char*
   // aus QByteArray (utf8). Pointer-Lebensdauer = die Funktion.

@@ -35,9 +35,8 @@
 /**
  * MKV mux task
  */
-TTMuxTask::TTMuxTask(TTAVData* avData) : TTThreadTask("MuxTask")
+TTMuxTask::TTMuxTask(TTAVData* avData) : TTAbortableTask(avData, "MuxTask")
 {
-  mpAVData = avData;
 }
 
 /**
@@ -63,7 +62,7 @@ void TTMuxTask::init(const TTMuxTaskParams& params)
  */
 void TTMuxTask::onUserAbort()
 {
-  mCancelRequested.store(true, std::memory_order_relaxed);
+  requestCancel();
   mMkvProvider.requestAbort();
   abort();   // TTThreadTask bookkeeping (mIsAborted; pool Canceled chain)
 }
@@ -86,38 +85,6 @@ void TTMuxTask::cleanUp()
   // finished and must not be deleted (same rule as the missing poll point at
   // the end of operation()).
   if (isAborted() && !mOperationDone) abortCleanup();
-}
-
-/**
- * Delete everything this run created.
- *
- * Abort only: on a real mux failure the products stay on disk, which is the
- * behaviour the synchronous version had. Beside this task's own products (the
- * partial .mkv and the chapter file) the list holds the cut elementary
- * streams that fed the mux - after a cancel none of them is useful, and the
- * spec for this feature is to delete everything the run created.
- *
- * Failures to remove a file are logged and skipped: an abort must always
- * reach the Canceled bracket and must never hang or fail on cleanup.
- */
-void TTMuxTask::abortCleanup()
-{
-  ttRemoveFiles(mCreatedFiles, log);
-  mCreatedFiles.clear();
-}
-
-/**
- * Leave operation() through the abort path.
- *
- * The message-only TTAbortException constructor is used on purpose: its
- * (caller, line, msg) sibling logs through TTMessageLogger::fatalMsg(), which
- * would record a deliberate user cancel as the most severe class of log event
- * (same reasoning as TTH26xCutTask::abortNow()).
- */
-void TTMuxTask::abortNow()
-{
-  abortCleanup();
-  throw TTAbortException("user abort");
 }
 
 /**

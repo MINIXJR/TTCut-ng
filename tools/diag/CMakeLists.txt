@@ -254,6 +254,7 @@ diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
 diag_tool(test_audiocut        AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audiocut_abort  AV SOURCES ${AUDIOCUT_SRC})
+diag_tool(test_audiocutter_paths AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
@@ -310,6 +311,11 @@ target_link_libraries(test_repairdialog_model PRIVATE ttcut-core)
 # `diag` DEPENDS list below, same as that harness.
 diag_tool(test_repairdialog_mpv_lifecycle AV WIDGETS SOURCES)
 target_link_libraries(test_repairdialog_mpv_lifecycle PRIVATE ttcut-core)
+# Pure + live-libmpv gate for the loadfile options quoting (subtitle path
+# with a comma); links ttcut-core for ttMpvLoadfileCommand() and libmpv for
+# the live part - no GL, so it runs offscreen.
+diag_tool(test_mpv_loadfile_args AV WIDGETS SOURCES)
+target_link_libraries(test_mpv_loadfile_args PRIVATE ttcut-core PkgConfig::MPV)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
 # the whole core library, not a curated source list.
@@ -382,7 +388,7 @@ add_custom_target(diag DEPENDS
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
-  test_directed_search test_probe_video)
+  test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

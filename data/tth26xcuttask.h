@@ -15,7 +15,7 @@
 #ifndef TTH26XCUTTASK_H
 #define TTH26XCUTTASK_H
 
-#include "../common/ttthreadtask.h"
+#include "ttabortabletask.h"
 #include "../avstream/ttdisplayordermap.h"
 #include "../extern/ttessmartcut.h"
 #include "../extern/ttmkvmergeprovider.h"
@@ -52,7 +52,7 @@ struct TTH26xCutParams
 
 //! Pool task running the whole H.26x final cut pipeline
 //! (Smart Cut video -> audio -> subtitles -> MKV mux) off the GUI thread.
-class TTH26xCutTask : public TTThreadTask
+class TTH26xCutTask : public TTAbortableTask
 {
   Q_OBJECT
 
@@ -71,7 +71,6 @@ class TTH26xCutTask : public TTThreadTask
     QStringList seamNotes()    const { return mSeamNotes; }
 
   protected:
-    void cleanUp() override;
     void operation() override;
 
   public slots:
@@ -80,21 +79,8 @@ class TTH26xCutTask : public TTThreadTask
   private:
     //! The pipeline itself; operation() only wraps it in the abort funnel.
     void runCut();
-    void reportStep(const QString& msg, quint64 percent);
-    void reportStage(int stage);
     void fail(const QString& exitMessage, const QString& errorText);
-    //! Worker-side poll point: THROWS TTAbortException (via abortNow()) to
-    //! leave operation() if a cancel arrived, otherwise returns.
-    void abortIfRequested();
-    //! Unconditional abort exit (cleanup + TTAbortException). Used where an
-    //! engine already reported the cancel through its own false return.
-    [[noreturn]] void abortNow();
-    //! Delete everything this run created (abort only).
-    void abortCleanup();
-    bool cancelRequested() const
-        { return mCancelRequested.load(std::memory_order_relaxed); }
 
-    TTAVData*        mpAVData;
     //! The item whose streams the worker reads (audio/subtitle lists, the video
     //! stream's decodeToDisplayIndex). It stays alive because the only thing
     //! that destroys it is TTAVData::clear(), and its every caller goes through
@@ -109,23 +95,12 @@ class TTH26xCutTask : public TTThreadTask
     QString          mError;
     QString          mExitMessage;
     QStringList      mSeamNotes;
-    //! Every file this run produced, in creation order — the cleanup list for
-    //! an aborted cut.
-    QStringList      mCreatedFiles;
 
     //! The two engines are members, not locals, so onUserAbort() (GUI thread)
     //! can reach them without a pointer race against the worker that creates
     //! and destroys them. Both only receive an atomic store from that side.
     TTESSmartCut       mSmartCut;
     TTMkvMergeProvider mMkvProvider;
-
-    //! Cancel flag of the task itself. Set by onUserAbort() on the GUI thread,
-    //! polled by the worker between phases. It is deliberately separate from
-    //! the engines' flags: TTESSmartCut clears its own request in
-    //! initialize(), so a cancel arriving in the window between task start and
-    //! the end of initialize() would be lost there — this flag keeps it and
-    //! the next poll point acts on it.
-    std::atomic<bool>  mCancelRequested { false };
 };
 
 #endif

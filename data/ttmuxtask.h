@@ -15,7 +15,7 @@
 #ifndef TTMUXTASK_H
 #define TTMUXTASK_H
 
-#include "../common/ttthreadtask.h"
+#include "ttabortabletask.h"
 #include "../extern/ttmkvmergeprovider.h"
 
 #include <QString>
@@ -57,7 +57,7 @@ struct TTMuxTaskParams
 //! now runs here, as the cut operation's SECOND pool run (the video task being
 //! the first) - see onCutFinished()/onMpeg2MuxFinished() for the status
 //! bracket handling that spans both runs.
-class TTMuxTask : public TTThreadTask
+class TTMuxTask : public TTAbortableTask
 {
   Q_OBJECT
 
@@ -81,20 +81,11 @@ class TTMuxTask : public TTThreadTask
     void onUserAbort() override;
 
   private:
-    //! Delete everything this run created (abort only). Idempotent.
-    void abortCleanup();
-    //! Unconditional abort exit (cleanup + TTAbortException).
-    [[noreturn]] void abortNow();
-    bool cancelRequested() const
-        { return mCancelRequested.load(std::memory_order_relaxed); }
-
-    TTAVData*       mpAVData;
     TTMuxTaskParams mParams;
     QString         mError;
-    //! Filled by init() already, not by operation(): a cancel can arrive
-    //! before the pool ever schedules run(), and the files below exist from
-    //! the moment the task is created.
-    QStringList     mCreatedFiles;
+    //! mCreatedFiles (base) is filled by init() already, not by operation():
+    //! a cancel can arrive before the pool ever schedules run(), and the
+    //! files exist from the moment the task is created.
     //! Set by operation() once the mux has run to a conclusion (success or a
     //! real failure). Worker thread only; read by cleanUp() on the same
     //! thread. See cleanUp() for what it guards against.
@@ -105,11 +96,6 @@ class TTMuxTask : public TTThreadTask
     //! destroy it. It only receives an atomic store from that side. Same
     //! arrangement as TTH26xCutTask's two engines.
     TTMkvMergeProvider mMkvProvider;
-
-    //! Cancel flag of the task itself, set on the GUI thread. Kept next to the
-    //! provider's own flag so a cancel arriving before mux() starts polling is
-    //! still acted on.
-    std::atomic<bool>  mCancelRequested { false };
 };
 
 #endif

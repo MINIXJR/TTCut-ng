@@ -17,7 +17,7 @@
 
 #include "ui_audiofilelistwidget.h"
 
-#include "../common/ttcut.h"
+#include "tttracktreeview.h"
 
 class TTAVData;
 class TTAVItem;
@@ -28,43 +28,20 @@ class QAction;
 class QComboBox;
 class QSpinBox;
 
-class TTAudioTreeView : public QWidget, Ui::TTAudioFileListWidget
+class TTAudioTreeView : public TTTrackTreeView, Ui::TTAudioFileListWidget
 {
   Q_OBJECT
 
   public:
-    TTAudioTreeView(QWidget* parent=0);
-
-    void clear();
-
-  signals:
-    void openFile();
-    void removeItem(int index);
-    void swapItems(int oldIndex, int newIndex);
-    void languageChanged(int index, const QString& language);
-    void delayChanged(int index, int delayMs);
+    explicit TTAudioTreeView(QWidget* parent=0);
 
   public slots:
     void onAVDataChanged(const TTAVItem* avData);
-    void onItemUp();
-    void onItemDown();
-    void onRemoveItem();
-    void onItemRemoved(int index);
-    void onClearList();
-    void onContextMenuRequest(const QPoint& point);
     void onAppendItem(const TTAudioItem& item);
     void onSwapItems(int oldIndex, int newIndex);
     void onReloadList(const TTAVItem* avData);
 
   private:
-    void createActions();
-    QComboBox* createLanguageCombo(const QString& currentLang);
-
-  private:
-  	const TTAVItem* mpAVItem;
-    QAction*      itemUpAction;
-    QAction*      itemDownAction;
-    QAction*      itemDeleteAction;
-    QAction*      itemNewAction;
+    const TTAVItem* mpAVItem;
 };
 #endif

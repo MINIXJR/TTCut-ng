@@ -12,11 +12,14 @@
 
 #include <functional>
 
+#include <QByteArray>
 #include <QList>
 #include <QPair>
 #include <QString>
 
 #include "ttaudiorepair.h"
+
+struct AVPacket;
 
 class TTAudioCutter
 {
@@ -67,6 +70,16 @@ public:
     QString lastError() const { return mLastError; }
 
 private:
+    //! Per-call state of cut() (containers, timeline, accounting, AC3 chain);
+    //! defined in the .cpp together with the named steps of the packet loop.
+    struct CutSession;
+    bool openCutSession(CutSession& s, const QString& inputFile, const QString& outputFile);
+    bool ensureAc3Codecs(CutSession& s, int targetAcmod);
+    bool writeRepairedPacket(CutSession& s, const AVPacket* pkt,
+                             const QByteArray& bytes, double pktTime);
+    void writeReencodedPacket(CutSession& s, AVPacket* pkt);
+    void writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double pktTime);
+
     void setError(const QString& error);
     QString mLastError;
 };

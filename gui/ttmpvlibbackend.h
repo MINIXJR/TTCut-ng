@@ -19,6 +19,13 @@ class TTMpvRenderWidget;
 // ITTMpvBackend-Implementierung: mpv als libmpv-Library in-process,
 // gerendert in einen Qt-OpenGL-Kontext über die MPV_RENDER_API.
 // Erlaubt Wayland-Betrieb ohne XCB-Zwang.
+//! The wrapper hands loadfile per-file options in CLI form ("--start=10.5",
+//! "--pause=yes", "--audio-file=...", "--sub-file=..."); libmpv's loadfile
+//! wants them as its fourth positional argument, one "key=value,key=value"
+//! list. Pure: returns the argv to pass to mpv_command; anything that is not
+//! a loadfile command with options comes back unchanged.
+QStringList ttMpvLoadfileCommand(const QStringList& args);
+
 class TTMpvLibBackend : public ITTMpvBackend
 {
   Q_OBJECT

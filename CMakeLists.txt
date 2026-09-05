@@ -102,6 +102,7 @@ set(TTCUT_HEADERS
   data/ttopensubtitletask.h
   data/ttcutvideotask.h
   data/ttcutpreviewtask.h
+  data/ttabortabletask.h
   data/tth26xcuttask.h
   data/ttaudioonlycuttask.h
   data/ttmuxtask.h
@@ -164,6 +165,7 @@ set(TTCUT_HEADERS
   gui/ttmpvrenderwidget.h
   gui/ttmpvlibbackend.h
   gui/ttmpvwrapper.h
+  gui/tttracktreeview.h
   gui/ttaudiotreeview.h
   gui/ttvideotreeview.h
   gui/ttsubtitletreeview.h
@@ -224,6 +226,7 @@ set(TTCUT_CORE_SOURCES
   data/ttopensubtitletask.cpp
   data/ttcutvideotask.cpp
   data/ttcutpreviewtask.cpp
+  data/ttabortabletask.cpp
   data/tth26xcuttask.cpp
   data/ttaudioonlycuttask.cpp
   data/ttmuxtask.cpp
@@ -280,6 +283,7 @@ set(TTCUT_CORE_SOURCES
   gui/ttmpvrenderwidget.cpp
   gui/ttmpvlibbackend.cpp
   gui/ttmpvwrapper.cpp
+  gui/tttracktreeview.cpp
   gui/ttaudiotreeview.cpp
   gui/ttvideotreeview.cpp
   gui/ttsubtitletreeview.cpp

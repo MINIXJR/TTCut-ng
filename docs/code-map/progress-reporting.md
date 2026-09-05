@@ -567,6 +567,16 @@ flowchart TD
 
 ## Redundancy / consolidation candidates
 
+- **Cancel flag / created-files list / abort funnel of the pool tasks**:
+  **Done 2026-09-05** (code audit batch E3, `de4df8dd`): `TTAbortableTask`
+  (`data/ttabortabletask.{h,cpp}`) holds `mCancelRequested`, `mCreatedFiles`,
+  `cancelRequested()`, `abortIfRequested()`, `abortNow()`, `abortCleanup()`
+  and the `reportStep()`/`reportStage()` forwarding once; `TTH26xCutTask`,
+  `TTAudioOnlyCutTask` and `TTMuxTask` derive from it. Their `onUserAbort()`
+  keeps the order flag → engines' `requestAbort()` → `TTThreadTask::abort()`
+  via `requestCancel()`; `TTMuxTask` keeps its own `cleanUp()` (files removed
+  when the cancel arrived before `run()`). The abort matrix harnesses and
+  `gate_cut_identity.sh` were identical across the change.
 - **Audio progress lambda pair** (`onProgress`/track-start callbacks for
   `cutAudioTracks`): three near-identical copies — same
   `(i*100+percent)/audioCount` folding — now spread across three files:

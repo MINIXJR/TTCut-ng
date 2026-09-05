@@ -4555,6 +4555,21 @@ Unterstützte Formate:
     </message>
 </context>
 <context>
+    <name>TTTrackTreeView</name>
+    <message>
+        <source>Move &amp;up</source>
+        <translation>Nach &amp;oben</translation>
+    </message>
+    <message>
+        <source>&amp;Delete</source>
+        <translation>&amp;Entfernen</translation>
+    </message>
+    <message>
+        <source>Move d&amp;own</source>
+        <translation>Nach &amp;unten</translation>
+    </message>
+</context>
+<context>
     <name>TTVideoTreeView</name>
     <message>
         <location filename="../gui/ttvideotreeview.cpp" line="280"/>
