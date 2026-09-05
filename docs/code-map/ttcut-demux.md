@@ -250,6 +250,14 @@ flowchart LR
    and one ffmpeg call for the h264/hevc extraction (bsf/format per codec).
    Gate: ES output byte-identical and logs identical on MPEG-2/H.264/HEVC TS
    and a two-segment VDR `.rec`; `gate_demux_gapsync` 3/3, `gate_demux_zonesync` 9/9.
+   Rest pass on the module alone (scan without cap, same day): `_ffprobe`
+   is the quiet front end of the four probe helpers, `_probe_segment_timing`
+   the start_time/duration pair of the multi-file scanners, the audiofix
+   block's sixth `$FRAME_RATE` re-parse reads `FRAME_RATE_NUM/DEN`, and
+   `ENCODER` is an array. Same gate, identical again. The 25 remaining
+   verdicts on this module are deliberate/documented (cross-script idioms
+   shared with `vdr-demux-example.sh` and the gate scripts, the awk float
+   idiom, the 3173-line single file by decision 2c).
 
 Verified after all five: Futurama ES outputs byte-identical to the
 pre-refactor baseline (video, both audio tracks, logo, .info modulo
