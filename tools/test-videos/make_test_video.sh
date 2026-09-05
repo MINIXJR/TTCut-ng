@@ -63,6 +63,19 @@ output_already_present() {
     [[ $FORCE -eq 0 && -s "$1" && "$1" -nt "$SCRIPT_PATH" ]]
 }
 
+# skip_if_present <output> <label> <basename> <video_ext> <audio_ext|"">
+# Returns 0 when <output> is already present: says so and (re)writes the
+# project file, so a cached variant still gets a current .ttcut. Returns 1
+# when the variant has to be generated. Callers return right after a 0.
+skip_if_present() {
+    local output=$1 label=$2
+    shift 2
+    output_already_present "$output" || return 1
+    echo "==> ${label} already present: ${output} (use --force to regenerate)"
+    write_ttcut_project "$@"
+    return 0
+}
+
 # ---------- Tux PNG render (cached) ----------
 render_tux() {
     if [[ ! -s tux_main.png ]]; then
@@ -193,9 +206,7 @@ encode_variant() {
     local BASE=$1 vext=$2 acodec=$3 timeline=$4 W=$5 H=$6 R=$7 label=$8
     shift 8
     ENCODE_SKIPPED=0
-    if output_already_present "${BASE}.${vext}"; then
-        echo "==> ${label} already present: ${BASE}.${vext} (use --force to regenerate)"
-        write_ttcut_project "$BASE" "$vext" "$acodec"
+    if skip_if_present "${BASE}.${vext}" "$label" "$BASE" "$vext" "$acodec"; then
         ENCODE_SKIPPED=1
         return 0
     fi
@@ -234,9 +245,7 @@ verify_stream_flag() {
 # existing frame-coded PAL stream, reusing its audio.
 generate_mpeg2_fieldpic() {
     local BASE=$1 SRC_BASE=$2 src_fn=$3 label=$4
-    if output_already_present "${BASE}.m2v"; then
-        echo "==> ${label} already present: ${BASE}.m2v (use --force to regenerate)"
-        write_ttcut_project "$BASE" "m2v" "mp2"
+    if skip_if_present "${BASE}.m2v" "$label" "$BASE" "m2v" "mp2"; then
         return 0
     fi
     echo "==> Generating ${label} (inject every 50 frames)..."
@@ -282,9 +291,7 @@ generate_h264_1080i_mbaff() {
 }
 generate_h264_1080i_paff() {
     local BASE="tux_h264_1080i_paff_test"
-    if output_already_present "${BASE}.264"; then
-        echo "==> H.264 1080i PAFF already present: ${BASE}.264 (use --force to regenerate)"
-        write_ttcut_project "$BASE" "264" "ac3"
+    if skip_if_present "${BASE}.264" "H.264 1080i PAFF" "$BASE" "264" "ac3"; then
         return 0
     fi
     echo "==> Generating H.264 1080i PAFF via JM Reference Encoder (slow)..."
@@ -297,6 +304,7 @@ generate_h264_1080i_paff() {
 
     local RAW="${BASE}.yuv"
     echo "    Step 1/3: dump raw YUV (~7 GB)..."
+    # shellcheck disable=SC2046  # the timeline builder emits separate ffmpeg arguments
     ffmpeg -y -hide_banner -loglevel warning -stats \
         $(build_tux_timeline_args 1920 1080 25) \
         -filter_complex "$TUX_FILTERGRAPH" \

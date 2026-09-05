@@ -15,6 +15,7 @@
  * License: GPL v2 or later
  */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -265,6 +266,75 @@ static int open_ac3_files(const ac3fix_options_t *opts, ac3fix_io_t *io)
     return 0;
 }
 
+/* One complete frame: count it, report a channel-format change, classify it
+ * (stereo / 5.1 / other), patch the header when the fix applies, and write it
+ * to the output when there is one. The frame is copied into frame_buffer
+ * first so the patch never touches the read buffer. Returns 1 after a write
+ * error, 0 otherwise. */
+static int process_one_frame(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix_stats_t *stats,
+                             const uint8_t *frame, const ac3_frame_info_t *info, uint8_t *frame_buffer)
+{
+    stats->total_frames++;
+
+    /* Track format changes */
+    if (stats->last_acmod != -1 && info->acmod != stats->last_acmod) {
+        stats->format_changes++;
+        if (opts->show_segments) {
+            char time_buf[32];
+            format_time(stats->duration_s, time_buf, sizeof(time_buf));
+            printf("Format change at %s (frame %" PRIu64 "): %s -> %s\n",
+                   time_buf, stats->total_frames,
+                   ac3_acmod_names[stats->last_acmod],
+                   ac3_acmod_names[info->acmod]);
+        }
+    }
+    stats->last_acmod = info->acmod;
+
+    /* Copy frame to frame buffer */
+    memcpy(frame_buffer, frame, info->frame_size);
+
+    bool should_fix = false;
+
+    if (info->acmod == AC3_ACMOD_STEREO) {
+        stats->stereo_frames++;
+
+        if (is_inconsistent_header(info, opts->min_bitrate)) {
+            stats->inconsistent_frames++;
+
+            /* In force_fix mode, fix all inconsistent frames */
+            if (opts->force_fix) {
+                should_fix = true;
+                stats->fixed_frames++;
+
+                if (opts->verbose) {
+                    char time_buf[32];
+                    format_time(stats->duration_s, time_buf, sizeof(time_buf));
+                    printf("Frame %" PRIu64 " @ %s: %d kbps stereo -> 5.1 (FIX)\n",
+                           stats->total_frames, time_buf, info->bitrate);
+                }
+            }
+        }
+    } else if (info->acmod == AC3_ACMOD_3F2R) {
+        stats->surround_frames++;
+    } else {
+        stats->other_frames++;
+    }
+
+    /* Apply fix if needed */
+    if (should_fix && io->out_fp) {
+        patch_ac3_header(frame_buffer, info->frame_size, AC3_ACMOD_3F2R);
+    }
+
+    /* Write frame to output */
+    if (io->out_fp) {
+        if (fwrite(frame_buffer, 1, info->frame_size, io->out_fp) != info->frame_size) {
+            fprintf(stderr, "\nError: Write failed at frame %" PRIu64 "\n", stats->total_frames);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Walks the input frame by frame: counts frames per acmod, reports format
  * changes, patches inconsistent stereo headers in force-fix mode and
  * writes every frame to the output when there is one. Bytes that belong
@@ -315,64 +385,8 @@ static int walk_ac3_frames(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix
                 break;
             }
 
-            stats->total_frames++;
-
-            /* Track format changes */
-            if (stats->last_acmod != -1 && info.acmod != stats->last_acmod) {
-                stats->format_changes++;
-                if (opts->show_segments) {
-                    char time_buf[32];
-                    format_time(stats->duration_s, time_buf, sizeof(time_buf));
-                    printf("Format change at %s (frame %" PRIu64 "): %s -> %s\n",
-                           time_buf, stats->total_frames,
-                           ac3_acmod_names[stats->last_acmod],
-                           ac3_acmod_names[info.acmod]);
-                }
-            }
-            stats->last_acmod = info.acmod;
-
-            /* Copy frame to frame buffer */
-            memcpy(frame_buffer, buffer + processed, info.frame_size);
-
-            bool should_fix = false;
-
-            if (info.acmod == AC3_ACMOD_STEREO) {
-                stats->stereo_frames++;
-
-                if (is_inconsistent_header(&info, opts->min_bitrate)) {
-                    stats->inconsistent_frames++;
-
-                    /* In force_fix mode, fix all inconsistent frames */
-                    if (opts->force_fix) {
-                        should_fix = true;
-                        stats->fixed_frames++;
-
-                        if (opts->verbose) {
-                            char time_buf[32];
-                            format_time(stats->duration_s, time_buf, sizeof(time_buf));
-                            printf("Frame %" PRIu64 " @ %s: %d kbps stereo -> 5.1 (FIX)\n",
-                                   stats->total_frames, time_buf, info.bitrate);
-                        }
-                    }
-                }
-            } else if (info.acmod == AC3_ACMOD_3F2R) {
-                stats->surround_frames++;
-            } else {
-                stats->other_frames++;
-            }
-
-            /* Apply fix if needed */
-            if (should_fix && io->out_fp) {
-                patch_ac3_header(frame_buffer, info.frame_size, AC3_ACMOD_3F2R);
-            }
-
-            /* Write frame to output */
-            if (io->out_fp) {
-                if (fwrite(frame_buffer, 1, info.frame_size, io->out_fp) != info.frame_size) {
-                    fprintf(stderr, "\nError: Write failed at frame %" PRIu64 "\n", stats->total_frames);
-                    return 1;
-                }
-            }
+            if (process_one_frame(opts, io, stats, buffer + processed, &info, frame_buffer))
+                return 1;
 
             last_frame_size = info.frame_size;
             processed += info.frame_size;
@@ -498,51 +512,72 @@ static void print_usage(const char *progname)
     printf("  %s -F -v input.ac3 fixed.ac3      # Fix with verbose output\n", progname);
 }
 
+/* Boolean switches: short form, long form, and the option field they set. */
+typedef struct {
+    const char *short_opt;
+    const char *long_opt;
+    size_t      field;       /* offsetof(ac3fix_options_t, <bool member>) */
+} ac3fix_switch_t;
+
+static const ac3fix_switch_t ac3fix_switches[] = {
+    { "-a", "--analyze",       offsetof(ac3fix_options_t, analyze_only) },
+    { "-v", "--verbose",       offsetof(ac3fix_options_t, verbose) },
+    { "-f", "--force",         offsetof(ac3fix_options_t, force) },
+    { "-F", "--force-fix",     offsetof(ac3fix_options_t, force_fix) },
+    { "-s", "--show-segments", offsetof(ac3fix_options_t, show_segments) },
+};
+
+/* Sets the switch named by arg and returns true; false when arg is no
+ * switch (an option with an argument, --help, or an unknown one). */
+static bool set_ac3fix_switch(ac3fix_options_t *opts, const char *arg)
+{
+    for (size_t i = 0; i < sizeof(ac3fix_switches) / sizeof(ac3fix_switches[0]); i++) {
+        const ac3fix_switch_t *sw = &ac3fix_switches[i];
+        if (strcmp(arg, sw->short_opt) == 0 || strcmp(arg, sw->long_opt) == 0) {
+            *(bool *)((char *)opts + sw->field) = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Command-line options into *opts. Returns -1 to continue, otherwise the
  * exit code to leave with (0 after --help, 1 after a usage error). */
 static int parse_ac3fix_args(int argc, char **argv, ac3fix_options_t *opts)
 {
-    /* Parse arguments */
     int positional = 0;
     for (int i = 1; i < argc; i++) {
-        if (argv[i][0] == '-') {
-            if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--analyze") == 0) {
-                opts->analyze_only = true;
-            } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
-                opts->verbose = true;
-            } else if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--force") == 0) {
-                opts->force = true;
-            } else if (strcmp(argv[i], "-F") == 0 || strcmp(argv[i], "--force-fix") == 0) {
-                opts->force_fix = true;
-            } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--show-segments") == 0) {
-                opts->show_segments = true;
-            } else if (strcmp(argv[i], "-b") == 0 || strcmp(argv[i], "--bitrate") == 0) {
-                if (i + 1 < argc) {
-                    int val = atoi(argv[++i]);
-                    if (val < 32 || val > 640) {
-                        fprintf(stderr, "Error: Invalid bitrate '%s' (valid: 32-640 kbps)\n", argv[i]);
-                        return 1;
-                    }
-                    opts->min_bitrate = (uint16_t)val;
-                } else {
-                    fprintf(stderr, "Error: -b requires an argument\n");
-                    return 1;
-                }
-            } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-                print_usage(argv[0]);
-                return 0;
-            } else {
-                fprintf(stderr, "Unknown option: %s\n", argv[i]);
-                return 1;
-            }
-        } else {
+        if (argv[i][0] != '-') {
             if (positional == 0) {
                 opts->input_file = argv[i];
             } else if (positional == 1) {
                 opts->output_file = argv[i];
             }
             positional++;
+            continue;
         }
+        if (set_ac3fix_switch(opts, argv[i]))
+            continue;
+        if (strcmp(argv[i], "-b") == 0 || strcmp(argv[i], "--bitrate") == 0) {
+            if (i + 1 < argc) {
+                int val = atoi(argv[++i]);
+                if (val < 32 || val > 640) {
+                    fprintf(stderr, "Error: Invalid bitrate '%s' (valid: 32-640 kbps)\n", argv[i]);
+                    return 1;
+                }
+                opts->min_bitrate = (uint16_t)val;
+            } else {
+                fprintf(stderr, "Error: -b requires an argument\n");
+                return 1;
+            }
+            continue;
+        }
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+        fprintf(stderr, "Unknown option: %s\n", argv[i]);
+        return 1;
     }
 
     return -1;

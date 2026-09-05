@@ -154,6 +154,27 @@ static const uint8_t *next_pid_section(const uint8_t *ts_data, int64_t ts_size,
     return NULL;
 }
 
+/* Next section of table_id on pid, starting at *off: skips sections of
+ * another table or shorter than min_len, consumes the 3-byte section header
+ * (table_id + section_length) and returns the pointer past it, with
+ * *remaining and *section_length set. NULL when no section is left. */
+static const uint8_t *ts_locate_section(const uint8_t *ts_data, int64_t ts_size, int64_t *off,
+                                        int pid, uint8_t table_id, int min_len,
+                                        int *remaining, int *section_length)
+{
+    const uint8_t *p;
+    while ((p = next_pid_section(ts_data, ts_size, off, pid, remaining)) != NULL) {
+        if (*remaining < min_len)
+            continue;
+        if (p[0] != table_id)
+            continue;
+        *section_length = ((p[1] & 0x0F) << 8) | p[2];
+        *remaining -= 3;
+        return p + 3;
+    }
+    return NULL;
+}
+
 /* Parse PAT to find PMT PID, then PMT to find video stream PID.
  * Also reports the PMT stream_type of the selected video stream via
  * *stream_type_out (0 if not found). Returns video PID or -1 on failure. */
@@ -166,25 +187,15 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
     if (stream_type_out)
         *stream_type_out = 0;
 
-    /* Step 1: Find PAT (PID 0) and extract first non-NIT PMT PID */
+    /* Step 1: Find PAT (PID 0) and extract first non-NIT PMT PID.
+     * PAT section: table_id(1) + section_length(2) + tsid(2) + ver(1) + secnum(1) + lastsec(1) */
     int64_t off = 0;
     const uint8_t *p;
-    int remaining;
-    while ((p = next_pid_section(ts_data, ts_size, &off, PAT_PID, &remaining)) != NULL) {
-        if (remaining < 8)
-            continue;
-
-        /* PAT section: table_id(1) + section_length(2) + tsid(2) + ver(1) + secnum(1) + lastsec(1) */
-        uint8_t table_id = p[0];
-        if (table_id != 0x00)
-            continue;
-
-        int section_length = ((p[1] & 0x0F) << 8) | p[2];
-        p += 3;
-        remaining -= 3;
-
+    int remaining, section_length;
+    while ((p = ts_locate_section(ts_data, ts_size, &off, PAT_PID, 0x00, 8,
+                                  &remaining, &section_length)) != NULL) {
         /* Skip transport_stream_id(2) + reserved/version/current(1) + section_number(1) + last_section_number(1);
-         * remaining >= 5 follows from the >= 8 check above */
+         * remaining >= 5 follows from the min_len 8 above */
         p += 5;
         remaining -= 5;
 
@@ -207,25 +218,15 @@ static int find_video_pid(const uint8_t *ts_data, int64_t ts_size,
     if (pmt_pid < 0)
         return -1;
 
-    /* Step 2: Find PMT and extract video PID */
+    /* Step 2: Find PMT and extract video PID.
+     * PMT section: table_id(1) + section_length(2) + program_number(2)
+     * + reserved/version/current(1) + section_number(1) + last_section_number(1)
+     * + PCR_PID(2) + program_info_length(2) */
     off = 0;
-    while ((p = next_pid_section(ts_data, ts_size, &off, pmt_pid, &remaining)) != NULL) {
-        if (remaining < 12)
-            continue;
-
-        /* PMT section: table_id(1) + section_length(2) + program_number(2)
-         * + reserved/version/current(1) + section_number(1) + last_section_number(1)
-         * + PCR_PID(2) + program_info_length(2) */
-        uint8_t table_id = p[0];
-        if (table_id != 0x02)
-            continue;
-
-        int section_length = ((p[1] & 0x0F) << 8) | p[2];
-        p += 3;
-        remaining -= 3;
-
+    while ((p = ts_locate_section(ts_data, ts_size, &off, pmt_pid, 0x02, 12,
+                                  &remaining, &section_length)) != NULL) {
         /* Skip program_number(2) + ver(1) + secnum(1) + lastsec(1) + PCR_PID(2);
-         * remaining >= 9 follows from the >= 12 check above */
+         * remaining >= 9 follows from the min_len 12 above */
         p += 7;
         remaining -= 7;
 
@@ -418,6 +419,75 @@ static int find_vdr_segments(const char *first_ts, char ***segments, int *count)
     return 0;
 }
 
+static void free_segment_paths(char **paths, int count)
+{
+    for (int i = 0; i < count; i++)
+        free(paths[i]);
+    free(paths);
+}
+
+/* Growing AccessUnit array plus the running state of the packet walk. */
+typedef struct {
+    AccessUnit *aus;
+    int         count;
+    int         capacity;
+    int64_t     cumulative_es;   /* ES bytes seen so far = offset of the next AU */
+    bool        have_current;    /* an AU is open (its es_size still unknown) */
+    int         prev_cc;         /* continuity counter of the previous video packet, -1 at start */
+} AuCollector;
+
+/* Continuity-counter check for one video packet; a break while an AU is
+ * open is charged to that AU. */
+static void au_collector_check_cc(AuCollector *c, int cc)
+{
+    if (c->prev_cc >= 0) {
+        int expected = (c->prev_cc + 1) & 0x0F;
+        if (cc != expected && c->have_current)
+            c->aus[c->count - 1].cc_errors++;
+    }
+    c->prev_cc = cc;
+}
+
+/* Payload of a PUSI packet = new PES packet = new Access Unit: closes the
+ * open AU, grows the array when full and opens the next AU from the PES
+ * header. Returns -1 when the array could not grow (c->aus stays valid). */
+static int au_collector_start_au(AuCollector *c, const uint8_t *payload, int plen)
+{
+    /* Finalize previous AU's es_size */
+    if (c->have_current)
+        c->aus[c->count - 1].es_size = c->cumulative_es - c->aus[c->count - 1].es_offset;
+
+    if (c->count >= c->capacity) {
+        int capacity = c->capacity * 2;
+        AccessUnit *tmp = (AccessUnit *)realloc(c->aus, capacity * sizeof(AccessUnit));
+        if (!tmp)
+            return -1;
+        c->aus = tmp;
+        c->capacity = capacity;
+    }
+
+    /* Parse PES header */
+    int64_t pts = -1, dts = -1;
+    int es_skip = parse_video_pes_header(payload, plen, &pts, &dts);
+
+    /* Initialize new AU */
+    AccessUnit *au = &c->aus[c->count];
+    au->pts = pts;
+    au->dts = dts;
+    au->es_offset = c->cumulative_es;
+    au->es_size = 0;
+    au->cc_errors = 0;
+    au->extra = false;
+    c->count++;
+    c->have_current = true;
+
+    /* Count ES bytes in this first packet (after PES header) */
+    int es_bytes = plen - es_skip;
+    if (es_bytes > 0)
+        c->cumulative_es += es_bytes;
+    return 0;
+}
+
 /* Scan TS file(s) for video PES packets, extract PTS/DTS, track ES byte offsets.
  * Handles VDR multi-file: mmaps each segment internally, processes sequentially.
  * Returns 0 on success, -1 on error. */
@@ -437,18 +507,14 @@ static int collect_access_units(const char *ts_path, int video_pid,
     if (verbose && seg_count > 1)
         fprintf(stderr, "VDR multi-file: %d segments detected\n", seg_count);
 
-    int capacity = 4096;
-    AccessUnit *aus = (AccessUnit *)malloc(capacity * sizeof(AccessUnit));
-    if (!aus) {
-        for (int i = 0; i < seg_count; i++) free(seg_paths[i]);
-        free(seg_paths);
+    AuCollector c = { .aus = NULL, .count = 0, .capacity = 4096,
+                      .cumulative_es = 0, .have_current = false,
+                      .prev_cc = -1 };   /* continuity counter tracking across segments */
+    c.aus = (AccessUnit *)malloc(c.capacity * sizeof(AccessUnit));
+    if (!c.aus) {
+        free_segment_paths(seg_paths, seg_count);
         return -1;
     }
-
-    int num_aus = 0;
-    int64_t cumulative_es = 0;
-    int prev_cc = -1;           /* continuity counter tracking across segments */
-    bool have_current_au = false;
 
     for (int s = 0; s < seg_count; s++) {
         const uint8_t *ts_data = NULL;
@@ -468,15 +534,7 @@ static int collect_access_units(const char *ts_path, int video_pid,
             if (ts_packet_pid(pkt) != video_pid)
                 continue;
 
-            /* Continuity counter check */
-            int cc = pkt[3] & 0x0F;
-            if (prev_cc >= 0) {
-                int expected = (prev_cc + 1) & 0x0F;
-                if (cc != expected && have_current_au) {
-                    aus[num_aus - 1].cc_errors++;
-                }
-            }
-            prev_cc = cc;
+            au_collector_check_cc(&c, pkt[3] & 0x0F);
 
             /* Get TS payload */
             int plen;
@@ -488,48 +546,16 @@ static int collect_access_units(const char *ts_path, int video_pid,
 
             if (pusi) {
                 /* Payload Unit Start Indicator — new PES packet = new Access Unit */
-
-                /* Finalize previous AU's es_size */
-                if (have_current_au) {
-                    aus[num_aus - 1].es_size = cumulative_es - aus[num_aus - 1].es_offset;
+                if (au_collector_start_au(&c, payload, plen) < 0) {
+                    free(c.aus);
+                    close_mmap(ts_data, ts_size);
+                    free_segment_paths(seg_paths, seg_count);
+                    return -1;
                 }
-
-                /* Grow array if needed */
-                if (num_aus >= capacity) {
-                    capacity *= 2;
-                    AccessUnit *tmp = (AccessUnit *)realloc(aus, capacity * sizeof(AccessUnit));
-                    if (!tmp) {
-                        free(aus);
-                        close_mmap(ts_data, ts_size);
-                        for (int i = 0; i < seg_count; i++) free(seg_paths[i]);
-                        free(seg_paths);
-                        return -1;
-                    }
-                    aus = tmp;
-                }
-
-                /* Parse PES header */
-                int64_t pts = -1, dts = -1;
-                int es_skip = parse_video_pes_header(payload, plen, &pts, &dts);
-
-                /* Initialize new AU */
-                aus[num_aus].pts = pts;
-                aus[num_aus].dts = dts;
-                aus[num_aus].es_offset = cumulative_es;
-                aus[num_aus].es_size = 0;
-                aus[num_aus].cc_errors = 0;
-                aus[num_aus].extra = false;
-                num_aus++;
-                have_current_au = true;
-
-                /* Count ES bytes in this first packet (after PES header) */
-                int es_bytes = plen - es_skip;
-                if (es_bytes > 0)
-                    cumulative_es += es_bytes;
             } else {
                 /* Continuation packet — all payload bytes are ES data */
-                if (have_current_au)
-                    cumulative_es += plen;
+                if (c.have_current)
+                    c.cumulative_es += plen;
             }
         }
 
@@ -537,18 +563,15 @@ static int collect_access_units(const char *ts_path, int video_pid,
     }
 
     /* Finalize last AU's es_size */
-    if (have_current_au && num_aus > 0) {
-        aus[num_aus - 1].es_size = cumulative_es - aus[num_aus - 1].es_offset;
+    if (c.have_current && c.count > 0) {
+        c.aus[c.count - 1].es_size = c.cumulative_es - c.aus[c.count - 1].es_offset;
     }
 
-    /* Free VDR segments array */
-    for (int i = 0; i < seg_count; i++)
-        free(seg_paths[i]);
-    free(seg_paths);
+    free_segment_paths(seg_paths, seg_count);
 
-    *out = aus;
-    *count = num_aus;
-    *total_es_bytes = cumulative_es;
+    *out = c.aus;
+    *count = c.count;
+    *total_es_bytes = c.cumulative_es;
     return 0;
 }
 
@@ -563,6 +586,13 @@ static int cmp_pts_entry(const void *a, const void *b)
     int64_t va = ((const PtsSortEntry *)a)->pts;
     int64_t vb = ((const PtsSortEntry *)b)->pts;
     return (va > vb) - (va < vb);
+}
+
+/* Verbose summary line of one detection method. */
+static void report_extra_count(const char *method, int extras, int verbose)
+{
+    if (extras > 0 && verbose)
+        fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (%s)\n", extras, method);
 }
 
 /* Method 1: DTS monotonicity. Marks AUs whose DTS steps backwards or repeats;
@@ -596,9 +626,7 @@ static int detect_dts_monotonicity(AccessUnit *aus, int count, int verbose)
         }
     }
 
-    if (dts_extras > 0 && verbose)
-        fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (DTS monotonicity method)\n",
-                dts_extras);
+    report_extra_count("DTS monotonicity method", dts_extras, verbose);
     return dts_extras;
 }
 
@@ -625,55 +653,16 @@ static int detect_pts_duplicates(AccessUnit *aus, int count, int verbose)
         }
     }
 
-    if (dup_extras > 0 && verbose)
-        fprintf(stderr, "PTS/DTS analysis: %d extra frames detected (PTS duplicate method)\n",
-                dup_extras);
+    report_extra_count("PTS duplicate method", dup_extras, verbose);
     return dup_extras;
 }
 
-/* Method 3: PTS grid analysis (primary for MPEG-2). Sort PTS values and detect
- * regions where spacing drops to half the nominal frame duration. In those
- * regions, frames that fall off the normal frame-duration grid are extra
- * (doubled frames from TS corruption).
- *
- * Example: 25fps nominal = 3600 ticks. In corrupted regions, spacing
- * drops to 1800 ticks (50 fields/s). Every other frame in such a run
- * is extra - specifically the ones whose PTS doesn't align with the
- * 3600-tick grid established by the surrounding normal frames.
- * Returns the number of extra frames marked. */
-static int detect_pts_grid(AccessUnit *aus, int count, int verbose)
+/* Nominal frame duration in 90 kHz ticks = the most common gap between
+ * consecutive sorted PTS values (first 10000 gaps), out of the known frame
+ * rates: 3600 (25fps), 3003 (29.97fps), 1800 (50fps), 1501 (59.94fps), 3750,
+ * 7200, 6006. Defaults to 3600 when none of them occurs. */
+static int64_t nominal_frame_duration(const PtsSortEntry *sorted, int valid_count)
 {
-    /* Collect AUs with valid PTS */
-    int valid_count = 0;
-    for (int i = 0; i < count; i++) {
-        if (aus[i].pts >= 0)
-            valid_count++;
-    }
-
-    if (valid_count < 2) {
-        if (verbose)
-            fprintf(stderr, "PTS/DTS analysis: insufficient PTS data for grid analysis\n");
-        return 0;
-    }
-
-    PtsSortEntry *sorted = (PtsSortEntry *)malloc(valid_count * sizeof(PtsSortEntry));
-    if (!sorted)
-        return 0;
-
-    int si = 0;
-    for (int i = 0; i < count; i++) {
-        if (aus[i].pts >= 0) {
-            sorted[si].pts = aus[i].pts;
-            sorted[si].orig_idx = i;
-            si++;
-        }
-    }
-
-    qsort(sorted, valid_count, sizeof(PtsSortEntry), cmp_pts_entry);
-
-    /* Determine nominal frame duration from the most common PTS gap.
-     * Sample gaps and find the mode. Common values: 3600 (25fps), 3003 (29.97fps),
-     * 1800 (50fps), 1501 (59.94fps). */
     int64_t gap_counts[8] = {0};
     const int64_t gap_values[8] = {3600, 3003, 1800, 1501, 3750, 7200, 6006, 0};
     int num_gap_types = 7;
@@ -696,23 +685,15 @@ static int detect_pts_grid(AccessUnit *aus, int count, int verbose)
             nominal_duration = gap_values[g];
         }
     }
+    return nominal_duration;
+}
 
-    int64_t half_duration = nominal_duration / 2;
-
-    if (verbose)
-        fprintf(stderr, "PTS grid analysis: nominal frame duration = %lld ticks (%.2f fps)\n",
-                (long long)nominal_duration, 90000.0 / nominal_duration);
-
-    /* If nominal is already the smallest unit (e.g., 1800 for 50fps progressive),
-     * grid analysis cannot detect extras — there's no "half" to find */
-    if (half_duration < 900) {
-        if (verbose)
-            fprintf(stderr, "PTS grid analysis: frame rate too high for half-duration detection\n");
-        free(sorted);
-        return 0;
-    }
-
-    /* Find runs of half-duration gaps and mark off-grid frames as extra */
+/* Walks the sorted PTS list for runs of half-duration gaps and marks every
+ * frame in such a run whose PTS is off the nominal grid (anchored on the
+ * frame just before the run) as extra. Returns the number marked. */
+static int mark_off_grid_frames(AccessUnit *aus, const PtsSortEntry *sorted, int valid_count,
+                                int64_t nominal_duration, int64_t half_duration, int verbose)
+{
     int grid_extras = 0;
     int i = 0;
     while (i < valid_count - 1) {
@@ -765,6 +746,68 @@ static int detect_pts_grid(AccessUnit *aus, int count, int verbose)
             i++;
         }
     }
+    return grid_extras;
+}
+
+/* Method 3: PTS grid analysis (primary for MPEG-2). Sort PTS values and detect
+ * regions where spacing drops to half the nominal frame duration. In those
+ * regions, frames that fall off the normal frame-duration grid are extra
+ * (doubled frames from TS corruption).
+ *
+ * Example: 25fps nominal = 3600 ticks. In corrupted regions, spacing
+ * drops to 1800 ticks (50 fields/s). Every other frame in such a run
+ * is extra - specifically the ones whose PTS doesn't align with the
+ * 3600-tick grid established by the surrounding normal frames.
+ * Returns the number of extra frames marked. */
+static int detect_pts_grid(AccessUnit *aus, int count, int verbose)
+{
+    /* Collect AUs with valid PTS */
+    int valid_count = 0;
+    for (int i = 0; i < count; i++) {
+        if (aus[i].pts >= 0)
+            valid_count++;
+    }
+
+    if (valid_count < 2) {
+        if (verbose)
+            fprintf(stderr, "PTS/DTS analysis: insufficient PTS data for grid analysis\n");
+        return 0;
+    }
+
+    PtsSortEntry *sorted = (PtsSortEntry *)malloc(valid_count * sizeof(PtsSortEntry));
+    if (!sorted)
+        return 0;
+
+    int si = 0;
+    for (int i = 0; i < count; i++) {
+        if (aus[i].pts >= 0) {
+            sorted[si].pts = aus[i].pts;
+            sorted[si].orig_idx = i;
+            si++;
+        }
+    }
+
+    qsort(sorted, valid_count, sizeof(PtsSortEntry), cmp_pts_entry);
+
+    int64_t nominal_duration = nominal_frame_duration(sorted, valid_count);
+    int64_t half_duration = nominal_duration / 2;
+
+    if (verbose)
+        fprintf(stderr, "PTS grid analysis: nominal frame duration = %lld ticks (%.2f fps)\n",
+                (long long)nominal_duration, 90000.0 / nominal_duration);
+
+    /* If nominal is already the smallest unit (e.g., 1800 for 50fps progressive),
+     * grid analysis cannot detect extras — there's no "half" to find */
+    if (half_duration < 900) {
+        if (verbose)
+            fprintf(stderr, "PTS grid analysis: frame rate too high for half-duration detection\n");
+        free(sorted);
+        return 0;
+    }
+
+    /* Find runs of half-duration gaps and mark off-grid frames as extra */
+    int grid_extras = mark_off_grid_frames(aus, sorted, valid_count,
+                                           nominal_duration, half_duration, verbose);
 
     free(sorted);
 
@@ -833,6 +876,33 @@ static void print_usage(const char *prog)
         prog);
 }
 
+/* Verbose: how many AUs carry a DTS and a PTS. */
+static void print_au_summary(const AccessUnit *aus, int au_count)
+{
+    int with_dts = 0, with_pts = 0;
+    for (int i = 0; i < au_count; i++) {
+        if (aus[i].dts >= 0) with_dts++;
+        if (aus[i].pts >= 0) with_pts++;
+    }
+    fprintf(stderr, "Access units: %d (DTS: %d, PTS: %d)\n",
+            au_count, with_dts, with_pts);
+}
+
+/* The doubled_pts_aus= line: comma-separated indices of the extra AUs. */
+static void print_doubled_pts_list(const AccessUnit *aus, int au_count)
+{
+    printf("doubled_pts_aus=");
+    bool first = true;
+    for (int i = 0; i < au_count; i++) {
+        if (aus[i].extra) {
+            if (!first) printf(",");
+            printf("%d", i);
+            first = false;
+        }
+    }
+    printf("\n");
+}
+
 int main(int argc, char *argv[])
 {
     bool verbose = false;
@@ -896,15 +966,8 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    if (verbose) {
-        int with_dts = 0, with_pts = 0;
-        for (int i = 0; i < au_count; i++) {
-            if (aus[i].dts >= 0) with_dts++;
-            if (aus[i].pts >= 0) with_pts++;
-        }
-        fprintf(stderr, "Access units: %d (DTS: %d, PTS: %d)\n",
-                au_count, with_dts, with_pts);
-    }
+    if (verbose)
+        print_au_summary(aus, au_count);
 
     bool skip_grid = (stream_type == ST_H264_VIDEO ||
                       stream_type == ST_H265_VIDEO);
@@ -919,16 +982,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    printf("doubled_pts_aus=");
-    bool first = true;
-    for (int i = 0; i < au_count; i++) {
-        if (aus[i].extra) {
-            if (!first) printf(",");
-            printf("%d", i);
-            first = false;
-        }
-    }
-    printf("\n");
+    print_doubled_pts_list(aus, au_count);
 
     if (verbose)
         fprintf(stderr, "Extra frames detected: %d\n", extra_count);
