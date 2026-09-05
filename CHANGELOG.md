@@ -2,6 +2,18 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **Playback lost the subtitles (and the "start paused" option) when the
+  recording's name contained a comma.** The player hands its per-file
+  options to libmpv as one comma-separated list; a subtitle path such as
+  `03x11_-_Da_glaub_i,_haben_wir_..._deu.srt` was cut at the comma, the rest
+  rejected as an unknown option and every option after it dropped. Each
+  value now carries mpv's length prefix and is taken literally, whatever the
+  name contains (comma, quote, bracket, umlaut). Gate:
+  `tools/diag/test_mpv_loadfile_args`.
+
 ## v0.82.6 (2026-08-30)
 
 **Loading no longer hangs, and the audio no longer cries wolf**
