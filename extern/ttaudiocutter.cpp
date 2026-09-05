@@ -168,10 +168,18 @@ struct TTAudioCutter::CutSession
     int     totalPacketsWritten = 0;
     int64_t lastWrittenPtsTicks = 0;        // out time_base ticks
 
-    // AC3 acmod normalization, created on the first frame that needs it
+    // AC3 acmod normalization, created on the first frame that needs it.
+    // The encoder is bound to one target layout and the resampler to one
+    // input layout/format/rate; both are re-created when a later frame
+    // needs another one (ranges with different target acmods, or a source
+    // that switches between stereo and 5.1 inside a re-encoded range).
     AVCodecContext*    ac3DecCtx = nullptr;
     AVCodecContext*    ac3EncCtx = nullptr;
+    bool               ac3EncIs51 = false;      // layout the encoder was opened with
     struct SwrContext* swrCtx    = nullptr;
+    AVChannelLayout    swrInLayout {};          // input signature the resampler was set up for
+    int                swrInFormat = -1;
+    int                swrInRate   = 0;
     AVFrame*           ac3Frame  = nullptr;
     AVFrame*           ac3ConvertedFrame = nullptr;
     int                acmodReencoded = 0;
@@ -193,12 +201,29 @@ struct TTAudioCutter::CutSession
         reportProgress();
     }
 
-    void closeCodecs()
+    //! Drop the resampler and its output frame; the next re-encoded frame
+    //! sets them up again for its own layout.
+    void closeResampler()
     {
         if (swrCtx)             swr_free(&swrCtx);
         if (ac3ConvertedFrame)  av_frame_free(&ac3ConvertedFrame);
-        if (ac3DecCtx)          avcodec_free_context(&ac3DecCtx);
+        av_channel_layout_uninit(&swrInLayout);
+        swrInFormat = -1;
+        swrInRate   = 0;
+    }
+
+    //! Drop the encoder together with the resampler (whose output layout is
+    //! the encoder's); the decoder stays, it follows the stream on its own.
+    void closeEncoder()
+    {
+        closeResampler();
         if (ac3EncCtx)          avcodec_free_context(&ac3EncCtx);
+    }
+
+    void closeCodecs()
+    {
+        closeEncoder();
+        if (ac3DecCtx)          avcodec_free_context(&ac3DecCtx);
         if (ac3Frame)           av_frame_free(&ac3Frame);
     }
 
@@ -288,12 +313,19 @@ bool TTAudioCutter::openCutSession(CutSession& s, const QString& inputFile, cons
     return true;
 }
 
-// Decoder and encoder for the acmod re-encode, created on first use and kept
-// for the rest of the run (the encoder therefore carries the layout of the
-// first target it was created for). Any failure returns false and the frame
+// Decoder and encoder for the acmod re-encode, created on first use. The
+// decoder is kept for the run; the encoder is re-created when the target
+// layout changes between ranges (before 2026-09-05 it kept the first
+// target's layout and a later 5.1-target range fed stereo frames through a
+// 5.1-input resampler - SIGSEGV in swr_convert, reproduced by
+// test_audiocutter_paths run B3). Any failure returns false and the frame
 // takes the stream-copy path instead.
 bool TTAudioCutter::ensureAc3Codecs(CutSession& s, int targetAcmod)
 {
+    const bool wants51 = (targetAcmod == 7 || targetAcmod == 6);
+    if (s.ac3EncCtx && s.ac3EncIs51 != wants51)
+        s.closeEncoder();
+
     if (!s.ac3DecCtx) {
         const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
         s.ac3DecCtx = dec ? avcodec_alloc_context3(dec) : nullptr;
@@ -325,7 +357,7 @@ bool TTAudioCutter::ensureAc3Codecs(CutSession& s, int targetAcmod)
             ? s.inStream->codecpar->bit_rate : 384000;
         s.ac3EncCtx->time_base = s.inStream->time_base;
         // Set target channel layout based on target acmod
-        if (targetAcmod == 7 || targetAcmod == 6) {
+        if (wants51) {
             // 5.1: 3/2 + LFE
             AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
             av_channel_layout_copy(&s.ac3EncCtx->ch_layout, &layout51);
@@ -340,6 +372,7 @@ bool TTAudioCutter::ensureAc3Codecs(CutSession& s, int targetAcmod)
             avcodec_free_context(&s.ac3EncCtx);
             return false;
         }
+        s.ac3EncIs51 = wants51;
     }
     return true;
 }
@@ -387,7 +420,16 @@ void TTAudioCutter::writeReencodedPacket(CutSession& s, AVPacket* pkt)
     const int decRet = avcodec_receive_frame(s.ac3DecCtx, s.ac3Frame);
     if (decRet != 0) return;
 
-    // Setup resampler on first use (channel layout conversion)
+    // Setup resampler on first use (channel layout conversion), and again
+    // whenever the decoded frame's layout, format or rate differs from the
+    // one it was set up for (a source switching between stereo and 5.1
+    // inside a re-encoded range; a resampler built for six input planes
+    // reads past a stereo frame's two).
+    if (s.swrCtx && (av_channel_layout_compare(&s.swrInLayout, &s.ac3Frame->ch_layout) != 0 ||
+                     s.swrInFormat != s.ac3Frame->format ||
+                     s.swrInRate   != s.ac3Frame->sample_rate)) {
+        s.closeResampler();
+    }
     if (!s.swrCtx) {
         int swrRet = swr_alloc_set_opts2(&s.swrCtx,
             &s.ac3EncCtx->ch_layout, s.ac3EncCtx->sample_fmt, s.ac3EncCtx->sample_rate,
@@ -405,6 +447,9 @@ void TTAudioCutter::writeReencodedPacket(CutSession& s, AVPacket* pkt)
             swr_free(&s.swrCtx);
             return;
         }
+        av_channel_layout_copy(&s.swrInLayout, &s.ac3Frame->ch_layout);
+        s.swrInFormat = s.ac3Frame->format;
+        s.swrInRate   = s.ac3Frame->sample_rate;
 
         s.ac3ConvertedFrame = av_frame_alloc();
         if (!s.ac3ConvertedFrame) return;

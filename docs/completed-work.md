@@ -1741,6 +1741,22 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **`TTAudioCutter::cut` stürzte bei wechselnden Ziel-acmods zwischen
+  Segmenten ab** → **GELÖST (2026-09-05)**. Gefunden beim Bau des Gates
+  `tools/diag/test_audiocutter_paths` (Code-Audit Batch E): mit
+  `normalizeAcmod` und `targetAcmods = {2, 2, 7}` auf einer
+  Stereo/5.1/Stereo-Quelle SIGSEGV in `swr_convert`. Ursache: Encoder und
+  Resampler wurden beim ersten umzukodierenden Frame angelegt (Ziel-Layout
+  bzw. Eingangs-Layout dieses Frames) und für den ganzen Lauf behalten; ein
+  späteres Segment mit anderem Ziel schob Stereo-Frames durch einen
+  Resampler mit sechs Eingangsebenen. Fix: `ensureAc3Codecs` legt den
+  Encoder neu an, wenn sich das Ziel-Layout ändert; `writeReencodedPacket`
+  den Resampler, wenn Layout, Format oder Rate des dekodierten Frames von
+  der eingerichteten Signatur abweichen. Beleg: Harness-Lauf B3 (`{2,2,7}`)
+  läuft durch, acmod-Folge der Ausgabe `2x264,7x139` (Segmente 1+2 stereo,
+  Segment 3 5.1, Zahlen passen zu Lauf A); die fünf anderen Läufe sind
+  byteidentisch zum Stand vor dem Fix; `gate_cut_identity.sh` identisch.
+
 - **Toter Audio-Schnittpfad über `TTAVStream::cut()`** → **ENTFERNT
   (Dead-Code-Audit 2026-09-02)**. Fund vom 2026-08-31 beim
   Randmeldungs-Vorhaben: `TTMPEGAudioStream::cut()` und
