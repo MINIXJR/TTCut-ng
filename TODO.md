@@ -389,7 +389,7 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - `extern/ttessmartcut.cpp` hat eigene file-lokale Bit-Primitives (`spsReadBits`,
     `spsWriteBits`, `spsReadUE`, `spsWriteUE`, `spsReadSE`, `spsWriteSE`,
     `skipScalingList`) für SPS-Patching mit Read+Write-Pfad. Andere Caller
-    (`ttffmpegwrapper.cpp`, `ttmkvmergeprovider.cpp`) nutzen die nur lesenden
+    (`avstream/ttframeindexer.cpp`, `ttmkvmergeprovider.cpp`) nutzen die nur lesenden
     `TTNaluParser::readBits` / `readExpGolombUE` / `readExpGolombSE`.
   - Folge: SPS-Bit-Skipping-Block (chroma, bit_depth, scaling lists) ist 4×
     dupliziert (siehe code-review-2026-05-01/02-extern.md MEDIUM-2). Die

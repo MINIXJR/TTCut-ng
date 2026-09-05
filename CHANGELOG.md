@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.83.0 (2026-09-05)
+
+**Two audits, three refactors, two fixes**
 
 ### Fixed
 - **The audio cut could crash when the target channel layout differed
@@ -21,6 +23,37 @@ All notable changes to TTCut-ng are documented in this file.
   value now carries mpv's length prefix and is taken literally, whatever the
   name contains (comma, quote, bracket, umlaut). Gate:
   `tools/diag/test_mpv_loadfile_args`.
+
+### Changes
+- **Code audits.** A second dead-code pass (eleven unreferenced methods and
+  the dead audio-cut path removed) and two structure/DRY audits with a new
+  `code-audit` skill: mechanical tool findings settled, duplicated blocks
+  folded into helpers, two latent errors fixed on the way (an uninitialised
+  preview cut list, an uninitialised `acmod`), dead accessors removed,
+  conventions written down in `docs/conventions.md`, every verdict kept in
+  `docs/code-audit/verdicts.tsv`.
+- **Structure.** `TTFFmpegWrapper` split into `TTAudioCutter` (audio ES cut,
+  burst detection, acmod analysis) and `TTFrameIndexer` (frame index
+  bundle); the H.26x video streams own their index and no longer need a
+  wrapper to open (`ttProbeVideo`); the `common -> avstream` and
+  `extern -> data` module edges are gone; `TTAbortableTask` carries the
+  cancel flag, created-files list and abort funnel of the three pool tasks;
+  `TTTrackTreeView` carries what the video, audio and subtitle lists
+  shared; `TTAudioCutter::cut`, `collectFrameStats`, `walk_ac3_frames`,
+  `find_video_pid`, `collect_access_units` and `detect_pts_grid` are split
+  into named steps. Cut output, harness matrices and screenshots were held
+  byte-identical across every step.
+- **ttcut-demux.** The repeated probe, fraction, splice-gap, concat-list
+  and drift blocks are helpers now; ES output byte-identical on MPEG-2,
+  H.264, HEVC and VDR multi-file fixtures.
+- **Packaging.** `build-package.sh` no longer copies 1.9 GB of untracked
+  material into the build tree; debhelper compat 13, `Standards-Version`
+  4.7, a new package version scheme (`0.83.0+git<date>.<count>.<hash>~forky`),
+  desktop file without the `xcb` override.
+- **Gates.** New harnesses `gate_cut_identity.sh` (five Tux projects,
+  per-stream MD5 and packet lists), `gate_ac3fix.sh`, `test_audiocutter_paths`,
+  `test_mpv_loadfile_args`; `ttcut-burst-probe` and the abort matrix rebuilt
+  in one `diag` target.
 
 ## v0.82.6 (2026-08-30)
 

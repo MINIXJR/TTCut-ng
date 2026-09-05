@@ -1,6 +1,6 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-28
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcutsettingsnavigation.cpp
@@ -21,6 +21,8 @@ sources:
   - extern/ttffmpegwrapper.cpp
   - avstream/ttframeindexer.h
   - avstream/ttframeindexer.cpp
+  - avstream/ttframeindex.h
+  - avstream/ttavutil.h
 ---
 
 # Quick Jump dialog (Zeitsprung)
@@ -84,7 +86,7 @@ flowchart TD
 | `TTSettings` → `TTQuickJumpDialog` | Two values, both read **once at construction**: `quickJumpIntervalSec()` and `quickJumpThumbHeight()`. Changing either in the settings takes effect the next time the dialog opens, not in an open one. The height is clamped to `kQuickJumpThumbHeightMin/Max`, so a hand-edited config cannot collapse the tiles. |
 | `TTQuickJumpDialog` → `TTQuickJumpDelegate` | Tile geometry: the configured **height**, and a width computed from it by `computeThumbWidth()` via the stream's aspect ratio. Only the height is stored anywhere — the width is always derived, which is what keeps tiles undistorted. `calculateItemsPerPage()` then derives the tiles per page from the delegate's `sizeHint()`, so a larger height automatically means fewer tiles and more paging. |
 | `TTQuickJumpModel` → `TTQuickJumpDelegate` | Per tile: a `QPixmap` if decoded, else a placeholder. `isFailedFrame()` decides the colour — **dark red** for a decode that returned null, **grey** for one still pending. A tile that stays grey means the worker has not answered yet; red means it answered with nothing. |
-| `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle` and hands a copy to its wrapper. No decoder instance is involved in building it. |
+| `TTFrameIndexer` → `TTH26xVideoStream` | `TTFrameIndexer::build(file, streamIdx, progress)` opens the file itself and produces the whole `TTFrameIndexBundle` — index, `gops`, `rawToMerged`/`rawPacketCount` and the three stream values. `createHeaderList()` keeps it in `mFrameIndexBundle`. Since 2026-09-04 the stream itself opens no `TTFFmpegWrapper` at all — `openStream()` probes the file via `ttProbeVideo()` into `mProbe` instead, and `TTH26xVideoStream` never constructs a decoder; only `frameIndexBundle()` hands the bundle out, to whichever wrapper an adopter creates for itself. No decoder instance is involved in building the index. |
 | `TTH26xVideoStream` → `TTQuickJumpWorker` | `frameIndexBundle()` — the owner's own bundle: index **and** the H.264 stream metadata (`isPAFF`, `frameMbsOnlyFlag`, `log2MaxFrameNum`). The bundle exists so the two cannot be separated; see pitfalls. Since 2026-09-04 the bundle also carries the display-order map. |
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |

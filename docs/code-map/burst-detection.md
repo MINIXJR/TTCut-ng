@@ -1,9 +1,9 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-18
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
-  - extern/ttffmpegwrapper.cpp
-  - extern/ttffmpegwrapper.h
+  - extern/ttaudiocutter.cpp
+  - extern/ttaudiocutter.h
   - data/ttavdata.cpp
   - data/ttavdata.h
   - gui/ttcuttreeview.cpp
@@ -11,6 +11,7 @@ sources:
   - gui/ttcutpreview.cpp
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
+  - gui/ttcutmainwindow_headless.cpp
   - common/ttsettings.cpp
 ---
 
@@ -107,7 +108,7 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 | `HINT -.-> BURST` (1.), `HINT -.-> ACMOD` (2.) | **Reihenfolge ist Vertrag:** erst `updateBurstIcon` (setzt/leert Spalte 5), dann `updateAcmodIcon` (hängt an). Vertauscht ⇒ Burst überschreibt den acmod-Hinweis; nur den ersten rufen ⇒ Hinweis geht ganz verloren (genau der Defekt vor `666ed08`). Beide Callees sind `private`; der Vertrag ist von außen nicht brechbar. |
 | `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. Die Darstellung liegt in einer **eigenen, volle Breite spannenden Grid-Zeile**. Der Shift-Knopf behält seinen Platz auch im versteckten Zustand, damit das Videobild beim Clip-Wechsel nicht springt. |
 | `CUTRUN -.-> FINAL` | `confirmBurstWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Dialog dort doppelt. Bewertet die gesamte `TTCutList` erneut über dieselben Wrapper. |
-| `NONINT -.-> FINAL` | `--auto-cut` (`runAutoCutMode`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
+| `NONINT -.-> FINAL` | `--auto-cut` (`TTCutMainWindow::runAutoCutMode`, seit `ab3fae4d` in `gui/ttcutmainwindow_headless.cpp` statt `gui/ttcutmainwindow.cpp`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
 | `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `TTAudioCutter::detectBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `TTAudioCutter::detectBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
 
 ## Annahmen & Verträge

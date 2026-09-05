@@ -1,11 +1,9 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-19
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
-  - extern/ttffmpegwrapper.cpp
-  - extern/ttffmpegwrapper.h
   - data/ttcutpreviewtask.cpp
   - data/ttcutpreviewtask.h
   - gui/ttcutpreview.cpp
@@ -18,9 +16,13 @@ sources:
   - data/tth26xcuttask.h
   - data/ttaudioonlycuttask.cpp
   - data/ttaudioonlycuttask.h
+  - data/ttabortabletask.cpp
+  - data/ttabortabletask.h
   - extern/ttaudiorepair.h
   - extern/ttaudiorepair.cpp
   - extern/ttaudiorepairitem.h
+  - extern/ttaudiocutter.h
+  - extern/ttaudiocutter.cpp
 ---
 
 # Audio-Cut-Zeitkette (video-frame-index → audio-frame-aligned cut)
@@ -50,7 +52,7 @@ eigene `TTThreadTask`-Klassen) sind zwei der fünf `PROD`-Aufrufer nicht mehr
 `TTAVData::doH264Cut`/`doAudioOnlyCut` selbst — die bauen nur noch `VKL`
 (via `buildVideoKeepList`, GUI-Thread) und reichen sie per Wertkopie
 (`TTH26xCutParams::keepList` / `TTAudioOnlyCutParams::videoKeepList`) an
-`TTH26xCutTask::doCut` bzw. `TTAudioOnlyCutTask::runAudioCut` weiter, die
+`TTH26xCutTask::runCut` bzw. `TTAudioOnlyCutTask::runAudioCut` weiter, die
 dann auf einem Pool-Worker-Thread `cutAudioTracks` aufrufen. `onDoCut`
 (MPEG-2) bleibt die einzige Stelle, die `VKL` UND den `cutAudioTracks`-Aufruf
 synchron im GUI-Thread hält.
@@ -61,7 +63,7 @@ flowchart TD
   MP2X["MPEG-2 parser<br/>extraIndices()"]
   EXTRA["mExtraFrameIndices"]
   CEFB["countExtraFramesBefore"]
-  PROD["Producers (5 call sites)<br/>onDoCut (GUI-Thread, MPEG-2) ·<br/>TTH26xCutTask::doCut (Worker) ·<br/>TTAudioOnlyCutTask::runAudioCut (Worker) ·<br/>TTCutPreviewTask · TTCutPreview"]
+  PROD["Producers (5 call sites)<br/>onDoCut (GUI-Thread, MPEG-2) ·<br/>TTH26xCutTask::runCut (Worker) ·<br/>TTAudioOnlyCutTask::runAudioCut (Worker) ·<br/>TTCutPreviewTask · TTCutPreview"]
   VKL["videoKeepList<br/>(sec, extra-corrected)"]
   DELAY["per-track delay<br/>getDelayMs"]
   PLAN["planAudioCut"]
@@ -98,7 +100,7 @@ flowchart TD
 | `MP2X → EXTRA` | Für MPEG-2 hat der Bitstream-Parser **Vorrang vor `.info`**: `loadExtraFrameIndices` bevorzugt `TTMpeg2VideoStream::extraIndices()` (Anzeige-Index-Raum, Feldbild-Zweiteinträge, siehe `mpeg2-cut.md`) vor den `.info`-Kandidaten (Roh-AU-Raum, PTS-Heuristik). **Die beiden Räume fallen bei MPEG-2 zusammen** (gemessen 2026-07-26 an Comedy Central SD576i25, 1,29 GB TS: `ttcut-pts-analyze`s `doubled_pts_aus` und `extraIndices()` sind elementweise identisch — 150 Positionen, 444…74288). Der Vorrang ist also eine **Verlässlichkeits**-, keine Raum-Entscheidung: der Bitstream-Parser liest die Feldbild-Struktur direkt, die `.info`-Kandidaten stammen aus einer PTS-Heuristik. Bei H.264-PAFF fallen die Räume dagegen auseinander (jedes Halbbild eine eigene AU) — dort greift die raw→merged-Übersetzung. Die MPEG-2-Parser-Bevorzugung sitzt in `loadExtraFrameIndices` selbst (nicht mehr als reiner Nur-wenn-leer-Fallback). |
 | `EXTRA → CEFB` | Sortierte Extra-Index-Liste; `countExtraFramesBefore(idx)` zählt per Binärsuche die Einträge `< idx`. Invariante: Liste aufsteigend sortiert. |
 | `CEFB → VKL` | Extra-Anzahl `N`; Zeit = `(index − N)/fps`. Cut-Out nutzt `index+1` (Grenze **hinter** den letzten behaltenen Frame). Bildet den aufgeblähten Anzeige-Index auf echte Audiozeit ab. |
-| `PROD → VKL` | Alle Final-Cut-Produzenten bauen die (start,end)-Sekundenliste **einheitlich** über `buildVideoKeepList`, ohne Delay. `TTAVData::onDoCut` (MPEG-2) baut `VKL` und ruft `cutAudioTracks` im selben Funktionskörper, synchron im GUI-Thread, noch bevor der Pool für die Video-Task startet. `TTAVData::doH264Cut`/`doAudioOnlyCut` bauen `VKL` ebenfalls im GUI-Thread, reichen sie aber nur noch als Wertkopie in `TTH26xCutParams`/`TTAudioOnlyCutParams` weiter — der eigentliche `cutAudioTracks`-Aufruf sitzt in `TTH26xCutTask::doCut` (`data/tth26xcuttask.cpp`) bzw. `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`), beide auf einem Pool-Worker-Thread. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview::regenerateSmartCutPreviewClip` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). `TTCutPreviewTask`s MPEG-2-Segment-Zweig und `TTCutPreview::regenerateMpeg2PreviewClip` nutzen dagegen `buildVideoKeepList` (extra-korrigiert), unverändert seit `base_commit`. |
+| `PROD → VKL` | Alle Final-Cut-Produzenten bauen die (start,end)-Sekundenliste **einheitlich** über `buildVideoKeepList`, ohne Delay. `TTAVData::onDoCut` (MPEG-2) baut `VKL` und ruft `cutAudioTracks` im selben Funktionskörper, synchron im GUI-Thread, noch bevor der Pool für die Video-Task startet. `TTAVData::doH264Cut`/`doAudioOnlyCut` bauen `VKL` ebenfalls im GUI-Thread, reichen sie aber nur noch als Wertkopie in `TTH26xCutParams`/`TTAudioOnlyCutParams` weiter — der eigentliche `cutAudioTracks`-Aufruf sitzt in `TTH26xCutTask::runCut` (`data/tth26xcuttask.cpp`) bzw. `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`), beide auf einem Pool-Worker-Thread. Die zwei Vorschau-Pfade (`TTCutPreviewTask::createH264PreviewClip`, `TTCutPreview::regenerateSmartCutPreviewClip` 3-Arg-Aufruf) bauen weiterhin roh ohne Extra-Korrektur — bewusste Ausnahme, siehe Redundanz-Abschnitt (Option A). `TTCutPreviewTask`s MPEG-2-Segment-Zweig und `TTCutPreview::regenerateMpeg2PreviewClip` nutzen dagegen `buildVideoKeepList` (extra-korrigiert), unverändert seit `base_commit`. |
 | `DELAY → PLAN` | Per-Track-Delay in ms (`TTAudioItem::getDelayMs`), als `delaySec` von den Segmentzeiten **subtrahiert** (mkvmerge-Konvention: positiv = Spur spielt später, Quellfenster rückt früher). Pro Tonspur eigener Wert. |
 | `VKL → PLAN` | (start,end) Sekunden je Segment, extra-korrigiert, **noch ohne Delay**. Kontrakt: bereits anzeige-/B-Frame-korrekt — `planAudioCut` verschiebt nur, prüft nicht. |
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer: MP2@48k = 24 ms, AC3@48k = 32 ms). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
@@ -147,9 +149,14 @@ flowchart TD
   Abbruch in dieser Phase räumt `mCutProducedFiles` auf und meldet
   `finishCutOperation(CutOutcome::Cancelled, ...)`, ohne dass Pool-Start,
   `onCutFinished` oder `onCutAborted` je erreicht werden. `doH264Cut`
-  (`TTH26xCutTask::doCut`) und `doAudioOnlyCut` (`TTAudioOnlyCutTask::
-  runAudioCut`) haben dieselbe Reihenfolge (Audio+Untertitel vor Mux,
-    als Teil derselben Pool-Task).
+  (`TTH26xCutTask::runCut`) hat dieselbe Reihenfolge (Audio **und**
+  Untertitel vor dem Mux, als Teil derselben Pool-Task — belegt durch den
+  `cutAudioTracks`-Aufruf gefolgt vom `cutSubtitleTracks`-Aufruf in
+  `TTH26xCutTask::runCut`). `doAudioOnlyCut`
+  (`TTAudioOnlyCutTask::runAudioCut`) cuttet dagegen **nur** Audio — die
+  Klasse ruft `cutSubtitleTracks` an keiner Stelle auf. Beide Ausgabeformen
+  (Original-ES-Dateien je Spur, oder gemuxt in eine `.mka` über
+  `TTMkvMergeProvider::muxAudioOnly`) tragen keine Untertitelspur.
 - **`cutAudioTracks` hat jetzt einen Untertitel-Zwilling: `TTAVData::
   cutSubtitleTracks`** (All-Tracks- und Track-Index-Überladung, gleiches
   Callback-Schema `outPath`/`onCut`). Er teilt sich **dieselbe** `VKL`
@@ -172,10 +179,10 @@ flowchart TD
   regenerateMpeg2PreviewClip`) rufen `cutSubtitleTracks` nur mit
   Track-Index `{0}` auf — die Vorschau schneidet immer nur die erste
   Untertitelspur, unabhängig vom Codec. Der MPEG-2- und der H.26x-Endschnitt
-  (`onDoCut`, `TTH26xCutTask::doCut`) rufen dagegen die All-Tracks-Überladung
+  (`onDoCut`, `TTH26xCutTask::runCut`) rufen dagegen die All-Tracks-Überladung
   auf und schneiden jede Spur.
 - **Teilfehlschlag-Prüfung existiert jetzt an drei Stellen**, nicht nur
-  einer: `TTAVData::onDoCut` (MPEG-2, GUI-Thread), `TTH26xCutTask::doCut`
+  einer: `TTAVData::onDoCut` (MPEG-2, GUI-Thread), `TTH26xCutTask::runCut`
   (`data/tth26xcuttask.cpp`, Worker-Thread) und `TTAudioOnlyCutTask::
   runAudioCut` (`data/ttaudioonlycuttask.cpp`, Worker-Thread) zählen die
   `ok==true`-Callbacks von `cutAudioTracks` und vergleichen sie gegen
@@ -234,7 +241,7 @@ flowchart TD
 
 ## Redundanz / Konsolidierungskandidaten
 
-- **[2026-09-05, Code-Audit Batch E2, `5d38ae80`]** `TTAudioCutter::cut` hält
+- **[2026-09-05, Code-Audit Batch E2, `717fcf5a`]** `TTAudioCutter::cut` hält
   seinen Zustand je Aufruf in einem `CutSession`-Struct (Container, Ausgabe-
   Zeitachse, Fortschritts-/`[DRIFT]`-Buchhaltung, AC3-Umkodierkette) und ruft
   aus der weiterhin EINEN Paketschleife `openCutSession`, `ensureAc3Codecs`,
@@ -243,9 +250,16 @@ flowchart TD
   `CutSession::notePacketWritten`. Einzel-Pass und fortlaufender PTS unverändert.
   Gate: `tools/diag/test_audiocutter_paths` (Stream-Copy, acmod→Stereo,
   acmod→5.1, Reparaturtabelle, Abbruch) byteidentisch, `gate_cut_identity.sh`
-  auf fünf Tux-Fixtures identisch. **Befund dabei (TODO.md):** wechselnde
-  Ziel-acmods zwischen Segmenten stürzen in `swr_convert` ab — Encoder und
-  Resampler werden nur einmal, vom ersten umkodierten Frame, angelegt.
+  auf fünf Tux-Fixtures identisch. **Befund dabei — GELÖST (2026-09-05,
+  `de37d225`/`0259ae1a`, Details in `docs/completed-work.md`):** wechselnde
+  Ziel-acmods zwischen Segmenten stürzten in `swr_convert` ab, weil Encoder
+  und Resampler nur einmal, vom ersten umkodierten Frame, angelegt wurden.
+  Fix: `ensureAc3Codecs` legt den Encoder neu an, sobald sich das
+  Ziel-Layout ändert (`CutSession::ac3EncIs51`); `writeReencodedPacket` legt
+  den Resampler neu an, sobald Layout/Format/Rate des dekodierten Frames von
+  der eingerichteten Signatur abweichen (`CutSession::swrInLayout` /
+  `swrInFormat` / `swrInRate`). Belegt durch `tools/diag/test_audiocutter_paths`
+  Lauf B3 (`targetAcmods = {2, 2, 7}`).
 - **[KONSOLIDIERT `b28a7bd`..`7849f66`]** Die Producer bauen die Sequenz nicht mehr
   jeder selbst. `TTAVData::cutAudioTracks` ist die eine Implementierung von
   Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner
@@ -270,12 +284,12 @@ flowchart TD
 - **Nachzug (Stand 2026-08-15): `doH264Cut`/`doAudioOnlyCut` sind seither selbst
   keine `cutAudioTracks`-Aufrufer mehr.** Die Task-Pool-Umstellung auf eigene
   `TTThreadTask`-Klassen hat den Aufruf aus `TTAVData::doH264Cut` nach
-  `TTH26xCutTask::doCut` (`data/tth26xcuttask.cpp`) und aus `doAudioOnlyCut`
+  `TTH26xCutTask::runCut` (`data/tth26xcuttask.cpp`) und aus `doAudioOnlyCut`
   nach `TTAudioOnlyCutTask::runAudioCut` (`data/ttaudioonlycuttask.cpp`)
   verschoben — beide jetzt auf einem Pool-Worker-Thread statt im GUI-Thread.
   `buildVideoKeepList` bleibt in `doH264Cut`/`doAudioOnlyCut` (GUI-Thread) und
   wird per Wertkopie in die Task-Params gereicht. Zählung aktuell (verifiziert):
-  **5** `cutAudioTracks`-Aufrufstellen — `onDoCut`, `TTH26xCutTask::doCut`,
+  **5** `cutAudioTracks`-Aufrufstellen — `onDoCut`, `TTH26xCutTask::runCut`,
   `TTAudioOnlyCutTask::runAudioCut`, `TTCutPreviewTask` (Segmentschleife),
   `TTCutPreview::regenerateMpeg2PreviewClip` — die Spine selbst
   (`TTAVData::cutAudioTracks`) ist unverändert die einzige Implementierung.

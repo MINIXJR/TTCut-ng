@@ -1,6 +1,6 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-28
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -21,6 +21,9 @@ sources:
   - data/ttframesearchtask.h
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
+  - avstream/ttframeindexer.h
+  - avstream/ttframeindexer.cpp
+  - avstream/ttframeindex.h
   - extern/ttaudiorepairitem.h
   - gui/ttstreampointwidget.cpp
   - gui/ttcutmainwindow.cpp
@@ -192,7 +195,7 @@ beibehalten.
 | Dekoder | 1 × `TTMpeg2Decoder` (libmpeg2, RGB32) | N × `TTFFmpegWrapper` |
 | Parallelität | keine (`mWorkerCount = 1`, Inline-Zweig) | N (Voreinstellung ≤ 4) |
 | Bildindex | `TTVideoIndexList` + `TTVideoHeaderList` aus dem Parser | `preBuiltFrameIndex` (`TTFrameIndexBundle`) bzw. ein eigener `TTFrameIndexer`-Lauf |
-| Header-Liste | vorhanden (`ttmpeg2videostream.cpp:73`) | **null** — `TTH26xVideoStream` legt keine an |
+| Header-Liste | vorhanden (`TTMpeg2VideoStream::createHeaderList`) | **null** — `TTH26xVideoStream` legt keine an |
 | Seitenverhältnis über Header | ja (`TTStreamPointVideoWorker`, liest `aspect_ratio_information`) | nein — Elementarströme tragen keine Sequenz-Header |
 | Pillarbox über Bildanalyse | ja | ja |
 | Schwarzbild-Prüfung | Eigenimplementierung in `TTSearchTask::isFrameBlackAt` | `TTFFmpegWrapper::isFrameBlack` |

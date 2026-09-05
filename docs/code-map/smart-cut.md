@@ -1,6 +1,6 @@
 ---
-base_commit: a1aa31e4539f06dc8612ae96d2905d1680a8ad62
-last_verified: 2026-08-16
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -17,6 +17,8 @@ sources:
   - data/ttcutpreviewtask.h
   - data/ttavdata.cpp
   - gui/ttcutpreview.cpp
+  - data/ttabortabletask.cpp
+  - data/ttabortabletask.h
 ---
 
 # Code Map: Smart Cut (H.264 / H.265)
@@ -130,8 +132,8 @@ flowchart TD
 | `mOutputDisplayOrder` → `TTMkvMergeProvider` | Output-local display rank, used to assign MKV display PTS. Empty vector = "trust the muxer's linear timeline instead". |
 | `smartCutFrames` → caller (failure) | The boolean return is **load-bearing**: `createH264PreviewClip` must not swallow it and keep looping over the remaining segments, muxing clips that were never written — on a badly damaged recording that piled up decoder/encoder instances until `pthread_create` failed and the GUI aborted (`ba064f15`, 2026-07-19). Callers must stop the whole preview/cut run on false, not just the current segment. |
 | `requestAbort()` (GUI thread) → `checkAbort()` (worker) | Cooperative abort, added by `feature/cut-abort` (`f5a22762`..`f9352969`). `requestAbort()` is a relaxed store on `std::atomic<bool> mAbortRequested`; the worker polls it at **8 sites** — `smartCutFrames()`'s entry check and its segment loop, `streamCopyFrames()`'s per-frame path **and** its 8 MB chunked bulk-write path, `decodeFramesIntoList()`, `runEncodePass()` (per frame sent) and `flushEncoder()` — plus `TTNaluParser::parseFile()` per NAL unit, reached because `initialize()` forwards `checkAbort()` through `TTNaluParser::setAbortCallback()`. Every poll returns through the function's **normal `false` error path**, so nothing else in the engine needed an abort-aware exit. The bulk-write path was chunked (`kChunk = 8 MB`) *for* this: an un-chunked `mmap`→`write` of a whole segment has nowhere to poll. |
-| `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`common/ttexception.cpp:31`). A cancelled cut therefore produces no error, warning or fatal line at all. |
-| `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (`ttessmartcut.cpp:301`). |
+| `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`TTException::TTException(caller, line, msg)`, `common/ttexception.cpp`). A cancelled cut therefore produces no error, warning or fatal line at all. The same reasoning is now shared: `TTAbortableTask::abortNow()` (`data/ttabortabletask.cpp`) carries the identical comment and constructor choice for its other two subclasses (`TTAudioOnlyCutTask`, `TTMuxTask`). |
+| `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (the `mAbortRequested.load(...)` check right after the `mParser.parseFile()` failure branch in `TTESSmartCut::initialize()`, `extern/ttessmartcut.cpp`). |
 | `TTESSmartCut::seamNotes()` → `ttavdata` → `statusReport` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
 
 ## Variant matrix — which branch fires, and what it must guarantee
@@ -195,12 +197,19 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   reorder depth beyond those windows would silently truncate the segment. Both
   are fixed constants, not derived from `mReorderDelay`.
 
-- **`processSegment` / `useSpsUnification`** — the branch condition is
-  `H.264 && (isPAFF || !pocBridgeable)`. **Pitfall:** `CLAUDE.md` describes SPS
-  Unification as a PAFF-only mechanism. It is not — a progressive H.264 stream
-  with a non-bridgeable POC seam takes the same branch. Likewise the MMCO
-  neutralization is documented under "PAFF notes" but is emitted *only* by this
-  branch, which is broader than PAFF and narrower than "all H.264".
+- **`processSegment` / `useSpsUnification`** — the branch condition
+  (`extern/ttessmartcut.cpp`) is `H.264 && (isPAFF || !pocBridgeable ||
+  seamNeedsUnification)` — three independent triggers, not two. The third,
+  `seamNeedsUnification` (defect A fix, see the variant matrix row
+  "Progressive / MBAFF, POC seam bridgeable"), fires for a **bridgeable**
+  progressive seam too whenever the copy-start keyframe is non-IDR with
+  leading pictures — this bullet previously omitted it. **Pitfall:**
+  `CLAUDE.md` describes SPS Unification as a PAFF-only mechanism. It is not —
+  a progressive H.264 stream with a non-bridgeable POC seam, or with a
+  bridgeable one but leading-pic-bearing non-IDR copy-start, takes the same
+  branch. Likewise the MMCO neutralization is documented under "PAFF notes"
+  but is emitted *only* by this branch, which is broader than PAFF and
+  narrower than "all H.264".
 
 - **`pocDomainBridgeable`** — since `1893497` the encoder POC width is
   **measured up front** by `probeEncoderPocParams()` (one throwaway libx264

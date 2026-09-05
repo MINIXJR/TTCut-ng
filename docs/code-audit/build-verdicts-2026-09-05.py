@@ -19,16 +19,16 @@ O = Path(sys.argv[1] if len(sys.argv) > 1 else "/usr/local/src/CLAUDE_TMP/TTCut-
 OUT = Path(__file__).resolve().parent / "verdicts.tsv"
 D = "2026-09-05"
 
-F_MODULES = {"tools/ttcut-demux": "batch F (ttcut-demux helpers, 927f0968)",
-             "tools/ttcut-ac3fix": "batch F (process_one_frame, switch table, b5141328)",
-             "tools/ttcut-pts-analyze": "batch F (section/AU/grid helpers, dac1cf58)",
-             "tools/test-videos": "batch F (skip_if_present, 5e84d157)"}
+F_MODULES = {"tools/ttcut-demux": "batch F (ttcut-demux helpers, e0a2d4d4)",
+             "tools/ttcut-ac3fix": "batch F (process_one_frame, switch table, e0a2d4d4)",
+             "tools/ttcut-pts-analyze": "batch F (section/AU/grid helpers, e0a2d4d4)",
+             "tools/test-videos": "batch F (skip_if_present, e0a2d4d4)"}
 E_LOCATIONS = {  # location prefix -> note
-    "data/ttaudioanomalyscantask.cpp:266-419": "batch E1 (qScopeGuard, e3e585e7)",
-    "extern/ttaudiocutter.cpp:145-626":        "batch E2 (CutSession + five steps, 5d38ae80)",
-    "extern/ttaudiocutter.cpp:145-145":        "batch E2 (CutSession + five steps, 5d38ae80)",
-    "data/ttaudioonlycuttask.cpp:68-142":      "batch E3 (TTAbortableTask, de4df8dd)",
-    "data/ttaudioonlycuttask.cpp:78-117":      "batch E3 (TTAbortableTask, de4df8dd)",
+    "data/ttaudioanomalyscantask.cpp:266-419": "batch E1 (qScopeGuard, 717fcf5a)",
+    "extern/ttaudiocutter.cpp:145-626":        "batch E2 (CutSession + five steps, 717fcf5a)",
+    "extern/ttaudiocutter.cpp:145-145":        "batch E2 (CutSession + five steps, 717fcf5a)",
+    "data/ttaudioonlycuttask.cpp:68-142":      "batch E3 (TTAbortableTask, 717fcf5a)",
+    "data/ttaudioonlycuttask.cpp:78-117":      "batch E3 (TTAbortableTask, 717fcf5a)",
     "gui/ttsubtitletreeview.h":                "batch E4 (the unprefixed action members moved into TTTrackTreeView as mp*)",
     "gui/ttaudiotreeview.cpp:239-249":         "batch E4 (TTTrackTreeView)",
     "gui/ttaudiotreeview.cpp:48-130":          "batch E4 (TTTrackTreeView)",

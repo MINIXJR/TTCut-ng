@@ -1,6 +1,6 @@
 ---
-base_commit: 21419018b5a94fede26281039d7865abb9935d5f
-last_verified: 2026-08-30
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - avstream/ttmpeg2videostream.cpp
   - avstream/ttmpeg2videostream.h
@@ -18,8 +18,8 @@ sources:
   - extern/tttranscode.h
   - extern/ttmplexprovider.cpp
   - extern/ttmplexprovider.h
-  - data/ttcutparameter.cpp
-  - data/ttcutparameter.h
+  - avstream/ttcutparameter.cpp
+  - avstream/ttcutparameter.h
   - data/ttcutvideotask.cpp
   - data/ttopenvideotask.cpp
   - data/ttavdata.cpp

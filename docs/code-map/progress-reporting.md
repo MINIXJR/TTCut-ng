@@ -1,6 +1,6 @@
 ---
-base_commit: 21419018b5a94fede26281039d7865abb9935d5f
-last_verified: 2026-08-30
+base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
+last_verified: 2026-09-05
 sources:
   - common/istatusreporter.h
   - data/ttanalysislog.cpp
@@ -35,7 +35,14 @@ sources:
   - avstream/tth26xvideostream.cpp
   - avstream/ttnaluparser.cpp
   - avstream/ttfilebuffer.cpp
+  - avstream/ttframeindexer.cpp
+  - avstream/ttframeindexer.h
+  - avstream/ttcommon.cpp
+  - data/ttabortabletask.cpp
+  - data/ttabortabletask.h
   - extern/ttffmpegwrapper.cpp
+  - extern/ttaudiocutter.cpp
+  - extern/ttaudiocutter.h
   - extern/ttessmartcut.cpp
   - extern/ttessmartcut.h
   - extern/ttmkvmergeprovider.cpp
@@ -170,8 +177,8 @@ flowchart TD
 | `TTProgressBar` internal 1 s tick (`mTickTimer` → `onTick`, self-loop) | Started by `resetForNewOperation()`, stopped by `enterFinishedState()`. Each tick: (1) unconditionally refreshes `debugClockString`'s TEXT from `mWallClock` (a `QElapsedTimer` running for the whole dialog lifetime, ticking even while the bar pulses — that is its debug value: frozen bar + ticking clock = a stalled stage, not a hung app) — only the widget's VISIBILITY is gated by `cbDetails`, via `onDetailsStateChanged()`, not this tick; (2) applies `mPendingRemaining` to `remainingString` if non-empty; (3) if `mSinceLastStep` (reset on every `setTotalProgress()`, i.e. every `Step`) exceeds 5000 ms and the bar is not already indeterminate, switches `progressBar` to `setRange(0,0)` (pulse mode) — cleared back to `setRange(0,100)` on the next `Step` or in `enterFinishedState()`. |
 | `TTProgressBar` close paths | Cancel button, window X (`closeEvent`) and Esc (`reject()` → `close()`) all converge on cancel-while-running / plain-close-when-finished (`mFinished`). `cancel` signal → `TTAVData::onUserAbortRequest` + `onAbortStreamPoints`. |
 | `TTThreadTaskPool::onUserAbortRequest` → `TTThreadTask::onUserAbort` → `TTVideoStream::setAbort` | Both video-cut task classes forward the abort flag into the stream they drive, so an abort request takes effect mid-transfer, not just between cut-list entries: `TTCutTask::onUserAbort()` (single-segment cut, per-entry) always did; `TTCutVideoTask::onUserAbort()` (the MPEG-2 **final-cut** task that loops the whole cut list, `data/ttcutvideotask.cpp`) calls `abort()` (its own `TTThreadTask::isAborted()` poll flag, checked once per cut-list entry) and never `mpCutStream->setAbort(true)` — a cut list with one long entry was effectively unabortable until `1f372cca`. Both now call `setAbort(true)` on `mpCutStream`, which `TTAVStream`'s transfer loop polls (`mAbort`) and turns into a `TTAbortException`. **A cancelled run must not poison the next one** (`0bd07c93`): `mpCutStream` is not per-operation — it comes from the `TTAVItem` and is the same long-lived object the display widgets share — and every `mAbort` check clears the flag only as it *throws*, so it stays set if a check is never reached again (e.g. the stream finished its transfer before the cancel arrived). `TTCutVideoTask::operation()` now calls `mpCutStream->setAbort(false)` at the top of every cut-list entry, before touching the stream, clearing any leftover flag from a previous, unrelated cancelled run. Measured before the fix: cancelling one preview left the NEXT preview producing nothing (self-aborting on the leftover flag and clearing it in the process), with the one after that working normally. Harness: `tools/diag/test_stale_abort`. |
-| `TTAVData::onUserAbortRequest` → engines (cooperative abort) | `f5a22762..f9352969` ("cut-abort") made the remaining phases abortable; the Cancel button's route is unchanged (`TTProgressBar::cancel` → this slot), only what it reaches is new. Three delivery mechanisms, deliberately separate: **(a) pool tasks** — `mpThreadTaskPool->onUserAbortRequest()` reaches `TTH26xCutTask`, `TTAudioOnlyCutTask`, `TTMuxTask`, `TTCutVideoTask`, `TTCutPreviewTask`; each `onUserAbort()` sets its own flag AND pushes it into the engine it currently drives (`TTESSmartCut::requestAbort()`, `TTMkvMergeProvider::requestAbort()`; the preview holds its active engine behind `mSmartCutMutex` and clears the pointer under the mutex strictly *before* deleting the engine). **(b) `mSyncPhaseAbort`** (`std::atomic<bool>`, set unconditionally in this slot) — the MPEG-2 branch of `onDoCut()` cuts audio and subtitles synchronously *before* the pool starts, so at that moment there is no task to cancel; that phase polls this flag through `cutAudioTracks`'s `shouldAbort` predicate. Engine-side poll points: `TTESSmartCut::checkAbort()` at 8 sites (`smartCutFrames` entry + segment loop, `streamCopyFrames` per-frame path *and* its 8 MB chunked bulk-write path, `decodeFramesIntoList`, `runEncodePass`, `flushEncoder`) plus `TTNaluParser::parseFile()` per NAL unit (wired via `setAbortCallback()` in `initialize()`, so a cancel during the initial ES parse — seconds on a real recording — lands too); `TTAudioCutter::cut` per copied packet; `TTMkvMergeProvider::checkAbort()` in `mux()` and `muxAudioOnly()`. **A cancel must never read as an error**: `checkAbort()` sets `mLastError = "aborted by user"` *directly* instead of via `setError()`, which would log at ERROR level; the tasks throw the message-only `TTAbortException(msg)` because the `(file, line, msg)` overload logs at FATAL level on construction (`common/ttexception.cpp:31`). **(c) `mpMplexProvider`** — the mplex step of an MPG-output cut is neither a pool task nor part of the sync phase: it runs inside `onCutFinished()`, *after* the pool run, driving an external process. `TTAVData` publishes the live `TTMplexProvider` for exactly that call and this slot forwards `requestAbort()` to it; the provider polls in its own wait loop and stops the child (`extern/ttmplexprovider.cpp`, added 2026-08-11 — see `TTMplexProvider` below for why the earlier "cannot be aborted" claim was wrong). **Plus a seed**, because publishing the provider is not early enough on its own: `TTCutVideoTask` polls `isAborted()` only at the top of each cut-list iteration and `TTThreadTask::run()` emits `finished()` even with `mIsAborted` set, so a cancel arriving during the last iteration is neither polled nor turned into an `aborted()` — the pool reports a normal finish and `onCutFinished()` runs with the request held only in `mSyncPhaseAbort`. That branch therefore calls `requestAbort()` itself when the flag is set before invoking `mplexPart()`. Reaching the slot with the flag set *means* the pool did not honour the abort (otherwise `onCutAborted()` would have disconnected it). Regression test: the `mplexlate` phase. Not reached: `cutSubtitleTracks()` has no predicate (a cancel there is acted on when the phase returns), and there is deliberately no poll behind a *successful* mux. |
-| task `aborted()` → `TTAVData::onCutAborted` (cleanup + `Canceled`) | Every abortable path deletes what the run created: `mCutProducedFiles` (`TTAVData`, for the MPEG-2 synchronous phase and pre-pool exits), `TTH26xCutTask`/`TTAudioOnlyCutTask`'s own `mCreatedFiles` (registered **unconditionally**, not gated on success — an aborted track still leaves a partial file), and `TTMuxTask`'s own `mCreatedFiles`, seeded from `TTMuxTaskParams::cleanupOnAbort` (`ttmuxtask.cpp:52`) — the MPEG-2 mux run takes *ownership of* that list from `mCutProducedFiles`, which is cleared at the handover (`ttavdata.cpp:1908`), so nothing is deleted twice. A genuine error keeps its partial files: the discriminator is `mSyncPhaseAbort` in `onCutAborted()`, and inside the tasks the fact that cleanup is reachable only through the cancel-gated `abortIfRequested()`. **The closing bracket depends on which of the two arrived** (`0bd07c93`, 2026-08-15 — corrected from an earlier, wrong "2026-08-13" date this row carried, verified against `git log -S mLastFailureMessage`): this slot is reached by a cancel *and* by a genuine failure, because `TTThreadTask::run()` ends in `aborted()` either way. `TTThreadTaskPool::lastFailureMessage()` carries the reason — each task records it in `mFailureMessage` when `run()` catches a `TTException`, the pool keeps the last non-empty one and clears it in `init()`, i.e. once per operation. Empty → `finishCutOperation(Cancelled, "Cut cancelled")` as before; non-empty → `finishCutOperation(Failed, "Cut failed", <reason>)`, so the failure reaches `lastCutError()` and the error dialog. Before that, every failure on this path reported itself as a user cancel: no error dialog, empty `lastCutError()`, and `TTProgressBar` freezing the bar as if the user had pressed Cancel. |
+| `TTAVData::onUserAbortRequest` → engines (cooperative abort) | `f5a22762..f9352969` ("cut-abort") made the remaining phases abortable; the Cancel button's route is unchanged (`TTProgressBar::cancel` → this slot), only what it reaches is new. Three delivery mechanisms, deliberately separate: **(a) pool tasks** — `mpThreadTaskPool->onUserAbortRequest()` reaches `TTH26xCutTask`, `TTAudioOnlyCutTask`, `TTMuxTask`, `TTCutVideoTask`, `TTCutPreviewTask`; each `onUserAbort()` sets its own flag AND pushes it into the engine it currently drives (`TTESSmartCut::requestAbort()`, `TTMkvMergeProvider::requestAbort()`; the preview holds its active engine behind `mSmartCutMutex` and clears the pointer under the mutex strictly *before* deleting the engine). **(b) `mSyncPhaseAbort`** (`std::atomic<bool>`, set unconditionally in this slot) — the MPEG-2 branch of `onDoCut()` cuts audio and subtitles synchronously *before* the pool starts, so at that moment there is no task to cancel; that phase polls this flag through `cutAudioTracks`'s `shouldAbort` predicate. Engine-side poll points: `TTESSmartCut::checkAbort()` at 8 sites (`smartCutFrames` entry + segment loop, `streamCopyFrames` per-frame path *and* its 8 MB chunked bulk-write path, `decodeFramesIntoList`, `runEncodePass`, `flushEncoder`) plus `TTNaluParser::parseFile()` per NAL unit (wired via `setAbortCallback()` in `initialize()`, so a cancel during the initial ES parse — seconds on a real recording — lands too); `TTAudioCutter::cut` per copied packet; `TTMkvMergeProvider::checkAbort()` in `mux()` and `muxAudioOnly()`. **A cancel must never read as an error**: `checkAbort()` sets `mLastError = "aborted by user"` *directly* instead of via `setError()`, which would log at ERROR level; the tasks throw the message-only `TTAbortException(msg)` because the `(file, line, msg)` overload logs at FATAL level on construction (`TTException::TTException(const QString&, int, const QString&)`, `common/ttexception.cpp`). **(c) `mpMplexProvider`** — the mplex step of an MPG-output cut is neither a pool task nor part of the sync phase: it runs inside `onCutFinished()`, *after* the pool run, driving an external process. `TTAVData` publishes the live `TTMplexProvider` for exactly that call and this slot forwards `requestAbort()` to it; the provider polls in its own wait loop and stops the child (`extern/ttmplexprovider.cpp`, added 2026-08-11 — see `TTMplexProvider` below for why the earlier "cannot be aborted" claim was wrong). **Plus a seed**, because publishing the provider is not early enough on its own: `TTCutVideoTask` polls `isAborted()` only at the top of each cut-list iteration and `TTThreadTask::run()` emits `finished()` even with `mIsAborted` set, so a cancel arriving during the last iteration is neither polled nor turned into an `aborted()` — the pool reports a normal finish and `onCutFinished()` runs with the request held only in `mSyncPhaseAbort`. That branch therefore calls `requestAbort()` itself when the flag is set before invoking `mplexPart()`. Reaching the slot with the flag set *means* the pool did not honour the abort (otherwise `onCutAborted()` would have disconnected it). Regression test: the `mplexlate` phase. Not reached: `cutSubtitleTracks()` has no predicate (a cancel there is acted on when the phase returns), and there is deliberately no poll behind a *successful* mux. |
+| task `aborted()` → `TTAVData::onCutAborted` (cleanup + `Canceled`) | Every abortable path deletes what the run created: `mCutProducedFiles` (`TTAVData`, for the MPEG-2 synchronous phase and pre-pool exits), `TTH26xCutTask`/`TTAudioOnlyCutTask`'s own `mCreatedFiles` (registered **unconditionally**, not gated on success — an aborted track still leaves a partial file), and `TTMuxTask`'s own `mCreatedFiles` (inherited from `TTAbortableTask`, see the redundancy section), seeded from `TTMuxTaskParams::cleanupOnAbort` (`data/ttmuxtask.cpp`) — the MPEG-2 mux run takes *ownership of* that list from `mCutProducedFiles`, which is cleared at the handover (`TTAVData::onCutFinished`, MKV-mux branch), so nothing is deleted twice. A genuine error keeps its partial files: the discriminator is `mSyncPhaseAbort` in `onCutAborted()`, and inside the tasks the fact that cleanup is reachable only through the cancel-gated `abortIfRequested()`. **The closing bracket depends on which of the two arrived** (`0bd07c93`, 2026-08-15 — corrected from an earlier, wrong "2026-08-13" date this row carried, verified against `git log -S mLastFailureMessage`): this slot is reached by a cancel *and* by a genuine failure, because `TTThreadTask::run()` ends in `aborted()` either way. `TTThreadTaskPool::lastFailureMessage()` carries the reason — each task records it in `mFailureMessage` when `run()` catches a `TTException`, the pool keeps the last non-empty one and clears it in `init()`, i.e. once per operation. Empty → `finishCutOperation(Cancelled, "Cut cancelled")` as before; non-empty → `finishCutOperation(Failed, "Cut failed", <reason>)`, so the failure reaches `lastCutError()` and the error dialog. Before that, every failure on this path reported itself as a user cancel: no error dialog, empty `lastCutError()`, and `TTProgressBar` freezing the bar as if the user had pressed Cancel. |
 
 ## Assumptions, contracts & pitfalls
 
@@ -282,15 +289,16 @@ flowchart TD
   `onThreadPoolExit`'s else-branch consumes it, and it is connected in the
   constructor, so it always runs first. An MPEG-2 cut with MKV output has
   **two** pool runs (video task, then `TTMuxTask`), so `onCutFinished`
-  re-arms the flag (`ttavdata.cpp:1928`) before starting run B — without
-  that re-arm the pool would bracket the mux with its own `Init`/`Exit`
-  and that stray `Exit` would close the progress dialog early, *and*
-  `onCutAborted`'s `if (mCutOperationActive)` guard would go dead, so a
-  cancelled mux would report a successful `Exit` and no `Canceled`. The
-  false-window between consume and re-arm is inside one synchronous
-  `emit exit()` and cannot receive a pool signal. A sibling one-shot,
-  `mMuxPoolRunActive`, is set immediately after (`:1931`) and consumed in
-  the same slot (`:1057`) so the mux run does not fire a second
+  re-arms the flag (`TTAVData::onCutFinished`, MKV-mux branch) before
+  starting run B — without that re-arm the pool would bracket the mux with
+  its own `Init`/`Exit` and that stray `Exit` would close the progress
+  dialog early, *and* `onCutAborted`'s `if (mCutOperationActive)` guard
+  would go dead, so a cancelled mux would report a successful `Exit` and no
+  `Canceled`. The false-window between consume and re-arm is inside one
+  synchronous `emit exit()` and cannot receive a pool signal. A sibling
+  one-shot, `mMuxPoolRunActive`, is set immediately after (same branch of
+  `onCutFinished`) and consumed in `onThreadPoolExit` — the same slot that
+  consumes `mCutOperationActive` — so the mux run does not fire a second
   `avDataReloaded()` (measured: 2 tree-view rebuilds per cut without it).
   **Corrected 2026-08-15** (was stale — the code had already moved on from
   what this bullet described): `mLastCutError` is now set on both routes to
@@ -568,7 +576,8 @@ flowchart TD
 ## Redundancy / consolidation candidates
 
 - **Cancel flag / created-files list / abort funnel of the pool tasks**:
-  **Done 2026-09-05** (code audit batch E3, `de4df8dd`): `TTAbortableTask`
+  **Done 2026-09-05** (code audit batch E3, landed on master in `717fcf5a`):
+  `TTAbortableTask`
   (`data/ttabortabletask.{h,cpp}`) holds `mCancelRequested`, `mCreatedFiles`,
   `cancelRequested()`, `abortIfRequested()`, `abortNow()`, `abortCleanup()`
   and the `reportStep()`/`reportStage()` forwarding once; `TTH26xCutTask`,
@@ -585,16 +594,28 @@ flowchart TD
   one helper on `TTAVData` (which all three already hold a pointer to).
   **Still open** — the cut-abort work moved two of the copies but did not
   merge them.
-- **Abort-cleanup file lists**: three parallel implementations of
+- **Abort-cleanup file lists**: originally three parallel implementations of
   "delete what this run created" — `TTAVData::mCutProducedFiles`,
   `TTH26xCutTask`/`TTAudioOnlyCutTask::mCreatedFiles` (identical
   register-unconditionally/`abortCleanup()` pair in both) and
   `TTMuxTask`'s seeded copy. They differ in *who* discriminates cancel
   from error (`mSyncPhaseAbort` in the slot vs. reachability through
   `abortIfRequested()` in the tasks), which is the part worth keeping.
-  **Done 2026-09-04** (code audit batch D): the list handling is
-  `ttRemoveFiles()` in `avstream/ttcommon.cpp`, called from all five
-  sites; who decides cancel-vs-error stayed where it was.
+  **Done 2026-09-04** (code audit batch D): the deletion itself became one
+  helper, `ttRemoveFiles()` in `avstream/ttcommon.cpp`; who decides
+  cancel-vs-error stayed where it was. **Further consolidated 2026-09-05**
+  (batch E3, `717fcf5a`, see the redundancy entry above): the surrounding
+  `mCreatedFiles` field and the `abortCleanup()`/`abortNow()`/
+  `abortIfRequested()` funnel that call it also moved into `TTAbortableTask`,
+  so `TTH26xCutTask` and `TTAudioOnlyCutTask` no longer carry their own copy
+  at all, and `TTMuxTask` inherits the field (only its seeding from
+  `TTMuxTaskParams::cleanupOnAbort` and its own `cleanUp()` stay in the
+  subclass). `ttRemoveFiles()` now has two call sites: once inside
+  `TTAbortableTask::abortCleanup()` (all three pool tasks) and twice in
+  `TTAVData` for `mCutProducedFiles` (the MPEG-2 synchronous phase and
+  pre-pool exits) — `TTAVData::mCutProducedFiles` is the one list left that
+  is not part of `TTAbortableTask`, because it belongs to a phase that runs
+  before any pool task exists.
 - **Progress-bar creation + cancel wiring**: duplicated verbatim in the
   `Init` and `Start` branches of `TTCutMainWindow::onStatusReport`
   (stream-point scans skip `Init`). Candidate: `ensureProgressBar()`.
