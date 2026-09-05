@@ -86,27 +86,32 @@ audio_ext_for_codec() {
     esac
 }
 
+# Quiet ffprobe on one stream: SELECTOR in -select_streams syntax (empty =
+# all streams), the remaining arguments verbatim. stderr is dropped, the
+# callers below decide what an empty result means.
+_ffprobe() {
+    local selector=$1
+    shift
+    local -a sel=()
+    if [ -n "$selector" ]; then sel=(-select_streams "$selector"); fi
+    ffprobe -v error "${sel[@]}" "$@" 2>/dev/null
+}
+
 # First packet PTS of one stream of FILE, as ffprobe prints it (empty when the
-# probe fails). SELECTOR uses ffprobe's -select_streams syntax; an empty
-# SELECTOR probes the first packet of any stream. READ_INTERVALS (optional)
-# limits the probe window.
+# probe fails). An empty SELECTOR probes the first packet of any stream;
+# READ_INTERVALS (optional) limits the probe window.
 _probe_first_packet_pts() {
     local selector=$1 file=$2 intervals=${3:-}
-    local -a args=()
-    if [ -n "$selector" ]; then args+=(-select_streams "$selector"); fi
-    if [ -n "$intervals" ]; then args+=(-read_intervals "$intervals"); fi
-    ffprobe -v error "${args[@]}" -show_entries packet=pts_time \
-        -of csv=p=0 "$file" 2>/dev/null | head -1 | tr -d ','
+    local -a win=()
+    if [ -n "$intervals" ]; then win=(-read_intervals "$intervals"); fi
+    _ffprobe "$selector" "${win[@]}" -show_entries packet=pts_time -of csv=p=0 "$file" \
+        | head -1 | tr -d ','
 }
 
 # One ffprobe field as a bare value (-of default=noprint_wrappers=1:nokey=1).
 # Args: SELECTOR (empty = no -select_streams) ENTRIES FILE
 _probe_field() {
-    local selector=$1 entries=$2 file=$3
-    local -a args=()
-    if [ -n "$selector" ]; then args+=(-select_streams "$selector"); fi
-    ffprobe -v error "${args[@]}" -show_entries "$entries" \
-        -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null
+    _ffprobe "$1" -show_entries "$2" -of default=noprint_wrappers=1:nokey=1 "$3"
 }
 
 # Split "NUM/DEN" (ffprobe frame-rate notation) into two variables; a plain
@@ -326,9 +331,18 @@ _poll_ffmpeg_progress() {
 #   a raw .ts segment (global stream list + per-program stream list both
 #   match "v:0"); take the first line only.
 _probe_stream_field() {
-    local selector=$1 field=$2 file=$3 v
-    v=$(ffprobe -v error -select_streams "$selector" -show_entries "stream=$field" -of csv=p=0 "$file" 2>/dev/null | head -1)
+    local v
+    v=$(_ffprobe "$1" -show_entries "stream=$2" -of csv=p=0 "$3" | head -1)
     printf '%s' "${v%,}"
+}
+
+# start_time and duration of one stream of FILE into two variables (both
+# empty when the probe fails). Args: SELECTOR FILE START_VAR DUR_VAR
+_probe_segment_timing() {
+    local -n _start=$3
+    local -n _dur=$4
+    _start=$(_probe_stream_field "$1" start_time "$2")
+    _dur=$(_probe_stream_field "$1" duration "$2")
 }
 
 # One segment of the splice-gap chain: emits a gap row when this segment
@@ -406,8 +420,7 @@ detect_video_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
-        seg_start=$(_probe_stream_field v:0 start_time "${VDR_SEGMENTS[$i]}")
-        seg_dur=$(_probe_stream_field v:0 duration "${VDR_SEGMENTS[$i]}")
+        _probe_segment_timing v:0 "${VDR_SEGMENTS[$i]}" seg_start seg_dur
         _splice_gap_step_or_warn "$seg_start" "$seg_dur" "$threshold_s" "$out_file" \
             "detect_video_gaps_multifile: ffprobe failed on segment $i (${VDR_SEGMENTS[$i]})"
     done
@@ -430,8 +443,7 @@ detect_audio_gaps_multifile() {
         rm -f "$seg_gaps"
 
         local seg_start seg_dur
-        seg_start=$(_probe_stream_field "$stream_idx" start_time "${VDR_SEGMENTS[$i]}")
-        seg_dur=$(_probe_stream_field "$stream_idx" duration "${VDR_SEGMENTS[$i]}")
+        _probe_segment_timing "$stream_idx" "${VDR_SEGMENTS[$i]}" seg_start seg_dur
         # A badly damaged segment can leave this track's own duration
         # unprobeable ("N/A" - ffprobe's fast container-index duration probe
         # returning N/A: observed on the real 5-segment fixture for the
@@ -443,8 +455,7 @@ detect_audio_gaps_multifile() {
         # assumption the "no additional drift" fallback below makes).
         if [[ ! "$seg_start" =~ ^[0-9]+\.?[0-9]*$ || ! "$seg_dur" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             echo "detect_audio_gaps_multifile: track $stream_idx duration unavailable on segment $i (${VDR_SEGMENTS[$i]}) - falling back to video timing for splice-gap purposes" >&2
-            seg_start=$(_probe_stream_field v:0 start_time "${VDR_SEGMENTS[$i]}")
-            seg_dur=$(_probe_stream_field v:0 duration "${VDR_SEGMENTS[$i]}")
+            _probe_segment_timing v:0 "${VDR_SEGMENTS[$i]}" seg_start seg_dur
         fi
         _splice_gap_step_or_warn "$seg_start" "$seg_dur" "$threshold_s" "$out_file" \
             "detect_audio_gaps_multifile: ffprobe failed on segment $i track $stream_idx (${VDR_SEGMENTS[$i]})"
@@ -1436,9 +1447,8 @@ _probe_container_duration() {
 # Smallest (head) or largest (tail) video packet PTS inside a
 # -read_intervals window of $INPUT.
 _probe_pts_extreme() {
-    ffprobe -v error -select_streams v:0 \
-        -read_intervals "$1" -show_entries packet=pts_time \
-        -of csv=p=0 "$INPUT" 2>/dev/null | tr -d ',' | sort -n | "$2" -1
+    _ffprobe v:0 -read_intervals "$1" -show_entries packet=pts_time -of csv=p=0 "$INPUT" \
+        | tr -d ',' | sort -n | "$2" -1
 }
 
 # "pts_time,pict_type" rows of the video frames inside a -read_intervals
@@ -1965,6 +1975,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
 
             # Calculate ratio: r_frame_rate / avg_frame_rate
             # If ≈ 2.0, then r_frame_rate is the field rate → halve it
+            # shellcheck disable=SC2153  # FRAME_RATE_DEN is assigned through _parse_fraction's nameref
             if [[ -n "$AVG_NUM" && "$AVG_NUM" -gt 0 && "$AVG_DEN" -gt 0 ]]; then
                 RATIO=$(awk "BEGIN {printf \"%.1f\", ($FRAME_RATE_NUM / $FRAME_RATE_DEN) / ($AVG_NUM / $AVG_DEN)}")
                 if [[ "$RATIO" == "2.0" ]]; then
@@ -1996,13 +2007,11 @@ with open('$OUTPUT_VIDEO','rb') as f:
             step "Checking audio ES structure..."
             # Decimal frame rate for the ms->video-frame conversion. The Rev-2
             # gap section further below recomputes the same value into the
-            # global FRAME_RATE_DEC from the same (by-then-unchanged) FRAME_RATE
-            # — that recompute is a harmless no-op duplicate, kept so this block
-            # doesn't have to move past AC3 header repair per the original plan.
-            _AFIX_FR_NUM=$(echo "$FRAME_RATE" | cut -d'/' -f1)
-            _AFIX_FR_DEN=$(echo "$FRAME_RATE" | cut -d'/' -f2)
-            _AFIX_FR_DEN="${_AFIX_FR_DEN:-1}"
-            FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $_AFIX_FR_NUM / $_AFIX_FR_DEN}")
+            # global FRAME_RATE_DEC from the same (by-then-unchanged)
+            # FRAME_RATE_NUM/DEN — a harmless no-op duplicate, kept so this
+            # block doesn't have to move past AC3 header repair per the
+            # original plan.
+            FRAME_RATE_DEC=$(awk "BEGIN {printf \"%.6f\", $FRAME_RATE_NUM / $FRAME_RATE_DEN}")
             for i in "${!AUDIO_FILES[@]}"; do
                 AF="${AUDIO_FILES[$i]}"
                 case "$AF" in *.mp2|*.ac3|*.eac3) ;; *) continue ;; esac
@@ -2519,16 +2528,16 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 # Choose encoder for silence generation (matching original format)
                 case "$AUDIO_CODEC" in
                     mp2)
-                        ENCODER="-c:a mp2 -b:a ${ORIG_BITRATE:-192000} -ac ${ORIG_CHANNELS:-2}"
+                        ENCODER=(-c:a mp2 -b:a "${ORIG_BITRATE:-192000}" -ac "${ORIG_CHANNELS:-2}")
                         ;;
                     ac3)
-                        ENCODER="-c:a ac3 -b:a ${ORIG_BITRATE:-384000} -ac ${ORIG_CHANNELS:-2}"
+                        ENCODER=(-c:a ac3 -b:a "${ORIG_BITRATE:-384000}" -ac "${ORIG_CHANNELS:-2}")
                         ;;
                     aac)
-                        ENCODER="-c:a aac -b:a ${ORIG_BITRATE:-192000} -ac ${ORIG_CHANNELS:-2}"
+                        ENCODER=(-c:a aac -b:a "${ORIG_BITRATE:-192000}" -ac "${ORIG_CHANNELS:-2}")
                         ;;
                     *)
-                        ENCODER="-c:a copy"
+                        ENCODER=(-c:a copy)
                         ;;
                 esac
 
@@ -2543,7 +2552,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                     ffmpeg -y -f lavfi \
                         -i "anullsrc=r=${ORIG_SAMPLE_RATE:-48000}:cl=${pad_layout}" \
                         -t "$PAD_DURATION" \
-                        $ENCODER \
+                        "${ENCODER[@]}" \
                         "$TEMP_SILENCE" 2>&1
 
                     # 2. Concatenate original + silence via concat demuxer (stream copy).

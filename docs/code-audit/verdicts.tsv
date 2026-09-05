@@ -184,6 +184,7 @@ fingerprint	kind	verdict	date	reason
 1d648e49a1357a8cb9f21c15732761fa30e52ba7	tool	deliberate	2026-09-03	ttcut-audiofix.c:129-186 is a single-purpose MP2 CRC verification with mode-dependent subband/table lookups (`mp2_crc_nbal`, `mp2_crc_line`, `mp2_crc_sblimit`, 
 1d71c817ec10097d2df42ebe6d1c8b01a9197a16	method-size	deliberate	2026-09-03	same physical method as TTCutPreviewTask::operation above (data/ttcutpreviewtask.cpp:130 is the `QFile::remove(fi.absoluteFilePath())` call inside operation()'s
 1df069afc8cb6b51c4e6a25362fb34a6604782d2	tool	consolidate	2026-09-04	done 2026-09-04 batch B: `Event::value` (line 119) is stored via `add(state, msg, value)` (line 125) and captured from the signal lambda (lines 259-260), but the assertion loop (lines 3
+1f4e3aeab8bcec6e5e34e9f30f445912315b4a4f	clone	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: _probe_segment_timing for the three start_time/duration pairs of the multi-file scanners
 200bcd381adae5c40f7814208c05c9b26bee0522	clone	consolidate	2026-09-04	"done 2026-09-04 batch D: identical setError() body — mLastError=error; TTMessageLogger::getInstance()->warningMsg/errorMsg(__FILE__,__LINE__,QString(""<Class> error: %1"").arg(error)); — "
 20283bdda490031b44749a3022f23b304d773099	file-size	deliberate	2026-09-03	"same class as the class-size row above — 3192 lines is the direct consequence of the ""Konsolidiert (7849f66)"" centralization documented in audio-cut-timing.md a"
 202cb3763aa717e523f0a83351ce5d1dc958de70	tool	unsure	2026-09-03	`TStreamInfo` (ttmpeg2decoder.h:82-90) is defined but never instantiated anywhere in the codebase (no `TStreamInfo` variable found outside the typedef itself) —
@@ -246,6 +247,7 @@ fingerprint	kind	verdict	date	reason
 369ed2058fd65a0d18669c2c686aa309e29117d8	convention	deliberate	2026-09-04	file logs through log-> throughout; internally consistent (conventions.md, 2026-09-04)
 36aa1ad5865cd626a55fe285d8d946f36f4da7da	tool	deliberate	2026-09-04	same by-value convention across the whole class.
 36d29f65613753afd8f6eb9b0c72f0469479e3f9	convention	deliberate	2026-09-04	comment style, no structure; older forms remain in place per conventions.md
+37159e92828d6c3e04803ec8f29da51b773e481b	clone	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: _ffprobe front end shared by _probe_first_packet_pts, _probe_field, _probe_stream_field, _probe_pts_extreme
 37a6d4e10fc70a99356a5df55e94489471326e69	tool	deliberate	2026-09-03	$ENCODER is an intentionally word-split argument list
 37b366474d01e386a302b0c767e75266370f6481	method-size	documented	2026-09-04	"progress-reporting.md, Redundancy section: ""Progress-bar creation + cancel wiring: duplicated verbatim in the Init and Start branches of TTCutMainWindow::onStat"
 3889436a9c6411d9253b1b293b404c2da5ba7ce5	method-size	deliberate	2026-09-03	same mislabeled span (main(), test_previewcut_abort.cpp:160-524); tool picked `TTMessageLogger::getInstance()` (line 199) as the nearest symbol this time — same
@@ -405,6 +407,7 @@ fingerprint	kind	verdict	date	reason
 83eee784b6739f358db84baf72e25a4a6dbaa0d2	tool	deliberate	2026-09-03	same reasoning as line 191 above (`$(build_tux_timeline_args 1280 720 50)`).
 840a7c8102887eb5ca7688f966af0c3d839da499	tool	consolidate	2026-09-03	"function body (580-~820) is explicitly documented in its own header comment as ""Three detection methods, applied in order"" (572-579) and internally divided by `"
 8465f11eca18b0cbd7d3ee95bfa337b1e8c30591	clone	consolidate	2026-09-03	`ttNaluRemoveEpb` (avstream/ttnaluparser.cpp:478-494, file-static) and `removeEmulationPrevention` (extern/ttessmartcut.cpp:4072-4088, file-static) are byte-ide
+84e9982bff4f742585dbb606a0c1cd3e4aa978f1	clone	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: sixth $FRAME_RATE re-parse (audiofix block) reads FRAME_RATE_NUM/DEN
 85d5ad546a2c10b07e47b21c10b878d7f4acad0f	tool	consolidate	2026-09-03	ttmpeg2decoder.cpp:357 `TTSequenceHeader* seqHeader = videoHeaderList->sequenceHeaderAt(headerListIndex);` — only `seqHeader->headerOffset()` (:358) is read, ne
 8616e6c7d2b6ec8618c2490fb744145029712a58	method-size	deliberate	2026-09-03	metric mislabels the enclosing function — it is `runCut(...)` (declared test_mpeg2cut_abort.cpp:196, closes at 573, ~377 lines), not a method on TTSettings; the
 8693ae3d1e02accfed08014186d97687cdae893d	clone	consolidate	2026-09-05	"done 2026-09-05 batch E4 (TTTrackTreeView): createActions() bodies — literally identical 4-action sequence (Insert/Up/Delete/Down) between TTAudioTreeView and TTSubtitleTreeView (only ""audiofile""/""subtitl"
@@ -464,6 +467,7 @@ a1f42126cdf1d47b794032425c511fa43bc38b76	clone	consolidate	2026-09-04	done 2026-
 a2191c74c58157534b0b0ce00afdc769fe82f242	convention	documented	2026-09-03	docs/conventions.md: older comment forms remain in place; convention findings are not rebuilt
 a2543d8bd7359b85d0e734940757f77ce7bc0951	clone	deliberate	2026-09-03	ttcut-ac3fix.c:482-492 is 2 of 7 total `strcmp(argv[i], ...)` branches (grep count) in a hand-rolled long-option parser (no getopt_long since `-b` takes a value
 a27043776d2dbd65883c9cb18bc916f6d3abea91	clone	consolidate	2026-09-04	"the common ""read N bytes → `header_offset = position()-X` → `parseBasicData()`"" prologue repeats in `TTSequenceHeader::readHeader` (69-82), `TTGOPHeader::readHe"
+a2cbc4b19b347d7d6a6240b5de3a7eabf20fad33	clone	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: same _ffprobe front end
 a3e023a1a0fce4f37c6ba953e6c081312fc6e315	clone	deliberate	2026-09-03	"acm-cut.sh:40-41 `sz=$(stat -c %s ""$OUT"" 2>/dev/null || echo 0); if [ ""$sz"" -gt 0 ] ...`; qc-autocut.sh:130-131 same 2-line idiom inside a differently-parameter"
 a41df9a3847e70b44bb73571b222fb38dcb27b82	clone	deliberate	2026-09-03	qc-autocut.sh:178 `VCODEC=$(ffprobe ... -of csv=p=0 ...)`; ttcut-demux:334-400 same ffprobe-probe idiom. No shared bash lib exists (grep for `^source`/`. ` acro
 a42d4acda9b35b319ae701d61238e6c4d3e61b38	convention	consolidate	2026-09-05	done 2026-09-05 batch F (skip_if_present, 5e84d157): shellcheck's only finding on this file is SC2046 at make_test_video.sh:301 (`$(build_tux_timeline_args 1920 1080 25) \` inside `generate_h264_1080i_paff`), unqu
@@ -561,7 +565,7 @@ ce7f607be1f3a828dea1c30ce66429feee47139a	file-size	documented	2026-09-03	CLAUDE.
 ceafe009cbb530668650eff65e8bf9d5b3c66283	tool	deliberate	2026-09-03	same reasoning as line 191 above (`$(build_tux_timeline_args 1920 1080 25)`).
 cf2289c0abc3bc883cc6f5f17c51fce472c823b4	convention	deliberate	2026-09-03	"common/ttthreadtask.cpp:23-80 uses `/** ... */` Javadoc-style method comments uniformly throughout the file; header carries ""Originally TTCut (c) 2003-2010"" (li"
 cf48be7e73d21443405d4813f06afc2f595582c7	tool	deliberate	2026-09-03	overrides QWidget/QLabel's virtual `resizeEvent(QResizeEvent*)` (ttmpeg2window2.h:47) — dispatched by the Qt event system, not called directly in source, which 
-cf9c0fd0da9e42ad8f0af5f3e0dc3665d0544e4a	tool	consolidate	2026-09-05	"done 2026-09-05 batch F (ttcut-demux helpers, 927f0968): `-select_streams $idx` at :1444 is unquoted; mechanical fix to `""$idx""`."
+cf9c0fd0da9e42ad8f0af5f3e0dc3665d0544e4a	tool	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: ENCODER is an array now, expanded quoted
 cfffd35f28e7f04cf5b2fea5a76918dd603a3aa6	tool	deliberate	2026-09-03	same reasoning as line 191 above (`$(build_tux_timeline_args 720 576 25)`).
 d076f72e788efc27d49967a4c812d9b969e210ce	clone	consolidate	2026-09-03	exact-clone (unrenamed) instance of the splice-gap block duplication — ttcut-demux:334-336, 383-385, 398-400 are token-identical, same variables.
 d18e16332b6df7aafe5a1061eec188adb8e43f6e	convention	documented	2026-09-03	docs/conventions.md: older comment forms remain in place; convention findings are not rebuilt
@@ -628,6 +632,7 @@ ef664a291810ed8c021e80d76a1ce40d406fa5ee	clone	consolidate	2026-09-03	ttmpeg2win
 ef7e0554362dd2cf5f3ce2fb738d4d9de1cfc896	tool	deliberate	2026-09-03	every construction site uses `new TTMpeg2Decoder(...)` behind a pointer (gui/ttquickjumpworker.cpp:50, extern/tttranscode.cpp:170, data/ttframesearchtask.cpp:60
 ef86c104c532515d8e3866ce2210c89701e17867	convention	deliberate	2026-09-03	"avstream/ttheaderlist.cpp:6 carries the ""Originally TTCut"" marker; legacy-file convention split as above."
 f02fdeac932c8a3cdd54ff0a4e0a93bc6f6367c9	clone	consolidate	2026-09-03	data/ttcutprojectdata.cpp:461-472 (writeAudioSection), :492-511 (writeRepairSection), :519-539 (writeCutSection), :542-561 (writeMarkerSection) — and writeVideo
+f0459a8f201f6a7e4b45be8aaac4642db1e30977	clone	consolidate	2026-09-05	done 2026-09-05 ttcut-demux rest pass: same _ffprobe front end (also _probe_pts_extreme)
 f05780409fc58585e1563797609aef6136174a60	tool	consolidate	2026-09-03	"build-package.sh:56 `read -p ""Enter changelog description..."" CHANGELOG_MSG || CHANGELOG_MSG=""""` — free-text changelog input, backslash-mangling is a real (if m"
 f2c33473242039e12776830b09dfc8af38ed6c4a	clone	deliberate	2026-09-04	early-out setter idiom (ttsettings.cpp:412-484), Detection-Thresholds group setters.
 f2da94c0efd5ed8745587868d4313194c0b98756	tool	deliberate	2026-09-03	called via gui/ttcurrentframe.cpp:244 (itself called from gui/ttcutmainwindow.cpp:1630, :1804) — same cross-file visibility gap as above.
@@ -640,6 +645,7 @@ f578f5d0322c8fac234f8dc70b2ece4966b844d4	convention	deliberate	2026-09-04	commen
 f5c0b036697b898bd57f895a205f29aeedf4421e	clone	deliberate	2026-09-04	detect_audio_gaps (:207-224, PTS-only) vs detect_video_gaps (:251-269, DTS-driven, PTS reported) share the ffprobe|awk shape but differ in the exact dimension t
 f655ee3dfc03a2637fa5e2430d6bb1a19d5fec21	clone	deliberate	2026-09-04	same-file self-clone; each of the 6 blocks (lines 27-83) is `{ TTLeadingPicClassifier c(CODEC_HEVC); expect(...); }` instantiating a genuinely different NAL-seq
 f6969303109488527b5115e917efdc342763ea4e	clone	consolidate	2026-09-05	done 2026-09-05 batch F (section/AU/grid helpers, dac1cf58): ttcut-pts-analyze.c:172-192 (PAT section: table_id check, section_length/CRC→data_len) vs. 211-232 (PMT section, same skeleton, different post-header field layo
+f70e2bdfe93b778118bc3e475646a48065a23ab8	tool	deliberate	2026-09-05	shellcheck cannot see the nameref assignment in _parse_fraction; SC2153 disabled at the call with a note
 f74cab941feea2478fb80513db5d228fdab39cfa	clone	deliberate	2026-09-04	both scripts define the same `if [ -t 1 ]; then RED=...; else ...; fi` terminal-color block (ttcut-demux:58-70 vs vdr-demux-example.sh:45-56), each with its own
 f757aa3633bce06d6ba7c825c6728a3c0bbf8a05	clone	deliberate	2026-09-04	shared `Recorder`/`Event`/`dirEntries`/`clearDir` scaffolding repeated verbatim across the 5 cut-abort harnesses (test_cutsequence_abort.cpp, test_h26xcut_abort
 f88264aac1322e1bef98a5c79efb7c119584ae14	clone	consolidate	2026-09-05	done 2026-09-05 batch F (ttcut-demux helpers, 927f0968): same root cause as row 4 — :1897-1899 sets FRAME_RATE_NUM/DEN, :2158-2160 (`_FR_NUM`/`_FR_DEN`) re-derives the identical current value from `$FRAME_RATE` unnece
