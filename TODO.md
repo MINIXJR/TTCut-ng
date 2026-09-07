@@ -5,137 +5,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## High Priority
 
-- **SIGSEGV nach Smart Cut in `doH264Cut` — Use-after-free in Qt-Model-Internals
-  (2026-08-07, vertagt auf User-Entscheidung; einmaliger Absturz, seither in
-  keiner GUI-Abnahme wieder aufgetreten — der frühere Zusatz „blockiert den
-  Merge von `feature/progress-details`" ist überholt, der Branch ist seit
-  2026-08-09 gemergt und released)**
-  - Absturz bei der GUI-Abnahme: Öffnen (18:34) → Vorschau (18:36:38) →
-    Schnitt-Dialog → GUI-Schnitt einer 85-min-H.264-Aufnahme; Crash ~18:38,
-    direkt nach „Smart Cut complete" (Log endet dort), in der
-    Audio-/Folgephase von `doH264Cut`.
-  - **Forensik (Core `core.500359`, 2 GB, Build-ID passt zu `bb553cd6`):**
-    Absturz-Thread: `QAbstractItemModelPrivate::invalidatePersistentIndexes`
-    ← `QAbstractProxyModelPrivate::_q_sourceModelDestroyed` ← (Frames
-    fehlen/kollabiert) ← `TTAVData::doH264Cut` (attribuiert ~ttavdata.cpp:1637,
-    -O2-Inlining, ±). Der Proxy-Private-Block ist **freigegebener,
-    wiederverwendeter Speicher**: ungültiger vtable-Zeiger, `persistent.indexes`
-    mit m_size 2 951 281, „Source-Model"-Zeiger zeigt in denselben Block.
-    Backtrace-Dump: war `CLAUDE_TMP/TTCut-ng/core500359_bt.txt` — **gelöscht
-    2026-08-16** (CLAUDE_TMP-Purge, Memory `reference_claude_tmp_purge_2026_08_16`);
-    die tragenden Frames stehen wörtlich in diesem Eintrag.
-  - ~~TTCut-Code enthält kein einziges Proxy-Model und keinen QCompleter
-    (Grep 2026-08-07) — das Proxy ist Qt-intern.~~ **Richtiggestellt
-    2026-08-13, gemessen:** Der Grep konnte es nicht finden, weil TTCut keins
-    *schreibt* — die **Dateidialoge bringen eins mit**. Gemessen mit
-    `tools/diag/test_filedialog_proxy` in dieser Sitzung (Wayland, ASAN):
-    ein Dateidialog lädt `KF6KIOFileWidgets`/`KIOWidgets`/`KIOCore` unter
-    `KDEPlasmaPlatformTheme` und legt ein **`KDirSortFilterProxyModel`** an —
-    abgeleitet von `QSortFilterProxyModel`, erbt also genau das
-    `_q_sourceModelDestroyed` aus Frame #1. Damit ist das Objekt benannt,
-    auf dem der Absturz operierte; die Schlussfolgerung „nicht zuordenbar"
-    beruhte auf einer Ausschlussbegründung, die so nicht trug.
-  - Dateidialoge kommen in der Absturz-Sequenz **dreimal** vor:
-    `getOpenFileName` beim Öffnen, `getExistingDirectory` im Cut-Dialog
-    (`gui/ttcutavcutdlg.cpp:249`, mit `qApp->processEvents()` direkt
-    dahinter) und ein `QFileDialog`-Objekt beim Frame-Speichern
-    (`gui/ttcurrentframe.cpp:545`). Direkt vor `onDoCut` wird
-    `TTCutAVCutDlg` per `delete` zerstört (`ttcutmainwindow.cpp:1484`, dort
-    `cutAVDlg`), davor der Vorschau-Dialog (`delete cutPreview`, `:1435`)
-    — und `doH264Cut` betritt über die Statusmeldungen von `cutAudioTracks`/`cutSubtitleTracks`
-    wieder die Ereignisschleife (`qApp->processEvents()`). Dort werden die
-    aufgeschobenen Löschungen aus diesen Abbauten ausgeführt; dorthin gehören
-    die im Backtrace fehlenden Frames. **Mechanismus kohärent, nicht
-    gezeigt.**
-  - **Stand 2026-08-15: der vollständige Pfad ist nachgebaut und bleibt
-    sauber.** Zwei neue Sonden schließen die Lücken, die 2026-08-13 noch
-    offen waren, beide unter ASAN auf dem Originalmaterial
-    (`03x01`, 224 949 Bilder) mit den Originalschnittgrenzen 49719..190218:
-    | Sonde | was zusätzlich im Prozess ist | Ergebnis |
-    |---|---|---|
-    | `test_preview_then_cut` | Vorschau-Dialog, `doCutPreview` mit echten Clips, `initPreview`, mpv lädt sie, modaler Abbau per `delete` | sauber, Schnitt 2810,016 s |
-    | `test_mainwindow_then_cut` | **echtes `TTCutMainWindow`** mit allen Views und Modellen, Projekt geladen, Cut-Dialog, Bedienung über die Knöpfe `pbPreview`/`pbCutAudioVideo` | sauber, Schnitt 2810,016 s |
-    Damit ist der Vorschau-Dialog als alleinige Ursache ausgeschlossen, und
-    auch das vollständige Zusammenspiel aus Hauptfenster, beiden Dialogen und
-    Schnitt zeigt nichts.
-  - **Was jetzt noch fehlt**: echte Mausereignisse. `QAbstractButton::click()`
-    löst `clicked` aus, ohne durch `QWidget::mouseReleaseEvent` zu gehen — und
-    genau dort begann der Original-Backtrace. Dazu die Zeitabhängigkeit: der
-    Absturz trat einmal in Monaten auf, ein Einzellauf trifft so etwas nicht.
-    Nächster sinnvoller Schritt wäre ein Dauerlauf des Harnisch (er ist jetzt
-    vollständig) oder echte Ereignisse per `QTest`/xdotool.
-  - **Zwei Fallen, die diese Runde gekostet hat — beide erzeugten einen
-    Absturz, der dem gesuchten ähnlich sah:**
-    1. Ein Wächter-Zeitgeber mit **rohem Zeiger** auf einen bereits gelöschten
-       Dialog feuerte im `processEvents()` von `doH264Cut` — Backtrace mit
-       `processEvents` und `doH264Cut` direkt darunter, also genau die Form,
-       auf die diese Jagd wartet. Abhilfe: `QPointer` und den Zeitgeber nach
-       `exec()` stoppen.
-    2. **`accept()` auf einer Plasma-nativen `QMessageBox` stürzt zuverlässig
-       ab** (`~QDialog` → `QDialogPrivate::setNativeDialogVisible` →
-       `QWidget::hide`), ein Knopfklick nicht. Einzelvariablen-Vergleich
-       gemessen: `PROBE_DISMISS=accept` → SEGV, `=click` → sauber. Kein
-       Produktfehler — kein Anwendungscode schließt Meldungen per `accept()`.
-  - **Harnisch-Hinweis**: erst drücken, wenn das Hauptfenster wieder
-    freigegeben ist. Ein Klick 2 s nach `openProjectFile()` (Öffnen dauert bei
-    dieser Datei 9,7 s, unter ASAN 21 s) ließ den Oberflächen-Faden über zehn
-    Minuten bei 100 % rechnen, ohne dass je ein Vorschau-Dialog erschien — mit
-    **und** ohne ASAN. Ursache nicht geklärt; für Anwender nicht erreichbar,
-    weil das Fenster währenddessen deaktiviert ist.
-
-  - **Vier ASAN-Läufe am 2026-08-13, alle sauber** — die Spur ist damit
-    eingegrenzt, nicht bestätigt:
-    | Lauf | enthält | Ergebnis |
-    |---|---|---|
-    | `test_filedialog_proxy`, 20 Zyklen | Dateidialog (KIO-Proxy) | sauber |
-    | `--auto-cut` auf 03x01 (Originalmaterial) | ganzer H.264-Schnitt + Mux | sauber, Ausgabe exakt 2810,016 s |
-    | `test_dialog_then_cut` | Dialog **und** Schnitt in einem Prozess | sauber, Ausgabe identisch |
-    | `test_dialog_then_cut` (Wiederholung) | dasselbe | sauber, Ausgabe identisch |
-    **Was in keinem dieser Läufe steckt** und in der Absturz-Sequenz vorkam:
-    der Vorschau-Dialog (`TTCutPreview`, bringt libmpv + `QOpenGLWidget` mit,
-    wird per `delete` zerstört), der Cut-Dialog, das vollständige Hauptfenster
-    mit seinen Views — und echte Mausklicks. Der Vorschau-Dialog ist der
-    auffälligste verbliebene Kandidat (`QOpenGLWidget` war in diesem Projekt
-    schon einmal Ursache, `f87ea06c`). Nächster Schritt bleibt die echte
-    GUI-Sequenz unter ASAN, die sich nicht ohne Bedienung fahren lässt.
-  - **Zeitangabe richtiggestellt:** Der Schnitt dieses Materials dauert **rund
-    eine Minute**, nicht eine Stunde (gemessen, Smart Cut ist fast reiner
-    Stream-Copy). „Crash ~60 s nach den Dialog-Schließungen" heißt also: der
-    Absturz kam am **Ende** des Schnitts, in der Mux-/Abschlussphase.
-  - **Was der Sondenlauf NICHT zeigte:** 20 Zyklen Dialog auf/zu/`delete` +
-    Wiedereintritt in die Ereignisschleife, unter ASAN, ohne Report. Die
-    schärfere Form (modal per `exec()`, Abbau mit laufenden KIO-Jobs — das,
-    was TTCut tatsächlich tut) **hängt**: die modale Schleife kehrt nie
-    zurück, weder `reject()` noch ein 1,5-s-Wächter holen sie zurück, KIO
-    meldet vorher einen toten Socket. Drei Versuche, dann abgebrochen. Wer
-    hier weitermacht: dieser Fall bleibt der erreichenswerte — aber nicht
-    über diesen Harnisch.
-  - **Zuordnung offen:** Der Branch fasst keine Models an; dieselbe
-    Use-after-free-Klasse trat am 2026-08-01 vorbestehend auf (qtwayland,
-    → Memory `reference_core_dump_forensics`). Diese Bediensequenz
-    (Vorschau → Cut-Dialog → langer GUI-Schnitt) läuft unter Qt6 erst seit
-    dem 04.08. — Ursache kann im Branch, in der Qt6-Migration oder in Qt
-    selbst (6.10, Debian sid) liegen.
-  - **ASAN-Lauf 2026-08-09 (Branch-Stand `8b156cb4`, RelWithDebInfo +
-    `-fsanitize=address`): SAUBER.** Identifizierte Absturz-Datei
-    (`03x01_-_Drunter_und_drüber.264`, per Core-Strings belegt — die
-    „85 min" oben waren grob, real 75 min), komplette Sequenz Öffnen →
-    Vorschau → Cut-Dialog → GUI-Schnitt → Warten nach „Smart Cut
-    complete": kein ASAN-Report, kein Core, Mux komplett. Zusätzlich
-    lief die gesamte GUI-Abnahme am 2026-08-09 (>10 Öffnen-/
-    Schnitt-Zyklen, unintstrumentiert) absturzfrei. Der Befund stützt
-    „timing-abhängig, Qt-intern" (gleiche UAF-Klasse trat am 2026-08-01
-    vorbestehend auf, qtwayland). `core.500359` und der ASAN-Build
-    wurden am 2026-08-09 auf User-Entscheid gelöscht (veralten mit dem
-    nächsten Build); der Backtrace-Dump
-    `/usr/local/src/CLAUDE_TMP/TTCut-ng/core500359_bt.txt` [Material verloren 2026-08-16] bleibt.
-    Bei Wiederauftreten: Core sichern, Forensik-Referenz nutzen,
-    ASAN-Build neu erzeugen (Hinweis: auch der Backtrace-Dump ist seit dem
-    CLAUDE_TMP-Purge 2026-08-16 weg — die Frames oben sind der Restbestand)
-    (`cmake -B build-asan -G Ninja
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-fsanitize=address
-    -fno-omit-frame-pointer -g" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`).
-
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — PAFF-Wiedergabe**
   Die Befunde B, D und E sind gefixt (2026-07-19, `46d3dcb` / `8dfda6d`),
   ebenso die Wurzel (TS↔ES-AU-Nummerierungs-Drift der `es_extra_frames`) —
@@ -617,6 +486,25 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   einzeln in der GUI zu öffnen.
 
 ## Low Priority
+
+- **SIGSEGV nach Smart Cut in `doH264Cut` — einmaliger Absturz, herabgestuft
+  2026-09-07.** Ein Use-after-free am 2026-08-07 (Backtrace endete in
+  `QAbstractProxyModelPrivate::_q_sourceModelDestroyed` unter `doH264Cut`);
+  seither keine Wiederkehr. Die Forensik samt sechs sauberen ASAN-Nachbauten
+  und der am 2026-09-07 gemessen widerlegten KIO-Dialog-Hypothese steht in
+  `docs/completed-work.md` (GUI und Wiedergabe). Der Code-Stand des Absturzes
+  existiert seit `9e1e502c` nicht mehr (H.26x-Schnitt läuft im Pool statt
+  synchron im GUI-Thread), Core und Backtrace-Dump sind gelöscht — es gibt
+  nichts mehr nachzustellen.
+  **Bei Wiederauftreten:** Core sichern (`coredumpctl dump`), `thread apply
+  all bt` mit Qt-Debugsymbolen (`DEBUGINFOD_URLS` setzen oder
+  `libqt6core6t64-dbgsym`), prüfen ob Frame #1 wirklich der Proxy-Slot ist
+  und welches Objekt `this` war. ASAN-Build:
+  `cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+  -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"`; Harnisch
+  `tools/diag/test_mainwindow_then_cut` (`PROBE_TRACE_DEFERRED=1` zeigt, was
+  in den Ereignisschleifen aufgeschoben gelöscht wird).
 
 - **`make_test_video.sh`: MPEG-2-PAL-Generator scheitert mit ffmpeg 9**
   (2026-09-03, beim Code-Audit-Gate aufgefallen). `-top 1` ist in ffmpeg 9

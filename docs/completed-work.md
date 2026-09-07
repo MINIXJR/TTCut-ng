@@ -867,6 +867,85 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **`doH264Cut`-Absturz (core.500359, 2026-08-07): Forensik-Archiv, KIO-Hypothese
+  widerlegt, Eintrag herabgestuft** → **HERABGESTUFT (2026-09-07)**, Rest als
+  Low-Priority-Eintrag in `TODO.md`.
+  - **Der Absturz:** GUI-Abnahme auf `bb553cd6`, Öffnen → Vorschau → Cut-Dialog
+    → GUI-Schnitt einer 75-min-H.264-Aufnahme (03x01, per Core-Strings belegt);
+    SIGSEGV am Ende des Schnitts (Smart Cut ist fast reiner Stream-Copy, der
+    Schnitt dauert rund eine Minute). Absturz-Thread:
+    `QAbstractItemModelPrivate::invalidatePersistentIndexes` ←
+    `QAbstractProxyModelPrivate::_q_sourceModelDestroyed` ← (Frames fehlen) ←
+    `TTAVData::doH264Cut` (~ttavdata.cpp:1637 bei `bb553cd6`, -O2) ← `onDoCut`
+    ← `onAudioVideoCut` ← `mouseReleaseEvent`. Der Proxy-Private-Block war
+    freigegebener, wiederverwendeter Speicher (ungültiger vtable-Zeiger,
+    `persistent.indexes` mit m_size 2 951 281). Der Dump enthielt nur einen
+    Thread. Core und Dump sind gelöscht (2026-08-09 bzw. CLAUDE_TMP-Purge
+    2026-08-16); Qt-Debugsymbole waren nicht installiert, ob Frame #1 exakt
+    oder „nächstes exportiertes Symbol" war, ist nicht mehr feststellbar.
+  - **Sechs Nachbauten unter ASAN, alle sauber** (2026-08-09 bis 2026-08-15,
+    Originalmaterial, Originalschnittgrenzen 49719..190218, Ausgabe je
+    2810,016 s): komplette GUI-Sequenz von Hand (`8b156cb4`);
+    `test_filedialog_proxy` ×20; `--auto-cut`; `test_dialog_then_cut` ×2;
+    `test_preview_then_cut` (`PREVIEW_FULL=1`, Vorschau-Dialog samt Clips, mpv,
+    Abbau per `delete`); `test_mainwindow_then_cut` (echtes Hauptfenster,
+    Projekt, Cut-Dialog, Bedienung über `pbPreview`/`pbCutAudioVideo`).
+    Dazu >10 uninstrumentierte GUI-Zyklen am 2026-08-09 und ein Monat
+    Nutzung bis 2026-09-07 ohne neuen Core (`coredumpctl`).
+  - **Hypothese „KIO-Dialog-Abbau aufgeschoben in doH264Cut" — widerlegt
+    (2026-09-07, gemessen).** Sie trug den High-Priority-Status: ein
+    Dateidialog bringt unter `KDEPlasmaPlatformTheme` ein
+    `KDirSortFilterProxyModel` mit (gemessen 2026-08-13), und die fehlenden
+    Frames sollten dessen aufgeschobener Abbau im `processEvents()` von
+    `cutAudioTracks` sein. Messung mit einem DeferredDelete-Ereignisfilter auf
+    `qApp`: nach `delete` des KDE-Dialogs bleiben genau zwei
+    `Breeze::EnableData` als aufgeschobene Löschung — kein KIO-Modell, kein
+    Proxy, kein Job, auch nicht bei Abbau mit laufender Verzeichnisauflistung
+    (30 ms nach dem Öffnen). plasma-integration 6.7.4 löscht den Dialog im
+    Helper-Destruktor synchron (`delete m_dialog`, kein `deleteLater`). Die
+    Modelle sterben also im `getExistingDirectory()`-Aufruf selbst, lange vor
+    `onDoCut`.
+  - **Was tatsächlich in Schnitt-Ereignisschleifen aufgeschoben gelöscht wird**
+    (`test_mainwindow_then_cut` mit `PROBE_TRACE_DEFERRED=1`, 01x01 5,7 GB,
+    Ausgabe 2651,872 s): bei jedem Pool-Ende `avDataReloaded` →
+    `TTTrackTreeView::onReloadList` → `QTreeWidget::clear()` → Qt löscht die
+    Zeilen-Widgets (Delay-`QSpinBox`, Sprach-`QComboBox`) per `deleteLater`
+    (`QAbstractItemView::reset` → `releaseEditor`); dazu `TTH26xCutTask`,
+    `TTAudioAnomalyScanTask`, `QWaylandXdgActivationTokenV1`. Kein Item- oder
+    Proxy-Modell darunter; die Comboboxen sind nicht editierbar (kein
+    `QCompleter`/`QCompletionModel`). Bei `bb553cd6` konnten diese Löschungen
+    im verschachtelten `processEvents()` des synchronen `doH264Cut` landen —
+    das erklärt die Form des Backtrace (Abbau unter `doH264Cut`), nicht den
+    Use-after-free.
+  - **Der Code-Stand existiert nicht mehr:** bei `bb553cd6` lief `doH264Cut`
+    synchron im GUI-Thread mit sieben `processEvents()`; seit `9e1e502c`
+    (2026-08-11) läuft der H.26x-Schnitt als `TTH26xCutTask` im Pool,
+    `doH264Cut` hat nur noch zwei Aufrufe vor dem Start. Einen Dauerlauf oder
+    echte Mausereignisse gäbe es nur gegen einen Stand, den kein Anwender mehr
+    fährt.
+  - **Zwei Sonden-Fallen** (je ein täuschend ähnlicher Fehl-Absturz): ein
+    Wächter-Zeitgeber mit rohem Zeiger auf einen gelöschten Dialog feuerte im
+    `processEvents()` (→ `QPointer`, Zeitgeber nach `exec()` stoppen);
+    `accept()` auf einer Plasma-nativen `QMessageBox` stürzt zuverlässig ab
+    (`~QDialog` → `setNativeDialogVisible` → `QWidget::hide`), ein Knopfklick
+    nicht (`PROBE_DISMISS=accept` → SEGV, `=click` → sauber; kein
+    Anwendungscode ruft `accept()` auf Meldungen).
+  - **Nebenbefund, KIO, kein TTCut-Fehler:** ein Dateidialog auf `/usr/share`,
+    30 ms nach dem Öffnen per `delete` abgebaut, hängt endlos in
+    `KIO::FileSystemFreeSpaceJob::~FileSystemFreeSpaceJob` → `QThread::wait`
+    auf einen KIO-Worker-Thread in `QAbstractSocket::waitForReadyRead` (gdb,
+    alle Threads). Das ist der „Hänger" der Sonde vom 2026-08-13, damals dem
+    modalen `exec()` zugeschrieben.
+  - **Messfallen:** `tools/diag/` ist Ausgabeziel beider Builds — ein
+    `cmake --build build-asan --target X` überschreibt das normale `X`;
+    `TTThreadTaskPool::exit` ist nicht das Ende des Schnitts (ein Harnisch,
+    der darauf wartet, meldet Zahlen über einen Schnitt, der noch läuft —
+    Ausgabe per `ffprobe` gegenprüfen); `printf`-Puffer geht beim Abwürgen
+    verloren (`setvbuf(stdout, nullptr, _IONBF, 0)`); der Logpuffer wird beim
+    Absturz nicht geschrieben, das Log endet nicht am Absturzzeitpunkt; erst
+    klicken, wenn das Hauptfenster wieder freigegeben ist (ein Klick 2 s nach
+    `openProjectFile()` ließ den GUI-Thread über zehn Minuten rechnen).
+
 - **TTMpv-Wrapper: zwei Folge-Verbesserungen aus den Player-Reviews** →
   **GELÖST**. Verschoben aus `TODO.md` beim v0.82.2-Abgleich; die beiden
   übrigen Punkte des Eintrags (Stop-Rest-Versatz ~5 Frames, erster PLAY ~5 s)
