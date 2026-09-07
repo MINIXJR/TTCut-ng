@@ -32,6 +32,11 @@
 //   usage: test_mainwindow_then_cut <project.ttcut> <workdir> [totalTimeoutSec]
 //          PROBE_DISMISS=accept|click  how message boxes are dismissed
 //                                      (default click - see the driver below)
+//          PROBE_TRACE_DEFERRED=1      print every DeferredDelete event the
+//                                      application delivers, with the phase
+//                                      it lands in (Breeze style-engine data
+//                                      objects are only counted - they are
+//                                      dozens per widget and never models)
 //
 // The project must CONTAIN a cut; without one there is nothing to preview or
 // cut and the harness stops. None of the tux projects in
@@ -46,8 +51,10 @@
 // settings (cut directory, output name, encoder codec).
 //
 // Build: cmake --build build --target test_mainwindow_then_cut
+#include <QAbstractItemModel>
 #include <QAbstractProxyModel>
 #include <QApplication>
+#include <QEvent>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
@@ -59,12 +66,34 @@
 #include <QTreeWidget>
 
 #include <cstdio>
+#include <cstring>
 
 #include "common/ttmessagelogger.h"
 #include "common/ttsettings.h"
 #include "gui/ttcutmainwindow.h"
 
 namespace {
+
+// PROBE_TRACE_DEFERRED: which objects get their deferred deletion carried out,
+// and when. The crash backtrace has doH264Cut re-entering the event loop and a
+// proxy model's _q_sourceModelDestroyed running there - if that is a deferred
+// teardown, its DeferredDelete event shows up here, in the "cut" phase.
+const char* g_phase = "startup";
+int g_breezeDeferred = 0;
+QElapsedTimer g_trace;
+
+struct DeferredDeleteTrace : QObject {
+  bool eventFilter(QObject* o, QEvent* e) override {
+    if (e->type() != QEvent::DeferredDelete) return false;
+    const char* cls = o->metaObject()->className();
+    if (strncmp(cls, "Breeze::", 8) == 0) { g_breezeDeferred++; return false; }
+    const char* kind = qobject_cast<QAbstractProxyModel*>(o) ? "  <PROXY MODEL>"
+                     : qobject_cast<QAbstractItemModel*>(o) ? "  <ITEM MODEL>" : "";
+    printf("  [deferred @%6lld ms, %s] %s%s  parent=%s\n", (long long)g_trace.elapsed(),
+           g_phase, cls, kind, o->parent() ? o->parent()->metaObject()->className() : "(none)");
+    return false;
+  }
+};
 
 void pump(int ms)
 {
@@ -98,6 +127,10 @@ int main(int argc, char** argv)
 {
   setvbuf(stdout, nullptr, _IONBF, 0);
   QApplication app(argc, argv);
+
+  DeferredDeleteTrace trace;
+  const bool traceDeferred = !qgetenv("PROBE_TRACE_DEFERRED").isEmpty();
+  if (traceDeferred) { g_trace.start(); app.installEventFilter(&trace); }
 
   if (qgetenv("QT_QPA_PLATFORM") == "offscreen") {
     fprintf(stderr, "REFUSING: offscreen loads no platform theme (no KIO, no proxy)\n"
@@ -175,6 +208,7 @@ int main(int argc, char** argv)
   driver.start();
 
   // ---- phase 2: load the project the way the GUI does ---------------------
+  g_phase = "open";
   window.openProjectFile(project);
   {
     // By name, not by type: findChild<QTreeView*>() returns whichever tree
@@ -230,6 +264,7 @@ int main(int argc, char** argv)
   TTSettings::instance()->setCutVideoName("mainwindow_then_cut");
 
   // ---- the file dialog, for the KIO proxy ---------------------------------
+  g_phase = "filedialog";
   {
     QFileDialog* dlg = new QFileDialog(&window, "probe", QDir::homePath());
     dlg->setFileMode(QFileDialog::Directory);
@@ -252,6 +287,7 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  g_phase = "preview";
   printf("phase 3 - pressing Preview\n");
   // click() returns at once: onCutPreview() only starts doCutPreview(), and
   // the dialog is created later, when cutPreviewFinished arrives. Waiting for
@@ -272,6 +308,7 @@ int main(int argc, char** argv)
   pump(500);
 
   // ---- phase 4: the cut, from its own button ------------------------------
+  g_phase = "cut";
   printf("phase 4 - pressing Cut A/V\n");
   QElapsedTimer cutClock; cutClock.start();
   pbCutAV->click();                 // returns once onDoCut has been issued
@@ -293,8 +330,11 @@ int main(int argc, char** argv)
          (long long)cutClock.elapsed(), progressSeen ? "was seen" : "NEVER APPEARED");
 
   // Deferred deletions are the whole point - give them a last turn.
+  g_phase = "after-cut";
   pump(3000);
   driver.stop();
+  if (traceDeferred)
+    printf("deferred-delete trace: %d Breeze style-data objects not listed\n", g_breezeDeferred);
 
   printf("proxy models still reachable at the end: %s\n",
          proxyModelNames().isEmpty() ? "none" : qPrintable(proxyModelNames().join(", ")));
