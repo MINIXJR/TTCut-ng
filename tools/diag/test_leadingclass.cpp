@@ -2,13 +2,16 @@
 #include <cstdio>
 #include <vector>
 #include <cstdint>
-extern "C" { void av_log_set_level(int); }
+extern "C" {
+#include <libavcodec/codec_id.h>   // AV_CODEC_ID_* (the enum value shifts between
+                                   // libavcodec majors: HEVC was 173 in 62, is 172 in 63)
+void av_log_set_level(int);
+}
 #include "../../avstream/ttdisplayordermap.h"
 #include "../../avstream/ttnaluparser.h"   // H265:: NAL type constants
 
-// AV_CODEC_ID_HEVC=173, AV_CODEC_ID_H264=27 (avoid pulling avcodec.h here).
-static const int CODEC_HEVC = 173;
-static const int CODEC_H264 = 27;
+static const int CODEC_HEVC = AV_CODEC_ID_HEVC;
+static const int CODEC_H264 = AV_CODEC_ID_H264;
 
 // Build a minimal Annex-B packet with one VCL NAL of the given HEVC type.
 static std::vector<uint8_t> hevcPkt(int nalType) {

@@ -2081,6 +2081,22 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **`tools/diag/test_leadingclass` schlug fehl (5 FAIL)** → **GEFIXT**
+  (2026-09-10, Branch `fix/test-leadingclass-codec-id`)
+  - Der Harness hartcodierte `AV_CODEC_ID_HEVC = 173`. Gemessen: libavcodec 62
+    (FFmpeg 8, `ffmpeg-dmo-8.1.2`) hat 173, die installierte libavcodec 63
+    (FFmpeg 9.0.1) hat 172. Der Classifier bekam damit eine fremde Codec-ID,
+    `mIsHevc` blieb false, und genau die fünf Fälle mit erwarteter
+    RASL-Verwerfung meldeten `got=0 want=1`. Der TODO-Eintrag sprach von 6
+    FAIL, es waren 5 (alle `want=true`-Fälle). Der Harness war beim Schreiben
+    (2026-06-21, `455f9f3d`) korrekt; der FFmpeg-9-Wechsel hat ihn entwertet.
+  - Der Produktivcode ist nicht betroffen (nutzt die Enum-Konstante). Der
+    Annex-B-Walker und `classifyPacket()` waren nie schuld — die im TODO
+    vermutete Kunstpaket-Schwäche existiert nicht.
+  - Fix: `<libavcodec/codec_id.h>` einbinden und die Enum-Konstanten nutzen;
+    keine weitere hartcodierte Codec-ID im Baum (grep).
+  - Beleg: 14 PASS, `ALL PASS`, rc=0.
+
 - **`make_test_video.sh mpeg2` scheiterte am PAL-Encode (`-top 1`)** → **GEFIXT**
   (2026-09-10, Branch `fix/make-test-video-tff`)
   - ffmpeg 9.0.1 lehnt `-top 1` als Ausgabeoption ab (rc=234, „Codec AVOption
