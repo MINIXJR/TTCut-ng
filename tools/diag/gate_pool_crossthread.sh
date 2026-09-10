@@ -8,7 +8,7 @@
 #
 # The run is judged on findings that actually concern the queue: both stacks
 # have to reach it through a TTThreadTaskPool frame AND touch
-# QList<TTThreadTask*>. Everything else libQt5Core produces is noise here - it
+# QList<TTThreadTask*>. Everything else libQt6Core produces is noise here - it
 # is not built with ThreadSanitizer, so its own synchronisation is invisible and
 # every task that is created in one thread and run in another shows up as an
 # apparent race. Those counts stay the same in both shapes; only the queue
@@ -16,16 +16,24 @@
 #
 # PASS: queued reports queue findings, nested reports none.
 #
-# usage: gate_pool_crossthread.sh [innerCount] [mainCount]
+# Each shape runs under a time limit. The Qt5 build of the queued shape used
+# to SEGV and then spin under ThreadSanitizer instead of exiting (measured
+# 2026-09-10: 9 min of system time, no further output); the findings written
+# up to that point are all the verdict needs. The Qt6 build finishes both
+# shapes in seconds, the limit is a safety net.
+#
+# usage: gate_pool_crossthread.sh [innerCount] [mainCount] [secondsPerRun]
 set -u
 cd "$(dirname "$0")"
 
 INNER=${1:-200}
 MAIN=${2:-200}
+LIMIT=${3:-300}
 LOGDIR=$(mktemp -d)
 trap 'rm -rf "$LOGDIR"' EXIT
 
-MOC="$(pkg-config --variable=host_bins Qt5Core)/moc"
+# Qt6 ships moc under libexec, not bindir; pkg-config knows the directory.
+MOC="$(pkg-config --variable=libexecdir Qt6Core)/moc"
 MOCDIR=$(mktemp -d)
 trap 'rm -rf "$LOGDIR" "$MOCDIR"' EXIT   # extends the existing LOGDIR trap
 for h in ttthreadtask ttthreadtaskpool ttsettings istatusreporter; do
@@ -38,17 +46,19 @@ done
 echo "building (ThreadSanitizer)..."
 g++ -g -O1 -fsanitize=thread -fno-omit-frame-pointer -fPIC -std=gnu++17 \
     -DQT_NO_DEBUG -I../.. \
-    $(pkg-config --cflags Qt5Core Qt5Widgets) \
+    $(pkg-config --cflags Qt6Core Qt6Widgets) \
     -o test_pool_crossthread test_pool_crossthread.cpp \
     ../../common/ttthreadtask.cpp ../../common/ttthreadtaskpool.cpp \
     ../../common/ttmessagelogger.cpp ../../common/ttexception.cpp \
     ../../common/ttsettings.cpp ../../common/istatusreporter.cpp \
     "$MOCDIR"/moc_*.cpp \
-    $(pkg-config --libs Qt5Core) -lpthread || exit 1
+    $(pkg-config --libs Qt6Core) -lpthread || exit 1
 
 for mode in queued nested; do
-  TSAN_OPTIONS="halt_on_error=0" ./test_pool_crossthread "$mode" "$INNER" "$MAIN" \
+  TSAN_OPTIONS="halt_on_error=0" timeout -s KILL "$LIMIT" \
+      ./test_pool_crossthread "$mode" "$INNER" "$MAIN" \
       > "$LOGDIR/$mode.log" 2>&1
+  [[ $? -eq 137 ]] && echo "$mode: killed after ${LIMIT}s (findings up to then still count)"
 done
 
 python3 - "$LOGDIR" <<'EOF'

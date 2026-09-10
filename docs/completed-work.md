@@ -2081,6 +2081,32 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **`gate_pool_crossthread.sh` baute noch gegen Qt5** → **GEFIXT**
+  (2026-09-10, Branch `fix/gate-pool-crossthread-qt6`)
+  - Das Gate holte moc aus `pkg-config --variable=host_bins Qt5Core` und
+    baute mit `Qt5Core`/`Qt5Widgets`; es prüfte `startNested()` damit gegen
+    die Qt5-`QList`, nicht gegen die Qt6-Implementierung des gebauten Binaries.
+  - moc-Pfad-Entscheidung: `pkg-config --variable=libexecdir Qt6Core` liefert
+    `/usr/lib/qt6/libexec` (unter `/usr/lib/qt6/bin` gibt es kein moc) — kein
+    Hardcode nötig.
+  - **Nebenbefund Qt5-Baseline:** die Vor-Fix-Form (`queued`) stürzte unter
+    ThreadSanitizer wie erwartet mit SEGV ab, der Prozess drehte danach aber
+    endlos weiter (11 min Laufzeit, 9 min System-Zeit, ein Pool-Thread bei
+    100 %; kein ptrace möglich, `ptrace_scope=1`). Das Gate kam nur nach
+    Handabbruch des Prozesses zum Urteil (queued 4 Queue-Befunde, nested 0,
+    PASS). Deshalb hat jeder Lauf jetzt einen Zeitwächter (`timeout -s KILL`,
+    dritter Parameter, Standard 300 s); die bis dahin geschriebenen Befunde
+    reichen für das Urteil.
+  - Qt6-Ergebnis: **PASS in 8 s**, queued 49 Berichte / **11 zur
+    `mTaskQueue`** (Qt6-Frames `QList<TTThreadTask*>::size`,
+    `QPodArrayOps<TTThreadTask*>::emplace`, `QArrayDataPointer`), nested 36 /
+    0, kein Absturz, kein Hänger — der Filter des Gates erkennt die
+    Qt6-Container-Frames ohne Anpassung.
+  - Die Bauanleitungen in den Headern von `test_pool_crossthread.cpp` und
+    `test_task_cleanup_order.cpp` sind auf Qt6 nachgezogen; die
+    ASAN-Anleitung wurde nachvollzogen: baut, `PASS (5 runs, 0 cleanUp calls
+    on a destroyed object)`.
+
 - **`tools/diag/test_leadingclass` schlug fehl (5 FAIL)** → **GEFIXT**
   (2026-09-10, Branch `fix/test-leadingclass-codec-id`)
   - Der Harness hartcodierte `AV_CODEC_ID_HEVC = 173`. Gemessen: libavcodec 62

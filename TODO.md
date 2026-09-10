@@ -575,20 +575,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   MKV-Benennung); `createCutFileName` existiert bereits als gemeinsamer
   Baustein.
 
-- **`gate_pool_crossthread.sh` baut noch gegen Qt5** (gefunden bei der
-  Qt6-Migrations-Abschlussprüfung 2026-08-04, `tools/diag/gate_pool_crossthread.sh:28,41,47`
-  — `pkg-config Qt5Core`/`Qt5Widgets` und moc via `host_bins`). Solange das
-  so bleibt, prüft das Gate `TTThreadTaskPool::startNested()` gegen die
-  Qt5-`QList`-Implementierung statt der Qt6-eigenen — ein bestandenes Gate
-  belegt dann nicht mehr, dass der tatsächlich gebaute Qt6-Binary
-  race-frei ist. Die Portierung braucht eine moc-Pfad-Entscheidung: unter
-  Qt6 liegt moc nicht mehr in `host_bins`, sondern unter
-  `/usr/lib/qt6/libexec/`. Zur selben Portierung gehören die veralteten
-  manuellen g++/Qt5-Build-Anleitungen in den Headerkommentaren von
-  `tools/diag/test_pool_crossthread.cpp:151-167` und
-  `tools/diag/test_task_cleanup_order.cpp:109-126` (referenzieren
-  `gate_pool_crossthread.sh:28-33` und Qt5Core/Qt5Widgets direkt).
-
 - **TTMpv-Wrapper: Folge-Verbesserungen** (aus Code-Reviews des Player-Refactors)
   Zwei der vier Punkte sind erledigt (synchrone Stop-Lesung; `frameRate==0`-
   Absicherung + Destruktor-Cleanup) — Belege in `docs/completed-work.md`,

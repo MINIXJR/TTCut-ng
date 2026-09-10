@@ -147,21 +147,21 @@ int main(int argc, char** argv)
 // Build (from tools/diag), compiling the sources rather than linking the
 // project's objects so ThreadSanitizer covers them too. Mocs are generated
 // into a throwaway temp dir with Qt's own moc binary - see
-// gate_pool_crossthread.sh:28-33 (MOC="$(pkg-config --variable=host_bins
-// Qt5Core)/moc"), which builds this same binary and runs both shapes:
+// gate_pool_crossthread.sh:34-40 (MOC="$(pkg-config --variable=libexecdir
+// Qt6Core)/moc" - Qt6 keeps moc under libexec, not bindir), which builds this same binary and runs both shapes:
 //
-//   MOC="$(pkg-config --variable=host_bins Qt5Core)/moc"
+//   MOC="$(pkg-config --variable=libexecdir Qt6Core)/moc"
 //   MOCDIR=$(mktemp -d)
 //   for h in ttthreadtask ttthreadtaskpool ttsettings istatusreporter; do
 //     "$MOC" ../../common/$h.h -o "$MOCDIR/moc_$h.cpp"
 //   done
 //
 //   g++ -g -O1 -fsanitize=thread -fno-omit-frame-pointer -fPIC -std=gnu++17 \
-//       -I../.. -I"$MOCDIR" $(pkg-config --cflags Qt5Core Qt5Widgets) \
+//       -I../.. -I"$MOCDIR" $(pkg-config --cflags Qt6Core Qt6Widgets) \
 //       -o test_pool_crossthread test_pool_crossthread.cpp \
 //       ../../common/ttthreadtask.cpp ../../common/ttthreadtaskpool.cpp \
 //       ../../common/ttmessagelogger.cpp ../../common/ttexception.cpp \
 //       ../../common/ttsettings.cpp ../../common/istatusreporter.cpp \
 //       "$MOCDIR"/moc_ttthreadtask.cpp "$MOCDIR"/moc_ttthreadtaskpool.cpp \
 //       "$MOCDIR"/moc_ttsettings.cpp "$MOCDIR"/moc_istatusreporter.cpp \
-//       $(pkg-config --libs Qt5Core) -lpthread
+//       $(pkg-config --libs Qt6Core) -lpthread
