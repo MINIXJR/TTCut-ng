@@ -2047,6 +2047,30 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **`make_test_video.sh mpeg2` scheiterte am PAL-Encode (`-top 1`)** → **GEFIXT**
+  (2026-09-10, Branch `fix/make-test-video-tff`)
+  - ffmpeg 9.0.1 lehnt `-top 1` als Ausgabeoption ab (rc=234, „Codec AVOption
+    top (top field first) is not a encoding option"); `-top` ist nur noch eine
+    Decoder-Option (`ffmpeg -h full`: Flag `.D.V`). Wegen `set -e` fielen
+    danach auch 720p, Fieldpic und Multifile aus.
+  - **Der im TODO vermutete Ersatz `-field_order tt` ist wirkungslos** (gemessen:
+    `top_field_first=0` im Bitstream, wie ganz ohne Option). Der
+    mpeg2video-Encoder nimmt das Bit vom Frame-Flag, nicht vom Codec-Kontext.
+  - Fix: `encode_variant` nimmt optional `--vf <Kette>` nach dem Label und hängt
+    sie vor `[outv]` an den gemeinsamen Filtergraphen; die beiden 576i-PAL-
+    Varianten übergeben `--vf setfield=tff`, `-flags +ilme+ildct` bleibt.
+  - Belege: `mpeg2`-Lauf rc=0, alle vier Varianten erzeugt. Bild-Flags der neuen
+    PAL-, Fieldpic- und 720p-Dateien (`trace_headers`, erste 4 s:
+    `top_field_first`, `progressive_sequence`, `picture_structure`,
+    `frame_pred_frame_dct`, `progressive_frame`, `picture_coding_type`)
+    identisch zu den Cache-Dateien vom Mai; PAL und Fieldpic zudem gleich groß
+    (82 825 328 / 84 533 715 Bytes). Die Duplicate-PAL-Variante, isoliert
+    erzeugt, ist **byte-identisch** zur Datei vom 2026-05-10 (`cmp`).
+  - Messfalle: das isolierte Erzeugen über ein Hilfsskript im Scratchpad
+    schreibt nach `<Hilfsskript-Pfad>/cache`, weil `OUTDIR` aus
+    `BASH_SOURCE` abgeleitet wird — die Prüfung muss die dortige Datei lesen,
+    nicht die im echten Cache.
+
 - **Paketbau kopierte 1,9 GB Ballast pro Release** → **GEFIXT** (2026-08-31,
   Branch `fix/package-build-excludes`)
   - Ein Bauverzeichnis belegte 2,4 GB, das erzeugte `.deb` 1,2 MB. Anteile am

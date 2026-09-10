@@ -24,15 +24,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## Medium Priority
 
-- **`make_test_video.sh mpeg2` scheitert am PAL-Encode (`-top 1`)**
-  (2026-09-05; schon in Audit-Lauf 1 am 2026-09-03 mit rc=234 gesehen): das
-  aktuelle ffmpeg meldet „Codec AVOption top (top field first) is not a
-  encoding option" und bricht `generate_mpeg2_576i_pal` ab; alle MPEG-2-
-  Varianten danach (720p, fieldpic, multifile) laufen wegen `set -e` nicht.
-  Der Cache hat die Dateien noch, neu erzeugen geht nicht. Vermutlich ist die
-  Option zu `-top` → `-field_order tt`/`-flags:v +ilme+ildct` plus
-  `-top`-Ersatz zu wandern; vorher in der ffmpeg-Version nachsehen.
-
 - **`tools/diag/test_leadingclass` schlägt fehl (6 FAIL, seit wann unbekannt)**
   (2026-09-04, Befund neben dem Code-Audit): `rasl_r_drop`, `rasl_n_drop`,
   `rasl_after_eos_dropped` u. a. melden `got=0 want=1` — auf master

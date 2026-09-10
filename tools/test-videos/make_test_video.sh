@@ -194,10 +194,15 @@ DUPLICATE_FILTERGRAPH="
 "
 
 # ---------- Shared encode step ----------
-# encode_variant <base> <video_ext> <ac3|mp2> <tux|duplicate> <W> <H> <R> <label> <codec args...>
+# encode_variant <base> <video_ext> <ac3|mp2> <tux|duplicate> <W> <H> <R> <label> [--vf <chain>] <codec args...>
 # Cache check, Tux render, audio, the ffmpeg encode with the shared timeline
 # header, project file and "Done" line — everything the codec variants have
 # in common; the codec-specific encoder arguments follow the label.
+# An optional "--vf <chain>" right after the label appends <chain> to the
+# shared filtergraph just before [outv], for frame-level properties the
+# encoder reads from the frame rather than from its options (e.g.
+# setfield=tff: mpeg2video takes top_field_first from the frame flag; the
+# old "-top 1" output option is decoder-only since ffmpeg 7 and rejected).
 # Sets ENCODE_SKIPPED=1 when the output was already present (so a caller can
 # skip its post-encode checks), 0 after an encode. Called plainly, never in a
 # || list: errexit must still abort the script when ffmpeg fails.
@@ -205,6 +210,11 @@ ENCODE_SKIPPED=0
 encode_variant() {
     local BASE=$1 vext=$2 acodec=$3 timeline=$4 W=$5 H=$6 R=$7 label=$8
     shift 8
+    local post_filter=""
+    if [[ ${1:-} == --vf ]]; then
+        post_filter=$2
+        shift 2
+    fi
     ENCODE_SKIPPED=0
     if skip_if_present "${BASE}.${vext}" "$label" "$BASE" "$vext" "$acodec"; then
         ENCODE_SKIPPED=1
@@ -215,6 +225,9 @@ encode_variant() {
     local duration=120 args_fn=build_tux_timeline_args graph=$TUX_FILTERGRAPH
     if [[ $timeline == duplicate ]]; then
         duration=30; args_fn=build_duplicate_timeline_args; graph=$DUPLICATE_FILTERGRAPH
+    fi
+    if [[ -n $post_filter ]]; then
+        graph="${graph/\[outv\]/[pre];[pre]${post_filter}[outv]}"
     fi
     gen_audio "$acodec" "${BASE}.${acodec}" "$duration"
     # shellcheck disable=SC2046  # the timeline builder emits separate ffmpeg arguments
@@ -344,8 +357,9 @@ generate_h264_1080i_paff() {
 generate_mpeg2_576i_pal() {
     encode_variant tux_mpeg2_576i_pal_test m2v mp2 tux 720 576 25 \
         "MPEG-2 PAL DVB-SD 720x576 25fps interlaced" \
+        --vf setfield=tff \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 \
-        -flags +ilme+ildct -top 1 \
+        -flags +ilme+ildct \
         -b:v 5M -minrate 5M -maxrate 9M -bufsize 1835008 \
         -force_key_frames "0,30,31,60,61,90,91" \
         -g 12
@@ -406,8 +420,9 @@ generate_h264_1080i_mbaff_duplicate() {
 generate_mpeg2_576i_pal_duplicate() {
     encode_variant tux_mpeg2_576i_pal_duplicate m2v mp2 duplicate 720 576 25 \
         "MPEG-2 PAL DVB-SD duplicate 720x576 25fps (30s)" \
+        --vf setfield=tff \
         -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 \
-        -flags +ilme+ildct -top 1 \
+        -flags +ilme+ildct \
         -b:v 5M -minrate 5M -maxrate 9M -bufsize 1835008 \
         -force_key_frames "0,10,12,22" \
         -g 12
