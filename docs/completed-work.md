@@ -867,6 +867,40 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **PAFF-Wiedergabe: mpv meldet `reference picture missing during reorder`**
+  → **KEIN DEFEKT (2026-09-10)**, Branch `fix/paff-playback-message-closed`.
+  Der letzte offene Punkt des 08x04-Komplexes (Befunde B, D, E und die
+  Wurzel sind seit 2026-07-19 gefixt, siehe Smart Cut).
+  - Die Meldung stammt aus `libavcodec/h264_refs.c` und entsteht, sobald der
+    Decoder an einem Nicht-IDR-Bild zu dekodieren beginnt; DVB-Sender codieren
+    Open-GOP mit Recovery-Point-SEI statt IDR. Moon-Crash (DF1 HD, PAFF,
+    3,4 GB ES aus der NAS-Aufnahme demuxt): 4903 GOPs mit SPS + non-IDR-I,
+    IDR-Startcodes in der ganzen Datei höchstens 10.
+  - **Gegenprobe an der Original-TS:** `ffmpeg -ss 600` bzw. `-ss 1234.5`
+    meldet dort genau diese Meldung (2–3×) plus `Missing reference picture`,
+    `mmco: unref short failure` (6×) und `number of reference frames exceeds
+    max` — mehr als beim Wiedergabe-MKV. Die Meldung gehört zum Stream, nicht
+    zum Mux.
+  - Das Wiedergabe-MKV, mit `tools/diag/repro_playback_mkv` exakt wie in
+    `TTCurrentFrame::createTempMkvForPlayback()` gebaut (PAFF-Flag,
+    Display-PTS, Audio): 158 531 Videopakete = Display-Map, Keyframes alle
+    32 Bilder, keine Muxer-Warnung. mpv 0.41 und ffmpeg melden beim Seek an
+    fünf Positionen nur 4× `mmco: unref short failure` und 1–3× `exceeds
+    max`; kein Concealment, Luma der ersten 12 Bilder nach dem Seek stabil
+    (54,7 → 54,4). Synthetisches Tux-PAFF (JM, mit IDR) meldet nichts.
+  - Die App behandelt das bereits richtig: `TTCurrentFrame` und
+    `TTCutPreview` loggen `playerError` nur und setzen den Play-Zustand
+    nicht zurück (dokumentiert im Code, mpv stuft non-fatale h264-Warnungen
+    als „error" ein).
+  - **Annahme, nicht Beleg:** das 08x04-Material (gemischt MBAFF/PAFF), auf
+    dem die Meldung 2026-07-19 gesehen wurde, existiert nicht mehr; der
+    Mechanismus ist derselbe. Ebenso bleibt die Crash-Variante von Befund B
+    (SIGABRT in `avcodec_send_packet`) formal unbewiesen — als Folge des
+    beseitigten EOF-Drains plausibel, ohne Core-Dump und Material nicht mehr
+    nachprüfbar.
+  - Messfalle: `ffprobe -read_intervals '%+20'` zählte nur 1 Keyframe in
+    20 s — Artefakt; die Vollzählung zeigte 4903 regelmäßig verteilte.
+
 - **`doH264Cut`-Absturz (core.500359, 2026-08-07): Forensik-Archiv, KIO-Hypothese
   widerlegt, Eintrag herabgestuft** → **HERABGESTUFT (2026-09-07)**, Rest als
   Low-Priority-Eintrag in `TODO.md`.

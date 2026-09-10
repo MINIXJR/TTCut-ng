@@ -5,19 +5,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
 
 ## High Priority
 
-- **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — PAFF-Wiedergabe**
-  Die Befunde B, D und E sind gefixt (2026-07-19, `46d3dcb` / `8dfda6d`),
-  ebenso die Wurzel (TS↔ES-AU-Nummerierungs-Drift der `es_extra_frames`) —
-  Belege in `docs/completed-work.md`, Smart Cut.
-
-  **Offen ist allein die PAFF-Wiedergabe:** beim Play meldet mpv
-  `reference picture missing during reorder`. Follow-up zu libmpv Phase 2.
-  Nebenpunkt: die Crash-Variante von Befund B (SIGABRT in
-  `avcodec_send_packet`) ist als Folge des beseitigten EOF-Drains plausibel,
-  aber nicht formal bewiesen und nur über einen neuen Repro-Lauf auf dem
-  08x04-Korpus nachprüfbar — der alte Core-Dump ist gelöscht.
-
-
 - **Logo für TTCut-ng**
   - Projekt braucht ein wiedererkennbares Logo/Icon für GitHub, Debian-Paket, Desktop-Launcher
   - Anforderungen: SVG (skalierbar), funktioniert als 16x16 bis 512x512, passt zu Video-Editing
