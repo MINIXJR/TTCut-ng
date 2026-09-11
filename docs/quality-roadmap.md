@@ -75,7 +75,7 @@ Kandidaten eines Teilsystems mit dessen Verträgen in der Hand beurteilt.
 |---|---|---|
 | 1 Gate-Läufer | fertig 2026-09-11 | `tools/diag/run-gates.sh`, Lauf `20260911-173329`: 73 PASS, 0 FAIL, 0 SKIP, 5,5 min Gate-Zeit; Release-Skill Step 5 ruft ihn. Erster Fund: `mLogFile.log` statt `logfile.log` seit `ab3fae4d` (alte Binary bestand, frische nicht) |
 | 2a Karte Einstellungen | fertig 2026-09-11 | `docs/code-map/settings-state.md`: drei Wertklassen, 21 Kanten, 7 Pitfalls, 5 Redundanz-Kandidaten (Codec-Sync an vier Stellen, Stream-Typ → Codec an drei) |
-| 2b Karte Stream öffnen / Projekt laden | offen | — |
+| 2b Karte Stream öffnen / Projekt laden | fertig 2026-09-11 | `docs/code-map/stream-open-project-load.md`: zwei Wege, ein Task-Pfad; 14 Kantenzeilen, 8 Pitfalls, 6 Redundanz-Kandidaten; `TTCutMainWindow` kartiert, nicht zerlegt |
 | 2c Karte Wiedergabe | offen | — |
 | 2d `detection-and-search.md` Cancel-Token-Kante | offen | — |
 | 3 Audit-Lauf 3 nach Karte | offen | — |
