@@ -21,7 +21,7 @@
 const int   TTMessageLogger::STD_LOG_MODE   = TTMessageLogger::SUMMARIZE;
 int         TTMessageLogger::sLogMode        = TTMessageLogger::STD_LOG_MODE;
 int         TTMessageLogger::sLogLevel       = TTMessageLogger::ALL;
-const char* TTMessageLogger::SUM_FILE_NAME  = "mLogFile.log";
+const char* TTMessageLogger::SUM_FILE_NAME  = "logfile.log";
 
 TTMessageLogger* TTMessageLogger::loggerInstance = nullptr;
 
@@ -37,7 +37,7 @@ QString defaultLogPath()
         cacheDir = QDir::tempPath();
     }
     QDir().mkpath(cacheDir + "/ttcut-ng");
-    return cacheDir + "/ttcut-ng/mLogFile.log";
+    return cacheDir + "/ttcut-ng/logfile.log";
 }
 
 QString formatVa(const char* fmt, va_list ap)
