@@ -289,7 +289,9 @@ The executable name is `ttcut-ng`.
 
 ## Future Improvements
 
-See `TODO.md` for open work and the known limitations of the current build.
+See `TODO.md` for open work and the known limitations of the current build,
+and `docs/quality-roadmap.md` for the order in which quality work (gate
+runner, code maps, audits) is being done and where it stands.
 
 Finished work does **not** stay in `TODO.md` — it moves to
 `docs/completed-work.md` together with the evidence it was closed on

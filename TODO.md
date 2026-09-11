@@ -557,6 +557,10 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Entwicklungs-Workflow
 
+- **Qualitäts-Fahrplan**: Reihenfolge der Qualitätsarbeit (Gate-Läufer →
+  Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
+  Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).
+
 - **Verification-Test-Policy: Tux-Videos bevorzugen**
   - Bei Cut-Verification + Pipeline-Validation IMMER zuerst die Tux-Test-Videos verwenden
     (`tools/test-videos/cache/tux_*`). Kompakt (8-85 MB), reproduzierbar, im Repo.
