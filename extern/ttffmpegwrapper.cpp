@@ -664,10 +664,29 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
         mDecoderFrameIndex = mCurrentFrameIndex;
         mDecodeOrderTag    = mCurrentFrameIndex;
 
-        const int guardMax = mBundle.index.size() > 0 ? mBundle.index.size() : 100000;
+        // Same bound as decodeFrame()'s skip loop (2026-08-28): the seek
+        // distance plus headroom to the second keyframe past the target (at
+        // least 256 outputs), never the whole stream - a target the decoder
+        // does not deliver must fail here, not after a drain to end of file.
+        // And the same cancel poll: the frame search checks its abort flag only
+        // between frames, so a cancel during one decode has to be seen here.
+        const int seekStart = mCurrentFrameIndex;
+        int headroomEnd = targetAU;
+        int keyframesSeen = 0;
+        for (int i = targetAU + 1; i < mBundle.index.size(); ++i) {
+            if (!mBundle.index[i].isKeyframe) continue;
+            headroomEnd = i;
+            if (++keyframesSeen == 2) break;
+        }
+        if (keyframesSeen < 2)
+            headroomEnd = mBundle.index.size() - 1;
+        const int guardMax = qBound(1,
+                                    (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
+                                    mBundle.index.size() > 0 ? mBundle.index.size() : 100000);
         int guard = 0;
         bool reached = false;
         while (guard++ < guardMax) {
+            if (isCancelled()) return false;   // caller gave up; not a failure, no warning
             if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
             if (static_cast<int>(mDecodedFrame->pts) == targetAU) { reached = true; break; }
         }

@@ -85,6 +85,7 @@ void TTFrameSearchTask::initFrameSearch()
       delete refWrapper;
       throw TTAbortException("TTFrameSearchTask: could not open reference stream for FFmpeg decode");
     }
+    refWrapper->setCancelToken(&mAbort);   // a cancel must end a decode in flight
     // Index sharing (spec 2026-06-05): if the reference stream is an H.26x stream
     // with an already-built index, adopt it instead of rescanning.
     // mpReferenceStream IS the source stream object; refWrapper opened its
@@ -207,6 +208,7 @@ void TTFrameSearchTask::operation()
       delete searchWrapper;
       throw TTAbortException("TTFrameSearchTask: could not open search stream for FFmpeg decode");
     }
+    searchWrapper->setCancelToken(&mAbort);   // see the reference wrapper above
     // Adopt the stream's existing frame index instead of scanning the file a
     // second time - the same move the reference path above makes, which this
     // branch was missing. The application has already built this index when it

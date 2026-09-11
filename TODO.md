@@ -142,23 +142,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `Q_ASSERT`-Meldung geht ins Logfile, das beim Absturz nicht geschrieben
     und beim Neustart überschrieben wird.
 
-- **`decodeFrameYUV()` hat noch die alte unbegrenzte Skip-Schleife** (Fund aus
-  dem Abschluss-Review zum Frame-Index-Bündel, 2026-08-28)
-  - Der nicht-sequenzielle Zweig in `extern/ttffmpegwrapper.cpp` setzt
-    `guardMax = mFrameIndex.size()` (bzw. 100000 ohne Index) und prüft
-    innerhalb der Schleife kein `isCancelled()` — Zeile für Zeile die
-    Geschwisterschleife, die am 2026-08-28 in `decodeFrame()` auf die
-    Suchdistanz begrenzt und abbrechbar gemacht wurde (siehe
-    `docs/completed-work.md`). Genutzt von `data/ttframesearchtask.cpp`.
-  - Die Metadaten-Ursache ist für diese Aufrufer geschlossen — sie kommen
-    über `provideFrameIndexTo()` an denselben Bündel-Index heran wie
-    `decodeFrame()`, aber die EOF-Drain-Form der Schleife selbst besteht
-    fort, versteckt in einer Suche, die viele Frames durchläuft und ihren
-    Abbruch nur zwischen den Frames prüft, nicht während eines einzelnen
-    `decodeFrameYUV()`-Aufrufs.
-  - Entweder dieselbe Begrenzung (Suchdistanz + Abbruchprüfung) hier
-    nachziehen, oder begründen, warum `decodeFrameYUV()` sie nicht braucht.
-
 - **Vorschau-Rückfall-Engine ist nicht abbrechbar** (Kartenbefund 2026-08-15,
   niedrige Priorität — nur erreichbar, wenn die geteilte Smart-Cut-Engine der
   Vorschau nicht initialisiert werden konnte, also auf stark beschädigten

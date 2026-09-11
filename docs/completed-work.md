@@ -855,6 +855,39 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **`decodeFrameYUV()` hatte noch die alte unbegrenzte Skip-Schleife** →
+  **GEFIXT** (2026-09-11, Branch `fix/decodeframeyuv-skip-loop`)
+  - Der nicht-sequenzielle Zweig (Seek + Skip bis zum Ziel-Tag) hatte
+    `guardMax = Streamlänge` und keine Abbruchprüfung — die Form, die
+    `decodeFrame()` am 2026-08-28 verloren hat. Genutzt von
+    `TTFrameSearchTask` (Gleichbild-Suche) einmal je verglichenem Bild.
+  - **Zweiter Befund:** `TTFrameSearchTask` gab seinen zwei Wrappern gar
+    keinen Cancel-Token, und `mAbort` war ein nacktes `bool` (GUI-Thread
+    schreibt, Worker liest). Eine Abbruchprüfung in der Schleife wäre im
+    Suchpfad also wirkungslos geblieben. Jetzt `std::atomic<bool>` und
+    `setCancelToken(&mAbort)` an Referenz- und Suchwrapper.
+  - Fix in `decodeFrameYUV()`: `guardMax` wie in `decodeFrame()` (Distanz
+    Seek-Start→Ziel + Headroom bis zum zweiten Keyframe, mindestens 256),
+    `isCancelled()` je Iteration mit stillem `return false` (kein Warnlog).
+  - Gate `tools/diag/test_decode_cancel_yuv` (selbstkalibrierend wie
+    `test_decode_cancel`; Moon-Crash, Display 5000 und 77777): vorher lief
+    der Decode trotz Abbruch zu Ende und meldete „ok"; nachher kehrt er
+    **2 ms** nach dem Signal ohne Bild zurück, danach dekodiert er wieder.
+    Die 200-ms-Latenzprüfung greift bei diesem Material nicht (Decode 150–
+    240 ms), entscheidend ist „kein Bild".
+  - **Kein Laufzeit-Repro für das Drain-Bound:** mit verfälschten
+    Metadaten (`BREAK_METADATA`-Muster) laufen die Tags auf diesem Pfad dem
+    Ziel voraus und treffen es immer — 117 ms, falsches Bild, kein Drain
+    (Defekt A, strukturell durch das Bündel verhindert). Die Grenze ist als
+    Spiegel von `decodeFrame()` übernommen, nicht gemessen.
+  - Regression: `test_framesearch_progress` (Duplicate-Fixture: 1452
+    Meldungen, „Frame found" bei Schritt 1450) und `test_directed_search`
+    (Tux H.264, Start 1500) vorher/nachher bis auf Zeitstempel identisch;
+    `test_decode_cancel` weiterhin 4/4.
+  - Offen, nicht Teil dieses Punkts: `TTSearchTask` (gerichtete Suchen)
+    reicht seinen Unter-Decodern ebenfalls keinen Cancel-Token weiter;
+    seine Abbrüche laufen über die Task-Schleife zwischen den Bildern.
+
 - **Equal-Frame Search: H.264/H.265-Support fehlt** → **DONE** (commit 24562c0)
   - `TTFrameSearchTask::decoderKindFor()` dispatcht codec-aware: `TTFFmpegWrapper` (YUV-API)
     für H.264/H.265, `TTMpeg2Decoder` für MPEG-2 — für Reference- und Search-Stream.

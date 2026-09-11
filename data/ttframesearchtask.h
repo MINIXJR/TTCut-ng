@@ -16,6 +16,7 @@
 #define TTFRAMESEARCHTASK_H
 
 #include "../common/ttthreadtask.h"
+#include <atomic>
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 class TTVideoStream;
@@ -55,7 +56,9 @@ class TTFrameSearchTask : public TTThreadTask
     quint8*         mpRefV;
     int             mRefWidth;
     int             mRefHeight;
-    bool            mAbort;
+    //! Set on the GUI thread (onUserAbort), read by the worker between frames
+    //! and - via TTFFmpegWrapper::setCancelToken - inside a running decode.
+    std::atomic<bool> mAbort;
 };
 
 #endif
