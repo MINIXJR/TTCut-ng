@@ -1,6 +1,6 @@
 ---
-base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
-last_verified: 2026-09-05
+base_commit: 2dcd5aa5bf3caed451bfa37428f71e53151d74dc
+last_verified: 2026-09-11
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -35,6 +35,8 @@ sources:
   - common/ttsettings.cpp
   - data/ttcutpreviewtask.cpp
   - data/ttcutvideotask.cpp
+  - extern/ttffmpegwrapper.h
+  - extern/ttffmpegwrapper.cpp
 ---
 
 # Erkennung und Suche: ein Dekodier-Unterbau, zwei Ergebnisformen
@@ -114,10 +116,13 @@ flowchart TB
     POOLQ["TTThreadTaskPool<br/>mTaskQueue"]
 
     subgraph BASE["TTSearchTask — gemeinsamer Unterbau (Arbeitsthread)"]
-        SETUP["setupWorkers()<br/>N × TTFFmpegWrapper<br/>bzw. 1 × TTMpeg2Decoder"]
+        SETUP["setupWorkers() / openDecoder()<br/>N × TTFFmpegWrapper<br/>bzw. 1 × TTMpeg2Decoder"]
         BATCH["collectNextBatch()<br/>Stapel entlang der Indexliste"]
         PMAP["parallelMap()<br/>QThreadPool + QSemaphore"]
     end
+
+    WRAP["TTFFmpegWrapper je Worker<br/>isCancelled() je Skip-Schritt"]
+    FSEARCH["TTFrameSearchTask<br/>eigener Dekoder, mAbort"]
 
     subgraph TASKS["Unterklassen: Urteil je Bild"]
         DIRT["TTBlackFrameSearchTask<br/>TTSceneChangeSearchTask<br/>TTLogoSearchTask"]
@@ -146,6 +151,11 @@ flowchart TB
     POOLQ -. "run() → operation()" .-> BASE
     POOLQ -. "run() → operation()" .-> NODEC
 
+    SETUP -- "setCancelToken(&amp;mIsAborted)" --> WRAP
+    FSEARCH -- "setCancelToken(&amp;mAbort)" --> WRAP
+    POOLQ -. "run() → operation()" .-> FSEARCH
+    BAR -. "cancel → onUserAbort() setzt das Flag" .-> FSEARCH
+    WRAP -- "QImage / Urteil, leer bei Abbruch" --> PMAP
     SETUP --> PMAP
     BATCH --> PMAP
     PMAP -- "QImage / Histogramm / Schwarzurteil" --> DIRT
@@ -160,8 +170,8 @@ flowchart TB
     BAR -. "cancel → onAbortStreamPoints" .-> POOLQ
 ```
 
-Richtung gemessen (2026-08-20, nach Einbau der drei neuen Knoten/Kanten):
-`TD` viewBox-Verhältnis 0,80, `LR` 5,66 — `TD`/`TB` bleibt klar näher an 1,
+Richtung gemessen (2026-09-11, nach Einbau der Cancel-Token-Kante mit den
+Knoten `WRAP`/`FSEARCH`): `TD` viewBox-Verhältnis 0,87, `LR` 5,29 — `TD`/`TB` bleibt klar näher an 1,
 beibehalten.
 
 ## Kanten-Semantik
@@ -173,6 +183,8 @@ beibehalten.
 | `VWORK → displayPositionAfter → IDX` | Der Bitstrom-Zähler wird über den Kopf-Index des ersten Bildes nach dem Sequenzkopf in einen Rang der anzeigesortierten `TTVideoIndexList` übersetzt. | War bis `2026-07-30` nicht vorhanden; der rohe Zähler landete als Markerposition in `onVideoSliderChanged`. Gemessen (`tools/diag/test_streampoint_order`): TELE5 576p25 alle 626 Sequenzköpfe um +2 daneben, Comedy Central 268 von 350 (überwiegend +3, bis +6); RTLZWEI fährt geschlossene GOPs und war zufällig richtig. **Nachrechnen (`base_number + temporal_reference`) genügt nicht** — Feldbild-Paare lassen Rang und `display_order`-Wert auseinanderlaufen (65 von 7507 bzw. 14 von 136319 Einträgen). Der lineare Suchlauf ist vertretbar, weil er nur bei einem echten Wechsel läuft. |
 | `setupWorkers → parallelMap` | N Wrapper mit `setAnalysisMode(true)` **und** `setSearchMode(true)`; `parallelMap` verteilt Index *i* fest auf Wrapper *i*. | `setSearchMode(true)` = direkter Keyframe-Sprung ohne DPB-Vorlauf. Gemessen 34 ms statt 111 ms je I-Frame (2026-07-29 auf `03x01_-_Drunter_und_drüber.264`, 720p50) — aber Open-GOP-B-Bilder unmittelbar nach dem Sprung sind dabei nicht garantiert korrekt. Für Stichproben-Analysen belanglos, für Standbildanzeige **nicht** (dort ist der Vorlauf Pflicht, siehe `frame-order.md`). |
 | `parallelMap` Worker-Zahl | `TTSettings::searchWorkerCount()`, 0 = automatisch (`idealThreadCount()/2`, gedeckelt 4), geklemmt auf [1, 16]. | MPEG-2 wird hart auf `mWorkerCount = 1` gesetzt — libmpeg2-Dekoder sind nicht mehrfach instanziierbar. Für MPEG-2 fällt `parallelMap` deshalb in den Inline-Zweig. |
+| `SETUP → WRAP` (`setCancelToken`, seit `f61baed4`) | Jeder Sub-Dekoder aus `setupWorkers()` und der eine Dekoder aus `openDecoder()` bekommen einen **Zeiger** auf das `std::atomic<bool> mIsAborted` der Aufgabe (nicht besessen, `nullptr` = kein Abbruch möglich). `TTFFmpegWrapper::isCancelled()` liest ihn relaxed, einmal je Skip-Schritt in `decodeFrame()`, `decodeFrameYUV()`, `isFrameBlack()` und `buildHistogram()`; bei gesetztem Flag kehrt der Aufruf leer bzw. `false` zurück — ohne Fehlerprotokoll und ohne den Nachbarversuch, ein Abbruch ist kein Fehlschlag. | Vorher pollte `TTSearchTask` das Flag nur **zwischen** den Stapeln: die Latenz eines Abbruchs war eine volle Dekodierung je Worker (gemessen 114/112 ms in `buildHistogram`/`isFrameBlack`, Bild trotzdem geliefert). Der Zeiger lebt so lange wie die Aufgabe; die Wrapper gehören der Aufgabe und sterben vor ihr. Die Skip-Schleifen sind seit `8582c27d` zusätzlich begrenzt (`guardMax` aus Abstand zum Keyframe plus Vorlauf), damit ein Ziel jenseits des Dateiendes nicht bis EOF dreht. |
+| `FSEARCH → WRAP` (`setCancelToken`) | Die Gleichbild-Suche gibt ihrem Referenz- und ihrem Such-Wrapper denselben Zeiger auf ihr eigenes `std::atomic<bool> mAbort` (vorher ein nicht-atomares `bool`); `onUserAbort()` setzt es auf dem GUI-Thread, der Worker liest es zwischen den Bildern **und** in der laufenden Dekodierung. | `TTFrameSearchTask` steht außerhalb der `TTSearchTask`-Familie und hat kein `mIsAborted`-Polling zwischen Stapeln — ohne den Token sah der Abbruch dort erst nach dem Bild an der Reihe. |
 | `ASPECT → PURE` | `classifyAspectSample()` bekommt ein `Format_Grayscale8`-Bild und liefert drei Werte: `Pillarbox`, `NoPillarbox`, `NoStatement`. Seit `37d20e13` zusätzlich über einen **optionalen** Ausgabeparameter den Grund (`TTAspectReason`: `None`, `NoBars`, `BarsTooWide`, `CentreTooDark`, `Unusable`). | `NoStatement` ist **kein** Fehlerwert, sondern die Aussage „dieses Bild darf den Zustand nicht bewegen": Schwarzbild (mittlere Luminanz ≤ 20), zu breiter Balken (> 1,5 × Nennwert — dunkler Bildinhalt am Rand) oder Dekodierfehler. Die Hysterese ignoriert solche Proben, statt den Kandidatenlauf zurückzusetzen. Der Grund existiert für die Abschlussbilanz im Detailbereich, die die `NoStatement`-Proben aufschlüsselt; der Vorgabewert `nullptr` hält die zweiargumentigen Aufrufe (u. a. `refineTransition`, ~15 Prüffälle im Harness) gültig. **Zählen darf nur der Hauptlauf**: `refineTransition()` ruft `classifyBatch()` ein zweites Mal über dieselbe Gegend und übergibt bewusst keinen Gründe-Vektor, sonst wären die Proben doppelt gezählt. |
 | `PURE → ASPECT` (`TTAspectTransition`) | Die Hysterese meldet einen Wechsel erst, wenn der neue Zustand `10 s × fps` Frames durchgehalten hat; `firstFrame` ist die **erste** Probe des Laufs, nicht die bestätigende. | Der Stichprobenabstand darf das Hysteresefenster nicht überschreiten, sonst ist die Hysterese wirkungslos. Seit `aed01838` klemmt der Konstruktor `mSampleStride` auf das Fenster; beide Seiten lesen `kHysteresisWindowSeconds`. |
 | `PURE → ASPECT` (`TTAspectCandidate`) | Zusätzlich zum bestätigten Wechsel gibt die Hysterese **verworfene** Kandidatenläufe heraus — abzuholen mit `takeDiscardedCandidate()` nach jedem `feed()`, Einzelplatz mit Löschen beim Lesen. `feed()` behält seine Signatur. | Aufgezeichnet wird nur ein Lauf, der den **bestätigten** Zustand herausgefordert hätte (`mCandidate != mConfirmed`); Schwanken innerhalb des bestätigten Zustands erzeugt nichts. `heldFrames` ist `letzte − erste Probe des Laufs`, nicht `brechende − erste` — dafür führt die Klasse `mCandidateLast` mit, das auf **allen drei** Pfaden nachgezogen wird (Grundzustand, Kandidatenwechsel, Fortsetzung). Ein Lauf, der einen Wechsel auslöst, wird nicht zusätzlich als verworfen gemeldet. Der Scan zeigt Läufe mit `heldFrames == 0` **nicht** an (Einzelausreißer des Klassifizierers, gemessen 11 von 15 auf einer 90-min-Aufnahme mit 1 s Abstand), zählt sie aber getrennt in der Bilanz. |
@@ -292,6 +304,14 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   Methoden in die falsche Ecke — die Einstellungen — schickte).
 
 ## Fallstricke
+
+- **Ein Abbruch endet die Dekodierung in Flug — aber nur mit Pollpunkt.**
+  Der Token wird je Skip-Schritt geprüft; eine einzelne `avcodec`-Paketrunde
+  ist unteilbar. Auf Keyframe-Zielen im Suchmodus (kein DPB-Vorlauf, ein
+  Paket) gibt es deshalb keinen Pollpunkt, und der Abbruch greift erst nach
+  dem Bild. Gemessen 2026-09-11 auf den Tux-Fixtures (3–30 ms je Keyframe):
+  `test_search_cancel` bekommt dort kein Zeitfenster und steht darum nicht im
+  Gate-Läufer; sein dokumentierter Lauf ist Moon-Crash 5000/77777.
 
 - **Dekodier- gegen Anzeige-Ordnung.** `TTFFmpegWrapper::frameIndex()` ist in
   **Dekodier**-Reihenfolge; `decodeFrame()` erwartet eine **Anzeige**-Position.
@@ -418,3 +438,6 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
 | `tools/diag/test_abort_after_finish` | ohne Argumente | Spät-Abbruch nach Ende aus `0af72ab1`, drei Fälle inkl. Wiederverwendung |
 | `tools/diag/test_framesearch_progress` | `<es-datei> [refIndex] [searchIndex]` | Meldeverhalten und Indexübernahme der Gleichbild-Suche (`TTFrameSearchTask`) |
 | `tools/diag/test_directed_search` | `<es-datei> [start] [schwarz] [szene] [logo]` | die drei gerichteten Suchen vorwärts/rückwärts plus Selbstabbruch; Ausgabe ohne Zeiten, also zwischen zwei Bauständen diff-bar |
+| `tools/diag/test_decode_cancel` | `<es-datei> <anzeigeindex>` | Token in `decodeFrame()`: selbstkalibrierender Abbruch bei 40 % einer Dekodierung, Rückkehr binnen 200 ms, kein Bild, danach wieder dekodierbar; im Gate-Läufer (Tux 1080p, Index 1500) |
+| `tools/diag/test_decode_cancel_yuv` | `<es-datei> <anzeigeindex>` | dasselbe für `decodeFrameYUV()` (kein Bildcache, Skip-Schleife begrenzt); im Gate-Läufer |
+| `tools/diag/test_search_cancel` | `<es-datei> <rohindex>` | die drei Such-Dekodierungen `isFrameBlack`/`buildHistogram`/`decodeFrame` im Suchmodus; **nicht** im Gate-Läufer, siehe Fallstricke |
