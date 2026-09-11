@@ -911,6 +911,27 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Begriffskollision „Tonstörung" vs. „Tonanomalie"** → **ERLEDIGT**
+  (2026-09-11, Branch `fix/tonanomalie-wording`)
+  - Die englischen Quelltexte waren schon einheitlich („Audio anomaly …");
+    uneinheitlich war allein die deutsche Übersetzung, in drei Schreibweisen
+    für dieselbe Funktion: „Tonstörung (AC3 5.1)" (Einstellung),
+    „Tonstörungs-Suche" (eine Meldung), „Ton-Anomalie-Suche" (vier
+    Meldungen) neben „Tonanomalie" (Marker, Reparaturdialog, Wiki-Seite).
+    Jetzt durchgehend **„Tonanomalie"** ohne Bindestrich; `.ui` und Quellen
+    unverändert, nur `.ts` + `lrelease`.
+  - Nebenbefund behoben: der audiofix-Marker „Tonstörungen: X–Y (Spur N)"
+    war in `data/ttavdata.cpp` ein hartcodierter deutscher String ohne
+    `tr()` (gegen die i18n-Konvention). Jetzt `tr("Audio corruption: %1–%2
+    (track %3)")` mit derselben deutschen Übersetzung — deutsche Oberfläche
+    unverändert, englische bekommt Englisch. Kein Skript/Harness parst den
+    Text (grep über `tools/`).
+  - Wiki (eigenes Repo, committet, **Push erst mit dem Release**):
+    `Landezonen.md` (Begriffslage-Absatz, Einstellungs-Bullet, „-Werte",
+    „-Scan"), `Tonanomalie-Reparatur.md`, `Projektdatei-Format.md`.
+  - Beleg: `lrelease` 817/817, Vollbau sauber; `grep 'Tonstörung[^e]'` im
+    Wiki und in der `.ts` leer.
+
 - **`setEncoderCodec()`-Early-Return liess `workingOutputContainer` und
   `Mpeg2Muxer` auseinanderlaufen** → **GEFIXT** (2026-09-11, Branch
   `fix/working-container-sync`)

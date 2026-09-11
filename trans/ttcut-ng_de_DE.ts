@@ -83,6 +83,11 @@
         <translation>Als Landezonen übernehmen</translation>
     </message>
     <message>
+        <location filename="../data/ttavdata.cpp" line="707"/>
+        <source>Audio corruption: %1–%2 (track %3)</source>
+        <translation>Tonstörungen: %1–%2 (Spur %3)</translation>
+    </message>
+    <message>
         <location filename="../data/ttavdata.cpp" line="730"/>
         <source>%1 defective frames in %2 groups detected.
 </source>
@@ -552,16 +557,16 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
     <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="442"/>
         <source>Audio anomaly scan cancelled</source>
-        <translation>Ton-Anomalie-Suche abgebrochen</translation>
+        <translation>Tonanomalie-Suche abgebrochen</translation>
     </message>
     <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="455"/>
         <source>Audio anomaly scan not run: track could not be decoded, or its sample rate is not 48 kHz (see the log)</source>
-        <translation>Tonstörungs-Suche nicht gelaufen: Spur nicht dekodierbar oder Abtastrate nicht 48 kHz (siehe Log)</translation>
+        <translation>Tonanomalie-Suche nicht gelaufen: Spur nicht dekodierbar oder Abtastrate nicht 48 kHz (siehe Log)</translation>
     </message>
     <message>
         <source>Audio anomaly scan failed: track could not be decoded</source>
-        <translation type="vanished">Ton-Anomalie-Suche fehlgeschlagen: Spur konnte nicht dekodiert werden</translation>
+        <translation type="vanished">Tonanomalie-Suche fehlgeschlagen: Spur konnte nicht dekodiert werden</translation>
     </message>
     <message>
         <location filename="../data/ttaudioanomalyscantask.cpp" line="489"/>
@@ -577,8 +582,8 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <location filename="../data/ttaudioanomalyscantask.cpp" line="523"/>
         <source>Audio anomaly scan complete: %n finding(s)</source>
         <translation>
-            <numerusform>Ton-Anomalie-Suche abgeschlossen: %n Fund</numerusform>
-            <numerusform>Ton-Anomalie-Suche abgeschlossen: %n Funde</numerusform>
+            <numerusform>Tonanomalie-Suche abgeschlossen: %n Fund</numerusform>
+            <numerusform>Tonanomalie-Suche abgeschlossen: %n Funde</numerusform>
         </translation>
     </message>
 </context>
@@ -1580,7 +1585,7 @@ Dies kann zu A/V-Synchronisationsproblemen führen.</translation>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1076"/>
         <source>Audio anomaly scan: no AC3 track loaded - skipped</source>
-        <translation>Ton-Anomalie-Suche: keine AC3-Spur geladen - übersprungen</translation>
+        <translation>Tonanomalie-Suche: keine AC3-Spur geladen - übersprungen</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1108"/>
@@ -3177,7 +3182,7 @@ Ausgabedatei:
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="73"/>
         <source>Audio anomaly (AC3 5.1)</source>
-        <translation>Tonstörung (AC3 5.1)</translation>
+        <translation>Tonanomalie (AC3 5.1)</translation>
     </message>
     <message>
         <location filename="../ui/ttcutsettingsstreampoints.ui" line="75"/>
@@ -3535,18 +3540,18 @@ Ausgabedatei:
 <context>
     <name>TTFrameSearchTask</name>
     <message>
-        <location filename="../data/ttframesearchtask.cpp" line="196"/>
-        <location filename="../data/ttframesearchtask.cpp" line="298"/>
+        <location filename="../data/ttframesearchtask.cpp" line="197"/>
+        <location filename="../data/ttframesearchtask.cpp" line="300"/>
         <source>Searching frame</source>
         <translation>Frame suchen</translation>
     </message>
     <message>
-        <location filename="../data/ttframesearchtask.cpp" line="313"/>
+        <location filename="../data/ttframesearchtask.cpp" line="315"/>
         <source>No match found</source>
         <translation>Kein Treffer gefunden</translation>
     </message>
     <message>
-        <location filename="../data/ttframesearchtask.cpp" line="321"/>
+        <location filename="../data/ttframesearchtask.cpp" line="323"/>
         <source>Frame found</source>
         <translation>Frame gefunden</translation>
     </message>

@@ -704,7 +704,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
     for (const TTESRange& r : ranges) {
       int pos = qMax(0, r.start - offsetFrames);
       clusters.append(TTStreamPoint(pos, StreamPointType::Error,
-          QString("Tonstörungen: %1–%2 (Spur %3)")
+          tr("Audio corruption: %1–%2 (track %3)")
               .arg(r.start).arg(r.end).arg(t + 1)));
       ++audioCorruptZones;
       audioCorruptFrames += (r.end - r.start + 1);

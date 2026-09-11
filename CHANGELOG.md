@@ -21,6 +21,11 @@ All notable changes to TTCut-ng are documented in this file.
   preselected. Gate: `tools/diag/test_container_sync`.
 
 ### Changed
+- **German wording of the AC3 5.1 anomaly scan unified to „Tonanomalie".**
+  The setting, the scan messages and the marker used three spellings for
+  one feature („Tonstörung", „Ton-Anomalie", „Tonanomalie"); „Tonstörungen"
+  stays reserved for the structural damage markers from `ttcut-audiofix`,
+  whose text is now a translatable string (English UI: "Audio corruption").
 - **Preparing H.264/H.265 playback no longer freezes the window.** The
   temp MKV for the first Play (video and audio muxed so mpv can seek) is
   now built on a worker thread behind a progress dialog that can be
