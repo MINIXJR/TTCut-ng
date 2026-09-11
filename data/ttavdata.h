@@ -548,9 +548,10 @@ class TTAVData : public QObject
     qint64  lastCutResultMs()      const { return mLastCutResultMs; }
 
   private:
-    // AC3-only per-segment target acmod list (majority acmod per kept window).
-    // Empty unless normalizeAcmod && ext == "ac3".
-    static QList<int> computeTargetAcmods(const QString& audioFile, const QString& ext,
+    // AC3-only per-segment target acmod list (majority acmod per kept window,
+    // ttAnalyzeAcmodWindow on the stream's header list). Empty unless
+    // normalizeAcmod and the stream is AC3.
+    static QList<int> computeTargetAcmods(TTAudioStream* stream,
                                    const QList<QPair<double, double>>& keepList,
                                    bool normalizeAcmod);
     // Source (at(0) video duration) + result (Σ kept-segment lengths) in ms

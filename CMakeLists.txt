@@ -112,6 +112,7 @@ set(TTCUT_HEADERS
   avstream/ttcommon.h
   avstream/ttac3audioheader.h
   avstream/ttac3audiostream.h
+  avstream/ttac3acmod.h
   avstream/ttaudioheaderlist.h
   avstream/ttavheader.h
   avstream/ttavstream.h
@@ -237,6 +238,7 @@ set(TTCUT_CORE_SOURCES
   avstream/ttcommon.cpp
   avstream/ttac3audioheader.cpp
   avstream/ttac3audiostream.cpp
+  avstream/ttac3acmod.cpp
   avstream/ttaudioheaderlist.cpp
   avstream/ttavheader.cpp
   avstream/ttavstream.cpp

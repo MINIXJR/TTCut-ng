@@ -57,16 +57,6 @@ public:
                             bool isCutOut, int minDeltaDb,
                             double& burstRmsDb, double& contextRmsDb);
 
-    // AC3 acmod analysis - detect channel format changes at cut boundaries
-    struct AcmodInfo {
-        int mainAcmod;            // Majority acmod of segment (-1 if not AC3)
-        int cutInAcmod;           // acmod at CutIn position
-        int cutOutAcmod;          // acmod at CutOut position
-    };
-
-    static AcmodInfo analyzeAcmod(const QString& audioFile,
-                                  double cutInTime, double cutOutTime);
-
     QString lastError() const { return mLastError; }
 
 private:

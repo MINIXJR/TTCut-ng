@@ -78,11 +78,12 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
     void createActions();
 
-    // Column 5 ("hint") has two producers whose call order is a contract.
-    // Everything goes through updateHintColumn(); never call these directly.
+    // Column 5 ("hint"): two producers that only compute, one writer that
+    // composes and sets the cell (updateHintColumn).
+    struct HintCell { QString text; QString tip; };
     void updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item);
-    void updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
-    void updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item);
+    HintCell burstHint(const TTCutItem& item) const;
+    HintCell acmodHint(const TTCutItem& item) const;
 
   public:
     // Re-evaluate the hint column (column 5) of all entries — call after the

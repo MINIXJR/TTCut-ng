@@ -19,6 +19,7 @@
 
 #include <algorithm>
 
+#include "../avstream/ttac3acmod.h"
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
 #include "ttavdata.h"
@@ -2836,17 +2837,14 @@ QList<QPair<double, double>> TTAVData::buildVideoKeepList(TTCutList* cutList,
 // used by TTAudioCutter::cut to normalize acmod across segments. Empty for
 // non-AC3 or when normalization is off.
 // *****************************************************************************
-QList<int> TTAVData::computeTargetAcmods(const QString& audioFile, const QString& ext,
+QList<int> TTAVData::computeTargetAcmods(TTAudioStream* stream,
                                          const QList<QPair<double, double>>& keepList,
                                          bool normalizeAcmod)
 {
   QList<int> targetAcmods;
-  if (normalizeAcmod && ext.toLower() == "ac3") {
-    for (int s = 0; s < keepList.size(); s++) {
-      TTAudioCutter::AcmodInfo aInfo = TTAudioCutter::analyzeAcmod(
-          audioFile, keepList[s].first, keepList[s].second);
-      targetAcmods.append(aInfo.mainAcmod);
-    }
+  if (normalizeAcmod && stream && stream->streamType() == TTAVTypes::ac3_audio) {
+    for (int s = 0; s < keepList.size(); s++)
+      targetAcmods.append(ttAnalyzeAcmodWindow(stream, keepList[s].first, keepList[s].second).mainAcmod);
   }
   return targetAcmods;
 }
@@ -2935,8 +2933,7 @@ QList<float> TTAVData::cutAudioTracks(
     }
     if (beforeCut) beforeCut(idx);
 
-    QList<int> targetAcmods =
-        computeTargetAcmods(stream->filePath(), ext, plan.keepList, normalizeAcmod);
+    QList<int> targetAcmods = computeTargetAcmods(stream, plan.keepList, normalizeAcmod);
 
     // Audio anomaly repairs: build one replacement-frame table per enabled
     // item on this track and merge them (buildRepairTable is AC3-only, so

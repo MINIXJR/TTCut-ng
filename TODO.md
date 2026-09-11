@@ -237,21 +237,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Synergie: die Landezonen-Infrastruktur (libavfilter, silencedetect) könnte
     Kandidaten-Szenen vorschlagen (Sprechbeginn nach Stille = silencedetect-Kante).
 
-- **Doppelte Mehrheits-acmod-Logik** (Folge-Fund aus den Dead-Code-Audits, kein
-  toter Code)
-  - `analyzeAcmod()` (Datei-Scan per Syncword, dient der Cut-Normalisierung) und
-    `TTCutTreeView::updateAcmodIcon()` (In-Memory-`TTAudioHeaderList`, dient der
-    Anzeige) implementieren dieselbe Mehrheitsauswahl doppelt, mit
-    verschiedenen Stichprobenbereichen → sie können verschiedene `mainAcmod`
-    liefern.
-  - `updateAcmodIcon()` liest `text(5)`/`toolTip(5)`/`icon(5)` aus dem
-    Tree-Widget zurück, um seinen Text anzuhängen: das Widget dient als
-    Zwischenspeicher zwischen zwei Produzenten. `updateHintColumn()` kapselt die
-    Reihenfolge seit `666ed08`, beseitigt die Append-Semantik aber nicht.
-    Sauberer: beide liefern `{icon, text, tooltip}` zurück, ein Setter
-    komponiert und schreibt einmal.
-  - Wiederkehrender Audit-Lauf selbst: Skill `dead-code-audit` invoken.
-
 - **MP3/AAC re-encoding für Audio-Only-Output**
   - `audioOnlyBitrateKbps` Setting im Code vorhanden, UI ausgeblendet (v0.70.0)
   - Code-Stelle `data/ttaudioonlycuttask.cpp` warnt "not implemented yet"

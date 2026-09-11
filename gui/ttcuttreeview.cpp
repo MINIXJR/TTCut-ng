@@ -19,8 +19,7 @@
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
-#include "../avstream/ttac3audioheader.h"  // TTAC3AudioHeader (dynamic_cast)
-#include "../avstream/ttaudioheaderlist.h"
+#include "../avstream/ttac3acmod.h"
 
 #include "ttcuttreeview.h"
 
@@ -635,172 +634,114 @@ void TTCutTreeView::refreshHintIcons()
 
 /*!
  * updateHintColumn
- * The single entry point for column 5. Both producers write the same cell, and
- * their order is a contract, not a preference: updateBurstIcon() sets the cell
- * (and clears it when there is no burst), updateAcmodIcon() then appends to
- * whatever it finds there. Calling them the other way round makes the burst
- * text overwrite the acmod hint; calling only the first one drops the hint
- * entirely -- which is exactly what refreshBurstIcons() used to do.
+ * The single entry point for column 5. Two producers, one writer: the burst
+ * hint comes first, the AC3 format-change hint is appended, and the cell is
+ * written once. The icon is the burst warning if there is a burst, else the
+ * information icon if there is a format change, else none. Neither producer
+ * touches the widget, so their order is a composition rule here, not a
+ * contract they have to know about.
  */
 void TTCutTreeView::updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item)
 {
-    updateBurstIcon(treeItem, item);
-    updateAcmodIcon(treeItem, item);
+    const HintCell burst = burstHint(item);
+    const HintCell acmod = acmodHint(item);
+
+    QString text = burst.text;
+    if (!acmod.text.isEmpty())
+        text = text.isEmpty() ? acmod.text : text + " + " + acmod.text;
+    QString tip = burst.tip;
+    if (!acmod.tip.isEmpty())
+        tip = tip.isEmpty() ? acmod.tip : tip + "\n" + acmod.tip;
+    QIcon icon;
+    if (!burst.text.isEmpty())      icon = style()->standardIcon(QStyle::SP_MessageBoxWarning);
+    else if (!acmod.text.isEmpty()) icon = style()->standardIcon(QStyle::SP_MessageBoxInformation);
+
+    treeItem->setIcon(5, icon);
+    treeItem->setText(5, text);
+    treeItem->setToolTip(5, tip);
 }
 
 /*!
- * updateBurstIcon
- * Detect audio burst near cut boundaries and show warning icon
+ * burstHint
+ * Audio burst near the cut boundaries; empty when there is none.
  */
-void TTCutTreeView::updateBurstIcon(QTreeWidgetItem* treeItem, const TTCutItem& item)
+TTCutTreeView::HintCell TTCutTreeView::burstHint(const TTCutItem& item) const
 {
-    if (!mAVData || !item.avDataItem() || item.avDataItem()->audioCount() == 0) {
-        treeItem->setIcon(5, QIcon());
-        treeItem->setText(5, "");
-        treeItem->setToolTip(5, "");
-        return;
-    }
+    HintCell cell;
+    if (!mAVData || !item.avDataItem() || item.avDataItem()->audioCount() == 0)
+        return cell;
 
     TTAVData::CutBurstInfo bout = mAVData->detectCutOutBurst(item);
     TTAVData::CutBurstInfo bin  = mAVData->detectCutInBurst(item);
+    if (!bout.present && !bin.present) return cell;
 
-    if (bout.present || bin.present) {
-        treeItem->setIcon(5, style()->standardIcon(QStyle::SP_MessageBoxWarning));
-        QString shortText;
-        if (bout.present && bin.present)
-            shortText = tr("Burst start+end");
-        else if (bout.present)
-            shortText = tr("Burst end");
-        else
-            shortText = tr("Burst start");
-        treeItem->setText(5, shortText);
+    if (bout.present && bin.present)
+        cell.text = tr("Burst start+end");
+    else if (bout.present)
+        cell.text = tr("Burst end");
+    else
+        cell.text = tr("Burst start");
 
-        QString tip;
-        if (bout.present)
-            tip += tr("Audio burst at end: %1 dB (context: %2 dB)").arg(bout.burstDb, 0, 'f', 1).arg(bout.contextDb, 0, 'f', 1);
-        if (bin.present) {
-            if (!tip.isEmpty()) tip += "\n";
-            tip += tr("Audio burst at start: %1 dB (context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
-        }
-        treeItem->setToolTip(5, tip);
-    } else {
-        treeItem->setIcon(5, QIcon());
-        treeItem->setText(5, "");
-        treeItem->setToolTip(5, "");
+    if (bout.present)
+        cell.tip += tr("Audio burst at end: %1 dB (context: %2 dB)").arg(bout.burstDb, 0, 'f', 1).arg(bout.contextDb, 0, 'f', 1);
+    if (bin.present) {
+        if (!cell.tip.isEmpty()) cell.tip += "\n";
+        cell.tip += tr("Audio burst at start: %1 dB (context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
     }
+    return cell;
 }
 
-/* /////////////////////////////////////////////////////////////////////////////
- * Update acmod change icon for a cut item (column 5, if no burst detected)
- * Uses the in-memory AC3 header list (no file I/O, no libav).
+/*!
+ * acmodHint
+ * AC3 format change at the cut boundaries, judged against the majority acmod
+ * of the cut window (ttAnalyzeAcmodWindow - the same function the cut
+ * pipeline uses for its normalisation target, so hint and cut agree).
+ * Empty when there is no change.
  */
-void TTCutTreeView::updateAcmodIcon(QTreeWidgetItem* treeItem, const TTCutItem& item)
+TTCutTreeView::HintCell TTCutTreeView::acmodHint(const TTCutItem& item) const
 {
-    if (!item.avDataItem() || item.avDataItem()->audioCount() == 0) return;
+    HintCell cell;
+    if (!item.avDataItem() || item.avDataItem()->audioCount() == 0) return cell;
 
     TTAudioStream* audioStream = item.avDataItem()->audioStreamAt(0);
-    if (!audioStream || !audioStream->headerList()) return;
-    if (audioStream->streamType() != TTAVTypes::ac3_audio) return;
+    if (!audioStream || audioStream->streamType() != TTAVTypes::ac3_audio) return cell;
 
     TTVideoStream* vStream = item.avDataItem()->videoStream();
-    if (!vStream) return;
-    double frameRate = vStream->frameRate();
+    if (!vStream || vStream->frameRate() <= 0) return cell;
+    const double frameRate = vStream->frameRate();
 
-    TTAudioHeaderList* hdrList = audioStream->headerList();
-
-    // Calculate audio frame index directly from video time and audio frame duration
-    // (searchTimeIndex is O(n) linear scan — too slow for large files)
-    const TTAC3AudioHeader* firstHdr = dynamic_cast<const TTAC3AudioHeader*>(hdrList->audioHeaderAt(0));
-    if (!firstHdr) return;
-    double audioFrameDurMs = firstHdr->frame_time;  // ms per AC3 frame (~32ms)
-    if (audioFrameDurMs <= 0) audioFrameDurMs = 32.0;
-
-    double cutInTimeMs = (item.cutInIndex() / frameRate) * 1000.0;
-    double cutOutTimeMs = ((item.cutOutIndex() + 1) / frameRate) * 1000.0;
-    int startIdx = qBound(0, static_cast<int>(cutInTimeMs / audioFrameDurMs), hdrList->count() - 1);
-    int endIdx   = qBound(0, static_cast<int>(cutOutTimeMs / audioFrameDurMs), hdrList->count() - 1);
-
-    if (startIdx < 0 || endIdx < 0 || startIdx >= hdrList->count()) return;
-    if (endIdx >= hdrList->count()) endIdx = hdrList->count() - 1;
-
-    // Read acmod at exact CutIn and CutOut positions
-    TTAC3AudioHeader* hFirst = dynamic_cast<TTAC3AudioHeader*>(hdrList->audioHeaderAt(startIdx));
-    TTAC3AudioHeader* hLast  = dynamic_cast<TTAC3AudioHeader*>(hdrList->audioHeaderAt(endIdx));
-    if (!hFirst || !hLast) return;
-
-    int firstAcmod = hFirst->acmod;
-    int lastAcmod  = hLast->acmod;
+    const double cutInSec  = item.cutInIndex() / frameRate;
+    const double cutOutSec = (item.cutOutIndex() + 1) / frameRate;
+    const TTAcmodInfo info = ttAnalyzeAcmodWindow(audioStream, cutInSec, cutOutSec);
+    if (info.mainAcmod < 0) return cell;
 
     if (TTSettings::instance()->logUI())
-        qDebug() << "updateAcmodIcon: cutIn=" << item.cutInIndex() << "cutOut=" << item.cutOutIndex()
-                 << "cutInMs=" << cutInTimeMs << "cutOutMs=" << cutOutTimeMs
-                 << "startIdx=" << startIdx << "endIdx=" << endIdx
-                 << "totalFrames=" << hdrList->count()
-                 << "firstAcmod=" << firstAcmod << "lastAcmod=" << lastAcmod;
+        qDebug() << "acmodHint: cutIn=" << item.cutInIndex() << "cutOut=" << item.cutOutIndex()
+                 << "main=" << info.mainAcmod << "in=" << info.cutInAcmod << "out=" << info.cutOutAcmod;
 
-    // Sample first ~100 frames to determine majority acmod
-    static const int SAMPLE = 100;
-    int acmodCount[8] = {0};
-    int sampleEnd = qMin(startIdx + SAMPLE, endIdx + 1);
-    for (int i = startIdx; i < sampleEnd; i++) {
-        TTAC3AudioHeader* h = dynamic_cast<TTAC3AudioHeader*>(hdrList->audioHeaderAt(i));
-        if (!h) continue;
-        acmodCount[h->acmod]++;
-    }
-    // Also sample last ~100 frames if segment is long enough
-    if (endIdx - startIdx >= 2 * SAMPLE) {
-      for (int i = endIdx - SAMPLE + 1; i <= endIdx; i++) {
-          TTAC3AudioHeader* h = dynamic_cast<TTAC3AudioHeader*>(hdrList->audioHeaderAt(i));
-          if (!h) continue;
-          acmodCount[h->acmod]++;
-      }
-    }
+    const bool hasInChange  = (info.cutInAcmod  != info.mainAcmod);
+    const bool hasOutChange = (info.cutOutAcmod != info.mainAcmod);
+    if (!hasInChange && !hasOutChange) return cell;
 
-    // Majority acmod
-    int mainAcmod = 0, maxCount = 0;
-    for (int i = 0; i < 8; i++) {
-        if (acmodCount[i] > maxCount) { maxCount = acmodCount[i]; mainAcmod = i; }
-    }
-
-    bool hasInChange  = (firstAcmod != mainAcmod);
-    bool hasOutChange = (lastAcmod != mainAcmod);
-
-    if (!hasInChange && !hasOutChange) return;
-
-    // If burst icon already set, append acmod info to existing text
-    QString existingText = treeItem->text(5);
-    QString existingTip = treeItem->toolTip(5);
-
-    if (treeItem->icon(5).isNull())
-        treeItem->setIcon(5, style()->standardIcon(QStyle::SP_MessageBoxInformation));
-
-    QString shortText;
     if (hasInChange && hasOutChange)
-        shortText = tr("AC3 start+end");
+        cell.text = tr("AC3 start+end");
     else if (hasInChange)
-        shortText = tr("AC3 start");
+        cell.text = tr("AC3 start");
     else
-        shortText = tr("AC3 end");
-
-    if (!existingText.isEmpty())
-        shortText = existingText + " + " + shortText;
-    treeItem->setText(5, shortText);
+        cell.text = tr("AC3 end");
 
     static const char* AC3ModeName[] = {"1+1","1/0","2/0","3/0","2/1","3/1","2/2","3/2"};
-    QString tip;
     if (hasInChange)
-        tip += tr("Audio format change at start: %1 → %2")
-            .arg(AC3ModeName[firstAcmod]).arg(AC3ModeName[mainAcmod]);
+        cell.tip += tr("Audio format change at start: %1 → %2")
+            .arg(AC3ModeName[info.cutInAcmod]).arg(AC3ModeName[info.mainAcmod]);
     if (hasOutChange) {
-        if (!tip.isEmpty()) tip += "\n";
-        tip += tr("Audio format change at end: %1 → %2")
-            .arg(AC3ModeName[mainAcmod]).arg(AC3ModeName[lastAcmod]);
+        if (!cell.tip.isEmpty()) cell.tip += "\n";
+        cell.tip += tr("Audio format change at end: %1 → %2")
+            .arg(AC3ModeName[info.mainAcmod]).arg(AC3ModeName[info.cutOutAcmod]);
     }
     if (TTSettings::instance()->normalizeAcmod())
-        tip += tr("\n(Will be normalized during cut)");
-    if (!existingTip.isEmpty())
-        tip = existingTip + "\n" + tip;
-    treeItem->setToolTip(5, tip);
+        cell.tip += tr("\n(Will be normalized during cut)");
+    return cell;
 }
 
 /*!

@@ -21,6 +21,13 @@ All notable changes to TTCut-ng are documented in this file.
   preselected. Gate: `tools/diag/test_container_sync`.
 
 ### Changed
+- **The cut list's AC3 format-change hint and the cut's acmod
+  normalisation now use one majority rule.** They had separate
+  implementations with different sampling and could disagree on a segment;
+  the former file scan also mis-sampled segments shorter than 100 frames
+  (it looked before the cut-in), which could normalise such a segment to
+  its surroundings' layout. One header-list function serves both; no file
+  scan per segment any more. Gate: `tools/diag/test_acmod_majority`.
 - **German wording of the AC3 5.1 anomaly scan unified to „Tonanomalie".**
   The setting, the scan messages and the marker used three spellings for
   one feature („Tonstörung", „Ton-Anomalie", „Tonanomalie"); „Tonstörungen"

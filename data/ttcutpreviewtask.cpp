@@ -12,6 +12,7 @@
 // TTCUTPREVIEWTASK
 // ----------------------------------------------------------------------------
 
+#include "../avstream/ttac3acmod.h"
 #include "ttcutpreviewtask.h"
 
 #include <QFileInfo>
@@ -676,12 +677,10 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
 
     QList<int> targetAcmods;
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    if (normalizeAcmod && audioExt.toLower() == "ac3") {
-      for (int s = 0; s < audioKeepList.size(); s++) {
-        TTAudioCutter::AcmodInfo aInfo = TTAudioCutter::analyzeAcmod(
-            audioFile, audioKeepList[s].first, audioKeepList[s].second);
-        targetAcmods.append(aInfo.mainAcmod);
-      }
+    if (normalizeAcmod && aStream && aStream->streamType() == TTAVTypes::ac3_audio) {
+      for (int s = 0; s < audioKeepList.size(); s++)
+        targetAcmods.append(ttAnalyzeAcmodWindow(aStream, audioKeepList[s].first,
+                                                 audioKeepList[s].second).mainAcmod);
     }
 
     QElapsedTimer audioTimer;

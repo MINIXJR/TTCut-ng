@@ -1989,6 +1989,42 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Doppelte Mehrheits-acmod-Logik** → **ERLEDIGT** (2026-09-11, Branch
+  `refactor/acmod-majority-shared`)
+  - Zwei Implementierungen derselben Mehrheitsauswahl: `TTAudioCutter::
+    analyzeAcmod()` (Syncword-Dateiscan ab Byte 0 je Segment, fest 32 ms/
+    Frame, Ziel-acmod der Normalisierung) und `TTCutTreeView::
+    updateAcmodIcon()` (Header-Liste, echtes `frame_time`, letzte 100 Frames
+    nur ab 200 Frames Segmentlänge; Hinweis-Spalte). Jetzt eine Funktion
+    `ttAnalyzeAcmodWindow()` in `avstream/ttac3acmod.{h,cpp}` auf der
+    Header-Liste für beide; der Dateiscan ist entfernt.
+  - **Zwei Semantik-Entscheidungen, beide gemessen:** Fensterende
+    `floor(cutOut/dur) − 1` wie der Dateiscan (ein Frame mehr kippt in
+    [16,11 s, 22,11 s) eine 94:93-Mehrheit in ein Unentschieden); Stichprobe
+    erste + letzte 100 Frames, jeder Frame einmal (Fenster unter 200 Frames
+    ganz).
+  - **Fehler im alten Dateiscan gefunden:** bei Fenstern unter 100 Frames
+    begann seine Cut-Out-Stichprobe vor dem Cut-In — „cutInAcmod" war der
+    Frame `cutOut − 100`, die Mehrheit zählte Frames außerhalb des Fensters
+    (mixed5.ac3, [8,41 s, 8,91 s) mitten im 5.1-Lauf: `in=2`). Die neue
+    Funktion liefert dort 7/7/7. Für die Normalisierung hieß das: ein
+    kurzes Segment konnte auf den acmod seiner Umgebung statt seines
+    eigenen Inhalts normalisiert werden.
+  - Tree-View: `burstHint()`/`acmodHint()` liefern `{Text, Tooltip}`,
+    `updateHintColumn()` komponiert (Burst zuerst, „ + ", Warn-Icon bei
+    Burst, Info-Icon bei reinem Formatwechsel) und schreibt die Zelle
+    einmal; kein Rücklesen aus dem Widget mehr.
+  - Gates: `tools/diag/test_acmod_majority` (alter Dateiscan als Referenz im
+    Harness; synthetisches AC3 mit fünf acmod-Läufen, 768 Fenster, davon 520
+    ab 100 Frames verglichen: **0 Abweichungen** in main/in/out; kurze
+    Fenster ausgewiesen und die Referenz dort als falsch belegt);
+    `gate_cut_identity.sh` fünf Fixtures **byte-identisch**; Vollbau und
+    diag-Ziele sauber. Die Hinweis-Spalte selbst ist nicht per Harness
+    geprüft (Bau + Sichtung der Komposition).
+  - Rezept für das Material: fünf `ffmpeg -f lavfi sine … -c:a ac3 -b:a 448k`
+    Stücke (stereo 8 s, 5.1 4 s, stereo 6 s, 5.1 3 s, stereo 9 s) als ES
+    konkateniert (`2x250,7x125,2x188,7x94,2x282` Frames).
+
 - **`TTAudioCutter::cut` stürzte bei wechselnden Ziel-acmods zwischen
   Segmenten ab** → **GELÖST (2026-09-05)**. Gefunden beim Bau des Gates
   `tools/diag/test_audiocutter_paths` (Code-Audit Batch E): mit
