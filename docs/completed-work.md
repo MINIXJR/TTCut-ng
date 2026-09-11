@@ -867,6 +867,34 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **`setEncoderCodec()`-Early-Return liess `workingOutputContainer` und
+  `Mpeg2Muxer` auseinanderlaufen** → **GEFIXT** (2026-09-11, Branch
+  `fix/working-container-sync`)
+  - Wurzel lag nicht im Early-Return, sondern in `TTSettings::load()`: der
+    Encoder-Block setzte Preset/CRF/Profil aus den codec-spezifischen
+    Defaults des geladenen `EncoderCodec`, den transienten Container aber
+    aus dem Legacy-Schlüssel `Muxer/OutputContainer` (Default 1 = MKV, kein
+    Setter-Aufrufer mehr). `setEncoderCodec()` synchronisiert nur bei
+    Codec-WECHSEL und konservierte den inkonsistenten Zustand — betroffen
+    ist jede Konfiguration, deren gespeicherter oder kompilierter Codec dem
+    Stream entspricht, auch die leere (MPEG-2 → MKV statt mplex).
+  - GUI-Pfad (im TODO offen): `TTCutAVCutDlg::populateMuxerProg()` liest
+    denselben Working-Wert und dokumentiert genau den Vertrag „aus dem
+    Per-Codec-Default" — der Dialog belegte also auf frischer Konfiguration
+    MKV vor, sichtbar und korrigierbar; headless (`--auto-cut`) nicht.
+  - Fix: `load()` setzt `mWorkingOutputContainer` im vorhandenen
+    `switch (mEncoderCodec)` aus `mMpeg2Muxer`/`mH264Muxer`/`mH265Muxer`.
+    Der Early-Return bleibt (Zustand nach `load()` stimmt jetzt),
+    Projektdateien überschreiben den Working-Wert weiterhin danach, der
+    Legacy-Schlüssel wird weiter gelesen und geschrieben.
+  - Gate `tools/diag/test_container_sync` (ein Prozess je Fall, frische
+    `XDG_CONFIG_HOME`): vorher 4 FAIL / 2 PASS, nachher 6/6. **Harness-Falle:**
+    `load()` fällt bei fehlendem Schlüssel auf den aktuellen Feldwert zurück,
+    zwei Fälle im selben Prozess erben also Werte voneinander — deshalb
+    `QProcess` je Fall.
+  - `gate_audiofix.sh` setzt weiterhin beide Schlüssel (harmlos), der
+    Kommentar dort ist nachgezogen.
+
 - **Wiedergabe-Mux blockierte den GUI-Thread** → **GEFIXT** (2026-09-11,
   Branch `feature/playback-mux-async`)
   - Der H.26x-Wiedergabe-Mux lief synchron in `TTCurrentFrame::onPlayVideo()`:

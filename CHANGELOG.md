@@ -4,6 +4,14 @@ All notable changes to TTCut-ng are documented in this file.
 
 ## Unreleased
 
+### Fixed
+- **A fresh configuration cut MPEG-2 to MKV although the MPEG-2 muxer
+  default is mplex.** The transient output container was initialised from
+  the legacy global `OutputContainer` key instead of the codec's muxer
+  default, and the codec setter only re-syncs it when the codec changes;
+  `--auto-cut` had no way around it, the cut dialog showed MKV
+  preselected. Gate: `tools/diag/test_container_sync`.
+
 ### Changed
 - **Preparing H.264/H.265 playback no longer freezes the window.** The
   temp MKV for the first Play (video and audio muxed so mpv can seek) is

@@ -434,13 +434,14 @@ EOF
         APPTMP="$WORK/full_apptmp"; OUTDIR="$WORK/full_output"
         rm -rf "$XDGCFG" "$XDGCACHE" "$APPTMP" "$OUTDIR"
         mkdir -p "$XDGCFG/TTCut-ng" "$XDGCACHE" "$APPTMP" "$OUTDIR"
-        # Both Mpeg2Muxer AND OutputContainer must be 0/mplex: TTSettings::load()
-        # sets the transient workingOutputContainer from OutputContainer
-        # directly; setEncoderCodec(0)'s Mpeg2Muxer resync (called by
-        # runAutoCutMode for an MPEG-2 stream) is a no-op here because
-        # mEncoderCodec's compiled default is ALREADY 0 (early-return on
-        # "value unchanged" -- confirmed by measurement: Mpeg2Muxer=0 alone
-        # produced OutputContainer=1/MKV in the run's own saved settings).
+        # Mpeg2Muxer=0 selects mplex. Until 2026-09-11 OutputContainer=0 had
+        # to be set as well: TTSettings::load() took the transient working
+        # container from that legacy global key, and setEncoderCodec(0)'s
+        # resync (called by runAutoCutMode) was a no-op because the compiled
+        # codec default is already 0 (early-return on "value unchanged";
+        # measured: Mpeg2Muxer=0 alone produced OutputContainer=1/MKV). load()
+        # now takes it from the codec default (gate test_container_sync); the
+        # second key stays here as a harmless belt-and-braces.
         cat > "$XDGCFG/TTCut-ng/TTCut-ng.conf" <<EOF
 [Settings]
 Common\\TempDirPath=$APPTMP

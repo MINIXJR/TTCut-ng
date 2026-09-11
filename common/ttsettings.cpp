@@ -749,11 +749,19 @@ void TTSettings::load()
   // Without this the cut pipeline reads compile-time defaults instead of
   // the user's codec-specific settings until the Settings dialog is opened.
   // Mirrors the switch in former gui/ttcutsettings.cpp:168-184.
+  //
+  // The working output container belongs in this switch too: it has to
+  // follow the codec-specific muxer default (Mpeg2Muxer/H264Muxer/
+  // H265Muxer), and setEncoderCodec() only re-syncs it when the codec
+  // CHANGES. Taken from the legacy global Muxer\OutputContainer instead, a
+  // fresh configuration cut MPEG-2 to MKV (measured 2026-08-16, gate
+  // tools/diag/gate_audiofix.sh; gate tools/diag/test_container_sync). The
+  // Muxer block below still reads that key for round-trip compatibility.
   switch (mEncoderCodec) {
     case 0:  /* MPEG-2: nur Crf wirksam — Preset/Profile entfallen */
-             mEncoderCrf = mMpeg2Crf; break;
-    case 1:  mEncoderPreset = mH264Preset;  mEncoderCrf = mH264Crf;  mEncoderProfile = mH264Profile;  break;
-    case 2:  mEncoderPreset = mH265Preset;  mEncoderCrf = mH265Crf;  mEncoderProfile = mH265Profile;  break;
+             mEncoderCrf = mMpeg2Crf; mWorkingOutputContainer = mMpeg2Muxer; break;
+    case 1:  mEncoderPreset = mH264Preset;  mEncoderCrf = mH264Crf;  mEncoderProfile = mH264Profile;  mWorkingOutputContainer = mH264Muxer;  break;
+    case 2:  mEncoderPreset = mH265Preset;  mEncoderCrf = mH265Crf;  mEncoderProfile = mH265Profile;  mWorkingOutputContainer = mH265Muxer;  break;
   }
   settings.endGroup();
 
@@ -790,7 +798,8 @@ void TTSettings::load()
   mWorkingMpeg2Target        = mMpeg2Target;
   mWorkingMuxMode            = mMuxMode;
   mWorkingAudioOnlyFormat    = mAudioOnlyFormat;
-  mWorkingOutputContainer    = mOutputContainer;
+  // mWorkingOutputContainer: set from the codec default in the Encoder block
+  // above, not from the legacy global mOutputContainer.
 
   // ----- Cut Options group (Task 13) -----------------------------------
   // Sub-group of /Settings. Eight fields. NOTE: the on-disk key for

@@ -61,23 +61,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Materiallage (gemessen 2026-08-16): 15 von 21 lokalen Aufnahmen tragen
     echte DVB-UT-Daten; öffentlich-rechtliche Sender praktisch immer.
 
-- **`setEncoderCodec()`-Early-Return lässt `workingOutputContainer` und
-  `Mpeg2Muxer` auseinanderlaufen** (2026-08-16, gemessen beim
-  ttcut-audiofix-Realfall-Gate; dokumentiert im Kommentar von
-  `tools/diag/gate_audiofix.sh` ~Z. 437)
-  - `runAutoCutMode()` ruft `TTSettings::setEncoderCodec(0)` für MPEG-2, um
-    `workingOutputContainer` aus `mMpeg2Muxer` nachzuziehen —
-    `setEncoderCodec()` hat aber einen Early-Return
-    (`if (mEncoderCodec == v) return;`), und der kompilierte Default ist
-    schon 0. Auf frischer Konfiguration feuert der Resync also nie:
-    eine Ini mit nur `Encoder\Mpeg2Muxer=0` ergab gemessen
-    `workingOutputContainer=1` (MKV) im Lauf-Log und in den beim Beenden
-    zurückgeschriebenen Settings. Wer mplex will, muss derzeit **beide**
-    Schlüssel (`Encoder\Mpeg2Muxer=0` UND `Muxer\OutputContainer=0`) setzen.
-  - Betrifft die App unabhängig vom audiofix-Feature; GUI-Pfad (Settings-
-    Dialog setzt beide?) noch nicht vermessen — vor einem Fix prüfen, wo
-    der Resync überall hängt.
-
 - **Vorbestehende Defekte, gefunden beim Abbruch-Vorhaben (2026-08-10)** —
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten

@@ -249,6 +249,7 @@ diag_tool(test_mpeg2_seek  AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_seqheader_missing AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_headerlist_eof   AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
+diag_tool(test_container_sync  WIDGETS SOURCES)
 diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
 # --- MATERIAL_TOOLS (on demand, need a specific recording) ---
@@ -365,6 +366,7 @@ diag_tool(test_pulse_stylesheet   WIDGETS SOURCES
 target_link_libraries(test_stale_abort PRIVATE ttcut-core)
 target_link_libraries(test_framesearch_progress PRIVATE ttcut-core)
 target_link_libraries(test_directed_search PRIVATE ttcut-core)
+target_link_libraries(test_container_sync PRIVATE ttcut-core)
 target_link_libraries(repro_playback_mkv PRIVATE ttcut-core)
 target_link_libraries(test_audio_header_strings PRIVATE ttcut-core)
 target_link_libraries(test_dialog_then_cut PRIVATE ttcut-core)
@@ -388,7 +390,7 @@ add_custom_target(diag DEPENDS
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_anomalyscan
   test_pillarbox test_pool_abort
-  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry
+  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
