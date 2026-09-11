@@ -24,7 +24,10 @@ Rund 15 schnelle Harnesses existieren, nichts führt sie zusammen aus;
 
 - `tools/diag/run-gates.sh`: baut und startet alle Harnesses, die ohne großes
   Material auskommen (Tux-Fixtures, synthetische Dateien, keine Eingabe), und
-  druckt eine PASS/FAIL-Tabelle mit Laufzeit je Gate.
+  druckt eine PASS/FAIL-Tabelle mit Laufzeit je Gate. Bestand war nicht 15,
+  sondern 89 Harnesses plus 13 Gate-Skripte; 73 Gates sind drin, der Rest
+  steht mit Grund im Skriptkopf (Display nötig, Vergleichs-Baseline,
+  Korpusmaterial, nur Dump ohne Urteil).
 - Aufruf vor jedem Merge auf `master` und als Schritt im Release-Skill.
 - **Fertig**, wenn ein Lauf grün ist und der Release-Skill ihn ruft.
 
@@ -70,7 +73,7 @@ Kandidaten eines Teilsystems mit dessen Verträgen in der Hand beurteilt.
 
 | Schritt | Status | Beleg |
 |---|---|---|
-| 1 Gate-Läufer | offen | — |
+| 1 Gate-Läufer | fertig 2026-09-11 | `tools/diag/run-gates.sh`, Lauf `20260911-173329`: 73 PASS, 0 FAIL, 0 SKIP, 5,5 min Gate-Zeit; Release-Skill Step 5 ruft ihn. Erster Fund: `mLogFile.log` statt `logfile.log` seit `ab3fae4d` (alte Binary bestand, frische nicht) |
 | 2a Karte Einstellungen | offen | — |
 | 2b Karte Stream öffnen / Projekt laden | offen | — |
 | 2c Karte Wiedergabe | offen | — |

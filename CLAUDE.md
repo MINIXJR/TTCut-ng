@@ -63,6 +63,12 @@ gitignored, so a stale one from an earlier session is invisible.
 
 The generated executable is `build/ttcut-ng`.
 
+`tools/diag/run-gates.sh` builds and runs every self-verdicting harness and
+gate script that needs only repository fixtures (`--quick` for the
+material-free tier, `--list` for the table) and prints one PASS/FAIL/SKIP
+line per gate. Run it before every merge to `master`; the release skill
+runs it in step 5.
+
 ## Architecture
 
 > **Data-flow maps:** For detailed, maintained subsystem data-flow maps (decode-vs-display order, edge semantics, redundancy), see `docs/code-map/` (start at `INDEX.md`). Created and kept fresh via the `code-map` skill — check there before re-searching for architecture/data-flow answers.
