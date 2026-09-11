@@ -389,16 +389,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   ein Projekt mit nicht-fortlaufenden oder doppelten `<Order>`-Werten (von
   Hand editiert, nicht über die App gespeichert) kann eine Reparatur der
   falschen Spur zuordnen, ohne Warnung.
-- **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
-  M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
-  `TTAVItem::firstAc3TrackIndex()` liefert den Scan-Ort, und das Kontextmenü
-  des Markers ordnet jede Reparatur derselben Spur zu. Bei einer Aufnahme mit
-  zwei AC3-Spuren (z. B. deutsch + Originalton) bleibt die zweite unbeachtet —
-  eine Störung dort wird weder gefunden noch repariert, ohne Hinweis. Für den
-  Ausbau: Scan-Task pro AC3-Spur starten (der Task kennt seinen `trackIndex`
-  bereits), Markertext um die Spur ergänzen (steht schon drin), und im
-  Reparatur-Dialog die Spur wählbar machen statt sie aus
-  `firstAc3TrackIndex()` abzuleiten.
 - **Ersatzframe-Bau meldet OOM und Schreibfehler nicht getrennt** (M1/M2 aus
   dem Final-Review, bewusst offen gelassen). `TTAudioRepair::buildRepairTable()`
   baut die komplette Tabelle im Speicher (`QMap<qint64, QByteArray>`); bei sehr
@@ -454,6 +444,24 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   einzeln in der GUI zu öffnen.
 
 ## Low Priority
+
+- **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
+  M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
+  `TTAVItem::firstAc3TrackIndex()` liefert den Scan-Ort, und das Kontextmenü
+  des Markers ordnet jede Reparatur derselben Spur zu. Bei einer Aufnahme mit
+  zwei AC3-Spuren (z. B. deutsch + Originalton) bleibt die zweite unbeachtet —
+  eine Störung dort wird weder gefunden noch repariert, ohne Hinweis. Für den
+  Ausbau: Scan-Task pro AC3-Spur starten (der Task kennt seinen `trackIndex`
+  bereits), Markertext um die Spur ergänzen (steht schon drin), und im
+  Reparatur-Dialog die Spur wählbar machen statt sie aus
+  `firstAc3TrackIndex()` abzuleiten.
+  **Herabgestuft 2026-09-11 (User-Entscheid):** betrifft nach Code nur den
+  Fall zweier AC3-Spuren — Scan (`TTAudioAnomalyScanTask`, AC3-5.1-Heuristik
+  auf 32-ms-Rahmenraster) und Spurwahl (`firstAc3TrackIndex()`, prüft
+  `streamType() == ac3_audio`) sind AC3-spezifisch, MP2/Stereo ist per
+  Spec-Entscheid ausgenommen (eigener Eintrag „Stereo-/MP2-Scan"). Zwei
+  AC3-Spuren kommen bei DVB-Aufnahmen nach Erfahrung des Anwenders nicht
+  vor.
 
 - **SIGSEGV nach Smart Cut in `doH264Cut` — einmaliger Absturz, herabgestuft
   2026-09-07.** Ein Use-after-free am 2026-08-07 (Backtrace endete in
