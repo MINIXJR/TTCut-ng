@@ -884,9 +884,20 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Meldungen, „Frame found" bei Schritt 1450) und `test_directed_search`
     (Tux H.264, Start 1500) vorher/nachher bis auf Zeitstempel identisch;
     `test_decode_cancel` weiterhin 4/4.
-  - Offen, nicht Teil dieses Punkts: `TTSearchTask` (gerichtete Suchen)
-    reicht seinen Unter-Decodern ebenfalls keinen Cancel-Token weiter;
-    seine Abbrüche laufen über die Task-Schleife zwischen den Bildern.
+  - **Folge-Commit (Branch `fix/searchtask-cancel-token`):** `TTSearchTask`
+    (gerichtete Suchen) reichte seinen Unter-Decodern ebenfalls keinen
+    Cancel-Token weiter; der Abbruch griff nur zwischen den Batches (ein
+    Batch = N parallel dekodierte Bilder, Latenz ≈ ein Decode). Keine
+    unbegrenzte Schleife dort: `isFrameBlack()`/`buildHistogram()` sind
+    distanzbegrenzt, `decodeFrame()` war bereits abbrechbar, nur ohne Token.
+    Jetzt `setCancelToken(&mIsAborted)` in `openDecoder()` und
+    `setupWorkers()` und je ein `isCancelled()`-Poll in den zwei
+    distanzbegrenzten Skip-Schleifen. Gate `tools/diag/test_search_cancel`
+    (Moon-Crash, Frames 5000/77777): vorher liefen `buildHistogram()` und
+    `isFrameBlack()` trotz Absage zu Ende (114/112 ms, Bild geliefert),
+    `decodeFrame()` mit Token kehrte schon in 49 ms zurück; nachher alle
+    drei 0–1 ms nach dem Signal. `test_directed_search` (Tux H.264, Start
+    1500, inkl. Abbruchfall) vorher/nachher identisch.
 
 - **Equal-Frame Search: H.264/H.265-Support fehlt** → **DONE** (commit 24562c0)
   - `TTFrameSearchTask::decoderKindFor()` dispatcht codec-aware: `TTFFmpegWrapper` (YUV-API)

@@ -8,8 +8,11 @@ All notable changes to TTCut-ng are documented in this file.
 - **Cancelling the equal-frame search now takes effect during the frame
   being decoded, not only between frames.** The search decode kept the
   unbounded skip loop its sibling lost in v0.82.5 and the search task
-  never handed its abort flag to the decoder. Gate:
-  `tools/diag/test_decode_cancel_yuv`.
+  never handed its abort flag to the decoder. The directed searches
+  (black frame, scene change, logo) get the same treatment: their
+  sub-decoders now see the cancel inside a running decode instead of
+  after the current batch. Gates: `tools/diag/test_decode_cancel_yuv`,
+  `tools/diag/test_search_cancel`.
 - **A fresh configuration cut MPEG-2 to MKV although the MPEG-2 muxer
   default is mplex.** The transient output container was initialised from
   the legacy global `OutputContainer` key instead of the codec's muxer

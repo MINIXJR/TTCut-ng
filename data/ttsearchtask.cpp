@@ -64,6 +64,8 @@ bool TTSearchTask::openDecoder()
       mFFmpegWrapper = nullptr;
       return false;
     }
+    // A cancel ends the decode in flight, not just the batch after it.
+    mFFmpegWrapper->setCancelToken(&mIsAborted);
     if (!mPreBuiltFrameIndex.isEmpty()) {
       mFFmpegWrapper->setFrameIndex(mPreBuiltFrameIndex);
     } else {
@@ -237,6 +239,7 @@ bool TTSearchTask::setupWorkers()
     auto* w = new TTFFmpegWrapper();
     w->setAnalysisMode(true);
     w->setSearchMode(true);
+    w->setCancelToken(&mIsAborted);   // see openDecoder()
     if (!w->openFile(mFilePath)) {
       log->errorMsg(__FILE__, __LINE__,
                     QString("TTSearchTask::setupWorkers: openFile failed for %1 (worker %2)")

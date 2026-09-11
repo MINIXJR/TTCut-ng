@@ -895,8 +895,11 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
         mDecoderFrameIndex = mCurrentFrameIndex;
     }
 
-    // Skip intermediate frames to reach target
+    // Skip intermediate frames to reach target. The directed searches poll
+    // their abort flag only between batches; a cancel during this loop is
+    // seen here (token from TTSearchTask, see test_search_cancel).
     while (mDecoderFrameIndex < frameIndex) {
+        if (isCancelled()) return false;
         if (!skipCurrentFrame()) break;
         mDecoderFrameIndex++;
     }
@@ -1004,11 +1007,13 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
     if (frameIndex < 0 || frameIndex >= mBundle.index.size()) return false;
     if (!mFormatCtx || !mVideoCodecCtx) return false;
 
-    // Seek to keyframe, skip intermediate frames
+    // Seek to keyframe, skip intermediate frames (cancel poll as in
+    // isFrameBlack())
     if (!seekToFrame(frameIndex)) return false;
     mDecoderFrameIndex = mCurrentFrameIndex;
 
     while (mDecoderFrameIndex < frameIndex) {
+        if (isCancelled()) return false;
         if (!skipCurrentFrame()) break;
         mDecoderFrameIndex++;
     }
