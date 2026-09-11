@@ -106,6 +106,7 @@ set(TTCUT_HEADERS
   data/tth26xcuttask.h
   data/ttaudioonlycuttask.h
   data/ttmuxtask.h
+  data/ttplaybackmuxtask.h
   data/ttframesearchtask.h
   data/ttlogodetector.h
   avstream/ttcommon.h
@@ -230,6 +231,7 @@ set(TTCUT_CORE_SOURCES
   data/tth26xcuttask.cpp
   data/ttaudioonlycuttask.cpp
   data/ttmuxtask.cpp
+  data/ttplaybackmuxtask.cpp
   data/ttframesearchtask.cpp
   data/ttlogodetector.cpp
   avstream/ttcommon.cpp

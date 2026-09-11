@@ -20,10 +20,13 @@
 #include "../common/ttcut.h"
 #include "../avstream/ttavstream.h"
 
+class QProgressDialog;
 class QStackedLayout;
 class TTAVItem;
 class TTCutItem;
 class TTMpvWrapper;
+class TTPlaybackMuxTask;
+struct TTPlaybackMuxParams;
 class TTSubtitleStream;
 
 class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
@@ -79,7 +82,19 @@ void onGotoFramePreview(int pos);
 
   private:
     void updateCurrentPosition(int pos = -1);
-    QString createTempMkvForPlayback();
+    //! Everything the playback mux needs, collected on the GUI thread.
+    //! False (with a logged warning) when the stream has no usable frame rate.
+    bool buildPlaybackMuxParams(TTPlaybackMuxParams& params);
+    //! Mux the temp MKV on a worker with a cancellable progress dialog;
+    //! continues in onPlaybackMuxFinished().
+    void startPlaybackMux();
+    //! Forget a running mux: abort it and let it discard its output.
+    void detachPlaybackMux();
+    //! Common load path once the source to play is known: wires the first-
+    //! frame stack switch, resets the speed, passes the subtitle file and
+    //! flips the buttons; the caller then calls mPlayer->load().
+    void beginPlayerLoad();
+    void startPlaybackFromTempMkv();
     void cleanupTempPlaybackFile();
     QString playbackSourceFingerprint() const;
     // Playback time<->index conversion authority (display-PTS aware).
@@ -92,6 +107,8 @@ void onGotoFramePreview(int pos);
     void                setPlayingButtonState(bool playing);
 
   private slots:
+    void                onPlaybackMuxFinished();
+    void                onPlaybackMuxAborted();
     void                onPlaybackFinished();
     void                onPlaybackPositionChanged(double seconds);
     void                onPlaySlower();
@@ -116,6 +133,12 @@ void onGotoFramePreview(int pos);
     // display-order map was passed to the muxer). ALL playback time<->index
     // conversions key off this flag - no mixed-scale states possible.
     bool                mTempPlaybackHasDisplayPts = false;
+    //! The mux preparing the next playback, null when none runs. Deletes
+    //! itself on finished()/aborted(); this pointer is dropped in the two
+    //! completion slots and in detachPlaybackMux().
+    TTPlaybackMuxTask*  mMuxTask = nullptr;
+    QProgressDialog*    mMuxProgress = nullptr;
+    QString             mPendingPlaybackFingerprint;  // fingerprint of the mux in flight
     int                 mSpeedStep = 2;     // Index into kSpeedSteps[]; 2 = kSpeedStepNormal (1×)
     QWidget*            mFrameStackContainer = nullptr;
     QStackedLayout*     mFrameStack = nullptr;

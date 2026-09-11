@@ -189,27 +189,14 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `docs/code-map/smart-cut.md`.
 
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
-  - Dieselbe Bauform steht noch an drei Stellen: `gui/ttcutpreview.cpp` und
-    `data/ttcutpreviewtask.cpp` (Vorschau-Dateien) sowie
-    `gui/ttcurrentframe.cpp` (`createTempMkvForPlayback`,
-    `ttcut-ng_playback_temp.mkv`). Zwei
-    gleichzeitig offene Fenster benutzen dieselben Namen.
+  - Dieselbe Bauform steht noch an zwei Stellen: `gui/ttcutpreview.cpp` und
+    `data/ttcutpreviewtask.cpp` (Vorschau-Dateien). Zwei gleichzeitig
+    offene Fenster benutzen dieselben Namen. (Die dritte Stelle, das
+    Wiedergabe-MKV in `gui/ttcurrentframe.cpp`, trägt seit 2026-09-11 einen
+    Namen je Mux — Pflicht für den asynchronen Abbruchpfad, siehe
+    `docs/completed-work.md`.)
   - Kein gemessener Fehlerfall — deshalb nicht mitgefixt. Wer es angeht:
     dasselbe Muster wie in `encodePart()` (`QTemporaryDir` je Vorgang).
-
-- **Wiedergabe-Mux blockiert den GUI-Thread** (2026-08-17, mittlere/niedrige
-  Priorität)
-  - `TTCurrentFrame::createTempMkvForPlayback()` (`gui/ttcurrentframe.cpp`)
-    läuft synchron auf dem GUI-Thread: kein Fortschritt, kein Abbruch, das
-    Fenster meldet „reagiert nicht", bis der Mux fertig ist. Seit dem
-    Konsole-cgroup-Fund (siehe `docs/completed-work.md`, Untertitel-/
-    Wiedergabe-Einträge 2026-08-17) sind das ~6 s pro Quelle (vorher
-    minutenlang) — deshalb herabgestuft, aber strukturell offen.
-  - Lösungsform: wie die Schnitt-Tasks in den Task-Pool verlagern
-    (Fortschritt + Abbruch inklusive); hängt mit dem geteilten Temp-Namen
-    `ttcut-ng_playback_temp.mkv` zusammen (Eintrag „Weitere geteilte
-    Temp-Namen" oben).
-  - Messwerkzeug: `tools/diag/bench_playback_mux` (Mux-Durchsatz standalone).
 
 - **ttcut-demux: bash + ffmpeg-CLI → libav-Library-Migration**
   - `tools/ttcut-demux/ttcut-demux` ist aktuell ein bash-Script (~3050 Zeilen, Stand v0.82.1) das ffmpeg-CLI-Subprozesse spawnt für: TS-Demux, Audio-Trim, Audio-Padding, Audio-Gap-Repair, PTS-Analyse, etc.

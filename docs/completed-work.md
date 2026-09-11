@@ -867,6 +867,48 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### GUI und Wiedergabe
 
+- **Wiedergabe-Mux blockierte den GUI-Thread** → **GEFIXT** (2026-09-11,
+  Branch `feature/playback-mux-async`)
+  - Der H.26x-Wiedergabe-Mux lief synchron in `TTCurrentFrame::onPlayVideo()`:
+    kein Fortschritt, kein Abbruch, Fenster „reagiert nicht" für die Dauer
+    des Mux (~3–6 s je Quelle). Jetzt läuft er als `TTPlaybackMuxTask`
+    (`data/ttplaybackmuxtask.{h,cpp}`, `TTThreadTask` auf
+    `QThreadPool::globalInstance()`) hinter einem abbrechbaren
+    `QProgressDialog`; `onPlayVideo()` ist an der Mux-Stelle geteilt, der
+    Rest wandert in `onPlaybackMuxFinished()` / `onPlaybackMuxAborted()`.
+    Die gemeinsame Lade-Vorbereitung beider Codec-Pfade steht in
+    `beginPlayerLoad()`.
+  - **Warum nicht der TTAVData-Pool** (wie im TODO vorgeschlagen): `start(task,
+    true)` läuft synchron auf dem Aufrufer-Thread (`runSynchron()`), bringt
+    also nichts; der asynchrone Pool-Lauf löst bei jedem Exit `avDataReloaded`
+    aus (Baumansichten neu), meldet in das Schnitt-Fortschrittsfenster, und
+    TTCurrentFrame hat keinen Zugang zu TTAVData.
+  - **Abbruchpfad-Details:** `onUserAbort()` setzt nur das Flag
+    (`mIsAborted`) statt `TTThreadTask::abort()` aufzurufen — das würde für
+    einen noch nicht gestarteten Task `aborted()`+`cleanUp()` sofort auf dem
+    GUI-Thread ausführen und das `deleteLater` des Eigentümers gegen den
+    später doch laufenden Worker rennen lassen. Streamwechsel oder
+    Widget-Ende während des Mux: `detachPlaybackMux()` trennt die Slots und
+    ruft `discard()`, der Task verwirft sein Ergebnis in `cleanUp()` auf dem
+    Worker selbst — deshalb **ein Dateiname je Mux** (`ttcut-ng_playback_
+    <pid>_<n>.mkv`); der geteilte Name `ttcut-ng_playback_temp.mkv` hätte den
+    nächsten Mux mit dem noch aufräumenden alten kollidieren lassen.
+  - Gate `tools/diag/test_playback_mux_async` (echtes Hauptfenster, offscreen,
+    Moon-Crash 3,4 GB ES): 18 PASS — Dialog erscheint, Abbrechen räumt in
+    11 ms auf (keine Datei, Play wieder aktiv), vollständiger Mux 3,1 s mit
+    **156 von 156** 20-ms-Timer-Ticks auf dem GUI-Thread (vorher: 0 während
+    des Mux), Fortschritt bis 100 %, Cache-Play ohne Dialog, Streamwechsel
+    mitten im Mux hinterlässt keine Datei.
+  - **Zwei Harness-Fallen:** `QProgressDialog::cancel()` versteckt den Dialog
+    nur und sendet **kein** `canceled()` (der Mux lief unbemerkt zu Ende) —
+    der Knopf muss geklickt werden. Und nach dem Klick auf Abbrechen ist der
+    Dialog sofort weg, das `aborted()` des Workers kommt Millisekunden
+    später; wer vorher Play prüft oder klickt, misst die Kaskade, nicht den
+    Fehler. Ausserdem braucht ein Harness mit libmpv `setlocale(LC_NUMERIC,
+    "C")` wie `gui/ttcutmain.cpp`.
+  - Nicht per Harness geprüft: der MPEG-2-Pfad (unverändert verschobener
+    Code, `beginPlayerLoad()` + `load(es, startSec, audio)`).
+
 - **PAFF-Wiedergabe: mpv meldet `reference picture missing during reorder`**
   → **KEIN DEFEKT (2026-09-10)**, Branch `fix/paff-playback-message-closed`.
   Der letzte offene Punkt des 08x04-Komplexes (Befunde B, D, E und die

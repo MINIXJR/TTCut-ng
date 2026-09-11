@@ -835,9 +835,19 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 <context>
     <name>TTCurrentFrame</name>
     <message>
-        <location filename="../gui/ttcurrentframe.cpp" line="63"/>
+        <location filename="../gui/ttcurrentframe.cpp" line="67"/>
         <source>Click to go to a frame or timecode</source>
         <translation>Klick: zu Frame oder Timecode springen</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcurrentframe.cpp" line="820"/>
+        <source>Preparing playback (muxing video and audio)...</source>
+        <translation>Wiedergabe wird vorbereitet (Video und Ton werden gemuxt) …</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcurrentframe.cpp" line="821"/>
+        <source>Cancel</source>
+        <translation>Abbrechen</translation>
     </message>
 </context>
 <context>

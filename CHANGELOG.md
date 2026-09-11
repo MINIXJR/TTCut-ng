@@ -2,6 +2,15 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Changed
+- **Preparing H.264/H.265 playback no longer freezes the window.** The
+  temp MKV for the first Play (video and audio muxed so mpv can seek) is
+  now built on a worker thread behind a progress dialog that can be
+  cancelled; the window stays responsive meanwhile, and a stream switch
+  during the mux discards it cleanly. Gate: `tools/diag/test_playback_mux_async`.
+
 ## v0.83.0 (2026-09-05)
 
 **Two audits, three refactors, two fixes**

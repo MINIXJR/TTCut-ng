@@ -20,6 +20,7 @@
 #include "../avstream/tth26xvideostream.h"
 #include "../data/ttavlist.h"
 #include "../data/ttcutlist.h"
+#include "../data/ttplaybackmuxtask.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttcommon.h"
@@ -34,6 +35,7 @@ extern "C" {
 }
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QEvent>
@@ -45,6 +47,8 @@ extern "C" {
 #include <QStyle>
 #include <QWheelEvent>
 #include <QMouseEvent>
+#include <QProgressDialog>
+#include <QThreadPool>
 #include <cmath>
 #include <iterator>
 
@@ -137,6 +141,9 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
 
 TTCurrentFrame::~TTCurrentFrame()
 {
+  // A mux still preparing a playback keeps running on its worker; it
+  // discards its output on its own once it notices the abort.
+  detachPlaybackMux();
   // Drop the cached H.264/H.265 playback MKV if it still exists (e.g. the
   // window is closed during playback) so it does not linger in the temp
   // directory. cleanupTempPlaybackFile() is a no-op when there is nothing left.
@@ -186,6 +193,7 @@ void TTCurrentFrame::onAVDataChanged(TTAVItem* avData)
 	// Stop any running playback and clean up temp file
 	if (mPlayer && mPlayer->isPlaying())
 		mPlayer->stop();
+	detachPlaybackMux();
 	cleanupTempPlaybackFile();
 	clearCutContext();
 
@@ -662,43 +670,30 @@ void TTCurrentFrame::onPlayVideo()
   ensurePlayerCreated();
   realizeRenderContext();
 
-  // Stack-Switch zu renderWidget erst, wenn das Widget seinen ZWEITEN echten
-  // mpv-Frame gerendert hat (firstFrameReady). Per Log belegt: mpv liefert nach
-  // dem Lade-Seek den ersten Frame stale — den GOP-Keyframe vor dem Ziel, bei
-  // einem Cut-In nach Werbung also einen Werbe-Frame; er trägt zwar die korrekte
-  // time-pos, aber den falschen Bildinhalt. Erst ab dem zweiten Render stimmt
-  // der Inhalt. Bis dahin bleibt das mpegWindow mit dem gewählten Standbild
-  // vorne. Würden wir schon bei PLAYBACK_RESTART umschalten, würde dieser
-  // stale erste Frame für einen Moment sichtbar. Gilt für alle Codecs.
-  if (mFrameStack && mPlayer) {
-    if (auto* rw = qobject_cast<TTMpvRenderWidget*>(mPlayer->renderWidget())) {
-      auto conn = std::make_shared<QMetaObject::Connection>();
-      *conn = connect(rw, &TTMpvRenderWidget::firstFrameReady, this,
-                      [this, rw, conn]() {
-        if (mFrameStack)
-          mFrameStack->setCurrentWidget(rw);
-        QObject::disconnect(*conn);
-      });
-    }
-  }
-
-  // Reset speed to 1× on every fresh play
-  mSpeedStep = kSpeedStepNormal;
-  laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
+  // A mux is already preparing this playback (the button is disabled
+  // meanwhile, but controlEnabled() may have re-enabled it).
+  if (mMuxTask) return;
 
   TTAVTypes::AVStreamType stype = videoStream->streamType();
   bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
 
-  // Subtitles via mpv --sub-file (set at load time below, not muxed into the
-  // temp MKV — see playbackSourceFingerprint()). Source SRT: its times match
-  // the source timeline, which both the temp MKV and the direct MPEG-2 ES share.
-  if (mAVItem->subtitleCount() > 0) {
-    mPlayer->setSubtitleFile(mAVItem->subtitleStreamAt(0)->filePath());
-    // Same sign as mpv's --sub-delay (positive = show later), read fresh from
-    // the subtitle list on every PLAY so spinbox edits take effect.
-    mPlayer->setSubtitleDelay(mAVItem->subtitleListItemAt(0).getDelayMs());
-  } else {
-    mPlayer->clearSubtitleFile();
+  if (isH264orH265) {
+    // ES files have no timestamps: mux into a temp MKV first. The temp MKV is
+    // cached across STOP→PLAY cycles — re-muxing the whole ES (~6 s) is only
+    // needed when the source (video/audio path) changed. STOP no longer deletes
+    // it (see onPlaybackFinished); the fingerprint guards reuse.
+    QString fp = playbackSourceFingerprint();
+    bool cacheValid = !mTempPlaybackFile.isEmpty()
+                      && fp == mCachedPlaybackFingerprint
+                      && QFile::exists(mTempPlaybackFile);
+    if (!cacheValid) {
+      cleanupTempPlaybackFile();   // drop a stale cache (e.g. source changed)
+      mPendingPlaybackFingerprint = fp;
+      startPlaybackMux();          // continues in onPlaybackMuxFinished()
+      return;
+    }
+    startPlaybackFromTempMkv();
+    return;
   }
 
   // Compute start position in seconds from the current frame time.
@@ -726,73 +721,176 @@ void TTCurrentFrame::onPlayVideo()
     }
   }
 
-  // H.264/H.265 decode-order vs display-order correction. The app frame index is
-  // decode order, but mpv seeks by display time. decodeFrame() records the true
-  // decode-order index of the frame it delivers for the current (decode-order)
-  // position in TTFrameInfo::deliveredDecodeIndex. The temp playback MKV assigns
-  // PTS in decode order (pts = frameCount * frameDur), so the displayed frame's
-  // time is deliveredDecodeIndex / frameRate. Without this, mpv lands on a
-  // different frame than the still shown in mpegWindow (e.g. the GOP keyframe
-  // before the cut-in). Read from mpegWindow's wrapper — the one that decoded
-  // the visible still. Falls back to currentIndex on -1 (frame never decoded).
-  // NOTE: must run AFTER the temp-MKV cache decision below sets
-  // mTempPlaybackHasDisplayPts - moved accordingly (see startSec assignment
-  // after cache handling).
-
-  if (isH264orH265) {
-    // ES files have no timestamps: mux into a temp MKV first. The temp MKV is
-    // cached across STOP→PLAY cycles — re-muxing the whole ES (~5 s) is only
-    // needed when the source (video/audio path) changed. STOP no longer deletes
-    // it (see onPlaybackFinished); the fingerprint guards reuse.
-    QString fp = playbackSourceFingerprint();
-    bool cacheValid = !mTempPlaybackFile.isEmpty()
-                      && fp == mCachedPlaybackFingerprint
-                      && QFile::exists(mTempPlaybackFile);
-
-    if (!cacheValid) {
-      cleanupTempPlaybackFile();   // drop a stale cache (e.g. source changed)
-      QApplication::setOverrideCursor(Qt::WaitCursor);
-      QString tempMkv = createTempMkvForPlayback();
-      QApplication::restoreOverrideCursor();
-
-      if (tempMkv.isEmpty()) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("Failed to create temp MKV for H.264/H.265 playback"));
-        return;
-      }
-      mTempPlaybackFile = tempMkv;
-      mCachedPlaybackFingerprint = fp;
-    }
-
-    // Display/decode-aware start time - computed AFTER the cache block so
-    // mTempPlaybackHasDisplayPts reflects the MKV actually being played.
-    startSec = playbackSecondsForCurrentStill();
-
-    // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
-    setPlayingButtonState(true);
-    // StackAll for the playback session only: the renderWidget must paint
-    // its first frames while still covered by the opaque mpegWindow (see
-    // the constructor comment; outside playback StackOne avoids the KWin
-    // stale-area trigger). Reset in onPlaybackFinished.
-    if (mFrameStack)
-      mFrameStack->setStackingMode(QStackedLayout::StackAll);
-    // Audio is already muxed into the temp MKV — no separate audio file needed
-    mPlayer->load(mTempPlaybackFile, startSec);
-  } else {
-    // MPEG-2: seek directly in the ES; pass first audio track separately if present
-    QString audioFile;
-    if (mAVItem->audioCount() > 0) {
-      TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
-      if (audioStream != 0)
-        audioFile = audioStream->filePath();
-    }
-    // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
-    setPlayingButtonState(true);
-    // StackAll for the playback session only — see H.26x branch above.
-    if (mFrameStack)
-      mFrameStack->setStackingMode(QStackedLayout::StackAll);
-    mPlayer->load(videoStream->filePath(), startSec, audioFile);
+  // MPEG-2: seek directly in the ES; pass first audio track separately if present
+  QString audioFile;
+  if (mAVItem->audioCount() > 0) {
+    TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
+    if (audioStream != 0)
+      audioFile = audioStream->filePath();
   }
+  beginPlayerLoad();
+  mPlayer->load(videoStream->filePath(), startSec, audioFile);
+}
+
+//! Everything a load has in common, run right before mPlayer->load().
+void TTCurrentFrame::beginPlayerLoad()
+{
+  // Stack-Switch zu renderWidget erst, wenn das Widget seinen ZWEITEN echten
+  // mpv-Frame gerendert hat (firstFrameReady). Per Log belegt: mpv liefert nach
+  // dem Lade-Seek den ersten Frame stale — den GOP-Keyframe vor dem Ziel, bei
+  // einem Cut-In nach Werbung also einen Werbe-Frame; er trägt zwar die korrekte
+  // time-pos, aber den falschen Bildinhalt. Erst ab dem zweiten Render stimmt
+  // der Inhalt. Bis dahin bleibt das mpegWindow mit dem gewählten Standbild
+  // vorne. Würden wir schon bei PLAYBACK_RESTART umschalten, würde dieser
+  // stale erste Frame für einen Moment sichtbar. Gilt für alle Codecs.
+  if (mFrameStack && mPlayer) {
+    if (auto* rw = qobject_cast<TTMpvRenderWidget*>(mPlayer->renderWidget())) {
+      auto conn = std::make_shared<QMetaObject::Connection>();
+      *conn = connect(rw, &TTMpvRenderWidget::firstFrameReady, this,
+                      [this, rw, conn]() {
+        if (mFrameStack)
+          mFrameStack->setCurrentWidget(rw);
+        QObject::disconnect(*conn);
+      });
+    }
+  }
+
+  // Reset speed to 1× on every fresh play
+  mSpeedStep = kSpeedStepNormal;
+  laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"
+
+  // Subtitles via mpv --sub-file (set at load time below, not muxed into the
+  // temp MKV — see playbackSourceFingerprint()). Source SRT: its times match
+  // the source timeline, which both the temp MKV and the direct MPEG-2 ES share.
+  if (mAVItem->subtitleCount() > 0) {
+    mPlayer->setSubtitleFile(mAVItem->subtitleStreamAt(0)->filePath());
+    // Same sign as mpv's --sub-delay (positive = show later), read fresh from
+    // the subtitle list on every PLAY so spinbox edits take effect.
+    mPlayer->setSubtitleDelay(mAVItem->subtitleListItemAt(0).getDelayMs());
+  } else {
+    mPlayer->clearSubtitleFile();
+  }
+
+  // Switch buttons: Play disabled, Stop/speed enabled — only after all early returns
+  setPlayingButtonState(true);
+  // StackAll for the playback session only: the renderWidget must paint
+  // its first frames while still covered by the opaque mpegWindow (see
+  // the constructor comment; outside playback StackOne avoids the KWin
+  // stale-area trigger). Reset in onPlaybackFinished.
+  if (mFrameStack)
+    mFrameStack->setStackingMode(QStackedLayout::StackAll);
+}
+
+//! H.264/H.265: play the (cached or freshly muxed) temp MKV from the still
+//! that is on screen.
+//!
+//! Decode-order vs display-order correction: the app frame index is decode
+//! order, but mpv seeks by display time. decodeFrame() records the true
+//! decode-order index of the frame it delivers for the current (decode-order)
+//! position in TTFrameInfo::deliveredDecodeIndex; playbackSecondsForCurrentStill()
+//! turns that into the MKV's time scale, keyed on mTempPlaybackHasDisplayPts,
+//! which describes the MKV actually being played. Without this, mpv lands on a
+//! different frame than the still shown in mpegWindow (e.g. the GOP keyframe
+//! before the cut-in).
+void TTCurrentFrame::startPlaybackFromTempMkv()
+{
+  const double startSec = playbackSecondsForCurrentStill();
+  beginPlayerLoad();
+  // Audio is already muxed into the temp MKV — no separate audio file needed
+  mPlayer->load(mTempPlaybackFile, startSec);
+}
+
+//! Start the playback mux on a worker and show a cancellable progress dialog.
+void TTCurrentFrame::startPlaybackMux()
+{
+  TTPlaybackMuxParams params;
+  if (!buildPlaybackMuxParams(params)) return;
+
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Creating temp MKV via libav:" << params.videoFile
+               << "displayPts=" << !params.displayOrder.isEmpty()
+               << "->" << params.outputFile;
+
+  mMuxTask = new TTPlaybackMuxTask(params);   // no parent: deletes itself below
+  connect(mMuxTask, &TTThreadTask::finished, this, &TTCurrentFrame::onPlaybackMuxFinished);
+  connect(mMuxTask, &TTThreadTask::aborted,  this, &TTCurrentFrame::onPlaybackMuxAborted);
+  connect(mMuxTask, &TTThreadTask::finished, mMuxTask, &QObject::deleteLater);
+  connect(mMuxTask, &TTThreadTask::aborted,  mMuxTask, &QObject::deleteLater);
+
+  mMuxProgress = new QProgressDialog(tr("Preparing playback (muxing video and audio)..."),
+                                     tr("Cancel"), 0, 100, window());
+  mMuxProgress->setWindowModality(Qt::WindowModal);
+  mMuxProgress->setMinimumDuration(0);
+  mMuxProgress->setAutoClose(false);
+  mMuxProgress->setAutoReset(false);
+  mMuxProgress->setValue(0);
+  connect(mMuxTask, &TTPlaybackMuxTask::progress, mMuxProgress, &QProgressDialog::setValue);
+  connect(mMuxProgress, &QProgressDialog::canceled, mMuxTask, &TTPlaybackMuxTask::onUserAbort);
+
+  pbPlayVideo->setEnabled(false);
+  QThreadPool::globalInstance()->start(mMuxTask);
+}
+
+//! Tear down the progress dialog and forget the task pointer (both slots).
+static void closeMuxProgress(QProgressDialog*& dlg, TTPlaybackMuxTask* task)
+{
+  if (!dlg) return;
+  // closeEvent() would emit canceled() into the task's onUserAbort().
+  if (task) QObject::disconnect(dlg, &QProgressDialog::canceled, task, nullptr);
+  dlg->close();
+  dlg->deleteLater();
+  dlg = nullptr;
+}
+
+void TTCurrentFrame::onPlaybackMuxFinished()
+{
+  TTPlaybackMuxTask* task = mMuxTask;
+  mMuxTask = nullptr;
+  closeMuxProgress(mMuxProgress, task);
+  pbPlayVideo->setEnabled(isControlEnabled);
+  if (!task) return;
+
+  if (!task->lastError().isEmpty()) {
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Temp MKV creation failed: %1").arg(task->lastError()));
+    mPendingPlaybackFingerprint.clear();
+    return;
+  }
+  mTempPlaybackFile          = task->outputFile();
+  mCachedPlaybackFingerprint = mPendingPlaybackFingerprint;
+  mTempPlaybackHasDisplayPts = !task->params().displayOrder.isEmpty();
+  mPendingPlaybackFingerprint.clear();
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Temp MKV created:" << mTempPlaybackFile;
+
+  if (videoStream == nullptr || mAVItem == nullptr || mPlayer == nullptr) return;
+  startPlaybackFromTempMkv();
+}
+
+void TTCurrentFrame::onPlaybackMuxAborted()
+{
+  TTPlaybackMuxTask* task = mMuxTask;
+  mMuxTask = nullptr;
+  closeMuxProgress(mMuxProgress, task);
+  pbPlayVideo->setEnabled(isControlEnabled);
+  mPendingPlaybackFingerprint.clear();
+  if (task && !task->failureMessage().isEmpty())
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Temp MKV creation failed: %1").arg(task->failureMessage()));
+  else if (TTSettings::instance()->logUI())
+      qDebug() << "Playback mux cancelled";
+}
+
+void TTCurrentFrame::detachPlaybackMux()
+{
+  if (!mMuxTask) return;
+  TTPlaybackMuxTask* task = mMuxTask;
+  mMuxTask = nullptr;
+  disconnect(task, nullptr, this, nullptr);   // the deleteLater connections stay
+  closeMuxProgress(mMuxProgress, task);
+  task->discard();
+  pbPlayVideo->setEnabled(isControlEnabled);
+  mPendingPlaybackFingerprint.clear();
 }
 
 //! Called repeatedly by TTMpvWrapper with the current playback position in seconds.
@@ -915,7 +1013,7 @@ void TTCurrentFrame::cleanupTempPlaybackFile()
 //! Fingerprint of everything that determines the playback temp MKV's content.
 //! Used to decide whether a cached temp MKV can be reused on a subsequent PLAY
 //! instead of re-muxing the whole ES (~5 s). Covers exactly what
-//! createTempMkvForPlayback() feeds into the muxer: the video file path and the
+//! buildPlaybackMuxParams() feeds into the muxer: the video file path and the
 //! first audio track's path. startSec (mpv --start) and the UI audio delay
 //! (final cut only) deliberately do NOT enter the MKV and are therefore
 //! excluded. Subtitles are excluded too: onPlayVideo() passes the source SRT
@@ -993,14 +1091,18 @@ void TTCurrentFrame::applySpeedStep()
   laPlaySpeed->setText(QString("%1\xC3\x97").arg(fi));
 }
 
-//! Create a temporary MKV file for H.264/H.265 playback
-//! This muxes the ES video and audio so mpv can seek and sync properly
-QString TTCurrentFrame::createTempMkvForPlayback()
+//! Collect the parameters of the H.264/H.265 playback mux (the ES video and
+//! the first audio track, muxed so mpv can seek and sync properly). The mux
+//! itself runs in TTPlaybackMuxTask, started by startPlaybackMux().
+bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
 {
-  QString tempMkv = QDir(TTSettings::instance()->tempDirPath()).filePath("ttcut-ng_playback_temp.mkv");
-
-  // Remove old temp file if exists
-  QFile::remove(tempMkv);
+  // One file per mux (pid + counter): a mux that is being discarded may still
+  // be writing or removing its output while the next one starts.
+  static int muxCounter = 0;
+  params.outputFile = QDir(TTSettings::instance()->tempDirPath()).filePath(
+      QString("ttcut-ng_playback_%1_%2.mkv")
+          .arg(QCoreApplication::applicationPid()).arg(++muxCounter));
+  params.videoFile = videoStream->filePath();
 
   // Get frame rate and A/V offset from .info file
   double frameRate = videoStream->frameRate();
@@ -1022,38 +1124,34 @@ QString TTCurrentFrame::createTempMkvForPlayback()
 
   // Without a valid frame rate the default-duration math below divides by zero
   // (frameDurationNs would be UB) and playback timing would be meaningless.
-  // Bail out; the caller treats an empty result as "playback unavailable".
+  // Bail out; the caller treats false as "playback unavailable".
   if (frameRate <= 0) {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
         QString("Cannot create playback MKV: no valid frame rate for %1")
             .arg(videoStream->filePath()));
-    return QString();
+    return false;
   }
 
-  // Set up MKV muxer
   int frameDurationNs = static_cast<int>(1000000000.0 / frameRate);
-  TTMkvMergeProvider mkvProvider;
-  mkvProvider.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-  mkvProvider.setIsPAFF(videoStream->isPAFF(), videoStream->paffLog2MaxFrameNum());
-  mkvProvider.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType()));
-  if (avOffsetMs != 0) {
-    mkvProvider.setAudioSyncOffset(avOffsetMs);
-  }
+  params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
+  params.isPAFF              = videoStream->isPAFF();
+  params.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
+  params.videoCodecId        = TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType());
+  params.audioSyncOffsetMs   = avOffsetMs;
 
   // Collect audio file(s)
-  QStringList audioFiles;
   if (mAVItem->audioCount() > 0) {
     TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
     if (audioStream != 0) {
-      audioFiles << audioStream->filePath();
+      params.audioFiles << audioStream->filePath();
     }
   }
 
   // Display-PTS: pass the source display-order map so B-frames get true
   // display timestamps (uncut stream -> indices are already compact 0..N-1).
   // Any negative entry (HEVC dropped-RASL slot) -> loud linear fallback;
-  // mTempPlaybackHasDisplayPts keys ALL time<->index conversions (D2/D3).
-  mTempPlaybackHasDisplayPts = false;
+  // a non-empty list keys ALL time<->index conversions (D2/D3) via
+  // mTempPlaybackHasDisplayPts once the mux succeeded.
   if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
     const TTDisplayOrderMap& dmap = h26x->displayOrderMap();
     if (dmap.isValid() && dmap.count() > 0) {
@@ -1075,27 +1173,13 @@ QString TTCurrentFrame::createTempMkvForPlayback()
           int d = dmap.decodeToDisplay(i);
           order.append(d >= 0 ? d : nextDropped++);
         }
-        mkvProvider.setVideoDisplayOrder(order);
-        mTempPlaybackHasDisplayPts = true;
+        params.displayOrder = order;
         if (nextDropped > maxReal + 1 && TTSettings::instance()->logUI())
           qDebug() << "Playback: display map has" << (nextDropped - maxReal - 1)
                    << "dropped slots - parked behind last real slot" << maxReal;
       }
     }
   }
-
-  if (TTSettings::instance()->logUI())
-      qDebug() << "Creating temp MKV via libav:" << videoStream->filePath()
-               << "displayPts=" << mTempPlaybackHasDisplayPts;
-
-  if (!mkvProvider.mux(tempMkv, videoStream->filePath(), audioFiles)) {
-    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("Temp MKV creation failed: %1").arg(mkvProvider.lastError()));
-    return QString();
-  }
-
-  if (TTSettings::instance()->logUI())
-      qDebug() << "Temp MKV created:" << tempMkv;
-  return tempMkv;
+  return true;
 }
 

@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /* SPDX-License-Identifier: GPL-3.0-or-later                                  */
 /* Benchmark for the playback temp-MKV mux (2026-08-17): reproduces the       */
-/* TTMkvMergeProvider::mux call from TTCurrentFrame::createTempMkvForPlayback */
+/* TTMkvMergeProvider::mux call behind TTCurrentFrame::startPlaybackMux()    */
 /* to measure where the wall-clock goes. libav alone reads+parses the same   */
 /* file at >1.5 GB/s; the in-app mux ran at ~22 MB/s.                        */
 /*                                                                            */

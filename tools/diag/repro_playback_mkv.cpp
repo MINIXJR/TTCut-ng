@@ -1,5 +1,5 @@
 // Builds the H.264/H.265 playback temp MKV the way
-// TTCurrentFrame::createTempMkvForPlayback() does (default duration from the
+// TTCurrentFrame::buildPlaybackMuxParams() + TTPlaybackMuxTask do (default duration from the
 // stream frame rate, PAFF flag + log2_max_frame_num, display-order PTS with
 // dropped slots parked behind the last real slot, first audio track), so the
 // file can be played headless with mpv/ffmpeg to reproduce decoder messages.

@@ -243,7 +243,7 @@ Demux tool for H.264/H.265 TS files:
 
 **Known limitations:**
 
-1. **Video playback delay (first play only)**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer), because H.264/H.265 elementary streams lack the timestamps required for seeking and A/V synchronization. This causes a brief delay before playback starts. Since v0.71.0 the temp MKV is cached (fingerprint-based) across STOP→PLAY, so the delay only occurs on the first play (and after the source changes), not on every play. MPEG-2 playback does not have this limitation.
+1. **Video playback delay (first play only)**: When playing H.264/H.265 video from the "Current Frame" widget, TTCut-ng must first create a temporary MKV file (muxing video + audio with libav matroska muxer), because H.264/H.265 elementary streams lack the timestamps required for seeking and A/V synchronization. This causes a brief delay before playback starts; the mux runs on a worker thread (`TTPlaybackMuxTask`) behind a cancellable progress dialog, so the window stays responsive. Since v0.71.0 the temp MKV is cached (fingerprint-based) across STOP→PLAY, so the delay only occurs on the first play (and after the source changes), not on every play. MPEG-2 playback does not have this limitation.
 
 **Smart Cut seam handling (H.264 PAFF and beyond):**
 
