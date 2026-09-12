@@ -53,7 +53,7 @@ norm() {   # norm <dir-to-mask>
   sed -E -e "s|$1|<OUT>|g" -e 's/[0-9]+ ?ms\b/N ms/g' -e 's/0x[0-9a-fA-F]+/0xX/g' \
       -e 's/[0-9]+\.[0-9]+ ?s\b/N s/g' -e '/^\[INFO\] +-rw/d' -e '/^# Generated:/d' \
       -e 's/\{[0-9a-f-]{36}\}/{UUID}/g' -e 's/\[[0-9]{2}:[0-9]{2}:[0-9]{2}\]/[T]/g' \
-      -e 's/events=[0-9]+/events=N/g' -e 's/max [0-9]+%/max N%/g' \
+      -e 's/events=[0-9]+/events=N/g' -e 's/max [0-9]+%/max N%/g' -e 's/\[([a-z0-9_]+):[0-9]+\]/[\1:N]/g' \
       -e 's/(armedAtEvent|cancelDeliveredAtEvent)=[0-9]+/\1=N/g' -e 's/remaining tasks +[0-9]+/remaining tasks N/g' \
       -e '/^(finished|aborted) +"CutTask"/d' -e '/^QUuid\("\{UUID\}"\) +(total steps|finished) +[0-9]+$/d' \
       -e '/took|elapsed|Duration:|real|user|sys/d'
