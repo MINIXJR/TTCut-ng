@@ -286,7 +286,12 @@ class TTAVData : public QObject
     //! thread only - onUserAbortRequest() runs re-entrantly from mplexPart()'s
     //! own qApp->processEvents(), never from another thread.
     TTMplexProvider*  mpMplexProvider = nullptr;
-    TTCutProjectData* mpProjectData;
+    //! The project file being read; owned between readProjectFile() and
+    //! whichever of onReadProjectFileFinished/Aborted ends that read.
+    //! Initialised here because readProjectFile deletes the previous one
+    //! before it assigns: an uninitialised pointer crashed the first read
+    //! (found by tools/diag/test_project_load_rejected, run 5).
+    TTCutProjectData* mpProjectData = nullptr;
     int               mCurrentFramePosition;  // Track Current Frame widget position for frame search
 
     // Pending VDR markers to be converted to cut entries after video stream is loaded

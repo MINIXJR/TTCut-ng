@@ -162,6 +162,11 @@ TTCutMainWindow::TTCutMainWindow()
 
   connectMenuSignals();
   updateRecentFileActions();
+  // The recent-files menu is the canonical subscriber of the settings list
+  // (comment on TTSettings::recentFilesChanged); before, insertRecentFile
+  // walked every top-level widget by hand to refresh it.
+  connect(TTSettings::instance(), &TTSettings::recentFilesChanged,
+          this, &TTCutMainWindow::updateRecentFileActions);
   connect(mpAVData, qOverload<TTThreadTask*, int, const QString&, quint64>(&TTAVData::statusReport),
           this, &TTCutMainWindow::onStatusReport);
 
@@ -532,24 +537,28 @@ void TTCutMainWindow::onFileOpen()
 /* /////////////////////////////////////////////////////////////////////////////
  * Menu "File save" action
  */
-void TTCutMainWindow::onFileSave()
+QString TTCutMainWindow::askProjectFileName(const QString& title)
 {
-  if (mpAVData->avCount() == 0) return;
+  const QString prjName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
+  const QFileInfo prjFileInfo(QDir(TTSettings::instance()->lastDirPath()), prjName);
 
-  // Ask for file name
+  return QFileDialog::getSaveFileName(this, title,
+      prjFileInfo.absoluteFilePath(),
+      "TTCut Project (*.ttcut)");
+}
+
+bool TTCutMainWindow::onFileSave()
+{
+  if (mpAVData->avCount() == 0) return false;
+
+  // No save target yet (never saved, or a project that was only opened - the
+  // open path deliberately leaves projectFileName empty, see the comment on
+  // mProjectDisplayName): ask for one.
   if (TTSettings::instance()->projectFileName().isEmpty())
   {
-    QString prjName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
-    TTSettings::instance()->setProjectFileName(prjName);
-    QFileInfo prjFileInfo(QDir(TTSettings::instance()->lastDirPath()), prjName);
-
-    QString chosen = QFileDialog::getSaveFileName(this,
-        tr("Save project-file"),
-        prjFileInfo.absoluteFilePath(),
-        "TTCut Project (*.ttcut)");
+    const QString chosen = askProjectFileName(tr("Save project-file"));
+    if (chosen.isEmpty()) return false;
     TTSettings::instance()->setProjectFileName(chosen);
-
-    if (TTSettings::instance()->projectFileName().isEmpty()) return;
   }
 
   // append project file extension
@@ -576,12 +585,13 @@ void TTCutMainWindow::onFileSave()
   catch (const TTException& ex)
   {
     log->errorMsg(__FILE__, __LINE__, tr("error save project file: %1").arg(TTSettings::instance()->projectFileName()));
-    return;
+    return false;
   }
 
   mProjectDisplayName =
       QFileInfo(TTSettings::instance()->projectFileName()).completeBaseName();
   setProjectModified(false);   // also refreshes the window title
+  return true;
 }
 
 
@@ -590,28 +600,18 @@ void TTCutMainWindow::onFileSave()
  */
 void TTCutMainWindow::onFileSaveAs()
 {
-  if (mpAVData->avCount() == 0) {
-    return;
-  }
+  if (mpAVData->avCount() == 0) return;
 
-  {
-    QString prjName = ttChangeFileExt(mpCurrentAVDataItem->videoStream()->fileName(), "ttcut");
-    TTSettings::instance()->setProjectFileName(prjName);
-  }
-  QFileInfo prjFileInfo(QDir(TTSettings::instance()->lastDirPath()), TTSettings::instance()->projectFileName());
+  // The dialog result becomes the save target only when it is a real name:
+  // the former code assigned it unconditionally, so cancelling Save as threw
+  // away the save target of a project that had one (code-audit run 5, C2).
+  const QString chosen = askProjectFileName(tr("Save project-file as"));
+  if (chosen.isEmpty()) return;
 
-  TTSettings::instance()->setProjectFileName(QFileDialog::getSaveFileName( this,
-      tr("Save project-file as"),
-      prjFileInfo.absoluteFilePath(),
-      "TTCut Project (*.ttcut)" ));
+  TTSettings::instance()->setProjectFileName(chosen);
+  TTSettings::instance()->setLastDirPath(QFileInfo(chosen).absolutePath());
 
-  if (!TTSettings::instance()->projectFileName().isEmpty())
-  {
-    QFileInfo fInfo(TTSettings::instance()->projectFileName());
-    TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
-
-    onFileSave();
-  }
+  onFileSave();
 }
 
 
@@ -632,9 +632,14 @@ void TTCutMainWindow::onFileRecent()
  */
 void TTCutMainWindow::onFileExit()
 {
+  // Only close(). closeEvent() may refuse (Cancel in the unsaved-changes
+  // dialog, or a "Save" that wrote nothing), and the application then has to
+  // stay - the former unconditional qApp->quit() here ended it anyway, so
+  // Cancel closed the application it was meant to keep open (code-audit
+  // run 5, finding C3). When the window really closes, Qt's
+  // quitOnLastWindowClosed and main()'s lastWindowClosed connection end the
+  // application, exactly as they do for the window's own close button.
   close();
-
-  qApp->quit();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -670,8 +675,12 @@ void TTCutMainWindow::closeEvent(QCloseEvent* event)
       event->ignore();
       return;
     }
-    if (reply == QMessageBox::Save) {
-      onFileSave();
+    if (reply == QMessageBox::Save && !onFileSave()) {
+      // Nothing was written - the file dialog was cancelled or the write
+      // failed (the error goes to the log). Closing now would drop the
+      // changes the user just asked to save.
+      event->ignore();
+      return;
     }
   }
 
@@ -1004,9 +1013,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
     TTStreamPointVideoWorker* videoWorker = new TTStreamPointVideoWorker(
       vs->streamType(), videoHeaders, videoIndex, vs->frameRate());
 
-    connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
-            this, &TTCutMainWindow::onPointsDetected);
-    startAnalysisTask(videoWorker);
+    startDetectorTask(videoWorker);
   }
 
   // Pillarbox detection decodes I-frames; it needs the index list, which every
@@ -1029,9 +1036,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
       TTSettings::instance()->spPillarboxSampleSeconds(),
       preBuiltIndex);
 
-    connect(aspectTask, &TTAspectScanTask::pointsDetected,
-            this, &TTCutMainWindow::onPointsDetected);
-    startAnalysisTask(aspectTask);
+    startDetectorTask(aspectTask);
   }
 
   // AC3 5.1 anomaly scan (audio-anomaly-repair, Task 6): background scan for
@@ -1065,9 +1070,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
         TTSettings::instance()->spDetectSilence(), TTSettings::instance()->spSilenceThresholdDb(), TTSettings::instance()->spSilenceMinDuration(),
         TTSettings::instance()->spDetectAudioChange(), audioHeaders);
 
-      connect(audioWorker, &TTStreamPointAudioWorker::pointsDetected,
-              this, &TTCutMainWindow::onPointsDetected);
-      startAnalysisTask(audioWorker);
+      startDetectorTask(audioWorker);
     } else {
       mSkippedAnalysisNotes << tr("Audio analysis (silence, format changes): no "
                                   "audio track loaded - skipped");
@@ -1122,9 +1125,7 @@ bool TTCutMainWindow::startAudioAnomalyScan()
     ac3Track->filePath(), ac3TrackIndex, vs->frameRate(),
     mpAVData->extraFrameIndices(), mpAVData->audioGapFrameRanges(vs->frameRate()));
 
-  connect(anomalyTask, &TTAudioAnomalyScanTask::pointsDetected,
-          this, &TTCutMainWindow::onPointsDetected);
-  startAnalysisTask(anomalyTask);
+  startDetectorTask(anomalyTask);
   mpCurrentAVDataItem->setAnomalyScanStarted();
   return true;
 }
@@ -2162,14 +2163,9 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
   while (list.size() > MaxRecentFiles) {
     list.removeLast();
   }
+  // Every main window's menu refreshes itself on recentFilesChanged (wired
+  // in the constructor).
   TTSettings::instance()->setRecentFileList(list);
-
-  for (QWidget* widget : QApplication::topLevelWidgets()) {
-    TTCutMainWindow* mainWin = qobject_cast<TTCutMainWindow*>(widget);
-    if (mainWin) {
-      mainWin->updateRecentFileActions();
-    }
-  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

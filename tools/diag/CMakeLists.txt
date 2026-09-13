@@ -297,6 +297,10 @@ diag_tool(test_cut_outcome     AV WIDGETS SOURCES)
 diag_tool(test_partial_track     AV WIDGETS SOURCES)
 target_link_libraries(test_partial_track PRIVATE ttcut-core)
 # Loads and writes a project through TTAVData, so it needs the whole core.
+# A project that starts no open task must still end its load (code-audit
+# run 5, finding C4); drives TTAVData directly, so it needs the whole core.
+diag_tool(test_project_load_rejected AV WIDGETS SOURCES)
+target_link_libraries(test_project_load_rejected PRIVATE ttcut-core)
 diag_tool(test_project_roundtrip AV WIDGETS SOURCES)
 target_link_libraries(test_project_roundtrip PRIVATE ttcut-core)
 # Drives TTAVData::readProjectFile() with a failing audio track (gate for
@@ -305,6 +309,9 @@ diag_tool(test_open_track_failure AV WIDGETS SOURCES)
 target_link_libraries(test_open_track_failure PRIVATE ttcut-core)
 # Drives TTCutMainWindow::startAnalysisTask() offscreen (gate for finding B1
 # of code-audit run 4), so it needs the whole core.
+# Exit must honour what closeEvent decided (code-audit run 5, finding C3).
+diag_tool(test_exit_cancel AV WIDGETS SOURCES)
+target_link_libraries(test_exit_cancel PRIVATE ttcut-core)
 diag_tool(test_analysis_task_lifetime AV WIDGETS SOURCES)
 target_link_libraries(test_analysis_task_lifetime PRIVATE ttcut-core)
 # Drives TTAVData::cutSubtitleTracks() and planAudioCut() directly, so it
@@ -410,7 +417,7 @@ add_custom_target(diag DEPENDS
   test_anomalyscan
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
-  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)

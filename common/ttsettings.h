@@ -330,7 +330,6 @@ public:
   int     mkvChapterInterval() const       { return mMkvChapterInterval; }
   void    setMkvChapterInterval(int v);
 
-  int     audioOnlyFormat() const          { return mAudioOnlyFormat; }
 
 
   // ----- Mux/Audio Working Set (Phase 2b, transient per-cut/per-project) ----

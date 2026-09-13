@@ -175,13 +175,15 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
 /* /////////////////////////////////////////////////////////////////////////////
  * Deserialize an AVDataItem from xml
  */
-void TTCutProjectData::deserializeAVDataItem(TTAVData* avData)
+int TTCutProjectData::deserializeAVDataItem(TTAVData* avData)
 {
+  int started = 0;
   for (int i = 1; i < xmlNodeList->size(); i++) {
     QDomElement elem = xmlNodeList->at(i).toElement();
     if (elem.isNull() || elem.tagName() != "Video") continue;
-    parseVideoSection(elem.childNodes(), avData);
+    if (parseVideoSection(elem.childNodes(), avData)) started++;
   }
+  return started;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -206,11 +208,11 @@ void TTCutProjectData::createDocumentStructure()
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData)
+bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData)
 {
   if (videoNodesList.size() < 2) {
     qDebug("TTCutProjectData::parseVideoSection -> insufficient nodes");
-    return;
+    return false;
   }
   int     order = videoNodesList.at(0).toElement().text().toInt();
   QString rawName = videoNodesList.at(1).toElement().text();
@@ -218,14 +220,14 @@ void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
   if (name.isEmpty()) {
     qWarning("TTCutProjectData::parseVideoSection -> rejected unsafe path: %s",
              qPrintable(rawName));
-    return;
+    return false;
   }
 
   qDebug("TTCutProjectData::parseVideoSection -> doOpenVideoStream...");
   TTAVItem* avItem = avData->doOpenVideoStream(name, order);
   if (!avItem) {
     qDebug("TTCutProjectData::parseVideoSection -> doOpenVideoStream returned null");
-    return;
+    return false;
   }
 
   qDebug("after doOpenVideoStream");
@@ -251,6 +253,7 @@ void TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
 
   avData->sortCutItemsByOrder();
   avData->sortMarkerByOrder();
+  return true;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

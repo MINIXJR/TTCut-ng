@@ -54,7 +54,12 @@ class TTCutProjectData
     void serializeAVDataItem(const TTAVItem* vitem);
     void serializeStreamPoints(const QList<TTStreamPoint>& points);
     void serializeLogoData(const TTLogoProjectData& logoData);
-    void deserializeAVDataItem(TTAVData* avData);
+    //! Every <Video> section of the document, in order. Returns how many of
+    //! them actually started an open task - a section with too few nodes or
+    //! a path resolveProjectPath rejects is skipped, and a project where
+    //! that leaves zero videos never gets a task and therefore never a pool
+    //! exit (code-audit run 5, finding C4); the caller ends the load itself.
+    int  deserializeAVDataItem(TTAVData* avData);
     QList<TTStreamPoint> deserializeStreamPoints();
     TTLogoProjectData deserializeLogoData();
     void deserializeSettings();
@@ -74,7 +79,8 @@ class TTCutProjectData
     QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     QDomElement writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order);
-    void        parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData);
+    //! One <Video> section; false when it was skipped without starting an open task.
+    bool        parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData);
     void        parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem);
     static void parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
     static void parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);

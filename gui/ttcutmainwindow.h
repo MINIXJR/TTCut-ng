@@ -66,7 +66,11 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onOpenSubtitleFile();
     void onFileNew();
     void onFileOpen();
-    void onFileSave();
+    //! Writes the project; false when nothing was written - no AV item, the
+    //! file dialog was cancelled, or writeProjectFile threw. The close
+    //! handler needs to know, so that "Save" in the unsaved-changes dialog
+    //! cannot end in a silent exit without a file.
+    bool onFileSave();
     void onFileSaveAs();
     void onFileRecent();
     void onFileExit();
@@ -158,6 +162,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! task's own pointsDetected first. Public so that
     //! tools/diag/test_analysis_task_lifetime can drive it with a dummy task.
     void startAnalysisTask(TTThreadTask* task);
+    //! Connect a detector's own pointsDetected to the shared result slot and
+    //! hand the task to startAnalysisTask(). The four stream-point detectors
+    //! (video, aspect, audio, anomaly) declare the same pointsDetected
+    //! signature, so this is the whole start sequence they share.
+    template <class Task>
+    void startDetectorTask(Task* task)
+    {
+      connect(task, &Task::pointsDetected, this, &TTCutMainWindow::onPointsDetected);
+      startAnalysisTask(task);
+    }
 
   private slots:
     void onSliderDecodeTimer();
@@ -174,6 +188,11 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! File-open dialog starting in lastDirPath; the chosen file's directory
     //! becomes the new lastDirPath. Empty when cancelled.
     QString pickFileAndRememberDir(const QString& title, const QString& filter);
+    //! Save dialog for the project file, starting at <video base>.ttcut in
+    //! lastDirPath. Returns the chosen path, or an empty string when the
+    //! dialog was cancelled - the caller decides whether it becomes the new
+    //! save target, so a cancel never clears the one in place.
+    QString askProjectFileName(const QString& title);
     //! Create the progress dialog on first use and wire its Cancel.
     void ensureProgressBar();
 

@@ -1218,12 +1218,23 @@ void TTAVData::readProjectFile(const QFileInfo& fInfo)
   connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onReadProjectFileFinished);
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
+  // A read that ended without its handlers (see below) left its object
+  // behind; the handlers are the only other place that frees it.
+  delete mpProjectData;
   mpProjectData = new TTCutProjectData(fInfo);
 
   try
   {
 	  mpProjectData->readXml();
-	  mpProjectData->deserializeAVDataItem(this);
+	  // No video section started an open task - a project with no <Video> at
+	  // all, or one whose every path was rejected. Nothing runs on the pool,
+	  // so neither exit() nor aborted() would ever come and the load would
+	  // stay open forever (code-audit run 5, finding C4): end it here.
+	  if (mpProjectData->deserializeAVDataItem(this) == 0) {
+	    log->errorMsg(__FILE__, __LINE__,
+	        QString("no video stream could be opened from project file %1").arg(fInfo.filePath()));
+	    onReadProjectFileAborted();
+	  }
   }
   catch (const TTException& ex)
   {
@@ -2423,7 +2434,7 @@ void TTAVData::onCutAborted()
 
 // /////////////////////////////////////////////////////////////////////////////
 // Audio-only cut: extracts the audio track(s) for the kept segments without
-// touching video. Output format is selected by TTSettings::audioOnlyFormat():
+// touching video. Output format is selected by TTSettings::workingAudioOnlyFormat():
 //   AOF_OriginalES   — one ES file per track (.ac3, .mp2, ...)
 //   AOF_OriginalMKA  — one .mka with all tracks (stream-copy)
 //   AOF_MP3          — one .mp3 per track (re-encode, Stage 2)

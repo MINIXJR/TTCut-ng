@@ -99,6 +99,10 @@ container_sync         unit  120  test_container_sync
 settings_cancel        unit  120  test_settings_cancel
 analysis_task_lifetime unit  120  test_analysis_task_lifetime
 streampoint_model_time unit  120  test_streampoint_model_time
+project_load_rejected  unit  120  test_project_load_rejected
+exit_cancel            tux   300  test_exit_cancel
+exit_discard           tux   300  test_exit_cancel
+exit_savefail          tux   300  test_exit_cancel
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -218,6 +222,10 @@ gate_container_sync()        { "$D/test_container_sync"; }
 gate_settings_cancel()       { "$D/test_settings_cancel"; }
 gate_analysis_task_lifetime() { "$D/test_analysis_task_lifetime"; }
 gate_streampoint_model_time() { "$D/test_streampoint_model_time"; }
+gate_project_load_rejected() { "$D/test_project_load_rejected" "$W"; }
+gate_exit_cancel()           { need "$V264"; "$D/test_exit_cancel" "$V264" cancel; }
+gate_exit_discard()          { need "$V264"; "$D/test_exit_cancel" "$V264" discard; }
+gate_exit_savefail()         { need "$V264"; "$D/test_exit_cancel" "$V264" savefail; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
