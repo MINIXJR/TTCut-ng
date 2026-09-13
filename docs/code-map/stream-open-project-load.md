@@ -1,5 +1,5 @@
 ---
-base_commit: 026aa9fb
+base_commit: 2c8032f4b20ab777c89110ed23da9470d98f31f8
 last_verified: 2026-09-13
 sources:
   - data/ttavdata.h
@@ -76,7 +76,7 @@ flowchart TD
     MWR["TTCutMainWindow::onAVDataReloaded<br/>audio/subtitle tree reload"]
     MWP["TTCutMainWindow::onOpenProjectFileFinished<br/>flag release, recent file, title"]
     GATE["maybeStartAutoAnomalyScan<br/>gate, zero-timer"]
-    SP["stream points / logo / VDR<br/>onStreamPointsLoaded, onLogoDataLoaded,<br/>onVideoPointsDetected"]
+    SP["stream points / logo / VDR<br/>onStreamPointsLoaded, onLogoDataLoaded,<br/>onPointsDetected"]
     CLOSE["TTCutMainWindow::closeProject"]
 
     GUI -->|"video path"| OPEN

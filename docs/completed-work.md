@@ -2438,6 +2438,59 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   --target diag` baut nicht jeden Harness (`test_extra_index_rank` fehlte in
   der DEPENDS-Liste, ein alter Harness lief zuerst); ein Gate auf Material
   ohne Feldpaare ist leer — der Harness liefert dafür SKIP=77.
+- **Code-Audit, vierter Lauf (nach Karte `stream-points.md`)** → **ERLEDIGT
+  2026-09-13** (Branch `cleanup/code-audit-2026-09-13`, Fahrplan Schritt 5;
+  noch nicht gemergt). Scan vom 2026-09-13 auf die 26 Quelldateien der
+  Landezonen-Karte gefiltert (257 Kandidaten im Scope, 55 nie beurteilt),
+  zwei Sonnet-Klassifizierer (data, gui), 55 Urteile (15 consolidate, 31
+  deliberate, 9 documented), 12 Layer-3-Rulings; die vier Lese-Befunde der
+  Karte im Code belegt. Fünf Batches, je ein Commit mit Gate: A Mechanik
+  (`3ce254f4`: `explicit`, `static`, `const`, Key_B/Key_F-Fallthrough,
+  `tr("Marker (manual)")` statt des deutschen Literals); B Analyse-Start und
+  Logo-Lader (`f2198216`: `startAnalysisTask` verdrahtet `finished`/`aborted`
+  an den Zähler **und** an `deleteLater` — die beiden Stream-Point-Worker
+  lebten bis dahin nach jeder Analyse weiter; `onPointsDetected` statt zwei
+  identischer Slots; `createAnalysisWrapper`; ein markad-Lader
+  `loadMarkadLogoProfile` für Dateidialog, Projekt und Autoload, MPEG-2
+  dekodiert weiter über das Vorschaufenster; Statustext „could not be
+  loaded" statt „verified"); C Daten (`613a132b`:
+  `TTAVItem::findAudioRepairOverlapping`, `applyPending` für Sprache/Delay
+  frisch geöffneter Spuren, `TTCutList::isH26xCut`); D Navigation
+  (`91dba022`: `wireSearch`/`startSearch`/`setSearchRunning` für die drei
+  gerichteten Suchen, neun Slots und drei statische Setter weg; Wegwerf-
+  Prüfprogramm belegte Signal-Argumente, Abbruch-Signale, Sperre und
+  Laufzustand); E Zeitspalte (`0400b9a0`:
+  `TTStreamPointModel::setExtraFrameIndices`, Anzeige = (Index − Extras
+  davor) / fps wie Navigation und Schnittliste; Gate
+  `test_streampoint_model_time`). Gates je Batch: `run-gates.sh` 78 → 80
+  PASS (`analysis_task_lifetime`, `streampoint_model_time`),
+  `gate_cut_identity.sh` fünf Fixtures identisch, Refactor-Suiten
+  harness/cutter/mpv ref4 == Batch, 21 Screenshots byteidentisch bis auf
+  die Plattenplatz-Ziffern des Schnittdialogs. Rescan nach dem Umbau: 12 neu
+  im Scope — zehn Verdrahtungs-Idiome mit geänderter Standortzahl, das
+  `applyPending`-Paar (konsolidierte Form), ein cppcheck-Fund (`vs` nur noch
+  Nullprüfung, behoben); zweiter Rescan
+  brachte einen aufgeschobenen Kandidaten nach (setTabData-Idiom dreier
+  Einstellungsseiten, deliberate), der dritte keinen mehr — konvergiert. Store
+  `docs/code-audit/build-verdicts-2026-09-13.py` (67 Zeilen, alle 15
+  consolidate erledigt). Karten: `stream-points.md` (vier Kandidaten
+  erledigt, drei Pitfalls ersetzt, neuer Pitfall „unbekannter `<Type>` wird
+  `ManualMarker`"), `detection-and-search.md`,
+  `stream-open-project-load.md` (Slot-Name), `playback.md` und
+  `settings-state.md` per Symbol-Grep geprüft, alle fünf auf HEAD
+  gestempelt. Belege, die den Gate-Apparat änderten: LeakSanitizer sieht
+  das Worker-Leck NICHT (Signalverbindungen halten die Objekte erreichbar)
+  — der Harness treibt die echte Methode mit einem endenden und einem
+  abbrechenden Dummy-Task und schlägt ohne die `deleteLater`-Zeilen fehl
+  (gegengeprüft); `gate_refactor_identity.sh` isoliert seit `60af547d`
+  `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` (eine Nutzer-Einstellung cabac=0→1
+  brach den Vergleich) und maskiert seit `f6733f06` die libx264-Statistik
+  des Falls `previewcut_video`, dessen Abbruch mitten im Encode landet
+  (P:10/11/13 auf demselben Baum). Nicht erklärt: ein Screenshot-Lauf
+  zeigte das Statuslabel des Marker-Widgets unübersetzt („Analysis
+  running..."), der Wiederholungslauf war byteidentisch zur Referenz; Batch
+  B berührt weder das Widget noch `trans/`. Offen: Merge nach `master`,
+  lupdate für die neuen tr()-Strings im Release-Skill.
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**
   - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den

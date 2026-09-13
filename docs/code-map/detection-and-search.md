@@ -1,5 +1,5 @@
 ---
-base_commit: 5a7601a0
+base_commit: 2c8032f4b20ab777c89110ed23da9470d98f31f8
 last_verified: 2026-09-13
 sources:
   - data/ttanalysislog.cpp
@@ -64,8 +64,10 @@ defekte Center+LFE-Bursts in Material, dessen LFE sonst digital still ist
 Komponente 1). Erbt wie die anderen beiden direkt `TTThreadTask`, verbindet
 sich identisch (`finished`/`aborted` → `onAnalysisWorkerFinished`, zählt in
 `mStreamPointWorkersRunning`) und liefert `pointsDetected(QList<TTStreamPoint>)`
-an denselben Slot wie der Voll-Scan (`TTCutMainWindow::onVideoPointsDetected`)
-— kein eigener Slot.
+an denselben Slot wie der Voll-Scan (`TTCutMainWindow::onPointsDetected`, seit
+`f2198216` der eine Ergebnis-Slot aller Detektoren) — kein eigener Slot. Die
+Verdrahtung (`finished`/`aborted` → Zähler **und** `deleteLater`, Pool-Start)
+macht `TTCutMainWindow::startAnalysisTask` für alle vier Aufgaben gleich.
 
 Und eine Bildanalyse steht **ausserhalb** dieser Familie: die Gleichbild-Suche
 `TTFrameSearchTask` (`data/ttframesearchtask.cpp`). Sie erbt direkt von
