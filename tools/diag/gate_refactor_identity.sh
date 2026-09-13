@@ -43,14 +43,22 @@ FIX="$WORK/fixtures"
 MIXED=/usr/local/src/CLAUDE_TMP/TTCut-ng/ac3fix-gate/fixtures/mixed.ac3
 export PATH="$ROOT/tools/ttcut-ac3fix:$ROOT/tools/ttcut-audiofix:$PATH"
 export QT_QPA_PLATFORM=offscreen
+# Private settings and cache, as run-gates.sh does: the harnesses read
+# TTSettings (the smart-cut abort harness takes the encoder preset/profile
+# from it), and the user's TTCut-ng.conf changes between two captures -
+# measured 2026-09-13: cabac=0 vs cabac=1 in the libx264 log made ref != cand
+# without any code change.
+export XDG_CONFIG_HOME="$WORK/xdg-config" XDG_CACHE_HOME="$WORK/xdg-cache"
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
 suite=${1:-}; mode=${2:-}
 usage() { sed -n '2,36p' "$0"; exit 1; }
 case "$suite" in demux|pts|harness|cutter|mpv|mtv) ;; *) usage;; esac
 case "$mode" in run) tag=${3:-}; [ -n "$tag" ] || usage;; compare) a=${3:-}; b=${4:-}; [ -n "$a" ] && [ -n "$b" ] || usage;; *) usage;; esac
 mkdir -p "$WORK"
 
-norm() {   # norm <dir-to-mask>
-  sed -E -e "s|$1|<OUT>|g" -e 's/[0-9]+ ?ms\b/N ms/g' -e 's/0x[0-9a-fA-F]+/0xX/g' \
+norm() {   # norm <dir-to-mask> [extra-sed-expression]
+  sed -E ${2:+-e "$2"} -e "s|$1|<OUT>|g" -e 's/[0-9]+ ?ms\b/N ms/g' -e 's/0x[0-9a-fA-F]+/0xX/g' \
+      -e 's/(arm at "[^"]*") [0-9]+/\1 N/' \
       -e 's/[0-9]+\.[0-9]+ ?s\b/N s/g' -e '/^\[INFO\] +-rw/d' -e '/^# Generated:/d' \
       -e 's/\{[0-9a-f-]{36}\}/{UUID}/g' -e 's/\[[0-9]{2}:[0-9]{2}:[0-9]{2}\]/[T]/g' \
       -e 's/events=[0-9]+/events=N/g' -e 's/max [0-9]+%/max N%/g' -e 's/\[([a-z0-9_]+):[0-9]+\]/[\1:N]/g' \
@@ -64,7 +72,11 @@ cmpdir() {   # cmpdir <a> <b>
     case "$rel" in
       *.log|*.info|*.ttcut|*.txt|*.out|*.err)
         [ -f "$b/$rel" ] || { echo "MISSING in $b: $rel"; rc=1; continue; }
-        norm "$a" < "$f" > "$na"; norm "$b" < "$b/$rel" > "$nb"
+        # previewcut_video cancels in the middle of the first clip's encode;
+        # libx264's closing statistics count the frames that made it before
+        # the cancel landed (P:10, 11, 13 seen on one tree) - not comparable.
+        case "$rel" in previewcut_video.err) x='/^\[libx264 @/d';; *) x='';; esac
+        norm "$a" "$x" < "$f" > "$na"; norm "$b" "$x" < "$b/$rel" > "$nb"
         case "$rel" in *.err) sort -o "$na" "$na"; sort -o "$nb" "$nb";; esac
         if diff -q "$na" "$nb" >/dev/null; then echo "same(norm) $rel"; else echo "DIFF(norm) $rel"; diff "$na" "$nb" | head -20; rc=1; fi ;;
       *) if [ -f "$b/$rel" ]; then if cmp -s "$f" "$b/$rel"; then echo "identical $rel"; else echo "DIFF(bytes) $rel"; rc=1; fi
