@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcutframenavigation.h"
+#include "ttthemedicon.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../data/ttavlist.h"
@@ -121,19 +122,18 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
                              "QPushButton:disabled { background-color: #554400; color: #666666; }");
 
   // Use theme icons with Qt standard icon fallback for action buttons
-  QStyle* style = QApplication::style();
-  pbGotoCutIn->setIcon(QIcon::fromTheme("go-first", style->standardIcon(QStyle::SP_ArrowBack)));
+  pbGotoCutIn->setIcon(ttThemedIcon("go-first", QStyle::SP_ArrowBack));
   pbGotoCutIn->setStyleSheet("QPushButton { color: #44cc44; }");
-  pbGotoCutOut->setIcon(QIcon::fromTheme("go-last", style->standardIcon(QStyle::SP_ArrowForward)));
+  pbGotoCutOut->setIcon(ttThemedIcon("go-last", QStyle::SP_ArrowForward));
   pbGotoCutOut->setStyleSheet("QPushButton { color: #ccaa00; }");
 
   // Add Cut = Blue accent (main action)
-  pbAddCut->setIcon(QIcon::fromTheme("list-add", style->standardIcon(QStyle::SP_FileDialogNewFolder)));
+  pbAddCut->setIcon(ttThemedIcon("list-add", QStyle::SP_FileDialogNewFolder));
   pbAddCut->setStyleSheet("QPushButton { background-color: #2a5a8a; color: white; }"
                           "QPushButton:hover { background-color: #3a6a9a; }");
 
   // Marker button = Purple (industry convention for notes/music)
-  pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
+  pbSetMarker->setIcon(ttThemedIcon("bookmark-new", QStyle::SP_DialogApplyButton));
   pbSetMarker->setStyleSheet("QPushButton { color: #9966cc; }");
 
   connect(pbNextIFrame,        &QPushButton::clicked, this, &TTCutFrameNavigation::onNextIFrame);

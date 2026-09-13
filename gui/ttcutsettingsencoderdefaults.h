@@ -39,7 +39,6 @@ private slots:
     void resetToDefaults();
 
 private:
-    void populatePresetCombo(QComboBox* cb);
     void populateMpeg2Profiles();
     void populateH264Profiles();
     void populateH265Profiles();

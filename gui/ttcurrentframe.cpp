@@ -13,9 +13,11 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcurrentframe.h"
+#include "ttthemedicon.h"
 #include "ttgotoframedialog.h"
 #include "ttmpvwrapper.h"
 #include "ttmpvrenderwidget.h"
+#include "ttframepositiontext.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../avstream/tth26xvideostream.h"
 #include "../data/ttavlist.h"
@@ -109,10 +111,9 @@ TTCurrentFrame::TTCurrentFrame(QWidget* parent)
   currentCutPosition  = -1;
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  pbPrevFrame->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_MediaSkipBackward)));
-  pbNextFrame->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_MediaSkipForward)));
-  pbSetMarker->setIcon(QIcon::fromTheme("bookmark-new", style->standardIcon(QStyle::SP_DialogApplyButton)));
+  pbPrevFrame->setIcon(ttThemedIcon("go-previous", QStyle::SP_MediaSkipBackward));
+  pbNextFrame->setIcon(ttThemedIcon("go-next", QStyle::SP_MediaSkipForward));
+  pbSetMarker->setIcon(ttThemedIcon("bookmark-new", QStyle::SP_DialogApplyButton));
   // pbPlayVideo icon is managed by setPlayingButtonState() — Play (▶) ↔ Stop (⏹)
 
   connect(pbPrevFrame,  &QPushButton::clicked, this, &TTCurrentFrame::onWidgetPrevFrame);
@@ -180,10 +181,9 @@ void TTCurrentFrame::clearCutContext()
 //! Stop (⏹); the speed buttons are enabled only while playing.
 void TTCurrentFrame::setPlayingButtonState(bool playing)
 {
-  QStyle* style = QApplication::style();
   pbPlayVideo->setIcon(playing
-      ? QIcon::fromTheme("media-playback-stop",  style->standardIcon(QStyle::SP_MediaStop))
-      : QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
+      ? ttThemedIcon("media-playback-stop", QStyle::SP_MediaStop)
+      : ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
   pbPlaySlower->setEnabled(playing);
   pbPlayFaster->setEnabled(playing);
 }
@@ -329,75 +329,39 @@ bool TTCurrentFrame::eventFilter(QObject* watched, QEvent* event)
 //! Navigate to previous I-Frame
 void TTCurrentFrame::onPrevIFrame()
 {
-  int newFramePos;
-
-  newFramePos = videoStream->moveToPrevIFrame( );
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToPrevIFrame());
 }
 
 //! Navigate to next I-Frame
 void TTCurrentFrame::onNextIFrame()
 {
-  int newFramePos;
-
-  newFramePos = videoStream->moveToNextIFrame( );
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToNextIFrame());
 }
 
 //! Navigate to previous P-Frame
 void TTCurrentFrame::onPrevPFrame()
 {
-  int newFramePos;
-
-  newFramePos = videoStream->moveToPrevPIFrame( );
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToPrevPIFrame());
 }
 
 //! Navigate to next P-Frame
 void TTCurrentFrame::onNextPFrame()
 {
-  int newFramePos;
-
-  newFramePos = videoStream->moveToNextPIFrame( );
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToNextPIFrame());
 }
 
 //! Navigate to previous frame (any type)
 void TTCurrentFrame::onPrevBFrame()
 {
   if (videoStream == 0) return;
-
-  int newFramePos = videoStream->moveToPrevFrame();
-
-  currentCutPosition = newFramePos;
-
-  mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToPrevFrame());
 }
 
 //! Navigate to next frame (any type)
 void TTCurrentFrame::onNextBFrame()
 {
   if (videoStream == 0) return;
-
-  int newFramePos = videoStream->moveToNextFrame();
-
-  currentCutPosition = newFramePos;
-
-  mpegWindow->showFrameAt(newFramePos);
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToNextFrame());
 }
 
 //! Widget button: navigate to previous frame + auto-save CutIn if cut selected
@@ -449,13 +413,7 @@ void TTCurrentFrame::onGotoCutIn(int pos)
 //! Goto cut out position
 void TTCurrentFrame::onGotoCutOut(int pos)
 {
-  int newFramePos;
-
-  newFramePos = videoStream->moveToIndexPos(pos);
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToIndexPos(pos));
 }
 
 void TTCurrentFrame::onGotoFrame(int pos)
@@ -468,14 +426,7 @@ void TTCurrentFrame::onGotoFrame(int pos)
 void TTCurrentFrame::onGotoFrame(int pos, int fast)
 {
   clearCutContext();
-
-  int newFramePos;
-
-  newFramePos = videoStream->moveToIndexPos( pos, fast );
-  mpegWindow->showFrameAt( newFramePos );
-
-  currentCutPosition = newFramePos;
-  updateCurrentPosition(newFramePos);
+  navigateAndUpdate(videoStream->moveToIndexPos(pos, fast));
 }
 
 //! Slider-drag preview: show the nearest keyframe quickly; the exact frame
@@ -519,37 +470,42 @@ void TTCurrentFrame::onMoveToEnd()
 
 void TTCurrentFrame::updateCurrentPosition(int pos)
 {
-  QString szTemp1, szTemp2;
-  int actualPos   = (pos >= 0) ? pos : videoStream->currentIndex();
-  int frame_type  = videoStream->frameType(actualPos);
-
-  szTemp1 = videoStream->frameTime(actualPos).toString("hh:mm:ss.zzz");
-
-  szTemp2 = QString(" (%1)").arg(actualPos);
-
-  szTemp2 += ttFrameTypeTag(frame_type);
-
-  szTemp1 += szTemp2;
-  laCurrentPosition->setText( szTemp1 );
-
+  const int actualPos = (pos >= 0) ? pos : videoStream->currentIndex();
+  laCurrentPosition->setText(ttFramePositionText(videoStream, actualPos));
   laCurrentPosition->update();
 
   emit newFramePosition( actualPos );
 }
 
+void TTCurrentFrame::navigateAndUpdate(int newFramePos)
+{
+  currentCutPosition = newFramePos;
+  mpegWindow->showFrameAt(newFramePos);
+  updateCurrentPosition(newFramePos);
+}
+
+int TTCurrentFrame::displayToStreamIndex(int displayIndex) const
+{
+  int index = displayIndex;
+  // MPEG-2: the stream counts field pictures as their own entries, mpv's
+  // time-pos counts display frames. The extras come from the bitstream
+  // parser (TTMpeg2VideoStream::extraIndices), NOT from the .info file,
+  // which is often empty for our recordings (TTAVData::countExtraFramesBefore
+  // would then be 0).
+  if (const auto* mpeg2vs = dynamic_cast<const TTMpeg2VideoStream*>(videoStream))
+    index = mpeg2vs->streamIndexForDisplayIndex(displayIndex);
+  if (index < 0) index = 0;
+  if (index >= static_cast<int>(videoStream->frameCount()))
+    index = static_cast<int>(videoStream->frameCount()) - 1;
+  return index;
+}
+
 void TTCurrentFrame::saveCurrentFrame()
 {
-  QString      szTemp;
-  QString      extension;
-  QString      format;
-  QStringList  fileList;
-  QString      fileName;
-  QFileDialog* fileDlg;
-
   if (videoStream == 0) return;
 
   // get the image file name
-  fileDlg = new QFileDialog( this,
+  QFileDialog* fileDlg = new QFileDialog( this,
       "save current frame",
       TTSettings::instance()->lastDirPath(),
       "Portable Network Graphics (*.png);;JPEG (*.jpg);;Bitmap (*.bmp)" );
@@ -561,9 +517,11 @@ void TTCurrentFrame::saveCurrentFrame()
   // input filename specified
   if ( fileDlg->exec() == QDialog::Accepted )
   {
-    szTemp   = fileDlg->selectedNameFilter();
-    fileList = fileDlg->selectedFiles();
-    fileName = fileList.at(0);
+    const QString szTemp   = fileDlg->selectedNameFilter();
+    const QStringList fileList = fileDlg->selectedFiles();
+    QString fileName = fileList.at(0);
+    QString format;
+    QString extension;
 
     if ( szTemp == "Portable Network Graphics (*.png)" )
     {
@@ -675,7 +633,7 @@ void TTCurrentFrame::onPlayVideo()
   if (mMuxTask) return;
 
   TTAVTypes::AVStreamType stype = videoStream->streamType();
-  bool isH264orH265 = (stype == TTAVTypes::h264_video || stype == TTAVTypes::h265_video);
+  const bool isH264orH265 = TTAVTypes::isH26x(stype);
 
   if (isH264orH265) {
     // ES files have no timestamps: mux into a temp MKV first. The temp MKV is
@@ -696,32 +654,7 @@ void TTCurrentFrame::onPlayVideo()
     return;
   }
 
-  // Compute start position in seconds from the current frame time.
-  // Default: naive currentIndex / frameRate.
-  QTime frameTime = videoStream->currentFrameTime();
-  double startSec = frameTime.hour() * 3600.0 + frameTime.minute() * 60.0
-                    + frameTime.second() + frameTime.msec() / 1000.0;
-
-  // MPEG-2 field-picture-Korrektur: bei interlaced Stream enthält der
-  // videoStream-Index einen Eintrag pro Picture (frame_picture ODER
-  // jeweils ein top/bottom field_picture). Display-Frames = Index minus
-  // extras. mpv positioniert per echter Stream-Sekunde, also umrechnen.
-  if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
-    const QList<int>& extras = mpeg2vs->extraIndices();
-    if (!extras.isEmpty()) {
-      int idx = videoStream->currentIndex();
-      int lo = 0, hi = extras.size();
-      while (lo < hi) {
-        int mid = (lo + hi) / 2;
-        if (extras[mid] < idx) lo = mid + 1;
-        else hi = mid;
-      }
-      int displayIdx = idx - lo;
-      startSec = static_cast<double>(displayIdx) / static_cast<double>(videoStream->frameRate());
-    }
-  }
-
-  // MPEG-2: seek directly in the ES; pass first audio track separately if present
+  // MPEG-2: seek directly in the ES at the still's display time; pass first audio track separately if present
   QString audioFile;
   if (mAVItem->audioCount() > 0) {
     TTAudioStream* audioStream = mAVItem->audioStreamAt(0);
@@ -729,7 +662,7 @@ void TTCurrentFrame::onPlayVideo()
       audioFile = audioStream->filePath();
   }
   beginPlayerLoad();
-  mPlayer->load(videoStream->filePath(), startSec, audioFile);
+  mPlayer->load(videoStream->filePath(), playbackSecondsForCurrentStill(), audioFile);
 }
 
 //! Everything a load has in common, run right before mPlayer->load().
@@ -903,15 +836,19 @@ void TTCurrentFrame::onPlaybackPositionChanged(double seconds)
   float frameRate = videoStream->frameRate();
   if (frameRate <= 0.0f) return;
 
-  int framePos = static_cast<int>(std::floor(seconds * static_cast<double>(frameRate)));
-  if (framePos < 0) framePos = 0;
-  if (framePos >= static_cast<int>(videoStream->frameCount()))
-    framePos = static_cast<int>(videoStream->frameCount()) - 1;
+  // Display frame -> stream index, with the MPEG-2 field-picture correction
+  // onPlaybackFinished applies to the stop position (they used to disagree
+  // by the number of extras before the position; code-audit run 3,
+  // contract finding 5).
+  const int framePos = displayToStreamIndex(
+      static_cast<int>(std::floor(seconds * static_cast<double>(frameRate))));
 
   // updateCurrentPosition(pos) with an explicit index only reads metadata
-  // (frameType / frameTime) — no stream seek, no decode, no cut-position write.
-  // It emits newFramePosition which advances the slider and stores the integer
-  // in TTAVData; both are safe to call at playback rate (~25 Hz).
+  // (frameType / frameTime) — no stream seek, no decode. It emits
+  // newFramePosition, which advances the slider, stores the integer in
+  // TTAVData and runs TTCutFrameNavigation::checkCutPosition (the Set Cut-In/
+  // Out buttons and the position they would take follow the live position);
+  // all cheap at observer rate (~10 Hz).
   updateCurrentPosition(framePos);
 }
 
@@ -945,35 +882,9 @@ void TTCurrentFrame::onPlaybackFinished()
       playbackPos = lr;
   }
 
-  // MPEG-2-Korrektur: videoStream zählt field-pictures als eigene Index-
-  // Einträge, mpv's time-pos respektiert nur Display-Frames. Die Konversion:
-  //     time = (rawIndex - extras_before(rawIndex)) / fps
-  // Wir lösen nach `rawIndex` per Fixpunkt: starten mit baseFrame=round(time*fps)
-  // und addieren extras_before bis stabil. Quelle der extras ist der Bitstream-
-  // Parser (TTMpeg2VideoStream::extraIndices), NICHT das .info-File (das ist
-  // für unsere Recordings oft leer; TTAVData::countExtraFramesBefore wäre dann 0).
-  int baseFrame = static_cast<int>(std::round(playbackPos * frameRate));
-  int newFrame  = baseFrame;
-  if (auto* mpeg2vs = dynamic_cast<TTMpeg2VideoStream*>(videoStream)) {
-    const QList<int>& extras = mpeg2vs->extraIndices();
-    if (!extras.isEmpty()) {
-      for (int it = 0; it < 5; ++it) {
-        // count extras strictly less than newFrame
-        int lo = 0, hi = extras.size();
-        while (lo < hi) {
-          int mid = (lo + hi) / 2;
-          if (extras[mid] < newFrame) lo = mid + 1;
-          else hi = mid;
-        }
-        int corrected = baseFrame + lo;
-        if (corrected == newFrame) break;
-        newFrame = corrected;
-      }
-    }
-  }
-  if (newFrame < 0) newFrame = 0;
-  if (newFrame >= static_cast<int>(videoStream->frameCount()))
-    newFrame = videoStream->frameCount() - 1;
+  // Display frame -> stream index (MPEG-2 field-picture correction, see
+  // displayToStreamIndex / TTMpeg2VideoStream::streamIndexForDisplayIndex).
+  const int newFrame = displayToStreamIndex(static_cast<int>(std::round(playbackPos * frameRate)));
 
   if (TTSettings::instance()->logUI())
     qDebug() << "Playback finished: pos" << playbackPos << "s -> frame" << newFrame
@@ -1032,7 +943,9 @@ QString TTCurrentFrame::playbackSourceFingerprint() const
 }
 
 //! Playback start time for the currently shown still frame.
-//! Display-PTS mode: the true display time of the delivered frame.
+//! MPEG-2: (index - field-picture extras before it) / fps - the ES is
+//! played directly and mpv counts display frames.
+//! H.26x, display-PTS mode: the true display time of the delivered frame.
 //! Linear fallback: deliveredDecodeIndex / fps (the temp MKV's linear scale).
 double TTCurrentFrame::playbackSecondsForCurrentStill() const
 {
@@ -1041,6 +954,9 @@ double TTCurrentFrame::playbackSecondsForCurrentStill() const
   if (fr <= 0.0f) return 0.0;
 
   int idx = videoStream->currentIndex();
+  if (const auto* mpeg2vs = dynamic_cast<const TTMpeg2VideoStream*>(videoStream))
+    return static_cast<double>(idx - mpeg2vs->extrasBefore(idx)) / static_cast<double>(fr);
+
   int decIdx = -1;
   if (mpegWindow && mpegWindow->ffmpegWrapper())
     decIdx = mpegWindow->ffmpegWrapper()->frameAt(idx).deliveredDecodeIndex;
@@ -1052,7 +968,7 @@ double TTCurrentFrame::playbackSecondsForCurrentStill() const
   }
 
   if (mTempPlaybackHasDisplayPts) {
-    if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
+    if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
       int disp = h26x->displayOrderMap().decodeToDisplay(decIdx);
       if (disp >= 0)
         return static_cast<double>(disp) / static_cast<double>(fr);
@@ -1106,21 +1022,11 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
 
   // Get frame rate and A/V offset from .info file
   double frameRate = videoStream->frameRate();
-  int avOffsetMs = 0;
-  QString infoFile = TTESInfo::findInfoFile(videoStream->filePath());
-  if (!infoFile.isEmpty()) {
-    TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded()) {
-      if (frameRate <= 0 && esInfo.frameRate() > 0) {
-        frameRate = esInfo.frameRate();
-      }
-      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
-        avOffsetMs = esInfo.avOffsetMs();
-        if (TTSettings::instance()->logUI())
-            qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
-      }
-    }
-  }
+  const TTESInfoTiming info = TTESInfo::timingForVideo(videoStream->filePath());
+  if (frameRate <= 0 && info.frameRate > 0) frameRate = info.frameRate;
+  const int avOffsetMs = info.avOffsetMs;
+  if (avOffsetMs != 0 && TTSettings::instance()->logUI())
+      qDebug() << "Playback: A/V sync offset from .info:" << avOffsetMs << "ms";
 
   // Without a valid frame rate the default-duration math below divides by zero
   // (frameDurationNs would be UB) and playback timing would be meaningless.
@@ -1152,7 +1058,7 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
   // Any negative entry (HEVC dropped-RASL slot) -> loud linear fallback;
   // a non-empty list keys ALL time<->index conversions (D2/D3) via
   // mTempPlaybackHasDisplayPts once the mux succeeded.
-  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
+  if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
     const TTDisplayOrderMap& dmap = h26x->displayOrderMap();
     if (dmap.isValid() && dmap.count() > 0) {
       // Dropped slots (decodeToDisplay == -1, e.g. RASL after the stream's

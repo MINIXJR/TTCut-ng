@@ -18,6 +18,7 @@
 #include "ui_ttcutmainwindow.h"
 
 #include <QElapsedTimer>
+#include <functional>
 #include <QTimer>
 #include <QMutexLocker>
 
@@ -76,7 +77,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onHelpAbout();
     void onHelpKeyboardShortcuts();
 
-    void onReadVideoStream(QString fName);
+    void onReadVideoStream(const QString& fName);
     void onReadAudioStream(QString fName);
     void onReadSubtitleStream(QString fName);
 
@@ -142,7 +143,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onOpenProjectFileAborted();
     void onProjectModified();
     void runScreenshotMode();
-    void runAutoCutMode(QString projectFile, QString outputPath);
+    void runAutoCutMode(const QString& projectFile, const QString& outputPath);
 
     void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
@@ -162,6 +163,33 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
 
     // Opens the settings dialog; category >= 0 selects a sidebar entry.
     void openSettingsDialog(int category);
+    //! File-open dialog starting in lastDirPath; the chosen file's directory
+    //! becomes the new lastDirPath. Empty when cancelled.
+    QString pickFileAndRememberDir(const QString& title, const QString& filter);
+    //! Create the progress dialog on first use and wire its Cancel.
+    void ensureProgressBar();
+
+    //! What the three directed searches (black frame, scene change, logo)
+    //! take from the current item; directedSearchSource() fills it and
+    //! records the start position for the not-found return.
+    struct DirectedSearchSource {
+      TTVideoStream*    vs        = nullptr;
+      TTVideoIndexList* idxList   = nullptr;
+      int               frameCount = 0;
+      TTFrameIndexBundle preBuiltIndex;
+    };
+    bool directedSearchSource(int startPos, DirectedSearchSource& src);
+    //! Wire a directed-search task (progress, found, the abort-before-run
+    //! case), mark it running and start it on the stream-point pool.
+    void launchDirectedSearch(TTSearchTask* task, void (TTCutMainWindow::*finished)(int, bool),
+                              const std::function<void(bool)>& setRunning, const QString& startMessage);
+    //! Common end of the three searches: clear the running state, jump to
+    //! the hit or back to the start position with a status message.
+    void finishDirectedSearch(int foundPos, bool wasAborted, const std::function<void(bool)>& setRunning,
+                              const QString& abortedMessage, const QString& notFoundMessage);
+    //! Headless modes: pump until the project load chain has run (or
+    //! timeoutMs passed); true when a project is in.
+    bool waitForProjectLoad(int timeoutMs);
     void closeProject();
     void navigationEnabled(bool enabled);
     void updateRecentFileActions();
@@ -180,7 +208,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     static void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
     QString formatRemaining(const TTProgressEstimator::Result& r) const;
     static QString formatDurationMs(qint64 ms);  // h:mm:ss or m:ss
-    QString progressStageName(int stage) const;
+    static QString progressStageName(int stage);
     //! Start the AC3 anomaly scan for the current AV item on the
     //! stream-point pool. Returns false when there is no AC3 track to
     //! scan (nothing started). Shared by the explicit analysis and the

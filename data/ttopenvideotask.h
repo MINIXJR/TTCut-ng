@@ -30,7 +30,7 @@ class TTOpenVideoTask : public TTThreadTask
 	Q_OBJECT
 
 	public:
-		TTOpenVideoTask(TTAVItem* avItem, QString fileName, int order);
+		TTOpenVideoTask(TTAVItem* avItem, const QString& fileName, int order);
 
   protected:
     void operation();

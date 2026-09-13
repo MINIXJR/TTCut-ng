@@ -11,6 +11,8 @@
 #include "ttcutsettingsmuxer.h"
 
 #include "../common/ttsettings.h"
+#include "../common/ttencodernames.h"
+#include "ttcombofill.h"
 
 #include <QStandardItemModel>
 
@@ -57,23 +59,14 @@ void TTCutSettingsMuxer::populateCodecMuxers()
   }
   // H.264/H.265 do not support MPG: disable 2nd item
   for (QComboBox* cb : { cbH264Muxer, cbH265Muxer }) {
-    QStandardItemModel* m = qobject_cast<QStandardItemModel*>(cb->model());
+    const QStandardItemModel* m = qobject_cast<QStandardItemModel*>(cb->model());
     if (m && m->item(1)) m->item(1)->setEnabled(false);
   }
 }
 
 void TTCutSettingsMuxer::populateMpgTarget()
 {
-  cbMpgTarget->clear();
-  cbMpgTarget->insertItem(0, "Generic MPEG1 (f0)");
-  cbMpgTarget->insertItem(1, "VCD (f1)");
-  cbMpgTarget->insertItem(2, "user-rate VCD (f2)");
-  cbMpgTarget->insertItem(3, "Generic MPEG2 (f3)");
-  cbMpgTarget->insertItem(4, "SVCD (f4)");
-  cbMpgTarget->insertItem(5, "user-rate SVCD (f5)");
-  cbMpgTarget->insertItem(6, "VCD Stills (f6)");
-  cbMpgTarget->insertItem(7, "DVD mit NAV-Sektoren (f8)");
-  cbMpgTarget->insertItem(8, "DVD (f9)");
+  ttFillCombo(cbMpgTarget, TTEncoderNames::kMpeg2MuxTargets, TTEncoderNames::kMpeg2MuxTargetCount);
 }
 
 void TTCutSettingsMuxer::populateMpgMode()
@@ -85,7 +78,7 @@ void TTCutSettingsMuxer::populateMpgMode()
 
 void TTCutSettingsMuxer::setTabData()
 {
-  TTSettings* s = TTSettings::instance();
+  const TTSettings* s = TTSettings::instance();
 
   cbMkvCreateChapters->setChecked(s->mkvCreateChapters());
   sbMkvChapterInterval->setValue(s->mkvChapterInterval());
@@ -120,8 +113,9 @@ void TTCutSettingsMuxer::saveTabData()
   s->setH265Muxer(cbH265Muxer->currentData().toInt());
 }
 
+// UI-only: TTSettings is written by saveTabData() when the dialog is
+// accepted, never while it is open (Cancel must leave the settings alone).
 void TTCutSettingsMuxer::onMkvChaptersChanged(Qt::CheckState state)
 {
-  TTSettings::instance()->setMkvCreateChapters(state == Qt::Checked);
-  sbMkvChapterInterval->setEnabled(TTSettings::instance()->mkvCreateChapters());
+  sbMkvChapterInterval->setEnabled(state == Qt::Checked);
 }

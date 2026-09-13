@@ -103,15 +103,12 @@ int TTH26xVideoStream::createHeaderList()
     frame_rate = static_cast<float>(streamInfo.frameRate);
 
     // .info file overrides ffmpeg's frame-rate detection if present
-    QString infoFile = TTESInfo::findInfoFile(filePath());
-    if (!infoFile.isEmpty()) {
-        TTESInfo esInfo(infoFile);
-        if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-            frame_rate = static_cast<float>(esInfo.frameRate());
-            setSPSFrameRate(esInfo.frameRate());
-            mLog->infoMsg(__FILE__, __LINE__,
-                QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
-        }
+    const TTESInfoTiming info = TTESInfo::timingForVideo(filePath());
+    if (info.frameRate > 0) {
+        frame_rate = static_cast<float>(info.frameRate);
+        setSPSFrameRate(info.frameRate);
+        mLog->infoMsg(__FILE__, __LINE__,
+            QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
     }
 
     bit_rate = static_cast<float>(streamInfo.bitRate) / 1000.0f;

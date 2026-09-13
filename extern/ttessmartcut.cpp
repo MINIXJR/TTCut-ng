@@ -11,6 +11,7 @@
 #include "../avstream/ttesinfo.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
+#include "../common/ttencodernames.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcalibrationstore.h"
 
@@ -306,14 +307,11 @@ bool TTESSmartCut::initialize(const QString& esFile, double frameRate)
 
     // Try to get frame rate from .info file if not provided
     if (frameRate <= 0) {
-        QString infoFile = TTESInfo::findInfoFile(esFile);
-        if (!infoFile.isEmpty()) {
-            TTESInfo info(infoFile);
-            if (info.isLoaded() && info.frameRate() > 0) {
-                frameRate = info.frameRate();
-                if (TTSettings::instance()->logSmartCut())
-                    qDebug() << "TTESSmartCut: Using frame rate from .info:" << frameRate;
-            }
+        const TTESInfoTiming info = TTESInfo::timingForVideo(esFile);
+        if (info.frameRate > 0) {
+            frameRate = info.frameRate;
+            if (TTSettings::instance()->logSmartCut())
+                qDebug() << "TTESSmartCut: Using frame rate from .info:" << frameRate;
         }
     }
 
@@ -3093,15 +3091,10 @@ bool TTESSmartCut::setupDecoder()
 // compares the probe against the real per-segment encoder SPS and warns
 // loudly on mismatch.
 // x264/x265 preset names by settings index (setupEncoder and the two probes).
-static const char* const kEncoderPresetNames[] = {
-    "ultrafast", "superfast", "veryfast", "faster", "fast",
-    "medium", "slow", "slower", "veryslow"
-};
-
 int TTESSmartCut::effectivePresetIndex() const
 {
-    return (mPresetOverride >= 0) ? qBound(0, mPresetOverride, 8)
-                                  : qBound(0, TTSettings::instance()->encoderPreset(), 8);
+    return (mPresetOverride >= 0) ? qBound(0, mPresetOverride, TTEncoderNames::kPresetCount - 1)
+                                  : qBound(0, TTSettings::instance()->encoderPreset(), TTEncoderNames::kPresetCount - 1);
 }
 
 QByteArray TTESSmartCut::probeEncoderExtradata(const char* codecName, int width, int height,
@@ -3150,16 +3143,13 @@ bool TTESSmartCut::probeEncoderPocParams()
     // Same option sources as setupEncoder (H.264 branch).
     TTSettings* s = TTSettings::instance();
     int crf        = s->encoderCrf();
-    int profileIdx = qBound(0, s->encoderProfile(), 5);
-    static const char* h264Profiles[] = {
-        "baseline", "main", "high", "high10", "high422", "high444"
-    };
+    int profileIdx = qBound(0, s->encoderProfile(), TTEncoderNames::kH264ProfileCount - 1);
     if (src.bitDepthLuma >= 10 && profileIdx < 3) profileIdx = 3;
 
     AVDictionary* opts = nullptr;
-    av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
+    av_dict_set(&opts, "profile", TTEncoderNames::kH264Profiles[profileIdx], 0);
     av_dict_set(&opts, "forced-idr", "1", 0);
-    av_dict_set(&opts, "preset", kEncoderPresetNames[effectivePresetIndex()], 0);
+    av_dict_set(&opts, "preset", TTEncoderNames::kPresets[effectivePresetIndex()], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
 
     // Interlace approximation from the source SPS: MBAFF/PAFF sources carry
@@ -3227,7 +3217,7 @@ bool TTESSmartCut::probeHevcEncoderSeamSps(const THevcSpsSeamInfo& srcSps,
     TTSettings* s = TTSettings::instance();
     int crf       = s->encoderCrf();
     AVDictionary* opts = nullptr;
-    av_dict_set(&opts, "preset", kEncoderPresetNames[effectivePresetIndex()], 0);
+    av_dict_set(&opts, "preset", TTEncoderNames::kPresets[effectivePresetIndex()], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
     av_dict_set(&opts, "profile",
                 srcSps.bitDepthLuma >= 10 ? "main10" : "main", 0);
@@ -3411,11 +3401,7 @@ bool TTESSmartCut::setupEncoder()
     if (mParser.codecType() == NALU_CODEC_H264) {
         TTSettings* s = TTSettings::instance();
         crf        = s->encoderCrf();
-        profileIdx = qBound(0, s->encoderProfile(), 5);
-
-        static const char* h264Profiles[] = {
-            "baseline", "main", "high", "high10", "high422", "high444"
-        };
+        profileIdx = qBound(0, s->encoderProfile(), TTEncoderNames::kH264ProfileCount - 1);
 
         // Auto-detect bit depth from pixel format and override profile if needed
         const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(mEncoder->pix_fmt);
@@ -3428,7 +3414,7 @@ bool TTESSmartCut::setupEncoder()
             }
         }
 
-        av_dict_set(&opts, "profile", h264Profiles[profileIdx], 0);
+        av_dict_set(&opts, "profile", TTEncoderNames::kH264Profiles[profileIdx], 0);
 
         // Force IDR frames when requesting I-frames. Without this, x264
         // produces Non-IDR I-frames (NAL type 1) which don't flush the
@@ -3441,11 +3427,7 @@ bool TTESSmartCut::setupEncoder()
         // H.265
         TTSettings* s = TTSettings::instance();
         crf        = s->encoderCrf();
-        profileIdx = qBound(0, s->encoderProfile(), 4);
-
-        static const char* h265Profiles[] = {
-            "main", "main10", "main12", "main422-10", "main444-10"
-        };
+        profileIdx = qBound(0, s->encoderProfile(), TTEncoderNames::kH265ProfileCount - 1);
 
         // Auto-detect bit depth from pixel format and override profile if needed
         const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(mEncoder->pix_fmt);
@@ -3462,7 +3444,7 @@ bool TTESSmartCut::setupEncoder()
             }
         }
 
-        av_dict_set(&opts, "profile", h265Profiles[profileIdx], 0);
+        av_dict_set(&opts, "profile", TTEncoderNames::kH265Profiles[profileIdx], 0);
 
         // HEVC seam fix: SPS-derived params (tu-depth, amp, sao, tmvp,
         // strong-intra-smoothing) so the re-encode slices stay CABAC-conform
@@ -3476,13 +3458,13 @@ bool TTESSmartCut::setupEncoder()
         }
     }
 
-    av_dict_set(&opts, "preset", kEncoderPresetNames[presetIdx], 0);
+    av_dict_set(&opts, "preset", TTEncoderNames::kPresets[presetIdx], 0);
     av_dict_set(&opts, "crf", QString::number(crf).toUtf8().constData(), 0);
 
     if (TTSettings::instance()->logSmartCut()) {
         qDebug() << "TTESSmartCut: Encoder settings -"
                  << "codec:" << (mParser.codecType() == NALU_CODEC_H264 ? "H.264" : "H.265")
-                 << "preset:" << kEncoderPresetNames[presetIdx]
+                 << "preset:" << TTEncoderNames::kPresets[presetIdx]
                  << "crf:" << crf
                  << "profile:" << profileIdx
                  << "decoder profile:" << (mDecoder ? mDecoder->profile : -1)

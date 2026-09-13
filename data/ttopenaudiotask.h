@@ -27,7 +27,7 @@ class TTOpenAudioTask : public TTThreadTask
   Q_OBJECT;
 
   public:
-    TTOpenAudioTask(TTAVItem* avItem, QString filePath, int order);
+    TTOpenAudioTask(TTAVItem* avItem, const QString& filePath, int order);
 
   protected:
     void cleanUp() override;

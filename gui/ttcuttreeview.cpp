@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "../data/ttcutlist.h"
+#include "ttthemedicon.h"
 #include "tttreeviewutil.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
@@ -58,7 +59,6 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
   // Video editing industry color scheme
-  QStyle* style = QApplication::style();
   pbEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
   pbEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
   pbEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
@@ -99,9 +99,9 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
 
   const int kIconSize = 16;
   const QColor kIconColor = Qt::white;
-  QIcon iconCut    = tintIcon(QIcon::fromTheme("edit-cut",        style->standardIcon(QStyle::SP_DialogSaveButton)),  kIconColor, kIconSize);
-  QIcon iconCutAlt = tintIcon(QIcon::fromTheme("edit-cut",        style->standardIcon(QStyle::SP_DialogApplyButton)), kIconColor, kIconSize);
-  QIcon iconAudio  = tintIcon(QIcon::fromTheme("audio-x-generic", style->standardIcon(QStyle::SP_DriveCDIcon)),       kIconColor, kIconSize);
+  QIcon iconCut    = tintIcon(ttThemedIcon("edit-cut", QStyle::SP_DialogSaveButton),  kIconColor, kIconSize);
+  QIcon iconCutAlt = tintIcon(ttThemedIcon("edit-cut", QStyle::SP_DialogApplyButton), kIconColor, kIconSize);
+  QIcon iconAudio  = tintIcon(ttThemedIcon("audio-x-generic", QStyle::SP_DriveCDIcon),       kIconColor, kIconSize);
 
   pbPreview->setIcon(iconCutAlt);
   pbPreview->setStyleSheet(styleAccent(kPreviewBg, kPreviewHv, false));

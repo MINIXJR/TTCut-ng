@@ -62,6 +62,13 @@ class TTMpeg2VideoStream : public TTVideoStream
     // Field-picture extra indices: second field of each top/bottom pair.
     // Empty for progressive sequences and frame-picture-only streams.
     const QList<int>& extraIndices() const { return mExtraIndices; }
+    // Field-picture extras strictly before a stream index: stream index minus
+    // this is the display frame mpv counts.
+    int extrasBefore(int index) const;
+    // The inverse for the playback position: the stream index whose display
+    // frame is displayIndex (fixed point of index = display + extrasBefore,
+    // as onPlaybackFinished has solved it since v0.71). Unclamped.
+    int streamIndexForDisplayIndex(int displayIndex) const;
 
     virtual bool isCutInPoint( int pos );
     virtual bool isCutOutPoint( int pos );

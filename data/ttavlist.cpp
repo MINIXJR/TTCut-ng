@@ -94,16 +94,24 @@ void TTAVItem::onRemoveAudioItem(int index)
 {
 	mpAudioList->remove(mpAudioList->at(index));
 
+  // Removing a track invalidates every repair's stored index at or after the
+  // removed position; the removed track's own repairs go with it.
+  remapAudioRepairTracks([index](int track) {
+    return track == index ? -1 : (track > index ? track - 1 : track);
+  });
+}
+
+void TTAVItem::remapAudioRepairTracks(const std::function<int(int)>& newTrack)
+{
   // TTAudioRepairItem tags itself with a track index and has no setter for
-  // it (extern/ttaudiorepairitem.h), so removing a track invalidates every
-  // repair's stored index at or after the removed position - rebuild them
-  // via the full constructor (isEnabled() carried over explicitly, the
-  // constructor always defaults it to true).
+  // it (extern/ttaudiorepairitem.h) - rebuild via the full constructor
+  // (isEnabled() carried over explicitly, the constructor defaults it to
+  // true).
   QList<TTAudioRepairItem> updatedRepairs;
   for (const TTAudioRepairItem& repair : mAudioRepairs) {
-    if (repair.trackIndex() == index) continue; // belonged to the removed track
-    int newTrack = repair.trackIndex() > index ? repair.trackIndex() - 1 : repair.trackIndex();
-    TTAudioRepairItem rebuilt(newTrack, repair.frameFrom(), repair.frameTo(),
+    const int track = newTrack(repair.trackIndex());
+    if (track < 0) continue;
+    TTAudioRepairItem rebuilt(track, repair.frameFrom(), repair.frameTo(),
                                repair.channelMask(), repair.method());
     rebuilt.setEnabled(repair.isEnabled());
     updatedRepairs.append(rebuilt);
@@ -119,17 +127,9 @@ void TTAVItem::onSwapAudioItems(int oldIndex, int newIndex)
   // so swapping two tracks must swap the indices any repair on those two
   // tracks carries - otherwise a save after a reorder (TTAudioTreeView
   // swapItems, since v0.81.2) attributes the repair to the wrong audio file.
-  QList<TTAudioRepairItem> updatedRepairs;
-  for (const TTAudioRepairItem& repair : mAudioRepairs) {
-    int track = repair.trackIndex();
-    if (track == oldIndex)      track = newIndex;
-    else if (track == newIndex) track = oldIndex;
-    TTAudioRepairItem rebuilt(track, repair.frameFrom(), repair.frameTo(),
-                               repair.channelMask(), repair.method());
-    rebuilt.setEnabled(repair.isEnabled());
-    updatedRepairs.append(rebuilt);
-  }
-  mAudioRepairs = updatedRepairs;
+  remapAudioRepairTracks([oldIndex, newIndex](int track) {
+    return track == oldIndex ? newIndex : (track == newIndex ? oldIndex : track);
+  });
 }
 
 void TTAVItem::onAudioLanguageChanged(int index, const QString& language)
@@ -278,7 +278,7 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 int TTAVItem::firstAc3TrackIndex() const
 {
   for (int i = 0; i < audioCount(); ++i) {
-    TTAudioStream* candidate = audioStreamAt(i);
+    const TTAudioStream* candidate = audioStreamAt(i);
     if (candidate && candidate->streamType() == TTAVTypes::ac3_audio) return i;
   }
   return -1;
@@ -359,7 +359,6 @@ void TTAVList::clear()
 	while (mpAVList.count() > 0) {
 		TTAVItem* item = mpAVList.takeLast();
 		delete item;
-		item = 0;
 		emit itemRemoved(mpAVList.count());
 	}
 	//removeAt(mpAVList.indexOf(mpAVList.last()));

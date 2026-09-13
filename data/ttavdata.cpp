@@ -16,12 +16,14 @@
 #include <QPushButton>
 #include <QProcess>
 #include <QTime>
+#include <QTimer>
 
 #include <algorithm>
 
 #include "../avstream/ttac3acmod.h"
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
+#include "ttindexcluster.h"
 #include "ttavdata.h"
 #include "../avstream/ttcommon.h"
 #include "../extern/ttmuxlistdata.h"
@@ -33,6 +35,7 @@
 #include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
+#include "../common/ttstreamfiles.h"
 #include "../common/istatusreporter.h"
 
 #include "../extern/ttmplexprovider.h"
@@ -128,22 +131,6 @@ void TTAVData::clear()
 	mpMarkerList->clear();
 }
 
-/*!
- * appendAudioStream
- */
-void TTAVData::appendAudioStream(TTAVItem* avItem, const QFileInfo& fInfo, int)
-{
-  doOpenAudioStream(avItem, fInfo.absoluteFilePath());
-}
-
-/*!
- * appendSubtitleStream
- */
-void TTAVData::appendSubtitleStream(TTAVItem* avItem, const QFileInfo& fInfo, int)
-{
-  doOpenSubtitleStream(avItem, fInfo.absoluteFilePath());
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Cut list handling
  */
@@ -183,26 +170,6 @@ void TTAVData::sortCutItemsByOrder()
 /* /////////////////////////////////////////////////////////////////////////////
  * Marker handling
  */
-
-/*!
- * onAppendMarker
- */
-void TTAVData::onAppendMarker(int markerPos)
-{
-	if (mpCurrentAVItem == 0)
-		return;
-
-	mpCurrentAVItem->appendMarker(markerPos);
-}
-
-/*!
- * onRemoveMarker
- */
-void TTAVData::onRemoveMarker(const TTMarkerItem& mItem)
-{
-	TTAVItem* avItem = mItem.avDataItem();
-	avItem->removeMarker(mItem);
-}
 
 /*!
  * sortMarkerByOrder
@@ -269,7 +236,7 @@ static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
 {
   if (!target.isEmpty()) return;
 
-  TTMpeg2VideoStream* mpeg2 = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  const TTMpeg2VideoStream* mpeg2 = dynamic_cast<TTMpeg2VideoStream*>(vStream);
   if (mpeg2 != nullptr && !mpeg2->extraIndices().isEmpty()) {
     target = mpeg2->extraIndices();
     if (TTSettings::instance()->logCutPipeline())
@@ -280,7 +247,7 @@ static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
   // H.26x: classify .info doubled-PTS candidates (raw AU numbering, one AU
   // per PES packet — PAFF fields separate) through the merge map. Only real
   // defects enter the audio-correction list, in display space.
-  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+  if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
     const QList<int> candidates = esInfo.esDoubledPtsAus();
     if (candidates.isEmpty()) return;
 
@@ -333,6 +300,7 @@ static void loadExtraFrameIndices(QList<int>& target, const TTESInfo& esInfo,
  */
 void TTAVData::openAVStreams(const QString& videoFilePath)
 {
+  clearOpenOutcome();
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
           this,             &TTAVData::onOpenAVStreamsAborted);
 
@@ -449,24 +417,12 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
           }
         }
 
-        QMessageBox msgBox(QMessageBox::Warning,
-                           tr("Stream Integrity Warning"),
-                           warnMsg, QMessageBox::NoButton, TTCut::mainWindow);
-        QPushButton* importBtn = msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
-        QPushButton* okBtn = msgBox.addButton(QMessageBox::Ok);
-        // Two AcceptRole buttons leave QMessageBox without an escape button,
-        // which silently disables the window close (X) and Esc.
-        msgBox.setEscapeButton(okBtn);
-        msgBox.exec();
-
-        if (msgBox.clickedButton() == importBtn && !regions.isEmpty()) {
-          QList<TTStreamPoint> errorPoints;
-          for (const auto& region : regions) {
-            errorPoints.append(TTStreamPoint(region.frame, StreamPointType::Error,
-              QString("Decode Error (%1 errors)").arg(region.errorCount)));
-          }
-          emit vdrMarkersLoaded(errorPoints);
+        QList<TTStreamPoint> errorPoints;
+        for (const auto& region : regions) {
+          errorPoints.append(TTStreamPoint(region.frame, StreamPointType::Error,
+            QString("Decode Error (%1 errors)").arg(region.errorCount)));
         }
+        showImportAsStreamPointsWarning(tr("Stream Integrity Warning"), warnMsg, errorPoints);
       }
     }
   }
@@ -499,6 +455,7 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
   connect(openVideoTask, qOverload<TTAVItem*, TTVideoStream*, int, const QString&>(&TTOpenVideoTask::finished),
           this,          &TTAVData::onOpenVideoFinished,
           Qt::QueuedConnection);
+  watchOpenAbort(openVideoTask, [this](const QString& reason) { onOpenVideoAborted(reason); });
 
   int audioCount = getAudioNames(QFileInfo(filePath)).count();
 
@@ -518,6 +475,8 @@ void TTAVData::doOpenAudioStream(TTAVItem* avItem, const QString& filePath, int 
   connect(openAudioTask, qOverload<TTAVItem*, TTAudioStream*, int>(&TTOpenAudioTask::finished),
           this,          &TTAVData::onOpenAudioFinished,
           Qt::QueuedConnection);
+  watchOpenAbort(openAudioTask, [this, avItem, filePath](const QString& reason) {
+    onOpenAudioAborted(avItem, filePath, reason); });
 
   mpThreadTaskPool->start(openAudioTask);
 }
@@ -532,6 +491,8 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
   connect(openSubtitleTask, qOverload<TTAVItem*, TTSubtitleStream*, int>(&TTOpenSubtitleTask::finished),
           this,             &TTAVData::onOpenSubtitleFinished,
           Qt::QueuedConnection);
+  watchOpenAbort(openSubtitleTask, [this, avItem, filePath](const QString& reason) {
+    onOpenSubtitleAborted(avItem, filePath, reason); });
 
   mpThreadTaskPool->start(openSubtitleTask);
 }
@@ -563,8 +524,8 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   // H.26x: mExtraFrameIndices already holds the classified real defects
   // (display space; legitimate field pairs are structurally excluded by the
   // merge map in loadExtraFrameIndices, which runs before this dialog).
-  TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
-  TTH26xVideoStream*  h26xVs  = dynamic_cast<TTH26xVideoStream*>(vStream);
+  const TTMpeg2VideoStream* mpeg2Vs = dynamic_cast<TTMpeg2VideoStream*>(vStream);
+  const TTH26xVideoStream*  h26xVs  = dynamic_cast<TTH26xVideoStream*>(vStream);
   QList<int> infoExtras = h26xVs ? mExtraFrameIndices : esInfo.esDoubledPtsAus();
   QList<int> parserPairs = mpeg2Vs ? mpeg2Vs->extraIndices() : QList<int>();
 
@@ -585,7 +546,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
   // A cluster is a confirmed field-pair cluster when at least one parser
   // field-pair position lies within +/-4 of its range (4 = local B-reorder
   // distance M-1 plus slack). Confirmed clusters are counted for the log only;
-  // unconfirmed ones become a visible "Defekt:" marker (see emitCluster).
+  // unconfirmed ones become a visible "Defekt:" marker (cluster pass 1).
   auto clusterConfirmed = [&](int cs, int ce) -> bool {
       for (int p : parserPairs)
           if (p >= cs - 4 && p <= ce + 4) return true;
@@ -599,70 +560,34 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
 
   // Cluster pass 1: video doubled-PTS frames (.info es_doubled_pts_aus,
   // already classified into display space by loadExtraFrameIndices)
-  if (!infoExtras.isEmpty()) {
-      int clusterStart = infoExtras.first();
-      int clusterEnd = clusterStart;
-      int clusterCount = 1;
-
-      auto emitCluster = [&]() {
-          bool confirmed = clusterConfirmed(clusterStart, clusterEnd);
-          if (confirmed) {
-              // Parser-confirmed legitimate field-picture coding, not a defect.
-              // Keep the count for logging, but do NOT add a visible timeline
-              // marker: field pairs are a normal encoder property (interlaced
-              // MPEG-2), not something the user needs flagged. The internal
-              // audio correction reads the parser positions via
-              // loadExtraFrameIndices(), independent of these markers.
-              ++confirmedClusters;
-              return;
-          }
-          ++unconfirmedClusters;
-          defectVideoFrames += clusterCount;
-          int pos = qMax(0, clusterStart - offsetFrames);
-          double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-          QString desc = QString("Defekt: %1–%2 (%3 Frames, %4s)")
-              .arg(clusterStart).arg(clusterEnd)
-              .arg(clusterCount).arg(durSec, 0, 'f', 1);
-          clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
-      };
-
-      for (int i = 1; i < infoExtras.size(); ++i) {
-          if (infoExtras[i] - clusterEnd <= gapFrames) {
-              clusterEnd = infoExtras[i];
-              clusterCount++;
-          } else {
-              emitCluster();
-              clusterStart = infoExtras[i];
-              clusterEnd = clusterStart;
-              clusterCount = 1;
-          }
+  for (const TTIndexCluster& c : ttClusterIndices(infoExtras, gapFrames)) {
+      if (clusterConfirmed(c.first, c.last)) {
+          // Parser-confirmed legitimate field-picture coding, not a defect.
+          // Keep the count for logging, but do NOT add a visible timeline
+          // marker: field pairs are a normal encoder property (interlaced
+          // MPEG-2), not something the user needs flagged. The internal
+          // audio correction reads the parser positions via
+          // loadExtraFrameIndices(), independent of these markers.
+          ++confirmedClusters;
+          continue;
       }
-      emitCluster();
+      ++unconfirmedClusters;
+      defectVideoFrames += c.count;
+      int pos = qMax(0, c.first - offsetFrames);
+      double durSec = (c.last - c.first + 1) / frameRate;
+      QString desc = QString("Defekt: %1–%2 (%3 Frames, %4s)")
+          .arg(c.first).arg(c.last)
+          .arg(c.count).arg(durSec, 0, 'f', 1);
+      clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
   }
 
-  // Cluster pass 2: audio gap frames
-  if (!mAudioGapIndices.isEmpty()) {
-      int clusterStart = mAudioGapIndices.first();
-      int clusterEnd = clusterStart;
-
-      auto emitGapCluster = [&]() {
-          int pos = qMax(0, clusterStart - offsetFrames);
-          double durSec = (clusterEnd - clusterStart + 1) / frameRate;
-          QString desc = QString("Audio-Gap: %1–%2 (%3s)")
-              .arg(clusterStart).arg(clusterEnd).arg(durSec, 0, 'f', 1);
-          clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
-      };
-
-      for (int i = 1; i < mAudioGapIndices.size(); ++i) {
-          if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
-              clusterEnd = mAudioGapIndices[i];
-          } else {
-              emitGapCluster();
-              clusterStart = mAudioGapIndices[i];
-              clusterEnd = clusterStart;
-          }
-      }
-      emitGapCluster();
+  // Cluster pass 2: audio gap frames (same clustering as audioGapFrameRanges)
+  for (const TTIndexCluster& c : ttClusterIndices(mAudioGapIndices, gapFrames)) {
+      int pos = qMax(0, c.first - offsetFrames);
+      double durSec = (c.last - c.first + 1) / frameRate;
+      QString desc = QString("Audio-Gap: %1–%2 (%3s)")
+          .arg(c.first).arg(c.last).arg(durSec, 0, 'f', 1);
+      clusters.append(TTStreamPoint(pos, StreamPointType::Error, desc));
   }
 
   // Cluster pass 3: mid-stream video loss + corrupt regions (defect repair,
@@ -720,7 +645,7 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
 
   // Nothing to report: either a clean stream or only parser-confirmed field
   // pairs. Field pairs are legitimate interlaced coding and are intentionally
-  // NOT turned into timeline markers (see emitCluster above), so clusters is
+  // NOT turned into timeline markers (see cluster pass 1 above), so clusters is
   // empty here and we return silently -- no import, no dialog. Only real
   // defects, audio gaps, and demuxer-reported loss/corruption reach clusters.
   if (clusters.isEmpty()) return;
@@ -742,20 +667,38 @@ void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStr
           .arg(tr("more groups"));
   }
 
-  QMessageBox msgBox(QMessageBox::Warning,
-                     tr("Defective Frames Detected"),
-                     msg, QMessageBox::NoButton, TTCut::mainWindow);
-  QPushButton* importBtn = msgBox.addButton(
-      tr("Import as Stream Points"), QMessageBox::AcceptRole);
+  showImportAsStreamPointsWarning(tr("Defective Frames Detected"), msg, clusters);
+}
+
+void TTAVData::showImportAsStreamPointsWarning(const QString& title, const QString& msg,
+                                               const QList<TTStreamPoint>& points)
+{
+  QMessageBox msgBox(QMessageBox::Warning, title, msg, QMessageBox::NoButton, TTCut::mainWindow);
+  const QPushButton* importBtn = msgBox.addButton(tr("Import as Stream Points"), QMessageBox::AcceptRole);
   QPushButton* okBtn = msgBox.addButton(QMessageBox::Ok);
   // Two AcceptRole buttons leave QMessageBox without an escape button,
   // which silently disables the window close (X) and Esc.
   msgBox.setEscapeButton(okBtn);
   msgBox.exec();
 
-  if (msgBox.clickedButton() == importBtn) {
-      emit vdrMarkersLoaded(clusters);
-  }
+  if (msgBox.clickedButton() == importBtn && !points.isEmpty())
+    emit vdrMarkersLoaded(points);
+}
+
+void TTAVData::setCurrentAVItem(TTAVItem* avItem)
+{
+  mpCurrentAVItem = avItem;
+  emit currentAVItemChanged(avItem);
+}
+
+void TTAVData::announceCutStart(const QVector<TTStagePlan>& plan, const QString& initMsg,
+                                const QString& startMsg, quint64 startValue)
+{
+  emit operationPlanReady(plan);
+  emit statusReport(0, StatusReportArgs::Init, initMsg, 0);
+  qApp->processEvents();
+  emit statusReport(0, StatusReportArgs::Start, startMsg, startValue);
+  qApp->processEvents();
 }
 
 void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int, const QString& demuxedAudio)
@@ -867,8 +810,7 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
   this->cutDataReloaded();
   this->markerDataReloaded();
 
-  mpCurrentAVItem = avItem;
-  emit currentAVItemChanged(avItem);
+  setCurrentAVItem(avItem);
 
   // Load demuxed audio if available
   if (!demuxedAudio.isEmpty()) {
@@ -886,8 +828,7 @@ void TTAVData::onOpenAVStreamsAborted()
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
              this,             &TTAVData::onOpenAVStreamsAborted);
 
-  mpCurrentAVItem = (mpAVList->count() > 0) ? mpAVList->at(mpAVList->count()-1) : 0;
-  emit currentAVItemChanged(mpCurrentAVItem);
+  setCurrentAVItem(mpAVList->count() > 0 ? mpAVList->at(mpAVList->count()-1) : nullptr);
 }
 
 /*!
@@ -958,9 +899,42 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 /*!
  * onOpenAudioAborted
  */
-void TTAVData::onOpenAudioAborted(TTAVItem*)
+void TTAVData::onOpenAudioAborted(TTAVItem*, const QString& filePath, const QString& reason)
 {
-  qDebug("TTAVData::onOpenAudioAborted called...");
+  recordTrackOpenFailure(tr("Audio"), filePath, reason);
+}
+
+void TTAVData::onOpenVideoAborted(const QString& reason)
+{
+  if (reason.isEmpty()) mOpenCancelled = true;
+  else                  mVideoOpenFailed = true;
+}
+
+// A failed open task reaches the pool as aborted(), which on its own would
+// end a project load as "aborted" (when it is the last task to leave) or
+// silently drop the track (when it is not). Remember the track instead:
+// onThreadPoolExit() reports the list, onReadProjectFileAborted() lets the
+// project count as loaded when nothing but tracks failed. An abort WITHOUT a
+// failure reason is the user's cancel and is not a track failure.
+void TTAVData::recordTrackOpenFailure(const QString& kind, const QString& filePath, const QString& reason)
+{
+  if (reason.isEmpty()) { mOpenCancelled = true; return; }
+  mTrackOpenFailures.append(QString("%1: %2 - %3").arg(kind, filePath, reason));
+}
+
+void TTAVData::clearOpenOutcome()
+{
+  mTrackOpenFailures.clear();
+  mVideoOpenFailed = false;
+  mOpenCancelled   = false;
+}
+
+void TTAVData::watchOpenAbort(TTThreadTask* task, const std::function<void(const QString&)>& report)
+{
+  connect(task, &TTThreadTask::aborted, this, [this, report](TTThreadTask* t) {
+    const QString reason = t->failureMessage();
+    QMetaObject::invokeMethod(this, [report, reason] { report(reason); }, Qt::QueuedConnection);
+  }, Qt::DirectConnection);
 }
 
 /*!
@@ -996,9 +970,9 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
 /*!
  * onOpenSubtitleAborted
  */
-void TTAVData::onOpenSubtitleAborted(TTAVItem*)
+void TTAVData::onOpenSubtitleAborted(TTAVItem*, const QString& filePath, const QString& reason)
 {
-  qDebug("TTAVData::onOpenSubtitleAborted called...");
+  recordTrackOpenFailure(tr("Subtitle"), filePath, reason);
 }
 
 /*  ////////////////////////////////////////////////////////////////////////////
@@ -1007,42 +981,26 @@ void TTAVData::onOpenSubtitleAborted(TTAVItem*)
 
 void TTAVData::onChangeCurrentAVItem(TTAVItem* avItem)
 {
-	mpCurrentAVItem = avItem;
-
-	emit currentAVItemChanged(avItem);
+  setCurrentAVItem(avItem);
 }
 
 void TTAVData::onChangeCurrentAVItem(int index)
 {
 	if (index < 0 || index >= mpAVList->count()) return;
-
-	mpCurrentAVItem = avItemAt(index);
-
-	emit currentAVItemChanged(mpCurrentAVItem);
+  setCurrentAVItem(avItemAt(index));
 }
 
 void TTAVData::onRemoveAVItem(int index)
 {
-	if (index-1 >= 0 && avCount() > 1)
-		mpCurrentAVItem = avItemAt(index-1);
-
-	if (index+1 < avCount() && avCount() > 1)
-		mpCurrentAVItem = avItemAt(index+1);
-
-	if (avCount() > 1)
-	  emit currentAVItemChanged(mpCurrentAVItem);
-
-	//  mpCurrentAVItem = (avCount() > 0)
-//      ? avItemAt(avCount()-1)
-//      : 0;
-  //emit currentAVItemChanged(mpCurrentAVItem);
+  // Hand the GUI a neighbour before the item goes: the one after it, or the
+  // one before when the last item is removed.
+  if (avCount() > 1)
+    setCurrentAVItem(index+1 < avCount() ? avItemAt(index+1) : avItemAt(index-1));
 
   mpAVList->removeAt(index);
 
-  if (avCount() == 0) {
-  	mpCurrentAVItem = 0;
-    emit currentAVItemChanged(mpCurrentAVItem);
-  }
+  if (avCount() == 0)
+    setCurrentAVItem(nullptr);
 }
 
 void TTAVData::onSwapAVItems(int oldIndex, int newIndex)
@@ -1141,6 +1099,25 @@ void TTAVData::onThreadPoolExit()
   for (int i = 0; i < mpAVList->count(); i++) {
     mpAVList->at(i)->setInitialAudioLoadDone();
   }
+
+  // Tracks whose open task failed during this run (recordTrackOpenFailure):
+  // the video and the other tracks are in, the failed ones are simply
+  // missing - say so in the log and, in the GUI, in a dialog once the load
+  // chain (readProjectFileFinished is connected to this same exit()) has run.
+  if (!mTrackOpenFailures.isEmpty()) {
+    const QStringList failures = mTrackOpenFailures;
+    for (const QString& f : failures)
+      log->warningMsg(__FILE__, __LINE__, QString("Track not opened - %1").arg(f));
+    emit trackOpenFailed(failures);
+    if (!mNonInteractive) {
+      QTimer::singleShot(0, this, [failures] {
+        QMessageBox::warning(TTCut::mainWindow, tr("Tracks not opened"),
+            tr("%n track(s) could not be opened and were skipped:\n\n%1", "", failures.size())
+                .arg(failures.join("\n")));
+      });
+    }
+  }
+  clearOpenOutcome();
 
   // onThreadTaskPool::onThreadTaskAborted emits aborted() then exit() back to
   // back on abort, so onCutAborted's Canceled emit is immediately followed by
@@ -1241,6 +1218,7 @@ void TTAVData::writeProjectFile(const QFileInfo& fInfo,
  */
 void TTAVData::readProjectFile(const QFileInfo& fInfo)
 {
+  clearOpenOutcome();
   connect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onReadProjectFileFinished);
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
@@ -1269,7 +1247,7 @@ void TTAVData::onReadProjectFileFinished()
   emit avDataReloaded();
 
   if (avCount() > 0)
-    emit currentAVItemChanged(avItemAt(0));
+    setCurrentAVItem(avItemAt(0));
 
   // Load stream points from project file
   QList<TTStreamPoint> loadedPoints = mpProjectData->deserializeStreamPoints();
@@ -1307,10 +1285,21 @@ void TTAVData::onReadProjectFileAborted()
 {
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "TAVData::onReadProjectFileAborted";
+
+  // The pool says aborted() whenever the LAST task to leave did not finish -
+  // for a project whose video is in and whose only failure is an audio or
+  // subtitle track, that is a loaded project with a missing track, not an
+  // aborted load. The track itself is reported by onThreadPoolExit(). The
+  // pool's semantics stay as they are (ruled 2026-09-12, contract finding 3).
+  if (!mTrackOpenFailures.isEmpty() && !mVideoOpenFailed && !mOpenCancelled) {
+    onReadProjectFileFinished();
+    return;
+  }
+
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onReadProjectFileFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
-  emit currentAVItemChanged(0);
+  setCurrentAVItem(nullptr);
   emit readProjectFileAborted();
 
   if (mpProjectData != 0) {
@@ -1512,7 +1501,7 @@ void TTAVData::computeCutLengths(TTCutList* cutList)
   // Source duration from at(0)'s video only (single-source assumption, matching
   // how the cut paths use at(0) throughout). A joined multi-file project would
   // under-count the source; that edge is cosmetic (spec-approved at(0) semantics).
-  TTAVItem* avItem = cutList->at(0).avDataItem();
+  const TTAVItem* avItem = cutList->at(0).avDataItem();
   if (avItem && avItem->videoStream()) {
     double fr = avItem->videoStream()->frameRate();
     if (fr > 0)
@@ -1525,7 +1514,7 @@ namespace {
   // Calibration key for the audio stage: keyed by container/codec suffix of
   // the FIRST track ("audio/ac3", "audio/mp2", ...). Tracks of one recording
   // share the codec in practice; a mixed set just calibrates on track 1.
-  QString audioCalibKey(TTAVItem* avItem)
+  QString audioCalibKey(const TTAVItem* avItem)
   {
     if (avItem == 0 || avItem->audioCount() == 0) return QString();
     QString suffix = QFileInfo(avItem->audioStreamAt(0)->fileName()).suffix().toLower();
@@ -1578,7 +1567,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   // Detect stream type from first cut item
   TTVideoStream* firstStream = cutList->at(0).avDataItem()->videoStream();
   TTAVTypes::AVStreamType streamType = firstStream->streamType();
-  bool isH264H265 = (streamType == TTAVTypes::h264_video || streamType == TTAVTypes::h265_video);
+  const bool isH264H265 = TTAVTypes::isH26x(streamType);
 
   // Check for unresolved audio bursts
   if (!confirmBurstWarnings(cutList)) {
@@ -1605,11 +1594,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   {
     TTAVItem* planItem = cutList->at(0).avDataItem();
     double keptSecs = 0.001;
-    int totalFrames = 0;
     double fr = firstStream->frameRate();
-    for (int i = 0; i < cutList->count(); i++)
-      totalFrames += cutList->at(i).cutOutIndex() - cutList->at(i).cutInIndex() + 1;
-    if (fr > 0) keptSecs = qMax(0.001, totalFrames / fr);
+    if (fr > 0) keptSecs = qMax(0.001, cutList->keptFrameCount() / fr);
     QVector<TTStagePlan> plan;
     if (planItem->audioCount() > 0)
       plan.append({ StatusReportArgs::StageAudio, audioCalibKey(planItem),
@@ -1620,13 +1606,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     // projection + correction take over within seconds.
     plan.append({ StatusReportArgs::StageVideo, QStringLiteral("video/mpeg2cut"), keptSecs });
     plan.append({ StatusReportArgs::StageMux, QStringLiteral("mux/mpeg2cut"), keptSecs });
-    emit operationPlanReady(plan);
+    announceCutStart(plan, tr("Initializing MPEG-2 cut..."), tr("Cutting MPEG-2 video..."), 0);
   }
-
-  emit statusReport(0, StatusReportArgs::Init, tr("Initializing MPEG-2 cut..."), 0);
-  qApp->processEvents();
-  emit statusReport(0, StatusReportArgs::Start, tr("Cutting MPEG-2 video..."), 0);
-  qApp->processEvents();
   // Read A/V sync offset from .info file if available
   mAvSyncOffsetMs = 0;
   QString infoFile = TTESInfo::findInfoFile(firstStream->filePath());
@@ -1789,7 +1770,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
 }
 
 //! Do H.264/H.265 cut using TTESSmartCut (frame-accurate)
-void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
+void TTAVData::doH264Cut(const QString& tgtFileName, TTCutList* cutList)
 {
   // Reset here too (onDoCut() already does this before dispatching, since
   // doH264Cut() is private and only reachable through it) so the invariant
@@ -1810,21 +1791,14 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   double frameRate = vStream->frameRate();
 
   // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
-  int avOffsetMs = 0;
-  QString infoFile = TTESInfo::findInfoFile(sourceFile);
-  if (!infoFile.isEmpty()) {
-    TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded()) {
-      if (frameRate <= 0 && esInfo.frameRate() > 0) {
-        frameRate = esInfo.frameRate();
-        log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info (fallback): %1 fps").arg(frameRate));
-      }
-      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) {
-        avOffsetMs = esInfo.avOffsetMs();
-        log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(avOffsetMs));
-      }
-    }
+  const TTESInfoTiming info = TTESInfo::timingForVideo(sourceFile);
+  if (frameRate <= 0 && info.frameRate > 0) {
+    frameRate = info.frameRate;
+    log->infoMsg(__FILE__, __LINE__, QString("ES frame rate from .info (fallback): %1 fps").arg(frameRate));
   }
+  const int avOffsetMs = info.avOffsetMs;
+  if (avOffsetMs != 0)
+    log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(avOffsetMs));
 
   // Get audio file (ES workflow: separate audio files)
   QString audioFile;
@@ -1867,13 +1841,9 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
       plan.append({ StatusReportArgs::StageAudio, audioCalibKey(avItem),
                     keptSecs * avItem->audioCount() });
     plan.append({ StatusReportArgs::StageMux, QStringLiteral("mux/h26xcut"), keptSecs });
-    emit operationPlanReady(plan);
+    announceCutStart(plan, tr("Initializing H.264/H.265 cut..."), tr("Cutting H.264/H.265 video..."),
+                     cutList->count());
   }
-
-  emit statusReport(0, StatusReportArgs::Init, tr("Initializing H.264/H.265 cut..."), 0);
-  qApp->processEvents();
-  emit statusReport(0, StatusReportArgs::Start, tr("Cutting H.264/H.265 video..."), cutList->count());
-  qApp->processEvents();
 
   QString finalOutput = tgtFileName;
   if (!finalOutput.endsWith(".mkv", Qt::CaseInsensitive)) {
@@ -1886,14 +1856,10 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   log->infoMsg(__FILE__, __LINE__, QString("  Video: %1").arg(sourceFile));
   log->infoMsg(__FILE__, __LINE__, QString("  Frame rate: %1 fps").arg(frameRate));
 
-  // Build frame-based cut list
-  QList<QPair<int, int>> cutFrames;
-  for (int i = 0; i < cutList->count(); i++) {
-    TTCutItem item = cutList->at(i);
-    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
+  const QList<QPair<int, int>> cutFrames = cutList->frameRanges();
+  for (int i = 0; i < cutFrames.count(); i++)
     log->infoMsg(__FILE__, __LINE__, QString("  Segment %1: frames %2-%3")
-        .arg(i+1).arg(item.cutInIndex()).arg(item.cutOutIndex()));
-  }
+        .arg(i+1).arg(cutFrames[i].first).arg(cutFrames[i].second));
 
   // Create temporary video output
   QString tempVideoFile = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
@@ -1919,7 +1885,7 @@ void TTAVData::doH264Cut(QString tgtFileName, TTCutList* cutList)
   // Frame-granularity display-order map from the open stream's wrapper.
   // Required for PAFF: TTESSmartCut's buildFromFile fallback is
   // field-granularity and would mismatch the parser's frame count.
-  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+  if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
     params.displayMap    = h26x->displayOrderMap();
     params.hasDisplayMap = true;
   }
@@ -2309,7 +2275,7 @@ void TTAVData::onMpeg2MuxFinished()
 
     // Delete elementary streams if option is set
     if (TTSettings::instance()->workingMuxDeleteES()) {
-      deleteElementaryStreams(videoFile, audioFiles, subFiles);
+      ttRemoveElementaryStreams(videoFile, audioFiles, subFiles);
     }
   } else {
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -2498,10 +2464,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   {
     double keptSecs = 0.001;
     if (frameRate > 0) {
-      int totalFrames = 0;
-      for (int i = 0; i < cutList->count(); i++)
-        totalFrames += cutList->at(i).cutOutIndex() - cutList->at(i).cutInIndex() + 1;
-      keptSecs = qMax(0.001, totalFrames / frameRate);
+      keptSecs = qMax(0.001, cutList->keptFrameCount() / frameRate);
     }
     QVector<TTStagePlan> plan;
     plan.append({ StatusReportArgs::StageAudio, audioCalibKey(avItem),
@@ -2614,60 +2577,21 @@ void TTAVData::onMuxProgress(int percent, const QString& msg)
   emit statusReport(0, StatusReportArgs::Step, msg, percent);
 }
 
-void TTAVData::deleteElementaryStreams(const QString& videoFilePath,
-                                        const QStringList& audioFilePaths,
-                                        const QStringList& subtitleFilePaths)
-{
-  // Delete video file
-  QFile videoFile(videoFilePath);
-  bool success = videoFile.remove();
-  log->debugMsg(__FILE__, __LINE__, QString("Removing video stream %1 (%2)").
-      arg(videoFilePath).arg(success ? "ok" : "failed"));
-
-  // Delete audio files
-  for (const QString& audioPath : audioFilePaths) {
-    QFile audioFile(audioPath);
-    success = audioFile.remove();
-    log->debugMsg(__FILE__, __LINE__, QString("Removing audio stream %1 (%2)").
-        arg(audioPath).arg(success ? "ok" : "failed"));
-  }
-
-  // Delete subtitle files
-  for (const QString& subtitlePath : subtitleFilePaths) {
-    QFile subtitleFile(subtitlePath);
-    success = subtitleFile.remove();
-    log->debugMsg(__FILE__, __LINE__, QString("Removing subtitle stream %1 (%2)").
-        arg(subtitlePath).arg(success ? "ok" : "failed"));
-  }
-}
-
 // *****************************************************************************
 // Count extra frames before a given frame index (binary search)
 // Used for audio time correction: time = (frame - extras_before) / fps
 // *****************************************************************************
 int TTAVData::countExtraFramesBefore(int frameIndex) const
 {
-  if (mExtraFrameIndices.isEmpty()) return 0;
-
-  int lo = 0, hi = mExtraFrameIndices.size();
-  while (lo < hi) {
-    int mid = (lo + hi) / 2;
-    if (mExtraFrameIndices[mid] < frameIndex)
-      lo = mid + 1;
-    else
-      hi = mid;
-  }
-  return lo;
+  return ttCountBelow(mExtraFrameIndices, frameIndex);
 }
 
 // *****************************************************************************
-// Clustered audio-gap video-frame ranges, same clustering rule (gapFrames
-// tolerance from extraFrameClusterGapSec) and the same raw (unclustered by
-// the display offset) start/end pair as emitGapCluster() in
-// showExtraFrameClusterDialog() above. Duplicated rather than shared with
-// that lambda-local helper: this is the only other caller today
-// (TTAudioAnomalyScanTask's gap-overlap annotation) and it needs the raw
-// ranges, not the TTStreamPoint markers the dialog builds.
+// Clustered audio-gap video-frame ranges: the same clustering rule
+// (ttClusterIndices, gapFrames tolerance from extraFrameClusterGapSec) as
+// cluster pass 2 in showExtraFrameClusterDialog() above, but the raw
+// start/end pairs (no display offset, no TTStreamPoint) - what
+// TTAudioAnomalyScanTask's gap-overlap annotation needs.
 // *****************************************************************************
 QList<QPair<int,int>> TTAVData::audioGapFrameRanges(double frameRate) const
 {
@@ -2676,19 +2600,8 @@ QList<QPair<int,int>> TTAVData::audioGapFrameRanges(double frameRate) const
   if (frameRate <= 0.0) frameRate = 25.0;
 
   int gapFrames = qRound(TTSettings::instance()->extraFrameClusterGapSec() * frameRate);
-
-  int clusterStart = mAudioGapIndices.first();
-  int clusterEnd = clusterStart;
-  for (int i = 1; i < mAudioGapIndices.size(); ++i) {
-    if (mAudioGapIndices[i] - clusterEnd <= gapFrames) {
-      clusterEnd = mAudioGapIndices[i];
-    } else {
-      ranges.append({clusterStart, clusterEnd});
-      clusterStart = mAudioGapIndices[i];
-      clusterEnd = clusterStart;
-    }
-  }
-  ranges.append({clusterStart, clusterEnd});
+  for (const TTIndexCluster& c : ttClusterIndices(mAudioGapIndices, gapFrames))
+    ranges.append({c.first, c.last});
   return ranges;
 }
 
@@ -2742,12 +2655,12 @@ TTAVData::CutBurstInfo TTAVData::detectCutOutBurst(const TTCutItem& item) const
 // *****************************************************************************
 TTAVData::AudioCutPlan TTAVData::planAudioCut(TTAudioStream* audioStream,
                                               const QList<QPair<double, double>>& videoKeepList,
-                                              int delayMs) const
+                                              int delayMs)
 {
   AudioCutPlan plan;
   if (!audioStream || videoKeepList.isEmpty()) return plan;
 
-  TTAudioHeader* hdr = audioStream->headerAt(0);
+  const TTAudioHeader* hdr = audioStream->headerAt(0);
   if (!hdr) return plan;
 
   double audioFrameMs = hdr->frame_time;       // ms per audio frame, codec-aware
@@ -2946,7 +2859,7 @@ QList<float> TTAVData::cutAudioTracks(
     bool repairFailed = false;
     QString repairFailMsg;
     if (ext.compare(QStringLiteral("ac3"), Qt::CaseInsensitive) == 0) {
-      TTAudioHeader* hdr = stream->headerAt(0);
+      const TTAudioHeader* hdr = stream->headerAt(0);
       double audioFrameSec = (hdr && hdr->frame_time > 0) ? hdr->frame_time / 1000.0 : 0.032;
 
       for (const TTAudioRepairItem& item : avItem->audioRepairList()) {

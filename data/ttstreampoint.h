@@ -86,14 +86,16 @@ public:
   // re-touched in another carries whichever variant was active THEN, not
   // now. Checking only the current tr() result against it (residuals R6)
   // fails to recognize an existing suffix from a different language and
-  // appends a second one instead of replacing it. Callers must check every
-  // entry, e.g.:
-  //   for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
-  //     if (desc.endsWith(v)) { desc.chop(v.length()); break; }
+  // appends a second one instead of replacing it. Callers check every entry
+  // through hasSuffixVariant()/stripSuffixVariant() below.
   // Kept here as literal strings (not tr()) deliberately: TTStreamPoint is
   // not a QObject, and the point is to match ANY known language, not just
   // whichever one tr() would resolve to right now.
   static QStringList repairPlannedSuffixVariants();
+  // True when desc ends with one of the variants.
+  static bool hasSuffixVariant(const QString& desc, const QStringList& variants);
+  // Chop the first matching variant off desc; true when one was there.
+  static bool stripSuffixVariant(QString& desc, const QStringList& variants);
 
   // Same idea as repairPlannedSuffixVariants(), for the
   // " (repair DISABLED - it no longer fits the audio file)" suffix

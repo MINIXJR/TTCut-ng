@@ -29,14 +29,14 @@
 /**
  * Open video stream task
  */
-TTOpenVideoTask::TTOpenVideoTask(TTAVItem* avItem, QString fileName, int order) :
-                 TTThreadTask("OpenVideoTask")
+TTOpenVideoTask::TTOpenVideoTask(TTAVItem* avItem, const QString& fileName, int order) :
+                 TTThreadTask("OpenVideoTask"),
+                 mFileName(fileName),
+                 mOriginalFileName(fileName),
+                 mDemuxedAudio("")
 {
   mpAVItem          = avItem;
   mOrder            = order;
-  mFileName         = fileName;
-  mOriginalFileName = fileName;
-  mDemuxedAudio     = "";
   mpVideoStream     = 0;
   mpVideoType       = 0;
 }
@@ -63,8 +63,7 @@ void TTOpenVideoTask::cleanUp()
   if (mpVideoType   != 0) delete mpVideoType;
   if (mpVideoStream == 0) return;
 
-  disconnect(mpVideoStream, &TTVideoStream::statusReport,
-             this,          qOverload<int, const QString&, quint64>(&TTOpenVideoTask::onStatusReport));
+  unlinkStatusSource(mpVideoStream);
 }
 
 /**
@@ -125,8 +124,7 @@ void TTOpenVideoTask::operation()
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "TTOpenVideoTask: Created video stream, type =" << mpVideoStream->streamType();
 
-  connect(mpVideoStream, &TTVideoStream::statusReport,
-          this,          qOverload<int, const QString&, quint64>(&TTOpenVideoTask::onStatusReport));
+  linkStatusSource(mpVideoStream);
 
   int headerCount = mpVideoStream->createHeaderList();
   if (headerCount <= 0) {

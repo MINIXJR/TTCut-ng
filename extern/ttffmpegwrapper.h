@@ -171,6 +171,13 @@ public:
     // Frame cache management
     void clearFrameCache();
 
+    // Give the wrapper its frame index: the prebuilt bundle when it has one
+    // (an open H.26x stream's, a sibling wrapper's - Qt COW, cheap), else a
+    // fresh TTFrameIndexer scan of filePath. False only when that scan
+    // failed (error then names why); adopted says which way it went.
+    bool adoptOrBuildFrameIndex(const TTFrameIndexBundle& prebuilt, const QString& filePath,
+                                QString* error = nullptr, bool* adopted = nullptr);
+
     // Error handling
     QString lastError() const { return mLastError; }
 
@@ -180,6 +187,32 @@ private:
     // was unbounded and would walk down to frame 0 — harmless only as long as
     // each level took 40 s. It does not any more.
     QImage decodeFrameInternal(int frameIndex, int fallbackDepth);
+
+    // Display position -> decode-order AU through the bundle's display map
+    // (identity without a map).
+    int displayToTargetAU(int frameIndex) const;
+
+    // seekToFrame(targetAU), then skip decoder outputs until the one tagged
+    // targetAU sits in mDecodedFrame. The skip is bounded by the seek
+    // distance plus headroom to the second keyframe past the target (at
+    // least 256 outputs), never the whole stream, and polls the cancel
+    // token. `caller` names the log lines. Shared by decodeFrameInternal and
+    // decodeFrameYUV's non-sequential path.
+    enum class SeekSkip { Reached, NotReached, SeekFailed, Cancelled };
+    SeekSkip seekAndSkipToAU(int targetAU, int displayIndex, const char* caller);
+
+    // Position the decoder on frameIndex (seek unless allowSequential and the
+    // decoder already sits between the frame's keyframe and the frame) and
+    // decode exactly one output into mDecodedFrame. Shared by isFrameBlack
+    // and buildHistogram; the analysis reads mDecodedFrame afterwards.
+    bool decodeFrameForAnalysis(int frameIndex, bool allowSequential, const char* caller);
+    // Flush the decoder at end of stream into mDecodedFrame; true when a
+    // frame came out (mDecoderDrained is then set).
+    bool drainDecoderEOF();
+
+    // LRU frame cache: look up / store by display position.
+    bool cachedFrame(int displayIndex, QImage& out);
+    void cacheFrame(int displayIndex, const QImage& image);
 
     // Libav contexts
     AVFormatContext* mFormatCtx;

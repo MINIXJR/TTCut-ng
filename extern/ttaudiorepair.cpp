@@ -96,6 +96,35 @@ void applyMaskAndFade(AVFrame* frame, quint8 channelMask, int fadeLen,
 
 } // namespace
 
+bool openFirstAudioStream(const QString& audioFile, AVFormatContext** fmtCtx, int* audioIdx, QString* error)
+{
+    *fmtCtx = nullptr;
+    *audioIdx = -1;
+    int ret = avformat_open_input(fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
+    if (ret < 0) {
+        if (error) *error = QString("Could not open %1: %2").arg(audioFile, avErr(ret));
+        return false;
+    }
+    ret = avformat_find_stream_info(*fmtCtx, nullptr);
+    if (ret < 0) {
+        if (error) *error = QString("Could not find stream info: %1").arg(avErr(ret));
+        avformat_close_input(fmtCtx);
+        return false;
+    }
+    for (unsigned i = 0; i < (*fmtCtx)->nb_streams; ++i) {
+        if ((*fmtCtx)->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            *audioIdx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (*audioIdx < 0) {
+        if (error) *error = QStringLiteral("no audio stream found");
+        avformat_close_input(fmtCtx);
+        return false;
+    }
+    return true;
+}
+
 FrameTable buildRepairTable(const QString& audioFile,
                              const TTAudioRepairItem& item,
                              int targetAcmod,
@@ -112,28 +141,10 @@ FrameTable buildRepairTable(const QString& audioFile,
     }
 
     AVFormatContext* fmtCtx = nullptr;
-    int ret = avformat_open_input(&fmtCtx, audioFile.toUtf8().constData(), nullptr, nullptr);
-    if (ret < 0) {
-        return fail(QString("Could not open %1: %2").arg(audioFile, avErr(ret)));
-    }
-    ret = avformat_find_stream_info(fmtCtx, nullptr);
-    if (ret < 0) {
-        QString msg = QString("Could not find stream info: %1").arg(avErr(ret));
-        avformat_close_input(&fmtCtx);
-        return fail(msg);
-    }
-
     int audioIdx = -1;
-    for (unsigned i = 0; i < fmtCtx->nb_streams; ++i) {
-        if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-            audioIdx = static_cast<int>(i);
-            break;
-        }
-    }
-    if (audioIdx < 0) {
-        avformat_close_input(&fmtCtx);
-        return fail(QStringLiteral("no audio stream found"));
-    }
+    QString openError;
+    if (!openFirstAudioStream(audioFile, &fmtCtx, &audioIdx, &openError))
+        return fail(openError);
     AVStream* inStream = fmtCtx->streams[audioIdx];
     AVCodecParameters* cp = inStream->codecpar;
     if (cp->sample_rate <= 0) {

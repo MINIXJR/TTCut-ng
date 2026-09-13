@@ -14,8 +14,11 @@
 
 
 #include "ttcutavcutdlg.h"
+#include "ttthemedicon.h"
 
 #include "../common/ttsettings.h"
+#include "../common/ttencodernames.h"
+#include "ttcombofill.h"
 
 #include <sys/statvfs.h>
 #include <QApplication>
@@ -46,10 +49,9 @@ TTCutAVCutDlg::TTCutAVCutDlg(QWidget* parent, bool audioOnly)
   log = TTMessageLogger::getInstance();
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  btnDirOpen->setIcon(QIcon::fromTheme("folder-open", style->standardIcon(QStyle::SP_DirOpenIcon)));
-  okButton->setIcon(QIcon::fromTheme("dialog-ok", style->standardIcon(QStyle::SP_DialogOkButton)));
-  cancelButton->setIcon(QIcon::fromTheme("dialog-cancel", style->standardIcon(QStyle::SP_DialogCancelButton)));
+  btnDirOpen->setIcon(ttThemedIcon("folder-open", QStyle::SP_DirOpenIcon));
+  okButton->setIcon(ttThemedIcon("dialog-ok", QStyle::SP_DialogOkButton));
+  cancelButton->setIcon(ttThemedIcon("dialog-cancel", QStyle::SP_DialogCancelButton));
 
   // signals and slot connection
   // ------------------------------------------------------------------
@@ -161,37 +163,11 @@ void TTCutAVCutDlg::onResetDefaults()
   // wiped without a project reload.
   TTSettings* s = TTSettings::instance();
 
-  // Encoder transient: codec-specific App-Default.
-  switch (s->encoderCodec()) {
-    case 0:
-      s->setEncoderCrf(s->mpeg2Crf());
-      break;
-    case 1:
-      s->setEncoderPreset(s->h264Preset());
-      s->setEncoderCrf(s->h264Crf());
-      s->setEncoderProfile(s->h264Profile());
-      break;
-    case 2:
-      s->setEncoderPreset(s->h265Preset());
-      s->setEncoderCrf(s->h265Crf());
-      s->setEncoderProfile(s->h265Profile());
-      break;
-  }
-
-  // Mux/Audio working set: persistent App-Defaults.
-  s->setWorkingMkvCreateChapters(s->mkvCreateChapters());
-  s->setWorkingMkvChapterInterval(s->mkvChapterInterval());
-  s->setWorkingMuxDeleteES(s->muxDeleteES());
-  s->setWorkingMpeg2Target(s->mpeg2Target());
-  s->setWorkingMuxMode(s->muxMode());
-  s->setWorkingAudioOnlyFormat(s->audioOnlyFormat());
-  // Container: codec-specific App-Default sticky.
-  switch (s->encoderCodec()) {
-    case 0: s->setWorkingOutputContainer(s->mpeg2Muxer()); break;
-    case 1: s->setWorkingOutputContainer(s->h264Muxer());  break;
-    case 2: s->setWorkingOutputContainer(s->h265Muxer());  break;
-    default: s->setWorkingOutputContainer(s->outputContainer()); break;
-  }
+  // Encoder transient + container: the codec's App-Defaults (the same sync
+  // load() and setEncoderCodec() run); Mux/Audio working set: the
+  // persistent App-Defaults.
+  s->syncWorkingSetToCodec(s->encoderCodec());
+  s->resetWorkingMuxSet();
 
   // Reload the UI from the freshly reset working set.
   int muxMode = s->workingMuxMode();
@@ -331,16 +307,7 @@ void TTCutAVCutDlg::populateMuxerProg()
  */
 void TTCutAVCutDlg::populateMuxTarget()
 {
-  cbMuxTarget->clear();
-  cbMuxTarget->insertItem(0, "Generic MPEG1 (f0)");
-  cbMuxTarget->insertItem(1, "VCD (f1)");
-  cbMuxTarget->insertItem(2, "user-rate VCD (f2)");
-  cbMuxTarget->insertItem(3, "Generic MPEG2 (f3)");
-  cbMuxTarget->insertItem(4, "SVCD (f4)");
-  cbMuxTarget->insertItem(5, "user-rate SVCD (f5)");
-  cbMuxTarget->insertItem(6, "VCD Stills (f6)");
-  cbMuxTarget->insertItem(7, "DVD with NAV sectors (f8)");
-  cbMuxTarget->insertItem(8, "DVD (f9)");
+  ttFillCombo(cbMuxTarget, TTEncoderNames::kMpeg2MuxTargets, TTEncoderNames::kMpeg2MuxTargetCount);
   cbMuxTarget->setCurrentIndex(TTSettings::instance()->workingMpeg2Target());
 }
 
@@ -381,14 +348,7 @@ void TTCutAVCutDlg::onCodecChangedForVisibility(int codecIndex)
   // Switch container to the codec's per-codec sticky preference (so a
   // user-codec-switch in the dialog re-picks the right preferred container,
   // e.g. MPEG-2 → MPG, H.264 → MKV).
-  TTSettings* s = TTSettings::instance();
-  int desired;
-  switch (codecIndex) {
-    case 0:  desired = s->mpeg2Muxer(); break;
-    case 1:  desired = s->h264Muxer();  break;
-    case 2:  desired = s->h265Muxer();  break;
-    default: desired = s->outputContainer(); break;
-  }
+  int desired = TTSettings::instance()->encoderDefaultsFor(codecIndex).container;
   // Fall back to MKV if the preferred container is MPG but the codec
   // doesn't support it (H.264/H.265 with MPG is not a valid combination).
   if (!mpgSupported && desired == 0) desired = 1;

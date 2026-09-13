@@ -14,6 +14,8 @@
 #include <QList>
 
 class QListView;
+class QMenu;
+class QAction;
 class QTabWidget;
 class QPushButton;
 class QCheckBox;
@@ -67,6 +69,22 @@ private slots:
 public:
 
 private:
+  //! The actions onContextMenu offers for one marker (null when not offered)
+  //! and what handling them needs to know.
+  struct ContextMenuActions {
+    const QAction* actDelete       = nullptr;
+    const QAction* actCutIn        = nullptr;
+    const QAction* actCutOut       = nullptr;
+    const QAction* actRepair       = nullptr;
+    const QAction* actEditRepair   = nullptr;
+    const QAction* actRemoveRepair = nullptr;
+    const QAction* actDeleteAll    = nullptr;
+    int frameIndex       = 0;
+    int repairTrackIndex = -1;
+    int repairIndex      = -1;
+  };
+  void buildContextMenu(QMenu& menu, const QModelIndex& index, ContextMenuActions& acts);
+  void handleContextAction(const QAction* chosen, const QModelIndex& index, const ContextMenuActions& acts);
   void setupLandezonenTab(QWidget* tab);
 
   TTStreamPointModel* mModel;

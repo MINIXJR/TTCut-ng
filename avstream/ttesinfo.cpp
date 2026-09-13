@@ -470,6 +470,21 @@ int TTESInfo::audioRemovedMs(int track) const
 //   1. "Petrocelli_5min_video.info"
 //   2. "Petrocelli_5min.info" (base name without _video suffix)
 // ----------------------------------------------------------------------------
+TTESInfoTiming TTESInfo::timingForVideo(const QString& videoFilePath)
+{
+    TTESInfoTiming t;
+    const QString infoFile = findInfoFile(videoFilePath);
+    if (infoFile.isEmpty()) return t;
+
+    TTESInfo esInfo(infoFile);
+    if (!esInfo.isLoaded()) return t;
+
+    t.found = true;
+    if (esInfo.frameRate() > 0) t.frameRate = esInfo.frameRate();
+    if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) t.avOffsetMs = esInfo.avOffsetMs();
+    return t;
+}
+
 QString TTESInfo::findInfoFile(const QString& videoFilePath)
 {
     QFileInfo videoInfo(videoFilePath);

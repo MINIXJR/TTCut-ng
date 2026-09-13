@@ -13,6 +13,7 @@
 // ----------------------------------------------------------------------------
 
 #include "../common/ttexception.h"
+#include "ttthemedicon.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "ttcutpreview.h"
@@ -78,11 +79,10 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   cbCutPreview->setInsertPolicy( QComboBox::InsertAfterCurrent );
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-start", style->standardIcon(QStyle::SP_MediaPlay)));
-  pbExit->setIcon(QIcon::fromTheme("window-close", style->standardIcon(QStyle::SP_DialogCloseButton)));
-  pbPrevCut->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_ArrowBack)));
-  pbNextCut->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_ArrowForward)));
+  pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
+  pbExit->setIcon(ttThemedIcon("window-close", QStyle::SP_DialogCloseButton));
+  pbPrevCut->setIcon(ttThemedIcon("go-previous", QStyle::SP_ArrowBack));
+  pbNextCut->setIcon(ttThemedIcon("go-next", QStyle::SP_ArrowForward));
 
   connect(mPlayer, &TTMpvWrapper::playerPlaying,  this, &TTCutPreview::onPlayerPlaying);
   connect(mPlayer, &TTMpvWrapper::playerFinished, this, &TTCutPreview::onPlayerFinished);
@@ -301,10 +301,10 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/mAutoPlayOnSelect);
   if (mAutoPlayOnSelect) {
     pbPlay->setText(tr("Stop"));
-    pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
+    pbPlay->setIcon(ttThemedIcon("media-playback-stop", QStyle::SP_MediaStop));
   } else {
     pbPlay->setText(tr("Play"));
-    pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+    pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
   }
 
   // Update prev/next button states
@@ -327,7 +327,7 @@ void TTCutPreview::onPlayPreview()
     // Pause without tearing mpv down — current frame stays visible.
     mPlayer->pause();
     pbPlay->setText(tr("Play"));
-    pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+    pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
     return;
   }
 
@@ -343,7 +343,7 @@ void TTCutPreview::onPlayPreview()
 void TTCutPreview::onPlayerPlaying()
 {
   pbPlay->setText(tr("Stop"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-stop", QApplication::style()->standardIcon(QStyle::SP_MediaStop)));
+  pbPlay->setIcon(ttThemedIcon("media-playback-stop", QStyle::SP_MediaStop));
 }
 
 void TTCutPreview::onPlayerFinished()
@@ -352,7 +352,7 @@ void TTCutPreview::onPlayerFinished()
   // frame on screen — that is the point of this dialog change. Reloading here
   // is what used to snap the picture back to frame 0.
   pbPlay->setText(tr("Play"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+  pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
 }
 
 void TTCutPreview::onPlayerError(const QString& message)
@@ -394,7 +394,7 @@ void TTCutPreview::onPrevCut()
     mPlayer->pause();
     mPlayer->seek(0.0);
     pbPlay->setText(tr("Play"));
-    pbPlay->setIcon(QIcon::fromTheme("media-playback-start", QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+    pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
     return;
   }
 
@@ -450,16 +450,13 @@ void TTCutPreview::setBurstMessage(const QString& message, bool resolved)
  */
 void TTCutPreview::configureBurstShiftButton(bool isCutOut)
 {
-  QStyle* style = QApplication::style();
 
   if (isCutOut) {
-    pbBurstShift->setIcon(QIcon::fromTheme("go-previous",
-        style->standardIcon(QStyle::SP_ArrowBack)));
+    pbBurstShift->setIcon(ttThemedIcon("go-previous", QStyle::SP_ArrowBack));
     pbBurstShift->setToolTip(tr("Move cut-out one frame earlier"));
   }
   else {
-    pbBurstShift->setIcon(QIcon::fromTheme("go-next",
-        style->standardIcon(QStyle::SP_ArrowForward)));
+    pbBurstShift->setIcon(ttThemedIcon("go-next", QStyle::SP_ArrowForward));
     pbBurstShift->setToolTip(tr("Move cut-in one frame later"));
   }
 
@@ -726,8 +723,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   current_video_file = outputFile;
   mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
   pbPlay->setText(tr("Play"));
-  pbPlay->setIcon(QIcon::fromTheme("media-playback-start",
-      QApplication::style()->standardIcon(QStyle::SP_MediaPlay)));
+  pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
 
   // Re-check burst for the current cut
   checkBurstForCurrentCut(iCut);
@@ -750,13 +746,7 @@ void TTCutPreview::regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutLi
   TTVideoStream* vStream = avItem->videoStream();
 
   // Get A/V sync offset from .info file
-  int avOffsetMs = 0;
-  QString infoFile = TTESInfo::findInfoFile(vStream->filePath());
-  if (!infoFile.isEmpty()) {
-    TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded() && esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
-      avOffsetMs = esInfo.avOffsetMs();
-  }
+  const int avOffsetMs = TTESInfo::timingForVideo(vStream->filePath()).avOffsetMs;
 
   progress->setLabelText(tr("Cutting MPEG-2 video..."));
   QApplication::processEvents();
@@ -821,17 +811,9 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   QString suffix = QFileInfo(sourceFile).suffix().toLower();
 
   // Get A/V offset from .info file (frame rate comes from vStream, already PAFF-corrected)
-  int avOffsetMs = 0;
-  QString infoFile = TTESInfo::findInfoFile(sourceFile);
-  if (!infoFile.isEmpty()) {
-    TTESInfo esInfo(infoFile);
-    if (esInfo.isLoaded()) {
-      if (frameRate <= 0 && esInfo.frameRate() > 0)
-        frameRate = esInfo.frameRate();
-      if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0)
-        avOffsetMs = esInfo.avOffsetMs();
-    }
-  }
+  const TTESInfoTiming info = TTESInfo::timingForVideo(sourceFile);
+  if (frameRate <= 0 && info.frameRate > 0) frameRate = info.frameRate;
+  const int avOffsetMs = info.avOffsetMs;
 
   progress->setLabelText(tr("Video Smart Cut..."));
   QApplication::processEvents();
@@ -846,18 +828,14 @@ void TTCutPreview::regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCu
   }
 
   // Inject frame-granularity display-order map (PAFF-safe).
-  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
+  if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream)) {
     smartCut.setDisplayOrderMap(h26x->displayOrderMap());
     if (TTSettings::instance()->logUI())
         qDebug() << "Regenerate: Injected display-order map ("
                  << h26x->displayOrderMap().count() << "entries)";
   }
 
-  QList<QPair<int, int>> cutFrames;
-  for (int i = 0; i < tmpCutList->count(); i++) {
-    TTCutItem item = tmpCutList->at(i);
-    cutFrames.append(qMakePair(item.cutInIndex(), item.cutOutIndex()));
-  }
+  const QList<QPair<int, int>> cutFrames = tmpCutList->frameRanges();
 
   QString tempVideoFile = QString("%1/preview_video_temp.%2")
       .arg(TTSettings::instance()->tempDirPath()).arg(suffix);

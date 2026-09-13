@@ -250,6 +250,7 @@ diag_tool(test_seqheader_missing AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_headerlist_eof   AV MPEG2 SOURCES ${MPEG2CUT_SRC})
 diag_tool(test_window_geometry WIDGETS SOURCES ${ROOT}/gui/ttwindowgeometry.cpp)
 diag_tool(test_container_sync  WIDGETS SOURCES)
+diag_tool(test_settings_cancel WIDGETS SOURCES)
 diag_tool(test_acmod_majority  WIDGETS SOURCES)
 diag_tool(test_progressestimator  SOURCES ${PROGEST_SRC})
 
@@ -293,6 +294,13 @@ target_link_libraries(test_h26xcut_abort PRIVATE ttcut-core)
 diag_tool(test_cut_outcome     AV WIDGETS SOURCES)
 diag_tool(test_partial_track     AV WIDGETS SOURCES)
 target_link_libraries(test_partial_track PRIVATE ttcut-core)
+# Loads and writes a project through TTAVData, so it needs the whole core.
+diag_tool(test_project_roundtrip AV WIDGETS SOURCES)
+target_link_libraries(test_project_roundtrip PRIVATE ttcut-core)
+# Drives TTAVData::readProjectFile() with a failing audio track (gate for
+# contract findings 3+4 of code-audit run 3), so it needs the whole core.
+diag_tool(test_open_track_failure AV WIDGETS SOURCES)
+target_link_libraries(test_open_track_failure PRIVATE ttcut-core)
 # Drives TTAVData::cutSubtitleTracks() and planAudioCut() directly, so it
 # needs the whole core library (same rationale as test_h26xcut_abort).
 diag_tool(test_subtitle_delay    AV WIDGETS SOURCES)
@@ -370,6 +378,7 @@ target_link_libraries(test_stale_abort PRIVATE ttcut-core)
 target_link_libraries(test_framesearch_progress PRIVATE ttcut-core)
 target_link_libraries(test_directed_search PRIVATE ttcut-core)
 target_link_libraries(test_container_sync PRIVATE ttcut-core)
+target_link_libraries(test_settings_cancel PRIVATE ttcut-core)
 target_link_libraries(test_acmod_majority PRIVATE ttcut-core)
 target_link_libraries(repro_playback_mkv PRIVATE ttcut-core)
 target_link_libraries(test_audio_header_strings PRIVATE ttcut-core)
@@ -394,8 +403,8 @@ add_custom_target(diag DEPENDS
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
   test_anomalyscan
   test_pillarbox test_pool_abort
-  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync
-  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair
+  test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_open_track_failure test_extra_index_rank
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)

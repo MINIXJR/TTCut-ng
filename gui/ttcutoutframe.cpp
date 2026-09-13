@@ -13,6 +13,8 @@
 // ----------------------------------------------------------------------------
 
 #include "ttcutoutframe.h"
+#include "ttthemedicon.h"
+#include "ttframepositiontext.h"
 #include "../data/ttavlist.h"
 #include "../avstream/ttcommon.h"
 
@@ -35,10 +37,9 @@ TTCutOutFrame::TTCutOutFrame(QWidget* parent)
   isCutOut            = false;
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  pbPrevCutOutFrame->setIcon(QIcon::fromTheme("go-previous", style->standardIcon(QStyle::SP_MediaSeekBackward)));
-  pbNextCutOutFrame->setIcon(QIcon::fromTheme("go-next", style->standardIcon(QStyle::SP_MediaSeekForward)));
-  pbSearchFrame->setIcon(QIcon::fromTheme("edit-find", style->standardIcon(QStyle::SP_FileDialogContentsView)));
+  pbPrevCutOutFrame->setIcon(ttThemedIcon("go-previous", QStyle::SP_MediaSeekBackward));
+  pbNextCutOutFrame->setIcon(ttThemedIcon("go-next", QStyle::SP_MediaSeekForward));
+  pbSearchFrame->setIcon(ttThemedIcon("edit-find", QStyle::SP_FileDialogContentsView));
 
   connect(pbPrevCutOutFrame, &QPushButton::clicked, this, &TTCutOutFrame::onPrevCutOutPos);
   connect(pbNextCutOutFrame, &QPushButton::clicked, this, &TTCutOutFrame::onNextCutOutPos);
@@ -185,19 +186,8 @@ void TTCutOutFrame::updateCurrentPosition(int pos)
 {
   if (videoStream == 0) return;
 
-  QString szTemp;
-  QString szTemp1, szTemp2;
-  int actualPos   = (pos >= 0) ? pos : videoStream->currentIndex();
-  int frame_type  = videoStream->frameType(actualPos);
-
-  szTemp1 = videoStream->frameTime(actualPos).toString("hh:mm:ss.zzz");
-
-  szTemp2 = QString(" (%1)").arg(actualPos);
-
-  szTemp2 += ttFrameTypeTag(frame_type);
-
-  szTemp1 += szTemp2;
-  laCutOutFramePosition->setText( szTemp1 );
+  const int actualPos = (pos >= 0) ? pos : videoStream->currentIndex();
+  laCutOutFramePosition->setText(ttFramePositionText(videoStream, actualPos));
 
   laCutOutFramePosition->update();
 }

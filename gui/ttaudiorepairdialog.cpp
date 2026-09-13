@@ -61,7 +61,7 @@ double probeFrameDurationMs(const QString& audioFile)
   }
   double result = kApproxFrameDurMs;
   for (unsigned i = 0; i < fmtCtx->nb_streams; ++i) {
-    AVCodecParameters* cp = fmtCtx->streams[i]->codecpar;
+    const AVCodecParameters* cp = fmtCtx->streams[i]->codecpar;
     if (cp->codec_type == AVMEDIA_TYPE_AUDIO && cp->sample_rate > 0) {
       result = 1536.0 * 1000.0 / cp->sample_rate;
       break;
@@ -368,21 +368,13 @@ void TTAudioRepairDialog::onPlaybackConfirmed()
   mAwaitingPlaybackStart = false;
 }
 
-void TTAudioRepairDialog::onPlayOriginal()
-{
-  QString error;
-  QString path = writePreviewWindow(false, &error);
-  if (path.isEmpty()) {
-    QMessageBox::warning(this, tr("Repair preview"), error);
-    return;
-  }
-  playFile(path);
-}
+void TTAudioRepairDialog::onPlayOriginal() { playPreview(false); }
+void TTAudioRepairDialog::onPlayRepaired() { playPreview(true); }
 
-void TTAudioRepairDialog::onPlayRepaired()
+void TTAudioRepairDialog::playPreview(bool repaired)
 {
   QString error;
-  QString path = writePreviewWindow(true, &error);
+  QString path = writePreviewWindow(repaired, &error);
   if (path.isEmpty()) {
     QMessageBox::warning(this, tr("Repair preview"), error);
     return;
@@ -461,28 +453,12 @@ QString TTAudioRepairDialog::writePreviewWindow(bool repaired, QString* error)
   const qint64 windowFrom = qMax<qint64>(0, from - marginFrames);
   const qint64 windowTo   = to + marginFrames;
 
+  // Same open as TTAudioRepair::buildRepairTable; its message names the
+  // libav error, which the dialog shows as is.
   AVFormatContext* fmtCtx = nullptr;
-  if (avformat_open_input(&fmtCtx, mAudioFile.toUtf8().constData(), nullptr, nullptr) < 0) {
-    *error = tr("Could not open %1").arg(mAudioFile);
-    return QString();
-  }
-  if (avformat_find_stream_info(fmtCtx, nullptr) < 0) {
-    avformat_close_input(&fmtCtx);
-    *error = tr("Could not read stream information for %1").arg(mAudioFile);
-    return QString();
-  }
   int audioIdx = -1;
-  for (unsigned i = 0; i < fmtCtx->nb_streams; ++i) {
-    if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-      audioIdx = int(i);
-      break;
-    }
-  }
-  if (audioIdx < 0) {
-    avformat_close_input(&fmtCtx);
-    *error = tr("No audio stream found in %1").arg(mAudioFile);
+  if (!TTAudioRepair::openFirstAudioStream(mAudioFile, &fmtCtx, &audioIdx, error))
     return QString();
-  }
 
   // Review fix (Minor): mInstanceId makes this unique per dialog instance -
   // two dialogs open at once (or a stale file from a crashed prior run)

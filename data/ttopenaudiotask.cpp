@@ -25,12 +25,12 @@
 /**
  * Open audio stream task
  */
-TTOpenAudioTask::TTOpenAudioTask(TTAVItem* avItem, QString filePath, int order) :
-                 TTThreadTask("OpenAudioTask")
+TTOpenAudioTask::TTOpenAudioTask(TTAVItem* avItem, const QString& filePath, int order) :
+                 TTThreadTask("OpenAudioTask"),
+                 mFilePath(filePath)
 {
   mpAVItem      = avItem;
   mOrder        = order;
-	mFilePath     = filePath;
   mpAudioType   = 0;
 	mpAudioStream = 0;
 }
@@ -57,8 +57,7 @@ void TTOpenAudioTask::cleanUp()
   if (mpAudioType   != 0) delete mpAudioType;
   if (mpAudioStream == 0) return;
 
-	disconnect(mpAudioStream, &TTAudioStream::statusReport,
-			   	   this,          qOverload<int, const QString&, quint64>(&TTOpenAudioTask::onStatusReport));
+  unlinkStatusSource(mpAudioStream);
 }
 
 /**
@@ -79,10 +78,9 @@ void TTOpenAudioTask::operation()
 			mpAudioType->avStreamType() != TTAVTypes::ac3_audio) 
     throw TTException(__FILE__, __LINE__, tr("Unsupported audio type %1!").arg(mFilePath));
 
-	mpAudioStream = (TTAudioStream*) mpAudioType->createAudioStream();
+	mpAudioStream = static_cast<TTAudioStream*>(mpAudioType->createAudioStream());
 
-  connect(mpAudioStream, &TTAudioStream::statusReport,
-				  this,          qOverload<int, const QString&, quint64>(&TTOpenAudioTask::onStatusReport));
+  linkStatusSource(mpAudioStream);
 
 	mpAudioStream->createHeaderList();
 

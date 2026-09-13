@@ -33,7 +33,7 @@ class TTCutVideoTask : public TTThreadTask
   public:
     TTCutVideoTask(TTAVData* avData);
     ~TTCutVideoTask() override;
-    void init(QString tgtFilePath, TTCutList* cutList);
+    void init(const QString& tgtFilePath, TTCutList* cutList);
     TTMuxListDataItem* muxListItem();
 
   protected:
@@ -73,8 +73,8 @@ class TTCutTask : public TTThreadTask
     void onUserAbort();
 
   private:  
-    int             mCutIn;
-    int             mCutOut;
+    int             mCutIn  = 0;
+    int             mCutOut = 0;
     TTVideoStream*  mpCutStream;
     TTCutParameter* mpCutParameter;
 };

@@ -46,10 +46,12 @@ struct TTLogoProjectData
 class TTCutProjectData
 {
   public:
-    TTCutProjectData(const QFileInfo& fInfo);
+    explicit TTCutProjectData(const QFileInfo& fInfo);
     ~TTCutProjectData();
+    TTCutProjectData(const TTCutProjectData&) = delete;
+    TTCutProjectData& operator=(const TTCutProjectData&) = delete;
 
-    void serializeAVDataItem(TTAVItem* vitem);
+    void serializeAVDataItem(const TTAVItem* vitem);
     void serializeStreamPoints(const QList<TTStreamPoint>& points);
     void serializeLogoData(const TTLogoProjectData& logoData);
     void deserializeAVDataItem(TTAVData* avData);
@@ -66,15 +68,16 @@ class TTCutProjectData
     void createDocumentStructure();
     void addTextElement(QDomElement& parent, const QString& tag, const QString& text);
     QDomElement writeVideoSection(const QString& filePath, int order);
-    QDomElement writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs = 0);
+    // <Audio> and <Subtitle> carry the same fields (Order, Name, optional
+    // Language and Delay); tag picks the element name.
+    QDomElement writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs = 0);
     QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     QDomElement writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order);
-    QDomElement writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs = 0);
     void        parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData);
     void        parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem);
-    void        parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
-    void        parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);
+    static void parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
+    static void parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);
     void        parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem);
     void        serializeSettings();
     void        parseSettingsSection(QDomElement settingsElement);

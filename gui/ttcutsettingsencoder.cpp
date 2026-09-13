@@ -16,6 +16,8 @@
 
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
+#include "../common/ttencodernames.h"
+#include "ttcombofill.h"
 
 
 TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
@@ -49,13 +51,7 @@ void TTCutSettingsEncoder::initCodecList()
 // libx264 / libx265 share the same speed-preset name set.
 static void populatePresetCombo(QComboBox* combo)
 {
-  static const char* const kPresets[] = {
-    "ultrafast", "superfast", "veryfast", "faster", "fast",
-    "medium", "slow", "slower", "veryslow"
-  };
-  combo->clear();
-  for (int i = 0; i < int(sizeof(kPresets)/sizeof(kPresets[0])); ++i)
-    combo->insertItem(i, QString::fromLatin1(kPresets[i]));
+  ttFillCombo(combo, TTEncoderNames::kPresets, TTEncoderNames::kPresetCount);
 }
 
 void TTCutSettingsEncoder::initPresetList()
@@ -88,21 +84,12 @@ void TTCutSettingsEncoder::updateProfileList()
       break;
 
     case 1:  // H.264
-      cbProfile->insertItem(0, "baseline");
-      cbProfile->insertItem(1, "main");
-      cbProfile->insertItem(2, "high");
-      cbProfile->insertItem(3, "high10");
-      cbProfile->insertItem(4, "high422");
-      cbProfile->insertItem(5, "high444");
+      ttFillCombo(cbProfile, TTEncoderNames::kH264Profiles, TTEncoderNames::kH264ProfileCount);
       cbProfile->setEnabled(true);
       break;
 
     case 2:  // H.265
-      cbProfile->insertItem(0, "main");
-      cbProfile->insertItem(1, "main10");
-      cbProfile->insertItem(2, "main12");
-      cbProfile->insertItem(3, "main422-10");
-      cbProfile->insertItem(4, "main444-10");
+      ttFillCombo(cbProfile, TTEncoderNames::kH265Profiles, TTEncoderNames::kH265ProfileCount);
       cbProfile->setEnabled(true);
       break;
   }
@@ -155,7 +142,7 @@ void TTCutSettingsEncoder::updateQualityUI(int codec)
 
 void TTCutSettingsEncoder::setTabData()
 {
-  TTSettings* s = TTSettings::instance();
+  const TTSettings* s = TTSettings::instance();
   cbEncodingMode->setChecked(s->encoderMode());
   cbCodec->setCurrentIndex(s->encoderCodec());
 
@@ -213,27 +200,9 @@ void TTCutSettingsEncoder::saveCurrentCodecSettings(int /*codec*/)
 
 void TTCutSettingsEncoder::loadCodecSettings(int codec)
 {
-  int preset, crf, profile;
-
-  TTSettings* s = TTSettings::instance();
-  switch (codec) {
-    case 0:  // MPEG-2: Preset/Profile entfallen — Defaults für UI-Konsistenz
-      preset  = 4;  // "fast" (UI shows preset list aber wirkt nicht für MPEG-2)
-      crf     = s->mpeg2Crf();
-      profile = 0;  // "Main Profile" (auto-detected im Cut)
-      break;
-    case 1:  // H.264
-      preset  = s->h264Preset();
-      crf     = s->h264Crf();
-      profile = s->h264Profile();
-      break;
-    case 2:  // H.265
-    default:
-      preset  = s->h265Preset();
-      crf     = s->h265Crf();
-      profile = s->h265Profile();
-      break;
-  }
+  // MPEG-2: preset/profile are not applied; the record carries neutral UI values.
+  const TTSettings::EncoderDefaults d = TTSettings::instance()->encoderDefaultsFor(codec);
+  const int preset = d.preset, crf = d.crf, profile = d.profile;
 
   // Update quality UI (label, range, tooltip) before setting value
   updateQualityUI(codec);

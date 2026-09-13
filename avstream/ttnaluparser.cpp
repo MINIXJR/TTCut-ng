@@ -1378,6 +1378,86 @@ uint32_t TTNaluParser::readBits(const uint8_t* data, int dataSize, int& bitPos, 
 // 134 (MFC High), 135 (MFC Depth High), 138 (Multiview Depth High),
 // 139 (Enhanced Multiview Depth High).
 // ----------------------------------------------------------------------------
+bool TTNaluParser::parseH264SpsBasics(const uint8_t* data, int size, H264SpsBasics& out)
+{
+    if (!data || size < 5) return false;
+
+    int nalStart = -1;
+    for (int s = findStartCodePayload(data, size, 0); s >= 0; s = findStartCodePayload(data, size, s)) {
+        if ((data[s] & 0x1F) == 7) { nalStart = s; break; }
+    }
+    if (nalStart < 0) return false;
+
+    const uint8_t* sps = data + nalStart;
+    const int spsSize = size - nalStart;
+    if (spsSize < 5) return false;
+    int bitPos = 8;   // past the NAL header byte
+
+    const int profileIdc = static_cast<int>(readBits(sps, spsSize, bitPos, 8));
+    readBits(sps, spsSize, bitPos, 8);        // constraint_set flags + reserved
+    readBits(sps, spsSize, bitPos, 8);        // level_idc
+    readExpGolombUE(sps, spsSize, bitPos);    // seq_parameter_set_id
+
+    if (isH264HighProfile(static_cast<uint32_t>(profileIdc))) {
+        const int chromaFormatIdc = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
+        if (chromaFormatIdc == 3) readBits(sps, spsSize, bitPos, 1);   // separate_colour_plane_flag
+        readExpGolombUE(sps, spsSize, bitPos);    // bit_depth_luma_minus8
+        readExpGolombUE(sps, spsSize, bitPos);    // bit_depth_chroma_minus8
+        readBits(sps, spsSize, bitPos, 1);        // qpprime_y_zero_transform_bypass_flag
+        if (readBits(sps, spsSize, bitPos, 1)) {  // seq_scaling_matrix_present_flag
+            const int numLists = (chromaFormatIdc != 3) ? 8 : 12;
+            for (int i = 0; i < numLists; i++) {
+                if (!readBits(sps, spsSize, bitPos, 1)) continue;   // seq_scaling_list_present_flag[i]
+                const int listSize = (i < 6) ? 16 : 64;
+                int lastScale = 8, nextScale = 8;
+                for (int j = 0; j < listSize; j++) {
+                    if (nextScale != 0) {
+                        const int delta = readExpGolombSE(sps, spsSize, bitPos);
+                        nextScale = (lastScale + delta + 256) % 256;
+                    }
+                    lastScale = (nextScale == 0) ? lastScale : nextScale;
+                }
+            }
+        }
+    }
+
+    out.log2MaxFrameNum = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos)) + 4;
+
+    const int pocType = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
+    if (pocType == 0) {
+        readExpGolombUE(sps, spsSize, bitPos);    // log2_max_pic_order_cnt_lsb_minus4
+    } else if (pocType == 1) {
+        readBits(sps, spsSize, bitPos, 1);        // delta_pic_order_always_zero_flag
+        readExpGolombSE(sps, spsSize, bitPos);    // offset_for_non_ref_pic
+        readExpGolombSE(sps, spsSize, bitPos);    // offset_for_top_to_bottom_field
+        const int n = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
+        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
+        if (n > 256) return true;   // log2MaxFrameNum is valid, the rest is not read
+        for (int i = 0; i < n; i++) readExpGolombSE(sps, spsSize, bitPos);
+    }
+
+    readExpGolombUE(sps, spsSize, bitPos);    // max_num_ref_frames
+    readBits(sps, spsSize, bitPos, 1);        // gaps_in_frame_num_value_allowed_flag
+    readExpGolombUE(sps, spsSize, bitPos);    // pic_width_in_mbs_minus1
+    readExpGolombUE(sps, spsSize, bitPos);    // pic_height_in_map_units_minus1
+
+    out.frameMbsOnlyFlag     = (readBits(sps, spsSize, bitPos, 1) == 1);
+    out.haveFrameMbsOnlyFlag = true;
+    return true;
+}
+
+void TTNaluParser::parseH264SliceFieldInfo(const uint8_t* nal, int nalSize, int log2MaxFrameNum,
+                                           int& frameNum, bool& isField, bool& isBottomField)
+{
+    int bitPos = 8;   // past the NAL header byte
+    readExpGolombUE(nal, nalSize, bitPos);   // first_mb_in_slice
+    readExpGolombUE(nal, nalSize, bitPos);   // slice_type
+    readExpGolombUE(nal, nalSize, bitPos);   // pic_parameter_set_id
+    frameNum      = static_cast<int>(readBits(nal, nalSize, bitPos, log2MaxFrameNum));
+    isField       = (readBits(nal, nalSize, bitPos, 1) == 1);          // field_pic_flag
+    isBottomField = isField && (readBits(nal, nalSize, bitPos, 1) == 1); // bottom_field_flag
+}
+
 bool TTNaluParser::isH264HighProfile(uint32_t profile_idc)
 {
     switch (profile_idc) {

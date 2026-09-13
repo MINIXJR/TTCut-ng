@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttaudioanomalyscantask.h"
+#include "ttindexcluster.h"
 
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
@@ -140,20 +141,8 @@ QList<TTAudioAnomalyScanTask::Finding> TTAudioAnomalyScanTask::evaluate(
     if (stats[f].is51 && stats[f].lfeRms > lfeRmsThresholdDb) activeIdx.append(f);
 
   QList<QPair<int,int>> islands;
-  if (!activeIdx.isEmpty()) {
-    int clusterStart = activeIdx.first();
-    int clusterEnd = clusterStart;
-    for (int k = 1; k < activeIdx.size(); ++k) {
-      if (activeIdx[k] - clusterEnd <= gapFrames) {
-        clusterEnd = activeIdx[k];
-      } else {
-        islands.append({clusterStart, clusterEnd});
-        clusterStart = activeIdx[k];
-        clusterEnd = clusterStart;
-      }
-    }
-    islands.append({clusterStart, clusterEnd});
-  }
+  for (const TTIndexCluster& c : ttClusterIndices(activeIdx, gapFrames))
+    islands.append({c.first, c.last});
 
   for (const auto& island : islands) {
     const int islandStart = island.first;
@@ -458,7 +447,7 @@ void TTAudioAnomalyScanTask::operation()
     return;
   }
 
-  TTSettings* cfg = TTSettings::instance();
+  const TTSettings* cfg = TTSettings::instance();
   GateStatus gate;
   const QList<Finding> findings = evaluate(stats,
       cfg->anomalyLfeRmsDb(), cfg->anomalyCenterContrast(),
@@ -490,12 +479,9 @@ void TTAudioAnomalyScanTask::operation()
         .arg(mTrackIndex + 1)
         .arg(QString::number(f.lfePeak, 'f', 1));
 
-    for (const auto& gap : mGapFrameRanges) {
-      if (videoFrom <= gap.second && videoTo >= gap.first) {
-        desc += tr(" (overlaps gap repair)");
-        break;
-      }
-    }
+    const bool overlapsGap = std::any_of(mGapFrameRanges.cbegin(), mGapFrameRanges.cend(),
+        [&](const auto& gap) { return videoFrom <= gap.second && videoTo >= gap.first; });
+    if (overlapsGap) desc += tr(" (overlaps gap repair)");
 
     TTStreamPoint pt(videoFrom, StreamPointType::AudioAnomaly, desc,
                      f.confidence, float(endSec - startSec));

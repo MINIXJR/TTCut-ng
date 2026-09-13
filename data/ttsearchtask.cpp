@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttsearchtask.h"
+#include "../avstream/ttlumasample.h"
 
 #include "../avstream/ttvideoindexlist.h"
 #include "../avstream/ttvideoheaderlist.h"
@@ -66,13 +67,7 @@ bool TTSearchTask::openDecoder()
     }
     // A cancel ends the decode in flight, not just the batch after it.
     mFFmpegWrapper->setCancelToken(&mIsAborted);
-    if (!mPreBuiltFrameIndex.isEmpty()) {
-      mFFmpegWrapper->setFrameIndex(mPreBuiltFrameIndex);
-    } else {
-      TTFrameIndexer indexer;
-      if (indexer.build(mFilePath, -1, nullptr))
-        mFFmpegWrapper->setFrameIndex(indexer.bundle());
-    }
+    mFFmpegWrapper->adoptOrBuildFrameIndex(mPreBuiltFrameIndex, mFilePath);
     return true;
   }
 
@@ -144,17 +139,16 @@ bool TTSearchTask::isFrameBlackAt(int pos, int pixelThreshold, float ratioThresh
   }
   if (gray.isNull()) return false;
 
-  int w = gray.width(), h = gray.height();
-  int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-
-  const int step = 2;
+  // Same sampling rule as TTFFmpegWrapper::isFrameBlack (TTCentreBand); the
+  // thresholds differ: the grayscale conversion here is full-range.
+  const TTCentreBand band = TTCentreBand::of(gray.width(), gray.height());
   const int earlyExitSamples = 500;
   long lumaSum = 0;
   int totalPixels = 0, blackPixels = 0;
 
-  for (int row = y0; row < y1; row += step) {
+  for (int row = band.y0; row < band.y1; row += TTCentreBand::step) {
     const uchar* line = gray.constScanLine(row);
-    for (int col = x0; col < x1; col += step) {
+    for (int col = band.x0; col < band.x1; col += TTCentreBand::step) {
       totalPixels++;
       lumaSum += line[col];
       if (line[col] < pixelThreshold) blackPixels++;
@@ -187,13 +181,10 @@ bool TTSearchTask::buildHistogramAt(int pos, int hist[256], int& totalPixels)
     QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
     QImage gray = rgb.convertToFormat(QImage::Format_Grayscale8);
 
-    int w = gray.width(), h = gray.height();
-    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-    const int step = 2;
-
-    for (int row = y0; row < y1; row += step) {
+    const TTCentreBand band = TTCentreBand::of(gray.width(), gray.height());
+    for (int row = band.y0; row < band.y1; row += TTCentreBand::step) {
       const uchar* line = gray.constScanLine(row);
-      for (int col = x0; col < x1; col += step) {
+      for (int col = band.x0; col < band.x1; col += TTCentreBand::step) {
         hist[line[col]]++;
         totalPixels++;
       }
@@ -248,13 +239,7 @@ bool TTSearchTask::setupWorkers()
       teardownWorkers();   // delete previously-opened wrappers
       return false;
     }
-    if (!mPreBuiltFrameIndex.isEmpty()) {
-      w->setFrameIndex(mPreBuiltFrameIndex);
-    } else {
-      TTFrameIndexer indexer;
-      if (indexer.build(mFilePath, -1, nullptr))
-        w->setFrameIndex(indexer.bundle());
-    }
+    w->adoptOrBuildFrameIndex(mPreBuiltFrameIndex, mFilePath);
     mSubWrappers.append(w);
   }
 

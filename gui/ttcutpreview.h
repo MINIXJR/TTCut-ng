@@ -98,7 +98,7 @@ private:
     void applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx);
     void regeneratePreviewClip(int iCut);
     void regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
-    void regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
+    static void regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
 };
 
 #endif // TTCUTPREVIEW_H

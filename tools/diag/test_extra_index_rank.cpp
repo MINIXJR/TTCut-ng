@@ -31,18 +31,14 @@
 #include "avstream/ttmpeg2videostream.h"
 #include "avstream/ttvideoindexlist.h"
 #include "avstream/ttavheader.h"
+#include "avstream/ttcommon.h"
 
-// Mirror of TTAVData::countExtraFramesBefore(): how many entries of a sorted
-// list are strictly below frameIndex.
+// ttCountBelow (avstream/ttcommon.h) is the implementation behind
+// TTAVData::countExtraFramesBefore and TTMpeg2VideoStream::extrasBefore,
+// so the harness measures the real one.
 static int countBefore(const QList<int>& sorted, int frameIndex)
 {
-  int lo = 0, hi = sorted.size();
-  while (lo < hi) {
-    int mid = (lo + hi) / 2;
-    if (sorted[mid] < frameIndex) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
+  return ttCountBelow(sorted, frameIndex);
 }
 
 int main(int argc, char** argv)
@@ -67,8 +63,9 @@ int main(int argc, char** argv)
   printf("== pictures (index entries)  : %d\n", n);
   printf("== extras (2nd field)        : %d\n", extras.size());
   if (extras.isEmpty()) {
-    printf("\nNo field pairs in this stream -- nothing to measure.\n");
-    return 0;
+    // 77 = SKIP in run-gates.sh: a stream without field pairs proves nothing.
+    printf("SKIP: no field pairs in this stream -- nothing to measure.\n");
+    return 77;
   }
 
   // Identity before the sort: stream position -> header-list index.
@@ -197,5 +194,25 @@ int main(int argc, char** argv)
   printf("\n== (3) field pairs not adjacent after sortDisplayOrder(): %d of %d\n",
          nonAdjacent, extras.size());
 
-  return 0;
+  // (4) Playback position round trip (code-audit run 3, contract finding 5):
+  // for every display frame d the stream index s that
+  // TTMpeg2VideoStream::streamIndexForDisplayIndex returns must satisfy
+  // s - extrasBefore(s) == d and lie inside the stream - what
+  // TTCurrentFrame::displayToStreamIndex relies on for the live position and
+  // the stop position alike.
+  const int displayFrames = n - extras.size();
+  int roundTripFailures = 0;
+  for (int d = 0; d < displayFrames; ++d) {
+    const int s = vs.streamIndexForDisplayIndex(d);
+    if (s < 0 || s >= n || s - vs.extrasBefore(s) != d) {
+      if (roundTripFailures < 5)
+        printf("   round trip FAIL: display %d -> stream %d -> display %d\n",
+               d, s, s - vs.extrasBefore(s));
+      ++roundTripFailures;
+    }
+  }
+  printf("\n== (4) display -> stream -> display round trip over %d display frames "
+         "(%d extras): %d failures\n", displayFrames, extras.size(), roundTripFailures);
+  printf("%s\n", roundTripFailures ? "EXTRA-INDEX-RANK FAIL" : "EXTRA-INDEX-RANK PASS");
+  return roundTripFailures ? 1 : 0;
 }

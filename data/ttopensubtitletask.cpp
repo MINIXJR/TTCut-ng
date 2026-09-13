@@ -25,12 +25,12 @@
 /**
  * Open subtitle stream task
  */
-TTOpenSubtitleTask::TTOpenSubtitleTask(TTAVItem* avItem, QString filePath, int order) :
-                    TTThreadTask("OpenSubtitleTask")
+TTOpenSubtitleTask::TTOpenSubtitleTask(TTAVItem* avItem, const QString& filePath, int order) :
+                    TTThreadTask("OpenSubtitleTask"),
+                    mFilePath(filePath)
 {
   mpAVItem         = avItem;
   mOrder           = order;
-  mFilePath        = filePath;
   mpSubtitleType   = 0;
   mpSubtitleStream = 0;
 }
@@ -58,8 +58,7 @@ void TTOpenSubtitleTask::cleanUp()
   if (mpSubtitleType   != 0) delete mpSubtitleType;
   if (mpSubtitleStream == 0) return;
 
-  disconnect(mpSubtitleStream, &TTSubtitleStream::statusReport,
-             this,             qOverload<int, const QString&, quint64>(&TTOpenSubtitleTask::onStatusReport));
+  unlinkStatusSource(mpSubtitleStream);
 }
 
 /**
@@ -79,11 +78,10 @@ void TTOpenSubtitleTask::operation()
   if (mpSubtitleType->avStreamType() != TTAVTypes::srt_subtitle)
     throw TTException(__FILE__, __LINE__, tr("Unsupported subtitle type %1!").arg(mFilePath));
 
-  mpSubtitleStream = (TTSubtitleStream*) mpSubtitleType->createSubtitleStream();
+  mpSubtitleStream = static_cast<TTSubtitleStream*>(mpSubtitleType->createSubtitleStream());
 
   qDebug("connect subtitle stream step signal");
-  connect(mpSubtitleStream, &TTSubtitleStream::statusReport,
-          this,             qOverload<int, const QString&, quint64>(&TTOpenSubtitleTask::onStatusReport));
+  linkStatusSource(mpSubtitleStream);
   qDebug("create subtitle stream header list");
   mpSubtitleStream->createHeaderList();
 

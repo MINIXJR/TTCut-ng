@@ -159,56 +159,10 @@ static AVFormatContext* openInput(const QString& filePath, int& ret)
 // detect re-encoded frames as field packets, causing frame merging corruption.
 static bool parseInlineSpsLog2MaxFrameNum(const uint8_t* data, int size, int& log2MaxFrameNum)
 {
-    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
-         s = TTNaluParser::findStartCodePayload(data, size, s)) {
-        uint8_t nt = data[s] & 0x1F;
-        if (nt != 7) continue;  // Not SPS
-
-        // Parse SPS: skip NAL header, profile_idc, constraint_flags, level_idc
-        const uint8_t* sps = data + s + 1;
-        int spsSz = size - s - 1;
-        if (spsSz < 4) continue;
-
-        uint8_t profile_idc = sps[0];
-        int bp = 24;  // After profile_idc(8) + constraint(8) + level(8)
-
-        // sps_id
-        TTNaluParser::readExpGolombUE(sps, spsSz, bp);
-
-        // High profile: chroma, bit depth, etc.
-        if (TTNaluParser::isH264HighProfile(profile_idc)) {
-            uint32_t chroma = TTNaluParser::readExpGolombUE(sps, spsSz, bp);
-            if (chroma == 3)
-                TTNaluParser::readBits(sps, spsSz, bp, 1); // separate_colour_plane
-            TTNaluParser::readExpGolombUE(sps, spsSz, bp); // bit_depth_luma
-            TTNaluParser::readExpGolombUE(sps, spsSz, bp); // bit_depth_chroma
-            TTNaluParser::readBits(sps, spsSz, bp, 1);     // qpprime_y_zero
-            uint32_t scaling = TTNaluParser::readBits(sps, spsSz, bp, 1);
-            if (scaling) {
-                int cnt = (chroma != 3) ? 8 : 12;
-                for (int i = 0; i < cnt; i++) {
-                    uint32_t present = TTNaluParser::readBits(sps, spsSz, bp, 1);
-                    if (present) {
-                        int sz = (i < 6) ? 16 : 64;
-                        int lastScale = 8, nextScale = 8;
-                        for (int j = 0; j < sz; j++) {
-                            if (nextScale != 0) {
-                                // Read signed exp-golomb (delta_scale)
-                                int delta = TTNaluParser::readExpGolombSE(sps, spsSz, bp);
-                                nextScale = (lastScale + delta + 256) % 256;
-                            }
-                            lastScale = (nextScale == 0) ? lastScale : nextScale;
-                        }
-                    }
-                }
-            }
-        }
-
-        uint32_t l2mfn = TTNaluParser::readExpGolombUE(sps, spsSz, bp);
-        log2MaxFrameNum = static_cast<int>(l2mfn) + 4;
-        return true;
-    }
-    return false;
+    TTNaluParser::H264SpsBasics sps;
+    if (!TTNaluParser::parseH264SpsBasics(data, size, sps)) return false;
+    log2MaxFrameNum = sps.log2MaxFrameNum;
+    return true;
 }
 
 // Per-input read helper + normalized PTS calc moved to member methods
@@ -976,14 +930,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                 }
                 hasVclNal = (nalStart >= 0);
                 if (hasVclNal) {
-                    const uint8_t* nal = d + nalStart;
-                    int nalSz = sz - nalStart;
-                    int bp = 8;
-                    TTNaluParser::readExpGolombUE(nal, nalSz, bp); // first_mb
-                    TTNaluParser::readExpGolombUE(nal, nalSz, bp); // slice_type
-                    TTNaluParser::readExpGolombUE(nal, nalSz, bp); // pps_id
-                    TTNaluParser::readBits(nal, nalSz, bp, activeLog2MaxFrameNum); // frame_num
-                    isFieldPacket = (TTNaluParser::readBits(nal, nalSz, bp, 1) == 1); // field_pic_flag
+                    int  frameNum = 0;
+                    bool isBottom = false;
+                    TTNaluParser::parseH264SliceFieldInfo(d + nalStart, sz - nalStart, activeLog2MaxFrameNum,
+                                                          frameNum, isFieldPacket, isBottom);
                 }
             } else if (in.outIdx == 0 && in.pkt->data && in.pkt->size > 0) {
                 // Non-PAFF video: check for VCL NAL (codec-aware)

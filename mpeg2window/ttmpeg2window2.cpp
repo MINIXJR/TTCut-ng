@@ -371,19 +371,11 @@ void TTMPEG2Window2::openVideoStream(TTVideoStream* vStream)
     // building our own if vStream is not an H.26x stream or its index is not
     // available yet.
     bool indexAdopted = false;
-    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(vStream)) {
-      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
-      if (!bundle.isEmpty()) { mpFFmpegWrapper->setFrameIndex(bundle); indexAdopted = true; }
-    }
-    if (!indexAdopted) {
-      qDebug() << "Building frame index for preview...";
-      TTFrameIndexer indexer;
-      if (indexer.build(vStream->filePath(), -1, nullptr))
-        mpFFmpegWrapper->setFrameIndex(indexer.bundle());
-      else
-        log->errorMsg(__FILE__, __LINE__,
-            QString("Failed to build frame index: %1").arg(indexer.lastError()));
-    }
+    QString indexError;
+    const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(vStream);
+    if (!mpFFmpegWrapper->adoptOrBuildFrameIndex(h26x ? h26x->frameIndexBundle() : TTFrameIndexBundle(),
+                                                 vStream->filePath(), &indexError, &indexAdopted))
+      log->errorMsg(__FILE__, __LINE__, QString("Failed to build frame index: %1").arg(indexError));
     qDebug() << (indexAdopted ? "Frame index adopted:" : "Frame index built:")
              << mpFFmpegWrapper->frameCount() << "frames"
              << "(videoStream:" << vStream->frameCount() << "headers)";

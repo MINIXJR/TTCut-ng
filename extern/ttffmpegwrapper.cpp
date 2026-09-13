@@ -15,6 +15,7 @@
 #include "ttffmpegwrapper.h"
 #include "../avstream/ttavutil.h"
 #include "../avstream/ttframeindexer.h"
+#include "../avstream/ttlumasample.h"
 #include "ttessmartcut.h"
 #include "../avstream/ttdisplayordermap.h"
 #include "../common/ttcut.h"
@@ -480,22 +481,15 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
         }
     }
 
-    // Check LRU cache first
-    if (mFrameCache.contains(frameIndex)) {
-        // Move to back of LRU list (most recently used)
-        mFrameCacheLRU.removeOne(frameIndex);
-        mFrameCacheLRU.append(frameIndex);
-        return mFrameCache[frameIndex];
-    }
+    QImage result;
+    if (cachedFrame(frameIndex, result)) return result;
 
     // Map the DISPLAY position to the decode-order AU to deliver. This is the
     // SAME map the smart cut uses (displayOrderMap), so the still-image shows
     // exactly the frame the cut starts with for cut-in N (WYSIWYG). The old code
     // counted (frameIndex - seekKeyframe) decoder outputs, which yields the
     // display-RANK frame — off by the local B-frame reorder amount.
-    int targetAU = frameIndex;
-    if (mBundle.displayMap.isValid() && frameIndex >= 0 && frameIndex < mBundle.displayMap.displayCount())
-        targetAU = mBundle.displayMap.displayToDecode(frameIndex);
+    const int targetAU = displayToTargetAU(frameIndex);
 
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "decodeFrame: display" << frameIndex << "-> targetAU" << targetAU
@@ -506,55 +500,11 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
     // with its decode-order AU in pts; decode until the output whose pts ==
     // targetAU, then convert THAT frame. Same decode work as the old skip; only
     // the stop condition changed (deliver the mapped AU, not the Nth output).
-    QImage result;
     for (int attempt = 0; attempt < 2 && result.isNull(); ++attempt) {
-        if (!seekToFrame(targetAU)) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeFrame: seekToFrame failed for AU %1 (display %2)")
-                    .arg(targetAU).arg(frameIndex));
-            break;
-        }
-        mDecoderFrameIndex = mCurrentFrameIndex;
-        mDecodeOrderTag    = mCurrentFrameIndex;
-
-        int guard = 0;
-        // The target AU must appear between the seek point and shortly after
-        // it — reorder and field pairing move it by a GOP at most, never by
-        // the length of the file. The old bound (the whole index) turned every
-        // undelivered target into a full decode to EOF: 41 s per attempt on
-        // 06x03, twice, then again for the neighbour frame.
-        // seekStart is where the loop actually starts decoding, i.e.
-        // mCurrentFrameIndex after seekToFrame() — not targetAU, not frameIndex.
-        const int seekStart = mCurrentFrameIndex;
-        // Placeholder only — the scan below always assigns a real value,
-        // either the second keyframe past the target or (fewer than two
-        // left) end of file. Never read at this initial value.
-        int headroomEnd = targetAU;
-        int keyframesSeen = 0;
-        for (int i = targetAU + 1; i < mBundle.index.size(); ++i) {
-            if (!mBundle.index[i].isKeyframe) continue;
-            headroomEnd = i;
-            if (++keyframesSeen == 2) break;   // second keyframe beyond the target
-        }
-        if (keyframesSeen < 2)
-            headroomEnd = mBundle.index.size() - 1;   // fewer than two left: end of file
-        const int guardMax = qBound(1,
-                                    (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
-                                    mBundle.index.size() > 0 ? mBundle.index.size() : 100000);
-        const bool logTags = TTSettings::instance()->logFFmpegDecoder();
-        while (guard++ < guardMax) {
-            if (isCancelled()) return QImage();   // caller gave up; not a failure
-            if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
-            if (logTags && (guard <= 5 || static_cast<int>(mDecodedFrame->pts) >= targetAU - 2))
-                qDebug() << "  skip-loop output" << guard << "pts-tag" << mDecodedFrame->pts
-                         << "(target" << targetAU << ")";
-            if (static_cast<int>(mDecodedFrame->pts) == targetAU) {
-                result = convertDecodedFrameToImage();
-                break;
-            }
-        }
-        if (logTags && result.isNull())
-            qDebug() << "  skip-loop ended after" << guard << "outputs without hitting target" << targetAU;
+        const SeekSkip r = seekAndSkipToAU(targetAU, frameIndex, "decodeFrame");
+        if (r == SeekSkip::Cancelled)  return QImage();   // caller gave up; not a failure
+        if (r == SeekSkip::SeekFailed) break;
+        if (r == SeekSkip::Reached)    result = convertDecodedFrameToImage();
         if (result.isNull() && attempt == 0) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
                 QString("decodeFrame: targetAU %1 (display %2) not delivered — retrying with fresh seek")
@@ -584,13 +534,7 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
         mDecoderFrameIndex = frameIndex;
         mCurrentFrameIndex = frameIndex;
 
-        // Store in LRU cache
-        mFrameCache[frameIndex] = result;
-        mFrameCacheLRU.append(frameIndex);
-        while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
-            int evict = mFrameCacheLRU.takeFirst();
-            mFrameCache.remove(evict);
-        }
+        cacheFrame(frameIndex, result);
     } else if (!isCancelled()) {
         if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
             qDebug() << "Search-mode decodeFrame: failure at frame" << frameIndex
@@ -601,6 +545,117 @@ QImage TTFFmpegWrapper::decodeFrameInternal(int frameIndex, int fallbackDepth)
                 .arg(frameIndex).arg(mBundle.index.size()));
     }
     return result;
+}
+
+int TTFFmpegWrapper::displayToTargetAU(int frameIndex) const
+{
+    if (mBundle.displayMap.isValid() && frameIndex >= 0 && frameIndex < mBundle.displayMap.displayCount())
+        return mBundle.displayMap.displayToDecode(frameIndex);
+    return frameIndex;
+}
+
+TTFFmpegWrapper::SeekSkip TTFFmpegWrapper::seekAndSkipToAU(int targetAU, int displayIndex, const char* caller)
+{
+    if (!seekToFrame(targetAU)) {
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("%1: seekToFrame failed for AU %2 (display %3)")
+                .arg(QLatin1String(caller)).arg(targetAU).arg(displayIndex));
+        return SeekSkip::SeekFailed;
+    }
+    mDecoderFrameIndex = mCurrentFrameIndex;
+    mDecodeOrderTag    = mCurrentFrameIndex;
+
+    // The target AU must appear between the seek point and shortly after
+    // it — reorder and field pairing move it by a GOP at most, never by
+    // the length of the file. The old bound (the whole index) turned every
+    // undelivered target into a full decode to EOF: 41 s per attempt on
+    // 06x03, twice, then again for the neighbour frame.
+    // seekStart is where the loop actually starts decoding, i.e.
+    // mCurrentFrameIndex after seekToFrame() — not targetAU, not frameIndex.
+    const int seekStart = mCurrentFrameIndex;
+    // Placeholder only — the scan below always assigns a real value,
+    // either the second keyframe past the target or (fewer than two
+    // left) end of file. Never read at this initial value.
+    int headroomEnd = targetAU;
+    int keyframesSeen = 0;
+    for (int i = targetAU + 1; i < mBundle.index.size(); ++i) {
+        if (!mBundle.index[i].isKeyframe) continue;
+        headroomEnd = i;
+        if (++keyframesSeen == 2) break;   // second keyframe beyond the target
+    }
+    if (keyframesSeen < 2)
+        headroomEnd = mBundle.index.size() - 1;   // fewer than two left: end of file
+    const int guardMax = qBound(1,
+                                (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
+                                mBundle.index.size() > 0 ? mBundle.index.size() : 100000);
+    // The frame search checks its abort flag only between frames, so a cancel
+    // during one decode has to be seen here.
+    const bool logTags = TTSettings::instance()->logFFmpegDecoder();
+    int guard = 0;
+    while (guard++ < guardMax) {
+        if (isCancelled()) return SeekSkip::Cancelled;
+        if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
+        if (logTags && (guard <= 5 || static_cast<int>(mDecodedFrame->pts) >= targetAU - 2))
+            qDebug() << "  skip-loop output" << guard << "pts-tag" << mDecodedFrame->pts
+                     << "(target" << targetAU << ")";
+        if (static_cast<int>(mDecodedFrame->pts) == targetAU) return SeekSkip::Reached;
+    }
+    if (logTags)
+        qDebug() << "  skip-loop ended after" << guard << "outputs without hitting target" << targetAU;
+    return SeekSkip::NotReached;
+}
+
+bool TTFFmpegWrapper::cachedFrame(int displayIndex, QImage& out)
+{
+    if (!mFrameCache.contains(displayIndex)) return false;
+    // Move to back of LRU list (most recently used)
+    mFrameCacheLRU.removeOne(displayIndex);
+    mFrameCacheLRU.append(displayIndex);
+    out = mFrameCache[displayIndex];
+    return true;
+}
+
+void TTFFmpegWrapper::cacheFrame(int displayIndex, const QImage& image)
+{
+    mFrameCache[displayIndex] = image;
+    mFrameCacheLRU.append(displayIndex);
+    while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
+        int evict = mFrameCacheLRU.takeFirst();
+        mFrameCache.remove(evict);
+    }
+}
+
+bool TTFFmpegWrapper::drainDecoderEOF()
+{
+    avcodec_send_packet(mVideoCodecCtx, nullptr);
+    if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) != 0) return false;
+    mDecoderDrained = true;
+    return true;
+}
+
+bool TTFFmpegWrapper::adoptOrBuildFrameIndex(const TTFrameIndexBundle& prebuilt, const QString& filePath,
+                                             QString* error, bool* adopted)
+{
+    if (adopted) *adopted = false;
+    if (!prebuilt.isEmpty()) {
+        setFrameIndex(prebuilt);
+        if (adopted) *adopted = true;
+        return true;
+    }
+    TTFrameIndexer indexer;
+    if (!indexer.build(filePath, -1, nullptr)) {
+        if (error) *error = indexer.lastError();
+        return false;
+    }
+    setFrameIndex(indexer.bundle());
+    return true;
+}
+
+// Tight-pack one plane out of libav's strided buffer.
+static void packPlane(quint8* dst, int dstStride, const uint8_t* src, int srcStride, int rows)
+{
+    for (int row = 0; row < rows; row++)
+        memcpy(dst + row * dstStride, src + row * srcStride, dstStride);
 }
 
 // ----------------------------------------------------------------------------
@@ -632,9 +687,7 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
     }
 
     // Display position -> raw decode AU (identity if no map).
-    int targetAU = frameIndex;
-    if (mBundle.displayMap.isValid() && frameIndex >= 0 && frameIndex < mBundle.displayMap.displayCount())
-        targetAU = mBundle.displayMap.displayToDecode(frameIndex);
+    const int targetAU = displayToTargetAU(frameIndex);
 
     // Ensure mDecodedFrame is allocated
     if (!mDecodedFrame) {
@@ -654,43 +707,11 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
 
     if (!sequentialPath) {
         // Non-sequential path: seek by raw decode AU, then skip until the decoder
-        // emits the output whose pts tag == targetAU (mirrors decodeFrame exactly).
-        if (!seekToFrame(targetAU)) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("decodeFrameYUV: seekToFrame failed for AU %1 (display %2)")
-                    .arg(targetAU).arg(frameIndex));
-            return false;
-        }
-        mDecoderFrameIndex = mCurrentFrameIndex;
-        mDecodeOrderTag    = mCurrentFrameIndex;
-
-        // Same bound as decodeFrame()'s skip loop (2026-08-28): the seek
-        // distance plus headroom to the second keyframe past the target (at
-        // least 256 outputs), never the whole stream - a target the decoder
-        // does not deliver must fail here, not after a drain to end of file.
-        // And the same cancel poll: the frame search checks its abort flag only
-        // between frames, so a cancel during one decode has to be seen here.
-        const int seekStart = mCurrentFrameIndex;
-        int headroomEnd = targetAU;
-        int keyframesSeen = 0;
-        for (int i = targetAU + 1; i < mBundle.index.size(); ++i) {
-            if (!mBundle.index[i].isKeyframe) continue;
-            headroomEnd = i;
-            if (++keyframesSeen == 2) break;
-        }
-        if (keyframesSeen < 2)
-            headroomEnd = mBundle.index.size() - 1;
-        const int guardMax = qBound(1,
-                                    (targetAU - seekStart) + qMax(headroomEnd - targetAU, 256),
-                                    mBundle.index.size() > 0 ? mBundle.index.size() : 100000);
-        int guard = 0;
-        bool reached = false;
-        while (guard++ < guardMax) {
-            if (isCancelled()) return false;   // caller gave up; not a failure, no warning
-            if (!skipCurrentFrame()) break;   // decodes one output into mDecodedFrame
-            if (static_cast<int>(mDecodedFrame->pts) == targetAU) { reached = true; break; }
-        }
-        if (!reached) {
+        // emits the output whose pts tag == targetAU (the same seekAndSkipToAU
+        // decodeFrame uses, same bound, same cancel poll).
+        const SeekSkip r = seekAndSkipToAU(targetAU, frameIndex, "decodeFrameYUV");
+        if (r == SeekSkip::Cancelled || r == SeekSkip::SeekFailed) return false;   // cancel: not a failure, no warning
+        if (r != SeekSkip::Reached) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
                 QString("decodeFrameYUV: could not reach AU %1 (display %2)")
                     .arg(targetAU).arg(frameIndex));
@@ -724,14 +745,7 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
             }
             av_packet_unref(packet);
         }
-        // EOF drain if no frame yet
-        if (!gotFrame) {
-            avcodec_send_packet(mVideoCodecCtx, nullptr);
-            if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
-                gotFrame = true;
-                mDecoderDrained = true;
-            }
-        }
+        if (!gotFrame) gotFrame = drainDecoderEOF();
         av_packet_free(&packet);
         if (!gotFrame) {
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -761,19 +775,9 @@ bool TTFFmpegWrapper::decodeFrameYUV(int frameIndex, TFrameInfo& outInfo)
 
     if (srcFmt == AV_PIX_FMT_YUV420P) {
         // Fast path: tight-pack memcpy from libav's strided 8-bit planes
-        for (int row = 0; row < h; row++) {
-            memcpy(mYBuffer + row * w,
-                   mDecodedFrame->data[0] + row * mDecodedFrame->linesize[0],
-                   w);
-        }
-        for (int row = 0; row < ch; row++) {
-            memcpy(mUBuffer + row * cw,
-                   mDecodedFrame->data[1] + row * mDecodedFrame->linesize[1],
-                   cw);
-            memcpy(mVBuffer + row * cw,
-                   mDecodedFrame->data[2] + row * mDecodedFrame->linesize[2],
-                   cw);
-        }
+        packPlane(mYBuffer, w,  mDecodedFrame->data[0], mDecodedFrame->linesize[0], h);
+        packPlane(mUBuffer, cw, mDecodedFrame->data[1], mDecodedFrame->linesize[1], ch);
+        packPlane(mVBuffer, cw, mDecodedFrame->data[2], mDecodedFrame->linesize[2], ch);
     } else {
         // Slow path: convert any other planar/interleaved YUV (10-bit Main 10,
         // 4:2:2, 4:4:4, etc.) to 8-bit YUV420P via swscale, writing directly
@@ -874,21 +878,22 @@ QImage TTFFmpegWrapper::convertDecodedFrameToImage()
 // Lightweight black frame check — decode to YUV, analyze Y-plane directly.
 // No RGB conversion, no QImage, no cache. Much faster than decodeFrame().
 // ----------------------------------------------------------------------------
-bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold)
+bool TTFFmpegWrapper::decodeFrameForAnalysis(int frameIndex, bool allowSequential, const char* caller)
 {
     if (frameIndex < 0 || frameIndex >= mBundle.index.size()) return false;
     if (!mFormatCtx || !mVideoCodecCtx) return false;
 
-    // Seek to keyframe for this frame
-    int keyframeIndex = frameIndex;
-    while (keyframeIndex > 0 && !mBundle.index[keyframeIndex].isKeyframe)
-        keyframeIndex--;
-
-    // Only seek if needed (decoder already past the keyframe)
+    // Only seek if needed: the decoder may already sit between the frame's
+    // keyframe and the frame itself (the black-frame search walks forward).
     bool needSeek = true;
-    if (!mDecoderDrained && mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex
-        && mDecoderFrameIndex >= keyframeIndex)
-        needSeek = false;
+    if (allowSequential) {
+        int keyframeIndex = frameIndex;
+        while (keyframeIndex > 0 && !mBundle.index[keyframeIndex].isKeyframe)
+            keyframeIndex--;
+        if (!mDecoderDrained && mDecoderFrameIndex >= 0 && mDecoderFrameIndex < frameIndex
+            && mDecoderFrameIndex >= keyframeIndex)
+            needSeek = false;
+    }
 
     if (needSeek) {
         if (!seekToFrame(frameIndex)) return false;
@@ -904,7 +909,8 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
         mDecoderFrameIndex++;
     }
 
-    // Decode one frame (YUV, no RGB conversion)
+    // Decode one frame (YUV, no RGB conversion). In analysis mode
+    // (AVDISCARD_NONKEY) only keyframes produce output.
     if (!mDecodedFrame) {
         mDecodedFrame = av_frame_alloc();
         if (!mDecodedFrame) return false;
@@ -927,67 +933,79 @@ bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float rat
         av_packet_unref(packet);
     }
 
-    // EOF drain if needed
-    if (!decoded) {
-        avcodec_send_packet(mVideoCodecCtx, nullptr);
-        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
-            decoded = true;
-            mDecoderDrained = true;
-        }
-    }
+    if (!decoded) decoded = drainDecoderEOF();
 
     av_packet_free(&packet);
     if (!decoded) {
         if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
-            qDebug() << "Search-mode isFrameBlack: decode failure at frame" << frameIndex
-                     << "(possibly non-IDR I-slice with DPB inconsistency)";
+            qDebug() << QString("Search-mode %1: decode failure at frame").arg(QLatin1String(caller))
+                     << frameIndex << "(possibly non-IDR I-slice with DPB inconsistency)";
         }
         return false;
     }
 
     mDecoderFrameIndex = frameIndex;
     mCurrentFrameIndex = frameIndex;
+    return true;
+}
 
-    // Analyze Y-plane directly (YUV420P: data[0] = Y, linesize[0] = Y stride).
-    // For 10/12-bit content (HEVC Main 10/12), each sample is two bytes; cast
-    // to uint16_t and right-shift to compare against the 8-bit threshold.
-    int w = mDecodedFrame->width, h = mDecodedFrame->height;
-    uint8_t* yPlane = mDecodedFrame->data[0];
-    int yStride = mDecodedFrame->linesize[0];
+// Centre-band luma scan over mDecodedFrame's Y plane: perSample(y) for every
+// 8-bit sample (10/12-bit content is right-shifted), rowDone() after each
+// row - return false there to stop early. False when the frame has no Y
+// plane.
+template<class PerSample, class RowDone>
+static bool scanCentreLuma(const AVFrame* frame, PerSample perSample, RowDone rowDone)
+{
+    const int w = frame->width, h = frame->height;
+    const uint8_t* yPlane = frame->data[0];
+    const int yStride = frame->linesize[0];
     if (!yPlane || w <= 0 || h <= 0) return false;
 
-    int depth = yPlaneDepth(mDecodedFrame->format);
-    int shift = (depth > 8) ? (depth - 8) : 0;
+    const int depth = yPlaneDepth(frame->format);
+    const int shift = (depth > 8) ? (depth - 8) : 0;
+    const TTCentreBand band = TTCentreBand::of(w, h);
 
-    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-    const int step = 2;
+    for (int row = band.y0; row < band.y1; row += TTCentreBand::step) {
+        const uint8_t* rowBase = yPlane + row * yStride;
+        if (shift == 0) {
+            for (int col = band.x0; col < band.x1; col += TTCentreBand::step)
+                perSample(rowBase[col]);
+        } else {
+            const uint16_t* line16 = (const uint16_t*)rowBase;
+            for (int col = band.x0; col < band.x1; col += TTCentreBand::step)
+                perSample(line16[col] >> shift);
+        }
+        if (!rowDone()) break;
+    }
+    return true;
+}
+
+bool TTFFmpegWrapper::isFrameBlack(int frameIndex, int pixelThreshold, float ratioThreshold)
+{
+    if (!decodeFrameForAnalysis(frameIndex, true, "isFrameBlack")) return false;
+
+    // Analyze Y-plane directly (YUV420P: data[0] = Y, linesize[0] = Y stride).
+    // For 10/12-bit content (HEVC Main 10/12), each sample is two bytes;
+    // scanCentreLuma right-shifts them to compare against the 8-bit threshold.
     const int earlyExitSamples = 500;
     long lumaSum = 0;
     int totalPixels = 0, blackPixels = 0;
+    bool tooBright = false;
 
-    for (int row = y0; row < y1; row += step) {
-        uint8_t* rowBase = yPlane + row * yStride;
-        if (shift == 0) {
-            for (int col = x0; col < x1; col += step) {
-                totalPixels++;
-                int y = rowBase[col];
-                lumaSum += y;
-                if (y < pixelThreshold) blackPixels++;
+    const bool scanned = scanCentreLuma(mDecodedFrame,
+        [&](int y) {
+            totalPixels++;
+            lumaSum += y;
+            if (y < pixelThreshold) blackPixels++;
+        },
+        [&]() {
+            if (totalPixels >= earlyExitSamples) {
+                float avgSoFar = (float)lumaSum / totalPixels;
+                if (avgSoFar > 20.0f) { tooBright = true; return false; }  // video-range: black ≈ 16
             }
-        } else {
-            const uint16_t* line16 = (const uint16_t*)rowBase;
-            for (int col = x0; col < x1; col += step) {
-                totalPixels++;
-                int y = line16[col] >> shift;
-                lumaSum += y;
-                if (y < pixelThreshold) blackPixels++;
-            }
-        }
-        if (totalPixels >= earlyExitSamples) {
-            float avgSoFar = (float)lumaSum / totalPixels;
-            if (avgSoFar > 20.0f) return false;  // video-range: black ≈ 16
-        }
-    }
+            return true;
+        });
+    if (!scanned || tooBright) return false;
 
     if (totalPixels == 0) return false;
     float avgLuma = (float)lumaSum / totalPixels;
@@ -1004,93 +1022,16 @@ bool TTFFmpegWrapper::buildHistogram(int frameIndex, int hist[256], int& totalPi
     memset(hist, 0, 256 * sizeof(int));
     totalPixels = 0;
 
-    if (frameIndex < 0 || frameIndex >= mBundle.index.size()) return false;
-    if (!mFormatCtx || !mVideoCodecCtx) return false;
-
-    // Seek to keyframe, skip intermediate frames (cancel poll as in
-    // isFrameBlack())
-    if (!seekToFrame(frameIndex)) return false;
-    mDecoderFrameIndex = mCurrentFrameIndex;
-
-    while (mDecoderFrameIndex < frameIndex) {
-        if (isCancelled()) return false;
-        if (!skipCurrentFrame()) break;
-        mDecoderFrameIndex++;
-    }
-
-    if (!mDecodedFrame) {
-        mDecodedFrame = av_frame_alloc();
-        if (!mDecodedFrame) return false;
-    }
-
-    AVPacket* packet = av_packet_alloc();
-    if (!packet) return false;
-
-    // Read packets until decoder produces a frame
-    // In analysis mode (AVDISCARD_NONKEY), only keyframes produce output
-    bool decoded = false;
-    while (av_read_frame(mFormatCtx, packet) >= 0) {
-        if (packet->stream_index == mVideoStreamIndex) {
-            if (avcodec_send_packet(mVideoCodecCtx, packet) >= 0) {
-                if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
-                    decoded = true;
-                    av_packet_unref(packet);
-                    break;
-                }
-            }
-        }
-        av_packet_unref(packet);
-    }
-
-    if (!decoded) {
-        avcodec_send_packet(mVideoCodecCtx, nullptr);
-        if (avcodec_receive_frame(mVideoCodecCtx, mDecodedFrame) == 0) {
-            decoded = true;
-            mDecoderDrained = true;
-        }
-    }
-
-    av_packet_free(&packet);
-    if (!decoded) {
-        if (mSearchMode && TTSettings::instance()->logFFmpegDecoder()) {
-            qDebug() << "Search-mode buildHistogram: decode failure at frame" << frameIndex
-                     << "(possibly non-IDR I-slice with DPB inconsistency)";
-        }
-        return false;
-    }
-
-    mDecoderFrameIndex = frameIndex;
-    mCurrentFrameIndex = frameIndex;
+    // Always seek (no sequential shortcut here), skip, decode one output.
+    if (!decodeFrameForAnalysis(frameIndex, false, "buildHistogram")) return false;
 
     // Build histogram from Y-plane center 80%. 10/12-bit samples are
     // right-shifted to 8-bit so the 256-bucket layout and downstream
     // histogramDifference math keep matching 8-bit-derived thresholds.
-    int w = mDecodedFrame->width, h = mDecodedFrame->height;
-    uint8_t* yPlane = mDecodedFrame->data[0];
-    int yStride = mDecodedFrame->linesize[0];
-    if (!yPlane || w <= 0 || h <= 0) return false;
-
-    int depth = yPlaneDepth(mDecodedFrame->format);
-    int shift = (depth > 8) ? (depth - 8) : 0;
-
-    int x0 = w / 10, y0 = h / 10, x1 = w - x0, y1 = h - y0;
-    const int step = 2;
-
-    for (int row = y0; row < y1; row += step) {
-        uint8_t* rowBase = yPlane + row * yStride;
-        if (shift == 0) {
-            for (int col = x0; col < x1; col += step) {
-                hist[rowBase[col]]++;
-                totalPixels++;
-            }
-        } else {
-            const uint16_t* line16 = (const uint16_t*)rowBase;
-            for (int col = x0; col < x1; col += step) {
-                hist[line16[col] >> shift]++;
-                totalPixels++;
-            }
-        }
-    }
+    if (!scanCentreLuma(mDecodedFrame,
+                        [&](int y) { hist[y]++; totalPixels++; },
+                        []() { return true; }))
+        return false;
     return totalPixels > 0;
 }
 
@@ -1147,11 +1088,8 @@ QImage TTFFmpegWrapper::decodeNearestKeyframe(int displayPos, int* shownDisplayP
 
     // The LRU cache is shared with decodeFrame() and keyed by display
     // position - dragging back and forth over the same GOP is then free.
-    if (keyDisplay >= 0 && mFrameCache.contains(keyDisplay)) {
-        mFrameCacheLRU.removeOne(keyDisplay);
-        mFrameCacheLRU.append(keyDisplay);
-        return mFrameCache[keyDisplay];
-    }
+    QImage result;
+    if (keyDisplay >= 0 && cachedFrame(keyDisplay, result)) return result;
 
     // Borrow the search path's no-prefill seek: mSearchMode is only read by
     // seekToFrame() to decide whether to prefill from the previous keyframe.
@@ -1169,7 +1107,6 @@ QImage TTFFmpegWrapper::decodeNearestKeyframe(int displayPos, int* shownDisplayP
     // display order, so the keyframe (lowest POC of its GOP) comes out first
     // or nearly so - a small guard suffices and keeps a broken stream from
     // turning the preview into the very drain this is meant to avoid.
-    QImage result;
     int guard = 0;
     while (guard++ < 64) {
         if (!skipCurrentFrame()) break;
@@ -1180,12 +1117,7 @@ QImage TTFFmpegWrapper::decodeNearestKeyframe(int displayPos, int* shownDisplayP
     }
 
     if (!result.isNull() && keyDisplay >= 0) {
-        mFrameCache[keyDisplay] = result;
-        mFrameCacheLRU.append(keyDisplay);
-        while (mFrameCacheLRU.size() > mFrameCacheMaxSize) {
-            int evict = mFrameCacheLRU.takeFirst();
-            mFrameCache.remove(evict);
-        }
+        cacheFrame(keyDisplay, result);
         mCurrentFrameIndex = keyDisplay;
         mDecoderFrameIndex = keyDisplay;
     }

@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttcutsettingsdlg.h"
+#include "ttthemedicon.h"
 #include "ttcutsettingsnavigation.h"
 #include "ttcutsettingssearch.h"
 #include "ttcutsettingsaudio.h"
@@ -51,35 +52,34 @@ TTSettingsDialog::TTSettingsDialog(QWidget* parent)
 
   // Populate sidebar list and stacked pages — order: UI interaction →
   // processing → output → system. Bedienung first, Logging last.
-  QStyle* s = QApplication::style();
   auto addCat = [this](const QString& title, const QIcon& icon, QWidget* page) {
     new QListWidgetItem(icon, title, categoryList);
     stackedPages->addWidget(page);
   };
 
   addCat(tr("Navigation"),
-         QIcon::fromTheme("go-jump", s->standardIcon(QStyle::SP_ArrowRight)),
+         ttThemedIcon("go-jump", QStyle::SP_ArrowRight),
          pageNavigation);
   addCat(tr("Search & Preview"),
-         QIcon::fromTheme("system-search", s->standardIcon(QStyle::SP_FileDialogContentsView)),
+         ttThemedIcon("system-search", QStyle::SP_FileDialogContentsView),
          pageSearch);
   addCat(tr("Audio & Language"),
-         QIcon::fromTheme("audio-x-generic", s->standardIcon(QStyle::SP_MediaVolume)),
+         ttThemedIcon("audio-x-generic", QStyle::SP_MediaVolume),
          pageAudio);
   addCat(tr("Encoder"),
-         QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveCDIcon)),
+         ttThemedIcon("applications-system", QStyle::SP_DriveCDIcon),
          pageEncoder);
   addCat(tr("Multiplexing"),
-         QIcon::fromTheme("applications-system", s->standardIcon(QStyle::SP_DriveHDIcon)),
+         ttThemedIcon("applications-system", QStyle::SP_DriveHDIcon),
          pageMuxer);
   addCat(tr("Paths"),
-         QIcon::fromTheme("folder", s->standardIcon(QStyle::SP_DirIcon)),
+         ttThemedIcon("folder", QStyle::SP_DirIcon),
          pagePaths);
   addCat(tr("Logging"),
-         QIcon::fromTheme("utilities-log-viewer", s->standardIcon(QStyle::SP_FileIcon)),
+         ttThemedIcon("utilities-log-viewer", QStyle::SP_FileIcon),
          pageLogging);
   addCat(tr("Stream Points"),
-         QIcon::fromTheme("edit-find", s->standardIcon(QStyle::SP_FileDialogContentsView)),
+         ttThemedIcon("edit-find", QStyle::SP_FileDialogContentsView),
          pageStreamPoints);
 
   connect(categoryList, &QListWidget::currentRowChanged,

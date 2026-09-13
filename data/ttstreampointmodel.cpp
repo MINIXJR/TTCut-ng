@@ -63,12 +63,12 @@ void TTStreamPointModel::addPoint(const TTStreamPoint& point)
   insertSorted(point);
 }
 
-void TTStreamPointModel::addPoints(const QList<TTStreamPoint>& points)
+void TTStreamPointModel::addPoints(const QList<TTStreamPoint>& newPoints)
 {
-  if (points.isEmpty()) return;
+  if (newPoints.isEmpty()) return;
 
   beginResetModel();
-  for (const TTStreamPoint& pt : points) {
+  for (const TTStreamPoint& pt : newPoints) {
     mPoints.append(pt);
   }
   std::sort(mPoints.begin(), mPoints.end());

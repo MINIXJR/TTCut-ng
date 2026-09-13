@@ -93,6 +93,23 @@ QStringList TTStreamPoint::repairPlannedSuffixVariants()
   return variants;
 }
 
+bool TTStreamPoint::hasSuffixVariant(const QString& desc, const QStringList& variants)
+{
+  for (const QString& v : variants)
+    if (desc.endsWith(v)) return true;
+  return false;
+}
+
+bool TTStreamPoint::stripSuffixVariant(QString& desc, const QStringList& variants)
+{
+  for (const QString& v : variants) {
+    if (!desc.endsWith(v)) continue;
+    desc.chop(v.length());
+    return true;
+  }
+  return false;
+}
+
 QStringList TTStreamPoint::repairDisabledSuffixVariants()
 {
   // Source EN string (TTCutMainWindow::onStreamPointsLoaded()) plus every

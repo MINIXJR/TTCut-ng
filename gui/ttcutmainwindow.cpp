@@ -24,6 +24,7 @@
 #include <QThreadPool>
 
 #include "ttcutmainwindow.h"
+#include "ttthemedicon.h"
 #include "ttquickjumpdialog.h"
 #include "ttstreampointwidget.h"
 // approxAc3RangeForMarker() - marker <-> repair-item matching for the
@@ -219,18 +220,17 @@ void TTCutMainWindow::setupImagesAndIcons()
   TTCut::imgFileClose  = new QPixmap( fileclose_18_xpm );
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  QStyle* style = QApplication::style();
-  actionFileNew->setIcon(QIcon::fromTheme("document-new", style->standardIcon(QStyle::SP_FileIcon)));
-  actionFileOpen->setIcon(QIcon::fromTheme("document-open", style->standardIcon(QStyle::SP_DialogOpenButton)));
-  actionFileSave->setIcon(QIcon::fromTheme("document-save", style->standardIcon(QStyle::SP_DialogSaveButton)));
-  actionFileSaveAs->setIcon(QIcon::fromTheme("document-save-as", style->standardIcon(QStyle::SP_DialogSaveButton)));
-  actionExit->setIcon(QIcon::fromTheme("application-exit", style->standardIcon(QStyle::SP_DialogCloseButton)));
-  actionOpenVideo->setIcon(QIcon::fromTheme("video-x-generic", style->standardIcon(QStyle::SP_DriveDVDIcon)));
-  actionOpenAudio->setIcon(QIcon::fromTheme("audio-x-generic", style->standardIcon(QStyle::SP_DriveCDIcon)));
-  actionOpenSubtitle->setIcon(QIcon::fromTheme("text-x-generic", style->standardIcon(QStyle::SP_FileDialogContentsView)));
-  actionSaveCurrentFrame->setIcon(QIcon::fromTheme("image-x-generic", style->standardIcon(QStyle::SP_DesktopIcon)));
-  actionSettings->setIcon(QIcon::fromTheme("preferences-system", style->standardIcon(QStyle::SP_ComputerIcon)));
-  actionAbout->setIcon(QIcon::fromTheme("help-about", style->standardIcon(QStyle::SP_MessageBoxInformation)));
+  actionFileNew->setIcon(ttThemedIcon("document-new", QStyle::SP_FileIcon));
+  actionFileOpen->setIcon(ttThemedIcon("document-open", QStyle::SP_DialogOpenButton));
+  actionFileSave->setIcon(ttThemedIcon("document-save", QStyle::SP_DialogSaveButton));
+  actionFileSaveAs->setIcon(ttThemedIcon("document-save-as", QStyle::SP_DialogSaveButton));
+  actionExit->setIcon(ttThemedIcon("application-exit", QStyle::SP_DialogCloseButton));
+  actionOpenVideo->setIcon(ttThemedIcon("video-x-generic", QStyle::SP_DriveDVDIcon));
+  actionOpenAudio->setIcon(ttThemedIcon("audio-x-generic", QStyle::SP_DriveCDIcon));
+  actionOpenSubtitle->setIcon(ttThemedIcon("text-x-generic", QStyle::SP_FileDialogContentsView));
+  actionSaveCurrentFrame->setIcon(ttThemedIcon("image-x-generic", QStyle::SP_DesktopIcon));
+  actionSettings->setIcon(ttThemedIcon("preferences-system", QStyle::SP_ComputerIcon));
+  actionAbout->setIcon(ttThemedIcon("help-about", QStyle::SP_MessageBoxInformation));
 }
 
 // Restore the saved main-window geometry (clamped to its screen) or default to 80% of the screen.
@@ -445,20 +445,22 @@ void TTCutMainWindow::keyPressEvent(QKeyEvent* e)
  */
 void TTCutMainWindow::onOpenVideoFile()
 {
-  QString fn = QFileDialog::getOpenFileName( this,
-      tr("Open video file"),
-      TTSettings::instance()->lastDirPath(),
+  const QString fn = pickFileAndRememberDir(tr("Open video file"),
       tr("All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;"
          "MPEG-2 Video (*.m2v *.mpv);;"
          "H.264/AVC (*.264 *.h264);;"
          "H.265/HEVC (*.265 *.h265 *.hevc);;"
          "All Files (*)"));
-
   if (fn.isEmpty()) return;
-
-  QFileInfo fInfo( fn );
-  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
   onReadVideoStream(fn);
+}
+
+QString TTCutMainWindow::pickFileAndRememberDir(const QString& title, const QString& filter)
+{
+  const QString fn = QFileDialog::getOpenFileName(this, title, TTSettings::instance()->lastDirPath(), filter);
+  if (!fn.isEmpty())
+    TTSettings::instance()->setLastDirPath(QFileInfo(fn).absolutePath());
+  return fn;
 }
 
 /* //////////////////////////////////////////////////////////////////////////////
@@ -466,23 +468,16 @@ void TTCutMainWindow::onOpenVideoFile()
  */
 void TTCutMainWindow::onOpenAudioFile()
 {
-	if (mpAVData->avCount() == 0) return;
+  if (mpAVData->avCount() == 0) return;
 
-	QString fn = QFileDialog::getOpenFileName( this,
-      tr("Open audio file"),
-      TTSettings::instance()->lastDirPath(),
+  const QString fn = pickFileAndRememberDir(tr("Open audio file"),
       tr("All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;"
          "MPEG Audio (*.mpa *.mp2);;"
          "AC3/Dolby Digital (*.ac3 *.eac3);;"
          "AAC Audio (*.aac *.m4a);;"
          "DTS Audio (*.dts);;"
          "All Files (*)"));
-
-  if (fn.isEmpty())
-    return;
-
-  QFileInfo fInfo(fn);
-  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
+  if (fn.isEmpty()) return;
   onReadAudioStream(fn);
 }
 
@@ -493,16 +488,8 @@ void TTCutMainWindow::onOpenSubtitleFile()
 {
   if (mpAVData->avCount() == 0) return;
 
-  QString fn = QFileDialog::getOpenFileName( this,
-      tr("Open subtitle file"),
-      TTSettings::instance()->lastDirPath(),
-      "Subtitle (*.srt)" );
-
-  if (fn.isEmpty())
-    return;
-
-  QFileInfo fInfo(fn);
-  TTSettings::instance()->setLastDirPath(fInfo.absolutePath());
+  const QString fn = pickFileAndRememberDir(tr("Open subtitle file"), "Subtitle (*.srt)");
+  if (fn.isEmpty()) return;
   onReadSubtitleStream(fn);
 }
 
@@ -734,17 +721,19 @@ void TTCutMainWindow::openSettingsDialog(int category)
       if (category < cats->count()) cats->setCurrentRow(category);
     }
   }
-  settingsDlg->exec();
+  // The pages write TTSettings only in their saveTabData(), which accept()
+  // runs; after Cancel nothing has changed and nothing is saved.
+  if (settingsDlg->exec() == QDialog::Accepted) {
+    log->enableLogFile(TTSettings::instance()->createLogFile());
+    log->setLogModeConsole(TTSettings::instance()->logModeConsole());
+    log->setLogModeExtended(TTSettings::instance()->logModeExtended());
 
-  log->enableLogFile(TTSettings::instance()->createLogFile());
-  log->setLogModeConsole(TTSettings::instance()->logModeConsole());
-  log->setLogModeExtended(TTSettings::instance()->logModeExtended());
+    TTSettings::instance()->save();
 
-  TTSettings::instance()->save();
-
-  // Burst filter setting may have changed - re-evaluate the hint column
-  // (burst warnings and AC3 format-change hints share it)
-  cutList->refreshHintIcons();
+    // Burst filter setting may have changed - re-evaluate the hint column
+    // (burst warnings and AC3 format-change hints share it)
+    cutList->refreshHintIcons();
+  }
 
   delete settingsDlg;
 }
@@ -812,7 +801,7 @@ void TTCutMainWindow::onHelpKeyboardShortcuts()
 /* /////////////////////////////////////////////////////////////////////////////
  * Signal from open video action
  */
-void TTCutMainWindow::onReadVideoStream(QString fName)
+void TTCutMainWindow::onReadVideoStream(const QString& fName)
 {
   // Fresh video open (no existing AV-item): clear the output filename so
   // the Cut dialog derives a fresh default from the current video.
@@ -835,7 +824,7 @@ void TTCutMainWindow::onReadVideoStream(QString fName)
 void TTCutMainWindow::onReadAudioStream(QString fName)
 {
   QFileInfo fInfo(fName);
-  mpAVData->appendAudioStream(mpCurrentAVDataItem, fInfo);
+  mpAVData->doOpenAudioStream(mpCurrentAVDataItem, fInfo.absoluteFilePath());
 
   // Check if audio length differs significantly from video length
   if (mpCurrentAVDataItem != 0 &&
@@ -875,8 +864,7 @@ void TTCutMainWindow::onReadAudioStream(QString fName)
  */
 void TTCutMainWindow::onReadSubtitleStream(QString fName)
 {
-  QFileInfo fInfo(fName);
-  mpAVData->appendSubtitleStream(mpCurrentAVDataItem, fInfo);
+  mpAVData->doOpenSubtitleStream(mpCurrentAVDataItem, QFileInfo(fName).absoluteFilePath());
 }
 
 void TTCutMainWindow::onAppendCutEntry(int cutIn, int cutOut)
@@ -1037,7 +1025,7 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
   }
   if (TTSettings::instance()->spDetectPillarbox() && haveIndex) {
     TTFrameIndexBundle preBuiltIndex;
-    if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
+    if (const TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
       preBuiltIndex = preview->frameIndexBundle();
 
     TTAspectScanTask* aspectTask = new TTAspectScanTask(
@@ -1378,15 +1366,12 @@ void TTCutMainWindow::onStreamPointsLoaded(const QList<TTStreamPoint>& points)
           // actually stored (residuals R6) - it may not be the one tr()
           // resolves to in THIS session's UI language, e.g. after a
           // language switch or when reloading a project saved elsewhere.
-          for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
-            if (desc.endsWith(v)) { desc.chop(v.length()); break; }
+          TTStreamPoint::stripSuffixVariant(desc, TTStreamPoint::repairPlannedSuffixVariants());
           // Same cross-language guard for the disabled suffix itself: a
           // marker reloaded from a project last annotated in a different UI
           // language already carries it, just spelled differently.
-          bool alreadyDisabled = false;
-          for (const QString& v : TTStreamPoint::repairDisabledSuffixVariants())
-            if (desc.endsWith(v)) { alreadyDisabled = true; break; }
-          if (!alreadyDisabled) desc += disabled;
+          if (!TTStreamPoint::hasSuffixVariant(desc, TTStreamPoint::repairDisabledSuffixVariants()))
+            desc += disabled;
           pt.setDescription(desc);
           markedDisabled++;
           break;
@@ -1494,13 +1479,7 @@ void TTCutMainWindow::onAudioVideoCut(bool audioOnly, TTCutList* cutData)
   TTVideoStream* vStream = mpCurrentAVDataItem->videoStream();
   TTAVTypes::AVStreamType streamType = vStream->streamType();
 
-  if (streamType == TTAVTypes::h264_video) {
-    TTSettings::instance()->setEncoderCodec(1);  // H.264
-  } else if (streamType == TTAVTypes::h265_video) {
-    TTSettings::instance()->setEncoderCodec(2);  // H.265
-  } else {
-    TTSettings::instance()->setEncoderCodec(0);  // MPEG-2
-  }
+  TTSettings::instance()->setEncoderCodec(TTAVTypes::encoderCodecFor(streamType));
 
   // Set default video cut name from video file name if not already set
   // (project settings may have loaded a custom name)
@@ -1822,10 +1801,8 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
     // Project-Load fires deserializeSettings() AFTER this signal, so the
     // .ttcut transient values overwrite App-Defaults last — see
     // TTAVData::onReadProjectFileFinished().
-    TTAVTypes::AVStreamType streamType = avItem->videoStream()->streamType();
-    if (streamType == TTAVTypes::h264_video)      TTSettings::instance()->setEncoderCodec(1);
-    else if (streamType == TTAVTypes::h265_video) TTSettings::instance()->setEncoderCodec(2);
-    else                                          TTSettings::instance()->setEncoderCodec(0);
+    TTSettings::instance()->setEncoderCodec(
+        TTAVTypes::encoderCodecFor(avItem->videoStream()->streamType()));
   }
 
   currentFrame->onAVDataChanged(avItem);
@@ -1974,6 +1951,18 @@ void TTCutMainWindow::onSetCutOut(int index)
   cutOutFrame->onGotoCutOut(index);
 }
 
+void TTCutMainWindow::ensureProgressBar()
+{
+  if (progressBar != 0) return;
+  progressBar = new TTProgressBar(this);
+  connect(progressBar, &TTProgressBar::cancel, mpAVData, &TTAVData::onUserAbortRequest);
+  // Route through onAbortStreamPoints() (not directly to the pool) so a
+  // cancel from this dialog also marks the run as aborted - otherwise a
+  // stream-point scan cancelled here delivers its partial results as if
+  // the run had completed normally (TTAspectScanTask reports on abort).
+  connect(progressBar, &TTProgressBar::cancel, this, &TTCutMainWindow::onAbortStreamPoints);
+}
+
 /* /////////////////////////////////////////////////////////////////////////////
  * onStatusReport;
  */
@@ -1991,15 +1980,7 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
 
   switch(state) {
     case StatusReportArgs::Init:
-      if (progressBar == 0) {
-        progressBar = new TTProgressBar(this);
-        connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
-        // Route through onAbortStreamPoints() (not directly to the pool) so a
-        // cancel from this dialog also marks the run as aborted - otherwise a
-        // stream-point scan cancelled here delivers its partial results as if
-        // the run had completed normally (TTAspectScanTask reports on abort).
-        connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
-      }
+      ensureProgressBar();
       this->setEnabled(false);
       // ...but not the progress dialog. It is a child of this window, and Qt
       // disables children along with their parent - child windows included. A
@@ -2022,15 +2003,7 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
       // Stream-point analysis never emits Init (only open/cut does), so the
       // bar has to be created here as well - otherwise a long scan runs with
       // no visible feedback whenever no open operation created it earlier.
-      if (progressBar == 0) {
-        progressBar = new TTProgressBar(this);
-        connect(progressBar, &TTProgressBar::cancel, mpAVData,              &TTAVData::onUserAbortRequest);
-        // Route through onAbortStreamPoints() (not directly to the pool) so a
-        // cancel from this dialog also marks the run as aborted - otherwise a
-        // stream-point scan cancelled here delivers its partial results as if
-        // the run had completed normally (TTAspectScanTask reports on abort).
-        connect(progressBar, &TTProgressBar::cancel, this,                  &TTCutMainWindow::onAbortStreamPoints);
-      }
+      ensureProgressBar();
       progressBar->showBar();
       // The notes collected in onAnalyzeStreamPoints() (analyses that were
       // enabled but could not run) go into the LOG right here - and into the
@@ -2169,7 +2142,7 @@ QString TTCutMainWindow::formatRemaining(const TTProgressEstimator::Result& r) c
   return t;
 }
 
-QString TTCutMainWindow::progressStageName(int stage) const
+QString TTCutMainWindow::progressStageName(int stage)
 {
   switch (stage) {
     case StatusReportArgs::StageVideo: return tr("Video");
@@ -2253,40 +2226,52 @@ void TTCutMainWindow::insertRecentFile(const QString& fName)
 void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float threshold)
 {
   if (!mpCurrentAVDataItem || mpRunningSearch) return;
+  DirectedSearchSource src;
+  if (!directedSearchSource(startPos, src)) return;
 
-  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-  if (!vs) return;
+  auto* task = new TTBlackFrameSearchTask(
+      src.vs->filePath(),
+      src.vs->streamType(),
+      src.idxList,
+      src.vs->headerList(),
+      startPos, direction, src.frameCount,
+      threshold,
+      src.preBuiltIndex);
+  launchDirectedSearch(task, &TTCutMainWindow::onBlackSearchFinished,
+                       [this](bool on) { navigation->setBlackSearchRunning(on); },
+                       tr("Searching black frame from frame %1...").arg(startPos));
+}
 
-  int frameCount = vs->frameCount();
-  if (frameCount <= 0) return;
+bool TTCutMainWindow::directedSearchSource(int startPos, DirectedSearchSource& src)
+{
+  src.vs = mpCurrentAVDataItem->videoStream();
+  if (!src.vs) return false;
 
-  TTVideoIndexList* idxList = vs->indexList();
-  if (!idxList) return;
+  src.frameCount = src.vs->frameCount();
+  if (src.frameCount <= 0) return false;
+
+  src.idxList = src.vs->indexList();
+  if (!src.idxList) return false;
 
   mLastSearchStartPos = startPos;
 
   // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
   // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
   // scan in the search worker.
-  TTFrameIndexBundle preBuiltIndex;
-  if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndexBundle();
+  if (const TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
+    src.preBuiltIndex = preview->frameIndexBundle();
+  return true;
+}
 
-  auto* task = new TTBlackFrameSearchTask(
-      vs->filePath(),
-      vs->streamType(),
-      idxList,
-      vs->headerList(),
-      startPos, direction, frameCount,
-      threshold,
-      preBuiltIndex);
-
+void TTCutMainWindow::launchDirectedSearch(TTSearchTask* task, void (TTCutMainWindow::*finished)(int, bool),
+                                           const std::function<void(bool)>& setRunning,
+                                           const QString& startMessage)
+{
   connect(task, &TTSearchTask::progress, this,
           [this](int n) {
             statusBar()->showMessage(tr("Searching... %1 frames checked").arg(n));
           });
-  connect(task, &TTSearchTask::found,
-          this, &TTCutMainWindow::onBlackSearchFinished);
+  connect(task, &TTSearchTask::found, this, finished);
   connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
 
   // A task aborted before the pool ever ran it emits aborted, never finished
@@ -2297,12 +2282,28 @@ void TTCutMainWindow::onSearchBlackFrame(int startPos, int direction, float thre
   // through found(), which is possible if operation() throws after emitting.
   connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
   connect(task, &TTThreadTask::aborted, this,
-          [this, task]() { if (mpRunningSearch == task) onBlackSearchFinished(-1, true); });
+          [this, task, finished]() { if (mpRunningSearch == task) (this->*finished)(-1, true); });
 
   mpRunningSearch = task;
-  navigation->setBlackSearchRunning(true);
-  statusBar()->showMessage(tr("Searching black frame from frame %1...").arg(startPos));
+  setRunning(true);
+  statusBar()->showMessage(startMessage);
   mpStreamPointTaskPool->start(task);
+}
+
+void TTCutMainWindow::finishDirectedSearch(int foundPos, bool wasAborted,
+                                           const std::function<void(bool)>& setRunning,
+                                           const QString& abortedMessage, const QString& notFoundMessage)
+{
+  setRunning(false);
+  mpRunningSearch = nullptr;
+
+  if (foundPos >= 0) {
+    onVideoSliderChanged(foundPos);
+    statusBar()->clearMessage();
+  } else {
+    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
+    statusBar()->showMessage(wasAborted ? abortedMessage : notFoundMessage, 3000);
+  }
 }
 
 void TTCutMainWindow::onAbortBlackSearch()
@@ -2312,19 +2313,8 @@ void TTCutMainWindow::onAbortBlackSearch()
 
 void TTCutMainWindow::onBlackSearchFinished(int foundPos, bool wasAborted)
 {
-  navigation->setBlackSearchRunning(false);
-  mpRunningSearch = nullptr;
-
-  if (foundPos >= 0) {
-    onVideoSliderChanged(foundPos);
-    statusBar()->clearMessage();
-  } else {
-    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
-    statusBar()->showMessage(
-        wasAborted ? tr("Black frame search aborted")
-                   : tr("No black frame found"),
-        3000);
-  }
+  finishDirectedSearch(foundPos, wasAborted, [this](bool on) { navigation->setBlackSearchRunning(on); },
+                       tr("Black frame search aborted"), tr("No black frame found"));
 }
 
 /*!
@@ -2333,56 +2323,20 @@ void TTCutMainWindow::onBlackSearchFinished(int foundPos, bool wasAborted)
 void TTCutMainWindow::onSearchSceneChange(int startPos, int direction, float threshold)
 {
   if (!mpCurrentAVDataItem || mpRunningSearch) return;
-
-  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-  if (!vs) return;
-
-  int frameCount = vs->frameCount();
-  if (frameCount <= 0) return;
-
-  TTVideoIndexList* idxList = vs->indexList();
-  if (!idxList) return;
-
-  mLastSearchStartPos = startPos;
-
-  // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
-  // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
-  // scan in the search worker.
-  TTFrameIndexBundle preBuiltIndex;
-  if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndexBundle();
+  DirectedSearchSource src;
+  if (!directedSearchSource(startPos, src)) return;
 
   auto* task = new TTSceneChangeSearchTask(
-      vs->filePath(),
-      vs->streamType(),
-      idxList,
-      vs->headerList(),
-      startPos, direction, frameCount,
+      src.vs->filePath(),
+      src.vs->streamType(),
+      src.idxList,
+      src.vs->headerList(),
+      startPos, direction, src.frameCount,
       threshold,
-      preBuiltIndex);
-
-  connect(task, &TTSearchTask::progress, this,
-          [this](int n) {
-            statusBar()->showMessage(tr("Searching... %1 frames checked").arg(n));
-          });
-  connect(task, &TTSearchTask::found,
-          this, &TTCutMainWindow::onSceneSearchFinished);
-  connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
-
-  // A task aborted before the pool ever ran it emits aborted, never finished
-  // and never found: TTThreadTask::run() throws TTAbortException before
-  // reaching operation(). Without this, the task leaks and - worse -
-  // mpRunningSearch stays set, which blocks every later search. The pointer
-  // comparison keeps the reset from firing on a task that already reported
-  // through found(), which is possible if operation() throws after emitting.
-  connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
-  connect(task, &TTThreadTask::aborted, this,
-          [this, task]() { if (mpRunningSearch == task) onSceneSearchFinished(-1, true); });
-
-  mpRunningSearch = task;
-  navigation->setSceneSearchRunning(true);
-  statusBar()->showMessage(tr("Searching scene change from frame %1...").arg(startPos));
-  mpStreamPointTaskPool->start(task);
+      src.preBuiltIndex);
+  launchDirectedSearch(task, &TTCutMainWindow::onSceneSearchFinished,
+                       [this](bool on) { navigation->setSceneSearchRunning(on); },
+                       tr("Searching scene change from frame %1...").arg(startPos));
 }
 
 void TTCutMainWindow::onAbortSceneSearch()
@@ -2392,19 +2346,8 @@ void TTCutMainWindow::onAbortSceneSearch()
 
 void TTCutMainWindow::onSceneSearchFinished(int foundPos, bool wasAborted)
 {
-  navigation->setSceneSearchRunning(false);
-  mpRunningSearch = nullptr;
-
-  if (foundPos >= 0) {
-    onVideoSliderChanged(foundPos);
-    statusBar()->clearMessage();
-  } else {
-    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
-    statusBar()->showMessage(
-        wasAborted ? tr("Scene change search aborted")
-                   : tr("No scene change found"),
-        3000);
-  }
+  finishDirectedSearch(foundPos, wasAborted, [this](bool on) { navigation->setSceneSearchRunning(on); },
+                       tr("Scene change search aborted"), tr("No scene change found"));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -2488,14 +2431,9 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
       analysisWrapper = new TTFFmpegWrapper();
       analysisWrapper->setAnalysisMode(true);
       if (analysisWrapper->openFile(vs->filePath())) {
-        TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-        if (previewWrapper) {
-          analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
-        } else {
-          TTFrameIndexer indexer;
-          if (indexer.build(vs->filePath(), -1, nullptr))
-            analysisWrapper->setFrameIndex(indexer.bundle());
-        }
+        const TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+        analysisWrapper->adoptOrBuildFrameIndex(
+            previewWrapper ? previewWrapper->frameIndexBundle() : TTFrameIndexBundle(), vs->filePath());
       } else {
         delete analysisWrapper;
         analysisWrapper = nullptr;
@@ -2552,14 +2490,9 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
     analysisWrapper = new TTFFmpegWrapper();
     analysisWrapper->setAnalysisMode(true);
     if (analysisWrapper->openFile(vs->filePath())) {
-      TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-      if (previewWrapper) {
-        analysisWrapper->setFrameIndex(previewWrapper->frameIndexBundle());
-      } else {
-        TTFrameIndexer indexer;
-        if (indexer.build(vs->filePath(), -1, nullptr))
-          analysisWrapper->setFrameIndex(indexer.bundle());
-      }
+      const TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+      analysisWrapper->adoptOrBuildFrameIndex(
+          previewWrapper ? previewWrapper->frameIndexBundle() : TTFrameIndexBundle(), vs->filePath());
     } else {
       delete analysisWrapper;
       analysisWrapper = nullptr;
@@ -2613,57 +2546,21 @@ void TTCutMainWindow::onSearchLogo(int startPos, int direction, float threshold)
 {
   if (!mpCurrentAVDataItem || mpRunningSearch) return;
   if (!mLogoDetector || !mLogoDetector->hasProfile()) return;
-
-  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-  if (!vs) return;
-
-  int frameCount = vs->frameCount();
-  if (frameCount <= 0) return;
-
-  TTVideoIndexList* idxList = vs->indexList();
-  if (!idxList) return;
-
-  mLastSearchStartPos = startPos;
-
-  // Index sharing (spec 2026-06-05): pulls the frame index from Owner B
-  // (mpegWindow), which itself adopted Owner A's index — avoids another ~2 s
-  // scan in the search worker.
-  TTFrameIndexBundle preBuiltIndex;
-  if (TTFFmpegWrapper* preview = currentFrame->videoWindow()->ffmpegWrapper())
-    preBuiltIndex = preview->frameIndexBundle();
+  DirectedSearchSource src;
+  if (!directedSearchSource(startPos, src)) return;
 
   auto* task = new TTLogoSearchTask(
-      vs->filePath(),
-      vs->streamType(),
-      idxList,
-      vs->headerList(),
-      startPos, direction, frameCount,
+      src.vs->filePath(),
+      src.vs->streamType(),
+      src.idxList,
+      src.vs->headerList(),
+      startPos, direction, src.frameCount,
       mLogoDetector,
       threshold,
-      preBuiltIndex);
-
-  connect(task, &TTSearchTask::progress, this,
-          [this](int n) {
-            statusBar()->showMessage(tr("Searching... %1 frames checked").arg(n));
-          });
-  connect(task, &TTSearchTask::found,
-          this, &TTCutMainWindow::onLogoSearchFinished);
-  connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
-
-  // A task aborted before the pool ever ran it emits aborted, never finished
-  // and never found: TTThreadTask::run() throws TTAbortException before
-  // reaching operation(). Without this, the task leaks and - worse -
-  // mpRunningSearch stays set, which blocks every later search. The pointer
-  // comparison keeps the reset from firing on a task that already reported
-  // through found(), which is possible if operation() throws after emitting.
-  connect(task, &TTThreadTask::aborted, task, &QObject::deleteLater);
-  connect(task, &TTThreadTask::aborted, this,
-          [this, task]() { if (mpRunningSearch == task) onLogoSearchFinished(-1, true); });
-
-  mpRunningSearch = task;
-  navigation->setLogoSearchRunning(true);
-  statusBar()->showMessage(tr("Searching logo change from frame %1...").arg(startPos));
-  mpStreamPointTaskPool->start(task);
+      src.preBuiltIndex);
+  launchDirectedSearch(task, &TTCutMainWindow::onLogoSearchFinished,
+                       [this](bool on) { navigation->setLogoSearchRunning(on); },
+                       tr("Searching logo change from frame %1...").arg(startPos));
 }
 
 void TTCutMainWindow::onAbortLogoSearch()
@@ -2673,17 +2570,6 @@ void TTCutMainWindow::onAbortLogoSearch()
 
 void TTCutMainWindow::onLogoSearchFinished(int foundPos, bool wasAborted)
 {
-  navigation->setLogoSearchRunning(false);
-  mpRunningSearch = nullptr;
-
-  if (foundPos >= 0) {
-    onVideoSliderChanged(foundPos);
-    statusBar()->clearMessage();
-  } else {
-    currentFrame->videoWindow()->showFrameAt(mLastSearchStartPos);
-    statusBar()->showMessage(
-        wasAborted ? tr("Logo search aborted")
-                   : tr("No logo state change found"),
-        3000);
-  }
+  finishDirectedSearch(foundPos, wasAborted, [this](bool on) { navigation->setLogoSearchRunning(on); },
+                       tr("Logo search aborted"), tr("No logo state change found"));
 }

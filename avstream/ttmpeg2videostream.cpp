@@ -198,6 +198,22 @@ int TTMpeg2VideoStream::createIndexList()
 /*! ////////////////////////////////////////////////////////////////////////////
  * Return the stream type
  */
+int TTMpeg2VideoStream::extrasBefore(int index) const
+{
+  return ttCountBelow(mExtraIndices, index);
+}
+
+int TTMpeg2VideoStream::streamIndexForDisplayIndex(int displayIndex) const
+{
+  int index = displayIndex;
+  for (int it = 0; it < 5; ++it) {
+    const int corrected = displayIndex + extrasBefore(index);
+    if (corrected == index) break;
+    index = corrected;
+  }
+  return index;
+}
+
 TTAVTypes::AVStreamType TTMpeg2VideoStream::streamType() const
 {
   return TTAVTypes::mpeg2_demuxed_video;

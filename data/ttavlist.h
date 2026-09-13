@@ -16,6 +16,7 @@
 #define TTAVDATALIST_H
 
 #include <QObject>
+#include <functional>
 #include <QList>
 #include <QListIterator>
 
@@ -42,7 +43,7 @@ class TTAVItem : public QObject
   friend class TTAVData;
 
   public:
-    TTAVItem(TTVideoStream* videoStream);
+    explicit TTAVItem(TTVideoStream* videoStream);
     ~TTAVItem();
 
     bool           isInList();
@@ -106,6 +107,12 @@ class TTAVItem : public QObject
     bool anomalyScanStarted() const       { return mAnomalyScanStarted; }
     void setAnomalyScanStarted()          { mAnomalyScanStarted = true; }
 
+  private:
+    //! Repairs are tagged with the track index of the file they belong to.
+    //! Rebuild every repair with newTrack(oldTrack) - or drop it when that
+    //! returns -1 - after the audio list was shortened or reordered.
+    void remapAudioRepairTracks(const std::function<int(int)>& newTrack);
+
   public slots:
     void onRemoveAudioItem(int index);
     void onSwapAudioItems(int oldIndex, int newIndex);
@@ -133,8 +140,6 @@ class TTAVItem : public QObject
 
   private:
     TTAudioList*    audioDataList()    { return mpAudioList; }
-    TTSubtitleList* subtitleDataList() { return mpSubtitleList; }
-    TTCutList*      cutDataList()      { return mpCutList; }
     void            checkCut(int cutIn, int cutOut);
 
   private:

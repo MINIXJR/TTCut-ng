@@ -8,7 +8,12 @@
 /* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
 /*----------------------------------------------------------------------------*/
 
+#ifndef TTCOMMON_H
+#define TTCOMMON_H
+
 #include <QString>
+#include <QList>
+#include <algorithm>
 #include <QDateTime>
 #include <QStringList>
 
@@ -39,6 +44,15 @@ TTTimeCode ttFrameToTimeCode( int FrameNr, float fps);
 // string for unknown types (instead of dropping the whole tag silently).
 QString ttFrameTypeTag(int frameType);
 
+// Entries of an ascending index list strictly below `index` - the number of
+// MPEG-2 field-picture extras that precede a position. One implementation
+// for TTMpeg2VideoStream::extrasBefore (the bitstream parser's list) and
+// TTAVData::countExtraFramesBefore (the audio-correction list).
+inline int ttCountBelow(const QList<int>& ascending, int index)
+{
+  return int(std::lower_bound(ascending.begin(), ascending.end(), index) - ascending.begin());
+}
+
 #ifndef TTTIMECODE_H
 #define TTTIMECODE_H
 
@@ -57,3 +71,5 @@ class TTTimeCode
 
 };
 #endif
+
+#endif // TTCOMMON_H

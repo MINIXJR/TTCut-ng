@@ -168,6 +168,13 @@ void TTThreadTask::runSynchron()
  * resources or disconnect signals that observers have no business seeing
  * afterwards.
  */
+void TTThreadTask::finishAborted()
+{
+  mIsRunning = false;
+  cleanUp();
+  emit aborted(this);
+}
+
 void TTThreadTask::run()
 {
   try
@@ -201,9 +208,7 @@ void TTThreadTask::run()
   catch(const TTAbortException&)
   {
     qDebug() << taskName() << " with UUID " << taskID() << " catched TTAbortException";
-    mIsRunning = false;
-    cleanUp();
-    emit aborted(this);
+    finishAborted();
 
     if (mIsSynchron) {
       qDebug() << taskName() << " with UUID " << taskID() << " redirect TTAbortException";
@@ -231,9 +236,7 @@ void TTThreadTask::run()
     mFailureMessage = e.getMessage();
     TTMessageLogger::getInstance()->errorMsg(__FILE__, __LINE__,
         QString("%1 failed: %2").arg(taskName(), mFailureMessage));
-    mIsRunning = false;
-    cleanUp();
-    emit aborted(this);
+    finishAborted();
 
     if (mIsSynchron) {
       qDebug() << taskName() << " with UUID " << taskID() << " redirect TTException";

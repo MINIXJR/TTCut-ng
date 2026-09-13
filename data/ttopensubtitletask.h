@@ -27,7 +27,7 @@ class TTOpenSubtitleTask : public TTThreadTask
   Q_OBJECT
 
   public:
-    TTOpenSubtitleTask(TTAVItem* avItem, QString filePath, int order);
+    TTOpenSubtitleTask(TTAVItem* avItem, const QString& filePath, int order);
 
   protected:
     void cleanUp() override;

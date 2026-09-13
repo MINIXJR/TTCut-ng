@@ -145,7 +145,7 @@ bool TTFrameIndexer::setupIndexingPass(int videoStreamIndex)
     // Parse SPS for PAFF detection (H.264 only)
     AVCodecID codecId = mFormatCtx->streams[videoStreamIndex]->codecpar->codec_id;
     if (codecId == AV_CODEC_ID_H264) {
-        uint8_t* extradata = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata;
+        const uint8_t* extradata = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata;
         int extradataSize = mFormatCtx->streams[videoStreamIndex]->codecpar->extradata_size;
         if (extradata && extradataSize > 0) {
             parseH264SpsFromExtradata(extradata, extradataSize);
@@ -161,70 +161,12 @@ bool TTFrameIndexer::setupIndexingPass(int videoStreamIndex)
 // ----------------------------------------------------------------------------
 void TTFrameIndexer::parseH264SpsFromExtradata(const uint8_t* data, int size)
 {
-    if (!data || size < 5) return;
+    TTNaluParser::H264SpsBasics sps;
+    if (!TTNaluParser::parseH264SpsBasics(data, size, sps)) return;
 
-    int nalStart = -1;
-    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
-         s = TTNaluParser::findStartCodePayload(data, size, s)) {
-        if ((data[s] & 0x1F) == 7) { nalStart = s; break; }
-    }
-    if (nalStart < 0) return;
-
-    const uint8_t* sps = data + nalStart;
-    int spsSize = size - nalStart;
-    int bitPos = 8;
-
-    int profileIdc = static_cast<int>(TTNaluParser::readBits(sps, spsSize, bitPos, 8));
-    TTNaluParser::readBits(sps, spsSize, bitPos, 8);  // constraint+reserved
-    TTNaluParser::readBits(sps, spsSize, bitPos, 8);  // level_idc
-    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);  // sps_id
-
-    if (TTNaluParser::isH264HighProfile(static_cast<uint32_t>(profileIdc))) {
-        int chromaFormatIdc = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
-        if (chromaFormatIdc == 3) TTNaluParser::readBits(sps, spsSize, bitPos, 1);
-        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-        TTNaluParser::readBits(sps, spsSize, bitPos, 1);
-        uint32_t scalingPresent = TTNaluParser::readBits(sps, spsSize, bitPos, 1);
-        if (scalingPresent) {
-            int numLists = (chromaFormatIdc != 3) ? 8 : 12;
-            for (int i = 0; i < numLists; i++) {
-                if (TTNaluParser::readBits(sps, spsSize, bitPos, 1)) {
-                    int listSize = (i < 6) ? 16 : 64;
-                    int lastScale = 8, nextScale = 8;
-                    for (int j = 0; j < listSize; j++) {
-                        if (nextScale != 0) {
-                            int delta = TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
-                            nextScale = (lastScale + delta + 256) % 256;
-                        }
-                        lastScale = (nextScale == 0) ? lastScale : nextScale;
-                    }
-                }
-            }
-        }
-    }
-
-    mBundle.log2MaxFrameNum = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos)) + 4;
-
-    int pocType = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
-    if (pocType == 0) {
-        TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-    } else if (pocType == 1) {
-        TTNaluParser::readBits(sps, spsSize, bitPos, 1);
-        TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
-        TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
-        int n = static_cast<int>(TTNaluParser::readExpGolombUE(sps, spsSize, bitPos));
-        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
-        if (n > 256) return;
-        for (int i = 0; i < n; i++) TTNaluParser::readExpGolombSE(sps, spsSize, bitPos);
-    }
-
-    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-    TTNaluParser::readBits(sps, spsSize, bitPos, 1);
-    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-    TTNaluParser::readExpGolombUE(sps, spsSize, bitPos);
-
-    mBundle.frameMbsOnlyFlag = (TTNaluParser::readBits(sps, spsSize, bitPos, 1) == 1);
+    mBundle.log2MaxFrameNum = sps.log2MaxFrameNum;
+    if (!sps.haveFrameMbsOnlyFlag) return;
+    mBundle.frameMbsOnlyFlag = sps.frameMbsOnlyFlag;
 
     if (!mBundle.frameMbsOnlyFlag) {
         if (TTSettings::instance()->logFFmpegDecoder())
@@ -248,27 +190,14 @@ TTFieldInfo TTFrameIndexer::parseH264FieldInfo(const uint8_t* data, int size,
         if (nalType == 1 || nalType == 5) { nalStart = s; break; }
     }
 
-    if (nalStart < 0 && size >= 3) {
+    if (nalStart < 0) {
         uint8_t nalType = data[0] & 0x1F;
         if (nalType == 1 || nalType == 5) nalStart = 0;
     }
     if (nalStart < 0) return result;
 
-    const uint8_t* nal = data + nalStart;
-    int nalSize = size - nalStart;
-    int bitPos = 8;
-
-    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // first_mb_in_slice
-    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // slice_type
-    TTNaluParser::readExpGolombUE(nal, nalSize, bitPos);  // pps_id
-
-    result.frameNum = static_cast<int>(TTNaluParser::readBits(nal, nalSize, bitPos, log2MaxFrameNum));
-
-    result.isField = (TTNaluParser::readBits(nal, nalSize, bitPos, 1) == 1);
-    if (result.isField) {
-        result.isBottomField = (TTNaluParser::readBits(nal, nalSize, bitPos, 1) == 1);
-    }
-
+    TTNaluParser::parseH264SliceFieldInfo(data + nalStart, size - nalStart, log2MaxFrameNum,
+                                          result.frameNum, result.isField, result.isBottomField);
     return result;
 }
 
@@ -475,16 +404,11 @@ void TTFrameIndexer::assignPtsFromFrameRate(int videoStreamIndex)
     // Get frame rate from .info file if available, otherwise from stream
     TTStreamInfo streamInfo = ttStreamInfo(mFormatCtx, videoStreamIndex);
     double frameRate = streamInfo.frameRate;
-    QString sourceFile = QString::fromUtf8(mFormatCtx->url);
-    QString infoFile = TTESInfo::findInfoFile(sourceFile);
-
-    if (!infoFile.isEmpty()) {
-        TTESInfo esInfo(infoFile);
-        if (esInfo.isLoaded() && esInfo.frameRate() > 0) {
-            frameRate = esInfo.frameRate();
-            if (TTSettings::instance()->logFFmpegDecoder())
-                qDebug() << "Using frame rate from .info file:" << frameRate;
-        }
+    const TTESInfoTiming info = TTESInfo::timingForVideo(QString::fromUtf8(mFormatCtx->url));
+    if (info.frameRate > 0) {   // .info wins over libav's rate (2x for raw H.264 ES)
+        frameRate = info.frameRate;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "Using frame rate from .info file:" << frameRate;
     }
 
     // Validate frame rate
@@ -502,7 +426,7 @@ void TTFrameIndexer::assignPtsFromFrameRate(int videoStreamIndex)
     }
 
     // Get time base from stream
-    AVStream* videoStream = mFormatCtx->streams[videoStreamIndex];
+    const AVStream* videoStream = mFormatCtx->streams[videoStreamIndex];
     AVRational timeBase = videoStream->time_base;
 
     // Calculate frame duration in stream time base

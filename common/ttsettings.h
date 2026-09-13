@@ -76,7 +76,6 @@ public:
   void    setStepMouseWheel(int v);
 
   // ----- Index Files & Logging group (Task 6) -----------------------------
-  bool    createD2V() const          { return mCreateD2V; }
 
   bool    createLogFile() const      { return mCreateLogFile; }
   void    setCreateLogFile(bool v);
@@ -137,6 +136,19 @@ public:
   void    setEncoderMode(bool v);
 
   int     encoderCodec() const       { return mEncoderCodec; }
+
+  // The per-codec App-Defaults as one record, index 0/1/2 = MPEG-2/H.264/
+  // H.265 (any other value reads as H.265, like the encoder page). MPEG-2
+  // has no preset or profile; its record carries the neutral UI values.
+  struct EncoderDefaults { int preset; int crf; int profile; int container; };
+  EncoderDefaults encoderDefaultsFor(int codec) const;
+  // Copy a codec's App-Defaults into the transient working set
+  // (encoderPreset/Crf/Profile and workingOutputContainer; MPEG-2 sets crf
+  // and container only). Called by load(), setEncoderCodec() and the cut
+  // dialog's reset button - the one place that sync lives.
+  void    syncWorkingSetToCodec(int codec);
+  // Reset the six mux/audio working fields to their persistent App-Defaults.
+  void    resetWorkingMuxSet();
   void    setEncoderCodec(int v);
 
   int     encoderPreset() const      { return mEncoderPreset; }
@@ -299,9 +311,8 @@ public:
 
   // ----- Muxer group (Task 12) --------------------------------------------
   // Twelve fields extend the existing /Settings/Muxer block (Task 9 already
-  // populated mpeg2Target). setOutputContainer emits outputContainerChanged(int)
-  // so non-dialog subscribers (e.g. cut-target file-extension logic) can
-  // react to container switches uniformly.
+  // populated mpeg2Target). The container is per codec (mpeg2Muxer/
+  // h264Muxer/h265Muxer); the former global OutputContainer key is gone.
   int     muxMode() const                  { return mMuxMode; }
   void    setMuxMode(int v);
 
@@ -313,8 +324,6 @@ public:
   void    setMuxDeleteES(bool v);
 
 
-  int     outputContainer() const          { return mOutputContainer; }
-
   bool    mkvCreateChapters() const        { return mMkvCreateChapters; }
   void    setMkvCreateChapters(bool v);
 
@@ -323,7 +332,6 @@ public:
 
   int     audioOnlyFormat() const          { return mAudioOnlyFormat; }
 
-  int     audioOnlyBitrateKbps() const     { return mAudioOnlyBitrateKbps; }
 
   // ----- Mux/Audio Working Set (Phase 2b, transient per-cut/per-project) ----
   // Same pattern as encoderCrf/Preset/Profile: working values are kept in
@@ -386,12 +394,6 @@ signals:
   // list. Mutating call sites must read-modify-write through the setter
   // so the signal fires and the legacy mirror stays consistent.
   void audioLanguagePreferenceChanged(const QStringList& v);
-
-  // Task 12: emitted by setOutputContainer so non-dialog subscribers
-  // (e.g. cut-target file-extension logic, mux-target path resolution)
-  // can react to container switches uniformly. The settings dialog wires
-  // its own intra-dialog signals separately and is unchanged by this task.
-  void outputContainerChanged(int v);
 
 private:
   static TTSettings* sInstance;
@@ -515,7 +517,6 @@ private:
   int     mMuxMode             = 0;
   QString mMuxOutputPath;          // initialised to QDir::homePath() in ctor
   bool    mMuxDeleteES         = false;
-  int     mOutputContainer     = 1;   // 1=MKV (default for modern codecs)
   bool    mMkvCreateChapters   = true;
   int     mMkvChapterInterval  = 5;
   int     mAudioOnlyFormat;        // initialised to TTCut::AOF_OriginalES in ctor

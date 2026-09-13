@@ -15,6 +15,7 @@
 #include "ttmplexprovider.h"
 
 #include "../common/ttsettings.h"
+#include "../common/ttstreamfiles.h"
 #include "../avstream/ttcommon.h"
 
 #include <QDebug>
@@ -341,28 +342,6 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
   return mplexArgs;
 }
 
-//! Delete the elementary streams from disk
-void TTMplexProvider::deleteElementaryStreams(const QString& videoFilePath, const QStringList& audioFilePaths)
-{
-  QFile videoFile(videoFilePath);
-  bool  success = videoFile.remove();
-
-  log->debugMsg(__FILE__, __LINE__, QString("Removing video stream %1 (%2)").
-        arg(videoFilePath).
-        arg(success ? "success" : "failed"));
-
-  QStringListIterator listIterator(audioFilePaths);
-  while(listIterator.hasNext()) {
-    QString audioFilePath = listIterator.next();
-    QFile   audioFile(audioFilePath);
-    success = audioFile.remove();
-
-    log->debugMsg(__FILE__, __LINE__, QString("Removing audio stream %1 (%2)").
-        arg(audioFilePath).
-        arg(success ? "success" : "failed"));
-  }
-}
-
 // /////////////////////////////////////////////////////////////////////////////
 // Event Processing
 //
@@ -471,8 +450,8 @@ void TTMplexProvider::onProcFinished(int exitCode, QProcess::ExitStatus exitStat
   if (!TTSettings::instance()->workingMuxDeleteES()) return;
 
   // Only delete ES files for the current mux item, not all items in the list
-  deleteElementaryStreams(mpMuxList->videoFilePathAt(mCurrentMuxIndex),
-                          mpMuxList->audioFilePathsAt(mCurrentMuxIndex));
+  ttRemoveElementaryStreams(mpMuxList->videoFilePathAt(mCurrentMuxIndex),
+                            mpMuxList->audioFilePathsAt(mCurrentMuxIndex));
 }
 
 //! This signal is emitted whenever the state changed

@@ -242,6 +242,14 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
     return silenceUnavailable(tr("not enough memory for the audio buffers"));
   }
 
+  // Everything the silencedetect filter has produced so far.
+  auto drainSink = [&]() {
+    while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
+      collectSilenceResult(filtFrame, results);
+      av_frame_unref(filtFrame);
+    }
+  };
+
   while (av_read_frame(fmtCtx, pkt) >= 0 && !mIsAborted) {
     if (pkt->stream_index == audioIdx) {
       if (avcodec_send_packet(codecCtx, pkt) >= 0) {
@@ -249,11 +257,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
           if (av_buffersrc_add_frame_flags(bufferSrcCtx, frame,
                                             AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
             break;
-
-          while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
-            collectSilenceResult(filtFrame, results);
-            av_frame_unref(filtFrame);
-          }
+          drainSink();
           av_frame_unref(frame);
         }
       }
@@ -265,18 +269,12 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectSilencePoints()
   avcodec_send_packet(codecCtx, nullptr);
   while (avcodec_receive_frame(codecCtx, frame) >= 0 && !mIsAborted) {
     if (av_buffersrc_add_frame(bufferSrcCtx, frame) < 0) break;
-    while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
-      collectSilenceResult(filtFrame, results);
-      av_frame_unref(filtFrame);
-    }
+    drainSink();
     av_frame_unref(frame);
   }
   // Final flush
   (void)av_buffersrc_add_frame(bufferSrcCtx, nullptr);
-  while (av_buffersink_get_frame(bufferSinkCtx, filtFrame) >= 0) {
-    collectSilenceResult(filtFrame, results);
-    av_frame_unref(filtFrame);
-  }
+  drainSink();
 
   return results;
 }
@@ -301,7 +299,7 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
   }
 
   // Check for silence_start → create point at start position
-  AVDictionaryEntry* startTag = av_dict_get(filtFrame->metadata,
+  const AVDictionaryEntry* startTag = av_dict_get(filtFrame->metadata,
     "lavfi.silence_start", nullptr, 0);
   if (startTag) {
     double silenceStart = QString::fromUtf8(startTag->value).replace(',', '.').toDouble();
@@ -359,7 +357,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
     if (!hdr) continue;
 
     // Try AC3 header (has acmod field)
-    TTAC3AudioHeader* ac3Hdr = dynamic_cast<TTAC3AudioHeader*>(hdr);
+    const TTAC3AudioHeader* ac3Hdr = dynamic_cast<TTAC3AudioHeader*>(hdr);
     if (ac3Hdr) {
       ac3Headers++;
       int acmod = ac3Hdr->acmod;

@@ -77,6 +77,12 @@ private slots:
   void onPlaybackRestarted();
 
 private:
+  //! The one end of a playback: whichever source reports it first
+  //! (eof-reached, END_FILE, stop()) emits playerFinished(); the others find
+  //! mAtEnd set and stay silent - a caller never sees two per ending.
+  void finishPlayback();
+
+private:
   ITTMpvBackend* mBackend          = nullptr;
   QString        mSubtitleFile;
   int            mSubtitleDelayMs = 0;  // mpv --sub-delay sign: positive = show later

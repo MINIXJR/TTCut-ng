@@ -80,9 +80,6 @@ class TTAVData : public QObject
                                const TTLogoProjectData& logoData = TTLogoProjectData());
     void      readProjectFile(const QFileInfo& fInfo);
 
-    void      appendAudioStream(TTAVItem* avItem, const QFileInfo& fInfo, int order=-1);
-    void      appendSubtitleStream(TTAVItem* avItem, const QFileInfo& fInfo, int order=-1);
-
     void      appendCutEntry(TTAVItem* avItem, int cutIn, int cutOut);
     void      copyCutEntry(const TTCutItem& cutItem);
     void      sortCutItemsByOrder();
@@ -91,7 +88,6 @@ class TTAVData : public QObject
 
     TTAVItem* avItemAt(int index)         { return mpAVList->at(index); }
     int       avCount()                   { return mpAVList->count(); }
-    int       avIndexOf(TTAVItem* item)   { return mpAVList->indexOf(item); }
 
     TTCutItem cutItemAt(int index)        { return mpCutList->at(index); }
     int       cutIndexOf(const TTCutItem& item) { return mpCutList->indexOf(item); }
@@ -134,8 +130,6 @@ class TTAVData : public QObject
     void onRemoveCutItem(const TTCutItem& item);
     void onCutOrderChanged(int, int);
 
-    void onAppendMarker(int);
-    void onRemoveMarker(const TTMarkerItem& mItem);
 
     void onDoFrameSearch(TTAVItem* avItem, int startIndex);
     void onCurrentFramePositionChanged(int position);
@@ -159,11 +153,13 @@ class TTAVData : public QObject
     void onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int order, const QString& demuxedAudio);
     void onOpenAVStreamsAborted();
 
+    void onOpenVideoAborted(const QString& reason);
+
     void onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int order);
-    void onOpenAudioAborted(TTAVItem* avItem);
+    void onOpenAudioAborted(TTAVItem* avItem, const QString& filePath, const QString& reason);
 
     void onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStream, int order);
-    void onOpenSubtitleAborted(TTAVItem* avItem);
+    void onOpenSubtitleAborted(TTAVItem* avItem, const QString& filePath, const QString& reason);
 
     void onCutPreviewFinished(TTCutList* cutList);
     void onCutPreviewAudioDrift(const QList<float>& driftsMs);
@@ -186,6 +182,10 @@ class TTAVData : public QObject
     void streamPointsLoaded(const QList<TTStreamPoint>& points);
     void logoDataLoaded(const TTLogoProjectData& logoData);
     void vdrMarkersLoaded(const QList<TTStreamPoint>& points);
+    //! Audio/subtitle tracks whose open task failed during the run that just
+    //! ended (one text per track); the rest of the open or project load
+    //! stands. Emitted from onThreadPoolExit() before the GUI dialog.
+    void trackOpenFailed(const QStringList& messages);
 
     void avItemAppended(const TTAVItem& item);
     void avItemRemoved(int index);
@@ -217,18 +217,32 @@ class TTAVData : public QObject
 
   private:
     TTAVItem*      createAVItem();
-    TTAVList*      videoDataList() { return mpAVList; }
-    QFileInfoList  getAudioNames(const QFileInfo& vFileInfo);
-    QFileInfoList  getSubtitleNames(const QFileInfo& vFileInfo);
-    void           deleteElementaryStreams(const QString& videoFilePath,
-                                           const QStringList& audioFilePaths,
-                                           const QStringList& subtitleFilePaths = QStringList());
+    static QFileInfoList getAudioNames(const QFileInfo& vFileInfo);
+    static QFileInfoList getSubtitleNames(const QFileInfo& vFileInfo);
+    //! The one place the current item changes: keeps mpCurrentAVItem and
+    //! what currentAVItemChanged() tells the GUI in step.
+    void           setCurrentAVItem(TTAVItem* avItem);
+    //! Warning dialog with an "Import as Stream Points" button; the points
+    //! are emitted as markers (vdrMarkersLoaded) when the user takes it.
+    void           showImportAsStreamPointsWarning(const QString& title, const QString& msg,
+                                                   const QList<TTStreamPoint>& points);
+    //! The opening brackets every cut path emits: the stage plan, then Init
+    //! and Start with an event-loop turn after each.
+    void           announceCutStart(const QVector<TTStagePlan>& plan, const QString& initMsg,
+                                    const QString& startMsg, quint64 startValue);
+    //! Run `report(reason)` on this object's thread when an open task
+    //! aborts. aborted() is emitted on the worker; a direct connection reads
+    //! failureMessage() while the task is certainly alive and queues only
+    //! the string back here.
+    void           watchOpenAbort(TTThreadTask* task, const std::function<void(const QString&)>& report);
+    void           recordTrackOpenFailure(const QString& kind, const QString& filePath, const QString& reason);
+    void           clearOpenOutcome();
     //! Close the MPEG-2 cut operation: reset mCutOperationActive, emit the
     //! single final Exit bracket and cutFinished(). Called inline by
     //! onCutFinished()'s mplex/Elementary branches and by onMpeg2MuxFinished()
     //! for the MKV branch, whose mux is a second pool run.
     void           finishMpeg2Cut();
-    void           doH264Cut(QString tgtFileName, TTCutList* cutList);
+    void           doH264Cut(const QString& tgtFileName, TTCutList* cutList);
     void           doAudioOnlyCut(QString tgtFileName, TTCutList* cutList);
     // Classify the .info doubled-PTS clusters against the MPEG-2 parser's
     // field-pair list and show the warning dialog (or import silently when all
@@ -252,9 +266,6 @@ class TTAVData : public QObject
     bool mNonInteractive = false;  // --auto-cut: no modal dialogs
     TTMarkerList*     mpMarkerList;
     TTMuxListData*    mpMuxList;
-    TTOpenVideoTask*    openVideoTask;
-    TTOpenAudioTask*    openAudioTask;
-    TTOpenSubtitleTask* openSubtitleTask;
     TTCutPreviewTask*   cutPreviewTask;
     TTCutVideoTask*   cutVideoTask;
     TTH26xCutTask*    mpH26xCutTask = nullptr;
@@ -298,6 +309,14 @@ class TTAVData : public QObject
     // Audio gap frame indices (sorted) — for marker visualization only.
     // NOT used for audio cut time correction (separate from mExtraFrameIndices).
     QList<int> mAudioGapIndices;
+
+    // How the open tasks of the current run ended (onOpenVideoAborted,
+    // onOpenAudioAborted, onOpenSubtitleAborted): failed tracks are reported
+    // by onThreadPoolExit(), and onReadProjectFileAborted() treats "only a
+    // track failed" as a loaded project. Reset at every open/project start.
+    QStringList mTrackOpenFailures;
+    bool        mVideoOpenFailed = false;
+    bool        mOpenCancelled   = false;   // an aborted() without a failure reason = user cancel
 
     // Pending language overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
@@ -435,9 +454,9 @@ class TTAVData : public QObject
     // seconds (already extra-frame-corrected, B-frame-adjusted, etc., but
     // without per-track audio delay). Adds the delay and snaps to audio-frame
     // boundaries with feed-forward.
-    AudioCutPlan planAudioCut(TTAudioStream* audioStream,
+    static AudioCutPlan planAudioCut(TTAudioStream* audioStream,
                               const QList<QPair<double, double>>& videoKeepList,
-                              int delayMs) const;
+                              int delayMs);
 
     // Build a video-domain keep list (seconds) from cut indices, applying the
     // extra-frame correction: (index - extraBefore)/fps, cut-out uses index+1.

@@ -133,7 +133,7 @@ QString TTCutProjectData::filePath()
 /* /////////////////////////////////////////////////////////////////////////////
  * Serialize an AVDataItem to xml
  */
-void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
+void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
 {
   QDomElement video = writeVideoSection(vItem->videoStream()->filePath(), 0);
 
@@ -145,7 +145,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
     // stored order would otherwise still be the discovery order and a
     // manual arrangement would not survive save/reload (sortByProjectOrder
     // restores exactly this number).
-    QDomElement audio = writeAudioSection(video, aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
+    QDomElement audio = writeTrackSection(video, "Audio", aStream->filePath(), i, aItem.getLanguage(), aItem.getDelayMs());
 
     // Repair items are tagged with the same visible list position (trackIndex()),
     // not nested under the audio list itself - filter by it here.
@@ -168,7 +168,7 @@ void TTCutProjectData::serializeAVDataItem(TTAVItem* vItem)
   for (int i = 0; i < vItem->subtitleCount(); i++) {
     TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
-    writeSubtitleSection(video, sStream->filePath(), sItem.order(), sItem.getLanguage(), sItem.getDelayMs());
+    writeTrackSection(video, "Subtitle", sStream->filePath(), sItem.order(), sItem.getLanguage(), sItem.getDelayMs());
   }
 }
 
@@ -465,24 +465,24 @@ QDomElement TTCutProjectData::writeVideoSection(const QString& filePath, int ord
 /* /////////////////////////////////////////////////////////////////////////////
  *
  */
-QDomElement TTCutProjectData::writeAudioSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs)
+QDomElement TTCutProjectData::writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs)
 {
-  QDomElement audio = xmlDocument->createElement("Audio");
-  parent.appendChild(audio);
+  QDomElement track = xmlDocument->createElement(tag);
+  parent.appendChild(track);
 
-  addTextElement(audio, "Order", QString("%1").arg(order));
+  addTextElement(track, "Order", QString("%1").arg(order));
 
-  addTextElement(audio, "Name", filePath);
+  addTextElement(track, "Name", filePath);
 
   if (!language.isEmpty()) {
-    addTextElement(audio, "Language", language);
+    addTextElement(track, "Language", language);
   }
 
   if (delayMs != 0) {
-    addTextElement(audio, "Delay", QString::number(delayMs));
+    addTextElement(track, "Delay", QString::number(delayMs));
   }
 
-  return audio;
+  return track;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -695,29 +695,6 @@ TTLogoProjectData TTCutProjectData::deserializeLogoData()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Write subtitle section to XML
- */
-QDomElement TTCutProjectData::writeSubtitleSection(QDomElement& parent, const QString& filePath, int order, const QString& language, int delayMs)
-{
-  QDomElement subtitle = xmlDocument->createElement("Subtitle");
-  parent.appendChild(subtitle);
-
-  addTextElement(subtitle, "Order", QString("%1").arg(order));
-
-  addTextElement(subtitle, "Name", filePath);
-
-  if (!language.isEmpty()) {
-    addTextElement(subtitle, "Language", language);
-  }
-
-  if (delayMs != 0) {
-    addTextElement(subtitle, "Delay", QString::number(delayMs));
-  }
-
-  return subtitle;
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
  * Parse subtitle section from XML
  */
 void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem)
@@ -766,35 +743,29 @@ void TTCutProjectData::serializeSettings()
   QDomElement settings = xmlDocument->createElement("Settings");
   root.appendChild(settings);
 
-  auto addElement = [&](const QString& name, const QString& value) {
-    QDomElement el = xmlDocument->createElement(name);
-    settings.appendChild(el);
-    el.appendChild(xmlDocument->createTextNode(value));
-  };
-
   // Output
-  addElement("CutDirPath",    TTSettings::instance()->cutDirPath());
-  addElement("CutVideoName",  TTSettings::instance()->cutVideoName());
-  addElement("CutAddSuffix",  TTSettings::instance()->cutAddSuffix() ? "true" : "false");
+  addTextElement(settings, "CutDirPath",    TTSettings::instance()->cutDirPath());
+  addTextElement(settings, "CutVideoName",  TTSettings::instance()->cutVideoName());
+  addTextElement(settings, "CutAddSuffix",  TTSettings::instance()->cutAddSuffix() ? "true" : "false");
 
   // Muxing — read from the working set (transient, per-cut/per-project).
   // The persistent App-Defaults (Settings dialog) deliberately do NOT round-
   // trip through .ttcut: a project carries the cut-time choice, the user's
   // App-Defaults stay sacrosanct.
-  TTSettings* s = TTSettings::instance();
-  addElement("OutputContainer",    QString::number(s->workingOutputContainer()));
-  addElement("MkvCreateChapters",  s->workingMkvCreateChapters() ? "true" : "false");
-  addElement("MkvChapterInterval", QString::number(s->workingMkvChapterInterval()));
-  addElement("MuxDeleteES",        s->workingMuxDeleteES() ? "true" : "false");
-  addElement("MuxMode",            QString::number(s->workingMuxMode()));
-  addElement("Mpeg2Target",        QString::number(s->workingMpeg2Target()));
-  addElement("AudioOnlyFormat",    QString::number(s->workingAudioOnlyFormat()));
+  const TTSettings* s = TTSettings::instance();
+  addTextElement(settings, "OutputContainer",    QString::number(s->workingOutputContainer()));
+  addTextElement(settings, "MkvCreateChapters",  s->workingMkvCreateChapters() ? "true" : "false");
+  addTextElement(settings, "MkvChapterInterval", QString::number(s->workingMkvChapterInterval()));
+  addTextElement(settings, "MuxDeleteES",        s->workingMuxDeleteES() ? "true" : "false");
+  addTextElement(settings, "MuxMode",            QString::number(s->workingMuxMode()));
+  addTextElement(settings, "Mpeg2Target",        QString::number(s->workingMpeg2Target()));
+  addTextElement(settings, "AudioOnlyFormat",    QString::number(s->workingAudioOnlyFormat()));
 
   // Encoder (active codec values — transient working values, persisted here
   // because they live in TTSettings as in-memory only, not in QSettings)
-  addElement("EncoderPreset",  QString::number(s->encoderPreset()));
-  addElement("EncoderCrf",     QString::number(s->encoderCrf()));
-  addElement("EncoderProfile", QString::number(s->encoderProfile()));
+  addTextElement(settings, "EncoderPreset",  QString::number(s->encoderPreset()));
+  addTextElement(settings, "EncoderCrf",     QString::number(s->encoderCrf()));
+  addTextElement(settings, "EncoderProfile", QString::number(s->encoderProfile()));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

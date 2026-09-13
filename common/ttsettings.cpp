@@ -26,16 +26,15 @@ TTSettings* TTSettings::instance()
 }
 
 TTSettings::TTSettings(QObject* parent)
-  : QObject(parent)
+  : QObject(parent),
+    // Runtime defaults that depend on environment (declaration order).
+    mTempDirPath(QDir::tempPath()),
+    mLastDirPath(QDir::homePath()),
+    mMuxOutputPath(QDir::homePath()),
+    mCutDirPath(QDir::currentPath())
 {
-  // Runtime defaults that depend on environment.
-  mTempDirPath = QDir::tempPath();
-  mLastDirPath = QDir::homePath();
-  mProjectFileName = QString();
-  mMuxOutputPath = QDir::homePath();
   mAudioOnlyFormat = TTCut::AOF_OriginalES;
   mWorkingAudioOnlyFormat = TTCut::AOF_OriginalES;
-  mCutDirPath = QDir::currentPath();
 }
 
 TTSettings::~TTSettings()
@@ -237,25 +236,38 @@ void TTSettings::setEncoderCodec(int v)
   // currentAVItemChanged() (which triggers this setter from the main
   // window) BEFORE it calls deserializeSettings(), so the .ttcut transient
   // values land last and win.
-  switch (v) {
-    case 0:  // MPEG-2: only Crf is wired (no preset/profile in encoder)
-      mEncoderCrf = mMpeg2Crf;
-      mWorkingOutputContainer = mMpeg2Muxer;
-      break;
-    case 1:
-      mEncoderPreset  = mH264Preset;
-      mEncoderCrf     = mH264Crf;
-      mEncoderProfile = mH264Profile;
-      mWorkingOutputContainer = mH264Muxer;
-      break;
-    case 2:
-      mEncoderPreset  = mH265Preset;
-      mEncoderCrf     = mH265Crf;
-      mEncoderProfile = mH265Profile;
-      mWorkingOutputContainer = mH265Muxer;
-      break;
-  }
+  syncWorkingSetToCodec(v);
   emit encoderCodecChanged(v);
+}
+
+TTSettings::EncoderDefaults TTSettings::encoderDefaultsFor(int codec) const
+{
+  switch (codec) {
+    case 0:  return { 4, mMpeg2Crf, 0, mMpeg2Muxer };   // preset "fast"/profile 0: UI placeholders, not applied
+    case 1:  return { mH264Preset, mH264Crf, mH264Profile, mH264Muxer };
+    default: return { mH265Preset, mH265Crf, mH265Profile, mH265Muxer };
+  }
+}
+
+void TTSettings::syncWorkingSetToCodec(int codec)
+{
+  const EncoderDefaults d = encoderDefaultsFor(codec);
+  mEncoderCrf             = d.crf;
+  mWorkingOutputContainer = d.container;
+  if (codec != 0) {   // MPEG-2: only Crf is wired (no preset/profile in encoder)
+    mEncoderPreset  = d.preset;
+    mEncoderProfile = d.profile;
+  }
+}
+
+void TTSettings::resetWorkingMuxSet()
+{
+  mWorkingMkvCreateChapters  = mMkvCreateChapters;
+  mWorkingMkvChapterInterval = mMkvChapterInterval;
+  mWorkingMuxDeleteES        = mMuxDeleteES;
+  mWorkingMpeg2Target        = mMpeg2Target;
+  mWorkingMuxMode            = mMuxMode;
+  mWorkingAudioOnlyFormat    = mAudioOnlyFormat;
 }
 
 void TTSettings::setEncoderPreset(int v)
@@ -520,8 +532,6 @@ void TTSettings::setExtraFrameClusterOffsetSec(int v)
 // ---- Muxer group setters (Task 12) -----------------------------------------
 // Twelve setters extend the existing /Settings/Muxer block (Task 9 already
 // populated mpeg2Target). Each setter early-outs on no-op assignment.
-// setOutputContainer also emits outputContainerChanged(int) so non-dialog
-// subscribers can react to container switches uniformly.
 
 void TTSettings::setMuxMode(int v)
 {
@@ -739,8 +749,7 @@ void TTSettings::load()
   mH265Muxer    = settings.value("H265Muxer/",    mH265Muxer).toInt();
   // Legacy migration: the MP4 option (value 2) was removed; remap any stale
   // codec-specific Muxer values from existing user configs. Mirrors the
-  // sibling migrations in former gui/ttcutsettings.cpp:196-198 (the matching
-  // outputContainer migration is in the Muxer block below).
+  // sibling migrations in former gui/ttcutsettings.cpp:196-198.
   if (mMpeg2Muxer == 2) mMpeg2Muxer = 1;
   if (mH264Muxer  == 2) mH264Muxer  = 1;
   if (mH265Muxer  == 2) mH265Muxer  = 1;
@@ -757,12 +766,7 @@ void TTSettings::load()
   // fresh configuration cut MPEG-2 to MKV (measured 2026-08-16, gate
   // tools/diag/gate_audiofix.sh; gate tools/diag/test_container_sync). The
   // Muxer block below still reads that key for round-trip compatibility.
-  switch (mEncoderCodec) {
-    case 0:  /* MPEG-2: nur Crf wirksam — Preset/Profile entfallen */
-             mEncoderCrf = mMpeg2Crf; mWorkingOutputContainer = mMpeg2Muxer; break;
-    case 1:  mEncoderPreset = mH264Preset;  mEncoderCrf = mH264Crf;  mEncoderProfile = mH264Profile;  mWorkingOutputContainer = mH264Muxer;  break;
-    case 2:  mEncoderPreset = mH265Preset;  mEncoderCrf = mH265Crf;  mEncoderProfile = mH265Profile;  mWorkingOutputContainer = mH265Muxer;  break;
-  }
+  syncWorkingSetToCodec(mEncoderCodec);
   settings.endGroup();
 
   // ----- Muxer group (Tasks 9 + 12) ------------------------------------
@@ -777,12 +781,6 @@ void TTSettings::load()
   mMuxMode             = settings.value("MuxMode/",             mMuxMode).toInt();
   mMuxOutputPath       = settings.value("MuxOutputDir/",        mMuxOutputPath).toString();   // key is "MuxOutputDir/"
   mMuxDeleteES         = settings.value("MuxDeleteES/",         mMuxDeleteES).toBool();
-  mOutputContainer     = settings.value("OutputContainer/",     mOutputContainer).toInt();
-  // Legacy migration: the MP4 option (value 2) was removed; remap any
-  // stale persisted value of 2 to MKV (1). Mirrors the migration in former
-  // gui/ttcutsettings.cpp:193-195. Sibling codec-Muxer migrations are in
-  // the Encoder block above.
-  if (mOutputContainer == 2) mOutputContainer = 1;
   mMkvCreateChapters   = settings.value("MkvCreateChapters/",   mMkvCreateChapters).toBool();
   mMkvChapterInterval  = settings.value("MkvChapterInterval/",  mMkvChapterInterval).toInt();
   mAudioOnlyFormat     = settings.value("AudioOnlyFormat/",     mAudioOnlyFormat).toInt();
@@ -792,14 +790,8 @@ void TTSettings::load()
   // Sync Mux/Audio working set from the persistent App-Defaults so an
   // App-Start without a project loaded still gives the cut pipeline correct
   // values. Project-Load overwrites them in deserializeSettings().
-  mWorkingMkvCreateChapters  = mMkvCreateChapters;
-  mWorkingMkvChapterInterval = mMkvChapterInterval;
-  mWorkingMuxDeleteES        = mMuxDeleteES;
-  mWorkingMpeg2Target        = mMpeg2Target;
-  mWorkingMuxMode            = mMuxMode;
-  mWorkingAudioOnlyFormat    = mAudioOnlyFormat;
-  // mWorkingOutputContainer: set from the codec default in the Encoder block
-  // above, not from the legacy global mOutputContainer.
+  resetWorkingMuxSet();
+  // mWorkingOutputContainer: set from the codec default in the Encoder block above.
 
   // ----- Cut Options group (Task 13) -----------------------------------
   // Sub-group of /Settings. Eight fields. NOTE: the on-disk key for
@@ -989,7 +981,6 @@ void TTSettings::save()
   settings.setValue("MuxMode/",             mMuxMode);
   settings.setValue("MuxOutputDir/",        mMuxOutputPath);   // key is "MuxOutputDir/"
   settings.setValue("MuxDeleteES/",         mMuxDeleteES);
-  settings.setValue("OutputContainer/",     mOutputContainer);
   settings.setValue("MkvCreateChapters/",   mMkvCreateChapters);
   settings.setValue("MkvChapterInterval/",  mMkvChapterInterval);
   settings.setValue("AudioOnlyFormat/",     mAudioOnlyFormat);

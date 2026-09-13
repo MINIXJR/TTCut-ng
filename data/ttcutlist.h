@@ -96,6 +96,12 @@ class TTCutList : public QObject
 
     void clear();
     int  count();
+
+    //! The (cutIn, cutOut) display-frame pair of every entry, in list order
+    //! - the shape the Smart Cut engine and TTH26xCutParams consume.
+    QList<QPair<int, int>> frameRanges();
+    //! Frames the cut keeps: sum of (cutOut - cutIn + 1) over all entries.
+    int keptFrameCount();
     int  indexOf(const TTCutItem& item);
 
     void swap(int a, int b);

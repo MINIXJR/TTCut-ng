@@ -59,7 +59,7 @@ TTCutVideoTask::~TTCutVideoTask()
 /**
  * Init task
  */
-void TTCutVideoTask::init(QString tgtFilePath, TTCutList* cutList)
+void TTCutVideoTask::init(const QString& tgtFilePath, TTCutList* cutList)
 {
   mTgtFilePath = tgtFilePath;
   mpCutList    = cutList;
@@ -214,8 +214,7 @@ void TTCutTask::cleanUp()
 {
   if (mpCutStream == 0) return;
 
-  disconnect(mpCutStream, &TTVideoStream::statusReport,
-	    			 this,        qOverload<int, const QString&, quint64>(&TTCutTask::onStatusReport));
+  unlinkStatusSource(mpCutStream);
 }
 
 /**
@@ -237,8 +236,7 @@ void TTCutTask::operation()
   if (mpCutStream == 0)
     throw TTInvalidOperationException(__FILE__, __LINE__, tr("No cut stream specified!"));
 
-	connect(mpCutStream, &TTVideoStream::statusReport,
-	  			this,        qOverload<int, const QString&, quint64>(&TTCutTask::onStatusReport));
+  linkStatusSource(mpCutStream);
 
   mpCutStream->cut(mCutIn, mCutOut, mpCutParameter);
 }

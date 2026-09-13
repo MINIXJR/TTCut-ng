@@ -171,7 +171,7 @@ void TTVideoTreeView::onReloadList()
   onClearList();
 
   for (int i = 0; i < mAVData->avCount(); i++) {
-    TTAVItem* videoItem = mAVData->avItemAt(i);
+    const TTAVItem* videoItem = mAVData->avItemAt(i);
     onAppendItem(*videoItem);
   }
 }

@@ -64,6 +64,12 @@ class TTAVTypes
 
   virtual AVStreamType avStreamType();
 
+  // TTSettings encoder codec index (0 MPEG-2, 1 H.264, 2 H.265) of a stream type.
+  static int encoderCodecFor(AVStreamType t)
+  { return t == h264_video ? 1 : (t == h265_video ? 2 : 0); }
+  // H.264 or H.265: the Smart Cut (libav) family, as opposed to MPEG-2.
+  static bool isH26x(AVStreamType t) { return t == h264_video || t == h265_video; }
+
  protected:
 	 TTMessageLogger* log;
   QFileInfo*      av_stream_info;

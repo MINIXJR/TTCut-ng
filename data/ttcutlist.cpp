@@ -424,3 +424,19 @@ void TTCutList::sortByOrder()
 {
   std::sort(data.begin(), data.end());
 }
+
+QList<QPair<int, int>> TTCutList::frameRanges()
+{
+  QList<QPair<int, int>> ranges;
+  for (int i = 0; i < count(); i++)
+    ranges.append(qMakePair(at(i).cutInIndex(), at(i).cutOutIndex()));
+  return ranges;
+}
+
+int TTCutList::keptFrameCount()
+{
+  int frames = 0;
+  for (int i = 0; i < count(); i++)
+    frames += at(i).cutOutIndex() - at(i).cutInIndex() + 1;
+  return frames;
+}

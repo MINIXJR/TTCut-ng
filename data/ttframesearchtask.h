@@ -20,6 +20,7 @@
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 
 class TTVideoStream;
+class TTFFmpegWrapper;
 
 //! Runable task for frame comparison and searching
 class TTFrameSearchTask : public TTThreadTask
@@ -32,20 +33,26 @@ class TTFrameSearchTask : public TTThreadTask
 
   protected:
     enum class DecoderKind { Mpeg2, FFmpeg };
-    DecoderKind decoderKindFor(TTVideoStream* stream) const;
+    static DecoderKind decoderKindFor(TTVideoStream* stream);
 
     void    initFrameSearch();
     quint64 compareFrames(const TFrameInfo& searchInfo);
-    void    cleanUp();
-    void    operation();
+    void    cleanUp() override;
+    void    operation() override;
 
   public slots:
-    void onUserAbort();
+    void onUserAbort() override;
 
   signals:
     void finished(int index);
 
   private:
+    //! Open `stream` with a search wrapper: cancel token set, the stream's
+    //! frame index adopted (or built), search mode off. Throws
+    //! TTAbortException naming `role` when the file or the index fails.
+    TTFFmpegWrapper* openFFmpegWrapperFor(TTVideoStream* stream, const char* role);
+    //! Copy the reference frame's planes into mpRefY/U/V.
+    void captureRefBuffers(const TFrameInfo& refInfo);
     TTVideoStream*  mpReferenceStream;
     TTVideoStream*  mpSearchStream;
     int             mReferenceIndex;

@@ -148,10 +148,15 @@ void TTMpvWrapper::stop()
   // use-after-free, so onProcessFinished → playbackFinished can no longer
   // fire. Without this emit, callers connected to playerFinished (e.g. the
   // Play/Stop button reset in TTCurrentFrame) would never wake up.
-  if (mPlaying) {
-    mPlaying = false;
-    emit playerFinished();
-  }
+  if (mPlaying) finishPlayback();
+}
+
+void TTMpvWrapper::finishPlayback()
+{
+  if (mAtEnd) return;
+  mAtEnd   = true;
+  mPlaying = false;
+  emit playerFinished();
 }
 
 void TTMpvWrapper::setSpeed(double factor)
@@ -196,14 +201,12 @@ void TTMpvWrapper::onPropertyChanged(const QString& name, const QVariant& value)
 
   if (name == QLatin1String("eof-reached") && value.isValid()) {
     const bool atEnd = value.toBool();
-    if (atEnd && !mAtEnd) {
+    if (atEnd) {
       // mpv pauses itself here (measured: pause=1 about 12 ms later). Report
       // the same playerFinished() the END_FILE path reports, so callers need
       // not know which mode they are in.
-      mAtEnd   = true;
-      mPlaying = false;
-      emit playerFinished();
-    } else if (!atEnd) {
+      finishPlayback();
+    } else {
       mAtEnd = false;
     }
   }
@@ -233,14 +236,9 @@ void TTMpvWrapper::onBackendConnected()
 void TTMpvWrapper::onBackendPlaybackFinished()
 {
   // END_FILE path. With keep-open this does not fire at a natural end, but it
-  // still does on error or shutdown. Set mAtEnd here as well as in the
-  // eof-reached handler, so whichever source reports an ending first also
-  // blocks the other one — a caller must never see two playerFinished() for
-  // one ending.
-  if (mAtEnd) return;
-  mAtEnd   = true;
-  mPlaying = false;
-  emit playerFinished();
+  // still does on error or shutdown; finishPlayback()'s guard keeps it from
+  // reporting an ending the eof-reached handler already did.
+  finishPlayback();
 }
 
 //! mpv hat den initialen --start-Seek abgeschlossen und zeigt den Zielframe.

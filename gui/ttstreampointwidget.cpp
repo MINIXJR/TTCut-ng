@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampointwidget.h"
+#include "ttthemedicon.h"
 #include "ttaudiorepairdialog.h"
 #include "../data/ttstreampointmodel.h"
 #include "../data/ttavlist.h"
@@ -63,8 +64,7 @@ TTStreamPointWidget::TTStreamPointWidget(TTStreamPointModel* model, QWidget* par
   // 280 px wide, and three labelled buttons no longer fit side by side.
   // Same icon as the Settings menu action, so it reads as the same thing.
   QToolButton* btnSettings = new QToolButton(this);
-  btnSettings->setIcon(QIcon::fromTheme("preferences-system",
-                       QApplication::style()->standardIcon(QStyle::SP_ComputerIcon)));
+  btnSettings->setIcon(ttThemedIcon("preferences-system", QStyle::SP_ComputerIcon));
   btnSettings->setAutoRaise(true);
   btnSettings->setToolTip(tr("Opens the detection settings in the settings dialog."));
   connect(btnSettings, &QToolButton::clicked, this, &TTStreamPointWidget::settingsRequested);
@@ -172,34 +172,33 @@ void TTStreamPointWidget::onItemDoubleClicked(const QModelIndex& index)
 
 void TTStreamPointWidget::onContextMenu(const QPoint& pos)
 {
-  QModelIndex index = mListView->indexAt(pos);
+  const QModelIndex index = mListView->indexAt(pos);
 
   QMenu menu(this);
+  ContextMenuActions acts;
+  buildContextMenu(menu, index, acts);
+  if (menu.isEmpty()) return;
 
-  QAction* actDelete = nullptr;
-  const QAction* actCutIn = nullptr;
-  QAction* actCutOut = nullptr;
-  QAction* actRepair = nullptr;
-  QAction* actEditRepair = nullptr;
-  QAction* actRemoveRepair = nullptr;
-  int frameIndex = 0;
-  int repairTrackIndex = -1;
-  int repairIndex = -1;
+  const QAction* chosen = menu.exec(mListView->viewport()->mapToGlobal(pos));
+  handleContextAction(chosen, index, acts);
+}
 
+void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index, ContextMenuActions& acts)
+{
   if (index.isValid()) {
-    frameIndex = mModel->data(index, TTStreamPointModel::FrameIndexRole).toInt();
-    actDelete = menu.addAction(tr("Delete"));
+    acts.frameIndex = mModel->data(index, TTStreamPointModel::FrameIndexRole).toInt();
+    acts.actDelete = menu.addAction(tr("Delete"));
     menu.addSeparator();
-    actCutIn = menu.addAction(tr("Set as Cut-In"));
-    actCutOut = menu.addAction(tr("Set as Cut-Out"));
+    acts.actCutIn = menu.addAction(tr("Set as Cut-In"));
+    acts.actCutOut = menu.addAction(tr("Set as Cut-Out"));
 
     // Audio repair (audio-anomaly-repair Task 7): only for AudioAnomaly
     // markers, and only once an AC3 track and a current AVItem exist (the
     // marker widget has neither immediately after project close).
     auto type = static_cast<StreamPointType>(mModel->data(index, TTStreamPointModel::TypeRole).toInt());
     if (type == StreamPointType::AudioAnomaly && mpAvItem) {
-      repairTrackIndex = mpAvItem->firstAc3TrackIndex();
-      if (repairTrackIndex >= 0) {
+      acts.repairTrackIndex = mpAvItem->firstAc3TrackIndex();
+      if (acts.repairTrackIndex >= 0) {
         const TTStreamPoint pt = mModel->pointAt(index.row());
         const double frameRate = mpAvItem->videoStream() ? mpAvItem->videoStream()->frameRate() : 25.0;
         qint64 approxFrom = 0, approxTo = 0;
@@ -208,60 +207,57 @@ void TTStreamPointWidget::onContextMenu(const QPoint& pos)
         const QList<TTAudioRepairItem> repairs = mpAvItem->audioRepairList();
         for (int i = 0; i < repairs.size(); ++i) {
           const TTAudioRepairItem& r = repairs.at(i);
-          if (r.trackIndex() != repairTrackIndex) continue;
+          if (r.trackIndex() != acts.repairTrackIndex) continue;
           if (r.frameTo() < approxFrom || r.frameFrom() > approxTo) continue; // no overlap
-          repairIndex = i;
+          acts.repairIndex = i;
           break;
         }
 
         menu.addSeparator();
-        if (repairIndex >= 0) {
-          actEditRepair = menu.addAction(tr("Edit repair..."));
-          actRemoveRepair = menu.addAction(tr("Remove repair"));
+        if (acts.repairIndex >= 0) {
+          acts.actEditRepair = menu.addAction(tr("Edit repair..."));
+          acts.actRemoveRepair = menu.addAction(tr("Remove repair"));
         } else {
-          actRepair = menu.addAction(tr("Repair..."));
+          acts.actRepair = menu.addAction(tr("Repair..."));
         }
       }
     }
     menu.addSeparator();
   }
 
-  QAction* actDeleteAll = nullptr;
   if (mModel->rowCount() > 0) {
-    actDeleteAll = menu.addAction(tr("Delete all"));
+    acts.actDeleteAll = menu.addAction(tr("Delete all"));
   }
+}
 
-  if (menu.isEmpty()) return;
-
-  QAction* chosen = menu.exec(mListView->viewport()->mapToGlobal(pos));
-  if (chosen == actDelete) {
+void TTStreamPointWidget::handleContextAction(const QAction* chosen, const QModelIndex& index,
+                                              const ContextMenuActions& acts)
+{
+  if (chosen == acts.actDelete) {
     emit deleteRequested(index.row());
-  } else if (chosen == actCutIn) {
-    emit setCutIn(frameIndex);
-  } else if (chosen == actCutOut) {
-    emit setCutOut(frameIndex);
-  } else if (chosen == actRepair || chosen == actEditRepair) {
+  } else if (chosen == acts.actCutIn) {
+    emit setCutIn(acts.frameIndex);
+  } else if (chosen == acts.actCutOut) {
+    emit setCutOut(acts.frameIndex);
+  } else if (chosen == acts.actRepair || chosen == acts.actEditRepair) {
     const TTStreamPoint pt = mModel->pointAt(index.row());
-    TTAudioRepairDialog dlg(mpAvItem, pt, repairTrackIndex, mExtraFrameIndices, this);
+    TTAudioRepairDialog dlg(mpAvItem, pt, acts.repairTrackIndex, mExtraFrameIndices, this);
     connect(&dlg, &TTAudioRepairDialog::jumpToFrameRequested, this, &TTStreamPointWidget::jumpToFrame);
     if (dlg.exec() == QDialog::Accepted) {
       QString desc = pt.description();
       // Check every known-language variant (residuals R6) - a marker
       // reloaded from a project saved in a different UI language already
       // carries a suffix tr() in THIS session would not recognize.
-      bool alreadyPlanned = false;
-      for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
-        if (desc.endsWith(v)) { alreadyPlanned = true; break; }
-      if (!alreadyPlanned) desc += tr(" (repair planned)");
+      if (!TTStreamPoint::hasSuffixVariant(desc, TTStreamPoint::repairPlannedSuffixVariants()))
+        desc += tr(" (repair planned)");
       mModel->setDescriptionAt(index.row(), desc);
     }
-  } else if (chosen == actRemoveRepair) {
-    mpAvItem->removeAudioRepairAt(repairIndex);
+  } else if (chosen == acts.actRemoveRepair) {
+    mpAvItem->removeAudioRepairAt(acts.repairIndex);
     QString desc = mModel->pointAt(index.row()).description();
-    for (const QString& v : TTStreamPoint::repairPlannedSuffixVariants())
-      if (desc.endsWith(v)) { desc.chop(v.length()); break; }
+    TTStreamPoint::stripSuffixVariant(desc, TTStreamPoint::repairPlannedSuffixVariants());
     mModel->setDescriptionAt(index.row(), desc);
-  } else if (chosen == actDeleteAll) {
+  } else if (chosen == acts.actDeleteAll) {
     emit deleteAllRequested();
   }
 }

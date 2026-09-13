@@ -9,14 +9,8 @@
 
 #include "ttcutsettingsencoderdefaults.h"
 #include "../common/ttsettings.h"
-
-#include <QComboBox>
-
-static const char* const kPresets[] = {
-    "ultrafast", "superfast", "veryfast", "faster", "fast",
-    "medium", "slow", "slower", "veryslow"
-};
-static constexpr int kPresetCount = int(sizeof(kPresets) / sizeof(kPresets[0]));
+#include "../common/ttencodernames.h"
+#include "ttcombofill.h"
 
 TTCutSettingsEncoderDefaults::TTCutSettingsEncoderDefaults(QWidget* parent)
     : QGroupBox(parent)
@@ -27,7 +21,7 @@ TTCutSettingsEncoderDefaults::TTCutSettingsEncoderDefaults(QWidget* parent)
   // mpeg2video kennt nur global_quality = qscale; Preview-Preset wurde
   // nach Settings/Suche & Vorschau verschoben).
   for (QComboBox* cb : { cbH264Preset, cbH265Preset })
-    populatePresetCombo(cb);
+    ttFillCombo(cb, TTEncoderNames::kPresets, TTEncoderNames::kPresetCount);
 
   populateH264Profiles();
   populateH265Profiles();
@@ -51,41 +45,21 @@ void TTCutSettingsEncoderDefaults::resetToDefaults()
 
 TTCutSettingsEncoderDefaults::~TTCutSettingsEncoderDefaults() {}
 
-void TTCutSettingsEncoderDefaults::populatePresetCombo(QComboBox* cb)
-{
-  cb->clear();
-  for (int i = 0; i < kPresetCount; ++i)
-    cb->insertItem(i, QString::fromLatin1(kPresets[i]));
-}
-
 void TTCutSettingsEncoderDefaults::populateH264Profiles()
 {
-  // Reihenfolge muss exakt zur Tabelle in extern/ttessmartcut.cpp h264Profiles[]
-  // passen — Index wird direkt als profile-Option an libx264 weitergereicht.
-  cbH264Profile->clear();
-  cbH264Profile->insertItem(0, "baseline");
-  cbH264Profile->insertItem(1, "main");
-  cbH264Profile->insertItem(2, "high");
-  cbH264Profile->insertItem(3, "high10");
-  cbH264Profile->insertItem(4, "high422");
-  cbH264Profile->insertItem(5, "high444");
+  // Same table the Smart Cut engine indexes with the stored profile.
+  ttFillCombo(cbH264Profile, TTEncoderNames::kH264Profiles, TTEncoderNames::kH264ProfileCount);
 }
 
 void TTCutSettingsEncoderDefaults::populateH265Profiles()
 {
-  // Reihenfolge muss exakt zur Tabelle in extern/ttessmartcut.cpp h265Profiles[]
-  // passen — Index wird direkt als profile-Option an libx265 weitergereicht.
-  cbH265Profile->clear();
-  cbH265Profile->insertItem(0, "main");
-  cbH265Profile->insertItem(1, "main10");
-  cbH265Profile->insertItem(2, "main12");
-  cbH265Profile->insertItem(3, "main422-10");
-  cbH265Profile->insertItem(4, "main444-10");
+  // Same table the Smart Cut engine indexes with the stored profile.
+  ttFillCombo(cbH265Profile, TTEncoderNames::kH265Profiles, TTEncoderNames::kH265ProfileCount);
 }
 
 void TTCutSettingsEncoderDefaults::setTabData()
 {
-  TTSettings* s = TTSettings::instance();
+  const TTSettings* s = TTSettings::instance();
 
   cbEncodingMode->setChecked(s->encoderMode());
 
@@ -93,12 +67,12 @@ void TTCutSettingsEncoderDefaults::setTabData()
   sbMpeg2Crf->setValue(qBound(sbMpeg2Crf->minimum(), s->mpeg2Crf(), sbMpeg2Crf->maximum()));
 
   // H.264
-  cbH264Preset->setCurrentIndex(qBound(0, s->h264Preset(), kPresetCount - 1));
+  cbH264Preset->setCurrentIndex(qBound(0, s->h264Preset(), TTEncoderNames::kPresetCount - 1));
   sbH264Crf->setValue(qBound(sbH264Crf->minimum(), s->h264Crf(), sbH264Crf->maximum()));
   cbH264Profile->setCurrentIndex(qBound(0, s->h264Profile(), cbH264Profile->count() - 1));
 
   // H.265
-  cbH265Preset->setCurrentIndex(qBound(0, s->h265Preset(), kPresetCount - 1));
+  cbH265Preset->setCurrentIndex(qBound(0, s->h265Preset(), TTEncoderNames::kPresetCount - 1));
   sbH265Crf->setValue(qBound(sbH265Crf->minimum(), s->h265Crf(), sbH265Crf->maximum()));
   cbH265Profile->setCurrentIndex(qBound(0, s->h265Profile(), cbH265Profile->count() - 1));
 }

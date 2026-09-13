@@ -9,13 +9,8 @@
 
 #include "ttcutsettingssearch.h"
 #include "../common/ttsettings.h"
-
-static const char* const kPreviewPresets[] = {
-    "ultrafast", "superfast", "veryfast", "faster", "fast",
-    "medium", "slow", "slower", "veryslow"
-};
-static constexpr int kPreviewPresetCount =
-    int(sizeof(kPreviewPresets) / sizeof(kPreviewPresets[0]));
+#include "../common/ttencodernames.h"
+#include "ttcombofill.h"
 
 TTCutSettingsSearch::TTCutSettingsSearch(QWidget* parent)
     : QGroupBox(parent)
@@ -26,9 +21,7 @@ TTCutSettingsSearch::TTCutSettingsSearch(QWidget* parent)
   // (H.264/H.265). MPEG-2 nutzt für Preview-Re-Encoding TTTranscodeProvider
   // mit dem normalen mpeg2Crf. Tooltip stellt das klar; UI bleibt aktiv
   // weil viele User H.264/H.265-Material schneiden.
-  cbPreviewPreset->clear();
-  for (int i = 0; i < kPreviewPresetCount; ++i)
-    cbPreviewPreset->insertItem(i, QString::fromLatin1(kPreviewPresets[i]));
+  ttFillCombo(cbPreviewPreset, TTEncoderNames::kPresets, TTEncoderNames::kPresetCount);
 
   connect(btnResetDefaults, &QPushButton::clicked, this, &TTCutSettingsSearch::resetToDefaults);
 }
@@ -54,7 +47,7 @@ void TTCutSettingsSearch::setTabData()
   sbSearchIntervall->setValue(s->searchLength());
   sbSearchWorkerCount->setValue(s->searchWorkerCount());
   spPreviewLength->setValue(s->cutPreviewSeconds());
-  cbPreviewPreset->setCurrentIndex(qBound(0, s->previewPreset(), kPreviewPresetCount - 1));
+  cbPreviewPreset->setCurrentIndex(qBound(0, s->previewPreset(), TTEncoderNames::kPresetCount - 1));
   sbClusterGap->setValue(s->extraFrameClusterGapSec());
   sbClusterOffset->setValue(s->extraFrameClusterOffsetSec());
 }

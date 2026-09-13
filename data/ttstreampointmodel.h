@@ -52,7 +52,7 @@ public:
   void setDescriptionAt(int row, const QString& description);
 
   // Bulk insert (from worker results), re-sorts after
-  void addPoints(const QList<TTStreamPoint>& points);
+  void addPoints(const QList<TTStreamPoint>& newPoints);
 
 private:
   void insertSorted(const TTStreamPoint& point);

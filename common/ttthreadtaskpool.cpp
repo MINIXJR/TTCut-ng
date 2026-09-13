@@ -97,17 +97,11 @@ void TTThreadTaskPool::cleanUpQueue()
   QMutableListIterator<TTThreadTask*> t(mTaskQueue);
   while (t.hasNext())
   {
-    TTThreadTask* task = t.next();
+    const TTThreadTask* task = t.next();
 
     if (task == 0) continue;
 
-    disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
-    disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
-    disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
-
-    disconnect(task, &TTThreadTask::statusReport,
-      this, &TTThreadTaskPool::onStatusReport);
-
+    disconnectTaskSignals(task);
     disconnect(task, &QObject::destroyed,
       this, &TTThreadTaskPool::onThreadTaskDestroyed);
 
@@ -115,6 +109,11 @@ void TTThreadTaskPool::cleanUpQueue()
     t.remove();
   }
 
+  resetCounters();
+}
+
+void TTThreadTaskPool::resetCounters()
+{
   mOverallTotalSteps  = 0;
   mOverallStepCount   = 0;
   mEstimateTaskCount  = 1;
@@ -132,13 +131,20 @@ void TTThreadTaskPool::wireTask(TTThreadTask* task)
     this, &TTThreadTaskPool::onStatusReport);
 }
 
-void TTThreadTaskPool::unwireTask(TTThreadTask* task)
+void TTThreadTaskPool::disconnectTaskSignals(const TTThreadTask* task)
 {
   disconnect(task, &TTThreadTask::started,  this, &TTThreadTaskPool::onThreadTaskStarted);
   disconnect(task, &TTThreadTask::finished, this, &TTThreadTaskPool::onThreadTaskFinished);
   disconnect(task, &TTThreadTask::aborted,  this, &TTThreadTaskPool::onThreadTaskAborted);
   disconnect(task, &TTThreadTask::statusReport,
     this, &TTThreadTaskPool::onStatusReport);
+}
+
+// Also drops the queue entry - never call this from an iterator over
+// mTaskQueue (cleanUpQueue() removes through its own iterator instead).
+void TTThreadTaskPool::unwireTask(TTThreadTask* task)
+{
+  disconnectTaskSignals(task);
   mTaskQueue.removeAll(task);
 }
 
@@ -244,12 +250,7 @@ void TTThreadTaskPool::onThreadTaskFinished(TTThreadTask* task)
 
   if (mTaskQueue.isEmpty())
   {
-    mOverallTotalSteps  = 0;
-    mOverallStepCount   = 0;
-    mEstimateTaskCount  = 1;
-    mCompleted          = 0.0;
-    mTotalMap.clear();
-    mProgressMap.clear();
+    resetCounters();
     emit exit();
   }
 }
@@ -280,12 +281,7 @@ void TTThreadTaskPool::onThreadTaskAborted(TTThreadTask* task)
   if (mTaskQueue.isEmpty())
   {
     qDebug() << "Last thread task aborted -> exit the thread queue!";
-    mOverallTotalSteps  = 0;
-    mOverallStepCount   = 0;
-    mEstimateTaskCount  = 1;
-    mCompleted          = 0.0;
-    mTotalMap.clear();
-    mProgressMap.clear();
+    resetCounters();
     emit aborted();
     emit exit();
   }
@@ -412,7 +408,7 @@ int TTThreadTaskPool::runningTaskCount()
 
   for (int i = 0; i < mTaskQueue.count(); i++)
   {
-    TTThreadTask* task = mTaskQueue.at(i);
+    const TTThreadTask* task = mTaskQueue.at(i);
     //if (task == 0) continue;
     if (task->isRunning()) runningCount++;
   }

@@ -34,7 +34,7 @@ class TTCurrentFrame: public QWidget, Ui::TTCurrentFrameWidget
   Q_OBJECT
 
     public:
-    TTCurrentFrame(QWidget* parent = 0);
+    explicit TTCurrentFrame(QWidget* parent = 0);
     ~TTCurrentFrame();
 
     void setTitle(const QString & title);
@@ -82,6 +82,13 @@ void onGotoFramePreview(int pos);
 
   private:
     void updateCurrentPosition(int pos = -1);
+    //! Show newFramePos, make it the cut position and update the label - the
+    //! tail every navigation slot shares once the stream has moved.
+    void navigateAndUpdate(int newFramePos);
+    //! Stream index for a display frame of the playback (mpv counts display
+    //! frames; MPEG-2 field pictures add extra stream entries), clamped to
+    //! the stream.
+    int  displayToStreamIndex(int displayIndex) const;
     //! Everything the playback mux needs, collected on the GUI thread.
     //! False (with a logged warning) when the stream has no usable frame rate.
     bool buildPlaybackMuxParams(TTPlaybackMuxParams& params);

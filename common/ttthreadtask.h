@@ -52,6 +52,26 @@ protected:
   virtual void operation() = 0;
   virtual void cleanUp() = 0;
   virtual void abort();
+  //! The end every failed or cancelled run shares (see run()): leave the
+  //! running state, let cleanUp() release what operation() acquired, tell
+  //! the pool.
+  void finishAborted();
+
+  //! Route a stream's statusReport(int, const QString&, quint64) into
+  //! onStatusReport(), and undo it again from cleanUp(). Templates so that
+  //! common/ needs no stream type: any QObject with that signal will do.
+  template<class Source>
+  void linkStatusSource(Source* source)
+  {
+    connect(source, &Source::statusReport,
+            this,   qOverload<int, const QString&, quint64>(&TTThreadTask::onStatusReport));
+  }
+  template<class Source>
+  void unlinkStatusSource(Source* source)
+  {
+    disconnect(source, &Source::statusReport,
+               this,   qOverload<int, const QString&, quint64>(&TTThreadTask::onStatusReport));
+  }
 
 public slots:
   virtual void onUserAbort() = 0;

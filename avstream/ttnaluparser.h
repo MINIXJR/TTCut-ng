@@ -284,6 +284,26 @@ public:
     // 12-value list so future profile additions need only one edit.
     static bool isH264HighProfile(uint32_t profile_idc);
 
+    // The two SPS fields the PAFF handling needs, read from the first SPS NAL
+    // (type 7) in an Annex-B buffer (extradata or an in-band packet): the
+    // scaling-list walk of the high profiles is skipped, log2MaxFrameNum is
+    // stored with its +4, and the walk continues to frame_mbs_only_flag
+    // (haveFrameMbsOnlyFlag false when it stopped at an implausible
+    // pic_order_cnt cycle length). False when the buffer holds no SPS.
+    // Shared by TTFrameIndexer (extradata) and TTMkvMergeProvider (in-band).
+    struct H264SpsBasics {
+        int  log2MaxFrameNum      = -1;
+        bool frameMbsOnlyFlag     = true;
+        bool haveFrameMbsOnlyFlag = false;
+    };
+    static bool parseH264SpsBasics(const uint8_t* data, int size, H264SpsBasics& out);
+
+    // From the start of an H.264 VCL NAL (`nal` points at the NAL header
+    // byte): frame_num and, when field_pic_flag is set, bottom_field_flag.
+    // The caller locates the NAL; log2MaxFrameNum comes from the active SPS.
+    static void parseH264SliceFieldInfo(const uint8_t* nal, int nalSize, int log2MaxFrameNum,
+                                        int& frameNum, bool& isField, bool& isBottomField);
+
     // Error handling
     QString lastError() const { return mLastError; }
 

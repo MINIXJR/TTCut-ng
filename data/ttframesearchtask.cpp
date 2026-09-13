@@ -47,7 +47,7 @@ TTFrameSearchTask::TTFrameSearchTask(TTVideoStream* referenceStream, int referen
 }
 
 //! Decide which decoder backend to use for a given video stream.
-TTFrameSearchTask::DecoderKind TTFrameSearchTask::decoderKindFor(TTVideoStream* stream) const
+TTFrameSearchTask::DecoderKind TTFrameSearchTask::decoderKindFor(TTVideoStream* stream)
 {
   if (dynamic_cast<TTH264VideoStream*>(stream)) return DecoderKind::FFmpeg;
   if (dynamic_cast<TTH265VideoStream*>(stream)) return DecoderKind::FFmpeg;
@@ -66,88 +66,80 @@ void TTFrameSearchTask::initFrameSearch()
         mpReferenceStream->headerList(),
         formatYV12);
     refDecoder->moveToFrameIndex(mReferenceIndex);
-    TFrameInfo* fi = refDecoder->getFrameInfo();
+    const TFrameInfo* fi = refDecoder->getFrameInfo();
     refInfo = *fi;
-
-    mRefWidth  = refInfo.width;
-    mRefHeight = refInfo.height;
-    mpRefY = new quint8[refInfo.size];
-    mpRefU = new quint8[refInfo.chroma_size];
-    mpRefV = new quint8[refInfo.chroma_size];
-    memcpy(mpRefY, refInfo.Y, refInfo.size);
-    memcpy(mpRefU, refInfo.U, refInfo.chroma_size);
-    memcpy(mpRefV, refInfo.V, refInfo.chroma_size);
+    captureRefBuffers(refInfo);
 
     delete refDecoder;
   } else {
-    TTFFmpegWrapper* refWrapper = new TTFFmpegWrapper();
-    if (!refWrapper->openFile(mpReferenceStream->filePath())) {
-      delete refWrapper;
-      throw TTAbortException("TTFrameSearchTask: could not open reference stream for FFmpeg decode");
-    }
-    refWrapper->setCancelToken(&mAbort);   // a cancel must end a decode in flight
-    // Index sharing (spec 2026-06-05): if the reference stream is an H.26x stream
-    // with an already-built index, adopt it instead of rescanning.
-    // mpReferenceStream IS the source stream object; refWrapper opened its
-    // filePath() → file identity guaranteed by object identity.
-    bool refIndexAdopted = false;
-    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(mpReferenceStream)) {
-      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
-      if (!bundle.isEmpty()) { refWrapper->setFrameIndex(bundle); refIndexAdopted = true; }
-    }
-    if (!refIndexAdopted) {
-      TTFrameIndexer indexer;
-      if (!indexer.build(mpReferenceStream->filePath(), -1, nullptr)) {
-        refWrapper->closeFile();
-        delete refWrapper;
-        throw TTAbortException("TTFrameSearchTask: frame index build failed for reference stream");
-      }
-      refWrapper->setFrameIndex(indexer.bundle());
-    }
-    refWrapper->setSearchMode(false);
+    TTFFmpegWrapper* refWrapper = openFFmpegWrapperFor(mpReferenceStream, "reference");
 
     if (!refWrapper->decodeFrameYUV(mReferenceIndex, refInfo)) {
       refWrapper->closeFile();
       delete refWrapper;
       throw TTAbortException("TTFrameSearchTask: decodeFrameYUV failed for reference frame");
     }
-
-    mRefWidth  = refInfo.width;
-    mRefHeight = refInfo.height;
-    mpRefY = new quint8[refInfo.size];
-    mpRefU = new quint8[refInfo.chroma_size];
-    mpRefV = new quint8[refInfo.chroma_size];
-    memcpy(mpRefY, refInfo.Y, refInfo.size);
-    memcpy(mpRefU, refInfo.U, refInfo.chroma_size);
-    memcpy(mpRefV, refInfo.V, refInfo.chroma_size);
+    captureRefBuffers(refInfo);
 
     refWrapper->closeFile();
     delete refWrapper;
   }
 }
 
+TTFFmpegWrapper* TTFrameSearchTask::openFFmpegWrapperFor(TTVideoStream* stream, const char* role)
+{
+  TTFFmpegWrapper* wrapper = new TTFFmpegWrapper();
+  if (!wrapper->openFile(stream->filePath())) {
+    delete wrapper;
+    throw TTAbortException(QString("TTFrameSearchTask: could not open %1 stream for FFmpeg decode").arg(role));
+  }
+  wrapper->setCancelToken(&mAbort);   // a cancel must end a decode in flight
+  // Index sharing (spec 2026-06-05): an H.26x stream has already built its
+  // frame index at stream-open - adopt it instead of rescanning the file
+  // (measured with tools/diag/test_framesearch_progress on a 224 930-frame
+  // H.264 recording: the rescan took 5553 ms of an 11 464 ms search, with
+  // nothing to see in the progress dialog). `stream` IS the source stream
+  // object and the wrapper opened its filePath(), so file identity is
+  // guaranteed by object identity. The bundle is empty when the stream has
+  // no index yet (different item, never opened) - then the scan runs.
+  const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(stream);
+  if (!wrapper->adoptOrBuildFrameIndex(h26x ? h26x->frameIndexBundle() : TTFrameIndexBundle(),
+                                       stream->filePath())) {
+    wrapper->closeFile();
+    delete wrapper;
+    throw TTAbortException(QString("TTFrameSearchTask: frame index build failed for %1 stream").arg(role));
+  }
+  wrapper->setSearchMode(false);
+  return wrapper;
+}
+
+void TTFrameSearchTask::captureRefBuffers(const TFrameInfo& refInfo)
+{
+  mRefWidth  = refInfo.width;
+  mRefHeight = refInfo.height;
+  mpRefY = new quint8[refInfo.size];
+  mpRefU = new quint8[refInfo.chroma_size];
+  mpRefV = new quint8[refInfo.chroma_size];
+  memcpy(mpRefY, refInfo.Y, refInfo.size);
+  memcpy(mpRefU, refInfo.U, refInfo.chroma_size);
+  memcpy(mpRefV, refInfo.V, refInfo.chroma_size);
+}
+
 //! Compare two frames in YUV420 pixel format using per-plane buffers
 quint64 TTFrameSearchTask::compareFrames(const TFrameInfo& searchInfo)
 {
-  quint64 delta = 0;
-
-  // Y plane
-  for (int j = 0; j < searchInfo.size; j++) {
-    int d = (int)searchInfo.Y[j] - (int)mpRefY[j];
-    delta += (quint64)(d * d);
-  }
-  // U plane
-  for (int j = 0; j < searchInfo.chroma_size; j++) {
-    int d = (int)searchInfo.U[j] - (int)mpRefU[j];
-    delta += (quint64)(d * d);
-  }
-  // V plane
-  for (int j = 0; j < searchInfo.chroma_size; j++) {
-    int d = (int)searchInfo.V[j] - (int)mpRefV[j];
-    delta += (quint64)(d * d);
-  }
-
-  return delta;
+  // Sum of squared differences over the three planes.
+  auto planeDelta = [](const quint8* a, const quint8* b, int n) {
+    quint64 sum = 0;
+    for (int j = 0; j < n; j++) {
+      int d = (int)a[j] - (int)b[j];
+      sum += (quint64)(d * d);
+    }
+    return sum;
+  };
+  return planeDelta(searchInfo.Y, mpRefY, searchInfo.size)
+       + planeDelta(searchInfo.U, mpRefU, searchInfo.chroma_size)
+       + planeDelta(searchInfo.V, mpRefV, searchInfo.chroma_size);
 }
 
 //! Clean up after operation
@@ -203,36 +195,7 @@ void TTFrameSearchTask::operation()
   bool useFFmpeg = (decoderKindFor(mpSearchStream) == DecoderKind::FFmpeg);
 
   if (useFFmpeg) {
-    searchWrapper = new TTFFmpegWrapper();
-    if (!searchWrapper->openFile(mpSearchStream->filePath())) {
-      delete searchWrapper;
-      throw TTAbortException("TTFrameSearchTask: could not open search stream for FFmpeg decode");
-    }
-    searchWrapper->setCancelToken(&mAbort);   // see the reference wrapper above
-    // Adopt the stream's existing frame index instead of scanning the file a
-    // second time - the same move the reference path above makes, which this
-    // branch was missing. The application has already built this index when it
-    // opened the stream, and rebuilding it dominated the search: measured with
-    // tools/diag/test_framesearch_progress on a 224 930-frame H.264 recording,
-    // 5553 ms of the 11 464 ms run passed between the Start report and the
-    // first compared frame, with nothing to see in the progress dialog.
-    // frameIndexBundle() is empty when the stream has no index yet
-    // (different item, never opened) - then the scan below is still needed.
-    bool searchIndexAdopted = false;
-    if (const TTH26xVideoStream* h26x = dynamic_cast<const TTH26xVideoStream*>(mpSearchStream)) {
-      const TTFrameIndexBundle bundle = h26x->frameIndexBundle();
-      if (!bundle.isEmpty()) { searchWrapper->setFrameIndex(bundle); searchIndexAdopted = true; }
-    }
-    if (!searchIndexAdopted) {
-      TTFrameIndexer indexer;
-      if (!indexer.build(mpSearchStream->filePath(), -1, nullptr)) {
-        searchWrapper->closeFile();
-        delete searchWrapper;
-        throw TTAbortException("TTFrameSearchTask: frame index build failed for search stream");
-      }
-      searchWrapper->setFrameIndex(indexer.bundle());
-    }
-    searchWrapper->setSearchMode(false);
+    searchWrapper = openFFmpegWrapperFor(mpSearchStream, "search");
   } else {
     searchMpeg2 = new TTMpeg2Decoder(
         mpSearchStream->filePath(),
@@ -262,16 +225,14 @@ void TTFrameSearchTask::operation()
     }
 
     TFrameInfo searchInfo;
-    bool decodeOK = true;
-
     if (useFFmpeg) {
-      decodeOK = searchWrapper->decodeFrameYUV(mSearchIndex + index, searchInfo);
+      const bool decodeOK = searchWrapper->decodeFrameYUV(mSearchIndex + index, searchInfo);
       if (!decodeOK) {
         index++;
         continue;
       }
     } else {
-      TFrameInfo* fi = searchMpeg2->getFrameInfo();
+      const TFrameInfo* fi = searchMpeg2->getFrameInfo();
       searchInfo = *fi;
     }
 

@@ -75,7 +75,11 @@ class TTThreadTaskPool : public QObject
         // removal plus the queue entry once the task is done or aborted.
         void wireTask(TTThreadTask* task);
         void unwireTask(TTThreadTask* task);
+        void disconnectTaskSignals(const TTThreadTask* task);
         void cleanUpQueue();
+        // Back to "no run in progress": the step counters and the per-task
+        // progress maps, every time the queue drains or is cleared.
+        void resetCounters();
     int  runningTaskCount();
 
     private:

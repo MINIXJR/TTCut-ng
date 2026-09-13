@@ -53,7 +53,7 @@
 #   report only, no verdict: test_nalu_parser, test_au_types, probe_copystart,
 #     test_startcode_scan, test_esinfo_dump, test_frameindex_dump,
 #     test_probe_video, test_rawmap, test_pillarbox, test_stilldisplay,
-#     test_feed_decode, test_extra_index_rank, test_streampoint_order,
+#     test_feed_decode, test_streampoint_order,
 #     test_slider_decode_cost, test_mpeg2_seek, test_window_jump,
 #     test_mpeg2_cutout, test_audio_header_strings, test_directed_search,
 #     test_framesearch_progress, test_cutprogress, test_audiocut,
@@ -76,6 +76,7 @@ MBAFF="$CACHE/tux_h264_1080i_mbaff_test.264"
 PAFF="$CACHE/tux_h264_1080i_paff_test.264"
 H265="$CACHE/tux_hevc4k_cra_test.265"
 M2V="$CACHE/tux_mpeg2_576i_pal_test.m2v"
+M2VFP="$CACHE/tux_mpeg2_576i_fieldpic_test.m2v"        # field pictures every 50 frames
 MP2="$CACHE/tux_mpeg2_576i_pal_test.mp2"            # 192 kbit/s, 576 B frames
 DEMUX="$ROOT/tools/ttcut-demux/ttcut-demux"
 AUDIOFIX="$ROOT/tools/ttcut-audiofix/ttcut-audiofix"
@@ -95,6 +96,7 @@ mpeg2order             unit  120  test_mpeg2order
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
+settings_cancel        unit  120  test_settings_cancel
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -132,6 +134,10 @@ anomaly_trigger_project tux  600  test_auto_anomaly_scan_trigger
 anomaly_trigger_abort  tux   600  test_auto_anomaly_scan_trigger
 cut_outcome            tux   600  test_cut_outcome
 partial_track          tux   600  test_partial_track
+project_roundtrip_264  tux   600  test_project_roundtrip
+project_roundtrip_m2v  tux   600  test_project_roundtrip
+open_track_failure     tux   600  test_open_track_failure
+extra_index_rank       tux   300  test_extra_index_rank
 stale_abort            tux   600  test_stale_abort
 audiocut_abort         tux   300  test_audiocut_abort
 audioonlycut_none      tux   600  test_audioonlycut_abort
@@ -207,6 +213,7 @@ gate_mpeg2order()            { "$D/test_mpeg2order"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
+gate_settings_cancel()       { "$D/test_settings_cancel"; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }
@@ -265,6 +272,11 @@ gate_anomaly_trigger_project() { need "$PRJ264"; cp "$PRJ264" "$W/p.ttcut"; "$D/
 gate_anomaly_trigger_abort()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" project-abort-then-video "$V264" "$W"; }
 gate_cut_outcome()   { need "$V264" "$A264"; "$D/test_cut_outcome" "$V264" "$A264" "$W"; }
 gate_partial_track() { need "$V264" "$A264"; "$D/test_partial_track" "$V264" "$A264" "$W"; }
+gate_project_roundtrip_264() { need "$PRJ264"; "$D/test_project_roundtrip" "$PRJ264" "$W" rt264; }
+gate_project_roundtrip_m2v() { need "$M2V" "$MP2"; make_two_track_project "$W/rt-two-track.ttcut"
+                               "$D/test_project_roundtrip" "$W/rt-two-track.ttcut" "$W" rtm2v; }
+gate_open_track_failure()  { need "$M2V" "$MP2"; "$D/test_open_track_failure" "$M2V" "$MP2" "$W"; }
+gate_extra_index_rank()    { need "$M2VFP"; "$D/test_extra_index_rank" "$M2VFP" 4; }
 gate_stale_abort()   { need "$M2V" "$MP2"; "$D/test_stale_abort" "$M2V" "$MP2" "$W"; }
 # The abort matrix, phase by phase (same invocations as gate_refactor_identity.sh's
 # harness suite). Several of these write into a fixed CLAUDE_TMP/cut-abort path.

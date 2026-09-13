@@ -154,6 +154,9 @@ private:
   // depends on the source bit rate (384/448 kbit/s both occur in the
   // corpus). Returns the written path, or an empty string + *error.
   QString writePreviewWindow(bool repaired, QString* error);
+  //! Write the preview window (original or repaired) and play it; a write
+  //! error is shown instead. The two play buttons differ only in the flag.
+  void playPreview(bool repaired);
   void playFile(const QString& path);
 
   TTAVItem*     mAvItem;
