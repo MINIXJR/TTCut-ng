@@ -72,10 +72,17 @@ cmpdir() {   # cmpdir <a> <b>
     case "$rel" in
       *.log|*.info|*.ttcut|*.txt|*.out|*.err)
         [ -f "$b/$rel" ] || { echo "MISSING in $b: $rel"; rc=1; continue; }
-        # previewcut_video cancels in the middle of the first clip's encode;
-        # libx264's closing statistics count the frames that made it before
-        # the cancel landed (P:10, 11, 13 seen on one tree) - not comparable.
-        case "$rel" in previewcut_video.err) x='/^\[libx264 @/d';; *) x='';; esac
+        # The two cancelling preview cases arm their abort by polling a file
+        # size from outside, so where the cancel lands varies from run to run
+        # on one tree: the armed-at size, the encoder statistics of a
+        # half-finished encode, the temp files that exist by then and the
+        # harness's own prose about where it landed all move. Its verdict
+        # (PASS/rc) and the bracket line stay compared - that is the contract.
+        case "$rel" in
+          previewcut_audio.*|previewcut_video.*)
+            x='/^  temp dir preview\* entries:/d;/^  INCONCLUSIVE/d;/^  armed after/d;s/size=[0-9]+ bytes/size=N bytes/;/Estimating duration from bitrate/d;/\[DRIFT\] cutAudioStream done:.*preview_(audio|video)_temp/d;/^\[libx264 @/d';;
+          *) x='';;
+        esac
         norm "$a" "$x" < "$f" > "$na"; norm "$b" "$x" < "$b/$rel" > "$nb"
         case "$rel" in *.err) sort -o "$na" "$na"; sort -o "$nb" "$nb";; esac
         if diff -q "$na" "$nb" >/dev/null; then echo "same(norm) $rel"; else echo "DIFF(norm) $rel"; diff "$na" "$nb" | head -20; rc=1; fi ;;
