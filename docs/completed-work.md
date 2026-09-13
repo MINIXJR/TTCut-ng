@@ -2387,8 +2387,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   ohne `--library=qt`, Harness-printf als „Mehrheit", Definitions-Regex auf
   qualifizierte Aufrufe) sind im Skill behoben.
 - **Code-Audit, dritter Lauf (nach Karte)** → **ERLEDIGT 2026-09-13**
-  (Branch `cleanup/code-audit-2026-09-12`, Fahrplan Schritt 3; noch nicht
-  gemergt). Erster Lauf nach der Regel „Karte vor Audit": der Scan vom
+  (Fahrplan Schritt 3; gemergt und gepusht als `0edf34f2`, `9e5511f0`,
+  `76bbae80`). Erster Lauf nach der Regel „Karte vor Audit": der Scan vom
   2026-09-05 (2211 Kandidaten) auf die 68 Quelldateien der Karten
   Einstellungen, Stream öffnen/Projekt laden, Wiedergabe und
   Erkennung/Suche gefiltert; sechs Sonnet-Klassifizierer je Modul, 545
@@ -2439,8 +2439,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   der DEPENDS-Liste, ein alter Harness lief zuerst); ein Gate auf Material
   ohne Feldpaare ist leer — der Harness liefert dafür SKIP=77.
 - **Code-Audit, vierter Lauf (nach Karte `stream-points.md`)** → **ERLEDIGT
-  2026-09-13** (Branch `cleanup/code-audit-2026-09-13`, Fahrplan Schritt 5;
-  noch nicht gemergt). Scan vom 2026-09-13 auf die 26 Quelldateien der
+  2026-09-13** (Fahrplan Schritt 5; gemergt und gepusht als `11102883`,
+  `f3407532`, `c887becd`). Scan vom 2026-09-13 auf die 26 Quelldateien der
   Landezonen-Karte gefiltert (257 Kandidaten im Scope, 55 nie beurteilt),
   zwei Sonnet-Klassifizierer (data, gui), 55 Urteile (15 consolidate, 31
   deliberate, 9 documented), 12 Layer-3-Rulings; die vier Lese-Befunde der
@@ -2489,8 +2489,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   (P:10/11/13 auf demselben Baum). Nicht erklärt: ein Screenshot-Lauf
   zeigte das Statuslabel des Marker-Widgets unübersetzt („Analysis
   running..."), der Wiederholungslauf war byteidentisch zur Referenz; Batch
-  B berührt weder das Widget noch `trans/`. Offen: Merge nach `master`,
-  lupdate für die neuen tr()-Strings im Release-Skill.
+  B berührt weder das Widget noch `trans/`. Offen: lupdate für die neuen
+  tr()-Strings im Release-Skill.
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**
   - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den
