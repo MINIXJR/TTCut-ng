@@ -1,5 +1,5 @@
 ---
-base_commit: 2c8032f4b20ab777c89110ed23da9470d98f31f8
+base_commit: 5e47997b6535a69e9e42306ababe03d35d3afc57
 last_verified: 2026-09-13
 sources:
   - data/ttanalysislog.cpp
@@ -66,8 +66,9 @@ sich identisch (`finished`/`aborted` → `onAnalysisWorkerFinished`, zählt in
 `mStreamPointWorkersRunning`) und liefert `pointsDetected(QList<TTStreamPoint>)`
 an denselben Slot wie der Voll-Scan (`TTCutMainWindow::onPointsDetected`, seit
 `f2198216` der eine Ergebnis-Slot aller Detektoren) — kein eigener Slot. Die
-Verdrahtung (`finished`/`aborted` → Zähler **und** `deleteLater`, Pool-Start)
-macht `TTCutMainWindow::startAnalysisTask` für alle vier Aufgaben gleich.
+Verdrahtung macht `TTCutMainWindow::startDetectorTask` für alle vier Aufgaben
+gleich: `pointsDetected` an den Ergebnis-Slot, dann `startAnalysisTask`
+(`finished`/`aborted` an Zähler **und** `deleteLater`, Pool-Start).
 
 Und eine Bildanalyse steht **ausserhalb** dieser Familie: die Gleichbild-Suche
 `TTFrameSearchTask` (`data/ttframesearchtask.cpp`). Sie erbt direkt von

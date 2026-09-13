@@ -2491,6 +2491,47 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   running..."), der Wiederholungslauf war byteidentisch zur Referenz; Batch
   B berührt weder das Widget noch `trans/`. Offen: lupdate für die neuen
   tr()-Strings im Release-Skill.
+- **Code-Audit, fünfter Lauf (nach Karte `project-lifecycle.md`)** → **ERLEDIGT
+  2026-09-13** (Branch `cleanup/code-audit-run5`, Fahrplan Schritt 7; noch nicht
+  gemergt). Scan auf die 12 Quelldateien der Projekt-Lebenszyklus-Karte
+  gefiltert (240 Kandidaten im Scope, davon 26 nie beurteilt, 30 aus früheren
+  Läufen offen), drei Sonnet-Klassifizierer (common, data, gui), 26 Urteile
+  (2 consolidate, 18 deliberate, 6 documented), beide Karten-Redundanzen und
+  alle vier Vertragsbefunde im Code bewiesen. Vier Batches, je ein Commit mit
+  Gate: A ungenutzter Getter `TTSettings::audioOnlyFormat` (`fc4dd533`; jeder
+  Leser nimmt die Working-Set-Variante); B Hauptfenster (`ea7f763a`:
+  `startDetectorTask<Task>` für die vier Detektor-Starts, `askProjectFileName()`
+  für beide Speichern-Aktionen — ein abgebrochenes „Speichern unter" löscht das
+  Speicherziel nicht mehr —, `recentFilesChanged` ans Menü statt des Laufs über
+  alle Fenster); C Ladekette (`01c6116f`: `deserializeAVDataItem` meldet, wie
+  viele `<Video>` einen Task gestartet haben, bei null beendet `readProjectFile`
+  den Ladevorgang selbst; vorher blieb das Lade-Flag für den Rest der Sitzung
+  gesetzt und blockierte den Anomalie-Scan); D Beenden (`5e47997b`: `onFileExit`
+  ist nur noch `close()`, `onFileSave` meldet, ob geschrieben wurde, und der
+  Beenden-Dialog hält das Fenster offen, wenn nichts geschrieben wurde). Gates:
+  `run-gates.sh` 80 → 84 PASS (`project_load_rejected`, `exit_cancel`,
+  `exit_discard`, `exit_savefail`), `gate_cut_identity.sh` fünf Fixtures
+  identisch, Refactor-Suiten harness/cutter/mpv == ref5, 21 Screenshots
+  byteidentisch bis auf die Plattenplatz-Ziffern. Rescans nach dem Umbau: 16 neu
+  im Scope (Idiom-Klassen mit geänderter Standortzahl plus drei echte neue
+  Formen, davon zwei offen: die drei Parse-Wächter in `TTCutProjectData`), der
+  zweite Rescan keiner mehr. Store
+  `docs/code-audit/build-verdicts-2026-09-13-run5.py`. Sechs Karten geprüft,
+  aktualisiert und gestempelt. **Zwei Messkorrekturen dieses Laufs:** (1) Befund
+  C3 „Menü-Beenden beendet trotz Cancel" stimmt für Qt 6.10.2 nicht — ein
+  15-Zeilen-Programm zeigt, dass `qApp->quit()` selbst ein `closeEvent` auf die
+  offenen Fenster schickt und die Schleife weiterläuft; die alte Fassung fragte
+  bei Cancel also zweimal. Der echte Datenverlust lag im Zweig „Speichern": ein
+  abgebrochener Dateidialog schrieb nichts, das Fenster schloss trotzdem.
+  (2) Der neue Harness `test_project_load_rejected` stürzte im ersten Lauf ab und
+  legte damit einen vorbestehenden Defekt offen: `TTAVData::mpProjectData` war
+  nie initialisiert (der alte Code löschte den Zeiger nie, deshalb fiel es nicht
+  auf). Gate-Infrastruktur: `gate_refactor_identity.sh` maskiert jetzt die
+  Zeitrace-Zeilen der beiden abbrechenden Vorschau-Fälle (zwei Läufe desselben
+  Baums unterschieden sich dort), und der Screenshot-Vergleich nimmt eine
+  abweichende Aufnahme ein zweites Mal auf, bevor er sie meldet — das
+  unübersetzte Statuslabel trat je einmal in Lauf 4 und 5 auf und war in 11
+  Wiederholungen nicht reproduzierbar (Ursache offen).
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**
   - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den
