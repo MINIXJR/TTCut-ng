@@ -2492,8 +2492,8 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   B berührt weder das Widget noch `trans/`. Offen: lupdate für die neuen
   tr()-Strings im Release-Skill.
 - **Code-Audit, fünfter Lauf (nach Karte `project-lifecycle.md`)** → **ERLEDIGT
-  2026-09-13** (Branch `cleanup/code-audit-run5`, Fahrplan Schritt 7; noch nicht
-  gemergt). Scan auf die 12 Quelldateien der Projekt-Lebenszyklus-Karte
+  2026-09-13** (Fahrplan Schritt 7; gemergt und gepusht als `1e4fdcac`,
+  `d180146d`, `40ee2563`). Scan auf die 12 Quelldateien der Projekt-Lebenszyklus-Karte
   gefiltert (240 Kandidaten im Scope, davon 26 nie beurteilt, 30 aus früheren
   Läufen offen), drei Sonnet-Klassifizierer (common, data, gui), 26 Urteile
   (2 consolidate, 18 deliberate, 6 documented), beide Karten-Redundanzen und
