@@ -1,6 +1,6 @@
 ---
-base_commit: 2dcd5aa5bf3caed451bfa37428f71e53151d74dc
-last_verified: 2026-09-11
+base_commit: 5a7601a0
+last_verified: 2026-09-13
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
@@ -397,10 +397,22 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   Batch als Lambda (Treffer-Position oder −1) stellen. Gleichwertigkeit belegt mit
   `tools/diag/test_directed_search` (alter/neuer Stand identisch auf den
   H.264-, HEVC- und MPEG-2-`_duplicate`-Fixtures, inkl. Abbruchpfad).
-- `TTSearchTask::isFrameBlackAt` und `buildHistogramAt` enthalten je eine
+- ~~`TTSearchTask::isFrameBlackAt` und `buildHistogramAt` enthalten je eine
   MPEG-2-Zweitimplementierung dessen, was `TTFFmpegWrapper` für H.26x tut —
-  inklusive der 10-%-Randmaske und der `step = 2`-Abtastung. Drei Kopien
-  derselben Abtastregel im Baum (dazu `centreMeanLuma` in `ttaspectdetect.cpp`).
+  inklusive der 10-%-Randmaske und der `step = 2`-Abtastung.~~ Abtastregel
+  zusammengeführt in `5a7601a0`: `TTCentreBand` (`avstream/ttlumasample.h`) hält
+  Rand und Schrittweite für beide Domänen; im Wrapper laufen `isFrameBlack` und
+  `buildHistogram` über `decodeFrameForAnalysis()` + `scanCentreLuma()`. Die
+  Schwellen bleiben je Domäne (Wrapper Video-Range „Schwarz ≈ 16", MPEG-2-Pfad
+  Vollbereich). **Korrektur der Karte (2026-09-12):** `centreMeanLuma` in
+  `ttaspectdetect.cpp` war hier zu Unrecht als dritte Kopie genannt — es tastet
+  ein vom Aufrufer gewähltes Rechteck ab und teilt nur die Schrittweite 2, nicht
+  die Randmaske; bewusst nicht auf `TTCentreBand` umgestellt.
+- Bildindex übernehmen oder bauen: seit `5a7601a0` ein
+  `TTFFmpegWrapper::adoptOrBuildFrameIndex(prebuilt, path)` an allen sieben
+  Stellen (Gleichbild-Suche beide Ströme, `TTSearchTask` Koordinator + Worker,
+  Vorschaufenster, zwei Analyse-Wrapper im Hauptfenster); die Gleichbild-Suche
+  öffnet ihre beiden Wrapper über `openFFmpegWrapperFor()`.
 - ~~Die drei gerichteten Suchen verbinden nur `finished → deleteLater`, nicht
   `aborted`.~~ Behoben in `f8fe7dd6` — dabei zeigte sich, dass das Leck nur die
   halbe Wirkung war: eine vor dem Start abgebrochene Suche meldet weder

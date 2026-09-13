@@ -2386,6 +2386,58 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   `bitRateString()`-Hiding-Defekt. Scanner-Fallen dieses Laufs (cppcheck
   ohne `--library=qt`, Harness-printf als „Mehrheit", Definitions-Regex auf
   qualifizierte Aufrufe) sind im Skill behoben.
+- **Code-Audit, dritter Lauf (nach Karte)** → **ERLEDIGT 2026-09-13**
+  (Branch `cleanup/code-audit-2026-09-12`, Fahrplan Schritt 3; noch nicht
+  gemergt). Erster Lauf nach der Regel „Karte vor Audit": der Scan vom
+  2026-09-05 (2211 Kandidaten) auf die 68 Quelldateien der Karten
+  Einstellungen, Stream öffnen/Projekt laden, Wiedergabe und
+  Erkennung/Suche gefiltert; sechs Sonnet-Klassifizierer je Modul, 545
+  Urteile (277 consolidate, 244 deliberate, 24 documented), 30
+  Layer-3-Rulings, die sechs Vertragsbefunde der Karten im Code belegt und
+  vom User entschieden. Acht Batches, je ein Commit mit Gate:
+  A Werkzeug-Einzeiler (`1441c142`); B `.info`-Helfer
+  `TTESInfo::timingForVideo` (`9191a46a`); C Einstellungen-Working-Set
+  (`7bfd4a3b`: `syncWorkingSetToCodec`/`encoderDefaultsFor`, Namenstabellen
+  `common/ttencodernames.h`, `OutputContainer` entfernt; Befund 1 behoben —
+  die Muxer-Seite schreibt nicht mehr live und Abbrechen speichert nicht,
+  Gate `test_settings_cancel`); D TTAVData (`cc85a6c8`: `setCurrentAVItem`,
+  Abbruch-Slots der Öffnen-Tasks verbunden — eine fehlgeschlagene Spur wird
+  gemeldet, das Projekt gilt als geladen, Pool-Semantik unverändert
+  (Befunde 3+4, Gate `test_open_track_failure`), `ttClusterIndices`,
+  `TTCutList::frameRanges`, `ttRemoveElementaryStreams`,
+  `writeTrackSection`, Pool-/Task-Helfer; Gate `test_project_roundtrip`);
+  E Wiedergabe (`3504eb3e`: `ttCountBelow`/`extrasBefore`/
+  `streamIndexForDisplayIndex`, Befund 5 behoben — die Live-Position trägt
+  die Feldbild-Korrektur der Stop-Position; Befund 6 war ein falscher
+  Kommentar; Gate `extra_index_rank` auf dem Feldbild-Fixture); F Decoder +
+  Suche (`5a7601a0`: `seekAndSkipToAU`, `decodeFrameForAnalysis`,
+  `TTCentreBand`, `adoptOrBuildFrameIndex`, `parseH264SpsBasics`/
+  `parseH264SliceFieldInfo`, `openFirstAudioStream`; `test_frameindex_dump`
+  byteidentisch auf acht Fixtures); G Hauptfenster (`026aa9fb`:
+  `launchDirectedSearch`, `pickFileAndRememberDir`, `ensureProgressBar`,
+  `ttThemedIcon` an 51 Stellen, `waitForProjectLoad` statt des festen
+  2-s-Schlafs); H Einrückung `ttcutmainwindow_headless.cpp` (`8788b25f`).
+  Gates je Batch: `run-gates.sh` 73 → 78 PASS (fünf neue Gates),
+  `gate_cut_identity.sh` fünf Fixtures paket- und hash-identisch,
+  Refactor-Suiten harness/cutter/mpv ref == cand, 21 Screenshots
+  byteidentisch bis auf den englischen mplex-Zieltext der Muxer-Seite
+  (gewollt) und die Plattenplatz-Ziffern des Schnittdialogs. Befund 2
+  (Override überlebt Video B gleichen Codecs) als gewollt in der Karte.
+  Store `docs/code-audit/build-verdicts-2026-09-12.py`: 203 consolidate als
+  erledigt markiert (die Zeilen wurden von den Batches umgebaut), 74 offen
+  — darunter die 14 Größen-Funde, `previewSegmentIndices`/`showPlayState`/
+  das MKV-Provider-Setup der Vorschau, die `TTCutProjectData`-Parser und
+  bewusst `runDetectionPhase` (fünf Parameter für fünf Zeilen). Vier Karten
+  aktualisiert, Karten-Korrektur `centreMeanLuma` (teilt nur die
+  Schrittweite). Beobachtet, nicht geändert: fehlgeschlagenes VIDEO + gute
+  Spur zuletzt → Projekt „finished" mit null Items (Pool-Exit-Route).
+  Offen: Sichttest Wiedergabe (MPEG-2 mit Feldbildern, H.264) durch den
+  User, Merge nach `master`, lupdate für die neuen tr()-Strings im
+  Release-Skill. Fallen des Laufs: Batch-Dateilisten nie aus `git status`
+  ableiten (Batches überlappen in `ttavdata.cpp`); `cmake --build build
+  --target diag` baut nicht jeden Harness (`test_extra_index_rank` fehlte in
+  der DEPENDS-Liste, ein alter Harness lief zuerst); ein Gate auf Material
+  ohne Feldpaare ist leer — der Harness liefert dafür SKIP=77.
 - **Dead-Code-Audit — zwei Läufe** → **Erstlauf 2026-07-12, zweiter Lauf
   2026-08-02 (v0.78.0)**
   - **Erstlauf** (Branch `cleanup/dead-code-audit`): ~2.185 Zeilen in den
