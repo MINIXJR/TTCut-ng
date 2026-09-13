@@ -166,17 +166,13 @@ TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& 
   bool haveExactRange = mPoint.hasAudioFrameRange();
 
   if (mAvItem) {
-    const QList<TTAudioRepairItem> repairs = mAvItem->audioRepairList();
-    for (int i = 0; i < repairs.size(); ++i) {
-      const TTAudioRepairItem& r = repairs.at(i);
-      if (r.trackIndex() != mTrackIndex) continue;
-      if (r.frameTo() < approxFrom || r.frameFrom() > approxTo) continue; // no overlap
-      mExistingRepairIndex = i;
+    mExistingRepairIndex = mAvItem->findAudioRepairOverlapping(mTrackIndex, approxFrom, approxTo);
+    if (mExistingRepairIndex >= 0) {
+      const TTAudioRepairItem r = mAvItem->audioRepairList().at(mExistingRepairIndex);
       initFrom = r.frameFrom();
       initTo = r.frameTo();
       initialMask = r.channelMask();
       haveExactRange = true;
-      break;
     }
   }
 

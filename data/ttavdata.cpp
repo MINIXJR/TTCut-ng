@@ -832,6 +832,24 @@ void TTAVData::onOpenAVStreamsAborted()
 }
 
 /*!
+ * applyPending
+ *
+ * A value the project loader parked for a track that was still opening
+ * (language, delay) - taken out of the map as soon as the track's open
+ * finishes and handed to `apply` with the track's position in its list,
+ * the one it was just appended at. Taken even when that position is
+ * invalid, so a stale entry never fires on a later track.
+ */
+template <typename T, typename Fn>
+static void applyPending(QMap<QPair<TTAVItem*, int>, T>& pending,
+                         const QPair<TTAVItem*, int>& key, int idx, Fn apply)
+{
+  if (!pending.contains(key)) return;
+  const T value = pending.take(key);
+  if (idx >= 0) apply(idx, value);
+}
+
+/*!
  * onOpenAudioFinished
  */
 void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int order)
@@ -841,24 +859,13 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 
   avItem->appendAudioEntry(aStream, order);
 
-  // Apply saved language from project file if available
-  auto key = qMakePair(avItem, order);
-  if (mPendingAudioLanguages.contains(key)) {
-    QString lang = mPendingAudioLanguages.take(key);
-    int idx = avItem->audioCount() - 1;
-    if (idx >= 0) {
-      avItem->onAudioLanguageChanged(idx, lang);
-    }
-  }
-
-  // Apply saved delay from project file if available
-  if (mPendingAudioDelays.contains(key)) {
-    int delayMs = mPendingAudioDelays.take(key);
-    int idx = avItem->audioCount() - 1;
-    if (idx >= 0) {
-      avItem->onAudioDelayChanged(idx, delayMs);
-    }
-  }
+  // Language and delay saved in the project file, if any
+  const auto key = qMakePair(avItem, order);
+  const int idx = avItem->audioCount() - 1;
+  applyPending(mPendingAudioLanguages, key, idx,
+               [avItem](int i, const QString& lang) { avItem->onAudioLanguageChanged(i, lang); });
+  applyPending(mPendingAudioDelays, key, idx,
+               [avItem](int i, int delayMs) { avItem->onAudioDelayChanged(i, delayMs); });
 
   // Apply saved repair items from project file if available. Unlike
   // language/delay these aren't stored per-audio-item, so they don't need
@@ -947,24 +954,13 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
 
   avItem->appendSubtitleEntry(sStream, order);
 
-  // Apply saved language from project file if available
-  auto key = qMakePair(avItem, order);
-  if (mPendingSubtitleLanguages.contains(key)) {
-    QString lang = mPendingSubtitleLanguages.take(key);
-    int idx = avItem->subtitleCount() - 1;
-    if (idx >= 0) {
-      avItem->onSubtitleLanguageChanged(idx, lang);
-    }
-  }
-
-  // Apply saved delay from project file if available
-  if (mPendingSubtitleDelays.contains(key)) {
-    int delayMs = mPendingSubtitleDelays.take(key);
-    int idx = avItem->subtitleCount() - 1;
-    if (idx >= 0) {
-      avItem->onSubtitleDelayChanged(idx, delayMs);
-    }
-  }
+  // Language and delay saved in the project file, if any
+  const auto key = qMakePair(avItem, order);
+  const int idx = avItem->subtitleCount() - 1;
+  applyPending(mPendingSubtitleLanguages, key, idx,
+               [avItem](int i, const QString& lang) { avItem->onSubtitleLanguageChanged(i, lang); });
+  applyPending(mPendingSubtitleDelays, key, idx,
+               [avItem](int i, int delayMs) { avItem->onSubtitleDelayChanged(i, delayMs); });
 }
 
 /*!
@@ -1564,10 +1560,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     return;
   }
 
-  // Detect stream type from first cut item
   TTVideoStream* firstStream = cutList->at(0).avDataItem()->videoStream();
-  TTAVTypes::AVStreamType streamType = firstStream->streamType();
-  const bool isH264H265 = TTAVTypes::isH26x(streamType);
+  const bool isH264H265 = cutList->isH26xCut();
 
   // Check for unresolved audio bursts
   if (!confirmBurstWarnings(cutList)) {
@@ -1592,7 +1586,7 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
   // audio synchronously FIRST, then the pool video task, then mux (mplex or
   // MKV) inside onCutFinished.
   {
-    TTAVItem* planItem = cutList->at(0).avDataItem();
+    const TTAVItem* planItem = cutList->at(0).avDataItem();
     double keptSecs = 0.001;
     double fr = firstStream->frameRate();
     if (fr > 0) keptSecs = qMax(0.001, cutList->keptFrameCount() / fr);

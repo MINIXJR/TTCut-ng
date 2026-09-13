@@ -28,10 +28,16 @@ public:
     DurationRole
   };
 
-  TTStreamPointModel(QObject* parent = 0);
+  explicit TTStreamPointModel(QObject* parent = 0);
 
   void setFrameRate(float fps) { mFrameRate = fps; }
   float frameRate() const { return mFrameRate; }
+  //! Ascending indices of the MPEG-2 field-picture extras (TTAVData::
+  //! extraFrameIndices): index-list entries without a frame of their own.
+  //! The time column subtracts the extras before a marker, so it shows the
+  //! same time as the navigation display and the cut list for that frame.
+  //! Empty for H.26x and for MPEG-2 material without field pictures.
+  void setExtraFrameIndices(const QList<int>& extras);
 
   int rowCount(const QModelIndex& parent = QModelIndex()) const override;
   QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
@@ -59,6 +65,7 @@ private:
 
   QList<TTStreamPoint> mPoints;
   float mFrameRate;
+  QList<int> mExtraFrameIndices;
 };
 
 #endif // TTSTREAMPOINTMODEL_H

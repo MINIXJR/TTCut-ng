@@ -50,7 +50,7 @@ public:
 
 private:
   QImage extractGrayscaleROI(const QImage& fullFrame) const;
-  QVector<float> sobelEdge(const QImage& gray) const;
+  static QVector<float> sobelEdge(const QImage& gray);
   static float computeNCC(const QVector<float>& a, const QVector<float>& b);
 
 private:

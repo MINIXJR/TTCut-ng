@@ -97,6 +97,8 @@ quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
 settings_cancel        unit  120  test_settings_cancel
+analysis_task_lifetime unit  120  test_analysis_task_lifetime
+streampoint_model_time unit  120  test_streampoint_model_time
 pool_abort             unit  120  test_pool_abort
 abort_after_finish     unit  120  test_abort_after_finish
 cutlist_minsize        unit  120  test_cutlist_minsize
@@ -214,6 +216,8 @@ gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
 gate_settings_cancel()       { "$D/test_settings_cancel"; }
+gate_analysis_task_lifetime() { "$D/test_analysis_task_lifetime"; }
+gate_streampoint_model_time() { "$D/test_streampoint_model_time"; }
 gate_pool_abort()            { "$D/test_pool_abort"; }
 gate_abort_after_finish()    { "$D/test_abort_after_finish"; }
 gate_cutlist_minsize()       { "$D/test_cutlist_minsize"; }

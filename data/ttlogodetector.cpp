@@ -229,11 +229,11 @@ QImage TTLogoDetector::extractGrayscaleROI(const QImage& fullFrame) const
   QRect clipped = mROI.intersected(fullFrame.rect());
   if (clipped.width() < 4 || clipped.height() < 4) return QImage();
 
-  QImage roi = fullFrame.copy(clipped);
-  return roi.convertToFormat(QImage::Format_Grayscale8);
+  QImage roiImage = fullFrame.copy(clipped);
+  return roiImage.convertToFormat(QImage::Format_Grayscale8);
 }
 
-QVector<float> TTLogoDetector::sobelEdge(const QImage& gray) const
+QVector<float> TTLogoDetector::sobelEdge(const QImage& gray)
 {
   int w = gray.width();
   int h = gray.height();

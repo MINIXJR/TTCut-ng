@@ -151,10 +151,7 @@ void TTCutPreviewTask::operation()
 	// everything this line needs (numPreview) is already known.
 	onStatusReport(this, StatusReportArgs::Start, tr("create cut preview clips"), numPreview);
 
-	// Detect stream type from first cut item
-	const TTVideoStream* firstStream = mpCutList->at(0).avDataItem()->videoStream();
-	TTAVTypes::AVStreamType streamType = firstStream->streamType();
-	const bool isH264H265 = TTAVTypes::isH26x(streamType);
+	const bool isH264H265 = mpCutList->isH26xCut();
 
 	// Always use MKV for preview output (handles all audio formats)
 	QString outputExt = "mkv";

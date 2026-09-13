@@ -30,7 +30,7 @@ class TTStreamPointWidget : public QWidget
   Q_OBJECT
 
 public:
-  TTStreamPointWidget(TTStreamPointModel* model, QWidget* parent = 0);
+  explicit TTStreamPointWidget(TTStreamPointModel* model, QWidget* parent = 0);
 
   void setAnalysisRunning(bool running, bool aborted = false);
 

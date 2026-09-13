@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampointmodel.h"
+#include "../avstream/ttcommon.h"
 
 #include <algorithm>
 #include <QBrush>
@@ -35,7 +36,8 @@ QVariant TTStreamPointModel::data(const QModelIndex& index, int role) const
 
   switch (role) {
     case Qt::DisplayRole: {
-      int ms = (mFrameRate > 0) ? qRound(pt.frameIndex() / mFrameRate * 1000) : 0;
+      const int shownFrame = pt.frameIndex() - ttCountBelow(mExtraFrameIndices, pt.frameIndex());
+      int ms = (mFrameRate > 0) ? qRound(shownFrame / mFrameRate * 1000) : 0;
       QString time = QTime(0, 0).addMSecs(ms).toString("hh:mm:ss");
       return QString("%1  %2").arg(time, pt.description());
     }
@@ -56,6 +58,14 @@ QVariant TTStreamPointModel::data(const QModelIndex& index, int role) const
   }
 
   return QVariant();
+}
+
+void TTStreamPointModel::setExtraFrameIndices(const QList<int>& extras)
+{
+  if (extras == mExtraFrameIndices) return;
+  mExtraFrameIndices = extras;
+  if (!mPoints.isEmpty())
+    emit dataChanged(index(0), index(mPoints.size() - 1), {Qt::DisplayRole});
 }
 
 void TTStreamPointModel::addPoint(const TTStreamPoint& point)

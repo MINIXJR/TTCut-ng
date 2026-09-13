@@ -68,7 +68,7 @@ void TTCutSettingsStreamPoints::resetToDefaults()
 
 void TTCutSettingsStreamPoints::setTabData()
 {
-  TTSettings* s = TTSettings::instance();
+  const TTSettings* s = TTSettings::instance();
   cbSilence->setChecked(s->spDetectSilence());
   sbSilenceThreshold->setValue(s->spSilenceThresholdDb());
   sbSilenceMinDuration->setValue(s->spSilenceMinDuration());

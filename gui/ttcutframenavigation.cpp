@@ -72,11 +72,6 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
   pbPrevBlackFrame->setLayoutDirection(Qt::RightToLeft);  // arrow before icon
   pbNextBlackFrame->setText(tr("▶"));
 
-  // Cancel button: red, initially hidden
-  pbCancelBlackSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
-                                     "QPushButton:hover { background-color: #ee3333; }");
-  pbCancelBlackSearch->hide();
-
   // Scene change navigation buttons - Cyan (#44cccc)
   pbPrevSceneChange->setIcon(QIcon());
   pbPrevSceneChange->setText(tr("\u25C0 \u25E7"));
@@ -84,11 +79,6 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
   pbNextSceneChange->setIcon(QIcon());
   pbNextSceneChange->setText(tr("\u25E7 \u25B6"));
   pbNextSceneChange->setStyleSheet("QPushButton { color: #44cccc; font-weight: bold; }");
-
-  // Scene cancel button: red, initially hidden
-  pbCancelSceneSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
-                                      "QPushButton:hover { background-color: #ee3333; }");
-  pbCancelSceneSearch->hide();
 
   // Logo detection buttons - Magenta (#cc44cc)
   pbSelectLogoROI->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; font-size: 16px; }"
@@ -102,16 +92,21 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
   pbNextLogo->setText(tr("\u2B26 \u25B6"));  // ⬦ ▶
   pbNextLogo->setStyleSheet("QPushButton { color: #cc44cc; font-weight: bold; }");
 
-  // Logo cancel button: red, initially hidden
-  pbCancelLogoSearch->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
-                                    "QPushButton:hover { background-color: #ee3333; }");
-  pbCancelLogoSearch->hide();
-
+  // Set before wireSearch() connects the spin box, so the initial value
+  // is not written back to the settings. (Black and scene are set by the
+  // main window through setThresholds() after construction.)
   sbLogoThreshold->setValue(TTSettings::instance()->navLogoThreshold());
 
-  // Keep TTCut variables in sync with spinbox changes
-  connect(sbBlackThreshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onBlackThresholdChanged);
-  connect(sbSceneThreshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onSceneThresholdChanged);
+  mBlack = { pbPrevBlackFrame,  pbNextBlackFrame,  pbCancelBlackSearch, sbBlackThreshold };
+  mScene = { pbPrevSceneChange, pbNextSceneChange, pbCancelSceneSearch, sbSceneThreshold };
+  mLogo  = { pbPrevLogo,        pbNextLogo,        pbCancelLogoSearch,  sbLogoThreshold  };
+  TTSettings* settings = TTSettings::instance();
+  wireSearch(mBlack, &TTCutFrameNavigation::searchBlackFrame,  &TTCutFrameNavigation::abortBlackSearch,
+             [settings](double v) { settings->setNavBlackThreshold(v); });
+  wireSearch(mScene, &TTCutFrameNavigation::searchSceneChange, &TTCutFrameNavigation::abortSceneSearch,
+             [settings](double v) { settings->setNavSceneThreshold(v); });
+  wireSearch(mLogo,  &TTCutFrameNavigation::searchLogo,        &TTCutFrameNavigation::abortLogoSearch,
+             [settings](double v) { settings->setNavLogoThreshold(v); });
 
   // Cut-In = Green background (start/go - universal convention)
   pbSetCutIn->setStyleSheet("QPushButton { background-color: #2d7a2d; color: white; font-weight: bold; }"
@@ -149,17 +144,32 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
   connect(pbAddCut,            &QPushButton::clicked, this, &TTCutFrameNavigation::onAddCutRange);
   connect(pbQuickJump,         &QPushButton::clicked, this, &TTCutFrameNavigation::openQuickJump);
   connect(pbSetMarker,         &QPushButton::clicked, this, &TTCutFrameNavigation::onSetMarker);
-  connect(pbPrevBlackFrame,    &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevBlackFrame);
-  connect(pbNextBlackFrame,    &QPushButton::clicked, this, &TTCutFrameNavigation::onNextBlackFrame);
-  connect(pbCancelBlackSearch, &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelBlackSearch);
-  connect(pbPrevSceneChange,   &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevSceneChange);
-  connect(pbNextSceneChange,   &QPushButton::clicked, this, &TTCutFrameNavigation::onNextSceneChange);
-  connect(pbCancelSceneSearch, &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelSceneSearch);
   connect(pbSelectLogoROI,     &QPushButton::clicked, this, &TTCutFrameNavigation::onSelectLogoROI);
-  connect(pbPrevLogo,          &QPushButton::clicked, this, &TTCutFrameNavigation::onPrevLogo);
-  connect(pbNextLogo,          &QPushButton::clicked, this, &TTCutFrameNavigation::onNextLogo);
-  connect(pbCancelLogoSearch,  &QPushButton::clicked, this, &TTCutFrameNavigation::onCancelLogoSearch);
-  connect(sbLogoThreshold,     qOverload<double>(&QDoubleSpinBox::valueChanged), this, &TTCutFrameNavigation::onLogoThresholdChanged);
+}
+
+void TTCutFrameNavigation::wireSearch(const SearchControls& c, SearchSignal search,
+                                      void (TTCutFrameNavigation::*abort)(), std::function<void(double)> store)
+{
+  c.cancel->setStyleSheet("QPushButton { background-color: #cc2222; color: white; font-weight: bold; font-size: 14px; }"
+                          "QPushButton:hover { background-color: #ee3333; }");
+  c.cancel->hide();
+  connect(c.prev,   &QPushButton::clicked, this, [this, c, search]() { startSearch(search, c.threshold, -1); });
+  connect(c.next,   &QPushButton::clicked, this, [this, c, search]() { startSearch(search, c.threshold, +1); });
+  connect(c.cancel, &QPushButton::clicked, this, abort);
+  connect(c.threshold, qOverload<double>(&QDoubleSpinBox::valueChanged), this, std::move(store));
+}
+
+void TTCutFrameNavigation::startSearch(SearchSignal search, QDoubleSpinBox* threshold, int direction)
+{
+  if (!isControlEnabled) return;
+  emit (this->*search)(currentPosition, direction, threshold->value());
+}
+
+void TTCutFrameNavigation::setSearchRunning(const SearchControls& c, bool running)
+{
+  c.cancel->setVisible(running);
+  c.prev->setEnabled(!running);
+  c.next->setEnabled(!running);
 }
 
 //void TTCutFrameNavigation::setTitle(const QString & title)
@@ -311,22 +321,10 @@ void TTCutFrameNavigation::keyPressEvent(QKeyEvent* e)
     // ---------------------------------------------------------------------------
     // B-frame
     // ---------------------------------------------------------------------------
-  case Qt::Key_B:
-    // previous B-Frame
+  case Qt::Key_B:   // B-frame ...
+  case Qt::Key_F:   // ... and single frame: the same step, Ctrl reverses it
     if (e->modifiers() == Qt::ControlModifier)
       emit prevBFrame();
-    // next B-frame
-    else
-      emit nextBFrame();
-    break;
-    // ---------------------------------------------------------------------------
-    // Single frame
-    // ---------------------------------------------------------------------------
-  case Qt::Key_F:
-    // previous frame
-    if (e->modifiers() == Qt::ControlModifier)
-      emit prevBFrame();
-    // next frame
     else
       emit nextBFrame();
     break;
@@ -505,62 +503,14 @@ void TTCutFrameNavigation::onSetMarker()
   emit setMarker();
 }
 
-void TTCutFrameNavigation::onPrevBlackFrame()
-{
-  if (!isControlEnabled) return;
-  emit searchBlackFrame(currentPosition, -1, sbBlackThreshold->value());
-}
-
-void TTCutFrameNavigation::onNextBlackFrame()
-{
-  if (!isControlEnabled) return;
-  emit searchBlackFrame(currentPosition, +1, sbBlackThreshold->value());
-}
-
-void TTCutFrameNavigation::onCancelBlackSearch()
-{
-  emit abortBlackSearch();
-}
-
 void TTCutFrameNavigation::setBlackSearchRunning(bool running)
 {
-  pbCancelBlackSearch->setVisible(running);
-  pbPrevBlackFrame->setEnabled(!running);
-  pbNextBlackFrame->setEnabled(!running);
-}
-
-void TTCutFrameNavigation::onPrevSceneChange()
-{
-  if (!isControlEnabled) return;
-  emit searchSceneChange(currentPosition, -1, sbSceneThreshold->value());
-}
-
-void TTCutFrameNavigation::onNextSceneChange()
-{
-  if (!isControlEnabled) return;
-  emit searchSceneChange(currentPosition, +1, sbSceneThreshold->value());
-}
-
-void TTCutFrameNavigation::onCancelSceneSearch()
-{
-  emit abortSceneSearch();
+  setSearchRunning(mBlack, running);
 }
 
 void TTCutFrameNavigation::setSceneSearchRunning(bool running)
 {
-  pbCancelSceneSearch->setVisible(running);
-  pbPrevSceneChange->setEnabled(!running);
-  pbNextSceneChange->setEnabled(!running);
-}
-
-void TTCutFrameNavigation::onBlackThresholdChanged(double value)
-{
-  TTSettings::instance()->setNavBlackThreshold(value);
-}
-
-void TTCutFrameNavigation::onSceneThresholdChanged(double value)
-{
-  TTSettings::instance()->setNavSceneThreshold(value);
+  setSearchRunning(mScene, running);
 }
 
 void TTCutFrameNavigation::onSelectLogoROI()
@@ -574,28 +524,9 @@ void TTCutFrameNavigation::onSelectLogoROI()
   }
 }
 
-void TTCutFrameNavigation::onPrevLogo()
-{
-  if (!isControlEnabled) return;
-  emit searchLogo(currentPosition, -1, sbLogoThreshold->value());
-}
-
-void TTCutFrameNavigation::onNextLogo()
-{
-  if (!isControlEnabled) return;
-  emit searchLogo(currentPosition, +1, sbLogoThreshold->value());
-}
-
-void TTCutFrameNavigation::onCancelLogoSearch()
-{
-  emit abortLogoSearch();
-}
-
 void TTCutFrameNavigation::setLogoSearchRunning(bool running)
 {
-  pbCancelLogoSearch->setVisible(running);
-  pbPrevLogo->setEnabled(!running);
-  pbNextLogo->setEnabled(!running);
+  setSearchRunning(mLogo, running);
   pbSelectLogoROI->setEnabled(!running);
 }
 
@@ -605,11 +536,6 @@ void TTCutFrameNavigation::setLogoSearchEnabled(bool enabled)
   pbNextLogo->setEnabled(enabled);
   // Uncheck select button when profile state changes
   pbSelectLogoROI->setChecked(false);
-}
-
-void TTCutFrameNavigation::onLogoThresholdChanged(double value)
-{
-  TTSettings::instance()->setNavLogoThreshold(value);
 }
 
 void TTCutFrameNavigation::onLogoContextMenu(const QPoint& pos)

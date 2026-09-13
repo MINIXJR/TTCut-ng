@@ -102,6 +102,10 @@ class TTCutList : public QObject
     QList<QPair<int, int>> frameRanges();
     //! Frames the cut keeps: sum of (cutOut - cutIn + 1) over all entries.
     int keptFrameCount();
+    //! The first entry's video stream is H.264 or H.265 - the switch between
+    //! the Smart Cut path and the MPEG-2 path in the cut and the preview.
+    //! False for an empty list.
+    bool isH26xCut();
     int  indexOf(const TTCutItem& item);
 
     void swap(int a, int b);

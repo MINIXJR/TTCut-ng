@@ -404,7 +404,7 @@ void TTCutMainWindow::connectAVDataSignals()
   connect(mpAVData, &TTAVData::streamPointsLoaded,
           this, &TTCutMainWindow::onStreamPointsLoaded);
   connect(mpAVData, &TTAVData::vdrMarkersLoaded,
-          this, &TTCutMainWindow::onVideoPointsDetected);
+          this, &TTCutMainWindow::onPointsDetected);
   connect(mpAVData, &TTAVData::logoDataLoaded,
           this, &TTCutMainWindow::onLogoDataLoaded);
 
@@ -946,7 +946,7 @@ void TTCutMainWindow::onSetStreamPointMarker()
 
   int pos = vs->currentIndex();
   TTStreamPoint pt(pos, StreamPointType::ManualMarker,
-    QString("Marker (manuell)"));
+    tr("Marker (manual)"));
   mpStreamPointModel->addPoint(pt);
 }
 
@@ -1005,14 +1005,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
       vs->streamType(), videoHeaders, videoIndex, vs->frameRate());
 
     connect(videoWorker, &TTStreamPointVideoWorker::pointsDetected,
-            this, &TTCutMainWindow::onVideoPointsDetected);
-    connect(videoWorker, &TTThreadTask::finished,
-            this, &TTCutMainWindow::onAnalysisWorkerFinished);
-    connect(videoWorker, &TTThreadTask::aborted,
-            this, &TTCutMainWindow::onAnalysisWorkerFinished);
-
-    mpStreamPointTaskPool->start(videoWorker);
-    mStreamPointWorkersRunning++;
+            this, &TTCutMainWindow::onPointsDetected);
+    startAnalysisTask(videoWorker);
   }
 
   // Pillarbox detection decodes I-frames; it needs the index list, which every
@@ -1036,20 +1030,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
       preBuiltIndex);
 
     connect(aspectTask, &TTAspectScanTask::pointsDetected,
-            this, &TTCutMainWindow::onVideoPointsDetected);
-    connect(aspectTask, &TTThreadTask::finished,
-            this, &TTCutMainWindow::onAnalysisWorkerFinished);
-    connect(aspectTask, &TTThreadTask::aborted,
-            this, &TTCutMainWindow::onAnalysisWorkerFinished);
-    // TTSearchTask's ownership contract puts real teardown (freeing the
-    // MPEG-2 decoder etc.) in the destructor, only reached via deleteLater.
-    // Connect both terminal signals so a task aborted before it ever started
-    // (still queued in the pool) is freed too.
-    connect(aspectTask, &TTThreadTask::finished, aspectTask, &QObject::deleteLater);
-    connect(aspectTask, &TTThreadTask::aborted,  aspectTask, &QObject::deleteLater);
-
-    mpStreamPointTaskPool->start(aspectTask);
-    mStreamPointWorkersRunning++;
+            this, &TTCutMainWindow::onPointsDetected);
+    startAnalysisTask(aspectTask);
   }
 
   // AC3 5.1 anomaly scan (audio-anomaly-repair, Task 6): background scan for
@@ -1084,14 +1066,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
         TTSettings::instance()->spDetectAudioChange(), audioHeaders);
 
       connect(audioWorker, &TTStreamPointAudioWorker::pointsDetected,
-              this, &TTCutMainWindow::onAudioPointsDetected);
-      connect(audioWorker, &TTThreadTask::finished,
-              this, &TTCutMainWindow::onAnalysisWorkerFinished);
-      connect(audioWorker, &TTThreadTask::aborted,
-              this, &TTCutMainWindow::onAnalysisWorkerFinished);
-
-      mpStreamPointTaskPool->start(audioWorker);
-      mStreamPointWorkersRunning++;
+              this, &TTCutMainWindow::onPointsDetected);
+      startAnalysisTask(audioWorker);
     } else {
       mSkippedAnalysisNotes << tr("Audio analysis (silence, format changes): no "
                                   "audio track loaded - skipped");
@@ -1147,18 +1123,29 @@ bool TTCutMainWindow::startAudioAnomalyScan()
     mpAVData->extraFrameIndices(), mpAVData->audioGapFrameRanges(vs->frameRate()));
 
   connect(anomalyTask, &TTAudioAnomalyScanTask::pointsDetected,
-          this, &TTCutMainWindow::onVideoPointsDetected);
-  connect(anomalyTask, &TTThreadTask::finished,
-          this, &TTCutMainWindow::onAnalysisWorkerFinished);
-  connect(anomalyTask, &TTThreadTask::aborted,
-          this, &TTCutMainWindow::onAnalysisWorkerFinished);
-  connect(anomalyTask, &TTThreadTask::finished, anomalyTask, &QObject::deleteLater);
-  connect(anomalyTask, &TTThreadTask::aborted,  anomalyTask, &QObject::deleteLater);
-
-  mpStreamPointTaskPool->start(anomalyTask);
-  mStreamPointWorkersRunning++;
+          this, &TTCutMainWindow::onPointsDetected);
+  startAnalysisTask(anomalyTask);
   mpCurrentAVDataItem->setAnomalyScanStarted();
   return true;
+}
+
+void TTCutMainWindow::startAnalysisTask(TTThreadTask* task)
+{
+  connect(task, &TTThreadTask::finished, this, &TTCutMainWindow::onAnalysisWorkerFinished);
+  connect(task, &TTThreadTask::aborted,  this, &TTCutMainWindow::onAnalysisWorkerFinished);
+  // The pool does not own its tasks (TTThreadTask::setAutoDelete(false)) and
+  // the tasks have no parent: without these two connections a task lives
+  // on after its run - the video and audio stream-point workers did, one
+  // instance per analysis (code-audit run 4, finding B1). TTSearchTask's
+  // ownership contract also puts the real teardown (freeing the MPEG-2
+  // decoder etc.) in the destructor, only reached via deleteLater. Both
+  // terminal signals, so a task aborted before it ever started (still
+  // queued in the pool) is freed too.
+  connect(task, &TTThreadTask::finished, task, &QObject::deleteLater);
+  connect(task, &TTThreadTask::aborted,  task, &QObject::deleteLater);
+
+  mpStreamPointTaskPool->start(task);
+  mStreamPointWorkersRunning++;
 }
 
 /*!
@@ -1314,18 +1301,13 @@ void TTCutMainWindow::onStreamPointSetCutOut(int frameIndex)
   navigation->onSetCutOut();
 }
 
-void TTCutMainWindow::onVideoPointsDetected(const QList<TTStreamPoint>& points)
-{
-  mpStreamPointModel->addPoints(points);
-}
-
-void TTCutMainWindow::onAudioPointsDetected(const QList<TTStreamPoint>& points)
+void TTCutMainWindow::onPointsDetected(const QList<TTStreamPoint>& points)
 {
   mpStreamPointModel->addPoints(points);
 }
 
 /*!
- * Stream points restored from a project file. Same as onVideoPointsDetected,
+ * Stream points restored from a project file. Same as onPointsDetected,
  * except that AudioAnomaly markers whose repair the load validation had to
  * DISABLE (range no longer fits the audio file, unreadable file, malformed
  * range - see TTCutProjectData::parseAudioSection) get that fact written into
@@ -1657,6 +1639,7 @@ void TTCutMainWindow::closeProject()
   mpStreamPointModel->clear();
   mpStreamPointWidget->setAVItem(nullptr);
   mpStreamPointWidget->setExtraFrameIndices(QList<int>());
+  mpStreamPointModel->setExtraFrameIndices(QList<int>());
   mpAVData->clear();
   mpCurrentAVDataItem = 0;  // AVItem was deleted by clear(), null the dangling pointer
 
@@ -1785,6 +1768,8 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   // uses below.
   mpStreamPointWidget->setAVItem(mpCurrentAVDataItem);
   mpStreamPointWidget->setExtraFrameIndices(mpAVData->extraFrameIndices());
+  // The same list for the marker time column (code-audit run 4, B3).
+  mpStreamPointModel->setExtraFrameIndices(mpAVData->extraFrameIndices());
 
   connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemAppended,
           this, &TTCutMainWindow::onSubtitleItemAppended);
@@ -1851,39 +1836,8 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
       QString logoPath = videoPath.left(videoPath.lastIndexOf('.')) + ".logo.pgm";
       if (QFile::exists(logoPath)) {
         QTimer::singleShot(0, this, [this, logoPath]() {
-          if (!mpCurrentAVDataItem) return;
-          TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-          if (!vs) return;
-
-          TTVideoIndexList* idxList = vs->indexList();
-
-          auto decodeFn = [this](int idx) -> QImage {
-            currentFrame->videoWindow()->moveToVideoFrame(idx);
-            return currentFrame->videoWindow()->grabFrameImage();
-          };
-          auto nextIFn = [idxList](int pos) -> int {
-            return idxList->moveToNextIndexPos(pos, 1);
-          };
-
-          QApplication::setOverrideCursor(Qt::WaitCursor);
-
-          auto progressFn = [this](int current, int total) {
-            statusBar()->showMessage(tr("Loading logo profile (%1/%2 frames)...").arg(current).arg(total), 0);
-            QApplication::processEvents();
-          };
-
-          progressFn(0, 10);
-
-          if (mLogoDetector->loadMarkadLogo(logoPath, decodeFn, nextIFn, 0, progressFn)) {
-            currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
-            navigation->setLogoSearchEnabled(true);
-            statusBar()->showMessage(tr("Logo profile loaded: %1").arg(QFileInfo(logoPath).fileName()), 3000);
-          } else {
-            statusBar()->showMessage(tr("Logo profile could not be verified"), 3000);
-          }
-
-          QApplication::restoreOverrideCursor();
-          currentFrame->videoWindow()->showFrameAt(vs->currentIndex());
+          if (!mpCurrentAVDataItem || !mpCurrentAVDataItem->videoStream()) return;
+          loadMarkadLogoProfile(logoPath, true);
         });
       }
     }
@@ -2111,7 +2065,7 @@ void TTCutMainWindow::onStatusReport(TTThreadTask* task, int state, const QStrin
  * Human-readable remaining time (spec rounding rules): coarse on purpose -
  * a seconds-precise countdown suggests an accuracy the estimate cannot have.
  */
-QString TTCutMainWindow::formatRemaining(const TTProgressEstimator::Result& r) const
+QString TTCutMainWindow::formatRemaining(const TTProgressEstimator::Result& r)
 {
   if (r.kind == TTProgressEstimator::RemainingUnknown)
     return tr("calculating...");
@@ -2374,31 +2328,74 @@ void TTCutMainWindow::onLoadLogoFile()
     tr("Load logo file"), startDir, tr("PGM Logo (*.pgm)"));
 
   if (pgmPath.isEmpty()) return;
+  loadMarkadLogoProfile(pgmPath, false);
+}
 
+TTFFmpegWrapper* TTCutMainWindow::createAnalysisWrapper(TTVideoStream* vs)
+{
+  if (!currentFrame->videoWindow()->isFFmpegStream()) return nullptr;
+  TTFFmpegWrapper* analysisWrapper = new TTFFmpegWrapper();
+  analysisWrapper->setAnalysisMode(true);
+  if (!analysisWrapper->openFile(vs->filePath())) {
+    delete analysisWrapper;
+    return nullptr;
+  }
+  const TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
+  analysisWrapper->adoptOrBuildFrameIndex(
+      previewWrapper ? previewWrapper->frameIndexBundle() : TTFrameIndexBundle(), vs->filePath());
+  return analysisWrapper;
+}
+
+bool TTCutMainWindow::loadMarkadLogoProfile(const QString& pgmPath, bool withProgress)
+{
+  TTVideoStream* vs = mpCurrentAVDataItem ? mpCurrentAVDataItem->videoStream() : nullptr;
+  if (!vs) return false;
   TTVideoIndexList* idxList = vs->indexList();
 
-  auto decodeFn = [this](int idx) -> QImage {
-    currentFrame->videoWindow()->moveToVideoFrame(idx);
+  // H.26x: a dedicated analysis decoder, so the visible still is not moved;
+  // MPEG-2 has no libav wrapper and decodes through the preview window,
+  // whose frame is restored below.
+  TTFFmpegWrapper* analysisWrapper = createAnalysisWrapper(vs);
+  auto decodeFn = [this, analysisWrapper](int frameIndex) -> QImage {
+    if (analysisWrapper)
+      return analysisWrapper->decodeFrame(frameIndex);
+    currentFrame->videoWindow()->moveToVideoFrame(frameIndex);
     return currentFrame->videoWindow()->grabFrameImage();
   };
   auto nextIFn = [idxList](int pos) -> int {
-    return idxList->moveToNextIndexPos(pos, 1);
+    return idxList ? idxList->moveToNextIndexPos(pos, 1) : -1;
   };
+  std::function<void(int, int)> progressFn;
+  if (withProgress) {
+    progressFn = [this](int current, int total) {
+      statusBar()->showMessage(tr("Loading logo profile (%1/%2 frames)...").arg(current).arg(total), 0);
+      QApplication::processEvents();
+    };
+    progressFn(0, 10);
+  } else {
+    statusBar()->showMessage(tr("Loading logo profile..."), 0);
+    QApplication::processEvents();
+  }
 
   QApplication::setOverrideCursor(Qt::WaitCursor);
-  statusBar()->showMessage(tr("Loading logo profile..."), 0);
-  QApplication::processEvents();
-
-  if (mLogoDetector->loadMarkadLogo(pgmPath, decodeFn, nextIFn, 0)) {
+  const bool ok = mLogoDetector->loadMarkadLogo(pgmPath, decodeFn, nextIFn, 0, progressFn);
+  if (ok) {
     currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
     navigation->setLogoSearchEnabled(true);
     statusBar()->showMessage(tr("Logo profile loaded: %1").arg(QFileInfo(pgmPath).fileName()), 3000);
   } else {
-    statusBar()->showMessage(tr("Logo profile could not be verified"), 3000);
+    // loadMarkadLogo fails only on a format, geometry or decode problem -
+    // it does not compare the template against the frame (finding B4).
+    statusBar()->showMessage(tr("Logo profile could not be loaded: %1").arg(QFileInfo(pgmPath).fileName()), 3000);
   }
-
   QApplication::restoreOverrideCursor();
+
+  if (analysisWrapper) {
+    analysisWrapper->closeFile();
+    delete analysisWrapper;
+  }
   currentFrame->videoWindow()->showFrameAt(vs->currentIndex());
+  return ok;
 }
 
 void TTCutMainWindow::onCancelLogoROI()
@@ -2412,10 +2409,7 @@ void TTCutMainWindow::onCancelLogoROI()
 
 void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
 {
-  if (!mpCurrentAVDataItem) return;
-
-  TTVideoStream* vs = mpCurrentAVDataItem->videoStream();
-  if (!vs) return;
+  if (!mpCurrentAVDataItem || !mpCurrentAVDataItem->videoStream()) return;
 
   if (logoData.isMarkad) {
     // Reload markad PGM file
@@ -2425,44 +2419,7 @@ void TTCutMainWindow::onLogoDataLoaded(const TTLogoProjectData& logoData)
       return;
     }
 
-    TTFFmpegWrapper* analysisWrapper = nullptr;
-    bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
-    if (useAnalysis) {
-      analysisWrapper = new TTFFmpegWrapper();
-      analysisWrapper->setAnalysisMode(true);
-      if (analysisWrapper->openFile(vs->filePath())) {
-        const TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-        analysisWrapper->adoptOrBuildFrameIndex(
-            previewWrapper ? previewWrapper->frameIndexBundle() : TTFrameIndexBundle(), vs->filePath());
-      } else {
-        delete analysisWrapper;
-        analysisWrapper = nullptr;
-        useAnalysis = false;
-      }
-    }
-
-    TTVideoIndexList* idxList = vs->indexList();
-
-    auto decodeFn = [&](int frameIndex) -> QImage {
-      if (useAnalysis && analysisWrapper)
-        return analysisWrapper->decodeFrame(frameIndex);
-      currentFrame->videoWindow()->moveToVideoFrame(frameIndex);
-      return currentFrame->videoWindow()->grabFrameImage();
-    };
-    auto nextIFn = [&](int pos) -> int {
-      return idxList ? idxList->moveToNextIndexPos(pos, 1) : -1;
-    };
-
-    if (mLogoDetector->loadMarkadLogo(logoData.markadPath, decodeFn, nextIFn, 0)) {
-      currentFrame->videoWindow()->setLogoROIOverlay(mLogoDetector->roi());
-      navigation->setLogoSearchEnabled(true);
-      statusBar()->showMessage(tr("Logo profile loaded: %1").arg(fi.fileName()), 3000);
-    }
-
-    if (analysisWrapper) {
-      analysisWrapper->closeFile();
-      delete analysisWrapper;
-    }
+    loadMarkadLogoProfile(logoData.markadPath, false);
   } else {
     // Recreate manual ROI profile from saved coordinates
     onLogoROISelected(logoData.roi);
@@ -2483,22 +2440,9 @@ void TTCutMainWindow::onLogoROISelected(QRect imageCoords)
 
   const int profileFrames = 10;
 
-  // For H.264/H.265: create dedicated analysis decoder
-  TTFFmpegWrapper* analysisWrapper = nullptr;
-  bool useAnalysis = currentFrame->videoWindow()->isFFmpegStream();
-  if (useAnalysis) {
-    analysisWrapper = new TTFFmpegWrapper();
-    analysisWrapper->setAnalysisMode(true);
-    if (analysisWrapper->openFile(vs->filePath())) {
-      const TTFFmpegWrapper* previewWrapper = currentFrame->videoWindow()->ffmpegWrapper();
-      analysisWrapper->adoptOrBuildFrameIndex(
-          previewWrapper ? previewWrapper->frameIndexBundle() : TTFrameIndexBundle(), vs->filePath());
-    } else {
-      delete analysisWrapper;
-      analysisWrapper = nullptr;
-      useAnalysis = false;
-    }
-  }
+  // For H.264/H.265: dedicated analysis decoder (nullptr for MPEG-2)
+  TTFFmpegWrapper* analysisWrapper = createAnalysisWrapper(vs);
+  const bool useAnalysis = (analysisWrapper != nullptr);
 
   int pos = idxList->moveToIndexPos(vs->currentIndex(), 1);
   int collected = 0;

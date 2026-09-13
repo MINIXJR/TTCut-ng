@@ -80,6 +80,20 @@ class TTAVItem : public QObject
     QList<TTAudioRepairItem> audioRepairList() const     { return mAudioRepairs; }
     void appendAudioRepair(const TTAudioRepairItem& item) { mAudioRepairs.append(item); }
     void removeAudioRepairAt(int index)                   { if (index >= 0 && index < mAudioRepairs.size()) mAudioRepairs.removeAt(index); }
+    //! Index of the first repair on `trackIndex` whose AC3 frame range
+    //! [frameFrom, frameTo] touches [from, to] (closed intervals), or -1.
+    //! Shared by the marker context menu and the repair dialog, which both
+    //! decide "edit the existing repair or add a new one" with it.
+    int  findAudioRepairOverlapping(int trackIndex, qint64 from, qint64 to) const
+    {
+      for (int i = 0; i < mAudioRepairs.size(); ++i) {
+        const TTAudioRepairItem& r = mAudioRepairs.at(i);
+        if (r.trackIndex() != trackIndex) continue;
+        if (r.frameTo() < from || r.frameFrom() > to) continue;
+        return i;
+      }
+      return -1;
+    }
     void clearAudioRepairs()                              { mAudioRepairs.clear(); }
 
     void appendSubtitleEntry(TTSubtitleStream* sStream, int order=-1);

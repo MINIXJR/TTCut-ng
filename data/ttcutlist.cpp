@@ -440,3 +440,10 @@ int TTCutList::keptFrameCount()
     frames += at(i).cutOutIndex() - at(i).cutInIndex() + 1;
   return frames;
 }
+
+bool TTCutList::isH26xCut()
+{
+  if (count() == 0) return false;
+  const TTVideoStream* vs = at(0).avDataItem()->videoStream();
+  return vs && TTAVTypes::isH26x(vs->streamType());
+}

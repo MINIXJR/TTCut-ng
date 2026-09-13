@@ -774,7 +774,7 @@ static void testStreamPointAudioFrameRangeRoundTrip(const QString& workDir)
     // before this field existed - must round-trip on the frameIndex/duration
     // estimate alone, not trip over missing <AudioFrameFrom>/<AudioFrameTo>.
     TTStreamPoint noRange(42, StreamPointType::ManualMarker,
-                          QStringLiteral("Marker (manuell)"));
+                          QStringLiteral("Marker (manual)"));
     check(!noRange.hasAudioFrameRange(), "source: noRange has no audio frame range");
 
     QList<TTStreamPoint> points{withRange, noRange};

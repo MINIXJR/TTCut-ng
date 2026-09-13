@@ -42,6 +42,7 @@ class TTSubtitleItem;
 class TTCutList;
 class TTProgressBar;
 class TTThreadTask;
+class TTFFmpegWrapper;
 class TTSearchTask;
 class TTLogoDetector;
 class TTStreamPointModel;
@@ -111,12 +112,13 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onStreamPointDeleteAll();
     void onStreamPointSetCutIn(int frameIndex);
     void onStreamPointSetCutOut(int frameIndex);
-    void onVideoPointsDetected(const QList<TTStreamPoint>& points);
+    //! Result of every detector (video, aspect, anomaly, audio) and of the
+    //! VDR/defect import: straight into the marker model.
+    void onPointsDetected(const QList<TTStreamPoint>& points);
     //! Stream points restored from a project file - adds them like
-    //! onVideoPointsDetected, but marks AudioAnomaly markers whose
+    //! onPointsDetected, but marks AudioAnomaly markers whose
     //! repair the load validation disabled.
     void onStreamPointsLoaded(const QList<TTStreamPoint>& points);
-    void onAudioPointsDetected(const QList<TTStreamPoint>& points);
     void onAnalysisWorkerFinished();
     void onQuickJump();
     void onSearchBlackFrame(int startPos, int direction, float threshold);
@@ -150,6 +152,12 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
   public:
     // Called from main() to load a project given on the command line.
     void openProjectFile(QString fName);
+    //! Wire an analysis task for the stream-point pool - finished and
+    //! aborted to onAnalysisWorkerFinished and to deleteLater - count it in
+    //! mStreamPointWorkersRunning and start it. The caller connects the
+    //! task's own pointsDetected first. Public so that
+    //! tools/diag/test_analysis_task_lifetime can drive it with a dummy task.
+    void startAnalysisTask(TTThreadTask* task);
 
   private slots:
     void onSliderDecodeTimer();
@@ -206,7 +214,7 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void setProjectModified(bool modified);
     void updateWindowTitle();
     static void saveWidgetScreenshot(QWidget* widget, const QString& filename, int maxWidth = 1200);
-    QString formatRemaining(const TTProgressEstimator::Result& r) const;
+    static QString formatRemaining(const TTProgressEstimator::Result& r);
     static QString formatDurationMs(qint64 ms);  // h:mm:ss or m:ss
     static QString progressStageName(int stage);
     //! Start the AC3 anomaly scan for the current AV item on the
@@ -214,6 +222,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! scan (nothing started). Shared by the explicit analysis and the
     //! automatic post-load start.
     bool    startAudioAnomalyScan();
+    //! A dedicated TTFFmpegWrapper in analysis mode for logo work on an
+    //! H.26x stream, its frame index adopted from the preview wrapper;
+    //! nullptr for MPEG-2 (no libav wrapper) or when the file does not open.
+    TTFFmpegWrapper* createAnalysisWrapper(TTVideoStream* vs);
+    //! Load a markad PGM logo as the logo profile: frames come from an
+    //! analysis wrapper for H.26x, from the preview window for MPEG-2;
+    //! overlay, logo-search buttons and status text follow the outcome.
+    //! The one implementation behind the file dialog, the project restore
+    //! and the automatic <video>.logo.pgm load.
+    bool    loadMarkadLogoProfile(const QString& pgmPath, bool withProgress);
 
   private:
     TTAVData*        mpAVData;
