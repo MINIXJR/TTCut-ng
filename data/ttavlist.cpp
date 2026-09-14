@@ -230,6 +230,13 @@ void TTAVItem::updateCutEntry(const TTCutItem& cItem, int cutIn,	int cutOut)
  */
 void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 {
+	// Whether TWO videos can be cut into one output. The caller walks the
+	// whole AV list, so with a single video loaded this item is also the one
+	// being checked - nothing to compare then, and comparing it would pit two
+	// positions of the same file against each other, which a changing aspect
+	// ratio inside one recording makes fail.
+	if (avItem == this) return;
+
 	TTVideoStream*    video1  = videoStream();
 	TTVideoStream*    video2  = avItem->videoStream();
 

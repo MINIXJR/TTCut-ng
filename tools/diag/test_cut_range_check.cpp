@@ -81,6 +81,22 @@ int main(int argc, char** argv)
     check(item.cutCount() == 2,      "only the two accepted ranges are in the list");
   }
 
+  // TTAVData::appendCutEntry walks the whole AV list, so with a single video
+  // loaded an item is checked against itself. canCutWith must return at once
+  // then: it compares TWO videos, and running it on one file would pit two
+  // positions of that file against each other - which fails as soon as the
+  // aspect ratio changes somewhere in the recording, as it does in most DVB
+  // captures. Also covers the null stream: everything below the early return
+  // dereferences videoStream().
+  {
+    TTAVItem item(0);
+    item.appendCutEntry(100, 200);
+    bool threw = false;
+    try { item.canCutWith(&item, 300, 400); }
+    catch (const TTInvalidOperationException&) { threw = true; }
+    check(!threw, "an item checked against itself raises nothing");
+  }
+
   // Changing an existing range is validated too, but refused rather than
   // thrown: the six callers are Qt slots.
   {
