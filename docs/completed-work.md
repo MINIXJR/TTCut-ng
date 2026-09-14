@@ -2514,8 +2514,13 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   identisch, Refactor-Suiten harness/cutter/mpv == ref5, 21 Screenshots
   byteidentisch bis auf die Plattenplatz-Ziffern. Rescans nach dem Umbau: 16 neu
   im Scope (Idiom-Klassen mit geänderter Standortzahl plus drei echte neue
-  Formen, davon zwei offen: die drei Parse-Wächter in `TTCutProjectData`), der
-  zweite Rescan keiner mehr. Store
+  Formen, davon zwei offen: die drei Parse-Wächter in `TTCutProjectData` — am
+  2026-09-14 mit `3c888bf1` geschlossen: `parseSectionHeader` trägt Knotenzahl,
+  `<Order>` und den über `resolveProjectPath` geprüften `<Name>` für alle drei
+  Sektionen, der Sektionsname reist als Parameter mit, damit die Meldungen
+  wortgleich bleiben; `test_project_load_rejected` fährt seither auch die
+  `<Audio>`/`<Subtitle>`-Wächter, material-frei über ein `<Video>` mit
+  wohlgeformtem, aber nicht vorhandenem Pfad), der zweite Rescan keiner mehr. Store
   `docs/code-audit/build-verdicts-2026-09-13-run5.py`. Sechs Karten geprüft,
   aktualisiert und gestempelt. **Zwei Messkorrekturen dieses Laufs:** (1) Befund
   C3 „Menü-Beenden beendet trotz Cancel" stimmt für Qt 6.10.2 nicht — ein

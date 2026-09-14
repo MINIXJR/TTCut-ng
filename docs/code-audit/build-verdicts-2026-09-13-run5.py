@@ -60,9 +60,9 @@ RESCAN = [
      "onSearchBlackFrame and onSearchSceneChange construct two different task classes from the same source bundle; what they share is already directedSearchSource() + launchDirectedSearch() (run 3, 026aa9fb)"),
     # The two parse-guard classes are the same finding at two window offsets.
     ("clone x3 (data/ttcutprojectdata.cpp:217-223)", "consolidate",
-     "OPEN: parseVideoSection/parseAudioSection/parseSubtitleSection repeat the same two guards (node count, then resolveProjectPath on <Name> with a warning); batch C only changed the video one's return type. Target: a helper returning order+resolved name, ~10 lines x 3 sites"),
+     "done 2026-09-14 (3c888bf1): parseSectionHeader() reads Order + the resolveProjectPath'd Name for all three sections and takes the section name as a parameter, so the log messages read as before; gate test_project_load_rejected extended by the <Audio>/<Subtitle> guards"),
     ("clone x3 (data/ttcutprojectdata.cpp:215-218)", "consolidate",
-     "OPEN: same three parse guards as the class above, one window earlier"),
+     "done 2026-09-14 (3c888bf1): same three parse guards as the class above, one window earlier"),
 ]
 
 def old_side_hunks():
