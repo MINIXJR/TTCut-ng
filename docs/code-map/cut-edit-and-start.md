@@ -1,5 +1,5 @@
 ---
-base_commit: 91e088ff203cbe4f481bdc0ae36f05e2f8bb810a
+base_commit: 26bdfcc2f274d879601e24853656fd0819bdb783
 last_verified: 2026-09-14
 sources:
   - gui/ttcutframenavigation.h
@@ -89,7 +89,7 @@ flowchart TD
 | `onAppendCutEntry` → `TTAVData::appendCutEntry` | `(mpCurrentAVDataItem, cutIn, cutOut)` — the **current** item, not the one the tree selection points at. Wrapped in a `try` for `TTInvalidOperationException`, which `canCutWith` raises. |
 | `TTCutOutFrame` / `TTCurrentFrame` → `TTAVItem::updateCutEntry` | The two still frames move one end of the **selected** cut as the user steps through frames, writing after every step. Each stops once it reaches the other end of that range; without a selected cut they only navigate. |
 | `TTCutFrameNavigation` → `TTAVItem::mpCutList` | The edit branch of `onAddCutRange`: with `isEditCut` set it calls `editCutData->avDataItem()->updateCutEntry(*editCutData, cutInPosition, cutOutPosition)` on the item the edited entry belongs to, deletes its copy and returns. This is the one write that reaches a cut list without passing `TTAVData` — no `canCutWith`, no exception handler, and the global list learns of it only through `itemUpdated`. |
-| `TTAVData::appendCutEntry` → `TTAVItem::appendCutEntry` | Before appending, `canCutWith` runs against **every** item of `TTAVList`: equal frame rate, same audio-track count, same stream type, matching audio bitrate/samplerate/version, and for MPEG-2 the sequence headers of both videos at their own cut positions. `TTAVItem::checkCut` then rejects a negative or inverted range, and a cut-out beyond the frame count once a stream is open. |
+| `TTAVData::appendCutEntry` → `TTAVItem::appendCutEntry` | Before appending, `canCutWith` runs against every **other** item of `TTAVList` (it returns at once when handed the item itself): equal frame rate, same audio-track count, same stream type, matching audio bitrate/samplerate/version, and for MPEG-2 the sequence headers of both videos at their own cut positions. `TTAVItem::checkCut` then rejects a negative or inverted range, and a cut-out beyond the frame count once a stream is open. |
 | `TTAVItem::mpCutList` → `TTAVData::mpCutList` | `itemAppended` / `itemRemoved(const TTCutItem&)` / `itemUpdated` are wired in `createAVItem` to the global list's `onAppendItem` / `onRemoveItem` / `onUpdateItem`. The per-item list is the **content** source; entries enter the global list in the order the item emits them. |
 | `TTAVData::mpCutList` → `TTAVItem::mpCutList` | The reverse edge carries **order only**: `orderUpdated` → `onUpdateOrder` writes the new `mOrder` back into the item's copy. Reordering therefore originates in the global list, content does not. |
 | `TTAVData::mpCutList` → `TTCutTreeView` | `itemAppended` → `onAppendItem` builds one row with six columns (file, cut-in, cut-out, length, drift placeholder, hint). Row *i* of the tree and `TTAVData::cutItemAt(i)` are the same entry — the view keeps no item of its own and re-reads the model by position. |
@@ -124,7 +124,7 @@ flowchart TD
 - **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. `canCutWith` keeps them in step for anything appended through `TTAVData::appendCutEntry`, because it rejects a differing stream type — but the project loader bypasses it, so a project naming two videos of different codecs makes the two disagree.
 - **`clear()` emits two removal signals per entry** — the `TTCutItem` overload and the index overload — because the global list and the tree view listen to different ones.
 - **`onEntryUp` re-orders while iterating.** It walks rows front to back and moves each selected row up by one, reporting each move separately; with a multi-row selection the rows it has already moved shift the ones it has not.
-- **`canCutWith` only bites with more than one video.** With a single item it compares that item against itself, so every test passes trivially; the MPEG-2 sequence-header comparison additionally needs the existing item to already hold cut entries, since it reads its side at their positions.
+- **`canCutWith` only bites with more than one video.** The caller walks the whole AV list, so with one video loaded the item is handed itself; it returns at once in that case. It has to — its MPEG-2 half reads its own side at the positions of the item's existing cut entries, so comparing a file with itself would pit two places of that file against each other, and a recording whose aspect ratio changes would be refused. That check also needs the existing item to already hold cut entries.
 - **A failed cut also emits `cutFinished`.** Since the headless `--auto-cut` route must not hang, telling success from failure is the receiving slot's job — `onCutFinished` checks `lastCutError()` first.
 
 ## Redundancy / consolidation candidates

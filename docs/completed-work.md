@@ -2298,6 +2298,19 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Frame am Cut-Out, die Burst-Verschiebung bei einem Ein-Frame-Schnitt
     mit sichtbarer Meldung im Vorschau-Dialog. Sichttest der Anschläge
     steht aus.
+  - **Regression am selben Tag gemeldet und behoben (`26bdfcc2`):** Der
+    Batch-B-Umbau ließ das Anlegen eines Schnitts in einer EINZELNEN Datei
+    mit „Videodateien … müssen das gleiche Seitenverhältnis aufweisen"
+    scheitern. `TTAVData::appendCutEntry` läuft über die ganze AV-Liste, prüft
+    das Item also auch gegen sich selbst; solange beide Seiten an derselben
+    Position lasen, war das folgenlos. Seit die linke Seite an den eigenen
+    Cut-Positionen liest, vergleicht ein Selbsttest zwei verschiedene Stellen
+    derselben Datei — und eine DVB-Aufnahme mit wechselndem Seitenverhältnis
+    fällt sofort durch. `canCutWith` kehrt jetzt sofort zurück, wenn es sich
+    selbst bekommt. **Die Behauptung im Batch-B-Commit, ein einzelnes Video
+    sei nicht betroffen, war ungeprüft** — genau der Fall, für den mangels
+    passender Fixtures kein Gate gebaut worden war. Gate jetzt: der
+    Selbstvergleich in `test_cut_range_check`.
   - **Offen geblieben:** die Codec-Lücke von Befund 5 (der Projekt-Lader
     umgeht `canCutWith`). Die Vorschau-Klone zwischen
     `data/ttcutpreviewtask.cpp` und `gui/ttcutpreview.cpp` (fünf
