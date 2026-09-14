@@ -619,6 +619,17 @@ void TTCutPreview::onBurstShift()
     newIdx = oldIdx + 1;
   }
 
+  // A one-frame cut leaves the shift no room: moving either end puts it past
+  // the other one, which updateCutEntry refuses - say so instead of letting
+  // the button look as if it had worked.
+  const bool wouldInvert = mBurstIsCutOut ? (newIdx < copyItem.cutInIndex())
+                                          : (newIdx > copyItem.cutOutIndex());
+  if (wouldInvert) {
+    setBurstMessage(tr("The cut is only one frame long - its %1 cannot be shifted.")
+                    .arg(mBurstIsCutOut ? tr("cut-out") : tr("cut-in")), false);
+    return;
+  }
+
   updateRealCutItem(copyItem, oldIdx, newIdx);
   applyBurstShiftToLists(copyItem, newIdx);
 

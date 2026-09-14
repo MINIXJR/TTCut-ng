@@ -41,7 +41,7 @@ class TTCutVideoTask : public TTThreadTask
     void operation();
 
   public slots:
-    void onUserAbort();
+    void onUserAbort() override;
 
   signals:
     void finished(const TTMuxListDataItem& muxListItem);
@@ -70,7 +70,7 @@ class TTCutTask : public TTThreadTask
     void operation();
 
   public slots:
-    void onUserAbort();
+    void onUserAbort() override;
 
   private:  
     int             mCutIn  = 0;

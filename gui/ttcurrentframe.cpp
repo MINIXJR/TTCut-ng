@@ -381,6 +381,12 @@ void TTCurrentFrame::onWidgetPrevFrame()
 //! Widget button: navigate to next frame + auto-save CutIn if cut selected
 void TTCurrentFrame::onWidgetNextFrame()
 {
+  // With a cut selected this button moves that cut's start, so it stops at
+  // the cut-out (see TTCutOutFrame::onPrevCutOutPos for the mirror case).
+  if (currentCutItemIndex >= 0 && currentCutAVItem &&
+      currentCutPosition >= currentCutAVItem->cutListItemAt(currentCutItemIndex).cutOutIndex())
+    return;
+
   if (videoStream != 0)
     videoStream->moveToIndexPos(currentCutPosition);
 

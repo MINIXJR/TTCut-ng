@@ -130,6 +130,14 @@ void TTCutOutFrame::onPrevCutOutPos()
 {
   if (videoStream == 0) return;
 
+  // With a cut selected this button moves that cut's end, so it stops at the
+  // cut-in: one step further would invert the range, which updateCutEntry
+  // refuses anyway - and then the still would keep moving while the entry
+  // stood still.
+  if (currentCutItemIndex >= 0 && currentAVItem &&
+      currentPosition <= currentAVItem->cutListItemAt(currentCutItemIndex).cutInIndex())
+    return;
+
   videoStream->moveToIndexPos(currentPosition);
 
   int newFramePos = videoStream->moveToPrevFrame();

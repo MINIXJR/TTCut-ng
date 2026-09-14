@@ -209,6 +209,18 @@ void TTAVItem::removeCutEntry(const TTCutItem& cItem)
  */
 void TTAVItem::updateCutEntry(const TTCutItem& cItem, int cutIn,	int cutOut)
 {
+	// Last line of defence for the six gestures that move one end of an
+	// existing range (cut-out still, current frame, burst shift, edit branch).
+	// None of them stops at the other end, so each can invert the range.
+	// Refused rather than thrown: these callers are Qt slots, and an exception
+	// leaving one of them ends the application.
+	QString reason;
+	if (!isValidCut(cutIn, cutOut, &reason)) {
+		qWarning("TTAVItem::updateCutEntry -> %d-%d refused: %s",
+		         cutIn, cutOut, qPrintable(reason));
+		return;
+	}
+
 	TTCutItem uItem(this, cutIn, cutOut);
 	mpCutList->update(cItem, uItem);
 }
@@ -238,11 +250,16 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 	if (type1 == TTAVTypes::mpeg2_demuxed_video) {
 		TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
 		TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
+		if (seqIn2 == 0 || seqOut2 == 0) return;
 
+		// Every range already in this item is compared against the new one.
+		// cutIn/cutOut are positions in video2 and say nothing about video1,
+		// so this side reads its headers at its own entries' positions.
 		for (int i = 0; i < cutCount(); i++) {
-			(void)i; // Loop index used implicitly
-			TTSequenceHeader* seqIn1   = video2->getSequenceHeader(cutIn);
-			TTSequenceHeader* seqOut1  = video2->getSequenceHeader(cutOut);
+			const TTCutItem&  own      = cutListItemAt(i);
+			TTSequenceHeader* seqIn1   = video1->getSequenceHeader(own.cutInIndex());
+			TTSequenceHeader* seqOut1  = video1->getSequenceHeader(own.cutOutIndex());
+			if (seqIn1 == 0 || seqOut1 == 0) continue;
 
 			if (seqIn1->aspectRatio() != seqIn2->aspectRatio() || seqOut1->aspectRatio() != seqOut2->aspectRatio())
 				throw TTInvalidOperationException(tr("Video files to cut must have the same aspect ratio!"));
@@ -287,13 +304,38 @@ int TTAVItem::firstAc3TrackIndex() const
 /* /////////////////////////////////////////////////////////////////////////////
  * checkCut
  */
-void TTAVItem::checkCut(int , int )
+bool TTAVItem::isValidCut(int cutIn, int cutOut, QString* reason)
 {
-  if (videoStream() == 0) return;
+  // The first two tests are stream-independent and therefore always possible -
+  // including while the project loader is still building this item, where
+  // videoStream() is still 0 because the open task has not run yet.
+  if (cutIn < 0 || cutOut < 0) {
+    if (reason) *reason = tr("A cut range must not contain a negative frame position (%1-%2)!")
+        .arg(cutIn).arg(cutOut);
+    return false;
+  }
 
-  //TODO: what's about this check; remove it
-//	if (cutOut > videoStream()->frameCount())
-//		throw TTIndexOutOfRangeException(tr("Cut out exceeds video frame count!"));
+  if (cutOut < cutIn) {
+    if (reason) *reason = tr("Cut out must not lie before cut in (%1-%2)!").arg(cutIn).arg(cutOut);
+    return false;
+  }
+
+  // The upper bound needs an open stream, so it applies to ranges set while
+  // the video is loaded, not to those read from a project file.
+  if (videoStream() != 0 && cutOut >= videoStream()->frameCount()) {
+    if (reason) *reason = tr("Cut out %1 exceeds the video frame count of %2!")
+        .arg(cutOut).arg(videoStream()->frameCount());
+    return false;
+  }
+
+  return true;
+}
+
+void TTAVItem::checkCut(int cutIn, int cutOut)
+{
+  QString reason;
+  if (!isValidCut(cutIn, cutOut, &reason))
+    throw TTInvalidOperationException(reason);
 }
 
 /*!
@@ -302,11 +344,6 @@ void TTAVItem::checkCut(int , int )
 void TTAVItem::appendMarker(int markerPos, int order)
 {
 	mpMarkerList->append(this, markerPos, order);
-}
-
-void TTAVItem::removeMarker(const TTMarkerItem& cItem)
-{
-	mpMarkerList->remove(cItem);
 }
 
 

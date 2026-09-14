@@ -35,6 +35,7 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
 
   isControlEnabled = true;
   isEditCut = false;
+  editCutData = nullptr;
   isCutInPosition = false;
   isCutOutPosition = false;
 
@@ -145,6 +146,13 @@ TTCutFrameNavigation::TTCutFrameNavigation(QWidget* parent) :
   connect(pbQuickJump,         &QPushButton::clicked, this, &TTCutFrameNavigation::openQuickJump);
   connect(pbSetMarker,         &QPushButton::clicked, this, &TTCutFrameNavigation::onSetMarker);
   connect(pbSelectLogoROI,     &QPushButton::clicked, this, &TTCutFrameNavigation::onSelectLogoROI);
+}
+
+TTCutFrameNavigation::~TTCutFrameNavigation()
+{
+  // An edit that was armed but never completed (the user did not press
+  // "Update range in cut list") still holds its copy here.
+  delete editCutData;
 }
 
 void TTCutFrameNavigation::wireSearch(const SearchControls& c, SearchSignal search,
@@ -458,6 +466,7 @@ void TTCutFrameNavigation::onAddCutRange()
       pbAddCut->setText(tr("Add range to cut list"));
       isEditCut = false;
       delete editCutData;
+      editCutData = nullptr;
       return;
     }
 
@@ -491,6 +500,7 @@ void TTCutFrameNavigation::onEditCut(const TTCutItem& cutData)
   laCutOutPosition->setText(szTemp1);
 
   isEditCut = true;
+  delete editCutData;                    // a second edit without an update in between
   editCutData = new TTCutItem(cutData);
 
   pbAddCut->setText(tr("Update range in cut list"));

@@ -103,7 +103,6 @@ class TTAVItem : public QObject
     void updateCutEntry(const TTCutItem& cItem, int cutIn, int cutOut);
 
     void appendMarker(int markerPos, int order=-1);
-    void removeMarker(const TTMarkerItem& cItem);
 
     //! Audio auto-sort (language preference resp. project order, see
     //! TTAVData::onOpenAudioFinished) runs only while the item's initial
@@ -154,6 +153,11 @@ class TTAVItem : public QObject
 
   private:
     TTAudioList*    audioDataList()    { return mpAudioList; }
+    //! True when the pair can be used as a cut range: both positions
+    //! non-negative, cut-out not before cut-in, and - once a stream is
+    //! open - cut-out inside it. 'reason' takes a message for the caller.
+    bool            isValidCut(int cutIn, int cutOut, QString* reason = 0);
+    //! isValidCut, raising TTInvalidOperationException instead.
     void            checkCut(int cutIn, int cutOut);
 
   private:

@@ -135,6 +135,11 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
   connect(videoCutList, &QTreeWidget::customContextMenuRequested,  this, &TTCutTreeView::onContextMenuRequest);
 }
 
+TTCutTreeView::~TTCutTreeView()
+{
+  delete mpJobCutList;
+}
+
 /*!
  * enableControl
  */
@@ -364,12 +369,10 @@ void TTCutTreeView::onEntryDuplicate()
  */
 void TTCutTreeView::onEntrySelected(QTreeWidgetItem*, int column)
 {
-  if (mAVData == 0 || videoCutList->currentItem() == 0) return;
+  const int index = currentCutIndex();
+  if (index < 0) return;
 
-  int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-  TTCutItem cutItem = mAVData->cutItemAt(index);
-
-  emit selectionChanged(cutItem, column);
+  emit selectionChanged(mAVData->cutItemAt(index), column);
 }
 
 /*!
@@ -380,12 +383,10 @@ void TTCutTreeView::onItemSelectionChanged()
 	if (!allowSelectionChanged) return;
   // Skip if triggered by mouse click — onEntrySelected handles that with correct column
   if (QApplication::mouseButtons() != Qt::NoButton) return;
-  if (mAVData == 0 || videoCutList->currentItem() == 0)  return;
+  const int index = currentCutIndex();
+  if (index < 0) return;
 
-  int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-  TTCutItem cutItem = mAVData->cutItemAt(index);
-
-  emit selectionChanged(cutItem, 0);
+  emit selectionChanged(mAVData->cutItemAt(index), 0);
 }
 
 /*!
@@ -436,12 +437,10 @@ void TTCutTreeView::onEntryEdit()
  */
 void TTCutTreeView::onGotoCutIn()
 {
-  if (mAVData == 0 || videoCutList->currentItem() == 0) return;
+  const int index = currentCutIndex();
+  if (index < 0) return;
 
-  int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-  TTCutItem cutItem = mAVData->cutItemAt(index);
-
-  emit gotoCutIn(cutItem.cutInIndex());
+  emit gotoCutIn(mAVData->cutItemAt(index).cutInIndex());
 }
 
 /*!
@@ -449,18 +448,29 @@ void TTCutTreeView::onGotoCutIn()
  */
 void TTCutTreeView::onGotoCutOut()
 {
-  if (mAVData == 0 || videoCutList->currentItem() == 0) return;
+  const int index = currentCutIndex();
+  if (index < 0) return;
 
-  int index = videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
-  TTCutItem cutItem = mAVData->cutItemAt(index);
-
-  emit gotoCutOut(cutItem.cutOutIndex());
+  emit gotoCutOut(mAVData->cutItemAt(index).cutOutIndex());
 }
 
 //! Creates the cut list from current selection
+int TTCutTreeView::currentCutIndex() const
+{
+  if (mAVData == 0 || videoCutList->currentItem() == 0) return -1;
+  return videoCutList->indexOfTopLevelItem(videoCutList->currentItem());
+}
+
+TTCutList* TTCutTreeView::newJobCutList()
+{
+  delete mpJobCutList;
+  mpJobCutList = new TTCutList();
+  return mpJobCutList;
+}
+
 TTCutList* TTCutTreeView::cutListFromSelection(bool ignoreSelection)
 {
-  TTCutList* cutList = new TTCutList();
+  TTCutList* cutList = newJobCutList();
 
   for (int i = 0; i < videoCutList->topLevelItemCount(); i++) {
     TTCutItem cutItem = mAVData->cutItemAt(i);
@@ -501,7 +511,7 @@ void TTCutTreeView::onEntryPreview()
     if (i < totalCuts - 1) indices.insert(i + 1);
   }
 
-  TTCutList* cutList = new TTCutList();
+  TTCutList* cutList = newJobCutList();
   QList<int> sorted = indices.values();
   std::sort(sorted.begin(), sorted.end());
   for (int idx : sorted) {
@@ -575,17 +585,6 @@ void TTCutTreeView::onAudioSelCut()
   if (mAVData == 0) return;
 
   emit audioVideoCut(true, cutListFromSelection());
-}
-
-/*!
- * onEditCutOut
- */
-void TTCutTreeView::onEditCutOut(const TTCutItem& cutItem, int cutOut)
-{
-  if (mAVData == 0) return;
-
-  cutItem.avDataItem()->updateCutEntry(cutItem, cutItem.cutInIndex(), cutOut);
-  emit cutOutUpdated(cutItem);
 }
 
 /*!

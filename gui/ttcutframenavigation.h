@@ -31,6 +31,8 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
 
   public:
     explicit TTCutFrameNavigation(QWidget* parent=0);
+    //! Frees a cut copy that an armed but never finished edit left behind.
+    ~TTCutFrameNavigation() override;
 
     //void setTitle ( const QString & title );
 
@@ -114,7 +116,9 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
     SearchControls mLogo;
 
     TTMessageLogger* log;
-    TTCutItem* editCutData;
+    //! The entry being edited, owned here. Null unless isEditCut; see
+    //! onEditCut (arms) and onAddCutRange (writes it back and clears).
+    TTCutItem* editCutData = nullptr;
     bool    isControlEnabled;
     bool    isEditCut;
     bool    isCutInPosition;

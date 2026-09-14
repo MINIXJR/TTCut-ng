@@ -100,6 +100,8 @@ settings_cancel        unit  120  test_settings_cancel
 analysis_task_lifetime unit  120  test_analysis_task_lifetime
 streampoint_model_time unit  120  test_streampoint_model_time
 project_load_rejected  unit  120  test_project_load_rejected
+cut_range_check        unit  120  test_cut_range_check
+cut_job_ownership      unit  120  test_cut_job_ownership
 exit_cancel            tux   300  test_exit_cancel
 exit_discard           tux   300  test_exit_cancel
 exit_savefail          tux   300  test_exit_cancel
@@ -223,6 +225,8 @@ gate_settings_cancel()       { "$D/test_settings_cancel"; }
 gate_analysis_task_lifetime() { "$D/test_analysis_task_lifetime"; }
 gate_streampoint_model_time() { "$D/test_streampoint_model_time"; }
 gate_project_load_rejected() { "$D/test_project_load_rejected" "$W"; }
+gate_cut_range_check() { "$D/test_cut_range_check" "$W"; }
+gate_cut_job_ownership() { "$D/test_cut_job_ownership" "$W"; }
 gate_exit_cancel()           { need "$V264"; "$D/test_exit_cancel" "$V264" cancel; }
 gate_exit_discard()          { need "$V264"; "$D/test_exit_cancel" "$V264" discard; }
 gate_exit_savefail()         { need "$V264"; "$D/test_exit_cancel" "$V264" savefail; }

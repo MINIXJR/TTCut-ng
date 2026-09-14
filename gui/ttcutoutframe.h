@@ -27,7 +27,7 @@ class TTCutOutFrame: public QWidget, Ui::TTCutOutFrameWidget
   Q_OBJECT
 
   public:
-    TTCutOutFrame(QWidget* parent = 0);
+    explicit TTCutOutFrame(QWidget* parent = 0);
     ~TTCutOutFrame();
 
     void setTitle(const QString & title);

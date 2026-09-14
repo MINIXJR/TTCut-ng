@@ -423,7 +423,17 @@ void TTCutProjectData::parseCutSection(QDomNodeList cutNodesList, TTAVItem* avIt
   // position; the engine now cuts exactly at the displayed frame (the old
   // engine cut ~B-frame-reorder frames off — that was the bug). A decode->
   // display conversion here would double-shift and break legacy projects.
-  avItem->appendCutEntry(cutIn, cutOut, order);
+  // A project file can name any pair of numbers - it is the one route into a
+  // cut list that never passed a GUI navigator, so checkCut() can reject the
+  // range. Skip such an entry with a warning instead of aborting the load,
+  // the same way a rejected track path is skipped.
+  try {
+    avItem->appendCutEntry(cutIn, cutOut, order);
+  }
+  catch (const TTInvalidOperationException& ex) {
+    qWarning("TTCutProjectData::parseCutSection -> skipped cut %d-%d: %s",
+             cutIn, cutOut, qPrintable(ex.getMessage()));
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

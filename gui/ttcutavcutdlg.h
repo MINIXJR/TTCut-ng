@@ -30,7 +30,7 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
   Q_OBJECT
 
   public:
-    TTCutAVCutDlg( QWidget* parent=0, bool audioOnly = false);
+    explicit TTCutAVCutDlg( QWidget* parent=0, bool audioOnly = false);
     ~TTCutAVCutDlg();
 
     void setGlobalData();

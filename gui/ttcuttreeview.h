@@ -28,7 +28,9 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
   Q_OBJECT
 
   public:
-    TTCutTreeView(QWidget* parent=0);
+    explicit TTCutTreeView(QWidget* parent=0);
+    //! Frees the job list of the last preview or cut (see newJobCutList).
+    ~TTCutTreeView() override;
 
     void controlEnabled(bool value);
     void setAVData(TTAVData* avData);
@@ -53,7 +55,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void onAVSelCut();
     void onAudioCut();
     void onAudioSelCut();
-    void onEditCutOut(const TTCutItem& item, int cutOut);
     void onContextMenuRequest(const QPoint& point);
     void onEntryDuplicate();
     void onClearList();
@@ -66,7 +67,6 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     void itemUpdated(const TTCutItem& item);
     void selectionChanged(const TTCutItem& item, int column);
     void entryEdit(const TTCutItem& item);
-    void cutOutUpdated(const TTCutItem& item);
     void gotoCutIn(int index);
     void gotoCutOut(int index);
     void refreshDisplay();
@@ -75,7 +75,17 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
 
   private:
   	QTreeWidgetItem* findItem(const TTCutItem& cutItem);
+    TTCutList* mpJobCutList = nullptr;
     TTCutList* cutListFromSelection(bool ignoreSelection=false);
+    //! An empty job list for the next preview or cut, freeing the previous
+    //! one. The receivers (main window, TTAVData, TTCutPreviewTask) only
+    //! borrow the pointer, so the producer owns it; an operation always ends
+    //! before the next one starts.
+    TTCutList* newJobCutList();
+    //! Position of the current row, which is also the position of its entry
+    //! in TTAVData's cut list (row i <-> cutItemAt(i)). -1 when there is no
+    //! model or no current row.
+    int currentCutIndex() const;
     void createActions();
 
     // Column 5 ("hint"): two producers that only compute, one writer that

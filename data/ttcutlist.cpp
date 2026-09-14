@@ -298,8 +298,17 @@ void TTCutList::append(const TTCutItem& cItem)
  */
 void TTCutList::remove(const TTCutItem& cItem)
 {
-  int       index = data.indexOf(cItem);
-  TTCutItem item  = data.takeAt(index);
+  int index = data.indexOf(cItem);
+
+  // An entry that is not in this list: takeAt(-1) would be an out-of-range
+  // access. No caller is known that can get here - this is a guard, like the
+  // one in update() and onUpdateOrder(), not a case that occurs.
+  if (index < 0) {
+    qWarning("TTCutList::remove -> entry not in this list, ignored");
+    return;
+  }
+
+  TTCutItem item = data.takeAt(index);
 
   emit itemRemoved(item);
   emit itemRemoved(index);
