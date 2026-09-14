@@ -132,6 +132,7 @@ headerlist_eof         tux   300  test_headerlist_eof
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
 acmod_majority         tux   300  test_acmod_majority
+hint_column            tux   300  test_hint_column
 audiocutter_paths      tux   300  test_audiocutter_paths
 mpv_loadfile_args      tux   300  test_mpv_loadfile_args
 subtitle_delay         tux   600  test_subtitle_delay
@@ -275,6 +276,7 @@ gate_headerlist_eof()    { need "$M2V"; "$D/gate_headerlist_eof.sh" "$D/test_hea
 gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600; }
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
 gate_acmod_majority()    { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_acmod_majority" "$W/mixed.ac3"; }
+gate_hint_column()       { need "$V264"; make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_hint_column" "$V264" "$W/mixed.ac3" "$W/hint"; }
 gate_audiocutter_paths() { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_audiocutter_paths" "$W/mixed.ac3" "$W/out"; }
 # A subtitle path with a comma, a space and an umlaut (reference_mpv_loadfile_comma).
 gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp "$SRT" "$W/kömma, tést/a,b_deu.srt"

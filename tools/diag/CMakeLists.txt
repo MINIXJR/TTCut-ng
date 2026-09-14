@@ -305,6 +305,8 @@ diag_tool(test_cut_range_check AV WIDGETS SOURCES)
 target_link_libraries(test_cut_range_check PRIVATE ttcut-core)
 diag_tool(test_cut_job_ownership AV WIDGETS SOURCES)
 target_link_libraries(test_cut_job_ownership PRIVATE ttcut-core)
+diag_tool(test_hint_column AV WIDGETS SOURCES)
+target_link_libraries(test_hint_column PRIVATE ttcut-core)
 diag_tool(test_project_roundtrip AV WIDGETS SOURCES)
 target_link_libraries(test_project_roundtrip PRIVATE ttcut-core)
 # Drives TTAVData::readProjectFile() with a failing audio track (gate for
@@ -421,7 +423,7 @@ add_custom_target(diag DEPENDS
   test_anomalyscan
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
-  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)
