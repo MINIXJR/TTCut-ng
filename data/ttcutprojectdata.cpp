@@ -206,22 +206,35 @@ void TTCutProjectData::createDocumentStructure()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Order and validated path shared by the <Video>, <Audio> and <Subtitle>
+ * sections; see the header for the contract.
+ */
+bool TTCutProjectData::parseSectionHeader(const QDomNodeList& nodes, const char* section,
+                                          int& order, QString& name)
+{
+  if (nodes.size() < 2) {
+    qDebug("TTCutProjectData::%s -> insufficient nodes", section);
+    return false;
+  }
+  order = nodes.at(0).toElement().text().toInt();
+  QString rawName = nodes.at(1).toElement().text();
+  name = resolveProjectPath(rawName, xmlFileInfo);
+  if (name.isEmpty()) {
+    qWarning("TTCutProjectData::%s -> rejected unsafe path: %s",
+             section, qPrintable(rawName));
+    return false;
+  }
+  return true;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  *
  */
 bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData)
 {
-  if (videoNodesList.size() < 2) {
-    qDebug("TTCutProjectData::parseVideoSection -> insufficient nodes");
-    return false;
-  }
-  int     order = videoNodesList.at(0).toElement().text().toInt();
-  QString rawName = videoNodesList.at(1).toElement().text();
-  QString name = resolveProjectPath(rawName, xmlFileInfo);
-  if (name.isEmpty()) {
-    qWarning("TTCutProjectData::parseVideoSection -> rejected unsafe path: %s",
-             qPrintable(rawName));
-    return false;
-  }
+  int     order = 0;
+  QString name;
+  if (!parseSectionHeader(videoNodesList, "parseVideoSection", order, name)) return false;
 
   qDebug("TTCutProjectData::parseVideoSection -> doOpenVideoStream...");
   TTAVItem* avItem = avData->doOpenVideoStream(name, order);
@@ -261,18 +274,9 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
  */
 void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem)
 {
-  if (audioNodesList.size() < 2) {
-    qDebug("TTCutProjectData::parseAudioSection -> insufficient nodes");
-    return;
-  }
-  int     order = audioNodesList.at(0).toElement().text().toInt();
-  QString rawName = audioNodesList.at(1).toElement().text();
-  QString name = resolveProjectPath(rawName, xmlFileInfo);
-  if (name.isEmpty()) {
-    qWarning("TTCutProjectData::parseAudioSection -> rejected unsafe path: %s",
-             qPrintable(rawName));
-    return;
-  }
+  int     order = 0;
+  QString name;
+  if (!parseSectionHeader(audioNodesList, "parseAudioSection", order, name)) return;
 
   // Read optional Language, Delay and Repair elements (added in TTCut-ng
   // 0.52+, 0.66+ and unreleased). Repair may occur multiple times; any other
@@ -702,18 +706,9 @@ TTLogoProjectData TTCutProjectData::deserializeLogoData()
  */
 void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem)
 {
-  if (subtitleNodesList.size() < 2) {
-    qDebug("TTCutProjectData::parseSubtitleSection -> insufficient nodes");
-    return;
-  }
-  int     order = subtitleNodesList.at(0).toElement().text().toInt();
-  QString rawName = subtitleNodesList.at(1).toElement().text();
-  QString name = resolveProjectPath(rawName, xmlFileInfo);
-  if (name.isEmpty()) {
-    qWarning("TTCutProjectData::parseSubtitleSection -> rejected unsafe path: %s",
-             qPrintable(rawName));
-    return;
-  }
+  int     order = 0;
+  QString name;
+  if (!parseSectionHeader(subtitleNodesList, "parseSubtitleSection", order, name)) return;
 
   // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.81+)
   QString lang;

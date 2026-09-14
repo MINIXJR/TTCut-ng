@@ -79,6 +79,12 @@ class TTCutProjectData
     QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
     QDomElement writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order);
+    //! Order and validated path from a section header. <Video>, <Audio> and
+    //! <Subtitle> all start with the same two nodes (Order, Name); 'section'
+    //! names the caller in the log messages. false when the section carries
+    //! too few nodes or resolveProjectPath refuses the path.
+    bool        parseSectionHeader(const QDomNodeList& nodes, const char* section,
+                                   int& order, QString& name);
     //! One <Video> section; false when it was skipped without starting an open task.
     bool        parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData);
     void        parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem);

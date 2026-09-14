@@ -15,6 +15,12 @@
 // whose file is missing on disk DOES start a task, which then fails through
 // the task abort route - a different path with its own reporting.
 //
+// The last case uses exactly that to reach the <Audio>/<Subtitle> guards
+// without any media: doOpenVideoStream hands back its AVItem before the task
+// runs, so the track sections are parsed even though the video file does not
+// exist. It pins TTCutProjectData::parseSectionHeader, which all three
+// sections share, on both of its refusals and on the section name it logs.
+//
 // Material-free (the projects are written here), offscreen, no dialogs.
 //   usage: test_project_load_rejected <workdir>
 // Build via `cmake --build build --target test_project_load_rejected`.
@@ -23,6 +29,9 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QLoggingCategory>
+#include <QMutex>
+#include <QStringList>
 #include <QTimer>
 #include <cstdio>
 
@@ -35,6 +44,24 @@ void check(bool ok, const char* what)
 {
   printf("%s: %s\n", ok ? "PASS" : "FAIL", what);
   if (!ok) failures++;
+}
+
+QMutex      logMutex;
+QStringList logMessages;
+
+void collectMessages(QtMsgType, const QMessageLogContext&, const QString& msg)
+{
+  QMutexLocker lock(&logMutex);
+  logMessages << msg;
+}
+
+// True when some collected message contains 'needle'.
+bool logged(const char* needle)
+{
+  QMutexLocker lock(&logMutex);
+  for (const QString& m : std::as_const(logMessages))
+    if (m.contains(QLatin1String(needle))) return true;
+  return false;
 }
 
 bool writeFile(const QString& path, const QByteArray& content)
@@ -83,6 +110,7 @@ int main(int argc, char** argv)
   const QString noVideo  = work.absoluteFilePath("no-video.ttcut");
   const QString rejected = work.absoluteFilePath("rejected-path.ttcut");
   const QString broken   = work.absoluteFilePath("not-xml.ttcut");
+  const QString tracks   = work.absoluteFilePath("rejected-tracks.ttcut");
 
   if (!writeFile(noVideo,
           "<TTCut-Projectfile><Version>1.0</Version></TTCut-Projectfile>\n") ||
@@ -90,6 +118,13 @@ int main(int argc, char** argv)
           "<TTCut-Projectfile><Version>1.0</Version>"
           "<Video><Order>0</Order><Name>../outside.m2v</Name></Video>"
           "</TTCut-Projectfile>\n") ||
+      !writeFile(tracks,
+          "<TTCut-Projectfile><Version>1.0</Version>"
+          "<Video><Order>0</Order><Name>/nonexistent-ttcut-gate/video.m2v</Name>"
+          "<Audio><Order>0</Order><Name>../outside.mp2</Name></Audio>"
+          "<Audio><Order>1</Order></Audio>"
+          "<Subtitle><Order>0</Order><Name>../outside.srt</Name></Subtitle>"
+          "</Video></TTCut-Projectfile>\n") ||
       !writeFile(broken, "this is not xml\n")) {
     fprintf(stderr, "cannot write the test projects into %s\n", qPrintable(work.absolutePath()));
     return 2;
@@ -98,6 +133,19 @@ int main(int argc, char** argv)
   check(loadOutcome(noVideo, 5000) == 'a',  "a project without a <Video> section ends as aborted");
   check(loadOutcome(rejected, 5000) == 'a', "a project whose only video path is rejected ends as aborted");
   check(loadOutcome(broken, 5000) == 'a',   "an unparsable project ends as aborted");
+
+  // The shared section guard: both refusals, named per section. qDebug has to
+  // be enabled explicitly - a gate run may carry QT_LOGGING_RULES.
+  QLoggingCategory::setFilterRules(QStringLiteral("default.debug=true"));
+  QtMessageHandler previous = qInstallMessageHandler(collectMessages);
+  loadOutcome(tracks, 5000);   // outcome is the task-abort route, not this test
+  qInstallMessageHandler(previous);
+  check(logged("parseAudioSection -> rejected unsafe path: ../outside.mp2"),
+        "a rejected <Audio> path is refused and logged as parseAudioSection");
+  check(logged("parseAudioSection -> insufficient nodes"),
+        "an <Audio> section without a Name is refused as insufficient nodes");
+  check(logged("parseSubtitleSection -> rejected unsafe path: ../outside.srt"),
+        "a rejected <Subtitle> path is refused and logged as parseSubtitleSection");
 
   printf("%s\n", failures ? "PROJECT-LOAD-REJECTED FAIL" : "PROJECT-LOAD-REJECTED PASS");
   return failures ? 1 : 0;
