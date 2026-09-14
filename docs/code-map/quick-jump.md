@@ -1,6 +1,6 @@
 ---
-base_commit: 0259ae1afba13ddeebbf47c2a1ef71ca57492d0d
-last_verified: 2026-09-05
+base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
+last_verified: 2026-09-14
 sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcutsettingsnavigation.cpp
@@ -160,9 +160,23 @@ flowchart TD
 
 ## Redundancy / consolidation candidates
 
-- **Index adoption is now single-path.** Every adopter pulls
-  `frameIndexBundle()` and ends in `setFrameIndex(const TTFrameIndexBundle&)`. No consolidation left here; the
-  earlier duplication was the defect.
+- **Index adoption is single-path at the `setFrameIndex()` end, but the
+  "adopt-or-build" decision above it has drifted back into two shapes.**
+  Every adopter still ends in `setFrameIndex(const TTFrameIndexBundle&)`,
+  but code-audit run 3 (`9e5511f0`) added
+  `TTFFmpegWrapper::adoptOrBuildFrameIndex(prebuilt, filePath, error,
+  adopted)` — "use `prebuilt` if non-empty, else build a fresh
+  `TTFrameIndexer` over `filePath`, then `setFrameIndex()` either way" — and
+  switched four call sites onto it (`gui/ttcutmainwindow.cpp`'s analysis
+  wrapper, `data/ttframesearchtask.cpp`, `data/ttsearchtask.cpp` twice,
+  `mpeg2window/ttmpeg2window2.cpp`). `TTQuickJumpWorker::operation()` still
+  carries its own hand-written copy of exactly that branch
+  (`mPrebuiltFrameIndex.isEmpty() ? … : …` around a local `TTFrameIndexer`)
+  instead of calling the new helper — none of the four switched call sites
+  are in this map's scope, so the worker was not touched by that batch.
+  Candidate: replace the worker's inline block with
+  `ffmpegWrapper->adoptOrBuildFrameIndex(mPrebuiltFrameIndex, mFilePath)`.
+  **Still open.**
 - **Two thumbnail-producing decoders** (`TTFFmpegWrapper`, `TTMpeg2Decoder`)
   split by codec inside `TTQuickJumpWorker::operation()`. This mirrors the split
   everywhere else in the project (see `detection-and-search.md`) and is not a

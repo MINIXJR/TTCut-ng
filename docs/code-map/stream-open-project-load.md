@@ -1,5 +1,5 @@
 ---
-base_commit: 3c888bf1fe2b8d45b27e86050d9fb38ce212417a
+base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
 last_verified: 2026-09-14
 sources:
   - data/ttavdata.h
@@ -40,7 +40,7 @@ load overwrites (`settings-state.md`), the pool's progress bookkeeping
 | Audio | discovered: `<base>*.{mpa,mp2,ac3,aac}` next to the video (`getAudioNames`), order −1 | every `<Audio>` with its `<Order>`; `<Language>`, `<Delay>`, `<Repair>` become pending entries keyed `(item, order)` |
 | Subtitles | discovered `<base>*.srt` (`getSubtitleNames`) | every `<Subtitle>` with order, pending language/delay |
 | `.info` | read here: languages → pending, VDR marks → `mpPendingVdrMarkers`, item marked for the defect dialog, legacy decode-error warning (modal) | not read here; `onOpenVideoFinished` reads it again for the extra-frame list only |
-| Cuts / markers | from VDR marks in `onOpenVideoFinished` | `parseCutSection`/`parseMarkerSection` append synchronously while the tasks still run, then `sortCutItemsByOrder`/`sortMarkerByOrder` |
+| Cuts / markers | from VDR marks in `onOpenVideoFinished` | `parseCutSection`/`parseMarkerSection` append synchronously while the tasks still run, then `sortCutItemsByOrder`/`sortMarkerByOrder` `parseCutSection` refuses a range `TTAVItem::checkCut` rejects (negative or inverted) and skips that entry with a warning rather than failing the load. |
 | Pool abort hook | `aborted → onOpenAVStreamsAborted` (armed per open, dropped in `onThreadPoolExit`) | `exit → onReadProjectFileFinished`, `aborted → onReadProjectFileAborted` (armed in `readProjectFile`) |
 | Main window flag | — | `mProjectLoadInProgress` from `openProjectFile` to `onOpenProjectFileFinished`/`Aborted` |
 

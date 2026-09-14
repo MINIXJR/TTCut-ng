@@ -154,6 +154,37 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
+- **Zwei Vorschau-Pipelines teilen fünf Fragmente** (Code-Audit Lauf 6,
+  2026-09-14, als „Batch G" zurückgestellt)
+  - `data/ttcutpreviewtask.cpp` erzeugt die Vorschau-Clips für alle Schnitte,
+    `gui/ttcutpreview.cpp` erzeugt EINEN Clip neu, wenn der Nutzer eine
+    Schnittkante per Burst-Verschiebung bewegt. Die Trennung hat damit einen
+    Grund; die fünf gemeinsamen Fragmente haben keinen: Temp-Aufräumen
+    (`preview*` löschen), Quellauflösung aus Eintrag 0, die
+    Segment-Indexrechnung `(i-1)*2+1`, der Encoder-Aufbau
+    (`setPresetOverride` + `initialize` + Display-Map-Cast) und **zweimal die
+    MKV-Mux-Konfiguration**.
+  - Die Mux-Konfiguration ist der gefährliche Teil: laufen die beiden
+    auseinander, sieht ein nachgezeugter Clip anders aus als die
+    ursprünglichen, ohne dass es auffällt.
+  - Reichweite: die grösste Redundanz des Laufs, und `gui/ttcutpreview.cpp`
+    liegt ausserhalb des Umfangs der Karte `cut-edit-and-start.md`.
+
+- **Der Projektlader umgeht die Verträglichkeitsprüfung zweier Videos**
+  (Code-Audit Lauf 6, 2026-09-14)
+  - `TTCutProjectData::parseVideoSection` ruft `TTAVData::doOpenVideoStream`
+    je `<Video>`-Abschnitt, und `parseCutSection` hängt die Schnitte über
+    `TTAVItem::appendCutEntry` direkt an — beides ohne `TTAVItem::canCutWith`,
+    das beim Anlegen über die GUI jedes weitere Video gegen alle bereits
+    geladenen prüft (gleicher Codec, gleiche Bildrate, gleiche Tonspurzahl,
+    bei MPEG-2 auch Seitenverhältnis und Bildgrösse).
+  - Folge: ein von Hand geschriebenes `.ttcut` mit zwei Videos
+    unterschiedlicher Codecs lädt. Der Encoder-Codec wird dann aus dem
+    aktuellen Element gesetzt, die Weiche in `TTAVData::onDoCut` entscheidet
+    aber nach Eintrag 0 der Auftragsliste — die beiden können auseinanderlaufen.
+  - Beschrieben in `docs/code-map/cut-edit-and-start.md` (Fallstricke,
+    Befund 5).
+
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `gui/ttcutpreview.cpp` und
     `data/ttcutpreviewtask.cpp` (Vorschau-Dateien). Zwei gleichzeitig

@@ -1,6 +1,6 @@
 ---
-base_commit: 5e47997b6535a69e9e42306ababe03d35d3afc57
-last_verified: 2026-09-13
+base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
+last_verified: 2026-09-14
 sources:
   - gui/ttcurrentframe.h
   - gui/ttcurrentframe.cpp

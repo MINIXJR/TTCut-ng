@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.84.0 (2026-09-14)
+
+**Cut ranges are validated, six audit runs, three new code maps**
 
 ### Fixed
 - **Cancelling the equal-frame search now takes effect during the frame
@@ -20,7 +22,36 @@ All notable changes to TTCut-ng are documented in this file.
   `--auto-cut` had no way around it, the cut dialog showed MKV
   preselected. Gate: `tools/diag/test_container_sync`.
 
+- **A cut range is now checked before it enters the cut list.** Nothing on
+  the path from a gesture to the engines looked at one: `TTAVItem::checkCut`
+  had its only test commented out, so an inverted or negative range was
+  accepted and reported a plausible length (the length is an absolute
+  difference). Both write paths validate now - appending refuses with a
+  message, changing an existing range refuses silently because its callers
+  are Qt slots. The one route that never passes a navigator, a project file,
+  skips a bad range with a warning instead of aborting the load. Gate:
+  `tools/diag/test_cut_range_check`.
+- **The compatibility check between two videos never compared them.** Its
+  MPEG-2 half read both sides of every comparison from the same stream at
+  the same position, so the aspect-ratio and picture-size tests could not
+  fail. They compare the two videos now, each at its own cut positions -
+  loading a second video that differs in aspect ratio or size is refused, as
+  the messages always said.
+- **Saving under a new name lost the save target when the dialog was
+  cancelled**, and the exit dialog asked twice on Cancel while a "Save" whose
+  file dialog was cancelled closed the window with the changes unsaved.
+  Gates: `tools/diag/test_exit_cancel`, `_exit_discard`, `_exit_savefail`.
+- **A project whose video could not be opened never finished loading** - the
+  load flag stayed set for the rest of the session and blocked the automatic
+  anomaly scan. Gate: `tools/diag/test_project_load_rejected`.
+- **The cut list's time column ignored field pictures**, and the marker added
+  by hand was labelled in German inside the English UI.
+
 ### Changed
+- **The three range gestures stop at the other end of their range.** The
+  cut-out still no longer moves below the cut-in, the current frame no longer
+  above the cut-out (both only while a cut is selected), and the burst shift
+  says so when a one-frame cut leaves it no room.
 - **The cut list's AC3 format-change hint and the cut's acmod
   normalisation now use one majority rule.** They had separate
   implementations with different sampling and could disagree on a segment;

@@ -1,5 +1,5 @@
 ---
-base_commit: 3c888bf1fe2b8d45b27e86050d9fb38ce212417a
+base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
 last_verified: 2026-09-14
 sources:
   - common/ttsettings.h
