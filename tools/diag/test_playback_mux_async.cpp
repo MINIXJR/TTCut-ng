@@ -15,8 +15,16 @@
 //   4. detach:   with the cache removed, Play starts a mux and a stream
 //                switch mid-mux (onAVDataChanged(nullptr)) leaves no file.
 //
-// Needs a source whose mux takes several seconds (a 3 GB broadcast ES, not
-// the 24 MB tux fixtures - those finish before the dialog is even mapped).
+// Needs a source whose mux takes several seconds: the harness clicks Cancel
+// 400 ms after Play, and a mux that is done by then leaves nothing to cancel
+// - the run then fails three checks for a reason that has nothing to do with
+// the code under test (measured 2026-09-14: 75 MB muxes in ~150 ms, 1.3 GB
+// in ~900 ms, 3.1 GB in ~2.3 s, which is the first size that works).
+// Without broadcast material, concatenating a tux fixture is enough - an
+// elementary stream stays valid when appended to itself:
+//   for i in $(seq 1 100); do cat tools/test-videos/cache/\
+//       tux_h264_1080p_progressive_test.264; done > /tmp-of-project/big.264
+//   (same for the .ac3, then a .ttcut naming both)
 // Runs offscreen: mpv gets no GL context there, so playback itself is not
 // asserted - only the mux, the dialog, the responsiveness and the files.
 // Point XDG_CONFIG_HOME somewhere disposable; the run writes settings.
