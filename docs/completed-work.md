@@ -2237,6 +2237,73 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Projektdatei
 
+- **Code-Audit Lauf 6: Schnitt bearbeiten und starten** → **ERLEDIGT
+  (2026-09-14)**, Zweig `cleanup/code-audit-run6`, sechs Batches. Umfang
+  waren die 21 Quelldateien von `docs/code-map/cut-edit-and-start.md`;
+  27 nie beurteilte Kandidaten (9 consolidate, 18 deliberate), zwei
+  Sonnet-Klassifizierer, Urteile in
+  `docs/code-audit/build-verdicts-2026-09-14-run6.py`.
+  - **Was die fünf Lese-Befunde der Karte bei der Messung ergaben:**
+    `checkCut` prüfte nichts — bestätigt: eine Probe hängte `(500, 100)`
+    und `(-7, 1000000)` an, der umgedrehte Bereich meldete 401 Frames
+    Länge; erreichbar über den Projekt-Lader, der `appendCutEntry` direkt
+    ruft. `TTCutList::remove` ohne `indexOf`-Wache — bestätigt als
+    Indexfehler, aber **kein erreichbarer Weg gefunden**, deshalb als
+    Härtung gebaut und so benannt. `editCutData` — bestätigt und größer:
+    LSan meldete zwei Lecks, eines beim zweiten Bearbeiten, eines weil der
+    Destruktor fehlte. Auftragsliste ohne Eigentümer — bestätigt, aber nur
+    für den GUI-Weg: `--auto-cut` reicht die globale Liste durch.
+    „Codec aus zwei Quellen" — **größtenteils widerlegt**: `canCutWith`
+    weist einen abweichenden Stream-Typ ab; die Lücke ist wieder der
+    Projekt-Lader, also dieselbe wie Befund 1.
+  - **Neu und nicht aus der Karte:** die MPEG-2-Prüfung in `canCutWith`
+    las beide Seiten jedes Vergleichs aus `video2` an derselben Position —
+    jeder Vergleich prüfte einen Wert gegen sich selbst, keine der drei
+    `throw`-Zeilen war erreichbar. Die Schleife darum lief `cutCount()`-mal
+    über konstante Werte, ihr `(void)i; // Loop index used implicitly`
+    behauptete eine Nutzung, die es nicht gab. Linke Seite jetzt `video1`
+    an dessen **eigenen** Cut-Positionen (`cutIn`/`cutOut` gehören zu
+    `video2`), Entscheid des Users unter drei vorgelegten Varianten.
+  - **Batches**, beim Squash alle in `91e088ff` zusammengefasst: A checkCut
+    prüft und der Lader überspringt statt abzubrechen; B canCutWith;
+    C Eigentum für Bearbeiten-Kopie und Auftragsliste; D `onEditCutOut` +
+    `cutOutUpdated` + `TTAVItem::removeMarker` (kein Aufrufer seit dem ersten
+    Commit); E `currentCutIndex()`, `override`, `explicit`; F Wache in
+    `remove`.
+  - **Gates:** `run-gates.sh` 84 → 86 PASS, 0 FAIL; neu
+    `tools/diag/test_cut_range_check` und
+    `tools/diag/test_cut_job_ownership`, beide mit Negativprobe. Das
+    Ownership-Gate beobachtet `QObject::destroyed` statt Speicher, weil die
+    Diag-Harnesses ohne Sanitizer gebaut werden.
+  - **Zwei Messfallen dieses Laufs:** (1) Eine Gate-Prüfung „die zwei
+    Auftragslisten sind verschiedene Objekte" misst den Allokator, nicht
+    das Verhalten — die erste wird freigegeben, bevor die zweite entsteht,
+    Adressgleichheit ist normal. (2) Eine Negativprobe per `git stash`
+    entfernt auch die CMake-Registrierung eines neuen Harnesses; der Build
+    schlägt still fehl und die alte Binärdatei meldet grün. Nur die
+    geänderten Quelldateien zurücksetzen.
+  - **Kein Gate für Batch B:** die Prüfung braucht zwei MPEG-2-Fixtures,
+    die sich **nur** in der Bildgröße unterscheiden; die beiden im Repo
+    unterscheiden sich auch in der Bildrate (25 gegen 50), wo die frühere
+    Bildraten-Prüfung zuerst wirft. Ein darauf gebautes Gate hätte etwas
+    anderes gemessen als behauptet.
+  - **Nachgereicht (Batches A2 und A3, ebenfalls in `91e088ff`):** `updateCutEntry` war
+    der zweite, ungeprüfte Schreibweg mit sechs Aufrufern. `checkCut` ist in
+    `isValidCut()` (entscheidet, nennt den Grund) und `checkCut()` (wirft
+    weiterhin) geteilt; `updateCutEntry` verwirft und meldet ins Log, weil
+    seine Aufrufer Qt-Slots sind und eine entkommende Ausnahme die Anwendung
+    beendet. Weil ein Verwerfen nur im Log dem Benutzer das Bild
+    weiterlaufen lässt, während die Liste stehen bleibt, halten die drei
+    Gesten jetzt vorher an: der Cut-Out-Rahmen am Cut-In, der aktuelle
+    Frame am Cut-Out, die Burst-Verschiebung bei einem Ein-Frame-Schnitt
+    mit sichtbarer Meldung im Vorschau-Dialog. Sichttest der Anschläge
+    steht aus.
+  - **Offen geblieben:** die Codec-Lücke von Befund 5 (der Projekt-Lader
+    umgeht `canCutWith`). Die Vorschau-Klone zwischen
+    `data/ttcutpreviewtask.cpp` und `gui/ttcutpreview.cpp` (fünf
+    Fragmente, darunter zweimal die MKV-Mux-Konfiguration) sind als
+    Batch G zurückgestellt.
+
 - **Projektdatei-Endung: .prj → .ttcut** → **DONE** (v0.63.0)
   - Neue Dateien: `.ttcut`, bestehende `.prj` behalten Endung
   - File-Dialog Filter: `"TTCut Project (*.ttcut);;Legacy Project (*.prj)"`

@@ -1,5 +1,5 @@
 ---
-base_commit: 2b6aa497785bf0f62201ac5902b204f1089defc5
+base_commit: 91e088ff203cbe4f481bdc0ae36f05e2f8bb810a
 last_verified: 2026-09-14
 sources:
   - gui/ttcutframenavigation.h
@@ -87,12 +87,13 @@ flowchart TD
 | `TTCutFrameNavigation` → `TTCutMainWindow::onAppendCutEntry` | `addCutRange(cutIn, cutOut)`, emitted by `onAddCutRange` only when **both** positions were set since the last append; the two labels reset to "..." and the flags clear before the signal. The positions are display-order stream indices, taken from `currentPosition` at the moment the button was pressed — the widget never re-reads the stream. |
 | `TTStreamPointWidget` → `onStreamPointSetCutIn` / `SetCutOut` | Trigger only: the marker's frame index moves the current frame (`currentFrame->onGotoFrame`), then `navigation->onSetCutIn()/onSetCutOut()` reads the position back out of the navigation widget. The marker index never reaches the cut list directly. |
 | `onAppendCutEntry` → `TTAVData::appendCutEntry` | `(mpCurrentAVDataItem, cutIn, cutOut)` — the **current** item, not the one the tree selection points at. Wrapped in a `try` for `TTInvalidOperationException`, which `canCutWith` raises. |
+| `TTCutOutFrame` / `TTCurrentFrame` → `TTAVItem::updateCutEntry` | The two still frames move one end of the **selected** cut as the user steps through frames, writing after every step. Each stops once it reaches the other end of that range; without a selected cut they only navigate. |
 | `TTCutFrameNavigation` → `TTAVItem::mpCutList` | The edit branch of `onAddCutRange`: with `isEditCut` set it calls `editCutData->avDataItem()->updateCutEntry(*editCutData, cutInPosition, cutOutPosition)` on the item the edited entry belongs to, deletes its copy and returns. This is the one write that reaches a cut list without passing `TTAVData` — no `canCutWith`, no exception handler, and the global list learns of it only through `itemUpdated`. |
-| `TTAVData::appendCutEntry` → `TTAVItem::appendCutEntry` | Before appending, `canCutWith` runs against **every** item of `TTAVList` (frame rate equal, same audio-track count, compatible stream type) — the compatibility contract for a cut list spanning several videos. `TTAVItem::checkCut` is then called and does nothing: its only check is commented out. |
+| `TTAVData::appendCutEntry` → `TTAVItem::appendCutEntry` | Before appending, `canCutWith` runs against **every** item of `TTAVList`: equal frame rate, same audio-track count, same stream type, matching audio bitrate/samplerate/version, and for MPEG-2 the sequence headers of both videos at their own cut positions. `TTAVItem::checkCut` then rejects a negative or inverted range, and a cut-out beyond the frame count once a stream is open. |
 | `TTAVItem::mpCutList` → `TTAVData::mpCutList` | `itemAppended` / `itemRemoved(const TTCutItem&)` / `itemUpdated` are wired in `createAVItem` to the global list's `onAppendItem` / `onRemoveItem` / `onUpdateItem`. The per-item list is the **content** source; entries enter the global list in the order the item emits them. |
 | `TTAVData::mpCutList` → `TTAVItem::mpCutList` | The reverse edge carries **order only**: `orderUpdated` → `onUpdateOrder` writes the new `mOrder` back into the item's copy. Reordering therefore originates in the global list, content does not. |
 | `TTAVData::mpCutList` → `TTCutTreeView` | `itemAppended` → `onAppendItem` builds one row with six columns (file, cut-in, cut-out, length, drift placeholder, hint). Row *i* of the tree and `TTAVData::cutItemAt(i)` are the same entry — the view keeps no item of its own and re-reads the model by position. |
-| `TTCutTreeView` → job `TTCutList` | `cutListFromSelection(ignoreSelection)` allocates a **new** `TTCutList` and appends `(avDataItem, cutIn, cutOut)` per row — either all rows or the selected ones. The four-argument `append` leaves `order` at its default `-1` for every entry, so a job list carries no usable order. |
+| `TTCutTreeView` → job `TTCutList` | `cutListFromSelection(ignoreSelection)` fills a list from `newJobCutList()` with `(avDataItem, cutIn, cutOut)` per row — either all rows or the selected ones. The view owns that list: starting the next job frees the previous one, the destructor the last. The four-argument `append` leaves `order` at its default `-1` for every entry, so a job list carries no usable order. |
 | job list → `onCutPreview` / `onAudioVideoCut` | `previewCut(list, skipFirst, skipLast)` and `audioVideoCut(audioOnly, list)`. `skipFirst`/`skipLast` mark neighbour clips that `onEntryPreview` added for transition context and that the preview must not present as selected cuts. |
 | `onAudioVideoCut` → `TTCutAVCutDlg` | Trigger only. Before the dialog opens, the encoder codec is set from **`mpCurrentAVDataItem`'s** stream type and a still-empty `cutVideoName` is derived from that stream's file name (plus `_cut` when `cutAddSuffix`). |
 | `TTCutAVCutDlg` → `TTSettings` → `TTAVData` | On Start only (`onDlgStart` → `setGlobalData`, `done(Accepted)`): output directory, suffix flag, container and the encoder values. `getCommonData` strips the **UI** container extension and re-attaches the codec's **ES** extension, so `cutVideoName` leaves the dialog as the intermediate elementary-stream name (`architecture_cutvideoname_split`). `TTSettings::save()` runs after Accepted, never after Cancel. |
@@ -102,7 +103,7 @@ flowchart TD
 | `doH264Cut` → `TTH26xCutTask::init` | A flat `TTH26xCutParams`: source path, targets, frame rate, A/V offset, codec and PAFF flags, `cutFrames` (display-order pairs from `frameRanges()`), the seconds-based `keepList` and the display-order map. The list itself does not travel — everything was resolved from entry 0 plus the ranges. |
 | `doAudioOnlyCut` → `TTAudioOnlyCutTask::init` | `TTAudioOnlyCutParams`: target name, the same seconds-based keep list, acmod normalisation flag, the audio-only output format copied **at dispatch time**, and the pre-computed `.mka` path. |
 | `TTAVData::doCutPreview` → `TTCutPreviewTask` | The job list is handed to the constructor and kept as `mpCutList`; the task builds its **own** `mpPreviewCutList` in `operation()` and owns only that one. The pool is initialised with `cutList->count()*2` steps. |
-| `TTCutTreeView` → `TTCutOutFrame` | `itemUpdated` → `onCutOutChanged`: the cut-out still follows the edited entry. The reverse direction is `onEditCutOut`, where the view writes a new cut-out straight into `avDataItem()->updateCutEntry` and then reports `cutOutUpdated`. |
+| `TTCutTreeView` → `TTCutOutFrame` | `itemUpdated` → `onCutOutChanged`: the cut-out still follows the edited entry. There is no edge back: changing an entry goes through `onEntryEdit` → `entryEdit` → `TTCutFrameNavigation::onEditCut`, which writes via `TTAVItem::updateCutEntry`. |
 
 ## Assumptions and contracts
 
@@ -110,21 +111,20 @@ flowchart TD
 - **Entry 0 is the source of record.** Video stream, frame rate, audio tracks, `.info` timing and the codec switch are all read from `cutList->at(0).avDataItem()`, in all three branches. A job list is a sequence of ranges, not a sequence of sources — `canCutWith` is what makes that safe, and it runs at append time against the AV list, not at start time against the job list.
 - **Positions are display-order stream indices** end to end (`frame-order.md`); `frameRanges()` hands exactly those pairs to the Smart Cut engine.
 - **A cut range is only complete when both ends were set.** `onAddCutRange` is the sole gate; it clears both flags, so the next range starts empty.
-- **Edit mode bypasses the main window.** With `isEditCut` armed, `onAddCutRange` calls `editCutData->avDataItem()->updateCutEntry(...)` directly and returns — the `addCutRange` signal is not emitted and `TTAVData::appendCutEntry`, with its `canCutWith` check, never runs.
+- **Edit mode bypasses the main window.** With `isEditCut` armed, `onAddCutRange` calls `editCutData->avDataItem()->updateCutEntry(...)` directly and returns — the `addCutRange` signal is not emitted and `TTAVData::appendCutEntry`, with its `canCutWith` check, never runs. `updateCutEntry` does not call `checkCut` either, so an edited range is the one that reaches the list unvalidated.
 - **The view moves first, the model follows.** `onEntryUp`/`onEntryDown` re-order the tree rows themselves and report `itemOrderChanged(old, new)` afterwards, which swaps the global list. Row *i* ↔ `cutItemAt(i)` only holds while both stay in step.
-- **Job lists are transient by intent but nobody frees them.** See the pitfalls.
+- **The producer owns the job list.** `newJobCutList()` is the single allocation point; an operation always ends before the next starts, so freeing the previous job at the next one is safe.
 - **Cancel changes nothing.** The start dialog persists settings only on Accept, and `onDlgStart` refuses to accept while the output file exists unless the overwrite question is answered with Yes.
 
 ## Known pitfalls
 
-- **`TTAVItem::checkCut` is an empty shell.** Both parameters are unnamed, the only check (`cutOut > frameCount`) is commented out with a `TODO`. No `cutIn <= cutOut`, no range check — neither here nor anywhere else on the path. `TTCutItem::cutLengthFrames` takes the absolute difference, so an inverted range even reports a plausible length.
-- **`TTCutList::remove` does not check `indexOf`.** `data.takeAt(index)` with `index == -1` on an item that is not in this list. Its siblings `update` and `onUpdateOrder` both guard; `remove` does not.
+- **A refused range change is only visible in the log.** Both write paths validate through `isValidCut`, but `appendCutEntry` raises (its callers catch) while `updateCutEntry` refuses and logs — its six callers are Qt slots, where an escaping exception ends the application. The three gestures that could hit the limit stop at the other end before getting there, so the refusal is a last line of defence rather than something a user meets. `TTCutItem::cutLengthFrames` takes the absolute difference, so an inverted range would still report a plausible length.
+- **A cut list never validates what it is handed.** `TTCutList::append`/`update` store whatever they get; every check lives one level up in `TTAVItem`. `remove` guards against an entry it does not hold, as `update` and `onUpdateOrder` do.
 - **The two `append` overloads disagree about `order`.** `append(const TTCutItem&)` assigns `count()` when the order is negative and announces it; `append(avItem, cutIn, cutOut, order = -1)` stores whatever it got. Every job list goes through the second one, so all its entries carry `-1` — `sortByOrder()` on such a list is `std::sort` over equal keys and not stable.
-- **Nobody owns the job list.** `cutListFromSelection` returns a `new TTCutList` (a `QObject` without parent); the preview task explicitly owns only the list it builds itself, and the cut path stores the pointer in `mpRunningCutList`. There is no `delete` for it anywhere — one leak per preview and per started cut.
-- **`editCutData` outlives a second edit.** `onEditCut` does `new TTCutItem(cutData)` every time; only a completed `onAddCutRange` deletes it. Two "Edit" clicks in a row leak the first copy, and the member is never initialised in the constructor (only `isEditCut = false` protects the read).
-- **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. With a job list whose entry 0 belongs to a different item than the current one, the two disagree.
+- **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. `canCutWith` keeps them in step for anything appended through `TTAVData::appendCutEntry`, because it rejects a differing stream type — but the project loader bypasses it, so a project naming two videos of different codecs makes the two disagree.
 - **`clear()` emits two removal signals per entry** — the `TTCutItem` overload and the index overload — because the global list and the tree view listen to different ones.
 - **`onEntryUp` re-orders while iterating.** It walks rows front to back and moves each selected row up by one, reporting each move separately; with a multi-row selection the rows it has already moved shift the ones it has not.
+- **`canCutWith` only bites with more than one video.** With a single item it compares that item against itself, so every test passes trivially; the MPEG-2 sequence-header comparison additionally needs the existing item to already hold cut entries, since it reads its side at their positions.
 - **A failed cut also emits `cutFinished`.** Since the headless `--auto-cut` route must not hang, telling success from failure is the receiving slot's job — `onCutFinished` checks `lastCutError()` first.
 
 ## Redundancy / consolidation candidates
@@ -133,14 +133,18 @@ flowchart TD
   - sites: `gui/ttcuttreeview.cpp:TTCutTreeView::onEntryCut`, `:onAVCut`, `:onAVSelCut`, `:onAudioCut`, `:onAudioSelCut`
   - shared purpose: emit `audioVideoCut(audioOnly, cutListFromSelection(ignoreSelection))` — the five differ only in the two flags
   - status: consolidate → one slot taking the two flags, or two thin wrappers; the menu/action layer already knows which combination it wants
-- **cut-out written from two directions**
-  - sites: `gui/ttcuttreeview.cpp:TTCutTreeView::onEditCutOut`, `gui/ttcutframenavigation.cpp:TTCutFrameNavigation::onAddCutRange` (edit branch)
-  - shared purpose: change an existing entry through `TTAVItem::updateCutEntry`
-  - status: deliberate → different gestures (in-place column edit vs. re-set both ends), same one-line call; consolidating would only move the call
+- **current-row lookup**
+  - sites: `gui/ttcuttreeview.cpp:TTCutTreeView::onEntrySelected`, `:onItemSelectionChanged`, `:onGotoCutIn`, `:onGotoCutOut`
+  - shared purpose: guard, then turn the current row into its entry
+  - status: done `91e088ff` (audit run 6, batch E) — `currentCutIndex()` holds both and states the row↔entry contract once
 - **"no data" guard in the tree view**
-  - sites: `onEntryPreview`, `onEntryCut`, `onAVCut`, `onAVSelCut`, `onAudioCut`, `onAudioSelCut`, `onEditCutOut`, `onContextMenuRequest` (`mAVData == 0` → return)
+  - sites: `onEntryPreview`, `onEntryCut`, `onAVCut`, `onAVSelCut`, `onAudioCut`, `onAudioSelCut`, `onContextMenuRequest` (`mAVData == 0` → return)
   - shared purpose: every command needs a model
-  - status: deliberate → eight one-liners; the real gap is that the actions are not disabled instead, the same finding `project-lifecycle.md` records for the menu actions
+  - status: deliberate → seven one-liners; the real gap is that the actions are not disabled instead, the same finding `project-lifecycle.md` records for the menu actions
+- **range validation on the two write paths**
+  - sites: `data/ttavlist.cpp:TTAVItem::appendCutEntry`, `data/ttavlist.cpp:TTAVItem::updateCutEntry`
+  - shared purpose: a cut range entering the list
+  - status: done `91e088ff` (audit run 6, batch A2) — `isValidCut` decides for both; `checkCut` raises on top of it for the appending path, `updateCutEntry` refuses and logs because its callers are slots
 - **source resolution from entry 0**
   - sites: `data/ttavdata.cpp:TTAVData::onDoCut`, `:doH264Cut`, `:doAudioOnlyCut`, `data/ttcutvideotask.cpp`
   - shared purpose: video stream, frame rate, audio tracks and `.info` timing of "the" source
@@ -150,14 +154,42 @@ flowchart TD
   - shared purpose: mirror a per-item list into the global one and push the order back
   - status: deliberate → the two list types share no base class; a template helper would need one first
 
-## Read findings for audit run 6
+## Findings of audit run 6
 
-Read, not measured — the same status the `project-lifecycle.md` findings had
-before run 5 confirmed them:
+1. **`checkCut` validates nothing — confirmed, reachable.** A probe appends
+   `(500, 100)` and `(-7, 1000000)`; both are accepted and the inverted range
+   reports a length of 401 frames. The reachable route is the project loader:
+   `TTCutProjectData::parseCutSection` calls `avItem->appendCutEntry` directly,
+   bypassing `TTAVData::appendCutEntry` and therefore `canCutWith`. The VDR
+   import in `data/ttavdata.cpp` already rebuilt the missing check locally
+   (`cutIn >= 0 && cutOut > cutIn`, capped at `frameCount - 1`).
+2. **`TTCutList::remove` without the guard — confirmed, no route found.** A
+   foreign item produces `QList::operator[]: index out of range` (a silent
+   bad access in a build without active asserts). No reachable route: the
+   global list holds copies carrying the same UUID and the same
+   `mpAVDataItem`, and `onRemoveCutItem` always hands the entry to the item
+   whose list holds it. Hardening, not a defect.
+3. **The job list has no owner — confirmed for the GUI route only.** The
+   headless route passes `mpAVData->cutList()` (the global list, not a `new`
+   one), so `--auto-cut` never leaks. Only `cutListFromSelection`'s five
+   callers do.
+4. **`editCutData` — confirmed, larger than the read suggested.**
+   LeakSanitizer reports two 40-byte leaks from `onEditCut`: one when the
+   second edit overwrites the pointer, one because the destructor does not
+   free it either. A single unfinished edit already leaks.
+5. **Codec from two sources — largely disproved.** `canCutWith` rejects a
+   differing stream type, so the encoder codec (from the current item) and
+   the dispatch (from entry 0) cannot disagree as long as every entry came
+   through `TTAVData::appendCutEntry`. The project loader bypasses that, so a
+   project naming two videos of different codecs is loadable — which is the
+   same hole as finding 1, not a second one.
+6. **New in run 6:** the `canCutWith` MPEG-2 loop compared `video2` with
+   itself, so its aspect-ratio and picture-size tests could never fail.
 
-1. `checkCut` validates nothing, so an inverted or out-of-range cut range
-   reaches the engines.
-2. `TTCutList::remove` can call `takeAt(-1)`.
-3. The job list from `cutListFromSelection` has no owner.
-4. `editCutData` leaks on a second edit and is uninitialised until the first.
-5. Codec decided from the current item, dispatch decided from entry 0.
+The batches of the run fixed 1, 2, 4 and 6 and hardened 3. Finding 1 took
+three of them: the appending path first, then `updateCutEntry` as the
+other way in, then the three gestures that could reach the limit, which
+now stop at the other end of the range. What remains open is the codec
+hole of finding 5 — the project loader bypasses `canCutWith` — and the
+preview clones held back as batch G. Details and evidence:
+`docs/completed-work.md`.
