@@ -2274,7 +2274,12 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     `tools/diag/test_cut_range_check` und
     `tools/diag/test_cut_job_ownership`, beide mit Negativprobe. Das
     Ownership-Gate beobachtet `QObject::destroyed` statt Speicher, weil die
-    Diag-Harnesses ohne Sanitizer gebaut werden.
+    Diag-Harnesses ohne Sanitizer gebaut werden. Der Screenshot-Lauf fiel
+    zunächst aus (NAS offline) und wurde am selben Tag nachgeholt: 19 von 21
+    Bildern byteidentisch zum Stand vor dem Lauf (`bb64810c`), die zwei
+    Schnitt-Dialog-Bilder unterscheiden sich in der Plattenplatz-Ziffer
+    („30G frei" gegen „31G frei"), die auch zwischen zwei Läufen desselben
+    Baums wechselt.
   - **Zwei Messfallen dieses Laufs:** (1) Eine Gate-Prüfung „die zwei
     Auftragslisten sind verschiedene Objekte" misst den Allokator, nicht
     das Verhalten — die erste wird freigegeben, bevor die zweite entsteht,
