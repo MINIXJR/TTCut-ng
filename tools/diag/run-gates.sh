@@ -102,6 +102,9 @@ streampoint_model_time unit  120  test_streampoint_model_time
 project_load_rejected  unit  120  test_project_load_rejected
 cut_range_check        unit  120  test_cut_range_check
 cut_job_ownership      unit  120  test_cut_job_ownership
+aspect_window          unit  120  test_aspect_window
+aspect_hint            unit  300  test_aspect_hint
+aspect_autocut         unit  300  -
 exit_cancel            tux   300  test_exit_cancel
 exit_discard           tux   300  test_exit_cancel
 exit_savefail          tux   300  test_exit_cancel
@@ -190,6 +193,50 @@ make_mixed_ac3() {
   rm -rf "$t"
 }
 
+# 12 s MPEG-2 with open GOPs (-bf 2: from the second GOP on every I-picture
+# has two leading B-pictures) whose sequence headers 10..14 are patched to
+# 16:9; the rest stays 4:3. $2 receives "A B", the display positions of the
+# first and last 16:9 picture, computed from GOP base + temporal_reference -
+# an oracle that does not go through TTCut's index list.
+make_aspect_m2v() {
+  local out=$1 expect=$2
+  ffmpeg -y -v error -f lavfi -i "testsrc2=size=720x576:rate=25" -t 12 \
+      -c:v mpeg2video -pix_fmt yuv420p -aspect 4:3 -b:v 4M -bf 2 -g 12 \
+      -sc_threshold 1000000000 -f mpeg2video "$out.src" || return 1
+  python3 - "$out.src" "$out" "$expect" <<'PY' || return 1
+import sys
+d = bytearray(open(sys.argv[1], 'rb').read())
+PATCH = range(10, 15)
+k = pos = 0
+while (i := d.find(b'\x00\x00\x01\xb3', pos)) >= 0:
+    if k in PATCH:
+        d[i + 7] = (d[i + 7] & 0x0F) | 0x30      # aspect_ratio_information = 3
+    k += 1
+    pos = i + 4
+assert k > max(PATCH), f"only {k} sequence headers"
+open(sys.argv[2], 'wb').write(d)
+pos = pic = base = 0
+ar = None
+wide = []
+while (i := d.find(b'\x00\x00\x01', pos)) >= 0 and i + 6 <= len(d):
+    c = d[i + 3]
+    if c == 0xB3:
+        ar = d[i + 7] >> 4
+    elif c == 0xB8:
+        base = pic
+    elif c == 0x00:
+        tref = (d[i + 4] << 2) | (d[i + 5] >> 6)
+        if ar == 3:
+            wide.append(base + tref)
+        pic += 1
+    pos = i + 3
+wide.sort()
+assert wide and wide == list(range(wide[0], wide[-1] + 1)), "16:9 run not contiguous"
+open(sys.argv[3], 'w').write(f"{wide[0]} {wide[-1]}\n")
+PY
+  rm -f "$out.src"
+}
+
 # Two-track MPEG-2 project with a cut, as test_audio_order_reset.cpp documents.
 make_two_track_project() {
   local out=$1
@@ -259,6 +306,9 @@ gate_adopt_paff()        { need "$PAFF"; "$D/test_adopt_paff" "$PAFF" 200; }
 gate_index_bundle_adopt() { need "$PAFF"; "$D/test_index_bundle_adopt" "$PAFF" 200; }
 # The Tux timeline has no aspect switch: the gate is "exactly 0 transitions".
 gate_aspectscan_mpeg2()  { need "$M2V"; "$D/test_aspectscan_mpeg2" "$M2V" 2 0; }
+gate_aspect_window() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
+  read -r A B < "$W/aspect.expect"
+  "$D/test_aspect_window" "$W/aspect.m2v" "$A" "$B"; }
 # The harness needs a header list WITHOUT a sequence header (what a run reads
 # back after another instance overwrote its encode.m2v): the first GOP of the
 # fixture, from its group_start_code up to the next sequence_header_code.
@@ -277,6 +327,46 @@ gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
 gate_acmod_majority()    { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_acmod_majority" "$W/mixed.ac3"; }
 gate_hint_column()       { need "$V264"; make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_hint_column" "$V264" "$W/mixed.ac3" "$W/hint"; }
+gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
+  read -r A B < "$W/aspect.expect"
+  "$D/test_aspect_hint" "$W/aspect.m2v" "$A" "$B" "$W/hint"; }
+# --auto-cut on a 4:3-start cut: the aspect warning must reach the log and the
+# run must end (a modal dialog would hang it until the timeout). LC_ALL=C.UTF-8
+# because the translator follows the system locale; the log file is on by
+# default and lives below XDG_CACHE_HOME, which the runner points into $W.
+gate_aspect_autocut() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
+  read -r A B < "$W/aspect.expect"
+  ffmpeg -y -v error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=12" \
+      -c:a mp2 -b:a 192k "$W/aspect.mp2" || exit 1
+  mkdir -p "$W/out"
+  cat > "$W/aspect.ttcut" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$W/aspect.m2v</Name>
+  <Audio>
+   <Order>0</Order>
+   <Name>$W/aspect.mp2</Name>
+   <Language>deu</Language>
+  </Audio>
+  <Cut>
+   <Order>0</Order>
+   <CutIn>$((A - 1))</CutIn>
+   <CutOut>$((B - 5))</CutOut>
+  </Cut>
+ </Video>
+</TTCut-Projectfile>
+PRJ
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/aspect.ttcut" --auto-cut "$W/out/aspect.mkv"
+  echo "auto-cut exit code $?"
+  local log="$XDG_CACHE_HOME/ttcut-ng/logfile.log"
+  grep -F "Cut 1: starts in 4:3, the cut is 16:9 from frame $A" "$log" \
+    || { echo "FAIL: no aspect warning in $log"; exit 1; }
+  grep -F "cut warning(s) - proceeding (auto-cut)" "$log" \
+    || { echo "FAIL: no auto-cut summary line in $log"; exit 1; }
+  echo "PASS: aspect warning logged, run terminated"; }
 gate_audiocutter_paths() { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_audiocutter_paths" "$W/mixed.ac3" "$W/out"; }
 # A subtitle path with a comma, a space and an umlaut (reference_mpv_loadfile_comma).
 gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp "$SRT" "$W/kömma, tést/a,b_deu.srt"

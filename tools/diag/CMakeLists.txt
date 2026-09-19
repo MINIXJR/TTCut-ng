@@ -244,6 +244,7 @@ diag_tool(test_silence_unavailable AV SOURCES ${SILENCE_SRC})
 diag_tool(test_aspectscan  AV MPEG2 SOURCES ${ASPECTSCAN_SRC})
 diag_tool(test_anomalyscan AV SOURCES ${ANOMALYSCAN_SRC})
 diag_tool(test_aspectscan_mpeg2 AV MPEG2 SOURCES ${MPEG2ASPECTSCAN_SRC})
+diag_tool(test_aspect_window AV MPEG2 SOURCES ${MPEG2CUT_SRC} ${ROOT}/avstream/ttaspectwindow.cpp)
 diag_tool(test_pool_abort         SOURCES ${POOLABORT_SRC})
 diag_tool(test_abort_after_finish SOURCES ${POOLABORT_SRC})
 diag_tool(test_streampoint_order AV MPEG2 SOURCES ${STREAMPOINTORDER_SRC})
@@ -307,6 +308,8 @@ diag_tool(test_cut_job_ownership AV WIDGETS SOURCES)
 target_link_libraries(test_cut_job_ownership PRIVATE ttcut-core)
 diag_tool(test_hint_column AV WIDGETS SOURCES)
 target_link_libraries(test_hint_column PRIVATE ttcut-core)
+diag_tool(test_aspect_hint AV WIDGETS SOURCES)
+target_link_libraries(test_aspect_hint PRIVATE ttcut-core)
 diag_tool(test_project_roundtrip AV WIDGETS SOURCES)
 target_link_libraries(test_project_roundtrip PRIVATE ttcut-core)
 # Drives TTAVData::readProjectFile() with a failing audio track (gate for
@@ -419,11 +422,11 @@ add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
   test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_aspectdetect
-  test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2
+  test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
   test_anomalyscan
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
-  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)

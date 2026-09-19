@@ -21,6 +21,7 @@
 #include <QListIterator>
 #include <QMap>
 #include <QSet>
+#include <QStringList>
 #include <QPair>
 #include <functional>
 #include <atomic>
@@ -440,7 +441,14 @@ class TTAVData : public QObject
     };
     // Detect audio bursts at cut boundaries using extra-frame-corrected probe times.
     CutBurstInfo detectCutOutBurst(const TTCutItem& item) const;
-    bool confirmBurstWarnings(TTCutList* cutList);
+    // Findings at cut edges that the user may want to fix before cutting:
+    // audio bursts (only for cuts with audio) and MPEG-2 aspect changes
+    // (ttAnalyzeAspectWindow), one line per finding. Pure - no dialog, no log.
+    QStringList cutWarnings(TTCutList* cutList) const;
+    // Shows cutWarnings() in one dialog ("Cut anyway" / "Cancel"). Under
+    // --auto-cut (mNonInteractive) logs them and proceeds. Returns false only
+    // when the user cancels.
+    bool confirmCutWarnings(TTCutList* cutList);
 
     CutBurstInfo detectCutInBurst(const TTCutItem& item)  const;
 

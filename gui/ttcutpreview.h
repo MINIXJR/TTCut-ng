@@ -20,6 +20,8 @@
 #include <QCloseEvent>
 #include <QLabel>
 
+#include <optional>
+
 #include "../common/ttcut.h"
 #include "../data/ttcutlist.h"
 
@@ -64,6 +66,7 @@ protected slots:
 	void onPrevCut();
 	void onNextCut();
 	void onBurstShift();
+	void onAspectJump();
 
 private:
   TTMpvWrapper*  mPlayer;
@@ -81,6 +84,14 @@ private:
     int          mClipOffset;
     bool         mBurstIsCutOut;
 
+    // Aspect change row (own grid row, hidden entirely when there is nothing
+    // to report). mAspectTarget is the frame the jump moves the edge to.
+    QLabel*      lblAspectWarning;
+    QPushButton* pbAspectJump;
+    int          mAspectSegmentIdx;
+    bool         mAspectIsCutOut;
+    int          mAspectTarget;
+
     //! False while the dialog loads its first clip, true once the user drives
     //! the selection. Decides whether a cut change starts playback: opening
     //! the dialog must not play, a deliberate cut change must.
@@ -93,9 +104,17 @@ private:
 
     void checkBurstForCurrentCut(int iCut);
     void configureBurstShiftButton(bool isCutOut);
+    void checkAspectForCurrentCut(int iCut);
+    void updateHintRowSpace();
     void setBurstMessage(const QString& message, bool resolved);
-    void updateRealCutItem(const TTCutItem& copyItem, int oldIdx, int newIdx);
-    void applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx);
+    void setAspectMessage(const QString& message, bool resolved);
+    static void applyHintMessage(QLabel* label, const QString& message, bool resolved);
+    //! The cut behind a preview-list index (two entries per cut) in the copy
+    //! of the original list; nullopt when out of range.
+    std::optional<TTCutItem> originalCutItem(int segmentIdx) const;
+    void updateRealCutItem(const TTCutItem& copyItem, bool isCutOut, int oldIdx, int newIdx);
+    void applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentIdx, bool isCutOut, int newIdx);
+    void moveCutEdge(int segmentIdx, bool isCutOut, int oldIdx, int newIdx);
     void regeneratePreviewClip(int iCut);
     void regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
     static void regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);

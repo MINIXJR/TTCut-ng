@@ -17,6 +17,7 @@
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "ttcutpreview.h"
+#include "../avstream/ttaspectwindow.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -111,6 +112,18 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   pbBurstShift->hide();
   connect(pbBurstShift, &QPushButton::clicked, this, &TTCutPreview::onBurstShift);
 
+  // Aspect change widgets - their own grid row below the burst row, hidden
+  // entirely when there is nothing to report. updateHintRowSpace() lets the
+  // empty burst row give up its reserved height while an aspect message is
+  // shown, so the message takes the burst row's place instead of sitting
+  // below an empty line.
+  lblAspectWarning = new QLabel(this);
+  lblAspectWarning->hide();
+  pbAspectJump = new QPushButton(this);
+  pbAspectJump->setAutoDefault(false);   // Enter stays bound to Start
+  pbAspectJump->hide();
+  connect(pbAspectJump, &QPushButton::clicked, this, &TTCutPreview::onAspectJump);
+
   // The burst warning gets its own grid row below the controls (row 0 = video
   // frame, row 1 = controls). Sharing the controls row meant competing with
   // the cut selector and four buttons: the spacer collapsed first, then the
@@ -125,6 +138,12 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
     burstLayout->addStretch(1);
     burstLayout->addWidget(pbBurstShift);
     grid->addLayout(burstLayout, 2, 0);
+
+    QHBoxLayout* aspectLayout = new QHBoxLayout();
+    aspectLayout->addWidget(lblAspectWarning);
+    aspectLayout->addStretch(1);
+    aspectLayout->addWidget(pbAspectJump);
+    grid->addLayout(aspectLayout, 3, 0);
   }
 
   mpCutList = nullptr;
@@ -132,6 +151,9 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   mpAVData = nullptr;
   mBurstSegmentIdx = -1;
   mBurstIsCutOut = false;
+  mAspectSegmentIdx = -1;
+  mAspectIsCutOut = false;
+  mAspectTarget = -1;
   mClipOffset = 0;
 }
 
@@ -316,6 +338,8 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   pbNextCut->setEnabled(iCut < cbCutPreview->count() - 1);
 
   checkBurstForCurrentCut(iCut);
+  checkAspectForCurrentCut(iCut);
+  updateHintRowSpace();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -430,13 +454,23 @@ void TTCutPreview::onNextCut()
  * row. Visibility stays with the caller: regeneratePreviewClip() reads
  * isVisible() to tell "burst gone" from "burst still there".
  */
-void TTCutPreview::setBurstMessage(const QString& message, bool resolved)
+void TTCutPreview::applyHintMessage(QLabel* label, const QString& message, bool resolved)
 {
-  lblBurstWarning->setStyleSheet(resolved
+  label->setStyleSheet(resolved
       ? "QLabel { color: #228B22; font-weight: bold; }"
       : "QLabel { color: #FF8C00; font-weight: bold; }");
-  lblBurstWarning->setText(message);
-  lblBurstWarning->setToolTip(message);
+  label->setText(message);
+  label->setToolTip(message);
+}
+
+void TTCutPreview::setBurstMessage(const QString& message, bool resolved)
+{
+  applyHintMessage(lblBurstWarning, message, resolved);
+}
+
+void TTCutPreview::setAspectMessage(const QString& message, bool resolved)
+{
+  applyHintMessage(lblAspectWarning, message, resolved);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -532,15 +566,105 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Shift the cut point by one frame to avoid the audio burst
+ * Check for an aspect change at the currently selected cut transition
+ *
+ * Same transition rule as the burst check: clip 0 = cut-in of cut 1, clip i
+ * = cut-out of cut i first, then cut-in of cut i+1; one finding shown.
+ * The analysis reads the ORIGINAL cut: the preview list holds only the short
+ * pieces around each edge (two entries per cut), whose majority would say
+ * nothing about the cut.
  */
-// The burst shift moves one edge (mBurstIsCutOut selects which) of a cut
-// to newIdx; the copy in mpOriginalCutList identifies the cut by position.
+void TTCutPreview::checkAspectForCurrentCut(int iCut)
+{
+  lblAspectWarning->hide();
+  pbAspectJump->hide();
+  mAspectSegmentIdx = -1;
+  mAspectTarget = -1;
+
+  if (!mpCutList || !mpOriginalCutList || mpCutList->count() < 2) return;
+  const int numPreview = mpCutList->count() / 2 + 1;
+  if (iCut < 0 || iCut >= numPreview) return;
+
+  auto report = [this](int segmentIdx, bool isCutOut, int cutNumber) {
+    const std::optional<TTCutItem> original = originalCutItem(segmentIdx);
+    if (!original || !original->avDataItem()) return false;
+    const TTCutItem& cut = *original;
+    const TTAspectWindowInfo info = ttAnalyzeAspectWindow(
+        cut.avDataItem()->videoStream(), cut.cutInIndex(), cut.cutOutIndex());
+    const int target = isCutOut ? info.cutOutTarget : info.cutInTarget;
+    if (target < 0) return false;
+
+    if (isCutOut) {
+      setAspectMessage(tr("\xe2\x9a\xa0 Cut %1 ends in %2 - the cut is %3 up to frame %4 (-%5)")
+          .arg(cutNumber)
+          .arg(ttAspectText(info.cutOutAspect), ttAspectText(info.mainAspect))
+          .arg(target).arg(cut.cutOutIndex() - target), /*resolved=*/false);
+      pbAspectJump->setIcon(ttThemedIcon("go-previous", QStyle::SP_ArrowBack));
+      pbAspectJump->setToolTip(tr("Move the cut-out to frame %1").arg(target));
+    } else {
+      setAspectMessage(tr("\xe2\x9a\xa0 Cut %1 starts in %2 - the cut is %3 from frame %4 (+%5)")
+          .arg(cutNumber)
+          .arg(ttAspectText(info.cutInAspect), ttAspectText(info.mainAspect))
+          .arg(target).arg(target - cut.cutInIndex()), /*resolved=*/false);
+      pbAspectJump->setIcon(ttThemedIcon("go-next", QStyle::SP_ArrowForward));
+      pbAspectJump->setToolTip(tr("Move the cut-in to frame %1").arg(target));
+    }
+    pbAspectJump->setText(tr("Frame %1").arg(target));
+    lblAspectWarning->show();
+    pbAspectJump->show();
+    mAspectSegmentIdx = segmentIdx;
+    mAspectIsCutOut = isCutOut;
+    mAspectTarget = target;
+    return true;
+  };
+
+  if (iCut == 0) {
+    report(0, /*isCutOut=*/false, 1);
+    return;
+  }
+  const int iPos = (iCut - 1) * 2 + 1;
+  if (iPos >= mpCutList->count()) return;
+  if (report(iPos, /*isCutOut=*/true, iCut)) return;   // cut-out takes priority
+  if (iPos + 1 < mpCutList->count())
+    report(iPos + 1, /*isCutOut=*/false, iCut + 1);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Height of the two hint rows
+ *
+ * The burst row keeps its height while empty (the burst button retains its
+ * size when hidden), so the video frame does not jump between clips with and
+ * without a burst. That reservation only holds while the aspect row is
+ * hidden: with an aspect message and no burst, the empty burst row would sit
+ * above the message. Releasing it lets the aspect row take its place - one
+ * row in every case except burst AND aspect change at the same transition.
+ * Call after every change of the aspect row's visibility.
+ */
+void TTCutPreview::updateHintRowSpace()
+{
+  QSizePolicy policy = pbBurstShift->sizePolicy();
+  policy.setRetainSizeWhenHidden(lblAspectWarning->isHidden());
+  pbBurstShift->setSizePolicy(policy);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Move one edge of a cut: shared by the burst shift and the aspect jump
+ */
+// Maps a preview-list index to its cut in the copy of the original list:
+// the preview list holds two entries per cut.
+std::optional<TTCutItem> TTCutPreview::originalCutItem(int segmentIdx) const
+{
+  if (segmentIdx < 0 || !mpCutList || !mpOriginalCutList) return std::nullopt;
+  if (segmentIdx >= mpCutList->count()) return std::nullopt;
+  const int originalIdx = segmentIdx / 2;
+  if (originalIdx >= mpOriginalCutList->count()) return std::nullopt;
+  return mpOriginalCutList->at(originalIdx);
+}
 
 // Update the REAL model data via TTAVItem::updateCutEntry. The copy's
 // avDataItem() points to the real TTAVItem in the model; the real cut item
 // is found by matching its position.
-void TTCutPreview::updateRealCutItem(const TTCutItem& copyItem, int oldIdx, int newIdx)
+void TTCutPreview::updateRealCutItem(const TTCutItem& copyItem, bool isCutOut, int oldIdx, int newIdx)
 {
   TTAVItem* avItem = copyItem.avDataItem();
   if (!mpAVData || !avItem) return;
@@ -549,35 +673,36 @@ void TTCutPreview::updateRealCutItem(const TTCutItem& copyItem, int oldIdx, int 
     if (realItem.cutInIndex() == copyItem.cutInIndex() &&
         realItem.cutOutIndex() == copyItem.cutOutIndex() &&
         realItem.avDataItem() == avItem) {
-      if (mBurstIsCutOut) {
+      if (isCutOut) {
         avItem->updateCutEntry(realItem, realItem.cutInIndex(), newIdx);
       } else {
         avItem->updateCutEntry(realItem, newIdx, realItem.cutOutIndex());
       }
       if (TTSettings::instance()->logUI())
-          qDebug() << "Burst shift: Updated REAL model cut" << i
-                   << (mBurstIsCutOut ? "CutOut" : "CutIn")
+          qDebug() << "Edge move: Updated REAL model cut" << i
+                   << (isCutOut ? "CutOut" : "CutIn")
                    << "Frame" << oldIdx << "->" << newIdx;
       break;
     }
   }
 }
 
-// Mirror the shifted edge into the preview's own two lists: the copy of the
-// original cut list and the preview entry the burst re-check reads.
-void TTCutPreview::applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx)
+// Mirror the moved edge into the preview's own two lists: the copy of the
+// original cut list and the preview entry the re-checks read.
+void TTCutPreview::applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentIdx,
+                                        bool isCutOut, int newIdx)
 {
   TTCutItem updatedCopy(copyItem);
-  if (mBurstIsCutOut) {
+  if (isCutOut) {
     updatedCopy.update(copyItem.cutInIndex(), newIdx);
   } else {
     updatedCopy.update(newIdx, copyItem.cutOutIndex());
   }
   mpOriginalCutList->update(copyItem, updatedCopy);
 
-  TTCutItem previewItem = mpCutList->at(mBurstSegmentIdx);
+  TTCutItem previewItem = mpCutList->at(segmentIdx);
   TTCutItem updatedPreview(previewItem);
-  if (mBurstIsCutOut) {
+  if (isCutOut) {
     updatedPreview.update(previewItem.cutInIndex(), newIdx);
   } else {
     updatedPreview.update(newIdx, previewItem.cutOutIndex());
@@ -585,39 +710,48 @@ void TTCutPreview::applyBurstShiftToLists(const TTCutItem& copyItem, int newIdx)
   mpCutList->update(previewItem, updatedPreview);
 }
 
-void TTCutPreview::onBurstShift()
+// Move one edge in model and preview lists, rebuild the current clip (which
+// re-runs both checks) and put the shared videoStream back.
+void TTCutPreview::moveCutEdge(int segmentIdx, bool isCutOut, int oldIdx, int newIdx)
 {
-  if (mBurstSegmentIdx < 0 || !mpCutList || !mpOriginalCutList) return;
-  if (mBurstSegmentIdx >= mpCutList->count()) return;
-
-  // Map preview index to original cut list index
-  int originalIdx = mBurstSegmentIdx / 2;
-  if (originalIdx >= mpOriginalCutList->count()) return;
-
-  TTCutItem copyItem = mpOriginalCutList->at(originalIdx);
+  const std::optional<TTCutItem> original = originalCutItem(segmentIdx);
+  if (!original) return;
+  const TTCutItem copyItem = *original;
 
   // updateCutEntry() emits a signal chain that ends in
   // TTCutOutFrame::onCutOutChanged → videoStream->moveToIndexPos(cutOut),
   // moving the shared videoStream off the UI's current frame. Save the
-  // stream index up front and restore it after the whole burst-shift
-  // operation (including the preview regen) is done — otherwise Play in
+  // stream index up front and restore it after the whole operation
+  // (including the preview regen) is done — otherwise Play in
   // TTCurrentFrame would start at the cut-out instead of the visible frame.
-  TTVideoStream* savedStreamForBurst = nullptr;
-  int savedStreamIndexForBurst = -1;
-  if (TTAVItem* burstAVItem = copyItem.avDataItem()) {
-    savedStreamForBurst = burstAVItem->videoStream();
-    if (savedStreamForBurst)
-      savedStreamIndexForBurst = savedStreamForBurst->currentIndex();
+  TTVideoStream* savedStream = nullptr;
+  int savedStreamIndex = -1;
+  if (TTAVItem* avItem = copyItem.avDataItem()) {
+    savedStream = avItem->videoStream();
+    if (savedStream)
+      savedStreamIndex = savedStream->currentIndex();
   }
 
-  int oldIdx, newIdx;
-  if (mBurstIsCutOut) {
-    oldIdx = copyItem.cutOutIndex();
-    newIdx = oldIdx - 1;
-  } else {
-    oldIdx = copyItem.cutInIndex();
-    newIdx = oldIdx + 1;
-  }
+  updateRealCutItem(copyItem, isCutOut, oldIdx, newIdx);
+  applyEdgeMoveToLists(copyItem, segmentIdx, isCutOut, newIdx);
+
+  regeneratePreviewClip(cbCutPreview->currentIndex());
+
+  if (savedStream && savedStreamIndex >= 0)
+    savedStream->moveToIndexPos(savedStreamIndex);
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Shift the cut point by one frame to avoid the audio burst
+ */
+void TTCutPreview::onBurstShift()
+{
+  const std::optional<TTCutItem> original = originalCutItem(mBurstSegmentIdx);
+  if (!original) return;
+  const TTCutItem copyItem = *original;
+
+  const int oldIdx = mBurstIsCutOut ? copyItem.cutOutIndex() : copyItem.cutInIndex();
+  const int newIdx = mBurstIsCutOut ? oldIdx - 1 : oldIdx + 1;
 
   // A one-frame cut leaves the shift no room: moving either end puts it past
   // the other one, which updateCutEntry refuses - say so instead of letting
@@ -630,32 +764,61 @@ void TTCutPreview::onBurstShift()
     return;
   }
 
-  updateRealCutItem(copyItem, oldIdx, newIdx);
-  applyBurstShiftToLists(copyItem, newIdx);
-
   if (TTSettings::instance()->logUI())
       qDebug() << "Burst shift:" << (mBurstIsCutOut ? "CutOut" : "CutIn")
                << "Frame" << oldIdx << "->" << newIdx
-               << "(original cut" << originalIdx << ")";
+               << "(original cut" << mBurstSegmentIdx / 2 << ")";
 
-  // Show feedback
+  // Show feedback (the re-check at the end of the regeneration replaces it)
   QString label = mBurstIsCutOut ? tr("CutOut updated") : tr("CutIn updated");
   setBurstMessage(tr("\xe2\x9c\x93 %1 (frame %2 \xe2\x86\x92 %3)")
       .arg(label).arg(oldIdx).arg(newIdx), /*resolved=*/true);
   pbBurstShift->hide();
 
-  // Regenerate the current preview clip
-  int iCut = cbCutPreview->currentIndex();
-  regeneratePreviewClip(iCut);
+  moveCutEdge(mBurstSegmentIdx, mBurstIsCutOut, oldIdx, newIdx);
 
-  // Restore the shared videoStream's index to whatever the UI was showing
-  // before the cut got updated — see save above.
-  if (savedStreamForBurst && savedStreamIndexForBurst >= 0)
-    savedStreamForBurst->moveToIndexPos(savedStreamIndexForBurst);
+  // regeneratePreviewClip() re-ran the check; nothing visible means gone.
+  if (!lblBurstWarning->isVisible()) {
+    setBurstMessage(tr("\xe2\x9c\x93 Burst resolved"), /*resolved=*/true);
+    lblBurstWarning->show();
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Regenerate a single preview clip after burst shift
+ * Move the cut edge to the first (last) picture of the cut's majority aspect
+ */
+void TTCutPreview::onAspectJump()
+{
+  const std::optional<TTCutItem> original = originalCutItem(mAspectSegmentIdx);
+  if (mAspectTarget < 0 || !original) return;
+  const TTCutItem copyItem = *original;
+
+  const bool isCutOut = mAspectIsCutOut;
+  const int oldIdx = isCutOut ? copyItem.cutOutIndex() : copyItem.cutInIndex();
+  const int newIdx = mAspectTarget;
+
+  // The target lies inside the cut by construction (it is a picture of the
+  // cut's majority aspect), so the move cannot invert the cut.
+  if (TTSettings::instance()->logUI())
+      qDebug() << "Aspect jump:" << (isCutOut ? "CutOut" : "CutIn")
+               << "Frame" << oldIdx << "->" << newIdx
+               << "(original cut" << mAspectSegmentIdx / 2 << ")";
+
+  pbAspectJump->hide();
+  moveCutEdge(mAspectSegmentIdx, isCutOut, oldIdx, newIdx);
+
+  // regeneratePreviewClip() re-ran the check; nothing visible means solved.
+  if (!lblAspectWarning->isVisible()) {
+    setAspectMessage(tr("\xe2\x9c\x93 %1 moved (frame %2 \xe2\x86\x92 %3)")
+        .arg(isCutOut ? tr("Cut-out") : tr("Cut-in")).arg(oldIdx).arg(newIdx),
+        /*resolved=*/true);
+    lblAspectWarning->show();
+    updateHintRowSpace();
+  }
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ * Regenerate a single preview clip after an edge move
  */
 void TTCutPreview::regeneratePreviewClip(int iCut)
 {
@@ -736,14 +899,12 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));
 
-  // Re-check burst for the current cut
+  // Re-check both edge findings for the current cut. The "resolved"
+  // confirmation belongs to the caller that knows what it moved: after an
+  // aspect jump a "Burst resolved" would claim a burst that never existed.
   checkBurstForCurrentCut(iCut);
-
-  // If no burst detected after shift, show success
-  if (!lblBurstWarning->isVisible()) {
-    setBurstMessage(tr("\xe2\x9c\x93 Burst resolved"), /*resolved=*/true);
-    lblBurstWarning->show();
-  }
+  checkAspectForCurrentCut(iCut);
+  updateHintRowSpace();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

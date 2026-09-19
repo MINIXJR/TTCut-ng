@@ -21,6 +21,7 @@
 #include "../data/ttavlist.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttac3acmod.h"
+#include "../avstream/ttaspectwindow.h"
 
 #include "ttcuttreeview.h"
 
@@ -33,6 +34,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPoint>
+#include <QStringList>
 #include <QStyle>
 
 /*!
@@ -633,31 +635,38 @@ void TTCutTreeView::refreshHintIcons()
 
 /*!
  * updateHintColumn
- * The single entry point for column 5. Two producers, one writer: the burst
- * hint comes first, the AC3 format-change hint is appended, and the cell is
- * written once. The icon is the burst warning if there is a burst, else the
- * information icon if there is a format change, else none. Neither producer
- * touches the widget, so their order is a composition rule here, not a
- * contract they have to know about.
+ * The single entry point for column 5. Three producers, one writer: the
+ * burst hint comes first, then the MPEG-2 aspect hint, then the AC3
+ * format-change hint, and the cell is written once. The icon is the warning
+ * icon if there is a burst or an aspect change, else the information icon if
+ * there is an AC3 format change, else none. No producer touches the widget,
+ * so their order is a composition rule here, not a contract they have to
+ * know about.
  */
 void TTCutTreeView::updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item)
 {
-    const HintCell burst = burstHint(item);
-    const HintCell acmod = acmodHint(item);
+    const HintCell burst  = burstHint(item);
+    const HintCell aspect = aspectHint(item);
+    const HintCell acmod  = acmodHint(item);
 
-    QString text = burst.text;
-    if (!acmod.text.isEmpty())
-        text = text.isEmpty() ? acmod.text : text + " + " + acmod.text;
-    QString tip = burst.tip;
-    if (!acmod.tip.isEmpty())
-        tip = tip.isEmpty() ? acmod.tip : tip + "\n" + acmod.tip;
+    // Text order burst, aspect, acmod; joined as before (" + " / newline), so
+    // a burst+acmod cell reads exactly as it did with two producers.
+    QStringList texts, tips;
+    for (const HintCell* cell : {&burst, &aspect, &acmod}) {
+        if (!cell->text.isEmpty()) texts << cell->text;
+        if (!cell->tip.isEmpty())  tips  << cell->tip;
+    }
+    // A burst and an aspect change both damage the output (a click, a whole
+    // file shown in the wrong shape); an AC3 change is normalised by the cut.
     QIcon icon;
-    if (!burst.text.isEmpty())      icon = style()->standardIcon(QStyle::SP_MessageBoxWarning);
-    else if (!acmod.text.isEmpty()) icon = style()->standardIcon(QStyle::SP_MessageBoxInformation);
+    if (!burst.text.isEmpty() || !aspect.text.isEmpty())
+        icon = style()->standardIcon(QStyle::SP_MessageBoxWarning);
+    else if (!acmod.text.isEmpty())
+        icon = style()->standardIcon(QStyle::SP_MessageBoxInformation);
 
     treeItem->setIcon(5, icon);
-    treeItem->setText(5, text);
-    treeItem->setToolTip(5, tip);
+    treeItem->setText(5, texts.join(" + "));
+    treeItem->setToolTip(5, tips.join("\n"));
 }
 
 /*!
@@ -687,6 +696,53 @@ TTCutTreeView::HintCell TTCutTreeView::burstHint(const TTCutItem& item) const
         if (!cell.tip.isEmpty()) cell.tip += "\n";
         cell.tip += tr("Audio burst at start: %1 dB (context: %2 dB)").arg(bin.burstDb, 0, 'f', 1).arg(bin.contextDb, 0, 'f', 1);
     }
+    return cell;
+}
+
+/*!
+ * aspectHint
+ * MPEG-2 aspect ratio change at the cut boundaries, judged against the
+ * majority aspect of the cut (ttAnalyzeAspectWindow - the preview and the
+ * warning before the cut call the same function). The MKV muxer takes the
+ * aspect of the whole track from the first picture, so a stray 4:3 picture
+ * at the start of a 16:9 cut marks the entire output 4:3. Empty when both
+ * edges carry the majority aspect.
+ */
+TTCutTreeView::HintCell TTCutTreeView::aspectHint(const TTCutItem& item) const
+{
+    HintCell cell;
+    if (!item.avDataItem()) return cell;
+
+    const TTAspectWindowInfo info = ttAnalyzeAspectWindow(
+        item.avDataItem()->videoStream(), item.cutInIndex(), item.cutOutIndex());
+    const bool atIn  = info.cutInTarget  >= 0;
+    const bool atOut = info.cutOutTarget >= 0;
+    if (!atIn && !atOut) return cell;
+
+    if (atIn && atOut)
+        cell.text = tr("Aspect start+end");
+    else if (atIn)
+        cell.text = tr("Aspect start");
+    else
+        cell.text = tr("Aspect end");
+
+    if (atIn)
+        cell.tip = tr("Starts in %1, the cut is %2 from frame %3 (+%4)")
+                       .arg(ttAspectText(info.cutInAspect), ttAspectText(info.mainAspect))
+                       .arg(info.cutInTarget)
+                       .arg(info.cutInTarget - item.cutInIndex());
+    if (atOut) {
+        if (!cell.tip.isEmpty()) cell.tip += "\n";
+        cell.tip += tr("Ends in %1, the cut is %2 up to frame %3 (-%4)")
+                        .arg(ttAspectText(info.cutOutAspect), ttAspectText(info.mainAspect))
+                        .arg(info.cutOutTarget)
+                        .arg(item.cutOutIndex() - info.cutOutTarget);
+    }
+
+    if (TTSettings::instance()->logUI())
+        qDebug() << "aspectHint: cutIn=" << item.cutInIndex() << "cutOut=" << item.cutOutIndex()
+                 << "main=" << info.mainAspect << "inTarget=" << info.cutInTarget
+                 << "outTarget=" << info.cutOutTarget;
     return cell;
 }
 

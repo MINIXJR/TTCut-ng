@@ -88,17 +88,18 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
     int currentCutIndex() const;
     void createActions();
 
-    // Column 5 ("hint"): two producers that only compute, one writer that
+    // Column 5 ("hint"): three producers that only compute, one writer that
     // composes and sets the cell (updateHintColumn).
     struct HintCell { QString text; QString tip; };
     void updateHintColumn(QTreeWidgetItem* treeItem, const TTCutItem& item);
     HintCell burstHint(const TTCutItem& item) const;
+    HintCell aspectHint(const TTCutItem& item) const;
     HintCell acmodHint(const TTCutItem& item) const;
 
   public:
     // Re-evaluate the hint column (column 5) of all entries — call after the
     // burst filter setting changed so the list matches without cut edits.
-    // Covers burst AND AC3 format-change hints.
+    // Covers burst, MPEG-2 aspect and AC3 format-change hints.
     void refreshHintIcons();
 
   private:

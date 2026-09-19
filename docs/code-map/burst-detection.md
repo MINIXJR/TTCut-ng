@@ -6,6 +6,9 @@ sources:
   - extern/ttaudiocutter.h
   - avstream/ttac3acmod.h
   - avstream/ttac3acmod.cpp
+  - avstream/ttaspectwindow.h
+  - avstream/ttaspectwindow.cpp
+  - gui/ttcutpreview.h
   - data/ttavdata.cpp
   - data/ttavdata.h
   - gui/ttcuttreeview.cpp
@@ -17,25 +20,34 @@ sources:
   - common/ttsettings.cpp
 ---
 
-# Burst-Erkennung: Detektor → zwei UI-Konsumenten
+# Burst-Erkennung (+ Seitenverhältnis, acmod): Analyse → Schnittliste, Vorschau, Warndialog
 
 Audio-Burst = Werbe-Knall unmittelbar an einer Schnittgrenze (DVB: Werbung
 startet ~1 Frame vor/nach dem Content-Übergang). Ein Detektor (Schwelle als
 Parameter, kein separater Nachfilter mehr), zwei Anzeigen (Schnittliste +
 Preview-Dialog).
 
-**Spalte 5 der Schnittliste hat zwei Produzenten**: `burstHint` (RMS-Burst,
-libav-Dekodierung) und `acmodHint` (AC3-Formatwechsel, nur In-Memory-Header —
+**Spalte 5 der Schnittliste hat drei Produzenten**: `burstHint` (RMS-Burst,
+libav-Dekodierung), `aspectHint` (MPEG-2-Seitenverhältnis am Schnittrand, siehe
+unten) und `acmodHint` (AC3-Formatwechsel, nur In-Memory-Header —
 teilt sich seit `ada97fd2` die Mehrheits-acmod-Logik mit der Cut-Pipeline über
 `ttAnalyzeAcmodWindow`, `avstream/ttac3acmod.cpp`). Beide sind seit derselben
 Änderung reine Funktionen, die ein `HintCell{text, tip}` zurückgeben, ohne das
 Baum-Widget zu berühren; `updateHintColumn()` — weiterhin der **einzige
-Eingang** — ruft beide, komponiert Text/Tooltip/Icon aus den zwei Rückgaben
+Eingang** — ruft alle drei, komponiert Text/Tooltip/Icon aus den Rückgaben
 und schreibt Spalte 5 **einmal**. Die frühere Append-an-die-Zelle-Gefahr
 (Aufrufreihenfolge zweier Setzer als Vertrag) ist damit entfallen, siehe
-Redundanz-Abschnitt. Beide Helfer sind weiterhin `private` und werden von
-nirgends sonst gerufen. Der acmod-Pfad ist deshalb hier mitkartiert, obwohl
-er kein Burst ist.
+Redundanz-Abschnitt. Die Helfer sind `private` und werden von nirgends sonst
+gerufen. Der acmod- und der Seitenverhältnis-Pfad sind deshalb hier
+mitkartiert, obwohl sie kein Burst sind.
+
+**Seitenverhältnis (nur MPEG-2)** folgt demselben Muster wie der Burst: **eine**
+Analyse, `ttAnalyzeAspectWindow` (`avstream/ttaspectwindow.cpp`), drei
+Konsumenten (Spalte 5, eigene Vorschau-Zeile mit Sprungknopf, gemeinsamer
+Warndialog vor dem Schnitt). Anlass: Der MKV-Muxer übernimmt das
+Seitenverhältnis der ganzen Videospur aus dem ersten Sequence-Header des
+Schnitts; ein einzelnes 4:3-Bild am Anfang eines 16:9-Programms markiert die
+ganze Datei als 4:3 (gemessen 2026-09-19 an `01x03`, Cut-In 23975 statt 23976).
 
 **Die Erkennung ist ein Hinweis, kein Urteil.** Ihre Auflösungsgrenzen sind gemessen
 und stehen unter Pitfalls; eine fehlende Warnung heißt *nicht*, dass der Schnitt
@@ -66,7 +78,13 @@ flowchart TD
     ACMOD["acmodHint<br/>(ttAnalyzeAcmodWindow)"]
     COL5["Spalte 5"]
     PREV["checkBurstForCurrentCut"]
-    FINAL["confirmBurstWarnings"]
+    FINAL["cutWarnings /<br/>confirmCutWarnings"]
+    SEQ["Sequence-Header<br/>(Header-Liste)"]
+    ASPWIN["ttAnalyzeAspectWindow"]
+    AINFO["TTAspectWindowInfo"]
+    ASPECT["aspectHint"]
+    APREV["checkAspectForCurrentCut"]
+    MOVE["moveCutEdge"]
 
     HINT["updateHintColumn"]
     APPEND["onAppendItem /<br/>onUpdateItem"]
@@ -84,15 +102,27 @@ flowchart TD
     RES --> PREV
     RES --> FINAL
     HDR --> ACMOD
+    SEQ -->|"getSequenceHeader(pos)"| ASPWIN
+    ASPWIN --> AINFO
+    AINFO --> ASPECT
+    AINFO --> APREV
+    AINFO --> FINAL
     BURST -->|"HintCell"| HINT
+    ASPECT -->|"HintCell"| HINT
     ACMOD -->|"HintCell"| HINT
     HINT -->|"schreibt einmal"| COL5
 
     APPEND -.-> HINT
     REFRESH -.-> HINT
     HINT -. "1." .-> BURST
-    HINT -. "2." .-> ACMOD
+    HINT -. "2." .-> ASPECT
+    HINT -. "3." .-> ACMOD
     SEL -.-> PREV
+    SEL -.-> APREV
+    PREV -. "Shift-Knopf" .-> MOVE
+    APREV -. "Sprungknopf" .-> MOVE
+    MOVE -. "Neuerzeugung" .-> PREV
+    MOVE -. "Neuerzeugung" .-> APREV
     CUTRUN -.-> FINAL
     NONINT -. "Modus" .-> FINAL
     PROBE -. "umgeht WRAP" .-> DET
@@ -111,14 +141,19 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 | `DET → RES` | `bool present` + `burstRmsDb`/`contextRmsDb` (**nur bei Treffer gesetzt**). Kriterium: **Peak** der zwei Randchunks, `peak − median >= minDeltaDb` **UND** `peak > kBurstAbsoluteFloorDb` (−40 dB, absolutes Hörbarkeits-Gate). Peak statt First-Hit, weil die Anstiegsflanke 38–51 dB pro 32-ms-Frame steigt und der erste überschwellige Chunk sonst rasterabhängig irgendwo darauf landet. **Merke:** Peak vs. First-Hit ändert nur den *angezeigten* `burstRmsDb` (beide Bedingungen monoton in rms ⇒ `present` invariant); der Erkennungs-Fix war die Schwellen-Vereinheitlichung. |
 | `RES → BURST`, `RES → PREV`, `RES → FINAL` | Dasselbe `CutBurstInfo` an alle drei Konsumenten, kein Nachfilter mehr (`a7d1c0e`). Deshalb zeigen Schnittliste, Preview-Dialog und Final-Warndialog **zwangsläufig dieselbe `present`-Entscheidung** — „Icon fehlt" und „Warnung fehlt" haben immer dieselbe Ursache. |
 | `HDR → ACMOD` | `acmodHint` liest `item.avDataItem()->audioStreamAt(0)` und ruft `ttAnalyzeAcmodWindow(stream, cutInSec, cutOutSec)` (`avstream/ttac3acmod.cpp`) — **dieselbe Funktion, die `TTAVData::computeTargetAcmods` für die Cut-Pipeline aufruft** (seit `ada97fd2`, siehe `audio-cut-timing.md`, Kante `ACMOD → CUT`). Arbeitet auf der **In-Memory** `TTAudioHeaderList` (`TTAC3AudioHeader`): kein File-I/O, kein libav — anders als der Burst-Pfad. Fenster `[floor(cutIn/frameDur), floor(cutOut/frameDur) − 1]` in AC3-Frames (frameDur aus dem ersten Header der Liste, Default 32 ms bei 48 kHz); Mehrheit über die ersten und letzten `kAcmodSampleFrames` (100) Frames des Fensters, jeder Frame einmal gezählt — ein kürzeres Fenster wird komplett gesampelt. Nur AC3 (`streamType() == ac3_audio`), sonst leerer `TTAcmodInfo` (`mainAcmod == -1`). |
-| `BURST → HINT`, `ACMOD → HINT` | Beide liefern ein `HintCell{text, tip}` zurück (leere Felder, wenn nichts zu melden ist) — kein Seiteneffekt auf das Widget. |
-| `HINT → COL5` | `updateHintColumn` komponiert **einmal**: `text = burst.text`, ergänzt um `" + " + acmod.text`, falls beide etwas melden (Burst-Text steht immer zuerst); `tip` ebenso mit `"\n"` als Trenner. Icon-Priorität: Burst-Text vorhanden ⇒ Warn-Icon, sonst Acmod-Text vorhanden ⇒ Info-Icon, sonst kein Icon. Schreibt Icon/Text/Tooltip **unbedingt** bei jedem Aufruf — deckt das Leeren der Zelle (auch im Kein-Audio-Ausstieg) ohne eigenen Sonderfall ab. |
+| `SEQ → ASPWIN` | Pro Bild des Fensters `[cutIn, cutOut]` (Anzeige-Positionen, auf den Stream geklemmt) ein Aufruf `TTVideoStream::getSequenceHeader(pos)`: Anzeige-Position → Header-Index des Bildes → rückwärts bis zum Sequence-Header, also **Dekodier-Reihenfolge**. Ein führender B-Frame einer offenen GOP gehört damit zum **neuen** Header, obwohl er vor seinem I-Frame angezeigt wird (gemessen 2026-09-19: Wechsel auf Anzeigebild 22, I-Frame bei 24, deckungsgleich mit `temporal_reference`). Liest nur die Listen, bewegt den Stream-Index nicht. Kosten: 19–23 ms für alle 126 012 Bilder einer 84-min-Aufnahme — deshalb keine Lauflängen-Abkürzung. Nur `mpeg2_demuxed_video` mit Header- und Index-Liste, sonst leeres Ergebnis. |
+| `ASPWIN → AINFO` | `TTAspectWindowInfo{mainAspect, cutInAspect, cutOutAspect, cutInTarget, cutOutTarget}` (MPEG-2-Codes, 2 = 4:3, 3 = 16:9). `mainAspect` = häufigster Wert; **exakter Gleichstand ⇒ `-1`, keine Ziele** (sonst gewänne am Cut-Out der Trailer). Ziel am Cut-In = erstes Bild `>= cutIn` mit `mainAspect`, am Cut-Out = letztes Bild `<= cutOut`, jeweils nur wenn der Rand selbst abweicht; bildgenau, auch wenn es ein B-Frame ist. Keine Abstandsgrenze. |
+| `AINFO → ASPECT`, `AINFO → APREV`, `AINFO → FINAL` | Alle drei rufen dieselbe Funktion — Schnittliste, Vorschau und Warndialog können nicht auseinanderlaufen. `APREV` liest dabei den **Originalschnitt** (`mpOriginalCutList->at(segmentIdx / 2)`), nicht das Vorschau-Stück: die Vorschauliste hält nur die kurzen Stücke um jede Kante (zwei Einträge je Schnitt), deren Mehrheit bedeutungslos wäre. |
+| `BURST → HINT`, `ASPECT → HINT`, `ACMOD → HINT` | Alle liefern ein `HintCell{text, tip}` zurück (leere Felder, wenn nichts zu melden ist) — kein Seiteneffekt auf das Widget. `aspectHint`: `Aspect start` / `Aspect end` / `Aspect start+end`, Tooltip je Rand mit beiden Formaten, Ziel-Frame und Abstand (`(+1)` / `(-2)`). |
+| `HINT → COL5` | `updateHintColumn` komponiert **einmal**: Texte in der Reihenfolge Burst, Seitenverhältnis, acmod, mit `" + "` verbunden; Tooltips ebenso mit `"\n"`. Ein Burst+acmod-Fall liest sich dadurch genau wie vorher mit zwei Produzenten (Gate `hint_column` unverändert grün). Icon: Burst **oder** Seitenverhältnis ⇒ Warn-Icon (beide beschädigen die Ausgabe), sonst acmod ⇒ Info-Icon (der Schnitt normalisiert es), sonst keins. Schreibt Icon/Text/Tooltip **unbedingt** bei jedem Aufruf — deckt das Leeren der Zelle (auch im Kein-Audio-Ausstieg) ohne eigenen Sonderfall ab. |
 | `APPEND -.-> HINT`, `REFRESH -.-> HINT` | Die drei Aufrufstellen (`onAppendItem`, `onUpdateItem`, `refreshHintIcons`) gehen **ausschließlich** über den Helper. `onAppend/onUpdate` bei Anlage/Änderung eines Cuts, inklusive Projekt-Laden (das appended). `refreshHintIcons` wird aus `TTCutMainWindow::openSettingsDialog` gerufen (von `onActionSettings` und dem Audio-Kategorie-Kurzweg aufgerufen) — **seit `9e5511f0` NUR bei „OK"** (`if (settingsDlg->exec() == QDialog::Accepted) { …; cutList->refreshHintIcons(); }`); bei „Abbrechen" laufen weder `TTSettings::save()` noch der Refresh mehr (vorher liefen beide unbedingt, siehe Gate `tools/diag/test_settings_cancel`). Tree-Reihenfolge == CutList-Reihenfolge, Zähl-Guard `qMin`. |
 | `APPEND -.-> HINT`, `REFRESH -.-> HINT` | Die zwei Auslöser derselben Aktualisierung: `onAppendItem`/`onUpdateItem` bauen bzw. ändern eine Zeile und rufen `updateHintColumn` für genau diese, `refreshHintIcons` läuft über alle Zeilen — seit `9e5511f0` nur nach **Annahme** des Einstellungsdialogs, nicht mehr auch nach Abbrechen (Gate `test_settings_cancel`). |
-| `HINT -.-> BURST` (1.), `HINT -.-> ACMOD` (2.) | Aufrufreihenfolge in `updateHintColumn()`: erst `burstHint`, dann `acmodHint` — bestimmt nur noch die Kompositionsreihenfolge (Burst-Text zuerst, Warn-Icon hat Vorrang vor Info-Icon), nicht mehr, ob ein Wert überschrieben wird: beide Rückgaben werden erst am Ende zusammengesetzt (siehe `HINT → COL5`). Beide Callees sind weiterhin `private`. |
-| `SEL -.-> PREV` | Pro **ausgewähltem** Clip: `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Kein globaler Überblick im Dialog. Die Darstellung liegt in einer **eigenen, volle Breite spannenden Grid-Zeile**. Der Shift-Knopf behält seinen Platz auch im versteckten Zustand, damit das Videobild beim Clip-Wechsel nicht springt. |
-| `CUTRUN -.-> FINAL` | `confirmBurstWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Dialog dort doppelt. Bewertet die gesamte `TTCutList` erneut über dieselben Wrapper. |
-| `NONINT -.-> FINAL` | `--auto-cut` (`TTCutMainWindow::runAutoCutMode`, seit `ab3fae4d` in `gui/ttcutmainwindow_headless.cpp` statt `gui/ttcutmainwindow.cpp`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine „proceeding (auto-cut)"-Sammelzeile, und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
+| `HINT -.-> BURST` (1.), `HINT -.-> ASPECT` (2.), `HINT -.-> ACMOD` (3.) | Aufrufreihenfolge in `updateHintColumn()` — bestimmt nur die Kompositionsreihenfolge und die Icon-Priorität, nicht, ob ein Wert überschrieben wird: alle Rückgaben werden erst am Ende zusammengesetzt (siehe `HINT → COL5`). Alle Callees sind `private`. |
+| `SEL -.-> PREV`, `SEL -.-> APREV` | Pro **ausgewähltem** Clip (`onCutSelectionChanged`, beide Prüfungen, danach `updateHintRowSpace`): `iCut == 0` ⇒ nur CutIn von Schnitt 1; sonst CutOut von Schnitt `iCut` (Priorität, `return`), danach CutIn von Schnitt `iCut+1`. Ein Fund je Übergang und Art. Kein globaler Überblick im Dialog. Burst in Grid-Zeile 2, Seitenverhältnis in Grid-Zeile 3, beide volle Breite. Der Burst-Knopf behält seinen Platz auch versteckt (seit `8ecf4cb0`, damit das Videobild beim Clip-Wechsel nicht springt) — **außer** solange die Seitenverhältnis-Zeile sichtbar ist: `updateHintRowSpace()` gibt die leere Burst-Zeile dann frei, die Meldung rückt an ihren Platz (Sichttest 2026-09-19 fand sie sonst unter einer Leerzeile). Zwei Zeilen nur bei Burst **und** Formatwechsel am selben Übergang. |
+| `PREV -.-> MOVE`, `APREV -.-> MOVE` | `onBurstShift` (±1 Frame, mit `wouldInvert`-Prüfung) und `onAspectJump` (auf `mAspectTarget`; liegt per Konstruktion im Schnitt) rufen beide `moveCutEdge(segmentIdx, isCutOut, oldIdx, newIdx)`: sichert den Index des **geteilten** videoStream, `updateRealCutItem` (echtes Modell via `updateCutEntry`, Suche über die Position), `applyEdgeMoveToLists` (Kopie der Originalliste + Vorschau-Eintrag), `regeneratePreviewClip`, Index zurück. |
+| `MOVE -.-> PREV`, `MOVE -.-> APREV` | `regeneratePreviewClip` ruft am Ende **beide** Prüfungen und `updateHintRowSpace` — ein verschobener Rand kann auch den Burst-Befund ändern. Die grüne Bestätigung gehört dem Aufrufer: „✓ Burst resolved" steht in `onBurstShift` (stand bis 2026-09-19 in `regeneratePreviewClip` und hätte nach einem Formatsprung einen nie vorhandenen Burst für behoben erklärt), „✓ Cut-in/Cut-out moved" in `onAspectJump`. |
+| `CUTRUN -.-> FINAL` | `confirmCutWarnings()` hängt an **beiden** Cut-Pfaden in `TTAVData` (audio-only und Normalpfad); vor `27f8f29` existierte der Burst-Dialog dort doppelt. Sammelt über die reine Funktion `cutWarnings()` Burst- und Seitenverhältnis-Zeilen für die gesamte `TTCutList` (ein Dialog „Cut Warnings"). Der Burst-Teil prüft **je Schnitt**, ob dessen Item Audio hat; der Seitenverhältnis-Teil braucht kein Audio (bis 2026-09-19 stieg die Funktion für die ganze Liste aus, wenn der **erste** Schnitt kein Audio hatte). |
+| `NONINT -.-> FINAL` | `--auto-cut` (`TTCutMainWindow::runAutoCutMode`, seit `ab3fae4d` in `gui/ttcutmainwindow_headless.cpp` statt `gui/ttcutmainwindow.cpp`) setzt `mNonInteractive = true` (`27f8f29`). Dann wird jede verbleibende Warnung via `TTMessageLogger::warningMsg` geloggt, plus eine Sammelzeile „N cut warning(s) - proceeding (auto-cut)" (Gate `aspect_autocut` sucht beide in `$XDG_CACHE_HOME/ttcut-ng/logfile.log`), und der Schnitt läuft weiter (Semantik = „Cut anyway"). GUI-Pfad (`false`) zeigt den modalen Dialog, „Cancel" bricht ab. Verhindert Hängen im Headless-Betrieb. |
 | `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `TTAudioCutter::detectBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `TTAudioCutter::detectBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
 
 ## Annahmen & Verträge
@@ -140,14 +175,15 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   `contextRmsDb` gegen eigene Messungen aber zu beachten.
 - Spalte 5 wird nur über `updateHintColumn()` geschrieben, und zwar **unbedingt**
   bei jedem Aufruf (Icon/Text/Tooltip) — unabhängig davon, ob `burstHint`/
-  `acmodHint` etwas melden. Ein eigener „leeren"-Sonderfall für den
+  `aspectHint`/`acmodHint` etwas melden. Ein eigener „leeren"-Sonderfall für den
   Kein-Audio-Ausstieg entfällt damit; das unbedingte Schreiben deckt ihn ab.
 - `refreshHintIcons()` läuft seit `9e5511f0` nur noch, wenn der Einstellungs-
   dialog mit „OK" verlassen wurde (`TTCutMainWindow::openSettingsDialog`);
   ein „Abbrechen" ändert weder `TTSettings` noch Spalte 5.
 - Preview-Dialog und Schnittliste zeigen IMMER dieselbe `present`-Entscheidung
   (gemeinsame Wrapper) — Diskrepanzen zwischen beiden UIs sind ausgeschlossen;
-  „Icon fehlt" und „Warnung fehlt" haben zwangsläufig dieselbe Ursache.
+  „Icon fehlt" und „Warnung fehlt" haben zwangsläufig dieselbe Ursache. Dasselbe
+  gilt für das Seitenverhältnis (eine Funktion, `ttAnalyzeAspectWindow`).
 
 ## Pitfalls
 
@@ -185,6 +221,18 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
    Verschiebung das Cut-Ende über das Cut-In (oder umgekehrt) hinaus schieben
    würde (`wouldInvert`), und bricht mit einer Meldung „The cut is only one
    frame long …" ab, statt den Knopf wirkungslos erscheinen zu lassen.
+9. **Die MKV-Spur übernimmt das Seitenverhältnis des ersten Bildes.**
+   `TTMkvMergeProvider::setupVideoInput()` kopiert die von libav ermittelte SAR
+   des Schnitt-ES in die Spur. Deshalb ist der Seitenverhältnis-Hinweis am
+   Cut-In von Schnitt 1 der mit dem größten Schaden; ein Mehrheits-SAR im Muxer
+   für absichtlich gemischte Ausgabe ist bewusst nicht Teil dieser Änderung.
+10. **Die Vorschauliste enthält Stücke, keine Schnitte.** Wer in `TTCutPreview`
+   etwas über einen ganzen Schnitt wissen will (Mehrheit, Länge), muss
+   `mpOriginalCutList->at(segmentIdx / 2)` lesen (`originalCutItem`).
+11. **clangd stürzt an Harnessen mit `ttavdata.h` ab** — `test_aspect_hint.cpp`
+   eingeschlossen. `.clangd` sperrt nur den Hintergrund-Index; das Parsen nach
+   dem Schreiben einer solchen Datei hinterlässt trotzdem einen Core-Dump im
+   Wurzelverzeichnis (2026-09-19: 3 GB).
 
 ## Redundanz / Konsolidierungskandidaten
 
@@ -198,7 +246,21 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   (TreeView-Icon, Preview-Label, Final-Warndialog) über denselben zwei
   Wrappern — bei Filter-Änderungen alle drei Pfade gegentesten.
 - `configureBurstShiftButton(isCutOut)` besitzt Beschriftung, Icon und Tooltip
-  des Shift-Knopfs im Preview-Dialog als einzige Stelle.
+  des Shift-Knopfs im Preview-Dialog als einzige Stelle; der Sprungknopf wird in
+  `checkAspectForCurrentCut` beschriftet (Ziel-Frame ändert sich je Fund).
+- **Rand-Verschiebung in der Vorschau**
+  - sites: `onBurstShift`, `onAspectJump`
+  - shared purpose: einen Schnittrand in Modell und Vorschaulisten verschieben,
+    Clip neu erzeugen, geteilten videoStream-Index wiederherstellen
+  - status: done 2026-09-19 — gemeinsam in `moveCutEdge`; `updateRealCutItem`
+    und `applyEdgeMoveToLists` (vormals `applyBurstShiftToLists`) nehmen Rand und
+    Position als Parameter statt `mBurstIsCutOut`/`mBurstSegmentIdx` zu lesen.
+- **Seitenverhältnis-Text doppelt**
+  - sites: `ttAspectText()` (`avstream/ttaspectwindow.cpp`),
+    Ternär-Ketten in `TTStreamPointVideoWorker::detectAspectChanges()`
+    (`data/ttstreampoint_videoworker.cpp`)
+  - shared purpose: MPEG-2-`aspect_ratio_information` → „4:3"/„16:9"
+  - status: open — Kandidat, nicht Teil der Seitenverhältnis-Änderung.
 - **Append-Semantik über das Widget**
   - sites: `TTCutTreeView::updateBurstIcon` / `updateAcmodIcon` (vor `ada97fd2`)
   - shared purpose: zwei Produzenten schreiben nacheinander in dieselbe Zelle
@@ -224,6 +286,6 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
     als Referenz, keine Abweichung), `gate_cut_identity.sh` (fünf Fixtures identisch),
     `test_hint_column` (neu: Hinweis-Spalte „AC3 start/end/start+end", Tooltip nennt
     beide Modi).
-- Der Final-Warndialog liegt einfach in `confirmBurstWarnings()`, mit
-  GUI/headless-Verzweigung über `mNonInteractive`. Verbleibendes Duplikat
-  sind allein die zwei Detektor-Wrapper.
+- Der Final-Warndialog liegt einfach in `confirmCutWarnings()` (Sammeln in der
+  reinen Funktion `cutWarnings()`), mit GUI/headless-Verzweigung über
+  `mNonInteractive`. Verbleibendes Duplikat sind allein die zwei Detektor-Wrapper.

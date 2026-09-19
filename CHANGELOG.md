@@ -2,6 +2,24 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Added
+- **MPEG-2: aspect ratio changes at cut edges are flagged and can be fixed
+  frame-exactly.** A cut that starts on the last 4:3 picture before a 16:9
+  programme produced an MKV whose whole video track was marked 4:3 - the
+  muxer takes the display aspect from the first sequence header, so the
+  programme played squeezed. The cut list shows `Aspect start` /
+  `Aspect end` with the change frame and the distance, the warning before
+  the cut lists it next to audio bursts, and the preview offers a button
+  that moves the edge to the first (last) picture of the cut's majority
+  aspect. Gates: `aspect_window`, `aspect_hint`, `aspect_autocut`.
+
+### Changed
+- **The audio-burst dialog before the cut is now one "Cut Warnings" dialog**
+  for bursts and aspect changes. Its burst part is checked per cut; before,
+  a first cut without audio skipped the burst check for the whole list.
+
 ## v0.84.0 (2026-09-14)
 
 **Cut ranges are validated, six audit runs, three new code maps**
