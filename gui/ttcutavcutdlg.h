@@ -40,6 +40,11 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
     // Strips only extensions this dialog itself attaches; public for the
     // test_output_name diag harness.
     static QString stripKnownExtension(const QString& fileName);
+    // Final container / intermediate ES extension for a container code (and
+    // codec). Public so --auto-cut (runAutoCutMode) translates its output
+    // path exactly the way getCommonData() translates the output field.
+    static QString expectedContainerExtension(int container);
+    static QString expectedEsExtension(int container, int codec);
 
   protected slots:
     void onDlgStart();
@@ -60,8 +65,6 @@ class TTCutAVCutDlg : public QDialog, Ui::TTCutAVCutDlg
     void populateMuxTarget();
     void updateMuxerVisibility();
     void updateFreeSpaceLine();
-    static QString expectedContainerExtension(int container);
-    static QString expectedEsExtension(int container, int codec);
 
   private:
     TTMessageLogger* log;

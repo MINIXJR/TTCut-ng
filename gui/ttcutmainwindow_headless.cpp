@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QThreadPool>
 #include "ttcutmainwindow.h"
+#include "ttcutavcutdlg.h"
 #include "ttquickjumpdialog.h"
 #include "ttstreampointwidget.h"
 #include "ttaudiorepairdialog.h"
@@ -98,20 +99,40 @@ void TTCutMainWindow::runAutoCutMode(const QString& projectFile, const QString& 
   return;
   }
 
-  QFileInfo outFI(outputPath);
-  TTSettings::instance()->setCutDirPath(outFI.absolutePath());
-  TTSettings::instance()->setCutVideoName(outFI.completeBaseName());
-
+  TTSettings* settings = TTSettings::instance();
   if (mpCurrentAVDataItem && mpCurrentAVDataItem->videoStream()) {
-  TTSettings::instance()->setEncoderCodec(
+  settings->setEncoderCodec(
     TTAVTypes::encoderCodecFor(mpCurrentAVDataItem->videoStream()->streamType()));
   }
 
-  if (TTSettings::instance()->logUI())
-    qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath;
+  // The requested path decides container and place, the way the cut dialog's
+  // getCommonData() turns its output field into pipeline settings. Without
+  // this the run fell back to the codec's default muxer (mplex for MPEG-2),
+  // wrote the intermediate ES without an extension and put the .mpg into
+  // muxOutputPath() - the home directory unless the dialog's directory
+  // button had ever been used. Set after setEncoderCodec(), which resets
+  // the working container to the codec default.
+  QFileInfo outFI(outputPath);
+  const QString ext = outFI.suffix().toLower();
+  const int container = (ext == QLatin1String("mkv")) ? 1
+                      : (ext == QLatin1String("mpg")) ? 0 : -1;
+  if (container < 0 || (container == 0 && settings->encoderCodec() != 0)) {
+    qWarning() << "Auto-cut: output must end in .mkv (or .mpg for MPEG-2):" << outputPath;
+    QApplication::exit(1);
+    return;
+  }
+  settings->setWorkingOutputContainer(container);
+  settings->setCutDirPath(outFI.absolutePath());
+  settings->setMuxOutputPath(outFI.absolutePath());
+  settings->setCutVideoName(TTCutAVCutDlg::stripKnownExtension(outFI.fileName()) + "."
+      + TTCutAVCutDlg::expectedEsExtension(container, settings->encoderCodec()));
+
+  if (settings->logUI())
+    qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath
+             << "container" << container << "ES" << settings->cutVideoName();
 
   connect(mpAVData, &TTAVData::cutFinished, &QApplication::quit);
-  mpAVData->onDoCut(QFileInfo(QDir(outFI.absolutePath()), outFI.completeBaseName()).absoluteFilePath(),
+  mpAVData->onDoCut(QFileInfo(QDir(settings->cutDirPath()), settings->cutVideoName()).absoluteFilePath(),
           cutData, false);
 }
 

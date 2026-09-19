@@ -15,6 +15,17 @@ All notable changes to TTCut-ng are documented in this file.
   that moves the edge to the first (last) picture of the cut's majority
   aspect. Gates: `aspect_window`, `aspect_hint`, `aspect_autocut`.
 
+### Fixed
+- **`--auto-cut` ignored the requested output path.** It passed only the
+  base name on, so the codec's default muxer ran (mplex for MPEG-2 on a
+  fresh configuration), the intermediate stream had no extension and the
+  `.mpg` went to the home directory. The extension of the path now picks
+  the container (`.mkv`, or `.mpg` for MPEG-2) and the result lands where
+  it was asked for; H.264/H.265 output is packet-identical to before
+  (`gate_cut_identity.sh`). The gate runner also gives every gate its own
+  `HOME`, so harnesses that mux with mplex no longer write into the real
+  home directory.
+
 ### Changed
 - **The audio-burst dialog before the cut is now one "Cut Warnings" dialog**
   for bursts and aspect changes. Its burst part is checked per cut; before,

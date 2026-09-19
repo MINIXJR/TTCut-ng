@@ -366,7 +366,14 @@ PRJ
     || { echo "FAIL: no aspect warning in $log"; exit 1; }
   grep -F "cut warning(s) - proceeding (auto-cut)" "$log" \
     || { echo "FAIL: no auto-cut summary line in $log"; exit 1; }
-  echo "PASS: aspect warning logged, run terminated"; }
+  # The requested output decides container and place: aspect.mkv must be an
+  # MKV right there, the intermediate ES must carry its extension, and
+  # nothing may land in HOME (the mplex default directory).
+  local fmt; fmt=$(ffprobe -v error -show_entries format=format_name -of default=nw=1:nk=1 "$W/out/aspect.mkv" 2>/dev/null)
+  [ "${fmt%%,*}" = matroska ] || { echo "FAIL: out/aspect.mkv is not an MKV (format '$fmt')"; ls -la "$W/out"; exit 1; }
+  [ ! -e "$W/out/aspect" ] || { echo "FAIL: intermediate ES written without extension"; exit 1; }
+  [ -z "$(ls -A "$HOME")" ] || { echo "FAIL: files written to HOME:"; ls -la "$HOME"; exit 1; }
+  echo "PASS: aspect warning logged, aspect.mkv written, HOME untouched"; }
 gate_audiocutter_paths() { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_audiocutter_paths" "$W/mixed.ac3" "$W/out"; }
 # A subtitle path with a comma, a space and an umlaut (reference_mpv_loadfile_comma).
 gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp "$SRT" "$W/kömma, tést/a,b_deu.srt"
@@ -487,9 +494,12 @@ pass=0; fail=0; skip=0
 printf '%-8s %-24s %8s\n' VERDICT GATE TIME
 while read -r name tier secs targets; do
   selected "$name" "$tier" || continue
-  W="$RUN/work/$name"; mkdir -p "$W/xdg-config" "$W/xdg-cache"
+  W="$RUN/work/$name"; mkdir -p "$W/xdg-config" "$W/xdg-cache" "$W/home"
   t0=$(date +%s.%N)
-  W="$W" QT_QPA_PLATFORM=offscreen XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
+  # HOME too: TTSettings defaults the mplex output directory (and the last
+  # directory) to QDir::homePath(), so harnesses that drive TTAVData without
+  # setting it wrote their .mpg into the real home directory on every run.
+  W="$W" QT_QPA_PLATFORM=offscreen HOME="$W/home" XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
     "${runner[@]}" timeout -k 10 "$secs" "$0" --exec "$name" < /dev/null > "$RUN/$name.log" 2>&1
   rc=$?
   dt=$(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
