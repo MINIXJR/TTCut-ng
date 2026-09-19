@@ -18,6 +18,7 @@
 #include "../common/ttsettings.h"
 #include "ttcutpreview.h"
 #include "../avstream/ttaspectwindow.h"
+#include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavstream.h"
 #include "../data/ttavdata.h"
 #include "../data/ttavlist.h"
@@ -597,14 +598,14 @@ void TTCutPreview::checkAspectForCurrentCut(int iCut)
     if (isCutOut) {
       setAspectMessage(tr("\xe2\x9a\xa0 Cut %1 ends in %2 - the cut is %3 up to frame %4 (-%5)")
           .arg(cutNumber)
-          .arg(ttAspectText(info.cutOutAspect), ttAspectText(info.mainAspect))
+          .arg(TTSequenceHeader::aspectText(info.cutOutAspect), TTSequenceHeader::aspectText(info.mainAspect))
           .arg(target).arg(cut.cutOutIndex() - target), /*resolved=*/false);
       pbAspectJump->setIcon(ttThemedIcon("go-previous", QStyle::SP_ArrowBack));
       pbAspectJump->setToolTip(tr("Move the cut-out to frame %1").arg(target));
     } else {
       setAspectMessage(tr("\xe2\x9a\xa0 Cut %1 starts in %2 - the cut is %3 from frame %4 (+%5)")
           .arg(cutNumber)
-          .arg(ttAspectText(info.cutInAspect), ttAspectText(info.mainAspect))
+          .arg(TTSequenceHeader::aspectText(info.cutInAspect), TTSequenceHeader::aspectText(info.mainAspect))
           .arg(target).arg(target - cut.cutInIndex()), /*resolved=*/false);
       pbAspectJump->setIcon(ttThemedIcon("go-next", QStyle::SP_ArrowForward));
       pbAspectJump->setToolTip(tr("Move the cut-in to frame %1").arg(target));

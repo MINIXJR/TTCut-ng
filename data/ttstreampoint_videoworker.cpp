@@ -146,12 +146,8 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
       int aspect = seqHdr->aspectRatio();
 
       if (prevAspect >= 0 && aspect != prevAspect) {
-        QString prevStr = (prevAspect == 2) ? "4:3" :
-                          (prevAspect == 3) ? "16:9" :
-                          QString::number(prevAspect);
-        QString newStr  = (aspect == 2) ? "4:3" :
-                          (aspect == 3) ? "16:9" :
-                          QString::number(aspect);
+        const QString prevStr = TTSequenceHeader::aspectText(prevAspect);
+        const QString newStr  = TTSequenceHeader::aspectText(aspect);
 
         // The bitstream counter is only the fallback for the (impossible)
         // case that the picture following the header is missing from the
@@ -197,10 +193,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
       : tr("Aspect ratio: %1 sequence headers, %2 pictures")
             .arg(sequenceHeaders).arg(pictureCount);
   if (results.isEmpty() && prevAspect >= 0) {
-    const QString aspectStr = (prevAspect == 2) ? QString("4:3")
-                            : (prevAspect == 3) ? QString("16:9")
-                                                : QString::number(prevAspect);
-    summary += tr(" - aspect constant %1, no changes").arg(aspectStr);
+    summary += tr(" - aspect constant %1, no changes").arg(TTSequenceHeader::aspectText(prevAspect));
   } else if (results.isEmpty()) {
     summary += tr(" - no sequence header with aspect information");
   } else {

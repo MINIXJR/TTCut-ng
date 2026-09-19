@@ -19,8 +19,6 @@
 #ifndef TTASPECTWINDOW_H
 #define TTASPECTWINDOW_H
 
-#include <QString>
-
 class TTVideoStream;
 
 // Aspect values are MPEG-2 aspect_ratio_information codes (2 = 4:3, 3 = 16:9).
@@ -40,9 +38,5 @@ struct TTAspectWindowInfo
 //! defaults for a non-MPEG-2 stream, missing lists or an empty window; an
 //! exact tie between two aspects leaves mainAspect and both targets at -1.
 TTAspectWindowInfo ttAnalyzeAspectWindow(TTVideoStream* stream, int cutIn, int cutOut);
-
-//! "4:3", "16:9", ... for an aspect_ratio_information code; the number for
-//! codes outside 1..4.
-QString ttAspectText(int aspect);
 
 #endif // TTASPECTWINDOW_H

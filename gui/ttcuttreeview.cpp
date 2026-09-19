@@ -22,6 +22,7 @@
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttac3acmod.h"
 #include "../avstream/ttaspectwindow.h"
+#include "../avstream/ttmpeg2videoheader.h"
 
 #include "ttcuttreeview.h"
 
@@ -728,13 +729,13 @@ TTCutTreeView::HintCell TTCutTreeView::aspectHint(const TTCutItem& item) const
 
     if (atIn)
         cell.tip = tr("Starts in %1, the cut is %2 from frame %3 (+%4)")
-                       .arg(ttAspectText(info.cutInAspect), ttAspectText(info.mainAspect))
+                       .arg(TTSequenceHeader::aspectText(info.cutInAspect), TTSequenceHeader::aspectText(info.mainAspect))
                        .arg(info.cutInTarget)
                        .arg(info.cutInTarget - item.cutInIndex());
     if (atOut) {
         if (!cell.tip.isEmpty()) cell.tip += "\n";
         cell.tip += tr("Ends in %1, the cut is %2 up to frame %3 (-%4)")
-                        .arg(ttAspectText(info.cutOutAspect), ttAspectText(info.mainAspect))
+                        .arg(TTSequenceHeader::aspectText(info.cutOutAspect), TTSequenceHeader::aspectText(info.mainAspect))
                         .arg(info.cutOutTarget)
                         .arg(item.cutOutIndex() - info.cutOutTarget);
     }

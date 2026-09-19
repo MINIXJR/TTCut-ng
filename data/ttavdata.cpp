@@ -22,6 +22,7 @@
 
 #include "../avstream/ttac3acmod.h"
 #include "../avstream/ttaspectwindow.h"
+#include "../avstream/ttmpeg2videoheader.h"
 #include "ttaudiolist.h"
 #include "ttcutlist.h"
 #include "ttindexcluster.h"
@@ -1478,12 +1479,12 @@ QStringList TTAVData::cutWarnings(TTCutList* cutList) const
     if (aspect.cutInTarget >= 0)
       warnings << tr("Cut %1: starts in %2, the cut is %3 from frame %4")
                       .arg(i + 1)
-                      .arg(ttAspectText(aspect.cutInAspect), ttAspectText(aspect.mainAspect))
+                      .arg(TTSequenceHeader::aspectText(aspect.cutInAspect), TTSequenceHeader::aspectText(aspect.mainAspect))
                       .arg(aspect.cutInTarget);
     if (aspect.cutOutTarget >= 0)
       warnings << tr("Cut %1: ends in %2, the cut is %3 up to frame %4")
                       .arg(i + 1)
-                      .arg(ttAspectText(aspect.cutOutAspect), ttAspectText(aspect.mainAspect))
+                      .arg(TTSequenceHeader::aspectText(aspect.cutOutAspect), TTSequenceHeader::aspectText(aspect.mainAspect))
                       .arg(aspect.cutOutTarget);
   }
   return warnings;

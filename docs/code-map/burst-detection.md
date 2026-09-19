@@ -255,12 +255,15 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   - status: done 2026-09-19 — gemeinsam in `moveCutEdge`; `updateRealCutItem`
     und `applyEdgeMoveToLists` (vormals `applyBurstShiftToLists`) nehmen Rand und
     Position als Parameter statt `mBurstIsCutOut`/`mBurstSegmentIdx` zu lesen.
-- **Seitenverhältnis-Text doppelt**
-  - sites: `ttAspectText()` (`avstream/ttaspectwindow.cpp`),
-    Ternär-Ketten in `TTStreamPointVideoWorker::detectAspectChanges()`
-    (`data/ttstreampoint_videoworker.cpp`)
+- **Seitenverhältnis-Text dreifach**
+  - sites: (ehemals) `ttAspectText()` (`avstream/ttaspectwindow.cpp`),
+    Ternär-Ketten in `TTStreamPointVideoWorker::detectAspectChanges()`,
+    `TTSequenceHeader::aspectRatioText()`
   - shared purpose: MPEG-2-`aspect_ratio_information` → „4:3"/„16:9"
-  - status: open — Kandidat, nicht Teil der Seitenverhältnis-Änderung.
+  - status: done 2026-09-19 — eine Tabelle, `static TTSequenceHeader::aspectText(int)`
+    (`avstream/ttmpeg2videoheader.cpp`, unterste Ebene: Harnesse, die nur den
+    Header-Parser linken, brauchen nichts weiter). `aspectRatioText()`, der Worker
+    und die drei Seitenverhältnis-Konsumenten rufen sie.
 - **Append-Semantik über das Widget**
   - sites: `TTCutTreeView::updateBurstIcon` / `updateAcmodIcon` (vor `ada97fd2`)
   - shared purpose: zwei Produzenten schreiben nacheinander in dieselbe Zelle

@@ -67,14 +67,3 @@ TTAspectWindowInfo ttAnalyzeAspectWindow(TTVideoStream* stream, int cutIn, int c
   }
   return info;
 }
-
-QString ttAspectText(int aspect)
-{
-  switch (aspect) {
-    case 1: return QStringLiteral("1:1");
-    case 2: return QStringLiteral("4:3");
-    case 3: return QStringLiteral("16:9");
-    case 4: return QStringLiteral("2.21:1");
-    default: return QString::number(aspect);
-  }
-}

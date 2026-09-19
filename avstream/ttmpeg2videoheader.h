@@ -95,6 +95,9 @@ class TTSequenceHeader : public TTMpeg2VideoHeader
   int     verticalSize();
   int     aspectRatio();
   QString aspectRatioText();
+  //! "4:3", "16:9", ... for an aspect_ratio_information code; the number for
+  //! codes outside 1..4. The one table for every place that shows an aspect.
+  static QString aspectText(int aspectRatioInformation);
   float   frameRateValue();
   float   bitRateKbit();
   int     vbvBufferSize();

@@ -193,14 +193,18 @@ int TTSequenceHeader::aspectRatio()
  */
 QString TTSequenceHeader::aspectRatioText()
 {
-  QString szTemp;
+  return aspectText(aspect_ratio_information);
+}
 
-  if ( aspect_ratio_information == 1 ) szTemp = "1:1";
-  if ( aspect_ratio_information == 2 ) szTemp = "4:3";
-  if ( aspect_ratio_information == 3 ) szTemp = "16:9";
-  if ( aspect_ratio_information == 4 ) szTemp = "2.21:1";
-
-  return szTemp;
+QString TTSequenceHeader::aspectText(int aspectRatioInformation)
+{
+  switch (aspectRatioInformation) {
+    case 1: return QStringLiteral("1:1");
+    case 2: return QStringLiteral("4:3");
+    case 3: return QStringLiteral("16:9");
+    case 4: return QStringLiteral("2.21:1");
+    default: return QString::number(aspectRatioInformation);
+  }
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
