@@ -16,6 +16,13 @@ All notable changes to TTCut-ng are documented in this file.
   aspect. Gates: `aspect_window`, `aspect_hint`, `aspect_autocut`.
 
 ### Fixed
+- **ttcut-demux: no subtitle SRT when ccextractor crashes on the stream.**
+  ccextractor 0.96.6 segfaults on some DVB subtitle streams, and the run
+  then kept the bitmap track only. The OCR stage now retries from a
+  subtitle stream re-encoded with ffmpeg's dvbsub encoder when the direct
+  run fails; recordings whose direct run works are untouched. The glyph
+  repair reads the same file as the OCR, so both ccextractor clocks stay
+  together.
 - **`--auto-cut` ignored the requested output path.** It passed only the
   base name on, so the codec's default muxer ran (mplex for MPEG-2 on a
   fresh configuration), the intermediate stream had no extension and the

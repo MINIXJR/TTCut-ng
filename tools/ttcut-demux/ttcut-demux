@@ -2732,7 +2732,69 @@ with open('$OUTPUT_VIDEO','rb') as f:
                         set +e
                         ccextractor -in=ts -codec dvbsub --ocrlang deu --oem 1 --ignoreptsjumps \
                             -delay "$DELAY_MS" -o "$OCR_SRT" "$SUBS_TS" >/dev/null 2>&1
+                        OCR_RC=$?
                         set -e
+                        # The stream ccextractor actually read - the glyph dump
+                        # below must use the SAME file, or the two ccextractor
+                        # clocks drift apart (see the comment there).
+                        OCR_TS="$SUBS_TS"
+
+                        # ccextractor 0.96.6 segfaults on some DVB subtitle
+                        # streams. Measured 2026-09-20 on "The Silent Hour"
+                        # (Sat.1 HD, rc=139 after 300 s of material, SRT empty);
+                        # the same crash on ZDF HD recordings was measured
+                        # 2026-09-02 outside this project, where re-encoding the
+                        # stream with ffmpeg's dvbsub encoder produced a stream
+                        # it decodes fine. Detour only on failure: recordings
+                        # whose direct run works keep the proven path.
+                        # The encoder keeps its default depth of 4 bit (16
+                        # colours): -min_bpp 8 was tried to preserve a larger
+                        # palette and makes ccextractor fail outright (measured
+                        # 2026-09-20: rc=10 and no captions, while the same
+                        # stream at 4 bit gives rc=0 and a full SRT). 4 bit is
+                        # also the usual depth of broadcast DVB subtitles.
+                        # Whether a colour palette survives the detour unchanged
+                        # is UNVERIFIED: no recording with coloured subtitles was
+                        # available to measure it, and ffmpeg cannot build one
+                        # from a text SRT (no text -> dvbsub encoder). The
+                        # alternative here is no SRT at all.
+                        if [ "$OCR_RC" -ne 0 ] || [ ! -s "$OCR_SRT" ]; then
+                            warn "  OCR failed (ccextractor exit $OCR_RC) - retrying with a re-encoded subtitle stream"
+                            SUBS_TS_RE="$OUTDIR/.subs_reenc_${idx}.ts"
+                            SUBS_REENC_LOG="$OUTDIR/.subs_reenc_${idx}.log"
+                            _CLEANUP_FILES+=("$SUBS_TS_RE" "$SUBS_REENC_LOG")
+                            # Re-encode from the SOURCE, not from $SUBS_TS:
+                            # measured 2026-09-20 that re-encoding the
+                            # subtitle-only TS yields a degenerate stream
+                            # (37 KB instead of 5 MB, renders nothing, no
+                            # captions), while the same re-encode straight from
+                            # the recording decodes fine. Same rebasing as the
+                            # stream-copy extraction above, so both outputs sit
+                            # on the ES timeline.
+                            ffmpeg -y -v warning "${SUBS_INPUT_ARGS[@]}" \
+                                -copyts -output_ts_offset "-${ORIG_VIDEO_PTS:-0}" \
+                                -muxdelay 0 -avoid_negative_ts disabled \
+                                -map "0:$idx" -c:s dvbsub \
+                                -f mpegts "$SUBS_TS_RE" > "$SUBS_REENC_LOG" 2>&1 || true
+                            warn_ffmpeg_log "$SUBS_REENC_LOG" "  "
+                            if [ -s "$SUBS_TS_RE" ]; then
+                                # Same rule as above: the delay comes from the
+                                # first packet of the file handed to ccextractor.
+                                SUB_PTS0=$(_probe_first_packet_pts "" "$SUBS_TS_RE" "%+#1")
+                                DELAY_MS=$(awk "BEGIN{printf \"%.0f\", ${SUB_PTS0:-0}*1000}")
+                                set +e
+                                ccextractor -in=ts -codec dvbsub --ocrlang deu --oem 1 --ignoreptsjumps \
+                                    -delay "$DELAY_MS" -o "$OCR_SRT" "$SUBS_TS_RE" >/dev/null 2>&1
+                                OCR_RC=$?
+                                set -e
+                                if [ -s "$OCR_SRT" ]; then
+                                    OCR_TS="$SUBS_TS_RE"
+                                    info "  OCR via re-encoded stream succeeded (delay ${DELAY_MS} ms)"
+                                fi
+                            else
+                                warn "  Re-encoding the subtitle stream produced nothing"
+                            fi
+                        fi
                         if [ -s "$OCR_SRT" ]; then
                             # Invalid UTF-8 bytes make players fall back to
                             # Latin-1 (Ts2MKV lesson); SubRip wants CRLF line
@@ -2784,7 +2846,7 @@ with open('$OUTPUT_VIDEO','rb') as f:
                                 # pointing at cue.d/). Run from inside the dir
                                 # with a dot-free relative name to be immune to
                                 # dots anywhere in the output path.
-                                SUBS_TS_ABS=$(realpath "$SUBS_TS")
+                                SUBS_TS_ABS=$(realpath "$OCR_TS")
                                 set +e
                                 ( cd "$SPU_DIR" && ccextractor -in=ts -codec dvbsub \
                                     --no-spupngocr --out=spupng \
