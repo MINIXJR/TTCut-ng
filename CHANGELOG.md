@@ -2,7 +2,9 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
-## Unreleased
+## v0.85.0 (2026-09-22)
+
+**Aspect changes at cut edges, a pinnable playback layout, preview audio through the cut's own chain**
 
 ### Added
 - **Playback: the audio channel layout can be pinned.** An AC3 track that

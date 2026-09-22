@@ -1,6 +1,6 @@
 ---
-base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
-last_verified: 2026-09-14
+base_commit: ef96cd5b8fce4b2b7ad71c99455e8282d96f4fbe
+last_verified: 2026-09-22
 sources:
   - gui/ttcurrentframe.cpp
   - gui/ttcurrentframe.h
@@ -10,6 +10,8 @@ sources:
   - gui/ttcutoutframe.cpp
   - gui/ttcutframenavigation.cpp
   - gui/ttcutpreview.cpp
+  - data/ttpreviewclip.cpp
+  - data/ttpreviewclip.h
   - mpeg2window/ttmpeg2window2.cpp
   - mpeg2window/ttmpeg2window2.h
   - extern/ttffmpegwrapper.cpp

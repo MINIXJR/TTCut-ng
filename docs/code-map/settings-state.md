@@ -1,6 +1,6 @@
 ---
-base_commit: b06fd6cc54628a2db897d8c33fdb176fc0dba868
-last_verified: 2026-09-14
+base_commit: ef96cd5b8fce4b2b7ad71c99455e8282d96f4fbe
+last_verified: 2026-09-22
 sources:
   - common/ttsettings.h
   - common/ttsettings.cpp

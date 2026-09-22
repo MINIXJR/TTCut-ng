@@ -170,9 +170,11 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     Befund 5).
 
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
-  - Dieselbe Bauform steht noch an zwei Stellen: `gui/ttcutpreview.cpp` und
-    `data/ttcutpreviewtask.cpp` (Vorschau-Dateien). Zwei gleichzeitig
-    offene Fenster benutzen dieselben Namen. (Die dritte Stelle, das
+  - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
+    `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`
+    und `preview_video_temp.<ext>` (der Neubau lag bis 2026-09-21 in
+    `gui/ttcutpreview.cpp`). Zwei gleichzeitig offene Fenster benutzen
+    dieselben Namen. (Die dritte Stelle, das
     Wiedergabe-MKV in `gui/ttcurrentframe.cpp`, trägt seit 2026-09-11 einen
     Namen je Mux — Pflicht für den asynchronen Abbruchpfad, siehe
     `docs/completed-work.md`.)

@@ -1,6 +1,6 @@
 ---
-base_commit: 5e47997b6535a69e9e42306ababe03d35d3afc57
-last_verified: 2026-09-13
+base_commit: ef96cd5b8fce4b2b7ad71c99455e8282d96f4fbe
+last_verified: 2026-09-22
 sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h

@@ -2291,22 +2291,22 @@ Ausgabedatei:
 <context>
     <name>TTCutPreviewTask</name>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="141"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="139"/>
         <source>create cut preview clips</source>
         <translation>Erstelle Vorschau-Clips</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="229"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="227"/>
         <source>Creating preview clip %1 of %2</source>
         <translation>Vorschau-Clip %1 von %2 erstellen</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="316"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="314"/>
         <source>The audio track for preview clip %1 could not be cut.</source>
         <translation>Die Tonspur für Vorschauclip %1 konnte nicht geschnitten werden.</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="383"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="381"/>
         <source>The preview could not be created:
 
 %1</source>
@@ -2315,17 +2315,17 @@ Ausgabedatei:
 %1</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="390"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="388"/>
         <source>Preview clip %1 of %2 created</source>
         <translation>Vorschau-Clip %1 von %2 erstellt</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="417"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="415"/>
         <source>preview cuts done</source>
         <translation>Vorschau-Schnitte fertig</translation>
     </message>
     <message>
-        <location filename="../data/ttcutpreviewtask.cpp" line="543"/>
+        <location filename="../data/ttcutpreviewtask.cpp" line="541"/>
         <source>The preview could not be created: this recording is too damaged for frame-accurate cutting.
 
 %1</source>
