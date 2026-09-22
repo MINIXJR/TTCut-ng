@@ -859,36 +859,8 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   als TTCut-Problem zu untersuchen. Dieselbe Hardware. Wer hier weitermacht,
   braucht zuerst eine Aufnahme, bei der der Knacks reproduzierbar auftritt.
 
-  Die fertige MKV ist nicht betroffen (siehe unten).
-
-- **Der Vorschau-Neubau trägt den Formatwechsel weiter, die Vorschau-Task nicht**
-  (gemessen 2026-09-22, offen — Defekt)
-
-  Wer eine Schnittkante in der Vorschau bewegt (Burst-Verschiebung,
-  Seitenverhältnis-Sprung), bekommt einen neu gebauten Clip, der an einem
-  AC3-Formatwechsel knackst, wo die ursprüngliche Vorschau still war.
-
-  Gemessen mit `tools/diag/test_preview_clip` (`PREVIEW_CLIP_KEEP=1`) auf einem
-  120-s-AC3 mit 5.1-Abschnitt 38,016…42,016 s, Tux-H.264 als Bild:
-
-  | | Rahmen | Wechsel im Clip |
-  |---|---|---|
-  | Clip der Task | 251 | keiner |
-  | Neubau nach Kantenverschiebung | 250 | zwei: t=2,016 s (2→6), t=4,000 s (6→2) |
-  | fertige MKV (`--auto-cut`, Schnitt 1500…2500) | 626 | keiner |
-
-  Ursache ist die **Option-A-Abweichung**
-  (`docs/code-map/audio-cut-timing.md`): `ttRebuildSmartCutPreviewClip` ruft den
-  3-Arg-`TTAudioCutter::cut` ohne acmod-Vereinheitlichung, Rasterung und
-  Spur-Delay, wo `TTCutPreviewTask::createH264PreviewClip` den Schnitt plant. Die
-  Karte verlangte für ihre Auflösung bisher eine eigene Begründung — die liegt
-  damit vor. Der Fix ist, den Neubau ebenfalls über `cutAudioTracks` zu führen;
-  das beseitigt alle drei Teile auf einmal.
-
-  **Das Gate `preview_clip_*` hat es nicht bemerkt**: es vergleicht die Kanalzahl
-  aus `codecpar`, und die meldet den Wert des ersten Rahmens (beidseitig 2). Wer
-  den Fix angeht, prüft den Kanalwechsel **je Rahmen** — sonst steht das Gate
-  wieder auf PASS, während ein hörbarer Unterschied im Clip liegt.
+  Die fertige MKV ist nicht betroffen: der Schnitt vereinheitlicht den
+  acmod (gemessen 2026-09-22, 626 Rahmen ohne Wechsel).
 
 - **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected). When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of ≤ reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
 

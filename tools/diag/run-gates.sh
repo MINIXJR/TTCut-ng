@@ -185,6 +185,16 @@ need_bin() { local b="$D/$1"; [ -x "$b" ] || { echo "SKIP: not built: $b"; exit 
 
 # stereo + 5.1 + stereo at one frame size plus four junk bytes; the recipe of
 # gate_ac3fix.sh, kept identical so both see the same acmod switches.
+# Pink noise as AC3: every frame differs from every other, so a timing
+# difference of even one audio frame shows up as different bytes. A steady
+# tone does NOT work for this - it encodes to repeating frames, and a
+# whole-frame shift then copies identical bytes (measured 2026-09-22 on the
+# tux AC3: a 200 ms track delay left the cut audio byte-identical).
+make_noise_ac3() {
+  ffmpeg -y -v error -f lavfi -i "anoisesrc=d=120:c=pink:r=48000:a=0.3" \
+      -af "aformat=channel_layouts=stereo" -c:a ac3 -b:a 448k "$1"
+}
+
 make_mixed_ac3() {
   local out=$1 t; t=$(mktemp -d)
   ffmpeg -y -v error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=8" \
@@ -420,7 +430,8 @@ gate_previewcut_video() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V26
 # Holds the preview dialog's single-clip rebuild against the clip the preview
 # TASK produced for the same cut - the two must not drift apart. Both codec
 # branches, because they share the fragments but not the audio cut.
-gate_preview_clip_h264()  { need "$V264" "$A264"; "$D/test_preview_clip" "$V264" "$A264" "$W"; }
+gate_preview_clip_h264()  { need "$V264"; make_noise_ac3 "$W/noise.ac3" || exit 1
+  "$D/test_preview_clip" "$V264" "$W/noise.ac3" "$W"; }
 gate_preview_clip_mpeg2() { need "$M2V" "$MP2";   "$D/test_preview_clip" "$M2V" "$MP2" "$W"; }
 gate_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" audio; }
 gate_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }

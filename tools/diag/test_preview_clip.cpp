@@ -35,13 +35,15 @@
 //           ist von Lauf zu Lauf nicht reproduzierbar"), which is a property
 //           of the encoder, not of this refactor.
 //
-//   audio   codec, channel count and sample rate exactly; length in packets
-//           within two frames. The two paths cut audio differently on
-//           purpose: the task plans the cut (grid snapping, per-track delay,
-//           acmod normalization), the rebuild uses the raw three-argument
-//           TTAudioCutter::cut. That is the "Option A" divergence documented
-//           in docs/code-map/audio-cut-timing.md. Comparing audio exactly
-//           here would assert that divergence away instead of reporting it.
+//   audio   everything: codec, channels, sample rate, packet count, payload
+//           MD5, and the per-frame channel layout. Both producers cut audio
+//           through TTAVData::cutAudioTracks since 2026-09-22, so they must
+//           agree exactly. The layout check is the one this gate lacked when
+//           it passed on 2026-09-21 while the rebuilt clip carried an AC3
+//           channel-mode switch the task's clip did not - codecpar reports
+//           the FIRST frame, so the difference was invisible to it. The layout
+//           may change at a SEGMENT SEAM (normalization unifies each segment
+//           on its own majority), so the bound is one run per segment.
 //
 // A FAIL on the video side is what this gate exists for: it means the two
 // producers no longer agree about a clip.
@@ -55,6 +57,7 @@
 #include <cstdio>
 
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 }
 
@@ -86,6 +89,11 @@ struct Packet {
 
 struct StreamInfo {
   bool           ok         = false;
+  //! Channel count per decoded frame, run-length collapsed. A mid-stream
+  //! change shows here and NOWHERE else: codecpar reports the first frame
+  //! only, which is why this gate passed on 2026-09-21 while the rebuilt clip
+  //! carried an AC3 channel-mode switch the task's clip did not.
+  QList<int>     channelRuns;
   AVCodecID      codecId    = AV_CODEC_ID_NONE;
   int            width      = 0;
   int            height     = 0;
@@ -134,6 +142,22 @@ ClipInfo probeClip(const QString& path)
     }
   }
 
+  // Decoder for the audio stream: the per-frame channel count is only visible
+  // after decoding. An AC3 stream can change acmod per frame, and codecpar
+  // keeps reporting the first frame's layout.
+  AVCodecContext* adec = nullptr;
+  if (audioIdx >= 0) {
+    const AVCodec* dec = avcodec_find_decoder(fmt->streams[audioIdx]->codecpar->codec_id);
+    if (dec != nullptr) {
+      adec = avcodec_alloc_context3(dec);
+      if (adec != nullptr) {
+        avcodec_parameters_to_context(adec, fmt->streams[audioIdx]->codecpar);
+        if (avcodec_open2(adec, dec, nullptr) < 0) { avcodec_free_context(&adec); }
+      }
+    }
+  }
+  AVFrame* aframe = av_frame_alloc();
+
   AVPacket* pkt = av_packet_alloc();
   while (av_read_frame(fmt, pkt) >= 0) {
     StreamInfo* target = (pkt->stream_index == videoIdx) ? &info.video
@@ -150,9 +174,22 @@ ClipInfo probeClip(const QString& path)
           QCryptographicHash::Md5);
       target->packets.append(p);
     }
+
+    if (adec != nullptr && pkt->stream_index == audioIdx && aframe != nullptr) {
+      if (avcodec_send_packet(adec, pkt) >= 0) {
+        while (avcodec_receive_frame(adec, aframe) == 0) {
+          const int nch = aframe->ch_layout.nb_channels;
+          if (info.audio.channelRuns.isEmpty() || info.audio.channelRuns.last() != nch)
+            info.audio.channelRuns.append(nch);
+          av_frame_unref(aframe);
+        }
+      }
+    }
     av_packet_unref(pkt);
   }
   av_packet_free(&pkt);
+  av_frame_free(&aframe);
+  if (adec != nullptr) avcodec_free_context(&adec);
   avformat_close_input(&fmt);
 
   info.ok = true;
@@ -208,13 +245,12 @@ bool compareVideo(const StreamInfo& a, const StreamInfo& b, bool comparePayload)
   return true;
 }
 
-//! Compare the audio streams as far as the deliberate divergence allows.
-//!
-//! Length is measured in PACKETS, not in AVStream::duration: Matroska leaves
-//! that field unset for the preview's AC3 track (measured: 0 on both sides),
-//! so a duration comparison would pass without ever looking at anything. One
-//! packet is one audio frame, which is the unit the divergence works in.
-bool compareAudio(const StreamInfo& a, const StreamInfo& b, int frameTolerance)
+//! Compare the audio streams. Since 2026-09-22 both producers cut audio
+//! through TTAVData::cutAudioTracks, so there is nothing left to tolerate:
+//! same keep list, same planning, same acmod handling. The old two-frame
+//! slack is gone on purpose - it existed only to let the "Option A"
+//! divergence pass, and letting it pass is what hid the defect.
+bool compareAudio(const StreamInfo& a, const StreamInfo& b, int segmentCount)
 {
   if (a.ok != b.ok) {
     fail("only one of the clips has audio");
@@ -239,19 +275,49 @@ bool compareAudio(const StreamInfo& a, const StreamInfo& b, int frameTolerance)
     return false;
   }
 
-  // The task plans the cut (grid snapping, per-track delay, acmod
-  // normalization), the rebuild does not - Option A. A difference beyond a
-  // frame or two is more than that divergence explains.
-  const int delta = qAbs(a.packets.count() - b.packets.count());
-  if (delta > frameTolerance) {
-    fail(QString("audio %1 vs %2 packets (%3 frames apart, tolerated %4)")
-             .arg(a.packets.count()).arg(b.packets.count()).arg(delta).arg(frameTolerance));
+  if (a.packets.count() != b.packets.count()) {
+    fail(QString("audio packet count %1 vs %2")
+             .arg(a.packets.count()).arg(b.packets.count()));
+    return false;
+  }
+  for (int i = 0; i < a.packets.count(); i++) {
+    if (a.packets[i].md5 != b.packets[i].md5) {
+      fail(QString("audio packet %1: payload differs").arg(i));
+      return false;
+    }
+  }
+
+  // The channel layout must not change inside a clip, and must not differ
+  // between the two. A mid-stream change makes mpv rebuild its audio output;
+  // acmod normalization is there to prevent exactly that, and before
+  // 2026-09-22 the rebuild skipped it.
+  auto runsText = [](const QList<int>& runs) {
+    QStringList parts;
+    for (int n : runs) parts << QString::number(n);
+    return parts.join(QStringLiteral(" -> "));
+  };
+  if (a.channelRuns != b.channelRuns) {
+    fail(QString("channel layout differs: task %1, rebuild %2")
+             .arg(runsText(a.channelRuns)).arg(runsText(b.channelRuns)));
+    return false;
+  }
+  // At most one run PER SEGMENT. Acmod normalization unifies each segment on
+  // its own majority, so a clip built from two distant parts of a recording
+  // may legitimately change layout at the seam - measured on the ZDFneo
+  // Rookie 07x11 recording, whose cut-out window is 69 stereo against 56 5.1
+  // frames (majority stereo) while its cut-in window is all 5.1. What must
+  // NOT happen is a change inside a segment; that is what normalization is
+  // for, and it is what the rebuild used to skip.
+  if (a.channelRuns.size() > segmentCount) {
+    fail(QString("channel layout changes inside a segment: %1 runs over %2 segment(s): %3")
+             .arg(a.channelRuns.size()).arg(segmentCount).arg(runsText(a.channelRuns)));
     return false;
   }
 
-  printf("  audio: %s %d ch @ %d Hz, %d vs %d packets (%d frame(s) apart)\n",
-         avcodec_get_name(a.codecId), a.channels, a.sampleRate,
-         a.packets.count(), b.packets.count(), delta);
+  printf("  audio: %s %d ch @ %d Hz, %d packets, payload identical, "
+         "%d layout run(s) over %d segment(s)\n",
+         avcodec_get_name(a.codecId), a.channels, a.sampleRate, a.packets.count(),
+         static_cast<int>(a.channelRuns.size()), segmentCount);
   return true;
 }
 
@@ -375,6 +441,21 @@ int main(int argc, char* argv[])
   aStream->createHeaderList();
   avItem->appendAudioEntry(aStream);
 
+  // A non-zero per-track delay, so the run covers it. The rebuild used to drop
+  // it (the three-argument TTAudioCutter::cut never sees a delay), which made a
+  // rebuilt clip's audio sit at a different offset than the clip it replaced.
+  // 200 ms is far more than the audio-frame grid, so a dropped delay cannot
+  // hide inside the snapping.
+  // PREVIEW_CLIP_DELAY_MS overrides it, so a run can show that the delay
+  // reaches the output at all (set it to 0 and compare) - on a fixture whose
+  // frames actually differ over time. A steady tone encodes to repeating AC3
+  // frames, and a whole-frame shift then copies identical bytes, which makes
+  // any delay check on such material vacuous.
+  const int delayMs = qEnvironmentVariableIsSet("PREVIEW_CLIP_DELAY_MS")
+                    ? qEnvironmentVariableIntValue("PREVIEW_CLIP_DELAY_MS") : 200;
+  avItem->onAudioDelayChanged(0, delayMs);   // the path the audio list uses
+  printf("track delay set to %d ms\n", avItem->audioListItemAt(0).getDelayMs());
+
   const bool isMpeg2 = (vStream->streamType() == TTAVTypes::mpeg2_demuxed_video);
 
   // Two cuts, so the preview list has four entries and the middle clip is a
@@ -436,7 +517,7 @@ int main(int argc, char* argv[])
 
   const bool rebuilt = isMpeg2
       ? ttRebuildMpeg2PreviewClip(&avData, &clip, fileIndex)
-      : ttRebuildSmartCutPreviewClip(&clip, fileIndex);
+      : ttRebuildSmartCutPreviewClip(&avData, &clip, fileIndex);
   if (!rebuilt) return fail("the rebuild reported a failure");
 
   const ClipInfo fromTask    = probeClip(keptTaskClip);
@@ -456,9 +537,7 @@ int main(int argc, char* argv[])
   if (isMpeg2)
     printf("  video payload not compared (MPEG-2 re-encoder is not reproducible)\n");
 
-  // Option A shifts the boundaries by at most the snapping does: one frame
-  // per segment end, two segments in a transition clip.
-  if (!compareAudio(fromTask.audio, fromRebuild.audio, /*frameTolerance=*/2))
+  if (!compareAudio(fromTask.audio, fromRebuild.audio, clip.count()))
     return 1;
 
   // PREVIEW_CLIP_KEEP=1 skips the cleanup check so the produced clips stay on

@@ -273,8 +273,8 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
     wird: Gate `preview_clip_h264`/`preview_clip_mpeg2`
     (`tools/diag/test_preview_clip.cpp`) hält einen neu gebauten Clip gegen
     den, den die Task für denselben Schnitt erzeugt hat. Der Tonschnitt bleibt
-    getrennt (Option A, `audio-cut-timing.md`); das Gate misst den Abstand,
-    statt ihn wegzudefinieren.
+    getrennt (Option A, `audio-cut-timing.md`) — **seit 2026-09-22 nicht mehr:
+    beide gehen über `cutAudioTracks`, das Gate vergleicht den Ton exakt.**
 - **Seitenverhältnis-Text dreifach**
   - sites: (ehemals) `ttAspectText()` (`avstream/ttaspectwindow.cpp`),
     Ternär-Ketten in `TTStreamPointVideoWorker::detectAspectChanges()`,

@@ -12,7 +12,6 @@
 // TTCUTPREVIEWTASK
 // ----------------------------------------------------------------------------
 
-#include "../avstream/ttac3acmod.h"
 #include "ttcutpreviewtask.h"
 #include "ttpreviewclip.h"
 
@@ -33,7 +32,6 @@
 #include "../extern/ttmkvmergeprovider.h"
 
 #include "../extern/ttessmartcut.h"
-#include "../extern/ttaudiocutter.h"
 #include "../avstream/ttcommon.h"
 
 #include <QCoreApplication>
@@ -552,73 +550,51 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
                << smartCut->framesReencoded() << "re-encoded,"
                << smartCut->framesStreamCopied() << "stream-copied";
 
-  // --- Cut audio (same approach as final cut in doH264Cut) ---
+  // --- Cut audio ---
+  //
+  // Through cutAudioTracks, the same spine every final cut uses. Until
+  // 2026-09-22 this open-coded the keep list (without extra-frame correction),
+  // planAudioCut, the per-track delay and the acmod targets; the dialog's
+  // rebuild open-coded even less, and the two clips could therefore differ.
+  // Both now go through one call.
   QStringList cutAudioFiles;
-
-  // Build video-domain keep list (no delay baked in) and let planAudioCut
-  // align to audio frame boundaries with feed-forward drift compensation.
-  // KNOWN DIVERGENCE: unlike the consolidated paths (buildVideoKeepList),
-  // this build applies NO extra-frame correction — deliberately left as-is
-  // during the audio-cut consolidation because changing it would alter
-  // preview output (see docs/code-map/audio-cut-timing.md, redundancy
-  // section, "Option A"). Align only as a deliberate preview-correctness
-  // fix with its own verification.
-  QList<QPair<double, double>> videoKeepList;
-  for (int i = 0; i < cutList->count(); i++) {
-    TTCutItem item = cutList->at(i);
-    double cutInTime  = item.cutInIndex() / frameRate;
-    double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-    videoKeepList.append(qMakePair(cutInTime, cutOutTime));
-  }
+  const auto videoKeepList = mpAVData->buildVideoKeepList(cutList, frameRate);
 
   if (hasAudio && !audioFile.isEmpty()) {
-    // Apply per-track audio delay for the first audio track.
-    // Preview only uses a single audio track (track 0), so we only need
-    // the delay for that track. Multi-track preview is not supported.
-    TTAudioStream* aStream = avItem->audioStreamAt(0);
-    int audioDelayMs = avItem->audioListItemAt(0).getDelayMs();
-
-    TTAVData::AudioCutPlan plan = mpAVData->planAudioCut(aStream, videoKeepList, audioDelayMs);
-    QList<QPair<double, double>> audioKeepList = plan.keepList;
-
-    QString audioExt = QFileInfo(audioFile).suffix();
-    QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-        .arg(TTSettings::instance()->tempDirPath())
-        .arg(audioExt);
-
-    QList<int> targetAcmods;
-    const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
-    if (normalizeAcmod && aStream && aStream->streamType() == TTAVTypes::ac3_audio) {
-      for (int s = 0; s < audioKeepList.size(); s++)
-        targetAcmods.append(ttAnalyzeAcmodWindow(aStream, audioKeepList[s].first,
-                                                 audioKeepList[s].second).mainAcmod);
-    }
-
     QElapsedTimer audioTimer;
     audioTimer.start();
-    TTAudioCutter cutter;
-    // shouldAbort is polled inside TTAudioCutter::cut's per-segment packet loop,
-    // so a cancel stops it at the next packet instead of only being noticed
-    // once the whole track has been copied. isAborted() is TTThreadTask's own
-    // flag, read here on the same worker thread that is about to act on it -
-    // same cross-thread contract TTCutVideoTask/TTCutTask already rely on
-    // (onUserAbort() on the GUI thread only ever sets it, never reads it back).
-    if (cutter.cut(audioFile, cutAudioFile, audioKeepList,
-                   normalizeAcmod, targetAcmods, nullptr,
-                   [this] { return isAborted(); })) {
-      cutAudioFiles.append(cutAudioFile);
+
+    bool audioCutOk = false;
+    QString cutAudioFile;
+    mpAVData->cutAudioTracks(avItem, {0}, videoKeepList,
+        TTSettings::instance()->normalizeAcmod(),
+        [&](int, const QString& ext) {
+          return QString("%1/preview_audio_temp.%2")
+              .arg(TTSettings::instance()->tempDirPath()).arg(ext);
+        },
+        [&](int, const QString& path, const QString&, bool ok) {
+          cutAudioFile = path;
+          audioCutOk   = ok;
+          if (ok) cutAudioFiles.append(path);
+        },
+        {}, nullptr,
+        // Polled once per track and inside TTAudioCutter::cut's packet loop,
+        // so a cancel stops it at the next packet instead of after the whole
+        // track. isAborted() is TTThreadTask's own flag, read on the worker
+        // thread that acts on it.
+        [this] { return isAborted(); });
+
+    if (audioCutOk) {
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut complete in" << audioTimer.elapsed() << "ms:" << cutAudioFile;
     } else if (isAborted()) {
       // Plain user cancel: TTAudioCutter::cut still finalizes the container
-      // before returning false, so cutAudioFile is a partial/empty file on
-      // disk (same behavior TTAVData::cutAudioTracks's own comment documents
-      // for the consolidated path). Stop here rather than falling through to
-      // subtitle cut and mux with a truncated clip - same treatment as the
-      // video phase above.
+      // before returning false, so the output is a partial file on disk. Stop
+      // here rather than falling through to subtitle cut and mux with a
+      // truncated clip - same treatment as the video phase above.
       if (TTSettings::instance()->logCutPipeline())
           qDebug() << "Preview audio cut aborted by user";
-      QFile::remove(cutAudioFile);
+      if (!cutAudioFile.isEmpty()) QFile::remove(cutAudioFile);
       QFile::remove(tempVideoFile);
       QFile::remove(outputFile);
       throw TTAbortException("user abort");
@@ -628,10 +604,9 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
     }
   }
 
-  // Cut subtitle track 0 for the preview clip (same uncorrected keep list as
-  // the preview audio — see KNOWN DIVERGENCE above). The preview dialog
-  // finds the file by name; only one --sub-file is supported, so only the
-  // first track is cut.
+  // Cut subtitle track 0 for the preview clip, on the same keep list as the
+  // audio. The preview dialog finds the file by name; only one --sub-file is
+  // supported, so only the first track is cut.
   if (avItem->subtitleCount() > 0) {
     mpAVData->cutSubtitleTracks(avItem, {0}, videoKeepList,
         [&](int /*trk*/) {

@@ -39,12 +39,11 @@ class TTVideoStream;
 //! polling, no logging. The callers differ in all three, and the functions
 //! return what a caller needs in order to log it in its own words.
 //!
-//! NOT shared: the audio cut. TTCutPreview::regenerateSmartCutPreviewClip uses
-//! the three-argument TTAudioCutter::cut (raw keep list, no grid snapping, no
-//! acmod normalization, no per-track delay) where TTCutPreviewTask::
-//! createH264PreviewClip plans the cut. That divergence is deliberate and
-//! documented as "Option A" in docs/code-map/audio-cut-timing.md; resolving it
-//! changes preview output and needs its own justification.
+//! The audio cut is NOT among them, but for a different reason than it used to
+//! be: both producers now go through TTAVData::cutAudioTracks, the spine every
+//! final cut uses, so they agree by construction. What still differs is who
+//! drives it - the task on its worker thread with cancellation, the rebuild
+//! synchronously - which is why each keeps its own call.
 
 //! Everything the clip production reads off cut entry 0.
 struct TTPreviewSource
@@ -132,10 +131,10 @@ using TTPreviewProgressFn = std::function<void(TTPreviewStage)>;
 bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fileIndex,
                                const TTPreviewProgressFn& progress = {});
 
-//! Needs no TTAVData: the Smart Cut path drives TTESSmartCut and TTAudioCutter
-//! directly, where the MPEG-2 path goes through the task pool and the
-//! consolidated audio cut.
-bool ttRebuildSmartCutPreviewClip(TTCutList* clipCutList, int fileIndex,
+//! Same shape as the MPEG-2 sibling. The video goes through TTESSmartCut
+//! directly; the audio goes through TTAVData::cutAudioTracks, the spine every
+//! final cut uses, so a rebuilt clip sounds like the one it replaces.
+bool ttRebuildSmartCutPreviewClip(TTAVData* avData, TTCutList* clipCutList, int fileIndex,
                                   const TTPreviewProgressFn& progress = {});
 
 #endif // TTPREVIEWCLIP_H

@@ -887,7 +887,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   if (isMpeg2) {
     ttRebuildMpeg2PreviewClip(mpAVData, &tmpCutList, fileIndex, showStage);
   } else {
-    ttRebuildSmartCutPreviewClip(&tmpCutList, fileIndex, showStage);
+    ttRebuildSmartCutPreviewClip(mpAVData, &tmpCutList, fileIndex, showStage);
   }
 
   vStream->moveToIndexPos(savedStreamIndex);

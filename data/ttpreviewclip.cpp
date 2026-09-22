@@ -25,7 +25,6 @@
 #include "../data/ttcutlist.h"
 #include "../data/ttcutpreviewtask.h"
 #include "../data/ttcutvideotask.h"
-#include "../extern/ttaudiocutter.h"
 #include "../extern/ttessmartcut.h"
 #include "../extern/ttmkvmergeprovider.h"
 
@@ -232,9 +231,11 @@ bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fil
 /**
  * Rebuild one H.264/H.265 preview clip
  */
-bool ttRebuildSmartCutPreviewClip(TTCutList* clipCutList, int fileIndex,
+bool ttRebuildSmartCutPreviewClip(TTAVData* avData, TTCutList* clipCutList, int fileIndex,
                                   const TTPreviewProgressFn& progress)
 {
+  if (avData == nullptr) return false;
+
   const TTPreviewSource src = ttResolvePreviewSource(clipCutList);
   if (!src.isValid()) return false;
 
@@ -268,29 +269,27 @@ bool ttRebuildSmartCutPreviewClip(TTCutList* clipCutList, int fileIndex,
   report(progress, TTPreviewStage::CutAudio);
 
   // --- Cut audio ---
+  //
+  // Through cutAudioTracks, the same spine every final cut uses: extra-frame
+  // correction in the keep list, per-track delay, audio-frame snapping with
+  // feed-forward drift, AC3 acmod normalization. Until 2026-09-22 this path
+  // open-coded a raw keep list and the three-argument TTAudioCutter::cut, and
+  // a rebuilt clip could therefore sound different from the one it replaced -
+  // measured on an AC3 that switches channel mode: the rebuild carried the
+  // switch into the clip, the preview task's clip did not.
   QStringList cutAudioFiles;
   if (src.hasAudio) {
-    // KNOWN DIVERGENCE: raw keep list - no extra-frame correction, no
-    // planAudioCut snapping, no acmod normalization, no per-track delay
-    // (3-arg TTAudioCutter::cut). Deliberately left as-is during the
-    // audio-cut consolidation because changing it would alter preview output
-    // (see docs/code-map/audio-cut-timing.md, redundancy section, "Option A").
-    QList<QPair<double, double>> keepList;
-    for (int i = 0; i < clipCutList->count(); i++) {
-      TTCutItem item = clipCutList->at(i);
-      double cutInTime  = item.cutInIndex() / frameRate;
-      double cutOutTime = (item.cutOutIndex() + 1) / frameRate;
-      keepList.append(qMakePair(cutInTime, cutOutTime));
-    }
+    const auto videoKeepList = avData->buildVideoKeepList(clipCutList, frameRate);
 
-    const QString cutAudioFile = QString("%1/preview_audio_temp.%2")
-        .arg(TTSettings::instance()->tempDirPath())
-        .arg(QFileInfo(src.audioFile).suffix());
-
-    TTAudioCutter cutter;
-    if (cutter.cut(src.audioFile, cutAudioFile, keepList)) {
-      cutAudioFiles.append(cutAudioFile);
-    }
+    avData->cutAudioTracks(src.avItem, {0}, videoKeepList,
+        TTSettings::instance()->normalizeAcmod(),
+        [&](int, const QString& ext) {
+          return QString("%1/preview_audio_temp.%2")
+              .arg(TTSettings::instance()->tempDirPath()).arg(ext);
+        },
+        [&](int, const QString& path, const QString&, bool ok) {
+          if (ok) cutAudioFiles.append(path);
+        });
   }
 
   report(progress, TTPreviewStage::Mux);

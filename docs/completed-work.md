@@ -2338,6 +2338,47 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **Vorschau-Neubau trug den AC3-Formatwechsel weiter und verlor den Spur-Delay
+  („Option A")** → **ERLEDIGT** (2026-09-22, Branch `feature/preview-audio-consolidation`)
+  - Nach einer Kantenverschiebung in der Vorschau baute der Dialog den Clip mit
+    dem 3-Arg-`TTAudioCutter::cut` neu — ohne Rasterung, acmod-Vereinheitlichung
+    und Spur-Delay —, während die Vorschau-Task den Schnitt plante. Gemessen:
+    Clip der Task 251 Rahmen ohne Formatwechsel, Neubau 250 Rahmen mit **zwei**
+    Wechseln, fertige MKV 626 Rahmen ohne. Beide Wege gehen jetzt über
+    `buildVideoKeepList` + `cutAudioTracks` wie jeder Endschnitt-Produzent; die
+    Task hatte `planAudioCut`, Delay und acmod-Ziele ebenfalls von Hand
+    nachgebaut und verliert das mit.
+  - **Die Task-Ausgabe ist byte-unverändert** — progressiv, MBAFF, PAFF und
+    HEVC je Ton-ES byte-gleich, Video-Paketliste gleich. Grund: die
+    Extra-Frame-Korrektur ist auf allem verfügbaren Material ein No-op, weil
+    `loadExtraFrameIndices` bei H.26x nur echte Doppel-PTS-Defekte aufnimmt und
+    legitime PAFF-Feldpaare ausdrücklich ausschließt. Die Frage nach einer
+    strukturabhängigen Regression (MBAFF/PAFF) beantwortet sich damit: die
+    Korrektur hängt nicht an der Feldkodierung.
+  - **Zwei Messfallen**, beide erst beim Messen aufgefallen und in
+    `audio-cut-timing.md` als Fallstricke hinterlegt: ein Spur-Delay lässt sich
+    auf einem Dauerton nicht nachweisen (gleiche AC3-Rahmen, ein
+    Ganzrahmen-Versatz kopiert dieselben Bytes — 200 ms ließen die Tux-Fixture
+    byte-gleich; mit Rauschen wirkt er nachweislich auf beiden Seiten); und ein
+    Vorschau-Clip darf an der **Segmentnaht** das Layout wechseln, weil
+    `computeTargetAcmods` je Segment auf dessen Mehrheit vereinheitlicht.
+  - **Der eigens demuxte Defekt-Fall brachte etwas anderes als gedacht.**
+    `ZDFneo-HD-The-Rookie-07x11` von der NAS (6,5 GB) hat **keine**
+    `es_doubled_pts_aus` in der `.info` — sein Defekt sind fehlende, nicht
+    verdoppelte Frames, die Extra-Frame-Korrektur greift also auch dort nicht.
+    Dafür hat seine AC3-Spur **14 acmod-Wechsel**: echtes Material für den
+    behobenen Defekt. Gate darauf: 271 Tonpakete, Nutzdaten identisch, 2
+    Layout-Läufe über 2 Segmente.
+  - **Gate verschärft**: `preview_clip_h264`/`preview_clip_mpeg2` vergleichen
+    jetzt Paketzahl und Nutzdaten exakt (die alten zwei Rahmen Toleranz gab es
+    nur, um Option A durchzulassen) und prüfen die Kanalfolge **je dekodiertem
+    Rahmen** statt aus `codecpar` — die Lücke, durch die der Defekt am
+    2026-09-21 unbemerkt blieb. Das H.264-Gate läuft seither auf erzeugtem
+    Rauschen (`make_noise_ac3`), weil auf gleichförmigem Ton keine
+    Zeitverschiebung sichtbar wäre. Gegenprobe mit wieder eingebautem altem
+    Verhalten: FAIL bei 271 gegen 269 Tonpaketen.
+  - Voller Gate-Lauf: 93 PASS, 0 FAIL.
+
 - **Zwei Vorschau-Pipelines teilten fünf Fragmente (Code-Audit Lauf 6,
   „Batch G")** → **ERLEDIGT** (2026-09-21, Branch `feature/preview-clip-shared`)
   - `TTCutPreviewTask` baut die Vorschau-Clips für alle Schnitte, `TTCutPreview`

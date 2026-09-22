@@ -27,6 +27,15 @@ All notable changes to TTCut-ng are documented in this file.
   aspect. Gates: `aspect_window`, `aspect_hint`, `aspect_autocut`.
 
 ### Fixed
+- **The preview clip rebuilt after moving a cut edge sounded different from the
+  one it replaced.** Moving an edge (audio-burst shift, aspect jump) rebuilds
+  that clip, and the rebuild cut its audio without grid snapping, without AC3
+  channel-mode normalisation and without the track delay - so it could carry a
+  channel-mode switch the original preview did not, and sat at a different
+  offset when a delay was set. Both preview paths now cut audio through the
+  same code as every final cut. Clips of unaffected recordings are unchanged
+  (byte-identical on progressive, MBAFF, PAFF and HEVC material). Gates:
+  `preview_clip_h264`, `preview_clip_mpeg2`.
 - **ttcut-demux: no subtitle SRT when ccextractor crashes on the stream.**
   ccextractor 0.96.6 segfaults on some DVB subtitle streams, and the run
   then kept the bitmap track only. The OCR stage now retries from a
