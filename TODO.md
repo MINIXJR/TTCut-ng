@@ -845,13 +845,33 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     `05x04` drei Wechsel (alle fallen auf −114 bzw. −120 dB ab); `The Silent Hour`
     zwei, davon einer bei 6161,504 s in durchgehend lautem Material (−25 dB, keine
     Senke) — **dort ebenfalls nichts hörbar.** Das ist das belastbare Negativ.
-  - Synthetischer Härtefall (`/usr/local/src/CLAUDE_TMP/TTCut-ng/klicktest/`):
-    Dauerton 440 Hz, Wechsel bei 38,0 und 42,0 s, **pegelgleich gemacht** — die
-    erste Fassung legte denselben Ton auf alle sechs Kanäle und war dadurch im
-    Downmix 3 dB lauter, was als Pegelsprung zu hören war und den Test
-    verfälscht hätte. In der bereinigten Fassung: kein Unterschied zwischen
-    `Original` und `5.1`, und **es klingt nicht wie der Knacks, den der User
-    kennt**.
+  - Synthetischer Härtefall: Dauerton 440 Hz, Kanalwechsel bei 38,0 und 42,0 s,
+    **pegelgleich gemacht** — die erste Fassung legte denselben Ton auf alle
+    sechs Kanäle und war dadurch im Downmix 3 dB lauter, was als Pegelsprung zu
+    hören war und den Test verfälscht hätte. In der bereinigten Fassung: kein
+    Unterschied zwischen `Original` und `5.1`, und **es klingt nicht wie der
+    Knacks, den der User kennt**.
+
+    Die Datei lag in `CLAUDE_TMP` und ist gelöscht — dieses Verzeichnis ist von
+    der Sicherung ausgeschlossen, ein Verweis darauf wäre in ein paar Wochen
+    tot gewesen. Sie ist in Sekunden wiederherstellbar; der 5.1-Abschnitt trägt
+    den Ton NUR auf FL/FR, sonst entsteht der genannte Pegelsprung:
+
+    ```bash
+    ffmpeg -y -f lavfi -i "sine=frequency=440:duration=38:sample_rate=48000" \
+        -ac 2 -c:a ac3 -b:a 448k s1.ac3
+    ffmpeg -y -f lavfi -i "sine=frequency=440:duration=4:sample_rate=48000" \
+           -f lavfi -i "anullsrc=r=48000:cl=mono:d=4" \
+        -filter_complex "[0:a][0:a][1:a][1:a][1:a][1:a]join=inputs=6:channel_layout=5.1[a]" \
+        -map "[a]" -c:a ac3 -b:a 448k s2.ac3
+    ffmpeg -y -f lavfi -i "sine=frequency=440:duration=78:sample_rate=48000" \
+        -ac 2 -c:a ac3 -b:a 448k s3.ac3
+    cat s1.ac3 s2.ac3 s3.ac3 > klicktest_deu.ac3
+    ```
+
+    Dazu ein beliebiges 120-s-Video als Bildspur (z.B.
+    `tools/test-videos/cache/tux_h264_1080p_progressive_test.264`) und eine
+    `.ttcut` mit `<Video>`/`<Audio>` darauf.
 
   **Vorrangige Hypothese für das echte Knacksen ist damit die Wiedergabekette
   selbst, nicht der Formatwechsel.** Präzedenzfall im Korpus-Inventar
