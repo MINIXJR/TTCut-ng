@@ -365,6 +365,12 @@ target_link_libraries(test_audioonlycut_abort PRIVATE ttcut-core)
 # core library too.
 diag_tool(test_previewcut_abort AV WIDGETS SOURCES)
 target_link_libraries(test_previewcut_abort PRIVATE ttcut-core)
+# Drift gate for the two preview clip producers: runs the real
+# TTCutPreviewTask through TTAVData::doCutPreview() and then rebuilds one of
+# its clips through data/ttpreviewclip.cpp, so it needs the same whole-core
+# dependency chain (and MPEG2 for the MPEG-2 fixture's video cut).
+diag_tool(test_preview_clip AV MPEG2 WIDGETS SOURCES)
+target_link_libraries(test_preview_clip PRIVATE ttcut-core)
 # Same rationale again, plus both codec branches in one process: it drives
 # onDoCut() for H.26x AND MPEG-2 and doCutPreview(), five operations on one
 # long-lived TTAVData.
@@ -429,7 +435,8 @@ add_custom_target(diag DEPENDS
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
-  test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args)
+  test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
+  test_preview_clip)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

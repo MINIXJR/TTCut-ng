@@ -69,7 +69,7 @@ flowchart TD
     N["TTESSmartCut::smartCutFrames<br/>(extern/ttessmartcut.cpp)<br/>analyzeCutPoints(cutFrames)"]
     O["TTNaluParser<br/>(avstream/ttnaluparser.cpp)<br/>mAccessUnits — DECODE order list<br/>accessUnitAt(index), findKeyframeBefore(index)"]
     P["Smart Cut output ES<br/>stream-copy or re-encode<br/>by NAL byte offset<br/>+ TTESSmartCut::mOutputDisplayOrder<br/>(one entry per written frame,<br/>source display index)"]
-    Q["Cut/preview caller<br/>(data/ttavdata.cpp doH264Cut,<br/>data/ttcutpreviewtask.cpp createH264PreviewClip,<br/>gui/ttcutpreview.cpp regenerateSmartCutPreviewClip)<br/>smartCut->outputDisplayOrder() → mkvProvider.setVideoDisplayOrder()"]
+    Q["Cut/preview caller<br/>(data/ttavdata.cpp doH264Cut,<br/>data/ttcutpreviewtask.cpp createH264PreviewClip,<br/>data/ttpreviewclip.cpp ttRebuildSmartCutPreviewClip)<br/>smartCut->outputDisplayOrder() → mkvProvider.setVideoDisplayOrder()"]
     R["TTMkvMergeProvider::mux() → assignEsTimestamps()<br/>(extern/ttmkvmergeprovider.cpp)<br/>pts = displayOrder[i] × frameDur (DISPLAY time)<br/>dts = (i − reorderOffset) × frameDur"]
 
     MRG["TTFrameIndexer::mergePAFFFieldsInIndex<br/>collapses PAFF field pairs<br/>records TTFrameIndexBundle::rawToMerged (raw AU → merged idx)"]

@@ -2319,8 +2319,9 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
   - **Offen geblieben:** die Codec-Lücke von Befund 5 (der Projekt-Lader
     umgeht `canCutWith`). Die Vorschau-Klone zwischen
     `data/ttcutpreviewtask.cpp` und `gui/ttcutpreview.cpp` (fünf
-    Fragmente, darunter zweimal die MKV-Mux-Konfiguration) sind als
-    Batch G zurückgestellt.
+    Fragmente, darunter zweimal die MKV-Mux-Konfiguration) waren als
+    Batch G zurückgestellt — erledigt 2026-09-21, eigener Eintrag unter
+    „Werkzeuge und Infrastruktur".
 
 - **Projektdatei-Endung: .prj → .ttcut** → **DONE** (v0.63.0)
   - Neue Dateien: `.ttcut`, bestehende `.prj` behalten Endung
@@ -2336,6 +2337,51 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 - **Dirty-Tracking: "Neues Projekt" Warnung nur bei echten Änderungen** → Completed (v0.62.1)
 
 ### Werkzeuge und Infrastruktur
+
+- **Zwei Vorschau-Pipelines teilten fünf Fragmente (Code-Audit Lauf 6,
+  „Batch G")** → **ERLEDIGT** (2026-09-21, Branch `feature/preview-clip-shared`)
+  - `TTCutPreviewTask` baut die Vorschau-Clips für alle Schnitte, `TTCutPreview`
+    baut EINEN Clip neu, wenn der Nutzer eine Schnittkante bewegt (Burst-
+    Verschiebung, Seitenverhältnis-Sprung). Beide bleiben; gemeinsam sind jetzt
+    Temp-Aufräumen, Quellauflösung aus Eintrag 0, Segment-Indexrechnung,
+    Encoder-Aufbau und die MKV-Mux-Konfiguration — als freie Funktionen in
+    `data/ttpreviewclip.{h,cpp}`.
+  - **Zwei Gleichwertigkeiten vorher belegt, nicht angenommen:**
+    `TTESSmartCut::cleanup()` löscht `mPresetOverride` nicht und der Wert wird
+    erst beim Encoder-Aufbau gelesen — die geteilte Engine setzte das Preset
+    nach `initialize()`, die beiden anderen Stellen davor, beides gleichwertig.
+    Und eine Mux-Funktion reicht für beide Codecs: `mIsPAFF` startet `false`,
+    die Basisklasse liefert `isPAFF() == false` und `paffLog2MaxFrameNum() == 4`
+    — genau die Vorgabewerte von `setIsPAFF()`, und eine leere Display-Order ist
+    ebenfalls der Vorgabewert.
+  - **Der Neubau musste aus dem Dialog heraus**, sonst bliebe er ungeprüft:
+    `TTCutPreview` baut einen `TTMpvWrapper` und braucht einen GL-Kontext
+    (`test_preview_then_cut.cpp` verweigert deshalb den Offscreen-Betrieb).
+    Die Ablaufsteuerung liegt jetzt als `ttRebuildMpeg2PreviewClip` /
+    `ttRebuildSmartCutPreviewClip` im selben Modul; im Dialog bleibt nur die
+    Zuordnung Stufe → Fortschrittstext (die Strings dort zu lassen hält ihren
+    Übersetzungskontext und damit die `.ts`-Einträge gültig).
+  - **Gate** `preview_clip_h264` / `preview_clip_mpeg2`
+    (`tools/diag/test_preview_clip.cpp`): ein Lauf erzeugt beide Seiten selbst —
+    erst die echte Task über `doCutPreview()`, dann der Neubau desselben Clips —
+    und hält sie gegeneinander. Keine hinterlegte Referenz. Gegenprobe: mit
+    absichtlich weggelassener Display-Reihenfolge im Neubau schlägt das Gate bei
+    Videopaket 1 fehl (PTS 100 statt 20).
+  - **Verhaltensgleichheit der Task belegt** (Stufe 2 fasste sie an): Paketliste
+    (pts, dts, size, flags) des Übergangsclips vor/nach dem Umbau identisch auf
+    H.264, HEVC und MPEG-2; roher ES-Auszug zusätzlich byte-identisch für Video
+    und Ton bei H.264 und HEVC. MPEG-2-Nutzdaten ausgenommen — jener
+    Neucodierer läuft mit `thread_count = 0` und ist von Lauf zu Lauf nicht
+    reproduzierbar (eigener TODO-Eintrag).
+  - **Nicht angefasst:** der Tonschnitt. Der Neubau nutzt weiter den
+    3-Arg-`TTAudioCutter::cut` (ohne Rasterung, acmod-Normalisierung und
+    Spur-Delay), die Task plant ihn — „Option A" in
+    `docs/code-map/audio-cut-timing.md`. Das Gate misst den Abstand (gemessen:
+    ein Tonrahmen bei H.26x, null bei MPEG-2) und lässt bis zwei zu, statt die
+    Abweichung wegzudefinieren.
+  - Karten nachgezogen: `burst-detection.md` (Redundanz-Abschnitt),
+    `audio-cut-timing.md` (Option A, Produzentenlisten), `frame-order.md`.
+  - Voller Gate-Lauf: 92 PASS, 0 FAIL.
 
 - **`gate_pool_crossthread.sh` baute noch gegen Qt5** → **GEFIXT**
   (2026-09-10, Branch `fix/gate-pool-crossthread-qt6`)

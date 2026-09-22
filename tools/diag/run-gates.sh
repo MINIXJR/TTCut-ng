@@ -169,6 +169,8 @@ previewcut_none        tux   600  test_previewcut_abort
 previewcut_video       tux   600  test_previewcut_abort
 previewcut_audio       tux   600  test_previewcut_abort
 previewcut_fail        tux   600  test_previewcut_abort
+preview_clip_h264      tux   600  test_preview_clip
+preview_clip_mpeg2     tux   600  test_preview_clip
 smartcut_abort_h264    tux   600  test_smartcut_abort
 smartcut_abort_hevc    tux   600  test_smartcut_abort
 encode_tempdir         tux   900  test_mpeg2cut_abort
@@ -411,6 +413,11 @@ gate_mpeg2cut_mux()   { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP
 gate_cutsequence_abort() { need "$V264" "$A264" "$M2V" "$MP2"; "$D/test_cutsequence_abort" "$V264" "$A264" "$M2V" "$MP2" "$W"; }
 gate_previewcut_none()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" none; }
 gate_previewcut_video() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" video; }
+# Holds the preview dialog's single-clip rebuild against the clip the preview
+# TASK produced for the same cut - the two must not drift apart. Both codec
+# branches, because they share the fragments but not the audio cut.
+gate_preview_clip_h264()  { need "$V264" "$A264"; "$D/test_preview_clip" "$V264" "$A264" "$W"; }
+gate_preview_clip_mpeg2() { need "$M2V" "$MP2";   "$D/test_preview_clip" "$M2V" "$MP2" "$W"; }
 gate_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" audio; }
 gate_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }
 gate_smartcut_abort_h264() { need "$V264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$V264" 50; }

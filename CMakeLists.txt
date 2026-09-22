@@ -102,6 +102,7 @@ set(TTCUT_HEADERS
   data/ttopensubtitletask.h
   data/ttcutvideotask.h
   data/ttcutpreviewtask.h
+  data/ttpreviewclip.h
   data/ttabortabletask.h
   data/tth26xcuttask.h
   data/ttaudioonlycuttask.h
@@ -229,6 +230,7 @@ set(TTCUT_CORE_SOURCES
   data/ttopensubtitletask.cpp
   data/ttcutvideotask.cpp
   data/ttcutpreviewtask.cpp
+  data/ttpreviewclip.cpp
   data/ttabortabletask.cpp
   data/tth26xcuttask.cpp
   data/ttaudioonlycuttask.cpp

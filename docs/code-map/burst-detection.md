@@ -14,6 +14,7 @@ sources:
   - gui/ttcuttreeview.cpp
   - gui/ttcuttreeview.h
   - gui/ttcutpreview.cpp
+  - data/ttpreviewclip.cpp
   - gui/ttcutsettingsaudio.cpp
   - gui/ttcutmainwindow.cpp
   - gui/ttcutmainwindow_headless.cpp
@@ -255,6 +256,20 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   - status: done 2026-09-19 — gemeinsam in `moveCutEdge`; `updateRealCutItem`
     und `applyEdgeMoveToLists` (vormals `applyBurstShiftToLists`) nehmen Rand und
     Position als Parameter statt `mBurstIsCutOut`/`mBurstSegmentIdx` zu lesen.
+- **Clip-Neubau gegen die Vorschau-Task**
+  - sites: `TTCutPreview::regeneratePreviewClip` (Dialog, EIN Clip) gegen
+    `TTCutPreviewTask::operation`/`createH264PreviewClip` (Task, alle Clips)
+  - shared purpose: Temp-Aufräumen, Quellauflösung aus Eintrag 0,
+    Segment-Indexrechnung, Encoder-Aufbau, MKV-Mux-Konfiguration
+  - status: done 2026-09-21 — die fünf Teile liegen als freie Funktionen in
+    `data/ttpreviewclip.cpp`, die Ablaufsteuerung des Einzelclips als
+    `ttRebuildMpeg2PreviewClip`/`ttRebuildSmartCutPreviewClip` daneben. Das war
+    nötig, damit der Neubau ohne mpv und GL-Kontext läuft und damit prüfbar
+    wird: Gate `preview_clip_h264`/`preview_clip_mpeg2`
+    (`tools/diag/test_preview_clip.cpp`) hält einen neu gebauten Clip gegen
+    den, den die Task für denselben Schnitt erzeugt hat. Der Tonschnitt bleibt
+    getrennt (Option A, `audio-cut-timing.md`); das Gate misst den Abstand,
+    statt ihn wegzudefinieren.
 - **Seitenverhältnis-Text dreifach**
   - sites: (ehemals) `ttAspectText()` (`avstream/ttaspectwindow.cpp`),
     Ternär-Ketten in `TTStreamPointVideoWorker::detectAspectChanges()`,

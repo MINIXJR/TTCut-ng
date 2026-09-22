@@ -154,22 +154,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
-- **Zwei Vorschau-Pipelines teilen fünf Fragmente** (Code-Audit Lauf 6,
-  2026-09-14, als „Batch G" zurückgestellt)
-  - `data/ttcutpreviewtask.cpp` erzeugt die Vorschau-Clips für alle Schnitte,
-    `gui/ttcutpreview.cpp` erzeugt EINEN Clip neu, wenn der Nutzer eine
-    Schnittkante per Burst-Verschiebung bewegt. Die Trennung hat damit einen
-    Grund; die fünf gemeinsamen Fragmente haben keinen: Temp-Aufräumen
-    (`preview*` löschen), Quellauflösung aus Eintrag 0, die
-    Segment-Indexrechnung `(i-1)*2+1`, der Encoder-Aufbau
-    (`setPresetOverride` + `initialize` + Display-Map-Cast) und **zweimal die
-    MKV-Mux-Konfiguration**.
-  - Die Mux-Konfiguration ist der gefährliche Teil: laufen die beiden
-    auseinander, sieht ein nachgezeugter Clip anders aus als die
-    ursprünglichen, ohne dass es auffällt.
-  - Reichweite: die grösste Redundanz des Laufs, und `gui/ttcutpreview.cpp`
-    liegt ausserhalb des Umfangs der Karte `cut-edit-and-start.md`.
-
 - **Der Projektlader umgeht die Verträglichkeitsprüfung zweier Videos**
   (Code-Audit Lauf 6, 2026-09-14)
   - `TTCutProjectData::parseVideoSection` ruft `TTAVData::doOpenVideoStream`

@@ -116,8 +116,6 @@ private:
     void applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentIdx, bool isCutOut, int newIdx);
     void moveCutEdge(int segmentIdx, bool isCutOut, int oldIdx, int newIdx);
     void regeneratePreviewClip(int iCut);
-    void regenerateMpeg2PreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
-    static void regenerateSmartCutPreviewClip(int fileIndex, TTCutList* tmpCutList, QProgressDialog* progress);
 };
 
 #endif // TTCUTPREVIEW_H
