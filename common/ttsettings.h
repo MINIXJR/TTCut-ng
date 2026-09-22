@@ -219,6 +219,21 @@ public:
   bool    normalizeAcmod() const     { return mNormalizeAcmod; }
   void    setNormalizeAcmod(bool v);
 
+  //! How the PLAYBACK output channel layout is chosen. Affects mpv only -
+  //! nothing in the cut or mux chain reads it.
+  //!
+  //! mpv follows the stream by default, so an AC3 track that switches its
+  //! channel mode mid-stream (5.1 <-> 2.0, common in DVB) makes it tear the
+  //! audio output down and open it again at every switch - measured on
+  //! PipeWire: three openings for two switches. Pinning the layout keeps it
+  //! at one.
+  enum PlaybackChannels {
+    PlaybackChannelsOriginal = 0,   //!< leave mpv alone (default, today's behaviour)
+    PlaybackChannels51       = 1    //!< pin multichannel-capable tracks to 5.1
+  };
+  int     playbackAudioChannels() const { return mPlaybackAudioChannels; }
+  void    setPlaybackAudioChannels(int v);
+
   const QStringList& audioLanguagePreference() const { return mAudioLanguagePreference; }
   void    setAudioLanguagePreference(const QStringList& v);
 
@@ -477,6 +492,7 @@ private:
   // detector decision only). Replaces the old ABSOLUTE BurstThresholdDb.
   int         mBurstMinDeltaDb      = 20;
   bool        mNormalizeAcmod       = true;
+  int         mPlaybackAudioChannels = PlaybackChannelsOriginal;
   QStringList mAudioLanguagePreference;     // empty = use system locale
   int         mQuickJumpIntervalSec = 30;
   int         mQuickJumpThumbHeight = kQuickJumpThumbHeightDefault;

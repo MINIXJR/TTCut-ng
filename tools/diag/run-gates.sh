@@ -138,6 +138,7 @@ acmod_majority         tux   300  test_acmod_majority
 hint_column            tux   300  test_hint_column
 audiocutter_paths      tux   300  test_audiocutter_paths
 mpv_loadfile_args      tux   300  test_mpv_loadfile_args
+mpv_channels           unit  300  test_mpv_channels
 subtitle_delay         tux   600  test_subtitle_delay
 audiorepair_persist    tux   600  test_audiorepair_persist
 audio_order_reset      tux   600  test_audio_order_reset
@@ -328,6 +329,9 @@ gate_headerlist_eof()    { need "$M2V"; "$D/gate_headerlist_eof.sh" "$D/test_hea
 gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600; }
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
 gate_acmod_majority()    { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_acmod_majority" "$W/mixed.ac3"; }
+# Playback channel layout: the mapping, plus a live libmpv run on the same
+# mixed-acmod fixture that counts audio-output initialisations.
+gate_mpv_channels()      { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_mpv_channels" "$W/mixed.ac3"; }
 gate_hint_column()       { need "$V264"; make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_hint_column" "$V264" "$W/mixed.ac3" "$W/hint"; }
 gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
   read -r A B < "$W/aspect.expect"

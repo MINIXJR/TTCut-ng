@@ -5,6 +5,17 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Added
+- **Playback: the audio channel layout can be pinned.** An AC3 track that
+  switches its channel mode inside the recording (5.1 ↔ 2.0, common in DVB)
+  makes mpv close and reopen the audio output at every switch - measured on
+  PipeWire: three openings for two switches. Playback reads the source audio, so
+  the switch reaches it unchanged; the finished MKV is unaffected, because the
+  cut normalises the channel mode. The new setting *Channel layout during
+  playback* (Audio tab) offers `Original` - which changes nothing and stays the
+  default - and `5.1`, which pins the output for AC3 tracks so no switch occurs;
+  stereo material then occupies the front channels unchanged. Tracks that are
+  stereo by definition are never pinned. Affects playback only, never the cut.
+  Gate: `mpv_channels`.
 - **MPEG-2: aspect ratio changes at cut edges are flagged and can be fixed
   frame-exactly.** A cut that starts on the last 4:3 picture before a 16:9
   programme produced an MKV whose whole video track was marked 4:3 - the

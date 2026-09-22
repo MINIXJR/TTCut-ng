@@ -115,6 +115,10 @@ private:
     void updateRealCutItem(const TTCutItem& copyItem, bool isCutOut, int oldIdx, int newIdx);
     void applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentIdx, bool isCutOut, int newIdx);
     void moveCutEdge(int segmentIdx, bool isCutOut, int oldIdx, int newIdx);
+    //! Pin the output channel layout for the track this preview plays, if
+    //! the user asked for it. Called before every load; the clip carries the
+    //! source track's codec, so the source's type decides.
+    void applyOutputChannels();
     void regeneratePreviewClip(int iCut);
 };
 

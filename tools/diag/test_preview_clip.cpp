@@ -461,7 +461,16 @@ int main(int argc, char* argv[])
   if (!compareAudio(fromTask.audio, fromRebuild.audio, /*frameTolerance=*/2))
     return 1;
 
-  if (!checkPreviewFileRemoval(tempDir)) return 1;
+  // PREVIEW_CLIP_KEEP=1 skips the cleanup check so the produced clips stay on
+  // disk for a hand measurement (the task's clip is kept as task_clip.mkv
+  // either way; the rebuilt one is preview_002.mkv in the temp directory).
+  // Same shape as test_preview_then_cut.cpp's PREVIEW_EXEC.
+  if (qgetenv("PREVIEW_CLIP_KEEP") == "1") {
+    printf("  preview cleanup skipped (PREVIEW_CLIP_KEEP=1), clips kept in %s\n",
+           qPrintable(tempDir));
+  } else if (!checkPreviewFileRemoval(tempDir)) {
+    return 1;
+  }
 
   printf("PASS: the rebuilt clip matches the one the task produced\n");
   return 0;

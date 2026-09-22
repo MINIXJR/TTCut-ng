@@ -694,6 +694,15 @@ void TTCurrentFrame::beginPlayerLoad()
     }
   }
 
+  // Pin the output channel layout for this track, if the user asked for it.
+  // Playback reads the SOURCE audio (uncut, un-normalized), so an AC3 track
+  // that switches channel mode mid-stream reaches mpv unchanged and makes it
+  // rebuild the audio output at every switch.
+  if (mPlayer && mAVItem && mAVItem->audioCount() > 0) {
+    if (TTAudioStream* audioStream = mAVItem->audioStreamAt(0))
+      mPlayer->setOutputChannels(TTMpvWrapper::channelsOptionFor(audioStream->streamType()));
+  }
+
   // Reset speed to 1× on every fresh play
   mSpeedStep = kSpeedStepNormal;
   laPlaySpeed->setText(QString("1\xC3\x97")); // "1×"

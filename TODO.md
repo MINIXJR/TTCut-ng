@@ -760,14 +760,135 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
      that actually exhibits the artefact exists.
   2. **Correction is single-step.** The preview offers only `Shift -1 Frame` /
      `Shift +1 Frame` (`TTCutPreview::onBurstShift()`), so a 2-3 frame burst needs
-     repeated clicks. Note the shift moves the cut by one *video* frame (40 ms @ 25 fps)
+     repeated clicks, and every click costs a full clip rebuild (Smart Cut, audio,
+     mux). Note the shift moves the cut by one *video* frame (40 ms @ 25 fps)
      while an AC3 audio frame is 32 ms — the two grids do not align.
+
+     **Design worked out 2026-09-22, deferred by the user** ("bringt mich aktuell
+     nicht weiter"). Not blocked on anything — pick it up as written:
+     - `TTAudioCutter::detectBurst` already computes the RMS of EVERY audio frame
+       in the 200 ms window (`rmsValues`) and only *tests* the outermost two. The
+       length of the loud run is therefore available at zero extra I/O: keep
+       walking inward from the boundary while `rms - median >= minDeltaDb` and the
+       chunk clears the absolute floor. New out-parameter with a default value, so
+       the existing callers stay untouched.
+     - `TTAVData::CutBurstInfo` carries the run length on, converted to video
+       frames; the button labels itself with the distance instead of a fixed
+       "1 Frame" (needs a `%1` translation entry) and moves it in ONE
+       `moveCutEdge` — one clip rebuild instead of N. `wouldInvert` then guards
+       the whole distance.
+     - **The bound falls out of the measurement, no invented number:** a loud run
+       that reaches the inner end of the window has no measurable end — exactly the
+       level-step case of Pitfall 5. The button then stays at one frame and the row
+       says the burst reaches past the window. In the one-frame case the button
+       behaves exactly as today, so the change can only add.
+     - Gate: synthetic AC3 with a burst of exactly N audio frames (N = 1, 2, 3)
+       plus one that fills the window; assert the reported distance. Unlike the
+       *detection* widening above, this needs no scarce real material.
+
+     **What the 2026-09-22 spike removed from its rationale:** the click at an AC3
+     format change is NOT in the audio (see the separate entry below), so the
+     button cannot help there. What remains is the ordinary advertising burst, and
+     the gain is limited to the 2-3 frame case.
 
   Orthogonal and already solved: the context-relative threshold `burstMinDeltaDb`
   (v0.72.0) fixed false negatives on quiet programme material; the 2026-07-09 rewrite
   passed that threshold into the detector, removed the redundant post-filter, and made
   the detector report the **peak** of the tested chunks instead of the first one above
   the threshold. None of this addresses the two gaps above — both remain open.
+
+- **Das Knacksen am AC3-Formatwechsel steht nicht im Ton — mpv baut den
+  Ausgabeweg neu auf** (gemessen 2026-09-22, offen)
+
+  Ausgangsfrage des Users: ist der Knacks beim Formatwechsel (5.1 ↔ 2.0)
+  überhaupt im Strom, oder entsteht er erst bei der Wiedergabe? Gemessen an
+  einem eigens gebauten Fixture (440 Hz durchgehend, nur die Kanalzahl wechselt
+  bei 8,0 s und 12,0 s — die Tonhöhe bleibt gleich, damit der Sprung nicht vom
+  Inhalt kommt):
+
+  - **mpv reißt den Ausgabeweg ab und baut ihn neu auf**, an jeder Wechselstelle:
+    drei `Trying audio driver` statt einer, zwei `drain timeout` dazwischen, und
+    der PCM-Schreiber fing die Datei neu an (8,0 s statt 20 s Ausgabe). Mit
+    `--audio-channels=stereo`: **eine** Öffnung, **null** timeouts.
+  - **TTCut ist genau so eingestellt.** `gui/ttmpvlibbackend.cpp` setzt acht
+    mpv-Optionen, `audio-channels` ist keine davon. Und
+    `TTCurrentFrame::buildPlaybackMuxParams` hängt `audioStream->filePath()` an —
+    die **Quell**-Tonspur, ungeschnitten und unvereinheitlicht; MPEG-2 spielt die
+    Quell-ES ohnehin direkt. Beim Sichten ist der Wechsel also voll da.
+  - **Im Ton selbst kein Befund.** Weder die Messung von 2026-07-09 an
+    `TEST_deu.ac3` noch diese zeigt einen lauten Transienten. Der kleine Sprung,
+    den eine Herunter-Mischung erzeugt, ist eine Eigenschaft der Mischung: über
+    eine Layout-Grenze hinweg gibt es ohne eine solche Entscheidung gar keine
+    gemeinsamen Abtastwerte.
+
+  **Umgesetzt 2026-09-22** als Einstellung „Kanalaufteilung bei der Wiedergabe"
+  im Audio-Tab: `Original` (Vorgabe, ändert nichts) oder `5.1` (hält die Ausgabe
+  bei AC3-Spuren fest). `TTMpvWrapper::channelsOptionFor` ist die einzige Stelle
+  der Zuordnung und hält nur AC3 fest — ein Codec, der ohnehin nur Stereo kann,
+  bringt mpv nie zum Umschalten. Beide Abspieler wenden es an (Hauptfenster und
+  Vorschau). Gate `mpv_channels` prüft die Zuordnung und zählt in einer echten
+  libmpv-Instanz die AO-Initialisierungen: drei ohne die Option, eine mit.
+  Der Schnitt ist nicht berührt.
+
+  **Der Hörtest ist gelaufen und blieb negativ (2026-09-22).** Der Abriss ist
+  gemessen, seine Hörbarkeit nicht — und der Knacks, den der User kennt, ist
+  damit NICHT erklärt. Die Einstellung bleibt trotzdem drin, um sie an echtem
+  Material umschalten zu können, sobald eines auftaucht.
+
+  Geprüft wurde, in dieser Reihenfolge:
+  - `TEST_deu.ac3` (Wechsel 83,808 s / 624,128 s): nichts hörbar. **Messfalle:**
+    an beiden Stellen ist es leise — RMS-Senke auf −53 dB bzw. Stille bei −95 dB.
+    Untaugliches Material, sagt in beide Richtungen nichts.
+  - Vollständiger Durchlauf der übrigen Aufnahmen: `05x02`, `05x03` ohne Wechsel;
+    `05x04` drei Wechsel (alle fallen auf −114 bzw. −120 dB ab); `The Silent Hour`
+    zwei, davon einer bei 6161,504 s in durchgehend lautem Material (−25 dB, keine
+    Senke) — **dort ebenfalls nichts hörbar.** Das ist das belastbare Negativ.
+  - Synthetischer Härtefall (`/usr/local/src/CLAUDE_TMP/TTCut-ng/klicktest/`):
+    Dauerton 440 Hz, Wechsel bei 38,0 und 42,0 s, **pegelgleich gemacht** — die
+    erste Fassung legte denselben Ton auf alle sechs Kanäle und war dadurch im
+    Downmix 3 dB lauter, was als Pegelsprung zu hören war und den Test
+    verfälscht hätte. In der bereinigten Fassung: kein Unterschied zwischen
+    `Original` und `5.1`, und **es klingt nicht wie der Knacks, den der User
+    kennt**.
+
+  **Vorrangige Hypothese für das echte Knacksen ist damit die Wiedergabekette
+  selbst, nicht der Formatwechsel.** Präzedenzfall im Korpus-Inventar
+  ([[reference_test_corpus_naming]], Astra-UHD1-Eintrag): ein gemeldetes Knistern
+  reproduzierte sich unter VDR *und* mpv, die Tonspur war sauber gemessen, Ergebnis
+  war die Ausgabekette (Teufel Soundbar One) — mit dem Vermerk, das nicht erneut
+  als TTCut-Problem zu untersuchen. Dieselbe Hardware. Wer hier weitermacht,
+  braucht zuerst eine Aufnahme, bei der der Knacks reproduzierbar auftritt.
+
+  Die fertige MKV ist nicht betroffen (siehe unten).
+
+- **Der Vorschau-Neubau trägt den Formatwechsel weiter, die Vorschau-Task nicht**
+  (gemessen 2026-09-22, offen — Defekt)
+
+  Wer eine Schnittkante in der Vorschau bewegt (Burst-Verschiebung,
+  Seitenverhältnis-Sprung), bekommt einen neu gebauten Clip, der an einem
+  AC3-Formatwechsel knackst, wo die ursprüngliche Vorschau still war.
+
+  Gemessen mit `tools/diag/test_preview_clip` (`PREVIEW_CLIP_KEEP=1`) auf einem
+  120-s-AC3 mit 5.1-Abschnitt 38,016…42,016 s, Tux-H.264 als Bild:
+
+  | | Rahmen | Wechsel im Clip |
+  |---|---|---|
+  | Clip der Task | 251 | keiner |
+  | Neubau nach Kantenverschiebung | 250 | zwei: t=2,016 s (2→6), t=4,000 s (6→2) |
+  | fertige MKV (`--auto-cut`, Schnitt 1500…2500) | 626 | keiner |
+
+  Ursache ist die **Option-A-Abweichung**
+  (`docs/code-map/audio-cut-timing.md`): `ttRebuildSmartCutPreviewClip` ruft den
+  3-Arg-`TTAudioCutter::cut` ohne acmod-Vereinheitlichung, Rasterung und
+  Spur-Delay, wo `TTCutPreviewTask::createH264PreviewClip` den Schnitt plant. Die
+  Karte verlangte für ihre Auflösung bisher eine eigene Begründung — die liegt
+  damit vor. Der Fix ist, den Neubau ebenfalls über `cutAudioTracks` zu führen;
+  das beseitigt alle drei Teile auf einmal.
+
+  **Das Gate `preview_clip_*` hat es nicht bemerkt**: es vergleicht die Kanalzahl
+  aus `codecpar`, und die meldet den Wert des ersten Rahmens (beidseitig 2). Wer
+  den Fix angeht, prüft den Kanalwechsel **je Rahmen** — sonst steht das Gate
+  wieder auf PASS, während ein hörbarer Unterschied im Clip liegt.
 
 - **Cut point stutter (rare)**: For streams without any IDR frames (only Non-IDR I-slices), Smart Cut re-encodes 1 GOP at each segment boundary to produce an IDR. This is typically invisible but may cause minor quality differences at cut points (~0.5% of frames affected). When B-frame reorder delay shifts CutIn past the stream-copy keyframe (Case B), a small leak of ≤ reorder_delay pre-CutIn frames may occur to avoid POC domain mismatch.
 

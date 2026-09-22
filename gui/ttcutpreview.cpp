@@ -312,6 +312,7 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   }
 
   qDebug("load preview %s", qPrintable(current_video_file));
+  applyOutputChannels();
   mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/mAutoPlayOnSelect);
   if (mAutoPlayOnSelect) {
     pbPlay->setText(tr("Stop"));
@@ -810,6 +811,20 @@ void TTCutPreview::onAspectJump()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
+ * Pin the output channel layout for the track this preview plays
+ */
+void TTCutPreview::applyOutputChannels()
+{
+  if (!mPlayer || !mpCutList || mpCutList->count() == 0) return;
+
+  TTAVItem* avItem = mpCutList->at(0).avDataItem();
+  if (avItem == nullptr || avItem->audioCount() == 0) return;
+
+  if (TTAudioStream* aStream = avItem->audioStreamAt(0))
+    mPlayer->setOutputChannels(TTMpvWrapper::channelsOptionFor(aStream->streamType()));
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
  * Regenerate a single preview clip after an edge move
  */
 void TTCutPreview::regeneratePreviewClip(int iCut)
@@ -882,6 +897,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
 
   // Reload clip in player, preloaded paused — user has to press Play.
   current_video_file = outputFile;
+  applyOutputChannels();
   mPlayer->load(current_video_file, 0.0, QString(), /*autoPlay=*/false);
   pbPlay->setText(tr("Play"));
   pbPlay->setIcon(ttThemedIcon("media-playback-start", QStyle::SP_MediaPlay));

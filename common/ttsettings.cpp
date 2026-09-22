@@ -384,6 +384,12 @@ void TTSettings::setNormalizeAcmod(bool v)
   mNormalizeAcmod = v;
 }
 
+void TTSettings::setPlaybackAudioChannels(int v)
+{
+  if (mPlaybackAudioChannels == v) return;
+  mPlaybackAudioChannels = v;
+}
+
 void TTSettings::setAudioLanguagePreference(const QStringList& v)
 {
   if (mAudioLanguagePreference == v) return;
@@ -662,6 +668,7 @@ void TTSettings::load()
   // their own Screenshot block (below) per the Task 1 inventory.
   mBurstMinDeltaDb        = settings.value("BurstMinDeltaDb/",        mBurstMinDeltaDb).toInt();
   mNormalizeAcmod         = settings.value("NormalizeAcmod/",         mNormalizeAcmod).toBool();
+  mPlaybackAudioChannels  = settings.value("PlaybackAudioChannels/",  mPlaybackAudioChannels).toInt();
   mAudioLanguagePreference = settings.value("AudioLanguagePreference/", QStringList{}).toStringList();
   mQuickJumpIntervalSec   = settings.value("QuickJumpInterval/",      mQuickJumpIntervalSec).toInt();
   mQuickJumpThumbHeight   = settings.value("QuickJumpThumbHeight/",    mQuickJumpThumbHeight).toInt();
@@ -904,6 +911,7 @@ void TTSettings::save()
   // ----- Audio/QuickJump fields (Task 10) -----------------------------
   settings.setValue("BurstMinDeltaDb/",         mBurstMinDeltaDb);
   settings.setValue("NormalizeAcmod/",          mNormalizeAcmod);
+  settings.setValue("PlaybackAudioChannels/",  mPlaybackAudioChannels);
   settings.setValue("AudioLanguagePreference/", mAudioLanguagePreference);
   settings.setValue("QuickJumpInterval/",       mQuickJumpIntervalSec);
   settings.setValue("QuickJumpThumbHeight/",    mQuickJumpThumbHeight);

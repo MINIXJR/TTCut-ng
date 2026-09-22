@@ -23,11 +23,13 @@ TTCutSettingsAudio::~TTCutSettingsAudio() {}
 void TTCutSettingsAudio::resetToDefaults()
 {
   // Compile-time defaults — must match common/ttsettings.h
-  // (mNormalizeAcmod, mBurstMinDeltaDb). Audio language preference is
+  // (mNormalizeAcmod, mBurstMinDeltaDb, mPlaybackAudioChannels). Audio
+  // language preference is
   // intentionally left unchanged — user-curated setting that survives
   // factory resets.
   cbNormalizeAcmod->setChecked(true);
   sbBurstMinDelta->setValue(20);
+  cbPlaybackChannels->setCurrentIndex(TTSettings::PlaybackChannelsOriginal);
 }
 
 void TTCutSettingsAudio::setTabData()
@@ -35,6 +37,7 @@ void TTCutSettingsAudio::setTabData()
   leAudioLangPref->setText(TTSettings::instance()->audioLanguagePreference().join(","));
   cbNormalizeAcmod->setChecked(TTSettings::instance()->normalizeAcmod());
   sbBurstMinDelta->setValue(TTSettings::instance()->burstMinDeltaDb());
+  cbPlaybackChannels->setCurrentIndex(TTSettings::instance()->playbackAudioChannels());
 }
 
 void TTCutSettingsAudio::saveTabData()
@@ -50,4 +53,5 @@ void TTCutSettingsAudio::saveTabData()
   TTSettings::instance()->setAudioLanguagePreference(newPrefs);
   TTSettings::instance()->setNormalizeAcmod(cbNormalizeAcmod->isChecked());
   TTSettings::instance()->setBurstMinDeltaDb(sbBurstMinDelta->value());
+  TTSettings::instance()->setPlaybackAudioChannels(cbPlaybackChannels->currentIndex());
 }

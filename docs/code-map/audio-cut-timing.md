@@ -314,5 +314,11 @@ flowchart TD
   Bleibt offen. Das Gate `preview_clip_h264` misst den Abstand und lässt ihn
   bis zwei Tonrahmen zu — so bleibt die Abweichung sichtbar, statt
   wegdefiniert zu werden.
+  **Die Begründung liegt seit 2026-09-22 vor (gemessen):** an einem AC3 mit
+  5.1-Abschnitt trägt der Neubau den Formatwechsel in den Clip (zwei Wechsel),
+  der Clip der Task und die fertige MKV nicht — und ein Formatwechsel mitten im
+  Strom lässt mpv den Ausgabeweg neu aufbauen, was hörbar knackst. Der Neubau
+  klingt damit anders als die Vorschau, die er ersetzt. Details und Zahlen in
+  `TODO.md`, Eintrag „Der Vorschau-Neubau trägt den Formatwechsel weiter".
 - **Zwei Drift-Signale** (`audioDriftCalculated`, `cutAudioDriftCalculated`) auf
   denselben Slot `onAudioDriftUpdated`. Nicht Teil von A1/A2 — weiterhin offen.

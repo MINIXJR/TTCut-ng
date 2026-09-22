@@ -12,6 +12,8 @@
 #define TTMPVWRAPPER_H
 
 #include <QObject>
+
+#include "../avstream/ttavtypes.h"
 #include <QString>
 
 class ITTMpvBackend;
@@ -54,6 +56,23 @@ public:
   bool   isPlaying() const                  { return mPlaying; }
 
   void   setSpeed(double factor);            // ±-Faktor; <0 → play-dir=backward
+  //! The value for mpv's `audio-channels` that this audio track should be
+  //! played with, or an empty string when mpv is to be left alone.
+  //!
+  //! Empty unless the user picked a fixed layout AND the track's codec can
+  //! carry more than stereo - a format that is stereo by definition never
+  //! makes mpv switch layouts, so pinning it would gain nothing.
+  //!
+  //! Playback only. Nothing in the cut or mux chain reads this.
+  static QString channelsOptionFor(TTAVTypes::AVStreamType audioType);
+
+  //! Apply \a channels (from channelsOptionFor) to the player. An empty
+  //! string leaves mpv's own default in place. Unlike setKeepOpen this works
+  //! after mpv_initialize - `audio-channels` is a runtime property (measured:
+  //! set_property returns success and the next file opens the output once
+  //! instead of three times on a stream that switches channel mode twice).
+  void   setOutputChannels(const QString& channels);
+
   void   setSubtitleFile(const QString& path);
   void   clearSubtitleFile();
   void   setSubtitleDelay(int delayMs);

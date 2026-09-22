@@ -11,6 +11,7 @@
 #include "ttmpvwrapper.h"
 #include "ittmpvbackend.h"
 #include "ttmpvlibbackend.h"
+#include "../common/ttsettings.h"
 #include <QVariant>
 #include <QStringList>
 
@@ -44,6 +45,29 @@ void TTMpvWrapper::setKeepOpen(bool keepOpen)
 {
   if (mBackend)
     mBackend->setKeepOpen(keepOpen);
+}
+
+QString TTMpvWrapper::channelsOptionFor(TTAVTypes::AVStreamType audioType)
+{
+  if (TTSettings::instance()->playbackAudioChannels() != TTSettings::PlaybackChannels51)
+    return QString();
+
+  // Only codecs that can carry more than stereo. An MP2 track never makes mpv
+  // switch layouts, so pinning it would gain nothing and would hand PipeWire a
+  // six-channel stream with four silent channels for no reason.
+  if (audioType != TTAVTypes::ac3_audio)
+    return QString();
+
+  return QStringLiteral("5.1");
+}
+
+void TTMpvWrapper::setOutputChannels(const QString& channels)
+{
+  if (channels.isEmpty() || !mBackend) return;
+
+  // Runtime property, unlike keep-open: this may be called after the backend
+  // is up and takes effect for the next file.
+  mBackend->setProperty(QStringLiteral("audio-channels"), channels);
 }
 
 QWidget* TTMpvWrapper::renderWidget()

@@ -350,6 +350,10 @@ target_link_libraries(test_repairdialog_mpv_lifecycle PRIVATE ttcut-core)
 # the live part - no GL, so it runs offscreen.
 diag_tool(test_mpv_loadfile_args AV WIDGETS SOURCES)
 target_link_libraries(test_mpv_loadfile_args PRIVATE ttcut-core PkgConfig::MPV)
+# Same shape: the mapping lives in TTMpvWrapper (whole core), part 2 drives a
+# real libmpv instance.
+diag_tool(test_mpv_channels AV WIDGETS SOURCES)
+target_link_libraries(test_mpv_channels PRIVATE ttcut-core PkgConfig::MPV)
 # Same rationale as test_h26xcut_abort: drives TTAVData::onDoCut()'s MPEG-2
 # branch (TTCutVideoTask on the pool, mplex for the mux stage), so it needs
 # the whole core library, not a curated source list.
@@ -436,6 +440,7 @@ add_custom_target(diag DEPENDS
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
+  test_mpv_channels
   test_preview_clip)
 
 # --- the cut-abort harness suite -------------------------------------------

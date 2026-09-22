@@ -52,6 +52,19 @@
           <property name="toolTip"><string>A burst is reported when its level exceeds the surrounding audio by at least this many dB. Higher = less sensitive; 0 disables burst detection.</string></property>
          </widget>
         </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="laPlaybackChannels">
+          <property name="text"><string>Channel layout during playback:</string></property>
+          <property name="toolTip"><string>Playback only - the cut is not affected. mpv follows the audio stream by default, so an AC3 track that switches its channel mode within the recording (5.1 &lt;-&gt; 2.0, common in DVB) makes it close and reopen the audio output at every switch, which can be audible as a click. "5.1" pins the output for AC3 tracks so no switch happens; stereo material then simply occupies the front channels. Tracks that are stereo by definition (MP2) are never pinned.</string></property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QComboBox" name="cbPlaybackChannels">
+          <property name="toolTip"><string>Playback only - the cut is not affected. mpv follows the audio stream by default, so an AC3 track that switches its channel mode within the recording (5.1 &lt;-&gt; 2.0, common in DVB) makes it close and reopen the audio output at every switch, which can be audible as a click. "5.1" pins the output for AC3 tracks so no switch happens; stereo material then simply occupies the front channels. Tracks that are stereo by definition (MP2) are never pinned.</string></property>
+          <item><property name="text"><string>Original (follow the stream)</string></property></item>
+          <item><property name="text"><string>5.1 (pin, avoids the switch)</string></property></item>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>
@@ -66,7 +79,7 @@
      <item>
       <widget class="QPushButton" name="btnResetDefaults">
        <property name="text"><string>Reset to defaults</string></property>
-       <property name="toolTip"><string>Reset audio burst threshold and AC3 normalisation to their factory defaults. The language preference is left unchanged. Changes are applied only when you click OK.</string></property>
+       <property name="toolTip"><string>Reset audio burst threshold, AC3 normalisation and the playback channel layout to their factory defaults. The language preference is left unchanged. Changes are applied only when you click OK.</string></property>
       </widget>
      </item>
     </layout>

@@ -197,7 +197,12 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
    weggemittelt und bleibt unsichtbar, selbst wenn sein Sample-Peak 0 dBFS
    erreicht. Empirisch 2026-07-09: an beiden acmod-Wechseln in `TEST_deu.ac3`
    (83,808 s / 624,128 s) zeigt **weder RMS noch Sample-Peak** einen Ausschlag
-   nach oben.
+   nach oben. **2026-09-22 aufgeklärt:** das Knacksen am Formatwechsel steht
+   gar nicht im Ton — mpv reißt den Ausgabeweg ab und baut ihn neu auf, sobald
+   die Kanalzahl mitten im Strom wechselt (drei AO-Öffnungen statt einer, zwei
+   `drain timeout`). Gegen diesen Fall hilft kein Detektor und kein
+   Verschiebe-Knopf; siehe `TODO.md`, Eintrag „Das Knacksen am
+   AC3-Formatwechsel steht nicht im Ton".
 3. **Nur die äußersten zwei Chunks (~64 ms) werden geprüft**, das Fenster
    spannt aber 200 ms. Alles weiter innen geht **ausschließlich in den
    Kontext-Median** ein.
