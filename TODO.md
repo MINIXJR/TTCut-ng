@@ -154,6 +154,19 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
+- **Projekt, dessen Video nicht öffnet, bleibt halb geladen und „geändert"**
+  (Befund 2026-09-23, beim Gate `autocut_exit`)
+  - `TTAVData::endAbortedProjectLoad` setzt das aktuelle Element auf
+    `nullptr`; `TTCutMainWindow::onAVItemChanged` kehrt aber sofort zurück,
+    wenn das schon sein aktuelles Element ist — und das ist es, wenn kein
+    Video des Projekts je geöffnet wurde (fehlende Datei). `closeProject`
+    läuft dann nicht: das angelegte Element mit seinen Schnitten bleibt,
+    `mProjectModified` bleibt gesetzt.
+  - Gemessen headless: `quit()` führte in `closeEvent` zum Dialog „Save
+    changes before closing?" und hing (gdb: `closeEvent` → `QDialog::exec`).
+    `--auto-cut` umgeht das seitdem (`endAutoCut` setzt das Flag zurück);
+    in der Oberfläche ist der Zustand ungeprüft.
+
 - **MPEG-2: Bildraten ausser 24, 25 und 30 fps werden als 25 fps gelesen**
   (Befund 2026-09-23, beim Gate `project_incompatible`)
   - `TTSequenceHeader::frameRateValue` (`avstream/ttmpeg2videoheader.cpp`)
@@ -198,6 +211,8 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Selbstbeendung BEHOBEN (v0.78.0, `9da00f13`/`4071cc3d`): `--auto-cut` endet jetzt von
     selbst — bei Erfolg wie bei Fehlschlag, für MPEG-2 wie für H.264. Ein Wächter-Wrapper,
     der auf eine stabile Ausgabedatei wartet und den Prozess killt, ist nicht mehr nötig.
+  - Exit-Code BEHOBEN (2026-09-23): 0 nur bei vollständigem Schnitt, 1 bei jedem Lauf
+    ohne Ausgabe (Gate `autocut_exit`, siehe `docs/completed-work.md`).
   - Offen: echtes Qt-freies Standalone-Tool, das `.ttcut` liest und ohne GUI-Event-Loop schneidet —
     läuft dann auch auf reinen Servern. Use case: VDR → demux → TTCut-ng CLI → archive
 

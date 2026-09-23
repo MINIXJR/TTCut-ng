@@ -5,6 +5,12 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **`--auto-cut` reports failure in its exit code.** It exited 0 even when
+  the cut failed, the project did not load or held no cuts; it now exits 0
+  only for a completed cut and 1 otherwise, and logs "Auto-cut: cut complete"
+  or the reason. A project whose video file is missing no longer leaves the
+  run waiting forever on a hidden "Save changes?" dialog. Gate:
+  `autocut_exit`.
 - **A project with two videos that cannot be cut together no longer loads.**
   Cuts from a project file skipped the check the cut list applies (same
   codec, frame rate, audio tracks); a hand-written project with an MPEG-2 and

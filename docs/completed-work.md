@@ -2428,6 +2428,26 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Werkzeuge und Infrastruktur
 
+- **`--auto-cut` meldete jeden Lauf mit Exit 0** → **ERLEDIGT
+  (2026-09-23)**, Zweig `fix/autocut-exit-code` (Nebenbefund aus dem
+  Projektlader-Fix, User: „Exit-Code als Nächstes separat").
+  - Gemessen vor dem Fix: gescheiterter Schnitt (Ausgabeverzeichnis ohne
+    Schreibrecht, „Audio cut failed for track 1", nichts geschrieben),
+    Projekt ohne Schnitte und abgelehntes Mischprojekt endeten mit Exit 0;
+    nur die falsche Endung gab 1 (über `QApplication::exit`).
+  - Erster Ansatz `QApplication::exit(code)` verworfen, gemessen: dann läuft
+    `closeEvent` nicht — Konfiguration 4 statt 89 Zeilen, und vor allem
+    fehlt `closeProject` (Stream-Point-Tasks stoppen, auf den globalen Pool
+    warten, bevor abgebaut wird). Jetzt: `endAutoCut(code)` merkt den Code,
+    `quit()` wie bisher, `main()` gibt `headlessExitCode()` zurück.
+  - Dabei gefunden und headless umgangen: fehlende Videodatei → Element
+    bleibt geladen und „geändert", `quit()` hing im Speichern-Dialog von
+    `closeEvent` (gdb). `endAutoCut` setzt das Flag zurück; die Wurzel
+    (`onAVItemChanged` überspringt `closeProject`) steht in `TODO.md`.
+  - Gate `autocut_exit` (Tux-Stufe): vollständiger Schnitt 0, ohne Schnitte
+    1, schreibgeschütztes Verzeichnis 1, fehlende Datei 1 — vor dem Fix rot;
+    `project_incompatible` und `aspect_autocut` prüfen ihren Exit-Code mit.
+
 - **Vorschau-Neubau trug den AC3-Formatwechsel weiter und verlor den Spur-Delay
   („Option A")** → **ERLEDIGT** (2026-09-22, Branch `feature/preview-audio-consolidation`)
   - Nach einer Kantenverschiebung in der Vorschau baute der Dialog den Clip mit
