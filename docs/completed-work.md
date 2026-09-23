@@ -18,6 +18,70 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Smart Cut (H.264 / H.265)
 
+- **Bit-Stream-API in `extern/` vereinheitlichen** → **DONE (2026-09-23,
+  Zweig `refactor/bitstream-unification`)**, Spec
+  `docs/superpowers/specs/2026-09-23-bitstream-unification-design.md`.
+  - War: nicht zwei, sondern **drei** Bit-APIs (`TTNaluParser::readBits` /
+    `readExpGolombUE/SE`, die dateilokalen `sps*`-Helfer in
+    `extern/ttessmartcut.cpp`, `THevcBitReader/Writer` in
+    `extern/tthevcseam.cpp`), zwei Paare für Emulation Prevention und vier
+    Durchläufe des H.264-SPS-Kopfs. Die Smart-Cut-Helfer waren `static` in
+    einer 5101-Zeilen-Datei und nur über ganze Schnitte geprüft; Scaling-
+    Matrizen, `poc_type 1`, 4:4:4, VUI mit HRD erreichte keine Fixture.
+  - Umbau: `avstream/ttbitstream` (Leser mit Fehler-Flag, anhängender
+    Schreiber, `ttOverwriteBits`, `ttRbspFromNal`/`ttNalFromRbsp`),
+    `avstream/tth264syntax` (`ttParseH264SpsHeader`, ein Durchlauf für
+    `TTNaluParser` und Smart Cut), Helfer unverändert nach
+    `extern/tth264bitstream.{h,cpp}` verschoben (`ttessmartcut.cpp` 5101 →
+    3184 Zeilen), dann alle Nutzer umgestellt und die alten APIs gelöscht.
+  - **Befund EPB (behoben):** `parseH264SpsBasics` las die SPS ohne
+    Entfernen der EPB-Bytes. Synthetische SPS mit EPB vor
+    `frame_mbs_only_flag` (große `poc_type-1`-Offsets): falsch gelesene
+    POC-Zykluslänge, `frame_mbs_only_flag` blieb unbekannt → Feldstream als
+    Framestream. Reichweite gemessen: 0 von 8 echten Dateien (5 Tux-Fixtures,
+    3 DVB-Aufnahmen) — deren EPB liegen alle in der VUI. Gate
+    `test_sps_basics_epb` (rot vor, grün nach dem Fix).
+  - **Befund Hänger (behoben):** Lesen am Pufferende lieferte `ue()` = 2³¹−1;
+    die MMCO- und RPLM-Schleifen in `neutralizeMmcoInAU` (Quell-AUs direkt
+    nach der Naht) und in `rewriteEncoderSliceForSourceSps` enden nur bei 0
+    bzw. 3. Gemessen: 4 von 5 abgeschnittenen Slices hingen (10-s-Wächter).
+    Fix: Schleifenwächter am Datenende, `num_ref_idx` auf 31 begrenzt.
+    Das Code-Review fand danach zwei Lücken, beide per Harness belegt und
+    behoben: Mehr als 31 Null-Bits mitten in der Liste setzen den Fehler
+    des neuen Lesers, ohne das Ende zu erreichen (der Wächter prüft jetzt
+    `error() || atEnd()`), und ein Header, der erst nach den Schleifen
+    abbricht, wurde noch umgebaut (jetzt: unverändert bzw. verworfen).
+    Gate `test_h264_truncated_slice` (7 Fälle + 2 Urteile).
+  - Belege: `test_h264_syntax_golden` — 495 Zeilen (Fixtures, Vektoren unter
+    `tools/diag/testdata/h264-syntax/`, handgebaute SPS/Slices/Streams),
+    aufgezeichnet mit dem alten Bit-Layer, nach jeder umgestellten Gruppe
+    identisch; gcov über den Golden-Satz: `tth264bitstream.cpp` 37 nie
+    ausgeführte Zeilen, alle Logging oder defensiv. EPB-Differenztest
+    (alle Folgen ≤ 4 Byte über {00,01,02,03,FF}, 10⁵ Zufallsfolgen) gegen
+    beide alten Paare ohne Abweichung. `gate_cut_identity.sh` 5/5 nach
+    jedem Schritt, `test_hevc_seam roundtrip` auf der Referenz-Schnitt-
+    ausgabe unverändert, `run-gates.sh` 96 PASS (einziger FAIL
+    `aspect_autocut`, Umgebung: `LANGUAGE=de` sticht `LC_ALL`, schon in der
+    Baseline).
+  - Bewusst offen: HEVC `scaling_list_data` mit expliziten Listen, positive
+    RPS-Einträge und die Fehlerzweige der CRA-Probe deckt der Golden-Satz
+    nicht ab. `neutralizeMmcoInAU` parst `redundant_pic_cnt` nicht (nur
+    Baseline/Extended), die Encoder-Umschreibung keine B-Slices (Re-Encode
+    mit `bf=0`). Breitere EPB-Reichweite auf dem NAS-Korpus nicht gemessen.
+  - **Review-Nacharbeit (User-Entscheid: alle fünf offenen Punkte), jeder
+    Punkt erst per Harness als FAIL belegt:**
+    abgeschnittene SPS gilt jetzt als unvollständig (`frame_mbs_only_flag`
+    unbekannt statt 0, keine erfundene `frame_num`-Breite; `test_sps_basics_epb`);
+    `ttNeutralizeMmcoInAU` kopiert CAVLC-Slice-Daten bitgenau bis zum Stoppbit
+    statt CABAC-Ausrichtung (`test_h264_mmco_neutralize`, golden.txt gezielt in
+    genau zwei Zeilen geändert — die zwei handgebauten CAVLC-Slices);
+    nicht umschreibbare Encoder-Slices werden gezählt, geloggt und nach dem
+    Schnitt als Frame-Liste mit „Ergebnis behalten"/„Verwerfen" und Kopieren in
+    die Zwischenablage vorgelegt (`test_unrewritten_frames`); die sieben
+    Annex-B-Scanner und die zwei HEVC-Helfer sitzen auf `avstream/ttannexb`
+    (golden identisch); die global gewordenen Helfer tragen das tt/TT-Präfix.
+    Danach `run-gates.sh` 98 PASS, Cut-Identität 5/5, HEVC-Round-Trip gleich.
+
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — Befunde B, D, E** → **GELÖST
   (2026-07-19)**. Wurzel war der TS↔ES-AU-Nummerierungs-Drift der
   `es_extra_frames`, Spec

@@ -50,12 +50,12 @@
 // default constructor
 // -----------------------------------------------------------------------------
 TTAVHeader::TTAVHeader()
-  : str_description("unknown"),
+  : header_offset(0),
+    header_start_code(0xFF),
+    str_description("unknown"),
     str_mode("unknown"),
     str_bit_rate("unknown"),
-    str_sample_rate("unknown"),
-    header_start_code(0xFF),
-    header_offset(0)
+    str_sample_rate("unknown")
 {
 }
 

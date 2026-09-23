@@ -449,6 +449,12 @@ class TTAVData : public QObject
     // --auto-cut (mNonInteractive) logs them and proceeds. Returns false only
     // when the user cancels.
     bool confirmCutWarnings(TTCutList* cutList);
+    // After an H.264 cut: lists re-encoded frames the SPS unification could
+    // not adjust (source display positions, -1 = unknown; frameRate turns
+    // them into times) and asks "Keep result" / "Discard", with a button
+    // that copies the list to the clipboard. Under --auto-cut logs the list
+    // and keeps the result. Returns false only when the user discards.
+    bool confirmUnrewrittenFrames(const QList<int>& sourceFrames, double frameRate);
 
     CutBurstInfo detectCutInBurst(const TTCutItem& item)  const;
 

@@ -133,6 +133,9 @@ set(TTCUT_HEADERS
   avstream/ttvideoheaderlist.h
   avstream/ttesinfo.h
   avstream/ttnaluparser.h
+  avstream/ttannexb.h
+  avstream/ttbitstream.h
+  avstream/tth264syntax.h
   avstream/ttdisplayordermap.h
   avstream/ttsrtsubtitlestream.h
   avstream/ttsubtitleheaderlist.h
@@ -151,6 +154,7 @@ set(TTCUT_HEADERS
   avstream/ttframeindexer.h
   extern/ttessmartcut.h
   extern/tthevcseam.h
+  extern/tth264bitstream.h
   extern/ttaudiorepair.h
   extern/ttaudiorepairitem.h
   extern/ttmuxlistdata.h
@@ -261,6 +265,9 @@ set(TTCUT_CORE_SOURCES
   avstream/ttvideoheaderlist.cpp
   avstream/ttesinfo.cpp
   avstream/ttnaluparser.cpp
+  avstream/ttannexb.cpp
+  avstream/ttbitstream.cpp
+  avstream/tth264syntax.cpp
   avstream/ttdisplayordermap.cpp
   avstream/ttsrtsubtitlestream.cpp
   avstream/ttsubtitleheaderlist.cpp
@@ -274,6 +281,7 @@ set(TTCUT_CORE_SOURCES
   extern/ttaudiocutter.cpp
   avstream/ttframeindexer.cpp
   extern/ttessmartcut.cpp
+  extern/tth264bitstream.cpp
   extern/tthevcseam.cpp
   extern/ttaudiorepair.cpp
   extern/ttmuxlistdata.cpp

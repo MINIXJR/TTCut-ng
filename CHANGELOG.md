@@ -2,6 +2,40 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **H.264 Smart Cut: a damaged slice header right after a seam no longer
+  hangs the cut.** The first access units copied after a re-encoded stretch
+  get their memory-management commands removed; a slice header that ended
+  inside that list (damaged DVB data) kept the parser looping forever. It now
+  stops at the end of the data and leaves such a slice unchanged. The same
+  guard protects the header rewrite of the re-encoded pictures. Gate:
+  `h264_truncated_slice`.
+- **H.264: the frame index and the MKV muxer read every SPS correctly.**
+  Both took `frame_mbs_only_flag` and the `frame_num` width from the raw SPS
+  bytes; an emulation-prevention byte early in the SPS shifted the fields
+  behind it, so a field-coded stream could be treated as frame-coded. Only
+  SPS with large `poc_type 1` offsets are affected - none of the measured
+  recordings. Gate: `sps_basics_epb`.
+- **H.264 Smart Cut on CAVLC sources: the frames after a seam are no longer
+  damaged.** The memory-management commands of the first copied access units
+  are removed after each seam; for CAVLC-coded slices this shifted the slice
+  data by up to seven bits, so their first macroblocks decoded as garbage.
+  CABAC material (most DVB H.264) was not affected. Gate:
+  `h264_mmco_neutralize`.
+- **H.264: an SPS that ends early is no longer read as field-coded.** The
+  missing `frame_mbs_only_flag` counted as 0, which made a progressive stream
+  look like a field stream. It now stays unknown.
+
+### Changed
+- **H.264 cuts report re-encoded frames that could not be adjusted to the
+  source stream.** Such a frame used to stay in the result silently and could
+  decode with artefacts. After the cut a dialog lists the frames with their
+  source position and time, offers *Keep result* or *Discard*, and copies the
+  list to the clipboard on request; the log names every frame. `--auto-cut`
+  logs and keeps. Gate: `unrewritten_frames`.
+
 ## v0.85.0 (2026-09-22)
 
 **Aspect changes at cut edges, a pinnable playback layout, preview audio through the cut's own chain**

@@ -211,6 +211,8 @@ void TTH26xCutTask::runCut()
   // HEVC seam fallback notes (Defekt A / H.265): surface in the progress
   // window and the log so affected seams are visible (spec decision 1).
   mSeamNotes = mSmartCut.seamNotes();
+  mUnrewrittenFrames = mSmartCut.unrewrittenSourceFrames();
+  mSourceFrameRate   = mSmartCut.frameRate();
   for (const QString& note : mSeamNotes) {
     log->warningMsg(__FILE__, __LINE__, note);
     reportStep(note, 0);

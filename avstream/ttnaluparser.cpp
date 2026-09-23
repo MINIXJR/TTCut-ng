@@ -8,6 +8,8 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttnaluparser.h"
+#include "ttbitstream.h"
+#include "tth264syntax.h"
 
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
@@ -488,130 +490,28 @@ int TTNaluParser::findStartCodePayload(const uint8_t* data, int size, int from)
     return -1;
 }
 
-QByteArray TTNaluParser::removeEmulationPrevention(const QByteArray& nal)
-{
-    QByteArray rbsp;
-    rbsp.reserve(nal.size());
-    for (int i = 0; i < nal.size(); ++i) {
-        if (i + 2 < nal.size() &&
-            (uint8_t)nal[i] == 0x00 &&
-            (uint8_t)nal[i+1] == 0x00 &&
-            (uint8_t)nal[i+2] == 0x03) {
-            rbsp.append(nal[i]);
-            rbsp.append(nal[i+1]);
-            i += 2;  // skip the 0x03 escape byte
-        } else {
-            rbsp.append(nal[i]);
-        }
-    }
-    return rbsp;
-}
-
 void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
 {
     // Strip emulation-prevention bytes before parsing — scaling lists and
     // VUI HRD parameters can extend past EP escapes, and reading them
     // bit-aligned without stripping shifts every following field.
-    QByteArray data = removeEmulationPrevention(rawNal);
+    const QByteArray data = ttRbspFromNal(rawNal);
     if (data.size() < 5) return;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
-    int bitPos = 8;  // Skip NAL header byte
-
-    // profile_idc (8 bits)
-    int profileIdc = static_cast<int>(readBits(bytes, data.size(), bitPos, 8));
-
-    // constraint_set0..5_flags (6 bits) + reserved (2 bits) = 8 bits
-    readBits(bytes, data.size(), bitPos, 8);
-
-    // level_idc (8 bits)
-    readBits(bytes, data.size(), bitPos, 8);
-
-    // seq_parameter_set_id (ue(v))
-    int spsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-
-    // For High profile and above, parse chroma_format_idc etc.
-    if (profileIdc == 100 || profileIdc == 110 || profileIdc == 122 ||
-        profileIdc == 244 || profileIdc == 44  || profileIdc == 83  ||
-        profileIdc == 86  || profileIdc == 118 || profileIdc == 128 ||
-        profileIdc == 138 || profileIdc == 139 || profileIdc == 134 ||
-        profileIdc == 135) {
-
-        // chroma_format_idc (ue(v))
-        int chromaFormatIdc = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-        if (chromaFormatIdc == 3) {
-            // separate_colour_plane_flag (1 bit)
-            readBits(bytes, data.size(), bitPos, 1);
-        }
-
-        // bit_depth_luma_minus8 (ue(v))
-        readExpGolombUE(bytes, data.size(), bitPos);
-        // bit_depth_chroma_minus8 (ue(v))
-        readExpGolombUE(bytes, data.size(), bitPos);
-
-        // qpprime_y_zero_transform_bypass_flag (1 bit)
-        readBits(bytes, data.size(), bitPos, 1);
-
-        // seq_scaling_matrix_present_flag (1 bit)
-        uint32_t scalingMatrixPresent = readBits(bytes, data.size(), bitPos, 1);
-        if (scalingMatrixPresent) {
-            int numLists = (chromaFormatIdc != 3) ? 8 : 12;
-            for (int i = 0; i < numLists; i++) {
-                uint32_t listPresent = readBits(bytes, data.size(), bitPos, 1);
-                if (listPresent) {
-                    int sizeOfList = (i < 6) ? 16 : 64;
-                    int lastScale = 8;
-                    int nextScale = 8;
-                    for (int j = 0; j < sizeOfList; j++) {
-                        if (nextScale != 0) {
-                            int deltaScale = readExpGolombSE(bytes, data.size(), bitPos);
-                            nextScale = (lastScale + deltaScale + 256) % 256;
-                        }
-                        lastScale = (nextScale == 0) ? lastScale : nextScale;
-                    }
-                }
-            }
-        }
-    }
-
-    // log2_max_frame_num_minus4 (ue(v))
-    int log2MaxFrameNumMinus4 = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-
-    // pic_order_cnt_type (ue(v))
-    int pocType = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-    if (pocType == 0) {
-        readExpGolombUE(bytes, data.size(), bitPos);
-    } else if (pocType == 1) {
-        readBits(bytes, data.size(), bitPos, 1);
-        readExpGolombSE(bytes, data.size(), bitPos);
-        readExpGolombSE(bytes, data.size(), bitPos);
-        int numRefFrames = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
-        // Cap to bound CPU time for malicious SPS values up to ~2^31.
-        if (numRefFrames > 256) return;
-        for (int i = 0; i < numRefFrames; i++) {
-            readExpGolombSE(bytes, data.size(), bitPos);
-        }
-    }
-
-    readExpGolombUE(bytes, data.size(), bitPos);  // max_num_ref_frames
-    readBits(bytes, data.size(), bitPos, 1);       // gaps_in_frame_num
-    readExpGolombUE(bytes, data.size(), bitPos);   // pic_width
-    readExpGolombUE(bytes, data.size(), bitPos);   // pic_height
-
-    // frame_mbs_only_flag (1 bit) -- THIS IS WHAT WE NEED
-    bool frameMbsOnlyFlag = (readBits(bytes, data.size(), bitPos, 1) == 1);
+    TTBitReader r(data);
+    TTH264SpsHeader h;
+    if (!ttParseH264SpsHeader(r, h)) return;     // cycle > 256: store nothing (as before)
 
     TTSpsInfo info;
-    info.spsId = spsId;
-    info.log2MaxFrameNumMinus4 = log2MaxFrameNumMinus4;
-    info.frameMbsOnlyFlag = frameMbsOnlyFlag;
-    mSpsInfoMap[spsId] = info;
+    info.spsId = static_cast<int>(h.spsId);
+    info.log2MaxFrameNumMinus4 = h.log2MaxFrameNumMinus4;
+    info.frameMbsOnlyFlag = h.frameMbsOnly;
+    mSpsInfoMap[info.spsId] = info;
 
-    if (!frameMbsOnlyFlag) {
+    if (!h.frameMbsOnly) {
         if (TTSettings::instance()->logAVStream())
-            qDebug() << "  SPS" << spsId << ": frame_mbs_only_flag=0 (may contain field pictures)"
-                     << "log2_max_frame_num_minus4=" << log2MaxFrameNumMinus4;
+            qDebug() << "  SPS" << info.spsId << ": frame_mbs_only_flag=0 (may contain field pictures)"
+                     << "log2_max_frame_num_minus4=" << h.log2MaxFrameNumMinus4;
     }
 }
 
@@ -622,11 +522,11 @@ void TTNaluParser::parseH264PpsData(const QByteArray& data)
 {
     if (data.size() < 2) return;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
-    int bitPos = 8;  // Skip NAL header byte
+    TTBitReader r(reinterpret_cast<const uint8_t*>(data.constData()), data.size());
+    r.setPos(8);  // Skip NAL header byte
 
-    int ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
-    int spsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    int ppsId = static_cast<int>(r.ue());
+    int spsId = static_cast<int>(r.ue());
 
     mPpsToSpsMap[ppsId] = spsId;
 }
@@ -640,20 +540,20 @@ bool TTNaluParser::parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal)
 {
     if (data.size() < 3) return false;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
-    int bitPos = 8;  // Skip NAL header byte
+    TTBitReader r(reinterpret_cast<const uint8_t*>(data.constData()), data.size());
+    r.setPos(8);  // Skip NAL header byte
 
     // first_mb_in_slice (ue(v))
-    nal.firstMbInSlice = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    nal.firstMbInSlice = static_cast<int>(r.ue());
 
     // slice_type (ue(v))
-    uint32_t sliceType = readExpGolombUE(bytes, data.size(), bitPos);
+    uint32_t sliceType = r.ue();
     // Normalize slice type (0-4 and 5-9 mean the same thing)
     if (sliceType > 4) sliceType -= 5;
     nal.sliceType = static_cast<int>(sliceType);
 
     // pic_parameter_set_id (ue(v))
-    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    nal.ppsId = static_cast<int>(r.ue());
 
     // Look up SPS via PPS -> SPS chain for frame_num bit-width and field info
     int spsId = mPpsToSpsMap.value(nal.ppsId, -1);
@@ -665,13 +565,13 @@ bool TTNaluParser::parseH264SliceHeader(const QByteArray& data, TTNalUnit& nal)
 
     // frame_num -- u(log2_max_frame_num_minus4 + 4) bits
     int frameNumBits = sps.log2MaxFrameNumMinus4 + 4;
-    nal.frameNum = static_cast<int>(readBits(bytes, data.size(), bitPos, frameNumBits));
+    nal.frameNum = static_cast<int>(r.bits(frameNumBits));
 
     // field_pic_flag -- only present if frame_mbs_only_flag == 0
     if (!sps.frameMbsOnlyFlag) {
-        nal.isField = (readBits(bytes, data.size(), bitPos, 1) == 1);
+        nal.isField = (r.bits(1) == 1);
         if (nal.isField) {
-            nal.isBottomField = (readBits(bytes, data.size(), bitPos, 1) == 1);
+            nal.isBottomField = (r.bits(1) == 1);
         }
     }
 
@@ -770,20 +670,20 @@ bool TTNaluParser::parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal)
 {
     if (data.size() < 4) return false;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.constData());
-    int bitPos = 16;  // Skip 2-byte NAL header
+    TTBitReader r(reinterpret_cast<const uint8_t*>(data.constData()), data.size());
+    r.setPos(16);  // Skip 2-byte NAL header
 
     // first_slice_segment_in_pic_flag (1 bit)
-    uint32_t firstSliceFlag = readBits(bytes, data.size(), bitPos, 1);
+    uint32_t firstSliceFlag = r.bits(1);
     nal.firstMbInSlice = (firstSliceFlag == 1) ? 0 : -1;
 
     // For BLA/IDR/CRA: no_output_of_prior_pics_flag (1 bit)
     if (nal.type >= H265::NAL_BLA_W_LP && nal.type <= H265::NAL_CRA_NUT) {
-        readBits(bytes, data.size(), bitPos, 1);  // no_output_of_prior_pics_flag
+        r.bits(1);  // no_output_of_prior_pics_flag
     }
 
     // slice_pic_parameter_set_id (ue(v))
-    nal.ppsId = static_cast<int>(readExpGolombUE(bytes, data.size(), bitPos));
+    nal.ppsId = static_cast<int>(r.ue());
 
     // For first slice in picture, we can read slice_type directly from the bitstream.
     // For dependent slices (firstSliceFlag == 0), we'd need PPS data we don't have,
@@ -791,7 +691,7 @@ bool TTNaluParser::parseH265SliceHeader(const QByteArray& data, TTNalUnit& nal)
     if (firstSliceFlag == 1) {
         // HEVC spec: slice_type is ue(v) right after slice_pic_parameter_set_id
         // (assuming num_extra_slice_header_bits == 0, which is standard for DVB)
-        uint32_t sliceType = readExpGolombUE(bytes, data.size(), bitPos);
+        uint32_t sliceType = r.ue();
         if (sliceType <= 2) {
             nal.sliceType = static_cast<int>(sliceType);
         } else {
@@ -1317,66 +1217,7 @@ void TTNaluParser::setError(const QString& error)
 }
 
 // ----------------------------------------------------------------------------
-// Read Exp-Golomb unsigned value (ue(v))
-// ----------------------------------------------------------------------------
-uint32_t TTNaluParser::readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos)
-{
-    // Count leading zeros
-    int leadingZeros = 0;
-    while (readBits(data, dataSize, bitPos, 1) == 0 && leadingZeros < 31) {
-        leadingZeros++;
-    }
-
-    if (leadingZeros == 0) {
-        return 0;
-    }
-
-    // Read the value bits
-    uint32_t value = readBits(data, dataSize, bitPos, leadingZeros);
-    return (1u << leadingZeros) - 1 + value;
-}
-
-// ----------------------------------------------------------------------------
-// Read Exp-Golomb signed value (se(v))
-// ----------------------------------------------------------------------------
-int32_t TTNaluParser::readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos)
-{
-    uint32_t ue = readExpGolombUE(data, dataSize, bitPos);
-    if (ue & 1) {
-        return static_cast<int32_t>((ue + 1) / 2);
-    } else {
-        return -static_cast<int32_t>(ue / 2);
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Read bits from byte array with bounds checking
-// ----------------------------------------------------------------------------
-uint32_t TTNaluParser::readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits)
-{
-    uint32_t value = 0;
-
-    for (int i = 0; i < numBits; i++) {
-        int byteIndex = bitPos / 8;
-        if (byteIndex >= dataSize) return value;  // OOB guard
-        int bitIndex = 7 - (bitPos % 8);
-
-        value <<= 1;
-        value |= (data[byteIndex] >> bitIndex) & 1;
-        bitPos++;
-    }
-
-    return value;
-}
-
-// ----------------------------------------------------------------------------
-// Returns true for H.264 profile_idc values whose SPS carries the high-profile
-// extension fields (chroma_format_idc, bit_depth_*_minus8, scaling lists).
-// Per ITU-T H.264 (08/2021) §7.3.2.1.1: 100 (High), 110 (High10),
-// 122 (High422), 244 (High444Predictive), 44 (CAVLC444), 83 (Scalable Baseline),
-// 86 (Scalable High), 118 (Multiview High), 128 (Stereo High),
-// 134 (MFC High), 135 (MFC Depth High), 138 (Multiview Depth High),
-// 139 (Enhanced Multiview Depth High).
+// The two SPS fields the PAFF handling needs (see the declaration).
 // ----------------------------------------------------------------------------
 bool TTNaluParser::parseH264SpsBasics(const uint8_t* data, int size, H264SpsBasics& out)
 {
@@ -1388,60 +1229,22 @@ bool TTNaluParser::parseH264SpsBasics(const uint8_t* data, int size, H264SpsBasi
     }
     if (nalStart < 0) return false;
 
-    const uint8_t* sps = data + nalStart;
-    const int spsSize = size - nalStart;
-    if (spsSize < 5) return false;
-    int bitPos = 8;   // past the NAL header byte
+    // Emulation-prevention bytes before frame_mbs_only_flag shift every
+    // later field (possible through large poc_type 1 offsets), so read the
+    // de-escaped NAL - as parseH264SpsData does.
+    const int next = findStartCodePayload(data, size, nalStart);
+    const int nalEnd = next >= 0 ? next - 3 : size;
+    const QByteArray rbsp = ttRbspFromNal(QByteArray::fromRawData(
+        reinterpret_cast<const char*>(data + nalStart), nalEnd - nalStart));
+    if (rbsp.size() < 5) return false;
 
-    const int profileIdc = static_cast<int>(readBits(sps, spsSize, bitPos, 8));
-    readBits(sps, spsSize, bitPos, 8);        // constraint_set flags + reserved
-    readBits(sps, spsSize, bitPos, 8);        // level_idc
-    readExpGolombUE(sps, spsSize, bitPos);    // seq_parameter_set_id
-
-    if (isH264HighProfile(static_cast<uint32_t>(profileIdc))) {
-        const int chromaFormatIdc = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
-        if (chromaFormatIdc == 3) readBits(sps, spsSize, bitPos, 1);   // separate_colour_plane_flag
-        readExpGolombUE(sps, spsSize, bitPos);    // bit_depth_luma_minus8
-        readExpGolombUE(sps, spsSize, bitPos);    // bit_depth_chroma_minus8
-        readBits(sps, spsSize, bitPos, 1);        // qpprime_y_zero_transform_bypass_flag
-        if (readBits(sps, spsSize, bitPos, 1)) {  // seq_scaling_matrix_present_flag
-            const int numLists = (chromaFormatIdc != 3) ? 8 : 12;
-            for (int i = 0; i < numLists; i++) {
-                if (!readBits(sps, spsSize, bitPos, 1)) continue;   // seq_scaling_list_present_flag[i]
-                const int listSize = (i < 6) ? 16 : 64;
-                int lastScale = 8, nextScale = 8;
-                for (int j = 0; j < listSize; j++) {
-                    if (nextScale != 0) {
-                        const int delta = readExpGolombSE(sps, spsSize, bitPos);
-                        nextScale = (lastScale + delta + 256) % 256;
-                    }
-                    lastScale = (nextScale == 0) ? lastScale : nextScale;
-                }
-            }
-        }
-    }
-
-    out.log2MaxFrameNum = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos)) + 4;
-
-    const int pocType = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
-    if (pocType == 0) {
-        readExpGolombUE(sps, spsSize, bitPos);    // log2_max_pic_order_cnt_lsb_minus4
-    } else if (pocType == 1) {
-        readBits(sps, spsSize, bitPos, 1);        // delta_pic_order_always_zero_flag
-        readExpGolombSE(sps, spsSize, bitPos);    // offset_for_non_ref_pic
-        readExpGolombSE(sps, spsSize, bitPos);    // offset_for_top_to_bottom_field
-        const int n = static_cast<int>(readExpGolombUE(sps, spsSize, bitPos));
-        // Spec H.264 7.4.2.1.1: num_ref_frames_in_pic_order_cnt_cycle <= 255.
-        if (n > 256) return true;   // log2MaxFrameNum is valid, the rest is not read
-        for (int i = 0; i < n; i++) readExpGolombSE(sps, spsSize, bitPos);
-    }
-
-    readExpGolombUE(sps, spsSize, bitPos);    // max_num_ref_frames
-    readBits(sps, spsSize, bitPos, 1);        // gaps_in_frame_num_value_allowed_flag
-    readExpGolombUE(sps, spsSize, bitPos);    // pic_width_in_mbs_minus1
-    readExpGolombUE(sps, spsSize, bitPos);    // pic_height_in_map_units_minus1
-
-    out.frameMbsOnlyFlag     = (readBits(sps, spsSize, bitPos, 1) == 1);
+    TTBitReader r(rbsp);
+    TTH264SpsHeader h;
+    const bool complete = ttParseH264SpsHeader(r, h);
+    if (h.log2MaxFrameNumMinus4 < 0) return false;   // SPS ends before log2_max_frame_num
+    out.log2MaxFrameNum = h.log2MaxFrameNumMinus4 + 4;
+    if (!complete) return true;          // log2MaxFrameNum is valid, the rest is not read
+    out.frameMbsOnlyFlag     = h.frameMbsOnly;
     out.haveFrameMbsOnlyFlag = true;
     return true;
 }
@@ -1449,26 +1252,14 @@ bool TTNaluParser::parseH264SpsBasics(const uint8_t* data, int size, H264SpsBasi
 void TTNaluParser::parseH264SliceFieldInfo(const uint8_t* nal, int nalSize, int log2MaxFrameNum,
                                            int& frameNum, bool& isField, bool& isBottomField)
 {
-    int bitPos = 8;   // past the NAL header byte
-    readExpGolombUE(nal, nalSize, bitPos);   // first_mb_in_slice
-    readExpGolombUE(nal, nalSize, bitPos);   // slice_type
-    readExpGolombUE(nal, nalSize, bitPos);   // pic_parameter_set_id
-    frameNum      = static_cast<int>(readBits(nal, nalSize, bitPos, log2MaxFrameNum));
-    isField       = (readBits(nal, nalSize, bitPos, 1) == 1);          // field_pic_flag
-    isBottomField = isField && (readBits(nal, nalSize, bitPos, 1) == 1); // bottom_field_flag
-}
-
-bool TTNaluParser::isH264HighProfile(uint32_t profile_idc)
-{
-    switch (profile_idc) {
-        case 100: case 110: case 122:
-        case 244: case 44:  case 83:
-        case 86:  case 118: case 128:
-        case 134: case 135: case 138: case 139:
-            return true;
-        default:
-            return false;
-    }
+    TTBitReader r(nal, nalSize);
+    r.setPos(8);   // past the NAL header byte
+    r.ue();   // first_mb_in_slice
+    r.ue();   // slice_type
+    r.ue();   // pic_parameter_set_id
+    frameNum      = static_cast<int>(r.bits(log2MaxFrameNum));
+    isField       = (r.bits(1) == 1);          // field_pic_flag
+    isBottomField = isField && (r.bits(1) == 1); // bottom_field_flag
 }
 
 // ----------------------------------------------------------------------------
@@ -1500,18 +1291,19 @@ int TTNaluParser::parseH264SliceTypeFromPacket(const uint8_t* data, int size)
 
                 // VCL NAL types: 1 (non-IDR slice), 5 (IDR slice)
                 if (nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE) {
-                    int bitPos = 8;  // Skip 1-byte NAL header
                     const uint8_t* nalData = data + nalStart;
                     int nalDataSize = size - nalStart;
 
                     if (nalDataSize < 3) return -1;
+                    TTBitReader r(nalData, nalDataSize);
+                    r.setPos(8);  // Skip 1-byte NAL header
 
                     // first_mb_in_slice (ue(v)) — skip
-                    readExpGolombUE(nalData, nalDataSize, bitPos);
+                    r.ue();
 
                     // slice_type (ue(v))
-                    if (bitPos / 8 + 1 >= nalDataSize) return -1;
-                    uint32_t sliceType = readExpGolombUE(nalData, nalDataSize, bitPos);
+                    if (r.pos() / 8 + 1 >= nalDataSize) return -1;
+                    uint32_t sliceType = r.ue();
 
                     // Normalize: values 5-9 are same as 0-4
                     if (sliceType >= 5 && sliceType <= 9)
@@ -1531,10 +1323,11 @@ int TTNaluParser::parseH264SliceTypeFromPacket(const uint8_t* data, int size)
     if (size >= 3) {
         uint8_t nalType = data[0] & 0x1F;
         if (nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE) {
-            int bitPos = 8;
-            readExpGolombUE(data, size, bitPos);  // first_mb_in_slice
-            if (bitPos / 8 + 1 >= size) return -1;
-            uint32_t sliceType = readExpGolombUE(data, size, bitPos);
+            TTBitReader r(data, size);
+            r.setPos(8);
+            r.ue();  // first_mb_in_slice
+            if (r.pos() / 8 + 1 >= size) return -1;
+            uint32_t sliceType = r.ue();
             if (sliceType >= 5 && sliceType <= 9)
                 sliceType -= 5;
             if (sliceType <= 4)
@@ -1580,14 +1373,15 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
                     // Need at least a few bytes for slice header
                     if (nalDataSize < 4) return -1;
 
-                    int bitPos = 16;  // Skip 2-byte NAL header
+                    TTBitReader r(nalData, nalDataSize);
+                    r.setPos(16);  // Skip 2-byte NAL header
 
                     // first_slice_segment_in_pic_flag (1 bit)
-                    uint32_t firstSliceFlag = readBits(nalData, nalDataSize, bitPos, 1);
+                    uint32_t firstSliceFlag = r.bits(1);
 
                     // For BLA/IDR/CRA: no_output_of_prior_pics_flag (1 bit)
                     if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
-                        readBits(nalData, nalDataSize, bitPos, 1);
+                        r.bits(1);
                     }
 
                     if (firstSliceFlag != 1) {
@@ -1599,13 +1393,13 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
                     }
 
                     // slice_pic_parameter_set_id (ue(v))
-                    readExpGolombUE(nalData, nalDataSize, bitPos);
+                    r.ue();
 
                     // slice_type (ue(v))
                     // Guard: make sure we have enough data
-                    if (bitPos / 8 + 2 >= nalDataSize) return -1;
+                    if (r.pos() / 8 + 2 >= nalDataSize) return -1;
 
-                    uint32_t sliceType = readExpGolombUE(nalData, nalDataSize, bitPos);
+                    uint32_t sliceType = r.ue();
                     if (sliceType <= 2) {
                         return static_cast<int>(sliceType);
                     }
@@ -1622,21 +1416,22 @@ int TTNaluParser::parseH265SliceTypeFromPacket(const uint8_t* data, int size)
     if (size >= 4) {
         uint8_t nalType = (data[0] >> 1) & 0x3F;
         if (nalType <= 31) {
-            int bitPos = 16;  // Skip 2-byte NAL header
+            TTBitReader r(data, size);
+            r.setPos(16);  // Skip 2-byte NAL header
 
-            uint32_t firstSliceFlag = readBits(data, size, bitPos, 1);
+            uint32_t firstSliceFlag = r.bits(1);
 
             if (nalType >= H265::NAL_BLA_W_LP && nalType <= H265::NAL_CRA_NUT) {
-                readBits(data, size, bitPos, 1);
+                r.bits(1);
             }
 
             if (firstSliceFlag != 1) return -1;
 
-            readExpGolombUE(data, size, bitPos);  // pps_id
+            r.ue();  // pps_id
 
-            if (bitPos / 8 + 2 >= size) return -1;
+            if (r.pos() / 8 + 2 >= size) return -1;
 
-            uint32_t sliceType = readExpGolombUE(data, size, bitPos);
+            uint32_t sliceType = r.ue();
             if (sliceType <= 2) {
                 return static_cast<int>(sliceType);
             }

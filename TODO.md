@@ -192,22 +192,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     3. Hybrid: bash-Skelett bleibt, kleine C-Helfer für PTS-Analyse + Audio-Splice via libav
   - **Scope**: mehrtägig, separater Refactor.
 
-- **Bit-Stream API in extern/ vereinheitlichen**
-  - `extern/ttessmartcut.cpp` hat eigene file-lokale Bit-Primitives (`spsReadBits`,
-    `spsWriteBits`, `spsReadUE`, `spsWriteUE`, `spsReadSE`, `spsWriteSE`,
-    `skipScalingList`) für SPS-Patching mit Read+Write-Pfad. Andere Caller
-    (`avstream/ttframeindexer.cpp`, `ttmkvmergeprovider.cpp`) nutzen die nur lesenden
-    `TTNaluParser::readBits` / `readExpGolombUE` / `readExpGolombSE`.
-  - Folge: SPS-Bit-Skipping-Block (chroma, bit_depth, scaling lists) ist 4×
-    dupliziert (siehe code-review-2026-05-01/02-extern.md MEDIUM-2). Die
-    Predicate-Hälfte ist konsolidiert (`TTNaluParser::isH264HighProfile`),
-    aber die Bit-Skipping-Logik selbst kann erst zusammengelegt werden, wenn
-    beide APIs unifiziert sind — entweder TTNaluParser um Write-Primitives
-    erweitern, oder die ttessmartcut-locals als file-scope-statics in einen
-    Shared-Header ziehen.
-  - Risiko: SPS-Patching ist heißer Pfad bei PAFF/MBAFF Smart Cut → erst
-    abdeckende Tests bauen, dann unifizieren.
-
 - **CLI Interface for batch Smart Cut (headless mode)**
   - Teilweise abgedeckt: `ttcut-ng --project <file> --auto-cut <out.mkv>` lädt ein `.ttcut`-Projekt
     und führt Smart Cut + Audio + MKV-Mux headless aus (für QC-Regression). Es bleibt aber die

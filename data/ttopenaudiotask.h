@@ -20,6 +20,8 @@
 class TTAudioType;
 class TTAudioStream;
 class TTAVItem;
+// moc must see TTAVItem complete to register TTAVItem* in its signals/slots
+Q_MOC_INCLUDE("data/ttavlist.h")
 
 //! Runable task for opening audio streams
 class TTOpenAudioTask : public TTThreadTask

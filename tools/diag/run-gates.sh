@@ -20,9 +20,9 @@
 # FAIL. Exit code of the whole run: 0 all PASS, 1 at least one FAIL or
 # TIMEOUT, 2 no FAIL but at least one SKIP.
 #
-# Every gate runs with QT_QPA_PLATFORM=offscreen, a private XDG_CONFIG_HOME and
-# XDG_CACHE_HOME and a work directory of its own under the run directory
-# (RUN, below): the user's TTCut-ng.conf is neither read nor written, a stored
+# Every gate runs with QT_QPA_PLATFORM=offscreen, LANGUAGE unset, a private
+# XDG_CONFIG_HOME and XDG_CACHE_HOME and a work directory of its own under
+# the run directory (RUN, below): the user's TTCut-ng.conf is neither read nor written, a stored
 # TempDirPath cannot leak in, and the log file a harness inspects is its own.
 # The CMake targets a gate needs are built first, so no stale binary from an
 # earlier session is ever run (tools/diag binaries are gitignored and
@@ -85,6 +85,11 @@ AUDIOFIX="$ROOT/tools/ttcut-audiofix/ttcut-audiofix"
 # The gate function is gate_<name>; W (work dir) is set and current when it runs.
 GATES='
 displayordermap        unit  120  test_displayordermap
+bitstream              unit  120  test_bitstream
+sps_basics_epb         unit  120  test_sps_basics_epb
+h264_truncated_slice   unit  120  test_h264_truncated_slice
+h264_mmco_neutralize   unit  120  test_h264_mmco_neutralize
+unrewritten_frames     unit  120  test_unrewritten_frames
 leadingclass           unit  120  test_leadingclass
 analysislog            unit  120  test_analysislog
 aspectdetect           unit  120  test_aspectdetect
@@ -134,6 +139,7 @@ seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
+h264_syntax_golden     tux   300  test_h264_syntax_golden
 acmod_majority         tux   300  test_acmod_majority
 hint_column            tux   300  test_hint_column
 audiocutter_paths      tux   300  test_audiocutter_paths
@@ -271,6 +277,11 @@ PRJ
 
 # ---- tier unit ---------------------------------------------------------------
 gate_displayordermap()       { "$D/test_displayordermap"; }
+gate_bitstream()             { "$D/test_bitstream"; }
+gate_sps_basics_epb()        { "$D/test_sps_basics_epb"; }
+gate_h264_truncated_slice()  { "$D/test_h264_truncated_slice"; }
+gate_h264_mmco_neutralize()  { "$D/test_h264_mmco_neutralize"; }
+gate_unrewritten_frames()    { "$D/test_unrewritten_frames"; }
 gate_leadingclass()          { "$D/test_leadingclass"; }
 gate_analysislog()           { "$D/test_analysislog"; }
 gate_aspectdetect()          { "$D/test_aspectdetect"; }
@@ -338,6 +349,13 @@ gate_headerlist_eof()    { need "$M2V"; "$D/gate_headerlist_eof.sh" "$D/test_hea
 # Two segments across the BLUE/BLACK/RED boundaries at 30 s and 31 s (50 fps).
 gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600; }
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
+# Golden output of the H.264/H.265 bit-stream helpers, recorded with the
+# pre-unification bit layer (docs/superpowers/specs/2026-09-23-bitstream-unification-design.md).
+gate_h264_syntax_golden() {
+  need "$V264" "$MBAFF" "$PAFF" "$H265"
+  "$D/test_h264_syntax_golden" "$CACHE" "$D/testdata/h264-syntax" "$W/es" > golden.out 2> golden.err
+  diff -u "$D/testdata/h264-syntax/golden.txt" golden.out
+}
 gate_acmod_majority()    { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_acmod_majority" "$W/mixed.ac3"; }
 # Playback channel layout: the mapping, plus a live libmpv run on the same
 # mixed-acmod fixture that counts audio-output initialisations.
@@ -521,7 +539,9 @@ while read -r name tier secs targets; do
   # HOME too: TTSettings defaults the mplex output directory (and the last
   # directory) to QDir::homePath(), so harnesses that drive TTAVData without
   # setting it wrote their .mpg into the real home directory on every run.
-  W="$W" QT_QPA_PLATFORM=offscreen HOME="$W/home" XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
+  # LANGUAGE unset: it outranks LC_ALL in Qt's UI-language list, so a
+  # desktop's LANGUAGE=de would translate the texts a gate greps for.
+  env -u LANGUAGE W="$W" QT_QPA_PLATFORM=offscreen HOME="$W/home" XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
     "${runner[@]}" timeout -k 10 "$secs" "$0" --exec "$name" < /dev/null > "$RUN/$name.log" 2>&1
   rc=$?
   dt=$(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
