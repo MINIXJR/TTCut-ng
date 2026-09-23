@@ -13,6 +13,8 @@
 #include <QPair>
 #include <QVector>
 
+#include "../../avstream/ttannexb.h"
+#include "../../avstream/ttbitstream.h"
 #include "../../extern/tthevcseam.h"
 
 // Minimal annex-b NAL scan (start offset incl. start code, end exclusive).
@@ -136,7 +138,7 @@ int main(int argc, char** argv)
             }
             QByteArray rebuilt = buildHevcSliceHeader(
                 h, encSps, encPps, encSps.log2MaxPocLsb, h.ppsId);
-            QByteArray orig = ttHevcDeescape(raw.mid(ttHevcStartCodeLen(raw)));
+            QByteArray orig = ttRbspFromNal(raw.mid(ttStartCodeLength(raw)));
             if (rebuilt != orig) {
                 printf("slice %d ROUNDTRIP MISMATCH (%d vs %d bytes)\n",
                        tested, rebuilt.size(), orig.size());

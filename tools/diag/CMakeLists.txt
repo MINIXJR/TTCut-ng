@@ -13,8 +13,17 @@ set(ROOT ${CMAKE_SOURCE_DIR})
 
 set(NALU_FULL_SRC
   ${ROOT}/avstream/ttnaluparser.cpp
+  ${ROOT}/avstream/ttbitstream.cpp
+  ${ROOT}/avstream/tth264syntax.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/common/ttmessagelogger.cpp)
+
+# avstream/ttbitstream + tth264syntax: every list that compiles
+# ttnaluparser.cpp, tthevcseam.cpp or ttessmartcut.cpp needs them.
+set(BITSTREAM_SRC
+  ${ROOT}/avstream/ttannexb.cpp
+  ${ROOT}/avstream/ttbitstream.cpp
+  ${ROOT}/avstream/tth264syntax.cpp)
 
 set(DISPMAP_SRC
   ${ROOT}/avstream/ttdisplayordermap.cpp
@@ -27,7 +36,8 @@ set(WRAPPER_SRC
   ${ROOT}/avstream/ttframeindexer.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
-  ${ROOT}/avstream/ttnaluparser.cpp)
+  ${ROOT}/avstream/ttnaluparser.cpp
+  ${BITSTREAM_SRC})
 
 # TTAudioCutter's own dependencies, for the harnesses that call it directly
 # (none of them touch TTFFmpegWrapper, so WRAPPER_SRC would be overkill).
@@ -39,10 +49,12 @@ set(AUDIOCUT_SRC
 
 set(STILLFRAME_SRC
   ${ROOT}/extern/ttessmartcut.cpp
+  ${ROOT}/extern/tth264bitstream.cpp
   ${ROOT}/extern/tthevcseam.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
+  ${BITSTREAM_SRC}
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttcalibrationstore.cpp)
@@ -131,7 +143,8 @@ set(MPEG2ASPECTSCAN_SRC
   ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/avstream/ttframeindexer.cpp
   ${ROOT}/avstream/ttesinfo.cpp
-  ${ROOT}/avstream/ttnaluparser.cpp)
+  ${ROOT}/avstream/ttnaluparser.cpp
+  ${BITSTREAM_SRC})
 
 set(ANOMALYSCAN_SRC
   ${ROOT}/data/ttaudioanomalyscantask.cpp
@@ -164,6 +177,7 @@ set(WINDOWJUMP_SRC
   ${ROOT}/avstream/ttdisplayordermap.cpp
   ${ROOT}/avstream/ttesinfo.cpp
   ${ROOT}/avstream/ttnaluparser.cpp
+  ${BITSTREAM_SRC}
   ${ROOT}/avstream/ttsubtitleheaderlist.cpp
   ${ROOT}/avstream/tth26xvideostream.cpp)
 
@@ -227,7 +241,10 @@ diag_tool(test_startcode_scan     SOURCES ${FILEBUF_SRC})
 diag_tool(test_esinfo             SOURCES ${ESINFO_SRC})
 diag_tool(test_audiofix_esinfo    SOURCES ${ESINFO_SRC})
 diag_tool(test_esinfo_dump        SOURCES ${ESINFO_SRC})
-diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp)
+diag_tool(test_hevc_seam          SOURCES ${ROOT}/extern/tthevcseam.cpp ${ROOT}/avstream/ttbitstream.cpp
+  ${ROOT}/avstream/ttannexb.cpp)
+diag_tool(test_bitstream          SOURCES ${ROOT}/avstream/ttbitstream.cpp ${ROOT}/avstream/ttannexb.cpp)
+diag_tool(test_sps_basics_epb     SOURCES ${NALU_FULL_SRC} ${BITSTREAM_SRC})
 diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
 # Drives TTAVData::cutAudioTracks() with a real TTAVItem/TTAudioStream (the
 # cut-segment-boundary error path needs the actual per-track loop, not just
@@ -304,6 +321,12 @@ diag_tool(test_project_load_rejected AV WIDGETS SOURCES)
 target_link_libraries(test_project_load_rejected PRIVATE ttcut-core)
 diag_tool(test_cut_range_check AV WIDGETS SOURCES)
 target_link_libraries(test_cut_range_check PRIVATE ttcut-core)
+diag_tool(test_h264_syntax_golden AV WIDGETS SOURCES)
+target_link_libraries(test_h264_syntax_golden PRIVATE ttcut-core)
+diag_tool(test_h264_truncated_slice AV WIDGETS SOURCES)
+target_link_libraries(test_h264_truncated_slice PRIVATE ttcut-core)
+diag_tool(test_h264_mmco_neutralize AV WIDGETS SOURCES)
+target_link_libraries(test_h264_mmco_neutralize PRIVATE ttcut-core)
 diag_tool(test_cut_job_ownership AV WIDGETS SOURCES)
 target_link_libraries(test_cut_job_ownership PRIVATE ttcut-core)
 diag_tool(test_hint_column AV WIDGETS SOURCES)
@@ -431,7 +454,7 @@ target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
-  test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_aspectdetect
+  test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_aspectdetect
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
   test_anomalyscan
   test_pillarbox test_pool_abort

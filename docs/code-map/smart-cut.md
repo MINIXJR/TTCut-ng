@@ -9,6 +9,12 @@ sources:
   - extern/ttessmartcut.h
   - extern/tthevcseam.cpp
   - extern/tthevcseam.h
+  - extern/tth264bitstream.cpp
+  - extern/tth264bitstream.h
+  - avstream/ttbitstream.cpp
+  - avstream/ttbitstream.h
+  - avstream/tth264syntax.cpp
+  - avstream/tth264syntax.h
   - avstream/ttnaluparser.cpp
   - avstream/ttnaluparser.h
   - avstream/ttdisplayordermap.cpp
@@ -28,7 +34,15 @@ sources:
 **Scope:** The `TTESSmartCut` engine — from a display-order cut list to a written
 elementary stream. Covers segment planning (`analyzeCutPoints`), the three
 execution branches in `processSegment`, and the bitstream surgery that bridges
-the re-encode → stream-copy seam (EOS, `frame_num`, POC, MMCO, SPS).
+the re-encode → stream-copy seam (EOS, `frame_num`, POC, MMCO, SPS). The H.264
+surgery is a set of free functions in `extern/tth264bitstream.cpp` (SPS/PPS
+parsing, `frame_num`/POC patches, `ttNeutralizeMmcoInAU`, the SPS-unification
+rewrite, `ttPatchH264SpsReorderFrames`); the HEVC counterpart is
+`extern/tthevcseam.cpp`. Both read and write syntax only through
+`avstream/ttbitstream` (`TTBitReader`, `TTBitWriter`, `ttOverwriteBits`,
+`ttRbspFromNal`/`ttNalFromRbsp`); the H.264 SPS header walk is
+`ttParseH264SpsHeader` (`avstream/tth264syntax.cpp`, together with the
+profile predicate `ttIsH264HighProfile`), shared with `TTNaluParser`.
 
 **Not covered here:**
 - MPEG-2 cutting — a separate engine (`TTMpeg2VideoStream::cut` →
@@ -146,7 +160,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 | Stream property | H.264 | H.265 |
 |---|---|---|
 | **CRA copy-start with RASL window** | n/a (the H.264 analogue is the `seamNeedsUnification` trigger one row down). | **RASL-preserving seam** (defect A / H.265 fix, 2026-07-21). Trigger in `planHevcSeamFix`: copy-start AU is a CRA (slice NAL type 21, not IDR/BLA) **and** ≥ 1 RASL AU (type 8/9) follows in decode order **and** the preflight passes. Preflight (all failures fall back to the standard seam with a note in `seamNotes()`): uniform source SPS, no non-flat scaling lists, all source PPS parsable with a free `pps_id`, CRA slice header + RPS readable, POC window does not wrap the `lsb` cycle, and a **measured** encoder-SPS match — `deriveX265SeamParams` derives `tu-intra/inter-depth`, `amp`, `sao`, `tmvp`, `strong-intra-smoothing` from the source SPS, `probeHevcEncoderSeamSps` opens a throwaway libx265 with `GLOBAL_HEADER` and `hevcSpsSeamCompatible` compares every CABAC-/parse-relevant field. Matching overrides preset defaults. |
-| **PAFF** (field pairs) | SPS-Unification branch, always (`isPAFF ⇒ useSpsUnification`). Encoder emits MBAFF; source SPS params (`log2_max_frame_num`, `log2_max_pic_order_cnt_lsb`, `frame_mbs_only_flag`) are stamped back onto the encoder slices. EOS before copy; MMCO neutralized for 32 AUs; `patchH264SpsReorderFrames(isPAFF=true)` raises `num_ref_frames`/`max_dec_frame_buffering` for the MBAFF→PAFF DPB transition. POC anchor stays `-1` (legacy linear numbering, byte-identical output). | **n/a** — `isPAFF()` is an H.264 concept; HEVC never enters this cell. |
+| **PAFF** (field pairs) | SPS-Unification branch, always (`isPAFF ⇒ useSpsUnification`). Encoder emits MBAFF; source SPS params (`log2_max_frame_num`, `log2_max_pic_order_cnt_lsb`, `frame_mbs_only_flag`) are stamped back onto the encoder slices. EOS before copy; MMCO neutralized for 32 AUs; `ttPatchH264SpsReorderFrames(isPAFF=true)` raises `num_ref_frames`/`max_dec_frame_buffering` for the MBAFF→PAFF DPB transition. POC anchor stays `-1` (legacy linear numbering, byte-identical output). | **n/a** — `isPAFF()` is an H.264 concept; HEVC never enters this cell. |
 | **Progressive / MBAFF**, POC seam bridgeable | Standard branch **only when the copy-start keyframe is IDR or has no leading pictures**. Otherwise the `seamNeedsUnification` trigger (defect A fix, 2026-07-20: probe `kfHasLeadingPics`, non-IDR check on the copy-start AU) routes the seam through unification regardless of bridgeability. Standard seam: EOS → source SPS/PPS → `frameNumDelta` recalculated from the **encoder's** `log2_max_frame_num` → stream-copy. `applyPocDomainFix` bridges the POC seam. No MMCO neutralization. | Standard branch. EOS NAL type 37 → VPS+SPS+PPS → stream-copy. **No** `frame_num`, POC, MMCO or SPS patching at all — every one of those is gated on `NALU_CODEC_H264`. |
 | **Progressive**, POC seam **not** bridgeable | SPS-Unification branch (`!pocBridgeable`). Slices rewritten into the **source** POC domain; `mSpsUnificationPocAnchor` = source `poc_lsb` of the first *displayed* copy frame (min-display AU in the copy GOP, not the copy-start AU — its leading B pictures carry smaller POCs). | Cannot occur: `pocBridgeable` is only computed for H.264. |
 | **Non-IDR I-frame cut-in** (open GOP, DVB) | `needsReencodeAtStart = !isAtKeyframe \|\| !isAtIDR` → re-encode with `forced-idr=1` produces an IDR barrier. Exception: segment 0 without leading pics → override to pure stream-copy. | Same rule, same override. `findKeyframeBefore/After` accept IDR/CRA/I-slice alike. |
@@ -154,6 +168,28 @@ picks a segment shape by keyframe/IDR status at the cut-in.
 | **Cut-out mid-GOP** | Tail re-encode: stream-copy ends at `tailStartFrame-1` (whole GOPs only), tail GOP re-encoded as a forced-IDR closed sub-segment bounded by `disp ≤ endDisplay`. Collapses to a pure re-encode when `tailStart ≤ streamCopyStart`. | Identical (codec-agnostic path). |
 
 ## Assumptions, contracts & pitfalls
+
+- **Bit layer (`avstream/ttbitstream`)** — the one reader/writer for all
+  H.264/H.265 NAL syntax. Reader past the end of the data: sticky
+  `error()`, missing bits read as 0, `ue()`/`se()` return 0 once the flag
+  is set; more than 31 leading zeros also set it, mid-buffer, without
+  advancing. A return value alone does not end every syntax loop (reference
+  list modification only exits on idc 3), so the slice loops in
+  `ttNeutralizeMmcoInAU` and `ttRewriteEncoderSliceForSourceSps` stop on
+  `error() || atEnd()`, and both check `error()` once more after the whole
+  header: a source slice that cannot be read to its end is left unchanged,
+  such an encoder slice is rejected (`ttRewriteEncoderPacketForSourceSps` then
+  keeps the original NAL, without a log line). `num_ref_idx_lX_active_minus1` is clamped to
+  the spec limit 31 for the weight-table loops. Writing appends
+  (`TTBitWriter` grows); fixed-width in-place patches (`frame_num`,
+  `poc_lsb`, the PAFF `mb_adaptive_frame_field_flag`) use `ttOverwriteBits`.
+  **Scope limits, by design:** `ttNeutralizeMmcoInAU` does not parse
+  `redundant_pic_cnt` (only Baseline/Extended profiles carry it) and
+  `ttRewriteEncoderSliceForSourceSps` does not parse B slices (the re-encode
+  runs with `bf=0`). Gates: `test_bitstream` (module + frozen legacy
+  reference), `test_h264_syntax_golden` (every helper against
+  `tools/diag/testdata/h264-syntax/golden.txt`), `test_h264_truncated_slice`
+  (termination).
 
 - **`TTESSmartCut::smartCutFrames`** — assumes: the injected or self-built
   `TTDisplayOrderMap` has exactly `frameCount()` entries; hard-fails otherwise
@@ -318,7 +354,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   artifacts `/usr/local/src/CLAUDE_TMP/TTCut-ng/eos_nonidr/`.
 
 - **SPS-Unification × poc_type-2 encoder (defect B — FIXED 2026-07-16)** —
-  `rewriteEncoderSliceForSourceSps` step 8 was gated on
+  `ttRewriteEncoderSliceForSourceSps` step 8 was gated on
   `encLog2MaxPocLsb > 0 && srcLog2MaxPocLsb > 0`: with a progressive
   (poc_type 2) encoder it skipped the `pic_order_cnt_lsb` write entirely, while
   the rewritten slice runs under the **source** SPS (poc_type 0), which
@@ -342,7 +378,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   artifacts) is defect A's cross-seam reference mechanism, tracked separately.
 
 - **SPS-Unification × byte-aligned slice header (defect E — FIXED
-  2026-07-19)** — `rewriteEncoderSliceForSourceSps` step 17 read and wrote
+  2026-07-19)** — `ttRewriteEncoderSliceForSourceSps` step 17 read and wrote
   the CABAC alignment bits **unconditionally** (1 alignment bit + pad). Per
   H.264 7.3.4 `cabac_alignment_one_bit` exists only *while* the header is
   not byte-aligned; a header ending exactly on a byte boundary has none.
@@ -356,7 +392,7 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   same recording had a 50-bit header and was clean. The read side had the
   symmetric bug (would eat 8 payload bits if an x264 header ever ended
   aligned). **Fix:** both sides now pad conditionally (`(8 - pos % 8) % 8`,
-  the same pattern `neutralizeMmcoInAU` always used; `patchFrameNumInAU` /
+  the same pattern `ttNeutralizeMmcoInAU` always used; `ttPatchFrameNumInAU` /
   `applyPocDomainFix` patch values at fixed bit width and were never
   affected). H.265 never enters the rewriter (both transform paths are
   H.264-gated). Gates: gray seam heals (0 concealment, luma matches

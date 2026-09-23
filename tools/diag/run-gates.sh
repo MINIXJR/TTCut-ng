@@ -85,6 +85,10 @@ AUDIOFIX="$ROOT/tools/ttcut-audiofix/ttcut-audiofix"
 # The gate function is gate_<name>; W (work dir) is set and current when it runs.
 GATES='
 displayordermap        unit  120  test_displayordermap
+bitstream              unit  120  test_bitstream
+sps_basics_epb         unit  120  test_sps_basics_epb
+h264_truncated_slice   unit  120  test_h264_truncated_slice
+h264_mmco_neutralize   unit  120  test_h264_mmco_neutralize
 leadingclass           unit  120  test_leadingclass
 analysislog            unit  120  test_analysislog
 aspectdetect           unit  120  test_aspectdetect
@@ -134,6 +138,7 @@ seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
+h264_syntax_golden     tux   300  test_h264_syntax_golden
 acmod_majority         tux   300  test_acmod_majority
 hint_column            tux   300  test_hint_column
 audiocutter_paths      tux   300  test_audiocutter_paths
@@ -271,6 +276,10 @@ PRJ
 
 # ---- tier unit ---------------------------------------------------------------
 gate_displayordermap()       { "$D/test_displayordermap"; }
+gate_bitstream()             { "$D/test_bitstream"; }
+gate_sps_basics_epb()        { "$D/test_sps_basics_epb"; }
+gate_h264_truncated_slice()  { "$D/test_h264_truncated_slice"; }
+gate_h264_mmco_neutralize()  { "$D/test_h264_mmco_neutralize"; }
 gate_leadingclass()          { "$D/test_leadingclass"; }
 gate_analysislog()           { "$D/test_analysislog"; }
 gate_aspectdetect()          { "$D/test_aspectdetect"; }
@@ -338,6 +347,13 @@ gate_headerlist_eof()    { need "$M2V"; "$D/gate_headerlist_eof.sh" "$D/test_hea
 # Two segments across the BLUE/BLACK/RED boundaries at 30 s and 31 s (50 fps).
 gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600; }
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
+# Golden output of the H.264/H.265 bit-stream helpers, recorded with the
+# pre-unification bit layer (docs/superpowers/specs/2026-09-23-bitstream-unification-design.md).
+gate_h264_syntax_golden() {
+  need "$V264" "$MBAFF" "$PAFF" "$H265"
+  "$D/test_h264_syntax_golden" "$CACHE" "$D/testdata/h264-syntax" "$W/es" > golden.out 2> golden.err
+  diff -u "$D/testdata/h264-syntax/golden.txt" golden.out
+}
 gate_acmod_majority()    { make_mixed_ac3 "$W/mixed.ac3" || exit 1; "$D/test_acmod_majority" "$W/mixed.ac3"; }
 # Playback channel layout: the mapping, plus a live libmpv run on the same
 # mixed-acmod fixture that counts audio-output initialisations.

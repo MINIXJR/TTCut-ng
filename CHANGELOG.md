@@ -2,6 +2,23 @@
 
 All notable changes to TTCut-ng are documented in this file.
 
+## Unreleased
+
+### Fixed
+- **H.264 Smart Cut: a damaged slice header right after a seam no longer
+  hangs the cut.** The first access units copied after a re-encoded stretch
+  get their memory-management commands removed; a slice header that ended
+  inside that list (damaged DVB data) kept the parser looping forever. It now
+  stops at the end of the data and leaves such a slice unchanged. The same
+  guard protects the header rewrite of the re-encoded pictures. Gate:
+  `h264_truncated_slice`.
+- **H.264: the frame index and the MKV muxer read every SPS correctly.**
+  Both took `frame_mbs_only_flag` and the `frame_num` width from the raw SPS
+  bytes; an emulation-prevention byte early in the SPS shifted the fields
+  behind it, so a field-coded stream could be treated as frame-coded. Only
+  SPS with large `poc_type 1` offsets are affected - none of the measured
+  recordings. Gate: `sps_basics_epb`.
+
 ## v0.85.0 (2026-09-22)
 
 **Aspect changes at cut edges, a pinnable playback layout, preview audio through the cut's own chain**

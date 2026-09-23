@@ -266,23 +266,10 @@ public:
     // PAFF detection
     bool isPAFF() const { return mIsPAFF; }
 
-    // Exp-Golomb decoding (public static helpers for SPS/slice parsing)
-    static uint32_t readExpGolombUE(const uint8_t* data, int dataSize, int& bitPos);
-    static int32_t readExpGolombSE(const uint8_t* data, int dataSize, int& bitPos);
-    static uint32_t readBits(const uint8_t* data, int dataSize, int& bitPos, int numBits);
-    // Remove emulation prevention bytes (00 00 03 -> 00 00) from a NAL body
-    // to recover the RBSP; required before parsing any field past the
-    // first bytes of a NAL. Shared with the Smart Cut bitstream surgery.
-    static QByteArray removeEmulationPrevention(const QByteArray& nal);
     // Index of the first byte after the next Annex-B start code
     // (00 00 01 or 00 00 00 01) at or after `from`, or -1 when none is
     // left; the returned index is always < size.
     static int findStartCodePayload(const uint8_t* data, int size, int from);
-
-    // True for H.264 profiles whose SPS carries the high-profile extension
-    // fields (chroma_format_idc, bit_depth, scaling lists). Centralises the
-    // 12-value list so future profile additions need only one edit.
-    static bool isH264HighProfile(uint32_t profile_idc);
 
     // The two SPS fields the PAFF handling needs, read from the first SPS NAL
     // (type 7) in an Annex-B buffer (extradata or an in-band packet): the

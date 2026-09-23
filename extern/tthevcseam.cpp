@@ -4,154 +4,27 @@
 /*----------------------------------------------------------------------------*/
 
 #include "tthevcseam.h"
+#include "../avstream/ttannexb.h"
+#include "../avstream/ttbitstream.h"
 
 #include <QtGlobal>
 
 #include <algorithm>
 
-// ---------------------------------------------------------------- bit reader
-namespace {
-
-class THevcBitReader
-{
-public:
-    explicit THevcBitReader(const QByteArray& data)
-        : mData(reinterpret_cast<const quint8*>(data.constData()))
-        , mSizeBits(data.size() * 8), mPos(0), mError(false) {}
-
-    bool error() const { return mError; }
-    int  pos() const { return mPos; }
-    int  sizeBits() const { return mSizeBits; }
-
-    int bit()
-    {
-        if (mPos >= mSizeBits) { mError = true; return 0; }
-        int b = (mData[mPos >> 3] >> (7 - (mPos & 7))) & 1;
-        ++mPos;
-        return b;
-    }
-    quint32 bits(int n)
-    {
-        quint32 v = 0;
-        for (int i = 0; i < n; ++i) v = (v << 1) | bit();
-        return v;
-    }
-    quint32 ue()
-    {
-        int zeros = 0;
-        while (!mError && bit() == 0) {
-            if (++zeros > 31) { mError = true; return 0; }
-        }
-        quint32 suffix = (zeros > 0) ? bits(zeros) : 0;
-        return ((1u << zeros) - 1) + suffix;
-    }
-    qint32 se()
-    {
-        quint32 k = ue();
-        return (k & 1) ? static_cast<qint32>((k + 1) / 2)
-                       : -static_cast<qint32>(k / 2);
-    }
-    void skip(int n) { mPos += n; if (mPos > mSizeBits) mError = true; }
-
-private:
-    const quint8* mData;
-    int  mSizeBits;
-    int  mPos;
-    bool mError;
-};
-
-class THevcBitWriter
-{
-public:
-    void bit(int b)
-    {
-        if ((mNumBits & 7) == 0) mBytes.append(char(0));
-        if (b) mBytes[mBytes.size() - 1] =
-            char(quint8(mBytes.at(mBytes.size() - 1)) | (1 << (7 - (mNumBits & 7))));
-        ++mNumBits;
-    }
-    void bits(quint32 v, int n)
-    {
-        for (int i = n - 1; i >= 0; --i) bit((v >> i) & 1);
-    }
-    void ue(quint32 v)
-    {
-        quint32 vp1 = v + 1;
-        int nb = 0;
-        for (quint32 t = vp1; t; t >>= 1) ++nb;
-        bits(0, nb - 1);
-        bits(vp1, nb);
-    }
-    void se(qint32 v)
-    {
-        ue(v > 0 ? quint32(2 * v - 1) : quint32(-2 * v));
-    }
-    void alignOneZeros()          // rbsp stop bit + zero padding
-    {
-        bit(1);
-        while (mNumBits & 7) bit(0);
-    }
-    int numBits() const { return mNumBits; }
-    QByteArray data() const { return mBytes; }
-
-private:
-    QByteArray mBytes;
-    int mNumBits = 0;
-};
-
-} // namespace
-
-// -------------------------------------------------------------- EPB handling
-QByteArray ttHevcDeescape(const QByteArray& nalData)
-{
-    QByteArray out;
-    out.reserve(nalData.size());
-    int zeros = 0;
-    for (int i = 0; i < nalData.size(); ++i) {
-        quint8 b = quint8(nalData.at(i));
-        if (zeros >= 2 && b == 3) { zeros = 0; continue; }
-        out.append(char(b));
-        zeros = (b == 0) ? zeros + 1 : 0;
-    }
-    return out;
-}
-
-QByteArray ttHevcEscape(const QByteArray& rbsp)
-{
-    QByteArray out;
-    out.reserve(rbsp.size() + 8);
-    int zeros = 0;
-    for (int i = 0; i < rbsp.size(); ++i) {
-        quint8 b = quint8(rbsp.at(i));
-        if (zeros >= 2 && b <= 3) { out.append(char(3)); zeros = 0; }
-        out.append(char(b));
-        zeros = (b == 0) ? zeros + 1 : 0;
-    }
-    return out;
-}
-
-int ttHevcStartCodeLen(const QByteArray& nal)
-{
-    if (nal.size() >= 4 && nal.at(0) == 0 && nal.at(1) == 0
-        && nal.at(2) == 0 && nal.at(3) == 1) return 4;
-    if (nal.size() >= 3 && nal.at(0) == 0 && nal.at(1) == 0
-        && nal.at(2) == 1) return 3;
-    return 0;
-}
-
+// -------------------------------------------------------------- start codes
 // ------------------------------------------------------------------ SPS parse
 // Scaling list data walk with flat-16 tracking (H.265 7.3.4).
 // A list is "flat 16" when every coefficient (and the DC coef for
 // sizeId >= 2) decodes to 16 — numerically identical to scaling disabled.
 // pred_matrix_id_delta references copy earlier lists, inheriting flatness;
 // delta == 0 references the DEFAULT list, which is NOT flat -> not flat16.
-static void parseScalingListData(THevcBitReader& r, bool* allFlat16)
+static void parseScalingListData(TTBitReader& r, bool* allFlat16)
 {
     *allFlat16 = true;
     for (int sizeId = 0; sizeId < 4; ++sizeId) {
         for (int matrixId = 0; matrixId < 6;
              matrixId += (sizeId == 3) ? 3 : 1) {
-            int predMode = r.bit();
+            int predMode = r.bits(1);
             if (!predMode) {
                 quint32 delta = r.ue();
                 if (delta == 0)          // copies DEFAULT list (non-flat)
@@ -179,9 +52,9 @@ static void parseScalingListData(THevcBitReader& r, bool* allFlat16)
 THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
 {
     THevcSpsSeamInfo info;
-    int sc = ttHevcStartCodeLen(spsNal);
-    QByteArray rbsp = ttHevcDeescape(spsNal.mid(sc));
-    THevcBitReader r(rbsp);
+    int sc = ttStartCodeLength(spsNal);
+    QByteArray rbsp = ttRbspFromNal(spsNal.mid(sc));
+    TTBitReader r(rbsp);
 
     quint32 hdr = r.bits(16);
     if (((hdr >> 9) & 0x3F) != 33) {
@@ -190,7 +63,7 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
     }
     r.bits(4);                                   // sps_video_parameter_set_id
     info.maxSubLayersMinus1 = int(r.bits(3));
-    r.bit();                                     // temporal_id_nesting
+    r.bits(1);                                     // temporal_id_nesting
     if (info.maxSubLayersMinus1 != 0) {
         info.invalidReason = QStringLiteral("sub-layers unsupported");
         return info;
@@ -200,16 +73,16 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
 
     info.spsId = int(r.ue());
     info.chromaFormatIdc = int(r.ue());
-    if (info.chromaFormatIdc == 3) r.bit();      // separate_colour_plane
+    if (info.chromaFormatIdc == 3) r.bits(1);      // separate_colour_plane
     info.picWidth  = int(r.ue());
     info.picHeight = int(r.ue());
-    if (r.bit()) {                               // conformance_window
+    if (r.bits(1)) {                               // conformance_window
         r.ue(); r.ue(); r.ue(); r.ue();
     }
     info.bitDepthLuma   = int(r.ue()) + 8;
     info.bitDepthChroma = int(r.ue()) + 8;
     info.log2MaxPocLsb  = int(r.ue()) + 4;
-    int subLayerOrdering = r.bit();
+    int subLayerOrdering = r.bits(1);
     // maxSubLayersMinus1 == 0: exactly one dpb/reorder/latency triple either way
     Q_UNUSED(subLayerOrdering);
     info.maxDecPicBufferingMinus1 = int(r.ue());
@@ -221,9 +94,9 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
     info.log2DiffMaxMinTbSize = int(r.ue());
     info.tuDepthInter = int(r.ue());
     info.tuDepthIntra = int(r.ue());
-    info.scalingListEnabled = r.bit();
+    info.scalingListEnabled = r.bits(1);
     if (info.scalingListEnabled) {
-        info.scalingListDataPresent = r.bit();
+        info.scalingListDataPresent = r.bits(1);
         if (info.scalingListDataPresent) {
             bool flat = true;
             parseScalingListData(r, &flat);
@@ -233,9 +106,9 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
             info.scalingListFlat16 = false;
         }
     }
-    info.ampEnabled = r.bit();
-    info.saoEnabled = r.bit();
-    info.pcmEnabled = r.bit();
+    info.ampEnabled = r.bits(1);
+    info.saoEnabled = r.bits(1);
+    info.pcmEnabled = r.bits(1);
     if (info.pcmEnabled) {
         info.invalidReason = QStringLiteral("PCM unsupported");
         return info;
@@ -247,13 +120,13 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
         info.invalidReason = QStringLiteral("SPS RPS sets unsupported");
         return info;
     }
-    info.longTermRefPicsPresent = r.bit();
+    info.longTermRefPicsPresent = r.bits(1);
     if (info.longTermRefPicsPresent) {
         info.invalidReason = QStringLiteral("long-term ref pics unsupported");
         return info;
     }
-    info.temporalMvpEnabled = r.bit();
-    info.strongIntraSmoothing = r.bit();
+    info.temporalMvpEnabled = r.bits(1);
+    info.strongIntraSmoothing = r.bits(1);
     // VUI and extensions are irrelevant for the seam — stop here.
 
     if (r.error()) {
@@ -268,9 +141,9 @@ THevcSpsSeamInfo parseHevcSpsSeamInfo(const QByteArray& spsNal)
 THevcPpsSeamInfo parseHevcPpsSeamInfo(const QByteArray& ppsNal)
 {
     THevcPpsSeamInfo info;
-    int sc = ttHevcStartCodeLen(ppsNal);
-    QByteArray rbsp = ttHevcDeescape(ppsNal.mid(sc));
-    THevcBitReader r(rbsp);
+    int sc = ttStartCodeLength(ppsNal);
+    QByteArray rbsp = ttRbspFromNal(ppsNal.mid(sc));
+    TTBitReader r(rbsp);
 
     quint32 hdr = r.bits(16);
     if (((hdr >> 9) & 0x3F) != 34) {
@@ -279,46 +152,46 @@ THevcPpsSeamInfo parseHevcPpsSeamInfo(const QByteArray& ppsNal)
     }
     info.ppsId = int(r.ue());
     info.spsId = int(r.ue());
-    info.dependentSliceSegments = r.bit();
-    info.outputFlagPresent = r.bit();
+    info.dependentSliceSegments = r.bits(1);
+    info.outputFlagPresent = r.bits(1);
     info.numExtraSliceHeaderBits = int(r.bits(3));
-    info.signDataHiding = r.bit();
-    info.cabacInitPresent = r.bit();
+    info.signDataHiding = r.bits(1);
+    info.cabacInitPresent = r.bits(1);
     info.numRefIdxL0DefaultMinus1 = int(r.ue());
     info.numRefIdxL1DefaultMinus1 = int(r.ue());
     r.se();                                      // init_qp_minus26
-    r.bit();                                     // constrained_intra_pred
-    r.bit();                                     // transform_skip_enabled
-    if (r.bit())                                 // cu_qp_delta_enabled
+    r.bits(1);                                     // constrained_intra_pred
+    r.bits(1);                                     // transform_skip_enabled
+    if (r.bits(1))                                 // cu_qp_delta_enabled
         r.ue();                                  // diff_cu_qp_delta_depth
     r.se();                                      // pps_cb_qp_offset
     r.se();                                      // pps_cr_qp_offset
-    info.sliceChromaQpOffsetsPresent = r.bit();
-    info.weightedPred = r.bit();
-    info.weightedBipred = r.bit();
-    r.bit();                                     // transquant_bypass_enabled
-    info.tilesEnabled = r.bit();
-    info.entropyCodingSync = r.bit();
+    info.sliceChromaQpOffsetsPresent = r.bits(1);
+    info.weightedPred = r.bits(1);
+    info.weightedBipred = r.bits(1);
+    r.bits(1);                                     // transquant_bypass_enabled
+    info.tilesEnabled = r.bits(1);
+    info.entropyCodingSync = r.bits(1);
     if (info.tilesEnabled) {
         info.invalidReason = QStringLiteral("tiles unsupported");
         return info;
     }
-    info.ppsLoopFilterAcrossSlices = r.bit();
-    info.deblockingControlPresent = r.bit();
+    info.ppsLoopFilterAcrossSlices = r.bits(1);
+    info.deblockingControlPresent = r.bits(1);
     if (info.deblockingControlPresent) {
-        r.bit();                                 // deblocking_filter_override_enabled
-        if (r.bit() == 0) {                      // pps_deblocking_filter_disabled
+        r.bits(1);                                 // deblocking_filter_override_enabled
+        if (r.bits(1) == 0) {                      // pps_deblocking_filter_disabled
             r.se();                              // pps_beta_offset_div2
             r.se();                              // pps_tc_offset_div2
         }
     }
-    if (r.bit()) {                               // pps_scaling_list_data_present
+    if (r.bits(1)) {                               // pps_scaling_list_data_present
         bool flatIgnored = true;
         parseScalingListData(r, &flatIgnored);   // walk to stay in sync
     }
-    info.listsModificationPresent = r.bit();
+    info.listsModificationPresent = r.bits(1);
     r.ue();                                      // log2_parallel_merge_level_minus2
-    info.sliceHeaderExtension = r.bit();
+    info.sliceHeaderExtension = r.bits(1);
     // pps_extension_present + trailing: not needed.
 
     if (r.error()) {
@@ -332,15 +205,15 @@ THevcPpsSeamInfo parseHevcPpsSeamInfo(const QByteArray& ppsNal)
 // -------------------------------------------------------------- pps_id patch
 QByteArray patchHevcPpsId(const QByteArray& ppsNalWithStartCode, int newPpsId)
 {
-    int sc = ttHevcStartCodeLen(ppsNalWithStartCode);
+    int sc = ttStartCodeLength(ppsNalWithStartCode);
     if (sc == 0 || newPpsId < 1 || newPpsId > 63)
         return QByteArray();
-    QByteArray rbsp = ttHevcDeescape(ppsNalWithStartCode.mid(sc));
-    THevcBitReader r(rbsp);
+    QByteArray rbsp = ttRbspFromNal(ppsNalWithStartCode.mid(sc));
+    TTBitReader r(rbsp);
 
     quint32 hdr = r.bits(16);
     if (((hdr >> 9) & 0x3F) != 34) return QByteArray();
-    if (r.bit() != 1) return QByteArray();       // pps_id must be ue(0) = '1'
+    if (r.bits(1) != 1) return QByteArray();       // pps_id must be ue(0) = '1'
 
     // Locate the rbsp stop bit (last set bit) so trailing alignment can be
     // rebuilt after the shift.
@@ -351,14 +224,13 @@ QByteArray patchHevcPpsId(const QByteArray& ppsNalWithStartCode, int newPpsId)
         --last1;
     if (last1 <= r.pos()) return QByteArray();
 
-    THevcBitWriter w;
+    TTBitWriter w;
     w.bits(hdr, 16);
     w.ue(quint32(newPpsId));
-    for (int p = r.pos(); p < last1; ++p)
-        w.bit((d[p >> 3] >> (7 - (p & 7))) & 1);
-    w.alignOneZeros();                           // stop bit + padding
+    w.copyBits(r, last1 - r.pos());
+    w.rbspTrailingBits();                           // stop bit + padding
 
-    return ppsNalWithStartCode.left(sc) + ttHevcEscape(w.data());
+    return ppsNalWithStartCode.left(sc) + ttNalFromRbsp(w.data());
 }
 
 // --------------------------------------------------------------- slice header
@@ -370,9 +242,9 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
                                       const THevcPpsSeamInfo& pps)
 {
     THevcSliceHeader h;
-    int sc = ttHevcStartCodeLen(nalWithSc);
-    QByteArray rbsp = ttHevcDeescape(nalWithSc.mid(sc));
-    THevcBitReader r(rbsp);
+    int sc = ttStartCodeLength(nalWithSc);
+    QByteArray rbsp = ttRbspFromNal(nalWithSc.mid(sc));
+    TTBitReader r(rbsp);
 
     quint32 hdr = r.bits(16);
     h.nalType = int((hdr >> 9) & 0x3F);
@@ -382,34 +254,34 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
         h.ok = false; h.error = QString::fromLatin1(why); return h;
     };
 
-    if (r.bit() != 1) return fail("first_slice_segment_in_pic_flag != 1");
-    if (isIrapNal(h.nalType)) h.noOutputPrior = r.bit();
+    if (r.bits(1) != 1) return fail("first_slice_segment_in_pic_flag != 1");
+    if (isIrapNal(h.nalType)) h.noOutputPrior = r.bits(1);
     h.ppsId = int(r.ue());
     if (h.ppsId != 0) return fail("encoder pps_id != 0");
-    for (int i = 0; i < pps.numExtraSliceHeaderBits; ++i) r.bit();
+    for (int i = 0; i < pps.numExtraSliceHeaderBits; ++i) r.bits(1);
     h.sliceType = int(r.ue());
     if (h.sliceType == 0) return fail("B slice in encoder output");
     if (h.sliceType > 2) return fail("bad slice_type");
 
     if (!isIdrNal(h.nalType)) {
         h.pocLsb = int(r.bits(sps.log2MaxPocLsb));
-        if (r.bit() != 0) return fail("st_rps_sps_flag != 0");
+        if (r.bits(1) != 0) return fail("st_rps_sps_flag != 0");
         quint32 nneg = r.ue(), npos = r.ue();
         if (nneg > 16 || npos > 16) return fail("RPS too large");
         for (quint32 i = 0; i < nneg; ++i) {
-            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bit();
+            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bits(1);
             h.rpsNeg.append(e);
         }
         for (quint32 i = 0; i < npos; ++i) {
-            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bit();
+            THevcRpsEntry e; e.deltaPoc = int(r.ue()) + 1; e.used = r.bits(1);
             h.rpsPos.append(e);
         }
-        if (sps.temporalMvpEnabled) h.tmvp = r.bit();
+        if (sps.temporalMvpEnabled) h.tmvp = r.bits(1);
     }
-    if (sps.saoEnabled) { h.saoLuma = r.bit(); h.saoChroma = r.bit(); }
+    if (sps.saoEnabled) { h.saoLuma = r.bits(1); h.saoChroma = r.bits(1); }
 
     if (h.sliceType == 1) {                       // P
-        h.numRefIdxOverride = r.bit();
+        h.numRefIdxOverride = r.bits(1);
         int nActive = pps.numRefIdxL0DefaultMinus1 + 1;
         if (h.numRefIdxOverride) {
             h.l0ActiveMinus1 = int(r.ue());
@@ -425,7 +297,7 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
             h.lumaLog2Denom = r.ue();
             if (sps.chromaFormatIdc != 0) h.deltaChromaDenom = r.se();
             for (int i = 0; i < nActive; ++i)
-                h.lumaWeightFlag.append(r.bit());
+                h.lumaWeightFlag.append(r.bits(1));
             for (int i = 0; i < nActive; ++i) {
                 if (h.lumaWeightFlag.at(i)) {
                     qint32 wgt = r.se(), off = r.se();
@@ -434,7 +306,7 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
             }
             if (sps.chromaFormatIdc != 0) {
                 for (int i = 0; i < nActive; ++i)
-                    h.chromaWeightFlag.append(r.bit());
+                    h.chromaWeightFlag.append(r.bits(1));
                 for (int i = 0; i < nActive; ++i) {
                     if (h.chromaWeightFlag.at(i)) {
                         QVector<qint32> v;
@@ -454,7 +326,7 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
     // x265: deblocking on (not disabled), so present iff pps flag set.
     if (pps.ppsLoopFilterAcrossSlices) {
         h.hasLoopFilterAcross = true;
-        h.loopFilterAcross = r.bit();
+        h.loopFilterAcross = r.bits(1);
     }
     if (pps.tilesEnabled || pps.entropyCodingSync) {
         h.numEntryPoints = r.ue();
@@ -467,9 +339,9 @@ THevcSliceHeader parseHevcSliceHeader(const QByteArray& nalWithSc,
     if (pps.sliceHeaderExtension)
         return fail("slice header extension unsupported");
 
-    if (r.bit() != 1) return fail("alignment stop bit missing");
+    if (r.bits(1) != 1) return fail("alignment stop bit missing");
     while (r.pos() & 7) {
-        if (r.bit() != 0) return fail("alignment zero bit not zero");
+        if (r.bits(1) != 0) return fail("alignment zero bit not zero");
     }
     if (r.error()) return fail("bitstream overrun");
     h.sliceData = rbsp.mid(r.pos() / 8);
@@ -482,40 +354,40 @@ QByteArray buildHevcSliceHeader(const THevcSliceHeader& h,
                                 const THevcPpsSeamInfo& pps,
                                 int writePocBits, int writePpsId)
 {
-    THevcBitWriter w;
-    w.bit(0);                                    // forbidden_zero
+    TTBitWriter w;
+    w.bits(0, 1);                                    // forbidden_zero
     w.bits(quint32(h.nalType), 6);
     w.bits(h.nuhRest, 9);
-    w.bit(1);                                    // first_slice
-    if (isIrapNal(h.nalType)) w.bit(h.noOutputPrior);
+    w.bits(1, 1);                                    // first_slice
+    if (isIrapNal(h.nalType)) w.bits(h.noOutputPrior, 1);
     w.ue(quint32(writePpsId));
     // numExtraSliceHeaderBits is 0 for x265 PPS (asserted in the preflight)
     w.ue(quint32(h.sliceType));
     if (!isIdrNal(h.nalType)) {
         w.bits(quint32(h.pocLsb), writePocBits);
-        w.bit(0);                                // st_rps_sps_flag
+        w.bits(0, 1);                                // st_rps_sps_flag
         w.ue(quint32(h.rpsNeg.size()));
         w.ue(quint32(h.rpsPos.size()));
         for (const THevcRpsEntry& e : h.rpsNeg) {
-            w.ue(quint32(e.deltaPoc - 1)); w.bit(e.used);
+            w.ue(quint32(e.deltaPoc - 1)); w.bits(e.used, 1);
         }
         for (const THevcRpsEntry& e : h.rpsPos) {
-            w.ue(quint32(e.deltaPoc - 1)); w.bit(e.used);
+            w.ue(quint32(e.deltaPoc - 1)); w.bits(e.used, 1);
         }
-        if (sps.temporalMvpEnabled) w.bit(h.tmvp);
+        if (sps.temporalMvpEnabled) w.bits(h.tmvp, 1);
     }
-    if (sps.saoEnabled) { w.bit(h.saoLuma); w.bit(h.saoChroma); }
+    if (sps.saoEnabled) { w.bits(h.saoLuma, 1); w.bits(h.saoChroma, 1); }
     if (h.sliceType == 1) {
-        w.bit(h.numRefIdxOverride);
+        w.bits(h.numRefIdxOverride, 1);
         if (h.numRefIdxOverride) w.ue(quint32(h.l0ActiveMinus1));
         if (h.hasCollocatedRefIdx) w.ue(h.collocatedRefIdx);
         if (pps.weightedPred) {
             w.ue(h.lumaLog2Denom);
             if (sps.chromaFormatIdc != 0) w.se(h.deltaChromaDenom);
-            for (int f : h.lumaWeightFlag) w.bit(f);
+            for (int f : h.lumaWeightFlag) w.bits(f, 1);
             for (const auto& lw : h.lumaWeights) { w.se(lw.first); w.se(lw.second); }
             if (sps.chromaFormatIdc != 0) {
-                for (int f : h.chromaWeightFlag) w.bit(f);
+                for (int f : h.chromaWeightFlag) w.bits(f, 1);
                 for (const auto& cw : h.chromaWeights)
                     for (qint32 v : cw) w.se(v);
             }
@@ -523,7 +395,7 @@ QByteArray buildHevcSliceHeader(const THevcSliceHeader& h,
         w.ue(h.fiveMinusMaxMergeCand);
     }
     w.se(h.qpDelta);
-    if (h.hasLoopFilterAcross) w.bit(h.loopFilterAcross);
+    if (h.hasLoopFilterAcross) w.bits(h.loopFilterAcross, 1);
     if (pps.tilesEnabled || pps.entropyCodingSync) {
         w.ue(h.numEntryPoints);
         if (h.numEntryPoints > 0) {
@@ -532,7 +404,7 @@ QByteArray buildHevcSliceHeader(const THevcSliceHeader& h,
                 w.bits(off, int(h.offsetLenMinus1) + 1);
         }
     }
-    w.alignOneZeros();
+    w.rbspTrailingBits();
     return w.data() + h.sliceData;
 }
 
@@ -546,15 +418,15 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
     int sc = 0, type = 0;
     for (int i = 0; (i = ttHevcNextNal(auData, i, &sc, &type)) >= 0; i += sc + 1) {
         if (type == 21) {
-            QByteArray rbsp = ttHevcDeescape(auData.mid(i + sc));
-            THevcBitReader r(rbsp);
+            QByteArray rbsp = ttRbspFromNal(auData.mid(i + sc));
+            TTBitReader r(rbsp);
             r.bits(16);
-            if (r.bit() != 1) {
+            if (r.bits(1) != 1) {
                 if (errorReason) *errorReason =
                     QStringLiteral("CRA not first_slice");
                 return false;
             }
-            r.bit();                              // no_output_of_prior_pics
+            r.bits(1);                              // no_output_of_prior_pics
             int ppsId = int(r.ue());
             int extraBits = (ppsId >= 0 && ppsId < ppsExtraBitsById.size())
                 ? ppsExtraBitsById.at(ppsId) : -1;
@@ -563,7 +435,7 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
                     QStringLiteral("CRA references unknown PPS %1").arg(ppsId);
                 return false;
             }
-            for (int k = 0; k < extraBits; ++k) r.bit();
+            for (int k = 0; k < extraBits; ++k) r.bits(1);
             int sliceType = int(r.ue());
             if (sliceType != 2) {
                 if (errorReason) *errorReason =
@@ -571,7 +443,7 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
                 return false;
             }
             *craPoc = int(r.bits(srcPocBits));
-            if (r.bit() != 0) {
+            if (r.bits(1) != 0) {
                 if (errorReason) *errorReason =
                     QStringLiteral("CRA uses SPS RPS set");
                 return false;
@@ -586,7 +458,7 @@ bool parseHevcCraRpsInfo(const QByteArray& auData, int srcPocBits,
             int p = *craPoc;
             for (quint32 k = 0; k < nneg; ++k) {
                 p -= int(r.ue()) + 1;
-                r.bit();                          // used flag (irrelevant)
+                r.bits(1);                          // used flag (irrelevant)
                 retainPocs->append(p);
             }
             if (r.error()) {
@@ -712,7 +584,7 @@ QByteArray rewriteHevcEncoderPacket(const QByteArray& packetData,
             QByteArray rebuilt = buildHevcSliceHeader(
                 h, ctx.encSps, ctx.encPps, ctx.srcPocBits, ctx.encPpsId);
             out += nal.left(sc);                  // original start code
-            out += ttHevcEscape(rebuilt);
+            out += ttNalFromRbsp(rebuilt);
         } else {
             return fail(QStringLiteral("unexpected NAL type %1").arg(type));
         }
@@ -723,16 +595,9 @@ QByteArray rewriteHevcEncoderPacket(const QByteArray& packetData,
 
 int ttHevcNextNal(const QByteArray& data, int from, int* scLen, int* nalType)
 {
-    for (int i = from; i + 4 < data.size(); ++i) {
-        int sc = 0;
-        if (data.at(i) == 0 && data.at(i + 1) == 0) {
-            if (data.at(i + 2) == 1) sc = 3;
-            else if (data.at(i + 2) == 0 && data.at(i + 3) == 1) sc = 4;
-        }
-        if (sc == 0) continue;
-        *scLen   = sc;
-        *nalType = (quint8(data.at(i + sc)) >> 1) & 0x3F;
-        return i;
-    }
-    return -1;
+    const int i = ttNextStartCode(reinterpret_cast<const uint8_t*>(data.constData()),
+                                  data.size(), from, scLen);
+    if (i < 0) return -1;
+    *nalType = (quint8(data.at(i + *scLen)) >> 1) & 0x3F;
+    return i;
 }
