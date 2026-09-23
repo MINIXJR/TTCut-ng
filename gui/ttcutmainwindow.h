@@ -60,6 +60,10 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     TTCutMainWindow();
     ~TTCutMainWindow();
 
+    //! Exit code of an --auto-cut run: 0 when the cut completed, 1 when the
+    //! run ended without its output. main() returns it.
+    int headlessExitCode() const { return mHeadlessExitCode; }
+
     void keyPressEvent(QKeyEvent* e);
 
   public slots:
@@ -152,6 +156,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onProjectModified();
     void runScreenshotMode();
     void runAutoCutMode(const QString& projectFile, const QString& outputPath);
+    //! Ends an --auto-cut run through quit(), so closeEvent still saves and
+    //! tears the project down in order; the code reaches main().
+    void endAutoCut(int exitCode);
 
     void onStatusReport(TTThreadTask* task, int state, const QString& msg, quint64 value);
 
@@ -275,6 +282,8 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     //! its saved stream points arrive after the pool exit that would trigger
     //! the scan, so scanning earlier duplicates them.
     bool                 mProjectLoadInProgress = false;
+    //! See headlessExitCode(); set by endAutoCut().
+    int                  mHeadlessExitCode = 0;
     //! Why an enabled stream-point analysis did not run at all. Collected in
     //! onAnalyzeStreamPoints(), which is where that decision is made - a
     //! worker that is never built cannot report anything itself. Handed to

@@ -86,17 +86,22 @@ void TTCutMainWindow::runAutoCutMode(const QString& projectFile, const QString& 
   mpAVData->setNonInteractive(true);
   openProjectFile(projectFile);
 
+  // Exit code for the caller: 0 only when the cut completed, 1 for every
+  // run that ends without its output.
   if (!waitForProjectLoad(60000)) {
-  qWarning() << "Auto-cut: project failed to load within 60s";
-  QApplication::quit();
-  return;
+    if (mProjectLoadInProgress)
+      qWarning() << "Auto-cut: project did not load within 60 s";
+    else
+      qWarning() << "Auto-cut: project failed to load";
+    endAutoCut(1);
+    return;
   }
 
   TTCutList* cutData = mpAVData->cutList();
   if (cutData == 0 || cutData->count() == 0) {
-  qWarning() << "Auto-cut: no cut entries in project";
-  QApplication::quit();
-  return;
+    qWarning() << "Auto-cut: no cut entries in project";
+    endAutoCut(1);
+    return;
   }
 
   TTSettings* settings = TTSettings::instance();
@@ -118,7 +123,7 @@ void TTCutMainWindow::runAutoCutMode(const QString& projectFile, const QString& 
                       : (ext == QLatin1String("mpg")) ? 0 : -1;
   if (container < 0 || (container == 0 && settings->encoderCodec() != 0)) {
     qWarning() << "Auto-cut: output must end in .mkv (or .mpg for MPEG-2):" << outputPath;
-    QApplication::exit(1);
+    endAutoCut(1);
     return;
   }
   settings->setWorkingOutputContainer(container);
@@ -131,9 +136,35 @@ void TTCutMainWindow::runAutoCutMode(const QString& projectFile, const QString& 
     qDebug() << "Auto-cut: cutting" << cutData->count() << "segments to" << outputPath
              << "container" << container << "ES" << settings->cutVideoName();
 
-  connect(mpAVData, &TTAVData::cutFinished, &QApplication::quit);
+  // finishCutOperation() records lastCutError() before it emits
+  // cutFinished(), so the outcome is final here.
+  connect(mpAVData, &TTAVData::cutFinished, this, [this] {
+    const QString error = mpAVData->lastCutError();
+    if (error.isEmpty()) {
+      qInfo() << "Auto-cut: cut complete";
+      endAutoCut(0);
+    } else {
+      qWarning().noquote() << "Auto-cut: cut failed -" << error;
+      endAutoCut(1);
+    }
+  });
   mpAVData->onDoCut(QFileInfo(QDir(settings->cutDirPath()), settings->cutVideoName()).absoluteFilePath(),
           cutData, false);
+}
+
+void TTCutMainWindow::endAutoCut(int exitCode)
+{
+  // Not QApplication::exit(): only quit() runs closeEvent, which saves the
+  // settings and calls closeProject() - that aborts the stream-point tasks
+  // and waits for the global pool (the automatic anomaly scan may still be
+  // on it) before anything is destroyed.
+  // Nobody can answer closeEvent's "Save changes?" here: a project whose
+  // video never opened is left loaded and marked modified (onAVItemChanged
+  // skips closeProject when no item was current yet), and the dialog would
+  // hold the run forever. --auto-cut changes nothing worth saving.
+  setProjectModified(false);
+  mHeadlessExitCode = exitCode;
+  QApplication::quit();
 }
 
 void TTCutMainWindow::runScreenshotMode()
