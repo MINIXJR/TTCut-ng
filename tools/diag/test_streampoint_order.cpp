@@ -93,7 +93,7 @@ int main(int argc, char** argv)
         }
     }
     printf("index entries where rank != display_order value: %d of %d (first at %d)\n",
-           rankVsValueMismatch, indexList->count(), firstRankMismatch);
+           rankVsValueMismatch, int(indexList->count()), firstRankMismatch);
 
     // Replay of TTStreamPointVideoWorker::detectAspectChanges(), plus the
     // display-order lookup the worker does not do.
@@ -178,11 +178,11 @@ int main(int argc, char** argv)
                      [&points](const QList<TTStreamPoint>& p) { points = p; });
     worker.runSynchron();
 
-    printf("\nworker reported %d marker(s)\n", points.size());
+    printf("\nworker reported %d marker(s)\n", int(points.size()));
 
     if (points.size() != expectedChangeDisplay.size()) {
         printf("FAIL: %d aspect change(s) measured, worker reported %d marker(s)\n",
-               expectedChangeDisplay.size(), points.size());
+               int(expectedChangeDisplay.size()), int(points.size()));
         return 1;
     }
 
@@ -202,6 +202,6 @@ int main(int argc, char** argv)
         return 1;
     }
     printf("PASS: all %d marker(s) on the measured display position\n",
-           points.size());
+           int(points.size()));
     return 0;
 }

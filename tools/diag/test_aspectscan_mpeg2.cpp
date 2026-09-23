@@ -78,7 +78,7 @@ int main(int argc, char** argv)
         return 1;
     }
     indexList->sortDisplayOrder();
-    printf("index entries (display order)=%d\n", indexList->count());
+    printf("index entries (display order)=%d\n", int(indexList->count()));
     printf("frameCount=%d frameRate=%f\n", vs.frameCount(), vs.frameRate());
 
     QList<TTStreamPoint> points;
@@ -92,12 +92,12 @@ int main(int argc, char** argv)
 
     for (const TTStreamPoint& p : points)
         printf("point: frame=%d desc=%s\n", p.frameIndex(), qPrintable(p.description()));
-    printf("total points=%d\n", points.size());
+    printf("total points=%d\n", int(points.size()));
 
     if (expectCnt < 0) return 0;
 
     if (points.size() != expectCnt) {
-        printf("FAIL: expected %d transitions, got %d\n", expectCnt, points.size());
+        printf("FAIL: expected %d transitions, got %d\n", expectCnt, int(points.size()));
         return 1;
     }
     printf("PASS: %d transition(s) as expected\n", expectCnt);

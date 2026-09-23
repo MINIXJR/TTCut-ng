@@ -61,7 +61,7 @@ int main(int argc, char** argv)
 
   printf("== file                      : %s\n", qPrintable(fi.fileName()));
   printf("== pictures (index entries)  : %d\n", n);
-  printf("== extras (2nd field)        : %d\n", extras.size());
+  printf("== extras (2nd field)        : %d\n", int(extras.size()));
   if (extras.isEmpty()) {
     // 77 = SKIP in run-gates.sh: a stream without field pairs proves nothing.
     printf("SKIP: no field pairs in this stream -- nothing to measure.\n");
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
       printf("   %8d %8d %+7d\n", e, rank, d);
   }
   printf("   ...\n");
-  printf("   drift != 0 : %d of %d extras\n", nonZero, extras.size());
+  printf("   drift != 0 : %d of %d extras\n", nonZero, int(extras.size()));
   printf("   delta range: %+d .. %+d, mean |delta| = %.2f\n",
          minD, maxD, double(sumAbs) / double(extras.size()));
 
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
     if (extras[i] != ranksSorted[i]) ++multisetDiffs;
   printf("\n== multiset check: stored stream positions vs. duplicate display slots\n");
   printf("   differing entries after sorting both: %d of %d%s\n",
-         multisetDiffs, extras.size(),
+         multisetDiffs, int(extras.size()),
          multisetDiffs == 0 ? "  => identical multiset" : "  => NOT identical");
 
   int worstErr = 0, worstPos = -1, positionsWrong = 0;
@@ -192,7 +192,7 @@ int main(int argc, char** argv)
     if (qAbs(rankSecond - rankFirst) != 1) ++nonAdjacent;
   }
   printf("\n== (3) field pairs not adjacent after sortDisplayOrder(): %d of %d\n",
-         nonAdjacent, extras.size());
+         nonAdjacent, int(extras.size()));
 
   // (4) Playback position round trip (code-audit run 3, contract finding 5):
   // for every display frame d the stream index s that
@@ -212,7 +212,7 @@ int main(int argc, char** argv)
     }
   }
   printf("\n== (4) display -> stream -> display round trip over %d display frames "
-         "(%d extras): %d failures\n", displayFrames, extras.size(), roundTripFailures);
+         "(%d extras): %d failures\n", displayFrames, int(extras.size()), roundTripFailures);
   printf("%s\n", roundTripFailures ? "EXTRA-INDEX-RANK FAIL" : "EXTRA-INDEX-RANK PASS");
   return roundTripFailures ? 1 : 0;
 }

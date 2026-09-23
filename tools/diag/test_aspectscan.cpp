@@ -106,7 +106,7 @@ int main(int argc, char** argv)
         indexList.add(vi);
     }
     indexList.sortDisplayOrder();
-    printf("index entries=%d\n", indexList.count());
+    printf("index entries=%d\n", int(indexList.count()));
 
     QList<TTStreamPoint> points;
     TTAspectScanTask task(file, streamType, &indexList, nullptr,
@@ -129,7 +129,7 @@ int main(int argc, char** argv)
     if (expect < 0) return 0;
 
     if (points.size() != 1) {
-        printf("FAIL: expected exactly 1 transition, got %d\n", points.size());
+        printf("FAIL: expected exactly 1 transition, got %d\n", int(points.size()));
         return 1;
     }
     if (points.first().frameIndex() != expect) {

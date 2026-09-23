@@ -27,6 +27,7 @@
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <cstdio>
+#include <cstdlib>
 
 #include "common/ttsettings.h"
 
@@ -42,7 +43,10 @@ static int run(const QString& cfgDir, const QString& iniBody, int streamCodec)
 {
   QDir().mkpath(cfgDir + "/TTCut-ng");
   QFile f(cfgDir + "/TTCut-ng/TTCut-ng.conf");
-  f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    printf("FAIL  cannot write %s\n", qPrintable(f.fileName()));
+    exit(1);
+  }
   QTextStream(&f) << "[Settings]\n" << iniBody;
   f.close();
   TTSettings* s = TTSettings::instance();

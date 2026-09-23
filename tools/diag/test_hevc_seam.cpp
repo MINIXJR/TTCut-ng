@@ -141,7 +141,7 @@ int main(int argc, char** argv)
             QByteArray orig = ttRbspFromNal(raw.mid(ttStartCodeLength(raw)));
             if (rebuilt != orig) {
                 printf("slice %d ROUNDTRIP MISMATCH (%d vs %d bytes)\n",
-                       tested, rebuilt.size(), orig.size());
+                       tested, int(rebuilt.size()), int(orig.size()));
                 return 1;
             }
             ++tested;

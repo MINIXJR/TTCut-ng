@@ -77,7 +77,7 @@ int main(int argc, char** argv)
         return 1;
     }
     indexList->sortDisplayOrder();
-    printf("frames=%d\n\n", indexList->count());
+    printf("frames=%d\n\n", int(indexList->count()));
 
     // The display window's decoder, created first - as in the application,
     // where TTMPEG2Window2::openVideoFile runs when the stream is opened.

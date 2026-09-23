@@ -125,7 +125,7 @@ int main(int argc, char** argv)
 
     const QList<TTFrameInfo>& idx = w.frameIndex();
     const TTDisplayOrderMap&  map = w.displayOrderMap();
-    printf("frames=%d gops=%d\n", idx.size(), (int)bundle.gops.size());
+    printf("frames=%d gops=%d\n", (int)idx.size(), (int)bundle.gops.size());
 
     int nI = 0;
     for (const auto& fi : idx)

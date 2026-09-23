@@ -55,7 +55,7 @@ static void testRoundTrip()
 
   // The point of the whole change: the file must be readable.
   QFile f(scratchPath());
-  f.open(QIODevice::ReadOnly | QIODevice::Text);
+  check(f.open(QIODevice::ReadOnly | QIODevice::Text), "round trip: settings file opens");
   const QString text = QString::fromUtf8(f.readAll());
   check(text.contains("x=320"),        "file contains x=320");
   check(text.contains("y=180"),        "file contains y=180");
@@ -136,7 +136,7 @@ static void testDialogSize()
   check(g.rect.size() == QSize(1141, 695), "dialog: size round trip");
 
   QFile f(scratchPath());
-  f.open(QIODevice::ReadOnly | QIODevice::Text);
+  check(f.open(QIODevice::ReadOnly | QIODevice::Text), "dialog: settings file opens");
   const QString text = QString::fromUtf8(f.readAll());
   check(text.contains("width=1141") && text.contains("height=695"),
         "dialog: file is plain text");
@@ -275,7 +275,7 @@ static void testNoBinaryVariants()
     s.sync();
   }
   QFile f(scratchPath());
-  f.open(QIODevice::ReadOnly | QIODevice::Text);
+  check(f.open(QIODevice::ReadOnly | QIODevice::Text), "settings: settings file opens");
   const QString text = QString::fromUtf8(f.readAll());
   check(!text.contains("@Variant"), "settings: doubles are written in the clear");
   check(text.contains("BlackThreshold=0.98"), "settings: value is editable text");

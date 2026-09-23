@@ -316,7 +316,7 @@ bool compareAudio(const StreamInfo& a, const StreamInfo& b, int segmentCount)
 
   printf("  audio: %s %d ch @ %d Hz, %d packets, payload identical, "
          "%d layout run(s) over %d segment(s)\n",
-         avcodec_get_name(a.codecId), a.channels, a.sampleRate, a.packets.count(),
+         avcodec_get_name(a.codecId), a.channels, a.sampleRate, static_cast<int>(a.packets.count()),
          static_cast<int>(a.channelRuns.size()), segmentCount);
   return true;
 }
@@ -370,8 +370,13 @@ bool checkPreviewFileRemoval(const QString& tempDir)
   const QString decoy = dir.absoluteFilePath("keep_me.txt");
   const QString bait  = dir.absoluteFilePath("preview_999.mkv");
 
-  QFile d(decoy); d.open(QIODevice::WriteOnly); d.write("keep"); d.close();
-  QFile b(bait);  b.open(QIODevice::WriteOnly); b.write("drop"); b.close();
+  QFile d(decoy), b(bait);
+  if (!d.open(QIODevice::WriteOnly) || !b.open(QIODevice::WriteOnly)) {
+    printf("FAIL: cannot create the decoy files in %s\n", qPrintable(tempDir));
+    return false;
+  }
+  d.write("keep"); d.close();
+  b.write("drop"); b.close();
 
   const int removed = ttRemovePreviewFiles();
 
@@ -528,7 +533,7 @@ int main(int argc, char* argv[])
   printf("  video: %s %dx%d, %d packets both sides\n",
          avcodec_get_name(fromTask.video.codecId),
          fromTask.video.width, fromTask.video.height,
-         fromTask.video.packets.count());
+         static_cast<int>(fromTask.video.packets.count()));
 
   // MPEG-2 re-encodes non-reproducibly (thread_count = 0), so its payload is
   // out of scope here - see the file header.
