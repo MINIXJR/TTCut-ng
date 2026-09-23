@@ -5,6 +5,12 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A project with two videos that cannot be cut together no longer loads.**
+  Cuts from a project file skipped the check the cut list applies (same
+  codec, frame rate, audio tracks); a hand-written project with an MPEG-2 and
+  an H.264 video loaded, and the cut sent the H.264 part through the MPEG-2
+  path, leaving an incomplete file. The project is now refused with the
+  reason. Gate: `project_incompatible`.
 - **H.264 Smart Cut: a damaged slice header right after a seam no longer
   hangs the cut.** The first access units copied after a re-encoded stretch
   get their memory-management commands removed; a slice header that ended

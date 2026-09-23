@@ -2301,6 +2301,32 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Projektdatei
 
+- **Der Projektlader umging die Verträglichkeitsprüfung zweier Videos**
+  → **ERLEDIGT (2026-09-23)**, Zweig `fix/project-cut-compatibility`
+  (TODO Medium, Befund 5 aus Code-Audit Lauf 6).
+  - War: `parseCutSection` hängt die Schnitte an, während die Streams noch
+    öffnen, also ohne `TTAVData::appendCutEntry` und dessen `canCutWith`.
+    Gemessen vor dem Fix: ein `.ttcut` mit `tux_mpeg2_576i_pal_test.m2v` und
+    `tux_h264_1080p_progressive_test.264` (je Schnitt 100–300) lud;
+    `--auto-cut` schnitt beide Einträge über den MPEG-2-Weg (Eintrag 0
+    entscheidet), der H.264-Eintrag scheiterte mit „H.264 stream cut() is a
+    deprecated stub", übrig blieben eine `mixed.h264` mit 201 MPEG-2-Bildern
+    und die MP2 — keine MKV, Exit-Code 0.
+  - Fix: `TTAVData::onReadProjectFileFinished` prüft zuerst
+    (`findIncompatibleVideos`) jeden Schnitt jedes Videos mit `canCutWith`
+    gegen alle geladenen Videos — dieselbe Regel wie `appendCutEntry`. Bei
+    einer Ablehnung: Logzeile mit beiden Dateien und Grund, Warnung in der
+    Oberfläche (nicht bei `--auto-cut`), Abbruch über
+    `endAbortedProjectLoad` → `closeProject` (Nutzerentscheid: Laden
+    ablehnen, nicht Schnitte verwerfen).
+  - Gate `project_incompatible` (Tux-Stufe): MPEG-2 gegen H.264 mit
+    gleicher Bildrate (per `.info` auf 25 fps gesetzt), damit wirklich die
+    Codec-Prüfung greift; Gegenprobe zwei verträgliche MPEG-2-Videos →
+    MKV. Gegen den alten Code rot (keine Ablehnung), mit Fix grün.
+  - Nebenbefunde: `--auto-cut` endet auch bei gescheitertem Schnitt oder
+    nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
+    MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
+
 - **Code-Audit Lauf 6: Schnitt bearbeiten und starten** → **ERLEDIGT
   (2026-09-14)**, Zweig `cleanup/code-audit-run6`, sechs Batches. Umfang
   waren die 21 Quelldateien von `docs/code-map/cut-edit-and-start.md`;

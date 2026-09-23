@@ -1,6 +1,6 @@
 ---
-base_commit: 3869f93f4ebee6a104e79472b1e4be90ed30142f
-last_verified: 2026-09-22
+base_commit: 22479ed8c07e8dc2e1e39307b046402587d1b926
+last_verified: 2026-09-23
 sources:
   - gui/ttcutmainwindow.h
   - gui/ttcutmainwindow.cpp
@@ -113,6 +113,7 @@ flowchart TD
 - **Dirty flag covers cuts and the video list only** — stream points, repairs, delays, languages, logo and the `<Settings>` values are saved but never mark the project dirty; New / Exit do not warn about them. A plain video open is "dirty" through `avItemAppended`.
 - **Version check is advisory** — wrong `<Version>` or a foreign root element is logged and then parsed as if fine.
 - **A project that starts no video ends as aborted** — when every `<Video>` is missing or rejected by `resolveProjectPath`, no task is queued and the pool emits neither `exit` nor `aborted`; since `01c6116f` `readProjectFile` sees the zero count and calls `onReadProjectFileAborted` itself, so the flag falls and the headless wait ends (gate `tools/diag/test_project_load_rejected`). Before that the load stayed open for the rest of the session and the `TTCutProjectData` object was left behind — `readProjectFile` deletes a previous one now, which needed `mpProjectData` to be initialised at all (it was not). A video that exists but fails to open still goes through the task's abort route and is reported.
+- **A project whose videos cannot be cut together ends as aborted** — `TTAVData::onReadProjectFileFinished` first runs `findIncompatibleVideos` (every cut through `canCutWith` against all loaded videos, the rule the GUI applies per appended cut). A refusal is logged with both file names and the reason, shown in a warning unless non-interactive, and the load takes the abort tail (`endAbortedProjectLoad` → `closeProject`), so `--auto-cut` finds nothing loaded. Gate `project_incompatible` (Tux tier), measured before the fix: a MPEG-2 + H.264 project loaded and `--auto-cut` cut the H.264 entry through the MPEG-2 path.
 - **No atomic write** — `writeXml` truncates in place; a write error after opening leaves a broken file; the only sign of a failed save is the log line.
 - **Recent list = opened projects** — a project saved for the first time appears in the recent menu only after it has been opened once.
 - **`<Marker>` is a legacy carrier** — VDR import and old projects fill `TTMarkerList`; nothing displays it; `markerAppended` still marks dirty.

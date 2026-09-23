@@ -1,6 +1,6 @@
 ---
-base_commit: 3869f93f4ebee6a104e79472b1e4be90ed30142f
-last_verified: 2026-09-22
+base_commit: 22479ed8c07e8dc2e1e39307b046402587d1b926
+last_verified: 2026-09-23
 sources:
   - gui/ttcutframenavigation.h
   - gui/ttcutframenavigation.cpp
@@ -121,7 +121,7 @@ flowchart TD
 - **A refused range change is only visible in the log.** Both write paths validate through `isValidCut`, but `appendCutEntry` raises (its callers catch) while `updateCutEntry` refuses and logs — its six callers are Qt slots, where an escaping exception ends the application. The three gestures that could hit the limit stop at the other end before getting there, so the refusal is a last line of defence rather than something a user meets. `TTCutItem::cutLengthFrames` takes the absolute difference, so an inverted range would still report a plausible length.
 - **A cut list never validates what it is handed.** `TTCutList::append`/`update` store whatever they get; every check lives one level up in `TTAVItem`. `remove` guards against an entry it does not hold, as `update` and `onUpdateOrder` do.
 - **The two `append` overloads disagree about `order`.** `append(const TTCutItem&)` assigns `count()` when the order is negative and announces it; `append(avItem, cutIn, cutOut, order = -1)` stores whatever it got. Every job list goes through the second one, so all its entries carry `-1` — `sortByOrder()` on such a list is `std::sort` over equal keys and not stable.
-- **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. `canCutWith` keeps them in step for anything appended through `TTAVData::appendCutEntry`, because it rejects a differing stream type — but the project loader bypasses it, so a project naming two videos of different codecs makes the two disagree.
+- **The codec is decided twice from two different places.** `onAudioVideoCut` sets the encoder codec from `mpCurrentAVDataItem`, the dispatch in `onDoCut` switches on `cutList->isH26xCut()`, which asks entry 0. `canCutWith` keeps them in step, because it rejects a differing stream type: `TTAVData::appendCutEntry` runs it per new cut, and for a project — whose loader appends its cuts while the streams are still opening — `TTAVData::onReadProjectFileFinished` runs the same rule over every cut once all streams are in (`findIncompatibleVideos`) and ends the load as aborted when it fails. Gate: `project_incompatible`.
 - **`clear()` emits two removal signals per entry** — the `TTCutItem` overload and the index overload — because the global list and the tree view listen to different ones.
 - **`onEntryUp` re-orders while iterating.** It walks rows front to back and moves each selected row up by one, reporting each move separately; with a multi-row selection the rows it has already moved shift the ones it has not.
 - **`canCutWith` only bites with more than one video.** The caller walks the whole AV list, so with one video loaded the item is handed itself; it returns at once in that case. It has to — its MPEG-2 half reads its own side at the positions of the item's existing cut entries, so comparing a file with itself would pit two places of that file against each other, and a recording whose aspect ratio changes would be refused. That check also needs the existing item to already hold cut entries.
@@ -180,16 +180,16 @@ flowchart TD
 5. **Codec from two sources — largely disproved.** `canCutWith` rejects a
    differing stream type, so the encoder codec (from the current item) and
    the dispatch (from entry 0) cannot disagree as long as every entry came
-   through `TTAVData::appendCutEntry`. The project loader bypasses that, so a
-   project naming two videos of different codecs is loadable — which is the
-   same hole as finding 1, not a second one.
+   through `TTAVData::appendCutEntry`. The project loader bypassed that; a
+   project naming two videos of different codecs loaded — closed since,
+   see `docs/completed-work.md`.
 6. **New in run 6:** the `canCutWith` MPEG-2 loop compared `video2` with
    itself, so its aspect-ratio and picture-size tests could never fail.
 
 The batches of the run fixed 1, 2, 4 and 6 and hardened 3. Finding 1 took
 three of them: the appending path first, then `updateCutEntry` as the
 other way in, then the three gestures that could reach the limit, which
-now stop at the other end of the range. What remains open is the codec
-hole of finding 5 — the project loader bypasses `canCutWith` — and the
-preview clones held back as batch G. Details and evidence:
+now stop at the other end of the range. The codec hole of finding 5 was
+closed afterwards (the loader checks with `canCutWith` once the streams are
+in); the preview clones were held back as batch G. Details and evidence:
 `docs/completed-work.md`.
