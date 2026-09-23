@@ -61,6 +61,26 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
   - Materiallage (gemessen 2026-08-16): 15 von 21 lokalen Aufnahmen tragen
     echte DVB-UT-Daten; öffentlich-rechtliche Sender praktisch immer.
 
+- **Schnitt-Ausgang „Cancelled": fehlender TODO-Eintrag und ungemessenes
+  Hängerisiko bei `--auto-cut`** (Befund 2026-09-23)
+  - Der Kommentar in `TTAVData::finishCutOperation` verweist auf einen
+    Eintrag „Eine echte TTException ... wird als Cut cancelled gemeldet"
+    unter Medium Priority — den gibt es weder hier noch in
+    `docs/completed-work.md`; die Zeilenangabe „:2285-2293" im selben
+    Kommentar ist veraltet. Behauptet wird: `onCutAborted()` (einziger
+    Aufrufer mit `CutOutcome::Cancelled`) werde auch von echten Fehlern
+    erreicht, weil `TTThreadTask::run()` bei `TTException` dasselbe
+    `aborted` sendet wie bei `TTAbortException`.
+  - Gegenbefund, nur ein Fall: am 2026-09-23 lief ein echter Fehler
+    (`TTException` „H.264 stream cut() is a deprecated stub" im MPEG-2-Weg)
+    über den Ausgang *Failed*, `--auto-cut` endete.
+  - Risiko, ungemessen: `finishCutOperation` sendet bei *Cancelled* kein
+    `cutFinished()`. `runAutoCutMode` wartet genau darauf — ein
+    headless-Schnitt, der als *Cancelled* endet, käme nie zum Ende.
+  - Nächster Schritt: messen, welche Fehler heute noch in `onCutAborted`
+    landen; dann Kommentar korrigieren und `--auto-cut` für *Cancelled*
+    absichern (Exit 1).
+
 - **Vorbestehende Defekte, gefunden beim Abbruch-Vorhaben (2026-08-10)** —
   keiner davon wurde von `feature/cut-abort` verursacht, alle sind dort beim
   Lesen bzw. Messen aufgefallen und bisher nur in den SDD-Berichten
