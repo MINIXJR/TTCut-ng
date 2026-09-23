@@ -56,12 +56,14 @@ QByteArray ttRewriteEncoderSliceForSourceSps(
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
     const TTH264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
     int pocLsbBase);
+// *failedSlices (optional) counts slice NALs that could not be rewritten and
+// were kept as the encoder wrote them.
 QByteArray ttRewriteEncoderPacketForSourceSps(
     const QByteArray& packetData,
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
     const TTH264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
-    int pocLsbBase);
+    int pocLsbBase, int* failedSlices = nullptr);
 QByteArray ttExtractPpsFromPacket(const QByteArray& packetData);
 QByteArray ttPatchH264PpsId(const QByteArray& ppsNal, uint32_t newPpsId);
 

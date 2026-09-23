@@ -1,6 +1,6 @@
 ---
-base_commit: ef96cd5b8fce4b2b7ad71c99455e8282d96f4fbe
-last_verified: 2026-09-22
+base_commit: ca89614dd28c37dfa7d4d68c08b22d85c6f291ed
+last_verified: 2026-09-23
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -15,6 +15,8 @@ sources:
   - avstream/ttbitstream.h
   - avstream/tth264syntax.cpp
   - avstream/tth264syntax.h
+  - avstream/ttannexb.cpp
+  - avstream/ttannexb.h
   - avstream/ttnaluparser.cpp
   - avstream/ttnaluparser.h
   - avstream/ttdisplayordermap.cpp
@@ -42,7 +44,9 @@ rewrite, `ttPatchH264SpsReorderFrames`); the HEVC counterpart is
 `avstream/ttbitstream` (`TTBitReader`, `TTBitWriter`, `ttOverwriteBits`,
 `ttRbspFromNal`/`ttNalFromRbsp`); the H.264 SPS header walk is
 `ttParseH264SpsHeader` (`avstream/tth264syntax.cpp`, together with the
-profile predicate `ttIsH264HighProfile`), shared with `TTNaluParser`.
+profile predicate `ttIsH264HighProfile`), shared with `TTNaluParser`. Start
+codes and NAL boundaries come from `avstream/ttannexb` (`ttStartCodeLength`,
+`ttNextStartCode`, `ttNalEnd`) for both.
 
 **Not covered here:**
 - MPEG-2 cutting — a separate engine (`TTMpeg2VideoStream::cut` →
@@ -151,6 +155,7 @@ flowchart TD
 | `checkAbort()` → `mLastError` (**not** `setError()`) | A cancel must never read as an error. `checkAbort()` sets `mWasAborted = true` and assigns `mLastError = "aborted by user"` **directly**, deliberately bypassing `setError()`, which logs at ERROR level through `TTMessageLogger`. The same rule is why the *callers* throw the message-only `TTAbortException(msg)`: the `(file, line, msg)` overload logs at FATAL level on construction (`TTException::TTException(caller, line, msg)`, `common/ttexception.cpp`). A cancelled cut therefore produces no error, warning or fatal line at all. The same reasoning is now shared: `TTAbortableTask::abortNow()` (`data/ttabortabletask.cpp`) carries the identical comment and constructor choice for its other two subclasses (`TTAudioOnlyCutTask`, `TTMuxTask`). |
 | `mAbortRequested` / `mWasAborted` lifetimes | Deliberately asymmetric, and the asymmetry is load-bearing. `mAbortRequested` is an **input**, cleared in `initialize()` only — so a `requestAbort()` arriving *during* `initialize()` still stops the parse, and a cancel between `initialize()` and `smartCutFrames()` is not lost. `mWasAborted` is an **output**, cleared at `smartCutFrames()` entry; it is a plain `bool`, so `wasAborted()` may only be read after the run ends or across a happens-before edge, never polled live. Consequence for reuse: `initialize()` must **not** consult `wasAborted()` on a parse failure — on a reused engine that flag can still carry the previous run's value. It reads `mAbortRequested` directly instead (the `mAbortRequested.load(...)` check right after the `mParser.parseFile()` failure branch in `TTESSmartCut::initialize()`, `extern/ttessmartcut.cpp`). |
 | `TTESSmartCut::seamNotes()` → `ttavdata` → `statusReport` | Per-seam fallback notes (English `tr()` strings), filled whenever the HEVC RASL-preserving seam was wanted but a preflight or the rewrite rejected it. Cleared at the start of each `smartCutFrames`. Empty is the normal case — either every seam took the fix path or no CRA+RASL seam occurred. Surfaced in the cut progress window and the log, never as an error. |
+| `TTESSmartCut::unrewrittenSourceFrames()` → `TTH26xCutTask` → `TTAVData::confirmUnrewrittenFrames` | Source display positions (`-1` = unknown) of re-encoded frames whose slices `ttRewriteEncoderPacketForSourceSps` could not rewrite and kept as encoded — each logged as "SPS unification: re-encoded frame not adjusted …". Asked **after** the whole cut (video, audio, mux) in `onH26xCutFinished`: "Keep result" / "Discard", plus a clipboard copy of the list; Discard deletes `TTH26xCutTask::createdFiles()` and closes the operation as `Cancelled` ("Cut result discarded"). `--auto-cut` logs and keeps; the preview path only logs. Empty in the normal case. |
 
 ## Variant matrix — which branch fires, and what it must guarantee
 
@@ -178,8 +183,12 @@ picks a segment shape by keyframe/IDR status at the cut-in.
   `ttNeutralizeMmcoInAU` and `ttRewriteEncoderSliceForSourceSps` stop on
   `error() || atEnd()`, and both check `error()` once more after the whole
   header: a source slice that cannot be read to its end is left unchanged,
-  such an encoder slice is rejected (`ttRewriteEncoderPacketForSourceSps` then
-  keeps the original NAL, without a log line). `num_ref_idx_lX_active_minus1` is clamped to
+  such an encoder slice is rejected — `ttRewriteEncoderPacketForSourceSps`
+  keeps the original NAL, counts it (`failedSlices`) and `transformEncoderPacket`
+  records the frame for the keep/discard question after the cut (edge table).
+  `ttNeutralizeMmcoInAU` rebuilds CABAC slices with alignment ones and a byte
+  copy of the payload, CAVLC slices with a bit copy up to the stop bit and
+  fresh trailing bits (CAVLC slice data is not byte-aligned). `num_ref_idx_lX_active_minus1` is clamped to
   the spec limit 31 for the weight-table loops. Writing appends
   (`TTBitWriter` grows); fixed-width in-place patches (`frame_num`,
   `poc_lsb`, the PAFF `mb_adaptive_frame_field_flag`) use `ttOverwriteBits`.

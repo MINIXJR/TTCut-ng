@@ -68,6 +68,19 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht ab. `neutralizeMmcoInAU` parst `redundant_pic_cnt` nicht (nur
     Baseline/Extended), die Encoder-Umschreibung keine B-Slices (Re-Encode
     mit `bf=0`). Breitere EPB-Reichweite auf dem NAS-Korpus nicht gemessen.
+  - **Review-Nacharbeit (User-Entscheid: alle fünf offenen Punkte), jeder
+    Punkt erst per Harness als FAIL belegt:**
+    abgeschnittene SPS gilt jetzt als unvollständig (`frame_mbs_only_flag`
+    unbekannt statt 0, keine erfundene `frame_num`-Breite; `test_sps_basics_epb`);
+    `ttNeutralizeMmcoInAU` kopiert CAVLC-Slice-Daten bitgenau bis zum Stoppbit
+    statt CABAC-Ausrichtung (`test_h264_mmco_neutralize`, golden.txt gezielt in
+    genau zwei Zeilen geändert — die zwei handgebauten CAVLC-Slices);
+    nicht umschreibbare Encoder-Slices werden gezählt, geloggt und nach dem
+    Schnitt als Frame-Liste mit „Ergebnis behalten"/„Verwerfen" und Kopieren in
+    die Zwischenablage vorgelegt (`test_unrewritten_frames`); die sieben
+    Annex-B-Scanner und die zwei HEVC-Helfer sitzen auf `avstream/ttannexb`
+    (golden identisch); die global gewordenen Helfer tragen das tt/TT-Präfix.
+    Danach `run-gates.sh` 98 PASS, Cut-Identität 5/5, HEVC-Round-Trip gleich.
 
 - **H.264 gemischt MBAFF+PAFF (08x04-Korpus) — Befunde B, D, E** → **GELÖST
   (2026-07-19)**. Wurzel war der TS↔ES-AU-Nummerierungs-Drift der

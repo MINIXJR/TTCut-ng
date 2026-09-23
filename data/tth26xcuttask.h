@@ -69,6 +69,15 @@ class TTH26xCutTask : public TTAbortableTask
     QString     exitMessage()  const { return mExitMessage; }
     QString     finalOutput()  const { return mParams.finalOutput; }
     QStringList seamNotes()    const { return mSeamNotes; }
+    //! Source display positions of re-encoded frames the SPS unification could
+    //! not adjust (TTESSmartCut::unrewrittenSourceFrames) and the source frame
+    //! rate to turn them into times; TTAVData asks the user whether to keep
+    //! the result.
+    QList<int>  unrewrittenSourceFrames() const { return mUnrewrittenFrames; }
+    double      sourceFrameRate()         const { return mSourceFrameRate; }
+    //! Every file this run produced (the abort cleanup list); TTAVData
+    //! deletes them when the user discards a finished result.
+    QStringList createdFiles()            const { return mCreatedFiles; }
 
   protected:
     void operation() override;
@@ -95,6 +104,8 @@ class TTH26xCutTask : public TTAbortableTask
     QString          mError;
     QString          mExitMessage;
     QStringList      mSeamNotes;
+    QList<int>       mUnrewrittenFrames;
+    double           mSourceFrameRate = 0.0;
 
     //! The two engines are members, not locals, so onUserAbort() (GUI thread)
     //! can reach them without a pointer race against the worker that creates

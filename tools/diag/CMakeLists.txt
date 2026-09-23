@@ -327,6 +327,8 @@ diag_tool(test_h264_truncated_slice AV WIDGETS SOURCES)
 target_link_libraries(test_h264_truncated_slice PRIVATE ttcut-core)
 diag_tool(test_h264_mmco_neutralize AV WIDGETS SOURCES)
 target_link_libraries(test_h264_mmco_neutralize PRIVATE ttcut-core)
+diag_tool(test_unrewritten_frames AV WIDGETS SOURCES)
+target_link_libraries(test_unrewritten_frames PRIVATE ttcut-core)
 diag_tool(test_cut_job_ownership AV WIDGETS SOURCES)
 target_link_libraries(test_cut_job_ownership PRIVATE ttcut-core)
 diag_tool(test_hint_column AV WIDGETS SOURCES)
@@ -454,7 +456,7 @@ target_link_libraries(test_progressbar_reshow PRIVATE ttcut-core)
 add_custom_target(diag DEPENDS
   test_nalu_parser test_au_types test_displayordermap test_wrapper_map
   test_stilldisplay test_leadingclass test_h264_leading probe_copystart
-  test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_aspectdetect
+  test_startcode_scan test_esinfo test_audiofix_esinfo test_hevc_seam test_bitstream test_sps_basics_epb test_h264_syntax_golden test_h264_truncated_slice test_h264_mmco_neutralize test_unrewritten_frames test_aspectdetect
   test_analysislog test_streampoint_anomaly test_silence_unavailable test_aspectscan test_aspectscan_mpeg2 test_aspect_window
   test_anomalyscan
   test_pillarbox test_pool_abort

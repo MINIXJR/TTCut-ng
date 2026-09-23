@@ -453,6 +453,7 @@ bool TTESSmartCut::smartCutFrames(const QString& outputFile,
     mOutputDisplayOrder.clear();
     mOutputDisplayOrderValid = true;
     mSeamNotes.clear();
+    mUnrewrittenFrames.clear();
 
     // ---- Display -> AU conversion (single source of truth) ----
     // UI/cut-list indices are display positions (Direction A). Below this point
@@ -2751,12 +2752,27 @@ QByteArray TTESSmartCut::transformEncoderPacket(ReencodeContext& ctx, const QByt
 
         // Rewrite encoder packet: strip SPS/PPS, rewrite slice NALs
         if (ctx.encPpsParsed) {
+            int failedSlices = 0;
             encodedData = ttRewriteEncoderPacketForSourceSps(
                 encodedData,
                 mEncoderLog2MaxFrameNum, mEncoderLog2MaxPocLsb, mEncoderFrameMbsOnly,
                 mLog2MaxFrameNum, mLog2MaxPocLsb, mFrameMbsOnly,
                 ctx.encPpsForRewrite, 1, mEncoderPacketsWritten,  // newPpsId=1
-                mSpsUnificationPocBase);
+                mSpsUnificationPocBase, &failedSlices);
+            if (failedSlices > 0) {
+                // The slice stays as the encoder wrote it (encoder pps_id,
+                // frame_num/POC widths) inside a stream decoded under the
+                // source SPS - it may decode with artefacts. With bf=0 the
+                // packet index maps 1:1 to the submitted source AU.
+                const int au = (ctx.packetsReceived < ctx.encodeAuOrder.size())
+                               ? ctx.encodeAuOrder[ctx.packetsReceived] : -1;
+                const int display = (au >= 0) ? mDisplayMap.decodeToDisplay(au) : -1;
+                mUnrewrittenFrames.append(display);
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("SPS unification: re-encoded frame not adjusted to the source "
+                            "stream - source frame %1 (AU %2), %3 slice(s) kept as encoded")
+                        .arg(display).arg(au).arg(failedSlices));
+            }
         }
     } else if (mReorderDelay > 0 && mParser.codecType() == NALU_CODEC_H264) {
         // Standard path: just patch SPS reorder frames

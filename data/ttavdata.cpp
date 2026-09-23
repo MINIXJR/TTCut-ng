@@ -12,6 +12,8 @@
 // TTAVDATA
 // ----------------------------------------------------------------------------
 
+#include <QApplication>
+#include <QClipboard>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QProcess>
@@ -1518,6 +1520,68 @@ bool TTAVData::confirmCutWarnings(TTCutList* cutList)
   return warnBox.clickedButton() == cutButton;
 }
 
+bool TTAVData::confirmUnrewrittenFrames(const QList<int>& sourceFrames, double frameRate)
+{
+  if (sourceFrames.isEmpty()) return true;
+
+  QStringList lines;
+  for (int frame : sourceFrames) {
+    if (frame < 0) {
+      lines << tr("frame at an unknown position");
+      continue;
+    }
+    const qint64 ms = frameRate > 0 ? qint64(frame * 1000.0 / frameRate + 0.5) : -1;
+    lines << (ms >= 0
+        ? tr("source frame %1 (%2)").arg(frame)
+              .arg(QTime(0, 0).addMSecs(int(ms)).toString("hh:mm:ss.zzz"))
+        : tr("source frame %1").arg(frame));
+  }
+
+  TTMessageLogger* mlog = TTMessageLogger::getInstance();
+  // --auto-cut: nobody can click the dialog - the per-frame warnings are in
+  // the log already (TTESSmartCut); record the decision and keep the result.
+  if (mNonInteractive) {
+    mlog->warningMsg(__FILE__, __LINE__,
+        QString("%1 re-encoded frame(s) not adjusted to the source stream - "
+                "keeping the result (auto-cut)").arg(sourceFrames.size()));
+    return true;
+  }
+
+  const QString header =
+      tr("%n re-encoded frame(s) could not be adjusted to the source stream and "
+         "may show artefacts:", "", int(sourceFrames.size()));
+  // Long lists stay readable in the dialog; the clipboard gets all of them.
+  const int shown = 20;
+  QStringList visible = lines.mid(0, shown);
+  if (lines.size() > shown)
+    visible << tr("... and %1 more").arg(lines.size() - shown);
+  QString msg = header + "\n\n" + visible.join("\n");
+  const QString logPath = mlog->logFilePath();
+  if (!logPath.isEmpty())
+    msg += tr("\n\nThe log file lists them as \"SPS unification: re-encoded frame "
+              "not adjusted\":\n%1").arg(logPath);
+
+  QMessageBox box(QMessageBox::Warning, tr("Re-encoded Frames Not Adjusted"), msg,
+                  QMessageBox::NoButton, TTCut::mainWindow);
+  QPushButton* keepButton    = box.addButton(tr("Keep result"), QMessageBox::AcceptRole);
+  QPushButton* discardButton = box.addButton(tr("Discard"), QMessageBox::DestructiveRole);
+  QPushButton* copyButton    = box.addButton(tr("Copy to clipboard"), QMessageBox::ActionRole);
+  // Every QMessageBox button closes the box; the copy button must not, so
+  // its connection to the box is replaced by the copy action alone.
+  QObject::disconnect(copyButton, &QAbstractButton::clicked, nullptr, nullptr);
+  const QString clipText = header + "\n" + lines.join("\n") + "\n";
+  connect(copyButton, &QPushButton::clicked, &box, [clipText]() {
+    QApplication::clipboard()->setText(clipText);
+  });
+  box.setDefaultButton(keepButton);
+  box.exec();
+  const bool keep = box.clickedButton() != discardButton;
+  mlog->warningMsg(__FILE__, __LINE__,
+      QString("%1 re-encoded frame(s) not adjusted to the source stream - user %2 the result")
+          .arg(sourceFrames.size()).arg(keep ? "kept" : "discarded"));
+  return keep;
+}
+
 void TTAVData::computeCutLengths(TTCutList* cutList)
 {
   mLastCutSourceMs = 0;
@@ -1950,12 +2014,25 @@ void TTAVData::onH26xCutFinished()
   const QString exitMessage = mpH26xCutTask->exitMessage();
   const QString error       = mpH26xCutTask->lastError();
   const QString finalOutput = mpH26xCutTask->finalOutput();
+  const QList<int> unrewritten  = mpH26xCutTask->unrewrittenSourceFrames();
+  const double     frameRate    = mpH26xCutTask->sourceFrameRate();
+  const QStringList createdFiles = mpH26xCutTask->createdFiles();
 
   mpH26xCutTask->deleteLater();
   mpH26xCutTask = 0;
 
   if (!error.isEmpty()) {
     finishCutOperation(CutOutcome::Failed, exitMessage, error);
+    return;
+  }
+
+  // Frames the SPS unification could not adjust: the result may show
+  // artefacts there. The user decides; "Discard" removes everything this
+  // run produced, as a cancel would.
+  if (!confirmUnrewrittenFrames(unrewritten, frameRate)) {
+    for (const QString& f : createdFiles)
+      if (!f.isEmpty()) QFile::remove(f);
+    finishCutOperation(CutOutcome::Cancelled, tr("Cut result discarded"));
     return;
   }
 

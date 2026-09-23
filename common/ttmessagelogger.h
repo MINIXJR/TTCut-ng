@@ -34,6 +34,7 @@ class TTMessageLogger
     // Override the default log file path (e.g. from main() before any
     // logging happens). Pass an empty string to fall back to the default.
     void setLogFilePath(const QString& path);
+    QString logFilePath() const { return mLogFilePath; }
 
     void enableLogFile(bool enable);
     void setLogModeConsole(bool console);

@@ -129,6 +129,13 @@ public:
     // H.265 CRA+RASL seam occurred).
     QStringList seamNotes() const { return mSeamNotes; }
 
+    // Source display positions of re-encoded frames whose slices could not
+    // be rewritten for SPS unification and were written as the encoder
+    // produced them (-1 when the position is unknown). Such a frame may
+    // decode with artefacts; the caller asks the user whether to keep the
+    // result. Empty in the normal case.
+    QList<int> unrewrittenSourceFrames() const { return mUnrewrittenFrames; }
+
     // Cooperative abort: thread-safe request from any thread (GUI or task's
     // onUserAbort). Work loops poll the flag and return through the normal
     // false/error path; wasAborted() distinguishes abort from real errors.
@@ -208,6 +215,7 @@ private:
     THevcSliceRewriteCtx mHevcSeamCtx;
     QString mHevcSeamX265Params;       // derived x265-params for setupEncoder
     QStringList mSeamNotes;            // fallback notes (GUI)
+    QList<int>  mUnrewrittenFrames;    // see unrewrittenSourceFrames()
 
     static QString deriveX265SeamParams(const THevcSpsSeamInfo& src);
     bool probeHevcEncoderSeamSps(const THevcSpsSeamInfo& srcSps,

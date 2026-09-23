@@ -1207,7 +1207,7 @@ QByteArray ttRewriteEncoderPacketForSourceSps(
     int encLog2MaxFN, int encLog2MaxPocLsb, bool encFrameMbsOnly,
     int srcLog2MaxFN, int srcLog2MaxPocLsb, bool srcFrameMbsOnly,
     const TTH264PpsInfo& encPps, uint32_t newPpsId, int frameIndex,
-    int pocLsbBase)
+    int pocLsbBase, int* failedSlices)
 {
     QByteArray result;
     result.reserve(packetData.size() + 128);
@@ -1261,8 +1261,9 @@ QByteArray ttRewriteEncoderPacketForSourceSps(
                     result.append(rewritten);
                     modified = true;
                 } else {
-                    // Rewrite failed — keep original NAL
+                    // Rewrite failed — keep original NAL; the caller reports it
                     result.append(packetData.mid(scStart, nalEnd - scStart));
+                    if (failedSlices) ++*failedSlices;
                 }
             } else {
                 // Other NAL types — copy as-is

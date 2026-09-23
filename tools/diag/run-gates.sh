@@ -89,6 +89,7 @@ bitstream              unit  120  test_bitstream
 sps_basics_epb         unit  120  test_sps_basics_epb
 h264_truncated_slice   unit  120  test_h264_truncated_slice
 h264_mmco_neutralize   unit  120  test_h264_mmco_neutralize
+unrewritten_frames     unit  120  test_unrewritten_frames
 leadingclass           unit  120  test_leadingclass
 analysislog            unit  120  test_analysislog
 aspectdetect           unit  120  test_aspectdetect
@@ -280,6 +281,7 @@ gate_bitstream()             { "$D/test_bitstream"; }
 gate_sps_basics_epb()        { "$D/test_sps_basics_epb"; }
 gate_h264_truncated_slice()  { "$D/test_h264_truncated_slice"; }
 gate_h264_mmco_neutralize()  { "$D/test_h264_mmco_neutralize"; }
+gate_unrewritten_frames()    { "$D/test_unrewritten_frames"; }
 gate_leadingclass()          { "$D/test_leadingclass"; }
 gate_analysislog()           { "$D/test_analysislog"; }
 gate_aspectdetect()          { "$D/test_aspectdetect"; }
