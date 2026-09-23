@@ -238,6 +238,13 @@ class TTAVData : public QObject
     void           watchOpenAbort(TTThreadTask* task, const std::function<void(const QString&)>& report);
     void           recordTrackOpenFailure(const QString& kind, const QString& filePath, const QString& reason);
     void           clearOpenOutcome();
+    //! Ends a project read as aborted: drops the pool hooks, clears the
+    //! current item (the main window closes what was loaded), emits
+    //! readProjectFileAborted and frees mpProjectData.
+    void           endAbortedProjectLoad();
+    //! The first pair of loaded videos canCutWith refuses for one of the
+    //! cuts, with its reason; false when every cut passes.
+    bool           findIncompatibleVideos(QString& fileA, QString& fileB, QString& reason) const;
     //! Close the MPEG-2 cut operation: reset mCutOperationActive, emit the
     //! single final Exit bracket and cutFinished(). Called inline by
     //! onCutFinished()'s mplex/Elementary branches and by onMpeg2MuxFinished()

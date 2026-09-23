@@ -1,5 +1,5 @@
 ---
-base_commit: 3869f93f4ebee6a104e79472b1e4be90ed30142f
+base_commit: 22479ed8c07e8dc2e1e39307b046402587d1b926
 last_verified: 2026-09-23
 sources:
   - gui/ttcurrentframe.cpp

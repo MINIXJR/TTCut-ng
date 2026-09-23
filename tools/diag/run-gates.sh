@@ -137,6 +137,7 @@ index_bundle_adopt     tux   300  test_index_bundle_adopt
 aspectscan_mpeg2       tux   300  test_aspectscan_mpeg2
 seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
+project_incompatible   tux   600  -
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
 h264_syntax_golden     tux   300  test_h264_syntax_golden
@@ -368,6 +369,60 @@ gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 
 # run must end (a modal dialog would hang it until the timeout). LC_ALL=C.UTF-8
 # because the translator follows the system locale; the log file is on by
 # default and lives below XDG_CACHE_HOME, which the runner points into $W.
+# A project naming two videos that cannot be cut into one output must not
+# load: the loader appends its cuts without TTAVData::appendCutEntry, so the
+# check the GUI runs (canCutWith) happens once all streams are in. The mixed
+# MPEG-2 + H.264 project used to load and cut entry 1 through the MPEG-2 path
+# (measured 2026-09-23: "H.264 stream cut() is a deprecated stub", no MKV).
+# The control, two compatible MPEG-2 videos, must still load and cut. Verdict
+# from the log and the files: --auto-cut exits 0 either way today. LC_ALL as
+# in aspect_autocut: the reason is canCutWith's translated text.
+write_two_video_project() { # out.ttcut video1 audio1 video2 audio2
+  cat > "$1" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$2</Name>
+  <Audio><Order>0</Order><Name>$3</Name></Audio>
+  <Cut><Order>0</Order><CutIn>100</CutIn><CutOut>300</CutOut></Cut>
+ </Video>
+ <Video>
+  <Order>1</Order>
+  <Name>$4</Name>
+  <Audio><Order>0</Order><Name>$5</Name></Audio>
+  <Cut><Order>1</Order><CutIn>100</CutIn><CutOut>300</CutOut></Cut>
+ </Video>
+</TTCut-Projectfile>
+PRJ
+}
+gate_project_incompatible() {
+  local dup="$CACHE/tux_mpeg2_576i_pal_duplicate" mbaff="${MBAFF%.264}"
+  need "$M2V" "$MP2" "$MBAFF" "$mbaff.ac3" "$dup.m2v" "$dup.mp2"
+  local log="$XDG_CACHE_HOME/ttcut-ng/logfile.log"
+  mkdir -p "$W/mixed" "$W/same"
+  # The MPEG-2 video against an H.264 one with the same frame rate and track
+  # count, so the codec is what canCutWith refuses. The H.264 frame rate comes
+  # from a .info next to a link to the MBAFF ES (TTCut reads it there).
+  ln -s "$MBAFF" "$W/h264_25.264"
+  printf '[video]\nfile=h264_25.264\ncodec=h264\nframe_rate=25/1\n' > "$W/h264_25.info"
+  write_two_video_project "$W/mixed.ttcut" "$M2V" "$MP2" "$W/h264_25.264" "$mbaff.ac3"
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/mixed.ttcut" --auto-cut "$W/mixed/out.mkv"
+  echo "mixed: auto-cut exit code $?"
+  grep -F "cannot be cut together" "$log" | grep -F "Video files to cut must have the same codec type" \
+    || { echo "FAIL: mixed project not rejected (no reason in $log)"; exit 1; }
+  grep -F "Auto-cut: project failed to load" "$log" \
+    || { echo "FAIL: mixed project still loaded after the rejection"; exit 1; }
+  [ -z "$(ls -A "$W/mixed")" ] || { echo "FAIL: mixed project was cut:"; ls -la "$W/mixed"; exit 1; }
+  mv "$log" "$W/mixed.log"
+  write_two_video_project "$W/same.ttcut" "$M2V" "$MP2" "$dup.m2v" "$dup.mp2"
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/same.ttcut" --auto-cut "$W/same/out.mkv"
+  echo "same: auto-cut exit code $?"
+  ! grep -F "cannot be cut together" "$log" || { echo "FAIL: compatible project rejected"; exit 1; }
+  local fmt; fmt=$(ffprobe -v error -show_entries format=format_name -of default=nw=1:nk=1 "$W/same/out.mkv" 2>/dev/null)
+  [ "${fmt%%,*}" = matroska ] || { echo "FAIL: compatible project gave no MKV (format '$fmt')"; ls -la "$W/same"; exit 1; }
+  echo "PASS: mixed codecs rejected with reason, compatible pair cut"; }
 gate_aspect_autocut() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
   read -r A B < "$W/aspect.expect"
   ffmpeg -y -v error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=12" \
