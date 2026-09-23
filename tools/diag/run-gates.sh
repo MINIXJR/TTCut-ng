@@ -138,6 +138,7 @@ aspectscan_mpeg2       tux   300  test_aspectscan_mpeg2
 seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
 project_incompatible   tux   600  -
+autocut_exit           tux   600  -
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
 h264_syntax_golden     tux   300  test_h264_syntax_golden
@@ -375,8 +376,8 @@ gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 
 # MPEG-2 + H.264 project used to load and cut entry 1 through the MPEG-2 path
 # (measured 2026-09-23: "H.264 stream cut() is a deprecated stub", no MKV).
 # The control, two compatible MPEG-2 videos, must still load and cut. Verdict
-# from the log and the files: --auto-cut exits 0 either way today. LC_ALL as
-# in aspect_autocut: the reason is canCutWith's translated text.
+# from the log, the files and the exit code. LC_ALL as in aspect_autocut: the
+# reason is canCutWith's translated text.
 write_two_video_project() { # out.ttcut video1 audio1 video2 audio2
   cat > "$1" <<PRJ
 <!DOCTYPE TTCut-Projectfile>
@@ -397,6 +398,37 @@ write_two_video_project() { # out.ttcut video1 audio1 video2 audio2
 </TTCut-Projectfile>
 PRJ
 }
+# --auto-cut must tell a caller whether it produced its output: exit 0 only
+# for a completed cut, 1 for every run that ended without one. Measured
+# before the fix: all four cases below exited 0.
+gate_autocut_exit() {
+  need "$M2V" "$MP2"
+  local rc
+  mkdir -p "$W/ok" "$W/ro" && chmod 555 "$W/ro"
+  cat > "$W/one.ttcut" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$M2V</Name>
+  <Audio><Order>0</Order><Name>$MP2</Name></Audio>
+  <Cut><Order>0</Order><CutIn>100</CutIn><CutOut>300</CutOut></Cut>
+ </Video>
+</TTCut-Projectfile>
+PRJ
+  sed '/<Cut>/d' "$W/one.ttcut" > "$W/nocut.ttcut"
+  sed "s|$M2V|$W/missing.m2v|" "$W/one.ttcut" > "$W/missing.ttcut"
+  expect_rc() { # want project output label
+    LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$2" --auto-cut "$3"; rc=$?
+    echo "$4: exit code $rc (want $1)"
+    [ "$rc" -eq "$1" ] || { echo "FAIL: $4 exited $rc, want $1"; exit 1; }
+  }
+  expect_rc 0 "$W/one.ttcut"     "$W/ok/out.mkv" "completed cut"
+  expect_rc 1 "$W/nocut.ttcut"   "$W/ok/nocut.mkv" "project without cuts"
+  expect_rc 1 "$W/one.ttcut"     "$W/ro/out.mkv" "cut into a read-only directory"
+  expect_rc 1 "$W/missing.ttcut" "$W/ok/missing.mkv" "project whose video is missing"
+  echo "PASS: exit 0 for the completed cut, 1 for the three runs without output"; }
 gate_project_incompatible() {
   local dup="$CACHE/tux_mpeg2_576i_pal_duplicate" mbaff="${MBAFF%.264}"
   need "$M2V" "$MP2" "$MBAFF" "$mbaff.ac3" "$dup.m2v" "$dup.mp2"
@@ -409,7 +441,8 @@ gate_project_incompatible() {
   printf '[video]\nfile=h264_25.264\ncodec=h264\nframe_rate=25/1\n' > "$W/h264_25.info"
   write_two_video_project "$W/mixed.ttcut" "$M2V" "$MP2" "$W/h264_25.264" "$mbaff.ac3"
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/mixed.ttcut" --auto-cut "$W/mixed/out.mkv"
-  echo "mixed: auto-cut exit code $?"
+  local rc=$?; echo "mixed: auto-cut exit code $rc"
+  [ "$rc" -eq 1 ] || { echo "FAIL: rejected project exited $rc, want 1"; exit 1; }
   grep -F "cannot be cut together" "$log" | grep -F "Video files to cut must have the same codec type" \
     || { echo "FAIL: mixed project not rejected (no reason in $log)"; exit 1; }
   grep -F "Auto-cut: project failed to load" "$log" \
@@ -418,7 +451,8 @@ gate_project_incompatible() {
   mv "$log" "$W/mixed.log"
   write_two_video_project "$W/same.ttcut" "$M2V" "$MP2" "$dup.m2v" "$dup.mp2"
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/same.ttcut" --auto-cut "$W/same/out.mkv"
-  echo "same: auto-cut exit code $?"
+  rc=$?; echo "same: auto-cut exit code $rc"
+  [ "$rc" -eq 0 ] || { echo "FAIL: compatible project exited $rc, want 0"; exit 1; }
   ! grep -F "cannot be cut together" "$log" || { echo "FAIL: compatible project rejected"; exit 1; }
   local fmt; fmt=$(ffprobe -v error -show_entries format=format_name -of default=nw=1:nk=1 "$W/same/out.mkv" 2>/dev/null)
   [ "${fmt%%,*}" = matroska ] || { echo "FAIL: compatible project gave no MKV (format '$fmt')"; ls -la "$W/same"; exit 1; }
@@ -449,7 +483,8 @@ gate_aspect_autocut() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || ex
 </TTCut-Projectfile>
 PRJ
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/aspect.ttcut" --auto-cut "$W/out/aspect.mkv"
-  echo "auto-cut exit code $?"
+  local rc=$?; echo "auto-cut exit code $rc"
+  [ "$rc" -eq 0 ] || { echo "FAIL: auto-cut exited $rc, want 0"; exit 1; }
   local log="$XDG_CACHE_HOME/ttcut-ng/logfile.log"
   grep -F "Cut 1: starts in 4:3, the cut is 16:9 from frame $A" "$log" \
     || { echo "FAIL: no aspect warning in $log"; exit 1; }

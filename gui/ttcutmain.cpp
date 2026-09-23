@@ -235,8 +235,10 @@ int main( int argc, char **argv )
     }
 
     a.connect( &a, &QApplication::lastWindowClosed, &a, &QApplication::quit );
-    // Execute application and start event loop
-    return a.exec();
+    // Execute application and start event loop. --auto-cut ends through
+    // quit() (exit code 0) and leaves its own outcome in headlessExitCode().
+    const int rc = a.exec();
+    return rc != 0 ? rc : mainWnd->headlessExitCode();
 
     delete mainWnd;
   }
