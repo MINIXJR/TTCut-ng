@@ -20,9 +20,9 @@
 # FAIL. Exit code of the whole run: 0 all PASS, 1 at least one FAIL or
 # TIMEOUT, 2 no FAIL but at least one SKIP.
 #
-# Every gate runs with QT_QPA_PLATFORM=offscreen, a private XDG_CONFIG_HOME and
-# XDG_CACHE_HOME and a work directory of its own under the run directory
-# (RUN, below): the user's TTCut-ng.conf is neither read nor written, a stored
+# Every gate runs with QT_QPA_PLATFORM=offscreen, LANGUAGE unset, a private
+# XDG_CONFIG_HOME and XDG_CACHE_HOME and a work directory of its own under
+# the run directory (RUN, below): the user's TTCut-ng.conf is neither read nor written, a stored
 # TempDirPath cannot leak in, and the log file a harness inspects is its own.
 # The CMake targets a gate needs are built first, so no stale binary from an
 # earlier session is ever run (tools/diag binaries are gitignored and
@@ -539,7 +539,9 @@ while read -r name tier secs targets; do
   # HOME too: TTSettings defaults the mplex output directory (and the last
   # directory) to QDir::homePath(), so harnesses that drive TTAVData without
   # setting it wrote their .mpg into the real home directory on every run.
-  W="$W" QT_QPA_PLATFORM=offscreen HOME="$W/home" XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
+  # LANGUAGE unset: it outranks LC_ALL in Qt's UI-language list, so a
+  # desktop's LANGUAGE=de would translate the texts a gate greps for.
+  env -u LANGUAGE W="$W" QT_QPA_PLATFORM=offscreen HOME="$W/home" XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
     "${runner[@]}" timeout -k 10 "$secs" "$0" --exec "$name" < /dev/null > "$RUN/$name.log" 2>&1
   rc=$?
   dt=$(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')

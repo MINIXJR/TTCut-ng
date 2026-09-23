@@ -18,6 +18,8 @@
 #include "ui_streamnavigationwidget.h"
 
 class TTAVItem;
+// moc must see TTAVItem complete to register TTAVItem* in its signals/slots
+Q_MOC_INCLUDE("data/ttavlist.h")
 
 class TTStreamNavigator : public QWidget, public Ui::TTStreamNavigatorWidget
 {

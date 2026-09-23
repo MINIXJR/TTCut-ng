@@ -21,6 +21,8 @@
 
 class TTAVData;
 class TTAVItem;
+// moc must see TTAVItem complete to register TTAVItem* in its signals/slots
+Q_MOC_INCLUDE("data/ttavlist.h")
 class TTSubtitleItem;
 
 class QMenu;
