@@ -1,5 +1,5 @@
 ---
-base_commit: 01b55921e21a411afb5a775219215ac1581e0dd2
+base_commit: 3869f93f4ebee6a104e79472b1e4be90ed30142f
 last_verified: 2026-09-23
 sources:
   - gui/ttcurrentframe.cpp
@@ -167,7 +167,8 @@ One row per boundary in the diagram. The order-domain column is the critical fac
 ## Root cause & knot — RESOLVED 2026-06-08 (two-harness empirical proof)
 
 Verified with two standalone harnesses against the real code paths (`tools/diag/test_stillframe`
-drives `TTESSmartCut::smartCutFrames`; `test_displaymap` drives `TTFFmpegWrapper::decodeFrame`),
+drives `TTESSmartCut::smartCutFrames`; `test_displaymap` drives `TTFFmpegWrapper::decodeFrame`; that harness was removed
+in `fa3530a5`),
 on MBAFF.264 around the 36384/36386 ad→programme transition.
 
 **The knot (why decode-order index looks display-accurate) — SOLVED:**
