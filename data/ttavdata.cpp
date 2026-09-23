@@ -1255,6 +1255,27 @@ void TTAVData::onReadProjectFileFinished()
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit,    this, &TTAVData::onReadProjectFileFinished);
 
+  // The loader appends its cuts while the streams are still opening, so it
+  // cannot go through appendCutEntry; the same compatibility rule runs here,
+  // once every video and track is in. A project the GUI could not have
+  // built - two videos that cannot be cut into one output - is not loaded.
+  QString fileA, fileB, reason;
+  if (findIncompatibleVideos(fileA, fileB, reason)) {
+    const QString project = mpProjectData->filePath();
+    log->errorMsg(__FILE__, __LINE__,
+        QString("project %1 not loaded: %2 and %3 cannot be cut together - %4")
+            .arg(project, fileA, fileB, reason));
+    if (!mNonInteractive) {
+      QTimer::singleShot(0, this, [project, fileA, fileB, reason] {
+        QMessageBox::warning(TTCut::mainWindow, tr("Project Not Loaded"),
+            tr("The project %1 was not loaded:\n\n%2 and %3 cannot be cut into one "
+               "output.\n%4").arg(project, fileA, fileB, reason));
+      });
+    }
+    endAbortedProjectLoad();
+    return;
+  }
+
   emit avDataReloaded();
 
   if (avCount() > 0)
@@ -1307,6 +1328,13 @@ void TTAVData::onReadProjectFileAborted()
     return;
   }
 
+  endAbortedProjectLoad();
+}
+
+// Clearing the current item closes the project in the main window
+// (onAVItemChanged(0) -> closeProject), so nothing of a failed load stays.
+void TTAVData::endAbortedProjectLoad()
+{
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onReadProjectFileFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
@@ -1317,6 +1345,34 @@ void TTAVData::onReadProjectFileAborted()
     delete mpProjectData;
     mpProjectData = 0;
   }
+}
+
+// Every cut of every video against all loaded videos, as appendCutEntry
+// checks a new cut. A video whose stream did not open is skipped: canCutWith
+// needs both streams, and the open failure is reported on its own route.
+bool TTAVData::findIncompatibleVideos(QString& fileA, QString& fileB, QString& reason) const
+{
+  for (int b = 0; b < mpAVList->count(); b++) {
+    TTAVItem* itemB = mpAVList->at(b);
+    if (itemB->videoStream() == nullptr) continue;
+    for (int c = 0; c < itemB->cutCount(); c++) {
+      const TTCutItem cut = itemB->cutListItemAt(c);
+      for (int a = 0; a < mpAVList->count(); a++) {
+        TTAVItem* itemA = mpAVList->at(a);
+        if (itemA->videoStream() == nullptr) continue;
+        try {
+          itemA->canCutWith(itemB, cut.cutInIndex(), cut.cutOutIndex());
+        }
+        catch (const TTInvalidOperationException& ex) {
+          fileA  = itemA->videoStream()->filePath();
+          fileB  = itemB->videoStream()->filePath();
+          reason = ex.getMessage();
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 // /////////////////////////////////////////////////////////////////////////////
