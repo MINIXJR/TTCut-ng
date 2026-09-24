@@ -102,6 +102,7 @@ mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
 mpeg2_framerate        unit  300  test_mpeg2_framerate
 mpeg2_framerate_cut    tux   600  -
+diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
@@ -305,6 +306,34 @@ gate_mpeg2order()            { "$D/test_mpeg2order"; }
 gate_mkv_framerate()         { "$D/gate_mkv_framerate.sh" "$W"; }
 gate_mux_script()             { "$D/test_mux_script" "$W"; }
 gate_mpeg2_framerate()        { "$D/gate_mpeg2_framerate.sh" "$W"; }
+# Every program this table runs must be built by `cmake --build build --target
+# diag` (diag + diag-abort). 14 were not until 2026-09-24: after a diag build,
+# `--no-build` or a direct call then ran a stale binary without any sign.
+gate_diag_target_complete() {
+  python3 - "$D/run-gates.sh" "$D/CMakeLists.txt" <<'PY'
+import re, sys
+gates = open(sys.argv[1]).read()
+table = gates[gates.index("GATES='") + 7:]
+table = table[:table.index("'")]
+wanted = set()
+for line in table.splitlines():
+    cols = line.split()
+    if len(cols) >= 4 and cols[3] != "-":
+        wanted.update(cols[3].split(","))
+cmake = open(sys.argv[2]).read()
+built = set()
+for name in ("diag", "diag-abort"):
+    m = re.search(r"add_custom_target\(" + re.escape(name) + r"\s+DEPENDS(.*?)\)", cmake, re.S)
+    if not m:
+        print(f"FAIL: target {name} not found"); sys.exit(1)
+    built.update(m.group(1).split())
+missing = sorted(wanted - built)
+print(f"{len(wanted)} programs in the gate table, {len(built)} in diag/diag-abort")
+if missing:
+    print("FAIL: not built by the diag target: " + " ".join(missing)); sys.exit(1)
+print("PASS: every gate program is part of the diag target")
+PY
+}
 # The 720p50 Tux MPEG-2 cut 100-599 is 500 frames = 10 s. Read as 25 fps
 # (before 2026-09-24) it became a 20 s MKV at half speed, with the audio cut
 # from 4-24 s instead of 2-12 s.

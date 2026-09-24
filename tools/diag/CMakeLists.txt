@@ -473,6 +473,11 @@ add_custom_target(diag DEPENDS
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track
   test_mka_interleave test_mpeg2_framerate
+  test_abort_after_finish test_acmod_majority test_audio_order_reset
+  test_auto_anomaly_scan_trigger test_cutlist_minsize test_decode_cancel
+  test_decode_cancel_yuv test_mpeg2order test_output_name
+  test_quickjump_thumbheight test_sar test_segshape test_smartcut_seam
+  test_stale_abort
   test_preview_clip)
 
 # --- the cut-abort harness suite -------------------------------------------
