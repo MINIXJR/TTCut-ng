@@ -150,12 +150,21 @@ int main(int argc, char** argv)
     QObject::connect(&avData, &TTAVData::readProjectFileAborted, &loop,
                      [&]() { outcome = 'a'; loop.quit(); });
     QTimer::singleShot(5000, &loop, &QEventLoop::quit);
+    // Counted as the loader appends them: the video does not exist, so the
+    // load ends aborted, and since 2026-09-24 an aborted load frees the item
+    // it created - the cut list is empty afterwards (it used to keep the
+    // cuts of the orphaned item, which is what this check read before).
+    int appended = 0;
+    QObject::connect(avData.cutList(), &TTCutList::itemAppended,
+                     [&](const TTCutItem&) { appended++; });
     avData.readProjectFile(QFileInfo(prj));
     if (outcome == '-') loop.exec();
 
     check(outcome != '-', "a project with a rejected cut range still ends the load");
-    check(avData.cutCount() == 1,
+    check(appended == 1,
           "the inverted entry is skipped, the sound one is kept");
+    check(avData.cutCount() == 0,
+          "the aborted load leaves no cut behind");
   }
 
   printf("%s\n", failures ? "CUT-RANGE-CHECK FAIL" : "CUT-RANGE-CHECK PASS");

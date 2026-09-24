@@ -74,7 +74,7 @@ void TTOpenVideoTask::operation()
   QFileInfo fInfo(mFileName);
 
   if (!fInfo.exists())
-    throw TTFileNotFoundException(__FILE__, __LINE__, tr("file %1 does not exists!").arg(fInfo.filePath()));
+    throw TTFileNotFoundException(__FILE__, __LINE__, tr("file %1 does not exist").arg(fInfo.filePath()));
 
   QString videoFilePath = fInfo.absoluteFilePath();
 

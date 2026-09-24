@@ -158,10 +158,12 @@ void TTCutMainWindow::endAutoCut(int exitCode)
   // settings and calls closeProject() - that aborts the stream-point tasks
   // and waits for the global pool (the automatic anomaly scan may still be
   // on it) before anything is destroyed.
-  // Nobody can answer closeEvent's "Save changes?" here: a project whose
-  // video never opened is left loaded and marked modified (onAVItemChanged
-  // skips closeProject when no item was current yet), and the dialog would
-  // hold the run forever. --auto-cut changes nothing worth saving.
+  // Nobody can answer closeEvent's "Save changes?" here, and the dialog
+  // would hold the run forever. --auto-cut changes nothing worth saving.
+  // (A project whose video never opened no longer stays loaded and modified
+  // since 2026-09-24 - onOpenProjectFileAborted closes it - but whether a
+  // completed cut marks the project modified is not measured, so the guard
+  // stays.)
   setProjectModified(false);
   mHeadlessExitCode = exitCode;
   QApplication::quit();

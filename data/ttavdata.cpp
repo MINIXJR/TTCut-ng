@@ -451,6 +451,9 @@ TTAVItem* TTAVData::doOpenVideoStream(const QString& filePath, int order)
 {
   TTAVItem*        avItem        = createAVItem();
   TTOpenVideoTask* openVideoTask = new TTOpenVideoTask(avItem, filePath, order);
+  // Owned by nobody until onOpenVideoFinished() appends it to mpAVList; a
+  // project load whose video never opens frees it in endAbortedProjectLoad().
+  mPendingVideoItems.append(avItem);
 
   connect(openVideoTask, qOverload<TTAVItem*, TTVideoStream*, int, const QString&>(&TTOpenVideoTask::finished),
           this,          &TTAVData::onOpenVideoFinished,
@@ -725,6 +728,7 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   if (mpAVList == nullptr) return;
 
+  mPendingVideoItems.removeAll(avItem);
   mpAVList->append(avItem);
 
   // The pool-exit initial-load-done loop (onThreadPoolExit(), below) can
@@ -914,7 +918,7 @@ void TTAVData::onOpenAudioAborted(TTAVItem*, const QString& filePath, const QStr
 void TTAVData::onOpenVideoAborted(const QString& reason)
 {
   if (reason.isEmpty()) mOpenCancelled = true;
-  else                  mVideoOpenFailed = true;
+  else                { mVideoOpenFailed = true; mVideoOpenFailure = reason; }
 }
 
 // A failed open task reaches the pool as aborted(), which on its own would
@@ -933,6 +937,7 @@ void TTAVData::clearOpenOutcome()
 {
   mTrackOpenFailures.clear();
   mVideoOpenFailed = false;
+  mVideoOpenFailure.clear();
   mOpenCancelled   = false;
 }
 
@@ -1324,17 +1329,43 @@ void TTAVData::onReadProjectFileAborted()
     return;
   }
 
+  // A video that did not open ends the load. Say so: until 2026-09-24 the
+  // reason reached only the log, and the window showed a half loaded project.
+  if (mVideoOpenFailed && !mOpenCancelled && mpProjectData != 0) {
+    const QString project = mpProjectData->filePath();
+    const QString reason  = mVideoOpenFailure;
+    log->errorMsg(__FILE__, __LINE__,
+        QString("project %1 not loaded: %2").arg(project, reason));
+    if (!mNonInteractive) {
+      QTimer::singleShot(0, this, [project, reason] {
+        QMessageBox::warning(TTCut::mainWindow, tr("Project Not Loaded"),
+            tr("The project %1 was not loaded:\n\n%2").arg(project, reason));
+      });
+    }
+  }
+
   endAbortedProjectLoad();
 }
 
 // Clearing the current item closes the project in the main window
-// (onAVItemChanged(0) -> closeProject), so nothing of a failed load stays.
+// (onAVItemChanged(0) -> closeProject) - but only when a video of the
+// project had become current. When none opened, the current item already is
+// nullptr and nothing changes; the main window then closes the project from
+// readProjectFileAborted (TTCutMainWindow::onOpenProjectFileAborted).
 void TTAVData::endAbortedProjectLoad()
 {
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::exit, this, &TTAVData::onReadProjectFileFinished);
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted, this, &TTAVData::onReadProjectFileAborted);
 
   setCurrentAVItem(nullptr);
+
+  // Items whose video never opened never joined mpAVList, so clear() cannot
+  // reach them: until 2026-09-24 they stayed, their cuts mirrored in the
+  // global cut list, and were never freed. The project load is over; any
+  // item still pending belongs to it.
+  qDeleteAll(mPendingVideoItems);
+  mPendingVideoItems.clear();
+
   emit readProjectFileAborted();
 
   if (mpProjectData != 0) {
