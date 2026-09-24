@@ -2327,6 +2327,20 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
     MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
 
+- **14 Gate-Harnesses gehörten nicht zum Target `diag`** → **ERLEDIGT
+  (2026-09-24)**, Zweig `fix/diag-target-complete` (Befund aus Code-Audit
+  Lauf 7).
+  - War: CLAUDE.md sagt, `cmake --build build --target diag` baue alles;
+    14 Programme der Gate-Tabelle standen weder in `diag` noch in
+    `diag-abort`. `run-gates.sh` baut sie selbst, ein `diag`-Bau mit
+    anschließendem `--no-build` oder direktem Aufruf ließ aber eine alte
+    Binärdatei laufen — in Lauf 7 zweimal passiert.
+  - Fix: die 14 Namen in der Liste von `diag`; neues Gate
+    `diag_target_complete` vergleicht die Gate-Tabelle mit `diag` +
+    `diag-abort` (vorher: FAIL mit genau den 14 Namen; Negativprobe: ein
+    Name entfernt → FAIL mit diesem Namen).
+  - Geprüft: die 14 Binärdateien gelöscht, `--target diag` gebaut — alle 14
+    wieder da.
 - **MPEG-2: Bildraten ausser 24, 25 und 30 fps wurden als 25 fps gelesen**
   → **ERLEDIGT (2026-09-24)**, Zweig `fix/mpeg2-frame-rate` (Befund
   2026-09-23 beim Gate `project_incompatible`).

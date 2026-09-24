@@ -578,24 +578,6 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Entwicklungs-Workflow
 
-- **14 Gate-Harnesses gehören nicht zum Target `diag`** (Befund 2026-09-24,
-  Code-Audit Lauf 7)
-  - CLAUDE.md sagt, `cmake --build build --target diag` baue alles; die
-    Tabelle von `run-gates.sh` nennt aber 14 Programme, die weder in `diag`
-    noch in `diag-abort` stehen: `test_abort_after_finish`,
-    `test_acmod_majority`, `test_audio_order_reset`,
-    `test_auto_anomaly_scan_trigger`, `test_cutlist_minsize`,
-    `test_decode_cancel`, `test_decode_cancel_yuv`, `test_mpeg2order`,
-    `test_output_name`, `test_quickjump_thumbheight`, `test_sar`,
-    `test_segshape`, `test_smartcut_seam`, `test_stale_abort`.
-  - `run-gates.sh` baut sie selbst (ohne `--no-build`), deshalb fällt es im
-    Gate-Lauf nicht auf. Wer nach einem `diag`-Bau ein Gate mit `--no-build`
-    oder das Programm direkt startet, bekommt eine alte Binärdatei — zweimal
-    passiert in Lauf 7 (`test_mkvmux`, `test_partial_track`, beide
-    nachgetragen).
-  - Zu tun: die Namen in die Liste von `diag` aufnehmen, oder die Liste aus
-    der Gate-Tabelle ableiten.
-
 - **Qualitäts-Fahrplan**: Reihenfolge der Qualitätsarbeit (Gate-Läufer →
   Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
   Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).

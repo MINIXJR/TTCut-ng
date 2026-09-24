@@ -55,8 +55,9 @@ on `CMAKE_EXPORT_COMPILE_COMMANDS`) — `bear` is no longer needed for clangd.
 
 Diagnostic tools (`tools/diag/`) build via `cmake --build build --target diag`,
 which builds **everything**, the cut-abort harnesses included (`diag` depends
-on `diag-abort`). `cmake --build build --target diag-abort` builds just those
-eight harnesses — useful before an abort matrix run, since most of them link
+on `diag-abort`); the gate `diag_target_complete` fails when a program of the
+`run-gates.sh` table is missing from those two lists. `cmake --build build
+--target diag-abort` builds just the abort harnesses — useful before an abort matrix run, since most of them link
 the whole `ttcut-core` and `diag` is correspondingly slower. Build the target
 before running a harness — the executables live in the source tree and are
 gitignored, so a stale one from an earlier session is invisible.
