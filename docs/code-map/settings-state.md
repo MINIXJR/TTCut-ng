@@ -1,6 +1,6 @@
 ---
-base_commit: 1017940417a1288731592b036c1a65a89694087d
-last_verified: 2026-09-23
+base_commit: 179d28d5272053c5c362ec18bb2cd3cf84290a91
+last_verified: 2026-09-24
 sources:
   - common/ttsettings.h
   - common/ttsettings.cpp
@@ -16,6 +16,10 @@ sources:
   - gui/ttcutsettingsencoderdefaults.cpp
   - gui/ttcutsettingsmuxer.cpp
   - gui/ttcutsettingspaths.cpp
+  - extern/ttmplexprovider.cpp
+  - common/ttencodernames.h
+  - data/ttaudioonlycuttask.cpp
+  - data/ttaudioonlycuttask.h
 ---
 
 # Code Map: Settings as a state machine
@@ -101,7 +105,7 @@ flowchart TD
 | `PRJ` → `ID` | `CutDirPath` goes through `resolveProjectPath` (absolute, no traversal, no NUL) and is dropped with a warning otherwise; `CutVideoName` is rejected if it contains a slash, backslash or control character; `CutAddSuffix` lands in the persistent default directly. |
 | `WORK`/`ID` → `PRJ` | `serializeSettings` writes 13 elements: the three cut fields, the seven working mux values, the three encoder transients — deliberately not the App-Defaults ("the user's dialog defaults stay sacrosanct"). Written on every `TTAVData::writeProjectFile`, i.e. every project save. |
 | `CDLG` → `WORK`/`DEF`/`ID` | `onDlgStart` (OK) → `setGlobalData`: `getCommonData` (cutDirPath, cutAddSuffix, cutVideoName = UI base name + ES extension from `expectedEsExtension(container, codec)`), `encodingPage->getTabData` (encoder mode, `setEncoderCodec` with the disabled combo's value = no-op, the three transients from the UI), then the seven working mux values, and the container ALSO into the per-codec `*Muxer` default ("sticky preference"). Cancel/Esc/X writes nothing; `onDirectoryOpen` however writes `cutDirPath` and `muxOutputPath` immediately when a directory is picked. |
-| `WORK` → `PIPE` | `onCutFinished` switches on `workingOutputContainer` (1 = MKV via a second pool task, 0 = mplex, else no mux); MKV chapters need `workingMkvCreateChapters && workingMkvChapterInterval > 0`; mplex script vs run from `workingMuxMode`; ES deletion from `workingMuxDeleteES` after a successful MKV mux. Audio-only: `workingAudioOnlyFormat` picks MKA vs per-track files. Encoder: `TTESSmartCut` reads preset/CRF/profile (profile clamped per codec), `TTTranscodeProvider` reads `encoderCrf` as qscale; the preview reads the App-Default `previewPreset`, not the Working-Set. |
+| `WORK` → `PIPE` | `onCutFinished` switches on `workingOutputContainer` (1 = MKV via a second pool task, 0 = mplex, else no mux); MKV chapters need `workingMkvCreateChapters && workingMkvChapterInterval > 0`; mplex script vs run from `workingMuxMode`, mplex `-f` from `workingMpeg2Target` (`TTEncoderNames::mpeg2MuxFormat`; it was ignored before code-audit run 7, every MPG got `-f8`); ES deletion from `workingMuxDeleteES` after a successful MKV mux and, since run 7, after the MKA mux too (copied into `TTAudioOnlyCutParams::deleteTrackFiles`). Audio-only: `workingAudioOnlyFormat` picks MKA vs per-track files. Encoder: `TTESSmartCut` reads preset/CRF/profile (profile clamped per codec), `TTTranscodeProvider` reads `encoderCrf` as qscale; the preview reads the App-Default `previewPreset`, not the Working-Set. |
 | `ID` → `PIPE` | `onAudioVideoCut` derives `cutVideoName` from the video base name (`_cut` suffix if `cutAddSuffix`) only when it is empty, then builds the `onDoCut` target from `cutDirPath` + `cutVideoName`. The pipeline treats that name as the INTERMEDIATE elementary-stream file (`.m2v/.h264/.h265`); the container file is derived from its base name. |
 | `PIPE` → `ID` | `onH26xCutFinished` and `onMpeg2MuxFinished` call `setCutVideoName(<final output file name>)` for the completion notification. After a cut the field therefore holds a CONTAINER name (`foo_cut.mkv`), no longer the ES name — except when the user discards an H.264 result (`confirmUnrewrittenFrames`), which returns before the call. |
 | `CLOSE` → `DEF`/`ID` | `closeProject` calls `load()` ("discard project overrides"), then clears `projectFileName` (after `load()` on purpose: load must never resurrect a project name) and `cutVideoName`. Given the fallback rule above, `load()` restores only fields that HAVE a key on disk; the Working-Set is rebuilt from the defaults, so it is the one place where project overrides are really dropped. `onReadVideoStream` clears `cutVideoName` too, but only when no AV item exists yet. |

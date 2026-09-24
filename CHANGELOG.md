@@ -5,6 +5,36 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **MKV output at 29.97, 59.94 and 23.976 fps stays in sync.** The video
+  timestamps were built from a frame duration rounded to whole milliseconds:
+  29.97 fps video ran 1.1 % short of the audio (0.66 s per minute), 23.976 fps
+  0.7 % long. 25 and 50 fps (DVB PAL) were never affected. Gate:
+  `mkv_framerate`.
+- **The MPG target chosen for MPEG-2 output reaches mplex.** Every MPG was
+  written as "DVD with NAV sectors" whatever the cut dialog said. Gate:
+  `mplex_target`.
+- **A cut no longer produces an MKV or MKA that is missing a track.** An
+  audio or subtitle file the muxer could not open was skipped silently and the
+  cut reported success; the cut now fails and names the file. Preview clips
+  and playback still go ahead without the track and log it. Gate:
+  `mkvmux_inputs`.
+- **A file named `chapters.txt` in the output directory survives a cut with
+  chapters.** The chapter file was written under that fixed name and deleted
+  after the mux. Gate: `chapter_file`.
+- **The mplex batch script is a shell script and holds only MPEG-2 cuts.** Its
+  `#!/bin/sh` line was the second line, and every H.264/H.265 cut of the session
+  added an mplex line for its MKV. Gate: `mux_script`.
+- **A preview clip whose mux fails is reported instead of shown.** The preview
+  announced the clip and the player loaded a file that was never written; the
+  preview now ends with the reason, and rebuilding a single clip shows a
+  warning and keeps the previous clip. Gates: `previewcut_muxfail`,
+  `previewcut_muxfail_mpeg2`, `preview_clip_*`.
+- **Audio-only MKA output.** A cut in which a track fails no longer writes a
+  short MKA (like the video cuts, it stops and keeps the finished tracks); the
+  cut track files are deleted after the mux only when "delete ES after
+  muxing" is on (they were always deleted); the tracks are interleaved in the
+  file instead of written one after the other; and the mux stage reports
+  progress. Gates: `partial_track`, `mka_interleave`.
 - **`--auto-cut` reports failure in its exit code.** It exited 0 even when
   the cut failed, the project did not load or held no cuts; it now exits 0
   only for a completed cut and 1 otherwise, and logs "Auto-cut: cut complete"
