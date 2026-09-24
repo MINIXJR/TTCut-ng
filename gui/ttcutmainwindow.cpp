@@ -1738,6 +1738,13 @@ void TTCutMainWindow::onOpenProjectFileFinished(const QString& fName)
 void TTCutMainWindow::onOpenProjectFileAborted()
 {
   mProjectLoadInProgress = false;
+  // TTAVData::endAbortedProjectLoad() closes the project through
+  // onAVItemChanged(nullptr) only when one of its videos had become current.
+  // When none opened (missing file), the project's cuts stayed in the cut
+  // list and the window counted as modified. Close unconditionally - after
+  // the other route closeProject() runs a second time, which only clears
+  // what is already empty.
+  closeProject();
   disconnect(mpAVData, &TTAVData::readProjectFileFinished, this, &TTCutMainWindow::onOpenProjectFileFinished);
   disconnect(mpAVData, &TTAVData::readProjectFileAborted, this, &TTCutMainWindow::onOpenProjectFileAborted);
 }

@@ -329,6 +329,9 @@ class TTAVData : public QObject
     // track failed" as a loaded project. Reset at every open/project start.
     QStringList mTrackOpenFailures;
     bool        mVideoOpenFailed = false;
+    QString mVideoOpenFailure;   //!< its reason, for the "Project Not Loaded" dialog
+    //! AV items created by doOpenVideoStream() whose open task has not finished.
+    QList<TTAVItem*> mPendingVideoItems;
     bool        mOpenCancelled   = false;   // an aborted() without a failure reason = user cancel
 
     // Pending language overrides from project file (applied after async stream open)
