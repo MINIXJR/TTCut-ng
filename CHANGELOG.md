@@ -5,6 +5,11 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **MPEG-2 at 23.976, 29.97, 50, 59.94 and 60 fps is cut at the right speed.**
+  Only 24, 25 and 30 fps were recognised; everything else was treated as
+  25 fps, so a 720p50 recording came out at half speed with its audio cut from
+  the wrong place, and times in the GUI were off by the same factor. Gates:
+  `mpeg2_framerate`, `mpeg2_framerate_cut`.
 - **MKV output at 29.97, 59.94 and 23.976 fps stays in sync.** The video
   timestamps were built from a frame duration rounded to whole milliseconds:
   29.97 fps video ran 1.1 % short of the audio (0.66 s per minute), 23.976 fps

@@ -83,12 +83,14 @@ bool TTTranscodeProvider::setupEncoder()
   mEncoder->flags |= AV_CODEC_FLAG_QSCALE;
   mEncoder->global_quality = FF_QP2LAMBDA * TTSettings::instance()->encoderCrf();
 
-  // GOP size based on frame rate (PAL=15, NTSC=18)
+  // GOP size based on frame rate (PAL=15, NTSC=18, 50/60 fps=30). The 50/60
+  // branch used to come second and was never reached, and until 2026-09-24
+  // no MPEG-2 stream reported more than 30 fps anyway.
   int gopSize = 15;
-  if (fps > 28.0f)
-    gopSize = 18;
-  else if (fps > 48.0f)
+  if (fps > 48.0f)
     gopSize = 30;
+  else if (fps > 28.0f)
+    gopSize = 18;
   mEncoder->gop_size = gopSize;
 
   // No B-frames for clean segment transitions (like TTESSmartCut)

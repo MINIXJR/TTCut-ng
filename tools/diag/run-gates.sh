@@ -100,6 +100,8 @@ audiofix_esinfo        unit  120  test_audiofix_esinfo
 mpeg2order             unit  120  test_mpeg2order
 mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
+mpeg2_framerate        unit  300  test_mpeg2_framerate
+mpeg2_framerate_cut    tux   600  -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
@@ -302,6 +304,35 @@ gate_audiofix_esinfo()       { "$D/test_audiofix_esinfo"; }
 gate_mpeg2order()            { "$D/test_mpeg2order"; }
 gate_mkv_framerate()         { "$D/gate_mkv_framerate.sh" "$W"; }
 gate_mux_script()             { "$D/test_mux_script" "$W"; }
+gate_mpeg2_framerate()        { "$D/gate_mpeg2_framerate.sh" "$W"; }
+# The 720p50 Tux MPEG-2 cut 100-599 is 500 frames = 10 s. Read as 25 fps
+# (before 2026-09-24) it became a 20 s MKV at half speed, with the audio cut
+# from 4-24 s instead of 2-12 s.
+gate_mpeg2_framerate_cut() {
+  local m2v="$CACHE/tux_mpeg2_720p_test.m2v" mp2="$CACHE/tux_mpeg2_720p_test.mp2"
+  need "$m2v" "$mp2"
+  mkdir -p "$W/out"
+  cat > "$W/p.ttcut" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$m2v</Name>
+  <Audio><Order>0</Order><Name>$mp2</Name></Audio>
+  <Cut><Order>0</Order><CutIn>100</CutIn><CutOut>599</CutOut></Cut>
+ </Video>
+</TTCut-Projectfile>
+PRJ
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/p.ttcut" --auto-cut "$W/out/p.mkv" \
+    || { echo "FAIL: auto-cut failed"; exit 1; }
+  local v a
+  v=$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 "$W/out/p.mkv" | sort -g | tail -1)
+  a=$(ffprobe -v error -select_streams a:0 -show_entries packet=pts_time -of csv=p=0 "$W/out/p.mkv" | sort -g | tail -1)
+  echo "last video pts $v s (want 9.98), last audio pts $a s (want about 10)"
+  awk -v v="$v" -v a="$a" 'BEGIN { exit !(v > 9.93 && v < 10.03 && a > 9.8 && a < 10.2) }' \
+    || { echo "FAIL: the cut does not run at 50 fps"; exit 1; }
+  echo "PASS: 720p50 cut is 10 s of video and 10 s of audio"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
