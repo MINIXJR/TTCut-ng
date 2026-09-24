@@ -545,6 +545,21 @@ int main(int argc, char* argv[])
   if (!compareAudio(fromTask.audio, fromRebuild.audio, clip.count()))
     return 1;
 
+  // A rebuild whose mux fails must say so. It returned true regardless until
+  // code-audit run 7, and the dialog then loaded a clip that was never
+  // written. A directory in place of the output file makes exactly the mux
+  // fail: video and audio are cut to other names first.
+  {
+    QFile::remove(taskClip);
+    if (!QDir().mkpath(taskClip)) return fail("could not block the clip path");
+    const bool blocked = isMpeg2
+        ? ttRebuildMpeg2PreviewClip(&avData, &clip, fileIndex)
+        : ttRebuildSmartCutPreviewClip(&avData, &clip, fileIndex);
+    QDir(taskClip).removeRecursively();
+    if (blocked) return fail("the rebuild reported success although its mux failed");
+    printf("  rebuild with a failing mux: reported as failed\n");
+  }
+
   // PREVIEW_CLIP_KEEP=1 skips the cleanup check so the produced clips stay on
   // disk for a hand measurement (the task's clip is kept as task_clip.mkv
   // either way; the rebuilt one is preview_002.mkv in the temp directory).

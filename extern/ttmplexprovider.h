@@ -15,7 +15,6 @@
 #ifndef TTMPLEXPROVIDER_H
 #define TTMPLEXPROVIDER_H
 
-#include "../extern/imuxprovider.h"
 #include "../common/istatusreporter.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttcut.h"
@@ -26,23 +25,22 @@
 #include <QString>
 #include <QStringList>
 #include <QProcess>
-#include <QHash>
 
 #include <atomic>
 
-class TTMplexProvider : public IStatusReporter, public IMuxProvider
+class TTMplexProvider : public IStatusReporter
 {
   Q_OBJECT
 
   public:
-    TTMplexProvider(TTMuxListData* muxListData);
-    ~TTMplexProvider();
+    explicit TTMplexProvider(TTMuxListData* muxListData);
+    ~TTMplexProvider() override;
 
     void writeMuxScript();
     void mplexPart(int index);
 
-    // A/V sync offset in milliseconds (from .info file)
-    // mplex uses --sync-offset (positive = video ahead of audio)
+    // A/V sync offset in milliseconds (from .info file), passed to mplex as
+    // -O <ms>; positive delays the audio (see createMplexArguments())
     void setAudioSyncOffset(int offsetMs) { mAudioSyncOffsetMs = offsetMs; }
 
     // Cooperative abort, same shape as TTMkvMergeProvider: requestAbort() is
@@ -61,10 +59,10 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     //! not end normally. Before this the exit code was discarded, so a failed
     //! multiplex still reported "Cut complete" to the user.
     bool    succeeded() const { return mSucceeded; }
-    QString lastError() const { return mLastError; }
+    const QString& lastError() const { return mLastError; }
 
   private:
-    QString     createOutputFilePath(const QString& videoFilePath);
+    static QString createOutputFilePath(const QString& videoFilePath);
     QStringList createMplexArguments(const QString& videoFilePath, const QStringList& audioFilePaths, bool escapeFileNames);
     //! Examine one line of mplex output for silent data loss (see the .cpp).
     void        inspectMplexLine(const QString& line);
@@ -88,8 +86,6 @@ class TTMplexProvider : public IStatusReporter, public IMuxProvider
     TTMuxListData*      mpMuxList;
     int                 mCurrentMuxIndex;
     QProcess*           proc;
-    QHash<QString, int> verbose;
-    QHash<QString, int> format;
     int                 mAudioSyncOffsetMs;
     // Providers are created fresh per mux operation (TTAVData::onCutFinished),
     // so mAbortRequested needs no clearing point of its own; mWasAborted is an

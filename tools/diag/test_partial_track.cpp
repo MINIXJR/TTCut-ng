@@ -35,6 +35,7 @@
 #include "avstream/ttavstream.h"
 #include "avstream/ttvideoindexlist.h"
 #include "common/istatusreporter.h"
+#include "common/ttcut.h"
 #include "common/ttsettings.h"
 #include "common/ttthreadtask.h"
 #include "data/ttavdata.h"
@@ -134,7 +135,7 @@ int main(int argc, char** argv)
     QObject::connect(&watchdog, &QTimer::timeout, qApp, &QCoreApplication::quit);
     watchdog.start(900000);
 
-    auto runCut = [&](const char* label) {
+    auto runCut = [&](const char* label, bool audioOnly = false) {
         errorAtExit.clear();
         sawMuxStage  = false;
         terminalSeen = false;
@@ -142,7 +143,7 @@ int main(int argc, char** argv)
         cutList.append(avItem, cutIn, cutOut);
         const QString target = QDir(workDir).absoluteFilePath(QString(label));
         QElapsedTimer t; t.start();
-        avData.onDoCut(target, &cutList, false);
+        avData.onDoCut(target, &cutList, audioOnly);
         qApp->exec();
         printf("  [%s] ran %lld ms, lastCutError='%s', mux stage %s\n",
                label, (long long)t.elapsed(),
@@ -155,6 +156,31 @@ int main(int argc, char** argv)
     check(terminalSeen, "control run reached a terminal bracket");
     check(errorAtExit.isEmpty(), "control run reports no error");
     check(sawMuxStage, "control run reached the mux stage");
+
+    // --- audio-only MKA, both tracks intact: the ES deletion follows the
+    //     "delete ES" option (it deleted the track files unconditionally until
+    //     code-audit run 7, H7) ------------------------------------------------
+    TTSettings::instance()->setWorkingAudioOnlyFormat(TTCut::AOF_OriginalMKA);
+    auto trackFilesOf = [&](const char* label) {
+        QStringList found;
+        for (int i = 1; i <= 2; ++i) {
+            const QString f = QDir(workDir).absoluteFilePath(
+                QString("%1_%2.%3").arg(label).arg(i, 3, 10, QLatin1Char('0'))
+                    .arg(QFileInfo(audioFile).suffix()));
+            if (QFile::exists(f)) found << f;
+        }
+        return found;
+    };
+    TTSettings::instance()->setWorkingMuxDeleteES(false);
+    runCut("mka_keep", true);
+    check(errorAtExit.isEmpty(), "audio-only MKA run reports no error");
+    check(QFile::exists(QDir(workDir).absoluteFilePath("mka_keep.mka")), "audio-only MKA written");
+    check(trackFilesOf("mka_keep").size() == 2, "MKA with 'delete ES' off keeps both track files");
+    TTSettings::instance()->setWorkingMuxDeleteES(true);
+    runCut("mka_delete", true);
+    check(QFile::exists(QDir(workDir).absoluteFilePath("mka_delete.mka")), "second MKA written");
+    check(trackFilesOf("mka_delete").isEmpty(), "MKA with 'delete ES' on removes the track files");
+    TTSettings::instance()->setWorkingMuxDeleteES(false);
 
     // --- run 2: second track's file vanishes --------------------------------
     if (!QFile::remove(track2File)) {
@@ -170,6 +196,14 @@ int main(int argc, char** argv)
           "the error names the count (1 of 2)");
     check(!sawMuxStage,
           "the mux stage is never reached when a track is missing");
+
+    // --- audio-only MKA with the second track gone: stop before the mux, like
+    //     the video paths (it muxed a short MKA until code-audit run 7, H7) ----
+    runCut("mka_partial", true);
+    check(!errorAtExit.isEmpty(), "audio-only MKA missing a track reports an error");
+    check(!sawMuxStage, "audio-only MKA missing a track never reaches the mux stage");
+    check(!QFile::exists(QDir(workDir).absoluteFilePath("mka_partial.mka")),
+          "no MKA written when a track is missing");
 
     printf("\n%s\n", gFailures == 0 ? "ALL PASS" : "FAILURES");
     return gFailures == 0 ? 0 : 1;

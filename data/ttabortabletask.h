@@ -15,6 +15,7 @@
 #include <QString>
 #include <QStringList>
 #include <atomic>
+#include <functional>
 
 class TTAVData;
 
@@ -56,6 +57,30 @@ class TTAbortableTask : public TTThreadTask
     [[noreturn]] void abortNow();
     //! Delete everything this run created (abort only). Idempotent.
     void abortCleanup();
+
+    //! After an engine call returned false: a cancel comes back through the
+    //! same false return as a real failure, so leave through abortNow() when
+    //! the engine saw the cancel or ours arrived in the window before it
+    //! could. Returns when it was a genuine failure, for the caller to record.
+    void abortIfEngineAborted(bool engineWasAborted);
+
+    //! Forward an engine's progressChanged(int percent, QString msg) as Step
+    //! reports. Direct connection on purpose: the engine runs on this worker,
+    //! the task object lives on the GUI thread, and an AutoConnection would
+    //! queue the report and run reportStep() on the GUI thread, where the
+    //! thread guard in TTAVData::onStatusReport passes and processEvents()
+    //! re-enters the event loop from inside a queued slot invocation.
+    template <class Engine>
+    void forwardProgressOf(Engine* engine)
+    {
+      connect(engine, &Engine::progressChanged, this,
+          [this](int percent, const QString& msg) { reportStep(msg, percent); },
+          Qt::DirectConnection);
+    }
+
+    //! Progress callback for TTAVData::cutAudioTracks: folds track i's
+    //! percent into one percent over all \a trackCount tracks.
+    std::function<void(int, int)> audioTrackProgress(int trackCount);
     //! Forward one Step report / a stage change to the GUI via TTAVData.
     void reportStep(const QString& msg, quint64 percent);
     void reportStage(int stage);

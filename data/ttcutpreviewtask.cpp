@@ -338,7 +338,13 @@ void TTCutPreviewTask::operation()
 
           TTMkvMergeProvider mkvProv;
           ttConfigurePreviewMux(mkvProv, src);
-          mkvProv.mux(outputFile, videoFile, audioFiles, QStringList());
+          // A failed mux used to go unnoticed: the clip was announced and the
+          // player got a file that was never written. The catch below records
+          // the reason for the dialog and removes the clip's files.
+          if (!mkvProv.mux(outputFile, videoFile, audioFiles, QStringList()))
+            throw TTIOException(__FILE__, __LINE__,
+                tr("Preview clip %1 could not be muxed: %2")
+                    .arg(i + 1).arg(mkvProv.lastError()));
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
         } else {
@@ -635,13 +641,19 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   // so we do NOT add it again here via setAudioDelays.
   ttConfigurePreviewMux(mkvProvider, src, smartCut->outputDisplayOrder());
 
-  if (mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
-    if (TTSettings::instance()->logCutPipeline())
-        qDebug() << "Preview mux complete in" << muxTimer.elapsed() << "ms:" << outputFile;
-  } else {
+  if (!mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList())) {
+    // Logged only, until code-audit run 7: the clip was announced anyway and
+    // the player got a file that was never written.
+    const QString err = mkvProvider.lastError();
     TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-        QString("Preview mux failed: %1").arg(mkvProvider.lastError()));
+        QString("Preview mux failed: %1").arg(err));
+    for (const QString& f : cutAudioFiles) QFile::remove(f);
+    QFile::remove(outputFile);
+    mErrorMessage = tr("The preview could not be created:\n\n%1").arg(err);
+    throw TTIOException(__FILE__, __LINE__, QString("Preview mux failed: %1").arg(err));
   }
+  if (TTSettings::instance()->logCutPipeline())
+      qDebug() << "Preview mux complete in" << muxTimer.elapsed() << "ms:" << outputFile;
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "Preview clip total time:" << clipTimer.elapsed() << "ms";

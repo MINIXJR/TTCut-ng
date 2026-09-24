@@ -147,21 +147,14 @@ int ttApplyPreviewEncoderSettings(TTESSmartCut& smartCut, const TTPreviewSource&
 void ttConfigurePreviewMux(TTMkvMergeProvider& mux, const TTPreviewSource& src,
                            const QVector<int>& displayOrder)
 {
-  // A stream without a frame rate would turn the default duration into a
-  // division by zero. Leaving it unset keeps the muxer on its own default
-  // instead; on any stream that reports a rate this branch is not reached.
-  if (src.frameRate > 0) {
-    const int frameDurationNs = static_cast<int>(1000000000.0 / src.frameRate);
-    mux.setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
-  }
-
-  mux.setIsPAFF(src.vStream->isPAFF(), src.vStream->paffLog2MaxFrameNum());
-  mux.setVideoCodecId(TTMkvMergeProvider::videoCodecIdFor(src.vStream->streamType()));
-
+  TTMkvVideoOptions options =
+      TTMkvMergeProvider::videoOptionsFor(src.vStream, src.frameRate, src.avOffsetMs);
   // Display-PTS: Smart Cut supplies the output order; empty means linear PTS.
-  mux.setVideoDisplayOrder(displayOrder);
-
-  if (src.avOffsetMs != 0) mux.setAudioSyncOffset(src.avOffsetMs);
+  options.displayOrder = displayOrder;
+  mux.setVideoOptions(options);
+  // A preview without one of its tracks is still worth showing; the muxer
+  // logs what it skipped.
+  mux.setRequireAllInputs(false);
 }
 
 namespace {
@@ -216,7 +209,11 @@ bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fil
   if (src.hasAudio && !cutAudioFiles.isEmpty()) {
     TTMkvMergeProvider mkvProv;
     ttConfigurePreviewMux(mkvProv, src);
-    mkvProv.mux(outputFile, videoFile, cutAudioFiles, QStringList());
+    if (!mkvProv.mux(outputFile, videoFile, cutAudioFiles, QStringList())) {
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Rebuild: preview mux failed: %1").arg(mkvProv.lastError()));
+      return false;
+    }
   } else {
     // No audio - just rename the video file to the output
     QFile::rename(videoFile, outputFile);
@@ -299,7 +296,10 @@ bool ttRebuildSmartCutPreviewClip(TTAVData* avData, TTCutList* clipCutList, int 
 
   TTMkvMergeProvider mkvProvider;
   ttConfigurePreviewMux(mkvProvider, src, smartCut.outputDisplayOrder());
-  mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList());
+  const bool muxed = mkvProvider.mux(outputFile, tempVideoFile, cutAudioFiles, QStringList());
+  if (!muxed)
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Rebuild: preview mux failed: %1").arg(mkvProvider.lastError()));
 
   // Clean up temp files
   QFile::remove(tempVideoFile);
@@ -307,5 +307,5 @@ bool ttRebuildSmartCutPreviewClip(TTAVData* avData, TTCutList* clipCutList, int 
     QFile::remove(f);
   }
 
-  return true;
+  return muxed;
 }

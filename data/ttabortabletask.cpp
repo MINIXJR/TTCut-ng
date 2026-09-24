@@ -61,6 +61,29 @@ void TTAbortableTask::abortNow()
 }
 
 /**
+ * Abort exit after an engine's false return, if that false was a cancel
+ */
+void TTAbortableTask::abortIfEngineAborted(bool engineWasAborted)
+{
+  if (engineWasAborted || cancelRequested()) abortNow();
+}
+
+/**
+ * Per-track audio progress, folded into one percent over all tracks
+ *
+ * TTAVData is the translation context on purpose: the text moved here from
+ * the cut tasks, which already named TTAVData for it (see TTH26xCutTask).
+ */
+std::function<void(int, int)> TTAbortableTask::audioTrackProgress(int trackCount)
+{
+  return [this, trackCount](int i, int percent) {
+    const int overall = (i * 100 + percent) / qMax(1, trackCount);
+    reportStep(TTAVData::tr("Cutting audio track %1 of %2...")
+                   .arg(i + 1).arg(trackCount), overall);
+  };
+}
+
+/**
  * Poll point between two phases of the pipeline
  */
 void TTAbortableTask::abortIfRequested()

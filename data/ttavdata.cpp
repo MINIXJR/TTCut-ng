@@ -69,10 +69,6 @@
 
 #include "../avstream/ttavtypes.h"
 
-extern "C" {
-#include <libavcodec/codec_id.h>
-}
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Class TTAVData
  */
@@ -510,7 +506,7 @@ void TTAVData::doOpenSubtitleStream(TTAVItem* avItem, const QString& filePath, i
  * list and show the warning dialog. Runs once the video stream is built, so
  * extraIndices() is available. Fresh open only (see mpPendingExtraFrameDialog).
  */
-void TTAVData::showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStream,
+void TTAVData::showExtraFrameClusterDialog(const TTAVItem* avItem, TTVideoStream* vStream,
                                            const TTESInfo& esInfo)
 {
   if (avItem == nullptr) return;
@@ -1021,7 +1017,7 @@ void TTAVData::onCutOrderChanged(int oldIndex, int newIndex)
 }
 
 //! Search equal frame
-void TTAVData::onDoFrameSearch(TTAVItem* avItem, int startIndex)
+void TTAVData::onDoFrameSearch(const TTAVItem* avItem, int startIndex)
 {
 	if (mpCurrentAVItem == 0) return;
 	if (avItem == 0) return;
@@ -1353,7 +1349,7 @@ void TTAVData::endAbortedProjectLoad()
 bool TTAVData::findIncompatibleVideos(QString& fileA, QString& fileB, QString& reason) const
 {
   for (int b = 0; b < mpAVList->count(); b++) {
-    TTAVItem* itemB = mpAVList->at(b);
+    const TTAVItem* itemB = mpAVList->at(b);
     if (itemB->videoStream() == nullptr) continue;
     for (int c = 0; c < itemB->cutCount(); c++) {
       const TTCutItem cut = itemB->cutListItemAt(c);
@@ -1620,7 +1616,7 @@ bool TTAVData::confirmUnrewrittenFrames(const QList<int>& sourceFrames, double f
   QMessageBox box(QMessageBox::Warning, tr("Re-encoded Frames Not Adjusted"), msg,
                   QMessageBox::NoButton, TTCut::mainWindow);
   QPushButton* keepButton    = box.addButton(tr("Keep result"), QMessageBox::AcceptRole);
-  QPushButton* discardButton = box.addButton(tr("Discard"), QMessageBox::DestructiveRole);
+  const QPushButton* discardButton = box.addButton(tr("Discard"), QMessageBox::DestructiveRole);
   QPushButton* copyButton    = box.addButton(tr("Copy to clipboard"), QMessageBox::ActionRole);
   // Every QMessageBox button closes the box; the copy button must not, so
   // its connection to the box is replaced by the copy action alone.
@@ -2025,10 +2021,7 @@ void TTAVData::doH264Cut(const QString& tgtFileName, TTCutList* cutList)
   params.finalOutput         = finalOutput;
   params.tempVideoFile       = tempVideoFile;
   params.frameRate           = frameRate;
-  params.avOffsetMs          = avOffsetMs;
-  params.isH265              = (vStream->streamType() == TTAVTypes::h265_video);
-  params.isPAFF              = vStream->isPAFF();
-  params.paffLog2MaxFrameNum = vStream->paffLog2MaxFrameNum();
+  params.mux                 = TTMkvMergeProvider::videoOptionsFor(vStream, frameRate, avOffsetMs);
   params.totalDurationMs     = mLastCutResultMs;
   params.cutFrames           = cutFrames;
   params.keepList            = keepList;
@@ -2092,12 +2085,9 @@ void TTAVData::onH26xCutFinished()
     return;
   }
 
-  // Create a mux list item for the finished signal
-  TTMuxListDataItem muxItem;
-  muxItem.setVideoName(finalOutput);
-
-  mpMuxList->appendItem(muxItem);
-  mpMuxList->print();
+  // No mux list item: the list feeds only the mplex batch script, which has
+  // nothing to do with an MKV. (It used to get one, and the script then held
+  // an "mplex ... x.mkv" line for every H.264/H.265 cut of the session.)
 
   // Update cutVideoName with actual output filename for notification
   TTSettings::instance()->setCutVideoName(QFileInfo(finalOutput).fileName());
@@ -2167,7 +2157,7 @@ void TTAVData::onCutFinished()
   mpMuxList->print();
 
   int lastIdx = mpMuxList->count() - 1;
-  TTMuxListDataItem& muxItem = mpMuxList->itemAt(lastIdx);
+  const TTMuxListDataItem& muxItem = mpMuxList->itemAt(lastIdx);
 
   if (TTSettings::instance()->logCutPipeline()) {
     qDebug() << "onCutFinished: workingOutputContainer =" << TTSettings::instance()->workingOutputContainer();
@@ -2201,20 +2191,10 @@ void TTAVData::onCutFinished()
           return;
         }
         TTVideoStream* videoStream = runList->at(0).avDataItem()->videoStream();
-        double frameRate = videoStream->frameRate();
-        int frameDurationNs = (int)(1000000000.0 / frameRate);
-        params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
-        params.isPAFF              = videoStream->isPAFF();
-        params.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
-        params.videoCodecId = static_cast<AVCodecID>(
-            TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType()));
-
-        // Apply A/V sync offset if present
-        if (mAvSyncOffsetMs != 0) {
-          params.audioSyncOffsetMs = mAvSyncOffsetMs;
-          if (TTSettings::instance()->logCutPipeline())
-              qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
-        }
+        params.video = TTMkvMergeProvider::videoOptionsFor(
+            videoStream, videoStream->frameRate(), mAvSyncOffsetMs);
+        if (mAvSyncOffsetMs != 0 && TTSettings::instance()->logCutPipeline())
+            qDebug() << "MKV muxing: applying A/V sync offset" << mAvSyncOffsetMs << "ms";
 
         // Note: per-track audio delay is already baked into the audio cut files
         // via the keepList times in onDoCut(). Do NOT apply it again here via
@@ -2661,6 +2641,7 @@ void TTAVData::doAudioOnlyCut(QString tgtFileName, TTCutList* cutList)
   params.videoKeepList   = videoKeepList;
   params.normalizeAcmod  = TTSettings::instance()->normalizeAcmod();
   params.audioOnlyFormat = TTSettings::instance()->workingAudioOnlyFormat();
+  params.deleteTrackFiles = TTSettings::instance()->workingMuxDeleteES();
   if (params.audioOnlyFormat == TTCut::AOF_OriginalMKA) {
     params.mkaOutputPath = QFileInfo(QDir(TTSettings::instance()->cutDirPath()),
         QFileInfo(tgtFileName).completeBaseName() + ".mka").absoluteFilePath();
@@ -3131,7 +3112,7 @@ QList<float> TTAVData::cutAudioTracks(
 // tolerates via the loop guard below) and forwards. Mirrors the
 // cutAudioTracks all-tracks convenience overload.
 void TTAVData::cutSubtitleTracks(
-    TTAVItem* avItem,
+    const TTAVItem* avItem,
     const QList<QPair<double, double>>& keepList,
     const std::function<QString(int trackIdx)>& outPath,
     const std::function<void(int trackIdx, const QString& path,
@@ -3149,7 +3130,7 @@ void TTAVData::cutSubtitleTracks(
 // TTCutParameter::lastCall(), which writes the MPEG-2 sequence-end trailer
 // that has no place in an SRT file.
 void TTAVData::cutSubtitleTracks(
-    TTAVItem* avItem,
+    const TTAVItem* avItem,
     const QList<int>& trackIndices,
     const QList<QPair<double, double>>& keepList,
     const std::function<QString(int trackIdx)>& outPath,

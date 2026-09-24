@@ -15,6 +15,7 @@
 #include "ttmkvmergeprovider.h"
 #include "ttffmpegwrapper.h"
 #include "../avstream/ttnaluparser.h"
+#include "../avstream/ttavstream.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 
@@ -24,6 +25,7 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QTemporaryFile>
 #include <QDir>
 
 extern "C" {
@@ -62,6 +64,24 @@ bool isVclNalByte(enum AVCodecID codec, const uint8_t* b)
                        "unexpected video codec in MKV ES mux path");
             return false;
     }
+}
+
+// Payload index of the first VCL NAL of `codec` behind a start code, -1 when
+// the packet holds none.
+int firstVclPayload(enum AVCodecID codec, const uint8_t* d, int sz)
+{
+    for (int s = TTNaluParser::findStartCodePayload(d, sz, 0); s >= 0;
+         s = TTNaluParser::findStartCodePayload(d, sz, s)) {
+        if (isVclNalByte(codec, d + s)) return s;
+    }
+    return -1;
+}
+
+// True when the packet carries a picture: a VCL NAL behind a start code, or a
+// packet without start code whose first byte is a VCL NAL header. sz > 0.
+bool containsVclNal(enum AVCodecID codec, const uint8_t* d, int sz)
+{
+    return firstVclPayload(codec, d, sz) >= 0 || isVclNalByte(codec, d);
 }
 
 } // namespace
@@ -145,10 +165,35 @@ static AVFormatContext* openInput(const QString& filePath, int& ret)
     return fmtCtx;
 }
 
-// MuxInput struct + isContainerFormat() helper moved/removed —
-// MuxInput now lives as a private nested struct in ttmkvmergeprovider.h
-// (so member helpers can take it by reference); isContainerFormat() is
-// gone with the dead container-remux path.
+// ----------------------------------------------------------------------------
+// Matroska output context for outputFile, titled after its file name ("_cut"
+// stripped, VDR #XX decoded). nullptr when libav cannot create one.
+// ----------------------------------------------------------------------------
+static AVFormatContext* allocMatroskaOutput(const QString& outputFile)
+{
+    AVFormatContext* outCtx = nullptr;
+    const int ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
+                                                   outputFile.toUtf8().constData());
+    if (ret < 0 || !outCtx) return nullptr;
+
+    QString baseName = QFileInfo(outputFile).completeBaseName();
+    if (baseName.endsWith("_cut")) baseName.chop(4);
+    const QString title = decodeVdrName(baseName);
+    if (!title.isEmpty())
+        av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
+    return outCtx;
+}
+
+// Close the output file (if it was opened) and free the context. Safe on a
+// context whose pb was never opened and on nullptr.
+static void freeMatroskaOutput(AVFormatContext*& outCtx)
+{
+    if (!outCtx) return;
+    if (!(outCtx->oformat->flags & AVFMT_NOFILE))
+        avio_closep(&outCtx->pb);
+    avformat_free_context(outCtx);
+    outCtx = nullptr;
+}
 
 // Scan a packet for an H.264 SPS NAL (type 7) and extract log2_max_frame_num.
 // This is needed because Smart Cut output contains TWO different SPS:
@@ -165,19 +210,12 @@ static bool parseInlineSpsLog2MaxFrameNum(const uint8_t* data, int size, int& lo
     return true;
 }
 
-// Per-input read helper + normalized PTS calc moved to member methods
-// (declared in ttmkvmergeprovider.h). Definitions are below — at file
-// position they would reference MuxInput before the class member section,
-// so they live with the other member methods (after the existing setError
-// definition).
-
 // -----------------------------------------------------------------------------
 // Constructor
 // -----------------------------------------------------------------------------
 TTMkvMergeProvider::TTMkvMergeProvider()
     : QObject()
     , mAudioSyncOffsetMs(0)
-    , mVideoSyncOffsetMs(0)
     , mTotalDurationMs(0)
     , mIsPAFF(false)
     , mH264Log2MaxFrameNum(4)
@@ -198,7 +236,7 @@ TTMkvMergeProvider::~TTMkvMergeProvider()
 }
 
 // -----------------------------------------------------------------------------
-// Option setters (same API as before)
+// Option setters
 // -----------------------------------------------------------------------------
 void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QString& duration)
 {
@@ -206,6 +244,32 @@ void TTMkvMergeProvider::setDefaultDuration(const QString& trackId, const QStrin
     mTrackOptions[id].defaultDuration = duration;
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "TTMkvMergeProvider: default duration for track" << id << "=" << duration;
+}
+
+void TTMkvMergeProvider::setVideoOptions(const TTMkvVideoOptions& options)
+{
+    // A stream without a frame rate would turn the default duration into a
+    // division by zero; without one the muxer keeps the packet timestamps.
+    if (options.frameRate > 0) {
+        const int frameDurationNs = static_cast<int>(1000000000.0 / options.frameRate);
+        setDefaultDuration("0", QString("%1ns").arg(frameDurationNs));
+    }
+    setIsPAFF(options.isPAFF, options.paffLog2MaxFrameNum);
+    setVideoCodecId(options.codecId);
+    setVideoDisplayOrder(options.displayOrder);
+    setAudioSyncOffset(options.audioSyncOffsetMs);
+}
+
+TTMkvVideoOptions TTMkvMergeProvider::videoOptionsFor(const TTVideoStream* videoStream,
+                                                      double frameRate, int audioSyncOffsetMs)
+{
+    TTMkvVideoOptions options;
+    options.frameRate           = frameRate;
+    options.isPAFF              = videoStream->isPAFF();
+    options.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
+    options.codecId             = videoCodecIdFor(videoStream->streamType());
+    options.audioSyncOffsetMs   = audioSyncOffsetMs;
+    return options;
 }
 
 void TTMkvMergeProvider::setChapterFile(const QString& chapterFile)
@@ -273,14 +337,14 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
     if (chapters.isEmpty())
         return;
 
-    outCtx->chapters = (AVChapter**)av_malloc(chapters.size() * sizeof(AVChapter*));
+    outCtx->chapters = static_cast<AVChapter**>(av_malloc(chapters.size() * sizeof(AVChapter*)));
     if (!outCtx->chapters) {
         qWarning() << "av_malloc failed for chapter array — chapters dropped";
         return;
     }
     outCtx->nb_chapters = 0;  // populated below; only set for entries actually allocated
     for (int i = 0; i < chapters.size(); i++) {
-        AVChapter* ch = (AVChapter*)av_mallocz(sizeof(AVChapter));
+        AVChapter* ch = static_cast<AVChapter*>(av_mallocz(sizeof(AVChapter)));
         if (!ch) {
             qWarning() << "av_mallocz failed for chapter" << i << "— remaining chapters dropped";
             break;
@@ -303,12 +367,6 @@ static void addChaptersFromFile(AVFormatContext* outCtx, const QString& chapterF
 }
 
 // -----------------------------------------------------------------------------
-// Main muxing function
-// Two modes:
-//   1. Container remux: MKV input → copy all streams, add chapters
-//   2. ES mux: video ES + separate audio/subtitle → interleaved MKV
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
 // Helpers for mux() — see docs/superpowers/specs/2026-05-03-mux-split-refactor.md
 // -----------------------------------------------------------------------------
 
@@ -325,14 +383,14 @@ bool TTMkvMergeProvider::readNextPacket(MuxInput& in)
 }
 
 // Get normalized PTS in AV_TIME_BASE for comparison across inputs.
-int64_t TTMkvMergeProvider::getNormalizedPts(const MuxInput& in,
-                                              const AVFormatContext* outCtx) const
+int64_t TTMkvMergeProvider::getNormalizedPts(const MuxInput& in) const
 {
     int64_t pts;
     if (in.assignPts) {
-        // PTS from frame count in output time_base → rescale to AV_TIME_BASE
-        pts = av_rescale_q(in.frameCount * in.frameDur,
-            outCtx->streams[in.outIdx]->time_base, AV_TIME_BASE_Q);
+        // PTS from the frame count, in ns -> AV_TIME_BASE (same source as
+        // assignEsTimestamps, so interleaving follows the written PTS)
+        pts = av_rescale_q(in.frameCount * in.frameDurNs,
+            AVRational{1, 1000000000}, AV_TIME_BASE_Q);
     } else if (in.pkt->pts != AV_NOPTS_VALUE) {
         pts = av_rescale_q(in.pkt->pts,
             in.fmtCtx->streams[in.srcIdx]->time_base, AV_TIME_BASE_Q);
@@ -379,7 +437,6 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
     outVin.fmtCtx = videoInCtx;
     outVin.srcIdx = videoIdx;
     outVin.outIdx = 0;
-    outVin.syncMs = mVideoSyncOffsetMs;
     outVin.ownsCtx = false;  // caller owns videoInCtx
     outVin.pkt = av_packet_alloc();
     if (!outVin.pkt) {
@@ -420,8 +477,9 @@ bool TTMkvMergeProvider::setupVideoInput(AVFormatContext* outCtx,
 }
 
 // Open each media file of one type, create one output stream per usable
-// input, append a MuxInput to `inputs`. Skip+log on per-file errors — never
-// fails the whole mux for one bad track. Language: explicit list first; for
+// input, append a MuxInput to `inputs`. A file that cannot be used is skipped
+// and recorded in `dropped` as "<file>: <reason>"; whether that fails the mux
+// is the caller's decision (acceptDroppedInputs). Language: explicit list first; for
 // audio the `_xxx` suffix of the file name is the fallback. Audio tracks are
 // flagged AV_DISPOSITION_DEFAULT (avcodec_parameters_copy() does not carry
 // the disposition, and without it only the first track would be default)
@@ -433,43 +491,45 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
                                          int mediaType,
                                          int& nextOutIdx,
                                          QList<MuxInput>& inputs,
-                                         int audioSyncMs)
+                                         int audioSyncMs,
+                                         QStringList& dropped)
 {
     const bool  isAudio = (mediaType == AVMEDIA_TYPE_AUDIO);
-    const char* tag     = isAudio ? "addAudioInputs" : "addSubtitleInputs";
     QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
 
     for (int i = 0; i < files.size(); i++) {
+        auto drop = [&](const QString& reason) {
+            dropped << QString("%1: %2").arg(files[i], reason);
+        };
         if (!QFile::exists(files[i])) {
-            qWarning() << tag << ": file missing, skipping:" << files[i];
+            drop("file missing");
             continue;
         }
 
         int ret = 0;
         AVFormatContext* inCtx = openInput(files[i], ret);
         if (!inCtx) {
-            qWarning() << tag << ": cannot open" << files[i] << ":" << avErrStr(ret);
+            drop(QString("cannot open (%1)").arg(avErrStr(ret)));
             continue;
         }
 
         int srcIdx = av_find_best_stream(inCtx, static_cast<AVMediaType>(mediaType),
                                          -1, -1, nullptr, 0);
         if (srcIdx < 0) {
-            qWarning() << tag << ": no" << (isAudio ? "audio" : "subtitle") << "stream in" << files[i];
+            drop(isAudio ? "no audio stream" : "no subtitle stream");
             avformat_close_input(&inCtx);
             continue;
         }
 
         AVStream* out = avformat_new_stream(outCtx, nullptr);
         if (!out) {
-            qWarning() << tag << ": avformat_new_stream failed";
+            drop("avformat_new_stream failed");
             avformat_close_input(&inCtx);
             continue;
         }
         ret = avcodec_parameters_copy(out->codecpar, inCtx->streams[srcIdx]->codecpar);
         if (ret < 0) {
-            qWarning() << tag << ": avcodec_parameters_copy failed for"
-                       << files[i] << ":" << avErrStr(ret);
+            drop(QString("avcodec_parameters_copy failed (%1)").arg(avErrStr(ret)));
             avformat_close_input(&inCtx);
             continue;
         }
@@ -495,7 +555,7 @@ bool TTMkvMergeProvider::addMediaInputs(AVFormatContext* outCtx,
         in.ownsCtx = true;
         in.pkt = av_packet_alloc();
         if (!in.pkt) {
-            qWarning() << "av_packet_alloc failed for" << (isAudio ? "audio" : "subtitle") << "input";
+            drop("av_packet_alloc failed");
             avformat_close_input(&inCtx);
             continue;
         }
@@ -519,7 +579,7 @@ bool TTMkvMergeProvider::addAudioInputs(AVFormatContext* outCtx,
                                          int audioSyncMs)
 {
     return addMediaInputs(outCtx, audioFiles, languages, AVMEDIA_TYPE_AUDIO,
-                          nextOutIdx, inputs, audioSyncMs);
+                          nextOutIdx, inputs, audioSyncMs, mDroppedInputs);
 }
 
 bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
@@ -528,7 +588,22 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
                                             QList<MuxInput>& inputs)
 {
     return addMediaInputs(outCtx, subtitleFiles, mSubtitleLanguages, AVMEDIA_TYPE_SUBTITLE,
-                          nextOutIdx, inputs, 0);
+                          nextOutIdx, inputs, 0, mDroppedInputs);
+}
+
+bool TTMkvMergeProvider::acceptDroppedInputs(int requestedCount)
+{
+    if (mDroppedInputs.isEmpty()) return true;
+    if (mRequireAllInputs) {
+        setError(QString("%1 of %2 audio/subtitle file(s) could not be used: %3")
+                     .arg(mDroppedInputs.size()).arg(requestedCount)
+                     .arg(mDroppedInputs.join("; ")));
+        return false;
+    }
+    for (const QString& d : mDroppedInputs)
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("MKV mux: input skipped - %1").arg(d));
+    return true;
 }
 
 // PAFF: merge both field packets into a single MKV block.
@@ -547,16 +622,28 @@ bool TTMkvMergeProvider::addSubtitleInputs(AVFormatContext* outCtx,
 // keeps A/V relation), dts = (i - reorderOffset)*dur (lowered so pts >= dts;
 // a negative start is normalized by avoid_negative_ts for ALL streams
 // together). On index overrun: one-shot warning, fall back to linear.
+//
+// Every timestamp is computed in ns and rounded to the output time base on
+// its own. The matroska time base is 1 ms; multiplying a duration that was
+// rounded to whole ms once (33 ms for 29.97 fps) accumulated the error:
+// -1.1 % at 29.97 fps, +0.7 % at 23.976 fps against the audio
+// (tools/diag/gate_mkv_framerate.sh).
 // ----------------------------------------------------------------------------
 void TTMkvMergeProvider::assignEsTimestamps(MuxInput& in)
 {
-    int64_t linear = in.frameCount * in.frameDur;
+    const AVRational nsBase  = {1, 1000000000};
+    const AVRational outBase = {in.tbNum, in.tbDen};
+    auto frameTime = [&](int64_t frames) {
+        return av_rescale_q(frames * in.frameDurNs, nsBase, outBase);
+    };
+
+    const int64_t linear = frameTime(in.frameCount);
     in.pkt->pts = linear;
     in.pkt->dts = linear;
     if (!in.displayOrder.isEmpty()) {
         if (in.frameCount < in.displayOrder.size()) {
-            in.pkt->pts = (int64_t)in.displayOrder[(int)in.frameCount] * in.frameDur;
-            in.pkt->dts = (in.frameCount - in.reorderOffset) * in.frameDur;
+            in.pkt->pts = frameTime(in.displayOrder[(int)in.frameCount]);
+            in.pkt->dts = frameTime(in.frameCount - in.reorderOffset);
         } else if (!in.displayOrderWarned) {
             in.displayOrderWarned = true;
             TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
@@ -570,7 +657,7 @@ void TTMkvMergeProvider::assignEsTimestamps(MuxInput& in)
 }
 
 bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
-                                               int& activeLog2MaxFrameNum,
+                                               int activeLog2MaxFrameNum,
                                                int64_t totalPacketsWritten)
 {
     QByteArray firstField(reinterpret_cast<const char*>(in.pkt->data),
@@ -586,16 +673,9 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
     // for consistency.
     const AVCodecID codec = static_cast<AVCodecID>(mVideoCodecId);
     while (!in.eof && in.pkt->data && in.pkt->size > 0) {
-        const uint8_t* nd = in.pkt->data;
-        int nsz = in.pkt->size;
-        bool nextIsVcl = false;
-        for (int s = TTNaluParser::findStartCodePayload(nd, nsz, 0); s >= 0;
-             s = TTNaluParser::findStartCodePayload(nd, nsz, s)) {
-            if (isVclNalByte(codec, nd + s)) { nextIsVcl = true; break; }
-        }
-        if (nextIsVcl) break;
+        if (firstVclPayload(codec, in.pkt->data, in.pkt->size) >= 0) break;
         if (TTSettings::instance()->logMkvMux())
-            qDebug() << "  MKV PAFF: skip non-VCL between fields, sz=" << nsz;
+            qDebug() << "  MKV PAFF: skip non-VCL between fields, sz=" << in.pkt->size;
         av_packet_unref(in.pkt);
         readNextPacket(in);
     }
@@ -623,11 +703,6 @@ bool TTMkvMergeProvider::processPAFFFieldPair(MuxInput& in,
     return true;
 }
 
-// -----------------------------------------------------------------------------
-// mux(): elementary-stream → matroska muxer (single mode, ES-only).
-// The container-remux branch was removed as dead code (no caller passes a
-// container as videoFile, TTCut-ng cannot demux MKV input).
-// -----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // MPEG-2 display order from the ES bitstream. temporal_reference (10 bits
 // right after the picture_start_code) is the display position within the
@@ -702,6 +777,170 @@ QVector<int> TTMkvMergeProvider::buildMpeg2DisplayOrder(const QString& filePath)
     return order;
 }
 
+// -----------------------------------------------------------------------------
+// One raw-ES video packet of the interleave loop: skip it when it carries no
+// picture (EOS, SPS/PPS only - it must not advance frameCount, or PTS shift
+// by phantom frames), merge a PAFF field pair, otherwise stamp it as one frame.
+//
+// PAFF: re-encoded frames are single packets (MBAFF), stream-copied frames may
+// be 2 field packets, told apart by field_pic_flag. Its bit position depends
+// on log2_max_frame_num, and Smart Cut ES carry two SPS (encoder, e.g. 4, then
+// source, e.g. 9), so the width follows the most recent inline SPS; a wrong
+// width detects re-encoded frames as fields and merges them.
+// -----------------------------------------------------------------------------
+TTMkvMergeProvider::EsVideoStep TTMkvMergeProvider::prepareEsVideoPacket(
+        MuxInput& in, int& activeLog2MaxFrameNum, int64_t totalPacketsWritten)
+{
+    const uint8_t* d  = in.pkt->data;
+    const int      sz = in.pkt->size;
+    bool isFieldPacket = false;
+    bool hasVclNal     = true;   // an empty packet is written, as it always was
+
+    if (mIsPAFF && in.outIdx == 0 && d && sz > 4) {
+        int newL2mfn = 0;
+        if (parseInlineSpsLog2MaxFrameNum(d, sz, newL2mfn)
+                && newL2mfn != activeLog2MaxFrameNum) {
+            if (TTSettings::instance()->logMkvMux())
+                qDebug() << "  MKV PAFF: SPS change log2_max_frame_num"
+                         << activeLog2MaxFrameNum << "->" << newL2mfn
+                         << "at packet" << totalPacketsWritten;
+            activeLog2MaxFrameNum = newL2mfn;
+        }
+
+        const int nalStart = TTNaluParser::findH264SlicePayload(d, sz);
+        hasVclNal = (nalStart >= 0);
+        if (hasVclNal) {
+            int  frameNum = 0;
+            bool isBottom = false;
+            TTNaluParser::parseH264SliceFieldInfo(d + nalStart, sz - nalStart,
+                                                  activeLog2MaxFrameNum,
+                                                  frameNum, isFieldPacket, isBottom);
+        }
+    } else if (in.outIdx == 0 && d && sz > 0) {
+        hasVclNal = containsVclNal(static_cast<AVCodecID>(mVideoCodecId), d, sz);
+    }
+
+    if (in.outIdx == 0 && !hasVclNal) {
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "  MKV PAFF: skip non-VCL video packet"
+                     << totalPacketsWritten << "sz=" << sz << "fc=" << in.frameCount;
+        return EsVideoStep::Skip;
+    }
+
+    if (isFieldPacket)
+        return processPAFFFieldPair(in, activeLog2MaxFrameNum, totalPacketsWritten)
+                   ? EsVideoStep::Write : EsVideoStep::Error;
+
+    // Frame packet (progressive or MBAFF re-encoded): 1 packet = 1 frame
+    assignEsTimestamps(in);
+    if (in.outIdx == 0 && TTSettings::instance()->logMkvMux())
+        qDebug() << "  MKV: frame pkt" << totalPacketsWritten
+                 << "pts=" << in.pkt->pts << "fc=" << in.frameCount
+                 << "sz=" << in.pkt->size
+                 << "field=" << isFieldPacket
+                 << "l2mfn=" << activeLog2MaxFrameNum;
+    return EsVideoStep::Write;
+}
+
+// -----------------------------------------------------------------------------
+// The interleave loop shared by mux() and muxAudioOnly(): always writes the
+// input whose next packet has the smallest normalized PTS, so the tracks come
+// out interleaved in the file (av_interleaved_write_frame alone gives up after
+// its 10 s max_interleave_delta when one input is fed ahead of the others).
+// Raw-ES video goes through prepareEsVideoPacket(); every other input is
+// rescaled to the output time base. progressPercent() returns -1 when no
+// percent is known. False on abort or a write error (lastError set); the
+// caller cleans up.
+// -----------------------------------------------------------------------------
+bool TTMkvMergeProvider::writeInterleaved(AVFormatContext* outCtx, QList<MuxInput>& inputs,
+                                          const std::function<int()>& progressPercent)
+{
+    int lastPercent = -1;
+    int64_t totalPacketsWritten = 0;
+
+    // Active SPS log2_max_frame_num for PAFF field_pic_flag parsing: Smart Cut
+    // ES carry two SPS (encoder, e.g. 4, then source, e.g. 9) - see
+    // prepareEsVideoPacket().
+    int activeLog2MaxFrameNum = mH264Log2MaxFrameNum;
+
+    for (int i = 0; i < inputs.size(); i++) {
+        bool got = readNextPacket(inputs[i]);
+        if (TTSettings::instance()->logMkvMux())
+            qDebug() << "    Input" << i << ": first read ="
+                     << (got ? "OK" : "EOF")
+                     << "srcIdx=" << inputs[i].srcIdx
+                     << "assignPts=" << inputs[i].assignPts;
+    }
+
+    while (true) {
+        if (checkAbort()) return false;
+
+        int bestIdx = -1;
+        int64_t bestPts = INT64_MAX;
+        for (int i = 0; i < inputs.size(); i++) {
+            if (inputs[i].eof) continue;
+            int64_t npts = getNormalizedPts(inputs[i]);
+            if (npts < bestPts) {
+                bestPts = npts;
+                bestIdx = i;
+            }
+        }
+        if (bestIdx < 0) break;  // All inputs exhausted
+
+        MuxInput& in = inputs[bestIdx];
+
+        if (in.assignPts) {
+            const EsVideoStep step =
+                prepareEsVideoPacket(in, activeLog2MaxFrameNum, totalPacketsWritten);
+            if (step == EsVideoStep::Error) return false;
+            if (step == EsVideoStep::Skip) {
+                readNextPacket(in);
+                continue;
+            }
+        } else {
+            av_packet_rescale_ts(in.pkt,
+                in.fmtCtx->streams[in.srcIdx]->time_base,
+                outCtx->streams[in.outIdx]->time_base);
+        }
+
+        // Apply sync offset
+        if (in.syncMs != 0) {
+            int64_t off = av_rescale_q(in.syncMs,
+                AVRational{1, 1000},
+                outCtx->streams[in.outIdx]->time_base);
+            in.pkt->pts += off;
+            in.pkt->dts += off;
+        }
+
+        in.pkt->stream_index = in.outIdx;
+        in.pkt->pos = -1;
+
+        int wfRet = av_interleaved_write_frame(outCtx, in.pkt);
+        // av_interleaved_write_frame takes ownership and unrefs the packet
+        if (wfRet < 0) {
+            setError(QString("av_interleaved_write_frame failed: %1").arg(avErrStr(wfRet)));
+            return false;
+        }
+        totalPacketsWritten++;
+
+        const int percent = progressPercent();
+        if (percent >= 0 && percent != lastPercent) {
+            lastPercent = percent;
+            emit progressChanged(percent, tr("Muxing..."));
+        }
+
+        readNextPacket(in);
+    }
+
+    if (TTSettings::instance()->logMkvMux())
+        qDebug() << "  Mux: total packets written:" << totalPacketsWritten;
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+// mux(): elementary-stream video plus separate audio/subtitle files ->
+// interleaved matroska.
+// -----------------------------------------------------------------------------
 bool TTMkvMergeProvider::mux(const QString& outputFile,
                               const QString& videoFile,
                               const QStringList& audioFiles,
@@ -711,6 +950,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     // point. mAbortRequested needs no clearing point of its own -- providers
     // are created fresh per operation (see the member declaration).
     mWasAborted = false;
+    mDroppedInputs.clear();
 
     if (videoFile.isEmpty() || !QFile::exists(videoFile)) {
         setError(QString("Video file not found: %1").arg(videoFile));
@@ -750,21 +990,11 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
         return false;
     }
 
-    AVFormatContext* outCtx = nullptr;
-    ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
-                                          outputFile.toUtf8().constData());
-    if (ret < 0 || !outCtx) {
+    AVFormatContext* outCtx = allocMatroskaOutput(outputFile);
+    if (!outCtx) {
         avformat_close_input(&videoInCtx);
         setError("Cannot create matroska output context");
         return false;
-    }
-
-    // Set title metadata from output filename, stripping "_cut" suffix
-    QString baseName = QFileInfo(outputFile).completeBaseName();
-    if (baseName.endsWith("_cut")) baseName.chop(4);
-    QString title = decodeVdrName(baseName);
-    if (!title.isEmpty()) {
-        av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
     }
 
     // Common cleanup lambda — every exit path goes through this.
@@ -776,12 +1006,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
             if (mi.ownsCtx && mi.fmtCtx) avformat_close_input(&mi.fmtCtx);
         }
         avformat_close_input(&videoInCtx);
-        if (outCtx) {
-            if (!(outCtx->oformat->flags & AVFMT_NOFILE))
-                avio_closep(&outCtx->pb);
-            avformat_free_context(outCtx);
-            outCtx = nullptr;
-        }
+        freeMatroskaOutput(outCtx);
     };
 
     if (TTSettings::instance()->logMkvMux())
@@ -799,6 +1024,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     addAudioInputs(outCtx, audioFiles, mAudioLanguages, nextOutIdx, inputs,
                     mAudioSyncOffsetMs);
     addSubtitleInputs(outCtx, subtitleFiles, nextOutIdx, inputs);
+    if (!acceptDroppedInputs(audioFiles.size() + subtitleFiles.size())) {
+        cleanupAll();
+        return false;
+    }
 
     // Add chapters if chapter file is set
     if (!mChapterFile.isEmpty() && QFile::exists(mChapterFile)) {
@@ -827,7 +1056,10 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     if (videoDurationNs > 0 && !inputs.isEmpty() && inputs[0].assignPts) {
         MuxInput& v = inputs[0];
         AVStream* videoOut = outCtx->streams[v.outIdx];
-        v.frameDur = av_rescale_q(videoDurationNs,
+        v.frameDurNs = videoDurationNs;
+        v.tbNum      = videoOut->time_base.num;
+        v.tbDen      = videoOut->time_base.den;
+        v.frameDur   = av_rescale_q(videoDurationNs,
             AVRational{1, 1000000000}, videoOut->time_base);
         if (TTSettings::instance()->logMkvMux())
             qDebug() << "  Video: frame duration" << videoDurationNs << "ns ="
@@ -836,192 +1068,29 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
                      << "after write_header)";
     }
 
-    // Write packets — interleaved multi-input loop
-    int64_t totalVideoSize = avio_size(videoInCtx->pb);
-    int lastPercent = -1;
-    int64_t totalPacketsWritten = 0;
-
-    // Track active SPS log2_max_frame_num for correct PAFF field_pic_flag parsing.
-    // Smart Cut ES files contain two SPS: encoder (log2_max_frame_num=4) then
-    // source (log2_max_frame_num=9). Using the wrong width causes false field
-    // detection and frame merging corruption.
-    int activeLog2MaxFrameNum = mH264Log2MaxFrameNum;
-
     // PAFF mode requires a valid log2_max_frame_num for field-pair parsing.
-    // The default ctor value (4) only happens to work for encoder SPS; if the
-    // caller forgets to call setH264Log2MaxFrameNum, source SPS parsing will
-    // be wrong. Surface the misconfiguration here.
+    // The default ctor value (4) only happens to work for encoder SPS; a
+    // caller that passes no width to setIsPAFF() gets wrong source SPS
+    // parsing. Surface the misconfiguration here.
     if (mIsPAFF && mH264Log2MaxFrameNum == 0) {
         qWarning() << "MKV mux: PAFF stream but mH264Log2MaxFrameNum is 0 — "
-                      "caller forgot setH264Log2MaxFrameNum(); "
+                      "setIsPAFF() got no log2_max_frame_num; "
                       "PAFF field detection will be wrong";
     }
 
+    // Progress follows the video file: it dominates the output size.
+    const int64_t totalVideoSize = avio_size(videoInCtx->pb);
     if (TTSettings::instance()->logMkvMux())
         qDebug() << "  ES mux: totalVideoSize=" << totalVideoSize
                  << "inputs=" << inputs.size();
-
-    // Read first packet from each input
-    for (int i = 0; i < inputs.size(); i++) {
-        bool got = readNextPacket(inputs[i]);
-        if (TTSettings::instance()->logMkvMux())
-            qDebug() << "    Input" << i << ": first read ="
-                     << (got ? "OK" : "EOF")
-                     << "srcIdx=" << inputs[i].srcIdx
-                     << "assignPts=" << inputs[i].assignPts;
+    auto videoPercent = [&]() -> int {
+        return totalVideoSize > 0
+            ? int(avio_tell(videoInCtx->pb) * 100 / totalVideoSize) : -1;
+    };
+    if (!writeInterleaved(outCtx, inputs, videoPercent)) {
+        cleanupAll();
+        return false;
     }
-
-    // Write packets in PTS order
-    while (true) {
-        if (checkAbort()) {
-            cleanupAll();
-            return false;
-        }
-
-        int bestIdx = -1;
-        int64_t bestPts = INT64_MAX;
-        for (int i = 0; i < inputs.size(); i++) {
-            if (inputs[i].eof) continue;
-            int64_t npts = getNormalizedPts(inputs[i], outCtx);
-            if (npts < bestPts) {
-                bestPts = npts;
-                bestIdx = i;
-            }
-        }
-        if (bestIdx < 0) break;  // All inputs exhausted
-
-        MuxInput& in = inputs[bestIdx];
-
-        if (in.assignPts) {
-            // PAFF detection: re-encoded frames are single packets (MBAFF),
-            // stream-copied frames may be 2 field packets (PAFF).
-            // Parse field_pic_flag from each video packet to distinguish.
-            //
-            // IMPORTANT: Track inline SPS to use correct log2_max_frame_num.
-            // Smart Cut ES contains encoder SPS (log2_max_frame_num=4) followed
-            // by source SPS (log2_max_frame_num=9). Using the wrong width causes
-            // field_pic_flag to be read at the wrong bit position.
-            bool isFieldPacket = false;
-            bool hasVclNal = false;
-            if (mIsPAFF && in.outIdx == 0 && in.pkt->data && in.pkt->size > 4) {
-                const uint8_t* d = in.pkt->data;
-                int sz = in.pkt->size;
-
-                // Update log2_max_frame_num from inline SPS if present
-                int newL2mfn = 0;
-                if (parseInlineSpsLog2MaxFrameNum(d, sz, newL2mfn)) {
-                    if (newL2mfn != activeLog2MaxFrameNum) {
-                        if (TTSettings::instance()->logMkvMux())
-                            qDebug() << "  MKV PAFF: SPS change log2_max_frame_num"
-                                     << activeLog2MaxFrameNum << "->" << newL2mfn
-                                     << "at packet" << totalPacketsWritten;
-                        activeLog2MaxFrameNum = newL2mfn;
-                    }
-                }
-
-                // Find VCL NAL and parse field_pic_flag (H.264-only path)
-                int nalStart = -1;
-                for (int s = TTNaluParser::findStartCodePayload(d, sz, 0); s >= 0;
-                     s = TTNaluParser::findStartCodePayload(d, sz, s)) {
-                    if (isVclNalByte(AV_CODEC_ID_H264, d + s)) { nalStart = s; break; }
-                }
-                if (nalStart < 0 && sz >= 1 && isVclNalByte(AV_CODEC_ID_H264, d)) {
-                    nalStart = 0;
-                }
-                hasVclNal = (nalStart >= 0);
-                if (hasVclNal) {
-                    int  frameNum = 0;
-                    bool isBottom = false;
-                    TTNaluParser::parseH264SliceFieldInfo(d + nalStart, sz - nalStart, activeLog2MaxFrameNum,
-                                                          frameNum, isFieldPacket, isBottom);
-                }
-            } else if (in.outIdx == 0 && in.pkt->data && in.pkt->size > 0) {
-                // Non-PAFF video: check for VCL NAL (codec-aware)
-                const uint8_t* d = in.pkt->data;
-                int sz = in.pkt->size;
-                const AVCodecID codec = static_cast<AVCodecID>(mVideoCodecId);
-                for (int s = TTNaluParser::findStartCodePayload(d, sz, 0); s >= 0;
-                     s = TTNaluParser::findStartCodePayload(d, sz, s)) {
-                    if (isVclNalByte(codec, d + s)) { hasVclNal = true; break; }
-                }
-                if (!hasVclNal && sz >= 1 && isVclNalByte(codec, d)) {
-                    hasVclNal = true;
-                }
-            } else {
-                hasVclNal = true;  // Audio/subtitle or empty: always write
-            }
-
-            // Skip non-VCL video packets (EOS, SPS/PPS-only).
-            // These contain no video frames and must not increment frameCount,
-            // otherwise PTS gets shifted by phantom frames.
-            if (in.outIdx == 0 && !hasVclNal) {
-                if (TTSettings::instance()->logMkvMux())
-                    qDebug() << "  MKV PAFF: skip non-VCL video packet"
-                             << totalPacketsWritten << "sz=" << in.pkt->size
-                             << "fc=" << in.frameCount;
-                readNextPacket(in);
-                continue;
-            }
-
-            if (isFieldPacket) {
-                if (!processPAFFFieldPair(in, activeLog2MaxFrameNum, totalPacketsWritten)) {
-                    cleanupAll();
-                    return false;
-                }
-            } else {
-                // Frame packet (progressive or MBAFF re-encoded): 1 packet = 1 frame
-                assignEsTimestamps(in);
-
-                if (in.outIdx == 0) {
-                    if (TTSettings::instance()->logMkvMux())
-                        qDebug() << "  MKV: frame pkt" << totalPacketsWritten
-                                 << "pts=" << in.pkt->pts << "fc=" << in.frameCount
-                                 << "sz=" << in.pkt->size
-                                 << "field=" << isFieldPacket
-                                 << "l2mfn=" << activeLog2MaxFrameNum;
-                }
-            }
-        } else {
-            av_packet_rescale_ts(in.pkt,
-                in.fmtCtx->streams[in.srcIdx]->time_base,
-                outCtx->streams[in.outIdx]->time_base);
-        }
-
-        // Apply sync offset
-        if (in.syncMs != 0) {
-            int64_t off = av_rescale_q(in.syncMs,
-                AVRational{1, 1000},
-                outCtx->streams[in.outIdx]->time_base);
-            in.pkt->pts += off;
-            in.pkt->dts += off;
-        }
-
-        in.pkt->stream_index = in.outIdx;
-        in.pkt->pos = -1;
-
-        int wfRet = av_interleaved_write_frame(outCtx, in.pkt);
-        // av_interleaved_write_frame takes ownership and unrefs the packet
-        if (wfRet < 0) {
-            setError(QString("av_interleaved_write_frame failed (ES mux): %1")
-                         .arg(avErrStr(wfRet)));
-            cleanupAll();
-            return false;
-        }
-        totalPacketsWritten++;
-
-        if (totalVideoSize > 0) {
-            int percent = (int)(avio_tell(videoInCtx->pb) * 100 / totalVideoSize);
-            if (percent != lastPercent) {
-                lastPercent = percent;
-                emit progressChanged(percent, tr("Muxing..."));
-            }
-        }
-
-        readNextPacket(in);
-    }
-
-    if (TTSettings::instance()->logMkvMux())
-        qDebug() << "  ES mux: total packets written:" << totalPacketsWritten;
 
     // Display-PTS self-check: the list must cover the video packets exactly.
     // A shortfall was already warned per-packet; a surplus means the list and
@@ -1068,6 +1137,7 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     // point. mAbortRequested needs no clearing point of its own -- providers
     // are created fresh per operation (see the member declaration).
     mWasAborted = false;
+    mDroppedInputs.clear();
 
     if (audioFiles.isEmpty()) {
         setError("muxAudioOnly: empty input list");
@@ -1078,20 +1148,12 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
         qDebug() << "TTMkvMergeProvider::muxAudioOnly:" << audioFiles.size()
                  << "tracks ->" << outputFile;
 
-    AVFormatContext* outCtx = nullptr;
-    int ret = avformat_alloc_output_context2(&outCtx, nullptr, "matroska",
-                                              outputFile.toUtf8().constData());
-    if (ret < 0 || !outCtx) {
+    AVFormatContext* outCtx = allocMatroskaOutput(outputFile);
+    if (!outCtx) {
         setError("Cannot create matroska output context");
         return false;
     }
-
-    QString baseName = QFileInfo(outputFile).completeBaseName();
-    if (baseName.endsWith("_cut")) baseName.chop(4);
-    QString title = decodeVdrName(baseName);
-    if (!title.isEmpty()) {
-        av_dict_set(&outCtx->metadata, "title", title.toUtf8().constData(), 0);
-    }
+    int ret = 0;
 
     // Use the shared helper (INFO-6 absorption). muxAudioOnly has no video,
     // so audio output streams start at index 0; sync offset is always 0.
@@ -1109,10 +1171,13 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     // avio_closep() tolerates a pb that was never opened.
     auto closeAll = [&]() {
         cleanupInputs();
-        if (!(outCtx->oformat->flags & AVFMT_NOFILE)) avio_closep(&outCtx->pb);
-        avformat_free_context(outCtx);
+        freeMatroskaOutput(outCtx);
     };
 
+    if (!acceptDroppedInputs(audioFiles.size())) {
+        closeAll();
+        return false;
+    }
     if (inputs.isEmpty()) {
         closeAll();
         setError("muxAudioOnly: no usable audio streams");
@@ -1135,38 +1200,19 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
         return false;
     }
 
-    // Read packets from each input and rescale into the matroska output.
-    // av_interleaved_write_frame handles interleaving across tracks.
-    AVPacket* pkt = av_packet_alloc();
-    for (auto& mi : inputs) {
-        AVRational inTb  = mi.fmtCtx->streams[mi.srcIdx]->time_base;
-        AVRational outTb = outCtx->streams[mi.outIdx]->time_base;
-
-        while (av_read_frame(mi.fmtCtx, pkt) >= 0) {
-            if (checkAbort()) {
-                // av_packet_free() unrefs the packet itself.
-                av_packet_free(&pkt);
-                closeAll();
-                return false;
-            }
-            if (pkt->stream_index != mi.srcIdx) {
-                av_packet_unref(pkt);
-                continue;
-            }
-            pkt->stream_index = mi.outIdx;
-            av_packet_rescale_ts(pkt, inTb, outTb);
-            pkt->pos = -1;
-            int wfRet = av_interleaved_write_frame(outCtx, pkt);
-            if (wfRet < 0) {
-                setError(QString("muxAudioOnly: write_frame failed: %1").arg(avErrStr(wfRet)));
-                av_packet_free(&pkt);
-                closeAll();
-                return false;
-            }
-            av_packet_unref(pkt);
-        }
+    // Interleaved like mux(); progress over the bytes read from all tracks.
+    int64_t totalBytes = 0;
+    for (const MuxInput& mi : inputs) totalBytes += qMax<int64_t>(0, avio_size(mi.fmtCtx->pb));
+    auto bytesPercent = [&]() -> int {
+        if (totalBytes <= 0) return -1;
+        int64_t done = 0;
+        for (const MuxInput& mi : inputs) done += qMax<int64_t>(0, avio_tell(mi.fmtCtx->pb));
+        return int(qMin<int64_t>(100, done * 100 / totalBytes));
+    };
+    if (!writeInterleaved(outCtx, inputs, bytesPercent)) {
+        closeAll();
+        return false;
     }
-    av_packet_free(&pkt);
 
     av_write_trailer(outCtx);
 
@@ -1218,14 +1264,18 @@ QString TTMkvMergeProvider::generateChapterFile(qint64 durationMs, int intervalM
     }
 
     qint64 intervalMs = static_cast<qint64>(intervalMinutes) * 60 * 1000;
-    QString chapterFilePath = QDir(outputDir).filePath("chapters.txt");
 
-    QFile chapterFile(chapterFilePath);
-    if (!chapterFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // A name of its own: a fixed "chapters.txt" overwrote - and after the mux
+    // deleted - a user file of that name in the output directory, and two
+    // cuts into one directory shared it. The caller removes the file.
+    QTemporaryFile chapterFile(QDir(outputDir).filePath("ttcut-chapters-XXXXXX.txt"));
+    chapterFile.setAutoRemove(false);
+    if (!chapterFile.open()) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("Failed to create chapter file: %1").arg(chapterFilePath));
+            QString("Failed to create a chapter file in %1").arg(outputDir));
         return QString();
     }
+    const QString chapterFilePath = chapterFile.fileName();
 
     QTextStream out(&chapterFile);
 

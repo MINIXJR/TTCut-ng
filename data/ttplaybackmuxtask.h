@@ -29,12 +29,7 @@ struct TTPlaybackMuxParams
   QString      outputFile;              // temp .mkv
   QString      videoFile;               // H.264/H.265 ES
   QStringList  audioFiles;              // first audio track, if any
-  QString      defaultDurationNs;       // frame duration, e.g. "40000000ns"
-  bool         isPAFF = false;
-  int          paffLog2MaxFrameNum = 4;
-  int          videoCodecId = 0;        // AVCodecID value
-  int          audioSyncOffsetMs = 0;   // 0 = none
-  QVector<int> displayOrder;            // empty = linear PTS
+  TTMkvVideoOptions video;              // incl. displayOrder (empty = linear PTS)
 };
 
 //! One TTMkvMergeProvider::mux() call for the H.264/H.265 playback temp MKV,

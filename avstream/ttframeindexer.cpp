@@ -183,17 +183,7 @@ TTFieldInfo TTFrameIndexer::parseH264FieldInfo(const uint8_t* data, int size,
     TTFieldInfo result = {false, false, -1};
     if (!data || size < 4 || frameMbsOnlyFlag) return result;
 
-    int nalStart = -1;
-    for (int s = TTNaluParser::findStartCodePayload(data, size, 0); s >= 0;
-         s = TTNaluParser::findStartCodePayload(data, size, s)) {
-        uint8_t nalType = data[s] & 0x1F;
-        if (nalType == 1 || nalType == 5) { nalStart = s; break; }
-    }
-
-    if (nalStart < 0) {
-        uint8_t nalType = data[0] & 0x1F;
-        if (nalType == 1 || nalType == 5) nalStart = 0;
-    }
+    const int nalStart = TTNaluParser::findH264SlicePayload(data, size);
     if (nalStart < 0) return result;
 
     TTNaluParser::parseH264SliceFieldInfo(data + nalStart, size - nalStart, log2MaxFrameNum,

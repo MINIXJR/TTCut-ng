@@ -45,9 +45,9 @@ TTMuxTask::TTMuxTask(TTAVData* avData) : TTAbortableTask(avData, "MuxTask")
  * mCreatedFiles is built here, on the GUI thread, so it is complete before the
  * task can possibly be aborted (see cleanUp()).
  */
-void TTMuxTask::init(const TTMuxTaskParams& params)
+void TTMuxTask::init(const TTMuxTaskParams& taskParams)
 {
-  mParams = params;
+  mParams = taskParams;
 
   mCreatedFiles = mParams.cleanupOnAbort;
   if (!mParams.chapterFile.isEmpty()) mCreatedFiles.append(mParams.chapterFile);
@@ -102,13 +102,7 @@ void TTMuxTask::operation()
       [this](int percent, const QString& msg) { mpAVData->onMuxProgress(percent, msg); },
       Qt::DirectConnection);
 
-  mMkvProvider.setDefaultDuration("0", mParams.defaultDurationNs);
-  mMkvProvider.setIsPAFF(mParams.isPAFF, mParams.paffLog2MaxFrameNum);
-  mMkvProvider.setVideoCodecId(mParams.videoCodecId);
-
-  if (mParams.audioSyncOffsetMs != 0)
-    mMkvProvider.setAudioSyncOffset(mParams.audioSyncOffsetMs);
-
+  mMkvProvider.setVideoOptions(mParams.video);
   mMkvProvider.setAudioLanguages(mParams.audioLanguages);
   mMkvProvider.setSubtitleLanguages(mParams.subtitleLanguages);
 
@@ -125,7 +119,7 @@ void TTMuxTask::operation()
   if (!mMkvProvider.mux(mParams.mkvOutput, mParams.videoFile,
                         mParams.audioFiles, mParams.subtitleFiles)) {
     // A cancel comes back through the same false return as a real failure.
-    if (mMkvProvider.wasAborted() || cancelRequested()) abortNow();
+    abortIfEngineAborted(mMkvProvider.wasAborted());
     mError = mMkvProvider.lastError();
   }
 

@@ -132,7 +132,7 @@ class TTAVData : public QObject
     void onCutOrderChanged(int, int);
 
 
-    void onDoFrameSearch(TTAVItem* avItem, int startIndex);
+    void onDoFrameSearch(const TTAVItem* avItem, int startIndex);
     void onCurrentFramePositionChanged(int position);
 
     void onUserAbortRequest();
@@ -256,7 +256,7 @@ class TTAVData : public QObject
     // field-pair list and show the warning dialog (or import silently when all
     // clusters are confirmed field pairs). Called from onOpenVideoFinished for
     // freshly-opened items only. Also refreshes mAudioGapIndices from esInfo.
-    void           showExtraFrameClusterDialog(TTAVItem* avItem, TTVideoStream* vStream,
+    void           showExtraFrameClusterDialog(const TTAVItem* avItem, TTVideoStream* vStream,
                                                const TTESInfo& esInfo);
 
   private:
@@ -566,7 +566,7 @@ class TTAVData : public QObject
     //! sequence-end trailer. outPath names the target file per track;
     //! onCut reports path/language/success per track.
     void cutSubtitleTracks(
-        TTAVItem* avItem,
+        const TTAVItem* avItem,
         const QList<int>& trackIndices,
         const QList<QPair<double, double>>& keepList,
         const std::function<QString(int trackIdx)>& outPath,
@@ -577,7 +577,7 @@ class TTAVData : public QObject
     // tracks. Builds the all-tracks index list and forwards to the overload
     // above.
     void cutSubtitleTracks(
-        TTAVItem* avItem,
+        const TTAVItem* avItem,
         const QList<QPair<double, double>>& keepList,
         const std::function<QString(int trackIdx)>& outPath,
         const std::function<void(int trackIdx, const QString& path,

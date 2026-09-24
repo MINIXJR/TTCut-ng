@@ -38,7 +38,7 @@ void TTCutSettingsMuxer::resetToDefaults()
   sbMkvChapterInterval->setEnabled(true);
   cbDeleteES->setChecked(false);
   cbMpgTarget->setCurrentIndex(7);   // DVD with NAV sectors
-  cbMpgMode->setCurrentIndex(0);     // Direkt muxen
+  cbMpgMode->setCurrentIndex(0);     // mux directly
   // Container je Codec: MPEG-2 → MPG (0=mplex), H.264 → MKV (1=libav),
   // H.265 → MKV (1=libav). Header default mMpeg2Muxer=0 entspricht 'MPG'
   // hier (combo item 1, data 0).
@@ -72,8 +72,8 @@ void TTCutSettingsMuxer::populateMpgTarget()
 void TTCutSettingsMuxer::populateMpgMode()
 {
   cbMpgMode->clear();
-  cbMpgMode->insertItem(0, "Direkt muxen");
-  cbMpgMode->insertItem(1, "Mux-Skript erstellen");
+  cbMpgMode->insertItem(0, tr("Mux directly"));
+  cbMpgMode->insertItem(1, tr("Create mux script"));
 }
 
 void TTCutSettingsMuxer::setTabData()

@@ -817,10 +817,10 @@ void TTCutPreview::applyOutputChannels()
 {
   if (!mPlayer || !mpCutList || mpCutList->count() == 0) return;
 
-  TTAVItem* avItem = mpCutList->at(0).avDataItem();
+  const TTAVItem* avItem = mpCutList->at(0).avDataItem();
   if (avItem == nullptr || avItem->audioCount() == 0) return;
 
-  if (TTAudioStream* aStream = avItem->audioStreamAt(0))
+  if (const TTAudioStream* aStream = avItem->audioStreamAt(0))
     mPlayer->setOutputChannels(TTMpvWrapper::channelsOptionFor(aStream->streamType()));
 }
 
@@ -884,13 +884,20 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
     QApplication::processEvents();
   };
 
-  if (isMpeg2) {
-    ttRebuildMpeg2PreviewClip(mpAVData, &tmpCutList, fileIndex, showStage);
-  } else {
-    ttRebuildSmartCutPreviewClip(mpAVData, &tmpCutList, fileIndex, showStage);
-  }
+  const bool rebuilt = isMpeg2
+      ? ttRebuildMpeg2PreviewClip(mpAVData, &tmpCutList, fileIndex, showStage)
+      : ttRebuildSmartCutPreviewClip(mpAVData, &tmpCutList, fileIndex, showStage);
 
   vStream->moveToIndexPos(savedStreamIndex);
+
+  // The rebuild used to be taken on trust: a failed Smart Cut or mux left
+  // the player loading a clip that had not been written.
+  if (!rebuilt) {
+    progress.close();
+    QMessageBox::warning(this, tr("Preview"),
+        tr("The preview clip could not be rebuilt. The log file has the reason."));
+    return;
+  }
 
   if (TTSettings::instance()->logUI())
       qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;

@@ -53,7 +53,7 @@ int main(int argc, char** argv)
     }
 
     const QVector<int> order = sc.outputDisplayOrder();
-    fprintf(stderr, "outputDisplayOrder: %d entries%s\n", order.size(),
+    fprintf(stderr, "outputDisplayOrder: %d entries%s\n", int(order.size()),
             order.isEmpty() ? " (EMPTY -> legacy linear PTS)" : "");
     // Dump the order entries around the copy seam for offline analysis.
     for (int i = 0; i < order.size(); ++i)

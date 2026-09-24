@@ -35,23 +35,18 @@ TTMuxListDataItem::TTMuxListDataItem(const TTMuxListDataItem& item)
 
 void TTMuxListDataItem::copyFrom(const TTMuxListDataItem& item)
 {
-  this->videoFileName = item.videoFileName;
+  // A language list never reaches past its file list.
+  auto copyTracks = [](const QStringList& srcFiles, const QStringList& srcLangs,
+                       QStringList& files, QStringList& langs) {
+    files = srcFiles;
+    langs = srcLangs.mid(0, srcFiles.count());
+  };
 
-  this->audioFileNames.clear();
-  this->audioLanguageList.clear();
-  for(int i=0; i<item.audioFileNames.count(); i++) {
-    this->audioFileNames.append(item.audioFileNames[i]);
-    if (i < item.audioLanguageList.count())
-      this->audioLanguageList.append(item.audioLanguageList[i]);
-  }
-
-  this->subtitleFileNames.clear();
-  this->subtitleLanguageList.clear();
-  for(int i=0; i<item.subtitleFileNames.count(); i++) {
-    this->subtitleFileNames.append(item.subtitleFileNames[i]);
-    if (i < item.subtitleLanguageList.count())
-      this->subtitleLanguageList.append(item.subtitleLanguageList[i]);
-  }
+  videoFileName = item.videoFileName;
+  copyTracks(item.audioFileNames, item.audioLanguageList,
+             audioFileNames, audioLanguageList);
+  copyTracks(item.subtitleFileNames, item.subtitleLanguageList,
+             subtitleFileNames, subtitleLanguageList);
 }
 
 const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& item)
@@ -61,57 +56,55 @@ const TTMuxListDataItem& TTMuxListDataItem::operator=(const TTMuxListDataItem& i
 }
 
 
-TTMuxListDataItem::TTMuxListDataItem(QString video, QStringList audio)
+TTMuxListDataItem::TTMuxListDataItem(const QString& video, const QStringList& audio)
+  : videoFileName(video), audioFileNames(audio)
 {
-  videoFileName  = video;
-  audioFileNames = audio;
 }
 
-TTMuxListDataItem::TTMuxListDataItem(QString video, QStringList audio, QStringList subtitle)
+TTMuxListDataItem::TTMuxListDataItem(const QString& video, const QStringList& audio,
+                                     const QStringList& subtitle)
+  : videoFileName(video), audioFileNames(audio), subtitleFileNames(subtitle)
 {
-  videoFileName     = video;
-  audioFileNames    = audio;
-  subtitleFileNames = subtitle;
 }
 
-QString TTMuxListDataItem::getVideoName()
+const QString& TTMuxListDataItem::getVideoName() const
 {
   return videoFileName;
 }
 
-void TTMuxListDataItem::setVideoName(QString videoFileName)
+void TTMuxListDataItem::setVideoName(const QString& videoFilePath)
 {
-  this->videoFileName = videoFileName;
+  videoFileName = videoFilePath;
 }
 
-QStringList TTMuxListDataItem::getAudioNames()
+const QStringList& TTMuxListDataItem::getAudioNames() const
 {
   return audioFileNames;
 }
 
-void TTMuxListDataItem::appendAudioFile(QString audioFileName, const QString& language)
+void TTMuxListDataItem::appendAudioFile(const QString& audioFilePath, const QString& language)
 {
-  audioFileNames.append(audioFileName);
+  audioFileNames.append(audioFilePath);
   audioLanguageList.append(language);
 }
 
-QStringList TTMuxListDataItem::getSubtitleNames()
+const QStringList& TTMuxListDataItem::getSubtitleNames() const
 {
   return subtitleFileNames;
 }
 
-void TTMuxListDataItem::appendSubtitleFile(QString subtitleFileName, const QString& language)
+void TTMuxListDataItem::appendSubtitleFile(const QString& subtitleFilePath, const QString& language)
 {
-  subtitleFileNames.append(subtitleFileName);
+  subtitleFileNames.append(subtitleFilePath);
   subtitleLanguageList.append(language);
 }
 
-QStringList TTMuxListDataItem::getAudioLanguages()
+const QStringList& TTMuxListDataItem::getAudioLanguages() const
 {
   return audioLanguageList;
 }
 
-QStringList TTMuxListDataItem::getSubtitleLanguages()
+const QStringList& TTMuxListDataItem::getSubtitleLanguages() const
 {
   return subtitleLanguageList;
 }
@@ -137,13 +130,13 @@ void TTMuxListData::appendItem(const TTMuxListDataItem& item)
   data.append(item);
 }
 
-QString TTMuxListData::videoFilePathAt(int index)
+const QString& TTMuxListData::videoFilePathAt(int index) const
 {
   return data[index].videoFileName;
 }
 
 //! Returns the audio file-paths string list
-QStringList TTMuxListData::audioFilePathsAt(int index)
+const QStringList& TTMuxListData::audioFilePathsAt(int index) const
 {
   return data[index].audioFileNames;
 }

@@ -76,13 +76,9 @@ void TTPlaybackMuxTask::operation()
       [this](int percent, const QString&) { emit progress(percent); },
       Qt::DirectConnection);
 
-  mProvider.setDefaultDuration("0", mParams.defaultDurationNs);
-  mProvider.setIsPAFF(mParams.isPAFF, mParams.paffLog2MaxFrameNum);
-  mProvider.setVideoCodecId(mParams.videoCodecId);
-  if (mParams.audioSyncOffsetMs != 0)
-    mProvider.setAudioSyncOffset(mParams.audioSyncOffsetMs);
-  if (!mParams.displayOrder.isEmpty())
-    mProvider.setVideoDisplayOrder(mParams.displayOrder);
+  mProvider.setVideoOptions(mParams.video);
+  // Playback without its audio is still playback; the muxer logs the skip.
+  mProvider.setRequireAllInputs(false);
 
   // A cancel between construction and here has not been polled yet; mux()'s
   // own entry poll would catch it only after creating the output file.

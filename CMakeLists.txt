@@ -143,7 +143,6 @@ set(TTCUT_HEADERS
   mpeg2decoder/ttmpeg2decoder.h
   avstream/ttframeinfo.h
   mpeg2window/ttmpeg2window2.h
-  extern/imuxprovider.h
   extern/ttencodeparameter.h
   extern/tttranscode.h
   extern/ttmplexprovider.h
