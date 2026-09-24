@@ -271,6 +271,12 @@ public:
     // left; the returned index is always < size.
     static int findStartCodePayload(const uint8_t* data, int size, int from);
 
+    // Payload index of the first H.264 slice NAL (type 1 or 5) in an Annex-B
+    // packet; a packet without any start code counts when its first byte is
+    // a slice header (index 0). -1 when the packet holds no slice. Shared by
+    // TTFrameIndexer and TTMkvMergeProvider's PAFF field detection.
+    static int findH264SlicePayload(const uint8_t* data, int size);
+
     // The two SPS fields the PAFF handling needs, read from the first SPS NAL
     // (type 7) in an Annex-B buffer (extradata or an in-band packet): the
     // scaling-list walk of the high profiles is skipped, log2MaxFrameNum is

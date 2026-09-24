@@ -98,6 +98,8 @@ streampoint_anomaly    unit  120  test_streampoint_anomaly
 esinfo                 unit  120  test_esinfo
 audiofix_esinfo        unit  120  test_audiofix_esinfo
 mpeg2order             unit  120  test_mpeg2order
+mkv_framerate          unit  300  test_mkvmux
+mux_script             unit  120  test_mux_script
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
 window_geometry        unit  120  test_window_geometry
 container_sync         unit  120  test_container_sync
@@ -139,6 +141,8 @@ seqheader_missing      tux   300  test_seqheader_missing
 headerlist_eof         tux   300  test_headerlist_eof
 project_incompatible   tux   600  -
 autocut_exit           tux   600  -
+mplex_target           tux   600  -
+chapter_file           tux   600  -
 segshape               tux   600  test_segshape
 h264_seam              tux   600  test_smartcut_seam
 h264_syntax_golden     tux   300  test_h264_syntax_golden
@@ -169,6 +173,8 @@ h26xcut_video          tux   900  test_h26xcut_abort
 h26xcut_audio          tux   900  test_h26xcut_abort
 h26xcut_mux            tux   900  test_h26xcut_abort
 mkvmux_abort           tux   300  test_mkvmux_abort
+mkvmux_inputs          tux   300  test_mkvmux_inputs
+mka_interleave         tux   300  test_mka_interleave
 mpeg2cut_none          tux   900  test_mpeg2cut_abort
 mpeg2cut_audio         tux   900  test_mpeg2cut_abort
 mpeg2cut_video         tux   900  test_mpeg2cut_abort
@@ -178,6 +184,8 @@ previewcut_none        tux   600  test_previewcut_abort
 previewcut_video       tux   600  test_previewcut_abort
 previewcut_audio       tux   600  test_previewcut_abort
 previewcut_fail        tux   600  test_previewcut_abort
+previewcut_muxfail     tux   600  test_previewcut_abort
+previewcut_muxfail_mpeg2 tux 600  test_previewcut_abort
 preview_clip_h264      tux   600  test_preview_clip
 preview_clip_mpeg2     tux   600  test_preview_clip
 smartcut_abort_h264    tux   600  test_smartcut_abort
@@ -292,6 +300,8 @@ gate_streampoint_anomaly()   { "$D/test_streampoint_anomaly"; }
 gate_esinfo()                { "$D/test_esinfo"; }
 gate_audiofix_esinfo()       { "$D/test_audiofix_esinfo"; }
 gate_mpeg2order()            { "$D/test_mpeg2order"; }
+gate_mkv_framerate()         { "$D/gate_mkv_framerate.sh" "$W"; }
+gate_mux_script()             { "$D/test_mux_script" "$W"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
@@ -429,6 +439,72 @@ PRJ
   expect_rc 1 "$W/one.ttcut"     "$W/ro/out.mkv" "cut into a read-only directory"
   expect_rc 1 "$W/missing.ttcut" "$W/ok/missing.mkv" "project whose video is missing"
   echo "PASS: exit 0 for the completed cut, 1 for the three runs without output"; }
+# The MPG target chosen in the cut dialog (stored as Mpeg2Target) must reach
+# mplex. Before code-audit run 7 every run got -f8: target 3 (Generic MPEG2)
+# produced the DVD file byte for byte, NAV packets included.
+gate_mplex_target() {
+  need "$M2V" "$MP2"
+  command -v mplex >/dev/null || { echo "SKIP: mplex not installed"; exit 77; }
+  local tgt nav
+  for tgt in 3 7; do
+    mkdir -p "$W/t$tgt"
+    cat > "$W/t$tgt.ttcut" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$M2V</Name>
+  <Audio><Order>0</Order><Name>$MP2</Name></Audio>
+  <Cut><Order>0</Order><CutIn>0</CutIn><CutOut>300</CutOut></Cut>
+ </Video>
+ <Settings><Mpeg2Target>$tgt</Mpeg2Target></Settings>
+</TTCut-Projectfile>
+PRJ
+    LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/t$tgt.ttcut" --auto-cut "$W/t$tgt/out.mpg" \
+      || { echo "FAIL: target $tgt: auto-cut failed"; exit 1; }
+    [ -s "$W/t$tgt/out.mpg" ] || { echo "FAIL: target $tgt: no .mpg"; ls -la "$W/t$tgt"; exit 1; }
+    # DVD NAV packs are private stream 2 (00 00 01 BF); only -f8 writes them.
+    nav=$(python3 -c "import sys; print(open(sys.argv[1],'rb').read().count(b'\x00\x00\x01\xbf'))" "$W/t$tgt/out.mpg")
+    echo "target $tgt: $nav NAV packets"
+    eval "nav$tgt=$nav"
+  done
+  [ "$nav3" -eq 0 ] || { echo "FAIL: Generic MPEG2 (f3) output carries DVD NAV packets - target not passed to mplex"; exit 1; }
+  [ "$nav7" -gt 0 ] || { echo "FAIL: DVD (f8) output has no NAV packets - control broken"; exit 1; }
+  echo "PASS: mplex gets the chosen target (f3 without, f8 with NAV packets)"; }
+# The chapter file is a temporary of the cut. It used to be
+# <cut dir>/chapters.txt, written and deleted there: a user file of that name
+# in the output directory was gone after the cut (code-audit run 7, H4).
+gate_chapter_file() {
+  need "$V264" "$A264"
+  mkdir -p "$W/out"
+  echo "user file - must survive" > "$W/out/chapters.txt"
+  cat > "$W/ch.ttcut" <<PRJ
+<!DOCTYPE TTCut-Projectfile>
+<TTCut-Projectfile>
+ <Version>1.0</Version>
+ <Video>
+  <Order>0</Order>
+  <Name>$V264</Name>
+  <Audio><Order>0</Order><Name>$A264</Name></Audio>
+  <Cut><Order>0</Order><CutIn>0</CutIn><CutOut>1480</CutOut></Cut>
+ </Video>
+ <Settings>
+  <MkvCreateChapters>true</MkvCreateChapters>
+  <MkvChapterInterval>1</MkvChapterInterval>
+ </Settings>
+</TTCut-Projectfile>
+PRJ
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/ch.ttcut" --auto-cut "$W/out/ch.mkv" \
+    || { echo "FAIL: auto-cut failed"; exit 1; }
+  local chapters; chapters=$(ffprobe -v error -show_chapters -of csv=p=0 "$W/out/ch.mkv" | wc -l)
+  echo "output: $chapters chapter(s); directory: $(ls "$W/out" | tr '\n' ' ')"
+  [ "$chapters" -ge 1 ] || { echo "FAIL: MKV has no chapters"; exit 1; }
+  [ "$(cat "$W/out/chapters.txt" 2>/dev/null)" = "user file - must survive" ] \
+    || { echo "FAIL: the user's chapters.txt was overwritten or deleted"; exit 1; }
+  [ "$(ls "$W/out" | grep -c -i chapter)" -eq 1 ] \
+    || { echo "FAIL: a temporary chapter file was left behind"; exit 1; }
+  echo "PASS: chapters written, the user's chapters.txt untouched, no temporary left"; }
 gate_project_incompatible() {
   local dup="$CACHE/tux_mpeg2_576i_pal_duplicate" mbaff="${MBAFF%.264}"
   need "$M2V" "$MP2" "$MBAFF" "$mbaff.ac3" "$dup.m2v" "$dup.mp2"
@@ -528,6 +604,8 @@ gate_h26xcut_video() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A
 gate_h26xcut_audio() { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" audio; }
 gate_h26xcut_mux()   { need "$V264" "$A264"; "$D/test_h26xcut_abort" "$V264" "$A264" "$W" mux; }
 gate_mkvmux_abort()  { need "$V264" "$A264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_mkvmux_abort" "$V264" "$A264" 50; }
+gate_mkvmux_inputs() { need "$V264" "$A264"; "$D/test_mkvmux_inputs" "$V264" "$A264" 50 "$W"; }
+gate_mka_interleave() { need "$A264"; "$D/test_mka_interleave" "$A264" "$W"; }
 gate_mpeg2cut_none()  { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" none; }
 gate_mpeg2cut_audio() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" audio; }
 gate_mpeg2cut_video() { need "$M2V" "$MP2"; "$D/test_mpeg2cut_abort" "$M2V" "$MP2" "$W" video; }
@@ -543,6 +621,8 @@ gate_preview_clip_h264()  { need "$V264"; make_noise_ac3 "$W/noise.ac3" || exit 
 gate_preview_clip_mpeg2() { need "$M2V" "$MP2";   "$D/test_preview_clip" "$M2V" "$MP2" "$W"; }
 gate_previewcut_audio() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" audio; }
 gate_previewcut_fail()  { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" fail; }
+gate_previewcut_muxfail() { need "$V264" "$A264"; "$D/test_previewcut_abort" "$V264" "$A264" "$W" muxfail; }
+gate_previewcut_muxfail_mpeg2() { need "$M2V" "$MP2"; "$D/test_previewcut_abort" "$M2V" "$MP2" "$W" muxfail; }
 gate_smartcut_abort_h264() { need "$V264"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$V264" 50; }
 gate_smartcut_abort_hevc() { need "$H265"; mkdir -p "$GATES_ROOT/../cut-abort"; "$D/test_smartcut_abort" "$H265" 50; }
 gate_encode_tempdir() { need "$M2V" "$MP2"; "$D/gate_encode_tempdir.sh"; }

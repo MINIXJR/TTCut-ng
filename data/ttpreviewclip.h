@@ -93,12 +93,8 @@ void ttBuildClipCutList(TTCutList* previewCutList, int iClip, TTCutList* out);
 int ttApplyPreviewEncoderSettings(TTESSmartCut& smartCut, const TTPreviewSource& src);
 
 //! Configure the muxer for a preview clip. \a displayOrder is the Smart Cut
-//! output order for H.264/H.265 and stays empty for MPEG-2 (which then gets
-//! linear PTS, as before).
-//!
-//! One function covers both codecs: an MPEG-2 stream reports isPAFF() == false
-//! and paffLog2MaxFrameNum() == 4, which is exactly what setIsPAFF() defaults
-//! to, and an empty display order is the provider's default as well.
+//! output order for H.264/H.265 and stays empty for MPEG-2, whose display
+//! order the muxer derives from temporal_reference itself.
 void ttConfigurePreviewMux(TTMkvMergeProvider& mux, const TTPreviewSource& src,
                            const QVector<int>& displayOrder = QVector<int>());
 

@@ -699,7 +699,7 @@ void TTCurrentFrame::beginPlayerLoad()
   // that switches channel mode mid-stream reaches mpv unchanged and makes it
   // rebuild the audio output at every switch.
   if (mPlayer && mAVItem && mAVItem->audioCount() > 0) {
-    if (TTAudioStream* audioStream = mAVItem->audioStreamAt(0))
+    if (const TTAudioStream* audioStream = mAVItem->audioStreamAt(0))
       mPlayer->setOutputChannels(TTMpvWrapper::channelsOptionFor(audioStream->streamType()));
   }
 
@@ -756,7 +756,7 @@ void TTCurrentFrame::startPlaybackMux()
 
   if (TTSettings::instance()->logUI())
       qDebug() << "Creating temp MKV via libav:" << params.videoFile
-               << "displayPts=" << !params.displayOrder.isEmpty()
+               << "displayPts=" << !params.video.displayOrder.isEmpty()
                << "->" << params.outputFile;
 
   mMuxTask = new TTPlaybackMuxTask(params);   // no parent: deletes itself below
@@ -806,7 +806,7 @@ void TTCurrentFrame::onPlaybackMuxFinished()
   }
   mTempPlaybackFile          = task->outputFile();
   mCachedPlaybackFingerprint = mPendingPlaybackFingerprint;
-  mTempPlaybackHasDisplayPts = !task->params().displayOrder.isEmpty();
+  mTempPlaybackHasDisplayPts = !task->params().video.displayOrder.isEmpty();
   mPendingPlaybackFingerprint.clear();
   if (TTSettings::instance()->logUI())
       qDebug() << "Temp MKV created:" << mTempPlaybackFile;
@@ -1053,12 +1053,7 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
     return false;
   }
 
-  int frameDurationNs = static_cast<int>(1000000000.0 / frameRate);
-  params.defaultDurationNs   = QString("%1ns").arg(frameDurationNs);
-  params.isPAFF              = videoStream->isPAFF();
-  params.paffLog2MaxFrameNum = videoStream->paffLog2MaxFrameNum();
-  params.videoCodecId        = TTMkvMergeProvider::videoCodecIdFor(videoStream->streamType());
-  params.audioSyncOffsetMs   = avOffsetMs;
+  params.video = TTMkvMergeProvider::videoOptionsFor(videoStream, frameRate, avOffsetMs);
 
   // Collect audio file(s)
   if (mAVItem->audioCount() > 0) {
@@ -1070,8 +1065,8 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
 
   // Display-PTS: pass the source display-order map so B-frames get true
   // display timestamps (uncut stream -> indices are already compact 0..N-1).
-  // Any negative entry (HEVC dropped-RASL slot) -> loud linear fallback;
-  // a non-empty list keys ALL time<->index conversions (D2/D3) via
+  // Dropped slots get parked behind the last real one (below); a non-empty
+  // list keys ALL time<->index conversions (D2/D3) via
   // mTempPlaybackHasDisplayPts once the mux succeeded.
   if (const auto* h26x = dynamic_cast<TTH26xVideoStream*>(videoStream)) {
     const TTDisplayOrderMap& dmap = h26x->displayOrderMap();
@@ -1094,7 +1089,7 @@ bool TTCurrentFrame::buildPlaybackMuxParams(TTPlaybackMuxParams& params)
           int d = dmap.decodeToDisplay(i);
           order.append(d >= 0 ? d : nextDropped++);
         }
-        params.displayOrder = order;
+        params.video.displayOrder = order;
         if (nextDropped > maxReal + 1 && TTSettings::instance()->logUI())
           qDebug() << "Playback: display map has" << (nextDropped - maxReal - 1)
                    << "dropped slots - parked behind last real slot" << maxReal;

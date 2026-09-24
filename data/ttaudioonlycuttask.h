@@ -38,6 +38,7 @@ struct TTAudioOnlyCutParams
   bool    normalizeAcmod  = false;
   int     audioOnlyFormat = 0;                // TTCut::AudioOnlyFormat, copied at dispatch time
   QString mkaOutputPath;                      // pre-computed .mka target (AOF_OriginalMKA only)
+  bool    deleteTrackFiles = false;           // workingMuxDeleteES: remove the tracks after the MKA mux
 };
 
 //! Pool task running the audio-only cut (per-track audio extraction, optional

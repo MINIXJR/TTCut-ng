@@ -2327,6 +2327,56 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
     MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
 
+- **Code-Audit Lauf 7: Ausgabe (Mux)** → **ERLEDIGT (2026-09-24)**, Zweig
+  `cleanup/code-audit-run7`. Umfang waren die 21 Quelldateien von
+  `docs/code-map/output-mux.md` (Fahrplan-Schritt 10); 130 nie beurteilte
+  Kandidaten (89 consolidate, 35 deliberate, 6 documented), zwei
+  Sonnet-Klassifizierer, Urteile in
+  `docs/code-audit/build-verdicts-2026-09-24-run7.py`. 70 consolidate
+  umgesetzt, 19 offen (davon 8 per User-Entscheid als Batch B7
+  zurückgestellt: `TTESInfo`-Einleseklone, `ttencodernames.h`,
+  Zeitformatierer).
+  - **Die neun Lese-Hypothesen der Karte, gemessen:** H1 Millisekunden-
+    Rundung — bestätigt: 29,97 fps −659 ms/min (−1,10 %), 23,976 fps +0,70 %,
+    25 fps exakt (synthetische ES, `test_mkvmux`; erste Messung falsch, weil
+    `atof("29.97")` unter `de_DE` 29 ergab). H2 MPG-Ziel — bestätigt: Ziel f3
+    byteidentisch zu f8, 124 NAV-Pakete; `mplex -f3` von Hand 0. H3 —
+    bestätigt: 3 Tonspuren übergeben, 1 im MKV, `mux()` true. H4 — bestätigt:
+    `chapters.txt` des Users nach dem Schnitt weg. H5 — bestätigt: mplex-Zeile
+    für eine `.mkv`, Shebang in Zeile 2. H6, H7 aus dem Code eindeutig
+    (Entscheid H7 durch den User: vor dem MKA-Mux abbrechen, Löschen nach
+    `workingMuxDeleteES`). H8 — bestätigt: zwei 60-s-Spuren als Blöcke 0–50 s,
+    nur die letzten 10 s verschränkt (`max_interleave_delta`), Inhalt
+    bitgleich. H9 per grep. Messprotokoll lag in
+    `CLAUDE_TMP/TTCut-ng/code-audit-run7/messungen.md`.
+  - **Batches:** B5+B6 mechanisch und tot (`IMuxProvider`,
+    `mVideoSyncOffsetMs`, ungenutzte mplex-Hashes, veraltete Kommentare,
+    zwei deutsche Texte ohne `tr()`); B1 `TTMkvVideoOptions` statt fünf
+    Settern an vier Stellen; B2 VCL-Suche (vier Kopien,
+    `TTNaluParser::findH264SlicePayload`), `prepareEsVideoPacket`, gemeinsamer
+    Aus-/Eingang von `mux()`/`muxAudioOnly()`; B3 H.26x löscht ES über
+    `ttRemoveElementaryStreams`; B4 `abortIfEngineAborted`,
+    `forwardProgressOf`, `audioTrackProgress` in `TTAbortableTask`. Fixes
+    A1–A8 je mit Gate: `mkv_framerate`, `mplex_target`, `mkvmux_inputs`,
+    `chapter_file`, `mux_script`, `previewcut_muxfail(_mpeg2)` +
+    `preview_clip_*`-Erweiterung, `partial_track`-Erweiterung,
+    `mka_interleave`; A3, A6, A7 mit Negativprobe.
+  - **Verhaltensneutral belegt:** `gate_cut_identity.sh` nach jedem Batch
+    identisch auf allen fünf Fixtures (25/50 fps — A1 ändert dort nichts),
+    Harness-Suite von `gate_refactor_identity.sh` ref7 == b4 == a8.
+  - **Korrektur an der Karte:** die Wiedergabe fällt bei verworfenen
+    RASL-Plätzen nicht auf lineare PTS zurück, sie parkt sie hinter dem
+    letzten echten Platz (der Code-Kommentar sagte es falsch, die Karte
+    übernahm es).
+  - **Messfallen dieses Laufs:** (1) `test_mkvmux`, `test_partial_track`
+    und 14 weitere Gate-Harnesses gehören nicht zum Target `diag` — nach
+    `cmake --build build --target diag` lief zweimal eine alte Binärdatei
+    (erst der Rot-Lauf nach dem Fix, dann das A7-Gate). Die beiden jetzt
+    benutzten sind nachgetragen, der Rest steht in `TODO.md`. (2) awk kennt
+    `exp` als Funktion — als Variablenname ein Syntaxfehler, der das Gate
+    schon im Rot-Lauf verdarb.
+  - **Offen:** die neuen `tr()`-Texte (Muxer-Seite, Vorschau-Mux) kommen mit
+    dem `lupdate` des nächsten Releases.
 - **Code-Audit Lauf 6: Schnitt bearbeiten und starten** → **ERLEDIGT
   (2026-09-14)**, Zweig `cleanup/code-audit-run6`, sechs Batches. Umfang
   waren die 21 Quelldateien von `docs/code-map/cut-edit-and-start.md`;

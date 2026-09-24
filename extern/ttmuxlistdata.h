@@ -31,17 +31,17 @@ class TTMuxListDataItem
   public:
     TTMuxListDataItem();
     TTMuxListDataItem(const TTMuxListDataItem& item);
-    TTMuxListDataItem(QString video, QStringList audio);
-    TTMuxListDataItem(QString video, QStringList audio, QStringList subtitle);
+    TTMuxListDataItem(const QString& video, const QStringList& audio);
+    TTMuxListDataItem(const QString& video, const QStringList& audio, const QStringList& subtitle);
 
-    QString     getVideoName();
-    void        setVideoName(QString videoFilePath);
-    QStringList getAudioNames();
-    void        appendAudioFile(QString audioFilePath, const QString& language = QString());
-    QStringList getSubtitleNames();
-    void        appendSubtitleFile(QString subtitleFilePath, const QString& language = QString());
-    QStringList getAudioLanguages();
-    QStringList getSubtitleLanguages();
+    const QString&     getVideoName() const;
+    void               setVideoName(const QString& videoFilePath);
+    const QStringList& getAudioNames() const;
+    void               appendAudioFile(const QString& audioFilePath, const QString& language = QString());
+    const QStringList& getSubtitleNames() const;
+    void               appendSubtitleFile(const QString& subtitleFilePath, const QString& language = QString());
+    const QStringList& getAudioLanguages() const;
+    const QStringList& getSubtitleLanguages() const;
 
     const TTMuxListDataItem& operator=(const TTMuxListDataItem& item);
 
@@ -66,8 +66,8 @@ class TTMuxListData
     void appendItem(const TTMuxListDataItem& item);
 
     TTMuxListDataItem& itemAt(int index);
-    QString            videoFilePathAt(int index);
-    QStringList        audioFilePathsAt(int index);
+    const QString&     videoFilePathAt(int index) const;
+    const QStringList& audioFilePathsAt(int index) const;
     int  							 count();
     void 							 print();
 

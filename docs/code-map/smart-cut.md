@@ -1,6 +1,6 @@
 ---
-base_commit: 22479ed8c07e8dc2e1e39307b046402587d1b926
-last_verified: 2026-09-23
+base_commit: 179d28d5272053c5c362ec18bb2cd3cf84290a91
+last_verified: 2026-09-24
 sources:
   - common/ttexception.cpp
   - data/tth26xcuttask.cpp
@@ -125,7 +125,7 @@ flowchart TD
     BUF --> ODO["mOutputDisplayOrder<br/>(source display idx per AU)"]
     SC --> ODO
     ODO --> CONS["ttavdata / ttcutpreviewtask<br/>ttcutpreview"]
-    CONS -->|"setVideoDisplayOrder()"| MKV["TTMkvMergeProvider<br/>(MKV display PTS)"]
+    CONS -->|"TTMkvVideoOptions::displayOrder"| MKV["TTMkvMergeProvider<br/>(MKV display PTS)"]
 ```
 
 ## Edge semantics

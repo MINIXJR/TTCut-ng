@@ -1,6 +1,6 @@
 ---
-base_commit: 1017940417a1288731592b036c1a65a89694087d
-last_verified: 2026-09-23
+base_commit: 179d28d5272053c5c362ec18bb2cd3cf84290a91
+last_verified: 2026-09-24
 sources:
   - gui/ttcutframenavigation.h
   - gui/ttcutframenavigation.cpp
@@ -101,7 +101,7 @@ flowchart TD
 | `onDoCut` → `doAudioOnlyCut` / `doH264Cut` / MPEG-2 branch | Three-way switch: `audioOnly` first, then `cutList->isH26xCut()` — which asks the **first entry's** stream type. Both video branches reach their engine only after `confirmCutWarnings(cutList)` (audio bursts and MPEG-2 aspect changes at cut edges) returned true; a refusal ends the operation with a `Finished` bracket and the text "Cut cancelled". |
 | `onDoCut` → `TTCutVideoTask::init` | `(tgtFilePath, cutList)` — the MPEG-2 task keeps the list itself and walks it entry by entry. Source stream, frame rate and audio tracks are taken from `cutList->at(0).avDataItem()`. |
 | `doH264Cut` → `TTH26xCutTask::init` | A flat `TTH26xCutParams`: source path, targets, frame rate, A/V offset, codec and PAFF flags, `cutFrames` (display-order pairs from `frameRanges()`), the seconds-based `keepList` and the display-order map. The list itself does not travel — everything was resolved from entry 0 plus the ranges. |
-| `doAudioOnlyCut` → `TTAudioOnlyCutTask::init` | `TTAudioOnlyCutParams`: target name, the same seconds-based keep list, acmod normalisation flag, the audio-only output format copied **at dispatch time**, and the pre-computed `.mka` path. |
+| `doAudioOnlyCut` → `TTAudioOnlyCutTask::init` | `TTAudioOnlyCutParams`: target name, the same seconds-based keep list, acmod normalisation flag, the audio-only output format and `workingMuxDeleteES` (as `deleteTrackFiles`) copied **at dispatch time**, and the pre-computed `.mka` path. |
 | `TTAVData::doCutPreview` → `TTCutPreviewTask` | The job list is handed to the constructor and kept as `mpCutList`; the task builds its **own** `mpPreviewCutList` in `operation()` and owns only that one. The pool is initialised with `cutList->count()*2` steps. |
 | `TTCutTreeView` → `TTCutOutFrame` | `itemUpdated` → `onCutOutChanged`: the cut-out still follows the edited entry. There is no edge back: changing an entry goes through `onEntryEdit` → `entryEdit` → `TTCutFrameNavigation::onEditCut`, which writes via `TTAVItem::updateCutEntry`. |
 

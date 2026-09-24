@@ -22,11 +22,29 @@
 #include <QObject>
 #include <QMap>
 #include <atomic>
+#include <functional>
 #include "../avstream/ttavtypes.h"
 
 // Libav forward decls — keep heavy headers out of this public header.
 struct AVFormatContext;
 struct AVPacket;
+class TTVideoStream;
+
+// -----------------------------------------------------------------------------
+// TTMkvVideoOptions
+// What the muxer needs to know about the video ES and its A/V offset. Built by
+// TTMkvMergeProvider::videoOptionsFor() at every caller and handed over with
+// setVideoOptions(), so the five settings cannot drift apart between callers.
+// -----------------------------------------------------------------------------
+struct TTMkvVideoOptions
+{
+    double       frameRate = 0.0;         // <= 0: no synthesized video timestamps
+    bool         isPAFF = false;
+    int          paffLog2MaxFrameNum = 4;
+    int          codecId = 0;             // AVCodecID value
+    int          audioSyncOffsetMs = 0;   // .info av_offset_ms, 0 = none
+    QVector<int> displayOrder;            // empty = linear (MPEG-2: derived in mux())
+};
 
 // -----------------------------------------------------------------------------
 // TTMkvMergeProvider
@@ -55,13 +73,27 @@ public:
     // Always available (libav is linked at build time)
     QString lastError() const { return mLastError; }
 
+    // An audio or subtitle file that cannot be used (missing, unreadable, no
+    // stream of its type) fails mux()/muxAudioOnly() by default, before the
+    // output file is created: a container short of a track must not pass
+    // for a finished cut. Callers that can live with a missing track
+    // (preview, playback) switch that off; the files are then skipped and
+    // logged. droppedInputs() lists them either way, as "<file>: <reason>".
+    void setRequireAllInputs(bool require) { mRequireAllInputs = require; }
+    const QStringList& droppedInputs() const { return mDroppedInputs; }
+
     // Cooperative abort: thread-safe request from any thread (GUI or task's
     // onUserAbort). Work loops poll the flag and return through the normal
     // false/error path; wasAborted() distinguishes abort from real errors.
     void requestAbort() { mAbortRequested.store(true, std::memory_order_relaxed); }
     bool wasAborted() const { return mWasAborted; }
 
-    // MKV-specific options
+    // Video ES and A/V offset in one step; see TTMkvVideoOptions.
+    void setVideoOptions(const TTMkvVideoOptions& options);
+    static TTMkvVideoOptions videoOptionsFor(const TTVideoStream* videoStream,
+                                             double frameRate, int audioSyncOffsetMs);
+
+    // MKV-specific options (the single setters remain for the diag harnesses)
     void setDefaultDuration(const QString& trackType, const QString& duration);
     void setChapterFile(const QString& chapterFile);
 
@@ -84,9 +116,9 @@ public:
 
     // Video codec of the ES input stream — used by the muxer to parse
     // NAL unit types correctly. H.264 and H.265 have different header layouts.
-    // Caller (ttavdata.cpp) passes an AVCodecID value from libavcodec/codec_id.h
-    // (implicit enum-to-int conversion). Stored as int to keep libav headers
-    // out of this public header.
+    // Callers pass an AVCodecID value from libavcodec/codec_id.h (usually via
+    // videoCodecIdFor()). Stored as int to keep libav headers out of this
+    // public header.
     void setVideoCodecId(int codecId) { mVideoCodecId = codecId; }
     // libav codec id for a TTCut video stream type (H.265, H.264, else MPEG-2).
     static int videoCodecIdFor(TTAVTypes::AVStreamType type);
@@ -101,8 +133,6 @@ public:
     // no pictures found) - callers then keep legacy linear PTS. Static
     // and side-effect-free so the fallback path is unit-testable.
     static QVector<int> buildMpeg2DisplayOrder(const QString& filePath);
-
-    // Compatibility stubs (always available — libav is built-in)
 
     // Chapter generation
     static QString generateChapterFile(qint64 durationMs, int intervalMinutes,
@@ -120,14 +150,15 @@ private:
     bool mWasAborted = false;
     QString mChapterFile;
     int mAudioSyncOffsetMs;
-    int mVideoSyncOffsetMs;
     qint64 mTotalDurationMs;
     bool mIsPAFF;
     int mH264Log2MaxFrameNum;
-    int mVideoCodecId;
-    QVector<int> mVideoDisplayOrder;  // display-PTS order for video ES (may be empty)   // AVCodecID value (from libavcodec/codec_id.h)
+    int mVideoCodecId;                // AVCodecID value (from libavcodec/codec_id.h)
+    QVector<int> mVideoDisplayOrder;  // display-PTS order for video ES (may be empty)
     QStringList mAudioLanguages;
     QStringList mSubtitleLanguages;
+    bool        mRequireAllInputs = true;
+    QStringList mDroppedInputs;
 
     struct TrackOption {
         QString name;
@@ -148,7 +179,10 @@ private:
         bool eof;
         int64_t syncMs;      // Sync offset in milliseconds
         bool assignPts;      // True = assign PTS from frameCount (raw ES video)
-        int64_t frameDur;    // Frame duration in output time_base units
+        int64_t frameDur;    // Frame duration in output time_base units (rounded)
+        int64_t frameDurNs;  // Frame duration in ns; timestamps are computed from it
+        int tbNum;           // Output time base of this stream (set after
+        int tbDen;           //   avformat_write_header, which may change it)
         int64_t frameCount;  // Frame counter for PTS assignment
         bool ownsCtx;        // True = this MuxInput owns the AVFormatContext
         // Display position per packet (frame units, from TTESSmartCut).
@@ -159,12 +193,13 @@ private:
         bool displayOrderWarned;  // one-shot mismatch warning latch
         MuxInput()
             : fmtCtx(nullptr), srcIdx(-1), outIdx(-1), pkt(nullptr), eof(false)
-            , syncMs(0), assignPts(false), frameDur(0), frameCount(0)
+            , syncMs(0), assignPts(false), frameDur(0), frameDurNs(0)
+            , tbNum(1), tbDen(1000), frameCount(0)
             , ownsCtx(false), reorderOffset(0), displayOrderWarned(false) {}
     };
 
     // mux() implementation split — see docs/superpowers/specs/2026-05-03-mux-split-refactor.md
-    void assignEsTimestamps(MuxInput& in);
+    static void assignEsTimestamps(MuxInput& in);
 
     bool setupVideoInput(AVFormatContext* outCtx,
                           AVFormatContext* videoInCtx,
@@ -178,7 +213,8 @@ private:
                         int mediaType,
                         int& nextOutIdx,
                         QList<MuxInput>& inputs,
-                        int audioSyncMs);
+                        int audioSyncMs,
+                        QStringList& dropped);
     bool addAudioInputs(AVFormatContext* outCtx,
                          const QStringList& audioFiles,
                          const QStringList& languages,
@@ -191,15 +227,27 @@ private:
                             int& nextOutIdx,
                             QList<MuxInput>& inputs);
 
+    // The interleave loop of mux() and muxAudioOnly() (see the .cpp).
+    bool writeInterleaved(AVFormatContext* outCtx, QList<MuxInput>& inputs,
+                          const std::function<int()>& progressPercent);
+
+    // One raw-ES video packet of the interleave loop (see the .cpp).
+    enum class EsVideoStep { Write, Skip, Error };
+    EsVideoStep prepareEsVideoPacket(MuxInput& in, int& activeLog2MaxFrameNum,
+                                     int64_t totalPacketsWritten);
+
+    // After the inputs were added: false (with lastError set) when files were
+    // dropped and all are required; otherwise logs the dropped ones.
+    bool acceptDroppedInputs(int requestedCount);
+
     bool processPAFFFieldPair(MuxInput& in,
-                               int& activeLog2MaxFrameNum,
+                               int activeLog2MaxFrameNum,
                                int64_t totalPacketsWritten);
 
     // Per-input read helper + normalized PTS calc (used by interleaved write loop).
     // Not static so they can take MuxInput& without exposing the struct.
     bool readNextPacket(MuxInput& in);
-    int64_t getNormalizedPts(const MuxInput& in,
-                              const AVFormatContext* outCtx) const;
+    int64_t getNormalizedPts(const MuxInput& in) const;
 
     void setError(const QString& error);
 

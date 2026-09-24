@@ -39,10 +39,7 @@ struct TTH26xCutParams
   QString finalOutput;           // .mkv target (already normalized)
   QString tempVideoFile;         // _cut.<suffix> path
   double  frameRate  = 0.0;
-  int     avOffsetMs = 0;
-  bool    isH265     = false;
-  bool    isPAFF     = false;
-  int     paffLog2MaxFrameNum = 0;
+  TTMkvVideoOptions mux;         // muxer settings; displayOrder is filled after the cut
   qint64  totalDurationMs = 0;   // for chapter generation (mLastCutResultMs)
   QList<QPair<int,int>>       cutFrames;  // display-order frame ranges
   QList<QPair<double,double>> keepList;   // seconds, extra-frame-corrected
@@ -62,22 +59,22 @@ class TTH26xCutTask : public TTAbortableTask
 
     // Results, valid after the pool's exit signal (worker done):
     //! Empty on success; otherwise the text for TTAVData::mLastCutError.
-    QString     lastError()    const { return mError; }
+    const QString&     lastError()    const { return mError; }
     //! Text of the closing Exit bracket. The synchronous predecessor used a
     //! shorter wording for the progress window than for the error dialog, so
     //! both strings have to travel back separately.
-    QString     exitMessage()  const { return mExitMessage; }
-    QString     finalOutput()  const { return mParams.finalOutput; }
-    QStringList seamNotes()    const { return mSeamNotes; }
+    const QString&     exitMessage()  const { return mExitMessage; }
+    const QString&     finalOutput()  const { return mParams.finalOutput; }
+    const QStringList& seamNotes()    const { return mSeamNotes; }
     //! Source display positions of re-encoded frames the SPS unification could
     //! not adjust (TTESSmartCut::unrewrittenSourceFrames) and the source frame
     //! rate to turn them into times; TTAVData asks the user whether to keep
     //! the result.
-    QList<int>  unrewrittenSourceFrames() const { return mUnrewrittenFrames; }
+    const QList<int>&  unrewrittenSourceFrames() const { return mUnrewrittenFrames; }
     double      sourceFrameRate()         const { return mSourceFrameRate; }
     //! Every file this run produced (the abort cleanup list); TTAVData
     //! deletes them when the user discards a finished result.
-    QStringList createdFiles()            const { return mCreatedFiles; }
+    const QStringList& createdFiles()            const { return mCreatedFiles; }
 
   protected:
     void operation() override;
@@ -88,7 +85,7 @@ class TTH26xCutTask : public TTAbortableTask
   private:
     //! The pipeline itself; operation() only wraps it in the abort funnel.
     void runCut();
-    void fail(const QString& exitMessage, const QString& errorText);
+    void fail(const QString& exitText, const QString& errorText);
 
     //! The item whose streams the worker reads (audio/subtitle lists, the video
     //! stream's decodeToDisplayIndex). It stays alive because the only thing

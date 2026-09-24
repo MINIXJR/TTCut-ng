@@ -45,6 +45,20 @@ inline constexpr const char* const kMpeg2MuxTargets[] = {
 };
 inline constexpr int kMpeg2MuxTargetCount = int(sizeof(kMpeg2MuxTargets) / sizeof(kMpeg2MuxTargets[0]));
 
+// The mplex -f format number of each entry above (the number in brackets).
+inline constexpr int kMpeg2MuxTargetFormats[] = { 0, 1, 2, 3, 4, 5, 6, 8, 9 };
+static_assert(int(sizeof(kMpeg2MuxTargetFormats) / sizeof(kMpeg2MuxTargetFormats[0]))
+                  == kMpeg2MuxTargetCount,
+              "one mplex format number per MPG target");
+
+// mplex -f number for a stored target index; out of range falls back to the
+// default, DVD with NAV sectors (f8).
+inline int mpeg2MuxFormat(int targetIndex)
+{
+  return (targetIndex >= 0 && targetIndex < kMpeg2MuxTargetCount)
+             ? kMpeg2MuxTargetFormats[targetIndex] : 8;
+}
+
 } // namespace TTEncoderNames
 
 #endif // TTENCODERNAMES_H

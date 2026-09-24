@@ -15,6 +15,7 @@
 #include "ttmplexprovider.h"
 
 #include "../common/ttsettings.h"
+#include "../common/ttencodernames.h"
 #include "../common/ttstreamfiles.h"
 #include "../avstream/ttcommon.h"
 
@@ -73,6 +74,7 @@ TTMplexProvider::TTMplexProvider(TTMuxListData* muxList) : IStatusReporter()
   log       = TTMessageLogger::getInstance();
   mpMuxList = muxList;
   mAudioSyncOffsetMs = 0;
+  mCurrentMuxIndex  = 0;
   proc      = nullptr;
 }
 
@@ -106,8 +108,8 @@ void TTMplexProvider::writeMuxScript()
 
   QTextStream muxOutStream(&muxFile);
 
-  muxOutStream << "# TTCut - Mplex script ver. 1.0" << "\n";
   muxOutStream << "#!/bin/sh" << "\n";
+  muxOutStream << "# TTCut - Mplex script ver. 1.0" << "\n";
   muxOutStream << "#\n";
 
   for (int i=0; i < mpMuxList->count(); i++)
@@ -136,7 +138,6 @@ void TTMplexProvider::writeMuxScript()
 void TTMplexProvider::mplexPart(int index)
 {
   mCurrentMuxIndex = index;
-  int  update      = EVENT_LOOP_INTERVALL;
   // mWasAborted/mSucceeded/mLastError are outputs, not inputs: cleared at this
   // run's entry point (see the header for why mAbortRequested has no clearing
   // point of its own). Without this a second mplexPart() call on the same
@@ -160,7 +161,6 @@ void TTMplexProvider::mplexPart(int index)
   connect(proc, &QProcess::started,      this, &TTMplexProvider::onProcStarted);
   connect(proc, &QProcess::stateChanged, this, &TTMplexProvider::onProcStateChanged);
 
-  QString     mplexCmd  = "mplex";
   QStringList mplexArgs = createMplexArguments(mpMuxList->videoFilePathAt(index), mpMuxList->audioFilePathsAt(index), false);
 
   log->debugMsg(__FILE__, __LINE__, QString("Mplex command string: %1").arg(mplexArgs.join(" ")));
@@ -173,7 +173,8 @@ void TTMplexProvider::mplexPart(int index)
   // slot chain executes inside them. Then there is nothing to start, and the
   // partial-output cleanup below has nothing to remove either.
   if (!checkAbort()) {
-    proc->start(mplexCmd, mplexArgs);
+    proc->start(QStringLiteral("mplex"), mplexArgs);
+    int update = EVENT_LOOP_INTERVALL;
 
     // just a very simple event loop ;-)
     while (proc->state() == QProcess::Starting ||
@@ -306,7 +307,9 @@ QStringList TTMplexProvider::createMplexArguments(const QString& videoFilePath, 
 {
   QStringList mplexArgs;
 
-  mplexArgs << "-f8";
+  // Output format: the MPG target of the cut dialog / project.
+  mplexArgs << QString("-f%1").arg(
+      TTEncoderNames::mpeg2MuxFormat(TTSettings::instance()->workingMpeg2Target()));
 
   // Add A/V sync offset if set (--sync-offset num ms)
   // mplex -O: offset of timestamps (video-audio) in ms
@@ -484,13 +487,12 @@ void TTMplexProvider::procOutput()
 {
   if (proc == 0) return;
 
-  QString    line;
   QByteArray ba = proc->readAll();
   QTextStream out(&ba);
 
   while (!out.atEnd())
   {
-    line = out.readLine();
+    const QString line = out.readLine();
     log->debugMsg(__FILE__, __LINE__, QString("* %1").arg(line));
     emit statusReport(StatusReportArgs::AddProcessLine, line, 0);
     inspectMplexLine(line);

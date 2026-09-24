@@ -490,6 +490,20 @@ int TTNaluParser::findStartCodePayload(const uint8_t* data, int size, int from)
     return -1;
 }
 
+int TTNaluParser::findH264SlicePayload(const uint8_t* data, int size)
+{
+    if (!data || size <= 0) return -1;
+    auto isSlice = [](uint8_t header) {
+        const uint8_t nalType = header & 0x1F;
+        return nalType == H264::NAL_SLICE || nalType == H264::NAL_IDR_SLICE;
+    };
+    for (int s = findStartCodePayload(data, size, 0); s >= 0;
+         s = findStartCodePayload(data, size, s)) {
+        if (isSlice(data[s])) return s;
+    }
+    return isSlice(data[0]) ? 0 : -1;
+}
+
 void TTNaluParser::parseH264SpsData(const QByteArray& rawNal)
 {
     // Strip emulation-prevention bytes before parsing — scaling lists and

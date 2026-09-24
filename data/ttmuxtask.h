@@ -37,11 +37,7 @@ struct TTMuxTaskParams
   QStringList audioLanguages;        // ISO 639-2/B tags, per audio file
   QStringList subtitleLanguages;     // ISO 639-2/B tags, per subtitle file
   QString     chapterFile;           // empty = no chapters
-  QString     defaultDurationNs;     // frame duration of track 0, e.g. "40000000ns"
-  bool        isPAFF = false;
-  int         paffLog2MaxFrameNum = 4;
-  int         videoCodecId = 0;      // AVCodecID value (libavcodec/codec_id.h)
-  int         audioSyncOffsetMs = 0; // 0 = do not apply an offset
+  TTMkvVideoOptions video;           // frame rate, PAFF, codec, A/V offset
   qint64      totalDurationMs = 0;   // 0 = do not set one (chapter end calc)
   //! Everything the cut has produced so far and that only exists to feed this
   //! mux (video/audio/subtitle ES). A cancel deletes these together with the
@@ -62,13 +58,13 @@ class TTMuxTask : public TTAbortableTask
   Q_OBJECT
 
   public:
-    TTMuxTask(TTAVData* avData);
-    void init(const TTMuxTaskParams& params);
+    explicit TTMuxTask(TTAVData* avData);
+    void init(const TTMuxTaskParams& taskParams);
 
     // Results, valid after the pool's exit signal (worker done):
     //! Empty on success; otherwise TTMkvMergeProvider::lastError().
-    QString lastError() const { return mError; }
-    QString mkvOutput() const { return mParams.mkvOutput; }
+    const QString& lastError() const { return mError; }
+    const QString& mkvOutput() const { return mParams.mkvOutput; }
     //! The inputs, for the GUI-side follow-up work (ES deletion, chapter file
     //! removal) that stays in onMpeg2MuxFinished().
     const TTMuxTaskParams& params() const { return mParams; }

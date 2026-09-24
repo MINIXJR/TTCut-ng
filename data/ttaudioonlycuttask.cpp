@@ -119,11 +119,7 @@ void TTAudioOnlyCutTask::runAudioCut()
                    (i + 1) * 100 / qMax(1, mpAVItem->audioCount()));
       },
       {},
-      [&](int i, int percent) {
-        int overall = (i * 100 + percent) / qMax(1, mpAVItem->audioCount());
-        reportStep(TTAVData::tr("Cutting audio track %1 of %2...")
-                       .arg(i+1).arg(mpAVItem->audioCount()), overall);
-      },
+      audioTrackProgress(mpAVItem->audioCount()),
       // Abort predicate: polled inside TTAudioCutter::cut's read loop and
       // between tracks, so a cancel stops the audio phase at the next
       // packet - same wiring as TTH26xCutTask's audio phase.
@@ -163,7 +159,13 @@ void TTAudioOnlyCutTask::runAudioCut()
     // M14) - see TTAVData::audioCutFailureReasons().
     const QStringList reasons = mpAVData->audioCutFailureReasons();
     if (!reasons.isEmpty()) mError += "\n\n" + reasons.join("\n");
+    mOutputSummary = mError;
     mExitMessage = TTAVData::tr("Audio cut failed");
+    // Stop here, like the video cuts: an MKA short of a track is not a
+    // result, and the finished track files stay on disk for a retry (a
+    // genuine error never cleans up). Until code-audit run 7 the MKA branch
+    // below still muxed the tracks that did get cut.
+    return;
   }
 
   // Dispatch by chosen output format (working set, per-cut/per-project;
@@ -184,6 +186,7 @@ void TTAudioOnlyCutTask::runAudioCut()
 
       reportStage(StatusReportArgs::StageMux);
       reportStep(TTAVData::tr("Muxing audio tracks into MKA..."), 0);
+      forwardProgressOf(&mMkvProvider);
 
       // Registered unconditionally, like the per-track files above: a
       // cancelled or failed mux still leaves a partial .mka on disk.
@@ -191,7 +194,7 @@ void TTAudioOnlyCutTask::runAudioCut()
       if (!mMkvProvider.muxAudioOnly(mParams.mkaOutputPath, trackFiles, trackLanguages)) {
         // A cancel comes back through the same false return as a real mux
         // failure.
-        if (mMkvProvider.wasAborted() || cancelRequested()) abortNow();
+        abortIfEngineAborted(mMkvProvider.wasAborted());
         log->errorMsg(__FILE__, __LINE__,
                       QString("MKA mux failed: %1").arg(mMkvProvider.lastError()));
         const QString muxError = TTAVData::tr("MKA mux failed: %1").arg(mMkvProvider.lastError());
@@ -200,7 +203,10 @@ void TTAudioOnlyCutTask::runAudioCut()
         mExitMessage   = TTAVData::tr("Audio cut failed");
       } else {
         log->infoMsg(__FILE__, __LINE__, QString("Audio-only cut complete: %1").arg(mParams.mkaOutputPath));
-        for (const QString& f : trackFiles) QFile::remove(f);
+        // The track files are elementary streams like the video cuts' ES:
+        // they go only when "delete ES after muxing" is on (they were always
+        // deleted until code-audit run 7).
+        if (mParams.deleteTrackFiles) ttRemoveFiles(trackFiles, log);
         mOutputSummary = mParams.mkaOutputPath;
       }
       break;
@@ -216,12 +222,11 @@ void TTAudioOnlyCutTask::runAudioCut()
     }
   }
 
-  // Exit bracket text: both failure branches above (partial-track failure,
-  // failed MKA mux) already set mExitMessage to the short "Audio cut failed"
-  // form - same text the "no output files at all" branch uses via its own
-  // early return. Only fall back to the success wording here when neither
-  // branch ran; mError/mOutputSummary keep carrying the reason-specific
-  // detail regardless of which of the two set mExitMessage. No poll point
+  // Exit bracket text: a failed MKA mux already set mExitMessage to the short
+  // "Audio cut failed" form - same text the "no output files at all" and the
+  // partial-track branches use on their early returns. Only fall back to the
+  // success wording here when that did not happen; mError/mOutputSummary
+  // carry the reason-specific detail. No poll point
   // after this, deliberately: the run is complete and there is nothing left
   // to cancel (same rule as TTH26xCutTask/TTMuxTask after a successful mux).
   if (mExitMessage.isEmpty())

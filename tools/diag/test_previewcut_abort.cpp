@@ -16,7 +16,7 @@
 // pool's Exit.
 //
 // Usage: test_previewcut_abort <video-es> <audio-es> <workdir> <case> [cutIn cutOut]
-//   case = none | video | audio | fail
+//   case = none | video | audio | fail | muxfail
 //
 // Setup: ONE cut item with cutPreviewSeconds() raised to 40s, so BOTH derived
 // preview clips (the cut-in window and the cut-out window) get their full
@@ -63,6 +63,11 @@
 //          passed into TTAudioCutter::cut, correct cleanup on an aborted return)
 //          is still exercised by every run that DOES arm, and by the video
 //          case's identical code path one phase earlier.
+//   muxfail: genuine failure in the MUX of clip 1: a directory sits where
+//          preview_001.mkv goes, so everything before the mux succeeds and
+//          avio_open fails. Until code-audit run 7 that failure was only
+//          logged (H.264/H.265) or ignored (MPEG-2) and the clip was
+//          announced; now it must end like "fail": dialog, one Exit.
 //   fail:  genuine failure, not a cancel. tempDirPath is pointed at a
 //          directory that is never created, so
 //          TTFFmpegWrapper/TTESSmartCut's QFile::open(WriteOnly) call fails
@@ -107,6 +112,7 @@
 #include "common/istatusreporter.h"
 #include "common/ttsettings.h"
 #include "common/ttmessagelogger.h"
+#include "data/ttcutpreviewtask.h"
 #include "data/ttavdata.h"
 #include "data/ttavlist.h"
 #include "data/ttcutlist.h"
@@ -166,7 +172,7 @@ int main(int argc, char** argv)
   app.setQuitOnLastWindowClosed(false);
 
   if (argc < 5) {
-    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail> [cutIn cutOut]\n", argv[0]);
+    fprintf(stderr, "usage: %s <video-es> <audio-es> <workdir> <none|video|audio|fail|muxfail> [cutIn cutOut]\n", argv[0]);
     return 2;
   }
   const QString videoFile = argv[1];
@@ -177,8 +183,9 @@ int main(int argc, char** argv)
   const int argCutIn  = (argc > 5) ? QString(argv[5]).toInt() : -1;
   const int argCutOut = (argc > 6) ? QString(argv[6]).toInt() : -1;
 
-  if (testCase != "none" && testCase != "video" && testCase != "audio" && testCase != "fail")
-    return fail("unknown case (use none|video|audio|fail)");
+  if (testCase != "none" && testCase != "video" && testCase != "audio" && testCase != "fail"
+      && testCase != "muxfail")
+    return fail("unknown case (use none|video|audio|fail|muxfail)");
 
   const QString tempDir = QDir(workDir).absoluteFilePath("temp");
   const QString cutDir  = QDir(workDir).absoluteFilePath("cut");
@@ -197,6 +204,12 @@ int main(int argc, char** argv)
   TTSettings::instance()->setCutDirPath(cutDir);
   TTSettings::instance()->setCutPreviewSeconds(40);
   TTMessageLogger::getInstance()->setLogFilePath(logPath);
+
+  if (testCase == "muxfail") {
+    const QString blocked = TTCutPreviewTask::createPreviewFileName(1, "mkv");
+    QDir(blocked).removeRecursively();
+    if (!QDir().mkpath(blocked)) return fail("muxfail: could not block " + blocked);
+  }
 
   // Open the streams exactly like TTOpenVideoTask / TTOpenAudioTask do (same
   // setup as test_h26xcut_abort.cpp).
@@ -405,6 +418,19 @@ int main(int argc, char** argv)
       if (QFileInfo(QDir(tempDir), f).size() == 0)
         return fail(QString("none: %1 is empty").arg(f));
     }
+    printf("PASS\n");
+    return 0;
+  }
+
+  if (testCase == "muxfail") {
+    QDir(TTCutPreviewTask::createPreviewFileName(1, "mkv")).removeRecursively();
+    if (finishedFired.load())     return fail("muxfail: cutPreviewFinished fired although the mux failed");
+    if (cancelCount != 0)         return fail("muxfail: a mux failure was reported as Canceled");
+    if (exitCount != 1)           return fail(QString("muxfail: expected one Exit, got %1").arg(exitCount));
+    if (!dialogSeen.load())       return fail("muxfail: no dialog for the failed mux");
+    if (!dialogText.contains("could not be created") || !dialogText.contains("Cannot open output"))
+      return fail(QString("muxfail: dialog text does not carry the mux failure: \"%1\"").arg(dialogText));
+    printf("  dialog text: %s\n", qPrintable(dialogText));
     printf("PASS\n");
     return 0;
   }
