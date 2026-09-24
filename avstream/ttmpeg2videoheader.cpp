@@ -215,16 +215,29 @@ QString TTSequenceHeader::aspectText(int aspectRatioInformation)
  */
 float TTSequenceHeader::frameRateValue()
 {
-  float value = 25.0;
+  // ISO/IEC 13818-2 table 6-4. Only 24, 25 and 30 fps were known until
+  // 2026-09-24; 23.976, 29.97, 50, 59.94 and 60 fps came back as 25 and the
+  // whole timeline ran on it (a 720p50 cut played at half speed).
+  // frame_rate_extension_n/_d of the sequence extension are not applied:
+  // they must be 0 in Main Profile.
+  static const double kFrameRates[] = {
+    0.0,              // 0: forbidden (the parser maps it to 3)
+    24000.0 / 1001.0, // 1: 23.976
+    24.0,             // 2
+    25.0,             // 3
+    30000.0 / 1001.0, // 4: 29.97
+    30.0,             // 5
+    50.0,             // 6
+    60000.0 / 1001.0, // 7: 59.94
+    60.0              // 8
+  };
 
-  if ( frame_rate_code == 2 ) value = 24.0;
-  if ( frame_rate_code == 3 ) value = 25.0;
-  if ( frame_rate_code == 5 ) value = 30.0;
-
-  if ( frame_rate_code < 2 || frame_rate_code > 5 )
-    log->errorMsg(cName, __LINE__, "Couldn't determine the correct frame rate: assume 25 fps!");
-
-  return value;
+  if (frame_rate_code < 1 || frame_rate_code > 8) {
+    log->errorMsg(cName, __LINE__,
+        QString("Invalid frame_rate_code %1: assume 25 fps").arg(frame_rate_code));
+    return 25.0f;
+  }
+  return static_cast<float>(kFrameRates[frame_rate_code]);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
