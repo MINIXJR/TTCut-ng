@@ -154,19 +154,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     wie bei der geteilten Engine). Auch vermerkt in
     `docs/code-map/smart-cut.md`.
 
-- **Projekt, dessen Video nicht öffnet, bleibt halb geladen und „geändert"**
-  (Befund 2026-09-23, beim Gate `autocut_exit`)
-  - `TTAVData::endAbortedProjectLoad` setzt das aktuelle Element auf
-    `nullptr`; `TTCutMainWindow::onAVItemChanged` kehrt aber sofort zurück,
-    wenn das schon sein aktuelles Element ist — und das ist es, wenn kein
-    Video des Projekts je geöffnet wurde (fehlende Datei). `closeProject`
-    läuft dann nicht: das angelegte Element mit seinen Schnitten bleibt,
-    `mProjectModified` bleibt gesetzt.
-  - Gemessen headless: `quit()` führte in `closeEvent` zum Dialog „Save
-    changes before closing?" und hing (gdb: `closeEvent` → `QDialog::exec`).
-    `--auto-cut` umgeht das seitdem (`endAutoCut` setzt das Flag zurück);
-    in der Oberfläche ist der Zustand ungeprüft.
-
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
     `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`

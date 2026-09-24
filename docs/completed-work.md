@@ -2327,6 +2327,27 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
     MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
 
+- **Projekt mit fehlender Videodatei blieb halb geladen und „geändert“** →
+  **ERLEDIGT (2026-09-24)**, Zweig `fix/missing-video-project` (Befund
+  2026-09-23 beim Gate `autocut_exit`).
+  - Gemessen in der Oberfläche (offscreen, `test_project_missing_video`):
+    nach dem gescheiterten Laden Titel mit `*`, der Schnitt aus der
+    Projektdatei in der Schnittliste, beim Schließen „Änderungen speichern?“
+    — und kein Hinweis an den Benutzer, der Grund stand nur im Log.
+  - Ursache genauer als im TODO vermutet: das Element aus
+    `doOpenVideoStream` kommt erst in `onOpenVideoFinished` in `mpAVList`.
+    Öffnet das Video nicht, bleibt es verwaist (nie freigegeben), seine
+    Schnitte stehen im globalen Spiegel, und `onAVItemChanged(nullptr)`
+    sieht keine Änderung.
+  - Fix: `mPendingVideoItems` in `TTAVData`, freigegeben in
+    `endAbortedProjectLoad`; `onOpenProjectFileAborted` schließt das Projekt
+    immer; Dialog „Project Not Loaded“ mit dem Grund (nicht bei
+    `--auto-cut`); Text „file %1 does not exists!“ → „does not exist“.
+    Die Wache in `endAutoCut` bleibt (ob ein fertiger Schnitt das Projekt
+    als geändert markiert, ist ungemessen), nur ihr Kommentar ist angepasst.
+  - Gate `project_missing_video` (vorher 3 FAIL, jetzt grün); Negativprobe:
+    alter Fensterteil → FAIL bei Titel und Schließen-Frage. Übersetzung per
+    `lupdate` (auch die offenen Texte aus Code-Audit Lauf 7), 863/863.
 - **Schnitt-Ausgang „Cancelled“ und `--auto-cut`** → **ERLEDIGT (2026-09-24,
   gemessen, kein Code-Wächter)**, Zweig `fix/cancelled-outcome-comment`
   (Befund 2026-09-23).

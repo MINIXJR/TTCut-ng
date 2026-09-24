@@ -5,6 +5,11 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A project whose video file is missing is reported and leaves nothing
+  behind.** The load failed silently: the window showed the project's cuts,
+  counted as modified and asked to save on closing. It now says "Project Not
+  Loaded" with the reason and returns to an empty window. Gate:
+  `project_missing_video`.
 - **MPEG-2 at 23.976, 29.97, 50, 59.94 and 60 fps is cut at the right speed.**
   Only 24, 25 and 30 fps were recognised; everything else was treated as
   25 fps, so a 720p50 recording came out at half speed with its audio cut from
