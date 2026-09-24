@@ -143,7 +143,8 @@ TTAVStream
 - Qt6 (Core, Widgets, Gui, Xml, OpenGL, OpenGLWidgets)
 - libmpeg2 and libmpeg2convert (MPEG-2 decoding)
 - libavformat, libavcodec, libavutil, libswscale (H.264/H.265 smart cut, audio cutting, MKV muxing)
-- ffmpeg CLI (optional, for MP4 output container muxing)
+- ffmpeg/ffprobe CLI (for `tools/ttcut-demux`; the application itself does not
+  call it — the former MP4 output option was removed)
 - mplex (optional, for MPEG-2 multiplexing)
 - Note: mkvmerge/mkvtoolnix is no longer required (replaced by libav matroska muxer in v0.60.0)
 
