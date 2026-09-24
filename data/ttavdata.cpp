@@ -2120,16 +2120,14 @@ void TTAVData::finishCutOperation(CutOutcome outcome, const QString& message,
     mLastCutError = errorText.isEmpty() ? msg : errorText;
   else if (outcome == CutOutcome::Success)
     mLastCutError.clear();
-  // Cancelled leaves the field untouched. This is meant for a deliberate
-  // user abort, but onCutAborted() - the only caller that passes Cancelled -
-  // is reached today by genuine errors too: TTThreadTask::run()'s
-  // catch(TTException) sends the same aborted(this) signal as its
-  // catch(TTAbortException) (see onCutAborted()'s own comment at
-  // :2285-2293). Telling the two apart needs a second, reason-carrying
-  // signal from TTThreadTask - not yet added; see TODO.md, Medium Priority,
-  // "Eine echte TTException ... wird als Cut cancelled gemeldet". Until
-  // then, a previously recorded mLastCutError can survive a run that was
-  // actually a real failure misreported as Cancelled.
+  // Cancelled leaves the field untouched: it means a deliberate user abort.
+  // A genuine error that ends a pool task reaches onCutAborted() too, but
+  // with the task's message in TTThreadTaskPool::lastFailureMessage(), and
+  // onCutAborted() turns that into Failed (measured 2026-09-24: a video task
+  // that could not write its ES ended as "Cut failed", --auto-cut exit 1,
+  // gate autocut_exit). Every Cancelled caller depends on
+  // onUserAbortRequest(), which only the progress dialog's cancel reaches, so
+  // --auto-cut - which has no one to press it - never ends here.
 
   // 2. Report it.
   emit statusReport(0,
@@ -2138,11 +2136,10 @@ void TTAVData::finishCutOperation(CutOutcome outcome, const QString& message,
       msg, 0);
 
   // 3. cutFinished() follows the outcome, not a parameter. Measured on the
-  //    pre-change tree: every Exit site emitted it (ttavdata.cpp:1843, :1859,
-  //    :2210, :2405), no Canceled site did (:1631, :2089, :2281). The
-  //    coupling is exhaustive, so a per-caller flag would carry the same
-  //    derivable value everywhere. Should a future path need to differ, add
-  //    the parameter then.
+  //    tree before finishCutOperation existed: every Exit site emitted it, no
+  //    Canceled site did. The coupling is exhaustive, so a per-caller flag
+  //    would carry the same derivable value everywhere. Should a future path
+  //    need to differ, add the parameter then.
   if (outcome != CutOutcome::Cancelled)
     emit cutFinished();
 }

@@ -498,7 +498,16 @@ PRJ
   expect_rc 1 "$W/nocut.ttcut"   "$W/ok/nocut.mkv" "project without cuts"
   expect_rc 1 "$W/one.ttcut"     "$W/ro/out.mkv" "cut into a read-only directory"
   expect_rc 1 "$W/missing.ttcut" "$W/ok/missing.mkv" "project whose video is missing"
-  echo "PASS: exit 0 for the completed cut, 1 for the three runs without output"; }
+  # A failure inside the pool's video task (audio written, the video ES path
+  # is a directory) reaches TTAVData::onCutAborted and must count as a failed
+  # cut, not as a cancel - a cancel sends no cutFinished() and would leave
+  # --auto-cut waiting. Measured 2026-09-24: "Failed", exit 1.
+  mkdir -p "$W/vt/out.m2v"
+  expect_rc 1 "$W/one.ttcut"     "$W/vt/out.mkv" "failure inside the video task"
+  grep -F "Auto-cut: cut failed" "$XDG_CACHE_HOME/ttcut-ng/logfile.log" | tail -1 \
+    | grep -F "could not be completed" \
+    || { echo "FAIL: the video-task failure was not reported as a failed cut"; exit 1; }
+  echo "PASS: exit 0 for the completed cut, 1 for the four runs without output"; }
 # The MPG target chosen in the cut dialog (stored as Mpeg2Target) must reach
 # mplex. Before code-audit run 7 every run got -f8: target 3 (Generic MPEG2)
 # produced the DVD file byte for byte, NAV packets included.

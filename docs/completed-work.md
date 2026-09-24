@@ -2327,6 +2327,29 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
     MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
 
+- **Schnitt-Ausgang „Cancelled“ und `--auto-cut`** → **ERLEDIGT (2026-09-24,
+  gemessen, kein Code-Wächter)**, Zweig `fix/cancelled-outcome-comment`
+  (Befund 2026-09-23).
+  - Frage: landen echte Fehler noch als *Cancelled* (kein `cutFinished()` →
+    `--auto-cut` wartet ewig)? Der Kommentar in `finishCutOperation`
+    behauptete das und verwies auf einen TODO-Eintrag, den es nicht gab.
+  - Gemessen per `--auto-cut`: MPEG-2 → MKV/MPG und H.264 in einen
+    schreibgeschützten Ordner — Exit 1 nach 1 s (MPEG-2 scheitert schon in der
+    Tonphase, H.264 in `onH26xCutFinished`); MPEG-2 mit blockiertem
+    Video-ES-Pfad, also Fehler **im** Pool-Task → `onCutAborted` → *Failed*
+    („The cut could not be completed: … Is a directory“), Exit 1. Seit
+    `0bd07c93` trägt `lastFailureMessage()` den Grund; der Kommentar war
+    überholt.
+  - *Cancelled* setzt `onUserAbortRequest()` voraus (alle `TTAbortException`
+    der Schnittwege hängen an Abbruch-Flags), und das erreicht nur der
+    Abbrechen-Weg des Fortschrittsdialogs; „Cut result discarded“ kehrt
+    headless vorher mit „behalten“ zurück. Unter `--auto-cut` unerreichbar.
+    Negativprobe: `onCutAborted` fest auf *Cancelled* gestellt → `--auto-cut`
+    hängt (Timeout nach 40 s) — das Risiko war real, der Weg dorthin gibt es
+    headless nicht. Nach der Regel „Repro vor Code“ kein Wächter.
+  - Umgesetzt: Kommentar in `finishCutOperation` korrigiert (auch die
+    veralteten Zeilenangaben im Folgeabsatz); Gate `autocut_exit` um den Fall
+    „Fehler im Video-Task“ erweitert (Exit 1, als *failed* geloggt).
 - **14 Gate-Harnesses gehörten nicht zum Target `diag`** → **ERLEDIGT
   (2026-09-24)**, Zweig `fix/diag-target-complete` (Befund aus Code-Audit
   Lauf 7).
