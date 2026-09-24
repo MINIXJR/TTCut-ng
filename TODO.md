@@ -187,18 +187,6 @@ Belegen in [docs/completed-work.md](docs/completed-work.md).
     `--auto-cut` umgeht das seitdem (`endAutoCut` setzt das Flag zurück);
     in der Oberfläche ist der Zustand ungeprüft.
 
-- **MPEG-2: Bildraten ausser 24, 25 und 30 fps werden als 25 fps gelesen**
-  (Befund 2026-09-23, beim Gate `project_incompatible`)
-  - `TTSequenceHeader::frameRateValue` (`avstream/ttmpeg2videoheader.cpp`)
-    kennt nur `frame_rate_code` 2, 3 und 5; 1 (23,976), 4 (29,97),
-    6 (50), 7 (59,94) und 8 (60) fallen mit „Couldn't determine the correct
-    frame rate: assume 25 fps!" auf 25 zurück — gemessen an
-    `tux_mpeg2_720p_test.m2v` (ffprobe: 50/1), eine Fehlermeldung je
-    Sequence-Header.
-  - Wirkung ungemessen: Zeitanzeige, Audio-Schnittzeiten und
-    `canCutWith` rechnen dann mit 25 fps. DVB-MPEG-2 ist fast immer 25 fps,
-    betroffen wären 720p50- und NTSC-Material.
-
 - **Weitere geteilte Temp-Namen** (2026-08-12, offen, niedrige Priorität)
   - Dieselbe Bauform steht noch an zwei Stellen: `data/ttpreviewclip.cpp` und
     `data/ttcutpreviewtask.cpp` — beide schreiben `preview_audio_temp.<ext>`

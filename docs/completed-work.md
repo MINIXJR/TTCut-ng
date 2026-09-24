@@ -2327,6 +2327,27 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     nicht geladenem Projekt mit Exit 0 (als Nächstes beauftragt); der
     MPEG-2-Parser liest 50 fps als 25 fps (→ `TODO.md`).
 
+- **MPEG-2: Bildraten ausser 24, 25 und 30 fps wurden als 25 fps gelesen**
+  → **ERLEDIGT (2026-09-24)**, Zweig `fix/mpeg2-frame-rate` (Befund
+  2026-09-23 beim Gate `project_incompatible`).
+  - War: `TTSequenceHeader::frameRateValue` kannte nur `frame_rate_code` 2, 3
+    und 5; 1, 4, 6, 7 und 8 lieferten 25 fps — Code 4 (29,97) sogar ohne
+    Logmeldung, weil 4 im geprüften Bereich 2–5 lag.
+  - Gemessen vor dem Fix (`tux_mpeg2_720p_test`, 50 fps, Schnitt 100–599 =
+    500 Frames = 10 s): MKV mit 20 s Video (halbe Geschwindigkeit) und 20 s
+    Ton, Tonausschnitt aus der Keep-Liste 4–24 s statt 2–12 s; 41 ×
+    „assume 25 fps“ im Log.
+  - Fix: Tabelle 6-4 aus ISO 13818-2 vollständig mit exakten NTSC-Werten;
+    `frame_rate_extension` bleibt unberücksichtigt (in Main Profile 0). Mit
+    erledigt: der GOP-Zweig `fps > 48` in `TTTranscodeProvider::initEncoder`
+    stand hinter `fps > 28` und war unerreichbar; 50/60-fps-Material bekommt
+    beim Neucodieren jetzt GOP 30 statt 18 (kein Gate — die neu codierten
+    Stücke an Schnittstellen sind kürzer als eine GOP).
+  - Gates: `mpeg2_framerate` (acht synthetische ES, ein Code je Datei: vorher
+    5 von 8 falsch) und `mpeg2_framerate_cut` (720p50-Schnitt: vorher 19,96 s
+    Video, jetzt 9,98 s; Ton 9,98 s). Ob der Neucodierer vorher mit 25 fps
+    Sequenzköpfe mit falschem Code geschrieben hat, wurde nicht gemessen (im
+    gemessenen Schnitt trugen alle zehn Sequenzköpfe Code 6).
 - **Code-Audit Lauf 7: Ausgabe (Mux)** → **ERLEDIGT (2026-09-24)**, Zweig
   `cleanup/code-audit-run7`. Umfang waren die 21 Quelldateien von
   `docs/code-map/output-mux.md` (Fahrplan-Schritt 10); 130 nie beurteilte

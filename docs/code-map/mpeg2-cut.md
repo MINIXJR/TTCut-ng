@@ -1,5 +1,5 @@
 ---
-base_commit: 179d28d5272053c5c362ec18bb2cd3cf84290a91
+base_commit: 29fe164abb9a1ace7dbf6c119d99f5188d983e21
 last_verified: 2026-09-24
 sources:
   - avstream/ttmpeg2videostream.cpp
@@ -99,7 +99,7 @@ flowchart TD
 | `transferCutObjects()` → `rewriteGOP()` | Rewrites the GOP time code from `cr->getNumPicturesWritten()` (the *output* frame counter, not the source position) and forces `closed_gop` when the first picture of that GOP has `temporal_reference != 0`. |
 | `transferCutObjects()` → `rewriteTempRefData()` | Subtracts `tempRefDelta` from `temporal_reference` and rewrites the 10-bit field in place, re-packing `picture_coding_type` and 3 bits of `vbv_delay` in the same two bytes. |
 | `transferCutObjects()` → `removeOrphanedBFrames()` | Pushes a `TTBreakObject` (stop/restart offsets) so B-frames whose references were cut away are skipped by advancing `bufferStartOffset` past them. `sequence_end_code` is elided the same way. |
-| `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate, fps) come from the **sequence header at `current_index`**, interlace/TFF from the picture header — not from the segment being encoded. |
+| `encodePart()` → `TTTranscodeProvider` | Encoder parameters (size, aspect, bitrate) come from the **sequence header at `current_index`**, the fps from `frameRate()` — the **first** sequence header, all eight `frame_rate_code`s since 2026-09-24 (before, everything but 24/25/30 fps read as 25) —, interlace/TFF from the picture header; none from the segment being encoded. The encoder's GOP size follows the fps: 15, 18 above 28 fps, 30 above 48 fps. |
 | `encodePart()` → temp files | Every call creates its own `QTemporaryDir` (`ttcut-encode-XXXXXX`) below `TTSettings::tempDirPath()` and writes `encode.avi`/`encode.m2v` there. Until 2026-08-12 both names sat directly in the shared directory and the cleanup deleted every `encode.*` it found — a concurrent instance's files included. Reading back a foreign file yielded a header list without a sequence header and killed the process; `tools/diag/gate_encode_tempdir.sh` is the gate for it. |
 | `encodePart()` → `cut()` (recursion) | The re-encoded `encode.m2v` is reopened as a fresh `TTMpeg2VideoStream`, display-sorted, and **cut again** with `cut(0, end-start)`. Termination relies on the encoder emitting an I-frame at position 0 (`max_b_frames = 0`), so `getCutStartObject` finds `pictureCodingType(0) == 1` and does not recurse further. |
 | `TTCutParameter::numPicturesWritten` | Accumulates across **all** cuts of a session (`firstCall()` once, `lastCall()` once, one `TTCutParameter` for the whole cut list). Feeds the rewritten GOP time codes, which is why it must count output frames. |
