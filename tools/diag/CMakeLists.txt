@@ -373,6 +373,8 @@ target_link_libraries(test_track_gui PRIVATE ttcut-core)
 # Cut-preview dialog: clip index, edge move, rebuild (audit run 9, H1/H3/H4/H8/H9).
 diag_tool(test_preview_clip_index AV WIDGETS SOURCES)
 target_link_libraries(test_preview_clip_index PRIVATE ttcut-core)
+diag_tool(test_preview_window_in_cut AV WIDGETS SOURCES)
+target_link_libraries(test_preview_window_in_cut PRIVATE ttcut-core)
 # Drift column after a neighbour preview (audit run 9, H2), real main window.
 diag_tool(test_preview_drift_rows AV WIDGETS SOURCES)
 target_link_libraries(test_preview_drift_rows PRIVATE ttcut-core)
@@ -485,7 +487,7 @@ add_custom_target(diag DEPENDS
   test_anomalyscan
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
-  test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_drift_rows test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
+  test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
   test_audiorepair_cut test_repairdialog_model
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args

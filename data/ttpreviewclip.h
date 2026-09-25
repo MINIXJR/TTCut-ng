@@ -80,13 +80,16 @@ int ttRemovePreviewFiles();
 //! window) is as long as the setting.
 long ttPreviewFrames(TTVideoStream* vStream);
 
-//! Preview window that shows a cut-in at \a cutIn: [cutIn, cutIn + frames],
-//! the end moved forward past B-frames and clamped to the stream.
-QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, long frames);
+//! Preview window that shows the cut-in of the cut [\a cutIn, \a cutOut]:
+//! [cutIn, cutIn + frames], the end moved forward past B-frames. It never
+//! leaves the cut - a cut shorter than the window is shown whole, not with
+//! the material behind it.
+QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, int cutOut, long frames);
 
-//! Preview window that shows a cut-out at \a cutOut: [cutOut - frames,
-//! cutOut], the start moved back to the preceding IDR frame if there is one.
-QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutOut, long frames);
+//! Preview window that shows the cut-out of the cut [\a cutIn, \a cutOut]:
+//! [cutOut - frames, cutOut], the start moved back to the preceding IDR frame
+//! if that still lies in the cut. Never starts before \a cutIn.
+QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutIn, int cutOut, long frames);
 
 //! Clips a preview list yields: the first cut-in, one per transition, the
 //! last cut-out - count()/2 + 1 for two entries per cut. The one place that

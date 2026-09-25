@@ -117,6 +117,7 @@ cut_job_ownership      unit  120  test_cut_job_ownership
 aspect_window          unit  120  test_aspect_window
 aspect_hint            unit  300  test_aspect_hint
 preview_clip_index     unit  300  test_preview_clip_index
+preview_window_in_cut  unit  300  test_preview_window_in_cut
 aspect_autocut         unit  300  -
 exit_cancel            tux   300  test_exit_cancel
 exit_discard           tux   300  test_exit_cancel
@@ -447,6 +448,9 @@ gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 
 gate_preview_clip_index() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
   read -r A B < "$W/aspect.expect"
   "$D/test_preview_clip_index" "$W/aspect.m2v" "$A" "$B" "$W/run"; }
+gate_preview_window_in_cut() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
+  read -r A B < "$W/aspect.expect"
+  "$D/test_preview_window_in_cut" "$W/aspect.m2v" "$A" "$B" "$W/run"; }
 # --auto-cut on a 4:3-start cut: the aspect warning must reach the log and the
 # run must end (a modal dialog would hang it until the timeout). LC_ALL=C.UTF-8
 # because the translator follows the system locale; the log file is on by

@@ -178,54 +178,79 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   mpOriginalCutList = originalCutList;
   mpAVData = avData;
 
-  int       iPos;
-  QString   selectionString;
-
-  int numPreview = ttPreviewClipCount(previewCutList);
+  const int numPreview = ttPreviewClipCount(previewCutList);
 
   // skipFirst/skipLast: skip standalone start/end clips when they are
   // neighbor-only context (not the selected cut). mClipOffset maps
   // combobox index → preview file index.
   mClipOffset = skipFirst ? 1 : 0;
+  const int lastClip = skipLast ? numPreview - 2 : numPreview - 1;
 
-  // Create video and audio preview clips.
   // Signals stay blocked while filling: the first addItem() moves currentIndex
   // from -1 to 0 and would fire currentIndexChanged → onCutSelectionChanged →
   // load(). Loading is deferred to showEvent() (see there), so nothing may
   // reach the player before the dialog is on screen.
   const QSignalBlocker fillBlocker(cbCutPreview);
-  for (int i = 0; i < numPreview; i++ ) {
-    // first cut-in (skip when first cut is neighbor-only context)
-    if (i == 0 && !skipFirst) {
-      TTCutItem item = previewCutList->at(i);
-      selectionString = QString("Start: %1").arg(item.cutInTime().toString("hh:mm:ss"));
-      cbCutPreview->addItem( selectionString );
-    }
-
-    // cut i-i
-    if (numPreview > 1 && i > 0 && i < numPreview-1) {
-      iPos = ttPreviewCutOutEntry(i);
-
-      TTCutItem item1 = previewCutList->at(iPos);
-      TTCutItem item2 = previewCutList->at(iPos+1);
-      selectionString = QString("Cut %1-%2: %3 - %4")
-            .arg(i).arg(i+1)
-            .arg(item1.cutInTime().toString("hh:mm:ss"))
-            .arg(item2.cutOutTime().toString("hh:mm:ss"));
-      cbCutPreview->addItem( selectionString );
-    }
-
-    //last cut out (skip when last cut is neighbor-only context)
-    if (i == numPreview-1 && !skipLast) {
-      iPos = ttPreviewCutOutEntry(i);
-
-      TTCutItem item = previewCutList->at(iPos);
-      selectionString = QString("End: %1").arg(item.cutOutTime().toString("hh:mm:ss"));
-      cbCutPreview->addItem( selectionString );
-    }
-  }
+  for (int clip = mClipOffset; clip <= lastClip; clip++)
+    cbCutPreview->addItem(clipLabel(clip));
+  updatePrePostRollToolTips();
 
   // No load here — showEvent() does it once the widget can render.
+}
+
+// Clip 0 is the first cut's start, the last clip the last cut's end, the
+// ones between are the transitions between cut k-1 and cut k. The times are
+// the cuts' own, as in the cut list; how much of them the clip plays is the
+// pre-/post-roll line.
+QString TTCutPreview::clipLabel(int clipIndex) const
+{
+  const int numPreview = ttPreviewClipCount(mpCutList);
+  if (clipIndex == 0) {
+    const std::optional<TTCutItem> first = originalCutItem(0);
+    return first ? QString("Start: %1").arg(first->cutInTime().toString("hh:mm:ss")) : QString();
+  }
+  const std::optional<TTCutItem> cutBefore = originalCutItem(ttPreviewCutOutEntry(clipIndex));
+  if (clipIndex == numPreview - 1)
+    return cutBefore ? QString("End: %1").arg(cutBefore->cutOutTime().toString("hh:mm:ss")) : QString();
+  const std::optional<TTCutItem> cutAfter = originalCutItem(ttPreviewCutOutEntry(clipIndex) + 1);
+  if (!cutBefore || !cutAfter) return QString();
+  return QString("Cut %1-%2: %3 - %4")
+      .arg(clipIndex).arg(clipIndex + 1)
+      .arg(cutBefore->cutInTime().toString("hh:mm:ss"))
+      .arg(cutAfter->cutOutTime().toString("hh:mm:ss"));
+}
+
+QString TTCutPreview::prePostRollToolTip(int clipIndex) const
+{
+  const int numPreview = ttPreviewClipCount(mpCutList);
+  TTVideoStream* vStream = mpCutList->at(0).avDataItem()
+      ? mpCutList->at(0).avDataItem()->videoStream() : nullptr;
+  if (vStream == nullptr || vStream->frameRate() <= 0 || clipIndex < 0 || clipIndex >= numPreview)
+    return QString();
+  const double fps = vStream->frameRate();
+  auto seconds = [&](int first, int last) { return QLocale().toString((last - first + 1) / fps, 'f', 1); };
+
+  QStringList parts;
+  if (clipIndex > 0) {
+    const TTCutItem out = mpCutList->at(ttPreviewCutOutEntry(clipIndex));
+    parts << tr("Pre-roll %1 s").arg(seconds(out.cutInIndex(), out.cutOutIndex()));
+  }
+  if (clipIndex < numPreview - 1) {
+    const TTCutItem in = mpCutList->at(clipIndex == 0 ? 0 : ttPreviewCutOutEntry(clipIndex) + 1);
+    parts << tr("Post-roll %1 s").arg(seconds(in.cutInIndex(), in.cutOutIndex()));
+  }
+
+  const int setting = TTSettings::instance()->cutPreviewSeconds();
+  return parts.join(QString::fromUtf8(" \u00b7 ")) + "\n"
+       + tr("Preview length %1 s (%2 s per side); shorter when the cut is shorter")
+             .arg(setting).arg(QLocale().toString(setting / 2.0, 'f', 1));
+}
+
+void TTCutPreview::updatePrePostRollToolTips()
+{
+  for (int i = 0; i < cbCutPreview->count(); i++)
+    cbCutPreview->setItemData(i, prePostRollToolTip(clipIndexOf(i)), Qt::ToolTipRole);
+  cbCutPreview->setToolTip(cbCutPreview->itemData(cbCutPreview->currentIndex(), Qt::ToolTipRole).toString());
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -275,6 +300,7 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   // Combo entry -> clip -> file: clip i lives in preview_<i+1>.* for both
   // codecs (TTCutPreviewTask writes .mkv for MPEG-2 too).
   const int clipIndex = clipIndexOf(iCut);
+  cbCutPreview->setToolTip(cbCutPreview->itemData(iCut, Qt::ToolTipRole).toString());
   current_video_file = TTCutPreviewTask::createPreviewFileName(clipIndex + 1, "mkv");
 
   // Check for subtitle file. size() > 0: a clip range without subtitle
@@ -670,19 +696,34 @@ void TTCutPreview::applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentId
   }
   mpOriginalCutList->update(copyItem, updatedCopy);
 
-  // The preview entry is a window around the edge, not the cut itself: rebuild
-  // it around the new edge with the same rule createPreviewCutList() uses.
-  // Moving only the edge kept the window's far end, so a jump beyond the
-  // window turned the entry around (start after end) and the rebuild failed.
-  TTCutItem previewItem = mpCutList->at(segmentIdx);
-  TTVideoStream* vStream = previewItem.avDataItem() ? previewItem.avDataItem()->videoStream() : nullptr;
+  // The preview entries are windows around the edges, not the cut itself:
+  // rebuild both windows of this cut (entries 2k and 2k+1) with the same rule
+  // createPreviewCutList() uses. Moving only the edge kept the window's far
+  // end, so a jump beyond the window turned the entry around (start after
+  // end); and the window of the other edge must stay inside the moved cut.
+  const int inEntry = segmentIdx - segmentIdx % 2;
+  if (inEntry + 1 >= mpCutList->count()) return;
+  TTVideoStream* vStream = mpCutList->at(inEntry).avDataItem()
+      ? mpCutList->at(inEntry).avDataItem()->videoStream() : nullptr;
   if (vStream == nullptr) return;
   const long frames = ttPreviewFrames(vStream);
-  const QPair<int, int> window = isCutOut ? ttPreviewCutOutWindow(vStream, newIdx, frames)
-                                          : ttPreviewCutInWindow(vStream, newIdx, frames);
-  TTCutItem updatedPreview(previewItem);
-  updatedPreview.update(window.first, window.second);
-  mpCutList->update(previewItem, updatedPreview);
+  const int  cutIn  = updatedCopy.cutInIndex();
+  const int  cutOut = updatedCopy.cutOutIndex();
+  const QPair<int, int> windows[2] = { ttPreviewCutInWindow(vStream, cutIn, cutOut, frames),
+                                       ttPreviewCutOutWindow(vStream, cutIn, cutOut, frames) };
+  for (int k = 0; k < 2; k++) {
+    const TTCutItem previewItem = mpCutList->at(inEntry + k);
+    TTCutItem updatedPreview(previewItem);
+    updatedPreview.update(windows[k].first, windows[k].second);
+    mpCutList->update(previewItem, updatedPreview);
+  }
+
+  // The combo shows the windows' times: refresh every entry (a cut's two
+  // windows belong to two neighbouring clips).
+  const QSignalBlocker blocker(cbCutPreview);
+  for (int i = 0; i < cbCutPreview->count(); i++)
+    cbCutPreview->setItemText(i, clipLabel(clipIndexOf(i)));
+  updatePrePostRollToolTips();
 }
 
 // Move one edge in model and preview lists, rebuild the current clip (which

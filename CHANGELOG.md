@@ -5,6 +5,17 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **The cut preview shows only what the cut keeps.** When a cut was shorter
+  than half the preview length, its preview windows ran on into the material
+  behind the cut - cut-away frames and the next cut - and the preview list
+  showed the whole recording as the clip's time span (e.g. every transition
+  of a 12-second test as "00:00:00 - 00:00:11" with a 25-second preview).
+  The windows now stay inside their cut. The list shows the cuts a clip
+  joins - cut-in of the first to cut-out of the second, as in the cut list -
+  and the tooltip of each entry says how much the clip plays before the
+  cut-out and after the cut-in ("Pre-roll 2.4 s · Post-roll 4.0 s"); both
+  follow a burst shift or aspect jump. Gates: `preview_window_in_cut`,
+  `preview_clip_index`.
 - **The cut preview's aspect jump no longer closes TTCut-ng.** Jumping the
   cut-in or cut-out to the first picture of the cut's main aspect ratio could
   land outside the short preview window; the rebuilt clip then had its start
