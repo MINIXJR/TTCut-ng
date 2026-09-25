@@ -199,9 +199,7 @@ QList<TTStreamPoint> TTStreamPointVideoWorker::detectAspectChanges()
   } else {
     summary += tr(" - %n change(s)", "", results.size());
   }
-  if (mLog.suppressed() > 0)
-    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
-  mLog.line(summary);
+  mLog.summary(summary);
 
   return results;
 }

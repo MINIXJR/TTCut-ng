@@ -29,7 +29,6 @@ class TTCutSettingsEncoder : public QWidget, Ui::TTCutSettingsEncoder
 
     TTCutSettingsEncoder(QWidget* parent=0);
 
-    void setTitle( const QString& title );
     void setTabData();
     void getTabData();
     void saveTabData() { getTabData(); }  // alias for new Settings-Dialog pattern

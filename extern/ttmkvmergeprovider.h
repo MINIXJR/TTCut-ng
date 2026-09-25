@@ -198,6 +198,10 @@ private:
             , ownsCtx(false), reorderOffset(0), displayOrderWarned(false) {}
     };
 
+    //! Free every input's packet and the input contexts it owns. Safe to call
+    //! more than once: the frees null what they release.
+    static void freeMuxInputs(QList<MuxInput>& inputs);
+
     // mux() implementation split — see docs/superpowers/specs/2026-05-03-mux-split-refactor.md
     static void assignEsTimestamps(MuxInput& in);
 

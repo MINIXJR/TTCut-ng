@@ -105,17 +105,7 @@ QImage TTSearchTask::decodeFrameAt(int pos)
 {
   if (mFFmpegWrapper) return mFFmpegWrapper->decodeFrame(pos);
 
-  if (mMpeg2Decoder) {
-    try {
-      mMpeg2Decoder->moveToFrameIndex(pos);
-      TFrameInfo* fi = mMpeg2Decoder->getFrameInfo();
-      if (!fi || !fi->Y) return QImage();
-      // fi->Y holds RGB32 data when the decoder was constructed with formatRGB32.
-      return QImage(fi->Y, fi->width, fi->height, QImage::Format_RGB32).copy();
-    } catch (TTMpeg2DecoderException&) {
-      return QImage();
-    }
-  }
+  if (mMpeg2Decoder) return mpeg2FrameAt(pos).copy();
   return QImage();
 }
 
@@ -127,16 +117,7 @@ bool TTSearchTask::isFrameBlackAt(int pos, int pixelThreshold, float ratioThresh
   if (!mMpeg2Decoder) return false;
 
   // MPEG-2 path: black-frame check on a worker-owned libmpeg2 decoder.
-  QImage gray;
-  try {
-    mMpeg2Decoder->moveToFrameIndex(pos);
-    TFrameInfo* fi = mMpeg2Decoder->getFrameInfo();
-    if (!fi || !fi->Y) return false;
-    QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
-    gray = rgb.convertToFormat(QImage::Format_Grayscale8);
-  } catch (TTMpeg2DecoderException&) {
-    return false;
-  }
+  const QImage gray = mpeg2FrameAt(pos).convertToFormat(QImage::Format_Grayscale8);
   if (gray.isNull()) return false;
 
   // Same sampling rule as TTFFmpegWrapper::isFrameBlack (TTCentreBand); the
@@ -174,24 +155,33 @@ bool TTSearchTask::buildHistogramAt(int pos, int hist[256], int& totalPixels)
   if (!mMpeg2Decoder) return false;
 
   // MPEG-2 path: replicate TTMPEG2Window2::buildHistogramAt MPEG-2 branch.
+  const QImage gray = mpeg2FrameAt(pos).convertToFormat(QImage::Format_Grayscale8);
+  if (gray.isNull()) return false;
+
+  const TTCentreBand band = TTCentreBand::of(gray.width(), gray.height());
+  for (int row = band.y0; row < band.y1; row += TTCentreBand::step) {
+    const uchar* line = gray.constScanLine(row);
+    for (int col = band.x0; col < band.x1; col += TTCentreBand::step) {
+      hist[line[col]]++;
+      totalPixels++;
+    }
+  }
+  return totalPixels > 0;
+}
+
+// The MPEG-2 frame at pos as RGB32, wrapping the decoder's buffer (valid
+// until the next decode), or a null image when it cannot be decoded. Only
+// called with mMpeg2Decoder set.
+QImage TTSearchTask::mpeg2FrameAt(int pos)
+{
   try {
     mMpeg2Decoder->moveToFrameIndex(pos);
     TFrameInfo* fi = mMpeg2Decoder->getFrameInfo();
-    if (!fi || !fi->Y) return false;
-    QImage rgb(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
-    QImage gray = rgb.convertToFormat(QImage::Format_Grayscale8);
-
-    const TTCentreBand band = TTCentreBand::of(gray.width(), gray.height());
-    for (int row = band.y0; row < band.y1; row += TTCentreBand::step) {
-      const uchar* line = gray.constScanLine(row);
-      for (int col = band.x0; col < band.x1; col += TTCentreBand::step) {
-        hist[line[col]]++;
-        totalPixels++;
-      }
-    }
-    return totalPixels > 0;
+    if (!fi || !fi->Y) return QImage();
+    // fi->Y holds RGB32 data when the decoder was constructed with formatRGB32.
+    return QImage(fi->Y, fi->width, fi->height, QImage::Format_RGB32);
   } catch (TTMpeg2DecoderException&) {
-    return false;
+    return QImage();
   }
 }
 

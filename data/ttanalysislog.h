@@ -39,6 +39,10 @@ public:
   //! Uncapped line - headers and summaries.
   void line(const QString& text);
 
+  //! A section's closing summary: line(), with " (N more events suppressed)"
+  //! appended when the cap swallowed events since the last resetCap().
+  void summary(const QString& text);
+
   //! Capped line - findings and discarded candidates. Beyond the cap the text
   //! is dropped and only counted, so one chatty analysis cannot crowd another
   //! one out of the pane.

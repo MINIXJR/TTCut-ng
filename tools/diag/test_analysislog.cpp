@@ -69,6 +69,19 @@ static void testFormatPosition()
           "negative frame rate -> no invented time");
 }
 
+static void testSummary()
+{
+    QStringList out;
+    TTAnalysisLog log([&out](const QString& s) { out << s; }, 1);
+    log.summary("clean");
+    log.event("a");
+    log.event("b");
+    log.event("c");
+    log.summary("done");
+    check(out.first() == "clean", "summary() without suppressed events is the text alone");
+    check(out.last() == "done (2 more events suppressed)", "summary() appends the suppressed count");
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
@@ -77,6 +90,7 @@ int main(int argc, char** argv)
     testLineIsNotCapped();
     testResetCap();
     testFormatPosition();
+    testSummary();
 
     printf("%s\n", gFailures == 0 ? "ALL PASS" : "FAILURES");
     return gFailures == 0 ? 0 : 1;

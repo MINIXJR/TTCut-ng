@@ -78,9 +78,7 @@ void TTStreamPointAudioWorker::operation()
           ? tr("Silence detection cancelled: %n region(s) found so far", "",
                silencePoints.size())
           : tr("Silence detection: %n region(s) found", "", silencePoints.size());
-      if (mLog.suppressed() > 0)
-        silenceSummary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
-      mLog.line(silenceSummary);
+      mLog.summary(silenceSummary);
     }
     mLog.resetCap();   // the format section gets its own budget
     mStepCount = 1;
@@ -400,9 +398,7 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
   summary += results.isEmpty()
       ? tr(" - channel layout constant, no changes")
       : tr(" - %n change(s)", "", results.size());
-  if (mLog.suppressed() > 0)
-    summary += tr(" (%1 more events suppressed)").arg(mLog.suppressed());
-  mLog.line(summary);
+  mLog.summary(summary);
 
   return results;
 }

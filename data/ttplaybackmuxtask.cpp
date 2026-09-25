@@ -30,10 +30,8 @@ TTPlaybackMuxTask::TTPlaybackMuxTask(const TTPlaybackMuxParams& params)
 {
 }
 
-/**
- * Abort request; GUI thread while operation() runs on the worker. Only
- * atomic stores happen here.
- */
+//! Abort request; GUI thread while operation() runs on the worker. Only
+//! atomic stores happen here.
 void TTPlaybackMuxTask::onUserAbort()
 {
   mProvider.requestAbort();
@@ -52,12 +50,10 @@ void TTPlaybackMuxTask::discard()
   onUserAbort();
 }
 
-/**
- * Removes the output unless the mux ran to a successful conclusion and the
- * owner still wants it. run() calls this on every exit, including a cancel
- * that arrived before the pool scheduled run() - then operation() never
- * executed and there is nothing to remove.
- */
+//! Removes the output unless the mux ran to a successful conclusion and the
+//! owner still wants it. run() calls this on every exit, including a cancel
+//! that arrived before the pool scheduled run() - then operation() never
+//! executed and there is nothing to remove.
 void TTPlaybackMuxTask::cleanUp()
 {
   const bool keep = mSucceeded && !mDiscard.load(std::memory_order_relaxed);
@@ -65,9 +61,7 @@ void TTPlaybackMuxTask::cleanUp()
     QFile::remove(mParams.outputFile);
 }
 
-/**
- * The mux itself.
- */
+//! The mux itself.
 void TTPlaybackMuxTask::operation()
 {
   // Direct connection: the provider emits on this thread, the re-emitted

@@ -131,49 +131,43 @@ bool TTFFmpegWrapper::openFile(const QString& filePath)
     mVideoStreamIndex = findBestVideoStream();
     mAudioStreamIndex = findBestAudioStream();
 
-    // Open video decoder context if video stream found
+    // Open video decoder context if video stream found. A failure leaves
+    // mVideoCodecCtx null; the file stays open for its audio stream.
     if (mVideoStreamIndex >= 0) {
         AVStream* videoStream = mFormatCtx->streams[mVideoStreamIndex];
         const AVCodec* codec = avcodec_find_decoder(videoStream->codecpar->codec_id);
 
-        if (codec) {
+        if (codec)
             mVideoCodecCtx = avcodec_alloc_context3(codec);
-            if (mVideoCodecCtx) {
-                int p2cRet = avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
-                if (p2cRet < 0) {
-                    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                        QString("Warning: avcodec_parameters_to_context failed: %1").arg(avErrorToString(p2cRet)));
-                    avcodec_free_context(&mVideoCodecCtx);
-                    mVideoCodecCtx = nullptr;
+        if (mVideoCodecCtx) {
+            const char* failed = "avcodec_parameters_to_context failed";
+            int ret = avcodec_parameters_to_context(mVideoCodecCtx, videoStream->codecpar);
+            if (ret >= 0) {
+                if (mAnalysisMode) {
+                    mVideoCodecCtx->thread_count = 0;  // auto-detect (all cores)
+                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
+                    mVideoCodecCtx->skip_loop_filter = AVDISCARD_ALL;  // skip deblocking (safe for analysis)
                 } else {
-                    if (mAnalysisMode) {
-                        mVideoCodecCtx->thread_count = 0;  // auto-detect (all cores)
-                        mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
-                        mVideoCodecCtx->skip_loop_filter = AVDISCARD_ALL;  // skip deblocking (safe for analysis)
-                    } else {
-                        mVideoCodecCtx->thread_count = 1;
-                        mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
-                    }
-                    int ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
-                    if (ret < 0) {
-                        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                            QString("Warning: Could not open video codec: %1").arg(avErrorToString(ret)));
-                        avcodec_free_context(&mVideoCodecCtx);
-                        mVideoCodecCtx = nullptr;
-                    }
+                    mVideoCodecCtx->thread_count = 1;
+                    mVideoCodecCtx->thread_type = FF_THREAD_SLICE;
                 }
+                failed = "Could not open video codec";
+                ret = avcodec_open2(mVideoCodecCtx, codec, nullptr);
+            }
+            if (ret < 0) {
+                TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                    QString("Warning: %1: %2").arg(failed, avErrorToString(ret)));
+                avcodec_free_context(&mVideoCodecCtx);  // sets it to nullptr
             }
         }
     }
 
-    if (TTSettings::instance()->logFFmpegDecoder())
+    if (TTSettings::instance()->logFFmpegDecoder()) {
         qDebug() << "Opened file:" << filePath;
-    if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "  Streams:" << mFormatCtx->nb_streams;
-    if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "  Video stream:" << mVideoStreamIndex;
-    if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "  Audio stream:" << mAudioStreamIndex;
+    }
 
     return true;
 }

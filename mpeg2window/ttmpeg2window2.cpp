@@ -72,11 +72,19 @@ void TTMPEG2Window2::resizeEvent (QResizeEvent*)
 // both are corrected in the upscale direction so no detail is lost.
 void TTMPEG2Window2::computeDisplayScale(float& scaleFactorX, float& scaleFactorY) const
 {
-  if (mpVideoStream != 0 && !mUseFFmpeg && videoWidth > 0 && videoHeight > 0) {
+  if (mUseFFmpeg)
+    sampleAspectScale(scaleFactorX, scaleFactorY);
+  else
+    mpeg2AspectScale(scaleFactorX, scaleFactorY);
+}
+
+void TTMPEG2Window2::mpeg2AspectScale(float& scaleFactorX, float& scaleFactorY) const
+{
+  if (mpVideoStream != 0 && videoWidth > 0 && videoHeight > 0) {
     // MPEG-2 aspect_ratio_information signals the DISPLAY aspect ratio of
     // the whole picture (2 = 4:3, 3 = 16:9, 4 = 2.21:1), unlike H.26x SAR.
     // Correct in the upscale direction so no detail is lost before the
-    // final widget scaling (same principle as the FFmpeg branch below);
+    // final widget scaling (same principle as sampleAspectScale());
     // mpv playback applies the same aspect, so still and playback keep the
     // same shape. Code 1 (square samples) needs no correction. This used
     // to handle only 16:9 — and shrank the height for it — leaving 4:3
@@ -106,8 +114,11 @@ void TTMPEG2Window2::computeDisplayScale(float& scaleFactorX, float& scaleFactor
       }
     }
   }
+}
 
-  if (mUseFFmpeg && mpFFmpegWrapper != 0) {
+void TTMPEG2Window2::sampleAspectScale(float& scaleFactorX, float& scaleFactorY) const
+{
+  if (mpFFmpegWrapper != 0) {
     // Anamorphic H.264/H.265 (SAR != 1:1, e.g. SD DVB 720x576 SAR 16:11):
     // correct the display aspect in the upscale direction so no detail is
     // lost before the final widget scaling. mpv playback applies the same
