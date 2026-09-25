@@ -393,8 +393,15 @@ gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.
 # ---- tier tux ----------------------------------------------------------------
 # Only the progressive fixture has a documented drop count (0, IDR start); the
 # other three still assert displayToDecode(0) and the prefix alignment.
+# The harness decodes the whole file single-threaded for its ground truth but
+# compares only the first 2000 display positions, so a 2000-AU head slice
+# (byte-identical start) checks the same window: 65 s -> about 20 s, most of
+# it the 4K HEVC fixture (measured 2026-09-25).
 gate_h264_leading()  { need "$V264" "$MBAFF" "$H265"
-                       "$D/gate_h264_leading.sh" "$D/test_h264_leading" "$V264:0" "$MBAFF" "$H265"; }
+                       ffmpeg -y -v error -i "$V264"  -c copy -frames:v 2000 -f h264 "$W/prog.264"  || exit 1
+                       ffmpeg -y -v error -i "$MBAFF" -c copy -frames:v 2000 -f h264 "$W/mbaff.264" || exit 1
+                       ffmpeg -y -v error -i "$H265"  -c copy -frames:v 2000 -f hevc "$W/hevc.265"  || exit 1
+                       "$D/gate_h264_leading.sh" "$D/test_h264_leading" "$W/prog.264:0" "$W/mbaff.264" "$W/hevc.265"; }
 gate_sar()           { need "$V264"; "$D/test_sar" "$V264" 1.0; }
 gate_decode_cancel()     { need "$V264"; "$D/test_decode_cancel" "$V264" 1500; }
 gate_decode_cancel_yuv() { need "$V264"; "$D/test_decode_cancel_yuv" "$V264" 1500; }
