@@ -112,6 +112,22 @@ void check(bool ok, const QString& what)
   if (!ok) gFailures++;
 }
 
+// The pool reports every task's end through qDebug ("finished"/"aborted"
+// <task name> ...), not through the log file. This handler passes every
+// message on and remembers when the anomaly scan task ended - the signal the
+// settle loop below waits for.
+static QtMessageHandler gPreviousHandler = nullptr;
+static QElapsedTimer    gScanEndClock;
+static qint64           gScanEndedAtMs = -1;
+
+static void watchScanEnd(QtMsgType type, const QMessageLogContext& ctx, const QString& msg)
+{
+  if (gScanEndedAtMs < 0 && msg.contains("\"AudioAnomalyScan\"")
+      && (msg.startsWith("finished") || msg.startsWith("aborted")))
+    gScanEndedAtMs = gScanEndClock.elapsed();
+  if (gPreviousHandler) gPreviousHandler(type, ctx, msg);
+}
+
 void pump(int ms)
 {
   QElapsedTimer t; t.start();
@@ -234,6 +250,9 @@ int main(int argc, char** argv)
     return 2;
   }
 
+  gScanEndClock.start();
+  gPreviousHandler = qInstallMessageHandler(watchScanEnd);
+
   TTCutMainWindow mainWnd;
 
   // Same fallback TTMessageLogger::defaultLogPath() computes, evaluated
@@ -293,11 +312,23 @@ int main(int argc, char** argv)
   // one. settleCapSec must be sized for the material under test; the
   // default covers the tux corpus, real DVB material needs the 5th
   // argument.
+  //
+  // The pool's own report of the scan's end (watchScanEnd) is the signal
+  // that works: the loop ends kSettleAfterEndMs after it - long enough for a
+  // wrongly re-triggered second scan to log its start, which is written the
+  // moment it is started from the pool's exit - and settleCapSec stays the
+  // limit for a scan that never ends. A fixed 30 s wait made each of the
+  // three gates cost 30 s on the Tux material.
+  constexpr qint64 kSettleAfterEndMs = 2000;
   QElapsedTimer total; total.start();
   const qint64 settleCapMs = qint64(settleCapSec) * 1000;
   while (total.elapsed() < settleCapMs) {
     pump(100);
+    if (gScanEndedAtMs >= 0 && gScanEndClock.elapsed() - gScanEndedAtMs >= kSettleAfterEndMs)
+      break;
   }
+  printf("settle: %lld ms (scan end %s)\n", (long long)total.elapsed(),
+         gScanEndedAtMs >= 0 ? "seen" : "not seen - cap reached");
 
   const int scanStartedCount = countLogOccurrences(logPath,
       "Audio anomaly scan started automatically after loading");
