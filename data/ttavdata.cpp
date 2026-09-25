@@ -1381,7 +1381,7 @@ void TTAVData::endAbortedProjectLoad()
   // reach them: until 2026-09-24 they stayed, their cuts mirrored in the
   // global cut list, and were never freed. The project load is over; any
   // item still pending belongs to it.
-  for (TTAVItem* item : mPendingVideoItems) dropPendingTrackValues(item);
+  for (const TTAVItem* item : mPendingVideoItems) dropPendingTrackValues(item);
   qDeleteAll(mPendingVideoItems);
   mPendingVideoItems.clear();
 
@@ -1584,7 +1584,7 @@ QStringList TTAVData::cutWarnings(TTCutList* cutList) const
 
   for (int i = 0; i < cutList->count(); i++) {
     const TTCutItem item = cutList->at(i);
-    TTAVItem* avItem = item.avDataItem();
+    const TTAVItem* avItem = item.avDataItem();
     if (!avItem) continue;
 
     if (avItem->audioCount() > 0) {
@@ -2016,9 +2016,8 @@ void TTAVData::doH264Cut(const QString& tgtFileName, TTCutList* cutList)
     log->infoMsg(__FILE__, __LINE__, QString("A/V sync offset from .info: %1 ms").arg(avOffsetMs));
 
   // Get audio file (ES workflow: separate audio files)
-  QString audioFile;
   if (avItem->audioCount() > 0) {
-    audioFile = avItem->audioStreamAt(0)->filePath();
+    const QString audioFile = avItem->audioStreamAt(0)->filePath();
     log->infoMsg(__FILE__, __LINE__, QString("Audio file: %1").arg(audioFile));
   }
 

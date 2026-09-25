@@ -183,7 +183,6 @@ void TTSubtitleList::clear()
     //emit itemRemoved(item);
     emit itemRemoved(i);
     if (item.subtitleStream != 0) delete item.subtitleStream;
-    item.subtitleStream = 0;
   }
 }
 

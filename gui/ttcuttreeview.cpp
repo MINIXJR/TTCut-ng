@@ -62,11 +62,11 @@ TTCutTreeView::TTCutTreeView(QWidget* parent)
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
   // Video editing industry color scheme
-  pbEntryUp->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
-  pbEntryDown->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
-  pbEntryDelete->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
+  pbEntryUp->setIcon(ttThemedIcon("go-up", QStyle::SP_ArrowUp));
+  pbEntryDown->setIcon(ttThemedIcon("go-down", QStyle::SP_ArrowDown));
+  pbEntryDelete->setIcon(ttThemedIcon("edit-delete", QStyle::SP_TrashIcon));
   pbEntryDelete->setStyleSheet("QPushButton { color: #cc4444; }");  // Red for destructive
-  pbEntryCopy->setIcon(ttThemeIcon("edit-copy", QStyle::SP_FileDialogNewFolder));
+  pbEntryCopy->setIcon(ttThemedIcon("edit-copy", QStyle::SP_FileDialogNewFolder));
 
   // Cut/Preview button accent palette.
   // Backgrounds picked for >=5:1 contrast with white text (WCAG AA) so the

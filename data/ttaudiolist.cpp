@@ -243,7 +243,6 @@ void TTAudioList::clear()
     //emit itemRemoved(item);
     emit itemRemoved(i);
     if (item.audioStream != 0) delete item.audioStream;
-    item.audioStream = 0;
   }
 }
 
