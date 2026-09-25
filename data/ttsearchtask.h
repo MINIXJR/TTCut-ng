@@ -170,6 +170,7 @@ protected:
 private:
   bool openDecoder();
   void closeDecoder();
+  QImage mpeg2FrameAt(int pos);
 
   QString                   mFilePath;
   TTAVTypes::AVStreamType   mStreamType;

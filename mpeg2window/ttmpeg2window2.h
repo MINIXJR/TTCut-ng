@@ -94,6 +94,8 @@ class TTMPEG2Window2 : public QLabel
     QString getSubtitleTextAtCurrentFrame();
     static void drawSubtitleOnImage(QImage& image, const QString& text);
     void computeDisplayScale(float& scaleFactorX, float& scaleFactorY) const;
+    void mpeg2AspectScale(float& scaleFactorX, float& scaleFactorY) const;
+    void sampleAspectScale(float& scaleFactorX, float& scaleFactorY) const;
     bool pixmapGeometry(QRect& pmRect) const;
 
   private:

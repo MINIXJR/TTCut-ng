@@ -405,11 +405,7 @@
         <number>6</number>
        </property>
        <item row="0" column="0" >
-        <widget class="TTCutSettingsEncoder" name="encodingPage" >
-         <property name="title" >
-          <string>GroupBox</string>
-         </property>
-        </widget>
+        <widget class="TTCutSettingsEncoder" name="encodingPage" />
        </item>
       </layout>
      </widget>
@@ -420,7 +416,7 @@
  <customwidgets>
   <customwidget>
    <class>TTCutSettingsEncoder</class>
-   <extends>QGroupBox</extends>
+   <extends>QWidget</extends>
    <header>../gui/ttcutsettingsencoder.h</header>
    <container>1</container>
   </customwidget>

@@ -24,6 +24,15 @@ void TTAnalysisLog::line(const QString& text)
   if (mSink) mSink(text);
 }
 
+void TTAnalysisLog::summary(const QString& text)
+{
+  if (mSuppressed > 0)
+    line(text + QCoreApplication::translate("TTAnalysisLog", " (%1 more events suppressed)")
+                    .arg(mSuppressed));
+  else
+    line(text);
+}
+
 void TTAnalysisLog::event(const QString& text)
 {
   if (mEmitted >= mMaxEvents) {

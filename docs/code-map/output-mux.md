@@ -1,5 +1,5 @@
 ---
-base_commit: e47e1d80293156fd5edfc4f3aa878e0aaa976190
+base_commit: 64481da84d478fa4186f3d6a4fcfe037047c1c9f
 last_verified: 2026-09-24
 sources:
   - extern/ttmkvmergeprovider.h
@@ -218,8 +218,8 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   - status: kept separate → the MPEG-2 branch needs the same `TTESInfo` object for `loadExtraFrameIndices`; the conditions are identical
 - **Output file open and finish in `mux()` and `muxAudioOnly()`**
   - sites: `extern/ttmkvmergeprovider.cpp:TTMkvMergeProvider::mux`, `extern/ttmkvmergeprovider.cpp:TTMkvMergeProvider::muxAudioOnly`
-  - shared purpose: `avio_open` of the output, `av_write_trailer` and the finish log
-  - status: consolidate → small helpers next to `allocMatroskaOutput`/`freeMatroskaOutput`; open since audit run 7 (low priority)
+  - shared purpose: `avio_open` of the output, freeing the inputs, `av_write_trailer` and the finish log
+  - status: opening and input cleanup are shared (`openMatroskaOutputFile`, `TTMkvMergeProvider::freeMuxInputs`, next to `allocMatroskaOutput`/`freeMatroskaOutput`); the trailer + finish log stay per function → each closes over its own local cleanup lambda and logs its own text
 - **Preview audio-cut and Smart Cut failure skeleton**
   - sites: `data/ttcutpreviewtask.cpp:TTCutPreviewTask::createH264PreviewClip`, `data/ttpreviewclip.cpp:ttRebuildSmartCutPreviewClip`, `data/ttpreviewclip.cpp:ttRebuildMpeg2PreviewClip`
   - shared purpose: cut the first audio track into the temp directory, log a failed Smart Cut

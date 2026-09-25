@@ -184,6 +184,14 @@ static AVFormatContext* allocMatroskaOutput(const QString& outputFile)
     return outCtx;
 }
 
+// Open outputFile for writing into outCtx. The libav return code: 0 on
+// success, also for an output format that needs no file.
+static int openMatroskaOutputFile(AVFormatContext* outCtx, const QString& outputFile)
+{
+  if (outCtx->oformat->flags & AVFMT_NOFILE) return 0;
+  return avio_open(&outCtx->pb, outputFile.toUtf8().constData(), AVIO_FLAG_WRITE);
+}
+
 // Close the output file (if it was opened) and free the context. Safe on a
 // context whose pb was never opened and on nullptr.
 static void freeMatroskaOutput(AVFormatContext*& outCtx)
@@ -193,6 +201,15 @@ static void freeMatroskaOutput(AVFormatContext*& outCtx)
         avio_closep(&outCtx->pb);
     avformat_free_context(outCtx);
     outCtx = nullptr;
+}
+
+// ----------------------------------------------------------------------------
+void TTMkvMergeProvider::freeMuxInputs(QList<MuxInput>& inputs)
+{
+    for (auto& mi : inputs) {
+        if (mi.pkt) av_packet_free(&mi.pkt);
+        if (mi.ownsCtx && mi.fmtCtx) avformat_close_input(&mi.fmtCtx);
+    }
 }
 
 // Scan a packet for an H.264 SPS NAL (type 7) and extract log2_max_frame_num.
@@ -1001,10 +1018,7 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     // Safe to call multiple times: avformat_close_input nulls its argument.
     QList<MuxInput> inputs;
     auto cleanupAll = [&]() {
-        for (auto& mi : inputs) {
-            if (mi.pkt) av_packet_free(&mi.pkt);
-            if (mi.ownsCtx && mi.fmtCtx) avformat_close_input(&mi.fmtCtx);
-        }
+        freeMuxInputs(inputs);
         avformat_close_input(&videoInCtx);
         freeMatroskaOutput(outCtx);
     };
@@ -1035,14 +1049,11 @@ bool TTMkvMergeProvider::mux(const QString& outputFile,
     }
 
     // Open output file
-    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&outCtx->pb, outputFile.toUtf8().constData(),
-                         AVIO_FLAG_WRITE);
-        if (ret < 0) {
-            setError(QString("Cannot open output: %1").arg(avErrStr(ret)));
-            cleanupAll();
-            return false;
-        }
+    ret = openMatroskaOutputFile(outCtx, outputFile);
+    if (ret < 0) {
+        setError(QString("Cannot open output: %1").arg(avErrStr(ret)));
+        cleanupAll();
+        return false;
     }
 
     ret = avformat_write_header(outCtx, nullptr);
@@ -1161,16 +1172,10 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
     int nextOutIdx = 0;
     addAudioInputs(outCtx, audioFiles, audioLanguages, nextOutIdx, inputs, 0);
 
-    auto cleanupInputs = [&]() {
-        for (auto& mi : inputs) {
-            if (mi.pkt) av_packet_free(&mi.pkt);
-            if (mi.ownsCtx && mi.fmtCtx) avformat_close_input(&mi.fmtCtx);
-        }
-    };
     // Every exit path below goes through this (same pattern as mux()).
     // avio_closep() tolerates a pb that was never opened.
     auto closeAll = [&]() {
-        cleanupInputs();
+        freeMuxInputs(inputs);
         freeMatroskaOutput(outCtx);
     };
 
@@ -1184,13 +1189,11 @@ bool TTMkvMergeProvider::muxAudioOnly(const QString& outputFile,
         return false;
     }
 
-    if (!(outCtx->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&outCtx->pb, outputFile.toUtf8().constData(), AVIO_FLAG_WRITE);
-        if (ret < 0) {
-            closeAll();
-            setError(QString("muxAudioOnly: cannot open output: %1").arg(avErrStr(ret)));
-            return false;
-        }
+    ret = openMatroskaOutputFile(outCtx, outputFile);
+    if (ret < 0) {
+        closeAll();
+        setError(QString("muxAudioOnly: cannot open output: %1").arg(avErrStr(ret)));
+        return false;
     }
 
     ret = avformat_write_header(outCtx, nullptr);

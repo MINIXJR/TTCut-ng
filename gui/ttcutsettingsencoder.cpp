@@ -36,10 +36,6 @@ TTCutSettingsEncoder::TTCutSettingsEncoder(QWidget* parent)
   connect(cbEncodingMode, &QCheckBox::checkStateChanged, this, &TTCutSettingsEncoder::onEncodingModeChanged);
 }
 
-void TTCutSettingsEncoder::setTitle(__attribute__((unused))const QString& title)
-{
-}
-
 void TTCutSettingsEncoder::initCodecList()
 {
   cbCodec->clear();
@@ -97,44 +93,50 @@ void TTCutSettingsEncoder::updateProfileList()
 
 void TTCutSettingsEncoder::updateQualityUI(int codec)
 {
+  // What differs per codec: the scale, its range and the explanations. The
+  // widgets are set once below.
+  QString label, info, tip;
+  int     minValue = 0, maxValue = 0;
+
+  switch (codec) {
+    case 0:  // MPEG-2 uses qscale (2-31, lower = better)
+      label    = tr("Quality (qscale):");
+      minValue = 2;
+      maxValue = 31;
+      info     = tr("MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6, default: 2");
+      tip      = tr("MPEG-2 qscale: 2 = best quality (default), 31 = worst quality");
+      break;
+
+    case 1:  // H.264 uses CRF (0-51, lower = better)
+      label    = tr("Quality (CRF):");
+      minValue = 0;
+      maxValue = 51;
+      info     = tr("H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 18");
+      tip      = tr("H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality");
+      break;
+
+    case 2:  // H.265 uses CRF (0-51, lower = better, but values ~6 higher than H.264)
+      label    = tr("Quality (CRF):");
+      minValue = 0;
+      maxValue = 51;
+      info     = tr("H.265 CRF: 0-51 (lower = better quality). Typical: 20-34, default: 20");
+      tip      = tr("H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality");
+      break;
+
+    default:
+      return;
+  }
+
   // Block signals to prevent recursive updates
   slCrf->blockSignals(true);
   sbCrf->blockSignals(true);
 
-  switch (codec) {
-    case 0:  // MPEG-2 uses qscale (2-31, lower = better)
-      lblCrf->setText(tr("Quality (qscale):"));
-      slCrf->setMinimum(2);
-      slCrf->setMaximum(31);
-      sbCrf->setMinimum(2);
-      sbCrf->setMaximum(31);
-      lblCrfInfo->setText(tr("MPEG-2 quality scale: 2-31 (lower = better quality, larger file). Typical: 2-6, default: 2"));
-      slCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality (default), 31 = worst quality"));
-      sbCrf->setToolTip(tr("MPEG-2 qscale: 2 = best quality (default), 31 = worst quality"));
-      break;
-
-    case 1:  // H.264 uses CRF (0-51, lower = better)
-      lblCrf->setText(tr("Quality (CRF):"));
-      slCrf->setMinimum(0);
-      slCrf->setMaximum(51);
-      sbCrf->setMinimum(0);
-      sbCrf->setMaximum(51);
-      lblCrfInfo->setText(tr("H.264 CRF: 0-51 (lower = better quality, larger file). Typical: 18-28, default: 18"));
-      slCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality"));
-      sbCrf->setToolTip(tr("H.264 CRF: 0 = lossless, 18 = default (visually lossless), 51 = worst quality"));
-      break;
-
-    case 2:  // H.265 uses CRF (0-51, lower = better, but values ~6 higher than H.264)
-      lblCrf->setText(tr("Quality (CRF):"));
-      slCrf->setMinimum(0);
-      slCrf->setMaximum(51);
-      sbCrf->setMinimum(0);
-      sbCrf->setMaximum(51);
-      lblCrfInfo->setText(tr("H.265 CRF: 0-51 (lower = better quality). Typical: 20-34, default: 20"));
-      slCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality"));
-      sbCrf->setToolTip(tr("H.265 CRF: 0 = lossless, 20 = default (visually lossless), 51 = worst quality"));
-      break;
-  }
+  lblCrf->setText(label);
+  slCrf->setRange(minValue, maxValue);
+  sbCrf->setRange(minValue, maxValue);
+  lblCrfInfo->setText(info);
+  slCrf->setToolTip(tip);
+  sbCrf->setToolTip(tip);
 
   slCrf->blockSignals(false);
   sbCrf->blockSignals(false);
