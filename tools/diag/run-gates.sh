@@ -65,6 +65,8 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 D="$ROOT/tools/diag"
 CACHE="$ROOT/tools/test-videos/cache"
+# shellcheck source=tools/diag/ttcut-project.sh
+. "$D/ttcut-project.sh"
 TESTDATA="$ROOT/tools/testdata"
 GATES_ROOT=/usr/local/src/CLAUDE_TMP/TTCut-ng/gates
 
@@ -348,18 +350,7 @@ gate_mpeg2_framerate_cut() {
   local m2v="$CACHE/tux_mpeg2_720p_test.m2v" mp2="$CACHE/tux_mpeg2_720p_test.mp2"
   need "$m2v" "$mp2"
   mkdir -p "$W/out"
-  cat > "$W/p.ttcut" <<PRJ
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$m2v</Name>
-  <Audio><Order>0</Order><Name>$mp2</Name></Audio>
-  <Cut><Order>0</Order><CutIn>100</CutIn><CutOut>599</CutOut></Cut>
- </Video>
-</TTCut-Projectfile>
-PRJ
+  ttcut_project_xml "$m2v" "$mp2" - 100:599 > "$W/p.ttcut"
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/p.ttcut" --auto-cut "$W/out/p.mkv" \
     || { echo "FAIL: auto-cut failed"; exit 1; }
   local v a
@@ -490,20 +481,9 @@ gate_autocut_exit() {
   need "$M2V" "$MP2"
   local rc
   mkdir -p "$W/ok" "$W/ro" && chmod 555 "$W/ro"
-  cat > "$W/one.ttcut" <<PRJ
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$M2V</Name>
-  <Audio><Order>0</Order><Name>$MP2</Name></Audio>
-  <Cut><Order>0</Order><CutIn>100</CutIn><CutOut>300</CutOut></Cut>
- </Video>
-</TTCut-Projectfile>
-PRJ
-  sed '/<Cut>/d' "$W/one.ttcut" > "$W/nocut.ttcut"
-  sed "s|$M2V|$W/missing.m2v|" "$W/one.ttcut" > "$W/missing.ttcut"
+  ttcut_project_xml "$M2V" "$MP2" - 100:300 > "$W/one.ttcut"
+  ttcut_project_xml "$M2V" "$MP2" - > "$W/nocut.ttcut"
+  ttcut_project_xml "$W/missing.m2v" "$MP2" - 100:300 > "$W/missing.ttcut"
   expect_rc() { # want project output label
     LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$2" --auto-cut "$3"; rc=$?
     echo "$4: exit code $rc (want $1)"
@@ -532,19 +512,8 @@ gate_mplex_target() {
   local tgt nav
   for tgt in 3 7; do
     mkdir -p "$W/t$tgt"
-    cat > "$W/t$tgt.ttcut" <<PRJ
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$M2V</Name>
-  <Audio><Order>0</Order><Name>$MP2</Name></Audio>
-  <Cut><Order>0</Order><CutIn>0</CutIn><CutOut>300</CutOut></Cut>
- </Video>
- <Settings><Mpeg2Target>$tgt</Mpeg2Target></Settings>
-</TTCut-Projectfile>
-PRJ
+    ttcut_project_xml "$M2V" "$MP2" - 0:300 -- " <Settings><Mpeg2Target>$tgt</Mpeg2Target></Settings>" \
+      > "$W/t$tgt.ttcut"
     LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/t$tgt.ttcut" --auto-cut "$W/t$tgt/out.mpg" \
       || { echo "FAIL: target $tgt: auto-cut failed"; exit 1; }
     [ -s "$W/t$tgt/out.mpg" ] || { echo "FAIL: target $tgt: no .mpg"; ls -la "$W/t$tgt"; exit 1; }
@@ -563,22 +532,9 @@ gate_chapter_file() {
   need "$V264" "$A264"
   mkdir -p "$W/out"
   echo "user file - must survive" > "$W/out/chapters.txt"
-  cat > "$W/ch.ttcut" <<PRJ
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$V264</Name>
-  <Audio><Order>0</Order><Name>$A264</Name></Audio>
-  <Cut><Order>0</Order><CutIn>0</CutIn><CutOut>1480</CutOut></Cut>
- </Video>
- <Settings>
-  <MkvCreateChapters>true</MkvCreateChapters>
-  <MkvChapterInterval>1</MkvChapterInterval>
- </Settings>
-</TTCut-Projectfile>
-PRJ
+  ttcut_project_xml "$V264" "$A264" - 0:1480 -- \
+    " <Settings>" "  <MkvCreateChapters>true</MkvCreateChapters>" \
+    "  <MkvChapterInterval>1</MkvChapterInterval>" " </Settings>" > "$W/ch.ttcut"
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/ch.ttcut" --auto-cut "$W/out/ch.mkv" \
     || { echo "FAIL: auto-cut failed"; exit 1; }
   local chapters; chapters=$(ffprobe -v error -show_chapters -of csv=p=0 "$W/out/ch.mkv" | wc -l)
@@ -622,26 +578,7 @@ gate_aspect_autocut() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || ex
   ffmpeg -y -v error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=12" \
       -c:a mp2 -b:a 192k "$W/aspect.mp2" || exit 1
   mkdir -p "$W/out"
-  cat > "$W/aspect.ttcut" <<PRJ
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$W/aspect.m2v</Name>
-  <Audio>
-   <Order>0</Order>
-   <Name>$W/aspect.mp2</Name>
-   <Language>deu</Language>
-  </Audio>
-  <Cut>
-   <Order>0</Order>
-   <CutIn>$((A - 1))</CutIn>
-   <CutOut>$((B - 5))</CutOut>
-  </Cut>
- </Video>
-</TTCut-Projectfile>
-PRJ
+  ttcut_project_xml "$W/aspect.m2v" "$W/aspect.mp2" deu "$((A - 1)):$((B - 5))" > "$W/aspect.ttcut"
   LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/aspect.ttcut" --auto-cut "$W/out/aspect.mkv"
   local rc=$?; echo "auto-cut exit code $rc"
   [ "$rc" -eq 0 ] || { echo "FAIL: auto-cut exited $rc, want 0"; exit 1; }

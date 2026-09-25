@@ -48,6 +48,8 @@
 set -u
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+# shellcheck source=tools/diag/ttcut-project.sh
+. "$ROOT/tools/diag/ttcut-project.sh"
 QC="${QC_WORKDIR:-/usr/local/src/CLAUDE_TMP/TTCut-ng/qc-autocut}"
 mkdir -p "$QC" || exit 2
 
@@ -84,30 +86,7 @@ else
         [ -f "$f" ] || { echo "Testkorpus fehlt: $f (tools/test-videos/make_test_video.sh)" >&2; exit 2; }
     done
     PROJECT="$QC/qc_ref_mpeg2.ttcut"
-    {
-        echo '<!DOCTYPE TTCut-Projectfile>'
-        echo '<TTCut-Projectfile>'
-        echo ' <Version>1.0</Version>'
-        echo ' <Video>'
-        echo '  <Order>0</Order>'
-        echo "  <Name>$V</Name>"
-        echo '  <Audio>'
-        echo '   <Order>0</Order>'
-        echo "   <Name>$A</Name>"
-        echo '   <Language>deu</Language>'
-        echo '  </Audio>'
-        i=0
-        for range in "100:899" "1300:2099" "2300:2799"; do
-            echo '  <Cut>'
-            echo "   <Order>$i</Order>"
-            echo "   <CutIn>${range%%:*}</CutIn>"
-            echo "   <CutOut>${range##*:}</CutOut>"
-            echo '  </Cut>'
-            i=$((i + 1))
-        done
-        echo ' </Video>'
-        echo '</TTCut-Projectfile>'
-    } > "$PROJECT"
+    ttcut_project_xml "$V" "$A" deu 100:899 1300:2099 2300:2799 > "$PROJECT"
     # Sollwerte des Referenzprojekts: 2100 Bilder à 25 fps = 84,000 s,
     # MP2 mit 1152 Samples à 48 kHz = 24 ms je Paket -> 3500 Audiopakete.
     EXPECT_DURATION="${EXPECT_DURATION:-84.000000}"

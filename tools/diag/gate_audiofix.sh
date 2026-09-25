@@ -4,6 +4,8 @@
 # vorfindet, meldet FAIL. Aufruf: tools/diag/gate_audiofix.sh
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=tools/diag/ttcut-project.sh
+. "$ROOT/tools/diag/ttcut-project.sh"
 TOOL="${AUDIOFIX_TOOL:-$ROOT/tools/ttcut-audiofix/ttcut-audiofix}"
 WORK=/usr/local/src/CLAUDE_TMP/TTCut-ng/audiofix-tests
 
@@ -409,26 +411,7 @@ if [ "$RUN_FULL" -eq 1 ]; then
         # Project file: adapt the rtl2.ttcut template (audiobug/) to the
         # fresh demux output. CutOut=120499 (~80min) spans the defect frame.
         PROJ="$WORK/realcase.ttcut"
-        cat > "$PROJ" <<EOF
-<!DOCTYPE TTCut-Projectfile>
-<TTCut-Projectfile>
- <Version>1.0</Version>
- <Video>
-  <Order>0</Order>
-  <Name>$FULLM2V</Name>
-  <Audio>
-   <Order>0</Order>
-   <Name>$FULLMP2</Name>
-   <Language>deu</Language>
-  </Audio>
-  <Cut>
-   <Order>0</Order>
-   <CutIn>500</CutIn>
-   <CutOut>120499</CutOut>
-  </Cut>
- </Video>
-</TTCut-Projectfile>
-EOF
+        ttcut_project_xml "$FULLM2V" "$FULLMP2" deu 500:120499 > "$PROJ"
 
         XDGCFG="$WORK/full_xdgconfig"; XDGCACHE="$WORK/full_xdgcache"
         APPTMP="$WORK/full_apptmp"; OUTDIR="$WORK/full_output"
