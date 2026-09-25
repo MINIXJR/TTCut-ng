@@ -18,6 +18,23 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Schnitt-Vorschau
 
+- **Vorschau-Fenster ragten über den Schnitt hinaus** → **DONE (2026-09-25,
+  Zweig `fix/preview-window-in-cut`)**. Gefunden beim Sichttest des Users
+  (Auswahlliste: jede Naht „00:00:00 - 00:00:11“ bei 12 s Testbild).
+  Gemessen mit einer Wegwerf-Sonde bei den 25 s des Users: die Fenster waren
+  nur am Stream begrenzt, „Cut 1-2“ spielte 283 statt 161 Bilder (Lücke,
+  Schnitt 3 und weggeschnittenes Ende hinter Schnitt 2). Regel seit dem
+  ersten Commit (`a65ccd22`, aus TTCut), nicht aus Lauf 9. Jetzt liegen beide
+  Fenster im Schnitt, der IDR-Rücksprung nur, solange er im Schnitt bleibt;
+  die Kantenverschiebung baut beide Fenster des Schnitts neu. Auswahlliste
+  nach User-Entscheid mit den Schnittzeiten (Cut-In des ersten bis Cut-Out des
+  zweiten Schnitts, `clipLabel`), dazu „Vorlauf … · Nachlauf …“ als Tooltip
+  der Einträge mit dem, was der Clip wirklich spielt (`prePostRollToolTip`;
+  eine eigene Zeile in der Knopfzeile passte mit deutschen Texten nicht in
+  die Mindestbreite 660 px – gemessen 807 px nötig). Gate `preview_window_in_cut`
+  (auf dem alten Stand 8 Fehler, neu 0); H.264 (Tux, 25 s): jeder
+  Übergangs-Clip = zwei ganze Schnitte (202 Bilder), Drift unverändert.
+
 - **Audit-Lauf 9: Lese-Hypothesen der Karte `cut-preview.md`** → **DONE
   (2026-09-25, Zweig `cleanup/code-audit-run9`)**. Gemessen mit Wegwerf-Sonden
   auf `make_aspect_m2v` (drei Schnitte, nur der mittlere beginnt 40 Bilder in
