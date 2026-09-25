@@ -394,6 +394,19 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     des Items. Ein `delete` braucht einen Entwurf, wer den Zeiger noch hält
     (Overlay, laufende Tasks, Wiedergabe), sonst droht ein Use-after-free.
     Karte `track-management.md`, H6.
+  - **P8 Dekodierpfade in TTFFmpegWrapper vereinheitlichen** —
+    `decodeFrameInternal` und `decodeFrameYUV` teilen Suche zum Keyframe,
+    Schutzgrenze und Überspring-Schleife bis zum Ziel-Frame (kognitive
+    Komplexität 37 und 52). Hängt an Dekodier- gegen Anzeige-Reihenfolge und
+    an der DPB-Vorfüllung (`seekToFrame`); braucht einen eigenen Entwurf nach
+    `frame-order.md`.
+  - **P9 Audio-Dekoder öffnen + Stream-Point-Audio-Worker teilen** — die
+    libav-Leiter „Datei öffnen → Stream suchen → Dekoder öffnen" steht in
+    `TTAudioAnomalyScanTask`, `TTStreamPointAudioWorker::detectSilencePoints`
+    und `TTAudioCutter::detectBurst`; sie macht den Großteil der Länge von
+    `detectSilencePoints` (155 Zeilen) und `detectBurst` (246 Zeilen) aus.
+    Ein gemeinsamer Öffner mit RAII-Freigabe, danach die Worker-Methode nach
+    Phasen teilen.
 
 - **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
   M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
