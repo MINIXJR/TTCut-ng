@@ -31,10 +31,10 @@ void TTTrackTreeView::bindListWidgets(QTreeWidget* list, QPushButton* open, QPus
   mpListView->setRootIsDecorated(false);
 
   // Use theme icons with Qt standard icon fallback for cross-platform support
-  open->setIcon(ttThemeIcon("document-open", QStyle::SP_DialogOpenButton));
-  up->setIcon(ttThemeIcon("go-up", QStyle::SP_ArrowUp));
-  down->setIcon(ttThemeIcon("go-down", QStyle::SP_ArrowDown));
-  del->setIcon(ttThemeIcon("edit-delete", QStyle::SP_TrashIcon));
+  open->setIcon(ttThemedIcon("document-open", QStyle::SP_DialogOpenButton));
+  up->setIcon(ttThemedIcon("go-up", QStyle::SP_ArrowUp));
+  down->setIcon(ttThemedIcon("go-down", QStyle::SP_ArrowDown));
+  del->setIcon(ttThemedIcon("edit-delete", QStyle::SP_TrashIcon));
 
   // Actions of the context menu
   mpItemNewAction = ttMakeAction(this, texts.insertText, "document-open", QStyle::SP_DialogOpenButton, texts.insertTip);

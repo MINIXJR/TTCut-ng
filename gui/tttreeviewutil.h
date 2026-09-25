@@ -24,18 +24,14 @@
 #include <QStyle>
 #include <QTreeWidget>
 
-// Theme icon with the application style's standard icon as fallback.
-inline QIcon ttThemeIcon(const char* themeName, QStyle::StandardPixmap fallback)
-{
-  return QIcon::fromTheme(QLatin1String(themeName), QApplication::style()->standardIcon(fallback));
-}
+#include "ttthemedicon.h"
 
 // Action owned by parent with text, theme icon and status tip.
 inline QAction* ttMakeAction(QObject* parent, const QString& text, const char* themeName,
                              QStyle::StandardPixmap fallback, const QString& statusTip)
 {
   QAction* action = new QAction(text, parent);
-  action->setIcon(ttThemeIcon(themeName, fallback));
+  action->setIcon(ttThemedIcon(themeName, fallback));
   action->setStatusTip(statusTip);
   return action;
 }

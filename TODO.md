@@ -358,6 +358,43 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Umbau-Projekte aus den Code-Audits** (angelegt 2026-09-25, Regel „offen
+  darf nicht offen bleiben" in `docs/quality-roadmap.md`). Befunde, die für
+  einen Audit-Batch zu groß sind; im Urteils-Speicher
+  `docs/code-audit/verdicts.tsv` als `documented` mit Verweis auf das Projekt
+  geführt.
+  - **P1 TTCutMainWindow-Rest** — `gui/ttcutmainwindow.cpp` (Datei- und
+    Klassengröße), `onStatusReport` und `onStreamPointsLoaded` (kognitive
+    Komplexität; letztere enthält die Suffix-Schleife ein zweites Mal).
+    Aufteilung nach Zuständigkeit, nach den Karten `stream-open-project-load`,
+    `project-lifecycle`, `stream-points`.
+  - **P2 TTESInfo aufräumen** (Batch B7 aus Lauf 7, vom User zurückgestellt) —
+    Pipe-Record-Parsing, die vier Warnungsblöcke, `parseWarningsSection`;
+    dazu die `ttencodernames`-Klone und der gemeinsame Zeitformatierer.
+  - **P3 Vorschau-Pipeline** — gemeinsames Gerüst von `TTCutPreviewTask` und
+    `ttRebuild*PreviewClip` (Audio-Schnitt, Fehler-Logging),
+    `createH264PreviewClip` und `TTCutPreviewTask::operation` (Größe,
+    Komplexität). Vorher Karte (Kandidat 3 der Kartenliste), dazu die
+    geteilten Temp-Namen unten.
+  - **P4 Extra-Frame-Dialog in TTAVData** — `showExtraFrameClusterDialog`
+    (212 Zeilen, fünf Aufgaben) und die Cluster-Beschreibungs- und
+    „… N more"-Schleifen der beiden Warnungsdialoge.
+  - **P5 `TTAVData::cutAudioTracks` zerlegen** — die Reparaturtabelle wird
+    mitten in der Spur-Schleife gebaut (kognitive Komplexität 83); Ablauf
+    laut `audio-cut-timing.md` erhalten.
+  - **P6 Spur-Listen als eine Vorlage** — `TTAudioList`/`TTSubtitleList`
+    (und nach Befund des Klassifizierers auch `TTMarkerList`/`TTCutList`)
+    samt Item-Klassen sind eine Klasse mit Sortier- und Order-Politik je Art;
+    dazu `TTOpenAudioTask`/`TTOpenSubtitleTask` (gleiche Klasse bis auf
+    Typprüfung und Signaltyp, daher Helfer ohne `QObject`). Braucht einen
+    eigenen Entwurf: `cut-edit-and-start.md` hält fest, dass die Listen noch
+    keine gemeinsame Basis haben.
+  - **P7 Entfernte Spuren freigeben** — `TTAudioList::remove` /
+    `TTSubtitleList::remove` löschen den Stream nicht; er lebt bis zum Ende
+    des Items. Ein `delete` braucht einen Entwurf, wer den Zeiger noch hält
+    (Overlay, laufende Tasks, Wiedergabe), sonst droht ein Use-after-free.
+    Karte `track-management.md`, H6.
+
 - **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
   M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
   `TTAVItem::firstAc3TrackIndex()` liefert den Scan-Ort, und das Kontextmenü

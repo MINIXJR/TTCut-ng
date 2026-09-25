@@ -150,6 +150,9 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onAVDataReloaded();
     void onSubtitleItemAppended(const TTSubtitleItem& item);
     void onSubtitleItemUpdated(const TTSubtitleItem& cItem, const TTSubtitleItem& uItem);
+    void onSubtitleItemsSwapped(int oldIndex, int newIndex);
+    void onSubtitleItemRemoved(int index);
+    void onAudioItemAppended(const TTAudioItem& item);
 
     void onOpenProjectFileFinished(const QString&);
     void onOpenProjectFileAborted();
@@ -186,6 +189,16 @@ class TTCutMainWindow: public QMainWindow, Ui::TTCutMainWindowForm
     void onSliderDecodeTimer();
 
   private:
+    //! Still-frame overlay = subtitle track 0 of the current item (stream and
+    //! delay), or none; re-run after anything that can change track 0.
+    void showSubtitleTrackZero();
+    //! "Length Mismatch" warning when 'audio' and the current video differ
+    //! by more than a second.
+    void warnIfLengthMismatch(TTAudioStream* audio);
+    //! Audio file opened by hand whose length is checked once it has been
+    //! appended to the current item (the open runs on the pool).
+    QString mPendingLengthCheckFile;
+
     // Slider debounce: valueChanged only records the newest position and
     // (re)starts this timer; the decode happens when it fires. See
     // onVideoSliderChanged() for why.

@@ -183,7 +183,6 @@ void TTSubtitleList::clear()
     //emit itemRemoved(item);
     emit itemRemoved(i);
     if (item.subtitleStream != 0) delete item.subtitleStream;
-    item.subtitleStream = 0;
   }
 }
 
@@ -194,6 +193,11 @@ void TTSubtitleList::clear()
 void TTSubtitleList::append(TTAVItem* avDataItem, TTSubtitleStream* sStream, int order)
 {
   TTSubtitleItem item(avDataItem, sStream);
+
+  // Same default as TTAudioList::append: without it every discovered or
+  // added subtitle carried order -1.
+  if (order < 0)
+    order = data.count();
 
   item.setOrder(order);
   data.append(item);
@@ -261,6 +265,19 @@ int  TTSubtitleList::count()
 /*!
  * indexOf
  */
+/*!
+ * sortByProjectOrder
+ * Restore the <Order> sequence of a .ttcut project file; the open tasks
+ * finish in arbitrary order (same as TTAudioList::sortByProjectOrder).
+ */
+void TTSubtitleList::sortByProjectOrder()
+{
+  std::stable_sort(data.begin(), data.end(),
+      [](const TTSubtitleItem& a, const TTSubtitleItem& b) {
+        return a.order() < b.order();
+      });
+}
+
 /*!
  * swap
  */

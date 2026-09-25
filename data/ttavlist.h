@@ -105,7 +105,8 @@ class TTAVItem : public QObject
     void appendMarker(int markerPos, int order=-1);
 
     //! Audio auto-sort (language preference resp. project order, see
-    //! TTAVData::onOpenAudioFinished) runs only while the item's initial
+    //! TTAVData::onOpenAudioFinished) and the subtitle project-order restore
+    //! (onOpenSubtitleFinished) run only while the item's initial
     //! load batch is still on the thread pool. TTAVData::onThreadPoolExit()
     //! latches this flag; afterwards the track order belongs to the user.
     bool initialAudioLoadDone() const     { return mInitialAudioLoadDone; }
@@ -121,6 +122,18 @@ class TTAVItem : public QObject
     void setAnomalyScanStarted()          { mAnomalyScanStarted = true; }
 
   private:
+    //! The three parts of canCutWith, in the order it runs them; each throws
+    //! TTInvalidOperationException with the first difference it finds.
+    //! Frame rate, audio track count, codec.
+    void checkStreamCompat(const TTAVItem* avItem) const;
+    //! MPEG-2 only: aspect ratio and picture size at every range already in
+    //! this item against the new range's headers. false when the new range
+    //! has no sequence header at cutIn or cutOut - canCutWith then stops
+    //! without the audio check (behaviour kept from before the split).
+    bool checkMpeg2SequenceCompat(const TTAVItem* avItem, int cutIn, int cutOut) const;
+    //! Bit rate, sample rate and version of each audio track pair.
+    void checkAudioCompat(const TTAVItem* avItem) const;
+
     //! Repairs are tagged with the track index of the file they belong to.
     //! Rebuild every repair with newTrack(oldTrack) - or drop it when that
     //! returns -1 - after the audio list was shortened or reordered.
@@ -153,6 +166,7 @@ class TTAVItem : public QObject
 
   private:
     TTAudioList*    audioDataList()    { return mpAudioList; }
+    TTSubtitleList* subtitleDataList() { return mpSubtitleList; }
     //! True when the pair can be used as a cut range: both positions
     //! non-negative, cut-out not before cut-in, and - once a stream is
     //! open - cut-out inside it. 'reason' takes a message for the caller.

@@ -833,38 +833,52 @@ void TTCutMainWindow::onReadVideoStream(const QString& fName)
 void TTCutMainWindow::onReadAudioStream(QString fName)
 {
   QFileInfo fInfo(fName);
+  // The open runs on the pool: the new track is not in the list yet, so the
+  // length check waits for onAudioItemAppended. Checking here compared the
+  // previous last track instead (audit run 8, track-management.md H4).
+  mPendingLengthCheckFile = fInfo.absoluteFilePath();
   mpAVData->doOpenAudioStream(mpCurrentAVDataItem, fInfo.absoluteFilePath());
+}
 
-  // Check if audio length differs significantly from video length
-  if (mpCurrentAVDataItem != 0 &&
-      mpCurrentAVDataItem->videoStream() != 0 &&
-      mpCurrentAVDataItem->audioCount() > 0)
-  {
-    TTVideoStream* video = mpCurrentAVDataItem->videoStream();
-    TTAudioStream* audio = mpCurrentAVDataItem->audioStreamAt(mpCurrentAVDataItem->audioCount() - 1);
+/* /////////////////////////////////////////////////////////////////////////////
+ * onAudioItemAppended
+ * An audio track reached the current item; if it is the file opened by hand,
+ * check its length against the video.
+ */
+void TTCutMainWindow::onAudioItemAppended(const TTAudioItem& item)
+{
+  if (mPendingLengthCheckFile.isEmpty()) return;
+  TTAudioStream* audio = item.getAudioStream();
+  if (audio == 0 || audio->filePath() != mPendingLengthCheckFile) return;
 
-    if (audio != 0) {
-      QTime videoLen = video->streamLengthTime();
-      QTime audioLen = audio->streamLengthTime();
+  mPendingLengthCheckFile.clear();
+  warnIfLengthMismatch(audio);
+}
 
-      // Calculate difference in milliseconds
-      int videoMs = videoLen.hour() * 3600000 + videoLen.minute() * 60000 +
-                    videoLen.second() * 1000 + videoLen.msec();
-      int audioMs = audioLen.hour() * 3600000 + audioLen.minute() * 60000 +
-                    audioLen.second() * 1000 + audioLen.msec();
-      int diffMs = qAbs(videoMs - audioMs);
+void TTCutMainWindow::warnIfLengthMismatch(TTAudioStream* audio)
+{
+  if (mpCurrentAVDataItem == 0 || mpCurrentAVDataItem->videoStream() == 0) return;
 
-      // Warn if difference is more than 1 second
-      if (diffMs > 1000) {
-        QString msg = tr("Audio and video length differ by %1 seconds.\n\n"
-                         "Video: %2\nAudio: %3\n\n"
-                         "This may cause A/V sync issues.")
-                      .arg(diffMs / 1000.0, 0, 'f', 1)
-                      .arg(videoLen.toString("hh:mm:ss.zzz"))
-                      .arg(audioLen.toString("hh:mm:ss.zzz"));
-        QMessageBox::warning(this, tr("Length Mismatch"), msg);
-      }
-    }
+  TTVideoStream* video = mpCurrentAVDataItem->videoStream();
+  QTime videoLen = video->streamLengthTime();
+  QTime audioLen = audio->streamLengthTime();
+
+  // Calculate difference in milliseconds
+  int videoMs = videoLen.hour() * 3600000 + videoLen.minute() * 60000 +
+                videoLen.second() * 1000 + videoLen.msec();
+  int audioMs = audioLen.hour() * 3600000 + audioLen.minute() * 60000 +
+                audioLen.second() * 1000 + audioLen.msec();
+  int diffMs = qAbs(videoMs - audioMs);
+
+  // Warn if difference is more than 1 second
+  if (diffMs > 1000) {
+    QString msg = tr("Audio and video length differ by %1 seconds.\n\n"
+                     "Video: %2\nAudio: %3\n\n"
+                     "This may cause A/V sync issues.")
+                  .arg(diffMs / 1000.0, 0, 'f', 1)
+                  .arg(videoLen.toString("hh:mm:ss.zzz"))
+                  .arg(audioLen.toString("hh:mm:ss.zzz"));
+    QMessageBox::warning(this, tr("Length Mismatch"), msg);
   }
 }
 
@@ -1766,7 +1780,15 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
                this, &TTCutMainWindow::onSubtitleItemAppended);
     disconnect(mpCurrentAVDataItem, &TTAVItem::subtitleItemUpdated,
                this, &TTCutMainWindow::onSubtitleItemUpdated);
+    disconnect(mpCurrentAVDataItem, &TTAVItem::subtitleItemsSwapped,
+               this, &TTCutMainWindow::onSubtitleItemsSwapped);
+    disconnect(mpCurrentAVDataItem, qOverload<int>(&TTAVItem::subtitleItemRemoved),
+               this, &TTCutMainWindow::onSubtitleItemRemoved);
+    disconnect(mpCurrentAVDataItem, &TTAVItem::audioItemAppended,
+               this, &TTCutMainWindow::onAudioItemAppended);
   }
+  // A length check still pending belongs to the item being left.
+  mPendingLengthCheckFile.clear();
 
   mpCurrentAVDataItem = avItem;
   // Audio-repair context menu (Task 7) needs the current AVItem to look up
@@ -1783,6 +1805,12 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
           this, &TTCutMainWindow::onSubtitleItemAppended);
   connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemUpdated,
           this, &TTCutMainWindow::onSubtitleItemUpdated);
+  connect(mpCurrentAVDataItem, &TTAVItem::subtitleItemsSwapped,
+          this, &TTCutMainWindow::onSubtitleItemsSwapped);
+  connect(mpCurrentAVDataItem, qOverload<int>(&TTAVItem::subtitleItemRemoved),
+          this, &TTCutMainWindow::onSubtitleItemRemoved);
+  connect(mpCurrentAVDataItem, &TTAVItem::audioItemAppended,
+          this, &TTCutMainWindow::onAudioItemAppended);
 
   // Update stream point model frame rate for time display
   if (avItem->videoStream()) {
@@ -1803,19 +1831,10 @@ void TTCutMainWindow::onAVItemChanged(TTAVItem* avItem)
   audioFileList->onAVDataChanged(avItem);
   subtitleFileList->onAVDataChanged(avItem);
 
-  // Set subtitle stream for preview overlay (use first subtitle if available).
-  // If the subtitle file is still loading (async TTOpenSubtitleTask), this is
-  // a no-op here and onSubtitleItemAppended() wires it in once it lands.
-  if (avItem->subtitleCount() > 0) {
-    currentFrame->setSubtitleStream(avItem->subtitleStreamAt(0));
-    currentFrame->setSubtitleDelay(avItem->subtitleListItemAt(0).getDelayMs());
-    // currentFrame->onAVDataChanged() above already showed the first still
-    // frame — refresh so the overlay is on it right away, not only after the
-    // next navigation.
-    currentFrame->refreshCurrentFrame();
-  } else {
-    currentFrame->clearSubtitleStream();
-  }
+  // Subtitle overlay (track 0). If the subtitle file is still loading (async
+  // TTOpenSubtitleTask), there is none yet and onSubtitleItemAppended() wires
+  // it in once it lands.
+  showSubtitleTrackZero();
 
   // Remember position when switching between videos
   onNewFramePos( avItem->videoStream()->currentIndex() );
@@ -1861,6 +1880,9 @@ void TTCutMainWindow::onAVDataReloaded()
   if (mpCurrentAVDataItem) {
     audioFileList->onReloadList(mpCurrentAVDataItem);
     subtitleFileList->onReloadList(mpCurrentAVDataItem);
+    // A project load can have re-sorted the subtitles (sortByProjectOrder),
+    // which emits nothing on its own.
+    showSubtitleTrackZero();
   }
 
   // Automatic AC3 anomaly scan, deferred by one event-loop turn - see
@@ -1880,27 +1902,48 @@ void TTCutMainWindow::onAVDataReloaded()
  */
 void TTCutMainWindow::onSubtitleItemAppended(const TTSubtitleItem&)
 {
-  if (mpCurrentAVDataItem == 0) return;
-  if (mpCurrentAVDataItem->subtitleCount() == 0) return;
-
-  currentFrame->setSubtitleStream(mpCurrentAVDataItem->subtitleStreamAt(0));
-  currentFrame->setSubtitleDelay(mpCurrentAVDataItem->subtitleListItemAt(0).getDelayMs());
-  currentFrame->refreshCurrentFrame();
+  showSubtitleTrackZero();
 }
 
 /*!
  * onSubtitleItemUpdated
  * Fires on any subtitle item change (delay spinbox, language combo, pending
  * project-file values applied after the async load). The overlay only shows
- * track 0 — re-push its delay and refresh the still frame so a delay edit is
- * visible immediately.
+ * track 0 — re-push it so a delay edit is visible immediately.
  */
 void TTCutMainWindow::onSubtitleItemUpdated(const TTSubtitleItem&, const TTSubtitleItem&)
 {
-  if (mpCurrentAVDataItem == 0) return;
-  if (mpCurrentAVDataItem->subtitleCount() == 0) return;
+  showSubtitleTrackZero();
+}
 
-  currentFrame->setSubtitleDelay(mpCurrentAVDataItem->subtitleListItemAt(0).getDelayMs());
+/*!
+ * onSubtitleItemsSwapped / onSubtitleItemRemoved
+ * The up/down buttons and "delete" change which file is track 0; without
+ * these the overlay kept showing the old one, even a removed track (audit
+ * run 8, track-management.md H6).
+ */
+void TTCutMainWindow::onSubtitleItemsSwapped(int, int)
+{
+  showSubtitleTrackZero();
+}
+
+void TTCutMainWindow::onSubtitleItemRemoved(int)
+{
+  showSubtitleTrackZero();
+}
+
+void TTCutMainWindow::showSubtitleTrackZero()
+{
+  if (mpCurrentAVDataItem == 0) return;
+
+  if (mpCurrentAVDataItem->subtitleCount() > 0) {
+    currentFrame->setSubtitleStream(mpCurrentAVDataItem->subtitleStreamAt(0));
+    currentFrame->setSubtitleDelay(mpCurrentAVDataItem->subtitleListItemAt(0).getDelayMs());
+  } else {
+    currentFrame->clearSubtitleStream();
+  }
+  // Redraw the still frame so the overlay changes now, not only after the
+  // next navigation.
   currentFrame->refreshCurrentFrame();
 }
 

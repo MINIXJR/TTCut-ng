@@ -237,6 +237,20 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 	// ratio inside one recording makes fail.
 	if (avItem == this) return;
 
+	checkStreamCompat(avItem);
+
+	// MPEG-2 specific checks using sequence headers. H.264/H.265 streams:
+	// basic checks are done via frameRate above. More detailed checks
+	// (resolution, profile) could be added via SPS comparison if needed.
+	if (videoStream()->streamType() == TTAVTypes::mpeg2_demuxed_video &&
+	    !checkMpeg2SequenceCompat(avItem, cutIn, cutOut))
+		return;
+
+	checkAudioCompat(avItem);
+}
+
+void TTAVItem::checkStreamCompat(const TTAVItem* avItem) const
+{
 	TTVideoStream*    video1  = videoStream();
 	TTVideoStream*    video2  = avItem->videoStream();
 
@@ -246,41 +260,42 @@ void TTAVItem::canCutWith(const TTAVItem* avItem, int cutIn, int cutOut)
 	if (audioCount() != avItem->audioCount())
 		throw TTInvalidOperationException(tr("Video files to cut must have the same count of audio files!"));
 
-	// Stream type compatibility check
-	TTAVTypes::AVStreamType type1 = video1->streamType();
-	TTAVTypes::AVStreamType type2 = video2->streamType();
-
-	if (type1 != type2)
+	if (video1->streamType() != video2->streamType())
 		throw TTInvalidOperationException(tr("Video files to cut must have the same codec type!"));
+}
 
-	// MPEG-2 specific checks using sequence headers
-	if (type1 == TTAVTypes::mpeg2_demuxed_video) {
-		TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
-		TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
-		if (seqIn2 == 0 || seqOut2 == 0) return;
+bool TTAVItem::checkMpeg2SequenceCompat(const TTAVItem* avItem, int cutIn, int cutOut) const
+{
+	TTVideoStream*    video1  = videoStream();
+	TTVideoStream*    video2  = avItem->videoStream();
 
-		// Every range already in this item is compared against the new one.
-		// cutIn/cutOut are positions in video2 and say nothing about video1,
-		// so this side reads its headers at its own entries' positions.
-		for (int i = 0; i < cutCount(); i++) {
-			const TTCutItem&  own      = cutListItemAt(i);
-			TTSequenceHeader* seqIn1   = video1->getSequenceHeader(own.cutInIndex());
-			TTSequenceHeader* seqOut1  = video1->getSequenceHeader(own.cutOutIndex());
-			if (seqIn1 == 0 || seqOut1 == 0) continue;
+	TTSequenceHeader* seqIn2  = video2->getSequenceHeader(cutIn);
+	TTSequenceHeader* seqOut2 = video2->getSequenceHeader(cutOut);
+	if (seqIn2 == 0 || seqOut2 == 0) return false;
 
-			if (seqIn1->aspectRatio() != seqIn2->aspectRatio() || seqOut1->aspectRatio() != seqOut2->aspectRatio())
-				throw TTInvalidOperationException(tr("Video files to cut must have the same aspect ratio!"));
+	// Every range already in this item is compared against the new one.
+	// cutIn/cutOut are positions in video2 and say nothing about video1,
+	// so this side reads its headers at its own entries' positions.
+	for (int i = 0; i < cutCount(); i++) {
+		const TTCutItem&  own      = cutListItemAt(i);
+		TTSequenceHeader* seqIn1   = video1->getSequenceHeader(own.cutInIndex());
+		TTSequenceHeader* seqOut1  = video1->getSequenceHeader(own.cutOutIndex());
+		if (seqIn1 == 0 || seqOut1 == 0) continue;
 
-			if (seqIn1->horizontalSize() != seqIn2->horizontalSize() || seqOut1->horizontalSize() != seqOut2->horizontalSize())
-				throw TTInvalidOperationException(tr("Video files to cut must have the same horizontal size!"));
+		if (seqIn1->aspectRatio() != seqIn2->aspectRatio() || seqOut1->aspectRatio() != seqOut2->aspectRatio())
+			throw TTInvalidOperationException(tr("Video files to cut must have the same aspect ratio!"));
 
-			if (seqIn1->verticalSize() != seqIn2->verticalSize() || seqOut1->verticalSize() != seqOut2->verticalSize())
-				throw TTInvalidOperationException(tr("Video files to cut must have the same vertical size!"));
-		}
+		if (seqIn1->horizontalSize() != seqIn2->horizontalSize() || seqOut1->horizontalSize() != seqOut2->horizontalSize())
+			throw TTInvalidOperationException(tr("Video files to cut must have the same horizontal size!"));
+
+		if (seqIn1->verticalSize() != seqIn2->verticalSize() || seqOut1->verticalSize() != seqOut2->verticalSize())
+			throw TTInvalidOperationException(tr("Video files to cut must have the same vertical size!"));
 	}
-	// H.264/H.265 streams: basic checks are done via frameRate above
-	// More detailed checks (resolution, profile) could be added via SPS comparison if needed
+	return true;
+}
 
+void TTAVItem::checkAudioCompat(const TTAVItem* avItem) const
+{
 	for (int i = 0; i < audioCount(); i++) {
 		const TTAudioItem& audio1 = audioListItemAt(i);
 		const TTAudioItem& audio2 = avItem->audioListItemAt(i);
