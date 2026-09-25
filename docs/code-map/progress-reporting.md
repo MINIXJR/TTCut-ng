@@ -1,5 +1,5 @@
 ---
-base_commit: b56927cdf997ecd3292b8e727bc0ac8b001d9ecb
+base_commit: 5943fe7a5bddcd8029eaecee08b0970b22a365e0
 last_verified: 2026-09-24
 sources:
   - common/istatusreporter.h

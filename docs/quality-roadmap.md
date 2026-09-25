@@ -68,6 +68,17 @@ Kandidaten eines Teilsystems mit dessen Verträgen in der Hand beurteilt.
 - Kein breiter Audit-Lauf ohne Karte des Bereichs.
 - Jeder Schritt startet mit seinem eigenen Brainstorming (Design-Abnahme
   vor Code).
+- Offen darf nicht offen bleiben (seit Lauf 8, 2026-09-25): Jeder Audit-Lauf
+  entscheidet zuerst über alle offenen Punkte (`consolidate` ohne Umbau) in
+  seinem Umfang, bevor neue Kandidaten drankommen. Jeder Punkt kommt in genau
+  eine Schublade: in diesem Lauf umbauen, eigenes Projekt (TODO-Eintrag,
+  im Urteils-Speicher `documented` mit Verweis) oder `deliberate` mit
+  Begründung.
+- Rückstands-Schritt: Nach jeder zweiten Runde aus Karte und Audit folgt ein
+  Schritt, der nur offene Punkte abarbeitet, sortiert nach Reichweite und
+  Risiko, ohne neuen Scan.
+- Jeder Laufbericht nennt die Zahl der offenen Punkte und ihren Trend
+  gegenüber dem Vorlauf. Ziel: Die Zahl wächst nicht.
 
 ## Stand
 
@@ -88,3 +99,4 @@ Kandidaten eines Teilsystems mit dessen Verträgen in der Hand beurteilt.
 | 10 Karte Ausgabe (Mux) | fertig 2026-09-24 | `docs/code-map/output-mux.md`: `TTMkvMergeProvider` mit seinen sechs Aufrufern als Konfigurationsmatrix, das Innere von `mux()`, die zwei Versatz-Stufen, `muxAudioOnly` und der mplex-Zweig. Diagrammrichtung gemessen (TD 2,39 vs LR 2,66), Symbole gegrept; Zeitbasis des Matroska-Muxers und EOS-Paketierung der libav-Parser im ffmpeg-8.1.2-Quelltext nachgelesen. 17 Kantenzeilen für 25 Diagrammkanten, 5 Redundanz-Einträge (4 consolidate), neun Lese-Hypothesen H1–H9 für Audit-Lauf 7, darunter Millisekunden-Rundung bei 29,97/23,976 fps (H1) und die nie an mplex übergebene MPG-Zielwahl (H2). Nächster Schritt: Audit-Lauf 7 auf den Quellen dieser Karte |
 | 11 Audit-Lauf 7 nach Karte | fertig 2026-09-24 | 130 nie beurteilte Kandidaten auf den 21 Quelldateien von `output-mux.md` (89 consolidate, 35 deliberate, 6 documented), zwei Sonnet-Klassifizierer; die neun Lese-Hypothesen H1–H9 gemessen, sieben bestätigt, zwei aus dem Code eindeutig. Sechs verhaltensneutrale Batches (B1–B6) und acht Fixes (A1–A8), jeder Fix mit Gate: `run-gates.sh` 101 → 109 PASS, 0 FAIL. Schnitt-Identität nach jedem Batch gleich, Harness-Suite ref7 == a8. 70 consolidate umgesetzt, 19 offen (8 davon Batch B7, per User zurückgestellt). Details `docs/completed-work.md`. Nächster Schritt: neue Karte (Regel „Karte, Audit, Karte“) |
 | 12 Karte Spurverwaltung | fertig 2026-09-25 | `docs/code-map/track-management.md`: Ton- und Untertitelspuren von der Aufnahme in die Liste bis zu den Lesern — drei Eingänge, geparkte Werte je `(Item, Order)`, Sortierung nur im ersten Ladefenster, zwei TreeViews, Reparatur-Umnummerierung, Position 0 als Leitspur. 25 Kantenzeilen, 7 Pitfalls, 5 Redundanz-Einträge (3 consolidate, 1 bewusst getrennt, 1 an den Dead-Code-Audit). Diagrammrichtung gemessen (TD 2,17 vs LR 3,14), Symbole gegrept. Sieben Lese-Hypothesen H1–H7 für Audit-Lauf 8 |
+| 13 Audit-Lauf 8 nach Karte | fertig 2026-09-25 | 62 nie beurteilte Kandidaten auf den 28 Quelldateien von `track-management.md` (5 consolidate umgebaut, 21 documented → TODO P6, 36 deliberate), zwei Sonnet-Klassifizierer; die sieben Lese-Hypothesen H1–H7 zur Laufzeit gemessen, sechs bestätigt, eine strukturell, alle behoben (drei neue Gates `track_persist`, `track_language`, `track_gui`; run-gates 113 → 116 PASS). Erster Lauf unter der Regel „offen darf nicht offen bleiben“: die 42 offenen Punkte im Umfang einsortiert (3 umgebaut, 24 → Projekte P1–P5, 15 deliberate). Offen im Umfang 42 → 0, projektweit 87 → 45; Nachscan konvergiert (0 neu). Alle 17 Karten auf `5943fe7a` gestempelt |

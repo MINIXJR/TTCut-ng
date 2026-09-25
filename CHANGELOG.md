@@ -5,6 +5,26 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Subtitle languages, delays and order survive saving and reopening a
+  project.** Every subtitle found next to the video or added by hand was saved
+  with the same position, so on reopening one subtitle got the language and
+  delay of another, the others lost theirs, and a changed order was lost.
+  Projects saved before the fix are read in file order. Gate: `track_persist`.
+- **Audio languages from the `.info` file are used.** When a recording was
+  opened directly, the languages that `ttcut-demux` writes into the `.info`
+  file were ignored and the language always came from the file name. Gate:
+  `track_persist`.
+- **Adding an audio file by hand checks the length of that file.** The
+  "Length Mismatch" warning compared the video with the track that was loaded
+  before, so a wrong file went unnoticed and a correct one could raise a
+  warning about another track. Gate: `track_gui`.
+- **The subtitle shown on the still frame follows the first subtitle track.**
+  After moving or deleting subtitle tracks the still frame kept showing the
+  old track, even one that was no longer in the list. Gate: `track_gui`.
+- **Track languages from file names match the language list.** A file named
+  `*_ger.ac3` now gets `deu`, so it matches the language preference; a code
+  the list does not know (for example `mul`) is shown as it is instead of
+  "und". Gate: `track_language`.
 - **A project whose video file is missing is reported and leaves nothing
   behind.** The load failed silently: the window showed the project's cuts,
   counted as modified and asked to save on closing. It now says "Project Not

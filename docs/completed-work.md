@@ -16,6 +16,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ## Untersuchungen und Fixes
 
+### Spurverwaltung (Ton- und Untertitelspuren)
+
+- **Audit-Lauf 8: Lese-Hypothesen H1–H7 der Karte `track-management.md`**
+  → **DONE (2026-09-25, Zweig `cleanup/code-audit-run8`)**. Alle zur Laufzeit
+  gemessen, bevor gebaut wurde (Protokoll `CLAUDE_TMP/TTCut-ng/code-audit-run8/messungen.md`).
+  - **H1** `.info`-Sprachen beim normalen Öffnen nie angewandt: geparkt unter
+    `(Item, Fund-Index)`, die Spuren kamen mit `order −1`. Gemessen: `.info`
+    sagt `ita`, Spur hatte `und`. Jetzt nach Dateipfad geparkt, vor der
+    Sortierung angewandt; `und` aus der `.info` zählt nicht. Gate `track_persist`.
+  - **H2** Untertitel mit `<Order>-1` gespeichert (gefundene und von Hand
+    hinzugefügte behielten −1, der Schreiber nahm `item.order()`). Gemessen:
+    zwei SRTs, nach dem Neuladen `ita/222` → `eng/0`, Reihenfolge verloren.
+    Jetzt sichtbare Position als `<Order>`, alte Dateien per Abschnittsnummer,
+    Projekt-Reihenfolge beim Laden wiederhergestellt. Gate `track_persist`
+    (H2, H2b für alte Dateien).
+  - **H3** `audioLanguagePreferenceChanged` ohne Empfänger (Kommentar
+    versprach Neusortierung, die seit dem User-Entscheid 2026-08-18 nicht
+    gewollt ist) → Signal entfernt.
+  - **H4** Längenwarnung beim manuellen Öffnen prüfte die vorher letzte Spur.
+    Messfalle: Kleine Dateien kamen über `processEvents()` in
+    `TTProgressBar::showBar` bzw. in der modalen Box scheinbar rechtzeitig an;
+    erst eine 210-MB-Datei zeigte `audioCount` unverändert, beide Läufe
+    meldeten die alte Spur (Audio 2:00,128). Jetzt Prüfung beim Eintreffen
+    genau dieser Datei. Gate `track_gui` (4 FAIL auf dem alten Hauptfenster).
+  - **H5** `_ger` im Dateinamen: Modell `ger`, Combo `und`. Jetzt
+    `TTCut::canonicalLangCode` für Dateinamen und `.info`, unbekannte Codes
+    als eigener Combo-Eintrag. Gate `track_language`.
+  - **H6** Overlay blieb nach Tauschen/Entfernen auf der alten (auch einer
+    entfernten) Spur. Jetzt `showSubtitleTrackZero()` bei jeder Listen-
+    änderung und nach dem Neuladen. Gate `track_gui`.
+  - **H7** geparkte Werte überlebten ihr Item (roher Zeiger als Schlüssel).
+    Jetzt beim Entfernen/Leeren/abgebrochenen Laden verworfen — bewusst nicht
+    am Pool-Ende, weil der Pool das Ende einer Aufgabe vor dem Fertig-Handler
+    von `TTAVData` erfährt. Kein beobachtbares Gate.
+  - Nicht gebaut, als Projekte in `TODO.md`: Freigabe entfernter Streams (P7),
+    gemeinsame Vorlage der Spur-Listen (P6).
+
 ### Smart Cut (H.264 / H.265)
 
 - **Bit-Stream-API in `extern/` vereinheitlichen** → **DONE (2026-09-23,
