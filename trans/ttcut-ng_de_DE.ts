@@ -2236,157 +2236,172 @@ Ausgabedatei:
 <context>
     <name>TTCutPreview</name>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="298"/>
-        <location filename="../gui/ttcutpreview.cpp" line="323"/>
-        <location filename="../gui/ttcutpreview.cpp" line="348"/>
-        <location filename="../gui/ttcutpreview.cpp" line="390"/>
-        <location filename="../gui/ttcutpreview.cpp" line="889"/>
+        <location filename="../gui/ttcutpreview.cpp" line="324"/>
+        <location filename="../gui/ttcutpreview.cpp" line="349"/>
+        <location filename="../gui/ttcutpreview.cpp" line="374"/>
+        <location filename="../gui/ttcutpreview.cpp" line="416"/>
+        <location filename="../gui/ttcutpreview.cpp" line="930"/>
         <source>Play</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="295"/>
-        <location filename="../gui/ttcutpreview.cpp" line="339"/>
+        <location filename="../gui/ttcutpreview.cpp" line="321"/>
+        <location filename="../gui/ttcutpreview.cpp" line="365"/>
         <source>Stop</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="460"/>
+        <location filename="../gui/ttcutpreview.cpp" line="236"/>
+        <source>Pre-roll %1 s</source>
+        <translation>Vorlauf %1 s</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="240"/>
+        <source>Post-roll %1 s</source>
+        <translation>Nachlauf %1 s</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="245"/>
+        <source>Preview length %1 s (%2 s per side); shorter when the cut is shorter</source>
+        <translation>Vorschau-Länge %1 s (%2 s je Seite); kürzer, wenn der Schnitt kürzer ist</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutpreview.cpp" line="486"/>
         <source>Move cut-out one frame earlier</source>
         <translation>Cut-Out um einen Frame nach vorn verschieben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="464"/>
+        <location filename="../gui/ttcutpreview.cpp" line="490"/>
         <source>Move cut-in one frame later</source>
         <translation>Cut-In um einen Frame nach hinten verschieben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="467"/>
+        <location filename="../gui/ttcutpreview.cpp" line="493"/>
         <source>1 Frame</source>
         <translation>1 Frame</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="493"/>
+        <location filename="../gui/ttcutpreview.cpp" line="519"/>
         <source>⚠ Audio burst at start of cut 1 (%1 dB)</source>
         <translation>⚠ Audio-Burst am Anfang von Schnitt 1 (%1 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="512"/>
+        <location filename="../gui/ttcutpreview.cpp" line="538"/>
         <source>⚠ Audio burst at end of cut %1 (%2 dB)</source>
         <translation>⚠ Audio-Burst am Ende von Schnitt %1 (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="527"/>
+        <location filename="../gui/ttcutpreview.cpp" line="553"/>
         <source>⚠ Audio burst at start of cut %1 (%2 dB)</source>
         <translation>⚠ Audio-Burst am Anfang von Schnitt %1 (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="568"/>
+        <location filename="../gui/ttcutpreview.cpp" line="594"/>
         <source>⚠ Cut %1 ends in %2 - the cut is %3 up to frame %4 (-%5)</source>
         <translation>⚠ Schnitt %1 endet in %2 – der Schnitt ist bis Frame %4 %3 (-%5)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="573"/>
+        <location filename="../gui/ttcutpreview.cpp" line="599"/>
         <source>Move the cut-out to frame %1</source>
         <translation>Cut-Out auf Frame %1 setzen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="575"/>
+        <location filename="../gui/ttcutpreview.cpp" line="601"/>
         <source>⚠ Cut %1 starts in %2 - the cut is %3 from frame %4 (+%5)</source>
         <translation>⚠ Schnitt %1 beginnt in %2 – der Schnitt ist ab Frame %4 %3 (+%5)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="580"/>
+        <location filename="../gui/ttcutpreview.cpp" line="606"/>
         <source>Move the cut-in to frame %1</source>
         <translation>Cut-In auf Frame %1 setzen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="582"/>
+        <location filename="../gui/ttcutpreview.cpp" line="608"/>
         <source>Frame %1</source>
         <translation>Frame %1</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="737"/>
+        <location filename="../gui/ttcutpreview.cpp" line="778"/>
         <source>The cut is only one frame long - its %1 cannot be shifted.</source>
         <translation>Der Schnitt ist nur einen Frame lang – %1 lässt sich nicht verschieben.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="738"/>
+        <location filename="../gui/ttcutpreview.cpp" line="779"/>
         <source>cut-out</source>
         <translation>der Cut-Out</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="738"/>
+        <location filename="../gui/ttcutpreview.cpp" line="779"/>
         <source>cut-in</source>
         <translation>der Cut-In</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="748"/>
+        <location filename="../gui/ttcutpreview.cpp" line="789"/>
         <source>CutOut updated</source>
         <translation>CutOut neu</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="748"/>
+        <location filename="../gui/ttcutpreview.cpp" line="789"/>
         <source>CutIn updated</source>
         <translation>CutIn neu</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="749"/>
+        <location filename="../gui/ttcutpreview.cpp" line="790"/>
         <source>✓ %1 (frame %2 → %3)</source>
         <translation>✓ %1 (Frame %2 → %3)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="787"/>
+        <location filename="../gui/ttcutpreview.cpp" line="828"/>
         <source>✓ %1 moved (frame %2 → %3)</source>
         <translation>✓ %1 verschoben (Frame %2 → %3)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="788"/>
+        <location filename="../gui/ttcutpreview.cpp" line="829"/>
         <source>Cut-out</source>
         <translation>Cut-Out</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="788"/>
+        <location filename="../gui/ttcutpreview.cpp" line="829"/>
         <source>Cut-in</source>
         <translation>Cut-In</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="825"/>
+        <location filename="../gui/ttcutpreview.cpp" line="866"/>
         <source>Regenerating preview...</source>
         <translation>Vorschau wird neu generiert...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="877"/>
+        <location filename="../gui/ttcutpreview.cpp" line="918"/>
         <source>Preview</source>
         <translation>Vorschau</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="878"/>
+        <location filename="../gui/ttcutpreview.cpp" line="919"/>
         <source>The preview clip could not be rebuilt. The log file has the reason.</source>
         <translation>Der Vorschau-Clip konnte nicht neu erstellt werden. Der Grund steht in der Logdatei.</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="757"/>
+        <location filename="../gui/ttcutpreview.cpp" line="798"/>
         <source>✓ Burst resolved</source>
         <translation>✓ Burst behoben</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="859"/>
+        <location filename="../gui/ttcutpreview.cpp" line="900"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>MPEG-2 Video schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="861"/>
+        <location filename="../gui/ttcutpreview.cpp" line="902"/>
         <source>Cutting audio...</source>
         <translation>Audio schneiden...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="862"/>
+        <location filename="../gui/ttcutpreview.cpp" line="903"/>
         <source>Creating MKV...</source>
         <translation>MKV erstellen...</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutpreview.cpp" line="860"/>
+        <location filename="../gui/ttcutpreview.cpp" line="901"/>
         <source>Video Smart Cut...</source>
         <translation>Video Smart Cut...</translation>
     </message>

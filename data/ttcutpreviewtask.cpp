@@ -668,10 +668,12 @@ TTCutList* TTCutPreviewTask::createPreviewCutList(TTCutList* cutList)
 		TTCutItem      cutItem      = cutList->at(i);
 		TTVideoStream* pVideoStream = cutItem.avDataItem()->videoStream();
 
-		const QPair<int, int> in  = ttPreviewCutInWindow(pVideoStream, cutItem.cutInIndex(), previewFrames);
+		const QPair<int, int> in  = ttPreviewCutInWindow(pVideoStream, cutItem.cutInIndex(),
+		                                                 cutItem.cutOutIndex(), previewFrames);
 		previewCutList->append(cutItem.avDataItem(), in.first, in.second);
 
-		const QPair<int, int> out = ttPreviewCutOutWindow(pVideoStream, cutItem.cutOutIndex(), previewFrames);
+		const QPair<int, int> out = ttPreviewCutOutWindow(pVideoStream, cutItem.cutInIndex(),
+		                                                  cutItem.cutOutIndex(), previewFrames);
 		previewCutList->append(cutItem.avDataItem(), out.first, out.second);
 	}
 	return previewCutList;

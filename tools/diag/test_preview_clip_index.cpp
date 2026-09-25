@@ -107,6 +107,11 @@ int main(int argc, char** argv)
   auto* jump   = dlg.findChild<QPushButton*>("pbAspectJump");
   if (!combo || !aspect || !jump) { check(false, "dialog widgets found"); return 1; }
   check(combo->count() == 2, QString("two combo entries (got %1)").arg(combo->count()));
+  // The combo names the cuts a clip joins (cut-in of the first to cut-out of
+  // the second), not the short preview windows around the seam.
+  auto hms = [&](int f) { return item->videoStream()->frameTime(f).toString("hh:mm:ss"); };
+  const QString want12 = QString("Cut 1-2: %1 - %2").arg(hms(cuts[0][0]), hms(cuts[1][1]));
+  check(combo->itemText(0) == want12, QString("combo 0 '%1' (want '%2')").arg(combo->itemText(0), want12));
 
   // --- H1 --------------------------------------------------------------------
   combo->setCurrentIndex(1);

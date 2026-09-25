@@ -104,26 +104,26 @@ long ttPreviewFrames(TTVideoStream* vStream)
   return ttTimeToFrames(previewTime, vStream->frameRate()) / 2;
 }
 
-QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, long frames)
+QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, int cutOut, long frames)
 {
-  int endIndex = cutIn + frames;
-  if (endIndex >= vStream->frameCount())
-    endIndex = vStream->frameCount() - 1;
+  const long limit = qMin<long>(cutOut, vStream->frameCount() - 1);
+  int endIndex = int(qMin<long>(cutIn + frames, limit));
 
-  // the window should end at an I-frame or P-frame
-  while (vStream->frameType(endIndex) == 3 && endIndex < vStream->frameCount() - 1)
+  // the window should end at an I-frame or P-frame - but not behind the cut
+  while (vStream->frameType(endIndex) == 3 && endIndex < limit)
     endIndex++;
 
   return qMakePair(cutIn, endIndex);
 }
 
-QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutOut, long frames)
+QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutIn, int cutOut, long frames)
 {
-  int startIndex = (cutOut - frames >= 0) ? cutOut - frames : 0;
+  int startIndex = int(qMax<long>(cutOut - frames, qMax(cutIn, 0)));
 
-  // Prefer IDR frame for stutter-free preview (non-IDR I-frames cause decoder stall)
+  // Prefer IDR frame for stutter-free preview (non-IDR I-frames cause decoder
+  // stall), unless it lies before the cut: the preview shows the cut only.
   const int idrPos = vStream->findIDRBefore(startIndex);
-  if (idrPos >= 0)
+  if (idrPos >= cutIn)
     startIndex = idrPos;
 
   return qMakePair(startIndex, cutOut);

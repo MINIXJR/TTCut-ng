@@ -105,6 +105,15 @@ private:
     //! skipFirst was set, so every clip-based lookup - checks, rebuild, file
     //! name - goes through this one mapping.
     int  clipIndexOf(int comboIndex) const { return comboIndex + mClipOffset; }
+    //! Combo text of a clip: the times of the cuts it joins, from the job
+    //! list - cut-in of the first to cut-out of the second.
+    QString clipLabel(int clipIndex) const;
+    //! Tooltip of a clip's combo entry: pre-roll (before the cut-out) and
+    //! post-roll (after the cut-in) the clip really plays, and the setting.
+    QString prePostRollToolTip(int clipIndex) const;
+    //! Set the entry tooltips of all combo entries and the combo's own
+    //! tooltip (the current entry's).
+    void updatePrePostRollToolTips();
     void checkBurstForCurrentCut(int clipIndex);
     void configureBurstShiftButton(bool isCutOut);
     void checkAspectForCurrentCut(int clipIndex);
