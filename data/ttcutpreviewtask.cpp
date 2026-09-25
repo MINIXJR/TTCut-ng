@@ -126,7 +126,7 @@ void TTCutPreviewTask::operation()
   mpPreviewCutList = createPreviewCutList(mpCutList);
 
 	bool hasAudio   = false;
-	int  numPreview = mpPreviewCutList->count() / 2 + 1;
+	int  numPreview = ttPreviewClipCount(mpPreviewCutList);
 
 	// Report the start HERE, not after the Smart Cut engine has been built.
 	// The window is disabled the moment the pool emits its Init, but the
@@ -348,8 +348,13 @@ void TTCutPreviewTask::operation()
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "MPEG-2 preview mux (MKV):" << outputFile;
         } else {
-          // No audio — just rename video file to output
-          QFile::rename(videoFile, outputFile);
+          // No audio — just rename video file to output. rename() does not
+          // overwrite; ttRemovePreviewFiles() cleared the directory at the
+          // start, but a failed rename must not pass as a created clip.
+          QFile::remove(outputFile);
+          if (!QFile::rename(videoFile, outputFile))
+            throw TTIOException(__FILE__, __LINE__,
+                tr("Preview clip %1 could not be written: %2").arg(i + 1).arg(outputFile));
           if (TTSettings::instance()->logCutPipeline())
               qDebug() << "MPEG-2 preview (no audio):" << outputFile;
         }
@@ -400,23 +405,6 @@ void TTCutPreviewTask::operation()
 
   if (TTSettings::instance()->logCutPipeline())
       qDebug() << "Preview: Total time for all clips:" << totalTimer.elapsed() << "ms";
-
-  // Report the cumulative A/V drift after each segment as produced by the
-  // audio cut planner (audio-frame-aligned with feed-forward compensation).
-  // This matches what TTAudioCutter::cut actually outputs — no separate model.
-  QList<float> audioDrifts;
-  if (mpCutList->count() > 0) {
-    TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
-    if (driftAvItem && driftAvItem->audioCount() > 0 && driftAvItem->videoStream()) {
-      TTAudioStream* firstAudio = driftAvItem->audioStreamAt(0);
-      double fr = driftAvItem->videoStream()->frameRate();
-      int    delayMs = driftAvItem->audioListItemAt(0).getDelayMs();
-
-      auto videoKeepList = mpAVData->buildVideoKeepList(mpCutList, fr);
-      audioDrifts = mpAVData->planAudioCut(firstAudio, videoKeepList, delayMs).drifts;
-    }
-  }
-  emit audioDriftCalculated(audioDrifts);
 
   onStatusReport(this, StatusReportArgs::Finished, tr("preview cuts done"), 0);
   emit finished(mpPreviewCutList);
@@ -626,8 +614,8 @@ void TTCutPreviewTask::createH264PreviewClip(TTCutList* cutList, const QString& 
   //
   // Deliberately NOT wired to TTMkvMergeProvider::requestAbort() here, unlike
   // TTH26xCutTask's final-cut mux. A preview clip is at most
-  // 2 * cutPreviewSeconds() (default 25s each side) of already-cut ES plus one
-  // short audio track - muxing that is on the order of tens of milliseconds,
+  // cutPreviewSeconds() (default 25 s, half of it on each side of the edge -
+  // see ttPreviewFrames()) of already-cut ES plus one short audio track - muxing that is on the order of tens of milliseconds,
   // not the many seconds a full-recording final-cut mux can take. Adding a
   // third mutex-guarded cross-thread pointer (next to mpActiveSmartCut) for a
   // phase that finishes before a cancel could realistically land inside it
@@ -674,41 +662,17 @@ TTCutList* TTCutPreviewTask::createPreviewCutList(TTCutList* cutList)
 {
 	TTVideoStream* vStream        = cutList->at(0).avDataItem()->videoStream();
 	TTCutList*     previewCutList = new TTCutList();
-	QTime          previewTime;
-	long           previewFrames;
-
-	previewTime.setHMS(0, 0, 0);
-	previewTime   = previewTime.addSecs(TTSettings::instance()->cutPreviewSeconds());
-	previewFrames = ttTimeToFrames(previewTime, vStream->frameRate()) / 2;
+	const long     previewFrames  = ttPreviewFrames(vStream);
 
 	for (int i = 0; i < cutList->count(); i++) {
 		TTCutItem      cutItem      = cutList->at(i);
 		TTVideoStream* pVideoStream = cutItem.avDataItem()->videoStream();
-		int            startIndex   = cutItem.cutInIndex();
-		int            endIndex     = startIndex + previewFrames;
 
-		if (endIndex >= pVideoStream->frameCount())
-			endIndex = pVideoStream->frameCount() - 1;
+		const QPair<int, int> in  = ttPreviewCutInWindow(pVideoStream, cutItem.cutInIndex(), previewFrames);
+		previewCutList->append(cutItem.avDataItem(), in.first, in.second);
 
-		// cut should end at an I-frame or P-frame
-		int frameType = pVideoStream->frameType(endIndex);
-
-		while (frameType == 3 && endIndex < pVideoStream->frameCount() - 1) {
-			endIndex++;
-			frameType = pVideoStream->frameType(endIndex);
-		}
-
-		previewCutList->append(cutItem.avDataItem(), startIndex, endIndex);
-
-		endIndex   = cutItem.cutOutIndex();
-		startIndex = (endIndex - previewFrames >= 0) ? endIndex - previewFrames	: 0;
-
-		// Prefer IDR frame for stutter-free preview (non-IDR I-frames cause decoder stall)
-		int idrPos = pVideoStream->findIDRBefore(startIndex);
-		if (idrPos >= 0) {
-			startIndex = idrPos;
-		}
-		previewCutList->append(cutItem.avDataItem(), startIndex, endIndex);
+		const QPair<int, int> out = ttPreviewCutOutWindow(pVideoStream, cutItem.cutOutIndex(), previewFrames);
+		previewCutList->append(cutItem.avDataItem(), out.first, out.second);
 	}
 	return previewCutList;
 }

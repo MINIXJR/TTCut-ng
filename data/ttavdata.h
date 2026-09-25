@@ -163,7 +163,6 @@ class TTAVData : public QObject
     void onOpenSubtitleAborted(TTAVItem* avItem, const QString& filePath, const QString& reason);
 
     void onCutPreviewFinished(TTCutList* cutList);
-    void onCutPreviewAudioDrift(const QList<float>& driftsMs);
     void onCutPreviewAborted();
 
     void onReadProjectFileFinished();

@@ -88,9 +88,11 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
 
   // Burst warning widgets — placed in their own grid row further below
   lblBurstWarning = new QLabel(this);
+  lblBurstWarning->setObjectName("lblBurstWarning");
   lblBurstWarning->hide();
 
   pbBurstShift = new QPushButton(this);
+  pbBurstShift->setObjectName("pbBurstShift");
   // Keep Enter bound to Start: this button appears only on a burst warning and
   // must not become the dialog default when it takes focus.
   pbBurstShift->setAutoDefault(false);
@@ -110,8 +112,10 @@ TTCutPreview::TTCutPreview(QWidget* parent, int prevW, int prevH)
   // shown, so the message takes the burst row's place instead of sitting
   // below an empty line.
   lblAspectWarning = new QLabel(this);
+  lblAspectWarning->setObjectName("lblAspectWarning");
   lblAspectWarning->hide();
   pbAspectJump = new QPushButton(this);
+  pbAspectJump->setObjectName("pbAspectJump");
   pbAspectJump->setAutoDefault(false);   // Enter stays bound to Start
   pbAspectJump->hide();
   connect(pbAspectJump, &QPushButton::clicked, this, &TTCutPreview::onAspectJump);
@@ -175,11 +179,9 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
   mpAVData = avData;
 
   int       iPos;
-  QString   preview_video_name;
-  QFileInfo preview_video_info;
   QString   selectionString;
 
-  int numPreview = previewCutList->count()/2+1;
+  int numPreview = ttPreviewClipCount(previewCutList);
 
   // skipFirst/skipLast: skip standalone start/end clips when they are
   // neighbor-only context (not the selected cut). mClipOffset maps
@@ -202,7 +204,7 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
 
     // cut i-i
     if (numPreview > 1 && i > 0 && i < numPreview-1) {
-      iPos = (i-1)*2+1;
+      iPos = ttPreviewCutOutEntry(i);
 
       TTCutItem item1 = previewCutList->at(iPos);
       TTCutItem item2 = previewCutList->at(iPos+1);
@@ -215,7 +217,7 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
 
     //last cut out (skip when last cut is neighbor-only context)
     if (i == numPreview-1 && !skipLast) {
-      iPos = (i-1)*2+1;
+      iPos = ttPreviewCutOutEntry(i);
 
       TTCutItem item = previewCutList->at(iPos);
       selectionString = QString("End: %1").arg(item.cutOutTime().toString("hh:mm:ss"));
@@ -223,18 +225,6 @@ void TTCutPreview::initPreview(TTCutList* previewCutList, TTCutList* originalCut
     }
   }
 
-  // set the current cut preview to the first cut clip
-  // Check for H.264/H.265 (.mkv) or MPEG-2 (.mpg) preview files
-  // Try .mkv first (mkvmerge output for H.264/H.265)
-  preview_video_name = "preview_001.mkv";
-  preview_video_info.setFile(QDir(TTSettings::instance()->tempDirPath()), preview_video_name);
-  if (!preview_video_info.exists()) {
-    // Fallback to .mpg for MPEG-2
-    preview_video_name = "preview_001.mpg";
-    preview_video_info.setFile(QDir(TTSettings::instance()->tempDirPath()), preview_video_name);
-  }
-
-  current_video_file = preview_video_info.absoluteFilePath();
   // No load here — showEvent() does it once the widget can render.
 }
 
@@ -282,29 +272,16 @@ void TTCutPreview::showEvent(QShowEvent* event)
  */
 void TTCutPreview::onCutSelectionChanged( int iCut )
 {
-  QString   preview_video_name;
-  QString   preview_subtitle_name;
-  QFileInfo preview_video_info;
-  QFileInfo preview_subtitle_info;
-
-  // Map combobox index to file index (offset for transitionsOnly mode)
-  int fileIndex = iCut + 1 + mClipOffset;
-
-  // Try .mkv first (H.264/H.265 via mkvmerge), then .mpg (MPEG-2 via mplex)
-  preview_video_name = QString("preview_%1.mkv").arg(fileIndex, 3, 10, QChar('0'));
-  preview_video_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_video_name );
-  if (!preview_video_info.exists()) {
-    preview_video_name = QString("preview_%1.mpg").arg(fileIndex, 3, 10, QChar('0'));
-    preview_video_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_video_name );
-  }
-  current_video_file = preview_video_info.absoluteFilePath();
+  // Combo entry -> clip -> file: clip i lives in preview_<i+1>.* for both
+  // codecs (TTCutPreviewTask writes .mkv for MPEG-2 too).
+  const int clipIndex = clipIndexOf(iCut);
+  current_video_file = TTCutPreviewTask::createPreviewFileName(clipIndex + 1, "mkv");
 
   // Check for subtitle file. size() > 0: a clip range without subtitle
   // entries used to leave a 0-byte .srt behind (cutSubtitleTracks removes
   // those now, but stale files may still exist), and mpv reports an
   // error-level "Can not open external file" on it.
-  preview_subtitle_name = QString("preview_%1.srt").arg(fileIndex, 3, 10, QChar('0'));
-  preview_subtitle_info.setFile( QDir(TTSettings::instance()->tempDirPath()), preview_subtitle_name );
+  const QFileInfo preview_subtitle_info(TTCutPreviewTask::createPreviewFileName(clipIndex + 1, "srt"));
   if (preview_subtitle_info.exists() && preview_subtitle_info.size() > 0) {
     mPlayer->setSubtitleFile(preview_subtitle_info.absoluteFilePath());
   } else {
@@ -330,8 +307,8 @@ void TTCutPreview::onCutSelectionChanged( int iCut )
   pbPrevCut->setEnabled(cbCutPreview->count() > 0);
   pbNextCut->setEnabled(iCut < cbCutPreview->count() - 1);
 
-  checkBurstForCurrentCut(iCut);
-  checkAspectForCurrentCut(iCut);
+  checkBurstForCurrentCut(clipIndex);
+  checkAspectForCurrentCut(clipIndex);
   updateHintRowSpace();
 }
 
@@ -493,7 +470,7 @@ void TTCutPreview::configureBurstShiftButton(bool isCutOut)
 /* /////////////////////////////////////////////////////////////////////////////
  * Check for audio burst at the currently selected cut transition
  */
-void TTCutPreview::checkBurstForCurrentCut(int iCut)
+void TTCutPreview::checkBurstForCurrentCut(int clipIndex)
 {
   // No colour reset needed: setBurstMessage() sets the colour with every
   // message, so an earlier green "Burst resolved" cannot bleed into the next
@@ -504,12 +481,12 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
 
   if (!mpAVData || !mpCutList || mpCutList->count() < 2) return;
 
-  int numPreview = mpCutList->count() / 2 + 1;
+  int numPreview = ttPreviewClipCount(mpCutList);
 
-  if (iCut < 0 || iCut >= numPreview) return;
+  if (clipIndex < 0 || clipIndex >= numPreview) return;
 
-  // Start preview (iCut == 0): only CutIn of first cut is relevant.
-  if (iCut == 0) {
+  // Start preview (clipIndex == 0): only CutIn of first cut is relevant.
+  if (clipIndex == 0) {
     TTCutItem cutInItem = mpCutList->at(0);
     TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
     if (bin.present) {
@@ -525,7 +502,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
   }
 
   // iPos = index of the CutOut entry in the cut list for this transition (or End preview)
-  int iPos = (iCut - 1) * 2 + 1;
+  int iPos = ttPreviewCutOutEntry(clipIndex);
   if (iPos >= mpCutList->count()) return;
 
   TTCutItem cutOutItem = mpCutList->at(iPos);
@@ -533,7 +510,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
 
   if (bout.present) {
     setBurstMessage(tr("\xe2\x9a\xa0 Audio burst at end of cut %1 (%2 dB)")
-        .arg(iCut).arg(bout.burstDb, 0, 'f', 1), /*resolved=*/false);
+        .arg(clipIndex).arg(bout.burstDb, 0, 'f', 1), /*resolved=*/false);
     lblBurstWarning->show();
     configureBurstShiftButton(/*isCutOut=*/true);
     pbBurstShift->show();
@@ -548,7 +525,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
     TTAVData::CutBurstInfo bin = mpAVData->detectCutInBurst(cutInItem);
     if (bin.present) {
       setBurstMessage(tr("\xe2\x9a\xa0 Audio burst at start of cut %1 (%2 dB)")
-          .arg(iCut + 1).arg(bin.burstDb, 0, 'f', 1), /*resolved=*/false);
+          .arg(clipIndex + 1).arg(bin.burstDb, 0, 'f', 1), /*resolved=*/false);
       lblBurstWarning->show();
       configureBurstShiftButton(/*isCutOut=*/false);
       pbBurstShift->show();
@@ -567,7 +544,7 @@ void TTCutPreview::checkBurstForCurrentCut(int iCut)
  * pieces around each edge (two entries per cut), whose majority would say
  * nothing about the cut.
  */
-void TTCutPreview::checkAspectForCurrentCut(int iCut)
+void TTCutPreview::checkAspectForCurrentCut(int clipIndex)
 {
   lblAspectWarning->hide();
   pbAspectJump->hide();
@@ -575,8 +552,8 @@ void TTCutPreview::checkAspectForCurrentCut(int iCut)
   mAspectTarget = -1;
 
   if (!mpCutList || !mpOriginalCutList || mpCutList->count() < 2) return;
-  const int numPreview = mpCutList->count() / 2 + 1;
-  if (iCut < 0 || iCut >= numPreview) return;
+  const int numPreview = ttPreviewClipCount(mpCutList);
+  if (clipIndex < 0 || clipIndex >= numPreview) return;
 
   auto report = [this](int segmentIdx, bool isCutOut, int cutNumber) {
     const std::optional<TTCutItem> original = originalCutItem(segmentIdx);
@@ -611,15 +588,15 @@ void TTCutPreview::checkAspectForCurrentCut(int iCut)
     return true;
   };
 
-  if (iCut == 0) {
+  if (clipIndex == 0) {
     report(0, /*isCutOut=*/false, 1);
     return;
   }
-  const int iPos = (iCut - 1) * 2 + 1;
+  const int iPos = ttPreviewCutOutEntry(clipIndex);
   if (iPos >= mpCutList->count()) return;
-  if (report(iPos, /*isCutOut=*/true, iCut)) return;   // cut-out takes priority
+  if (report(iPos, /*isCutOut=*/true, clipIndex)) return;   // cut-out takes priority
   if (iPos + 1 < mpCutList->count())
-    report(iPos + 1, /*isCutOut=*/false, iCut + 1);
+    report(iPos + 1, /*isCutOut=*/false, clipIndex + 1);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -693,13 +670,18 @@ void TTCutPreview::applyEdgeMoveToLists(const TTCutItem& copyItem, int segmentId
   }
   mpOriginalCutList->update(copyItem, updatedCopy);
 
+  // The preview entry is a window around the edge, not the cut itself: rebuild
+  // it around the new edge with the same rule createPreviewCutList() uses.
+  // Moving only the edge kept the window's far end, so a jump beyond the
+  // window turned the entry around (start after end) and the rebuild failed.
   TTCutItem previewItem = mpCutList->at(segmentIdx);
+  TTVideoStream* vStream = previewItem.avDataItem() ? previewItem.avDataItem()->videoStream() : nullptr;
+  if (vStream == nullptr) return;
+  const long frames = ttPreviewFrames(vStream);
+  const QPair<int, int> window = isCutOut ? ttPreviewCutOutWindow(vStream, newIdx, frames)
+                                          : ttPreviewCutInWindow(vStream, newIdx, frames);
   TTCutItem updatedPreview(previewItem);
-  if (isCutOut) {
-    updatedPreview.update(previewItem.cutInIndex(), newIdx);
-  } else {
-    updatedPreview.update(newIdx, previewItem.cutOutIndex());
-  }
+  updatedPreview.update(window.first, window.second);
   mpCutList->update(previewItem, updatedPreview);
 }
 
@@ -728,7 +710,7 @@ void TTCutPreview::moveCutEdge(int segmentIdx, bool isCutOut, int oldIdx, int ne
   updateRealCutItem(copyItem, isCutOut, oldIdx, newIdx);
   applyEdgeMoveToLists(copyItem, segmentIdx, isCutOut, newIdx);
 
-  regeneratePreviewClip(cbCutPreview->currentIndex());
+  regeneratePreviewClip(clipIndexOf(cbCutPreview->currentIndex()));
 
   if (savedStream && savedStreamIndex >= 0)
     savedStream->moveToIndexPos(savedStreamIndex);
@@ -827,12 +809,12 @@ void TTCutPreview::applyOutputChannels()
 /* /////////////////////////////////////////////////////////////////////////////
  * Regenerate a single preview clip after an edge move
  */
-void TTCutPreview::regeneratePreviewClip(int iCut)
+void TTCutPreview::regeneratePreviewClip(int clipIndex)
 {
   if (!mpCutList || mpCutList->count() < 2) return;
 
-  int numPreview = mpCutList->count() / 2 + 1;
-  if (iCut < 0 || iCut >= numPreview) return;
+  const int numPreview = ttPreviewClipCount(mpCutList);
+  if (clipIndex < 0 || clipIndex >= numPreview) return;
 
   // Stop player if running
   if (mPlayer->isPlaying()) {
@@ -849,7 +831,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
 
   // Build temporary cut list for this clip (shared with TTCutPreviewTask)
   TTCutList tmpCutList;
-  ttBuildClipCutList(mpCutList, iCut, &tmpCutList);
+  ttBuildClipCutList(mpCutList, clipIndex, &tmpCutList);
 
   if (tmpCutList.count() == 0) return;
 
@@ -860,10 +842,8 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   TTVideoStream* vStream = src.vStream;
   bool isMpeg2 = (vStream->streamType() == TTAVTypes::mpeg2_demuxed_video);
 
-  // File index must match onCutSelectionChanged()'s lookup, including
-  // mClipOffset (1 in transitionsOnly mode), or the regen overwrites
-  // the wrong file. All preview output is .mkv (set by TTCutPreviewTask).
-  int fileIndex = iCut + 1 + mClipOffset;
+  // Same file onCutSelectionChanged() loads: clip i lives in preview_<i+1>.
+  const int fileIndex = clipIndex + 1;
   QString outputFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "mkv");
 
   // The cut/regen pipeline shares this videoStream with TTCurrentFrame and
@@ -900,7 +880,7 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   }
 
   if (TTSettings::instance()->logUI())
-      qDebug() << "Regenerate: Preview clip" << iCut + 1 << "rebuilt:" << outputFile;
+      qDebug() << "Regenerate: Preview clip" << clipIndex + 1 << "rebuilt:" << outputFile;
 
   // Reload clip in player, preloaded paused — user has to press Play.
   current_video_file = outputFile;
@@ -912,8 +892,8 @@ void TTCutPreview::regeneratePreviewClip(int iCut)
   // Re-check both edge findings for the current cut. The "resolved"
   // confirmation belongs to the caller that knows what it moved: after an
   // aspect jump a "Burst resolved" would claim a burst that never existed.
-  checkBurstForCurrentCut(iCut);
-  checkAspectForCurrentCut(iCut);
+  checkBurstForCurrentCut(clipIndex);
+  checkAspectForCurrentCut(clipIndex);
   updateHintRowSpace();
 }
 

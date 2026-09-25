@@ -15,8 +15,10 @@
 #include "ttpreviewclip.h"
 
 #include "../avstream/ttavstream.h"
+#include "../avstream/ttcommon.h"
 #include "../avstream/ttesinfo.h"
 #include "../avstream/tth26xvideostream.h"
+#include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
 #include "../common/ttthreadtaskpool.h"
@@ -33,6 +35,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QStringList>
+#include <QTime>
 
 /**
  * Everything the clip production reads off cut entry 0
@@ -92,13 +95,56 @@ int ttRemovePreviewFiles()
 }
 
 /**
+ * Preview window length and the two windows
+ */
+long ttPreviewFrames(TTVideoStream* vStream)
+{
+  QTime previewTime(0, 0, 0);
+  previewTime = previewTime.addSecs(TTSettings::instance()->cutPreviewSeconds());
+  return ttTimeToFrames(previewTime, vStream->frameRate()) / 2;
+}
+
+QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, long frames)
+{
+  int endIndex = cutIn + frames;
+  if (endIndex >= vStream->frameCount())
+    endIndex = vStream->frameCount() - 1;
+
+  // the window should end at an I-frame or P-frame
+  while (vStream->frameType(endIndex) == 3 && endIndex < vStream->frameCount() - 1)
+    endIndex++;
+
+  return qMakePair(cutIn, endIndex);
+}
+
+QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutOut, long frames)
+{
+  int startIndex = (cutOut - frames >= 0) ? cutOut - frames : 0;
+
+  // Prefer IDR frame for stutter-free preview (non-IDR I-frames cause decoder stall)
+  const int idrPos = vStream->findIDRBefore(startIndex);
+  if (idrPos >= 0)
+    startIndex = idrPos;
+
+  return qMakePair(startIndex, cutOut);
+}
+
+/**
+ * Number of clips of a preview list
+ */
+int ttPreviewClipCount(TTCutList* previewCutList)
+{
+  return previewCutList == nullptr ? 0 : previewCutList->count() / 2 + 1;
+}
+
+/**
  * Collect the cut entries clip iClip is built from
  */
 void ttBuildClipCutList(TTCutList* previewCutList, int iClip, TTCutList* out)
 {
   if (previewCutList == nullptr || out == nullptr) return;
 
-  const int numPreview = previewCutList->count() / 2 + 1;
+  const int numPreview = ttPreviewClipCount(previewCutList);
   if (iClip < 0 || iClip >= numPreview) return;
 
   // First cut-in
@@ -110,7 +156,7 @@ void ttBuildClipCutList(TTCutList* previewCutList, int iClip, TTCutList* out)
 
   // Every clip past the first is anchored on the cut-out entry of its
   // transition, which is the odd entry of the preceding cut.
-  const int iPos = (iClip - 1) * 2 + 1;
+  const int iPos = ttPreviewCutOutEntry(iClip);
   if (iPos >= previewCutList->count()) return;
 
   // Last cut-out: no following segment to show
@@ -164,6 +210,18 @@ void report(const TTPreviewProgressFn& progress, TTPreviewStage stage)
   if (progress) progress(stage);
 }
 
+// Subtitle track 0 for a rebuilt clip, the way TTCutPreviewTask cuts it for
+// the original clips: the dialog loads preview_<n>.srt by name, and without
+// this the rebuilt clip played the old range's subtitles.
+void rebuildClipSubtitle(TTAVData* avData, const TTPreviewSource& src,
+                         const QList<QPair<double, double>>& videoKeepList, int fileIndex)
+{
+  if (src.avItem->subtitleCount() == 0) return;
+  avData->cutSubtitleTracks(src.avItem, {0}, videoKeepList,
+      [fileIndex](int) { return TTCutPreviewTask::createPreviewFileName(fileIndex, "srt"); },
+      [](int, const QString&, const QString&, bool) {});
+}
+
 } // namespace
 
 /**
@@ -183,7 +241,20 @@ bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fil
   const QString videoFile = TTCutPreviewTask::createPreviewFileName(fileIndex, "m2v");
   TTCutVideoTask cutVideoTask(avData);
   cutVideoTask.init(videoFile, clipCutList);
-  avData->threadTaskPool()->start(&cutVideoTask, true);
+  // A synchronous run re-raises the task's TTException (TTThreadTask::run).
+  // Nothing above this function catches it - it would leave the dialog's
+  // button slot and end the application in std::terminate.
+  try {
+    avData->threadTaskPool()->start(&cutVideoTask, true);
+  } catch (const TTException& e) {
+    TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+        QString("Rebuild: MPEG-2 video cut failed: %1").arg(e.getMessage()));
+    QFile::remove(videoFile);
+    return false;
+  }
+
+  const auto videoKeepList = avData->buildVideoKeepList(clipCutList, src.vStream->frameRate());
+  rebuildClipSubtitle(avData, src, videoKeepList, fileIndex);
 
   // --- Cut audio ---
   QStringList cutAudioFiles;
@@ -191,7 +262,6 @@ bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fil
     report(progress, TTPreviewStage::CutAudio);
 
     // Cut the first audio track for preview (consolidated onto cutAudioTracks).
-    auto videoKeepList = avData->buildVideoKeepList(clipCutList, src.vStream->frameRate());
     const bool normalizeAcmod = TTSettings::instance()->normalizeAcmod();
     avData->cutAudioTracks(src.avItem, {0}, videoKeepList, normalizeAcmod,
         [&](int, const QString& ext) {
@@ -215,8 +285,15 @@ bool ttRebuildMpeg2PreviewClip(TTAVData* avData, TTCutList* clipCutList, int fil
       return false;
     }
   } else {
-    // No audio - just rename the video file to the output
-    QFile::rename(videoFile, outputFile);
+    // No audio - just rename the video file to the output. QFile::rename()
+    // does not overwrite: the previous clip has to go first, or the rebuild
+    // "succeeds" while the player keeps loading the old file.
+    QFile::remove(outputFile);
+    if (!QFile::rename(videoFile, outputFile)) {
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("Rebuild: could not rename %1 to %2").arg(videoFile, outputFile));
+      return false;
+    }
   }
 
   if (TTSettings::instance()->logCutPipeline())
@@ -274,10 +351,11 @@ bool ttRebuildSmartCutPreviewClip(TTAVData* avData, TTCutList* clipCutList, int 
   // a rebuilt clip could therefore sound different from the one it replaced -
   // measured on an AC3 that switches channel mode: the rebuild carried the
   // switch into the clip, the preview task's clip did not.
+  const auto videoKeepList = avData->buildVideoKeepList(clipCutList, frameRate);
+  rebuildClipSubtitle(avData, src, videoKeepList, fileIndex);
+
   QStringList cutAudioFiles;
   if (src.hasAudio) {
-    const auto videoKeepList = avData->buildVideoKeepList(clipCutList, frameRate);
-
     avData->cutAudioTracks(src.avItem, {0}, videoKeepList,
         TTSettings::instance()->normalizeAcmod(),
         [&](int, const QString& ext) {
