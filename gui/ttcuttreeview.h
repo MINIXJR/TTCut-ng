@@ -105,18 +105,17 @@ class TTCutTreeView : public QWidget, Ui::TTCutListWidget
   private:
 
   private:
-    TTAVData*        mAVData;
-    int              editItemIndex;
-    bool             allowSelectionChanged;
-    QTreeWidgetItem* currentEditItem;
-    QAction*         itemUpAction;
-    QAction*         itemDownAction;
-    QAction*         itemDeleteAction;
-    QAction*         itemEditAction;
-    QAction*         gotoCutInAction;
-    QAction*         gotoCutOutAction;
-    QAction*         itemPreviewAction;
-    QAction*         itemCutAction;
-    QAction*         itemDuplicateAction;
+    TTAVData*        mpAVData;
+    int              mEditItemIndex;
+    bool             mAllowSelectionChanged;
+    QAction*         mpItemUpAction;
+    QAction*         mpItemDownAction;
+    QAction*         mpItemDeleteAction;
+    QAction*         mpItemEditAction;
+    QAction*         mpGotoCutInAction;
+    QAction*         mpGotoCutOutAction;
+    QAction*         mpItemPreviewAction;
+    QAction*         mpItemCutAction;
+    QAction*         mpItemDuplicateAction;
 };
 #endif
