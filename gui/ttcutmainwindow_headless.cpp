@@ -71,8 +71,8 @@ bool TTCutMainWindow::waitForProjectLoad(int timeoutMs)
   QElapsedTimer timer;
   timer.start();
   while (mProjectLoadInProgress && timer.elapsed() < timeoutMs) {
-  QApplication::processEvents();
-  QThread::msleep(50);
+    QApplication::processEvents();
+    QThread::msleep(50);
   }
   QApplication::processEvents();
   return !mProjectLoadInProgress && mpAVData->avCount() > 0;

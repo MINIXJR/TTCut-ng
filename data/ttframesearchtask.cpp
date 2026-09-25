@@ -60,11 +60,7 @@ void TTFrameSearchTask::initFrameSearch()
   TFrameInfo refInfo;
 
   if (decoderKindFor(mpReferenceStream) == DecoderKind::Mpeg2) {
-    TTMpeg2Decoder* refDecoder = new TTMpeg2Decoder(
-        mpReferenceStream->filePath(),
-        mpReferenceStream->indexList(),
-        mpReferenceStream->headerList(),
-        formatYV12);
+    TTMpeg2Decoder* refDecoder = openMpeg2DecoderFor(mpReferenceStream);
     refDecoder->moveToFrameIndex(mReferenceIndex);
     const TFrameInfo* fi = refDecoder->getFrameInfo();
     refInfo = *fi;
@@ -84,6 +80,12 @@ void TTFrameSearchTask::initFrameSearch()
     refWrapper->closeFile();
     delete refWrapper;
   }
+}
+
+TTMpeg2Decoder* TTFrameSearchTask::openMpeg2DecoderFor(TTVideoStream* stream)
+{
+  return new TTMpeg2Decoder(stream->filePath(), stream->indexList(),
+                            stream->headerList(), formatYV12);
 }
 
 TTFFmpegWrapper* TTFrameSearchTask::openFFmpegWrapperFor(TTVideoStream* stream, const char* role)
@@ -197,11 +199,7 @@ void TTFrameSearchTask::operation()
   if (useFFmpeg) {
     searchWrapper = openFFmpegWrapperFor(mpSearchStream, "search");
   } else {
-    searchMpeg2 = new TTMpeg2Decoder(
-        mpSearchStream->filePath(),
-        mpSearchStream->indexList(),
-        mpSearchStream->headerList(),
-        formatYV12);
+    searchMpeg2 = openMpeg2DecoderFor(mpSearchStream);
     searchMpeg2->decodeFirstMPEG2Frame(formatYV12);
     searchMpeg2->moveToFrameIndex(mSearchIndex);
   }

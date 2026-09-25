@@ -51,6 +51,8 @@ class TTFrameSearchTask : public TTThreadTask
     //! frame index adopted (or built), search mode off. Throws
     //! TTAbortException naming `role` when the file or the index fails.
     TTFFmpegWrapper* openFFmpegWrapperFor(TTVideoStream* stream, const char* role);
+    //! libmpeg2 decoder on `stream`, YV12 output, not yet positioned.
+    static TTMpeg2Decoder* openMpeg2DecoderFor(TTVideoStream* stream);
     //! Copy the reference frame's planes into mpRefY/U/V.
     void captureRefBuffers(const TFrameInfo& refInfo);
     TTVideoStream*  mpReferenceStream;

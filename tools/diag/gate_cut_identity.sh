@@ -15,6 +15,8 @@
 # five fixtures.
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=tools/diag/ttcut-project.sh
+. "$ROOT/tools/diag/ttcut-project.sh"
 CACHE="$ROOT/tools/test-videos/cache"
 WORK=/usr/local/src/CLAUDE_TMP/TTCut-ng/cut-identity
 export QT_QPA_PLATFORM=offscreen
@@ -33,32 +35,9 @@ tux_h264_1080i_paff_test       264 ac3 0-740  800-1480  1550-2200
 tux_hevc4k_cra_test            265 ac3 0-1480 1600-2960 3100-4400
 "
 
-write_project() {   # name vext aext cuts...
+write_project() {   # name vext aext cuts (in-out)...
   local name=$1 vext=$2 aext=$3; shift 3
-  local prj="$WORK/$name.ttcut" order=0
-  {
-    echo '<!DOCTYPE TTCut-Projectfile>'
-    echo '<TTCut-Projectfile>'
-    echo ' <Version>1.0</Version>'
-    echo ' <Video>'
-    echo '  <Order>0</Order>'
-    echo "  <Name>$CACHE/$name.$vext</Name>"
-    echo '  <Audio>'
-    echo '   <Order>0</Order>'
-    echo "   <Name>$CACHE/$name.$aext</Name>"
-    echo '   <Language>deu</Language>'
-    echo '  </Audio>'
-    for c in "$@"; do
-      echo '  <Cut>'
-      echo "   <Order>$order</Order>"
-      echo "   <CutIn>${c%-*}</CutIn>"
-      echo "   <CutOut>${c#*-}</CutOut>"
-      echo '  </Cut>'
-      order=$((order+1))
-    done
-    echo ' </Video>'
-    echo '</TTCut-Projectfile>'
-  } > "$prj"
+  ttcut_project_xml "$CACHE/$name.$vext" "$CACHE/$name.$aext" deu "${@/-/:}" > "$WORK/$name.ttcut"
 }
 
 ok=1
