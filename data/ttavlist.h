@@ -105,7 +105,8 @@ class TTAVItem : public QObject
     void appendMarker(int markerPos, int order=-1);
 
     //! Audio auto-sort (language preference resp. project order, see
-    //! TTAVData::onOpenAudioFinished) runs only while the item's initial
+    //! TTAVData::onOpenAudioFinished) and the subtitle project-order restore
+    //! (onOpenSubtitleFinished) run only while the item's initial
     //! load batch is still on the thread pool. TTAVData::onThreadPoolExit()
     //! latches this flag; afterwards the track order belongs to the user.
     bool initialAudioLoadDone() const     { return mInitialAudioLoadDone; }
@@ -153,6 +154,7 @@ class TTAVItem : public QObject
 
   private:
     TTAudioList*    audioDataList()    { return mpAudioList; }
+    TTSubtitleList* subtitleDataList() { return mpSubtitleList; }
     //! True when the pair can be used as a cut range: both positions
     //! non-negative, cut-out not before cut-in, and - once a stream is
     //! open - cut-out inside it. 'reason' takes a message for the caller.

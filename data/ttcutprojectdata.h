@@ -90,7 +90,14 @@ class TTCutProjectData
     void        parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem);
     static void parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
     static void parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);
-    void        parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem);
+    //! 'position' is the section's index among the <Subtitle> sections of its
+    //! <Video>; it stands in for an <Order> of -1, which projects written
+    //! before 2026-09-25 carry for every discovered or added subtitle.
+    void        parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem,
+                                     int position);
+    //! <Language>/<Delay> child of an <Audio> or <Subtitle> section; true when
+    //! 'node' was one of the two.
+    static bool parseTrackLanguageDelay(const QDomNode& node, QString& lang, int& delayMs);
     void        serializeSettings();
     void        parseSettingsSection(QDomElement settingsElement);
 

@@ -84,16 +84,22 @@ class TTCut
    static const QStringList& languageNames();    // {"Undetermined","Deutsch","English",...}
    static QString iso639_1to2(const QString& code2);  // "de" → "deu"
    static QString normalizeLangCode(const QString& code);  // "de"/"ger"/"DEU" → "deu", unknown → ""
+   // normalizeLangCode where it knows the code, the code itself otherwise
+   // ("ger" → "deu", "mul" stays "mul"). For languages read from file names
+   // and .info files, so a track's language matches the preference list.
+   static QString canonicalLangCode(const QString& code);
 
    // Extract a 3-letter ISO 639-2 language code from a filename of the form
    // "<base>_<lang>[_<n>].<ext>" (matches Show_deu.ac3 / Show_deu_1.ac3 /
-   // Show_eng.srt). Falls back to the current system locale converted via
-   // iso639_1to2 if no match. Used by TTAudioItem and TTSubtitleItem.
+   // Show_eng.srt), passed through canonicalLangCode. Falls back to the
+   // current system locale converted via iso639_1to2 if no match. Used by
+   // TTAudioItem and TTSubtitleItem.
    static QString langFromFilename(const QString& filePath);
 
    // Populate a QComboBox with "<code> (<name>)" entries from
    // languageCodes() / languageNames() and select the entry whose userData
-   // matches currentLang. Shared by TTAudioTreeView and TTSubtitleTreeView,
+   // matches currentLang; a currentLang outside that list gets an entry of
+   // its own instead of showing "und". Shared by TTAudioTreeView and TTSubtitleTreeView,
    // which previously each duplicated the loop. The caller wires the
    // currentIndexChanged signal — the row-lookup logic differs per view.
    static void populateLanguageCombo(class QComboBox* combo, const QString& currentLang);

@@ -21,6 +21,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <iterator>
 
 #include "../avstream/ttac3acmod.h"
 #include "../avstream/ttaspectwindow.h"
@@ -36,6 +37,7 @@
 #include "../avstream/ttfilebuffer.h"
 #include "../avstream/ttcutparameter.h"
 #include "../common/ttthreadtaskpool.h"
+#include "../common/ttcut.h"
 #include "../common/ttexception.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
@@ -126,6 +128,7 @@ TTAVData::~TTAVData()
  */
 void TTAVData::clear()
 {
+	dropPendingTrackValues(nullptr);
 	mpAVList->clear();
 	mpCutList->clear();
 	mpMarkerList->clear();
@@ -339,16 +342,17 @@ void TTAVData::openAVStreams(const QString& videoFilePath)
           }
         }
 
-        // Match loaded audio files by basename
-        int audioOrder = 0;
+        // Match loaded audio files by basename. "und" (TTESInfo's default
+        // for a missing audio_N_lang) says nothing and must not replace the
+        // language taken from the file name.
         for (const QFileInfo& af : audioInfoList) {
           QString lang = infoLangMap.value(af.fileName());
-          if (!lang.isEmpty()) {
-            setPendingAudioLanguage(avItem, audioOrder, lang);
+          if (!lang.isEmpty() && lang != QLatin1String("und")) {
+            mPendingInfoAudioLanguages.insert(qMakePair(avItem, af.absoluteFilePath()),
+                                              TTCut::canonicalLangCode(lang));
             if (TTSettings::instance()->logCutPipeline())
                 qDebug() << "  Audio language from .info:" << af.fileName() << "=" << lang;
           }
-          ++audioOrder;
         }
       }
 
@@ -844,9 +848,8 @@ void TTAVData::onOpenAVStreamsAborted()
  * the one it was just appended at. Taken even when that position is
  * invalid, so a stale entry never fires on a later track.
  */
-template <typename T, typename Fn>
-static void applyPending(QMap<QPair<TTAVItem*, int>, T>& pending,
-                         const QPair<TTAVItem*, int>& key, int idx, Fn apply)
+template <typename K, typename T, typename Fn>
+static void applyPending(QMap<K, T>& pending, const K& key, int idx, Fn apply)
 {
   if (!pending.contains(key)) return;
   const T value = pending.take(key);
@@ -863,9 +866,13 @@ void TTAVData::onOpenAudioFinished(TTAVItem* avItem, TTAudioStream* aStream, int
 
   avItem->appendAudioEntry(aStream, order);
 
-  // Language and delay saved in the project file, if any
-  const auto key = qMakePair(avItem, order);
+  // Language from the recording's .info (plain open only), then language
+  // and delay saved in the project file, if any. Both before the sort
+  // below, which reads the language.
   const int idx = avItem->audioCount() - 1;
+  applyPending(mPendingInfoAudioLanguages, qMakePair(avItem, aStream->filePath()), idx,
+               [avItem](int i, const QString& lang) { avItem->onAudioLanguageChanged(i, lang); });
+  const auto key = qMakePair(avItem, order);
   applyPending(mPendingAudioLanguages, key, idx,
                [avItem](int i, const QString& lang) { avItem->onAudioLanguageChanged(i, lang); });
   applyPending(mPendingAudioDelays, key, idx,
@@ -966,6 +973,16 @@ void TTAVData::onOpenSubtitleFinished(TTAVItem* avItem, TTSubtitleStream* sStrea
                [avItem](int i, const QString& lang) { avItem->onSubtitleLanguageChanged(i, lang); });
   applyPending(mPendingSubtitleDelays, key, idx,
                [avItem](int i, int delayMs) { avItem->onSubtitleDelayChanged(i, delayMs); });
+
+  // Project-loaded subtitles (order >= 0 from <Order>) arrive in task-finish
+  // order; restore the saved sequence during the initial load, as for audio.
+  // Discovered ones (order -1) keep their arrival order - subtitles have no
+  // language-preference sort.
+  if (order >= 0 && !avItem->initialAudioLoadDone()) {
+    TTSubtitleList* subtitleList = avItem->subtitleDataList();
+    if (subtitleList && subtitleList->count() > 1)
+      subtitleList->sortByProjectOrder();
+  }
 }
 
 /*!
@@ -998,6 +1015,7 @@ void TTAVData::onRemoveAVItem(int index)
   if (avCount() > 1)
     setCurrentAVItem(index+1 < avCount() ? avItemAt(index+1) : avItemAt(index-1));
 
+  dropPendingTrackValues(avItemAt(index));
   mpAVList->removeAt(index);
 
   if (avCount() == 0)
@@ -1363,6 +1381,7 @@ void TTAVData::endAbortedProjectLoad()
   // reach them: until 2026-09-24 they stayed, their cuts mirrored in the
   // global cut list, and were never freed. The project load is over; any
   // item still pending belongs to it.
+  for (TTAVItem* item : mPendingVideoItems) dropPendingTrackValues(item);
   qDeleteAll(mPendingVideoItems);
   mPendingVideoItems.clear();
 
@@ -1428,6 +1447,24 @@ void TTAVData::setPendingAudioRepairs(TTAVItem* avItem, int order, const QList<T
 void TTAVData::setPendingSubtitleDelay(TTAVItem* avItem, int order, int delayMs)
 {
   mPendingSubtitleDelays.insert(qMakePair(avItem, order), delayMs);
+}
+
+template <typename M>
+static void dropPendingOf(M& pending, const TTAVItem* item)
+{
+  if (item == nullptr) { pending.clear(); return; }
+  for (auto it = pending.begin(); it != pending.end(); )
+    it = (it.key().first == item) ? pending.erase(it) : std::next(it);
+}
+
+void TTAVData::dropPendingTrackValues(const TTAVItem* item)
+{
+  dropPendingOf(mPendingAudioLanguages, item);
+  dropPendingOf(mPendingInfoAudioLanguages, item);
+  dropPendingOf(mPendingSubtitleLanguages, item);
+  dropPendingOf(mPendingAudioDelays, item);
+  dropPendingOf(mPendingSubtitleDelays, item);
+  dropPendingOf(mPendingAudioRepairs, item);
 }
 
 // /////////////////////////////////////////////////////////////////////////////

@@ -84,6 +84,7 @@ class TTSubtitleList : public QObject
 
     int   count();
     void  clear();
+    void  sortByProjectOrder();
     void  swap(int a, int b);
     void  print();
 

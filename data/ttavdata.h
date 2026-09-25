@@ -336,6 +336,10 @@ class TTAVData : public QObject
 
     // Pending language overrides from project file (applied after async stream open)
     QMap<QPair<TTAVItem*, int>, QString> mPendingAudioLanguages;
+    // .info audio languages of a plain open, keyed by the audio file's path:
+    // discovered tracks arrive with order -1, so the order key above cannot
+    // tell them apart.
+    QMap<QPair<TTAVItem*, QString>, QString> mPendingInfoAudioLanguages;
     QMap<QPair<TTAVItem*, int>, QString> mPendingSubtitleLanguages;
 
     // Pending delay overrides from project file (applied after async stream open)
@@ -345,6 +349,13 @@ class TTAVData : public QObject
     // Pending audio repair items from project file (applied after async
     // stream open, same mechanism as mPendingAudioDelays).
     QMap<QPair<TTAVItem*, int>, QList<TTAudioRepairItem>> mPendingAudioRepairs;
+
+    //! Drop every parked language/delay/repair of 'item' (all items when
+    //! null). The maps are keyed by the raw pointer and an entry leaves them
+    //! only when its track arrives - one whose track never does (a failed
+    //! open) would otherwise outlive the item and could match a later item
+    //! allocated at the same address.
+    void dropPendingTrackValues(const TTAVItem* item);
 
     // Last-cut metadata (set by the cut path, read by the completion dialog)
     bool    mLastCutWasAudioOnly = false;

@@ -168,7 +168,9 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
   for (int i = 0; i < vItem->subtitleCount(); i++) {
     TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
-    writeTrackSection(video, "Subtitle", sStream->filePath(), sItem.order(), sItem.getLanguage(), sItem.getDelayMs());
+    // Visible list position, as for audio above: a discovered or added
+    // subtitle keeps order -1, and the reorder buttons never touch it.
+    writeTrackSection(video, "Subtitle", sStream->filePath(), i, sItem.getLanguage(), sItem.getDelayMs());
   }
 }
 
@@ -245,6 +247,7 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
 
   qDebug("after doOpenVideoStream");
   //create the data item;
+  int subtitlePosition = 0;
   for (int i = 2; i < videoNodesList.size(); i++) {
 
     if (videoNodesList.at(i).nodeName() == "Audio") {
@@ -257,7 +260,7 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
     	parseMarkerSection(videoNodesList.at(i).childNodes(), avItem);
     }
     else if (videoNodesList.at(i).nodeName() == "Subtitle") {
-      parseSubtitleSection(videoNodesList.at(i).childNodes(), avData, avItem);
+      parseSubtitleSection(videoNodesList.at(i).childNodes(), avData, avItem, subtitlePosition++);
     }
     else {
       qDebug("unkown node!");
@@ -267,6 +270,22 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
   avData->sortCutItemsByOrder();
   avData->sortMarkerByOrder();
   return true;
+}
+
+/* /////////////////////////////////////////////////////////////////////////////
+ *
+ */
+bool TTCutProjectData::parseTrackLanguageDelay(const QDomNode& node, QString& lang, int& delayMs)
+{
+  if (node.nodeName() == "Language") {
+    lang = node.toElement().text();
+    return true;
+  }
+  if (node.nodeName() == "Delay") {
+    delayMs = node.toElement().text().toInt();
+    return true;
+  }
+  return false;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -286,11 +305,8 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
   QList<TTAudioRepairItem> repairs;
   for (int n = 2; n < audioNodesList.size(); n++) {
     QDomNode node = audioNodesList.at(n);
-    if (node.nodeName() == "Language") {
-      lang = node.toElement().text();
-    } else if (node.nodeName() == "Delay") {
-      delayMs = node.toElement().text().toInt();
-    } else if (node.nodeName() == "Repair") {
+    if (parseTrackLanguageDelay(node, lang, delayMs)) continue;
+    if (node.nodeName() == "Repair") {
       QDomNodeList repairNodes = node.childNodes();
       qint64  frameFrom = 0;
       qint64  frameTo = 0;
@@ -333,6 +349,12 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
     // The real per-frame byte size, not a hardcoded constant: it scales with
     // the stream's bit rate (see ac3FrameByteSize() above).
     qint64 frameBytes = ac3FrameByteSize(name, &frameSizeError);
+    // Every rejected repair is disabled, never dropped, and says why.
+    auto disableRepair = [](TTAudioRepairItem& repair, const QString& reason) {
+      repair.setEnabled(false);
+      TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+          QString("TTCutProjectData::parseAudioSection -> ") + reason);
+    };
     for (TTAudioRepairItem& repair : repairs) {
       // Structural sanity first (final review M5): a hand-edited or
       // truncated project file can carry a negative or reversed range. Those
@@ -341,9 +363,8 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       // reversed range would silently produce an empty table - so reject
       // them here, with the same "disable, never drop" rule as below.
       if (repair.frameFrom() < 0 || repair.frameTo() < repair.frameFrom()) {
-        repair.setEnabled(false);
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("TTCutProjectData::parseAudioSection -> repair range %1-%2 on '%3' "
+        disableRepair(repair,
+            QString("repair range %1-%2 on '%3' "
                     "is not a valid frame range (negative, or end before start) - "
                     "disabling this repair entry")
                 .arg(repair.frameFrom())
@@ -356,9 +377,8 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
         // valid AC3 header) - never silently wave the item through under an
         // assumed size, and never silently drop it either; disable with a
         // reason so the user can investigate.
-        repair.setEnabled(false);
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("TTCutProjectData::parseAudioSection -> could not determine "
+        disableRepair(repair,
+            QString("could not determine "
                     "the AC3 frame size of '%1' (%2) - disabling repair entry "
                     "%3-%4 instead of validating it against an assumed size")
                 .arg(name, frameSizeError)
@@ -372,9 +392,8 @@ void TTCutProjectData::parseAudioSection(QDomNodeList audioNodesList, TTAVData* 
       // STARTS inside the file and therefore accepted a range whose last
       // frame is cut off by the file's end (final review M4).
       if ((repair.frameTo() + 1) * frameBytes > audioFileSize) {
-        repair.setEnabled(false);
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("TTCutProjectData::parseAudioSection -> repair range %1-%2 "
+        disableRepair(repair,
+            QString("repair range %1-%2 "
                     "on '%3' reaches past the file's end (%4 bytes, %5 bytes/"
                     "frame) - disabling this repair entry")
                 .arg(repair.frameFrom())
@@ -714,21 +733,24 @@ TTLogoProjectData TTCutProjectData::deserializeLogoData()
 /* /////////////////////////////////////////////////////////////////////////////
  * Parse subtitle section from XML
  */
-void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem)
+void TTCutProjectData::parseSubtitleSection(QDomNodeList subtitleNodesList, TTAVData* avData, TTAVItem* avItem,
+                                            int position)
 {
   int     order = 0;
   QString name;
   if (!parseSectionHeader(subtitleNodesList, "parseSubtitleSection", order, name)) return;
 
+  // Older projects wrote <Order>-1 for every discovered or added subtitle;
+  // the pending language/delay below are keyed by order, so those sections
+  // would all share one key. Their position in the file is the order the
+  // user saw.
+  if (order < 0) order = position;
+
   // Read optional Language and Delay elements (added in TTCut-ng 0.52+ and 0.81+)
   QString lang;
   int delayMs = 0;
   for (int n = 2; n < subtitleNodesList.size(); n++) {
-    if (subtitleNodesList.at(n).nodeName() == "Language") {
-      lang = subtitleNodesList.at(n).toElement().text();
-    } else if (subtitleNodesList.at(n).nodeName() == "Delay") {
-      delayMs = subtitleNodesList.at(n).toElement().text().toInt();
-    }
+    parseTrackLanguageDelay(subtitleNodesList.at(n), lang, delayMs);
   }
 
   qDebug("TTCutProjectData::parseSubtitleSection -> before doOpenSubtitleStream...");

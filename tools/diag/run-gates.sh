@@ -110,6 +110,7 @@ settings_cancel        unit  120  test_settings_cancel
 analysis_task_lifetime unit  120  test_analysis_task_lifetime
 streampoint_model_time unit  120  test_streampoint_model_time
 project_load_rejected  unit  120  test_project_load_rejected
+track_language         unit  60   test_track_language
 project_missing_video  unit  120  test_project_missing_video
 cut_range_check        unit  120  test_cut_range_check
 cut_job_ownership      unit  120  test_cut_job_ownership
@@ -157,6 +158,8 @@ mpv_loadfile_args      tux   300  test_mpv_loadfile_args
 mpv_channels           unit  300  test_mpv_channels
 subtitle_delay         tux   600  test_subtitle_delay
 audiorepair_persist    tux   600  test_audiorepair_persist
+track_persist          tux   600  test_track_persist
+track_gui              tux   600  test_track_gui
 audio_order_reset      tux   600  test_audio_order_reset
 anomaly_trigger_video  tux   600  test_auto_anomaly_scan_trigger
 anomaly_trigger_project tux  600  test_auto_anomaly_scan_trigger
@@ -370,6 +373,7 @@ gate_settings_cancel()       { "$D/test_settings_cancel"; }
 gate_analysis_task_lifetime() { "$D/test_analysis_task_lifetime"; }
 gate_streampoint_model_time() { "$D/test_streampoint_model_time"; }
 gate_project_load_rejected() { "$D/test_project_load_rejected" "$W"; }
+gate_track_language()      { "$D/test_track_language"; }
 gate_project_missing_video() { "$D/test_project_missing_video" "$W"; }
 gate_cut_range_check() { "$D/test_cut_range_check" "$W"; }
 gate_cut_job_ownership() { "$D/test_cut_job_ownership" "$W"; }
@@ -651,6 +655,8 @@ gate_mpv_loadfile_args() { need "$V264" "$SRT"; mkdir -p "$W/kömma, tést"; cp 
                            "$D/test_mpv_loadfile_args" "$V264" "$W/kömma, tést/a,b_deu.srt"; }
 gate_subtitle_delay()      { need "$A264"; "$D/test_subtitle_delay" "$A264" "$W"; }
 gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepair_persist" "$W"; }
+gate_track_persist()       { need "$TESTDATA/tux_test.264"; "$D/test_track_persist" "$W"; }
+gate_track_gui()           { need "$TESTDATA/tux_test.264"; "$D/test_track_gui" "$W"; }
 gate_audio_order_reset()   { need "$M2V" "$MP2" "$SRT"; make_two_track_project "$W/roundtrip.ttcut"
                              "$D/test_audio_order_reset" "$W/roundtrip.ttcut" "$SRT" "$W"; }
 gate_anomaly_trigger_video()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" video "$V264" "$W"; }

@@ -210,9 +210,11 @@ public:
   // Four fields extend the existing /Settings/Common block (Task 4). Two
   // fields open a NEW /Settings/Screenshot block — those are first-time
   // persistence keys per the Task 1 inventory recommendation.
-  // setAudioLanguagePreference emits audioLanguagePreferenceChanged so the
-  // audio-list sort comparator can re-sort reactively when the user edits
-  // the preference list. The other 5 setters use the standard pattern.
+  // All six setters use the standard pattern. The language preference is
+  // read by TTAudioItem::operator< when the audio list is sorted, which
+  // happens only during an item's initial load (user decision 2026-08-18:
+  // afterwards the track order is the user's), so an edit applies to the
+  // next load.
   int     burstMinDeltaDb() const    { return mBurstMinDeltaDb; }
   void    setBurstMinDeltaDb(int v);
 
@@ -401,13 +403,6 @@ signals:
   // switches uniformly. The settings dialog keeps its own codecChanged
   // signal for intra-dialog wiring.
   void encoderCodecChanged(int v);
-
-  // Task 10: emitted by setAudioLanguagePreference so the audio-list sort
-  // comparator (TTAudioItem::operator<) and any list views observing the
-  // ordering can re-sort reactively when the user edits the preference
-  // list. Mutating call sites must read-modify-write through the setter
-  // so the signal fires and the legacy mirror stays consistent.
-  void audioLanguagePreferenceChanged(const QStringList& v);
 
 private:
   static TTSettings* sInstance;

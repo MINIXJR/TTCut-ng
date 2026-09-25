@@ -126,6 +126,12 @@ void TTCut::populateLanguageCombo(QComboBox* combo, const QString& currentLang)
     combo->addItem(QString("%1 (%2)").arg(codes[i]).arg(names[i]), codes[i]);
     if (codes[i] == currentLang) selectIdx = i;
   }
+  // A code outside the list (a file named *_mul.mp2, a hand-edited project)
+  // would otherwise show as "und" while the track keeps the real code.
+  if (!currentLang.isEmpty() && !codes.contains(currentLang)) {
+    combo->addItem(currentLang, currentLang);
+    selectIdx = combo->count() - 1;
+  }
   combo->setCurrentIndex(selectIdx);
 }
 
@@ -135,7 +141,7 @@ QString TTCut::langFromFilename(const QString& filePath)
   static const QRegularExpression langRe("_([a-z]{3})(?:_\\d+)?$");
   QRegularExpressionMatch match = langRe.match(QFileInfo(filePath).completeBaseName());
   if (match.hasMatch()) {
-    return match.captured(1);
+    return canonicalLangCode(match.captured(1));
   }
   // Fallback: system locale → ISO 639-2.
   return iso639_1to2(QLocale::system().name().left(2));
@@ -154,6 +160,12 @@ QString TTCut::iso639_1to2(const QString& code2)
     map["ja"] = "jpn"; map["zh"] = "chi"; map["ko"] = "kor"; map["ar"] = "ara";
   }
   return map.value(code2, "und");
+}
+
+QString TTCut::canonicalLangCode(const QString& code)
+{
+  const QString normalized = normalizeLangCode(code);
+  return normalized.isEmpty() ? code : normalized;
 }
 
 QString TTCut::normalizeLangCode(const QString& code)

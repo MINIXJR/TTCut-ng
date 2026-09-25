@@ -368,9 +368,8 @@ void TTSettings::setMpeg2Target(int v)
 // ---- Audio/QuickJump/Screenshot group setters (Task 10) --------------------
 // Four fields extend /Settings/Common (Task 4). Two fields open a new
 // /Settings/Screenshot block — newly persisted per Task 1 inventory.
-// setAudioLanguagePreference emits audioLanguagePreferenceChanged so the
-// audio-list sort comparator can re-sort reactively. The other 5 setters
-// use the standard pattern.
+// All six setters use the standard pattern (see the header for why the
+// language preference needs no change signal).
 
 void TTSettings::setBurstMinDeltaDb(int v)
 {
@@ -394,7 +393,6 @@ void TTSettings::setAudioLanguagePreference(const QStringList& v)
 {
   if (mAudioLanguagePreference == v) return;
   mAudioLanguagePreference = v;
-  emit audioLanguagePreferenceChanged(v);
 }
 
 void TTSettings::setQuickJumpIntervalSec(int v)
