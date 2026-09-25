@@ -1,5 +1,5 @@
 ---
-base_commit: 31915bd364c3001dfcce1997edcc18dcef0f2628
+base_commit: 6f6574936b90725072fa008d50194fa44a3aa2a9
 last_verified: 2026-09-24
 sources:
   - extern/ttaudiocutter.cpp

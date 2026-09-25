@@ -1,5 +1,5 @@
 ---
-base_commit: 31915bd364c3001dfcce1997edcc18dcef0f2628
+base_commit: 6f6574936b90725072fa008d50194fa44a3aa2a9
 last_verified: 2026-09-24
 sources:
   - data/ttanalysislog.cpp
@@ -415,7 +415,8 @@ ist in `progress-reporting.md` beschrieben (Kante „Landing-zone workers →
   `TTFFmpegWrapper::adoptOrBuildFrameIndex(prebuilt, path)` an allen sieben
   Stellen (Gleichbild-Suche beide Ströme, `TTSearchTask` Koordinator + Worker,
   Vorschaufenster, zwei Analyse-Wrapper im Hauptfenster); die Gleichbild-Suche
-  öffnet ihre beiden Wrapper über `openFFmpegWrapperFor()`.
+  öffnet ihre beiden Wrapper über `openFFmpegWrapperFor()`, bei MPEG-2 die
+  beiden libmpeg2-Dekoder über `openMpeg2DecoderFor()`.
 - ~~Die drei gerichteten Suchen verbinden nur `finished → deleteLater`, nicht
   `aborted`.~~ Behoben in `f8fe7dd6` — dabei zeigte sich, dass das Leck nur die
   halbe Wirkung war: eine vor dem Start abgebrochene Suche meldet weder

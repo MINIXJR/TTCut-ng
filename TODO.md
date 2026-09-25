@@ -394,7 +394,9 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     des Items. Ein `delete` braucht einen Entwurf, wer den Zeiger noch hält
     (Overlay, laufende Tasks, Wiedergabe), sonst droht ein Use-after-free.
     Karte `track-management.md`, H6.
-  - **P8 Dekodierpfade in TTFFmpegWrapper vereinheitlichen** —
+  - **P8 TTFFmpegWrapper zerlegen** — die Klasse (rund 1250 Zeilen, 31
+    Methoden) hält Dekodieren, Frame-Index, Analyse-Hilfen und
+    Datei-Verwaltung; Ziel aus Lauf 1: getrennte Einheiten. Erster Schritt:
     `decodeFrameInternal` und `decodeFrameYUV` teilen Suche zum Keyframe,
     Schutzgrenze und Überspring-Schleife bis zum Ziel-Frame (kognitive
     Komplexität 37 und 52). Hängt an Dekodier- gegen Anzeige-Reihenfolge und
