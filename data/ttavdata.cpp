@@ -1479,8 +1479,6 @@ void TTAVData::doCutPreview(TTCutList* cutList)
 
   connect(cutPreviewTask,   qOverload<TTCutList*>(&TTCutPreviewTask::finished),
           this,             &TTAVData::onCutPreviewFinished);
-  connect(cutPreviewTask,   &TTCutPreviewTask::audioDriftCalculated,
-          this,             &TTAVData::onCutPreviewAudioDrift);
   connect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
 					this,             &TTAVData::onCutPreviewAborted);
 
@@ -1501,13 +1499,26 @@ void TTAVData::onCutPreviewFinished(TTCutList* cutList)
   disconnect(mpThreadTaskPool, &TTThreadTaskPool::aborted,
              this,             &TTAVData::onCutPreviewAborted);
 
-	emit cutPreviewFinished(cutList);
-}
+  // Drift column: the cumulative A/V drift after each cut as the audio cut
+  // planner produces it (audio-frame-aligned, feed-forward compensated - what
+  // TTAudioCutter::cut outputs), over ALL cuts of the project. The column
+  // shows one value per row of the whole list, so a preview of a few cuts
+  // with their neighbours must neither restart the sum at its first cut nor
+  // write its values into the first rows (user decision 2026-09-25). Computed
+  // here on the GUI thread, where the project cut list lives.
+  QList<float> audioDrifts;
+  if (mpCutList->count() > 0) {
+    const TTAVItem* driftAvItem = mpCutList->at(0).avDataItem();
+    if (driftAvItem && driftAvItem->audioCount() > 0 && driftAvItem->videoStream()) {
+      const double fr      = driftAvItem->videoStream()->frameRate();
+      const int    delayMs = driftAvItem->audioListItemAt(0).getDelayMs();
+      audioDrifts = planAudioCut(driftAvItem->audioStreamAt(0),
+                                 buildVideoKeepList(mpCutList, fr), delayMs).drifts;
+    }
+  }
+  emit cutAudioDriftCalculated(audioDrifts);
 
-//! Relay audio drift values from preview task to main window
-void TTAVData::onCutPreviewAudioDrift(const QList<float>& driftsMs)
-{
-    emit cutAudioDriftCalculated(driftsMs);
+	emit cutPreviewFinished(cutList);
 }
 
 //! Cut preview aborted by user

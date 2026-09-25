@@ -1,5 +1,5 @@
 ---
-base_commit: 5943fe7a5bddcd8029eaecee08b0970b22a365e0
+base_commit: e47e1d80293156fd5edfc4f3aa878e0aaa976190
 last_verified: 2026-09-24
 sources:
   - gui/ttcutframenavigation.h
@@ -138,7 +138,7 @@ flowchart TD
   - shared purpose: guard, then turn the current row into its entry
   - status: done `91e088ff` (audit run 6, batch E) — `currentCutIndex()` holds both and states the row↔entry contract once
 - **"no data" guard in the tree view**
-  - sites: `onEntryPreview`, `onEntryCut`, `onAVCut`, `onAVSelCut`, `onAudioCut`, `onAudioSelCut`, `onContextMenuRequest` (`mAVData == 0` → return)
+  - sites: `onEntryPreview`, `onEntryCut`, `onAVCut`, `onAVSelCut`, `onAudioCut`, `onAudioSelCut`, `onContextMenuRequest` (`mpAVData == 0` → return)
   - shared purpose: every command needs a model
   - status: deliberate → seven one-liners; the real gap is that the actions are not disabled instead, the same finding `project-lifecycle.md` records for the menu actions
 - **range validation on the two write paths**

@@ -16,6 +16,39 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ## Untersuchungen und Fixes
 
+### Schnitt-Vorschau
+
+- **Audit-Lauf 9: Lese-Hypothesen der Karte `cut-preview.md`** → **DONE
+  (2026-09-25, Zweig `cleanup/code-audit-run9`)**. Gemessen mit Wegwerf-Sonden
+  auf `make_aspect_m2v` (drei Schnitte, nur der mittlere beginnt 40 Bilder in
+  4:3; Vorschau „mittlerer Schnitt mit Nachbarn“, `skipFirst`/`skipLast`) und
+  im echten Hauptfenster (Tux, fünf Schnitte). Protokoll
+  `CLAUDE_TMP/TTCut-ng/code-audit-run9/messungen.md`.
+  - **H1** Combo-Index als Clip-Index: Hinweis „Cut 2 starts in 4:3“ erschien
+    bei „Cut 2-3“ statt „Cut 1-2“; der Neubau schrieb Clip 0 in Datei 002.
+    Jetzt `TTCutPreview::clipIndexOf`, `ttPreviewClipCount`,
+    `ttPreviewCutOutEntry`.
+  - **H3** Sprung aufs Seitenverhältnis-Ziel außerhalb des Vorschau-Fensters →
+    Eintrag 118–105 (umgedreht). Jetzt wird das Fenster um die neue Kante neu
+    berechnet (`ttPreviewCutInWindow`/`ttPreviewCutOutWindow`, dieselbe Regel
+    wie `createPreviewCutList`).
+  - **H8 (neu beim Messen)** der umgedrehte Bereich ließ den MPEG-2-Neubau mit
+    „Error in encode part!“ scheitern; die `TTException` des synchronen Tasks
+    blieb ungefangen → `std::terminate` (SIGABRT, zwei Core-Dumps der Sonde).
+    Jetzt fängt `ttRebuildMpeg2PreviewClip` sie und gibt `false` zurück.
+  - **H9 (neu beim Messen)** MPEG-2 ohne Ton: `QFile::rename` überschreibt nicht,
+    der Neubau ließ die alte `.mkv` stehen und meldete Erfolg. Jetzt Ziel löschen,
+    Ergebnis prüfen (auch im Task).
+  - **H4** Neubau schnitt keine Untertitel; jetzt `rebuildClipSubtitle`.
+  - **H2** Drift einer Nachbar-Vorschau landete in den Zeilen 0–2 und war nur
+    über die Teilliste summiert (−4/−8/−12 ms). User-Entscheid: Drift über alle
+    Schnitte; jetzt in `TTAVData::onCutPreviewFinished` auf dem GUI-Thread.
+  - Messfalle: `regeneratePreviewClip(0 − offset)` = −1 brach früh ab; die
+    ersten „returned/NO“-Werte waren wertlos.
+  - Nicht gemessen/offen: H5 (stille H.26x-Fehler) → P3; H6 (Drift des reinen
+    Tonschnitts ohne Empfänger) bleibt, Karte vermerkt es.
+  - Gates `preview_clip_index` (14 Prüfungen), `preview_drift_rows`.
+
 ### Spurverwaltung (Ton- und Untertitelspuren)
 
 - **Audit-Lauf 8: Lese-Hypothesen H1–H7 der Karte `track-management.md`**

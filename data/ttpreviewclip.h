@@ -15,6 +15,7 @@
 #ifndef TTPREVIEWCLIP_H
 #define TTPREVIEWCLIP_H
 
+#include <QPair>
 #include <QString>
 #include <QVector>
 
@@ -73,6 +74,29 @@ TTPreviewSource ttResolvePreviewSource(TTCutList* clipCutList);
 //! removed. Both producers do this before writing new clips, so a stale file
 //! from an earlier run cannot be picked up as a result of this one.
 int ttRemovePreviewFiles();
+
+//! Frames of one preview window: half of TTSettings::cutPreviewSeconds() at
+//! the stream's frame rate, so a transition clip (cut-out window + cut-in
+//! window) is as long as the setting.
+long ttPreviewFrames(TTVideoStream* vStream);
+
+//! Preview window that shows a cut-in at \a cutIn: [cutIn, cutIn + frames],
+//! the end moved forward past B-frames and clamped to the stream.
+QPair<int, int> ttPreviewCutInWindow(TTVideoStream* vStream, int cutIn, long frames);
+
+//! Preview window that shows a cut-out at \a cutOut: [cutOut - frames,
+//! cutOut], the start moved back to the preceding IDR frame if there is one.
+QPair<int, int> ttPreviewCutOutWindow(TTVideoStream* vStream, int cutOut, long frames);
+
+//! Clips a preview list yields: the first cut-in, one per transition, the
+//! last cut-out - count()/2 + 1 for two entries per cut. The one place that
+//! knows this; the task, the dialog and the rebuild all count through it.
+int ttPreviewClipCount(TTCutList* previewCutList);
+
+//! Index of the cut-out entry clip \a clipIndex (> 0) starts with: the
+//! preceding cut's second entry. The cut-in of the following cut, if the
+//! clip is a transition, is the entry after it.
+inline int ttPreviewCutOutEntry(int clipIndex) { return 2 * clipIndex - 1; }
 
 //! Fill \a out with the cut entries clip \a iClip is built from: the first
 //! cut-in, a cut-out/cut-in pair for every transition in between, or the last

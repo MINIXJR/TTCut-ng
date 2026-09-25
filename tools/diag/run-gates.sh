@@ -116,6 +116,7 @@ cut_range_check        unit  120  test_cut_range_check
 cut_job_ownership      unit  120  test_cut_job_ownership
 aspect_window          unit  120  test_aspect_window
 aspect_hint            unit  300  test_aspect_hint
+preview_clip_index     unit  300  test_preview_clip_index
 aspect_autocut         unit  300  -
 exit_cancel            tux   300  test_exit_cancel
 exit_discard           tux   300  test_exit_cancel
@@ -160,6 +161,7 @@ subtitle_delay         tux   600  test_subtitle_delay
 audiorepair_persist    tux   600  test_audiorepair_persist
 track_persist          tux   600  test_track_persist
 track_gui              tux   600  test_track_gui
+preview_drift_rows     tux   600  test_preview_drift_rows
 audio_order_reset      tux   600  test_audio_order_reset
 anomaly_trigger_video  tux   600  test_auto_anomaly_scan_trigger
 anomaly_trigger_project tux  600  test_auto_anomaly_scan_trigger
@@ -442,6 +444,9 @@ gate_hint_column()       { need "$V264"; make_mixed_ac3 "$W/mixed.ac3" || exit 1
 gate_aspect_hint() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
   read -r A B < "$W/aspect.expect"
   "$D/test_aspect_hint" "$W/aspect.m2v" "$A" "$B" "$W/hint"; }
+gate_preview_clip_index() { make_aspect_m2v "$W/aspect.m2v" "$W/aspect.expect" || exit 1
+  read -r A B < "$W/aspect.expect"
+  "$D/test_preview_clip_index" "$W/aspect.m2v" "$A" "$B" "$W/run"; }
 # --auto-cut on a 4:3-start cut: the aspect warning must reach the log and the
 # run must end (a modal dialog would hang it until the timeout). LC_ALL=C.UTF-8
 # because the translator follows the system locale; the log file is on by
@@ -657,6 +662,7 @@ gate_subtitle_delay()      { need "$A264"; "$D/test_subtitle_delay" "$A264" "$W"
 gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepair_persist" "$W"; }
 gate_track_persist()       { need "$TESTDATA/tux_test.264"; "$D/test_track_persist" "$W"; }
 gate_track_gui()           { need "$TESTDATA/tux_test.264"; "$D/test_track_gui" "$W"; }
+gate_preview_drift_rows() { need "$TESTDATA/tux_test.264"; "$D/test_preview_drift_rows" "$W"; }
 gate_audio_order_reset()   { need "$M2V" "$MP2" "$SRT"; make_two_track_project "$W/roundtrip.ttcut"
                              "$D/test_audio_order_reset" "$W/roundtrip.ttcut" "$SRT" "$W"; }
 gate_anomaly_trigger_video()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" video "$V264" "$W"; }

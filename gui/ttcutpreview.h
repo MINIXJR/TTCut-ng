@@ -45,11 +45,10 @@ class TTCutPreview: public QDialog, Ui::TTPreviewWidget
 Q_OBJECT
 
 public:
-	TTCutPreview(QWidget* parent = 0, int prevW = 640, int prevH = 480);
+	explicit TTCutPreview(QWidget* parent = 0, int prevW = 640, int prevH = 480);
 	~TTCutPreview();
 
 	void initPreview(TTCutList* previewCutList, TTCutList* originalCutList, TTAVData* avData = nullptr, bool skipFirst = false, bool skipLast = false);
-	void createPreview();
 
 protected:
 	void closeEvent(QCloseEvent* event);
@@ -102,9 +101,13 @@ private:
     //! render widget has never been painted and mpv has no render target yet.
     bool mInitialLoadPending = true;
 
-    void checkBurstForCurrentCut(int iCut);
+    //! Clip behind a combo entry: the combo omits the first clip when
+    //! skipFirst was set, so every clip-based lookup - checks, rebuild, file
+    //! name - goes through this one mapping.
+    int  clipIndexOf(int comboIndex) const { return comboIndex + mClipOffset; }
+    void checkBurstForCurrentCut(int clipIndex);
     void configureBurstShiftButton(bool isCutOut);
-    void checkAspectForCurrentCut(int iCut);
+    void checkAspectForCurrentCut(int clipIndex);
     void updateHintRowSpace();
     void setBurstMessage(const QString& message, bool resolved);
     void setAspectMessage(const QString& message, bool resolved);
@@ -119,7 +122,7 @@ private:
     //! the user asked for it. Called before every load; the clip carries the
     //! source track's codec, so the source's type decides.
     void applyOutputChannels();
-    void regeneratePreviewClip(int iCut);
+    void regeneratePreviewClip(int clipIndex);
 };
 
 #endif // TTCUTPREVIEW_H

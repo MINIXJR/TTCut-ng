@@ -49,7 +49,6 @@ class TTCutPreviewTask : public TTThreadTask
 
   signals:
     void finished(TTCutList* cutList);
-    void audioDriftCalculated(const QList<float>& driftsMs);
 
   private:
     static TTCutList* createPreviewCutList(TTCutList* cutList);

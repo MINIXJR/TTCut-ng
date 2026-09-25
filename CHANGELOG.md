@@ -5,6 +5,25 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **The cut preview's aspect jump no longer closes TTCut-ng.** Jumping the
+  cut-in or cut-out to the first picture of the cut's main aspect ratio could
+  land outside the short preview window; the rebuilt clip then had its start
+  after its end, the MPEG-2 cut failed and the unhandled error ended the
+  program. The window now moves with the edge, and a failed rebuild shows a
+  warning. Gate: `preview_clip_index`.
+- **Previewing a cut with its neighbours shows the hints of the right
+  transition.** The burst and aspect hints, the burst shift, the aspect jump
+  and the clip rebuild all worked one transition off whenever the preview
+  left out the first clip - the usual case of previewing one cut in the
+  middle. Gate: `preview_clip_index`.
+- **A rebuilt preview clip is really replaced.** An MPEG-2 clip without audio
+  kept the old clip on screen after a burst shift or aspect jump, and the
+  subtitles of a rebuilt clip still followed the old cut edge. Gate:
+  `preview_clip_index`.
+- **The drift column is right after previewing some of the cuts.** A preview
+  of selected cuts wrote its values into the first rows of the list and
+  added them up from the first previewed cut; every row now shows its value
+  over all cuts of the project. Gate: `preview_drift_rows`.
 - **Subtitle languages, delays and order survive saving and reopening a
   project.** Every subtitle found next to the video or added by hand was saved
   with the same position, so on reopening one subtitle got the language and
