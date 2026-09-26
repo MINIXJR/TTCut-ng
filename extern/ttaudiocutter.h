@@ -64,11 +64,13 @@ private:
     //! defined in the .cpp together with the named steps of the packet loop.
     struct CutSession;
     bool openCutSession(CutSession& s, const QString& inputFile, const QString& outputFile);
-    bool ensureAc3Codecs(CutSession& s, int targetAcmod);
-    bool writeRepairedPacket(CutSession& s, const AVPacket* pkt,
-                             const QByteArray& bytes, double pktTime);
-    void writeReencodedPacket(CutSession& s, AVPacket* pkt);
-    void writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double pktTime);
+    static bool ensureAc3Codecs(CutSession& s, int targetAcmod);
+    static bool writeRepairedPacket(CutSession& s, const AVPacket* pkt,
+                                    const QByteArray& bytes, double pktTime);
+    static void writeReencodedPacket(CutSession& s, AVPacket* pkt);
+    static void writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double pktTime);
+    static void writeOnOutputTimeline(CutSession& s, AVPacket* pkt, double pktTime,
+                                      const char* what);
 
     void setError(const QString& error);
     QString mLastError;

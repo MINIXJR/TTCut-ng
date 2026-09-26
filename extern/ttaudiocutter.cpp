@@ -281,18 +281,8 @@ bool TTAudioCutter::writeRepairedPacket(CutSession& s, const AVPacket* pkt,
     }
     memcpy(rp->data, bytes.constData(), bytes.size());
     rp->pts = pkt->pts + s.ptsOffset;
-    rp->dts = rp->pts;
     rp->duration = pkt->duration;
-    rp->stream_index = 0;
-    rp->pos = -1;
-
-    const int ret = av_write_frame(s.outFmtCtx, rp);
-    if (ret < 0) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("  Warning: av_write_frame (repair) failed at %1").arg(pktTime));
-    } else {
-        s.notePacketWritten(rp->pts);
-    }
+    writeOnOutputTimeline(s, rp, pktTime, " (repair)");
     av_packet_free(&rp);
     return true;
 }
@@ -350,7 +340,7 @@ void TTAudioCutter::writeReencodedPacket(CutSession& s, AVPacket* pkt)
     s.ac3ConvertedFrame->nb_samples = s.ac3Frame->nb_samples;
     swr_convert(s.swrCtx,
         s.ac3ConvertedFrame->data, s.ac3ConvertedFrame->nb_samples,
-        (const uint8_t**)s.ac3Frame->data, s.ac3Frame->nb_samples);
+        const_cast<const uint8_t**>(s.ac3Frame->data), s.ac3Frame->nb_samples);
 
     s.ac3ConvertedFrame->pts = pkt->pts + s.ptsOffset;
 
@@ -379,6 +369,15 @@ void TTAudioCutter::writeReencodedPacket(CutSession& s, AVPacket* pkt)
 void TTAudioCutter::writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double pktTime)
 {
     pkt->pts += s.ptsOffset;
+    writeOnOutputTimeline(s, pkt, pktTime, "");
+}
+
+// Write one packet whose pts is already on the output timeline (dts = pts,
+// the single output stream) and account for it; `what` names the kind in the
+// warning (" (repair)" or "").
+void TTAudioCutter::writeOnOutputTimeline(CutSession& s, AVPacket* pkt, double pktTime,
+                                          const char* what)
+{
     pkt->dts = pkt->pts;
     pkt->stream_index = 0;
     pkt->pos = -1;
@@ -386,7 +385,7 @@ void TTAudioCutter::writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double p
     const int ret = av_write_frame(s.outFmtCtx, pkt);
     if (ret < 0) {
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("  Warning: av_write_frame failed at %1").arg(pktTime));
+            QString("  Warning: av_write_frame%1 failed at %2").arg(what).arg(pktTime));
     } else {
         s.notePacketWritten(pkt->pts);
     }
