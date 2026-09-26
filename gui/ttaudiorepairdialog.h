@@ -83,6 +83,14 @@ public:
                                        const QList<int>& extraFrameIndices,
                                        qint64& frameFrom, qint64& frameTo);
 
+  // The planned repair behind an AudioAnomaly marker: index into
+  // item->audioRepairList() of the first repair on the item's first AC3
+  // track whose range overlaps the marker's, or -1 (no AC3 track, another
+  // marker type, no such repair). The one link between marker and repair -
+  // the context menu and marker deletion both go through it.
+  static int repairIndexForMarker(const TTAVItem* item, const TTStreamPoint& point,
+                                  const QList<int>& extraFrameIndices);
+
   // Test/inspection accessors for the "model" part of this dialog (Task 7
   // brief Step 1: prefill + accept() must be verifiable offscreen without a
   // human eye/ear). Not used by production code, which only ever calls

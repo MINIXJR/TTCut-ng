@@ -326,6 +326,12 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 - **Stereo-/MP2-Scan**: die LFE-Insel-Heuristik ist AC3-5.1-spezifisch und
   bewusst nicht auf Stereo/MP2 übertragen (Spec-Entscheidung: Fehlalarmrisiko
   ohne eigene Kalibrierung).
+- **Reparatur-Dialog bietet Kanäle an, die die Spur nicht hat** (Audit-Lauf 10,
+  2026-09-25): die Kanalmaske ist immer mit C+LFE vorbelegt und alle sechs
+  Kanäle sind wählbar, auch auf einer Stereospur. Seit Lauf 10 weist „OK" eine
+  solche Reparatur mit Meldung ab (Probe-Bau in `accept`), vorher scheiterte
+  erst der Schnitt. Besser: die Kanäle der Spur im Bereich ermitteln, fehlende
+  Kästchen sperren und die Vorbelegung daran anpassen (Stereo: kein C/LFE).
 - **Weitere Ersatzverfahren**: v1 kennt nur „Stille mit Randfades"
   (`Method`-Feld ist für Erweiterung vorgesehen). Interpolation
   (autoregressive Vorhersage aus Randsamples, nur für kurze Störungen) und
@@ -405,7 +411,9 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   - **P9 Audio-Dekoder öffnen + Stream-Point-Audio-Worker teilen** — die
     libav-Leiter „Datei öffnen → Stream suchen → Dekoder öffnen" steht in
     `TTAudioAnomalyScanTask`, `TTStreamPointAudioWorker::detectSilencePoints`
-    und `TTAudioCutter::detectBurst`; sie macht den Großteil der Länge von
+    und `TTAudioCutter::detectBurst`, dazu (Audit-Lauf 10)
+    `TTAudioRepair::openFirstAudioStream`, `ttOpenInput` und
+    `probeFrameDurationMs` im Reparatur-Dialog; sie macht den Großteil der Länge von
     `detectSilencePoints` (155 Zeilen) und `detectBurst` (246 Zeilen) aus.
     Ein gemeinsamer Öffner mit RAII-Freigabe, danach die Worker-Methode nach
     Phasen teilen.

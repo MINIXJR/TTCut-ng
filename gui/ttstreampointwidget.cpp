@@ -199,12 +199,8 @@ void TTStreamPointWidget::buildContextMenu(QMenu& menu, const QModelIndex& index
     if (type == StreamPointType::AudioAnomaly && mpAvItem) {
       acts.repairTrackIndex = mpAvItem->firstAc3TrackIndex();
       if (acts.repairTrackIndex >= 0) {
-        const TTStreamPoint pt = mModel->pointAt(index.row());
-        const double frameRate = mpAvItem->videoStream() ? mpAvItem->videoStream()->frameRate() : 25.0;
-        qint64 approxFrom = 0, approxTo = 0;
-        TTAudioRepairDialog::approxAc3RangeForMarker(pt, frameRate, mExtraFrameIndices, approxFrom, approxTo);
-
-        acts.repairIndex = mpAvItem->findAudioRepairOverlapping(acts.repairTrackIndex, approxFrom, approxTo);
+        acts.repairIndex = TTAudioRepairDialog::repairIndexForMarker(
+            mpAvItem, mModel->pointAt(index.row()), mExtraFrameIndices);
 
         menu.addSeparator();
         if (acts.repairIndex >= 0) {

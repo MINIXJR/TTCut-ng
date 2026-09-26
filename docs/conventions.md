@@ -14,7 +14,8 @@ and to files that are being reworked anyway.
   Two spaces, no tabs (the TTCut heritage). The H.26x/Smart-Cut block
   (`avstream/tth26*`, `ttnaluparser`, `extern/ttessmartcut`, `ttffmpegwrapper`,
   `tthevcseam`, `ttmkvmergeprovider`, the settings pages and the C tools under
-  `tools/`) uses four spaces consistently and stays that way; do not mix widths
+  `tools/`) and the libav audio cut and repair (`extern/ttaudiocutter`,
+  `extern/ttaudiorepair`) use four spaces consistently and stay that way; do not mix widths
   inside a file. The scanner lists these files as outliers against `2`; the
   verdict store carries them as `deliberate`.
 - **cpp/class_prefix**: `TT`

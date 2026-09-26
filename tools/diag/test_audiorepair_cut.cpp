@@ -22,13 +22,13 @@
 //        keep window is built and passed in; the lookup never matches inside
 //        the loop, so the output must be byte-identical to A (whole-file MD5
 //        compare).
-//     5. Segment-boundary-span path (Fix-Runde 1): a repair item whose frame
-//        range straddles the boundary between two keep segments must abort
-//        the TRACK via TTAVData::cutAudioTracks -- the target acmod is a
-//        per-call scalar and cannot represent two different segment targets
-//        for one item, so cutAudioTracks must never silently build a table
-//        against the wrong one. Checked at the cutAudioTracks level (not
-//        TTAudioCutter::cut in isolation), since the segment lookup lives there.
+//     5. Segment-boundary-span path, at the TTAVData::cutAudioTracks level
+//        where the segment lookup lives: a repair item reaching over the
+//        boundary between two keep segments is built when both segments
+//        want the same target acmod (audio-repair.md H1, user decision
+//        2026-09-25), and aborts the TRACK when they want different ones -
+//        the target acmod is a per-call scalar, so one table cannot serve
+//        both. The mixed case runs on a 5.1 + stereo file built here.
 //   Prints "ALL PASS"/"FAILED" and exits 0/1 accordingly.
 //
 // Build via `cmake --build build --target test_audiorepair_cut`.
@@ -189,15 +189,12 @@ static QByteArray fileMd5(const QString& path)
     return h.result();
 }
 
-// --- Fix-Runde 1, Important: a repair item whose frame range straddles the
-// boundary between two keep segments must abort the track, never silently
-// build its table against just one segment's targetAcmod. Item frames
-// 937-975 -> time [29.984, 31.232); the two video-domain keep segments are
-// split at 30.4s, well inside that range (>=0.15s margin on both sides --
-// safely more than one audio frame (32 ms) away from either edge, so
-// planAudioCut's frame-boundary snapping cannot pull the split back outside
-// the item's range). Exercised at the TTAVData::cutAudioTracks level (not
-// TTAudioCutter::cut in isolation), since the segment lookup lives there.
+// --- Segment-boundary span -----------------------------------------------
+// Item frames 937-975 -> time [29.984, 31.232); the two keep segments are
+// split at 30.4s, well inside that range (>= 0.15 s margin on both sides,
+// more than one audio frame, so planAudioCut's snapping cannot pull the
+// split outside the item). Without acmod normalization both segments want
+// the same target (-1), so the repair is built and applied in both.
 static void testSegmentBoundarySpan()
 {
     if (!QFileInfo::exists(kSampleFile)) {
@@ -217,8 +214,7 @@ static void testSegmentBoundarySpan()
     avItem->appendAudioEntry(aStream);
 
     const quint8 kMask = 0b001100; // C + LFE
-    TTAudioRepairItem item(0, 937, 975, kMask);
-    avItem->appendAudioRepair(item);
+    avItem->appendAudioRepair(TTAudioRepairItem(0, 937, 975, kMask));
     check(avItem->audioRepairList().size() == 1, "boundary-span test: repair item attached");
 
     const QList<QPair<double, double>> videoKeepList = {
@@ -231,7 +227,7 @@ static void testSegmentBoundarySpan()
 
     TTAVData avData;
     bool sawOnCut = false;
-    bool cutOk = true;
+    bool cutOk = false;
     avData.cutAudioTracks(avItem, {0}, videoKeepList, false,
         [&](int, const QString&) { return outFile; },
         [&](int, const QString&, const QString&, bool ok) {
@@ -240,24 +236,68 @@ static void testSegmentBoundarySpan()
         });
 
     check(sawOnCut, "boundary-span test: onCut was invoked");
-    check(!cutOk, "boundary-span test: track reports ok==false (segment-span error caught)");
-    check(!QFileInfo::exists(outFile), "boundary-span test: no output file was written");
+    check(cutOk, "boundary-span test: same target on both segments - the track is cut");
+    check(QFileInfo::exists(outFile), "boundary-span test: the output file was written");
+    check(avData.audioCutFailureReasons().isEmpty(),
+          QString("boundary-span test: no failure reason (got: %1)")
+              .arg(avData.audioCutFailureReasons().join(" | ")));
+}
 
-    // Final review M14: the actionable reason must be retrievable by the
-    // caller in user-facing wording, not only findable in the log file - that
-    // is what the partial-failure dialog now shows.
-    const QStringList reasons = avData.audioCutFailureReasons();
-    check(reasons.size() == 1,
-          QString("boundary-span test: exactly one user-facing failure reason (got %1)")
-              .arg(reasons.size()));
-    if (!reasons.isEmpty()) {
-        check(reasons.first().contains("cut-segment boundary", Qt::CaseInsensitive),
-              QString("boundary-span test: the reason names the cut-segment boundary "
-                      "(got: %1)").arg(reasons.first()));
-        check(reasons.first().contains("937") && reasons.first().contains("975"),
-              QString("boundary-span test: the reason names the offending range 937-975 "
-                      "(got: %1)").arg(reasons.first()));
+// Two keep segments whose majority channel layouts differ (5.1, then
+// stereo; both 384 kbit/s, so every frame is 1536 bytes) and a repair item
+// across their boundary: with acmod normalization the segments want
+// different targets, which one repair table cannot represent - the track
+// must fail with the user-facing reason, and nothing may be written.
+static void testMixedTargetSpan()
+{
+    const QString dir   = QFileInfo(kSampleFile).absolutePath();
+    const QString part1 = dir + "/test_audiorepair_cut_51.ac3";
+    const QString part2 = dir + "/test_audiorepair_cut_20.ac3";
+    const QString mixed = dir + "/test_audiorepair_cut_mixed.ac3";
+    for (const auto& [out, ch] : {std::pair<QString, QString>{part1, "6"}, {part2, "2"}}) {
+        QProcess p;
+        p.start("ffmpeg", {"-y", "-v", "error", "-f", "lavfi", "-i",
+                           "sine=frequency=440:sample_rate=48000:duration=5",
+                           "-ac", ch, "-c:a", "ac3", "-b:a", "384k", "-f", "ac3", out});
+        if (!p.waitForFinished(60000) || p.exitCode() != 0) {
+            check(false, "mixed-target test: fixture built with ffmpeg");
+            return;
+        }
     }
+    QFile m(mixed), a(part1), b(part2);
+    if (!m.open(QIODevice::WriteOnly | QIODevice::Truncate) || !a.open(QIODevice::ReadOnly) ||
+        !b.open(QIODevice::ReadOnly)) {
+        check(false, "mixed-target test: fixture concatenated");
+        return;
+    }
+    m.write(a.readAll());
+    m.write(b.readAll());
+    m.close();
+
+    TTAudioType    aType(mixed);
+    TTAudioStream* aStream = aType.createAudioStream();
+    if (!aStream) { check(false, "mixed-target test: could not create audio stream"); return; }
+    aStream->createHeaderList();
+
+    TTAVItem* avItem = new TTAVItem(nullptr);
+    avItem->appendAudioEntry(aStream);
+    avItem->appendAudioRepair(TTAudioRepairItem(0, 140, 171, 0x01));   // 4.48-5.50 s, FL
+
+    const QString outFile = dir + "/test_audiorepair_cut_mixed_out.ac3";
+    QFile::remove(outFile);
+    TTAVData avData;
+    bool cutOk = true;
+    avData.cutAudioTracks(avItem, {0}, {qMakePair(1.0, 5.0), qMakePair(5.0, 9.0)}, true,
+        [&](int, const QString&) { return outFile; },
+        [&](int, const QString&, const QString&, bool ok) { cutOk = ok; });
+
+    check(!cutOk, "mixed-target test: segments with different targets - the track fails");
+    check(!QFileInfo::exists(outFile), "mixed-target test: no output file was written");
+    const QStringList reasons = avData.audioCutFailureReasons();
+    check(reasons.size() == 1 && reasons.first().contains("different channel layouts")
+              && reasons.first().contains("140") && reasons.first().contains("171"),
+          QString("mixed-target test: the reason names the layouts and the range 140-171 (got: %1)")
+              .arg(reasons.join(" | ")));
 }
 
 int main(int argc, char** argv)
@@ -417,8 +457,9 @@ int main(int argc, char** argv)
                   .arg(QString(md5A.toHex())).arg(QString(md5C.toHex())));
     }
 
-    // --- Step 5: segment-boundary-span path (Fix-Runde 1) -------------------
+    // --- Step 5: segment-boundary span, same and mixed targets --------------
     testSegmentBoundarySpan();
+    testMixedTargetSpan();
 
     printf("\n%s (%d failures)\n", gFailures == 0 ? "ALL PASS" : "FAILED", gFailures);
     return gFailures == 0 ? 0 : 1;

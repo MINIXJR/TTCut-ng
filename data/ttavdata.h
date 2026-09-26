@@ -526,12 +526,11 @@ class TTAVData : public QObject
     // TTAudioCutter::cut's repairTable parameter. An item whose frames fall in no
     // kept window is skipped (never written, building its table would be
     // dead work and could needlessly fail on an out-of-range acmod change).
-    // An item whose range touches a kept window but is not fully contained in
-    // it (spans a cut-segment boundary, possibly into a differently-targeted
-    // window) is treated like a table-build error, since the target acmod is
-    // a single scalar per buildRepairTable call and cannot represent two
-    // different targets for one item. A table-build error (or a boundary
-    // span) aborts the TRACK (ok=false via onCut, logged) -- never a silent
+    // An item may reach out of the kept window(s) it touches - the cutter
+    // never writes the frames outside - but all windows it touches must want
+    // the same target acmod, which is a single scalar per buildRepairTable
+    // call; otherwise it is treated like a table-build error. A table-build
+    // error (or mixed targets) aborts the TRACK (ok=false via onCut, logged) -- never a silent
     // skip of the repair, per the feature's error contract.
     QList<float> cutAudioTracks(
         TTAVItem* avItem,
@@ -567,7 +566,8 @@ class TTAVData : public QObject
 
     //! User-facing reasons for the tracks the LAST cutAudioTracks() call could
     //! not cut, one line per failed track ("Audio track 2: the repair range
-    //! 63894-63901 spans a cut-segment boundary - adjust ..."). Empty after a
+    //! 63894-63901 reaches into cut segments with different channel layouts
+    //! - adjust ..."). Empty after a
     //! fully successful call; a user cancel is not a failure and adds nothing.
     //! Callers put these into the partial-failure message they show, so the
     //! actionable half of the reason does not stay in the log file alone
