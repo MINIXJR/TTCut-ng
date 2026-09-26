@@ -2140,6 +2140,51 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Audit-Lauf 10: Lese-Hypothesen der Karte `audio-repair.md`** → **DONE
+  (2026-09-26, Zweig `cleanup/code-audit-run10`)**. Gemessen mit Wegwerf-Sonden
+  (Tux H.264 + `tux_test.ac3`) und im echten Hauptfenster, bevor gebaut wurde.
+  - **H1** Reparatur über eine Vorschau-Fenstergrenze: `preview_001.mkv` ohne
+    Tonspur, Grund nur im Log; der Endschnitt mit derselben Reparatur gelang.
+    User-Entscheid: überall lockern. Eine Reparatur darf über ihre Fenster
+    hinausragen (der Schnitt schreibt nur Rahmen im Fenster); nur Fenster mit
+    verschiedenem Ziel-acmod lassen die Spur scheitern, mit neuer Meldung.
+    Gate `repair_window_edge` (Clip behält Ton; Schnittkante durch die
+    Reparatur ersetzt genau die geschriebenen Rahmen 150–157), dazu
+    `audiorepair_cut` (gleiche Ziele → Erfolg, 5.1 + Stereo → neue Meldung).
+  - **H2** gelöschter Marker: danach 0 Marker, gespeichertes Projekt 1×
+    `<Repair>`, 0× `<StreamPoint>` — Reparatur unsichtbar, weiter angewandt.
+    User-Entscheid: Rückfrage, dann beides entfernen (auch „Alle löschen“).
+    `TTAudioRepairDialog::repairIndexForMarker` ist jetzt die eine Verbindung
+    Marker ↔ Reparatur. Gate `marker_delete_repair`.
+  - **H3** `accept` prüfte nur Ende ≥ Anfang. Jetzt: mindestens ein Kanal und
+    ein Probe-Bau der Tabelle in der Quell-Belegung; Fehler → Meldung, Dialog
+    bleibt offen. Dabei fiel auf, dass die Fälle 1/2 von `repairdialog_model`
+    selbst eine nie baubare C+LFE-Reparatur über den Wechsel 938/939 speicherten.
+  - **H4** `videoFrameForTime` nach zwei Runden abgebrochen: bei fünf
+    Extra-Bildern in Folge Marker auf 103 statt 106. Jetzt bis stabil
+    (höchstens Listengröße). Gate `anomalyscan` (drei neue Fälle).
+  - **H8 (neu beim Bauen des H3-Gates)** `buildRepairTable` kodierte mit der
+    Bitrate des ersten Rahmens; `tux_test.ac3` wechselt Stereo 192 / 5.1
+    384 kbit/s (Rahmen 0–938, 939–1877, 1878–2972, 2973–3754) → jede Reparatur
+    in einem Block anderer Bitrate scheiterte mit „encoded replacement frame
+    size mismatch“. Jetzt Bitrate aus der Rahmengröße (`bytes · 8 · rate /
+    1536`). Gate `audiorepair` (zwei 5.1-Fälle, auf altem Stand rot).
+  - Nicht behoben: **H5** (Probehören gegen Schnitt bei abweichendem
+    Ziel-acmod) nicht gemessen, fehlendes Material; **H6** (Lade-Prüfung setzt
+    CBR über die ganze Datei voraus) auf echtem Material nicht aufgetreten
+    (140 654 Pakete, alle 1792 Byte); **H7** (Rahmennummer aus der Paketzeit)
+    widerlegt — Test- und echtes Material beginnen bei PTS 0, ohne Lücken.
+  - Umbau C1–C3 (51 nie beurteilte Kandidaten: 17 umgebaut, 4 → P9,
+    28 deliberate, 2 Konventionsdateien in die Ausnahmeliste): Paket-Helfer
+    von `TTAudioCutter` `static`, gemeinsamer Schreibschritt
+    `writeOnOutputTimeline` (`test_audiocutter_paths` byteidentisch);
+    `buildRepairTable` mit einem `qScopeGuard` (313 → 258 Zeilen, Komplexität
+    95 → 83; zehn Fälle vorher/nachher gleiche Tabellen-MD5 und Fehlertexte).
+    Store `docs/code-audit/build-verdicts-2026-09-26-run10.py`.
+  - Jeder Fix: Gate auf dem alten Stand rot, auf dem neuen grün.
+  - Messfalle: `run-gates --no-build` nach einem Stash-A/B führt die ALTE
+    Binärdatei aus — das Ziel neu bauen.
+
 - **Doppelte Mehrheits-acmod-Logik** → **ERLEDIGT** (2026-09-11, Branch
   `refactor/acmod-majority-shared`)
   - Zwei Implementierungen derselben Mehrheitsauswahl: `TTAudioCutter::
