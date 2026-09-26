@@ -49,8 +49,11 @@ class TTSubtitleStream;
 class TTAVTypes
 {
  public:
-  TTAVTypes( QString f_name );
+  explicit TTAVTypes( const QString& f_name );
   virtual ~TTAVTypes();
+  // Owns av_stream_info and av_stream: a copy would free them twice.
+  TTAVTypes(const TTAVTypes&)            = delete;
+  TTAVTypes& operator=(const TTAVTypes&) = delete;
 
   // known AV stream types
   enum AVStreamType
@@ -92,7 +95,7 @@ class TTAVTypes
 class TTAudioType : public TTAVTypes
 {
  public:
-  TTAudioType( QString f_name );
+  explicit TTAudioType( const QString& f_name );
   ~TTAudioType() override;
 
   TTAudioStream* createAudioStream();
@@ -113,8 +116,8 @@ class TTAudioType : public TTAVTypes
 class TTVideoType : public TTAVTypes
 {
  public:
-  TTVideoType( QString f_name );
-  ~TTVideoType();
+  explicit TTVideoType( const QString& f_name );
+  ~TTVideoType() override;
 
   TTVideoStream* createVideoStream();
 
@@ -128,8 +131,8 @@ class TTVideoType : public TTAVTypes
 class TTSubtitleType : public TTAVTypes
 {
  public:
-  TTSubtitleType( QString f_name );
-  ~TTSubtitleType();
+  explicit TTSubtitleType( const QString& f_name );
+  ~TTSubtitleType() override;
 
   TTSubtitleStream* createSubtitleStream();
 

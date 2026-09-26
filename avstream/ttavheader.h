@@ -95,16 +95,18 @@ public:
   virtual int     sampleRate();
   virtual int     frameLength();
 
+  // "192 kbit/s", "48000 Hz" from bitRate()/sampleRate() - the same for
+  // MPEG audio and AC3.
+  const QString& bitRateString() override;
+  const QString& sampleRateString() override;
+
   //protected:
-  long   position;  // header offset ???
   float  frame_time;
   // Start time of the frame in ms, the running sum of the frame_times
   // before it. double: a float sum of 34.83 ms (AC3 at 44.1 kHz) is 80 ms
   // off after 10 minutes (audit run 11).
   double abs_frame_time;
   int    frame_length;
-  int    bit_rate;
-  int    sample_rate;
 };
 
 // -----------------------------------------------------------------------------
@@ -183,8 +185,8 @@ class TTSubtitleHeader : public TTAVHeader
  public:
   TTSubtitleHeader();
 
-  QString text();
-  void    setText(QString text);
+  const QString& text() const;
+  void    setText(const QString& value);
   QTime   startTime();
   int     startMSec();
   void    setStartTime(QTime start);

@@ -34,13 +34,13 @@
 class TTAudioHeaderList : public TTHeaderList
 {
  public:
-  TTAudioHeaderList( int size );
+  explicit TTAudioHeaderList( int size );
 
   TTAudioHeader* audioHeaderAt( int index );
 
 
  protected:
-  void sort();
+  void sort() override;
 };
 
 #endif //TTAUDIOHEADERLIST_H

@@ -228,6 +228,14 @@ TTAudioHeader* TTAudioStream::headerAt( int index )
   return header_list->audioHeaderAt(index);
 }
 
+QTime TTAudioStream::streamLengthTime()
+{
+  if (header_list == nullptr || header_list->count() == 0)
+    return QTime(0, 0, 0, 0);
+
+  return ttMsecToTimeD(header_list->audioHeaderAt(header_list->count() - 1)->abs_frame_time);
+}
+
 
 // /////////////////////////////////////////////////////////////////////////////
 // -----------------------------------------------------------------------------
@@ -356,15 +364,6 @@ TTSequenceHeader* TTVideoStream::getSequenceHeader(int pos)
       : header_list->firstSequenceHeader();
 }
 
-/*
- * Return the picture coding type from picture at 'current_index'
- * position
- */
-QTime TTVideoStream::currentFrameTime()
-{
-  return ttFramesToTime( current_index, frameRate() );
-}
-
 int TTVideoStream::frameType( int i_pos )
 {
   return index_list->pictureCodingType( i_pos );
@@ -391,7 +390,7 @@ quint64 TTVideoStream::frameOffset( int i_pos )
   if ( ttAssigned( index_list ) && ttAssigned( header_list ) )
   {
     int h_index = index_list->headerListIndex( i_pos );
-    TTPicturesHeader* current_picture = header_list->pictureHeaderAt( h_index );
+    const TTPicturesHeader* current_picture = header_list->pictureHeaderAt( h_index );
     offset = current_picture->headerOffset();
   }
   else

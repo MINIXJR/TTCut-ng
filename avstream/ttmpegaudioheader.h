@@ -100,26 +100,22 @@ public:
 
   const QString& descString() override;
   const QString& modeString() override;
-  int      bitRate();
-  const QString& bitRateString() override;
-  int      sampleRate();
-  const QString& sampleRateString() override;
+  int      bitRate() override;
+  int      sampleRate() override;
 
   //private:
-  quint8 version;
-  quint8 layer;
-  bool   protection_bit;
-  quint8 bitrate_index;
-  quint8 bit_rate;
-  quint8 sampling_frequency;
-  quint8 sample_rate;
-  bool   padding_bit;
-  bool   private_bit;
-  quint8 mode;
-  quint8 mode_extension;
-  bool   copyright;
-  bool   original_home;
-  quint8 emphasis;
+  quint8 version            = 0;
+  quint8 layer              = 0;
+  bool   protection_bit     = false;
+  quint8 bitrate_index      = 0;
+  quint8 sampling_frequency = 0;
+  bool   padding_bit        = false;
+  bool   private_bit        = false;
+  quint8 mode               = 0;
+  quint8 mode_extension     = 0;
+  bool   copyright          = false;
+  bool   original_home      = false;
+  quint8 emphasis           = 0;
 
 };
 

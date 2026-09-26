@@ -55,7 +55,8 @@ TTAVHeader::TTAVHeader()
     str_description("unknown"),
     str_mode("unknown"),
     str_bit_rate("unknown"),
-    str_sample_rate("unknown")
+    str_sample_rate("unknown"),
+    log(TTMessageLogger::getInstance())
 {
 }
 
@@ -124,7 +125,6 @@ bool TTAVHeader::operator==(const TTAVHeader& test) const
 // -----------------------------------------------------------------------------
 TTAudioHeader::TTAudioHeader()
 {
-  position       = 0;
   frame_time     = 0.0;
   abs_frame_time = 0.0;
   frame_length   = 0;
@@ -152,6 +152,18 @@ int TTAudioHeader::sampleRate()
 int TTAudioHeader::frameLength()
 {
   return frame_length;
+}
+
+const QString& TTAudioHeader::bitRateString()
+{
+  str_bit_rate = QString("%1 kbit/s").arg(bitRate() / 1000);
+  return str_bit_rate;
+}
+
+const QString& TTAudioHeader::sampleRateString()
+{
+  str_sample_rate = QString("%1 Hz").arg(sampleRate());
+  return str_sample_rate;
 }
 
 
@@ -252,20 +264,19 @@ TTVideoHeader* TTBreakObject::restartObject()
 // -----------------------------------------------------------------------------
 // /////////////////////////////////////////////////////////////////////////////
 TTSubtitleHeader::TTSubtitleHeader()
+  : mStartMSec(0),
+    mEndMSec(0)
 {
-  mText = "";
-  mStartMSec = 0;
-  mEndMSec = 0;
 }
 
-QString TTSubtitleHeader::text()
+const QString& TTSubtitleHeader::text() const
 {
   return mText;
 }
 
-void TTSubtitleHeader::setText(QString text)
+void TTSubtitleHeader::setText(const QString& value)
 {
-  mText = text;
+  mText = value;
 }
 
 QTime TTSubtitleHeader::startTime()

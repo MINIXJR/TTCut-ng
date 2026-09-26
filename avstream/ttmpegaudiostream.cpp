@@ -58,33 +58,20 @@ TTAVTypes::AVStreamType TTMPEGAudioStream::streamType() const
   return TTAVTypes::mpeg_audio;
 }
 
-//! Returns the stream length as QTime
-QTime TTMPEGAudioStream::streamLengthTime()
-{
-  if (header_list == 0 || header_list->count() == 0)
-    return QTime(0, 0, 0, 0);
-
-  TTMpegAudioHeader* audio_header = (TTMpegAudioHeader*)header_list->audioHeaderAt( header_list->count()-1 );
-
-  return ttMsecToTimeD( audio_header->abs_frame_time );
-}
-
 // search next sync byte in stream
 // -----------------------------------------------------------------------------
 void TTMPEGAudioStream::searchNextSyncByte()
 {
-  quint8  byte1;
   quint8  byte2;
-  quint16 sync_word;
 
   stream_buffer->readByte( byte2 );
 
   while (!stream_buffer->atEnd() )
   {
-    byte1 = byte2;
+    const quint8 byte1 = byte2;
     stream_buffer->readByte( byte2 );
 
-    sync_word = (byte1<<8) + byte2;
+    const quint16 sync_word = (byte1<<8) + byte2;
 
     if ((sync_word & 0xffe0) == 0xffe0)
     {
@@ -96,7 +83,7 @@ void TTMPEGAudioStream::searchNextSyncByte()
 
 // parse mpeg audio header data
 // -----------------------------------------------------------------------------
-void TTMPEGAudioStream::parseAudioHeader( quint8* data, int offset, TTMpegAudioHeader* audio_header )
+void TTMPEGAudioStream::parseAudioHeader( const quint8* data, int offset, TTMpegAudioHeader* audio_header )
 {
   audio_header->version            = (data[offset] & 0x18) >> 3;
   audio_header->layer              = (data[offset] & 0x06) >> 1;
@@ -167,8 +154,6 @@ void TTMPEGAudioStream::readAudioHeader( TTMpegAudioHeader* audio_header )
 // -----------------------------------------------------------------------------
 int TTMPEGAudioStream::createHeaderList( )
 {
-  TTMpegAudioHeader* audio_header;
-  const TTMpegAudioHeader* prev_audio_header;
   QElapsedTimer updateTime;
   const int updateIntervalMs = 1000;
   int skipped = 0;
@@ -191,7 +176,7 @@ int TTMPEGAudioStream::createHeaderList( )
     	}
 
       searchNextSyncByte();
-      audio_header = new TTMpegAudioHeader();
+      TTMpegAudioHeader* audio_header = new TTMpegAudioHeader();
 
       // read and parse current audio header
       readAudioHeader( audio_header );
@@ -204,7 +189,7 @@ int TTMPEGAudioStream::createHeaderList( )
       else
       {
         // previous frame header
-        prev_audio_header = (TTMpegAudioHeader*)header_list->at(header_list->count()-1);
+        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
 
         // absolute frame time for current frame in msec
         audio_header->abs_frame_time = prev_audio_header->abs_frame_time+

@@ -54,7 +54,7 @@
 
 // construct a TTAVTypes object
 // -----------------------------------------------------------------------------
-TTAVTypes::TTAVTypes( QString f_name )
+TTAVTypes::TTAVTypes( const QString& f_name )
 {
   av_stream_info     = new QFileInfo( f_name );
   av_stream_exists   = av_stream_info->exists();
@@ -108,7 +108,7 @@ const QStringList& TTAVTypes::readableAudioSuffixes()
 
 // construct TTAudioType object
 // -----------------------------------------------------------------------------
-TTAudioType::TTAudioType( QString f_name )
+TTAudioType::TTAudioType( const QString& f_name )
   : TTAVTypes( f_name )
 {
   start_pos = 0;
@@ -150,7 +150,6 @@ void TTAudioType::getAudioStreamType()
 {
   int     count  = 0;
   quint8* buffer = new quint8[65536];
-  quint16 sync_word;
 
   log->debugMsg(__FILE__, __LINE__, QString("Get audio stream type"));
 
@@ -169,7 +168,7 @@ void TTAudioType::getAudioStreamType()
   // --------------------------------------------------------------------------
   for ( start_pos = 0; start_pos < count-1; start_pos++ )
   {
-    sync_word = (uint)((buffer[start_pos]<<8)+buffer[start_pos+1]);
+    const quint16 sync_word = (buffer[start_pos]<<8) + buffer[start_pos+1];
 
     //log->debugMsg(__FILE__, __LINE__, QString("sync word %1").arg(sync_word));
 
@@ -203,21 +202,14 @@ void TTAudioType::getAudioStreamType()
     {
       //log->debugMsg(__FILE__, __LINE__, QString("Found MPEG audio sync word: %1").arg(start_pos));
 
-      // Heap-allocated probe objects: free regardless of match outcome.
-      // Previously the non-match fall-through leaked both on every iteration
-      // where the 0xFFE0 sync word matched but the frame boundary didn't.
-      TTMpegAudioHeader* mpeg_header = new TTMpegAudioHeader();
-      TTMPEGAudioStream* mpeg_stream = new TTMPEGAudioStream(*av_stream_info, 0);
+      TTMpegAudioHeader mpeg_header;
+      TTMPEGAudioStream::parseAudioHeader( buffer, start_pos+1, &mpeg_header );
+      const int len = mpeg_header.frameLength();
 
-      mpeg_stream->parseAudioHeader( buffer, start_pos+1, mpeg_header );
-
-      bool matched = ( mpeg_header->frameLength() > 0 &&
-                       start_pos+mpeg_header->frameLength()+1 < count &&
+      bool matched = ( len > 0 &&
+                       start_pos+len+1 < count &&
                        // next sync_word is MPEG audio
-                       (((buffer[start_pos+mpeg_header->frameLength()]<<8)+buffer[start_pos+1+mpeg_header->frameLength()]) & 0xFFE0) == 0xFFE0 );
-
-      delete mpeg_stream;
-      delete mpeg_header;
+                       (((buffer[start_pos+len]<<8)+buffer[start_pos+1+len]) & 0xFFE0) == 0xFFE0 );
 
       if (matched) {
         av_stream_type = mpeg_audio;
@@ -245,7 +237,7 @@ void TTAudioType::getAudioStreamType()
 
 // construct TTVideoType object
 // -----------------------------------------------------------------------------
-  TTVideoType::TTVideoType( QString f_name )
+TTVideoType::TTVideoType( const QString& f_name )
 : TTAVTypes( f_name )
 {
   // if video file exists get video stream type
@@ -357,7 +349,7 @@ void TTVideoType::getVideoStreamType()
 
 // construct TTSubtitleType object
 // -----------------------------------------------------------------------------
-TTSubtitleType::TTSubtitleType( QString f_name )
+TTSubtitleType::TTSubtitleType( const QString& f_name )
   : TTAVTypes( f_name )
 {
   // if subtitle file exists get subtitle stream type

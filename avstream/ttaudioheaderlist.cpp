@@ -30,7 +30,7 @@
 
 #include <algorithm>
 
-bool audioHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
+bool audioHeaderListCompareItems( const TTAVHeader* head_1, const TTAVHeader* head_2 );
 
 TTAudioHeaderList::TTAudioHeaderList( int size )
   : TTHeaderList( size )
@@ -42,7 +42,7 @@ TTAudioHeader* TTAudioHeaderList::audioHeaderAt( int index )
 {
   checkIndexRange(index);
     
-  return (TTAudioHeader*)at( index );
+  return static_cast<TTAudioHeader*>(at( index ));
 }
 
 
@@ -51,11 +51,10 @@ void TTAudioHeaderList::sort()
   std::sort( begin(), end(), audioHeaderListCompareItems );
 }
 
-bool audioHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 )
+bool audioHeaderListCompareItems( const TTAVHeader* head_1, const TTAVHeader* head_2 )
 {
-  // the values for the display order of two items are compared
-  int time1 = (int)(((TTAudioHeader*)head_1)->abs_frame_time * 1000);
-  int time2 = (int)(((TTAudioHeader*)head_2)->abs_frame_time * 1000);
-
-  return (time1 < time2);
+  // by start time; compared as double - the former int of ms x 1000
+  // overflowed after 35 minutes
+  return static_cast<const TTAudioHeader*>(head_1)->abs_frame_time
+       < static_cast<const TTAudioHeader*>(head_2)->abs_frame_time;
 }

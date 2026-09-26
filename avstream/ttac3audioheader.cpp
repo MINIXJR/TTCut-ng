@@ -46,7 +46,6 @@ TTAC3AudioHeader::TTAC3AudioHeader()
 {
     str_description = "AC-3";
     str_mode        = "unknown";
-    acmod           = 0;   // modeString() indexes AC3Mode[acmod] before parseBasicData() may have run
 }
 
 
@@ -81,22 +80,7 @@ int TTAC3AudioHeader::bitRate()
   return 1000*AC3BitRate[frmsizecod];
 }
 
-const QString& TTAC3AudioHeader::bitRateString()
-{
-  str_bit_rate = QString("%1 kbit/s").arg(bitRate() / 1000);
-
-  return str_bit_rate;
-}
-
 int TTAC3AudioHeader::sampleRate()
 {
   return AC3SampleRate[fscod];
 }
-
-const QString& TTAC3AudioHeader::sampleRateString()
-{
-  str_sample_rate = QString("%1 Hz").arg(sampleRate());
-  
-  return str_sample_rate;
-}
-

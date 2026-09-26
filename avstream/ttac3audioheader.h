@@ -116,20 +116,17 @@ public:
 
   const QString& descString() override;
   const QString& modeString() override;
-  int      bitRate();
-  const QString& bitRateString() override;
-  int      sampleRate();
-  const QString& sampleRateString() override;
+  int      bitRate() override;
+  int      sampleRate() override;
 
   //private:
-  int     crc1;
-  quint8  fscod;
-  quint8  frmsizecod;
-  quint16 syncframe_words;
-  quint8  bsid;
-  quint8  bsmod;
-  quint8  acmod;
-  bool    lfeon;
+  quint8  fscod           = 0;
+  quint8  frmsizecod      = 0;
+  quint16 syncframe_words = 0;
+  quint8  bsid            = 0;
+  quint8  bsmod           = 0;
+  quint8  acmod           = 0;   // modeString() indexes AC3Mode[acmod] before readAudioHeader() may have run
+  bool    lfeon           = false;
 };
 
 #endif //TTAC3AUDIOHEADER_H
