@@ -417,6 +417,16 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     `detectSilencePoints` (155 Zeilen) und `detectBurst` (246 Zeilen) aus.
     Ein gemeinsamer Öffner mit RAII-Freigabe, danach die Worker-Methode nach
     Phasen teilen.
+  - **P10 Ein Kopflisten-Lauf für MPEG-Audio und AC3** (Audit-Lauf 11,
+    `audio-es-input.md`) — `TTMPEGAudioStream::createHeaderList` und
+    `TTAC3AudioStream::createHeaderList` (mit `searchNextSyncByte`) sind
+    derselbe Lauf: Abbruch prüfen, Sync suchen, Kopf lesen, unbrauchbaren
+    Kopf überspringen, `abs_frame_time` verketten, Rahmen überspringen,
+    Fortschritt melden, Dateiende schlucken. Seit Lauf 11 überspringen beide
+    einen unbrauchbaren Kopf. Ziel: ein Lauf in `TTAudioStream`, je Codec nur
+    Sync-Muster, Kopfgröße und das Lesen des Kopfes; E-AC3 beendet die Liste
+    weiterhin. Gate: jede Kopfliste vorher/nachher gleich, wie in Lauf 11
+    (Ausgabe aller Kopfwerte auf neun Dateien, `docs/completed-work.md`).
 
 - **AAC-, E-AC3- und DTS-Tonspuren werden nicht gelesen** (Audit-Lauf 11,
   `audio-es-input.md` H2). `ttcut-demux` schreibt `.aac` und `.eac3`, aber
