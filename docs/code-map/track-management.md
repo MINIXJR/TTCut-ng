@@ -1,5 +1,5 @@
 ---
-base_commit: 4017e44d7bd9b3147951270c3051de112dbdc68e
+base_commit: 014cdb99690eef09208287daced244ce54cf741f
 last_verified: 2026-09-26
 sources:
   - data/ttaudiolist.h
@@ -123,7 +123,7 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 2.30, `LR` 3.07.
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `DISC` → `TASK` | One `doOpenAudioStream(item, path)` per `getAudioNames()` hit (`<base>*.{mpa,mp2,ac3,aac}`, `QDir` name order) and one `doOpenSubtitleStream` per `<base>*.srt`, all with the default **order −1**. The open itself: [stream-open-project-load.md](stream-open-project-load.md). |
+| `DISC` → `TASK` | One `doOpenAudioStream(item, path)` per `getAudioNames()` hit (`<base>*.<suffix>` for `TTAVTypes::readableAudioSuffixes` — mpa, mp2, mp3, ac3 —, `QDir` name order) and one `doOpenSubtitleStream` per `<base>*.srt`, all with the default **order −1**. The open itself: [stream-open-project-load.md](stream-open-project-load.md). |
 | `PRJ` → `TASK` | `<Order>` of the section (parsed by `parseSectionHeader`) is passed as the task's order. For `<Subtitle>`, an `<Order>` of −1 (which older projects carry for every discovered or added subtitle) is replaced by the section's position among the `<Subtitle>` sections of its `<Video>` (`parseSubtitleSection`'s `position`). |
 | `MAN` → `TASK` | Menu/button open of one file for the **current** item, order −1. `onReadAudioStream` only remembers the absolute path in `mPendingLengthCheckFile`; the length check runs when that file arrives (`ITEM` -.-> `MW`). |
 | `INFO` → `PEND` | `openAVStreams` maps `audio_N_lang` (`TTESInfo`, default `"und"`) to the discovered files by file name and parks it in `mPendingInfoAudioLanguages` under `(item, absolute audio file path)`, through `TTCut::canonicalLangCode`. An `und` is not parked, so it never replaces the file-name language. Subtitles get nothing from `.info`. |

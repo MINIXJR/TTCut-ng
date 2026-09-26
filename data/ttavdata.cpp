@@ -1169,18 +1169,17 @@ void TTAVData::onThreadPoolExit()
 
 /* /////////////////////////////////////////////////////////////////////////////
  * getAudioNames
- * Search for audiofiles acording to the video file name; Valid audio extensions
- * are: mpa, mp2, ac3
+ * Search for audio files according to the video file name, one filter per
+ * suffix TTAudioType can read (TTAVTypes::readableAudioSuffixes). ".aac" was
+ * searched as well and then refused on every open (audit run 11, H2).
  */
 QFileInfoList TTAVData::getAudioNames(const QFileInfo& vFileInfo)
 {
 	QDir audioDir(vFileInfo.absoluteDir());
 
 	QStringList audioFilters;
-	audioFilters << vFileInfo.completeBaseName() + "*" + ".mpa"
-			<< vFileInfo.completeBaseName() + "*" + ".mp2"
-			<< vFileInfo.completeBaseName() + "*" + ".ac3"
-			<< vFileInfo.completeBaseName() + "*" + ".aac";
+	for (const QString& suffix : TTAVTypes::readableAudioSuffixes())
+		audioFilters << vFileInfo.completeBaseName() + "*." + suffix;
 
 	audioDir.setNameFilters(audioFilters);
 	audioDir.setFilter(QDir::Files);

@@ -116,13 +116,6 @@ int TTMpegAudioHeader::bitRate()
   return 1000*mpeg_bit_raten[version][layer][bitrate_index];
 }
  
-const QString& TTMpegAudioHeader::bitRateString()
-{
-  str_bit_rate = QString("%1 kbit/s").arg(bitRate() / 1000);
-
-  return str_bit_rate;
-}
-
  int TTMpegAudioHeader::sampleRate()
 {
   //qDebug( "version, sample_index: %d/%d:%d",version,sampling_frequency,mpeg_sample_raten[version][sampling_frequency] );
@@ -136,12 +129,3 @@ const QString& TTMpegAudioHeader::bitRateString()
 
   return result;
 }
-
-const QString& TTMpegAudioHeader::sampleRateString()
-{
-  str_sample_rate = QString("%1 Hz").arg(sampleRate());
-
-  return str_sample_rate;
-}
-
-

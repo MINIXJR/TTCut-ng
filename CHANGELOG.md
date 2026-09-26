@@ -5,6 +5,30 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Audio at 44.1 kHz stays in sync across cuts.** The length of an MPEG
+  audio or AC3 frame was taken from its byte size, which at 44.1 kHz varies
+  with the padding bit; the first frame's value, which the cut plan works
+  with, was 26.083 instead of 26.122 ms. Every kept segment then lost about
+  20 ms of audio - 0.2 s after ten cuts - while the drift column showed
+  almost none. The frame length now comes from its sample count. 48 kHz
+  (DVB) is unchanged. Gate: `audio_es_input`.
+- **MPEG-2 audio at 16/22.05/24 kHz (Layer I/II) opens.** Its frames were
+  parsed at half their length, so the file was refused as unsupported.
+- **One broken MPEG audio frame header no longer hides the rest of the
+  track.** The header list ended at the first unreadable header, so e.g.
+  the audio list showed 2:00 for a 10-minute track; it now skips the header
+  and goes on, as for AC3.
+- **Silence and audio-change markers sit on the right frame.** They
+  ignored the extra (doubled) frames of the video - one frame early per
+  extra frame before them - and audio-change markers assumed 48 kHz AC3,
+  which put them 48.8 s early at 10:00 of a 44.1 kHz track. They now map
+  the audio time to the frame the same way the audio anomaly markers do.
+  Gate: `audio_es_input`.
+- **Only readable audio files are offered.** The open dialog listed AAC,
+  E-AC3 and DTS files and the automatic search next to a video picked up
+  `.aac` files, which were then refused as "Unsupported audio type". Both
+  now offer MPEG audio (`.mpa`, `.mp2`, `.mp3`) and AC3 (`.ac3`) only;
+  `.mp3` is now found next to a video as well.
 - **A planned audio repair works when a cut edge or a preview window runs
   through it.** The repair had to lie inside one cut segment: otherwise the
   cut failed, and the preview of that edge came without audio, with the

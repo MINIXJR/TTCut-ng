@@ -39,20 +39,22 @@ class TTMPEGAudioStream : public TTAudioStream
   Q_OBJECT
 
  public:
-  TTMPEGAudioStream( const QFileInfo &f_info, int s_pos=0 );
-  virtual ~TTMPEGAudioStream();
+  explicit TTMPEGAudioStream( const QFileInfo &f_info, int s_pos=0 );
+  ~TTMPEGAudioStream() override;
 
-  TTAVTypes::AVStreamType streamType() const;
+  TTAVTypes::AVStreamType streamType() const override;
 
   void searchNextSyncByte();
-  void parseAudioHeader( quint8* data, int offset, TTMpegAudioHeader* audio_header );
+  //! Fills audio_header from the three header bytes after the sync byte at
+  //! data[offset]; frame_length 0 when they describe no frame. Needs no
+  //! stream: TTAudioType probes sync candidates with it.
+  static void parseAudioHeader( const quint8* data, int offset, TTMpegAudioHeader* audio_header );
 
   void    readAudioHeader( TTMpegAudioHeader* audio_header );
 
-  virtual int createHeaderList( );
-  virtual int createIndexList(){return 0;};
+  int createHeaderList() override;
+  int createIndexList() override {return 0;}
 
-  QTime   streamLengthTime();
 };
 
 #endif //TTMPEGAUDIOSTREAM_H

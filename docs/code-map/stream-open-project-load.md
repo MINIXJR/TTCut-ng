@@ -1,5 +1,5 @@
 ---
-base_commit: 4017e44d7bd9b3147951270c3051de112dbdc68e
+base_commit: 014cdb99690eef09208287daced244ce54cf741f
 last_verified: 2026-09-26
 sources:
   - data/ttavdata.h
@@ -37,7 +37,7 @@ load overwrites (`settings-state.md`), the pool's progress bookkeeping
 | | Plain open (`TTAVData::openAVStreams`) | Project load (`TTCutProjectData::deserializeAVDataItem`) |
 |---|---|---|
 | Video | `doOpenVideoStream(path)`, order default | `doOpenVideoStream(path, order)` per `<Video>` |
-| Audio | discovered: `<base>*.{mpa,mp2,ac3,aac}` next to the video (`getAudioNames`), order −1 | every `<Audio>` with its `<Order>`; `<Language>`, `<Delay>`, `<Repair>` become pending entries keyed `(item, order)` |
+| Audio | discovered: `<base>*.<suffix>` next to the video for every `TTAVTypes::readableAudioSuffixes` entry (mpa, mp2, mp3, ac3; `getAudioNames`), order −1 | every `<Audio>` with its `<Order>`; `<Language>`, `<Delay>`, `<Repair>` become pending entries keyed `(item, order)` |
 | Subtitles | discovered `<base>*.srt` (`getSubtitleNames`), order −1 | every `<Subtitle>` with its `<Order>` (an `<Order>` of −1, which older projects carry, becomes the section's position among the `<Subtitle>` sections), pending language/delay keyed `(item, order)` |
 | `.info` | read here: languages → pending, VDR marks → `mpPendingVdrMarkers`, item marked for the defect dialog, legacy decode-error warning (modal) | not read here; `onOpenVideoFinished` reads it again for the extra-frame list only |
 | Cuts / markers | from VDR marks in `onOpenVideoFinished` | `parseCutSection`/`parseMarkerSection` append synchronously while the tasks still run, then `sortCutItemsByOrder`/`sortMarkerByOrder` `parseCutSection` refuses a range `TTAVItem::checkCut` rejects (negative or inverted) and skips that entry with a warning rather than failing the load. Compatibility between videos (`canCutWith`) cannot run here — the streams are not in yet — and is checked in `onReadProjectFileFinished`. |

@@ -59,31 +59,18 @@ TTAVTypes::AVStreamType TTAC3AudioStream::streamType() const
   return TTAVTypes::ac3_audio;
 }
 
-//! Return the stream length as QTime
-QTime TTAC3AudioStream::streamLengthTime()
-{
-  if (header_list == 0 || header_list->count() == 0) 
-    return QTime(0, 0, 0, 0);
-
-  TTAC3AudioHeader* audio_header = (TTAC3AudioHeader*)header_list->audioHeaderAt( header_list->count()-1 );
-
-  return ttMsecToTimeD(audio_header->abs_frame_time);
-}
-
 //! Search the next sync byte in stream
 void TTAC3AudioStream::searchNextSyncByte()
 {
-  quint8  byte1;
   quint8  byte2;
-  quint16 sync_word;
 
   stream_buffer->readByte(byte2);
 
   while ( !stream_buffer->atEnd() )
   {
-    byte1 = byte2;
-    stream_buffer->readByte(byte2);
-    sync_word = (byte1<<8) + byte2;
+    const quint8 byte1 = byte2;
+    stream_buffer->readByte( byte2 );
+    const quint16 sync_word = (byte1<<8) + byte2;
 
     if (sync_word == 0x0B77)
       break;
@@ -108,7 +95,6 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 
   audio_header->setHeaderOffset( stream_buffer->position() - (kAC3SyncBytes + kAC3HeaderBytes) );
 
-  audio_header->crc1            = daten[0]<<(8+daten[1]);
   audio_header->fscod           = (quint8)((daten[2]&0xc0)>>6);
   audio_header->frmsizecod      = (quint8)(daten[2]&0x3f);
 
@@ -119,7 +105,11 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
     audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
   }
   audio_header->frame_length    = audio_header->syncframe_words*2;
-  audio_header->frame_time      = 1000.0*((double)audio_header->syncframe_words*16.0)/(double)audio_header->bitRate();
+  // 1536 samples per AC3 frame: the duration is samples / sample rate, not
+  // the byte length / bit rate, which alternates at 44.1 kHz (69/70-word
+  // frames) - see TTMPEGAudioStream::parseAudioHeader (audit run 11, H1).
+  audio_header->frame_time      = (audio_header->sampleRate() > 0)
+                                  ? 1536.0 * 1000.0 / audio_header->sampleRate() : 0.0;
   audio_header->bsid            = (quint8)(daten[3]>>3);
   audio_header->bsmod           = (quint8)(daten[3] & 0x07);
   audio_header->acmod           = (quint8)(daten[4]>>5);
@@ -128,9 +118,6 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
   //    arg(audio_header->bitRate()).
   //    arg(audio_header->frame_length));
   
-  frame_length = audio_header->frame_length;
-  frame_time   = audio_header->frame_time;
-
   stuff = (quint16)((daten[4]<<8)+daten[5]);
   stuff <<= 3;
 
@@ -149,8 +136,6 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
 //! Create the header list
 int TTAC3AudioStream::createHeaderList()
 {
-  TTAC3AudioHeader* audio_header;
-  TTAC3AudioHeader* prev_audio_header;
   QElapsedTimer updateTime;
   const int updateIntervalMs = 1000;
 
@@ -172,7 +157,7 @@ int TTAC3AudioStream::createHeaderList()
 
       searchNextSyncByte();
 
-      audio_header = new TTAC3AudioHeader();
+      TTAC3AudioHeader* audio_header = new TTAC3AudioHeader();
 
       readAudioHeader( audio_header );
 
@@ -186,7 +171,7 @@ int TTAC3AudioStream::createHeaderList()
       }
 
       // Guard against zero/invalid frame length (fscod=3 reserved, corrupt data)
-      if (audio_header->syncframe_words <= 0) {
+      if (audio_header->syncframe_words == 0) {
         delete audio_header;
         continue;
       }
@@ -195,7 +180,7 @@ int TTAC3AudioStream::createHeaderList()
         audio_header->abs_frame_time = 0.0;
       else
       {
-        prev_audio_header = (TTAC3AudioHeader*)header_list->at(header_list->count()-1);
+        const TTAudioHeader* prev_audio_header = header_list->audioHeaderAt(header_list->count()-1);
         audio_header->abs_frame_time = prev_audio_header->abs_frame_time
           +prev_audio_header->frame_time;
       }

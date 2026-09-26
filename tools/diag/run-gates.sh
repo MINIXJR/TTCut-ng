@@ -103,6 +103,7 @@ mpeg2order             unit  120  test_mpeg2order
 mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
 mpeg2_framerate        unit  300  test_mpeg2_framerate
+audio_es_input         unit  300  test_audio_es_input
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -363,6 +364,7 @@ gate_mpeg2_framerate_cut() {
     || { echo "FAIL: the cut does not run at 50 fps"; exit 1; }
   echo "PASS: 720p50 cut is 10 s of video and 10 s of audio"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
+gate_audio_es_input()        { "$D/test_audio_es_input" "$W"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
 gate_settings_cancel()       { "$D/test_settings_cancel"; }

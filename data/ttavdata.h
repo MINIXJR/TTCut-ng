@@ -215,9 +215,13 @@ class TTAVData : public QObject
     //! with work amounts, for the progress estimator.
     void operationPlanReady(const QVector<TTStagePlan>& plan);
 
+  public:
+    //! The audio files the automatic search picks up next to a video:
+    //! <base>*.<suffix> for every suffix TTAudioType can read.
+    static QFileInfoList getAudioNames(const QFileInfo& vFileInfo);
+
   private:
     TTAVItem*      createAVItem();
-    static QFileInfoList getAudioNames(const QFileInfo& vFileInfo);
     static QFileInfoList getSubtitleNames(const QFileInfo& vFileInfo);
     //! The one place the current item changes: keeps mpCurrentAVItem and
     //! what currentAVItemChanged() tells the GUI in step.

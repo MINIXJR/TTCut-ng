@@ -63,7 +63,6 @@ protected:
   virtual ~TTAVStream();
 
 public:
-  QFileInfo* fileInfo() { return stream_info; }
   QString fileName();
   QString filePath();
   QString fileExtension();
@@ -100,29 +99,27 @@ signals:
 class TTAudioStream : public TTAVStream
 {
 public:
-  TTAudioStream(const QFileInfo &f_info, int s_pos=0);
-  virtual ~TTAudioStream();
+  explicit TTAudioStream(const QFileInfo &f_info, int s_pos=0);
+  ~TTAudioStream() override;
 
   // header list
   TTAudioHeaderList* headerList();
 
   TTAudioHeader* headerAt( int index );
 
+  //! Start time of the last frame (so one frame short of the file), 0 for
+  //! an empty list - the same for MPEG audio and AC3.
+  QTime streamLengthTime() override;
+
   // virtual cut methods
-  virtual bool isCutInPoint(int)  {return true;};
-  virtual bool isCutOutPoint(int)  {return true;};
+  bool isCutInPoint(int) override  {return true;}
+  bool isCutOutPoint(int) override {return true;}
 
 protected:
   // header list
   TTAudioHeaderList* header_list;
 
-  // audio_delay > 0: audio starts before video (in ms)
-  // audio_delay < 0: audio starts after  video (in ms)
-  int    audio_delay;
   int    start_pos;
-  int    samples_count;
-  int    frame_length;
-  double frame_time;
 };
 
 
@@ -133,7 +130,7 @@ class TTVideoStream : public TTAVStream
 {
  public:
   TTVideoStream( const QFileInfo &f_info );
-  virtual ~TTVideoStream();
+  ~TTVideoStream() override;
 
   // Audio is not cut through this interface: audio tracks go through
   // TTAudioCutter::cut() (libav stream copy), so only the
@@ -149,8 +146,7 @@ class TTVideoStream : public TTAVStream
   virtual bool    isPAFF() const { return false; }
   virtual int     paffLog2MaxFrameNum() const { return 4; }
   float   bitRate();
-  QTime   streamLengthTime();
-  QTime   currentFrameTime();
+  QTime   streamLengthTime() override;
   int     frameType(int i_pos);
   QTime   frameTime(int i_pos);
   quint64 frameOffset(int i_pos);
@@ -188,7 +184,6 @@ protected:
   TTVideoIndexList*  index_list;
 
   // Navigation
-  TTVideoIndex* video_index;
   int           current_index;
   int           current_marker_index;
 
@@ -213,8 +208,8 @@ public:
   TTSubtitleHeaderList* headerList();
 
   // virtual cut methods
-  virtual bool isCutInPoint(int)  { return true; }
-  virtual bool isCutOutPoint(int) { return true; }
+  bool isCutInPoint(int) override  { return true; }
+  bool isCutOutPoint(int) override { return true; }
 
 protected:
   TTSubtitleHeaderList* header_list;

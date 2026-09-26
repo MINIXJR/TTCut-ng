@@ -35,7 +35,7 @@ static QStringList runAndCollect(const QString& audioPath)
     QStringList lines;
     TTStreamPointAudioWorker worker(audioPath, 25.0f,
                                     true /*detectSilence*/, -30, 0.5f,
-                                    false /*detectAudioChange*/, nullptr);
+                                    false /*detectAudioChange*/, nullptr, {});
     QObject::connect(&worker, &TTThreadTask::statusReport,
                      [&lines](TTThreadTask*, int state, const QString& msg, quint64) {
                          if (state == StatusReportArgs::AddProcessLine)

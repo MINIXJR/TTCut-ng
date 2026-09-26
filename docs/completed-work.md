@@ -2140,6 +2140,52 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Audit-Lauf 11: Lese-Hypothesen der Karte `audio-es-input.md`** → **DONE
+  (2026-09-26, Zweig `cleanup/code-audit-run11`)**. Gemessen mit einer
+  Wegwerf-Sonde (Typerkennung, Kopfliste, `planAudioCut` + `TTAudioCutter::cut`,
+  Worker-Marker) auf synthetischem ffmpeg-Material, bevor gebaut wurde.
+  - **H1** 44,1-kHz-Raster: Kopf 0 = 26,083 ms (626 Byte, ohne Padding),
+    richtig 26,122 ms. Nicht der vermutete Fehler proportional zur Länge,
+    sondern ~20 ms pro behaltenem Segment: 10 Segmente über 1 h → 3044,937 s
+    Ton für 3045,135 s Video (−198 ms), Plan/Drift-Spalte −10 ms; 48 kHz
+    +9 ms wie geplant. Jetzt `frame_time` = Samples / Abtastrate (MPEG und
+    AC3) → +11 ms, Plan = Ergebnis.
+  - **H5** MPEG-2/2.5 Layer I/II mit halber Rahmenlänge: 24-kHz-MP2 wurde
+    dadurch schon bei der Erkennung abgelehnt (nicht, wie vermutet, eine
+    falsche Liste). Jetzt Samples je Layer nach Norm.
+  - **H3** ungültiger MPEG-Kopf bei 2:00 → Liste endete dort (5000 von
+    25 000), Längenspalte 1:59,976. Der Schnitt (libav) war nicht betroffen.
+    Jetzt überspringen + eine Sammelwarnung; 2498 von 2500 (ein Rahmen geht
+    beim Neuaufsetzen zusätzlich verloren).
+  - **H2** breiter als vermutet: `.eac3`, `.aac`, `.m4a` werden sauber als
+    „Unsupported audio type“ abgelehnt, aber Dialog (dazu `.dts`) und
+    automatische Suche (`.aac`) boten sie an; CLAUDE.md nannte `.aac` als
+    Eingabe. User-Entscheid: angleichen, `TTAVTypes::readableAudioSuffixes`
+    (mpa, mp2, mp3, ac3) als eine Liste für beide; AAC/E-AC3/DTS als TODO.
+  - **H4** Tonwechsel-Marker: 3 Extra-Bilder davor → 3 Bilder zu früh (751
+    statt 754); 44,1-kHz-AC3 → 48,8 s zu früh bei 10:00 (13 782 statt
+    15 002). Stille-Marker ignorierten Extra-Bilder ebenso. User-Entscheid:
+    beide über `videoFrameForTime`. Dabei gefunden: `abs_frame_time` als
+    `float`-Summe lag nach 10 min bei 34,83-ms-Rahmen 80 ms daneben → `double`.
+  - **H6** (Verträglichkeit nur am ersten Rahmen) nur im Code belegt, per
+    User-Entscheid belassen; steht als Vertrag in der Karte.
+  - Gate `audio_es_input` (15 Prüfungen, Material per ffmpeg): auf dem alten
+    Stand 7 von 13 rot (die 48-kHz-Kontrollen grün); die H4-Prüfungen per
+    Gegenprobe mit den alten Formeln rot (15 000 / 13 782 / 500).
+  - Umbau (118 nie beurteilte Kandidaten, fast alles cppcheck-Stil im alten
+    TTCut-Code): C1 tote Felder/Funktionen, C2 mechanisch (`override`,
+    `explicit`, Initialisierung, Casts, `const`), C3 `streamLengthTime` und
+    die Ratentexte in die Basisklassen, C4 (aus dem Neuscan) statisches
+    `parseAudioHeader` statt Wegwerf-Stream je Sync-Kandidat. Gate für jeden
+    Batch: Ausgabe aller Kopfwerte und -texte auf neun Dateien (tux_test.ac3,
+    MP2 48/44,1/24 kHz, AC3 48/44,1 kHz, kaputter MP2- und AC3-Kopf, MP3)
+    vorher/nachher gleich. 97 umgebaut, 19 + 5 deliberate, 4 → neues P10
+    (gemeinsamer Kopflisten-Lauf). Store
+    `docs/code-audit/build-verdicts-2026-09-26-run11.py`.
+  - Messfalle: Sonde ohne ihren CMake-Eintrag gebaut → alte Binärdatei, das
+    „gleich“ war wertlos; der Vergleich prüft seitdem, ob die Sonde neuer
+    ist als die Quellen.
+
 - **Audit-Lauf 10: Lese-Hypothesen der Karte `audio-repair.md`** → **DONE
   (2026-09-26, Zweig `cleanup/code-audit-run10`)**. Gemessen mit Wegwerf-Sonden
   (Tux H.264 + `tux_test.ac3`) und im echten Hauptfenster, bevor gebaut wurde.

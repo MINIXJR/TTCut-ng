@@ -40,17 +40,16 @@ class TTAC3AudioStream : public TTAudioStream
   Q_OBJECT
 
  public:
-  TTAC3AudioStream(const QFileInfo &f_info, int s_pos=0);
-  virtual ~TTAC3AudioStream();
+  explicit TTAC3AudioStream(const QFileInfo &f_info, int s_pos=0);
+  ~TTAC3AudioStream() override;
 
-  virtual TTAVTypes::AVStreamType streamType() const;
+  TTAVTypes::AVStreamType streamType() const override;
 
   void searchNextSyncByte();
   void readAudioHeader(TTAC3AudioHeader* audio_header);
 
-  virtual int  createHeaderList();
-  virtual int  createIndexList(){return 0;};
-  QTime        streamLengthTime();
+  int  createHeaderList() override;
+  int  createIndexList() override {return 0;}
 };
 
 #endif //TTAC3AUDIOSTREAM_H

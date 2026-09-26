@@ -33,6 +33,8 @@
 #include "ttcommon.h"
 #include "ttfilebuffer.h"
 
+#include <QStringList>
+
 class QString;
 class QFileInfo;
 
@@ -47,8 +49,11 @@ class TTSubtitleStream;
 class TTAVTypes
 {
  public:
-  TTAVTypes( QString f_name );
+  explicit TTAVTypes( const QString& f_name );
   virtual ~TTAVTypes();
+  // Owns av_stream_info and av_stream: a copy would free them twice.
+  TTAVTypes(const TTAVTypes&)            = delete;
+  TTAVTypes& operator=(const TTAVTypes&) = delete;
 
   // known AV stream types
   enum AVStreamType
@@ -69,6 +74,10 @@ class TTAVTypes
   { return t == h264_video ? 1 : (t == h265_video ? 2 : 0); }
   // H.264 or H.265: the Smart Cut (libav) family, as opposed to MPEG-2.
   static bool isH26x(AVStreamType t) { return t == h264_video || t == h265_video; }
+  // File suffixes of the audio streams TTAudioType can read (MPEG audio
+  // Layer I-III, AC3) - the automatic audio search and the open dialog
+  // offer exactly these. AAC, E-AC3 and DTS have no parser here.
+  static const QStringList& readableAudioSuffixes();
 
  protected:
 	 TTMessageLogger* log;
@@ -86,7 +95,7 @@ class TTAVTypes
 class TTAudioType : public TTAVTypes
 {
  public:
-  TTAudioType( QString f_name );
+  explicit TTAudioType( const QString& f_name );
   ~TTAudioType() override;
 
   TTAudioStream* createAudioStream();
@@ -107,8 +116,8 @@ class TTAudioType : public TTAVTypes
 class TTVideoType : public TTAVTypes
 {
  public:
-  TTVideoType( QString f_name );
-  ~TTVideoType();
+  explicit TTVideoType( const QString& f_name );
+  ~TTVideoType() override;
 
   TTVideoStream* createVideoStream();
 
@@ -122,8 +131,8 @@ class TTVideoType : public TTAVTypes
 class TTSubtitleType : public TTAVTypes
 {
  public:
-  TTSubtitleType( QString f_name );
-  ~TTSubtitleType();
+  explicit TTSubtitleType( const QString& f_name );
+  ~TTSubtitleType() override;
 
   TTSubtitleStream* createSubtitleStream();
 
