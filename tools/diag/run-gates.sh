@@ -165,6 +165,8 @@ audiorepair_persist    tux   600  test_audiorepair_persist
 track_persist          tux   600  test_track_persist
 track_gui              tux   600  test_track_gui
 preview_drift_rows     tux   600  test_preview_drift_rows
+repair_window_edge     tux   600  test_repair_window_edge
+marker_delete_repair   tux   600  test_marker_delete_repair
 audio_order_reset      tux   600  test_audio_order_reset
 anomaly_trigger_video  tux   600  test_auto_anomaly_scan_trigger
 anomaly_trigger_project tux  600  test_auto_anomaly_scan_trigger
@@ -611,6 +613,8 @@ gate_audiorepair_persist() { need "$TESTDATA/tux_test.ttcut"; "$D/test_audiorepa
 gate_track_persist()       { need "$TESTDATA/tux_test.264"; "$D/test_track_persist" "$W"; }
 gate_track_gui()           { need "$TESTDATA/tux_test.264"; "$D/test_track_gui" "$W"; }
 gate_preview_drift_rows() { need "$TESTDATA/tux_test.264"; "$D/test_preview_drift_rows" "$W"; }
+gate_repair_window_edge() { need "$TESTDATA/tux_test.264"; "$D/test_repair_window_edge" "$W"; }
+gate_marker_delete_repair() { need "$TESTDATA/tux_test.264"; "$D/test_marker_delete_repair" "$W"; }
 gate_audio_order_reset()   { need "$M2V" "$MP2" "$SRT"; make_two_track_project "$W/roundtrip.ttcut"
                              "$D/test_audio_order_reset" "$W/roundtrip.ttcut" "$SRT" "$W"; }
 gate_anomaly_trigger_video()   { need "$V264"; "$D/test_auto_anomaly_scan_trigger" video "$V264" "$W"; }

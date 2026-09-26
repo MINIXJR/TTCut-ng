@@ -5,6 +5,32 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A planned audio repair works when a cut edge or a preview window runs
+  through it.** The repair had to lie inside one cut segment: otherwise the
+  cut failed, and the preview of that edge came without audio, with the
+  reason only in the log. Now the part inside the kept audio is repaired;
+  only a repair reaching into two segments with different channel layouts
+  is still refused. Gates: `repair_window_edge`, `audiorepair_cut`.
+- **Audio repairs work in a recording whose AC3 bit rate changes.** The
+  replacement frames were encoded at the bit rate of the file's first
+  frame, so a repair in a part with another bit rate - e.g. a 5.1 film at
+  384 kbit/s after a stereo stretch at 192 kbit/s - could not be built and
+  failed the cut. They now use the bit rate of the frames they replace.
+  Gate: `audiorepair`.
+- **The repair dialog refuses a repair the cut could not apply.** OK used
+  to accept any range and channel set; a range across a change of channel
+  layout or bit rate, a channel the track does not have (the default
+  centre + LFE on a stereo track) or no channel at all failed only the cut.
+  The dialog now builds the repair once and says what is wrong while the
+  range can still be changed. Gate: `repairdialog_model`.
+- **Deleting an audio anomaly marker no longer leaves an invisible repair.**
+  The planned repair stayed in the project and was applied to every cut,
+  with no marker left to see or remove it. Deleting a marker with a planned
+  repair (or all markers) now asks, and removes the repair along with it.
+  Gate: `marker_delete_repair`.
+- **Audio anomaly markers sit on the right frame behind runs of doubled
+  frames.** Behind three or more extra frames in a row a marker landed up to
+  three frames early. Gate: `anomalyscan`.
 - **The cut preview shows only what the cut keeps.** When a cut was shorter
   than half the preview length, its preview windows ran on into the material
   behind the cut - cut-away frames and the next cut - and the preview list

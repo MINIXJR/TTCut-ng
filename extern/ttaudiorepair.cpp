@@ -8,10 +8,12 @@
 // hard-zero in between), re-encodes on the source's sample rate/bit rate,
 // and returns one ready-to-splice AC3 frame per source frame number.
 //
-// Bitrate and frame size are read from the opened stream, never hardcoded:
-// 384 kbit/s@48 kHz is 1536 bytes/frame, but corpus material also exists at
-// 448 kbit/s (1792 bytes/frame) -- see CLAUDE.md calibration note in the
-// Task 4 brief. The AC3 encoder ch_layout is taken from the DECODED frame
+// Bitrate and frame size come from the repaired source frames themselves,
+// never hardcoded and never from the stream header: 384 kbit/s@48 kHz is
+// 1536 bytes/frame, 448 kbit/s is 1792, and one file can switch between
+// them (e.g. stereo at 192 kbit/s, 5.1 at 384 kbit/s) - the stream-level
+// bit rate is the FIRST frame's and made every repair in a block of another
+// bit rate fail (audio-repair.md H8). The AC3 encoder ch_layout is taken from the DECODED frame
 // (not codecpar) so this works even if avformat left codecpar's channel
 // layout unpopulated for a raw elementary stream.
 //
@@ -151,15 +153,6 @@ FrameTable buildRepairTable(const QString& audioFile,
         avformat_close_input(&fmtCtx);
         return fail(QStringLiteral("invalid sample rate"));
     }
-    // Bit rate from the source, never hardcoded/faked (384k/448k both occur
-    // in the corpus): an unknown bit rate would silently produce
-    // wrong-sized replacement frames that can't splice byte-for-byte back
-    // into the source, so it is a hard error, not a 384k guess (I2).
-    if (cp->bit_rate <= 0) {
-        avformat_close_input(&fmtCtx);
-        return fail(QStringLiteral("could not determine source bit rate"));
-    }
-    const int64_t bitRate = cp->bit_rate;
 
     const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
     AVCodecContext* decCtx = dec ? avcodec_alloc_context3(dec) : nullptr;
@@ -293,7 +286,13 @@ FrameTable buildRepairTable(const QString& audioFile,
                 break;
             }
             encCtx->sample_rate = frame->sample_rate;
-            encCtx->bit_rate = bitRate;
+            // The bit rate of the repaired frames, from their size: an AC3
+            // frame carries 1536 samples, so bytes * 8 / (1536 / rate) bit/s
+            // (1536 B -> 384 kbit/s, 768 B -> 192 kbit/s at 48 kHz). All
+            // touched frames have this size (checked above), and the encoded
+            // size is checked against it below - a replacement that does not
+            // splice byte-for-byte is still a hard error (I2).
+            encCtx->bit_rate = sourceFrameSize * 8 * frame->sample_rate / 1536;
             encCtx->time_base = AVRational{1, frame->sample_rate};
             encCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
             if (targetAcmod < 0) {

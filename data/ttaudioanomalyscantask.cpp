@@ -74,10 +74,9 @@ void TTAudioAnomalyScanTask::onUserAbort()
 // Audio time -> video display frame index. Inverse of buildVideoKeepList's
 // (displayIndex - countExtraFramesBefore(displayIndex)) / frameRate: start
 // from the extras-free estimate, then correct for the extras that lie below
-// the corrected index. Converges in at most two rounds because
-// countExtrasBefore(idx) only changes when idx crosses an extra-frame
-// boundary, and the correction only ever grows idx forward past extras it
-// has not yet accounted for.
+// the corrected index. The correction only grows idx, and every round that
+// changes it has passed at least one more extra, so a run of k extras in a
+// row needs up to k + 1 rounds - bounded by the list size.
 // ---------------------------------------------------------------------------
 int TTAudioAnomalyScanTask::videoFrameForTime(double seconds, double fps,
                                               const QList<int>& extraFrameIndices)
@@ -85,9 +84,8 @@ int TTAudioAnomalyScanTask::videoFrameForTime(double seconds, double fps,
   if (fps <= 0.0) return 0;
   const int base = qRound(seconds * fps);
   int idx = base;
-  for (int round = 0; round < 2; ++round) {
-    const int extras = countExtrasBefore(extraFrameIndices, idx);
-    const int next = base + extras;
+  for (int round = 0; round <= extraFrameIndices.size(); ++round) {
+    const int next = base + countExtrasBefore(extraFrameIndices, idx);
     if (next == idx) break;
     idx = next;
   }

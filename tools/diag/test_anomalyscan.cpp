@@ -227,6 +227,27 @@ static void testVideoFrameForTime()
     check(result == 25100,
           QString("videoFrameForTime(1000.0, 25.0, 100 extras < 20000) == 25100 (got %1)")
               .arg(result));
+
+    // Runs of extras right below the target (audio-repair.md H4): the index
+    // has to pass every extra of the run, which took more than the two rounds
+    // the function used to allow - measured 103 instead of 106 for five in a
+    // row. Expected value: the smallest index whose extras-corrected time is
+    // the target, found by brute force.
+    auto extrasBelow = [](const QList<int>& e, int idx) {
+        int n = 0; for (int x : e) if (x < idx) ++n; return n;
+    };
+    const QList<QList<int>> runs = { {100, 101, 102}, {100, 101, 102, 103, 104}, {50, 100, 101, 102} };
+    for (const QList<int>& run : runs) {
+        for (double sec : {4.04, 4.08, 4.20}) {
+            const int base = qRound(sec * 25.0);
+            int want = base;
+            while (want - extrasBelow(run, want) != base) ++want;
+            const int got = TTAudioAnomalyScanTask::videoFrameForTime(sec, 25.0, run);
+            QStringList s; for (int x : run) s << QString::number(x);
+            check(got == want, QString("videoFrameForTime(%1 s, extras %2) == %3 (got %4)")
+                                   .arg(sec).arg(s.join(",")).arg(want).arg(got));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

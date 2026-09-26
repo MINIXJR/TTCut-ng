@@ -1957,7 +1957,8 @@ void TTAVData::onDoCut(QString tgtFileName, TTCutList* cutList, bool audioOnly)
     cutVideoTask = nullptr;
     mCutOperationActive = false;
     // The per-track reasons come along (final review M14): the actionable one
-    // ("the repair range N-M spans a cut-segment boundary - adjust ...") is
+    // ("the repair range N-M reaches into cut segments with different
+    // channel layouts - adjust ...") is
     // useless in a log file the user never opens.
     QString detail = tr("Only %1 of %2 audio track(s) could be cut - "
                         "the finished streams were kept.")
@@ -3023,8 +3024,9 @@ QList<float> TTAVData::cutAudioTracks(
   QList<float> firstDrifts;
   // Per-track failure reasons for THIS call, in user-facing wording. The
   // callers' partial-failure message used to say "see the log for the
-  // reason", which for the actionable case ("repair range spans a cut-segment
-  // boundary - adjust the range or the cut points") meant the one sentence
+  // reason", which for the actionable case ("repair range reaches into cut
+  // segments with different channel layouts - adjust the range or the cut
+  // points") meant the one sentence
   // that tells the user what to do never left the log file (final review
   // M14). Cleared here so a previous run's reasons can never be reported.
   mAudioCutFailureReasons.clear();
@@ -3098,42 +3100,37 @@ QList<float> TTAVData::cutAudioTracks(
           continue;
         }
 
-        // buildRepairTable only rejects a SOURCE acmod change inside the
-        // item's range -- the TARGET acmod is a single scalar per call, so
-        // an item whose frame range touches two keep windows with different
-        // targetAcmods would silently get the wrong target layout applied
-        // to whichever part falls outside the window we happened to look up.
-        // Require the entire item range to lie inside exactly one keep
-        // window; an item touching more than one (or poking out of the one
-        // it starts in) is treated like a buildRepairTable failure -- never
-        // silently mis-targeted.
-        double itemStartSec = item.frameFrom() * audioFrameSec;
-        double itemEndSec = (item.frameTo() + 1) * audioFrameSec; // exclusive
-        int segIdx = -1;
-        bool touchesAnyWindow = false;
+        // buildRepairTable takes ONE target acmod per call, and TTAudioCutter::cut
+        // looks up only the frames it writes - the frames inside a keep window.
+        // So a repair may poke out of the window(s) it touches: the part outside
+        // is never written (audio-repair.md H1, user decision 2026-09-25 - a
+        // preview window cutting through a repair used to drop the clip's audio
+        // and a cut edge through one failed the cut). What must not happen is
+        // that the windows it touches want different target acmods: one call
+        // would then silently give part of it the wrong layout.
+        const double itemStartSec = item.frameFrom() * audioFrameSec;
+        const double itemEndSec   = (item.frameTo() + 1) * audioFrameSec; // exclusive
+        int  targetAcmod  = -1;
+        bool touches      = false;
+        bool mixedTargets = false;
         for (int s = 0; s < plan.keepList.size(); s++) {
-          double segStart = plan.keepList[s].first;
-          double segEnd = plan.keepList[s].second;
-          if (itemStartSec >= segEnd || itemEndSec <= segStart) continue; // no overlap
-          touchesAnyWindow = true;
-          if (itemStartSec >= segStart && itemEndSec <= segEnd) {
-            segIdx = s;
-            break;
-          }
+          if (itemStartSec >= plan.keepList[s].second || itemEndSec <= plan.keepList[s].first)
+            continue;   // no overlap
+          const int target = (normalizeAcmod && s < targetAcmods.size()) ? targetAcmods[s] : -1;
+          if (touches && target != targetAcmod) mixedTargets = true;
+          targetAcmod = target;
+          touches = true;
         }
-        if (segIdx < 0) {
-          if (!touchesAnyWindow) continue; // never written by TTAudioCutter::cut -- skip
+        if (!touches) continue; // never written by TTAudioCutter::cut -- skip
+        if (mixedTargets) {
           repairFailed = true;
           // tr(), not QStringLiteral: this one is actionable and is shown to
           // the user via mAudioCutFailureReasons (final review M14).
-          repairFailMsg = tr("the repair range %1-%2 spans a cut-segment boundary - "
-                             "adjust the repair range or the cut points")
+          repairFailMsg = tr("the repair range %1-%2 reaches into cut segments with different "
+                             "channel layouts - adjust the repair range or the cut points")
                               .arg(item.frameFrom()).arg(item.frameTo());
           break;
         }
-
-        int targetAcmod = (normalizeAcmod && segIdx < targetAcmods.size())
-                               ? targetAcmods[segIdx] : -1;
 
         QString itemErr;
         TTAudioRepair::FrameTable itemTable = TTAudioRepair::buildRepairTable(

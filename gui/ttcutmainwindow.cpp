@@ -93,6 +93,9 @@
 #include <QStringList>
 #include <QString>
 
+#include <algorithm>
+#include <functional>
+
 /* /////////////////////////////////////////////////////////////////////////////
  * Application main window constructor
  */
@@ -1292,13 +1295,44 @@ void TTCutMainWindow::onStreamPointJump(int frameIndex)
   navigation->checkCutPosition(mpCurrentAVDataItem);
 }
 
+// A marker is display only, but it is the only handle on its planned repair
+// (audio-repair.md H2): deleting it alone left the repair invisible, still
+// saved and still applied. So a marker with a repair goes only together with
+// the repair, after asking (user decision 2026-09-25).
 void TTCutMainWindow::onStreamPointDelete(int row)
 {
+  if (row < 0 || row >= mpStreamPointModel->rowCount()) return;
+  const int repair = TTAudioRepairDialog::repairIndexForMarker(
+      mpCurrentAVDataItem, mpStreamPointModel->pointAt(row), mpAVData->extraFrameIndices());
+  if (repair >= 0) {
+    if (QMessageBox::question(this, tr("Delete marker"),
+            tr("An audio repair is planned for this marker. Deleting the marker "
+               "removes the repair as well.\n\nDelete marker and repair?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+      return;
+    mpCurrentAVDataItem->removeAudioRepairAt(repair);
+  }
   mpStreamPointModel->removeAt(row);
 }
 
 void TTCutMainWindow::onStreamPointDeleteAll()
 {
+  QList<int> repairs;
+  for (int row = 0; row < mpStreamPointModel->rowCount(); row++) {
+    const int repair = TTAudioRepairDialog::repairIndexForMarker(
+        mpCurrentAVDataItem, mpStreamPointModel->pointAt(row), mpAVData->extraFrameIndices());
+    if (repair >= 0 && !repairs.contains(repair)) repairs.append(repair);
+  }
+  if (!repairs.isEmpty()) {
+    if (QMessageBox::question(this, tr("Delete all markers"),
+            tr("%n audio repair(s) are planned for these markers. Deleting the "
+               "markers removes the repairs as well.\n\nDelete markers and repairs?",
+               "", repairs.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+      return;
+    std::sort(repairs.begin(), repairs.end(), std::greater<int>());   // indices stay valid
+    for (int repair : repairs) mpCurrentAVDataItem->removeAudioRepairAt(repair);
+  }
   mpStreamPointModel->clear();
 }
 

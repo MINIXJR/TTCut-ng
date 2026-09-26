@@ -127,6 +127,18 @@ void TTAudioRepairDialog::approxAc3RangeForMarker(const TTStreamPoint& point, do
   if (frameTo < frameFrom) frameTo = frameFrom;
 }
 
+int TTAudioRepairDialog::repairIndexForMarker(const TTAVItem* item, const TTStreamPoint& point,
+                                              const QList<int>& extraFrameIndices)
+{
+  if (!item || point.type() != StreamPointType::AudioAnomaly) return -1;
+  const int track = item->firstAc3TrackIndex();
+  if (track < 0) return -1;
+  const double frameRate = item->videoStream() ? item->videoStream()->frameRate() : 25.0;
+  qint64 from = 0, to = 0;
+  approxAc3RangeForMarker(point, frameRate, extraFrameIndices, from, to);
+  return item->findAudioRepairOverlapping(track, from, to);
+}
+
 TTAudioRepairDialog::TTAudioRepairDialog(TTAVItem* avItem, const TTStreamPoint& point,
                                           int trackIndex, const QList<int>& extraFrameIndices,
                                           QWidget* parent)
@@ -520,11 +532,32 @@ void TTAudioRepairDialog::accept()
     QMessageBox::warning(this, tr("Audio repair"), tr("End must not be before start."));
     return; // keep the dialog open, AVItem stays untouched
   }
+  const quint8 mask = currentChannelMask();
+  if (mask == 0) {
+    QMessageBox::warning(this, tr("Audio repair"), tr("Select at least one channel to silence."));
+    return;
+  }
+  // Build the replacement frames once, as the cut will: a range across a
+  // channel-layout or frame-size change, a channel the track does not have
+  // or a range past the file's end is refused here, while the user can still
+  // change it - not when the cut runs and fails (audio-repair.md H3). The
+  // cut's target layout is not known here; like the audition, this builds
+  // in the source layout.
+  if (!mAudioFile.isEmpty()) {
+    QString buildError;
+    TTAudioRepair::buildRepairTable(mAudioFile, TTAudioRepairItem(mTrackIndex, from, to, mask),
+                                    /*targetAcmod=*/-1, &buildError);
+    if (!buildError.isEmpty()) {
+      QMessageBox::warning(this, tr("Audio repair"),
+                           tr("This repair cannot be applied:\n%1").arg(buildError));
+      return;
+    }
+  }
 
   if (mExistingRepairIndex >= 0)
     mAvItem->removeAudioRepairAt(mExistingRepairIndex);
 
-  mAvItem->appendAudioRepair(TTAudioRepairItem(mTrackIndex, from, to, currentChannelMask()));
+  mAvItem->appendAudioRepair(TTAudioRepairItem(mTrackIndex, from, to, mask));
 
   QDialog::accept();
 }

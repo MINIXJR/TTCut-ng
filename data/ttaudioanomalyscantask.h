@@ -81,7 +81,7 @@ public:
                                  double lfeMinPeakDb,
                                  GateStatus* gateOut = nullptr);
   // Audio time (s) -> video display frame index, inverse of
-  // (index - extrasBefore)/fps; iterates until stable (<= 2 rounds).
+  // (index - extrasBefore)/fps; iterates until stable.
   static int videoFrameForTime(double seconds, double fps,
                                const QList<int>& extraFrameIndices);
 

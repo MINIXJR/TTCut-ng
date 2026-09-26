@@ -486,6 +486,39 @@ static void testAcmodChangeRejected()
 
 // --- argument-driven mode: build a table for an arbitrary file/range/mask,
 // optionally write a windowed splice copy for the real-material measurement.
+// audio-repair.md H8: the replacement frames were encoded at the stream's
+// bit rate - the FIRST frame's - so in a file that switches bit rate every
+// repair outside the first frame's block failed ("encoded replacement frame
+// size mismatch"). tux_test.ac3 alternates stereo at 192 kbit/s (768-byte
+// frames: 0-938, 1878-2972) and 5.1 at 384 kbit/s (1536-byte frames:
+// 939-1877, 2973-3754). A repair in each block must build, with frames of
+// that block's own size.
+static void testMixedBitRate()
+{
+    const QString file = QStringLiteral("/usr/local/src/TTCut-ng/tools/testdata/tux_test.ac3");
+    if (!QFileInfo::exists(file)) {
+        check(false, "mixed bit rate: tools/testdata/tux_test.ac3 present");
+        return;
+    }
+    struct Case { qint64 from, to; quint8 mask; int frameBytes; const char* what; };
+    const Case cases[] = {
+        { 625,  661, 0x01,  768, "stereo block (192 kbit/s), left" },
+        {1563, 1599, 0x0C, 1536, "5.1 block (384 kbit/s), C+LFE" },
+        {3000, 3030, 0x0C, 1536, "second 5.1 block, C+LFE" },
+    };
+    for (const Case& c : cases) {
+        QString err;
+        const TTAudioRepair::FrameTable table = TTAudioRepair::buildRepairTable(
+            file, TTAudioRepairItem(0, c.from, c.to, c.mask), -1, &err);
+        bool sizesOk = !table.isEmpty();
+        for (const QByteArray& frame : table) sizesOk = sizesOk && frame.size() == c.frameBytes;
+        check(err.isEmpty() && table.size() == c.to - c.from + 1 && sizesOk,
+              QString("mixed bit rate: %1, frames %2-%3 -> %4 frames of %5 bytes (error: %6)")
+                  .arg(c.what).arg(c.from).arg(c.to).arg(table.size()).arg(c.frameBytes)
+                  .arg(err.isEmpty() ? QStringLiteral("-") : err));
+    }
+}
+
 static int argMode(int argc, char** argv)
 {
     const QString ac3Path = QString::fromUtf8(argv[1]);
@@ -564,6 +597,7 @@ int main(int argc, char** argv)
     if (argc == 1) {
         selfTest();
         testAcmodChangeRejected();
+        testMixedBitRate();
         if (gFailures > 0) {
             printf("\nFAILED (%d failures, %d skipped)\n", gFailures, gSkipped);
             return 1;
