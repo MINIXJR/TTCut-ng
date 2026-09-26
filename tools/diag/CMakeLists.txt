@@ -211,6 +211,7 @@ set(AUDIOREPAIR_SRC
 
 set(SILENCE_SRC
   ${ROOT}/data/ttstreampoint_audioworker.cpp
+  ${ROOT}/data/ttaudioanomalyscantask.cpp
   ${ROOT}/data/ttstreampoint.cpp
   ${ROOT}/data/ttanalysislog.cpp
   ${ROOT}/common/ttthreadtask.cpp
@@ -252,6 +253,10 @@ diag_tool(test_audiorepair     AV SOURCES ${AUDIOREPAIR_SRC})
 # library (same rationale as test_subtitle_delay).
 diag_tool(test_audiorepair_cut AV WIDGETS SOURCES)
 target_link_libraries(test_audiorepair_cut PRIVATE ttcut-core)
+# Audio ES input: frame time, low-rate MPEG, broken header, audio search
+# (audit run 11, audio-es-input.md); planAudioCut and the cut need the core.
+diag_tool(test_audio_es_input AV WIDGETS SOURCES)
+target_link_libraries(test_audio_es_input PRIVATE ttcut-core)
 diag_tool(test_aspectdetect       SOURCES ${ROOT}/data/ttaspectdetect.cpp)
 diag_tool(test_analysislog        SOURCES ${ROOT}/data/ttanalysislog.cpp)
 diag_tool(test_streampoint_anomaly SOURCES ${ROOT}/data/ttstreampoint.cpp)
@@ -492,7 +497,7 @@ add_custom_target(diag DEPENDS
   test_pillarbox test_pool_abort
   test_streampoint_order test_mpeg2_seek test_seqheader_missing test_headerlist_eof test_window_geometry test_container_sync test_settings_cancel
   test_progressestimator test_subtitle_delay test_audiorepair_persist test_track_persist test_track_language test_track_gui test_preview_clip_index test_preview_window_in_cut test_preview_drift_rows test_repair_window_edge test_marker_delete_repair test_audiorepair test_project_roundtrip test_project_load_rejected test_cut_range_check test_cut_job_ownership test_hint_column test_aspect_hint test_open_track_failure test_extra_index_rank test_analysis_task_lifetime test_streampoint_model_time test_exit_cancel
-  test_audiorepair_cut test_repairdialog_model
+  test_audiorepair_cut test_repairdialog_model test_audio_es_input
   test_frameindex_dump test_adopt_paff test_index_bundle_adopt test_rawmap
   test_directed_search test_probe_video test_audiocutter_paths test_mpv_loadfile_args
   test_mpv_channels test_mkvmux_inputs test_mkvmux test_mux_script test_partial_track

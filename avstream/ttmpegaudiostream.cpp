@@ -113,52 +113,35 @@ void TTMPEGAudioStream::parseAudioHeader( quint8* data, int offset, TTMpegAudioH
   audio_header->original_home      = (data[offset+2] & 0x04) == 4;
   audio_header->emphasis           = (data[offset+2] & 0x03);
 
-  // Guard against division by zero (corrupt header with sampleRate 0)
-  if (audio_header->sampleRate() <= 0 || audio_header->bitRate() <= 0) {
-    frame_length = 0;
-    frame_time   = 0.0;
-  } else {
-    switch (audio_header->version)
-    {
-    case 3: // Mpeg 1
-      if (audio_header->layer == 3) // Layer I
-        frame_length = (int)trunc((12*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
-      else // Layer II, Layer III
-        frame_length = (int)trunc(144*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
-      break;
-    case 0: // Mpeg 2.5
-    case 2: // Mpeg 2
-      if (audio_header->layer==3) // Layer I
-        frame_length = (int)trunc((6*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit)*4);
-      else // Layer II, Layer III
-        frame_length = (int)trunc(72*audio_header->bitRate()/audio_header->sampleRate()+audio_header->padding_bit);
-      break;
-    default:
-      log->errorMsg(__FILE__, __LINE__, QString("Reserved MPEG audio version %1!").arg(audio_header->version));
-      frame_length = 0;
-      frame_time   = 0.0;
-      break;
-    }
-  }
+  // Samples per frame (ISO 11172-3 / 13818-3): Layer I 384, Layer II 1152,
+  // Layer III 1152 in MPEG-1 but 576 at the low sampling rates of MPEG-2/2.5.
+  // Layer I counts 4-byte slots, the others bytes. The frame's duration is
+  // samples / sample rate - NOT its byte length / bit rate: at 44.1 kHz the
+  // byte length alternates with the padding bit, so the first header's
+  // frame_time, which the cut grid is built on, was 26.083 or 26.125 ms
+  // instead of 26.122 ms and every kept segment lost ~20 ms (audit run 11,
+  // audio-es-input.md H1). The old byte formula also halved Layer I/II at
+  // the low rates (H5).
+  audio_header->frame_length = 0;
+  audio_header->frame_time   = 0.0;
 
-  if (frame_length > 0)
-  {
-    //log->debugMsg(__FILE__, __LINE__, "bit rate: %d",audio_header->bitRate());
-    if ( audio_header->bitRate() > 0 )
-    {
-      audio_header->frame_length = (int)frame_length;
-      audio_header->frame_time   = (double)(audio_header->frame_length * 8000.0) / (double)audio_header->bitRate();
-      frame_time                 = audio_header->frame_time;
-      //log->debugMsg(__FILE__, __LINE__, QString("frame length/time: %1 / %2").
-      //    arg(frame_length).arg(frame_time));
-    }
-    else
-    {
-      log->errorMsg(__FILE__, __LINE__, "bitrate error: bitrate is 0!");
-      audio_header->frame_length = (int)0;
-      audio_header->frame_time   = (double)0.0;
-    }
+  int samples = 0;
+  switch (audio_header->layer) {
+    case 3: samples = 384;  break;                                   // Layer I
+    case 2: samples = 1152; break;                                   // Layer II
+    case 1: samples = (audio_header->version == 3) ? 1152 : 576; break; // Layer III
+    default: break;                                                  // reserved
   }
+  // Reserved version (1) or layer, or a corrupt header: no frame. Silent -
+  // TTAudioType probes every sync-like byte pair of its first 64 KiB here.
+  if (audio_header->version == 1 || samples == 0 ||
+      audio_header->sampleRate() <= 0 || audio_header->bitRate() <= 0)
+    return;
+
+  const int slotBytes = (audio_header->layer == 3) ? 4 : 1;
+  const int slotCount = samples / 8 / slotBytes * audio_header->bitRate() / audio_header->sampleRate();
+  audio_header->frame_length = (slotCount + (audio_header->padding_bit ? 1 : 0)) * slotBytes;
+  audio_header->frame_time   = samples * 1000.0 / audio_header->sampleRate();
 }
 
 
@@ -188,6 +171,7 @@ int TTMPEGAudioStream::createHeaderList( )
   const TTMpegAudioHeader* prev_audio_header;
   QElapsedTimer updateTime;
   const int updateIntervalMs = 1000;
+  int skipped = 0;
 
   header_list = new TTAudioHeaderList( 1000 );
 
@@ -227,10 +211,14 @@ int TTMPEGAudioStream::createHeaderList( )
           prev_audio_header->frame_time;
       }
 
+      // A header that yields no frame (reserved or corrupt fields) is skipped
+      // and the search goes on from behind it, like TTAC3AudioStream does.
+      // It used to END the list: one broken header at 2:00 of a 10-minute
+      // file left 2:00 in the length column (audit run 11, H3).
       if (audio_header->frame_length < 4) {
-        log->warningMsg(__FILE__, __LINE__, "Invalid MPEG audio frame_length %d, skipping", audio_header->frame_length);
+        ++skipped;
         delete audio_header;
-        break;
+        continue;
       }
       // add audio header to header list
       header_list->add( audio_header );
@@ -248,6 +236,9 @@ int TTMPEGAudioStream::createHeaderList( )
   {
   }
 
+  if (skipped > 0)
+    log->warningMsg(__FILE__, __LINE__,
+        QString("Skipped %1 invalid MPEG audio header(s) in %2").arg(skipped).arg(filePath()));
   logHeaderListCreated(header_list->count());
 
   return header_list->count();

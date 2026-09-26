@@ -33,6 +33,8 @@
 #include "ttcommon.h"
 #include "ttfilebuffer.h"
 
+#include <QStringList>
+
 class QString;
 class QFileInfo;
 
@@ -69,6 +71,10 @@ class TTAVTypes
   { return t == h264_video ? 1 : (t == h265_video ? 2 : 0); }
   // H.264 or H.265: the Smart Cut (libav) family, as opposed to MPEG-2.
   static bool isH26x(AVStreamType t) { return t == h264_video || t == h265_video; }
+  // File suffixes of the audio streams TTAudioType can read (MPEG audio
+  // Layer I-III, AC3) - the automatic audio search and the open dialog
+  // offer exactly these. AAC, E-AC3 and DTS have no parser here.
+  static const QStringList& readableAudioSuffixes();
 
  protected:
 	 TTMessageLogger* log;

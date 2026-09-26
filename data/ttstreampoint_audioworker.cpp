@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttstreampoint_audioworker.h"
+#include "ttaudioanomalyscantask.h"
 #include "ttanalysislog.h"
 #include "../avstream/ttaudioheaderlist.h"
 #include "../avstream/ttac3audioheader.h"
@@ -33,7 +34,8 @@ extern "C" {
 TTStreamPointAudioWorker::TTStreamPointAudioWorker(
     const QString& audioFilePath, float videoFrameRate,
     bool detectSilence, int silenceThresholdDb, float silenceMinDuration,
-    bool detectAudioChange, TTAudioHeaderList* audioHeaderList)
+    bool detectAudioChange, TTAudioHeaderList* audioHeaderList,
+    const QList<int>& extraFrameIndices)
   : TTThreadTask("StreamPointAudioAnalysis"),
     mAudioFilePath(audioFilePath),
     mVideoFrameRate(videoFrameRate),
@@ -42,6 +44,7 @@ TTStreamPointAudioWorker::TTStreamPointAudioWorker(
     mSilenceMinDuration(silenceMinDuration),
     mDetectAudioChange(detectAudioChange),
     mAudioHeaderList(audioHeaderList),
+    mExtraFrameIndices(extraFrameIndices),
     mLog([this](const QString& s) {
            onStatusReport(StatusReportArgs::AddProcessLine, s, 0);
          }, 20)
@@ -301,7 +304,8 @@ void TTStreamPointAudioWorker::collectSilenceResult(AVFrame* filtFrame,
     "lavfi.silence_start", nullptr, 0);
   if (startTag) {
     double silenceStart = QString::fromUtf8(startTag->value).replace(',', '.').toDouble();
-    int frameIdx = qRound(silenceStart * mVideoFrameRate);
+    int frameIdx = TTAudioAnomalyScanTask::videoFrameForTime(silenceStart, mVideoFrameRate,
+                                                             mExtraFrameIndices);
 
     TTStreamPoint pt(frameIdx, StreamPointType::Silence,
       tr("Silence (%1 dB)").arg(mSilenceThresholdDb),
@@ -363,9 +367,14 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
       if (ac3Hdr->lfeon) channels++;  // +1 for LFE (.1)
 
       if (prevChannels >= 0 && channels != prevChannels) {
-        // Channel count actually changed (not just acmod encoding)
-        double timeSec = (double)i * 1536.0 / 48000.0;
-        int frameIdx = qRound(timeSec * mVideoFrameRate);
+        // Channel count actually changed (not just acmod encoding). The
+        // header's own start time and the extra frames: "i x 1536 / 48000"
+        // and a plain qRound(t x fps) put the marker 48.8 s early at 10:00
+        // of a 44.1 kHz track and one frame early per extra frame before it
+        // (audit run 11, audio-es-input.md H4).
+        double timeSec = hdr->abs_frame_time / 1000.0;
+        int frameIdx = TTAudioAnomalyScanTask::videoFrameForTime(timeSec, mVideoFrameRate,
+                                                                 mExtraFrameIndices);
 
         QString prevStr = (prevChannels >= 5) ? "5.1" : QString::number(prevChannels) + ".0";
         QString newStr = (channels >= 5) ? "5.1" : QString::number(channels) + ".0";

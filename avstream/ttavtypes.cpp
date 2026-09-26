@@ -41,6 +41,7 @@
 #include "ttavutil.h"
 
 #include <QString>
+#include <QStringList>
 #include <QFileInfo>
 #include <QDebug>
 
@@ -90,6 +91,12 @@ TTAVTypes::~TTAVTypes()
 TTAVTypes::AVStreamType TTAVTypes::avStreamType()
 {
   return av_stream_type;
+}
+
+const QStringList& TTAVTypes::readableAudioSuffixes()
+{
+  static const QStringList suffixes{"mpa", "mp2", "mp3", "ac3"};
+  return suffixes;
 }
 
 

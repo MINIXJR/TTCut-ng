@@ -119,7 +119,11 @@ void TTAC3AudioStream::readAudioHeader( TTAC3AudioHeader* audio_header)
     audio_header->syncframe_words = AC3FrameLength[audio_header->fscod][audio_header->frmsizecod];
   }
   audio_header->frame_length    = audio_header->syncframe_words*2;
-  audio_header->frame_time      = 1000.0*((double)audio_header->syncframe_words*16.0)/(double)audio_header->bitRate();
+  // 1536 samples per AC3 frame: the duration is samples / sample rate, not
+  // the byte length / bit rate, which alternates at 44.1 kHz (69/70-word
+  // frames) - see TTMPEGAudioStream::parseAudioHeader (audit run 11, H1).
+  audio_header->frame_time      = (audio_header->sampleRate() > 0)
+                                  ? 1536.0 * 1000.0 / audio_header->sampleRate() : 0.0;
   audio_header->bsid            = (quint8)(daten[3]>>3);
   audio_header->bsmod           = (quint8)(daten[3] & 0x07);
   audio_header->acmod           = (quint8)(daten[4]>>5);

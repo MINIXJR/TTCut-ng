@@ -418,6 +418,17 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     Ein gemeinsamer Öffner mit RAII-Freigabe, danach die Worker-Methode nach
     Phasen teilen.
 
+- **AAC-, E-AC3- und DTS-Tonspuren werden nicht gelesen** (Audit-Lauf 11,
+  `audio-es-input.md` H2). `ttcut-demux` schreibt `.aac` und `.eac3`, aber
+  `TTAudioType` kennt nur MPEG-Audio und AC3; seit Lauf 11 bieten Dialog und
+  automatische Suche nur noch diese an (`TTAVTypes::readableAudioSuffixes`),
+  vorher wurden die anderen angeboten und dann als „Unsupported audio type"
+  abgewiesen. Für eine Unterstützung braucht jedes Format einen Kopfleser für
+  `TTAudioHeaderList` (Rahmendauer, Bitrate, Abtastrate; E-AC3: Rahmengröße
+  aus `frmsiz`, bsid 16) — der Schnitt selbst läuft schon über libav. Eigener
+  Entwurf nötig, u. a. wie acmod-Normalisierung und Tonanomalie-Reparatur
+  (beide AC3-only) sich bei E-AC3 verhalten sollen.
+
 - **Nur die ERSTE AC3-Spur wird gescannt und repariert** (Final-Review-Befund
   M8). Die Spec spricht von „AC3-Spuren" (Mehrzahl), umgesetzt ist genau eine:
   `TTAVItem::firstAc3TrackIndex()` liefert den Scan-Ort, und das Kontextmenü

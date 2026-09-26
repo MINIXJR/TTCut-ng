@@ -13,7 +13,8 @@ TTCut-ng is a Qt6-based video editing application for MPEG-2, H.264, and H.265 s
 
 **Input Format:**
 - Elementary streams only (.m2v, .264, .h264, .265, .h265)
-- Separate audio files (.ac3, .mp2, .mp3, .aac)
+- Separate audio files (.ac3, .mp2, .mpa, .mp3) — AAC, E-AC3 and DTS have no
+  parser (`TTAVTypes::readableAudioSuffixes`); see TODO.md
 - Optional .info metadata file (for frame rate, etc.)
 
 **Output Format:**

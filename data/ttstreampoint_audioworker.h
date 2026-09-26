@@ -29,7 +29,8 @@ public:
                            bool detectSilence, int silenceThresholdDb,
                            float silenceMinDuration,
                            bool detectAudioChange,
-                           TTAudioHeaderList* audioHeaderList);
+                           TTAudioHeaderList* audioHeaderList,
+                           const QList<int>& extraFrameIndices);
 
 signals:
   void pointsDetected(const QList<TTStreamPoint>& points);
@@ -60,6 +61,10 @@ private:
   float                mSilenceMinDuration;
   bool                 mDetectAudioChange;
   TTAudioHeaderList*   mAudioHeaderList;
+  //! Sorted display indices of the video's extra frames: marker times map to
+  //! display frames through TTAudioAnomalyScanTask::videoFrameForTime, like
+  //! the anomaly scan's markers (audit run 11, audio-es-input.md H4).
+  QList<int>           mExtraFrameIndices;
   bool                 mSilenceEngineFailed = false;
   TTAnalysisLog        mLog;
 };

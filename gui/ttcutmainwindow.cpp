@@ -478,13 +478,13 @@ void TTCutMainWindow::onOpenAudioFile()
 {
   if (mpAVData->avCount() == 0) return;
 
+  // Only what TTAudioType can read: AAC, E-AC3 and DTS were offered too and
+  // then refused as "Unsupported audio type" (audit run 11, H2).
+  QStringList patterns;
+  for (const QString& suffix : TTAVTypes::readableAudioSuffixes())
+    patterns << "*." + suffix;
   const QString fn = pickFileAndRememberDir(tr("Open audio file"),
-      tr("All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;"
-         "MPEG Audio (*.mpa *.mp2);;"
-         "AC3/Dolby Digital (*.ac3 *.eac3);;"
-         "AAC Audio (*.aac *.m4a);;"
-         "DTS Audio (*.dts);;"
-         "All Files (*)"));
+      tr("Audio Files (%1);;All Files (*)").arg(patterns.join(' ')));
   if (fn.isEmpty()) return;
   onReadAudioStream(fn);
 }
@@ -1085,7 +1085,8 @@ void TTCutMainWindow::onAnalyzeStreamPoints()
         audio->filePath(),
         vs->frameRate(),
         TTSettings::instance()->spDetectSilence(), TTSettings::instance()->spSilenceThresholdDb(), TTSettings::instance()->spSilenceMinDuration(),
-        TTSettings::instance()->spDetectAudioChange(), audioHeaders);
+        TTSettings::instance()->spDetectAudioChange(), audioHeaders,
+        mpAVData->extraFrameIndices());
 
       startDetectorTask(audioWorker);
     } else {

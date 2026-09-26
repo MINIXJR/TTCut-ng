@@ -98,7 +98,10 @@ public:
   //protected:
   long   position;  // header offset ???
   float  frame_time;
-  float  abs_frame_time;
+  // Start time of the frame in ms, the running sum of the frame_times
+  // before it. double: a float sum of 34.83 ms (AC3 at 44.1 kHz) is 80 ms
+  // off after 10 minutes (audit run 11).
+  double abs_frame_time;
   int    frame_length;
   int    bit_rate;
   int    sample_rate;

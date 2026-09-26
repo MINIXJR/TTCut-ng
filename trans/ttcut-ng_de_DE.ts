@@ -38,13 +38,13 @@
 <context>
     <name>TTAC3AudioStream</name>
     <message>
-        <location filename="../avstream/ttac3audiostream.cpp" line="164"/>
-        <location filename="../avstream/ttac3audiostream.cpp" line="208"/>
+        <location filename="../avstream/ttac3audiostream.cpp" line="168"/>
+        <location filename="../avstream/ttac3audiostream.cpp" line="212"/>
         <source>Creating audio header list</source>
         <translation>Audio-Header-Liste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttac3audiostream.cpp" line="212"/>
+        <location filename="../avstream/ttac3audiostream.cpp" line="216"/>
         <source>Audio header list created</source>
         <translation>Audio-Header-Liste erstellt</translation>
     </message>
@@ -143,22 +143,22 @@
         <translation>Thread-Pool wird beendet</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1558"/>
+        <location filename="../data/ttavdata.cpp" line="1557"/>
         <source>Preview cancelled</source>
         <translation>Vorschau abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1560"/>
+        <location filename="../data/ttavdata.cpp" line="1559"/>
         <source>Preview not possible</source>
         <translation>Vorschau nicht möglich</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1603"/>
+        <location filename="../data/ttavdata.cpp" line="1602"/>
         <source>Cut %1: audio burst at the end (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Ende (%2 dB)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1606"/>
+        <location filename="../data/ttavdata.cpp" line="1605"/>
         <source>Cut %1: audio burst at the start (%2 dB)</source>
         <translation>Schnitt %1: Audio-Burst am Anfang (%2 dB)</translation>
     </message>
@@ -183,36 +183,36 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Audio-Burst Warnung</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1647"/>
+        <location filename="../data/ttavdata.cpp" line="1646"/>
         <source>Cut anyway</source>
         <translation>Trotzdem schneiden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1648"/>
+        <location filename="../data/ttavdata.cpp" line="1647"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1788"/>
-        <location filename="../data/ttavdata.cpp" line="1800"/>
-        <location filename="../data/ttavdata.cpp" line="1942"/>
-        <location filename="../data/ttavdata.cpp" line="2444"/>
-        <location filename="../data/ttavdata.cpp" line="2642"/>
+        <location filename="../data/ttavdata.cpp" line="1787"/>
+        <location filename="../data/ttavdata.cpp" line="1799"/>
+        <location filename="../data/ttavdata.cpp" line="1941"/>
+        <location filename="../data/ttavdata.cpp" line="2443"/>
+        <location filename="../data/ttavdata.cpp" line="2641"/>
         <source>Cut cancelled</source>
         <translation>Schnitt abgebrochen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1835"/>
+        <location filename="../data/ttavdata.cpp" line="1834"/>
         <source>Initializing MPEG-2 cut...</source>
         <translation>Initialisiere MPEG-2-Schnitt...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1835"/>
+        <location filename="../data/ttavdata.cpp" line="1834"/>
         <source>Cutting MPEG-2 video...</source>
         <translation>Schneide MPEG-2-Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2163"/>
+        <location filename="../data/ttavdata.cpp" line="2162"/>
         <source>Cut result discarded</source>
         <translation>Schnittergebnis verworfen</translation>
     </message>
@@ -221,19 +221,19 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">der Reparaturbereich %1-%2 überschneidet eine Schnittgrenze – Reparaturbereich oder Schnittpunkte anpassen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3149"/>
+        <location filename="../data/ttavdata.cpp" line="3148"/>
         <source>Audio track %1: %2</source>
         <translation>Tonspur %1: %2</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3173"/>
+        <location filename="../data/ttavdata.cpp" line="3172"/>
         <source>Audio track %1: the audio cut itself failed (see the log for the libav error)</source>
         <translation>Tonspur %1: der Tonschnitt selbst ist fehlgeschlagen (libav-Fehler siehe Log)</translation>
     </message>
     <message>
         <location filename="../data/ttabortabletask.cpp" line="81"/>
-        <location filename="../data/ttavdata.cpp" line="1894"/>
-        <location filename="../data/ttavdata.cpp" line="1901"/>
+        <location filename="../data/ttavdata.cpp" line="1893"/>
+        <location filename="../data/ttavdata.cpp" line="1900"/>
         <location filename="../data/tth26xcuttask.cpp" line="268"/>
         <source>Cutting audio track %1 of %2...</source>
         <translation>Schneide Audiospur %1 von %2...</translation>
@@ -249,13 +249,13 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation>Schneiden fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2504"/>
+        <location filename="../data/ttavdata.cpp" line="2503"/>
         <location filename="../data/tth26xcuttask.cpp" line="390"/>
         <source>Muxing failed: %1</source>
         <translation>Multiplexen fehlgeschlagen: %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2503"/>
+        <location filename="../data/ttavdata.cpp" line="2502"/>
         <source>MKV muxing failed</source>
         <translation>MKV-Multiplexen fehlgeschlagen</translation>
     </message>
@@ -264,27 +264,27 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
         <translation type="vanished">Nur %1 von %2 Tonspur(en) konnten geschnitten werden – die fertigen Spuren wurden behalten, der Grund steht im Protokoll</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2262"/>
+        <location filename="../data/ttavdata.cpp" line="2261"/>
         <source>The cut finished but its cut list is empty - cannot mux without knowing what was cut.</source>
         <translation>Der Schnitt ist fertig, aber seine Schnittliste ist leer – ohne zu wissen, was geschnitten wurde, kann nicht gemuxt werden.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2473"/>
+        <location filename="../data/ttavdata.cpp" line="2472"/>
         <source>Muxing failed: the mux task was gone</source>
         <translation>Multiplexen fehlgeschlagen: die Mux-Aufgabe war nicht mehr vorhanden</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2564"/>
+        <location filename="../data/ttavdata.cpp" line="2563"/>
         <source>Cut complete</source>
         <translation>Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2644"/>
+        <location filename="../data/ttavdata.cpp" line="2643"/>
         <source>Cut failed</source>
         <translation>Schnitt fehlgeschlagen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2645"/>
+        <location filename="../data/ttavdata.cpp" line="2644"/>
         <source>The cut could not be completed:
 
 %1</source>
@@ -293,7 +293,7 @@ Vorschau nutzen um zu prüfen ob Shift nötig ist.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3066"/>
+        <location filename="../data/ttavdata.cpp" line="3065"/>
         <source>deleting existing audio cut file: %1</source>
         <translation>Lösche vorhandene Audio-Schnittdatei: %1</translation>
     </message>
@@ -309,13 +309,13 @@ Dieser MPEG-2-Stream hat defekte GOPs, die A/V-Synchronisationsprobleme verursac
 Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet und repariert solche Lücken.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1289"/>
-        <location filename="../data/ttavdata.cpp" line="1359"/>
+        <location filename="../data/ttavdata.cpp" line="1288"/>
+        <location filename="../data/ttavdata.cpp" line="1358"/>
         <source>Project Not Loaded</source>
         <translation>Projekt nicht geladen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1290"/>
+        <location filename="../data/ttavdata.cpp" line="1289"/>
         <source>The project %1 was not loaded:
 
 %2 and %3 cannot be cut into one output.
@@ -326,7 +326,7 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 %4</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1360"/>
+        <location filename="../data/ttavdata.cpp" line="1359"/>
         <source>The project %1 was not loaded:
 
 %2</source>
@@ -335,17 +335,17 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 %2</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1613"/>
+        <location filename="../data/ttavdata.cpp" line="1612"/>
         <source>Cut %1: starts in %2, the cut is %3 from frame %4</source>
         <translation>Schnitt %1: beginnt in %2, der Schnitt ist ab Frame %4 %3</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1618"/>
+        <location filename="../data/ttavdata.cpp" line="1617"/>
         <source>Cut %1: ends in %2, the cut is %3 up to frame %4</source>
         <translation>Schnitt %1: endet in %2, der Schnitt ist bis Frame %4 %3</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1642"/>
+        <location filename="../data/ttavdata.cpp" line="1641"/>
         <source>Please check these cut boundaries:
 
 </source>
@@ -354,7 +354,7 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
 </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1644"/>
+        <location filename="../data/ttavdata.cpp" line="1643"/>
         <source>
 
 Use the preview to move a cut point if needed.</source>
@@ -363,27 +363,27 @@ Use the preview to move a cut point if needed.</source>
 In der Vorschau lässt sich ein Schnittpunkt bei Bedarf verschieben.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1645"/>
+        <location filename="../data/ttavdata.cpp" line="1644"/>
         <source>Cut Warnings</source>
         <translation>Schnitt-Warnungen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1661"/>
+        <location filename="../data/ttavdata.cpp" line="1660"/>
         <source>frame at an unknown position</source>
         <translation>Frame an unbekannter Position</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1666"/>
+        <location filename="../data/ttavdata.cpp" line="1665"/>
         <source>source frame %1 (%2)</source>
         <translation>Quell-Frame %1 (%2)</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1668"/>
+        <location filename="../data/ttavdata.cpp" line="1667"/>
         <source>source frame %1</source>
         <translation>Quell-Frame %1</translation>
     </message>
     <message numerus="yes">
-        <location filename="../data/ttavdata.cpp" line="1682"/>
+        <location filename="../data/ttavdata.cpp" line="1681"/>
         <source>%n re-encoded frame(s) could not be adjusted to the source stream and may show artefacts:</source>
         <translation>
             <numerusform>%n neu kodierter Frame konnte nicht an den Quellstrom angepasst werden und kann Bildfehler zeigen:</numerusform>
@@ -391,12 +391,12 @@ In der Vorschau lässt sich ein Schnittpunkt bei Bedarf verschieben.</translatio
         </translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1688"/>
+        <location filename="../data/ttavdata.cpp" line="1687"/>
         <source>... and %1 more</source>
         <translation>... und %1 weitere</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1692"/>
+        <location filename="../data/ttavdata.cpp" line="1691"/>
         <source>
 
 The log file lists them as &quot;SPS unification: re-encoded frame not adjusted&quot;:
@@ -407,49 +407,49 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
 %1</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1695"/>
+        <location filename="../data/ttavdata.cpp" line="1694"/>
         <source>Re-encoded Frames Not Adjusted</source>
         <translation>Neu kodierte Frames nicht angepasst</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1697"/>
+        <location filename="../data/ttavdata.cpp" line="1696"/>
         <source>Keep result</source>
         <translation>Ergebnis behalten</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1698"/>
+        <location filename="../data/ttavdata.cpp" line="1697"/>
         <source>Discard</source>
         <translation>Verwerfen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1699"/>
+        <location filename="../data/ttavdata.cpp" line="1698"/>
         <source>Copy to clipboard</source>
         <translation>In die Zwischenablage kopieren</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1963"/>
+        <location filename="../data/ttavdata.cpp" line="1962"/>
         <location filename="../data/tth26xcuttask.cpp" line="291"/>
         <source>Only %1 of %2 audio track(s) could be cut - the finished streams were kept.</source>
         <translation>Nur %1 von %2 Tonspur(en) konnten geschnitten werden – die fertigen Ströme wurden behalten.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1968"/>
+        <location filename="../data/ttavdata.cpp" line="1967"/>
         <location filename="../data/tth26xcuttask.cpp" line="296"/>
         <source>See the log for the reason.</source>
         <translation>Den Grund finden Sie im Log.</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2070"/>
+        <location filename="../data/ttavdata.cpp" line="2069"/>
         <source>Initializing H.264/H.265 cut...</source>
         <translation>H.264/H.265-Schnitt wird initialisiert...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2070"/>
+        <location filename="../data/ttavdata.cpp" line="2069"/>
         <source>Cutting H.264/H.265 video...</source>
         <translation>Schneide H.264/H.265 Video...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="3129"/>
+        <location filename="../data/ttavdata.cpp" line="3128"/>
         <source>the repair range %1-%2 reaches into cut segments with different channel layouts - adjust the repair range or the cut points</source>
         <translation>der Reparaturbereich %1-%2 reicht in Schnittsegmente mit unterschiedlicher Kanalbelegung – Reparaturbereich oder Schnittpunkte anpassen</translation>
     </message>
@@ -464,7 +464,7 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>Schneide Video (Smart Cut)...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="1969"/>
+        <location filename="../data/ttavdata.cpp" line="1968"/>
         <location filename="../data/tth26xcuttask.cpp" line="192"/>
         <location filename="../data/tth26xcuttask.cpp" line="297"/>
         <source>Cutting failed</source>
@@ -486,12 +486,12 @@ In der Logdatei stehen sie als „SPS unification: re-encoded frame not adjusted
         <translation>H.264/H.265 Schnitt abgeschlossen</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2703"/>
+        <location filename="../data/ttavdata.cpp" line="2702"/>
         <source>Initializing audio cut...</source>
         <translation>Audio-Schnitt initialisieren...</translation>
     </message>
     <message>
-        <location filename="../data/ttavdata.cpp" line="2709"/>
+        <location filename="../data/ttavdata.cpp" line="2708"/>
         <source>Cutting audio tracks...</source>
         <translation>Audiospuren werden geschnitten...</translation>
     </message>
@@ -1659,14 +1659,13 @@ p, li { white-space: pre-wrap; }
         <translation>All Video ES (*.m2v *.mpv *.264 *.h264 *.265 *.h265 *.hevc);;MPEG-2 Video (*.m2v *.mpv);;H.264/AVC (*.264 *.h264);;H.265/HEVC (*.265 *.h265 *.hevc);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="481"/>
+        <location filename="../gui/ttcutmainwindow.cpp" line="486"/>
         <source>Open audio file</source>
         <translation>Audio öffnen</translation>
     </message>
     <message>
-        <location filename="../gui/ttcutmainwindow.cpp" line="482"/>
         <source>All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;MPEG Audio (*.mpa *.mp2);;AC3/Dolby Digital (*.ac3 *.eac3);;AAC Audio (*.aac *.m4a);;DTS Audio (*.dts);;All Files (*)</source>
-        <translation>All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;MPEG Audio (*.mpa *.mp2);;AC3/Dolby Digital (*.ac3 *.eac3);;AAC Audio (*.aac *.m4a);;DTS Audio (*.dts);;All Files (*)</translation>
+        <translation type="vanished">All Audio Files (*.mpa *.mp2 *.ac3 *.aac *.m4a *.eac3 *.dts);;MPEG Audio (*.mpa *.mp2);;AC3/Dolby Digital (*.ac3 *.eac3);;AAC Audio (*.aac *.m4a);;DTS Audio (*.dts);;All Files (*)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="499"/>
@@ -1911,6 +1910,11 @@ Empfehlung: die Aufnahme mit dem aktuellen ttcut-demux neu demuxen — es findet
         <location filename="../gui/ttcutmainwindow.cpp" line="2276"/>
         <source>Searching black frame from frame %1...</source>
         <translation>Suche Schwarzbild ab Frame %1...</translation>
+    </message>
+    <message>
+        <location filename="../gui/ttcutmainwindow.cpp" line="487"/>
+        <source>Audio Files (%1);;All Files (*)</source>
+        <translation>Audio Files (%1);;All Files (*)</translation>
     </message>
     <message>
         <location filename="../gui/ttcutmainwindow.cpp" line="1308"/>
@@ -3989,18 +3993,18 @@ Ausgabedatei:
 <context>
     <name>TTMPEGAudioStream</name>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="199"/>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="240"/>
+        <location filename="../avstream/ttmpegaudiostream.cpp" line="183"/>
+        <location filename="../avstream/ttmpegaudiostream.cpp" line="228"/>
         <source>Creating audio header list</source>
         <translation>Audio-Header-Liste erstellen</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="206"/>
+        <location filename="../avstream/ttmpegaudiostream.cpp" line="190"/>
         <source>Index list creation aborted!</source>
         <translation>Indexerstellung abgebrochen!</translation>
     </message>
     <message>
-        <location filename="../avstream/ttmpegaudiostream.cpp" line="245"/>
+        <location filename="../avstream/ttmpegaudiostream.cpp" line="233"/>
         <source>Audio header list created</source>
         <translation>Audio-Header-Liste erstellt</translation>
     </message>
