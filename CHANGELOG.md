@@ -5,6 +5,14 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Quick-jump thumbnails of MPEG-2 videos show the right picture.** Each
+  thumbnail was the picture after its position. Gate:
+  `mpeg2_decoder_contract`.
+- **MPEG-2: the right picture in a GOP without its own sequence header.**
+  The decoder started at the previous sequence header and stopped at the
+  previous GOP's I picture, so every picture of such a GOP - shown,
+  searched or re-encoded at a cut - came from the GOP before. Broadcast
+  recordings repeat the header almost always. Gate: `mpeg2_decoder_contract`.
 - **H.264 without a .info file is cut at the right frame rate.** A raw
   H.264 elementary stream without its .info file was opened at twice its
   frame rate (progressive and MBAFF): the video of the cut ran at double

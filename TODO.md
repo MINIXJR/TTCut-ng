@@ -630,6 +630,20 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
   Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).
 
+- **MPEG-2-Neu-Encode am Schnitt: Sprung je Bild vs. sequentiell — an einem
+  echten Beispiel prüfen** (Audit-Lauf 13, H6, 2026-09-27, User: „muss ich an
+  einem echten Beispiel sehen“). `TTTranscodeProvider::encodeFrames` ruft für
+  jedes Bild `moveToFrameIndex` (Sprung vom Sequenz-Header): gemessen 8–30×
+  langsamer als einmal springen + sequentiell dekodieren (576i 74 vs 9 ms,
+  720p 243 vs 8 ms je 100 Bilder), Bilder ohne Halbbild-Paare identisch
+  (Y-Prüfsumme). **Aber:** liegt ein Halbbild-Paar im Bereich
+  (`tux_mpeg2_576i_fieldpic_test.m2v`, Bereiche ab Position 40 und 2440),
+  liefern beide Wege andere Bilder — die Indexliste zählt das Paar als zwei
+  Positionen, der Decoder gibt ein Bild aus. Welcher Weg das richtige Bild
+  kodiert, ist nicht geklärt. Vorschlag bei Bedarf: sequentiell nur ohne
+  Halbbild-Paar im Bereich (`extraIndices()`); Sonde dafür lag in
+  `CLAUDE_TMP/TTCut-ng/run13/` (`probe_mpeg2_decoder seek`).
+
 - **`_parse_fraction` in `ttcut-demux`: Zahl ohne `/`** (gefunden 2026-09-27,
   Abschluss-Review `fix/frame-rate-source`): Der Kommentar verspricht „a plain
   number gets DEN=1“, aber `cut -d/ -f2` liefert ohne `/` die ganze Eingabe —

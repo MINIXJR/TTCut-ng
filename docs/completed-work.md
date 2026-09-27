@@ -1006,6 +1006,38 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 13: Lese-Hypothesen der Karte `mpeg2-decoder.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run13`)**. Wegwerf-Sonde
+  (`probe_mpeg2_decoder`, Modi seq/race/last/qj/seek/cmp/null) auf den
+  Tux-MPEG-2-Fixtures.
+  - **H4** Zeitsprung: nach `moveToFrameIndex` noch `decodeMPEG2Frame` → 5 von 5
+    Vorschaubildern zeigten das Bild danach. Jetzt `getFrameInfo`.
+  - **H2** GOP ohne eigenen Sequenz-Header: Fixtures haben je GOP einen
+    (255/255, 120/120, 255/255), echte DVB-TS fast immer (eine von sechs:
+    772 vs 776 Startcodes). 50. Header aus dem 576i-Fixture entfernt → alle
+    12 Positionen dieses GOP falsch (Bild des GOP davor). Jetzt nach dem
+    Sequenz-Header ein zweiter Sprung auf den GOP-Header des Ziels (ohne
+    Voll-Reset); Halbbild-Fixture mit zwei entfernten Headern: 1100–1300 gleich.
+  - **H1** ein `static TFrameInfo` für alle Decoder (Wettlauf GUI↔Worker):
+    in 2 × 300 Sprüngen nicht beobachtet, derselbe Zeiger aber belegt → Member.
+  - **H5** `ArgumentNull` nur bei beiden Listen null; eine leere Kopfliste →
+    Absturz (Exit 139) in `moveToFrameIndex`. Jetzt `||`.
+  - **H3** Dateiende: letzte acht Positionen dekodieren richtig — nicht beobachtet.
+  - **H6** Sprung je Bild beim Neu-Encode: 8–30× langsamer als sequentiell,
+    Bilder gleich — außer mit Halbbild-Paar im Bereich (dann verschieden).
+    User-Entscheid: belassen, als TODO („an einem echten Beispiel sehen“).
+  - Gate `mpeg2_decoder_contract` (H1/H2/H4/H5 alt rot, neu grün); run-gates 128 PASS.
+  - Umbau: 12 Kandidaten auf den 10 Quellen der Karte, 8 umgebaut (C1:
+    `ttAvErrorToString` + `drainPackets` in `TTTranscodeProvider`, Komplexität
+    `encodeFrames` 36 → 29; C2: `static_cast`, `const`), 4 + 2 (Nachscan)
+    deliberate. Store `docs/code-audit/build-verdicts-2026-09-27-run13.py`.
+  - Fallen: (1) Harness-Vorschaubild in Originalgröße → `QImage::scaled` gibt
+    eine flache Kopie über dem Decoder-Puffer zurück, nach dem Worker-Ende
+    freigegeben → Absturz im Vergleich; halbe Größe nehmen. (2) Stichproben
+    aus zwei Bildpunkten meldeten „gleich“ auch dort, wo die Y-Prüfsumme
+    Unterschiede zeigt — immer ganze Ebenen vergleichen. (3) `pkill -f` mit
+    einem Muster, das in der eigenen Kommandozeile steht, beendet die Shell.
+
 - **Bildrate roher H.26x-ES ohne .info + ttcut-demux-Halbierung** → **GEFIXT
   (2026-09-27, Zweig `fix/frame-rate-source`, Spec
   `2026-09-27-frame-rate-source-design`)**. Aus H5 von Audit-Lauf 12.
