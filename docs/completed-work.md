@@ -1006,6 +1006,28 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 14: Lese-Hypothesen der Karte `subtitle-core.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run14`)**. Wegwerf-Sonde `probe_srt`
+  (parse/lookup/cut mit dem echten Parser und Schnitt) auf kleinen SRT-Dateien.
+  - **H1** Keep-Segment nach dem letzten Untertitel: `searchTimeIndex` liefert
+    den letzten, der Schnitt schrieb ihn erneut — `00:00:02,500 -->
+    00:00:01,500 Drei`, Text aus einem entfernten Teil. Jetzt übersprungen.
+  - **H2** Punkt statt Komma, einstellige Stunde, Positionsfelder → 0..0 ms
+    (Qt: ungültige `QTime` = 0). Jetzt ein toleranter Ausdruck, unlesbare
+    Zeile → Untertitel übersprungen mit Warnung.
+  - **H4** Zeilenende nur aus der ersten Zeile → bei CRLF-dann-LF blieb nur
+    der erste Untertitel. Jetzt LF-Trennung, CR davor weg.
+  - **H6** unsortierte Datei → Overlay fand Untertitel nicht; jetzt stabil
+    nach Start sortiert. **H3** Überlappung → Overlay zeigte einen; jetzt
+    `TTSubtitleHeaderList::textAt` (alle, CRLF). **H5** BOM: kein Problem.
+  - Zehn echte SRT-Dateien (9065 Untertitel): keine zeigt H2/H3/H4/H6; der
+    neue Parser liest alle identisch zu einer unabhängigen Auswertung.
+  - Gate `subtitle_core` (5 Prüfungen, alt alle rot); run-gates 129 PASS.
+  - Umbau: 24 Kandidaten auf den 12 Quellen der Karte, 22 umgebaut (C1
+    `TTAVData::warnLater` für vier verzögerte Warnfenster, C2 mechanisch in
+    Untertitel-Klassen und `TTFileBuffer`, der jetzt nicht kopierbar ist),
+    2 + 1 deliberate. Store `docs/code-audit/build-verdicts-2026-09-27-run14.py`.
+
 - **Audit-Lauf 13: Lese-Hypothesen der Karte `mpeg2-decoder.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run13`)**. Wegwerf-Sonde
   (`probe_mpeg2_decoder`, Modi seq/race/last/qj/seek/cmp/null) auf den

@@ -5,6 +5,15 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Cut subtitles no longer repeat the last subtitle.** When a kept part
+  started after the last subtitle, the cut wrote that subtitle again - with
+  its end before its start and a text from a part that had been cut away.
+  Gate: `subtitle_core`.
+- **SRT files from other sources are read completely.** Timing lines with
+  a dot, a one-digit hour or position fields no longer turn into subtitles
+  at 00:00:00, files mixing Windows and Unix line ends keep all subtitles,
+  subtitles out of time order are sorted, and overlapping subtitles are
+  shown together in the picture. Gate: `subtitle_core`.
 - **Quick-jump thumbnails of MPEG-2 videos show the right picture.** Each
   thumbnail was the picture after its position. Gate:
   `mpeg2_decoder_contract`.
