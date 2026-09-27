@@ -255,12 +255,16 @@ bool TTH26xVideoStream::isCutOutPoint(int pos)
 
 int TTH26xVideoStream::findIDRBefore(int frameIndex)
 {
-    // `frameIndex` is a DISPLAY position (caller in ttcutpreviewtask.cpp supplies
-    // cutOutIndex(), which is stored in display space since 7f494e0).
-    // The AU array is decode-ordered, so convert on the way in and on the way out.
-    int decodeStart = displayToDecodeIndex(frameIndex);
-    for (int i = decodeStart; i >= 0; --i) {
-        if (accessUnitIsIDR(i)) return decodeToDisplayIndex(i);
+    // `frameIndex` is a DISPLAY position (the cut-out preview window,
+    // ttPreviewCutOutWindow). A true IDR (NAL scan, TTFrameInfo::isIDR) - not
+    // the libav key flag, which also marks H.264 recovery points and every
+    // HEVC IRAP. The walk goes down DISPLAY positions: in decode order a
+    // picture decoded after its IDR can display before it (HEVC RADL), and the
+    // result would lie behind the position.
+    const QList<TTFrameInfo>& index = mFrameIndexBundle.index;
+    for (int disp = qMin(frameIndex, frameCount() - 1); disp >= 0; --disp) {
+        const int dec = displayToDecodeIndex(disp);
+        if (dec >= 0 && dec < index.size() && index[dec].isIDR) return disp;
     }
     return -1;
 }
