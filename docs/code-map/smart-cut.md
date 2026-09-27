@@ -1,5 +1,5 @@
 ---
-base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
+base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
 last_verified: 2026-09-26
 sources:
   - common/ttexception.cpp

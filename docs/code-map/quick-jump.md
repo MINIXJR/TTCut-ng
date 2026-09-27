@@ -1,5 +1,5 @@
 ---
-base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
+base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
 last_verified: 2026-09-27
 sources:
   - gui/ttcutmainwindow.cpp
@@ -91,7 +91,7 @@ flowchart TD
 | `TTQuickJumpDialog` → `TTQuickJumpWorker` | Page frame list, thumbnail size, index/header lists, the bundle. One worker per page; `abortCurrentWorker()` disconnects the model first, so a late thumbnail from a superseded worker cannot repaint the new page. |
 | `TTThreadTaskPool` ⇢ `TTQuickJumpWorker` | Pool ownership is the dialog's. Destroying the dialog destroys the pool, whose `cleanUpQueue()` calls `waitForDone()` — a **blocking** wait on the GUI thread. |
 | `TTQuickJumpWorker` → `TTFFmpegWrapper` | One wrapper per worker, created inside the worker thread (it is a `QObject`). The worker's `mIsAborted` is handed over as a cancel token, so an abort reaches into a running decode instead of only being seen between frames. With no bundle handed in, the worker runs its own `TTFrameIndexer` over `mFilePath` and installs the result — `setFrameIndex()` is the only way an index enters a wrapper. |
-| `TTQuickJumpWorker` → `TTMpeg2Decoder` | MPEG-2 takes a completely separate decoder; no bundle, no cancel token, no wrapper involvement. The thumbnail is `getFrameInfo()` after `moveToFrameIndex(frameIndex)` — until audit run 13 a further `decodeMPEG2Frame()` made it the picture after the index (`mpeg2-decoder.md`, H4). |
+| `TTQuickJumpWorker` → `TTMpeg2Decoder` | MPEG-2 takes a completely separate decoder; no bundle, no cancel token, no wrapper involvement. The thumbnail is `getFrameInfo()` after `moveToFrameIndex(frameIndex)`. |
 | `TTFFmpegWrapper::decodeFrame(n)` | `n` is a **display** position. Internally mapped to a decode-order AU via `displayOrderMap()`; the delivered frame is that AU, not the n-th decoder output. |
 | worker → `thumbnailReady(frameIndex, QImage)` | A `QImage`, never a `QPixmap` (`QPixmap` is not thread-safe). Conversion happens in the model, on the GUI thread. A **null** image is the documented "decode failed" signal, not an error condition to be logged twice. |
 | `TTQuickJumpDialog::selectedFrameIndex()` → main window | The chosen keyframe position, in the same domain the model collected it — passed to `currentFrame->onGotoFrame()`. |

@@ -1,5 +1,5 @@
 ---
-base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
+base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
 last_verified: 2026-09-27
 sources:
   - data/ttavdata.h
@@ -40,12 +40,12 @@ load overwrites (`settings-state.md`), the pool's progress bookkeeping
 | Audio | discovered: `<base>*.<suffix>` next to the video for every `TTAVTypes::readableAudioSuffixes` entry (mpa, mp2, mp3, ac3; `getAudioNames`), order −1 | every `<Audio>` with its `<Order>`; `<Language>`, `<Delay>`, `<Repair>` become pending entries keyed `(item, order)` |
 | Subtitles | discovered `<base>*.srt` (`getSubtitleNames`), order −1 | every `<Subtitle>` with its `<Order>` (an `<Order>` of −1, which older projects carry, becomes the section's position among the `<Subtitle>` sections), pending language/delay keyed `(item, order)` |
 | `.info` | read here: languages → pending, VDR marks → `mpPendingVdrMarkers`, item marked for the defect dialog, legacy decode-error warning (modal) | not read here; `onOpenVideoFinished` reads it again for the extra-frame list only |
-| Cuts / markers | from VDR marks in `onOpenVideoFinished` | `parseCutSection`/`parseMarkerSection` append synchronously while the tasks still run, then `sortCutItemsByOrder`/`sortMarkerByOrder` `parseCutSection` refuses a range `TTAVItem::checkCut` rejects (negative or inverted) and skips that entry with a warning rather than failing the load. Compatibility between videos (`canCutWith`) cannot run here — the streams are not in yet — and is checked in `onReadProjectFileFinished`. |
+| Cuts | from VDR marks in `onOpenVideoFinished` (also as `VDRImportMarker` stream points) | `parseCutSection` appends synchronously while the tasks still run, then `sortCutItemsByOrder`. `parseCutSection` refuses a range `TTAVItem::checkCut` rejects (negative or inverted) and skips that entry with a warning rather than failing the load. Compatibility between videos (`canCutWith`) cannot run here — the streams are not in yet — and is checked in `onReadProjectFileFinished`. |
 | Pool abort hook | `aborted → onOpenAVStreamsAborted` (armed per open, dropped in `onThreadPoolExit`) | `exit → onReadProjectFileFinished`, `aborted → onReadProjectFileAborted` (armed in `readProjectFile`) |
 | Main window flag | — | `mProjectLoadInProgress` from `openProjectFile` to `onOpenProjectFileFinished`/`Aborted` |
 
 Both paths meet in `doOpenVideoStream`: `createAVItem` (wires the item's
-cut and marker lists to the global ones), `mpThreadTaskPool->init(audio+1)`,
+cut list to the global one), `mpThreadTaskPool->init(audio+1)`,
 `start(TTOpenVideoTask)`. Audio and subtitle tasks are started right behind
 it; the pool runs them on `QThreadPool::globalInstance()`.
 
@@ -59,7 +59,7 @@ flowchart TD
     GUI["GUI open<br/>onOpenVideoFile / onFileOpen / recent"]
     CLI["Command line + headless<br/>ttcutmain.cpp, runAutoCutMode"]
     OPEN["TTAVData::openAVStreams<br/>discovery + .info"]
-    PRJ["TTCutProjectData::deserializeAVDataItem<br/>parseVideo/Audio/Subtitle/Cut/Marker"]
+    PRJ["TTCutProjectData::deserializeAVDataItem<br/>parseVideo/Audio/Subtitle/Cut"]
     PEND["pending maps<br/>languages, delays, repairs, VDR marks,<br/>defect-dialog mark"]
     DISP["TTAVData::doOpenVideoStream<br/>createAVItem, pool init"]
     POOL["TTThreadTaskPool<br/>init / exit / aborted"]
@@ -68,7 +68,7 @@ flowchart TD
     OVF["TTAVData::onOpenVideoFinished"]
     OAF["TTAVData::onOpenAudioFinished /<br/>onOpenSubtitleFinished"]
     ITEM["TTAVItem<br/>video, audio list, subtitle list,<br/>initialAudioLoadDone, anomalyScanStarted"]
-    LIST["TTAVList (mpAVList)<br/>+ global cut/marker lists"]
+    LIST["TTAVList (mpAVList)<br/>+ global cut list"]
     DLG["defect dialog<br/>showExtraFrameClusterDialog (modal)"]
     PEXIT["TTAVData::onThreadPoolExit"]
     PRF["TTAVData::onReadProjectFileFinished"]
@@ -87,7 +87,7 @@ flowchart TD
     PRJ -->|"language, delay, repairs per (item, order)"| PEND
     OPEN -->|"video path"| DISP
     PRJ -->|"video path + order"| DISP
-    PRJ -->|"cuts, markers (synchronous)"| ITEM
+    PRJ -->|"cuts (synchronous)"| ITEM
     DISP -->|"item + task"| POOL
     OPEN -->|"audio/subtitle tasks"| POOL
     PRJ -->|"audio/subtitle tasks with order"| POOL
@@ -134,7 +134,7 @@ flowchart TD
 | `OVF`/`PRF` → `MW` | `onAVItemChanged` returns at once for the current item or when `avItem == 0` (→ `closeProject`). Otherwise: re-wire the subtitle-append hook, set the current item on the stream-point widget with the extra-frame list, frame rate into the stream-point model, `setEncoderCodec(streamType)` (see `settings-state.md`), both frame widgets, audio/subtitle lists, subtitle overlay if a subtitle already landed, `onNewFramePos(currentIndex)`, navigator, `navigationEnabled(true)`, zero-timer to the gate, logo profile cleared and `<video>.logo.pgm` autoload on a zero-timer. |
 | `MW`/`MWR`/`MWP` → `GATE` | Three entry points, all deferred by a zero-timer; `maybeStartAutoAnomalyScan` is idempotent: it needs `audioAnomalyScanEnabled`, no project load in progress, a current item with video, `initialAudioLoadDone`, not `anomalyScanStarted`, no stream-point workers running, an AC3 track, and no `AudioAnomaly` marker already in the model. Whichever entry runs last with all conditions true starts the scan. |
 | `LIST` → dirty flag | `TTAVList::itemAppended` → `avItemAppended` → `onProjectModified` during BOTH paths; `onOpenProjectFileFinished` resets it to clean at the end, a plain open leaves the window marked modified (unsaved new project). |
-| `MW` → `CLOSE` | Aborts the stream-point pool and waits for the global `QThreadPool`, disconnects the two AV signals, nulls every widget, clears the stream-point model and `TTAVData` (`mpAVList`, cut list, marker list; the `TTAVItem`s and their streams die with the list), reloads `TTSettings`, clears project identity and cut name, reconnects. |
+| `MW` → `CLOSE` | Aborts the stream-point pool and waits for the global `QThreadPool`, disconnects the two AV signals, nulls every widget, clears the stream-point model and `TTAVData` (`mpAVList`, cut list; the `TTAVItem`s and their streams die with the list), reloads `TTSettings`, clears project identity and cut name, reconnects. |
 | `CLI` (headless) → wait | `runAutoCutMode` and `runScreenshotMode` call `waitForProjectLoad(timeout)` (since `026aa9fb`): pump until `mProjectLoadInProgress` falls, which happens in `onOpenProjectFileFinished`/`Aborted` — i.e. after `readProjectFileFinished`, the pool's `exit` with every open task (audio and subtitles included) gone. Until then they polled `avCount() > 0` (video appended) and slept a fixed 2 s for the audio tasks. |
 
 ## Assumptions, contracts & pitfalls

@@ -254,6 +254,10 @@ All notable changes to TTCut-ng are documented in this file.
   their source file and line instead of `[qt]`. Gates: `log_levels`,
   `log_qdebug_context`.
 - **Building needs `zlib1g-dev`** (log rotation).
+- **Project files no longer carry `<Marker>` blocks.** The old marker list
+  behind them has had no display since the marker tab was removed; manual
+  and VDR marks are stream points. Older projects with `<Marker>` still
+  load, the blocks are skipped. Gate: `project_marker_dropped`.
 
 ## v0.85.0 (2026-09-22)
 

@@ -1,5 +1,5 @@
 ---
-base_commit: c81e99bc81c1616a783b7d7accf6d959d34440dd
+base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
 last_verified: 2026-09-27
 sources:
   - gui/ttcutframenavigation.h
@@ -149,10 +149,6 @@ flowchart TD
   - sites: `data/ttavdata.cpp:TTAVData::onDoCut`, `:doH264Cut`, `:doAudioOnlyCut`, `data/ttcutvideotask.cpp`
   - shared purpose: video stream, frame rate, audio tracks and `.info` timing of "the" source
   - status: consolidate → one accessor returning the job's source item plus its timing, so the entry-0 assumption is stated once rather than repeated in each branch
-- **list-mirroring wiring**
-  - sites: `data/ttavdata.cpp:TTAVData::createAVItem` (cut list and marker list, four connects each in the same shape)
-  - shared purpose: mirror a per-item list into the global one and push the order back
-  - status: deliberate → the two list types share no base class; a template helper would need one first
 
 ## Findings of audit run 6
 
