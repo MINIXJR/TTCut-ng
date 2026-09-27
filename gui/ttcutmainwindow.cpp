@@ -129,9 +129,6 @@ TTCutMainWindow::TTCutMainWindow()
   navigation->setThresholds(TTSettings::instance()->navBlackThreshold(), TTSettings::instance()->navSceneThreshold());
 
   restoreWindowGeometry();
-  log->enableLogFile(TTSettings::instance()->createLogFile());
-  log->setLogModeConsole(TTSettings::instance()->logModeConsole());
-  log->setLogModeExtended(TTSettings::instance()->logModeExtended());
 
   //AV stream controller instance
   mpAVData = new TTAVData();
@@ -736,10 +733,7 @@ void TTCutMainWindow::openSettingsDialog(int category)
   // The pages write TTSettings only in their saveTabData(), which accept()
   // runs; after Cancel nothing has changed and nothing is saved.
   if (settingsDlg->exec() == QDialog::Accepted) {
-    log->enableLogFile(TTSettings::instance()->createLogFile());
-    log->setLogModeConsole(TTSettings::instance()->logModeConsole());
-    log->setLogModeExtended(TTSettings::instance()->logModeExtended());
-
+    TTSettings::instance()->applyLogSettings();
     TTSettings::instance()->save();
 
     // Burst filter setting may have changed - re-evaluate the hint column

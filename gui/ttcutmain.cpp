@@ -68,6 +68,10 @@ int main( int argc, char **argv )
     // bootstrap and any libav probe-output get routed through
     // TTMessageLogger. TTMessageLogger::getInstance() is lazy and the
     // handlers degrade gracefully if invoked pre-singleton-init.
+    // Nothing may open - and rotate - the log file before the settings say
+    // whether one is wanted: lines are held until TTSettings::load() applies
+    // them (TTSettings::applyLogSettings).
+    TTMessageLogger::getInstance()->holdUntilConfigured();
     qInstallMessageHandler(ttQtMessageHandler);
     ttInstallAvLogCallback();
 

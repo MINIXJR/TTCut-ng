@@ -110,6 +110,12 @@ bool TTMpvLibBackend::start()
     return false;
   }
 
+  // libmpv has taken over the process-global av_log callback: every libav
+  // message - TTCut's own decoders and encoders included - would reach mpv's
+  // log, of which only errors come back, as "Playback error". Take it back;
+  // shutdown() re-installs it again after mpv restores ffmpeg's default.
+  ttInstallAvLogCallback();
+
   // Wakeup-Callback hängen
   mpv_set_wakeup_callback(mMpv, &TTMpvLibBackend::wakeupCallback, this);
 

@@ -20,12 +20,15 @@
 
 /* /////////////////////////////////////////////////////////////////////////////
  * Generell base class for all exception types
+ *
+ * The (caller, line, message) constructor also writes the message to the log
+ * as an error line; the message-only one logs nothing.
  */
 class TTException
 {
   public:
     TTException();
-    TTException(const QString& message);
+    explicit TTException(const QString& message);
     TTException(const QString& caller, int line, const QString& message);
     virtual ~TTException();
 
@@ -38,57 +41,44 @@ class TTException
 class TTIOException : public TTException
 {
   public:
-    TTIOException(const QString& msg) : TTException(msg){};
-    TTIOException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
+    using TTException::TTException;
 };
 
 class TTDataFormatException : public TTException
 {
   public:
-    TTDataFormatException(const QString& msg) : TTException(msg){};
-    TTDataFormatException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
+    using TTException::TTException;
 };
 
 class TTInvalidOperationException : public TTException
 {
   public:
-    TTInvalidOperationException(const QString& msg) : TTException(msg){};
-    TTInvalidOperationException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
+    using TTException::TTException;
 };
 
 class TTArgumentException : public TTException
 {
   public:
-    TTArgumentException(const QString& msg) : TTException(msg){};
-    TTArgumentException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
+    using TTException::TTException;
 };
 
 class TTIndexOutOfRangeException : public TTException
 {
   public:
-    TTIndexOutOfRangeException(const QString& msg) : TTException(msg) {};
-    TTIndexOutOfRangeException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
-   protected:
+    using TTException::TTException;
 };
 
 class TTFileNotFoundException : public TTException
 {
-	public:
-		TTFileNotFoundException(const QString& msg) : TTException(msg) {};
-    TTFileNotFoundException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
- 	protected:
+  public:
+    using TTException::TTException;
 };
 
 class TTAbortException : public TTException
 {
-	public:
-		TTAbortException(const QString& msg) : TTException(msg) {};
-    TTAbortException(const QString& caller, int line, const QString& msg) : TTException(caller, line, msg){};
- 	protected:
+  public:
+    using TTException::TTException;
 };
+
 #endif
 

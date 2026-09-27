@@ -18,6 +18,7 @@
 #include "avstream/tth264videostream.h"
 #include "avstream/tth265videostream.h"
 #include "common/ttmessagelogger.h"
+#include "common/ttsettings.h"
 
 static int failures = 0;
 static void check(bool ok, const QString& what)
@@ -43,7 +44,9 @@ int main(int argc, char** argv)
     fprintf(stderr, "usage: %s <es-file>=<fps>:<origin>[:warn][:log=<text>] ...\n", argv[0]);
     return 2;
   }
-  // Warnings go to stderr in console mode; each open is captured below.
+  // Warnings go to stderr in console mode; each open is captured below. The
+  // settings load applies the logger options, so it runs first.
+  (void)TTSettings::instance();
   TTMessageLogger::getInstance()->setLogModeConsole(true);
 
   for (int i = 1; i < argc; ++i) {

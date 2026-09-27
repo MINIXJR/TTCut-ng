@@ -21,6 +21,7 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <mutex>
+#include <vector>
 
 class TTMessageLogger
 {
@@ -31,27 +32,32 @@ class TTMessageLogger
     static TTMessageLogger* getInstance(int mode=STD_LOG_MODE);
     ~TTMessageLogger();
 
-    // Override the default log file path (e.g. from main() before any
-    // logging happens). Pass an empty string to fall back to the default.
+    // Override the default log file path (harnesses; the application sets it
+    // through configure()). Pass an empty string to fall back to the default.
     void setLogFilePath(const QString& path);
-    QString logFilePath() const { return mLogFilePath; }
+    const QString& logFilePath() const { return mLogFilePath; }
 
-    void enableLogFile(bool enable);
+    // Keep lines in memory instead of opening - and rotating - the log file
+    // until configure() says whether a file is wanted at all. main() calls it
+    // first thing; harnesses do not and log with the defaults.
+    void holdUntilConfigured();
+    // The settings' log options, applied together (TTSettings::
+    // applyLogSettings). Releases held lines through the configured level,
+    // console mode and file switch.
+    void configure(const QString& path, bool fileEnabled, bool console, bool extended);
     void setLogModeConsole(bool console);
-    void setLogModeExtended(bool extended);
 
-
-    void infoMsg(QString caller, int line, QString msgString);
-    void warningMsg(QString caller, int line, QString msgString);
-    void errorMsg(QString caller, int line, QString msgString);
-    void fatalMsg(QString caller, int line, QString msgString);
-    void debugMsg(QString caller, int line, QString msgString);
+    void infoMsg(const QString& caller, int line, const QString& msgString);
+    void warningMsg(const QString& caller, int line, const QString& msgString);
+    void errorMsg(const QString& caller, int line, const QString& msgString);
+    void fatalMsg(const QString& caller, int line, const QString& msgString);
+    void debugMsg(const QString& caller, int line, const QString& msgString);
 
     // printf-style overloads (caller, line, fmt, ...)
-    void infoMsg(QString caller, int line, const char* msg, ...);
-    void warningMsg(QString caller, int line, const char* msg, ...);
-    void errorMsg(QString caller, int line, const char* msg, ...);
-    void debugMsg(QString caller, int line, const char* msg, ...);
+    void infoMsg(const QString& caller, int line, const char* msg, ...);
+    void warningMsg(const QString& caller, int line, const char* msg, ...);
+    void errorMsg(const QString& caller, int line, const char* msg, ...);
+    void debugMsg(const QString& caller, int line, const char* msg, ...);
 
     enum MsgType
     {
@@ -76,10 +82,19 @@ class TTMessageLogger
       NONE         // FATAL+ERROR
     };
 
-    void logMsg( MsgType type, QString caller, int line, QString msgString, bool show=false);
-    void writeMsg(QString msgString);
+    void logMsg( MsgType type, const QString& caller, int line, const QString& msgString, bool show=false);
 
   private:
+    struct HeldLine
+    {
+      MsgType type     = INFO;
+      QString text;
+      bool    onStderr = false;   // already written to stderr when it was logged
+    };
+
+    static bool passesLevel(MsgType type);
+    void   setLogFilePathLocked(const QString& path);
+    void   writeMsg(const QString& msgString);
     void   ensureLogFileOpen();   // lazy open on first writeMsg call
 
     QFile*  mLogFile;
@@ -90,8 +105,8 @@ class TTMessageLogger
                                      // decode/encode worker threads)
     static TTMessageLogger* loggerInstance;
     bool   mLogEnabled;
-    bool   mLogConsole;
-    bool   mLogExtended;
+    bool   mHold = false;
+    std::vector<HeldLine> mHeld;
 
     static       int   sLogMode;
     static       int   sLogLevel;

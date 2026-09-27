@@ -48,11 +48,9 @@ void TTAbortableTask::abortCleanup()
  * show one.
  *
  * The message-only TTAbortException constructor is used on purpose. Its
- * (caller, line, msg) sibling logs the text through TTMessageLogger::
- * fatalMsg() - measured: a cancel wrote "[][..][tth26xcuttask:124] user
- * abort" into the persistent log, i.e. a fatal-level line for something the
- * user asked for. (TTCutVideoTask and TTCutPreviewTask still use that
- * constructor; their pre-existing fatal line on cancel is out of scope here.)
+ * (caller, line, msg) sibling logs the text as an error line - measured: a
+ * cancel wrote "..[tth26xcuttask:124] user abort" into the persistent log,
+ * a failure line for something the user asked for.
  */
 void TTAbortableTask::abortNow()
 {

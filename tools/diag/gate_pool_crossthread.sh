@@ -52,7 +52,7 @@ g++ -g -O1 -fsanitize=thread -fno-omit-frame-pointer -fPIC -std=gnu++17 \
     ../../common/ttmessagelogger.cpp ../../common/ttexception.cpp \
     ../../common/ttsettings.cpp ../../common/istatusreporter.cpp \
     "$MOCDIR"/moc_*.cpp \
-    $(pkg-config --libs Qt6Core) -lpthread || exit 1
+    $(pkg-config --libs Qt6Core zlib) -lpthread || exit 1
 
 for mode in queued nested; do
   TSAN_OPTIONS="halt_on_error=0" timeout -s KILL "$LIMIT" \

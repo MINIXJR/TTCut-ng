@@ -101,7 +101,8 @@ MAX_WAIT=900             # Notbremse, falls gar nichts passiert
 run_cut() {              # $1 = Binary, $2 = Ausgabename → 0 = ok
     local bin="$1" out="$2" pid last=-1 same=0 waited=0 size
     rm -f "$out"
-    QT_QPA_PLATFORM=offscreen "$bin" --project "$PROJECT" --auto-cut "$out" >/dev/null 2>&1 &
+    # own cache: the app rotates ~/.cache/ttcut-ng/logfile.log on its first line
+    XDG_CACHE_HOME="$QC/xdg-cache" QT_QPA_PLATFORM=offscreen "$bin" --project "$PROJECT" --auto-cut "$out" >/dev/null 2>&1 &
     pid=$!
 
     while kill -0 "$pid" 2>/dev/null; do

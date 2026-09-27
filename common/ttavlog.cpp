@@ -21,13 +21,14 @@ extern "C" {
 }
 
 // ---------------------------------------------------------------------------
-// libav log callback: gated on TTSettings::logLibav() (default off, since
-// libav is very chatty). When enabled, maps AV_LOG_ levels onto matching
-// TTMessageLogger severities and strips trailing newlines that libav emits.
+// libav log callback: errors (AV_LOG_ERROR and worse) are always logged;
+// everything below is gated on TTSettings::logLibav() (default off, since
+// libav is very chatty). Maps AV_LOG_ levels onto matching TTMessageLogger
+// severities and strips trailing newlines that libav emits.
 // ---------------------------------------------------------------------------
 static void ttAvLogCallback(void* avcl, int level, const char* fmt, va_list vl)
 {
-  if (!TTSettings::instance()->logLibav()) return;
+  if (level > AV_LOG_ERROR && !TTSettings::instance()->logLibav()) return;
   if (level > av_log_get_level()) return;
   char buf[1024];
   int prefix = 0;

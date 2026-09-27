@@ -16,7 +16,8 @@ Build-Depends: debhelper-compat (= 13),
                libswscale-dev,
                libavfilter-dev,
                libswresample-dev,
-               libmpv-dev
+               libmpv-dev,
+               zlib1g-dev
 Standards-Version: 4.7.4
 Homepage: https://github.com/MINIXJR/TTCut-ng
 
