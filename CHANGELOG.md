@@ -5,6 +5,15 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **ttcut-quality-check finds A/V offsets in every segment.** It measured
+  only the start of the first segment: an offset of 200 ms from the second
+  segment on was reported as +0 ms PASS. Audio without a clear correlation
+  (a steady tone, silence) is now "not measurable" instead of a pass.
+- **ttcut-quality-check reads your defect-region settings** and names the
+  config file only when a value came from it; correct 23.976/29.97/59.94 fps
+  cuts no longer fail the timestamp test; the reference is built once, next
+  to the cut instead of in `/tmp`. The package now recommends `mkvtoolnix`.
+  Gate: `quality_check`.
 - **Subtitle glyph repair: the right line.** A line starting with Ö, Ä or Ü
   or an empty OCR line shifted the pairing of subtitle lines and bitmap
   lines, so a music note could be put on the wrong line or missed (10 of

@@ -195,6 +195,7 @@ partial_track          tux   600  test_partial_track
 project_roundtrip_264  tux   600  test_project_roundtrip
 project_roundtrip_m2v  tux   600  test_project_roundtrip
 project_marker_dropped tux   600  test_project_roundtrip
+quality_check          tux   900  -
 open_track_failure     tux   600  test_open_track_failure
 extra_index_rank       tux   300  test_extra_index_rank
 stale_abort            tux   600  test_stale_abort
@@ -796,6 +797,7 @@ gate_project_marker_dropped() {
   fi
   echo "PASS: a <Marker> project loads silently and is saved without it"
 }
+gate_quality_check()      { need "$V264" "$A264"; "$D/gate_quality_check.sh" "$V264" "$A264" "$W"; }
 gate_project_roundtrip_m2v() { need "$M2V" "$MP2"; make_two_track_project "$W/rt-two-track.ttcut"
                                "$D/test_project_roundtrip" "$W/rt-two-track.ttcut" "$W" rtm2v; }
 gate_open_track_failure()  { need "$M2V" "$MP2"; "$D/test_open_track_failure" "$M2V" "$MP2" "$W"; }

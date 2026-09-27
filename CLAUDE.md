@@ -150,7 +150,7 @@ TTAVStream
 - ffmpeg/ffprobe CLI (for `tools/ttcut-demux`; the application itself does not
   call it — the former MP4 output option was removed)
 - mplex (optional, for MPEG-2 multiplexing)
-- Note: mkvmerge/mkvtoolnix is no longer required (replaced by libav matroska muxer in v0.60.0)
+- Note: mkvmerge/mkvtoolnix is no longer required by TTCut-ng itself (replaced by libav matroska muxer in v0.60.0); only `ttcut-quality-check` uses it for its reference MKV
 
 ## Version
 

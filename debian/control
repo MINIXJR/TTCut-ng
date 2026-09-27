@@ -24,7 +24,7 @@ Homepage: https://github.com/MINIXJR/TTCut-ng
 Package: ttcut-ng
 Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}, python3
-Recommends: ffmpeg, mjpegtools, mpv, python3-numpy
+Recommends: ffmpeg, mjpegtools, mpv, python3-numpy, mkvtoolnix
 Suggests: ccextractor, python3-pil
 Conflicts: ttcut
 Replaces: ttcut
