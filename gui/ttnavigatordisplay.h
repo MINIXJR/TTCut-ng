@@ -26,7 +26,7 @@ class TTNavigatorDisplay : public QFrame, public Ui::TTNavigatorDisplayWidget
   Q_OBJECT
 
   public:
-    TTNavigatorDisplay(QWidget* parent);
+    explicit TTNavigatorDisplay(QWidget* parent);
 
     void controlEnabled(bool enabled);
 
@@ -35,15 +35,13 @@ class TTNavigatorDisplay : public QFrame, public Ui::TTNavigatorDisplayWidget
 
   protected:
     void paintEvent(QPaintEvent *event);
-    void resizeEvent(QResizeEvent* event);
     void drawCutList();
 
   private:
     TTAVItem* mAVDataItem;
-    bool      isControlEnabled;
-    int       minValue;
-    int       maxValue;
-    double    scaleFactor;
+    bool      mControlEnabled;
+    int       mMinValue;
+    int       mMaxValue;
 };
 
 #endif //TTNAVIGATORDISPLAY_H

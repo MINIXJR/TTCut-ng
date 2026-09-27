@@ -21,6 +21,21 @@
 #include <QStyleOptionComplex>
 #include <QStyleOptionGroupBox>
 
+#include <optional>
+
+// The group-box option with a centred title, for drawing and for the layout
+// alike - both must see the same alignment. Empty for any other control.
+static std::optional<QStyleOptionGroupBox> centredGroupBox(QStyle::ComplexControl control,
+                                                           const QStyleOptionComplex* option)
+{
+  if (control != QStyle::CC_GroupBox) return std::nullopt;
+  const auto* groupBox = qstyleoption_cast<const QStyleOptionGroupBox*>(option);
+  if (!groupBox) return std::nullopt;
+  QStyleOptionGroupBox centred(*groupBox);
+  centred.textAlignment = Qt::AlignHCenter;
+  return centred;
+}
+
 TTCentredTitleStyle::TTCentredTitleStyle(QStyle* baseStyle)
   : QProxyStyle(baseStyle)
 {
@@ -59,13 +74,9 @@ void TTCentredTitleStyle::drawComplexControl(ComplexControl control,
                                              QPainter* painter,
                                              const QWidget* widget) const
 {
-  if (control == CC_GroupBox) {
-    if (const auto* groupBox = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
-      QStyleOptionGroupBox centred(*groupBox);
-      centred.textAlignment = Qt::AlignHCenter;
-      QProxyStyle::drawComplexControl(control, &centred, painter, widget);
-      return;
-    }
+  if (const auto centred = centredGroupBox(control, option)) {
+    QProxyStyle::drawComplexControl(control, &*centred, painter, widget);
+    return;
   }
 
   QProxyStyle::drawComplexControl(control, option, painter, widget);
@@ -80,13 +91,8 @@ QRect TTCentredTitleStyle::subControlRect(ComplexControl control,
                                           SubControl subControl,
                                           const QWidget* widget) const
 {
-  if (control == CC_GroupBox) {
-    if (const auto* groupBox = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
-      QStyleOptionGroupBox centred(*groupBox);
-      centred.textAlignment = Qt::AlignHCenter;
-      return QProxyStyle::subControlRect(control, &centred, subControl, widget);
-    }
-  }
+  if (const auto centred = centredGroupBox(control, option))
+    return QProxyStyle::subControlRect(control, &*centred, subControl, widget);
 
   return QProxyStyle::subControlRect(control, option, subControl, widget);
 }

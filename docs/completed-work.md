@@ -1006,6 +1006,35 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 16: Lese-Hypothesen der Karte `navigator-window.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run16`)**. Wegwerf-Sonde
+  `probe_navigator`: echtes Hauptfenster offscreen, Tux-Projekt, Ereignisfilter
+  auf dem Übersichtsbalken (zählt Schnitte beim letzten Paint).
+  - **N1** bestätigt: Schnitt über das Signal des Knopfes angelegt → Liste 2,
+    Balken zuletzt mit 1 gezeichnet, 0 Paints seither; erst die nächste
+    Schieberegler-Bewegung zeichnete neu. `emit refreshDisplay()` in
+    `TTCutTreeView::onAppendItem` war seit dem Initial-Commit auskommentiert.
+    Jetzt bei Anfügen und Entfernen, Navigator mit `update()`.
+  - **N2** kein Problem: nur `onEntryDelete` entfernt einzelne Schnitte.
+    **N3** unsichtbar (ein Bild = 0,15 px bei 6000 Bildern auf 888 px).
+    **N5** harmlos (gespeichert werden nur die aktuellen Werte).
+  - **N4** nicht gemessen (zwei Bildschirme beim User, offscreen nicht
+    prüfbar) → `TODO.md`.
+  - Gate `navigator_refresh` (alt rot beim Anfügen); run-gates 136 → 137.
+    Screenshot-Lauf mit zwei Schnitten: Balken richtig, Hauptfenster
+    unverändert.
+  - Umbau: 10 Kandidaten auf den 14 Quellen der Karte, 9 umgebaut (mechanisch
+    in `TTNavigatorDisplay`, leeres `setTitle` samt leerer `.ui`-Eigenschaft
+    weg, `readSize`/`writeSize`, `centredGroupBox`, Proxy-Kopie aus
+    `test_pulse_stylesheet`), 1 + 1 deliberate. Store
+    `docs/code-audit/build-verdicts-2026-09-27-run16.py`.
+  - Fallen: (1) `QScreen::grabWindow` liefert offscreen ein leeres Bild —
+    Pixel-Prüfungen dort wertlos, Paint-Ereignisse zählen. (2) Eine leere
+    Methode, die der Scanner als ungenutzt meldet, kann von `uic` aufgerufen
+    werden (`.ui`-Eigenschaft `title`) — erst bauen. (3) Mein Klon-Urteil
+    „`readSize` erledigt `f2467ce9`“ war falsch: der Klon war das
+    Schreib-Paar; der Konvergenz-Scan zeigte es als offen.
+
 - **Audit-Lauf 15: Lese-Hypothesen der Karte `logging.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run15`)**. Wegwerf-Sonde
   `probe_logging` und App-Läufe, alle mit eigenem `XDG_CONFIG_HOME`/

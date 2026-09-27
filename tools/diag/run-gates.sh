@@ -115,6 +115,7 @@ log_rotation           unit  60   test_logging
 log_app_file_off       tux   300  -
 log_qdebug_context     tux   300  -
 acm_cut_isolated       tux   300  -
+navigator_refresh      tux   300  test_navigator_refresh
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -503,6 +504,12 @@ gate_log_qdebug_context() {
   grep -Eq '^\[debug\]\[[0-9:]+\]\[ttcutprojectdata:[0-9]+\] TTCutProjectData::parseVideoSection' "$log" \
     || { echo "FAIL: qDebug line without file:line - got: $(grep -m1 'parseVideoSection' "$log")"; exit 1; }
   echo "PASS: $(grep -m1 'parseVideoSection' "$log")"
+}
+# The cut overview bar above the slider follows the cut list (audit run 16).
+gate_navigator_refresh() {
+  need "$V264" "$A264"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$D/test_navigator_refresh" "$W/p.ttcut"
 }
 # acm-cut.sh must not rotate the caller's log (XDG_CACHE_HOME stands for ~/.cache).
 gate_acm_cut_isolated() {

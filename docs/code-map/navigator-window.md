@@ -1,5 +1,5 @@
 ---
-base_commit: 3db49b7d3bf27a2737cf7471fe4c7bd49408d384
+base_commit: c81e99bc81c1616a783b7d7accf6d959d34440dd
 last_verified: 2026-09-27
 sources:
   - gui/ttstreamnavigator.h
@@ -72,10 +72,10 @@ flowchart LR
 
 | From → To | What crosses (data / order / invariant) |
 |---|---|
-| `MW` -.-> `SN` | `TTCutMainWindow::onAVItemChanged` calls `TTStreamNavigator::onAVItemChanged(item)` after the frame widgets and `onNewFramePos`, then `navigationEnabled(true)`. Slider range `0 .. frameCount()-1` — the same positions the current-frame widget uses. A null item (via `closeProject`) disables the slider and sets the range to `0 .. 0`. `navigationEnabled(bool)` → `controlEnabled`: slider enabled state plus the display's. `setTitle` is empty. |
-| `SN` -.-> `ND` | The navigator forwards the item and the enable state. The display keeps its own `isControlEnabled` and sets it to `true` on every non-null item, independently of the slider. `maxValue = frameCount()-1` (at least 1), `minValue = 0`. |
-| `AVI` → `ND` | `paintEvent` draws only with an item and enabled: dark background (= removed), then per cut of `mAVDataItem` (`cutListItemAt`, read at every paint) a green gradient from `cutIn*scale` over `(cutOut-cutIn)*scale` pixels, a green line at the cut-in and a gold one at the cut-out; `scale = width / (maxValue - minValue)`, truncated to int. Only the current video's cuts. The item is a raw pointer, replaced only through `onAVItemChanged`. |
-| `TV` -.-> `SN` | `refreshDisplay` → `onRefreshDisplay` → synchronous `repaint()` of the display. Emitted by `TTCutTreeView::onUpdateItem` (a cut edited) and `onEntryDelete` (after the delete requests); **not** by `onAppendItem` (the emit is commented out) nor `onRemoveItem`. Other repaints: `controlEnabled` (`repaint`), `onAVItemChanged` (`update`), resizes. |
+| `MW` -.-> `SN` | `TTCutMainWindow::onAVItemChanged` calls `TTStreamNavigator::onAVItemChanged(item)` after the frame widgets and `onNewFramePos`, then `navigationEnabled(true)`. Slider range `0 .. frameCount()-1` — the same positions the current-frame widget uses. A null item (via `closeProject`) disables the slider and sets the range to `0 .. 0`. `navigationEnabled(bool)` → `controlEnabled`: slider enabled state plus the display's. |
+| `SN` -.-> `ND` | The navigator forwards the item and the enable state. The display keeps its own `mControlEnabled` and sets it to `true` on every non-null item, independently of the slider. `mMaxValue = frameCount()-1` (at least 1), `mMinValue = 0`. |
+| `AVI` → `ND` | `paintEvent` draws only with an item and enabled: dark background (= removed), then per cut of `mAVDataItem` (`cutListItemAt`, read at every paint) a green gradient from `cutIn*scale` over `(cutOut-cutIn)*scale` pixels, a green line at the cut-in and a gold one at the cut-out; `scale = width / (mMaxValue - mMinValue)`, computed in `drawCutList`, positions truncated to int. Only the current video's cuts. The item is a raw pointer, replaced only through `onAVItemChanged`. |
+| `TV` -.-> `SN` | `refreshDisplay` → `onRefreshDisplay` → `update()` of the display (coalesced: a project load appends its cuts one by one). Emitted by `TTCutTreeView::onAppendItem`, `onUpdateItem` and `onRemoveItem` — every change of the cut list the tree shows, the delete button's included. Other repaints: `controlEnabled` (`repaint`), `onAVItemChanged` (`update`), resizes. |
 | `SN` → `DEC` | `valueChanged` → `sliderValueChanged(pos)` → `TTCutMainWindow::onVideoSliderChanged` (debounced decode, [frame-order.md](frame-order.md)). No `sliderMoved` → `processEvents` coupling any more. |
 | `CF` → `SN` | `TTCurrentFrame::newFramePosition` → `TTCutMainWindow::onNewFramePos`: `setValue` with the slider's signals blocked, so a position set from outside never decodes a second time. |
 | `SET` -.-> `SN` | Page step = `TTSettings::stepSliderClick()` at construction and on `stepSliderClickChanged`. |
@@ -103,24 +103,12 @@ flowchart LR
   `x`/`y` then only decide which screen's area the size is clamped to (Qt
   behaviour, not measured here).
 
-### Reading hypotheses for audit run 16
-
-From reading only; each needs proof first.
-
-- **N1 — a new cut appears late in the overview.** `onAppendItem` does not
-  emit `refreshDisplay`; after “Set Cut-Out” the bar may keep the old picture
-  until something else repaints it.
-- **N2 — cuts removed other than through the delete button are not
-  repainted.** `onRemoveItem` emits nothing; which removal paths bypass
-  `onEntryDelete`?
-- **N3 — the overview is off by one frame at the right edge.** A cut-out
-  marker is drawn at the start of the cut-out frame, a cut ending at the last
-  frame puts it at `x = width` (half outside), and the truncation to int can
-  shift markers by a pixel.
-- **N4 — the quick-jump dialog is sized for the primary screen**, not for the
-  screen the main window is on (smaller second screen → dialog larger than it).
-- **N5 — geometry and settings are saved even when closing is cancelled**
-  (both before the unsaved-project question).
+- **Offscreen measurement:** `QScreen::grabWindow` returns an empty image on
+  the offscreen platform; what the bar shows is measured through its Paint
+  events instead (`tools/diag/test_navigator_refresh`, gate
+  `navigator_refresh`).
+- **Open, not measured:** the quick-jump dialog is sized and clamped for the
+  primary screen, not for the screen the main window is on (`TODO.md`).
 
 ## Redundancy / consolidation candidates
 

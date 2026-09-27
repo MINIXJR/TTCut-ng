@@ -28,7 +28,6 @@ class TTStreamNavigator : public QWidget, public Ui::TTStreamNavigatorWidget
   public:
     explicit TTStreamNavigator(QWidget* parent);
 
-    void setTitle(const QString& title);
     void controlEnabled(bool enabled);
 
     QSlider* slider();

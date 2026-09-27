@@ -33,10 +33,6 @@ TTStreamNavigator::TTStreamNavigator(QWidget* parent)
           this, [this](int v) { videoSlider->setPageStep(v); });
 }
 
-void TTStreamNavigator::setTitle(const QString&)
-{
-}
-
 void TTStreamNavigator::controlEnabled(bool enabled)
 {
   videoSlider->setEnabled(enabled);
@@ -54,9 +50,11 @@ void TTStreamNavigator::onNewSliderValue(int val)
   emit sliderValueChanged(val);
 }
 
+// update(), not repaint(): a project load appends its cuts one by one, and
+// each would otherwise paint the bar synchronously.
 void TTStreamNavigator::onRefreshDisplay()
 {
-  navigatorDisplay->repaint();
+  navigatorDisplay->update();
 }
 
 void TTStreamNavigator::onAVItemChanged(TTAVItem* avDataItem)

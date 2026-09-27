@@ -1,6 +1,6 @@
 ---
-base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
-last_verified: 2026-09-26
+base_commit: c81e99bc81c1616a783b7d7accf6d959d34440dd
+last_verified: 2026-09-27
 sources:
   - gui/ttcutframenavigation.h
   - gui/ttcutframenavigation.cpp
@@ -92,7 +92,7 @@ flowchart TD
 | `TTAVData::appendCutEntry` → `TTAVItem::appendCutEntry` | Before appending, `canCutWith` runs against every **other** item of `TTAVList` (it returns at once when handed the item itself): equal frame rate, same audio-track count, same stream type, matching audio bitrate/samplerate/version, and for MPEG-2 the sequence headers of both videos at their own cut positions. `TTAVItem::checkCut` then rejects a negative or inverted range, and a cut-out beyond the frame count once a stream is open. |
 | `TTAVItem::mpCutList` → `TTAVData::mpCutList` | `itemAppended` / `itemRemoved(const TTCutItem&)` / `itemUpdated` are wired in `createAVItem` to the global list's `onAppendItem` / `onRemoveItem` / `onUpdateItem`. The per-item list is the **content** source; entries enter the global list in the order the item emits them. |
 | `TTAVData::mpCutList` → `TTAVItem::mpCutList` | The reverse edge carries **order only**: `orderUpdated` → `onUpdateOrder` writes the new `mOrder` back into the item's copy. Reordering therefore originates in the global list, content does not. |
-| `TTAVData::mpCutList` → `TTCutTreeView` | `itemAppended` → `onAppendItem` builds one row with six columns (file, cut-in, cut-out, length, drift placeholder, hint). Row *i* of the tree and `TTAVData::cutItemAt(i)` are the same entry — the view keeps no item of its own and re-reads the model by position. |
+| `TTAVData::mpCutList` → `TTCutTreeView` | `itemAppended` → `onAppendItem` builds one row with six columns (file, cut-in, cut-out, length, drift placeholder, hint) and asks for a repaint of the cut overview bar (`refreshDisplay`, [navigator-window.md](navigator-window.md)). Row *i* of the tree and `TTAVData::cutItemAt(i)` are the same entry — the view keeps no item of its own and re-reads the model by position. |
 | `TTCutTreeView` → job `TTCutList` | `cutListFromSelection(ignoreSelection)` fills a list from `newJobCutList()` with `(avDataItem, cutIn, cutOut)` per row — either all rows or the selected ones. The view owns that list: starting the next job frees the previous one, the destructor the last. The four-argument `append` leaves `order` at its default `-1` for every entry, so a job list carries no usable order. |
 | job list → `onCutPreview` / `onAudioVideoCut` | `previewCut(list, skipFirst, skipLast)` and `audioVideoCut(audioOnly, list)`. `skipFirst`/`skipLast` mark neighbour clips that `onEntryPreview` added for transition context and that the preview must not present as selected cuts. |
 | `onAudioVideoCut` → `TTCutAVCutDlg` | Trigger only. Before the dialog opens, the encoder codec is set from **`mpCurrentAVDataItem`'s** stream type and a still-empty `cutVideoName` is derived from that stream's file name (plus `_cut` when `cutAddSuffix`). |

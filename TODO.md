@@ -364,6 +364,15 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
+  gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom
+  Hauptbildschirm, nicht vom Bildschirm des Hauptfensters. Beim User stehen
+  2560×1440 und 2195×1235 nebeneinander. Messen: Hauptfenster auf den
+  kleineren Bildschirm, Zeitsprung öffnen, Dialoggröße gegen den Bildschirm
+  und gegen `QuickJumpDialog/width,height` in `TTCut-ng.conf`. Erst mit Beleg
+  umbauen; dann zusammen mit der 80-%-Vorgabegröße (Karte
+  `navigator-window.md`, Redundanz).
+
 - **Zweite Instanz und das Log einer laufenden** (Audit-Lauf 15, nicht
   gemessen). Jeder TTCut-Prozess rotiert `logfile.log` beim ersten Eintrag;
   läuft schon eine Instanz, schreibt sie nach der Umbenennung weiter in die
