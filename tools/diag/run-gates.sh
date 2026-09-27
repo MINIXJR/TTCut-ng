@@ -139,6 +139,7 @@ audiorepair            unit  300  test_audiorepair
 audiorepair_cut        unit  300  test_audiorepair_cut
 repairdialog_model     unit  300  test_repairdialog_model
 demux_zonesync         unit  300  -
+demux_framerate        unit  60   -
 demux_gapsync          unit  300  -
 ffmpeg_edge_packets    unit  120  -
 audiofix_edge_ac3      unit  120  -
@@ -394,6 +395,7 @@ gate_audiorepair()           { "$D/test_audiorepair"; }
 gate_audiorepair_cut()       { "$D/test_audiorepair_cut"; }
 gate_repairdialog_model()    { need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3"; "$D/test_repairdialog_model"; }
 gate_demux_zonesync()        { need "$DEMUX"; "$D/gate_demux_zonesync.sh"; }
+gate_demux_framerate()       { need "$DEMUX"; "$D/gate_demux_framerate.sh"; }
 gate_demux_gapsync()         { need "$DEMUX"; "$D/gate_demux_gapsync.sh"; }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }

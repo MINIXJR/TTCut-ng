@@ -123,6 +123,31 @@ _parse_fraction() {
     _den="${_den:-1}"
 }
 
+# Frame rate for the .info: the TS r_frame_rate, halved for interlaced
+# material when it is the field rate, i.e. twice the TS avg_frame_rate.
+# libav 9.0.2 sums the packet durations for avg_frame_rate, and takes a
+# packet's duration from the SPS timing (from r_frame_rate only when the
+# stream has none; libavformat/demux.c compute_frame_duration). Measured
+# 2026-09-27: 1080i25 PAFF reports r=50/avg=25, MBAFF 25/25, 720p50 50/50.
+# Not measured: a PAFF TS without SPS timing may report avg = r and then
+# stays at the field rate. The ES avg_frame_rate is no reference - for a
+# raw ES it is always the raw demuxer's default 25.
+# Args: R_FRAME_RATE AVG_FRAME_RATE FIELD_ORDER; prints NUM/DEN.
+video_frame_rate() {
+    local rn rd an ad ratio
+    _parse_fraction "$1" rn rd
+    _parse_fraction "${2:-0/1}" an ad
+    if [[ -n "$3" && "$3" != "progressive" && "$3" != "unknown" \
+          && "$an" -gt 0 && "$ad" -gt 0 && "$rd" -gt 0 ]]; then
+        ratio=$(awk "BEGIN {printf \"%.1f\", ($rn / $rd) / ($an / $ad)}")
+        if [[ "$ratio" == "2.0" ]]; then
+            if (( rn % 2 == 0 )); then echo "$((rn / 2))/$rd"; else echo "$rn/$((rd * 2))"; fi
+            return
+        fi
+    fi
+    echo "$rn/$rd"
+}
+
 # First video packet PTS of $1, codec-aware (reads $VIDEO_CODEC, so call
 # only after stream discovery):
 # H.264/H.265: minimum PTS over the first 2s = first DISPLAY frame (leading
@@ -1346,16 +1371,18 @@ VIDEO_CODEC=""
 VIDEO_WIDTH=""
 VIDEO_HEIGHT=""
 FRAME_RATE=""
+TS_AVG_FRAME_RATE=""
 
 # Get video stream info
-VIDEO_INFO=$(ffprobe -v error -select_streams v:0 -show_entries stream=index,codec_name,width,height,r_frame_rate -of csv "$INPUT" 2>&1 | grep "^stream," | head -1)
+VIDEO_INFO=$(ffprobe -v error -select_streams v:0 -show_entries stream=index,codec_name,width,height,r_frame_rate,avg_frame_rate -of csv "$INPUT" 2>&1 | grep "^stream," | head -1)
 if [ -n "$VIDEO_INFO" ]; then
-    IFS=',' read -r _ idx codec_name width height frame_rate <<< "$VIDEO_INFO"
+    IFS=',' read -r _ idx codec_name width height frame_rate avg_rate <<< "$VIDEO_INFO"
     VIDEO_STREAM="$idx"
     VIDEO_CODEC="$codec_name"
     VIDEO_WIDTH="$width"
     VIDEO_HEIGHT="$height"
     FRAME_RATE="$frame_rate"
+    TS_AVG_FRAME_RATE="$avg_rate"
     info "Video stream $idx: $codec_name ${width}x${height} @ ${frame_rate}"
 fi
 
@@ -1958,34 +1985,20 @@ with open('$OUTPUT_VIDEO','rb') as f:
     # Parse frame rate fraction (e.g., "25/1" or "30000/1001")
     _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
 
-    # Detect interlaced: for PAFF/MBAFF content, ffprobe may report the field
-    # rate as r_frame_rate (e.g. 50/1 for 25fps PAFF). The original TS typically
-    # reports the correct frame rate (25/1), but the ES after filler stripping
-    # may report the field rate (50/1). Only halve if r_frame_rate is actually
-    # the field rate (roughly 2x the expected frame rate).
+    # Interlaced material: the TS may report the field rate as r_frame_rate
+    # (1080i25 PAFF: 50/1); video_frame_rate halves it against the TS
+    # avg_frame_rate. field_order comes from the extracted ES.
     if $ES_MODE; then
         FIELD_ORDER=$(_probe_field v:0 stream=field_order "$OUTPUT_VIDEO")
-
         if [[ -n "$FIELD_ORDER" && "$FIELD_ORDER" != "progressive" && "$FIELD_ORDER" != "unknown" ]]; then
-            # Check if FRAME_RATE is actually the field rate by comparing with
-            # avg_frame_rate from the ES. If r_frame_rate ≈ 2 × avg_frame_rate,
-            # then r_frame_rate is the field rate and needs halving.
-            AVG_FPS=$(_probe_field v:0 stream=avg_frame_rate "$OUTPUT_VIDEO")
-            _parse_fraction "$AVG_FPS" AVG_NUM AVG_DEN
-
-            # Calculate ratio: r_frame_rate / avg_frame_rate
-            # If ≈ 2.0, then r_frame_rate is the field rate → halve it
             # shellcheck disable=SC2153  # FRAME_RATE_DEN is assigned through _parse_fraction's nameref
-            if [[ -n "$AVG_NUM" && "$AVG_NUM" -gt 0 && "$AVG_DEN" -gt 0 ]]; then
-                RATIO=$(awk "BEGIN {printf \"%.1f\", ($FRAME_RATE_NUM / $FRAME_RATE_DEN) / ($AVG_NUM / $AVG_DEN)}")
-                if [[ "$RATIO" == "2.0" ]]; then
-                    ORIG_RATE="$FRAME_RATE_NUM/$FRAME_RATE_DEN"
-                    FRAME_RATE_NUM=$((FRAME_RATE_NUM / 2))
-                    FRAME_RATE="${FRAME_RATE_NUM}/${FRAME_RATE_DEN}"
-                    info "  Interlaced ($FIELD_ORDER): corrected field rate $ORIG_RATE to frame rate $FRAME_RATE"
-                else
-                    info "  Interlaced ($FIELD_ORDER): r_frame_rate=$FRAME_RATE_NUM/$FRAME_RATE_DEN is already frame rate (ratio=$RATIO)"
-                fi
+            ORIG_RATE="$FRAME_RATE_NUM/$FRAME_RATE_DEN"
+            FRAME_RATE=$(video_frame_rate "$ORIG_RATE" "$TS_AVG_FRAME_RATE" "$FIELD_ORDER")
+            _parse_fraction "$FRAME_RATE" FRAME_RATE_NUM FRAME_RATE_DEN
+            if [[ "$FRAME_RATE" != "$ORIG_RATE" ]]; then
+                info "  Interlaced ($FIELD_ORDER): corrected field rate $ORIG_RATE to frame rate $FRAME_RATE"
+            else
+                info "  Interlaced ($FIELD_ORDER): r_frame_rate=$ORIG_RATE is already frame rate (TS avg_frame_rate=$TS_AVG_FRAME_RATE)"
             fi
         fi
     fi
