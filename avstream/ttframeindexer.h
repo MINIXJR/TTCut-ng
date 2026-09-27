@@ -54,6 +54,12 @@ public:
     static TTFieldInfo parseH264FieldInfo(const uint8_t* data, int size,
                                           bool frameMbsOnlyFlag, int log2MaxFrameNum);
 
+    // The frame rate of an H.26x ES: the .info frame_rate when present (libav
+    // reports twice the real rate for a raw H.264 ES), else libavRate; halved
+    // for PAFF when above 30 (a field rate). Shared by the stream's
+    // frameRate() and the PTS synthesis of an ES without timestamps.
+    static double effectiveFrameRate(double libavRate, const QString& filePath, bool isPAFF);
+
 private:
     // Parse the stream's SPS extradata; sets mBundle.log2MaxFrameNum and
     // mBundle.frameMbsOnlyFlag (H.264 PAFF detection).

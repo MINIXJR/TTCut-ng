@@ -23,8 +23,6 @@
 #include "../avstream/ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
 #include "../avstream/ttframeindexer.h"
-#include "../avstream/tth264videostream.h"
-#include "../avstream/tth265videostream.h"
 #include "../avstream/tth26xvideostream.h"  // frameIndexBundle (index sharing)
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../avstream/ttcommon.h"
@@ -49,8 +47,7 @@ TTFrameSearchTask::TTFrameSearchTask(TTVideoStream* referenceStream, int referen
 //! Decide which decoder backend to use for a given video stream.
 TTFrameSearchTask::DecoderKind TTFrameSearchTask::decoderKindFor(TTVideoStream* stream)
 {
-  if (dynamic_cast<TTH264VideoStream*>(stream)) return DecoderKind::FFmpeg;
-  if (dynamic_cast<TTH265VideoStream*>(stream)) return DecoderKind::FFmpeg;
+  if (dynamic_cast<TTH26xVideoStream*>(stream)) return DecoderKind::FFmpeg;
   return DecoderKind::Mpeg2;
 }
 

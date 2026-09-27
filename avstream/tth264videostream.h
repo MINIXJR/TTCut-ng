@@ -9,21 +9,16 @@
 
 // ----------------------------------------------------------------------------
 // TTH264VIDEOSTREAM
-// H.264/AVC Video Stream — codec-specific bits only. Common ffmpeg / GOP /
-// header-list flow lives in TTH26xVideoStream.
+// H.264/AVC Video Stream — codec identity and the PAFF accessors. Everything
+// else lives in TTH26xVideoStream.
 // ----------------------------------------------------------------------------
 
 #ifndef TTH264VIDEOSTREAM_H
 #define TTH264VIDEOSTREAM_H
 
 #include "tth26xvideostream.h"
-#include "tth264videoheader.h"
 
-#include <QString>
 #include <QFileInfo>
-#include <QList>
-
-class TTCutParameter;
 
 class TTH264VideoStream : public TTH26xVideoStream
 {
@@ -31,37 +26,16 @@ class TTH264VideoStream : public TTH26xVideoStream
 
 public:
     explicit TTH264VideoStream(const QFileInfo& fInfo);
-    virtual ~TTH264VideoStream();
+    ~TTH264VideoStream() override = default;
 
     // Stream identity
-    virtual TTAVTypes::AVStreamType streamType() const override;
-    virtual bool isPAFF() const override { return mFrameIndexBundle.isPAFF; }
-    virtual int  paffLog2MaxFrameNum() const override;
-
-    // Typed accessors (kept for callers that need concrete H.264 types)
-    TTH264SPS*        getSPS() const { return mSPS; }
+    TTAVTypes::AVStreamType streamType() const override;
+    bool isPAFF() const override { return mFrameIndexBundle.isPAFF; }
+    int  paffLog2MaxFrameNum() const override { return mFrameIndexBundle.log2MaxFrameNum; }
+    const char* codecLabel() const override { return "H.264"; }
 
 protected:
-    // Hooks
     TTVideoCodecType expectedCodec() const override;
-    const char*      codecLabel() const override { return "H.264"; }
-
-    void    resetSPS() override;
-    void    buildSPSFromStreamInfo(const TTStreamInfo& info) override;
-    void    setSPSFrameRate(double fps) override;
-    QString spsDescription() const override;
-
-    void    buildAccessUnits() override;
-    int     accessUnitCount() const override { return mAccessUnits.size(); }
-    bool    accessUnitIsIDR(int idx) const override;
-    bool    accessUnitIsRAP(int idx) const override { return accessUnitIsIDR(idx); }  // H.264 RAP == IDR
-    int     accessUnitToCodingType(int idx) const override;
-
-    bool    isPAFFCorrectionApplicable() const override { return true; }
-
-private:
-    TTH264SPS* mSPS;
-    QList<TTH264AccessUnit*> mAccessUnits;
 };
 
 #endif // TTH264VIDEOSTREAM_H

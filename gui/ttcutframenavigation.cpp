@@ -215,7 +215,7 @@ void TTCutFrameNavigation::controlEnabled(bool enabled)
   pbSelectLogoROI->setEnabled(enabled);
 }
 
-void TTCutFrameNavigation::checkCutPosition(TTAVItem* avData, int pos)
+void TTCutFrameNavigation::checkCutPosition(const TTAVItem* avData, int pos)
 {
   TTVideoStream* vs = avData->videoStream();
   currentPosition  = (pos >= 0) ? pos : vs->currentIndex();

@@ -16,8 +16,7 @@
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttmpeg2videoheader.h"
-#include "../avstream/tth264videostream.h"
-#include "../avstream/tth265videostream.h"
+#include "../avstream/tth26xvideostream.h"
 #include "../common/ttthreadtaskpool.h"
 
 #include <QListView>
@@ -93,11 +92,7 @@ TTQuickJumpDialog::TTQuickJumpDialog(TTVideoStream* videoStream,
   setupUI();
   calculateItemsPerPage();
 
-  // Find keyframe closest to current position and center it
-  mHighlightKeyframeListIndex = mModel->keyframeListIndex(mCurrentPosition);
-  int highlightFrameIndex = mModel->keyframeIndices().at(mHighlightKeyframeListIndex);
-  mDelegate->setHighlightFrameIndex(highlightFrameIndex);
-  navigateCenteredOn(mHighlightKeyframeListIndex);
+  highlightCurrentKeyframe();
 
   // Restore window size or use 80% of available screen. Size only — the dialog
   // has a parent and no move(), so Qt centres it over the main window.
@@ -267,13 +262,8 @@ void TTQuickJumpDialog::startThumbnailWorker()
   // avoid another ~2 s scan in the worker. As a bundle (spec 2026-08-28), so
   // the stream metadata travels with it.
   TTFrameIndexBundle prebuiltIndex;
-  if (streamType == TTAVTypes::h264_video) {
-    TTH264VideoStream* h264 = static_cast<TTH264VideoStream*>(mVideoStream);
-    prebuiltIndex = h264->frameIndexBundle();
-  } else if (streamType == TTAVTypes::h265_video) {
-    TTH265VideoStream* h265 = static_cast<TTH265VideoStream*>(mVideoStream);
-    prebuiltIndex = h265->frameIndexBundle();
-  }
+  if (const auto* h26x = dynamic_cast<const TTH26xVideoStream*>(mVideoStream))
+    prebuiltIndex = h26x->frameIndexBundle();
 
   mCurrentWorker = new TTQuickJumpWorker(
     mVideoStream->filePath(), streamType, pageFrames,
@@ -358,6 +348,14 @@ void TTQuickJumpDialog::resizeEvent(QResizeEvent* event)
   mResizeTimer->start();
 }
 
+//! Highlight the keyframe closest to the current position and center on it
+void TTQuickJumpDialog::highlightCurrentKeyframe()
+{
+  mHighlightKeyframeListIndex = mModel->keyframeListIndex(mCurrentPosition);
+  mDelegate->setHighlightFrameIndex(mModel->keyframeIndices().at(mHighlightKeyframeListIndex));
+  navigateCenteredOn(mHighlightKeyframeListIndex);
+}
+
 void TTQuickJumpDialog::onResizeDebounced()
 {
   calculateItemsPerPage();
@@ -372,9 +370,6 @@ void TTQuickJumpDialog::onIntervalChanged(int value)
   mModel->setIntervalSeconds(value);
   calculateItemsPerPage();
 
-  // Recalculate highlight index (keyframe list changed due to new interval)
-  mHighlightKeyframeListIndex = mModel->keyframeListIndex(mCurrentPosition);
-  int highlightFrameIndex = mModel->keyframeIndices().at(mHighlightKeyframeListIndex);
-  mDelegate->setHighlightFrameIndex(highlightFrameIndex);
-  navigateCenteredOn(mHighlightKeyframeListIndex);
+  // the keyframe list changed with the interval
+  highlightCurrentKeyframe();
 }

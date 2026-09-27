@@ -56,7 +56,7 @@ public:
 
     // Build directly from precomputed ranks (used by TTFFmpegWrapper when
     // the index is shared between wrapper instances).
-    void buildFromRanks(const QVector<int>& decodeToDisplay);
+    void buildFromRanks(const QVector<int>& ranks);
 
     // Standalone build: own libav parser pass over an ES file (H.264/H.265).
     // Used by TTESSmartCut when no wrapper map was injected (--auto-cut etc.).

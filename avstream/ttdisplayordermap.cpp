@@ -91,18 +91,18 @@ void TTDisplayOrderMap::build(const QVector<TTPocEntry>& entries)
     buildFromRanks(displayRanksFromPoc(entries));
 }
 
-void TTDisplayOrderMap::buildFromRanks(const QVector<int>& decodeToDisplay)
+void TTDisplayOrderMap::buildFromRanks(const QVector<int>& ranks)
 {
-    mDecodeToDisplay = decodeToDisplay;
+    mDecodeToDisplay = ranks;
 
     // Count decodable (non-dropped) entries -> display dimension size m.
     int m = 0;
-    for (int rank : decodeToDisplay)
+    for (int rank : ranks)
         if (rank >= 0) ++m;
 
     mDisplayToDecode = QVector<int>(m, -1);
-    for (int i = 0; i < decodeToDisplay.size(); ++i) {
-        const int rank = decodeToDisplay[i];
+    for (int i = 0; i < ranks.size(); ++i) {
+        const int rank = ranks[i];
         if (rank < 0) continue;                 // dropped leading pic — no display slot
         if (rank >= m) {                        // not a permutation of 0..m-1
             mDecodeToDisplay.clear();

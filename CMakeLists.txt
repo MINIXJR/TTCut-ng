@@ -124,9 +124,7 @@ set(TTCUT_HEADERS
   avstream/ttmpeg2videoheader.h
   avstream/ttmpeg2videostream.h
   avstream/tth26xvideostream.h
-  avstream/tth264videoheader.h
   avstream/tth264videostream.h
-  avstream/tth265videoheader.h
   avstream/tth265videostream.h
   avstream/ttmpegaudioheader.h
   avstream/ttmpegaudiostream.h
@@ -255,9 +253,7 @@ set(TTCUT_CORE_SOURCES
   avstream/ttmpeg2videoheader.cpp
   avstream/ttmpeg2videostream.cpp
   avstream/tth26xvideostream.cpp
-  avstream/tth264videoheader.cpp
   avstream/tth264videostream.cpp
-  avstream/tth265videoheader.cpp
   avstream/tth265videostream.cpp
   avstream/ttmpegaudioheader.cpp
   avstream/ttmpegaudiostream.cpp
