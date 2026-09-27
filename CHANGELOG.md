@@ -5,6 +5,8 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **A new cut shows up at once in the bar above the video slider.** The bar
+  kept the old cuts until the slider was moved. Gate: `navigator_refresh`.
 - **"Create log file" off means no log file.** TTCut-ng still moved the
   earlier sessions one generation on and wrote the first lines of every
   start before it read the setting. Gates: `log_file_off`, `log_app_file_off`.
