@@ -34,6 +34,7 @@
 #include "../common/ttexception.h"
 #include "ttcutparameter.h"
 
+#include <QRegularExpression>
 #include <QStringDecoder>
 
 namespace {
@@ -54,6 +55,23 @@ QString decodeSrtLine(const QString &rawLine)
   if (dec.hasError())
     return QString::fromLatin1(bytes);
   return out;
+}
+
+// hh:mm:ss,zzz --> hh:mm:ss,zzz, also with a dot for the comma, a one-digit
+// hour, fewer millisecond digits and fields after the end time (position).
+const QRegularExpression& srtTimingLine()
+{
+  static const QRegularExpression re(
+      R"(^\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3}))");
+  return re;
+}
+
+// Milliseconds of one time from capture group `first` on (h, m, s, fraction).
+int srtMSec(const QRegularExpressionMatch& m, int first)
+{
+  return ((m.captured(first).toInt() * 60 + m.captured(first + 1).toInt()) * 60
+          + m.captured(first + 2).toInt()) * 1000
+       + m.captured(first + 3).leftJustified(3, '0').toInt();
 }
 
 } // namespace
@@ -123,6 +141,12 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
     TTSubtitleHeader* header = (TTSubtitleHeader*)header_list->at(index);
     if (header->startMSec() > end)
       return;
+    // Ended before this segment: after the last cue searchTimeIndex() answers
+    // with that last one, which must not be written again.
+    if (header->endMSec() < start) {
+      index++;
+      continue;
+    }
 
     picsWritten++;
     QTime subtitleStart  = header->startMSec() <= start ? QTime::fromMSecsSinceStartOfDay(start) : header->startTime();
@@ -154,46 +178,33 @@ int TTSrtSubtitleStream::createHeaderList()
   {
     emit statusReport(StatusReportArgs::Start, tr("Creating subtitle header list"), stream_buffer->size());
 
-    QString lineEnd;
-    quint8 byte = 0;
-    quint8 lastByte = 0;
-    while (!stream_buffer->atEnd())
-    {
-      stream_buffer->readByte(byte);
-      if (byte == '\n')
-      {
-        lineEnd = lastByte == '\r' ? "\r\n" : "\n";
-        break;
-      }
-      lastByte = byte;
-    }
-    stream_buffer->seekAbsolute(0);
+    // Lines split on LF and a CR before it is dropped: CRLF, LF and files
+    // mixing both read the same.
+    auto nextLine = [this]() {
+      QString line = stream_buffer->readLine("\n");
+      if (line.endsWith('\r')) line.chop(1);
+      return line;
+    };
 
-    QString line;
     int counter = -1;
-
     while (!stream_buffer->atEnd())
     {
-      while (line.isEmpty())
-      {
-        if (stream_buffer->atEnd())
-          return header_list->count();
-        line  = stream_buffer->readLine(lineEnd).simplified();
-      }
+      QString line;
+      while (line.isEmpty() && !stream_buffer->atEnd())
+        line = nextLine().simplified();
+      if (line.isEmpty())
+        break;
       if (line.toInt() != counter + 1 && counter != -1)
         log->warningMsg("TTSrtSubtitleStream", __LINE__,
                         QString("Subtitles in %1 missing. Reading subtitle %2, last was %3.").arg(fileName()).arg(counter).arg(line));
       counter = line.toInt();
 
-      line = stream_buffer->readLine(lineEnd).simplified();
-      TTSubtitleHeader* header = new TTSubtitleHeader();
-      header->setStartTime(QTime::fromString(line.left(12), "hh:mm:ss,zzz"));
-      header->setEndTime(QTime::fromString(line.right(12), "hh:mm:ss,zzz"));
+      const QString timing = nextLine().simplified();
 
       QString text;
       do
       {
-        line = stream_buffer->readLine(lineEnd);
+        line = nextLine();
         text.append(line);
         text.append("\r\n");
         if (text.size() > 65536) break;  // Limit subtitle text to 64KB
@@ -201,6 +212,17 @@ int TTSrtSubtitleStream::createHeaderList()
       while (!line.isEmpty());
       while(text.right(2) == "\r\n")
         text = text.left(text.length()-2);
+
+      const QRegularExpressionMatch m = srtTimingLine().match(timing);
+      if (!m.hasMatch()) {
+        log->warningMsg("TTSrtSubtitleStream", __LINE__,
+                        QString("%1: subtitle %2 skipped, unreadable timing line \"%3\"")
+                            .arg(fileName()).arg(counter).arg(timing));
+        continue;
+      }
+      TTSubtitleHeader* header = new TTSubtitleHeader();
+      header->setStartTime(QTime::fromMSecsSinceStartOfDay(srtMSec(m, 1)));
+      header->setEndTime(QTime::fromMSecsSinceStartOfDay(srtMSec(m, 5)));
       // Decode the fully assembled text block, after the 64KB raw-byte cap
       // above, so the cap continues to operate on the same raw byte count
       // as before this fix (decoding can shrink multi-byte UTF-8 sequences
@@ -213,6 +235,9 @@ int TTSrtSubtitleStream::createHeaderList()
 
       emit statusReport(StatusReportArgs::Step, tr("Creating subtitle header list"), stream_buffer->position());
     }
+    // File order is not always time order (merged or hand-edited files);
+    // lookup and cut need it.
+    static_cast<TTSubtitleHeaderList*>(header_list)->sort();
     emit statusReport(StatusReportArgs::Finished, tr("Subtitle header list created"), stream_buffer->position());
   }
   catch (TTFileBufferException)

@@ -209,22 +209,10 @@ QString TTMPEG2Window2::getSubtitleTextAtCurrentFrame()
   // the lookup into the subtitle source runs d ms EARLIER than the video time.
   int currentTimeMs = (int)((currentIndex / frameRate) * 1000.0) - mSubtitleDelayMs;
 
-  // Get subtitle header list and search for subtitle at current time
+  // Every cue covering that time; overlapping cues show together
   TTSubtitleHeaderList* headerList = mpSubtitleStream->headerList();
   if (headerList == 0) return QString();
-
-  int index = headerList->searchTimeIndex(currentTimeMs);
-  if (index < 0) return QString();
-
-  TTSubtitleHeader* header = headerList->subtitleHeaderAt(index);
-  if (header == 0) return QString();
-
-  // Check if current time is within subtitle time range
-  if (currentTimeMs >= header->startMSec() && currentTimeMs <= header->endMSec()) {
-    return header->text();
-  }
-
-  return QString();
+  return headerList->textAt(currentTimeMs);
 }
 
 /*!

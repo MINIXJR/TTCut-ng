@@ -107,6 +107,7 @@ mpeg2_framerate        unit  300  test_mpeg2_framerate
 audio_es_input         unit  300  test_audio_es_input
 framerate_assumed      unit  120  test_h26x_framerate
 framerate_hint         unit  120  test_framerate_hint
+subtitle_core          unit  60   test_subtitle_core
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -434,6 +435,8 @@ gate_framerate_assumed() { need "$TD/novui.264" "$TD/novui.265"
                            "$D/test_h26x_framerate" "$TD/novui.264=25:Assumed:log=no .info and no SPS timing" \
                                "$TD/novui.265=25:Assumed" \
                                "$W/norate.264=25:Assumed:log=.info without frame_rate and no SPS timing"; }
+# SRT parser, time lookup and cut (audit run 14): .srt files written by the harness.
+gate_subtitle_core()     { "$D/test_subtitle_core" "$W"; }
 gate_framerate_hint()    { need "$TD/novui.264" "$TD/cqm.264"
                            "$D/test_framerate_hint" "$TD/novui.264" "$TD/cqm.264" "$W"; }
 # Frame rate without .info = SPS timing (raw H.264 r_frame_rate is 2x for
