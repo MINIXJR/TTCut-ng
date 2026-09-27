@@ -3,7 +3,8 @@
 ttcut-quality-check.py - Smart Cut Quality Test Suite for TTCut-ng
 
 Objective measurement of cut quality after Smart Cut (H.264/H.265/MPEG-2).
-Runs up to 7 automated tests on a cut MKV and reports PASS/WARN/FAIL for each.
+Runs up to 7 automated tests on a cut MKV and reports PASS/WARN/FAIL for each
+(the visual test reports two results: re-encoded and stream-copy frames).
 
 TESTS
 =====
@@ -13,30 +14,37 @@ TESTS
 
   2. PTS Consistency    - Reads all video and audio packets from the cut MKV
                           and checks that PTS intervals are uniform (tolerance
-                          0.5ms). Detects timestamp jumps or gaps.
+                          one time-base tick, at least 0.5ms - Matroska stores
+                          whole milliseconds). Detects timestamp jumps or gaps.
 
   3. Duration Match     - Compares video vs audio duration in the MKV.
                           Pass threshold: difference <= 50ms.
 
-  4. Visual Comparison  - Extracts frames from a reference MKV (original ES
-     (re-encoded)         wrapped with mkvmerge) and from the cut MKV at the
+  4. Visual Comparison  - Extracts frames from a reference MKV (original ES and
+     (re-encoded)         audio wrapped with mkvmerge) and from the cut MKV at the
      (stream-copy)        same content positions, then computes SSIM.
                           Stream-copy frames should be near-identical (>=0.99).
                           Re-encoded frames have expected quality loss (>=0.50).
                           Uses -copyts + select filter for frame-accurate
                           extraction (avoids keyframe-snapping issues).
 
-  5. A/V Sync           - Creates a reference MKV from original ES + audio,
-                          extracts the first segment from both reference and
-                          cut, then cross-correlates the audio tracks.
-                          Uses syncstart if installed, otherwise numpy FFT.
-                          Pass threshold: offset <= 50ms. Warn up to 150ms.
+  5. A/V Sync           - Compares the cut's audio with the same stretch of the
+                          reference: a 10 s window near the start and one near
+                          the end of every kept segment, numpy FFT
+                          cross-correlation. The largest offset decides:
+                          <= 50ms PASS, <= 150ms WARN. A window without a
+                          distinct correlation peak (a steady tone, silence)
+                          is "not measurable" - WARN when no window measures.
 
   6. Audio Waveform     - Extracts audio around each internal cut boundary
                           and checks for clicks/pops (impulse noise).
                           A click is a 1ms spike >30dB from both neighbors.
                           Natural level changes (program switch) are reported
                           as info but do not trigger failure.
+
+  7. Defect Regions     - Report only: extra frames from the .info that lie in
+                          the kept segments, grouped by the gap from TTCut-ng's
+                          settings (Common\\ExtraFrameClusterGap) or --defect-gap.
 
 WORKFLOW
 ========
@@ -53,19 +61,19 @@ WORKFLOW
 DEPENDENCIES
 ============
 
-  Required: ffmpeg (8.0+), ffprobe, mkvmerge, python3 (3.8+)
+  Required: ffmpeg, ffprobe, python3 (3.9+); mkvmerge (mkvtoolnix) for the
+            visual and A/V tests
   Optional: numpy          - enables A/V sync (cross-correlation) and
                              audio waveform analysis
-            syncstart       - more accurate A/V sync (pip install syncstart)
 
   Without numpy, tests 5 and 6 are skipped with WARN status.
 
 DISK SPACE
 ==========
 
-  Tests 4 and 5 create a reference MKV from the original ES (roughly the
-  same size as the input file). Ensure sufficient free space in the temp
-  directory. Use --tmpdir to redirect to a larger filesystem if needed.
+  Tests 4 and 5 share one reference MKV of the original ES and audio (roughly
+  the size of the input files). It is written to a temporary directory next
+  to the --cut file, which --tmpdir overrides.
 
 USAGE
 =====
@@ -110,10 +118,11 @@ EXAMPLE OUTPUT
   [PASS] Duration Match: video=580.940s, audio=580.920s, diff=0.020s
   [PASS] Visual (re-encoded): SSIM=0.608 min=0.582 (2 positions checked)
   [PASS] Visual (stream-copy): SSIM=0.998 min=0.990 (6 positions checked)
-  [WARN] A/V Sync: offset=+90ms (method: numpy cross-correlation)
+  [WARN] A/V Sync: max offset=+90ms (segment 2 start, threshold: +/-50ms) | ...
   [PASS] Audio Waveform: no clicks at 1 cut boundaries
+  [PASS] Defect Regions: no extra frames in .info (clean stream)
 
-  Result: 6/7 PASS, 1 WARN, 0 FAIL
+  Result: 7/8 PASS, 1 WARN, 0 FAIL
 """
 
 import argparse
@@ -213,6 +222,16 @@ def run_cmd(cmd: list[str], capture=True, timeout=120) -> subprocess.CompletedPr
     )
 
 
+def parse_fraction(text: str) -> float:
+    """'n/d' (ffprobe, .info) or a plain number -> float; 0.0 for a zero denominator."""
+    text = str(text).strip()
+    if "/" in text:
+        num, den = text.split("/", 1)
+        den = float(den)
+        return float(num) / den if den else 0.0
+    return float(text)
+
+
 def ffprobe_json(filepath: str, *extra_args) -> dict:
     """Run ffprobe and return parsed JSON."""
     cmd = [
@@ -297,13 +316,7 @@ def detect_paff(es_file: str) -> bool:
 
         # PAFF has 2 AUDs per frame (one per field), MBAFF has 1 AUD per frame.
         # Compare AUD count with expected frame count from avg_frame_rate.
-        avg_fps = stream.get("avg_frame_rate", "0/1")
-        def parse_frac(s):
-            if "/" in s:
-                n, d = s.split("/")
-                return int(n) / max(int(d), 1)
-            return float(s)
-        expected_frames = parse_frac(avg_fps)  # frames in 1 second
+        expected_frames = parse_fraction(stream.get("avg_frame_rate", "0/1"))  # frames in 1 second
         if expected_frames <= 0:
             return False
 
@@ -348,12 +361,7 @@ def parse_info_file(info_path: str) -> dict:
             key, val = [x.strip() for x in line.split("=", 1)]
 
             if section == "video" and key == "frame_rate":
-                if "/" in val:
-                    num, den = val.split("/")
-                    den = int(den) or 1
-                    result["fps"] = int(num) / den
-                else:
-                    result["fps"] = float(val)
+                result["fps"] = parse_fraction(val) or None
             elif section == "timing" and key == "av_offset_ms":
                 result["av_offset_ms"] = int(val)
             elif section == "warnings" and key == "es_doubled_pts_aus":
@@ -402,27 +410,32 @@ def frames_to_seconds(frame: int, fps: float, extra_frames: list = None) -> floa
 
 
 def parse_ttcut_settings() -> dict:
-    """Read defect region settings from TTCut-ng config file."""
-    result = {"defect_gap_sec": 5, "defect_offset_sec": 2}
+    """Read the defect-region settings from TTCut-ng's config file.
+
+    TTCut-ng writes a QSettings INI file: group [Settings], keys
+    Common\\ExtraFrameClusterGap and Common\\ExtraFrameClusterOffset. "source"
+    names the file only when a value was actually read from it.
+    """
+    result = {"defect_gap_sec": 5, "defect_offset_sec": 2, "source": "defaults"}
     conf = Path.home() / ".config" / "TTCut-ng" / "TTCut-ng.conf"
     if not conf.exists():
         return result
+    keys = {"Common\\ExtraFrameClusterGap": "defect_gap_sec",
+            "Common\\ExtraFrameClusterOffset": "defect_offset_sec"}
     section = None
-    with open(conf) as f:
+    with open(conf, encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             m = re.match(r"\[(.+)\]", line)
             if m:
                 section = m.group(1)
                 continue
-            if section == "Common" and "=" in line:
-                key, val = line.split("=", 1)
-                key = key.strip()
-                val = val.strip()
-                if key == "ExtraFrameClusterGap":
-                    result["defect_gap_sec"] = int(val)
-                elif key == "ExtraFrameClusterOffset":
-                    result["defect_offset_sec"] = int(val)
+            if section != "Settings" or "=" not in line:
+                continue
+            key, val = [x.strip() for x in line.split("=", 1)]
+            if key in keys and val.lstrip("-").isdigit():
+                result[keys[key]] = int(val)
+                result["source"] = str(conf)
     return result
 
 
@@ -451,12 +464,7 @@ def test_metadata(original_es: str, cut_mkv: str, fps: float,
         cut_codec = cut_stream.get("codec_name", "unknown")
 
         # FPS from cut MKV
-        r_fps_str = cut_stream.get("r_frame_rate", "0/1")
-        if "/" in r_fps_str:
-            num, den = r_fps_str.split("/")
-            cut_fps = int(num) / max(int(den), 1)
-        else:
-            cut_fps = float(r_fps_str)
+        cut_fps = parse_fraction(cut_stream.get("r_frame_rate", "0/1"))
 
         # Frame count: count packets since nb_frames is unreliable for MKV
         cut_packets = ffprobe_packets(cut_mkv, "video")
@@ -518,6 +526,13 @@ def test_pts_consistency(cut_mkv: str) -> TestResult:
 
         for stream_type in ("video", "audio"):
             packets = ffprobe_packets(cut_mkv, stream_type)
+            # Timestamps are stored in the stream's time base (Matroska: 1 ms),
+            # so a frame interval that is not a whole number of ticks varies by
+            # one tick from packet to packet (29.97 fps: 33/34 ms).
+            info = ffprobe_json(cut_mkv, "-show_streams", "-select_streams",
+                                "v:0" if stream_type == "video" else "a:0")
+            streams = info.get("streams", [])
+            tick = parse_fraction(streams[0].get("time_base", "0/1")) if streams else 0.0
             if not packets:
                 details_parts.append(f"no {stream_type} packets found")
                 anomalies_total += 1
@@ -548,10 +563,10 @@ def test_pts_consistency(cut_mkv: str) -> TestResult:
 
             # Count anomalies: intervals deviating > 0.5ms from median
             # (but allow the last packet to differ — container overhead)
-            tolerance = 0.0005  # 0.5ms
+            tolerance = max(0.0005, tick)  # 0.5 ms, at least one time-base tick
             anomalies = 0
             for iv in intervals:
-                if abs(iv - median_interval) > tolerance:
+                if abs(iv - median_interval) > tolerance + 1e-6:  # float slack
                     anomalies += 1
 
             anomalies_total += anomalies
@@ -630,6 +645,28 @@ def test_duration_match(cut_mkv: str) -> TestResult:
 # ---------------------------------------------------------------------------
 # Test 4: Visual Comparison (SSIM)
 # ---------------------------------------------------------------------------
+
+_REFERENCES = {}
+
+
+def build_reference(original_es: str, audio_file: str, fps: float, tmpdir: str):
+    """The uncut ES and audio muxed into one timestamped MKV - built once per
+    run and shared by the visual and the A/V test. Returns (path, error)."""
+    key = (original_es, audio_file, fps, tmpdir)
+    if key in _REFERENCES:
+        return _REFERENCES[key], None
+    ref_mkv = os.path.join(tmpdir, "reference.mkv")
+    # mkvmerge interprets --default-duration as per-frame, not per-field.
+    # For PAFF, it splits each frame into 2 field packets automatically.
+    frame_dur = f"{round(1_000_000_000 / fps)}ns"
+    cmd = ["mkvmerge", "-o", ref_mkv, "--default-duration", f"0:{frame_dur}",
+           original_es, audio_file]
+    r = run_cmd(cmd, timeout=600)  # large ES files (>5GB) need more time
+    if r.returncode not in (0, 1):  # mkvmerge returns 1 for warnings
+        return None, f"mkvmerge failed: {r.stderr[:200]}"
+    _REFERENCES[key] = ref_mkv
+    return ref_mkv, None
+
 
 def _extract_frame(input_file: str, time_sec: float, output_png: str) -> bool:
     """Extract a single frame at the given time position.
@@ -721,7 +758,7 @@ def _detect_boundary_offset(ref_mkv: str, cut_mkv: str,
     return best_offset
 
 
-def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
+def test_visual_comparison(original_es: str, audio_file: str, cut_mkv: str, fps: float,
                            cuts: list[tuple[int, int]], tmpdir: str,
                            extra_frames: list = None,
                            is_paff: bool = False) -> TestResult:
@@ -748,20 +785,10 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
         ]
 
     try:
-        # Step 1: Create reference MKV from original ES
-        ref_mkv = os.path.join(tmpdir, "reference.mkv")
-        # mkvmerge interprets --default-duration as per-frame, not per-field.
-        # For PAFF, it splits each frame into 2 field packets automatically.
-        frame_dur = f"{round(1_000_000_000 / fps)}ns"
-        cmd = [
-            "mkvmerge", "-o", ref_mkv,
-            "--default-duration", f"0:{frame_dur}",
-            original_es
-        ]
-        r = run_cmd(cmd, timeout=600)  # large ES files (>5GB) need more time
-        if r.returncode not in (0, 1):  # mkvmerge returns 1 for warnings
-            return TestResult(name="Visual Comparison", passed=False,
-                              details=f"mkvmerge failed: {r.stderr[:200]}")
+        # Step 1: the reference MKV of the original ES
+        ref_mkv, err = build_reference(original_es, audio_file, fps, tmpdir)
+        if err:
+            return TestResult(name="Visual Comparison", passed=False, details=err)
 
         # Step 2: Detect display-order offsets at segment boundaries
         boundary_offsets = []
@@ -917,170 +944,118 @@ def test_visual_comparison(original_es: str, cut_mkv: str, fps: float,
 # Test 5: A/V Sync
 # ---------------------------------------------------------------------------
 
-def _try_syncstart(file_a: str, file_b: str) -> Optional[float]:
-    """Try using syncstart to measure A/V offset. Returns offset in seconds or None."""
-    if not which("syncstart"):
-        return None
-    try:
-        r = run_cmd(["syncstart", file_a, file_b, "-t", "20", "-q"], timeout=120)
-        if r.returncode == 0:
-            # syncstart output format: "file,offset"
-            for line in r.stdout.strip().splitlines():
-                if "," in line:
-                    parts = line.rsplit(",", 1)
-                    return float(parts[1])
-        return None
-    except Exception:
-        return None
+AV_WINDOW_SEC = 10.0     # length of one A/V measuring window
+AV_EDGE_SEC = 0.5        # distance of a window from the segment edge
+AV_SAMPLE_RATE = 16000
+AV_MAX_LAG_SEC = 1.0     # search range of the cross-correlation
+AV_MIN_PEAK_RATIO = 1.25 # main peak vs best peak outside +-2 ms: below = ambiguous
 
 
+def _pcm_window(media: str, start: float, dur: float, out: str):
+    """Mono 16 kHz PCM of [start, start+dur) of media's first audio track."""
+    import numpy as np
+    run_cmd(["ffmpeg", "-y", "-v", "quiet", "-ss", f"{start:.4f}", "-i", media,
+             "-vn", "-t", f"{dur:.4f}", "-ac", "1", "-ar", str(AV_SAMPLE_RATE),
+             "-f", "s16le", "-acodec", "pcm_s16le", out], timeout=120)
+    if not os.path.exists(out):
+        return None
+    return np.fromfile(out, dtype=np.int16).astype(np.float64)
+
+
+def _audio_offset(ref, cut):
+    """(offset in seconds, None) or (None, reason).
+
+    Cross-correlation via FFT within +-AV_MAX_LAG_SEC. A result counts only
+    when its peak stands out: a steady tone or a silent window correlates
+    (almost) equally at many lags and would give any offset - that is
+    "not measurable", never a pass.
+    """
+    import numpy as np
+    sr = AV_SAMPLE_RATE
+    if ref is None or cut is None or len(ref) < sr or len(cut) < sr:
+        return None, "too little audio"
+    if np.sqrt(np.mean(ref ** 2)) < 30 or np.sqrt(np.mean(cut ** 2)) < 30:
+        return None, "silence"
+    n = 1
+    while n < len(ref) + len(cut):
+        n <<= 1
+    corr = np.fft.irfft(np.fft.rfft(ref, n) * np.conj(np.fft.rfft(cut, n)), n)
+    max_lag = int(AV_MAX_LAG_SEC * sr)
+    lags = np.concatenate([np.arange(0, max_lag), np.arange(-max_lag, 0)])
+    values = np.abs(np.concatenate([corr[:max_lag], corr[-max_lag:]]))
+    best = int(np.argmax(values))
+    guard = int(0.002 * sr)
+    others = values[np.abs(lags - lags[best]) > guard]
+    if others.size and values[best] < AV_MIN_PEAK_RATIO * others.max():
+        return None, "no distinct correlation peak (steady tone?)"
+    return lags[best] / sr, None
 
 
 def test_av_sync(original_es: str, audio_file: str, cut_mkv: str,
                  fps: float, cuts: list[tuple[int, int]], tmpdir: str,
                  extra_frames: list = None,
                  is_paff: bool = False) -> TestResult:
-    """Measure A/V sync offset in the cut MKV.
+    """Measure the A/V offset of every kept segment against the original.
 
-    Method: Create a reference MKV from the original ES+audio, extract the same
-    segment from both reference and cut, then cross-correlate the audio tracks.
-    A well-synced cut should have near-zero offset vs the reference.
-
-    Extraction uses re-encoding (not stream-copy) to ensure frame-accurate timing.
+    Per segment one window near its start and one near its end (a short
+    segment gets one), each compared with the same stretch of the uncut
+    reference; the largest offset decides. An offset that builds up after a
+    cut boundary therefore shows in the segment where it appears.
     """
     name = "A/V Sync"
     try:
-        # Create reference MKV with audio
-        ref_mkv = os.path.join(tmpdir, "ref_with_audio.mkv")
-        frame_dur = f"{round(1_000_000_000 / fps)}ns"
-        cmd = [
-            "mkvmerge", "-o", ref_mkv,
-            "--default-duration", f"0:{frame_dur}",
-            original_es, audio_file
-        ]
-        r = run_cmd(cmd, timeout=600)  # large ES files (>5GB) need more time
-        if r.returncode not in (0, 1):
-            return TestResult(name=name, passed=False,
-                              details=f"mkvmerge reference creation failed: {r.stderr[:200]}")
-
-        # Use the first segment, limited to 30 seconds for speed
-        first_start = frames_to_seconds(cuts[0][0], fps, extra_frames)
-        first_end = frames_to_seconds(cuts[0][1], fps, extra_frames)
-        seg_dur = min(first_end - first_start, 30.0)
-
-        # Extract audio as PCM from both files (re-encoding, not stream-copy!)
-        # This avoids keyframe-snapping that causes false offsets
-        sample_rate = 16000
-        ref_pcm = os.path.join(tmpdir, "ref_audio.raw")
-        cut_pcm = os.path.join(tmpdir, "cut_audio.raw")
-
-        # Reference: extract audio starting at the same position as the first cut
-        cmd = [
-            "ffmpeg", "-y", "-v", "quiet",
-            "-i", ref_mkv,
-            "-ss", f"{first_start:.4f}", "-t", f"{seg_dur:.4f}",
-            "-ac", "1", "-ar", str(sample_rate),
-            "-f", "s16le", "-acodec", "pcm_s16le",
-            ref_pcm
-        ]
-        run_cmd(cmd, timeout=120)
-
-        # Cut: first segment starts at time 0
-        cmd = [
-            "ffmpeg", "-y", "-v", "quiet",
-            "-i", cut_mkv,
-            "-t", f"{seg_dur:.4f}",
-            "-ac", "1", "-ar", str(sample_rate),
-            "-f", "s16le", "-acodec", "pcm_s16le",
-            cut_pcm
-        ]
-        run_cmd(cmd, timeout=120)
-
-        # Method A: try syncstart on the MKV segments (needs actual files)
-        offset = None
-        method = ""
-
-        if which("syncstart"):
-            ref_seg = os.path.join(tmpdir, "ref_segment.mkv")
-            cut_seg = os.path.join(tmpdir, "cut_segment.mkv")
-            # Use re-encoding for accurate extraction
-            cmd = [
-                "ffmpeg", "-y", "-v", "quiet",
-                "-i", ref_mkv,
-                "-ss", f"{first_start:.4f}", "-t", f"{seg_dur:.4f}",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-                "-c:a", "aac", "-b:a", "128k",
-                ref_seg
-            ]
-            run_cmd(cmd, timeout=120)
-            cmd = [
-                "ffmpeg", "-y", "-v", "quiet",
-                "-i", cut_mkv,
-                "-t", f"{seg_dur:.4f}",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-                "-c:a", "aac", "-b:a", "128k",
-                cut_seg
-            ]
-            run_cmd(cmd, timeout=120)
-            offset = _try_syncstart(ref_seg, cut_seg)
-            method = "syncstart"
-
-        # Method B: numpy cross-correlation on PCM audio
-        if offset is None:
-            try:
-                import numpy as np
-            except ImportError:
-                np = None
-
-            if np is not None and os.path.exists(ref_pcm) and os.path.exists(cut_pcm):
-                a = np.fromfile(ref_pcm, dtype=np.int16).astype(np.float32)
-                b = np.fromfile(cut_pcm, dtype=np.int16).astype(np.float32)
-
-                if len(a) >= sample_rate and len(b) >= sample_rate:
-                    # Normalize
-                    a = a / (np.max(np.abs(a)) + 1e-10)
-                    b = b / (np.max(np.abs(b)) + 1e-10)
-
-                    # Cross-correlation via FFT
-                    n = len(a) + len(b) - 1
-                    fft_size = 1
-                    while fft_size < n:
-                        fft_size <<= 1
-
-                    fa = np.fft.rfft(a, fft_size)
-                    fb = np.fft.rfft(b, fft_size)
-                    corr = np.fft.irfft(fa * np.conj(fb), fft_size)
-
-                    # Find peak within +/- 1 second range
-                    max_lag = sample_rate  # 1 second
-                    # Positive lags: first max_lag samples
-                    # Negative lags: last max_lag samples
-                    search_region = np.concatenate([
-                        corr[:max_lag],
-                        corr[-max_lag:]
-                    ])
-                    peak_idx = np.argmax(np.abs(search_region))
-
-                    if peak_idx < max_lag:
-                        lag = peak_idx
-                    else:
-                        lag = -(2 * max_lag - peak_idx)
-
-                    offset = lag / sample_rate
-                    method = "numpy cross-correlation"
-
-        if offset is None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
             return TestResult(name=name, passed=False, warn=True,
-                              details="Could not measure (install syncstart or numpy)")
+                              details="Could not measure (numpy not installed)")
+
+        ref_mkv, err = build_reference(original_es, audio_file, fps, tmpdir)
+        if err:
+            return TestResult(name=name, passed=False, details=err)
+
+        measured = []      # (segment, where, offset)
+        unmeasured = []    # (segment, where, reason)
+        cut_start = 0.0
+        for seg_idx, (start_frame, end_frame) in enumerate(cuts, 1):
+            ref_start = frames_to_seconds(start_frame, fps, extra_frames)
+            seg_len = frames_to_seconds(end_frame + 1, fps, extra_frames) - ref_start
+            usable = seg_len - 2 * AV_EDGE_SEC
+            if usable < 1.0:
+                unmeasured.append((seg_idx, "whole", "segment too short"))
+                cut_start += seg_len
+                continue
+            win = min(AV_WINDOW_SEC, usable)
+            spots = [("start", AV_EDGE_SEC)]
+            if usable >= 2 * win:
+                spots.append(("end", seg_len - AV_EDGE_SEC - win))
+            for where, rel in spots:
+                ref = _pcm_window(ref_mkv, ref_start + rel, win,
+                                  os.path.join(tmpdir, f"av_ref_{seg_idx}_{where}.raw"))
+                cut = _pcm_window(cut_mkv, cut_start + rel, win,
+                                  os.path.join(tmpdir, f"av_cut_{seg_idx}_{where}.raw"))
+                offset, reason = _audio_offset(ref, cut)
+                if offset is None:
+                    unmeasured.append((seg_idx, where, reason))
+                else:
+                    measured.append((seg_idx, where, offset))
+            cut_start += seg_len
+
+        if not measured:
+            reasons = sorted({r for _, _, r in unmeasured})
+            return TestResult(name=name, passed=False, warn=True,
+                              details="not measurable: " + "; ".join(reasons))
 
         threshold = 0.050  # 50ms
-        # Convert numpy types to native Python
-        offset_val = float(offset)
-        abs_offset = abs(offset_val)
+        worst = max(measured, key=lambda m: abs(m[2]))
+        abs_offset = abs(worst[2])
         passed = abs_offset <= threshold
-        sign = "+" if offset_val >= 0 else ""
-        details = f"offset={sign}{offset_val*1000:.0f}ms (method: {method}, threshold: +/-{threshold*1000:.0f}ms)"
-        return TestResult(name=name, passed=passed, value=offset_val,
+        parts = [f"seg {s} {w} {o*1000:+.0f}ms" for s, w, o in measured]
+        details = (f"max offset={worst[2]*1000:+.0f}ms (segment {worst[0]} {worst[1]}, "
+                   f"threshold: +/-{threshold*1000:.0f}ms) | " + ", ".join(parts))
+        if unmeasured:
+            details += f" | {len(unmeasured)} window(s) not measurable"
+        return TestResult(name=name, passed=passed, value=float(worst[2]),
                           expected=f"offset <= +/-{threshold*1000:.0f}ms",
                           details=details, warn=not passed and abs_offset <= 0.150)
 
@@ -1210,7 +1185,8 @@ def test_audio_waveform(cut_mkv: str, cuts: list[tuple[int, int]],
 
 def test_defect_regions(cuts: list[tuple[int, int]], fps: float,
                         extra_frames: list, defect_gap_sec: int,
-                        defect_offset_sec: int) -> TestResult:
+                        defect_offset_sec: int,
+                        settings_source: str = "defaults") -> TestResult:
     """Report defective frames within cut segments, grouped into regions."""
     name = "Defect Regions"
 
@@ -1267,11 +1243,6 @@ def test_defect_regions(cuts: list[tuple[int, int]], fps: float,
             f"Region {i+1}: frames {rs}-{re_} "
             f"({n_frames} frames, {dur:.1f}s) at {minutes:02d}:{seconds:02d}"
         )
-
-    settings_source = "defaults"
-    conf = Path.home() / ".config" / "TTCut-ng" / "TTCut-ng.conf"
-    if conf.exists():
-        settings_source = str(conf)
 
     detail_header = (
         f"{len(in_cut)} defective frames in {len(regions)} regions "
@@ -1406,7 +1377,10 @@ Examples:
         tmpdir = args.tmpdir
         os.makedirs(tmpdir, exist_ok=True)
     else:
-        tmpdir = tempfile.mkdtemp(prefix="ttcut_qc_")
+        # Next to the cut, on the disk that holds the large files: the
+        # reference MKV is about as large as the ES (/tmp may be a tmpfs).
+        tmpdir = tempfile.mkdtemp(prefix="ttcut_qc_",
+                                  dir=os.path.dirname(os.path.abspath(args.cut)))
 
     try:
         report = QualityReport(
@@ -1449,7 +1423,7 @@ Examples:
 
         if "visual" in selected:
             print("Running: Visual Comparison...", flush=True)
-            results = test_visual_comparison(args.video, args.cut, fps, cuts, tmpdir, extra_frames=extra_frames, is_paff=is_paff)
+            results = test_visual_comparison(args.video, args.audio, args.cut, fps, cuts, tmpdir, extra_frames=extra_frames, is_paff=is_paff)
             if isinstance(results, list):
                 for r in results:
                     report.tests.append(r)
@@ -1475,7 +1449,9 @@ Examples:
             ttcut_settings = parse_ttcut_settings()
             defect_gap = args.defect_gap if args.defect_gap is not None else ttcut_settings["defect_gap_sec"]
             defect_offset = args.defect_offset if args.defect_offset is not None else ttcut_settings["defect_offset_sec"]
-            r = test_defect_regions(cuts, fps, extra_frames, defect_gap, defect_offset)
+            source = ("command line" if args.defect_gap is not None and args.defect_offset is not None
+                      else ttcut_settings["source"])
+            r = test_defect_regions(cuts, fps, extra_frames, defect_gap, defect_offset, source)
             report.tests.append(r)
             print(f"  [{r.status_str()}] {r.details}")
 
