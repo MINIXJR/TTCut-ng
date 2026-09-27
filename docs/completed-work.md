@@ -1006,6 +1006,31 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 18: Lese-Hypothesen der Karte `quality-check.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run18`)**. Scanner: 0 Kandidaten
+  (Python). Messungen mit eigenem Material (Tux-H.264 + rosa Rauschen) und an
+  Babylon Berlin 05x05.
+  - **Q1** Konfiguration mit Abstand 9 s / Vorlauf 4 s → Bericht 5/2 „from
+    TTCut-ng.conf" (gesucht wurde `[Common]`, geschrieben wird `[Settings]`
+    mit `Common\…`). Mit 9 s wären zwei Störstellen 7 s auseinander eine
+    Region gewesen.
+  - **Q2** 200 ms Versatz ab Segment 2 (nachgemessen −203 ms) → PASS +0 ms.
+    Jetzt Fenster an Anfang und Ende jedes Segments: −200 ms FAIL.
+  - **Neu:** Tux-Ton ist ein reiner 1-kHz-Sinus — jede Korrelation darauf ist
+    bedeutungslos; die frühere Grundlinie „A/V −2 ms PASS" sagte nichts.
+    Jetzt Spitzenverhältnis ≥ 1,25 nötig, sonst „nicht messbar"; echter
+    Fernsehton 2,98–6,84, Sinus ≈ 1.
+  - **Q3** korrekte 29,97-fps-MKV: 219 „Anomalien" (Abstände genau 33/34 ms).
+    Toleranz = ein Zeitschritt; dabei Gleitkomma-Falle 0,034 − 0,033 > 0,001.
+  - **Q4** ohne `mkvmerge` Abbruch → `Recommends: mkvtoolnix`.
+  - **Q5** zwei Referenzen (33 + 36 MB bei 33 MB ES), Standard `/tmp` (tmpfs
+    46 GB) → eine Referenz neben dem Schnitt; echter Lauf 4,8 GB in 39 s.
+  - **Q6** Hilfetext (7 Tests, Python 3.9 wegen `list[...]`-Annotationen).
+  - Gate `quality_check` (5 Prüfungen alt rot, Kontrolle grün); run-gates 141.
+  - Fallen: (1) Test-Ton immer auf Aussagekraft prüfen, bevor ein
+    „A/V gleich" zählt. (2) Temp-Pfade: Werkzeug liefert `realpath`
+    (`/media/…`), das Gate kannte den Symlink-Pfad.
+
 - **Dead-Code-Audit, dritter Lauf** → **DONE (2026-09-27, Zweig
   `cleanup/dead-code-audit-3`)**. Skill `dead-code-audit`; 33 Kandidaten.
   Einstufung ohne Subagenten (User-Regel; Includes prüft der Compiler).

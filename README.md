@@ -45,7 +45,7 @@ sudo apt install cmake ninja-build qt6-base-dev qt6-l10n-tools libmpeg2-4-dev \
   libavfilter-dev libswresample-dev libmpv-dev zlib1g-dev
 
 # Optional: ttcut-demux (ffmpeg), MPEG-2 Multiplexing, Qualitätsprüfung
-sudo apt install ffmpeg mjpegtools python3-numpy
+sudo apt install ffmpeg mjpegtools python3-numpy mkvtoolnix
 ```
 
 > **libmpv ist nicht optional.** Der Player ist seit v0.71.0 als Bibliothek
