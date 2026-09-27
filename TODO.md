@@ -630,6 +630,14 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   Karten der unkartierten Hauptfunktionen → Audit nach Karte) mit Stand und
   Regeln in [docs/quality-roadmap.md](docs/quality-roadmap.md).
 
+- **`_parse_fraction` in `ttcut-demux`: Zahl ohne `/`** (gefunden 2026-09-27,
+  Abschluss-Review `fix/frame-rate-source`): Der Kommentar verspricht „a plain
+  number gets DEN=1“, aber `cut -d/ -f2` liefert ohne `/` die ganze Eingabe —
+  `_parse_fraction 50` ergibt 50/50. Heute unerreichbar (`ffprobe` schreibt
+  Bildraten immer als `N/D`); beim nächsten Commit an der Funktion richtig
+  stellen (Nenner nur setzen, wenn ein `/` vorkommt) und in
+  `gate_demux_framerate.sh` einen Fall `50 25/1 tt` ergänzen.
+
 - **Veralteter Kommentar in `tools/diag/CMakeLists.txt`** (gefunden
   2026-09-26): Der Kommentar über `diag_tool(test_audiorepair_cut …)` nennt
   noch den „cut-segment-boundary error path“. Seit Audit-Lauf 10 darf eine

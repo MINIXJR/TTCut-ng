@@ -5,6 +5,18 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **H.264 without a .info file is cut at the right frame rate.** A raw
+  H.264 elementary stream without its .info file was opened at twice its
+  frame rate (progressive and MBAFF): the video of the cut ran at double
+  speed and the audio came from the wrong part of the recording. The frame
+  rate now comes from the timing in the stream itself; a stream without it
+  opens at 25 fps with a warning instead of 1.2 million fps. A .info file
+  without a frame rate line no longer forces 25 fps.
+  Gates: `h26x_framerate`, `framerate_assumed`, `framerate_hint`.
+- **ttcut-demux: 29.97i PAFF recordings get their frame rate.** The field
+  rate was halved only when it was twice 25 (a fixed default, not a
+  measurement); the check now compares against the frame rate of the
+  recording. 25i recordings are unchanged. Gate: `demux_framerate`.
 - **The cut-out preview of H.264/H.265 with open GOPs starts where it
   should.** Its start was meant to move back to the preceding IDR frame, but
   took any key frame (H.264 recovery point, HEVC CRA) and searched in decode

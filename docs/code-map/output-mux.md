@@ -1,6 +1,6 @@
 ---
-base_commit: 014cdb99690eef09208287daced244ce54cf741f
-last_verified: 2026-09-26
+base_commit: 624be1f0649dc858d4b2a5599a3b7fd2dfd36117
+last_verified: 2026-09-27
 sources:
   - extern/ttmkvmergeprovider.h
   - extern/ttmkvmergeprovider.cpp
@@ -155,8 +155,8 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
   A list/packet count mismatch raises a warning that the gates treat as FAIL.
 - **Every timestamp is computed in nanoseconds and rounded on its own.** The
   matroska muxer sets every stream to time base 1/1000 in `mkv_init`
-  (`avpriv_set_pts_info(st, 64, 1, 1000)`, ffmpeg 8.1.2 source; linked
-  libavformat 63.1.102); `mux()` reads the output time base after
+  (`avpriv_set_pts_info(st, 64, 1, 1000)`, ffmpeg 9.0.2 source = the
+  linked libavformat 63.1.102; unchanged against 8.1.2); `mux()` reads the output time base after
   `avformat_write_header` into `MuxInput::tbNum/tbDen`. Multiplying a
   duration rounded once to whole ms drifted 1.1 % at 29.97 fps — the
   interleave order (`getNormalizedPts`) uses the same ns source. Gate
@@ -164,7 +164,7 @@ What each caller sets before `mux()` (`–` = not called). "Options" is `TTMkvVi
 - **Non-VCL video packets are dropped.** A video packet without a slice NAL
   (SPS/PPS-only, a trailing EOS) is skipped so it does not advance
   `frameCount` (`prepareEsVideoPacket`). The Smart Cut seam EOS survives
-  anyway, per the libav parsers' packetization (read in the ffmpeg 8.1.2
+  anyway, per the libav parsers' packetization (read in the ffmpeg 9.0.2
   source, not measured on an output file): the H.264 parser does not end a
   frame at NAL 10, so EOS stays in the preceding AU's packet; the HEVC parser
   starts a new packet at EOS_NUT, which then also holds the next AU's
