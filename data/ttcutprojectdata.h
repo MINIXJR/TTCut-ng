@@ -78,7 +78,6 @@ class TTCutProjectData
     QDomElement writeTrackSection(QDomElement& parent, const QString& tag, const QString& filePath, int order, const QString& language, int delayMs = 0);
     QDomElement writeRepairSection(QDomElement& parent, qint64 frameFrom, qint64 frameTo, quint8 channelMask, const QString& method);
     QDomElement writeCutSection(QDomElement& parent, int cutIn, int cutOut, int order);
-    QDomElement writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order);
     //! Order and validated path from a section header. <Video>, <Audio> and
     //! <Subtitle> all start with the same two nodes (Order, Name); 'section'
     //! names the caller in the log messages. false when the section carries
@@ -89,7 +88,6 @@ class TTCutProjectData
     bool        parseVideoSection(QDomNodeList videoNodesList, TTAVData* avData);
     void        parseAudioSection(QDomNodeList audioNodesList, TTAVData* avData, TTAVItem* avItem);
     static void parseCutSection(QDomNodeList cutNodesList, TTAVItem* avItem);
-    static void parseMarkerSection(QDomNodeList markerNodeList, TTAVItem* avItem);
     //! 'position' is the section's index among the <Subtitle> sections of its
     //! <Video>; it stands in for an <Order> of -1, which projects written
     //! before 2026-09-25 carry for every discovered or added subtitle.

@@ -194,6 +194,7 @@ cut_outcome            tux   600  test_cut_outcome
 partial_track          tux   600  test_partial_track
 project_roundtrip_264  tux   600  test_project_roundtrip
 project_roundtrip_m2v  tux   600  test_project_roundtrip
+project_marker_dropped tux   600  test_project_roundtrip
 open_track_failure     tux   600  test_open_track_failure
 extra_index_rank       tux   300  test_extra_index_rank
 stale_abort            tux   600  test_stale_abort
@@ -778,6 +779,23 @@ gate_anomaly_trigger_abort()   { need "$V264"; "$D/test_auto_anomaly_scan_trigge
 gate_cut_outcome()   { need "$V264" "$A264"; "$D/test_cut_outcome" "$V264" "$A264" "$W"; }
 gate_partial_track() { need "$V264" "$A264"; "$D/test_partial_track" "$V264" "$A264" "$W"; }
 gate_project_roundtrip_264() { need "$PRJ264"; "$D/test_project_roundtrip" "$PRJ264" "$W" rt264; }
+# A project written while TTCut-ng still kept the old marker list: it loads
+# without a word about the <Marker> element, and the saved project has none.
+gate_project_marker_dropped() {
+  need "$V264" "$A264"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 \
+    | sed 's#</Cut>#</Cut><Marker><Order>0</Order><MarkerPos>150</MarkerPos><MarkerType>1</MarkerType></Marker>#' \
+    > "$W/p.ttcut"
+  grep -q "<Marker>" "$W/p.ttcut" || { echo "FAIL: test project has no <Marker>"; exit 1; }
+  "$D/test_project_roundtrip" "$W/p.ttcut" "$W" mk > "$W/rt.out" 2>&1 \
+    || { cat "$W/rt.out"; exit 1; }
+  if grep -q "<Marker>" "$W/mk-a.ttcut"; then echo "FAIL: the saved project still carries <Marker>"; exit 1; fi
+  # What the parser says about an element it does not handle, or a broken one.
+  if grep -qiE "unkown node|parseMarkerSection" "$W/rt.out"; then
+    echo "FAIL: loading complained about the <Marker> element:"; grep -iE "unkown node|parseMarkerSection" "$W/rt.out"; exit 1
+  fi
+  echo "PASS: a <Marker> project loads silently and is saved without it"
+}
 gate_project_roundtrip_m2v() { need "$M2V" "$MP2"; make_two_track_project "$W/rt-two-track.ttcut"
                                "$D/test_project_roundtrip" "$W/rt-two-track.ttcut" "$W" rtm2v; }
 gate_open_track_failure()  { need "$M2V" "$MP2"; "$D/test_open_track_failure" "$M2V" "$MP2" "$W"; }

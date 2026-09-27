@@ -35,7 +35,6 @@ TTAVItem::TTAVItem(TTVideoStream* videoStream)
 	mpAudioList    = new TTAudioList();
 	mpSubtitleList = new TTSubtitleList();
 	mpCutList      = new TTCutList();
-	mpMarkerList   = new TTMarkerList();
 
   connect(mpAudioList, &TTAudioList::itemAppended,                this, &TTAVItem::audioItemAppended);
 	connect(mpAudioList, qOverload<int>(&TTAudioList::itemRemoved), this, qOverload<int>(&TTAVItem::audioItemRemoved));
@@ -50,7 +49,6 @@ TTAVItem::TTAVItem(TTVideoStream* videoStream)
 	connect(this, &TTAVItem::updated, mpAudioList,    &TTAudioList::onRefreshData);
 	connect(this, &TTAVItem::updated, mpSubtitleList, &TTSubtitleList::onRefreshData);
 	connect(this, &TTAVItem::updated, mpCutList,      &TTCutList::onRefreshData);
-	connect(this, &TTAVItem::updated, mpMarkerList,   &TTMarkerList::onRefreshData);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -61,7 +59,6 @@ TTAVItem::~TTAVItem()
   if (mpAudioList    != 0) delete mpAudioList;
   if (mpSubtitleList != 0) delete mpSubtitleList;
   if (mpCutList      != 0) delete mpCutList;
-  if (mpMarkerList   != 0) delete mpMarkerList;
   if (mpVideoStream  != 0) delete mpVideoStream;
 }
 
@@ -358,14 +355,6 @@ void TTAVItem::checkCut(int cutIn, int cutOut)
   QString reason;
   if (!isValidCut(cutIn, cutOut, &reason))
     throw TTInvalidOperationException(reason);
-}
-
-/*!
- * Marker
- */
-void TTAVItem::appendMarker(int markerPos, int order)
-{
-	mpMarkerList->append(this, markerPos, order);
 }
 
 

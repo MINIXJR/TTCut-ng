@@ -160,11 +160,6 @@ void TTCutProjectData::serializeAVDataItem(const TTAVItem* vItem)
     writeCutSection(video, cItem.cutInIndex(), cItem.cutOutIndex(), cItem.order());
   }
 
-  for (int i = 0; i < vItem->markerCount(); i++) {
-  	TTMarkerItem mItem = vItem->markerAt(i);
-  	writeMarkerSection(video, mItem.markerPos(), 1, mItem.order());
-  }
-
   for (int i = 0; i < vItem->subtitleCount(); i++) {
     TTSubtitleItem sItem = vItem->subtitleListItemAt(i);
     TTSubtitleStream* sStream = sItem.getSubtitleStream();
@@ -257,7 +252,8 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
       parseCutSection(videoNodesList.at(i).childNodes(), avItem);
     }
     else if (videoNodesList.at(i).nodeName() == "Marker") {
-    	parseMarkerSection(videoNodesList.at(i).childNodes(), avItem);
+      // Written by versions that kept the old marker list; nothing uses it
+      // any more (VDR marks live on as cuts and stream points).
     }
     else if (videoNodesList.at(i).nodeName() == "Subtitle") {
       parseSubtitleSection(videoNodesList.at(i).childNodes(), avData, avItem, subtitlePosition++);
@@ -268,7 +264,6 @@ bool TTCutProjectData::parseVideoSection(QDomNodeList videoNodesList, TTAVData* 
   }
 
   avData->sortCutItemsByOrder();
-  avData->sortMarkerByOrder();
   return true;
 }
 
@@ -456,23 +451,6 @@ void TTCutProjectData::parseCutSection(QDomNodeList cutNodesList, TTAVItem* avIt
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- *
- */
-void TTCutProjectData::parseMarkerSection(QDomNodeList markerNodesList, TTAVItem* avItem)
-{
-  if (markerNodesList.size() < 2) {
-    qWarning("parseMarkerSection: <Marker> element has only %d children, expected 2", markerNodesList.size());
-    return;
-  }
-
-  int order = markerNodesList.at(0).toElement().text().toInt();
-  int pos   = markerNodesList.at(1).toElement().text().toInt();
-  //int type  = markerNodesList.at(2).toElement().text().toInt();
-
-  avItem->appendMarker(pos, order);
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
  * One <tag>text</tag> child under parent — the shape every section writer
  * below repeats per field.
  */
@@ -555,23 +533,6 @@ QDomElement TTCutProjectData::writeCutSection(QDomElement& parent, int cutIn, in
   addTextElement(cut, "CutOut", QString("%1").arg(cutOut));
 
   return cut;
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
- *
- */
-QDomElement TTCutProjectData::writeMarkerSection(QDomElement& parent, int markerPos, int markerType, int order)
-{
-  QDomElement marker = xmlDocument->createElement("Marker");
-  parent.appendChild(marker);
-
-  addTextElement(marker, "Order", QString("%1").arg(order));
-
-  addTextElement(marker, "MarkerPos", QString("%1").arg(markerPos));
-
-  addTextElement(marker, "MarkerType", QString("%1").arg(markerType));
-
-  return marker;
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

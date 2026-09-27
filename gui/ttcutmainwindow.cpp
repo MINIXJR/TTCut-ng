@@ -417,8 +417,6 @@ void TTCutMainWindow::connectAVDataSignals()
   connect(mpAVData, &TTAVData::cutOrderUpdated,    this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemAppended,     this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemRemoved,      this, &TTCutMainWindow::onProjectModified);
-  connect(mpAVData, &TTAVData::markerAppended,     this, &TTCutMainWindow::onProjectModified);
-  connect(mpAVData, &TTAVData::markerRemoved,      this, &TTCutMainWindow::onProjectModified);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
