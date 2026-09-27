@@ -1006,6 +1006,49 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 12: Lese-Hypothesen der Karte `h26x-stream.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run12`)**. Gemessen mit einer
+  Wegwerf-Sonde (Keyframe-Flag gegen NAL-IDR, `findIDRBefore` an jeder
+  Anzeigeposition, Vorschau-Fenster am Cut-Out, Cut-In-Gate bei
+  ausgeschaltetem Encoder-Modus) auf den Tux-Fixtures (H.264 progressiv/PAFF/
+  MBAFF, HEVC CRA) und 400 MB vom Anfang einer DVB-H.264-Aufnahme.
+  - **H1** `findIDRBefore` lieferte kein IDR: die typisierten Access Units
+    füllten `isIDR` aus dem libav-Keyframe-Flag (H.264 Recovery Point, HEVC
+    jedes IRAP). Der IDR-Vorzug der Vorschau (`3535f922`, 2026-02-22,
+    „excludes CRA/BLA“) hat nie gewirkt. Tux progressiv/HEVC: 120 Keyframes,
+    1 IDR; DVB: 434 Keyframes, 0 IDR; PAFF/MBAFF geschlossen (120/120).
+  - **H2** Suche in Dekodier-Reihenfolge: von einem führenden Bild aus kam
+    der Keyframe dahinter — DVB 2555 von 12 834 Positionen (~20 %), z. B.
+    `findIDRBefore(25) = 32`; 4-Bild-Schnitt [25, 28] → Vorschau-Fenster
+    [32, 28] (1439 Fälle DVB, 119 HEVC). User-Entscheid: echtes IDR, Suche
+    über Anzeigepositionen (auch HEVC-RADL nach einem IDR). Gate
+    `h26x_idr_before` (600-AU-Kopfstücke): alt 552/554 falsche Positionen und
+    11 gekippte HEVC-Fenster, neu grün.
+  - **H3** (Nicht-Key-I-Bild bei H.265 Einstiegspunkt, bei H.264 nicht):
+    in keiner Datei ein solches Bild; die H.265-Regel fiel mit C1 weg.
+  - **H4** typisierte SPS/VPS/AU-Klassen als zweite Kopie des Bündels →
+    C1: `tth264videoheader.*`/`tth265videoheader.*` entfernt, die Basisklasse
+    liest das Bündel, Bildraten-Regel in `TTFrameIndexer::effectiveFrameRate`
+    (−1016/+96 Zeilen). Verhalten je Anzeigeposition (Bildtyp, Cut-In/Out-
+    Gate, `findIDRBefore`) plus Bildrate/Bildzahl auf fünf Dateien
+    zeilengleich.
+  - **H5** Kommentar in `ttStreamInfo` („r_frame_rate reliable“) falsch —
+    gemessen: rohes H.264 progressiv/MBAFF meldet die doppelte Bildrate
+    (50p → 100, 25i MBAFF → 50), PAFF die Halbbildrate (wird halbiert), rohes
+    HEVC richtig; `avg_frame_rate` ist nur die `framerate`-Option des
+    Rohdemuxers (Vorgabe 25). Schnitt ohne `.info` (Bild 1000–2499, echt
+    50 fps, Chirp-AC3 per Paket-MD5 zugeordnet): MKV 15,008 s statt 30,016 s,
+    Ton von 10,016–25,024 s statt 20,000–50,016 s. Kommentar korrigiert; ein
+    Fix für den Fall ohne `.info` ist nicht entschieden (Warnung oder
+    Bildrate aus dem SPS-Timing).
+  - Umbau: 95 nie beurteilte Kandidaten auf den 22 Quellen der Karte, 76
+    umgebaut (C1 ~60, C2 mechanisch: override, const, const-Referenz,
+    Argumentnamen, ein H.26x-Cast, Hervorhebungs-Helfer im Zeitsprung),
+    19 deliberate (Einrückung: `ttavutil`, `ttdisplayordermap` in die
+    Ausnahmeliste); Nachscan konvergiert, offen im Umfang und projektweit 0.
+    Store `docs/code-audit/build-verdicts-2026-09-27-run12.py`. run-gates.sh
+    123 PASS; Screenshot-Lauf: Zeitsprung-Dialog und Videoliste unverändert.
+
 - **`decodeFrameYUV()` hatte noch die alte unbegrenzte Skip-Schleife** →
   **GEFIXT** (2026-09-11, Branch `fix/decodeframeyuv-skip-loop`)
   - Der nicht-sequenzielle Zweig (Seek + Skip bis zum Ziel-Tag) hatte

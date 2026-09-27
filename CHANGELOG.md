@@ -5,6 +5,13 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **The cut-out preview of H.264/H.265 with open GOPs starts where it
+  should.** Its start was meant to move back to the preceding IDR frame, but
+  took any key frame (H.264 recovery point, HEVC CRA) and searched in decode
+  order, so it often landed a few frames later - e.g. 7 on a DVB recording -
+  and for a cut of only a few frames the window started behind its own end.
+  It now moves back to a real IDR frame only; recordings without IDR frames
+  keep the plain start. Gate: `h26x_idr_before`.
 - **Audio at 44.1 kHz stays in sync across cuts.** The length of an MPEG
   audio or AC3 frame was taken from its byte size, which at 44.1 kHz varies
   with the padding bit; the first frame's value, which the cut plan works

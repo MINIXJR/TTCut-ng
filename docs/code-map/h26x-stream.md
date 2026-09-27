@@ -1,5 +1,5 @@
 ---
-base_commit: 716b5a8ecfa85edbe737fd304a1e9f8cb4e1475d
+base_commit: 511e7ab95c05672848fb5dd4ddaf7f685beb9bbb
 last_verified: 2026-09-27
 sources:
   - avstream/tth26xvideostream.h
@@ -8,11 +8,9 @@ sources:
   - avstream/tth264videostream.cpp
   - avstream/tth265videostream.h
   - avstream/tth265videostream.cpp
-  - avstream/tth264videoheader.h
-  - avstream/tth264videoheader.cpp
-  - avstream/tth265videoheader.h
-  - avstream/tth265videoheader.cpp
   - avstream/ttframeindex.h
+  - avstream/ttframeindexer.h
+  - avstream/ttframeindexer.cpp
   - avstream/ttavutil.cpp
   - avstream/ttavstream.cpp
   - avstream/ttdisplayordermap.cpp
@@ -29,15 +27,16 @@ sources:
 # Code Map: H.26x video stream
 
 **Scope:** what `TTH264VideoStream` and `TTH265VideoStream` are after the
-stream-ownership split — the shared base `TTH26xVideoStream`
-(`createHeaderList`, `createIndexList`, cut-point tests, display↔decode
-conversion, the raw-AU accessors), the two codec subclasses with their typed
-SPS/VPS and access-unit lists (`tth264videoheader`, `tth265videoheader`), and
-what each reader takes from the stream: frame rate, the index list, the
-bundle, the display-order map, the typed SPS.
+stream-ownership split and audit run 12 — the shared base
+`TTH26xVideoStream` (`createHeaderList`, `createIndexList`, cut-point tests,
+`findIDRBefore`, display↔decode conversion, the raw-AU accessors), which
+answers every per-frame question from the frame index bundle, the two
+subclasses that only carry the codec identity (and PAFF for H.264), and what
+each reader takes from the stream: frame rate, the index list, the bundle,
+the display-order map, the probe info.
 
 **Neighbours, not part of this map:** how the packet scan, PAFF merge, POC
-collection and the display-order map are built (`TTFrameIndexer`,
+collection and the display-order map are built (`TTFrameIndexer::build`,
 `TTDisplayOrderMap` — [frame-order.md](frame-order.md)); when the open task
 runs and what the finish handlers do
 ([stream-open-project-load.md](stream-open-project-load.md)); the adopters of
@@ -53,15 +52,14 @@ the Smart Cut engine and its own NAL parser `TTNaluParser`
 Legend: solid = data, dashed = trigger (who starts what).
 
 ```mermaid
-flowchart TD
+flowchart LR
     FILE["H.264 / H.265 ES file"]
     INFO[".info file<br/>TTESInfo::timingForVideo"]
     OPEN["TTOpenVideoTask<br/>operation"]
-    PROBE["ttProbeVideo<br/>openStream"]
+    PROBE["ttProbeVideo<br/>openStream → mProbe"]
     IDXR["TTFrameIndexer<br/>build"]
     HL["TTH26xVideoStream<br/>createHeaderList"]
-    SPS["typed SPS / VPS<br/>TTH264SPS, TTH265SPS"]
-    AU["typed access units<br/>buildAccessUnits"]
+    RATE["TTFrameIndexer<br/>effectiveFrameRate"]
     BUN["mFrameIndexBundle<br/>index, gops, displayMap, raw map"]
     VIL["TTVideoIndexList<br/>createIndexList + sortDisplayOrder"]
     FR["frame_rate<br/>frameRate()"]
@@ -76,21 +74,20 @@ flowchart TD
     OPEN -.->|createHeaderList| HL
     OPEN -.->|createIndexList| VIL
     FILE --> PROBE
-    PROBE -->|TTStreamInfo| HL
-    INFO -->|frame_rate| HL
     FILE --> IDXR
     IDXR -->|bundle| BUN
-    HL --> SPS
-    HL --> FR
-    BUN --> AU
-    AU -->|IDR / RAP / coding type by decode index| VIL
-    BUN -->|decodeToDisplay| VIL
-    AU -->|RAP by decode index| NAV
+    PROBE -->|libav rate| RATE
+    INFO -->|frame_rate| RATE
+    BUN -->|isPAFF| RATE
+    RATE --> FR
+    HL -.->|after the index| RATE
+    BUN -->|coding type, display rank| VIL
+    BUN -->|key flag by decode index| NAV
     VIL -->|frameCount| NAV
-    AU -->|IDR by decode index| PREV
+    BUN -->|NAL-scan IDR by display position| PREV
     BUN -->|rawPacketCount, rawToMerged| EXTRA
-    SPS -->|width, height| TREE
-    BUN -->|frameIndexBundle copy| ADOPT
+    PROBE -->|streamInfo: width, height| TREE
+    BUN -->|frameIndexBundle| ADOPT
     BUN -->|displayOrderMap| SMART
     BUN -->|isPAFF, log2MaxFrameNum| MKV
 ```
@@ -100,102 +97,91 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `OPEN` -.-> `HL` | `TTOpenVideoTask::operation`: `TTVideoType::createVideoStream` builds the subclass from the libav probe (`h264_video` / `h265_video`), then `createHeaderList()`. A return `<= 0` throws `TTDataFormatException` — for H.26x that is `-1` (probe, codec or index failure) or an index without frames. |
-| `FILE` → `PROBE` | `openStream`: `ttProbeVideo` once per stream (`mProbed`); the detected codec must equal `expectedCodec()` or the open fails with “File is not H.264/H.265”. |
-| `PROBE` → `HL` | `TTStreamInfo` of the best video stream: width, height, profile, level, bit rate, frame rate. `frameRate` = `r_frame_rate`, else `avg_frame_rate` (`ttStreamInfo`). |
-| `INFO` → `HL` | `frame_rate` of the `.info` file, when positive, **replaces** the libav rate (`frame_rate` and the SPS copy). Without `.info` a raw H.264 ES gets libav's `time_scale / num_units_in_tick`, i.e. **twice** the real rate for progressive material — known, left as is; `ttcut-demux` always writes `.info`. |
-| `HL` → `FR` | `frame_rate` (float): libav or `.info`, then halved when H.264, `isPAFF` and `> 30` (a field rate). `TTH26xVideoStream::frameRate()` returns it; it is the rate of every time column and time↔index conversion of the video. H.265 is never halved (`isPAFFCorrectionApplicable` false). |
-| `FILE` → `IDXR` → `BUN` | `TTFrameIndexer::build` (progress mapped onto 10–80 % of the byte total), copied into `mFrameIndexBundle`: one `TTFrameInfo` per (merged) access unit in **decode order**, GOP table, raw→merged map, PAFF flags, display-order map. Failure → `-1`. |
-| `HL` → `SPS` | `buildSPSFromStreamInfo`: width/height/profile/level from the probe, not from the bitstream SPS; the H.265 VPS is an empty placeholder. Rebuilt on every `createHeaderList` (`resetSPS` first). |
-| `BUN` → `AU` | `buildAccessUnits`: one typed AU per bundle entry, same decode index. **IDR = `TTFrameInfo::isKeyframe`** = libav `AV_PKT_FLAG_KEY` (H.264: IDR slice, a recovery-point SEI, or the parser's single-reference I heuristic; H.265: every IRAP — IDR, CRA, BLA), **not** `TTFrameInfo::isIDR` (the NAL-scan IDR the display map uses). H.264: RAP = IDR; a non-key I picture is slice type I, neither IDR nor RAP. H.265: a non-key I picture is marked RAP (“could be CRA”), though every IRAP already carries the key flag. `createHeaderList` returns the AU count (decode units, dropped RASL included). |
-| `AU` + `BUN` → `VIL` (trigger `OPEN` -.-> `VIL`) | `createIndexList`, called by `TTOpenVideoTask` after the header list: per decode index `i` with `decodeToDisplay(i) >= 0` one `TTVideoIndex` (display order = display rank, header-list index = `i`, coding type 1/2/3 from `accessUnitToCodingType`). Dropped HEVC RASL pictures get no entry. `TTOpenVideoTask` then calls `sortDisplayOrder()`: **list position = display position**, `headerListIndex(pos)` = decode AU. `frameCount()` = display count. |
-| `AU` + `VIL` → `NAV` | `isCutInPoint(pos)` / `isCutOutPoint(pos)`, `pos` a display position: with the encoder mode on (default) always `true`. Off: cut-in needs `accessUnitIsRAP(displayToDecode(pos))`; cut-out needs the last displayed frame or a RAP at display `pos + 1`. Bounds in display space (`frameCount()`). Only reader: the Set-Cut-In/Out buttons (`checkCutPosition`). |
-| `AU` → `PREV` | `findIDRBefore(frameIndex)`, display position in, display position out: walks **decode** indices down from `displayToDecode(frameIndex)` to the first `accessUnitIsIDR`, returns its display position, `-1` if none. Only caller: `ttPreviewCutOutWindow`, which starts the cut-out preview there when it is not before the cut-in. |
+| `FILE` → `PROBE` | `openStream`: `ttProbeVideo` once per stream (`mProbed`); the detected codec must equal `expectedCodec()` or the open fails with “File is not H.264/H.265”. The result stays in `mProbe`; `streamInfo()` exposes its `TTStreamInfo` (width, height, profile, level, bit rate, libav frame rate = `r_frame_rate`, else `avg_frame_rate`). |
+| `FILE` → `IDXR` → `BUN` | `TTFrameIndexer::build` (progress mapped onto 10–80 % of the byte total), copied into `mFrameIndexBundle`: one `TTFrameInfo` per (merged) access unit in **decode order**, GOP table, raw→merged map, PAFF flags, display-order map. Failure → `-1`. `createHeaderList` returns the AU count (dropped RASL included). |
+| `PROBE` / `INFO` / `BUN` → `RATE` (trigger `HL` -.-> `RATE`) | `TTFrameIndexer::effectiveFrameRate(libavRate, path, isPAFF)`, called after the index is built: the `.info` `frame_rate` when positive, else the libav rate; halved when `isPAFF` and `> 30` (a field rate; only H.264 sets `isPAFF`). Without `.info` a raw H.264 ES gets **twice** the real rate for progressive material and MBAFF (measured, see H5), and the cut takes its audio from the wrong place — no warning; `ttcut-demux` always writes `.info`. The indexer's PTS synthesis (`assignPtsFromFrameRate`, ES without timestamps) uses the same rule and then clamps to 25 fps outside 0–120. |
+| `RATE` → `FR` | `frame_rate` (float), returned by `TTH26xVideoStream::frameRate()`: the rate of every time column and time↔index conversion of the video. The open log line shows it next to the libav rate, PAFF, profile and level. |
+| `BUN` → `VIL` (trigger `OPEN` -.-> `VIL`) | `createIndexList`, called by `TTOpenVideoTask` after the header list: per decode index `i` with `decodeToDisplay(i) >= 0` one `TTVideoIndex` (display order = display rank, header-list index = `i`, coding type = `TTFrameInfo::frameType`, 1/2/3 — the indexer writes I for every key picture, I/P/B from the slice type otherwise). Dropped HEVC RASL pictures get no entry. `TTOpenVideoTask` then calls `sortDisplayOrder()`: **list position = display position**, `headerListIndex(pos)` = decode AU. `frameCount()` = display count. |
+| `BUN` + `VIL` → `NAV` | `isCutInPoint(pos)` / `isCutOutPoint(pos)`, `pos` a display position: with the encoder mode on (default) always `true`. Off: cut-in needs random access at `displayToDecode(pos)`; cut-out needs the last displayed frame or random access at display `pos + 1`. **Random access = `TTFrameInfo::isKeyframe`**, the libav key flag (H.264: IDR slice, a recovery-point SEI, or the parser's single-reference I heuristic; H.265: every IRAP — IDR, CRA, BLA), the same rule for both codecs. Bounds in display space (`frameCount()`). Only reader: the Set-Cut-In/Out buttons (`checkCutPosition`). |
+| `BUN` → `PREV` | `findIDRBefore(frameIndex)`, display position in and out: walks **display** positions down from `frameIndex` to the first one whose AU has `TTFrameInfo::isIDR` (the NAL-scan IDR the display-order map uses), `-1` if none. Only caller: `ttPreviewCutOutWindow`, which starts the cut-out preview there when it is not before the cut-in; on material without IDRs (DVB H.264, x264/x265 open GOP after frame 0) the window keeps its plain start, “preview length before the cut-out”. |
 | `BUN` → `EXTRA` | `TTAVData` (extra-frame source for H.26x): `.info es_doubled_pts_aus` are raw-AU numbered; used only when `es_total_aus == rawAuCount()`. `rawAuIsCollapsedField` → legitimate PAFF field pair, skipped; else `mapRawAuToDisplayIndex` = raw → merged → display; `-1` (dropped leading picture) skipped. |
-| `SPS` → `TREE` | `TTVideoTreeView`: resolution column from `getSPS()->width()/height()`, ratio column the codec name. The only reader of the typed SPS outside the log line (`spsDescription`). |
-| `BUN` → `ADOPT` | `frameIndexBundle()` returns a copy (Qt COW). Quick jump (`TTQuickJumpDialog`, per-codec `static_cast`), preview window (`TTMPEG2Window2`, `adoptOrBuildFrameIndex`) and frame search (`TTFrameSearchTask`) adopt it instead of rescanning; empty bundle = “not built”, the adopter indexes itself. |
+| `PROBE` → `TREE` | `TTVideoTreeView`: resolution column from `streamInfo().width/height`, ratio column `codecLabel()`. |
+| `BUN` → `ADOPT` | `frameIndexBundle()` returns a const reference; quick jump (`TTQuickJumpDialog`), preview window (`TTMPEG2Window2`, `adoptOrBuildFrameIndex`) and frame search (`TTFrameSearchTask`) copy it (Qt COW) instead of rescanning, each after one `dynamic_cast` on `TTH26xVideoStream`; empty bundle = “not built”, the adopter indexes itself. |
 | `BUN` → `SMART` | `displayOrderMap()` by reference: `TTAVData` copies it into the cut parameters (`params.displayMap`), `ttpreviewclip` hands it to its engine; Smart Cut maps display cut positions to AUs with it (PAFF: frame granularity, which its own file fallback lacks). |
 | `BUN` → `MKV` | `isPAFF()` (H.264 override; base default `false`) and `paffLog2MaxFrameNum()` (H.264: bundle `log2MaxFrameNum`; base default 4) for the MKV mux of PAFF material. |
 
 ## Assumptions, contracts & pitfalls
 
-- **Two index spaces, one conversion.** The typed AU lists and the bundle
-  are in decode order; everything a caller passes (`isCutInPoint`,
-  `isCutOutPoint`, `findIDRBefore`, the index list after the sort) is in
-  display order. `decodeToDisplayIndex` / `displayToDecodeIndex` are the
-  bundle's map; an index outside the map comes back unchanged.
-- **Two notions of “IDR”.** The display-order map flushes its reorder
-  buffer on `TTFrameInfo::isIDR` (NAL scan, strict IDR); the stream's
-  `accessUnitIsIDR` — documented in the header as “strict IDR (DPB reset)”
-  — reads `isKeyframe`, the libav key flag (see the `BUN` → `AU` row). GOP
-  numbering (`gopIndex`) follows the key flag too.
-- **`findIDRBefore` walks decode order.** From a leading picture (open-GOP
-  B or RASL, displayed before its key picture but decoded after it) the
-  first key picture found is the one that follows in display order.
+- **Two index spaces, one conversion.** The bundle is in decode order;
+  everything a caller passes (`isCutInPoint`, `isCutOutPoint`,
+  `findIDRBefore`, the index list after the sort) is in display order.
+  `decodeToDisplayIndex` / `displayToDecodeIndex` are the bundle's map; an
+  index outside the map comes back unchanged.
+- **Two flags, two meanings.** `TTFrameInfo::isKeyframe` (libav key flag) is
+  random access: cut-point gates, GOP numbering. `TTFrameInfo::isIDR` (NAL
+  scan) is a DPB reset: the display-order map flushes on it, and
+  `findIDRBefore` looks for it. On open-GOP material the two differ almost
+  everywhere (Tux progressive H.264 and HEVC CRA: 120 key pictures, 1 IDR;
+  a DVB H.264 recording: 434 key pictures, 0 IDR).
+- **Walk display positions, not decode indices, for “the last X at or
+  before a position”.** A picture decoded after a key picture can display
+  before it (open-GOP B, HEVC RASL, and RADL even after an IDR); a decode-
+  order walk from such a picture lands behind the position (audit run 12:
+  `findIDRBefore(25) = 32`, cut [25, 28] → preview window [32, 28]).
 - **Encoder mode decides the cut-point gates.** With it on (default) every
-  display position may be a cut-in or cut-out; the RAP rules only apply
-  with it off. Smart Cut does not read the setting.
-- **Frame rate has three sources and two PAFF halvings.** libav, `.info`,
-  then the PAFF rule `> 30 → / 2` — applied here to `frame_rate` and, for
-  the PTS synthesis only, again inside `TTFrameIndexer::assignPtsFromFrameRate`
-  on its own copy.
-- **The typed SPS is the probe, not the bitstream.** H.264 `profileString`
-  switches on the raw libav profile, which carries constraint flags
-  (constrained baseline = 66 | 512 = 578, High 10 Intra = 110 | 2048 = 2158) and then prints
-  “Unknown (…)” — log line only.
+  display position may be a cut-in or cut-out; the random-access rules only
+  apply with it off. Smart Cut does not read the setting.
+- **One frame-rate rule.** `.info` over libav, PAFF field rate halved, in
+  `TTFrameIndexer::effectiveFrameRate` for the stream and the PTS synthesis.
 - **Ownership.** The stream owns the one canonical index of the file
   (“Owner A”); every other wrapper adopts the bundle. Handing the bare
   `QList<TTFrameInfo>` across an object boundary loses the PAFF metadata
   (see `ttframeindex.h`).
 - **`cut()` throws** (`TTInvalidOperationException`): H.26x is cut by
   `TTESSmartCut`, never through the stream.
-- **`stream_type`** is set in the H.264 constructor only; nothing reads the
-  member outside the constructors, `streamType()` is overridden in both.
 
-### Reading hypotheses for audit run 12
+### Audit run 12 (reading hypotheses H1–H5, measured)
 
-From reading only; each needs a runtime proof or refutation first.
+Probe over the Tux progressive/PAFF/MBAFF H.264 and HEVC CRA fixtures and a
+400 MB DVB H.264 head; gate `h26x_idr_before`.
 
-- **H1 — `accessUnitIsIDR` is the key flag, not an IDR.** On H.264 with
-  recovery-point SEI and on every H.265 CRA, `findIDRBefore` returns a
-  non-IDR picture; `ttPreviewCutOutWindow` starts there although its
-  comment wants an IDR (“non-IDR I-frames cause decoder stall”). Measure on
-  H.265 CRA material and an H.264 stream without IDR: which picture the
-  cut-out preview starts on, and whether the clip stalls.
-- **H2 — `findIDRBefore` can return a position after its argument.** For a
-  leading picture of the next key picture (open GOP / RASL) the walk in
-  decode order hits that key picture first; the preview window then starts
-  after `startIndex`, for a cut of only a few frames even after the
-  cut-out. Measure with an open-GOP fixture.
-- **H3 — the two codecs gate a non-key I picture differently.** With the
-  encoder mode off, H.265 allows a cut-in at a non-IRAP I picture (marked
-  RAP), H.264 does not. Which one is right, and does a cut-in there survive
-  Smart Cut unchanged?
-- **H4 — the typed AU and SPS lists are a second copy of the index.**
-  Readers use only IDR/RAP/coding type of the AUs and width/height of the
-  SPS; the VPS, `TTH264SPS::spsId/frameRate/hasFrameRate`, the AU
-  `pts/dts/frameNum/poc/frameSize/temporalId/isReference` and the codec
-  enums beyond the slice types are never read. The unknown-type defaults
-  differ (H.264 → P, H.265 → B) but are unreachable — the indexer only
-  writes I/P/B.
-- **H5 — the comment in `ttStreamInfo` calls `r_frame_rate` reliable for
-  raw ES**, while for raw H.264 it is twice the real rate (the `.info`
-  override hides it). Doc fix or a VUI-based rate.
+- **H1 confirmed and fixed.** `findIDRBefore` read the typed access unit's
+  `isIDR`, which both codecs filled from the key flag — the IDR preference of
+  `3535f922` never worked. Now `TTFrameInfo::isIDR`.
+- **H2 confirmed and fixed.** Decode-order walk; ~20 % of the DVB positions
+  got a later key picture, 1439 of the 4-frame cuts an inverted window. Now a
+  display-order walk.
+- **H3 not observed.** No non-key I picture in any file; the H.265 rule that
+  called one random access is gone with C1 (same rule as H.264).
+- **H4 confirmed, rebuilt (C1).** The typed SPS/VPS/access-unit classes are
+  removed; the base answers from the bundle, behaviour identical per display
+  position on all five files.
+- **H5 confirmed, comment corrected.** `ttStreamInfo` called `r_frame_rate`
+  reliable for a raw ES. Measured: raw H.264 progressive and MBAFF report
+  twice the frame rate (50p → 100, 25i MBAFF → 50), PAFF the field rate
+  (halved), raw HEVC right (50p → 50); `avg_frame_rate` is the raw
+  demuxer's `framerate` option (default 25). A cut without `.info`
+  (progressive H.264, frames 1000–2499 at real 50 fps) gave a 15.008 s MKV
+  with audio from 10.016–25.024 s instead of 30.016 s and 20.000–50.016 s.
+  `ttcut-demux` takes `frame_rate` from `ffprobe` on the original TS
+  (`r_frame_rate`, halved for interlaced when it is twice the ES's
+  `avg_frame_rate`). A fix for the no-`.info` case is not decided.
 
 ## Redundancy / consolidation candidates
 
 - **Typed access units vs the bundle**
-  - sites: `avstream/tth264videostream.cpp:TTH264VideoStream::buildAccessUnits`, `avstream/tth265videostream.cpp:TTH265VideoStream::buildAccessUnits`, `avstream/tth26xvideostream.h:TTH26xVideoStream::mFrameIndexBundle`
+  - sites: `TTH264VideoStream::buildAccessUnits`, `TTH265VideoStream::buildAccessUnits` (removed), `avstream/tth26xvideostream.h:TTH26xVideoStream::mFrameIndexBundle`
   - shared purpose: one record per decode-order AU with the frame type and the random-access flag
-  - status: candidate → the base class can answer IDR/RAP/coding type from `TTFrameInfo` directly; the two AU classes and hooks go (H4)
+  - status: done (audit run 12, C1) → `TTH26xVideoStream::accessUnitIsRAP` / `accessUnitCodingType` read the bundle
 - **H.264 vs H.265 stream subclass**
-  - sites: `avstream/tth264videostream.cpp`, `avstream/tth265videostream.cpp` (every hook)
-  - shared purpose: build the typed SPS from the probe, map the frame type, answer the per-AU hooks
-  - status: candidate → what differs is the codec id, the label, the RAP rule and the PAFF flag; falls with the previous entry
+  - sites: `avstream/tth264videostream.cpp`, `avstream/tth265videostream.cpp`
+  - shared purpose: codec identity
+  - status: done (C1) → what is left differs per codec (stream type, label, expected codec, PAFF accessors)
 - **PAFF frame-rate halving**
   - sites: `avstream/tth26xvideostream.cpp:TTH26xVideoStream::createHeaderList`, `avstream/ttframeindexer.cpp:TTFrameIndexer::assignPtsFromFrameRate`
-  - shared purpose: `isPAFF && rate > 30 → rate / 2`, each after its own `.info` lookup
-  - status: candidate → one rule (the bundle could carry the corrected rate)
+  - shared purpose: `.info` over libav, `isPAFF && rate > 30 → rate / 2`
+  - status: done (C1) → `TTFrameIndexer::effectiveFrameRate`
 - **Getting the bundle from either subclass**
-  - sites: `gui/ttquickjumpdialog.cpp:TTQuickJumpDialog` (per-codec `static_cast` on `streamType()`), `data/ttframesearchtask.cpp` (two `dynamic_cast` for the decoder kind)
-  - shared purpose: “is this an H.26x stream” — the base `TTH26xVideoStream` answers it in one cast (as `mpeg2window/ttmpeg2window2.cpp` and `data/ttavdata.cpp` do)
-  - status: candidate → one `dynamic_cast<TTH26xVideoStream*>`
+  - sites: `gui/ttquickjumpdialog.cpp`, `data/ttframesearchtask.cpp:TTFrameSearchTask::decoderKindFor`
+  - shared purpose: “is this an H.26x stream”
+  - status: done (C2) → one `dynamic_cast<TTH26xVideoStream*>` each

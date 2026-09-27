@@ -12,7 +12,7 @@ and to files that are being reworked anyway.
 
 - **cpp/indent**: `2`
   Two spaces, no tabs (the TTCut heritage). The H.26x/Smart-Cut block
-  (`avstream/tth26*`, `ttnaluparser`, `extern/ttessmartcut`, `ttffmpegwrapper`,
+  (`avstream/tth26*`, `ttnaluparser`, `ttdisplayordermap`, `ttavutil`, `extern/ttessmartcut`, `ttffmpegwrapper`,
   `tthevcseam`, `ttmkvmergeprovider`, the settings pages and the C tools under
   `tools/`) and the libav audio cut and repair (`extern/ttaudiocutter`,
   `extern/ttaudiorepair`) use four spaces consistently and stay that way; do not mix widths
