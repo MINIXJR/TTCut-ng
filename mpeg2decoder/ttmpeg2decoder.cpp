@@ -16,8 +16,6 @@
 #include "ttmpeg2decoder.h"
 #include "../avstream/ttcommon.h"
 
-static TFrameInfo frameInfo;
-
 /* /////////////////////////////////////////////////////////////////////////////
  * Constructor with filename, index- and header-list
  */
@@ -33,8 +31,9 @@ TTMpeg2Decoder::TTMpeg2Decoder(const QString& cFName, TTVideoIndexList* viIndex,
   videoIndexList     = viIndex;
   videoHeaderList    = viHeader;
   t_frame_info       = NULL;
+  mFrameInfo         = TFrameInfo();
 
-   if (!ttAssigned(videoIndexList) && !ttAssigned(videoHeaderList))
+  if (!ttAssigned(videoIndexList) || !ttAssigned(videoHeaderList))
     throw TTMpeg2DecoderException(TTMpeg2DecoderException::ArgumentNull);
 
   openMPEG2File(cFName);
@@ -210,33 +209,33 @@ int TTMpeg2Decoder::decodeNextFrame()
       case STATE_INVALID_END:
         if ( mpeg2Info->display_fbuf )
         {
-          t_frame_info            = &frameInfo;
-          frameInfo.Y             = mpeg2Info->display_fbuf->buf[0];
-          frameInfo.U             = mpeg2Info->display_fbuf->buf[1];
-          frameInfo.V             = mpeg2Info->display_fbuf->buf[2];
-          frameInfo.width         = mpeg2Info->sequence->width;
-          frameInfo.height        = mpeg2Info->sequence->height;
-          frameInfo.type          = mpeg2Info->display_picture->flags&0x03;
-          frameInfo.chroma_width  = mpeg2Info->sequence->chroma_width;
-          frameInfo.chroma_height = mpeg2Info->sequence->chroma_height;
+          t_frame_info             = &mFrameInfo;
+          mFrameInfo.Y             = mpeg2Info->display_fbuf->buf[0];
+          mFrameInfo.U             = mpeg2Info->display_fbuf->buf[1];
+          mFrameInfo.V             = mpeg2Info->display_fbuf->buf[2];
+          mFrameInfo.width         = mpeg2Info->sequence->width;
+          mFrameInfo.height        = mpeg2Info->sequence->height;
+          mFrameInfo.type          = mpeg2Info->display_picture->flags&0x03;
+          mFrameInfo.chroma_width  = mpeg2Info->sequence->chroma_width;
+          mFrameInfo.chroma_height = mpeg2Info->sequence->chroma_height;
 
 
           switch (convType)
           {
             case formatRGB24:
             	//qDebug("formatRGB24");
-              frameInfo.size=frameInfo.width*frameInfo.height*3;
-              frameInfo.chroma_size=0;
+              mFrameInfo.size=mFrameInfo.width*mFrameInfo.height*3;
+              mFrameInfo.chroma_size=0;
               break;
             case formatRGB32:
             	//qDebug("formatRGB32");
-              frameInfo.size=frameInfo.width*frameInfo.height*4;
-              frameInfo.chroma_size=0;
+              mFrameInfo.size=mFrameInfo.width*mFrameInfo.height*4;
+              mFrameInfo.chroma_size=0;
               break;
             case formatYV12:
             	//qDebug("formatYV12");
-              frameInfo.size=frameInfo.width*frameInfo.height;
-              frameInfo.chroma_size=frameInfo.chroma_width*frameInfo.chroma_height;
+              mFrameInfo.size=mFrameInfo.width*mFrameInfo.height;
+              mFrameInfo.chroma_size=mFrameInfo.chroma_width*mFrameInfo.chroma_height;
             default:
               break;
           }
@@ -358,13 +357,25 @@ int TTMpeg2Decoder::moveToFrameIndex(int framePosition)
     const TTSequenceHeader* seqHeader = videoHeaderList->sequenceHeaderAt(headerListIndex);
     sequenceOffset = seqHeader->headerOffset();
   }
-  //else
-  //  qDebug("no sequence at: %d", headerListIndex);
 
-  // position the lib
+  // The GOP header that opens the I picture's GOP. When a GOP header lies
+  // between it and the sequence header, that header belongs to an earlier
+  // GOP: decoding forward from it would stop at that GOP's I picture.
+  int gopIndex = currentFrameIndex->getHeaderListIndex();
+  while (gopIndex > headerListIndex &&
+         videoHeaderList->headerTypeAt(gopIndex) != TTMpeg2VideoHeader::group_start_code)
+    gopIndex--;
+  bool earlierGop = false;
+  for (int i = headerListIndex + 1; i < gopIndex && !earlierGop; i++)
+    earlierGop = videoHeaderList->headerTypeAt(i) == TTMpeg2VideoHeader::group_start_code;
+
+  // position the lib: the sequence header gives it the sequence parameters;
+  // a GOP without its own is then entered at its GOP header (no full reset)
   seek(sequenceOffset);
+  if (earlierGop)
+    seek(videoHeaderList->headerAt(gopIndex)->headerOffset());
 
-  while (t_frame_info != NULL && frameInfo.type != 1)
+  while (t_frame_info != NULL && mFrameInfo.type != 1)
     decodeNextFrame();
 
   skipFrames(framePosition-intraFramePosition);

@@ -92,7 +92,7 @@ void TTQuickJumpWorker::operation()
     if (isMpeg2) {
       try {
         mpeg2Decoder->moveToFrameIndex(frameIndex);
-        TFrameInfo* frame = mpeg2Decoder->decodeMPEG2Frame(formatRGB32);
+        TFrameInfo* frame = mpeg2Decoder->getFrameInfo();
         if (frame && frame->Y) {
           QImage img(frame->Y, frame->width, frame->height, QImage::Format_RGB32);
           thumb = img.scaled(mThumbSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);

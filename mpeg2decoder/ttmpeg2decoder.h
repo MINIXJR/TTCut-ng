@@ -96,7 +96,8 @@ private:
   TTVideoHeaderList*  videoHeaderList;
   TTVideoIndexList*   videoIndexList;
   TPixelFormat        convType;
-  TFrameInfo*         t_frame_info;
+  TFrameInfo*         t_frame_info;   // &mFrameInfo after a decode, else null
+  TFrameInfo          mFrameInfo;     // this decoder's current picture
 };
 
 /* /////////////////////////////////////////////////////////////////////////////

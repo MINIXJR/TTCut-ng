@@ -151,6 +151,7 @@ decode_cancel_yuv      tux   300  test_decode_cancel_yuv
 adopt_paff             tux   300  test_adopt_paff
 h26x_idr_before        tux   300  test_h26x_idr_before
 h26x_framerate         tux   300  test_h26x_framerate
+mpeg2_decoder_contract tux   300  test_mpeg2_decoder_contract
 index_bundle_adopt     tux   300  test_index_bundle_adopt
 aspectscan_mpeg2       tux   300  test_aspectscan_mpeg2
 seqheader_missing      tux   300  test_seqheader_missing
@@ -470,6 +471,23 @@ open(sys.argv[2], 'wb').write(d[gop:seq])
 PY
   "$D/test_seqheader_missing" "$W/noseq.m2v"; }
 gate_headerlist_eof()    { need "$M2V"; "$D/gate_headerlist_eof.sh" "$D/test_headerlist_eof" "$M2V"; }
+# TTMpeg2Decoder contracts (audit run 13): own TFrameInfo per decoder, the
+# right picture in a GOP without its own sequence header (the fixture with
+# the 50th sequence header removed), quick-jump thumbnail = picture at its
+# index, a null list refused.
+gate_mpeg2_decoder_contract() { need "$M2V"
+  python3 - "$M2V" "$W/strip50.m2v" <<'PY' || exit 1
+import sys
+d = open(sys.argv[1], 'rb').read()
+i = -1
+for _ in range(50):
+    i = d.find(b'\x00\x00\x01\xb3', i + 1)
+    assert i >= 0
+gop = d.find(b'\x00\x00\x01\xb8', i)
+assert gop > i
+open(sys.argv[2], 'wb').write(d[:i] + d[gop:])
+PY
+  "$D/test_mpeg2_decoder_contract" "$M2V" "$W/strip50.m2v"; }
 # Two segments across the BLUE/BLACK/RED boundaries at 30 s and 31 s (50 fps).
 gate_segshape()  { need "$V264"; "$D/test_segshape" "$V264" 50 300 700 1450 1600; }
 gate_h264_seam() { need "$V264"; "$D/gate_h264_seam.sh" "$D/test_smartcut_seam" "$V264" 300 700 50; }
