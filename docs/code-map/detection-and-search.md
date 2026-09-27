@@ -1,5 +1,5 @@
 ---
-base_commit: 624be1f0649dc858d4b2a5599a3b7fd2dfd36117
+base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
 last_verified: 2026-09-26
 sources:
   - data/ttanalysislog.cpp

@@ -1006,6 +1006,46 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 15: Lese-Hypothesen der Karte `logging.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run15`)**. Wegwerf-Sonde
+  `probe_logging` und App-Läufe, alle mit eigenem `XDG_CONFIG_HOME`/
+  `XDG_CACHE_HOME` (Einstellungs-Schlüssel liegen unter `[Settings]` als
+  `LogFile\…` — zwei erste Läufe mit `[LogFile]` lasen nichts).
+  - **H2** „Logfile erstellen“ aus: die alte Sitzung wanderte trotzdem nach
+    `.1`, drei Zeilen landeten in der Datei — die Einstellung griff erst im
+    Hauptfenster. Jetzt hält `main` alle Zeilen (`holdUntilConfigured`), bis
+    `TTSettings::load` sie über `applyLogSettings` → `configure` freigibt;
+    mit `qt.qpa.*`-Debug fallen Zeilen schon im `QApplication`-Konstruktor an.
+  - **H3** in der GUI anders als gelesen: echter DVB-H.264-Schnitt (2500
+    Bilder) mit `LogLibav=true` → 0 `[libav]`-Zeilen, 9 × `Playback error:
+    [mpv:ffmpeg/video] h264: mmco: unref short failure`. libmpv übernimmt den
+    prozessweiten av_log-Callback; der Schalter war wirkungslos. Ohne mpv
+    verschluckte der Callback jeden libav-`ERROR`. Jetzt: Callback nach
+    `mpv_initialize` zurückgeholt, Fehler immer, der Rest mit Schalter.
+  - **H4** 128 `[][`-Zeilen in isolierten Gate-Logs, alle von abgefangenen
+    „Unsupported audio type“-Ausnahmen. Jetzt loggt der `(caller, line)`-
+    Konstruktor als `[error]`, FATAL trägt `[fatal]` und geht auf stderr.
+  - **H5** schlimmer als gelesen: ohne `gzip` blieb die `.uncompressed`-Datei
+    liegen und ab der zweiten Rotation wurde die vorletzte Sitzung gelöscht
+    (`rename` aufs belegte Ziel scheitert, dann `remove(.1)`). Jetzt zlib im
+    Prozess, kein Kindprozess mit 30-s-Wartezeit unter dem Mutex; neue
+    Build-Abhängigkeit `zlib1g-dev`.
+  - **H6** `[qt]` auf jeder eigenen `qDebug`-Zeile → `QT_MESSAGELOGCONTEXT`.
+  - **H1** `acm-cut.sh`/`qc-autocut.sh` rotierten das Nutzer-Log → eigenes
+    `XDG_CACHE_HOME`. Offen und nicht gemessen: zweite Instanz rotiert die
+    Datei einer laufenden.
+  - Gates neu (alle zuerst rot): `log_levels`, `log_file_off`,
+    `log_libav_mpv`, `log_rotation`, `log_app_file_off`,
+    `log_qdebug_context`, `acm_cut_isolated`; run-gates 129 → 136, alle PASS (die zwei Sanitizer-Gates brauchten zlib in ihrer eigenen Linkzeile).
+  - Umbau: 19 Kandidaten auf den 11 Quellen der Karte, 14 umgebaut (C
+    mechanisch: Ausnahme-Unterklassen erben die Konstruktoren, `explicit`,
+    `const QString&`, Initialisierungsliste, `logFilePath()` per Referenz),
+    5 deliberate (drei GUI-Klone gleicher Form, zwei Log-Methoden-Familien).
+    Store `docs/code-audit/build-verdicts-2026-09-27-run15.py`.
+  - Fallen: (1) mpv startet nur mit `LC_NUMERIC=C` — im Harness nach
+    `QApplication` setzen. (2) Harnesses, die Logger-Optionen setzen, müssen
+    das nach dem Laden der Einstellungen tun (`test_h26x_framerate`).
+
 - **Audit-Lauf 14: Lese-Hypothesen der Karte `subtitle-core.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run14`)**. Wegwerf-Sonde `probe_srt`
   (parse/lookup/cut mit dem echten Parser und Schnitt) auf kleinen SRT-Dateien.
