@@ -5,6 +5,17 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Subtitle glyph repair: the right line.** A line starting with Ö, Ä or Ü
+  or an empty OCR line shifted the pairing of subtitle lines and bitmap
+  lines, so a music note could be put on the wrong line or missed (10 of
+  1035 subtitles of a measured episode). Gate: `ocr_glyphs_selftest`.
+- **ttcut-demux says when the glyph repair cannot run.** Without Pillow
+  (`python3-pil`) the repair was skipped silently; it now warns.
+- **VDR example script** (`tools/vdr-demux-example.sh`): it stopped at once
+  whenever `ttcut-demux` was installed, pointed to a TTCut-ng path that no
+  longer exists, and a second recording with the same name overwrote the
+  first one's files - it now gets its recording date appended. Gate:
+  `vdr_example_names`.
 - **A new cut shows up at once in the bar above the video slider.** The bar
   kept the old cuts until the slider was moved. Gate: `navigator_refresh`.
 - **"Create log file" off means no log file.** TTCut-ng still moved the

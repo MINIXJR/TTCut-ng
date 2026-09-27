@@ -35,6 +35,7 @@ MATCH_RATIO = 0.93       # fraction of equal pixels required for a template hit
 SIZE_SLACK = 2           # max bbox size difference (px) template vs candidate
 TIME_SLACK_MS = 400      # SRT cue start vs spupng start tolerance
 GAP_FRACTION = 0.25      # gap >= band_height * this separates glyph groups
+DOT_FRACTION = 0.4       # band shorter than tallest * this is umlaut dots
 
 
 def binarize(img):
@@ -55,7 +56,31 @@ def ink_rows(img):
             start = None
     if start is not None:
         bands.append((start, h))
-    return bands
+    return _join_dot_bands(bands)
+
+
+def _join_dot_bands(bands):
+    """Join bands far shorter than the tallest one to the band below.
+
+    The dots of a capital umlaut stand above every other glyph of a line, so
+    they come out as a band of their own; SRT line K is paired with band K.
+    """
+    if len(bands) < 2:
+        return bands
+    tallest = max(bottom - top for top, bottom in bands)
+    joined, carry = [], None
+    for top, bottom in bands:
+        if bottom - top < tallest * DOT_FRACTION:
+            carry = top if carry is None else carry
+            continue
+        joined.append((top if carry is None else carry, bottom))
+        carry = None
+    if carry is not None:                   # thin band at the bottom
+        if joined:
+            joined[-1] = (joined[-1][0], bands[-1][1])
+        else:
+            joined.append((carry, bands[-1][1]))
+    return joined
 
 
 def glyph_groups(band):
@@ -225,6 +250,16 @@ def fix_line(line, edge, repl, confusions=frozenset()):
     return rest[:-1].rstrip() + " " + repl + post + eol, "replaced %r" % char
 
 
+def visible_lines(raw, indices):
+    """Indices of the lines that carry text once the markup is gone.
+
+    The OCR sometimes writes an empty line (only <font> tags) between two
+    lines of a cue; the bitmap has no ink band for it, and SRT line K must
+    meet ink band K.
+    """
+    return [i for i in indices if re.sub(r"<[^>]*>", "", raw[i]).strip()]
+
+
 def cmd_match(args):
     templates = load_templates(args.templates)
     if not templates:
@@ -241,8 +276,9 @@ def cmd_match(args):
         if cue is None or abs(cue[0] - want_ms) > TIME_SLACK_MS or not cue[1]:
             continue
         img = None
+        lines = visible_lines(raw, cue[1])
         for edge in ("start", "end"):
-            for band in range(len(cue[1])):
+            for band in range(len(lines)):
                 if img is None:
                     img = binarize(Image.open(png))
                 glyph, nbands = edge_glyph(img, band, edge)
@@ -250,7 +286,7 @@ def cmd_match(args):
                     continue
                 for name, repl, tmpl, conf in templates:
                     if glyphs_equal(glyph, tmpl):
-                        idx = cue[1][band]
+                        idx = lines[band]
                         new, action = fix_line(raw[idx], edge, repl, conf)
                         if action:
                             raw[idx] = new
@@ -335,7 +371,27 @@ def cmd_selftest(_args=None):
         if not ok:
             print("          got      %r / %r" % (got_line, got_act))
             print("          expected %r / %r" % (want_line, want_act))
-    print("%d/%d passed" % (len(cases) - fails, len(cases)))
+    # Line bands: the dots of a capital umlaut (\u00d6, \u00c4, \u00dc) stand
+    # above every other glyph of the line and must not form a band of their
+    # own - SRT line K is paired with band K (measured: 10 of 1035 cues of a
+    # Babylon Berlin episode had one band too many).
+    img = Image.new("L", (40, 64), 0)
+    for top, bottom in ((0, 3), (6, 28), (38, 60)):     # dots, line 1, line 2
+        for y in range(top, bottom):
+            for x in range(4, 36):
+                img.putpixel((x, y), 255)
+    bands = ink_rows(img)
+    ok = len(bands) == 2
+    fails += not ok
+    print("%-4s bands umlaut dots + two lines -> %d band(s) %r" % ("ok" if ok else "FAIL", len(bands), bands))
+    # ... and an OCR line without text has no band to meet
+    raw = [F + "Ja.</font>\r\n", F + "</font>\r\n", F + "</font>" + F + "Kommen Sie.</font>\r\n"]
+    got = visible_lines(raw, [0, 1, 2])
+    ok = got == [0, 2]
+    fails += not ok
+    print("%-4s lines  empty OCR line skipped -> %r" % ("ok" if ok else "FAIL", got))
+    total = len(cases) + 2
+    print("%d/%d passed" % (total - fails, total))
     return 1 if fails else 0
 
 

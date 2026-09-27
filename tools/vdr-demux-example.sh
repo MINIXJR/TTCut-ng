@@ -34,12 +34,13 @@ SCRIPT_START=$(date +%s)
 # Konfiguration — adapt these paths to your system
 IN_PFAD="$HOME/Videos/VDR"
 OUT_PFAD="$HOME/Videos/TTCut_Output"
-TTCUT="ttcut-ng"
-TTCUT_DEMUX="ttcut-demux"
+# Source tree for the fallback below (cmake --build build).
+TTCUT_SRC="/usr/local/src/TTCut-ng"
 
-# Fallback auf lokale Version falls nicht installiert
-[ -x "$(command -v "$TTCUT_DEMUX")" ] || TTCUT_DEMUX="/usr/local/src/TTCut-ng/tools/ttcut-demux/ttcut-demux"
-[ -x "$(command -v "$TTCUT")" ] || TTCUT="/usr/local/src/TTCut-ng/ttcut-ng"
+# Installed programs as absolute paths - the checks below test the path with
+# -x, which a bare command name would fail; otherwise the source tree.
+TTCUT_DEMUX=$(command -v ttcut-demux || echo "$TTCUT_SRC/tools/ttcut-demux/ttcut-demux")
+TTCUT=$(command -v ttcut-ng || echo "$TTCUT_SRC/build/ttcut-ng")
 
 # Farben (deaktiviert wenn stdout kein Terminal ist)
 if [ -t 1 ]; then
@@ -81,6 +82,23 @@ vdr_unmask() {
     s="${s//#23/#}"
     s="${s//\//_}"
     printf '%s' "$s"
+}
+
+# Output names already used in this run. VDR keeps a repeat recording in the
+# same episode directory, so two recordings can carry the same name; the
+# second gets its recording date and time appended - otherwise it would
+# overwrite the first one's video, audio, .info and log. Sets UNIQUE_NAME
+# instead of printing it: a $(...) subshell would lose the USED_NAMES entry.
+declare -A USED_NAMES=()
+unique_name() {
+    local name="$1" rec_dir="$2" base n=2
+    if [ -n "${USED_NAMES[$name]+x}" ]; then
+        name="${name}_$(basename "$rec_dir" .rec | sed -E 's/^([0-9]{4}-[0-9]{2}-[0-9]{2})\.([0-9]{2})\.([0-9]{2})\..*/\1_\2.\3/')"
+        base="$name"
+        while [ -n "${USED_NAMES[$name]+x}" ]; do name="${base}_$n"; n=$((n + 1)); done
+    fi
+    USED_NAMES[$name]=1
+    UNIQUE_NAME="$name"
 }
 
 # Logdatei einfärben statt sie farbig zu erzeugen.
@@ -261,6 +279,8 @@ for ts_datei in "${TS_FILES[@]}"; do
     # VDR directory structure: .../Series/Episode/Date.Time.rec/00001.ts
     # Use the directory directly above .rec as the show/episode name
     show_name="$(vdr_unmask "$(basename "$(dirname "$rec_dir")")")"
+    unique_name "$show_name" "$rec_dir"
+    show_name="$UNIQUE_NAME"
 
     info "Demuxe: $show_name ($(basename "$ts_datei"))"
     progress_update $((CURRENT_STEP * 100)) "Demuxe: $show_name"$'\n'"(${DEMUX_COUNT}/${#TS_FILES[@]})"
