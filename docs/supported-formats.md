@@ -176,14 +176,15 @@ Pillarbox detection analyzes I-frames only and is a sub-option under the aspect 
 |------|---------|---------|
 | **libmpeg2** | MPEG-2 decoding | `libmpeg2-4-dev` |
 | **FFmpeg libraries** | H.264/H.265 decoding, encoding | `libavformat-dev`, `libavcodec-dev`, `libswscale-dev` |
+| **libmpv** | Playback, linked in-process | `libmpv-dev` |
+| **zlib** | Compressing rotated log files | `zlib1g-dev` |
 
 ### Optional (but recommended)
 
 | Tool | Purpose | Package |
 |------|---------|---------|
-| **ffmpeg** | MP4 output container (stream-copy) | `ffmpeg` |
-| **mplex** | MPEG multiplexing | `mjpegtools` |
-| **mpv** | Video preview playback | `mpv` |
+| **ffmpeg** | `ffmpeg`/`ffprobe` for `tools/ttcut-demux` (TS → ES) | `ffmpeg` |
+| **mplex** | MPEG-2 multiplexing | `mjpegtools` |
 
 ---
 

@@ -14,21 +14,27 @@ libavformat         (ffmpeg/libav)
 libavcodec          (ffmpeg/libav)
 libavutil           (ffmpeg/libav)
 libswscale          (ffmpeg/libav)
+libavfilter         (ffmpeg/libav)
+libswresample       (ffmpeg/libav)
+libmpv              (Wiedergabe, im Programm eingebunden - nicht optional)
+zlib                (Log-Rotation)
+
+Zum Bauen: cmake, ninja
 
 Debian/Ubuntu:
-  apt install qt6-base-dev qt6-l10n-tools libmpeg2-4-dev libavformat-dev libavcodec-dev \
-              libavutil-dev libswscale-dev libavfilter-dev libswresample-dev
+  apt install cmake ninja-build qt6-base-dev qt6-l10n-tools libmpeg2-4-dev \
+              libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
+              libavfilter-dev libswresample-dev libmpv-dev zlib1g-dev
 
 
 2. Benoetigte Hilfsprogramme
 ----------------------------
 
-mpv           fuer die Schnitt-Vorschau (optional)
-ffmpeg        fuer das MP4-Ausgabecontainer-Muxing (optional)
-mplex         fuer MPEG-Multiplexing (optional)
+ffmpeg        ffmpeg/ffprobe fuer tools/ttcut-demux (TS -> ES)
+mplex         fuer MPEG-2-Multiplexing (optional)
 
 Debian/Ubuntu:
-  apt install ffmpeg mpv mjpegtools
+  apt install ffmpeg mjpegtools
 
 
 3. Uebersetzen

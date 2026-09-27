@@ -44,7 +44,7 @@ sudo apt install cmake ninja-build qt6-base-dev qt6-l10n-tools libmpeg2-4-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
   libavfilter-dev libswresample-dev libmpv-dev zlib1g-dev
 
-# Optional: MP4-Output, MPEG-2 Multiplexing, Qualitätsprüfung
+# Optional: ttcut-demux (ffmpeg), MPEG-2 Multiplexing, Qualitätsprüfung
 sudo apt install ffmpeg mjpegtools python3-numpy
 ```
 
