@@ -244,6 +244,7 @@ class TTAVData : public QObject
     void           watchOpenAbort(TTThreadTask* task, const std::function<void(const QString&)>& report);
     void           recordTrackOpenFailure(const QString& kind, const QString& filePath, const QString& reason);
     void           clearOpenOutcome();
+    void           warnLater(const QString& title, const QString& text);
     //! Ends a project read as aborted: drops the pool hooks, clears the
     //! current item (the main window closes what was loaded), emits
     //! readProjectFileAborted and frees mpProjectData.

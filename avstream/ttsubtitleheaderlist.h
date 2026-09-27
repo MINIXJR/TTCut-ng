@@ -36,7 +36,7 @@
 class TTSubtitleHeaderList : public TTHeaderList
 {
  public:
-  TTSubtitleHeaderList( int size );
+  explicit TTSubtitleHeaderList( int size );
 
   TTSubtitleHeader* subtitleHeaderAt( int index );
 
@@ -47,7 +47,7 @@ class TTSubtitleHeaderList : public TTHeaderList
   QString textAt( int ms );
 
   // By start time; stable, so equal starts keep their file order.
-  void sort();
+  void sort() override;
 };
 
 #endif //TTSUBTITLEHEADERLIST_H

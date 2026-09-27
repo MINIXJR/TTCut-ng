@@ -104,7 +104,7 @@ TTAVTypes::AVStreamType TTSrtSubtitleStream::streamType() const
 QTime TTSrtSubtitleStream::streamLengthTime()
 {
   if (!header_list || header_list->count() == 0) return QTime(0, 0, 0, 0);
-  TTSubtitleHeader* lastHeader = (TTSubtitleHeader*)header_list->at(header_list->count()-1);
+  const TTSubtitleHeader* lastHeader = static_cast<const TTSubtitleHeader*>(header_list->at(header_list->count()-1));
   return lastHeader->endTime();
 }
 
@@ -138,7 +138,7 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
       mAbort = false;
       throw TTAbortException("User abort request in TTSrtSubtitleStream::cut!");
     }
-    TTSubtitleHeader* header = (TTSubtitleHeader*)header_list->at(index);
+    const TTSubtitleHeader* header = static_cast<const TTSubtitleHeader*>(header_list->at(index));
     if (header->startMSec() > end)
       return;
     // Ended before this segment: after the last cue searchTimeIndex() answers
@@ -158,7 +158,7 @@ void TTSrtSubtitleStream::cut(int start, int end, TTCutParameter* cp)
         .arg(header->text());
 
     QByteArray utf8 = subtitleCode.toUtf8();
-    stream_buffer->directWrite((quint8*)utf8.constData(), utf8.length());
+    stream_buffer->directWrite(reinterpret_cast<const quint8*>(utf8.constData()), utf8.length());
 
     cp->setNumPicturesWritten(picsWritten);
     index++;
