@@ -856,9 +856,14 @@ void TTSettings::load()
 
   settings.endGroup();
 
-  // Apply persisted log file path to TTMessageLogger singleton.
-  // Empty string restores the XDG default (see TTMessageLogger::defaultLogPath()).
-  TTMessageLogger::getInstance()->setLogFilePath(mLogFilePath);
+  applyLogSettings();
+}
+
+void TTSettings::applyLogSettings() const
+{
+  // An empty path means the XDG default (TTMessageLogger::defaultLogPath()).
+  TTMessageLogger::getInstance()->configure(mLogFilePath, mCreateLogFile,
+                                            mLogModeConsole, mLogModeExtended);
 }
 
 void TTSettings::save()

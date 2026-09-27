@@ -29,11 +29,13 @@ TTException::TTException(const QString& msg) : message(msg)
 }
 
 TTException::TTException(const QString& caller, int line, const QString& msg)
+  : message(msg)
 {
-  message = msg;
 
+  // An error line, not a fatal one: most of these exceptions are caught and
+  // reported to the user, the program goes on.
   TTMessageLogger* log = TTMessageLogger::getInstance();
-  log->fatalMsg(caller, line, msg);
+  log->errorMsg(caller, line, msg);
 }
 
 const QString& TTException::getMessage() const

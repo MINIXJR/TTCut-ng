@@ -13,10 +13,11 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QStandardPaths>
-#include <QProcess>
 
 #include <cstdarg>
 #include <cstdio>
+
+#include <zlib.h>
 
 const int   TTMessageLogger::STD_LOG_MODE   = TTMessageLogger::SUMMARIZE;
 int         TTMessageLogger::sLogMode        = TTMessageLogger::STD_LOG_MODE;
@@ -55,8 +56,6 @@ TTMessageLogger::TTMessageLogger(int mode)
     , mLogFilePath(defaultLogPath())
     , mLogFileOpenAttempted(false)
     , mLogEnabled(true)
-    , mLogConsole(false)
-    , mLogExtended(false)
 {
     sLogMode = mode;
 }
@@ -84,6 +83,12 @@ TTMessageLogger* TTMessageLogger::getInstance(int mode)
 // -----------------------------------------------------------------------------
 void TTMessageLogger::setLogFilePath(const QString& path)
 {
+    std::lock_guard<std::mutex> lock(mLogMutex);
+    setLogFilePathLocked(path);
+}
+
+void TTMessageLogger::setLogFilePathLocked(const QString& path)
+{
     // Empty → fall back to XDG default, THEN compare. Ohne diese Konvertierung
     // VOR dem Idempotenz-Check würde z.B. TTSettings::load() (das pro App-Start
     // dreimal mit "" aufruft, wenn der User keinen Pfad gesetzt hat) jedes Mal
@@ -102,53 +107,66 @@ void TTMessageLogger::setLogFilePath(const QString& path)
     mLogFileOpenAttempted = false;
 }
 
-void TTMessageLogger::enableLogFile(bool enable)
+void TTMessageLogger::holdUntilConfigured()
 {
-    // File-write toggle ONLY — does not touch sLogLevel any more
-    // (consumers configure sLogLevel via setLogLevel / setLogModeExtended).
-    mLogEnabled = enable;
+    std::lock_guard<std::mutex> lock(mLogMutex);
+    mHold = true;
+}
+
+void TTMessageLogger::configure(const QString& path, bool fileEnabled,
+                                bool console, bool extended)
+{
+    std::lock_guard<std::mutex> lock(mLogMutex);
+    setLogFilePathLocked(path);
+    mLogEnabled = fileEnabled;
+    sLogMode    = console ? (SUMMARIZE | CONSOLE) : SUMMARIZE;
+    sLogLevel   = extended ? ALL : MINIMAL;
+
+    if (!mHold) return;
+    mHold = false;
+    // The held lines passed the default level (ALL); filter them again with
+    // the configured one before they reach the console or the file.
+    for (const HeldLine& held : mHeld) {
+        if (!passesLevel(held.type)) continue;
+        if ((sLogMode & CONSOLE) && !held.onStderr) {
+            fprintf(stderr, "%s\n", held.text.toUtf8().constData());
+            fflush(stderr);
+        }
+        writeMsg(held.text);
+    }
+    mHeld.clear();
 }
 
 void TTMessageLogger::setLogModeConsole(bool console)
 {
-    if (console) {
-        sLogMode = SUMMARIZE | CONSOLE;
-    } else {
-        sLogMode = SUMMARIZE;
-    }
-    mLogConsole = console;
-}
-
-void TTMessageLogger::setLogModeExtended(bool extended)
-{
-    mLogExtended = extended;
-    sLogLevel = (mLogExtended) ? ALL : MINIMAL;
+    std::lock_guard<std::mutex> lock(mLogMutex);
+    sLogMode = console ? (SUMMARIZE | CONSOLE) : SUMMARIZE;
 }
 
 // -----------------------------------------------------------------------------
 // Per-type message methods (QString variants)
 // -----------------------------------------------------------------------------
-void TTMessageLogger::infoMsg(QString caller, int line, QString msgString)
+void TTMessageLogger::infoMsg(const QString& caller, int line, const QString& msgString)
 {
     logMsg(INFO, caller, line, msgString);
 }
 
-void TTMessageLogger::warningMsg(QString caller, int line, QString msgString)
+void TTMessageLogger::warningMsg(const QString& caller, int line, const QString& msgString)
 {
     logMsg(WARNING, caller, line, msgString);
 }
 
-void TTMessageLogger::errorMsg(QString caller, int line, QString msgString)
+void TTMessageLogger::errorMsg(const QString& caller, int line, const QString& msgString)
 {
     logMsg(ERROR, caller, line, msgString);
 }
 
-void TTMessageLogger::fatalMsg(QString caller, int line, QString msgString)
+void TTMessageLogger::fatalMsg(const QString& caller, int line, const QString& msgString)
 {
     logMsg(FATAL, caller, line, msgString);
 }
 
-void TTMessageLogger::debugMsg(QString caller, int line, QString msgString)
+void TTMessageLogger::debugMsg(const QString& caller, int line, const QString& msgString)
 {
     logMsg(DEBUG, caller, line, msgString);
 }
@@ -156,7 +174,7 @@ void TTMessageLogger::debugMsg(QString caller, int line, QString msgString)
 // -----------------------------------------------------------------------------
 // printf-style overloads — dynamic via QString::vasprintf (no truncation)
 // -----------------------------------------------------------------------------
-void TTMessageLogger::infoMsg(QString caller, int line, const char* msg, ...)
+void TTMessageLogger::infoMsg(const QString& caller, int line, const char* msg, ...)
 {
     va_list ap; va_start(ap, msg);
     QString s = formatVa(msg, ap);
@@ -164,7 +182,7 @@ void TTMessageLogger::infoMsg(QString caller, int line, const char* msg, ...)
     logMsg(INFO, caller, line, s);
 }
 
-void TTMessageLogger::warningMsg(QString caller, int line, const char* msg, ...)
+void TTMessageLogger::warningMsg(const QString& caller, int line, const char* msg, ...)
 {
     va_list ap; va_start(ap, msg);
     QString s = formatVa(msg, ap);
@@ -172,7 +190,7 @@ void TTMessageLogger::warningMsg(QString caller, int line, const char* msg, ...)
     logMsg(WARNING, caller, line, s);
 }
 
-void TTMessageLogger::errorMsg(QString caller, int line, const char* msg, ...)
+void TTMessageLogger::errorMsg(const QString& caller, int line, const char* msg, ...)
 {
     va_list ap; va_start(ap, msg);
     QString s = formatVa(msg, ap);
@@ -180,7 +198,7 @@ void TTMessageLogger::errorMsg(QString caller, int line, const char* msg, ...)
     logMsg(ERROR, caller, line, s);
 }
 
-void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
+void TTMessageLogger::debugMsg(const QString& caller, int line, const char* msg, ...)
 {
     va_list ap; va_start(ap, msg);
     QString s = formatVa(msg, ap);
@@ -191,8 +209,19 @@ void TTMessageLogger::debugMsg(QString caller, int line, const char* msg, ...)
 // -----------------------------------------------------------------------------
 // Common write path
 // -----------------------------------------------------------------------------
-void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
-                              QString msgString, bool show)
+bool TTMessageLogger::passesLevel(MsgType type)
+{
+    if (type == ERROR || type == FATAL) return true;
+    switch (sLogLevel) {
+        case NONE:     return false;
+        case MINIMAL:  return type == WARNING;
+        case EXTENDED: return type == WARNING || type == INFO;
+        default:       return true;
+    }
+}
+
+void TTMessageLogger::logMsg(MsgType msgType, const QString& caller, int line,
+                              const QString& msgString, bool show)
 {
     // Serialize across threads: the new libav log callback runs on libav's
     // own decode/encode worker threads, so concurrent writes to mLogFile and
@@ -203,17 +232,12 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     QFileInfo fInfo(caller);
     QString msgCaller = fInfo.baseName();
 
-    if ((sLogLevel == NONE) && ((msgType != ERROR) && (msgType != FATAL))) return;
-
-    if ((sLogLevel == MINIMAL) && ((msgType != ERROR) && (msgType != FATAL) &&
-                                  (msgType != WARNING))) return;
-
-    if ((sLogLevel == EXTENDED) && ((msgType != ERROR) && (msgType != FATAL) &&
-                                   (msgType != WARNING) && (msgType != INFO))) return;
+    if (!passesLevel(msgType)) return;
 
     if (msgType == INFO)    msgTypeStr = "info";
     if (msgType == WARNING) msgTypeStr = "warning";
     if (msgType == ERROR)   msgTypeStr = "error";
+    if (msgType == FATAL)   msgTypeStr = "fatal";
     if (msgType == DEBUG)   msgTypeStr = "debug";
 
     QString logMsgStr = (line > 0)
@@ -223,7 +247,8 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
     // TODO: implement message window display
     (void)show;
 
-    if (sLogMode & CONSOLE || msgType == ERROR) {
+    const bool onStderr = (sLogMode & CONSOLE) || msgType == ERROR || msgType == FATAL;
+    if (onStderr) {
         // Direct stderr write (not qDebug) — with the Qt message handler
         // installed in main(), qDebug would re-enter ttQtMessageHandler →
         // debugMsg → logMsg(DEBUG, ...), duplicating every ERROR entry as
@@ -232,7 +257,31 @@ void TTMessageLogger::logMsg(MsgType msgType, QString caller, int line,
         fflush(stderr);
     }
 
+    if (mHold) {
+        mHeld.push_back({msgType, logMsgStr, onStderr});
+        return;
+    }
     writeMsg(logMsgStr);
+}
+
+// Compresses src into dst (gzip format) in-process; false on any error, with
+// dst removed. Runs under the logger's mutex, so no child process and no
+// timeout (the former `gzip` process could block every logging thread for
+// up to 30 s, and without `gzip` on the PATH sessions were lost).
+static bool gzipFile(const QString& src, const QString& dst)
+{
+    QFile in(src);
+    if (!in.open(QIODevice::ReadOnly)) return false;
+    const QByteArray data = in.readAll();
+    if (in.error() != QFileDevice::NoError) return false;
+
+    gzFile out = gzopen(QFile::encodeName(dst).constData(), "wb");
+    if (!out) return false;
+    bool ok = data.isEmpty()
+           || gzwrite(out, data.constData(), static_cast<unsigned>(data.size())) == data.size();
+    if (gzclose(out) != Z_OK) ok = false;
+    if (!ok) QFile::remove(dst);
+    return ok;
 }
 
 static void rotateLogFile(const QString& path)
@@ -265,18 +314,15 @@ static void rotateLogFile(const QString& path)
     const QString lvl2gz = path + ".2.gz";
     if (QFile::exists(lvl1)) {
         QFile::remove(lvl2gz);
-        QProcess gz;
-        gz.setStandardOutputFile(lvl2gz, QIODevice::Truncate);
-        gz.start("gzip", QStringList() << "-c" << lvl1);
-        gz.waitForFinished(30000);
-        if (gz.exitStatus() == QProcess::NormalExit && gz.exitCode() == 0) {
-            QFile::remove(lvl1);
-        } else {
-            // gzip schiefgegangen: rohes Move statt komprimiertes Backup,
-            // damit die History nicht verloren geht.
-            QFile::remove(lvl2gz);
-            QFile::rename(lvl1, lvl2gz + ".uncompressed");
+        // A failed compression (disk full, no write permission) drops this
+        // older session: keeping it under another name would leave a file no
+        // later rotation moves, and step 4 needs the .1 slot.
+        if (!gzipFile(lvl1, lvl2gz)) {
+            fprintf(stderr, "TTMessageLogger: cannot compress %s, previous session dropped\n",
+                    lvl1.toUtf8().constData());
+            fflush(stderr);
         }
+        QFile::remove(lvl1);
     }
 
     // 4) <path> (Text der letzten Session) → <path>.1
@@ -311,7 +357,7 @@ void TTMessageLogger::ensureLogFileOpen()
     mLogFile = f;
 }
 
-void TTMessageLogger::writeMsg(QString msgString)
+void TTMessageLogger::writeMsg(const QString& msgString)
 {
     if (!mLogEnabled) return;          // file writes suppressed (LOW-1 fix)
 

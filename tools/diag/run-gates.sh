@@ -108,6 +108,13 @@ audio_es_input         unit  300  test_audio_es_input
 framerate_assumed      unit  120  test_h26x_framerate
 framerate_hint         unit  120  test_framerate_hint
 subtitle_core          unit  60   test_subtitle_core
+log_levels             unit  60   test_logging
+log_file_off           unit  60   test_logging
+log_libav_mpv          unit  60   test_logging
+log_rotation           unit  60   test_logging
+log_app_file_off       tux   300  -
+log_qdebug_context     tux   300  -
+acm_cut_isolated       tux   300  -
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -437,6 +444,75 @@ gate_framerate_assumed() { need "$TD/novui.264" "$TD/novui.265"
                                "$W/norate.264=25:Assumed:log=.info without frame_rate and no SPS timing"; }
 # SRT parser, time lookup and cut (audit run 14): .srt files written by the harness.
 gate_subtitle_core()     { "$D/test_subtitle_core" "$W"; }
+# Logger (audit run 15, docs/code-map/logging.md). FATAL must also reach stderr.
+gate_log_levels() {
+  "$D/test_logging" levels "$W/levels.log" 2>"$W/stderr" || exit 1
+  grep -q "MARK-FATAL" "$W/stderr" || { echo "FAIL: the FATAL line did not reach stderr"; exit 1; }
+  echo "PASS: the FATAL line reached stderr"
+}
+# With "create log file" off, nothing may rotate or write the log - not the
+# settings load (harness) and not the lines of the app's start (app gate).
+log_settings_file_off() {
+  mkdir -p "$XDG_CONFIG_HOME/TTCut-ng" "$XDG_CACHE_HOME/ttcut-ng"
+  printf '[Settings]\nLogFile\\CreateLogFile=false\n' > "$XDG_CONFIG_HOME/TTCut-ng/TTCut-ng.conf"
+  echo "MARK-OLD-SESSION" > "$XDG_CACHE_HOME/ttcut-ng/logfile.log"
+}
+log_left_alone() {   # $1 = log file, $2 = what ran
+  if [ "$(cat "$1")" != "MARK-OLD-SESSION" ] || [ -e "$1.1" ]; then
+    echo "FAIL: $2 rotated or wrote the log:"; ls "$(dirname "$1")"; head -3 "$1"; exit 1
+  fi
+  echo "PASS: $2 left the log alone"
+}
+gate_log_file_off() {
+  log_settings_file_off
+  "$D/test_logging" fileoff || exit 1
+  log_left_alone "$XDG_CACHE_HOME/ttcut-ng/logfile.log" "loading the settings (log file off)"
+}
+gate_log_libav_mpv()    { "$D/test_logging" mpv "$W/mpv.log"; }
+# Two rotations without gzip on the PATH: every session must survive, as a
+# valid .gz, and no .uncompressed fallback may appear.
+gate_log_rotation() {
+  local L="$W/r/logfile.log" f
+  mkdir -p "$W/r" "$W/nobin"
+  echo "MARK-SESSION-A" > "$L"; echo "MARK-SESSION-B" > "$L.1"
+  for _ in 1 2; do PATH="$W/nobin" "$D/test_logging" rotate "$L" >/dev/null || exit 1; done
+  grep -q "MARK-ROTATE-RUN" "$L.1" \
+    && [ "$(gzip -dc "$L.2.gz" 2>/dev/null)" = "MARK-SESSION-A" ] \
+    && [ "$(gzip -dc "$L.3.gz" 2>/dev/null)" = "MARK-SESSION-B" ] \
+    || { echo "FAIL: sessions lost in the rotation:"; for f in "$W"/r/*; do echo "  ${f##*/}: $( (gzip -dc "$f" 2>/dev/null || cat "$f") | head -1)"; done; exit 1; }
+  ls "$W"/r/*.uncompressed >/dev/null 2>&1 && { echo "FAIL: a .uncompressed fallback was left"; exit 1; }
+  echo "PASS: two rotations without gzip kept every session"
+}
+# qt.qpa debug categories log while QApplication is still being built, i.e.
+# before the settings are loaded.
+gate_log_app_file_off() {
+  need "$V264" "$A264"; mkdir -p "$W/out"
+  log_settings_file_off
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  QT_LOGGING_RULES="qt.qpa.*=true" LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/p.ttcut" \
+    --auto-cut "$W/out/p.mkv" >"$W/app.out" 2>&1 || { echo "FAIL: auto-cut failed"; exit 1; }
+  log_left_alone "$XDG_CACHE_HOME/ttcut-ng/logfile.log" "the app (log file off)"
+}
+# The application's own qDebug lines carry file and line, not [qt].
+gate_log_qdebug_context() {
+  need "$V264" "$A264"; mkdir -p "$W/out"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  LC_ALL=C.UTF-8 "$ROOT/build/ttcut-ng" --project "$W/p.ttcut" --auto-cut "$W/out/p.mkv" \
+    >"$W/app.out" 2>&1 || { echo "FAIL: auto-cut failed"; exit 1; }
+  local log="$XDG_CACHE_HOME/ttcut-ng/logfile.log"
+  grep -Eq '^\[debug\]\[[0-9:]+\]\[ttcutprojectdata:[0-9]+\] TTCutProjectData::parseVideoSection' "$log" \
+    || { echo "FAIL: qDebug line without file:line - got: $(grep -m1 'parseVideoSection' "$log")"; exit 1; }
+  echo "PASS: $(grep -m1 'parseVideoSection' "$log")"
+}
+# acm-cut.sh must not rotate the caller's log (XDG_CACHE_HOME stands for ~/.cache).
+gate_acm_cut_isolated() {
+  need "$V264" "$A264"; mkdir -p "$W/out" "$XDG_CACHE_HOME/ttcut-ng"
+  echo "MARK-OLD-SESSION" > "$XDG_CACHE_HOME/ttcut-ng/logfile.log"
+  ttcut_project_xml "$V264" "$A264" deu 100:599 > "$W/p.ttcut"
+  "$D/acm-cut.sh" "$W/p.ttcut" "$W/out/p.mkv" >"$W/acm.out" 2>&1
+  [ -s "$W/out/p.mkv" ] || { echo "FAIL: acm-cut produced no output"; cat "$W/acm.out"; exit 1; }
+  log_left_alone "$XDG_CACHE_HOME/ttcut-ng/logfile.log" "acm-cut.sh"
+}
 gate_framerate_hint()    { need "$TD/novui.264" "$TD/cqm.264"
                            "$D/test_framerate_hint" "$TD/novui.264" "$TD/cqm.264" "$W"; }
 # Frame rate without .info = SPS timing (raw H.264 r_frame_rate is 2x for
@@ -741,7 +817,7 @@ gate_task_cleanup_order() {
       -o "$W/test_task_cleanup_order" "$D/test_task_cleanup_order.cpp" \
       "$ROOT"/common/{ttthreadtask,ttthreadtaskpool,ttmessagelogger,ttexception,ttsettings,istatusreporter}.cpp \
       "$mocdir"/moc_{ttthreadtask,ttthreadtaskpool,ttsettings,istatusreporter}.cpp \
-      $(pkg-config --libs Qt6Core) -lpthread || exit 1
+      $(pkg-config --libs Qt6Core zlib) -lpthread || exit 1
   "$W/test_task_cleanup_order"
 }
 

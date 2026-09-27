@@ -30,9 +30,12 @@ BIN=$(readlink -f "${3:-$ROOT/build/ttcut-ng}")
 [ -f "$PRJ" ] || { echo "no such project: $PRJ" >&2; exit 2; }
 cd "$ROOT" || exit 2
 rm -f "$OUT"
-QT_QPA_PLATFORM=offscreen "$BIN" --project "$PRJ" --auto-cut "$OUT" >/dev/null 2>&1 &
+# A cache of its own: every TTCut process rotates logfile.log on its first
+# line, and the user's ~/.cache/ttcut-ng keeps the real sessions.
+LOGCACHE="$(dirname "$OUT")/xdg-cache"
+XDG_CACHE_HOME="$LOGCACHE" QT_QPA_PLATFORM=offscreen "$BIN" --project "$PRJ" --auto-cut "$OUT" >/dev/null 2>&1 &
 PID=$!
-echo "started pid=$PID -> $OUT"
+echo "started pid=$PID -> $OUT (log: $LOGCACHE/ttcut-ng/logfile.log)"
 last=-1; stable=0
 for i in $(seq 1 240); do          # up to 240*15s = 60 min hard cap
   sleep 15

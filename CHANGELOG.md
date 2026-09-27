@@ -5,6 +5,18 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **"Create log file" off means no log file.** TTCut-ng still moved the
+  earlier sessions one generation on and wrote the first lines of every
+  start before it read the setting. Gates: `log_file_off`, `log_app_file_off`.
+- **libav errors reach the log.** While the player was running, every libav
+  message - TTCut-ng's own decoders and encoders included - went to the player
+  and came back as "Playback error", and the "log libav" switch had no
+  effect. Errors are now always logged, everything below them with the
+  switch. Gates: `log_levels`, `log_libav_mpv`.
+- **The log rotation no longer loses sessions.** Without the `gzip` program
+  it left a `.uncompressed` file behind and from the second start on deleted
+  the previous session. The compression now runs inside TTCut-ng. Gate:
+  `log_rotation`.
 - **Cut subtitles no longer repeat the last subtitle.** When a kept part
   started after the last subtitle, the cut wrote that subtitle again - with
   its end before its start and a text from a part that had been cut away.
@@ -223,6 +235,12 @@ All notable changes to TTCut-ng are documented in this file.
   source position and time, offers *Keep result* or *Discard*, and copies the
   list to the clipboard on request; the log names every frame. `--auto-cut`
   logs and keeps. Gate: `unrewritten_frames`.
+- **Clearer log lines.** An error that TTCut-ng catches and reports is logged
+  as `[error]` instead of an untagged fatal line; a real fatal line carries
+  `[fatal]` and also goes to the console. TTCut-ng's own debug lines name
+  their source file and line instead of `[qt]`. Gates: `log_levels`,
+  `log_qdebug_context`.
+- **Building needs `zlib1g-dev`** (log rotation).
 
 ## v0.85.0 (2026-09-22)
 

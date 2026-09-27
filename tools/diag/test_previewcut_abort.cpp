@@ -525,18 +525,12 @@ int main(int argc, char** argv)
   QString logTail;
   if (logFile.open(QIODevice::ReadOnly | QIODevice::Text))
     logTail = QString::fromUtf8(logFile.readAll());
-  // TTMessageLogger's fatalMsg() leaves the level tag EMPTY (a pre-existing
-  // quirk, see common/ttmessagelogger.cpp:222-225: no "if (msgType ==
-  // FATAL)" branch sets msgTypeStr), so a fatal line reads "[][HH:MM:SS]
-  // [file:line] msg" -- matched here via the empty-bracket "[][" marker
-  // instead of a "[fatal]" tag that is never actually written. Same
-  // detection convention Task 9's harness used (see task-9-report.md,
-  // "log level of a cancel").
+  // A fatal line reads "[fatal][HH:MM:SS][file:line] msg".
   QStringList suspectLines;
   for (const QString& line : logTail.split('\n')) {
     if (line.contains("[error]", Qt::CaseInsensitive) ||
         line.contains("[warning]", Qt::CaseInsensitive) ||
-        line.contains("[][", Qt::CaseSensitive))
+        line.contains("[fatal]", Qt::CaseInsensitive))
       suspectLines << line;
   }
   if (!suspectLines.isEmpty())

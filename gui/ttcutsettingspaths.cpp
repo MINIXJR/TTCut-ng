@@ -9,7 +9,6 @@
 
 #include "ttcutsettingspaths.h"
 #include "../common/ttsettings.h"
-#include "../common/ttmessagelogger.h"
 #include <QFileDialog>
 #include <QApplication>
 #include <QStyle>
@@ -32,7 +31,7 @@ void TTCutSettingsPaths::setTabData()
 {
   leTempDirectory->setText(TTSettings::instance()->tempDirPath());
   leCutDir->setText(TTSettings::instance()->cutDirPath());
-  // Show the currently active logfile path (from TTMessageLogger if empty in settings)
+  // Empty = the default path below the XDG cache directory.
   leLogfile->setText(TTSettings::instance()->logFilePath());
 }
 
@@ -41,8 +40,6 @@ void TTCutSettingsPaths::saveTabData()
   TTSettings::instance()->setTempDirPath(leTempDirectory->text().trimmed());
   TTSettings::instance()->setCutDirPath(leCutDir->text().trimmed());
   TTSettings::instance()->setLogFilePath(leLogfile->text().trimmed());
-  // Apply immediately to TTMessageLogger
-  TTMessageLogger::getInstance()->setLogFilePath(leLogfile->text().trimmed());
 }
 
 void TTCutSettingsPaths::onTmpDirectoryOpen()

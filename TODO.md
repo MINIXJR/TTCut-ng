@@ -364,6 +364,13 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Zweite Instanz und das Log einer laufenden** (Audit-Lauf 15, nicht
+  gemessen). Jeder TTCut-Prozess rotiert `logfile.log` beim ersten Eintrag;
+  läuft schon eine Instanz, schreibt sie nach der Umbenennung weiter in die
+  Datei, die jetzt `logfile.log.1` heißt, und die nächste Rotation komprimiert
+  sie unter ihr weg. Erst messen (zwei Instanzen, Log-Inhalte vergleichen),
+  dann entscheiden (z. B. Sperrdatei, Log je Prozess). Karte `logging.md`.
+
 - **Umbau-Projekte aus den Code-Audits** (angelegt 2026-09-25, Regel „offen
   darf nicht offen bleiben" in `docs/quality-roadmap.md`). Befunde, die für
   einen Audit-Batch zu groß sind; im Urteils-Speicher

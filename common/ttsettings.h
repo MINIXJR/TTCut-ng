@@ -28,8 +28,11 @@ public:
   ~TTSettings() override;
 
   // Persistence
-  void load();              // QSettings -> fields
+  void load();              // QSettings -> fields, then applyLogSettings()
   void save();              // fields -> QSettings
+  // Push the log options (file on/off, path, console, extended) into
+  // TTMessageLogger - the one place that does.
+  void applyLogSettings() const;
 
   // ----- Common Options group (Task 4) -------------------------------------
   bool    fastSlider() const         { return mFastSlider; }

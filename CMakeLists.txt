@@ -56,6 +56,9 @@ add_compile_definitions(
   # Qt's supported override to keep Q_ASSERT active in non-Debug configs -
   # see the comment above the NDEBUG stripping for why NDEBUG alone does not.
   QT_FORCE_ASSERTS
+  # qDebug & co. carry file and line in non-Debug builds too; without it the
+  # message handler sees no context and every line is logged as [qt].
+  QT_MESSAGELOGCONTEXT
 )
 
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Widgets Gui Xml OpenGL OpenGLWidgets)
@@ -65,6 +68,8 @@ pkg_check_modules(AVLIBS REQUIRED IMPORTED_TARGET
   libavformat libavcodec libavutil libswscale libavfilter libswresample)
 pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 pkg_check_modules(MPEG2 REQUIRED IMPORTED_TARGET libmpeg2 libmpeg2convert)
+# Log rotation compresses the previous session in-process (TTMessageLogger).
+pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
 
 set(TTCUT_HEADERS
   common/ttcut.h
@@ -360,7 +365,7 @@ target_include_directories(ttcut-core PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/ttcut-c
 target_include_directories(ttcut-core PUBLIC ${CMAKE_SOURCE_DIR}/ui)
 target_link_libraries(ttcut-core PUBLIC
   Qt6::Core Qt6::Widgets Qt6::Gui Qt6::Xml Qt6::OpenGL Qt6::OpenGLWidgets
-  PkgConfig::AVLIBS PkgConfig::MPV PkgConfig::MPEG2
+  PkgConfig::AVLIBS PkgConfig::MPV PkgConfig::MPEG2 PkgConfig::ZLIB
   Threads::Threads)
 
 # .qrc files sit on the executable, not the static lib - resources inside a

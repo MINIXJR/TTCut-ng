@@ -1,6 +1,6 @@
 ---
-base_commit: cbed246d1f3620d05fb25f6d0e8f95bac6017056
-last_verified: 2026-09-26
+base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
+last_verified: 2026-09-27
 sources:
   - common/ttsettings.h
   - common/ttsettings.cpp
@@ -113,7 +113,7 @@ flowchart TD
 
 ## Assumptions, contracts & pitfalls
 
-- **`TTSettings::load()`** — assumes it may run any number of times; guarantees the disk keys win over memory for every key present; pitfall: absent keys keep the in-memory value, so a "reset" through `load()` is only as complete as the file, and a test that loads twice in one process measures the previous case.
+- **`TTSettings::load()`** — ends with `applyLogSettings()` (log file, path, console, extended into `TTMessageLogger`, see [logging.md](logging.md)); assumes it may run any number of times; guarantees the disk keys win over memory for every key present; pitfall: absent keys keep the in-memory value, so a "reset" through `load()` is only as complete as the file, and a test that loads twice in one process measures the previous case.
 - **`TTSettings::setEncoderCodec()`** — contract: derive the Working-Set for a NEW codec; pitfall: the early return means "same codec" never re-syncs. Consequence in the GUI: a cut-dialog CRF override made for video A stays in force for a later video B of the same codec opened in the same session (no `closeProject` in between, e.g. a multi-video project or a second `onReadVideoStream`). Read-derived, not measured. **Ruled deliberate 2026-09-12** (code-audit run 3, contract finding 2): re-syncing on every `onAVItemChanged` would wipe a project's overrides on each item switch, so the override surviving video B is the intended behaviour; no gate.
 - **`TTAVData::onReadProjectFileFinished`** — the "project values win" contract depends on `currentAVItemChanged` being delivered synchronously (same thread, auto connection) before `deserializeSettings`; the comment in `setEncoderCodec` documents it, nothing enforces it.
 - **`TTSettingsDialog`** — contract "nothing is written before OK" is broken by the muxer page's live `setMkvCreateChapters`; combined with `openSettingsDialog` saving unconditionally after `exec()`, a toggled-then-cancelled checkbox reaches disk. Read-derived.
