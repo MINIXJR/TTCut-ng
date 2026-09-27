@@ -38,17 +38,17 @@ class TTSrtSubtitleStream : public TTSubtitleStream
   Q_OBJECT
 
   public:
-    TTSrtSubtitleStream(const QFileInfo &f_info);
-    virtual ~TTSrtSubtitleStream();
+    explicit TTSrtSubtitleStream(const QFileInfo &f_info);
+    ~TTSrtSubtitleStream() override;
 
-    virtual TTAVTypes::AVStreamType streamType() const;
+    TTAVTypes::AVStreamType streamType() const override;
 
-    virtual void cut(int start, int end, TTCutParameter* cp);
+    void cut(int start, int end, TTCutParameter* cp) override;
 
-    virtual int  createHeaderList();
-    virtual int  createIndexList(){return 0;}
+    int  createHeaderList() override;
+    int  createIndexList() override {return 0;}
 
-    QTime        streamLengthTime();
+    QTime streamLengthTime() override;
 };
 
 #endif // TTSRTSUBTITLESTREAM_H

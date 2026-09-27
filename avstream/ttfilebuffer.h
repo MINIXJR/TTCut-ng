@@ -26,6 +26,9 @@ public:
   TTFileBuffer(QString name, QIODevice::OpenMode mode);
   TTFileBuffer(QString name, QIODevice::OpenMode mode, int bufferSize);
   ~TTFileBuffer();
+  // owns a QFile and a ring buffer: not copyable
+  TTFileBuffer(const TTFileBuffer&) = delete;
+  TTFileBuffer& operator=(const TTFileBuffer&) = delete;
 
   // file stream
   bool    open();    
@@ -37,7 +40,7 @@ public:
   // read / write
   void    readByte( quint8 &byte1 );
   int     readByte( quint8* byteArray, int length);
-  QString readLine(QString delimiter = "\n");
+  QString readLine(const QString& delimiter = "\n");
 
   // search
   void    initTSearch();

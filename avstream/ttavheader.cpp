@@ -279,12 +279,12 @@ void TTSubtitleHeader::setText(const QString& value)
   mText = value;
 }
 
-QTime TTSubtitleHeader::startTime()
+QTime TTSubtitleHeader::startTime() const
 {
   return QTime::fromMSecsSinceStartOfDay(mStartMSec);
 }
 
-int TTSubtitleHeader::startMSec()
+int TTSubtitleHeader::startMSec() const
 {
   return mStartMSec;
 }
@@ -294,12 +294,12 @@ void TTSubtitleHeader::setStartTime(QTime start)
   mStartMSec = start.msecsSinceStartOfDay();
 }
 
-QTime TTSubtitleHeader::endTime()
+QTime TTSubtitleHeader::endTime() const
 {
   return QTime::fromMSecsSinceStartOfDay(mEndMSec);
 }
 
-int TTSubtitleHeader::endMSec()
+int TTSubtitleHeader::endMSec() const
 {
   return mEndMSec;
 }

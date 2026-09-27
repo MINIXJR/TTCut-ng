@@ -32,8 +32,6 @@
 
 #include <algorithm>
 
-bool subtitleHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
-
 TTSubtitleHeaderList::TTSubtitleHeaderList( int size )
   : TTHeaderList( size )
 {
@@ -44,7 +42,7 @@ TTSubtitleHeader* TTSubtitleHeaderList::subtitleHeaderAt( int index )
 {
   checkIndexRange(index);
     
-  return (TTSubtitleHeader*)at( index );
+  return static_cast<TTSubtitleHeader*>(at( index ));
 }
 
 int TTSubtitleHeaderList::searchTimeIndex( int search_time )
@@ -52,13 +50,11 @@ int TTSubtitleHeaderList::searchTimeIndex( int search_time )
   if (size() == 0) return -1;
 
   int abs_time = 0;
-  TTSubtitleHeader* subtitle_header;
   int index = 0;
 
   do
   {
-    subtitle_header = (TTSubtitleHeader*)at(index);
-    abs_time = (int)(subtitle_header->endMSec());
+    abs_time = static_cast<TTSubtitleHeader*>(at(index))->endMSec();
     index++;
   }
   while ( abs_time < search_time && index < size());
@@ -67,16 +63,21 @@ int TTSubtitleHeaderList::searchTimeIndex( int search_time )
   return index-1;
 }
 
-void TTSubtitleHeaderList::sort()
+QString TTSubtitleHeaderList::textAt( int ms )
 {
-  std::sort( begin(), end(), subtitleHeaderListCompareItems );
+  QStringList texts;
+  for (int i = qMax(0, searchTimeIndex(ms)); i < size(); ++i) {
+    const TTSubtitleHeader* header = subtitleHeaderAt(i);
+    if (header->startMSec() > ms) break;
+    if (header->endMSec() >= ms) texts << header->text();
+  }
+  return texts.join("\r\n");
 }
 
-bool subtitleHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 )
+void TTSubtitleHeaderList::sort()
 {
-  // the values for the display order of two items are compared
-  int time1 = (int)((TTSubtitleHeader*)head_1)->startMSec();
-  int time2 = (int)((TTSubtitleHeader*)head_2)->startMSec();
-
-  return (time1 < time2);
+  std::stable_sort(begin(), end(), [](const TTAVHeader* a, const TTAVHeader* b) {
+    return static_cast<const TTSubtitleHeader*>(a)->startMSec()
+         < static_cast<const TTSubtitleHeader*>(b)->startMSec();
+  });
 }

@@ -36,14 +36,18 @@
 class TTSubtitleHeaderList : public TTHeaderList
 {
  public:
-  TTSubtitleHeaderList( int size );
+  explicit TTSubtitleHeaderList( int size );
 
   TTSubtitleHeader* subtitleHeaderAt( int index );
 
   int searchTimeIndex( int search_time );
 
- protected:
-  void sort();
+  // Text of every cue that covers ms, joined by CRLF: overlapping cues show
+  // together. Needs the list sorted by start time.
+  QString textAt( int ms );
+
+  // By start time; stable, so equal starts keep their file order.
+  void sort() override;
 };
 
 #endif //TTSUBTITLEHEADERLIST_H

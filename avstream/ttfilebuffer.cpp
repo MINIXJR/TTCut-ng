@@ -319,18 +319,17 @@ int TTFileBuffer::readByte(quint8* byteArray, int length)
 /* /////////////////////////////////////////////////////////////////////////////
  * Read a line from the file buffer up to the given delimiter
  */
-QString TTFileBuffer::readLine(QString delimiter)
+QString TTFileBuffer::readLine(const QString& delimiter)
 {
   // Cap line length to prevent unbounded memory consumption from a single
   // line without delimiter (~1 MB is well above any realistic SRT/VDR mark
   // line, and bounds malicious or corrupt input).
   static const int MAX_LINE_BYTES = 1 << 20;
   QString line;
-  quint8 byte;
 
   try {
     while (!atEnd()) {
-      byte = readByte();
+      const quint8 byte = readByte();
       line.append(QChar(byte));
 
       if (line.endsWith(delimiter)) {
@@ -374,7 +373,7 @@ QString TTFileBuffer::readLine(QString delimiter)
  */
 quint64 TTFileBuffer::directWrite(const quint8* w_buffer, int w_length)
 {
-  const qint64 result = file->write((char*)w_buffer, w_length);
+  const qint64 result = file->write(reinterpret_cast<const char*>(w_buffer), w_length);
 
   if (result != (qint64)w_length) {
     throw TTIOException(__FILE__, __LINE__,
@@ -402,7 +401,7 @@ void TTFileBuffer::fillBuffer()
   if (isAtEnd)
     throw TTFileBufferException(TTFileBufferException::StreamEOF);
 
-  qint64 rLength = file->read((char*)&cBuffer[((writePos+1)&bufferMask)], readInc);
+  qint64 rLength = file->read(reinterpret_cast<char*>(&cBuffer[((writePos+1)&bufferMask)]), readInc);
 
   if (rLength > 0)
     writePos += rLength;

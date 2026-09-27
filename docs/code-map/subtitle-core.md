@@ -1,5 +1,5 @@
 ---
-base_commit: 4e08a13b994faef71669aab2613267681c60f5ca
+base_commit: cbed246d1f3620d05fb25f6d0e8f95bac6017056
 last_verified: 2026-09-27
 sources:
   - avstream/ttsrtsubtitlestream.h
@@ -71,50 +71,48 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `TASK` -.-> `TYPE` / `PARSE` | `TTOpenSubtitleTask::operation`: `TTSubtitleType` by suffix only (`srt`); anything else throws “Unsupported subtitle type”. Then `createHeaderList()`; `finished` follows whatever the count. |
-| `FILE` → `FB` → `PARSE` | The line end is decided **once** from the first line (`\r\n` if its last byte before `\n` is `\r`, else `\n`); every later `readLine` splits on exactly that string. `TTFileBuffer::readLine` maps each byte 1:1 onto a `QChar` (Latin-1), caps a line at 1 MiB. |
-| `PARSE` → `HL` | Per cue: index line (`simplified().toInt()`; a gap in the numbering is only a log warning), timing line — `left(12)` as start, `right(12)` as end, parsed with `hh:mm:ss,zzz` — then text lines up to an empty line (64 KiB cap), trailing CRLF stripped, text decoded as UTF-8 with Latin-1 fallback (`decodeSrtLine`). Times stored as ms since 00:00 (`QTime::msecsSinceStartOfDay`, 0 for an unparsable time). Cues are appended in **file order**; `sort()` exists but nothing calls it. |
-| `HL` → `LEN` | `streamLengthTime()` = end time of the **last** cue in file order; the subtitle list shows it. |
-| `HL` → `SEARCH` | `searchTimeIndex(t)`: linear scan from index 0 for the first cue whose **end** ≥ t; when none, the **last** index; −1 for an empty list. Assumes cues sorted by time and not overlapping. |
-| `SEARCH` → `OVL` | `getSubtitleTextAtCurrentFrame`: t = `currentIndex / frameRate` in ms **minus the track delay**; shows the found cue only if start ≤ t ≤ end. Only the first cue by end time is a candidate — of two overlapping cues the other one is never shown. |
+| `FILE` → `FB` → `PARSE` | Lines are split on LF and a CR before it is dropped, so CRLF, LF and files mixing both read the same. `TTFileBuffer::readLine` maps each byte 1:1 onto a `QChar` (Latin-1), caps a line at 1 MiB. |
+| `PARSE` → `HL` | Per cue: index line (`simplified().toInt()`; a gap in the numbering is only a log warning), timing line matched by `srtTimingLine()` — `h:mm:ss,zzz --> h:mm:ss,zzz` with a comma or a dot, one- or two-digit hours, 1–3 fraction digits, anything after the end time ignored; an unreadable line skips its cue with a warning — then text lines up to an empty line (64 KiB cap), trailing CRLF stripped, text decoded as UTF-8 with Latin-1 fallback (`decodeSrtLine`). Times stored as ms since 00:00. After reading, `sort()` orders the list by start time (stable). |
+| `HL` → `LEN` | `streamLengthTime()` = end time of the cue that **starts** last; the subtitle list shows it. |
+| `HL` → `SEARCH` | `searchTimeIndex(t)`: linear scan from index 0 for the first cue whose **end** ≥ t; when none, the **last** index; −1 for an empty list. `textAt(t)` starts there and collects every cue with start ≤ t ≤ end, joined by CRLF. |
+| `SEARCH` → `OVL` | `getSubtitleTextAtCurrentFrame`: t = `currentIndex / frameRate` in ms **minus the track delay**; `textAt(t)` — overlapping cues show together, one per line. |
 | `CUTT` → `CUT` | `cutSubtitleTracks`: per track one target file, per keep segment `cut(startMs, endMs)` with `startMs = round(first·1000) − delay`, `endMs = round(second·1000) − 1 − delay`; `cutInIndex` carries the output position (next segment = previous `cutOutIndex + 1`). A 0-byte result is removed and reported as not ok. |
-| `SEARCH` / `HL` → `CUT` → `OUT` | From `searchTimeIndex(start)` on, every cue until one starts after `end`: start clamped to `start`, end clamped to `end`, both shifted by `cutIn − start`, written as `n\r\nhh:mm:ss,zzz --> hh:mm:ss,zzz\r\ntext\r\n\r\n` (UTF-8, running number across segments). |
+| `SEARCH` / `HL` → `CUT` → `OUT` | From `searchTimeIndex(start)` on, every cue until one starts after `end`, skipping cues that end before `start` (after the last cue the lookup answers with that cue): start clamped to `start`, end clamped to `end`, both shifted by `cutIn − start`, written as `n\r\nhh:mm:ss,zzz --> hh:mm:ss,zzz\r\ntext\r\n\r\n` (UTF-8, running number across segments). |
 
 ## Assumptions, contracts & pitfalls
 
-- **File order = time order.** Parser, lookup and cut all rely on cues
-  sorted by time; nothing sorts or checks.
-- **One timing-line format.** Exactly `hh:mm:ss,zzz --> hh:mm:ss,zzz` at the
-  line's start and end; what `ttcut-demux` writes (ccextractor, ffmpeg
-  SubRip) fits.
-- **One line-end style per file**, taken from the first line.
+- **Sorted by start time after reading**; lookup and cut rely on it. The
+  cut writes cues in that order, not in file order.
+- **Tolerant timing line**, strict about the `-->` and the time fields;
+  what `ttcut-demux` writes (ccextractor, ffmpeg SubRip) always fits (ten
+  real files, 9065 cues, read identically to an independent parse).
 - **Delay moves the lookup, not the cues:** overlay and cut both subtract
   the track delay from the video time (mkvmerge sign convention).
 - **The cut writes CRLF and UTF-8** whatever the source used.
 
-### Reading hypotheses for audit run 14
+### Audit run 14 (reading hypotheses H1–H6, measured)
 
-From reading only; each needs a runtime proof or refutation first.
+Throwaway probe on small crafted `.srt` files; gate `subtitle_core`.
 
-- **H1 — a keep segment after the last cue writes that cue again,
-  inverted.** `searchTimeIndex` returns the last index when every cue ended
-  before `start`; the cut loop does not check the end, clamps the start to
-  `start` and keeps the cue's earlier end — a cue with end before start, once
-  per such segment.
-- **H2 — a timing line in another shape becomes a cue at 00:00:00.** A dot
-  instead of the comma, one-digit hours, or coordinates after the end time
-  (`X1:… Y1:…`) make `left(12)`/`right(12)` unparsable → 0 ms, silently.
-- **H3 — overlapping cues: the overlay shows only one.** mpv, fed the same
-  file, shows both.
-- **H4 — mixed line ends lose cues.** A file whose first line ends in CRLF
-  and later lines in LF (or the reverse) is split on the wrong delimiter:
-  lines merge up to the 1 MiB cap or keep a stray `\r`.
-- **H5 — a UTF-8 BOM** makes the first index line unparsable: a numbering
-  warning, and possibly more.
-- **H6 — cues out of time order** break `searchTimeIndex` for the overlay and
-  the cut (hand-edited or merged SRTs).
+- **H1 confirmed and fixed.** Keep segments [0, 2499] + [7000, 8999] over
+  cues at 1/3/5 s wrote `00:00:02,500 --> 00:00:01,500 Drei` — end before
+  start, text from a removed part. Cues ending before the segment are
+  skipped now.
+- **H2 confirmed and fixed.** Dot, one-digit hour and position fields gave
+  0..0 ms (Qt returns 0 for an invalid `QTime`).
+- **H3 confirmed and fixed.** Overlapping cues: the overlay showed one;
+  `textAt` shows all.
+- **H4 confirmed and fixed.** CRLF then LF: only the first cue survived.
+- **H5 not a problem.** A UTF-8 BOM reads fine.
+- **H6 confirmed and fixed.** Out-of-order cues were missed by the
+  overlay; the list is sorted after reading.
+
+None of the ten real SRT files on disk shows H2/H3/H4/H6; H1 hits any cut
+whose last kept part starts after the last cue.
 
 ## Redundancy / consolidation candidates
 
-None found: `searchTimeIndex` exists only in `TTSubtitleHeaderList`, and
-the parser, the lookup and the cut each have one site. The cut's clamp and
+None found: `searchTimeIndex` / `textAt` exist only in
+`TTSubtitleHeaderList`, and the parser, the lookup and the cut each have one
+site. The cut's clamp and
 shift logic lives only in `TTSrtSubtitleStream::cut`.

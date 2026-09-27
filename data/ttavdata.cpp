@@ -946,6 +946,16 @@ void TTAVData::recordTrackOpenFailure(const QString& kind, const QString& filePa
   mTrackOpenFailures.append(QString("%1: %2 - %3").arg(kind, filePath, reason));
 }
 
+// A warning in the GUI once the current event is done (the load chain runs
+// to its end first); --auto-cut (mNonInteractive) has only the log.
+void TTAVData::warnLater(const QString& title, const QString& text)
+{
+  if (mNonInteractive) return;
+  QTimer::singleShot(0, this, [title, text] {
+    QMessageBox::warning(TTCut::mainWindow, title, text);
+  });
+}
+
 void TTAVData::clearOpenOutcome()
 {
   mTrackOpenFailures.clear();
@@ -1135,13 +1145,9 @@ void TTAVData::onThreadPoolExit()
     for (const QString& f : failures)
       log->warningMsg(__FILE__, __LINE__, QString("Track not opened - %1").arg(f));
     emit trackOpenFailed(failures);
-    if (!mNonInteractive) {
-      QTimer::singleShot(0, this, [failures] {
-        QMessageBox::warning(TTCut::mainWindow, tr("Tracks not opened"),
-            tr("%n track(s) could not be opened and were skipped:\n\n%1", "", failures.size())
-                .arg(failures.join("\n")));
-      });
-    }
+    warnLater(tr("Tracks not opened"),
+        tr("%n track(s) could not be opened and were skipped:\n\n%1", "", failures.size())
+            .arg(failures.join("\n")));
   }
 
   // Videos opened at an assumed frame rate (no .info, no SPS timing): the
@@ -1149,16 +1155,12 @@ void TTAVData::onThreadPoolExit()
   if (!mFrameRateAssumed.isEmpty()) {
     const QStringList files = mFrameRateAssumed;
     emit frameRateAssumed(files);
-    if (!mNonInteractive) {
-      QTimer::singleShot(0, this, [files] {
-        QMessageBox::warning(TTCut::mainWindow, tr("Frame rate assumed"),
-            tr("No frame rate from a .info file and none in the video stream (SPS timing).\n"
-               "Assumed %1 fps for:\n\n%2\n\n"
-               "Cuts and audio positions are wrong if the real frame rate differs. "
-               "Demux the recording with ttcut-demux to get a .info file with the frame rate.")
-                .arg(kTTAssumedFrameRate).arg(files.join("\n")));
-      });
-    }
+    warnLater(tr("Frame rate assumed"),
+        tr("No frame rate from a .info file and none in the video stream (SPS timing).\n"
+           "Assumed %1 fps for:\n\n%2\n\n"
+           "Cuts and audio positions are wrong if the real frame rate differs. "
+           "Demux the recording with ttcut-demux to get a .info file with the frame rate.")
+            .arg(kTTAssumedFrameRate).arg(files.join("\n")));
   }
   clearOpenOutcome();
 
@@ -1307,13 +1309,9 @@ void TTAVData::onReadProjectFileFinished()
     log->errorMsg(__FILE__, __LINE__,
         QString("project %1 not loaded: %2 and %3 cannot be cut together - %4")
             .arg(project, fileA, fileB, reason));
-    if (!mNonInteractive) {
-      QTimer::singleShot(0, this, [project, fileA, fileB, reason] {
-        QMessageBox::warning(TTCut::mainWindow, tr("Project Not Loaded"),
-            tr("The project %1 was not loaded:\n\n%2 and %3 cannot be cut into one "
-               "output.\n%4").arg(project, fileA, fileB, reason));
-      });
-    }
+    warnLater(tr("Project Not Loaded"),
+        tr("The project %1 was not loaded:\n\n%2 and %3 cannot be cut into one "
+           "output.\n%4").arg(project, fileA, fileB, reason));
     endAbortedProjectLoad();
     return;
   }
@@ -1377,12 +1375,8 @@ void TTAVData::onReadProjectFileAborted()
     const QString reason  = mVideoOpenFailure;
     log->errorMsg(__FILE__, __LINE__,
         QString("project %1 not loaded: %2").arg(project, reason));
-    if (!mNonInteractive) {
-      QTimer::singleShot(0, this, [project, reason] {
-        QMessageBox::warning(TTCut::mainWindow, tr("Project Not Loaded"),
-            tr("The project %1 was not loaded:\n\n%2").arg(project, reason));
-      });
-    }
+    warnLater(tr("Project Not Loaded"),
+        tr("The project %1 was not loaded:\n\n%2").arg(project, reason));
   }
 
   endAbortedProjectLoad();
