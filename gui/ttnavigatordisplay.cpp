@@ -29,11 +29,10 @@ TTNavigatorDisplay::TTNavigatorDisplay(QWidget* parent)
 {
   setupUi( this );
 
-  mAVDataItem      = 0;
-  isControlEnabled = false;
-  minValue         = 0;
-  maxValue         = 1;
-  scaleFactor      = 1.0;
+  mAVDataItem     = 0;
+  mControlEnabled = false;
+  mMinValue       = 0;
+  mMaxValue       = 1;
 
   // Hide the child QFrame so it doesn't cover our paint area
   navigatorDisplay->hide();
@@ -50,22 +49,8 @@ TTNavigatorDisplay::TTNavigatorDisplay(QWidget* parent)
  */
 void TTNavigatorDisplay::controlEnabled(bool enabled)
 {
-  isControlEnabled = enabled;
+  mControlEnabled = enabled;
   update();
-}
-
-/*!
- * resizeEvent
- */
-void TTNavigatorDisplay::resizeEvent(QResizeEvent* event)
-{
-  QFrame::resizeEvent(event);
-
-  if (maxValue > minValue) {
-    scaleFactor = width() / (double)(maxValue - minValue);
-  } else {
-    scaleFactor = 1.0;
-  }
 }
 
 /*!
@@ -73,7 +58,7 @@ void TTNavigatorDisplay::resizeEvent(QResizeEvent* event)
  */
 void TTNavigatorDisplay::paintEvent(QPaintEvent*)
 {
-  if (mAVDataItem != 0 && isControlEnabled)
+  if (mAVDataItem != 0 && mControlEnabled)
     drawCutList();
 }
 
@@ -82,17 +67,13 @@ void TTNavigatorDisplay::paintEvent(QPaintEvent*)
  */
 void TTNavigatorDisplay::drawCutList()
 {
-  int   cutIn;
-  int   cutOut;
   QRect clientRect = rect();
   int   startY = clientRect.y();
   int   height = clientRect.height();
 
-  if (maxValue > minValue) {
-    scaleFactor = clientRect.width() / (double)(maxValue - minValue);
-  } else {
-    scaleFactor = 1.0;
-  }
+  const double scaleFactor = (mMaxValue > mMinValue)
+      ? clientRect.width() / (double)(mMaxValue - mMinValue)
+      : 1.0;
 
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing, false);
@@ -109,8 +90,8 @@ void TTNavigatorDisplay::drawCutList()
   for (int i = 0; i < mAVDataItem->cutCount(); i++) {
       TTCutItem item = mAVDataItem->cutListItemAt(i);
 
-      cutIn    = item.cutInIndex();
-      cutOut   = item.cutOutIndex();
+      const int cutIn  = item.cutInIndex();
+      const int cutOut = item.cutOutIndex();
       const int startX       = clientRect.x() + (int)(cutIn * scaleFactor);
       const int segmentWidth = (int)((cutOut - cutIn) * scaleFactor);
 
@@ -141,19 +122,19 @@ void TTNavigatorDisplay::drawCutList()
 void TTNavigatorDisplay::onAVItemChanged(TTAVItem* avDataItem)
 {
   if (avDataItem == 0) {
-    mAVDataItem      = 0;
-    minValue         = 0;
-    maxValue         = 1;
-    isControlEnabled = false;
+    mAVDataItem     = 0;
+    mMinValue       = 0;
+    mMaxValue       = 1;
+    mControlEnabled = false;
     update();
     return;
   }
 
-  minValue         = 0;
-  maxValue         = avDataItem->videoStream()->frameCount() - 1;
-  if (maxValue < 1) maxValue = 1;
-  mAVDataItem      = avDataItem;
-  isControlEnabled = true;
+  mMinValue       = 0;
+  mMaxValue       = avDataItem->videoStream()->frameCount() - 1;
+  if (mMaxValue < 1) mMaxValue = 1;
+  mAVDataItem     = avDataItem;
+  mControlEnabled = true;
 
   update();
 }

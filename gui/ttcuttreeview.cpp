@@ -212,7 +212,7 @@ void TTCutTreeView::onAppendItem(const TTCutItem& item)
 
   updateHintColumn(treeItem, item);
 
-  //emit refreshDisplay();
+  emit refreshDisplay();
 }
 
 /*!
@@ -222,6 +222,8 @@ void TTCutTreeView::onRemoveItem(int index)
 {
   delete videoCutList->takeTopLevelItem(index);
   mAllowSelectionChanged = true;
+
+  emit refreshDisplay();
 }
 
 /*!
@@ -346,8 +348,6 @@ void TTCutTreeView::onEntryDelete()
     TTCutItem cutItem = mpAVData->cutItemAt(index);
     emit removeItem(cutItem);
   }
-
-  emit refreshDisplay();
 }
 
 /*!

@@ -14,23 +14,34 @@
 #include <QFile>
 #include <QSettings>
 #include <QStandardPaths>
-#include <algorithm>
 
-TTWindowGeometry ttLoadWindowGeometry(QSettings& settings, const QString& group)
+// [base]width and [base]height, both present and positive.
+static bool readSize(const QSettings& settings, const QString& base, int* w, int* h)
+{
+  if (!settings.contains(base + "width") || !settings.contains(base + "height"))
+    return false;
+  *w = settings.value(base + "width").toInt();
+  *h = settings.value(base + "height").toInt();
+  return *w > 0 && *h > 0;
+}
+
+static void writeSize(QSettings& settings, const QString& base, const QSize& size)
+{
+  settings.setValue(base + "width",  size.width());
+  settings.setValue(base + "height", size.height());
+}
+
+TTWindowGeometry ttLoadWindowGeometry(const QSettings& settings, const QString& group)
 {
   TTWindowGeometry g;
   const QString base = group + QLatin1Char('/');
 
   // Every key must be present: a half-written group means a half-placed
   // window, which is worse than falling back to the default position.
-  const QStringList required = {"x", "y", "width", "height"};
-  if (std::any_of(required.begin(), required.end(),
-                  [&](const QString& key) { return !settings.contains(base + key); }))
+  int w = 0, h = 0;
+  if (!settings.contains(base + "x") || !settings.contains(base + "y") ||
+      !readSize(settings, base, &w, &h))
     return g;
-
-  const int w = settings.value(base + "width").toInt();
-  const int h = settings.value(base + "height").toInt();
-  if (w <= 0 || h <= 0) return g;
 
   g.rect      = QRect(settings.value(base + "x").toInt(),
                       settings.value(base + "y").toInt(), w, h);
@@ -45,21 +56,15 @@ void ttSaveWindowGeometry(QSettings& settings, const QString& group,
   const QString base = group + QLatin1Char('/');
   settings.setValue(base + "x",         normalRect.x());
   settings.setValue(base + "y",         normalRect.y());
-  settings.setValue(base + "width",     normalRect.width());
-  settings.setValue(base + "height",    normalRect.height());
+  writeSize(settings, base, normalRect.size());
   settings.setValue(base + "maximized", maximized);
 }
 
 TTWindowGeometry ttLoadDialogSize(const QSettings& settings, const QString& group)
 {
   TTWindowGeometry g;
-  const QString base = group + QLatin1Char('/');
-  if (!settings.contains(base + "width") || !settings.contains(base + "height"))
-    return g;
-
-  const int w = settings.value(base + "width").toInt();
-  const int h = settings.value(base + "height").toInt();
-  if (w <= 0 || h <= 0) return g;
+  int w = 0, h = 0;
+  if (!readSize(settings, group + QLatin1Char('/'), &w, &h)) return g;
 
   g.rect  = QRect(0, 0, w, h);
   g.valid = true;
@@ -68,9 +73,7 @@ TTWindowGeometry ttLoadDialogSize(const QSettings& settings, const QString& grou
 
 void ttSaveDialogSize(QSettings& settings, const QString& group, const QSize& size)
 {
-  const QString base = group + QLatin1Char('/');
-  settings.setValue(base + "width",  size.width());
-  settings.setValue(base + "height", size.height());
+  writeSize(settings, group + QLatin1Char('/'), size);
 }
 
 QRect ttClampToArea(const QRect& want, const QRect& available)

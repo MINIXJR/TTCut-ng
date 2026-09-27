@@ -35,7 +35,7 @@ struct TTWindowGeometry
 
 // [group] x, y, width, height, maximized. A group missing any key, or carrying
 // a non-positive width/height, is reported invalid rather than half-applied.
-TTWindowGeometry ttLoadWindowGeometry(QSettings& settings, const QString& group);
+TTWindowGeometry ttLoadWindowGeometry(const QSettings& settings, const QString& group);
 void ttSaveWindowGeometry(QSettings& settings, const QString& group,
                           const QRect& normalRect, bool maximized);
 

@@ -19,7 +19,7 @@
 // second); a static one paints once and then never again.
 //
 //   usage: test_pulse_stylesheet [seconds]          (default 5)
-//          PULSE_MODE=none|sheet|chunk|proxy|real   (default none)
+//          PULSE_MODE=none|sheet|chunk|real         (default none)
 //          PULSE_GRAB=/path/to.png                  (screenshot for alignment)
 //
 // Modes:
@@ -27,12 +27,10 @@
 //   sheet  exactly what ttcutmain.cpp sets    - the reported defect
 //   chunk  sheet + an explicit QProgressBar::chunk rule
 //          - does styling the chunk bring the animation back?
-//   proxy  no stylesheet, QGroupBox titles centred by a local QProxyStyle
-//          - the idea, written out here so the probe stays self-contained
 //   real   the shipped fix: gui/TTCentredTitleStyle::install()
 //          - measures production code, not a copy of it
 //
-// The window also holds a QGroupBox, so PULSE_GRAB can prove that "proxy"
+// The window also holds a QGroupBox, so PULSE_GRAB can prove that "real"
 // really centres the title - a fix that animates but loses the centring would
 // be no fix.
 #include <QApplication>
@@ -42,10 +40,7 @@
 #include <QLabel>
 #include <QObject>
 #include <QProgressBar>
-#include <QProxyStyle>
-#include <QStyleFactory>
 #include <QStyle>
-#include <QStyleOptionGroupBox>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -70,43 +65,6 @@ protected:
   }
 };
 
-// Centres QGroupBox titles without a stylesheet: the alignment lives in the
-// style option, so a proxy can rewrite it on the way to the real style.
-class CentredTitleStyle : public QProxyStyle
-{
-public:
-  explicit CentredTitleStyle(QStyle* base) : QProxyStyle(base) {}
-
-  void drawComplexControl(ComplexControl cc, const QStyleOptionComplex* opt,
-                          QPainter* p, const QWidget* w) const override
-  {
-    if (cc == CC_GroupBox) {
-      if (const auto* gb = qstyleoption_cast<const QStyleOptionGroupBox*>(opt)) {
-        QStyleOptionGroupBox copy(*gb);
-        copy.textAlignment = Qt::AlignHCenter;
-        QProxyStyle::drawComplexControl(cc, &copy, p, w);
-        return;
-      }
-    }
-    QProxyStyle::drawComplexControl(cc, opt, p, w);
-  }
-
-  // subControlRect() lays the title out from the same alignment - without this
-  // the text would be painted centred but clipped to a left-aligned rect.
-  QRect subControlRect(ComplexControl cc, const QStyleOptionComplex* opt,
-                       SubControl sc, const QWidget* w) const override
-  {
-    if (cc == CC_GroupBox) {
-      if (const auto* gb = qstyleoption_cast<const QStyleOptionGroupBox*>(opt)) {
-        QStyleOptionGroupBox copy(*gb);
-        copy.textAlignment = Qt::AlignHCenter;
-        return QProxyStyle::subControlRect(cc, &copy, sc, w);
-      }
-    }
-    return QProxyStyle::subControlRect(cc, opt, sc, w);
-  }
-};
-
 int main(int argc, char** argv)
 {
   setvbuf(stdout, nullptr, _IONBF, 0);
@@ -121,31 +79,7 @@ int main(int argc, char** argv)
     return 2;
   }
 
-  if (mode == "proxy") {
-    // The base style must be created explicitly from the style that is active
-    // NOW. A default-constructed QProxyStyle installed as the application
-    // style does not inherit the platform theme's style (measured: the group
-    // box frame and the bar changed their look), so the proxy would silently
-    // replace Breeze with the fallback style.
-    // PULSE_FAKE_STYLENAME exercises the bail-out branch below: no third-party
-    // style with a non-key objectName is installed here, so the only way to
-    // measure what happens then is to hand the factory a name it cannot know.
-    const QString current = qEnvironmentVariableIsSet("PULSE_FAKE_STYLENAME")
-                                ? qEnvironmentVariable("PULSE_FAKE_STYLENAME")
-                                : app.style()->objectName();
-    // A third-party style whose objectName is not a factory key would yield a
-    // null base - and QProxyStyle(nullptr) silently falls back to the DEFAULT
-    // style, i.e. it would replace the user's look. Better no centring than a
-    // different style, so bail out in that case.
-    QStyle* base = QStyleFactory::create(current);
-    if (base == nullptr) {
-      printf("  proxy base style: '%s' is NOT a factory key -> proxy NOT installed\n",
-             qPrintable(current));
-    } else {
-      QApplication::setStyle(new CentredTitleStyle(base));
-      printf("  proxy base style: %s\n", qPrintable(current));
-    }
-  } else if (mode == "sheet") {
+  if (mode == "sheet") {
     // Byte-for-byte what gui/ttcutmain.cpp does.
     app.setStyleSheet(app.styleSheet() +
                       "\nQGroupBox::title { subcontrol-position: top center; }");
@@ -159,7 +93,7 @@ int main(int argc, char** argv)
     TTCentredTitleStyle::install();
     printf("  installed TTCentredTitleStyle, style now: '%s'\n",
            qPrintable(app.style()->objectName()));
-  } else if (mode != "none" && mode != "proxy") {
+  } else if (mode != "none") {
     fprintf(stderr, "unknown PULSE_MODE=%s\n", mode.constData());
     return 2;
   }
