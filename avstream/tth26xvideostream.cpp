@@ -9,7 +9,6 @@
 
 #include "tth26xvideostream.h"
 #include "ttvideoindexlist.h"
-#include "ttesinfo.h"
 #include "ttframeindexer.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
@@ -22,10 +21,6 @@ TTH26xVideoStream::TTH26xVideoStream(const QFileInfo& fInfo)
     : TTVideoStream(fInfo)
 {
     mLog = TTMessageLogger::getInstance();
-}
-
-TTH26xVideoStream::~TTH26xVideoStream()
-{
 }
 
 float TTH26xVideoStream::frameRate()
@@ -94,32 +89,8 @@ int TTH26xVideoStream::createHeaderList()
         return -1;
     }
 
-    const TTStreamInfo& streamInfo = mProbe.info;
-
-    // Reset and build SPS via derived
-    resetSPS();
-    buildSPSFromStreamInfo(streamInfo);
-
-    frame_rate = static_cast<float>(streamInfo.frameRate);
-
-    // .info file overrides ffmpeg's frame-rate detection if present
-    const TTESInfoTiming info = TTESInfo::timingForVideo(filePath());
-    if (info.frameRate > 0) {
-        frame_rate = static_cast<float>(info.frameRate);
-        setSPSFrameRate(info.frameRate);
-        mLog->infoMsg(__FILE__, __LINE__,
-            QString("Using frame rate from .info file: %1 fps").arg(frame_rate));
-    }
-
-    bit_rate = static_cast<float>(streamInfo.bitRate) / 1000.0f;
-
-    mLog->infoMsg(__FILE__, __LINE__,
-        QString("%1 stream: %2x%3 @ %4 fps, %5")
-            .arg(codecLabel())
-            .arg(streamInfo.width)
-            .arg(streamInfo.height)
-            .arg(frame_rate, 0, 'f', 2)
-            .arg(spsDescription()));
+    const TTStreamInfo& probe = mProbe.info;
+    bit_rate = static_cast<float>(probe.bitRate) / 1000.0f;
 
     emit statusReport(StatusReportArgs::Step, tr("Building frame index..."), 10 * total / 100);
 
@@ -142,21 +113,26 @@ int TTH26xVideoStream::createHeaderList()
     }
     mFrameIndexBundle = indexer.bundle();
 
-    // PAFF correction (H.264 only — H.265 returns false from the hook)
-    if (isPAFFCorrectionApplicable() && mFrameIndexBundle.isPAFF && frame_rate > 30) {
-        mLog->infoMsg(__FILE__, __LINE__,
-            QString("PAFF detected: correcting frame rate from %1 to %2 fps")
-                .arg(frame_rate).arg(frame_rate / 2.0f));
-        frame_rate /= 2.0f;
-        setSPSFrameRate(static_cast<double>(frame_rate));
-    }
+    // .info over libav, PAFF field rate halved (isPAFF is only ever set for H.264)
+    frame_rate = static_cast<float>(TTFrameIndexer::effectiveFrameRate(
+        probe.frameRate, filePath(), mFrameIndexBundle.isPAFF));
+
+    mLog->infoMsg(__FILE__, __LINE__,
+        QString("%1 stream: %2x%3 @ %4 fps (libav %5 fps%6), profile %7, level %8")
+            .arg(codecLabel())
+            .arg(probe.width)
+            .arg(probe.height)
+            .arg(frame_rate, 0, 'f', 2)
+            .arg(probe.frameRate, 0, 'f', 2)
+            .arg(mFrameIndexBundle.isPAFF ? ", PAFF" : "")
+            .arg(probe.profile)
+            .arg(probe.level));
 
     // The GOP table is part of the bundle the indexer produced; the Step report
     // stays so the progress sequence is unchanged.
     emit statusReport(StatusReportArgs::Step, tr("Building GOP index..."), 82 * total / 100);
 
     emit statusReport(StatusReportArgs::Step, tr("Processing frames..."), 90 * total / 100);
-    buildAccessUnits();
 
     int n = accessUnitCount();
     mLog->infoMsg(__FILE__, __LINE__,
@@ -199,7 +175,7 @@ int TTH26xVideoStream::createIndexList()
         // decode-order AU — the same semantics MPEG-2 has via temporal_reference.
         vidIndex->setDisplayOrder(disp);
         vidIndex->setHeaderListIndex(i);
-        vidIndex->setPictureCodingType(accessUnitToCodingType(i));
+        vidIndex->setPictureCodingType(accessUnitCodingType(i));
         index_list->add(vidIndex);
     }
 
@@ -255,14 +231,32 @@ bool TTH26xVideoStream::isCutOutPoint(int pos)
 
 int TTH26xVideoStream::findIDRBefore(int frameIndex)
 {
-    // `frameIndex` is a DISPLAY position (caller in ttcutpreviewtask.cpp supplies
-    // cutOutIndex(), which is stored in display space since 7f494e0).
-    // The AU array is decode-ordered, so convert on the way in and on the way out.
-    int decodeStart = displayToDecodeIndex(frameIndex);
-    for (int i = decodeStart; i >= 0; --i) {
-        if (accessUnitIsIDR(i)) return decodeToDisplayIndex(i);
+    // `frameIndex` is a DISPLAY position (the cut-out preview window,
+    // ttPreviewCutOutWindow). A true IDR (NAL scan, TTFrameInfo::isIDR) - not
+    // the libav key flag, which also marks H.264 recovery points and every
+    // HEVC IRAP. The walk goes down DISPLAY positions: in decode order a
+    // picture decoded after its IDR can display before it (HEVC RADL), and the
+    // result would lie behind the position.
+    const QList<TTFrameInfo>& index = mFrameIndexBundle.index;
+    for (int disp = qMin(frameIndex, frameCount() - 1); disp >= 0; --disp) {
+        const int dec = displayToDecodeIndex(disp);
+        if (dec >= 0 && dec < index.size() && index[dec].isIDR) return disp;
     }
     return -1;
+}
+
+bool TTH26xVideoStream::accessUnitIsRAP(int idx) const
+{
+    if (idx < 0 || idx >= accessUnitCount()) return false;
+    return mFrameIndexBundle.index[idx].isKeyframe;
+}
+
+int TTH26xVideoStream::accessUnitCodingType(int idx) const
+{
+    // The indexer writes AV_PICTURE_TYPE_I/P/B (1/2/3) for every entry, I for
+    // every key picture; TTVideoIndex uses the same numbering.
+    if (idx < 0 || idx >= accessUnitCount()) return 1;
+    return mFrameIndexBundle.index[idx].frameType;
 }
 
 int TTH26xVideoStream::decodeToDisplayIndex(int index) const
@@ -280,11 +274,6 @@ int TTH26xVideoStream::displayToDecodeIndex(int index) const
 const TTDisplayOrderMap& TTH26xVideoStream::displayOrderMap() const
 {
     return mFrameIndexBundle.displayMap;
-}
-
-TTFrameIndexBundle TTH26xVideoStream::frameIndexBundle() const
-{
-    return mFrameIndexBundle;
 }
 
 int TTH26xVideoStream::rawAuCount() const

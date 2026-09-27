@@ -384,6 +384,26 @@ void TTFrameIndexer::finalizeFrameIndex()
 }
 
 // ----------------------------------------------------------------------------
+// Frame rate of an H.26x ES: .info over libav, PAFF field rate halved
+// ----------------------------------------------------------------------------
+double TTFrameIndexer::effectiveFrameRate(double libavRate, const QString& filePath, bool isPAFF)
+{
+    double frameRate = libavRate;
+    const TTESInfoTiming info = TTESInfo::timingForVideo(filePath);
+    if (info.frameRate > 0) {   // .info wins over libav's rate (2x for raw H.264 ES)
+        frameRate = info.frameRate;
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "Using frame rate from .info file:" << frameRate;
+    }
+    if (isPAFF && frameRate > 30) {
+        if (TTSettings::instance()->logFFmpegDecoder())
+            qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
+        frameRate /= 2.0;
+    }
+    return frameRate;
+}
+
+// ----------------------------------------------------------------------------
 // Assign sequential PTS/DTS to mBundle.index from frame rate (.info or stream)
 // ----------------------------------------------------------------------------
 void TTFrameIndexer::assignPtsFromFrameRate(int videoStreamIndex)
@@ -391,28 +411,16 @@ void TTFrameIndexer::assignPtsFromFrameRate(int videoStreamIndex)
     if (TTSettings::instance()->logFFmpegDecoder())
         qDebug() << "Elementary stream detected - calculating PTS/DTS from frame rate";
 
-    // Get frame rate from .info file if available, otherwise from stream
+    // .info or stream rate, PAFF-corrected (the rule frameRate() uses too)
     TTStreamInfo streamInfo = ttStreamInfo(mFormatCtx, videoStreamIndex);
-    double frameRate = streamInfo.frameRate;
-    const TTESInfoTiming info = TTESInfo::timingForVideo(QString::fromUtf8(mFormatCtx->url));
-    if (info.frameRate > 0) {   // .info wins over libav's rate (2x for raw H.264 ES)
-        frameRate = info.frameRate;
-        if (TTSettings::instance()->logFFmpegDecoder())
-            qDebug() << "Using frame rate from .info file:" << frameRate;
-    }
+    double frameRate = effectiveFrameRate(streamInfo.frameRate,
+                                          QString::fromUtf8(mFormatCtx->url), mBundle.isPAFF);
 
     // Validate frame rate
     if (frameRate <= 0 || frameRate > 120) {
         frameRate = 25.0; // Default fallback
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
             QString("Invalid frame rate, using default: %1").arg(frameRate));
-    }
-
-    // PAFF: field-rate reported as frame-rate, correct to actual frame-rate
-    if (mBundle.isPAFF && frameRate > 30) {
-        if (TTSettings::instance()->logFFmpegDecoder())
-            qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
-        frameRate /= 2.0;
     }
 
     // Get time base from stream

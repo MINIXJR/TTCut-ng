@@ -170,9 +170,9 @@ void TTMPEG2Window2::showVideoFrame()
 /*!
  * Set subtitle stream for overlay display
  */
-void TTMPEG2Window2::setSubtitleStream(TTSubtitleStream* subtitleStream)
+void TTMPEG2Window2::setSubtitleStream(TTSubtitleStream* stream)
 {
-  mpSubtitleStream = subtitleStream;
+  mpSubtitleStream = stream;
 }
 
 /*!

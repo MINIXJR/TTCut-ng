@@ -70,7 +70,7 @@ class TTMPEG2Window2 : public QLabel
 
     void invalidateDisplay();
 
-    void setSubtitleStream(TTSubtitleStream* subtitleStream);
+    void setSubtitleStream(TTSubtitleStream* stream);
     //! The stream the overlay reads, or nullptr.
     TTSubtitleStream* subtitleStream() const { return mpSubtitleStream; }
     void clearSubtitleStream();

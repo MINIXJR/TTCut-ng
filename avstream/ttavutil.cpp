@@ -161,12 +161,16 @@ TTStreamInfo ttStreamInfo(const AVFormatContext* ctx, int streamIndex)
         info.level = codecpar->level;
 
         // Calculate frame rate. Prefer r_frame_rate over avg_frame_rate:
-        // for raw H.264/H.265 ES files without container PTS, libav often
-        // returns half the real rate as avg (a B-frame reorder window quirk).
-        // r_frame_rate comes from the SPS/codec timing and is reliable.
-        // PAFF/MBAFF streams fall through the existing frame_rate>30 PAFF
-        // correction in tth26xvideostream.cpp, so doubling the input here
-        // does not double the final progressive frame rate.
+        // for a raw H.264/H.265 ES (no container timestamps) avg_frame_rate
+        // is only the raw demuxer's "framerate" option, default 25.
+        // r_frame_rate is not reliable for a raw H.264 ES either: it is twice
+        // the frame rate for progressive and MBAFF material (measured
+        // 2026-09-27: 100 for 50p, 50 for 25i MBAFF); PAFF reports the field
+        // rate, which TTFrameIndexer::effectiveFrameRate halves. Raw HEVC
+        // measured right (50 for 50p). The .info frame_rate that ttcut-demux
+        // takes from the original TS therefore wins over this value
+        // (effectiveFrameRate); without .info a raw H.264 ES is cut at the
+        // wrong rate (audio from the wrong place, video at double speed).
         if (stream->r_frame_rate.den > 0) {
             info.frameRate = av_q2d(stream->r_frame_rate);
         } else if (stream->avg_frame_rate.den > 0) {

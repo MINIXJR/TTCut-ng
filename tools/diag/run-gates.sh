@@ -145,6 +145,7 @@ sar                    tux   120  test_sar
 decode_cancel          tux   300  test_decode_cancel
 decode_cancel_yuv      tux   300  test_decode_cancel_yuv
 adopt_paff             tux   300  test_adopt_paff
+h26x_idr_before        tux   300  test_h26x_idr_before
 index_bundle_adopt     tux   300  test_index_bundle_adopt
 aspectscan_mpeg2       tux   300  test_aspectscan_mpeg2
 seqheader_missing      tux   300  test_seqheader_missing
@@ -410,6 +411,14 @@ gate_sar()           { need "$V264"; "$D/test_sar" "$V264" 1.0; }
 gate_decode_cancel()     { need "$V264"; "$D/test_decode_cancel" "$V264" 1500; }
 gate_decode_cancel_yuv() { need "$V264"; "$D/test_decode_cancel_yuv" "$V264" 1500; }
 gate_adopt_paff()        { need "$PAFF"; "$D/test_adopt_paff" "$PAFF" 200; }
+# findIDRBefore = last true IDR at or before a display position; open GOP
+# (progressive H.264, HEVC CRA: IDR at 0 only) and closed GOP (PAFF). 600-AU
+# head slices hold 12 GOPs each, enough for the leading-picture cases.
+gate_h26x_idr_before()   { need "$V264" "$PAFF" "$H265"
+                           ffmpeg -y -v error -i "$V264" -c copy -frames:v 600 -f h264 "$W/prog.264" || exit 1
+                           ffmpeg -y -v error -i "$PAFF" -c copy -frames:v 600 -f h264 "$W/paff.264" || exit 1
+                           ffmpeg -y -v error -i "$H265" -c copy -frames:v 600 -f hevc "$W/hevc.265" || exit 1
+                           "$D/test_h26x_idr_before" "$W/prog.264" "$W/paff.264" "$W/hevc.265"; }
 gate_index_bundle_adopt() { need "$PAFF"; "$D/test_index_bundle_adopt" "$PAFF" 200; }
 # The Tux timeline has no aspect switch: the gate is "exactly 0 transitions".
 gate_aspectscan_mpeg2()  { need "$M2V"; "$D/test_aspectscan_mpeg2" "$M2V" 2 0; }

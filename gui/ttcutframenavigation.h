@@ -38,7 +38,7 @@ class TTCutFrameNavigation : public QWidget, Ui::TTCutFrameNavigationWidget
 
     void controlEnabled( bool enabled );
     void setThresholds(float blackThreshold, float sceneThreshold);
-    void checkCutPosition(TTAVItem* avData, int pos = -1);
+    void checkCutPosition(const TTAVItem* avData, int pos = -1);
     void keyPressEvent(QKeyEvent* e);
 
   public slots:

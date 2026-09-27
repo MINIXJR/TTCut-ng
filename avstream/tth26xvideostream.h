@@ -10,10 +10,9 @@
 // ----------------------------------------------------------------------------
 // TTH26XVIDEOSTREAM
 // Abstract intermediate base shared by TTH264VideoStream and TTH265VideoStream.
-// Owns the file probe, the frame index bundle and the codec-agnostic flow of
-// createHeaderList / createIndexList / GOP forwarding. Codec-specific bits
-// (typed SPS, typed access units, RAP-vs-IDR semantics, PAFF correction)
-// are implemented by the derived classes via protected hooks.
+// Owns the file probe and the frame index bundle and answers every per-frame
+// question (random access, IDR, coding type) from the bundle. The derived
+// classes supply the codec identity and, for H.264, the PAFF accessors.
 // ----------------------------------------------------------------------------
 
 #ifndef TTH26XVIDEOSTREAM_H
@@ -35,10 +34,14 @@ class TTH26xVideoStream : public TTVideoStream
 
 public:
     explicit TTH26xVideoStream(const QFileInfo& fInfo);
-    virtual ~TTH26xVideoStream();
+    ~TTH26xVideoStream() override = default;
 
     // From TTAVStream / TTVideoStream
     float frameRate() override;
+
+    // Probe result of the best video stream (resolution, profile, level).
+    const TTStreamInfo& streamInfo() const { return mProbe.info; }
+    virtual const char* codecLabel() const = 0;          // "H.264" / "H.265"
 
     // From TTAVStream
     int  createHeaderList() override;
@@ -72,7 +75,7 @@ public:
     //
     // Consumers that hand an index across a thread or object boundary MUST use
     // this bundle, never the bare list — see TTFrameIndexBundle.
-    TTFrameIndexBundle frameIndexBundle() const;
+    const TTFrameIndexBundle& frameIndexBundle() const { return mFrameIndexBundle; }
 
     // Raw->merged AU translation for .info doubled-PTS candidates (raw AU
     // numbering; see the TTFFmpegWrapper map doc). Display index is -1 for
@@ -86,22 +89,16 @@ protected:
     // from createHeaderList.
     bool openStream();
 
-    // Hooks implemented by derived
+    // Hook implemented by derived
     virtual TTVideoCodecType expectedCodec() const = 0;
-    virtual const char*      codecLabel() const = 0;     // "H.264" / "H.265"
 
-    virtual void    resetSPS() = 0;                       // delete + null typed mSPS
-    virtual void    buildSPSFromStreamInfo(const TTStreamInfo& info) = 0;
-    virtual void    setSPSFrameRate(double fps) = 0;
-    virtual QString spsDescription() const = 0;           // for log line
-
-    virtual void    buildAccessUnits() = 0;               // populate typed AU list from mFrameIndexBundle.index
-    virtual int     accessUnitCount() const = 0;
-    virtual bool    accessUnitIsIDR(int idx) const = 0;   // strict IDR (DPB reset)
-    virtual bool    accessUnitIsRAP(int idx) const = 0;   // RAP (IDR plus CRA/BLA for H.265)
-    virtual int     accessUnitToCodingType(int idx) const = 0; // 1=I, 2=P, 3=B for createIndexList
-
-    virtual bool    isPAFFCorrectionApplicable() const { return false; }
+private:
+    // Per decode-order access unit, from mFrameIndexBundle.index.
+    // Random access = the libav key flag: H.264 IDR or recovery point, HEVC
+    // IRAP (IDR, CRA, BLA). IDR = the NAL scan (TTFrameInfo::isIDR).
+    int  accessUnitCount() const { return mFrameIndexBundle.index.size(); }
+    bool accessUnitIsRAP(int idx) const;
+    int  accessUnitCodingType(int idx) const;          // 1=I, 2=P, 3=B
 
 protected:
     // Result of openStream(): codec type, best video stream and its stream

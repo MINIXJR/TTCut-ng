@@ -48,6 +48,7 @@ private slots:
 private:
   void setupUI();
   void navigateCenteredOn(int keyframeListIdx);
+  void highlightCurrentKeyframe();
   void navigateToOffset(int startIdx);
   void updatePageLabel();
   void startThumbnailWorker();
