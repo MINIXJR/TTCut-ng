@@ -32,7 +32,7 @@
 
 #include <algorithm>
 
-bool videoHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 );
+bool videoHeaderListCompareItems( const TTAVHeader* head_1, const TTAVHeader* head_2 );
 
 /*! ////////////////////////////////////////////////////////////////////////////
  * Constructor
@@ -92,7 +92,7 @@ TTVideoHeader* TTVideoHeaderList::getNextHeader(int startPos, TTMpeg2VideoHeader
 TTVideoHeader* TTVideoHeaderList::getNextHeader(TTVideoHeader* current, TTMpeg2VideoHeader::mpeg2StartCodes type)
 {
   return (current != NULL)
-      ? getNextHeader(indexOf((TTAVHeader*)current), type)
+      ? getNextHeader(indexOf(static_cast<TTAVHeader*>(current)), type)
       : NULL;
 }
 
@@ -150,7 +150,7 @@ int TTVideoHeaderList::headerIndex( TTVideoHeader* current )
     throw TTInvalidOperationException(msg);
   }
 
-  return indexOf( (TTAVHeader*)current );
+  return indexOf( static_cast<TTAVHeader*>(current) );
 }
 
 /*! ///////////////////////////////////////////////////////////////////////////
@@ -164,7 +164,7 @@ void TTVideoHeaderList::sort()
 /*! ////////////////////////////////////////////////////////////////////////////
  * compare routine for sort
  */
-bool videoHeaderListCompareItems( TTAVHeader* head_1, TTAVHeader* head_2 )
+bool videoHeaderListCompareItems( const TTAVHeader* head_1, const TTAVHeader* head_2 )
 {
   return (head_1->headerOffset() < head_2->headerOffset());
 }

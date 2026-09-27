@@ -108,6 +108,7 @@ set(MPEG2CUT_SRC
   ${ROOT}/avstream/ttmpeg2videostream.cpp
   ${ROOT}/common/ttsettings.cpp
   ${ROOT}/extern/tttranscode.cpp
+  ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/avstream/ttvideoheaderlist.cpp
   ${ROOT}/avstream/ttvideoindexlist.cpp)
 

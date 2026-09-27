@@ -16,6 +16,7 @@
 #include "ttencodeparameter.h"
 
 #include "../avstream/ttavstream.h"
+#include "../avstream/ttavutil.h"
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
@@ -132,9 +133,7 @@ bool TTTranscodeProvider::setupEncoder()
 
   int ret = avcodec_open2(mEncoder, codec, nullptr);
   if (ret < 0) {
-    char errbuf[AV_ERROR_MAX_STRING_SIZE];
-    av_strerror(ret, errbuf, sizeof(errbuf));
-    mLog->errorMsg(__FILE__, __LINE__, QString("Cannot open mpeg2video encoder: %1").arg(errbuf));
+    mLog->errorMsg(__FILE__, __LINE__, QString("Cannot open mpeg2video encoder: %1").arg(ttAvErrorToString(ret)));
     avcodec_free_context(&mEncoder);
     return false;
   }
@@ -209,13 +208,35 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
   int framesSent = 0;
   int packetsReceived = 0;
 
+  // Moves every packet the encoder has ready into the file. False when a
+  // write fails (the caller stops); a receive error only ends the drain.
+  auto drainPackets = [&](const char* phase) -> bool {
+    while (true) {
+      const int r = avcodec_receive_packet(mEncoder, packet);
+      if (r == AVERROR(EAGAIN) || r == AVERROR_EOF) return true;
+      if (r < 0) {
+        mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_receive_packet failed (%1): %2")
+            .arg(phase, ttAvErrorToString(r)));
+        return true;
+      }
+      const bool written = outFile.write(reinterpret_cast<char*>(packet->data), packet->size)
+                           == packet->size;
+      av_packet_unref(packet);
+      if (!written) {
+        mLog->errorMsg(__FILE__, __LINE__, QString("Failed to write encoded data (%1)").arg(phase));
+        return false;
+      }
+      packetsReceived++;
+    }
+  };
+
   // Decode and encode each frame
   for (int i = 0; i < frameCount; i++) {
     int frameIndex = start + i;
 
     // Move decoder to frame (in display order)
     decoder->moveToFrameIndex(frameIndex);
-    TFrameInfo* frameInfo = decoder->getFrameInfo();
+    const TFrameInfo* frameInfo = decoder->getFrameInfo();
 
     if (!frameInfo || !frameInfo->Y) {
       mLog->errorMsg(__FILE__, __LINE__, QString("Failed to decode frame %1").arg(frameIndex));
@@ -238,33 +259,13 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
     // Send frame to encoder
     int ret = avcodec_send_frame(mEncoder, frame);
     if (ret < 0 && ret != AVERROR(EAGAIN)) {
-      char errbuf[AV_ERROR_MAX_STRING_SIZE];
-      av_strerror(ret, errbuf, sizeof(errbuf));
-      mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_send_frame failed: %1").arg(errbuf));
+      mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_send_frame failed: %1").arg(ttAvErrorToString(ret)));
       break;
     }
     framesSent++;
 
-    // Receive any available encoded packets
-    while (true) {
-      ret = avcodec_receive_packet(mEncoder, packet);
-      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-        break;
-      if (ret < 0) {
-        char errbuf[AV_ERROR_MAX_STRING_SIZE];
-        av_strerror(ret, errbuf, sizeof(errbuf));
-        mLog->errorMsg(__FILE__, __LINE__, QString("avcodec_receive_packet failed: %1").arg(errbuf));
-        break;
-      }
-
-      if (outFile.write(reinterpret_cast<char*>(packet->data), packet->size) != packet->size) {
-        mLog->errorMsg(__FILE__, __LINE__, "Failed to write encoded data");
-        av_packet_unref(packet);
-        goto cleanup;
-      }
-      packetsReceived++;
-      av_packet_unref(packet);
-    }
+    if (!drainPackets("encode"))
+      goto cleanup;
 
     emit statusReport(StatusReportArgs::AddProcessLine,
         QString("Encoding frame %1/%2").arg(i + 1).arg(frameCount), 0);
@@ -275,21 +276,8 @@ bool TTTranscodeProvider::encodeFrames(TTVideoStream* vs, int start, int end)
 
   // Flush encoder — send null frame to get remaining packets
   avcodec_send_frame(mEncoder, nullptr);
-  while (true) {
-    int ret = avcodec_receive_packet(mEncoder, packet);
-    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-      break;
-    if (ret < 0)
-      break;
-
-    if (outFile.write(reinterpret_cast<char*>(packet->data), packet->size) != packet->size) {
-      mLog->errorMsg(__FILE__, __LINE__, "Failed to write encoded data (flush)");
-      av_packet_unref(packet);
-      goto cleanup;
-    }
-    packetsReceived++;
-    av_packet_unref(packet);
-  }
+  if (!drainPackets("flush"))
+    goto cleanup;
 
   if (TTSettings::instance()->logSmartCut()) {
       qDebug() << "MPEG-2 encoding complete: sent" << framesSent
