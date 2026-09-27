@@ -15,7 +15,6 @@
 #include "ttmarkerlist.h"
 #include "ttavlist.h"
 
-#include "../common/ttcut.h"
 
 #include <QDateTime>
 #include <QFileInfo>

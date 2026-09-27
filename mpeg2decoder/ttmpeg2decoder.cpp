@@ -278,19 +278,6 @@ TFrameInfo* TTMpeg2Decoder::getFrameInfo()
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
- * Decode the next frame
- */
-TFrameInfo* TTMpeg2Decoder::decodeMPEG2Frame(TPixelFormat pixelFormat)
-{
-  convType = pixelFormat;
-
-  if (!mpeg2Stream->atEnd())
-    decodeNextFrame();
-
-  return t_frame_info;
-}
-
-/* /////////////////////////////////////////////////////////////////////////////
  * Move to given index position and decode the frame
  */
 int TTMpeg2Decoder::moveToFrameIndex(int framePosition)

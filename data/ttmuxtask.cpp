@@ -23,12 +23,8 @@
 // ----------------------------------------------------------------------------
 
 #include "ttmuxtask.h"
-#include "../avstream/ttcommon.h"
 
 #include "ttavdata.h"
-
-#include "../common/ttexception.h"
-#include "../common/ttmessagelogger.h"
 
 #include <QFile>
 

@@ -36,7 +36,6 @@
 #include <cstdio>
 
 #include "avstream/ttavstream.h"
-#include "common/ttexception.h"
 #include "common/ttsettings.h"
 #include "data/ttavdata.h"
 #include "data/ttavlist.h"

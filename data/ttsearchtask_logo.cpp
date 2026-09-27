@@ -11,9 +11,7 @@
 #include "ttlogodetector.h"
 
 #include "../avstream/ttvideoindexlist.h"
-#include "../common/ttsettings.h"
 #include "../extern/ttffmpegwrapper.h"
-#include "../mpeg2decoder/ttmpeg2decoder.h"
 
 #include <QDebug>
 #include <QElapsedTimer>

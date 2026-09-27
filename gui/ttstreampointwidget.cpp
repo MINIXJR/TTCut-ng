@@ -12,8 +12,6 @@
 #include "ttaudiorepairdialog.h"
 #include "../data/ttstreampointmodel.h"
 #include "../data/ttavlist.h"
-#include "../extern/ttaudiorepairitem.h"
-#include "../avstream/ttavstream.h"
 #include "../common/ttcut.h"
 
 #include <QListView>

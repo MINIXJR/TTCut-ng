@@ -35,7 +35,6 @@
 #include "ttcommon.h"
 #include "ttfilebuffer.h"
 
-#include "ttcutparameter.h"
 #include "../common/ttmessagelogger.h"
 
 #include "ttaudioheaderlist.h"
