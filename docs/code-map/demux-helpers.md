@@ -1,5 +1,5 @@
 ---
-base_commit: 6bde9436860ca8d86cc130a698dfd29ed12a7859
+base_commit: d1ecf5ba2d9cfd5294f0772e5658e91ead8fe8ed
 last_verified: 2026-09-27
 sources:
   - tools/ttcut-demux/ttcut-ocr-glyphs
@@ -65,12 +65,12 @@ flowchart TD
 | From → To | What crosses (data / order / invariant) |
 |---|---|
 | `REC` → `VDR` | Every `*.rec` directory below `IN_PFAD` that holds `*.ts` or `*.vdr`; label = unmasked name of the directory above `.rec` (`vdr_unmask`: VFAT `#XX` escapes, `#23` last, `/` → `_`) plus the date from the `.rec` name. Checklist via `kdialog`, else `dialog`, else all. The first segment `00001.ts` (or `001.vdr`) is what is handed on; `ttcut-demux` finds the siblings itself. |
-| `VDR` -.-> `DEMUX` | Sequential, foreground: `ttcut-demux -n "$show_name" <first segment> "$OUT_PFAD" > "$OUT_PFAD/$show_name.log" 2>&1`. No `--subs` (subtitle export off by default). The output name is the episode directory's name only — two recordings with the same name in one run write to the same files. `set -e` is on; a failing demux is counted, not fatal. |
+| `VDR` -.-> `DEMUX` | Sequential, foreground: `ttcut-demux -n "$show_name" <first segment> "$OUT_PFAD" > "$OUT_PFAD/$show_name.log" 2>&1`. No `--subs` (subtitle export off by default). The output name is the episode directory's name; `unique_name` appends the recording's date and time (`Folge_2026-01-02_21.30`) when that name was already used in this run, so a repeat recording does not overwrite the first one. A re-demux in a later run overwrites as before. `set -e` is on; a failing demux is counted, not fatal. |
 | `DEMUX` → `LOG` → `SUM` | After each recording: the first `SEVERELY DAMAGED RECORDING` line (percent of missing pictures, audio gaps per minute) and the first `[WARN] Material loss:` line (text up to the first `-`) go into two lists; the closing `kdialog --yesno` carries both above “TTCut starten?”. `grep … || true` because of `set -e`. The log itself is shown coloured afterwards (`colorize_log`, `sed` on the plain file). |
-| `SUM` -.-> `TT` | “yes” starts `ttcut-ng` (`command -v`, else the fallback path at the top of the script) in the background; a second dialog offers the logs of this run (`-newermt @SCRIPT_START`) in `kwrite`. |
-| `DEMUX` → `SPU` | Inside the OCR step, after the SRT is sanitised and only when helper, template directory, `python3` and at least one PNG exist: a second ccextractor run with `--out=spupng --no-spupngocr --ignoreptsjumps -delay <same as OCR>`, from inside `spu_glyphs_tmp_<n>` with the dot-free name `cue` (ccextractor strips after the last dot of the whole path). Helper lookup: next to the script, else the source tree, templates else `/usr/share/ttcut-ng/ocr-glyphs`. |
+| `SUM` -.-> `TT` | “yes” starts `ttcut-ng` in the background — `ttcut-ng` and `ttcut-demux` are looked up once at the top as absolute paths (`command -v`), else `build/ttcut-ng` and `tools/ttcut-demux/ttcut-demux` of the source tree; a second dialog offers the logs of this run (`-newermt @SCRIPT_START`) in `kwrite`. |
+| `DEMUX` → `SPU` | Inside the OCR step, after the SRT is sanitised and only when helper, template directory, `python3` and at least one PNG exist and `import PIL` works (otherwise a warning “glyph repair skipped”): a second ccextractor run with `--out=spupng --no-spupngocr --ignoreptsjumps -delay <same as OCR>`, from inside `spu_glyphs_tmp_<n>` with the dot-free name `cue` (ccextractor strips after the last dot of the whole path). Helper lookup: next to the script, else the source tree, templates else `/usr/share/ttcut-ng/ocr-glyphs`. |
 | `DEMUX` → `SRT` | The sanitised OCR SRT (CRLF, markup kept) — see [ttcut-demux.md](ttcut-demux.md). |
-| `SPU`, `SRT`, `TPL` → `MATCH` | `match --srt --spuxml cue --templates --delay-ms 0 --apply`; its stdout becomes `info "  glyph: …"` lines, **stderr is discarded**. Per spupng entry: the SRT cue with the nearest start within `TIME_SLACK_MS` = 400 ms; per line index K of that cue the K-th ink band of the PNG (rows with ink, split at empty rows); per band the first (start) and last (end) glyph group (split at gaps ≥ ¼ band height, at least 3 px). A glyph equals a template when both sizes differ by ≤ `SIZE_SLACK` = 2 px and ≥ `MATCH_RATIO` = 93 % of the common top-left area agree after binarising at 128. First matching template wins. |
+| `SPU`, `SRT`, `TPL` → `MATCH` | `match --srt --spuxml cue --templates --delay-ms 0 --apply`; its stdout becomes `info "  glyph: …"` lines, **stderr is discarded**. Per spupng entry: the SRT cue with the nearest start within `TIME_SLACK_MS` = 400 ms; the K-th line **with visible text** of that cue (`visible_lines`: an OCR line of markup only has no band) meets the K-th ink band of the PNG (rows with ink, split at empty rows; a band shorter than `DOT_FRACTION` = 0.4 of the tallest — the dots of a capital umlaut — joins the band below); per band the first (start) and last (end) glyph group (split at gaps ≥ ¼ band height, at least 3 px). A glyph equals a template when both sizes differ by ≤ `SIZE_SLACK` = 2 px and ≥ `MATCH_RATIO` = 93 % of the common top-left area agree after binarising at 128. First matching template wins. |
 | `MATCH` → `OUTSRT` | `fix_line` per matched edge: leading/trailing tags kept, line end kept (CRLF, LF, none). The edge character is replaced when it is not a word character, or when it is listed in the template's sidecar **and** stands alone; otherwise the glyph is inserted/appended and the text stays. Idempotent (a line that already carries the glyph is left). The file is rewritten only with `--apply` and at least one change. |
 | `SPU` → `LEARN` → `TPL` | Manual: `learn --spuxml … --cue N (1-based spupng index, not SRT cue) --edge --line --out <dir>/<name>__<REPL>.png` crops the edge glyph of one bitmap; the sidecar `<stem>.txt` is written by hand (`2JF` for the note). Templates are renderer-specific (size gate). |
 | `PKG` -.-> `TPL` | `debian/rules` installs the helper to `/usr/bin`, `ocr-glyphs/*.png` **and** `*.txt` to `/usr/share/ttcut-ng/ocr-glyphs`; a missing sidecar silently reduces the repair to non-word characters. |
@@ -83,8 +83,10 @@ flowchart TD
   [ttcut-demux.md](ttcut-demux.md)).
 - **Bitmap decides, text never does:** a matched template proves the glyph;
   an ambiguous word character is kept and the glyph inserted, so no word is
-  ever lost. `ttcut-ocr-glyphs --selftest` checks these rules on 19 built-in
-  cases without test material.
+  ever lost. `ttcut-ocr-glyphs --selftest` checks these rules and the line
+  pairing on 21 built-in cases without test material (gate
+  `ocr_glyphs_selftest`); measured on a Babylon Berlin episode, 1035 of
+  1035 cues pair every text line with its band.
 - **Example vs. author's script:** `vdr-demux-example.sh` and
   `~/Skripte/VDR_Demux.sh` share `vdr_unmask`, `colorize_log`, the damage
   and loss lists and the closing dialog; a fix in one is checked in the
@@ -92,26 +94,9 @@ flowchart TD
   runs each demux in its own process group (`setsid`) with a progress file,
   and a DEV-build entry — the example deliberately waits in the foreground.
 
-### Reading hypotheses for audit run 17
-
-From reading; each needs proof first.
-
-- **D1 — the example's TTCut fallback path is dead.** `TTCUT` falls back to
-  `/usr/local/src/TTCut-ng/ttcut-ng`, the pre-CMake path (checked: the file
-  does not exist; the author's script uses `build/ttcut-ng`).
-- **D2 — two recordings with the same episode name overwrite each other.**
-  `-n "$show_name"` and `$show_name.log` depend only on the directory above
-  `.rec`; a repeat recording in the same episode directory lands on the same
-  output files (in both scripts).
-- **D3 — without Pillow the glyph repair is skipped silently.** The helper
-  imports `PIL` at start; the call discards stderr and the package only
-  suggests `python3-pil`.
-- **D4 — `--selftest` is not a gate.** No `run-gates.sh` entry runs it.
-- **D5 — SRT line K is paired with ink band K.** A bitmap whose ink splits
-  into more or fewer bands than the OCR produced lines (umlaut dots above a
-  lowercase line, two OCR lines merged) pairs an edge with the wrong line.
-- **D6 — a neighbouring cue within 400 ms.** Two cues closer than
-  `TIME_SLACK_MS` can pair a bitmap with the wrong cue.
+- **Example runs without dialogs in the gate** `vdr_example_names`: `HOME`
+  in the work directory, a stub `kdialog` that selects everything and says
+  no.
 
 ## Redundancy / consolidation candidates
 

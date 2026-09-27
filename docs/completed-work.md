@@ -1006,6 +1006,33 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Audit-Lauf 17: Lese-Hypothesen der Karte `demux-helpers.md`** → **DONE
+  (2026-09-27, Zweig `cleanup/code-audit-run17`)**. Echtes Material: Babylon
+  Berlin 05x05 (1035 OCR-Untertitel, spupng-Dump mit denselben Flags wie
+  `ttcut-demux`), Auswertung mit den Funktionen des Werkzeugs selbst.
+  - **D1** TTCut-Rückfallpfad des Beispiels tot (geprüft). Dabei **D7**
+    gefunden: `[ -x "$TTCUT_DEMUX" ]` auf den nackten Namen → das Beispiel
+    brach ab, sobald `ttcut-demux` installiert war. Jetzt absolute Pfade.
+  - **D2** gemessen: zweiter Lauf mit gleichem `-n` ersetzt Video, Ton,
+    `.info` ohne Warnung (4 s → 6 s). Beide Skripte hängen jetzt bei Doppelung
+    im selben Lauf das Aufnahmedatum an; `VDR_Demux.sh` per Pfad-Kopie mit
+    Stub-`kdialog` geprüft.
+  - **D3** gemessen (`python3 -S`-Wrapper): ohne Pillow weder Reparatur noch
+    Hinweis → Warnung. **D4** → Gate `ocr_glyphs_selftest`.
+  - **D5** bestätigt: 10/1035 Bänder ≠ Zeilen — 7 × Umlaut-Pünktchen als
+    eigenes Band, 3 × leere OCR-Zeile. Jetzt 1035/1035. **D6** kein Fall.
+  - C1: Untertitel-Extraktion und OCR-Aufruf je einmal; direkter und
+    erzwungener Rückfallweg (Wrapper lässt die erste OCR mit 139 scheitern)
+    vorher/nachher: SRT byte-gleich, MKS-Pakete, Video, Ton gleich.
+  - Gates neu `vdr_example_names`, `ocr_glyphs_selftest`; run-gates 137 → 139.
+  - Umbau: 6 Kandidaten (Scanner sieht nur Bash), 3 umgebaut (C1), 3
+    deliberate. Store `docs/code-audit/build-verdicts-2026-09-27-run17.py`.
+  - Fallen: (1) Stub-`kdialog` muss beide Aufrufformen können (mit/ohne
+    `--separate-output`). (2) Eigene Befehlszeile mit dem Skriptpfad ergibt
+    Treffer bei `ps | grep` — Prozesse mit `ps -eo pid,etime,args` ansehen.
+    (3) Untertitel-Byte-Zahl vor dem Test messen: der erste Kandidat hatte
+    einen PMT-Eintrag, aber 0 Bytes Daten.
+
 - **Audit-Lauf 16: Lese-Hypothesen der Karte `navigator-window.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run16`)**. Wegwerf-Sonde
   `probe_navigator`: echtes Hauptfenster offscreen, Tux-Projekt, Ereignisfilter
