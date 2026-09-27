@@ -90,6 +90,7 @@ TTESInfo::TTESInfo(const QString& infoFilePath)
 bool TTESInfo::load(const QString& infoFilePath)
 {
     mLoaded = false;
+    mHasFrameRate = false;
 
     QFile file(infoFilePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -217,9 +218,12 @@ void TTESInfo::parseVideoSection(const QMap<QString, QString>& values)
     mFillerStripped = (values.value("filler_stripped", "false") == "true");
     mFillerSavedBytes = values.value("filler_saved_bytes", "0").toLongLong();
 
-    // Parse frame_rate (can be "50/1" or "25" or "29.97")
-    QString frameRateStr = values.value("frame_rate", "25/1");
-    parseFrameRate(frameRateStr);
+    // Parse frame_rate (can be "50/1" or "25" or "29.97"). Without a usable
+    // value the 25/1 default stays for frameRate(), but hasFrameRate() is
+    // false: timingForVideo must not pass the default on as the file's rate.
+    mHasFrameRate = values.contains("frame_rate")
+                 && parseFrameRate(values.value("frame_rate"))
+                 && mFrameRateNum > 0;
 }
 
 void TTESInfo::parseAudioSection(const QMap<QString, QString>& values)
@@ -480,7 +484,7 @@ TTESInfoTiming TTESInfo::timingForVideo(const QString& videoFilePath)
     if (!esInfo.isLoaded()) return t;
 
     t.found = true;
-    if (esInfo.frameRate() > 0) t.frameRate = esInfo.frameRate();
+    if (esInfo.hasFrameRate()) t.frameRate = esInfo.frameRate();
     if (esInfo.hasTimingInfo() && esInfo.avOffsetMs() != 0) t.avOffsetMs = esInfo.avOffsetMs();
     return t;
 }

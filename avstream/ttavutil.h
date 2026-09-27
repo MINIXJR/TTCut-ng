@@ -35,7 +35,7 @@ struct TTStreamInfo {
     // Video specific
     int width = 0;
     int height = 0;
-    double frameRate = 0.0;
+    double frameRate = 0.0;   // SPS/VPS timing (codecpar->framerate); 0 = unknown
     int64_t bitRate = 0;
     int profile = 0;
     int level = 0;

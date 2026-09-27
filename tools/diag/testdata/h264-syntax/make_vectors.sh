@@ -28,4 +28,23 @@ ffmpeg -v error -y -f lavfi -i testsrc2=s=66x66:r=25:d=0.4 -vf "fade=in:0:8" \
     -pix_fmt yuv420p10le -profile:v main10 -c:v libx265 \
     -x265-params "bframes=0:frame-threads=1:pools=none:log-level=error:scaling-list=default:deblock=2,-1:weightp=1" \
     -f hevc x265misc.265
+# Raw ES WITHOUT SPS timing, for the frame-rate fallback (spec
+# 2026-09-27-frame-rate-source): libav then reports codecpar->framerate 0/1
+# and r_frame_rate 1200000/1. H.264 from the JM reference encoder with the
+# VUI switched off (x264 always writes VUI timing), HEVC from x265.
+JM=/usr/local/src/jm-reference
+if [ -x "$JM/bin/lencod_static" ]; then
+    ffmpeg -v error -y -f lavfi -i testsrc2=s=64x64:r=25:d=0.4 -pix_fmt yuv420p \
+        -f rawvideo novui.yuv
+    "$JM/bin/lencod_static" -d "$JM/cfg/encoder_main.cfg" \
+        -p InputFile=novui.yuv -p OutputFile=novui.264 -p ReconFile=/dev/null \
+        -p SourceWidth=64 -p SourceHeight=64 -p FramesToBeEncoded=10 \
+        -p FrameRate=25 -p EnableVUISupport=0 > /dev/null
+    rm -f novui.yuv log.dat stats.dat data.txt leakybucketparam.cfg
+else
+    echo "JM not found at $JM - novui.264 not regenerated" >&2
+fi
+enc -pix_fmt yuv420p -c:v libx265 \
+    -x265-params "vui-timing-info=0:log-level=error:frame-threads=1:pools=none" \
+    -f hevc novui.265
 ls -l ./*.264 ./*.265

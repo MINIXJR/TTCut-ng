@@ -77,6 +77,7 @@ PRJ264="$CACHE/tux_h264_1080p_progressive_test.ttcut"
 MBAFF="$CACHE/tux_h264_1080i_mbaff_test.264"
 PAFF="$CACHE/tux_h264_1080i_paff_test.264"
 H265="$CACHE/tux_hevc4k_cra_test.265"
+TD="$ROOT/tools/diag/testdata/h264-syntax"
 M2V="$CACHE/tux_mpeg2_576i_pal_test.m2v"
 M2VFP="$CACHE/tux_mpeg2_576i_fieldpic_test.m2v"        # field pictures every 50 frames
 MP2="$CACHE/tux_mpeg2_576i_pal_test.mp2"            # 192 kbit/s, 576 B frames
@@ -104,6 +105,8 @@ mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
 mpeg2_framerate        unit  300  test_mpeg2_framerate
 audio_es_input         unit  300  test_audio_es_input
+framerate_assumed      unit  120  test_h26x_framerate
+framerate_hint         unit  120  test_framerate_hint
 mpeg2_framerate_cut    tux   600  -
 diag_target_complete   unit  60   -
 quickjump_thumbheight  unit  120  test_quickjump_thumbheight
@@ -146,6 +149,7 @@ decode_cancel          tux   300  test_decode_cancel
 decode_cancel_yuv      tux   300  test_decode_cancel_yuv
 adopt_paff             tux   300  test_adopt_paff
 h26x_idr_before        tux   300  test_h26x_idr_before
+h26x_framerate         tux   300  test_h26x_framerate
 index_bundle_adopt     tux   300  test_index_bundle_adopt
 aspectscan_mpeg2       tux   300  test_aspectscan_mpeg2
 seqheader_missing      tux   300  test_seqheader_missing
@@ -419,6 +423,32 @@ gate_h26x_idr_before()   { need "$V264" "$PAFF" "$H265"
                            ffmpeg -y -v error -i "$PAFF" -c copy -frames:v 600 -f h264 "$W/paff.264" || exit 1
                            ffmpeg -y -v error -i "$H265" -c copy -frames:v 600 -f hevc "$W/hevc.265" || exit 1
                            "$D/test_h26x_idr_before" "$W/prog.264" "$W/paff.264" "$W/hevc.265"; }
+# Raw ES without SPS timing: 25 fps assumed, not libav's 1200000/1.
+# A .info without frame_rate gives no rate (not TTESInfo's default 25).
+gate_framerate_assumed() { need "$TD/novui.264" "$TD/novui.265"
+                           cp "$TD/novui.264" "$W/norate.264"
+                           printf '[video]\nfile=norate.264\ncodec=h264\n' > "$W/norate.info"
+                           "$D/test_h26x_framerate" "$TD/novui.264=25:Assumed:log=no .info and no SPS timing" \
+                               "$TD/novui.265=25:Assumed" \
+                               "$W/norate.264=25:Assumed:log=.info without frame_rate and no SPS timing"; }
+gate_framerate_hint()    { need "$TD/novui.264" "$TD/cqm.264"
+                           "$D/test_framerate_hint" "$TD/novui.264" "$TD/cqm.264" "$W"; }
+# Frame rate without .info = SPS timing (raw H.264 r_frame_rate is 2x for
+# progressive and MBAFF); .info wins and a disagreement is logged.
+gate_h26x_framerate()    { need "$V264" "$MBAFF" "$PAFF" "$H265"
+                           ffmpeg -y -v error -i "$V264"  -c copy -frames:v 600 -f h264 "$W/prog.264"  || exit 1
+                           ffmpeg -y -v error -i "$MBAFF" -c copy -frames:v 600 -f h264 "$W/mbaff.264" || exit 1
+                           ffmpeg -y -v error -i "$PAFF"  -c copy -frames:v 600 -f h264 "$W/paff.264"  || exit 1
+                           ffmpeg -y -v error -i "$H265"  -c copy -frames:v 600 -f hevc "$W/hevc.265"  || exit 1
+                           cp "$W/prog.264" "$W/withinfo.264"; cp "$W/prog.264" "$W/mismatch.264"
+                           printf '[video]\nfile=withinfo.264\ncodec=h264\nframe_rate=50/1\n' > "$W/withinfo.info"
+                           printf '[video]\nfile=mismatch.264\ncodec=h264\nframe_rate=30/1\n' > "$W/mismatch.info"
+                           cp "$W/prog.264" "$W/norate.264"
+                           printf '[video]\nfile=norate.264\ncodec=h264\n' > "$W/norate.info"
+                           "$D/test_h26x_framerate" "$W/prog.264=50:StreamTiming" "$W/mbaff.264=25:StreamTiming" \
+                               "$W/paff.264=25:StreamTiming" "$W/hevc.265=50:StreamTiming" \
+                               "$W/withinfo.264=50:Info" "$W/mismatch.264=30:Info:warn" \
+                               "$W/norate.264=50:StreamTiming:log=.info without frame_rate, frame rate from the SPS timing"; }
 gate_index_bundle_adopt() { need "$PAFF"; "$D/test_index_bundle_adopt" "$PAFF" 200; }
 # The Tux timeline has no aspect switch: the gate is "exactly 0 transitions".
 gate_aspectscan_mpeg2()  { need "$M2V"; "$D/test_aspectscan_mpeg2" "$M2V" 2 0; }

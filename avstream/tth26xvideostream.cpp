@@ -10,12 +10,15 @@
 #include "tth26xvideostream.h"
 #include "ttvideoindexlist.h"
 #include "ttframeindexer.h"
+#include "ttesinfo.h"
 #include "../common/ttcut.h"
 #include "../common/ttsettings.h"
 #include "../common/ttexception.h"
 #include "../common/istatusreporter.h"
 
 #include <QDebug>
+
+#include <cmath>
 
 TTH26xVideoStream::TTH26xVideoStream(const QFileInfo& fInfo)
     : TTVideoStream(fInfo)
@@ -113,20 +116,41 @@ int TTH26xVideoStream::createHeaderList()
     }
     mFrameIndexBundle = indexer.bundle();
 
-    // .info over libav, PAFF field rate halved (isPAFF is only ever set for H.264)
+    // .info first (PAFF field rate halved), else the SPS timing, else 25
     frame_rate = static_cast<float>(TTFrameIndexer::effectiveFrameRate(
-        probe.frameRate, filePath(), mFrameIndexBundle.isPAFF));
+        probe.frameRate, filePath(), mFrameIndexBundle.isPAFF, &mFrameRateOrigin));
 
     mLog->infoMsg(__FILE__, __LINE__,
-        QString("%1 stream: %2x%3 @ %4 fps (libav %5 fps%6), profile %7, level %8")
+        QString("%1 stream: %2x%3 @ %4 fps (SPS timing %5 fps%6), profile %7, level %8")
             .arg(codecLabel())
             .arg(probe.width)
             .arg(probe.height)
-            .arg(frame_rate, 0, 'f', 2)
-            .arg(probe.frameRate, 0, 'f', 2)
+            .arg(frame_rate, 0, 'f', 3)
+            .arg(probe.frameRate, 0, 'f', 3)
             .arg(mFrameIndexBundle.isPAFF ? ", PAFF" : "")
             .arg(probe.profile)
             .arg(probe.level));
+    // A .info without a usable frame_rate line counts as no .info here.
+    const QString noInfo = TTESInfo::findInfoFile(filePath()).isEmpty()
+        ? QStringLiteral("no .info") : QStringLiteral(".info without frame_rate");
+    switch (mFrameRateOrigin) {
+    case TTFrameRateOrigin::StreamTiming:
+        mLog->infoMsg(__FILE__, __LINE__,
+            QString("%1: %2, frame rate from the SPS timing: %3 fps")
+                .arg(filePath(), noInfo).arg(frame_rate, 0, 'f', 3));
+        break;
+    case TTFrameRateOrigin::Assumed:
+        mLog->warningMsg(__FILE__, __LINE__,
+            QString("%1: %2 and no SPS timing, frame rate assumed: %3 fps")
+                .arg(filePath(), noInfo).arg(frame_rate, 0, 'f', 3));
+        break;
+    case TTFrameRateOrigin::Info:
+        if (probe.frameRate > 0 && std::fabs(frame_rate - probe.frameRate) > 0.001 * frame_rate)
+            mLog->warningMsg(__FILE__, __LINE__,
+                QString("%1: .info frame rate %2 fps disagrees with the SPS timing %3 fps - using .info")
+                    .arg(filePath()).arg(frame_rate, 0, 'f', 3).arg(probe.frameRate, 0, 'f', 3));
+        break;
+    }
 
     // The GOP table is part of the bundle the indexer produced; the Step report
     // stays so the progress sequence is unchanged.
