@@ -84,7 +84,6 @@ TTAVData::TTAVData()
   mpMuxList         = new TTMuxListData();
 	mpAVList          = new TTAVList();
 	mpCutList         = new TTCutList();
-	mpMarkerList      = new TTMarkerList();
   mAvSyncOffsetMs   = 0;
   mCurrentFramePosition = 0;
 
@@ -103,10 +102,6 @@ TTAVData::TTAVData()
 	connect(mpCutList, &TTCutList::orderUpdated,                            this, &TTAVData::cutOrderUpdated);
 	connect(mpCutList, &TTCutList::itemUpdated,                             this, &TTAVData::cutItemUpdated);
 
-	connect(mpMarkerList, &TTMarkerList::itemAppended,                      this, &TTAVData::markerAppended);
-	connect(mpMarkerList, qOverload<int>(&TTMarkerList::itemRemoved),       this, &TTAVData::markerRemoved);
-	connect(mpMarkerList, &TTMarkerList::orderUpdated,                      this, qOverload<const TTMarkerItem&, int>(&TTAVData::markerUpdated));
-	connect(mpMarkerList, &TTMarkerList::itemUpdated,                       this, qOverload<const TTMarkerItem&, const TTMarkerItem&>(&TTAVData::markerUpdated));
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -118,7 +113,6 @@ TTAVData::~TTAVData()
 
 	if (mpAVList         != 0) delete mpAVList;
 	if (mpCutList        != 0) delete mpCutList;
-	if (mpMarkerList     != 0) delete mpMarkerList;
   if (mpMuxList        != 0) delete mpMuxList;
   if (mpThreadTaskPool != 0) delete mpThreadTaskPool;
 }
@@ -131,7 +125,6 @@ void TTAVData::clear()
 	dropPendingTrackValues(nullptr);
 	mpAVList->clear();
 	mpCutList->clear();
-	mpMarkerList->clear();
 }
 
 /* /////////////////////////////////////////////////////////////////////////////
@@ -170,19 +163,6 @@ void TTAVData::sortCutItemsByOrder()
 	emit cutDataReloaded();
 }
 
-/* /////////////////////////////////////////////////////////////////////////////
- * Marker handling
- */
-
-/*!
- * sortMarkerByOrder
- */
-void TTAVData::sortMarkerByOrder()
-{
-	mpMarkerList->sortByOrder();
-	emit markerDataReloaded();
-}
-
 int TTAVData::totalProcess() const
 {
 	return mpThreadTaskPool->overallPercentage();
@@ -207,14 +187,6 @@ TTAVItem* TTAVData::createAVItem()
 		connect(mpCutList,          &TTCutList::orderUpdated,
             avItem->mpCutList,  &TTCutList::onUpdateOrder);
 
-		connect(avItem->mpMarkerList, &TTMarkerList::itemAppended,
-            mpMarkerList,         &TTMarkerList::onAppendItem);
-		connect(avItem->mpMarkerList, qOverload<const TTMarkerItem&>(&TTMarkerList::itemRemoved),
-            mpMarkerList,         &TTMarkerList::onRemoveItem);
-		connect(avItem->mpMarkerList, &TTMarkerList::itemUpdated,
-            mpMarkerList,         &TTMarkerList::onUpdateItem);
-		connect(mpMarkerList,         &TTMarkerList::orderUpdated,
-            avItem->mpMarkerList, &TTMarkerList::onUpdateOrder);
 
   	return avItem;
 	}
@@ -803,10 +775,6 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
             qDebug() << "  Adding VDR cut:" << cutIn << "-" << cutOut;
         avItem->appendCutEntry(cutIn, cutOut);
 
-        // Also add individual markers for the Marker tab
-        avItem->appendMarker(cutIn);
-        avItem->appendMarker(cutOut);
-
         // Collect as VDR stream points for Landezonen widget
         vdrPoints.append(TTStreamPoint(cutIn, StreamPointType::VDRImportMarker,
           QString("VDR Mark (Cut-In)")));
@@ -822,7 +790,6 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   this->avDataReloaded();
   this->cutDataReloaded();
-  this->markerDataReloaded();
 
   setCurrentAVItem(avItem);
 

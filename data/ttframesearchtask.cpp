@@ -22,7 +22,6 @@
 #include "../common/istatusreporter.h"
 #include "../avstream/ttavstream.h"
 #include "../extern/ttffmpegwrapper.h"
-#include "../avstream/ttframeindexer.h"
 #include "../avstream/tth26xvideostream.h"  // frameIndexBundle (index sharing)
 #include "../mpeg2decoder/ttmpeg2decoder.h"
 #include "../avstream/ttcommon.h"

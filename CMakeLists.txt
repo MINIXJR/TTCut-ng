@@ -87,7 +87,6 @@ set(TTCUT_HEADERS
   data/ttaudiolist.h
   data/ttsubtitlelist.h
   data/ttcutlist.h
-  data/ttmarkerlist.h
   data/ttstreampoint.h
   data/ttstreampointmodel.h
   data/ttstreampoint_videoworker.h
@@ -216,7 +215,6 @@ set(TTCUT_CORE_SOURCES
   data/ttaudiolist.cpp
   data/ttsubtitlelist.cpp
   data/ttcutlist.cpp
-  data/ttmarkerlist.cpp
   data/ttstreampoint.cpp
   data/ttstreampointmodel.cpp
   data/ttstreampoint_videoworker.cpp

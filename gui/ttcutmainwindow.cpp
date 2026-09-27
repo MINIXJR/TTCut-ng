@@ -50,7 +50,6 @@
 #include "ttcutsettingsdlg.h"
 #include "ttprogressbar.h"
 #include "ttcutaboutdlg.h"
-#include "ttgotoframedialog.h"
 #include "ttwindowgeometry.h"
 
 #include "../data/ttavdata.h"
@@ -59,10 +58,8 @@
 
 // TTMPEG2Window2 is the preview window type (videoWindow(), logo ROI signal)
 #include "../mpeg2window/ttmpeg2window2.h"
-#include "../avstream/ttmpeg2videoheader.h"
 #include "../avstream/ttavtypes.h"
 #include "../avstream/ttaudioheaderlist.h"
-#include "../avstream/ttframeindexer.h"
 
 #include "../ui//pixmaps/downarrow_18.xpm"
 #include "../ui/pixmaps/uparrow_18.xpm"
@@ -420,8 +417,6 @@ void TTCutMainWindow::connectAVDataSignals()
   connect(mpAVData, &TTAVData::cutOrderUpdated,    this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemAppended,     this, &TTCutMainWindow::onProjectModified);
   connect(mpAVData, &TTAVData::avItemRemoved,      this, &TTCutMainWindow::onProjectModified);
-  connect(mpAVData, &TTAVData::markerAppended,     this, &TTCutMainWindow::onProjectModified);
-  connect(mpAVData, &TTAVData::markerRemoved,      this, &TTCutMainWindow::onProjectModified);
 }
 
 /* /////////////////////////////////////////////////////////////////////////////

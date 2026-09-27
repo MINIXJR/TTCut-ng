@@ -16,7 +16,6 @@
 #include "ttavlist.h"
 
 #include "../common/ttcut.h"
-#include "../avstream/ttavheader.h"
 #include "../avstream/ttavstream.h"
 #include "../avstream/ttmpeg2videostream.h"
 #include "../avstream/ttcommon.h"

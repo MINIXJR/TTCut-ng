@@ -1,6 +1,6 @@
 ---
-base_commit: a84e1fa3a2bd9a12c0bada05be9ba487ba173cca
-last_verified: 2026-09-26
+base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
+last_verified: 2026-09-27
 sources:
   - data/ttaudiolist.h
   - data/ttaudiolist.cpp
@@ -195,7 +195,7 @@ Direction measured with `mmdc` (2026-09-25): `TD` viewBox ratio 2.30, `LR` 3.07.
 ## Redundancy / consolidation candidates
 
 - **Two list classes with one shape**
-  - sites: `data/ttaudiolist.cpp:TTAudioList`, `data/ttsubtitlelist.cpp:TTSubtitleList` (and the item classes; the audit-run-8 classifier found the same shape in `TTMarkerList` and `TTCutList`), plus the parallel finish handlers `TTAVData::onOpenAudioFinished` / `onOpenSubtitleFinished` and the open tasks `TTOpenAudioTask` / `TTOpenSubtitleTask`
+  - sites: `data/ttaudiolist.cpp:TTAudioList`, `data/ttsubtitlelist.cpp:TTSubtitleList` (and the item classes; the audit-run-8 classifier found the same shape in `TTCutList`), plus the parallel finish handlers `TTAVData::onOpenAudioFinished` / `onOpenSubtitleFinished` and the open tasks `TTOpenAudioTask` / `TTOpenSubtitleTask`
   - shared purpose: ordered track entries with append/remove/update/swap/clear/sortByProjectOrder and the same signal set
   - status: documented → TODO.md P6 (Spur-Listen als eine Vorlage); needs its own design, `cut-edit-and-start.md` records that the lists share no base class yet
 - **Four language/delay slots on `TTAVItem`**

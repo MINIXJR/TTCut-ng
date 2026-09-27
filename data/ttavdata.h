@@ -27,7 +27,6 @@
 #include <atomic>
 
 #include "ttcutlist.h"
-#include "ttmarkerlist.h"
 #include "ttavlist.h"
 #include "ttstreampoint.h"
 #include "../common/ttprogressestimator.h"
@@ -85,7 +84,6 @@ class TTAVData : public QObject
     void      copyCutEntry(const TTCutItem& cutItem);
     void      sortCutItemsByOrder();
 
-    void      sortMarkerByOrder();
 
     TTAVItem* avItemAt(int index)         { return mpAVList->at(index); }
     int       avCount()                   { return mpAVList->count(); }
@@ -94,8 +92,6 @@ class TTAVData : public QObject
     int       cutIndexOf(const TTCutItem& item) { return mpCutList->indexOf(item); }
     int       cutCount()                  { return mpCutList->count(); }
 
-    TTMarkerItem markerAt(int index)                     { return mpMarkerList->at(index); }
-    int          markerCount()                           { return mpMarkerList->count(); }
 
 
     TTAVItem* doOpenVideoStream(const QString& filePath, int order=-1);
@@ -203,11 +199,6 @@ class TTAVData : public QObject
     void cutItemUpdated(const TTCutItem& citem, const TTCutItem& uitem);
     void cutDataReloaded();
 
-    void markerAppended(const TTMarkerItem& item);
-    void markerRemoved(int index);
-    void markerUpdated(const TTMarkerItem& item, int order);
-    void markerUpdated(const TTMarkerItem& citem, const TTMarkerItem& uitem);
-    void markerDataReloaded();
 
     void foundEqualFrame(int index);
     void cutPreviewFinished(TTCutList* cutList);
@@ -279,7 +270,6 @@ class TTAVData : public QObject
     //! the duration of one operation.
     TTCutList*        mpRunningCutList = nullptr;
     bool mNonInteractive = false;  // --auto-cut: no modal dialogs
-    TTMarkerList*     mpMarkerList;
     TTMuxListData*    mpMuxList;
     TTCutPreviewTask*   cutPreviewTask;
     TTCutVideoTask*   cutVideoTask;

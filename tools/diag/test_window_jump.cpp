@@ -31,7 +31,6 @@
 #include "avstream/ttmpeg2videostream.h"
 #include "avstream/ttvideoindexlist.h"
 #include "mpeg2window/ttmpeg2window2.h"
-#include "mpeg2decoder/ttmpeg2decoder.h"
 
 static QByteArray pixmapSum(const QPixmap& pm)
 {

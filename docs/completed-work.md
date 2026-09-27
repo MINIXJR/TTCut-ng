@@ -1006,6 +1006,31 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Dead-Code-Audit, dritter Lauf** → **DONE (2026-09-27, Zweig
+  `cleanup/dead-code-audit-3`)**. Skill `dead-code-audit`; 33 Kandidaten.
+  Einstufung ohne Subagenten (User-Regel; Includes prüft der Compiler).
+  - **Includes:** 50 Zeilen in 25 Dateien (30 Kandidaten); jede Übersetzungs-
+    einheit ohne die Zeile und ohne alle zusammen mit `-fsyntax-only` und
+    echter Compile-Zeile übersetzt — alle ok, keiner lieferte einen Typ nur
+    transitiv.
+  - **`TTMpeg2Decoder::decodeMPEG2Frame`:** seit Audit-Lauf 13 ohne Aufrufer.
+  - **Alte Markerliste** (User-Entscheid): `TTMarkerList`/`TTMarkerItem`
+    (369 Zeilen), Marker-API von `TTAVItem`/`TTAVData`, `<Marker>` schreiben.
+    Befüllt vom VDR-Import („for the Marker tab") und vom Projekt-Parser, aber
+    seit dem ersten Dead-Code-Audit (Marker-Tab weg) nirgends angezeigt;
+    einziger Abnehmer war das Dirty-Flag. Gate `project_marker_dropped`.
+  - `TTSearchTask::collectNextBatch` lebendig (Aufruf in Header-Template).
+  - Prüfung: frisches Build-Verzeichnis je Stapel inkl. `diag` und
+    `ttcut-burst-probe`; run-gates 140 PASS; `--auto-cut` master vs. Zweig auf
+    Tux H.264 (3413 Pakete) und MPEG-2 (3850) — Paket-Prüfsummen, PTS, DTS
+    identisch; Nachscan mit und ohne Linker-Signal konvergiert.
+  - Fallen: (1) Build-Verzeichnis unter `CLAUDE_TMP` scheitert an moc
+    (relative Pfade über den Symlink auf die andere Platte) — `build-audit`
+    im Repo oder den echten Pfad nehmen. (2) Gate-Kriterium `grep -i marker`
+    traf den Pfad des Arbeitsverzeichnisses. (3) `output-mux.md` führte seit
+    Audit-Lauf 7 eine gelöschte Quelle (`extern/imuxprovider.h`) — der Pfad-
+    Abgleich fand es.
+
 - **Audit-Lauf 17: Lese-Hypothesen der Karte `demux-helpers.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run17`)**. Echtes Material: Babylon
   Berlin 05x05 (1035 OCR-Untertitel, spupng-Dump mit denselben Flags wie

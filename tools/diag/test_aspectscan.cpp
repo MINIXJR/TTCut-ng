@@ -33,7 +33,6 @@
 #include "extern/ttffmpegwrapper.h"
 #include "avstream/ttframeindexer.h"
 #include "common/ttthreadtask.h"
-#include "mpeg2decoder/ttmpeg2decoder.h"
 
 extern "C" {
 #include <libavutil/avutil.h>

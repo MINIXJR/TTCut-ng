@@ -21,7 +21,6 @@
 #include <QListIterator>
 
 #include "ttcutlist.h"
-#include "ttmarkerlist.h"
 #include "ttaudiolist.h"
 #include "ttsubtitlelist.h"
 #include "../extern/ttaudiorepairitem.h"
@@ -54,12 +53,10 @@ class TTAVItem : public QObject
     TTSubtitleStream* subtitleStreamAt(int index) const { return mpSubtitleList->at(index).getSubtitleStream(); }
     int            subtitleCount()            const { return mpSubtitleList->count(); }
     int            cutCount()                 const { return mpCutList->count(); }
-    int            markerCount()              const { return mpMarkerList->count(); }
     TTAudioItem    audioListItemAt(int index) const { return mpAudioList->at(index); }
     TTSubtitleItem subtitleListItemAt(int index) const { return mpSubtitleList->at(index); }
     TTCutItem      cutListItemAt(int index)   const { return mpCutList->at(index); }
     int            cutIndexOf(const TTCutItem& item) const { return mpCutList->indexOf(item); }
-    TTMarkerItem   markerAt(int index)               const { return mpMarkerList->at(index); }
 
     void canCutWith(const TTAVItem* avItem, int cutIn, int cutOut);
 
@@ -101,8 +98,6 @@ class TTAVItem : public QObject
     void appendCutEntry(int cutIn, int cutOut, int order=-1);
     void removeCutEntry(const TTCutItem& cItem);
     void updateCutEntry(const TTCutItem& cItem, int cutIn, int cutOut);
-
-    void appendMarker(int markerPos, int order=-1);
 
     //! Audio auto-sort (language preference resp. project order, see
     //! TTAVData::onOpenAudioFinished) and the subtitle project-order restore
@@ -182,7 +177,6 @@ class TTAVItem : public QObject
     TTAudioList*     mpAudioList;
     TTSubtitleList*  mpSubtitleList;
     TTCutList*       mpCutList;
-    TTMarkerList*    mpMarkerList;
     QList<TTAudioRepairItem> mAudioRepairs;
 };
 
