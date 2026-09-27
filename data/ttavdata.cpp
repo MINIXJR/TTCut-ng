@@ -714,6 +714,12 @@ void TTAVData::onOpenVideoFinished(TTAVItem* avItem, TTVideoStream* vStream, int
 
   avItem->setVideoStream(vStream);
 
+  // No .info and no SPS timing: the frame rate is a guess - reported with
+  // the track failures when the pool run ends (onThreadPoolExit).
+  if (auto* h26x = dynamic_cast<TTH26xVideoStream*>(vStream))
+    if (h26x->frameRateOrigin() == TTFrameRateOrigin::Assumed)
+      mFrameRateAssumed.append(h26x->filePath());
+
   // Load extra frame indices for audio time correction, now that the video
   // stream (and, for MPEG-2, the parser's field-pair list) is built. Runs for
   // ALL paths: direct open, project load. The cluster dialog only runs for a
@@ -943,6 +949,7 @@ void TTAVData::recordTrackOpenFailure(const QString& kind, const QString& filePa
 void TTAVData::clearOpenOutcome()
 {
   mTrackOpenFailures.clear();
+  mFrameRateAssumed.clear();
   mVideoOpenFailed = false;
   mVideoOpenFailure.clear();
   mOpenCancelled   = false;
@@ -1133,6 +1140,23 @@ void TTAVData::onThreadPoolExit()
         QMessageBox::warning(TTCut::mainWindow, tr("Tracks not opened"),
             tr("%n track(s) could not be opened and were skipped:\n\n%1", "", failures.size())
                 .arg(failures.join("\n")));
+      });
+    }
+  }
+
+  // Videos opened at an assumed frame rate (no .info, no SPS timing): the
+  // stream logged it; say it in the GUI as well.
+  if (!mFrameRateAssumed.isEmpty()) {
+    const QStringList files = mFrameRateAssumed;
+    emit frameRateAssumed(files);
+    if (!mNonInteractive) {
+      QTimer::singleShot(0, this, [files] {
+        QMessageBox::warning(TTCut::mainWindow, tr("Frame rate assumed"),
+            tr("No frame rate from a .info file and none in the video stream (SPS timing).\n"
+               "Assumed %1 fps for:\n\n%2\n\n"
+               "Cuts and audio positions are wrong if the real frame rate differs. "
+               "Demux the recording with ttcut-demux to get a .info file with the frame rate.")
+                .arg(kTTAssumedFrameRate).arg(files.join("\n")));
       });
     }
   }

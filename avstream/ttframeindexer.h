@@ -27,6 +27,11 @@
 // Forward declaration for libav types (avoid including C headers in .h)
 struct AVFormatContext;
 
+// Where TTFrameIndexer::effectiveFrameRate took the frame rate from.
+enum class TTFrameRateOrigin { Info, StreamTiming, Assumed };
+// Frame rate of a raw ES with neither .info nor SPS timing.
+constexpr double kTTAssumedFrameRate = 25.0;
+
 class TTFrameIndexer
 {
 public:
@@ -54,11 +59,13 @@ public:
     static TTFieldInfo parseH264FieldInfo(const uint8_t* data, int size,
                                           bool frameMbsOnlyFlag, int log2MaxFrameNum);
 
-    // The frame rate of an H.26x ES: the .info frame_rate when present (libav
-    // reports twice the real rate for a raw H.264 ES), else libavRate; halved
-    // for PAFF when above 30 (a field rate). Shared by the stream's
-    // frameRate() and the PTS synthesis of an ES without timestamps.
-    static double effectiveFrameRate(double libavRate, const QString& filePath, bool isPAFF);
+    // The frame rate of an H.26x ES: the .info frame_rate when present
+    // (halved for PAFF above 30, a field rate), else the SPS/VPS timing
+    // (TTStreamInfo::frameRate, already the frame rate), else
+    // kTTAssumedFrameRate. Shared by the stream's frameRate() and the PTS
+    // synthesis of an ES without timestamps.
+    static double effectiveFrameRate(double streamTiming, const QString& filePath,
+                                     bool isPAFF, TTFrameRateOrigin* origin = nullptr);
 
 private:
     // Parse the stream's SPS extradata; sets mBundle.log2MaxFrameNum and

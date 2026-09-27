@@ -21,6 +21,7 @@
 #include "ttavstream.h"
 #include "ttavutil.h"
 #include "ttframeindex.h"
+#include "ttframeindexer.h"
 #include "../common/ttmessagelogger.h"
 
 #include <QFileInfo>
@@ -41,6 +42,8 @@ public:
 
     // Probe result of the best video stream (resolution, profile, level).
     const TTStreamInfo& streamInfo() const { return mProbe.info; }
+    // Where frameRate() came from (.info, SPS timing, or assumed 25).
+    TTFrameRateOrigin frameRateOrigin() const { return mFrameRateOrigin; }
     virtual const char* codecLabel() const = 0;          // "H.264" / "H.265"
 
     // From TTAVStream
@@ -109,6 +112,7 @@ protected:
     // createHeaderList(): entries, GOP table, raw->merged map, PAFF metadata
     // and the display-order map. Adopters receive a copy (Qt COW).
     TTFrameIndexBundle mFrameIndexBundle;
+    TTFrameRateOrigin  mFrameRateOrigin = TTFrameRateOrigin::Assumed;
     TTMessageLogger* mLog;
 };
 

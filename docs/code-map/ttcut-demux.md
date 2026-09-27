@@ -1,6 +1,6 @@
 ---
-base_commit: 511e7ab95c05672848fb5dd4ddaf7f685beb9bbb
-last_verified: 2026-09-26
+base_commit: 624be1f0649dc858d4b2a5599a3b7fd2dfd36117
+last_verified: 2026-09-27
 sources:
   - tools/ttcut-demux/ttcut-demux
   - tools/ttcut-pts-analyze/ttcut-pts-analyze.c
@@ -33,7 +33,7 @@ Legend: solid = data flow, dashed = trigger/control.
 flowchart LR
     TS["Source TS<br/>(VDR .rec, single or multi-file)"]
     MARKS["marks file<br/>(vdr-plugin-markad)"]
-    PROBE["Stream discovery<br/>ffprobe: streams, codec, WxH, r_frame_rate"]
+    PROBE["Stream discovery<br/>ffprobe: streams, codec, WxH, r/avg_frame_rate"]
     CONTDUR["CONTAINER_VIDEO_DURATION<br/>ffprobe format=duration"]
     PTS0["First-PTS probe (pre-repair)<br/>ORIG_VIDEO_PTS + per-track audio PTS"]
     TRIM["AUDIO_TRIM_SECS[i]<br/>per-track lead trim"]
@@ -104,6 +104,7 @@ flowchart LR
 
 | From → To | Data / order / invariant carried |
 |---|---|
+| PROBE → `.info frame_rate` | `VIDEO_INFO` (one `ffprobe` of `$INPUT`, also the concat input of a VDR multi-file run) reads `r_frame_rate` and `avg_frame_rate` of the **TS**. `frame_rate` = `r_frame_rate`, for interlaced material (`field_order` of the extracted ES not `progressive`/`unknown`) halved by `video_frame_rate` when it is twice the TS `avg_frame_rate` — libav 9.0.2 sums the packet durations for it and takes a packet's duration from the SPS timing, from `r_frame_rate` only when the stream has none (`demux.c` `compute_frame_duration`); so a PAFF TS without SPS timing may report avg = r and keep the field rate (not measured, no such material). Measured TS values 2026-09-27: 1080i25 PAFF 50/25 → 25, MBAFF 25/25, 720p50 50/50, MPEG-2 576i/p 25/25. Until `fix/frame-rate-source` the reference was the ES `avg_frame_rate`, which for a raw ES is always the raw demuxer default 25 (right for 25i by coincidence; 29.97i PAFF would have kept 59.94). Gate `demux_framerate`. |
 | TS → CONTAINER_VIDEO_DURATION | `ffprobe format=duration` of the source = **container span** (latest stream end − earliest stream start). With audio leading video (typical VDR), this exceeds the video display duration by the audio lead. Since `d7a046b` used only as a **seek hint** for the end-window probe, no longer as the duration. |
 | VIDEO_DURATION = video PTS span (FIXED `d7a046b`) | Measured on the repaired TS: `last_video_pts + frame_dur − first_video_pts`, where `first_video_pts` = the video stream's **start_time** (first *decodable* frame — excludes open-GOP leading Bs, which every decoder drops and which the old min-packet-PTS wrongly included). Falls back to the container span (with a warning) only if the repair failed or the probe is empty. Futurama: 3419800 ms = 85495 frames, exact vs ffprobe count_frames (was container 3420269). |
 | REPAIR → progress band | The remux is the run's first long call and used to report nothing while it ran: `progress_set 0` stood above it and `progress_set 10` only after it returned, so a supervising wrapper showed 0 % for the whole phase. It now runs in the background against `-progress` and maps `out_time_us` onto its band, the same way the gap repair does. `-nostats` stays OFF so the `frame=` line the log parser reads survives. The fixed marks after it are spaced by **measured** duration, not by step count: before, the PTS analysis took 13 s but moved the bar 7 points while the ES extraction took 8 s and moved it 15, and the three tail marks all landed in the last seconds — the bar jumped 40 → 76 and the upper half was never walked (measured on a gapless 10.4 GB run, 63 s, idle machine). |

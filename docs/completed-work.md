@@ -1006,6 +1006,43 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Suche und Dekodierung
 
+- **Bildrate roher H.26x-ES ohne .info + ttcut-demux-Halbierung** → **GEFIXT
+  (2026-09-27, Zweig `fix/frame-rate-source`, Spec
+  `2026-09-27-frame-rate-source-design`)**. Aus H5 von Audit-Lauf 12.
+  - Gemessen (libav 9.0.2): `r_frame_rate` roher ES — Tux progressiv 100
+    (echt 50), MBAFF 50 (25), PAFF 50 (25, wurde halbiert), HEVC 50 (50),
+    DVB 720p50 100 (50); ohne SPS-Timing (JM-H.264 ohne VUI, x265
+    `vui-timing-info=0`) 1200000/1. `avg_frame_rate` roher ES = Option
+    `framerate` des Rohdemuxers (Vorgabe 25). `codecpar->framerate` (SPS/VPS-
+    Timing des Parsers) auf allen Dateien mit Timing richtig.
+  - Folge vorher: Schnitt Bild 1000–2499 ohne `.info` → MKV 15,008 s, Ton aus
+    10,016–25,024 s (Chirp-AC3, Paket-MD5); nachher wie mit `.info` 30,016 s,
+    Ton 20,000–50,016 s.
+  - Regel jetzt `TTFrameIndexer::effectiveFrameRate`: `.info` (PAFF halbiert)
+    → SPS-Timing → 25 angenommen (`TTFrameRateOrigin`), GUI-Hinweis
+    `frameRateAssumed`. User-Entscheid beim Planen: `r_frame_rate`/
+    `avg_frame_rate` ganz weg statt Plausibilitätsgrenze.
+  - Gates: `h26x_framerate` (alt rot: 100/50), `framerate_assumed` (alt rot:
+    1,2e+06), `framerate_hint`, `demux_framerate` (alt rot: Funktion fehlt).
+  - `ttcut-demux`: Halbierung verglich TS-`r_frame_rate` mit ES-`avg_frame_rate`
+    (immer 25) — 25i zufällig richtig, 29,97i-PAFF gerechnet falsch. Jetzt
+    TS-`avg_frame_rate` (Korpus: überall richtig; libav summiert dafür die
+    Paketdauern, die aus dem SPS-Timing kommen — ein PAFF-TS ohne SPS-Timing
+    bliebe ungemessen auf der Halbbildrate). A/B auf drei Korpus-TS-
+    Kopfstücken (DF1 PAFF, ServusTV MBAFF, Das Erste 720p50): `.info` und ES
+    identisch. VDR-Mehrteiler nur gelesen.
+  - Nebenbefund: Quellenangaben „ffmpeg 8.1.2“ waren falsch (installiert
+    9.0.2); die betroffenen Stellen sind in 9.0.2 unverändert.
+  - Abschluss-Review (Fable): merge-reif, 5 kleinere Befunde. Dabei gefunden:
+    eine `.info` ohne `frame_rate` zwang still 25 fps (TTESInfo parste dann
+    `"25/1"` als Vorgabe und `timingForVideo` gab sie als Rate der Datei
+    weiter) — gemessen: 50p-Kopfstück mit solcher `.info` → 25/Info statt
+    50/SPS. Jetzt `TTESInfo::hasFrameRate`; Gate-Fälle `norate` in
+    `h26x_framerate` und `framerate_assumed` (alt rot). Die Begründung „TS-
+    `avg_frame_rate` aus den Zeitstempeln“ war falsch (Summe der Paketdauern
+    aus dem SPS-Timing, `demux.c` `compute_frame_duration`) und ist
+    berichtigt; `gate_demux_framerate` prüft jetzt stderr (Mutante ohne
+    avg-Schutz fällt durch); `_parse_fraction`-Altfehler → TODO.
 - **Audit-Lauf 12: Lese-Hypothesen der Karte `h26x-stream.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run12`)**. Gemessen mit einer
   Wegwerf-Sonde (Keyframe-Flag gegen NAL-IDR, `findIDRBefore` an jeder

@@ -186,6 +186,9 @@ class TTAVData : public QObject
     //! ended (one text per track); the rest of the open or project load
     //! stands. Emitted from onThreadPoolExit() before the GUI dialog.
     void trackOpenFailed(const QStringList& messages);
+    //! H.26x videos opened in the run that just ended with neither .info
+    //! nor SPS timing: their frame rate is kTTAssumedFrameRate.
+    void frameRateAssumed(const QStringList& files);
 
     void avItemAppended(const TTAVItem& item);
     void avItemRemoved(int index);
@@ -331,6 +334,7 @@ class TTAVData : public QObject
     // by onThreadPoolExit(), and onReadProjectFileAborted() treats "only a
     // track failed" as a loaded project. Reset at every open/project start.
     QStringList mTrackOpenFailures;
+    QStringList mFrameRateAssumed;   // videos opened at kTTAssumedFrameRate
     bool        mVideoOpenFailed = false;
     QString mVideoOpenFailure;   //!< its reason, for the "Project Not Loaded" dialog
     //! AV items created by doOpenVideoStream() whose open task has not finished.

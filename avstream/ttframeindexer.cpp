@@ -384,23 +384,30 @@ void TTFrameIndexer::finalizeFrameIndex()
 }
 
 // ----------------------------------------------------------------------------
-// Frame rate of an H.26x ES: .info over libav, PAFF field rate halved
+// Frame rate of an H.26x ES: .info, else SPS timing, else 25
 // ----------------------------------------------------------------------------
-double TTFrameIndexer::effectiveFrameRate(double libavRate, const QString& filePath, bool isPAFF)
+double TTFrameIndexer::effectiveFrameRate(double streamTiming, const QString& filePath,
+                                          bool isPAFF, TTFrameRateOrigin* origin)
 {
-    double frameRate = libavRate;
     const TTESInfoTiming info = TTESInfo::timingForVideo(filePath);
-    if (info.frameRate > 0) {   // .info wins over libav's rate (2x for raw H.264 ES)
-        frameRate = info.frameRate;
+    if (info.frameRate > 0) {
+        double frameRate = info.frameRate;
         if (TTSettings::instance()->logFFmpegDecoder())
             qDebug() << "Using frame rate from .info file:" << frameRate;
+        if (isPAFF && frameRate > 30) {
+            if (TTSettings::instance()->logFFmpegDecoder())
+                qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
+            frameRate /= 2.0;
+        }
+        if (origin) *origin = TTFrameRateOrigin::Info;
+        return frameRate;
     }
-    if (isPAFF && frameRate > 30) {
-        if (TTSettings::instance()->logFFmpegDecoder())
-            qDebug() << "PAFF: correcting frame rate from" << frameRate << "to" << frameRate / 2.0;
-        frameRate /= 2.0;
+    if (streamTiming > 0) {
+        if (origin) *origin = TTFrameRateOrigin::StreamTiming;
+        return streamTiming;
     }
-    return frameRate;
+    if (origin) *origin = TTFrameRateOrigin::Assumed;
+    return kTTAssumedFrameRate;
 }
 
 // ----------------------------------------------------------------------------

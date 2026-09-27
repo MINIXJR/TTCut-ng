@@ -160,22 +160,18 @@ TTStreamInfo ttStreamInfo(const AVFormatContext* ctx, int streamIndex)
         info.profile = codecpar->profile;
         info.level = codecpar->level;
 
-        // Calculate frame rate. Prefer r_frame_rate over avg_frame_rate:
-        // for a raw H.264/H.265 ES (no container timestamps) avg_frame_rate
-        // is only the raw demuxer's "framerate" option, default 25.
-        // r_frame_rate is not reliable for a raw H.264 ES either: it is twice
-        // the frame rate for progressive and MBAFF material (measured
-        // 2026-09-27: 100 for 50p, 50 for 25i MBAFF); PAFF reports the field
-        // rate, which TTFrameIndexer::effectiveFrameRate halves. Raw HEVC
-        // measured right (50 for 50p). The .info frame_rate that ttcut-demux
-        // takes from the original TS therefore wins over this value
-        // (effectiveFrameRate); without .info a raw H.264 ES is cut at the
-        // wrong rate (audio from the wrong place, video at double speed).
-        if (stream->r_frame_rate.den > 0) {
-            info.frameRate = av_q2d(stream->r_frame_rate);
-        } else if (stream->avg_frame_rate.den > 0) {
-            info.frameRate = av_q2d(stream->avg_frame_rate);
-        }
+        // Frame rate = the SPS/VPS timing the libav parser read
+        // (h264_parser.c: time_scale / (2 * num_units_in_tick); hevc/parser.c:
+        // VPS or VUI timing), copied here by avformat_find_stream_info; 0 =
+        // unknown. r_frame_rate and avg_frame_rate carry nothing for a raw ES
+        // (measured 2026-09-27, libav 9.0.2): r_frame_rate is twice the frame
+        // rate for raw H.264 progressive and MBAFF, the field rate for PAFF
+        // and 1200000/1 without SPS timing; avg_frame_rate is the raw
+        // demuxer's "framerate" option (default 25).
+        // TTFrameIndexer::effectiveFrameRate decides between .info, this
+        // value and an assumed 25.
+        if (codecpar->framerate.num > 0 && codecpar->framerate.den > 0)
+            info.frameRate = av_q2d(codecpar->framerate);
 
         // Estimate frame count
         if (stream->nb_frames > 0) {

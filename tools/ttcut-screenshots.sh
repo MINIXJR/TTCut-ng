@@ -126,10 +126,9 @@ fi
 # Create .info metadata file (mimics ttcut-demux output)
 #
 # The test video is a raw H.264 elementary stream without container timing.
-# For such streams libav reports r_frame_rate as 2x the real frame rate
-# (a documented quirk), so TTCut-ng would detect 50fps instead of 25. Real
-# recordings always carry a .info file written by ttcut-demux that overrides
-# the libav guess; the test fixture reproduces that here. Values mirror the
+# TTCut-ng takes its frame rate from the SPS timing then (25 fps here); real
+# recordings carry a .info file written by ttcut-demux, and the fixture
+# mirrors that so the screenshots show the usual setup. Values mirror the
 # ffmpeg generation parameters above (720x576, 25fps, libx264).
 # See reference_libav_h264_framerate.md.
 #-----------------------------------------------------------------------------

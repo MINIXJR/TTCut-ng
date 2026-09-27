@@ -77,8 +77,9 @@ struct TTDecodeErrorRegion {
 // Timing values of the .info file next to a video, read in one go. Which
 // value wins - the stream's own frame rate or the .info one - is the
 // caller's rule: the stream classes and the frame indexer let .info win
-// (libav reports 2x the real rate for raw H.264 ES), preview, Smart Cut and
-// playback only fall back to it when the stream carries no rate.
+// (ttcut-demux takes it from the original TS; TTFrameIndexer::
+// effectiveFrameRate), preview, Smart Cut and playback only fall back to it
+// when the stream carries no rate.
 struct TTESInfoTiming
 {
     bool   found      = false;  // an .info file exists and loaded
@@ -113,7 +114,8 @@ public:
     // Frame rate as rational (numerator/denominator)
     int frameRateNum() const { return mFrameRateNum; }
     int frameRateDen() const { return mFrameRateDen; }
-    double frameRate() const;
+    double frameRate() const;             // 25 when the .info has no usable frame_rate
+    bool   hasFrameRate() const { return mHasFrameRate; }
 
     // Original PTS start (for offset correction)
     double startPts() const { return mStartPts; }
@@ -203,6 +205,7 @@ private:
     int mVideoHeight;
     int mFrameRateNum;
     int mFrameRateDen;
+    bool mHasFrameRate = false;           // frame_rate line present and usable
     double mStartPts;
     bool mFillerStripped;
     int64_t mFillerSavedBytes;
