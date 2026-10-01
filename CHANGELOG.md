@@ -5,6 +5,13 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Audio-change marker "5.1 → 5.1" is gone.** A broadcaster switching from
+  5.1 to stereo drops the LFE channel two frames before the others; that
+  gave a marker labelled "Audio 5.1 → 5.1" and a second one three frames
+  later. A transition shorter than 5 AC3 frames is now one marker, labelled
+  with the layouts before and after ("Audio 5.1 → 2.0") and placed where
+  the transition starts. Layouts are named by main channels and LFE (5.0,
+  4.1, 2.1 were mislabelled). Gate: `audio_es_input`.
 - **ttcut-quality-check finds A/V offsets in every segment.** It measured
   only the start of the first segment: an offset of 200 ms from the second
   segment on was reported as +0 ms PASS. Audio without a clear correlation

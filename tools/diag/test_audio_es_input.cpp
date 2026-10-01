@@ -8,7 +8,9 @@
 //   H3  one broken MPEG header does not end the header list;
 //   H2  the automatic audio search offers only what the parser can read;
 //   H4  audio-change markers land on the display frame of the change,
-//       extra frames and a 44.1 kHz AC3 track included.
+//       extra frames and a 44.1 kHz AC3 track included;
+//   a short transition between two layouts (5.1 -> 5.0 -> 2.0) is one
+//       marker, labelled with main channels and LFE.
 //
 // Usage: test_audio_es_input <work-dir>
 #include <QCoreApplication>
@@ -247,6 +249,67 @@ static void checkAudioChangeMarker(const QString& dir, int rate)
   delete s;
 }
 
+// A broadcaster switching 5.1 -> 2.0 drops the LFE two frames before the
+// other channels (measured on a DVB recording: 2 frames of 3/2 without LFE).
+// That transition is one change, not two: one marker "5.1 -> 2.0" on the
+// first frame that leaves 5.1. A stretch shorter than the stable minimum
+// that returns to the layout it left (3 stereo frames inside 5.1) is none.
+static void checkAudioChangeTransition(const QString& dir)
+{
+  const QString a = dir + "/tr_51.ac3", b = dir + "/tr_50.ac3", c = dir + "/tr_20.ac3";
+  const QString in = dir + "/transition.ac3";
+  const QStringList enc{"-ar", "48000", "-c:a", "ac3", "-b:a", "384k", "-f", "ac3"};
+  if (!makeSine(a, 30, QStringList{"-ac", "6"} + enc) ||
+      !makeSine(b, 2, QStringList{"-af", "pan=5.0(side)|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0"} + enc) ||
+      !makeSine(c, 10, QStringList{"-ac", "2"} + enc)) {
+    check(false, "transition: ffmpeg could not build the material");
+    return;
+  }
+  auto bytes = [](const QString& path) {
+    QFile f(path);
+    f.open(QIODevice::ReadOnly);
+    return f.readAll();
+  };
+  const int frameBytes = 1536;                         // 384 kbit/s at 48 kHz
+  const QByteArray d51 = bytes(a), d50 = bytes(b), d20 = bytes(c);
+  QFile out(in);
+  out.open(QIODevice::WriteOnly);
+  out.write(d51);
+  out.write(d50.left(2 * frameBytes));                 // 2 frames 5.0: transition
+  out.write(d20);
+  out.write(d51);
+  out.write(d20.left(3 * frameBytes));                 // 3 frames 2.0: too short
+  out.write(d51);
+  out.close();
+
+  TTAudioStream* s = openAudio(in);
+  if (!s) { check(false, "transition: stream does not open"); return; }
+  auto hdr = [s](int i) { return static_cast<TTAC3AudioHeader*>(s->headerAt(i)); };
+  const int n51 = d51.size() / frameBytes, n20 = d20.size() / frameBytes;
+  const int leave = n51, back = n51 + 2 + n20;
+  const bool material = s->headerList()->count() == 3 * n51 + 2 + n20 + 3 &&
+      hdr(leave - 1)->acmod == 7 && hdr(leave - 1)->lfeon &&
+      hdr(leave)->acmod == 7 && !hdr(leave)->lfeon &&
+      hdr(leave + 2)->acmod == 2 && hdr(back)->acmod == 7 && hdr(back)->lfeon;
+  check(material, "transition: material is 5.1 | 2 x 5.0 | 2.0 | 5.1 | 3 x 2.0 | 5.1");
+
+  TTStreamPointAudioWorker worker(in, 25.0f, false, -50, 1.0f, true, s->headerList(), {});
+  QList<TTStreamPoint> points;
+  QObject::connect(&worker, &TTStreamPointAudioWorker::pointsDetected,
+                   [&points](const QList<TTStreamPoint>& p) { points = p; });
+  worker.runSynchron();
+
+  QStringList got;
+  for (const TTStreamPoint& p : points)
+    got << QString("%1 '%2'").arg(p.frameIndex()).arg(p.description());
+  const QStringList expected{
+    QString("%1 'Audio 5.1 → 2.0'").arg(qRound(leave * 1536.0 / 48000.0 * 25.0)),
+    QString("%1 'Audio 2.0 → 5.1'").arg(qRound(back * 1536.0 / 48000.0 * 25.0))};
+  check(got == expected, QString("transition: markers [%1], expected [%2]")
+                             .arg(got.join(", "), expected.join(", ")));
+  delete s;
+}
+
 // H4, silence side: 20 s tone, 3 s silence, 5 s tone; the silence marker
 // must sit at display frame 20 s x 25 + the three extra frames before it.
 static void checkSilenceMarker(const QString& dir)
@@ -283,6 +346,7 @@ int main(int argc, char** argv)
   checkAudioSearch(dir);
   checkAudioChangeMarker(dir, 48000);
   checkAudioChangeMarker(dir, 44100);
+  checkAudioChangeTransition(dir);
   checkSilenceMarker(dir);
 
   printf("%s (%d failed)\n", gFail ? "AUDIO_ES_INPUT FAIL" : "AUDIO_ES_INPUT PASS", gFail);
