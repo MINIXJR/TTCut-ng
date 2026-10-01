@@ -31,6 +31,12 @@ extern "C" {
 #include <QScopeGuard>
 #include <clocale>
 
+namespace {
+//! Shortest run of AC3 frames (5 x 32 ms at 48 kHz) that counts as a channel
+//! layout of its own; anything shorter inside the track is a transition.
+constexpr int kMinStableAc3Frames = 5;
+}
+
 TTStreamPointAudioWorker::TTStreamPointAudioWorker(
     const QString& audioFilePath, float videoFrameRate,
     bool detectSilence, int silenceThresholdDb, float silenceMinDuration,
@@ -349,48 +355,76 @@ QList<TTStreamPoint> TTStreamPointAudioWorker::detectAudioChanges()
     return results;
   }
 
-  // Detect channel configuration changes in AC3 streams
-  // by tracking acmod field across consecutive headers
-  int prevChannels = -1;
+  // Runs of consecutive AC3 headers with the same channel layout. The layout
+  // is the pair (main channels from acmod, LFE): their sum cannot tell 5.0
+  // from 2/2 + LFE, and labelled both "5.1".
+  // MP2 headers don't have acmod — channel changes are less common
+  // in DVB MP2 streams. Skip for now.
+  struct LayoutRun {
+    int  startHeader;   // index into mAudioHeaderList
+    int  frames;
+    int  mainChannels;
+    bool lfe;
+    bool sameLayout(const LayoutRun& o) const {
+      return mainChannels == o.mainChannels && lfe == o.lfe;
+    }
+    QString label() const {
+      return QString("%1.%2").arg(mainChannels).arg(lfe ? 1 : 0);
+    }
+  };
+  QList<LayoutRun> runs;
   int ac3Headers = 0;
 
   for (int i = 0; i < mAudioHeaderList->size() && !mIsAborted; ++i) {
-    TTAudioHeader* hdr = mAudioHeaderList->audioHeaderAt(i);
-    if (!hdr) continue;
+    const TTAC3AudioHeader* ac3Hdr =
+        dynamic_cast<TTAC3AudioHeader*>(mAudioHeaderList->audioHeaderAt(i));
+    if (!ac3Hdr) continue;
+    ac3Headers++;
+    const LayoutRun cur{i, 1, AC3AudioCodingMode[ac3Hdr->acmod], ac3Hdr->lfeon != 0};
+    if (!runs.isEmpty() && runs.last().sameLayout(cur))
+      runs.last().frames++;
+    else
+      runs.append(cur);
+  }
 
-    // Try AC3 header (has acmod field)
-    const TTAC3AudioHeader* ac3Hdr = dynamic_cast<TTAC3AudioHeader*>(hdr);
-    if (ac3Hdr) {
-      ac3Headers++;
-      int acmod = ac3Hdr->acmod;
-      int channels = AC3AudioCodingMode[acmod];
-      if (ac3Hdr->lfeon) channels++;  // +1 for LFE (.1)
+  // A run shorter than kMinStableAc3Frames inside the track is the
+  // transition of a layout switch, not a layout of its own: a broadcaster
+  // going 5.1 -> 2.0 drops the LFE two frames before the other channels.
+  // Each switch gives one marker, labelled with the stable layouts on both
+  // sides and placed on the first frame that leaves the old one. A short
+  // stretch that returns to the layout it left gives none. The first and
+  // the last run are what the track starts and ends on, whatever their
+  // length.
+  auto isStable = [&runs](int r) {
+    return r == 0 || r == runs.size() - 1 || runs[r].frames >= kMinStableAc3Frames;
+  };
+  int prevStable = 0;
+  int leaveHeader = -1;   // first header after the last stable run, -1: none yet
+  for (int r = 1; r < runs.size(); ++r) {
+    if (leaveHeader < 0) leaveHeader = runs[r].startHeader;
+    if (!isStable(r)) continue;
 
-      if (prevChannels >= 0 && channels != prevChannels) {
-        // Channel count actually changed (not just acmod encoding). The
-        // header's own start time and the extra frames: "i x 1536 / 48000"
-        // and a plain qRound(t x fps) put the marker 48.8 s early at 10:00
-        // of a 44.1 kHz track and one frame early per extra frame before it
-        // (audit run 11, audio-es-input.md H4).
-        double timeSec = hdr->abs_frame_time / 1000.0;
-        int frameIdx = TTAudioAnomalyScanTask::videoFrameForTime(timeSec, mVideoFrameRate,
-                                                                 mExtraFrameIndices);
+    if (!runs[r].sameLayout(runs[prevStable])) {
+      // The header's own start time and the extra frames: "i x 1536 / 48000"
+      // and a plain qRound(t x fps) put the marker 48.8 s early at 10:00
+      // of a 44.1 kHz track and one frame early per extra frame before it
+      // (audit run 11, audio-es-input.md H4).
+      double timeSec = mAudioHeaderList->audioHeaderAt(leaveHeader)->abs_frame_time / 1000.0;
+      int frameIdx = TTAudioAnomalyScanTask::videoFrameForTime(timeSec, mVideoFrameRate,
+                                                               mExtraFrameIndices);
+      const QString prevStr = runs[prevStable].label();
+      const QString newStr  = runs[r].label();
 
-        QString prevStr = (prevChannels >= 5) ? "5.1" : QString::number(prevChannels) + ".0";
-        QString newStr = (channels >= 5) ? "5.1" : QString::number(channels) + ".0";
-
-        TTStreamPoint pt(frameIdx, StreamPointType::AudioChange,
-          QString("Audio %1 \u2192 %2").arg(prevStr, newStr),
-          0.0f, 0.0f);
-        results.append(pt);
-        mLog.event(tr("%1: audio %2 -> %3")
-                       .arg(ttFormatStreamPosition(frameIdx, mVideoFrameRate))
-                       .arg(prevStr, newStr));
-      }
-      prevChannels = channels;
+      TTStreamPoint pt(frameIdx, StreamPointType::AudioChange,
+        QString("Audio %1 → %2").arg(prevStr, newStr),
+        0.0f, 0.0f);
+      results.append(pt);
+      mLog.event(tr("%1: audio %2 -> %3")
+                     .arg(ttFormatStreamPosition(frameIdx, mVideoFrameRate))
+                     .arg(prevStr, newStr));
     }
-    // MP2 headers don't have acmod — channel changes are less common
-    // in DVB MP2 streams. Skip for now.
+    prevStable = r;
+    leaveHeader = -1;
   }
 
   if (ac3Headers == 0) {
