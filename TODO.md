@@ -385,6 +385,11 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     mit einer Warnung. libav verschleiert Dekodierfehler, deshalb erreicht
     keine Eingabe diesen Weg verlässlich; getestet ist der Fehler nur an
     der Einheit (Gate `ac3_reencode`, Fall E1).
+  - **Transienten.** An 3 von 12 gemessenen Rahmen der DVB-Aufnahme, die
+    mit einem kurzen Block beginnen, liegt der Fehler der ersten 256
+    Samples eines neu kodierten Rahmens bei −14 bis −16 dB unter dem
+    Signal statt um −30 dB. Der Encoder von ffmpeg kennt keine kurzen
+    Blöcke. Hörbarkeit nicht geprüft.
   - **Mischkoeffizienten** der Umrechnung 5.1 ↔ Stereo sind die Vorgaben
     von libswresample; die Wirkung der übernommenen Mischpegel auf einen
     Abspieler, der 5.1 nach Stereo mischt, ist nicht gemessen.

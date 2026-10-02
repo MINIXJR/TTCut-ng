@@ -2559,6 +2559,16 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     schlecht (Fehler 12 dB unter dem Signal), dass keine Naht messbar ist;
     das Gate nimmt es bei 1,5 kHz tiefpassgefiltert. (4) Prüfmeldungen der
     Form `check(f(&err), "…" + err)` lesen `err` vor dem Aufruf.
+  - **Widerlegt: „der acmod-Pfad braucht einen Decoder-Warmlauf".** Die
+    Spec führte den kalten Decoder-Start am Laufanfang als vierte Abweichung
+    (aus dem Code gelesen). Gemessen: Der Sprung an einen Segmentanfang auf
+    dem Rahmenraster landet genau auf dem ersten Rahmen, der Decoder startet
+    dort also weiterhin kalt — und das Ersatzpaket ist trotzdem dasselbe:
+    erzeugtes Material 4 von 4 byte-gleich, DVB-Aufnahme an 12 Rahmen mit
+    kurzem Block 11 byte-gleich, Fehler der ersten 256 Samples in allen 16
+    Fällen gleich. Ein kalt dekodierter Rahmenanfang ist genau der Anteil
+    des Signals, den der erste Block des Encoders sieht. Kein Umbau; die
+    Kommentare sagen jetzt, was gemessen ist.
 
 - **Audit-Lauf 11: Lese-Hypothesen der Karte `audio-es-input.md`** → **DONE
   (2026-09-26, Zweig `cleanup/code-audit-run11`)**. Gemessen mit einer
