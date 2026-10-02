@@ -36,6 +36,8 @@ extern "C" {
 }
 
 #include "extern/ttac3reencoder.h"
+#include "extern/ttaudiocutter.h"
+#include "extern/ttaudiorepair.h"
 
 static int gChecks = 0, gFailed = 0;
 
@@ -331,12 +333,376 @@ static void caseUnit()
     avformat_close_input(&fmt);
 }
 
+// ---- end-to-end helpers ------------------------------------------------------
+// What a re-encode can carry: bsid only says whether extended fields exist;
+// extended mix levels mean nothing without centre or surround channels; an
+// absent xbsi2 field and "not indicated" are the same.
+static TTAc3FrameMeta norm(TTAc3FrameMeta m)
+{
+    m.bsid = 0;
+    if (m.acmod <= 2 || m.dmixmod < 0)
+        m.dmixmod = m.ltrtcmixlev = m.ltrtsurmixlev = m.lorocmixlev = m.lorosurmixlev = -1;
+    if (m.dsurexmod < 0 || m.acmod < 6) m.dsurexmod = 0;
+    if (m.dheadphonmod < 0 || m.acmod != 2) m.dheadphonmod = 0;
+    if (m.adconvtyp < 0) m.adconvtyp = 0;
+    return m;
+}
+
+static double levelDb(const QVector<float>& v, qint64 start, int n)
+{
+    double s = 0.0;
+    for (int i = 0; i < n; ++i) s += double(v[start + i]) * v[start + i];
+    return 10.0 * std::log10(s / n + 1e-20);
+}
+
+// Builds the repair table and splices it into a copy of the file's frames.
+static bool repairInto(const QString& src, qint64 from, qint64 to, quint8 mask, int targetAcmod,
+                       QVector<QByteArray>* frames, TTAudioRepair::FrameTable* table, QString* err)
+{
+    *table = TTAudioRepair::buildRepairTable(src, TTAudioRepairItem(0, from, to, mask), targetAcmod, err);
+    if (!err->isEmpty() || table->size() != to - from + 1) return false;
+    for (auto it = table->constBegin(); it != table->constEnd(); ++it)
+        (*frames)[int(it.key())] = it.value();
+    return true;
+}
+
+static double worstLevelDiff(const Pcm& o, qint64 oFrame, const Pcm& s, qint64 sFrame, int frames,
+                             const QVector<QPair<int, int>>& channels)   // (output channel, source channel)
+{
+    double worst = 0.0;
+    for (int f = 0; f < frames; ++f)
+        for (const auto& c : channels)
+            worst = qMax(worst, std::abs(levelDb(o.ch[c.first], (oFrame + f) * 1536, 1536) -
+                                         levelDb(s.ch[c.second], (sFrame + f) * 1536, 1536)));
+    return worst;
+}
+
+static Pcm gRef51, gRefSt;   // decodes of s51.ac3 and st.ac3
+
+// ---- R1: repair in the source layout, mask C+LFE ------------------------------
+static void caseRepairSameLayout()
+{
+    const qint64 from = 100, to = 131;
+    QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+    const QVector<QByteArray> source = frames;
+    TTAudioRepair::FrameTable table;
+    QString err;
+    const bool built1 = repairInto(W("s51.ac3"), from, to, 0x0C, -1, &frames, &table, &err);
+    check(built1, "R1 table built" + (built1 ? QString() : ": " + err));
+    if (table.isEmpty()) return;
+    writeFrames(W("r1.ac3"), frames);
+    Pcm o;
+    check(decodeFile(W("r1.ac3"), -1, &o), "R1 decoded");
+    const int lag = lagSamples(o.ch[0], (from + 8) * 1536, gRef51.ch[0], (from + 8) * 1536);
+    check(lag == 0, QString("R1 lag of the re-encoded audio: %1 samples").arg(lag));
+    const double lev = worstLevelDiff(o, from + 1, gRef51, from + 1, int(to - from - 1), {{0, 0}, {1, 1}, {4, 4}, {5, 5}});
+    check(lev <= kLevelTolDb, QString("R1 level of the unmasked channels: worst difference %1 dB").arg(lev, 0, 'f', 2));
+    const double in = worstBlockEsr(o.ch[0], from * 1536, gRef51.ch[0], from * 1536, -2, 3);
+    const double ex = worstBlockEsr(o.ch[0], (to + 1) * 1536, gRef51.ch[0], (to + 1) * 1536, -2, 3);
+    check(in < kSeamEsrDb && ex < kSeamEsrDb,
+          QString("R1 range edges, FL: error-to-signal %1 / %2 dB").arg(in, 0, 'f', 1).arg(ex, 0, 'f', 1));
+
+    // Masked channel FC: 240-sample fades at the first and the last sample of the range.
+    const qint64 a = from * 1536, e = (to + 1) * 1536;
+    // Relative to the source at the same place: transform coding spreads a
+    // little noise around a fade, so "silent" means 20 dB down, not digital zero.
+    const double fadeOutStart = levelDb(o.ch[2], a, 48) - levelDb(gRef51.ch[2], a, 48);
+    const double downAfter    = levelDb(o.ch[2], a + 256, 224) - levelDb(gRef51.ch[2], a + 256, 224);
+    const double downBefore   = levelDb(o.ch[2], e - 480, 224) - levelDb(gRef51.ch[2], e - 480, 224);
+    const double fadeInEnd    = levelDb(o.ch[2], e - 48, 48) - levelDb(gRef51.ch[2], e - 48, 48);
+    check(fadeOutStart > -2.0 && downAfter < -20.0,
+          QString("R1 fade-out starts with the range: first 48 samples %1 dB, samples 256..480 %2 dB against the source")
+              .arg(fadeOutStart, 0, 'f', 1).arg(downAfter, 0, 'f', 1));
+    check(fadeInEnd > -2.0 && downBefore < -20.0,
+          QString("R1 fade-in ends with the range: last 48 samples %1 dB, samples -480..-256 %2 dB against the source")
+              .arg(fadeInEnd, 0, 'f', 1).arg(downBefore, 0, 'f', 1));
+
+    bool same = true;
+    for (qint64 i = from; i <= to; ++i)
+        same = same && metaText(metaOf(frames[int(i)])) == metaText(metaOf(source[int(i)]));
+    check(same, "R1 header fields equal the source frames': " + metaText(metaOf(frames[int(from)])));
+}
+
+// ---- R2, R3: repair inside a normalised segment ------------------------------
+static void caseRepairConverted()
+{
+    // R2: 5.1 source, target stereo
+    {
+        QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+        TTAudioRepair::FrameTable table;
+        QString err;
+        const bool built2 = repairInto(W("s51.ac3"), 100, 131, 0x08, 2, &frames, &table, &err);
+        check(built2, "R2 table built" + (built2 ? QString() : ": " + err));
+        if (!table.isEmpty()) {
+            const TTAc3FrameMeta m = metaOf(table.value(110));
+            check(m.acmod == 2 && m.dialnorm == -23 && m.copyright == 1 && m.origbs == 0 && m.mixlevel == 20,
+                  "R2 stereo replacement carries the source's layout-independent fields: " + metaText(m));
+            writeFrames(W("r2.ac3"), frames.mid(100, 32));
+            Pcm o;
+            check(decodeFile(W("r2.ac3"), -1, &o), "R2 decoded");
+            const int lag = lagSamples(o.ch[0], 8 * 1536, gRef51.ch[0], 108 * 1536);
+            check(lag == 0, QString("R2 lag: %1 samples").arg(lag));
+        }
+    }
+    // R3: stereo source, target 5.1, FL masked
+    {
+        QVector<QByteArray> frames = readFrames(W("st.ac3"));
+        TTAudioRepair::FrameTable table;
+        QString err;
+        const bool built3 = repairInto(W("st.ac3"), 100, 131, 0x01, 7, &frames, &table, &err);
+        check(built3, "R3 table built" + (built3 ? QString() : ": " + err));
+        if (!table.isEmpty()) {
+            const TTAc3FrameMeta m = metaOf(table.value(110));
+            check(m.acmod == 7 && m.lfeon && m.dialnorm == -20 && m.copyright == 1,
+                  "R3 5.1 replacement carries the source's layout-independent fields: " + metaText(m));
+            writeFrames(W("r3.ac3"), frames.mid(100, 32));
+            Pcm o;
+            check(decodeFile(W("r3.ac3"), -1, &o), "R3 decoded");
+            const int lag = lagSamples(o.ch[1], 8 * 1536, gRefSt.ch[1], 108 * 1536);
+            const double lev = worstLevelDiff(o, 2, gRefSt, 102, 28, {{1, 1}});
+            check(lag == 0 && lev <= kLevelTolDb,
+                  QString("R3 FR against R: lag %1 samples, worst level difference %2 dB").arg(lag).arg(lev, 0, 'f', 2));
+            check(levelDb(o.ch[0], 4 * 1536, 24 * 1536) < kSilentDb, "R3 masked FL is silent");
+        }
+    }
+}
+
+// ---- R4, R5, R6, L1: ranges at the file's ends, reserved codes, locale --------
+static void caseRepairEdges()
+{
+    {   // R4: the range ends with the last frame
+        QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+        const qint64 last = frames.size() - 1;
+        TTAudioRepair::FrameTable table;
+        QString err;
+        const bool built4 = repairInto(W("s51.ac3"), last - 34, last, 0x08, -1, &frames, &table, &err);
+        check(built4, "R4 table built" + (built4 ? QString() : ": " + err));
+        if (!table.isEmpty()) {
+            writeFrames(W("r4.ac3"), frames);
+            Pcm o;
+            decodeFile(W("r4.ac3"), -1, &o);
+            const int lag = lagSamples(o.ch[0], (last - 26) * 1536, gRef51.ch[0], (last - 26) * 1536);
+            const double tail = esrDb(o.ch[0], last * 1536, gRef51.ch[0], last * 1536, 1280);
+            check(lag == 0 && tail < kSeamEsrDb,
+                  QString("R4 range to the end of the file: lag %1, last frame error-to-signal %2 dB").arg(lag).arg(tail, 0, 'f', 1));
+        }
+    }
+    {   // R5: the range starts at frame 0
+        QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+        TTAudioRepair::FrameTable table;
+        QString err;
+        const bool built5 = repairInto(W("s51.ac3"), 0, 5, 0x08, -1, &frames, &table, &err);
+        check(built5, "R5 table built" + (built5 ? QString() : ": " + err));
+        if (!table.isEmpty()) {
+            writeFrames(W("r5.ac3"), frames);
+            Pcm o;
+            decodeFile(W("r5.ac3"), -1, &o);
+            const double head = esrDb(o.ch[0], 256, gRef51.ch[0], 256, 6 * 1536 - 256);
+            check(head < kSeamEsrDb, QString("R5 range from frame 0: error-to-signal %1 dB").arg(head, 0, 'f', 1));
+        }
+    }
+    {   // R6: cmixlev 3 is reserved - the encoder default (1) is used, the build does not fail
+        QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+        for (int i = 298; i <= 305; ++i) frames[i][6] = char(quint8(frames[i][6]) | 0x18);
+        writeFrames(W("res.ac3"), frames);
+        TTAudioRepair::FrameTable table;
+        QString err;
+        const bool built6 = repairInto(W("res.ac3"), 300, 303, 0x08, -1, &frames, &table, &err);
+        check(built6, "R6 table built" + (built6 ? QString() : ": " + err));
+        if (!table.isEmpty()) {
+            const TTAc3FrameMeta m = metaOf(table.value(301));
+            check(m.cmixlev == 1 && m.dialnorm == -23, "R6 reserved cmixlev falls back to the default: " + metaText(m));
+        }
+    }
+    {   // L1: German numeric locale
+        if (!setlocale(LC_NUMERIC, "de_DE.UTF-8")) {
+            printf("NOTE: L1 not run - locale de_DE.UTF-8 is not installed\n");
+        } else {
+            QVector<QByteArray> frames = readFrames(W("s51.ac3"));
+            const QVector<QByteArray> source = frames;
+            TTAudioRepair::FrameTable table;
+            QString err;
+            const bool ok = repairInto(W("s51.ac3"), 400, 403, 0x08, -1, &frames, &table, &err);
+            setlocale(LC_NUMERIC, "C");
+            check(ok && metaText(metaOf(frames[401])) == metaText(metaOf(source[401])),
+                  "L1 header fields under a German numeric locale: " + (ok ? metaText(metaOf(frames[401])) : err));
+        }
+    }
+}
+
+// ---- H1: a header field changes inside the range ------------------------------
+static void caseHeaderChange()
+{
+    QVector<QByteArray> frames = readFrames(W("dn.ac3"));
+    TTAudioRepair::FrameTable table;
+    QString err;
+    const bool built7 = repairInto(W("dn.ac3"), 190, 210, 0x08, -1, &frames, &table, &err);
+    check(built7, "H1 table built" + (built7 ? QString() : ": " + err));
+    if (table.isEmpty()) return;
+    check(metaOf(table.value(195)).dialnorm == -23 && metaOf(table.value(205)).dialnorm == -27,
+          QString("H1 dialnorm follows the source: %1 / %2").arg(metaOf(table.value(195)).dialnorm).arg(metaOf(table.value(205)).dialnorm));
+    writeFrames(W("h1.ac3"), frames);
+    Pcm o, src;
+    decodeFile(W("h1.ac3"), -1, &o);
+    decodeFile(W("dn.ac3"), -1, &src);
+    const double seam = worstBlockEsr(o.ch[0], 200 * 1536, src.ch[0], 200 * 1536, -2, 2);
+    check(seam < kSeamEsrDb, QString("H1 no seam where the encoder changes: %1 dB").arg(seam, 0, 'f', 1));
+}
+
+// ---- N1..N3, A1: acmod normalisation through TTAudioCutter --------------------
+static void caseCutter()
+{
+    const QVector<QByteArray> source = readFrames(W("mixed.ac3"));
+    const double total = kFrames * 0.032;
+
+    // Fixture sanity: the stereo L and the 5.1 FL are the same signal.
+    const double fix = esrDb(gRefSt.ch[0], 300 * 1536, gRef51.ch[0], 300 * 1536, 10 * 1536);
+    check(fix < kSeamEsrDb, QString("fixture: stereo L equals 5.1 FL within coding noise (%1 dB)").arg(fix, 0, 'f', 1));
+
+    {   // N1: target 5.1 - a run from the file's start and a run to its end
+        TTAudioCutter cutter;
+        const bool ok = cutter.cut(W("mixed.ac3"), W("n1.ac3"), {{0.0, total}}, true, {7});
+        const QVector<QByteArray> out = readFrames(W("n1.ac3"));
+        check(ok && out.size() == kFrames, QString("N1 cut: %1 frames (%2)").arg(out.size()).arg(cutter.lastError()));
+        if (out.size() == kFrames) {
+            bool copied = true, heads = true;
+            for (int i = 250; i < 625; ++i) copied = copied && out[i] == source[i];
+            for (int i : {0, 100, 249, 625, 700, 874}) {
+                const TTAc3FrameMeta m = metaOf(out[i]);
+                heads = heads && m.acmod == 7 && m.lfeon && m.dialnorm == -20 && m.copyright == 1 && m.origbs == 1;
+            }
+            check(copied, "N1 the 5.1 frames are copied byte for byte");
+            check(heads, "N1 re-encoded frames carry the stereo source's fields: " + metaText(metaOf(out[100])));
+            Pcm o;
+            check(decodeFile(W("n1.ac3"), -1, &o), "N1 decoded");
+            const int lagA = lagSamples(o.ch[0], 8 * 1536, gRefSt.ch[0], 8 * 1536);
+            const int lagB = lagSamples(o.ch[0], 700 * 1536, gRefSt.ch[0], 700 * 1536);
+            check(lagA == 0 && lagB == 0, QString("N1 lag: %1 / %2 samples").arg(lagA).arg(lagB));
+            const double lev = qMax(worstLevelDiff(o, 2, gRefSt, 2, 246, {{0, 0}, {1, 1}}),
+                                    worstLevelDiff(o, 627, gRefSt, 627, 246, {{0, 0}, {1, 1}}));
+            check(lev <= kLevelTolDb, QString("N1 FL/FR against L/R: worst level difference %1 dB").arg(lev, 0, 'f', 2));
+            const double s1 = worstBlockEsr(o.ch[0], 250 * 1536, gRef51.ch[0], 250 * 1536, -3, 2);
+            const double s2 = worstBlockEsr(o.ch[0], 625 * 1536, gRef51.ch[0], 625 * 1536, -3, 2);
+            check(s1 < kSeamEsrDb && s2 < kSeamEsrDb,
+                  QString("N1 seams run/copy and copy/run: %1 / %2 dB").arg(s1, 0, 'f', 1).arg(s2, 0, 'f', 1));
+            const double tail = esrDb(o.ch[0], 874 * 1536, gRefSt.ch[0], 874 * 1536, 1280);
+            check(tail < kSeamEsrDb, QString("N1 last frame of the file: %1 dB").arg(tail, 0, 'f', 1));
+        }
+    }
+    {   // N2: target stereo - a run in mid-segment
+        TTAudioCutter cutter;
+        const bool ok = cutter.cut(W("mixed.ac3"), W("n2.ac3"), {{0.0, total}}, true, {2});
+        const QVector<QByteArray> out = readFrames(W("n2.ac3"));
+        check(ok && out.size() == kFrames, QString("N2 cut: %1 frames").arg(out.size()));
+        if (out.size() == kFrames) {
+            bool copied = true;
+            for (int i = 0; i < kFrames; ++i)
+                if (i < 250 || i >= 625) copied = copied && out[i] == source[i];
+            const TTAc3FrameMeta m = metaOf(out[400]);
+            check(copied, "N2 the stereo frames are copied byte for byte");
+            check(m.acmod == 2 && m.dialnorm == -23 && m.copyright == 1 && m.origbs == 0,
+                  "N2 re-encoded frames carry the 5.1 source's fields: " + metaText(m));
+            Pcm o;
+            decodeFile(W("n2.ac3"), -1, &o);
+            const int lag = lagSamples(o.ch[0], 300 * 1536, gRef51.ch[0], 300 * 1536);
+            check(lag == 0, QString("N2 lag: %1 samples").arg(lag));
+        }
+    }
+    {   // N3: a run that starts and ends with its segment (stereo frames 50..149)
+        TTAudioCutter cutter;
+        const bool ok = cutter.cut(W("mixed.ac3"), W("n3.ac3"), {{1.6, 4.8}}, true, {7});
+        const QVector<QByteArray> out = readFrames(W("n3.ac3"));
+        check(ok && out.size() == 100, QString("N3 cut: %1 frames").arg(out.size()));
+        if (out.size() == 100) {
+            Pcm o;
+            decodeFile(W("n3.ac3"), -1, &o);
+            const int lag = lagSamples(o.ch[0], 8 * 1536, gRefSt.ch[0], 58 * 1536);
+            const double head = esrDb(o.ch[0], 256, gRefSt.ch[0], 50 * 1536 + 256, 1280);
+            const double tail = esrDb(o.ch[0], 99 * 1536, gRefSt.ch[0], 149 * 1536, 1536);
+            check(lag == 0 && head < kSeamEsrDb && tail < kSeamEsrDb,
+                  QString("N3 lag %1, first frame %2 dB, last frame %3 dB").arg(lag).arg(head, 0, 'f', 1).arg(tail, 0, 'f', 1));
+        }
+    }
+    {   // A1: abort while a frame is held back
+        TTAudioCutter cutter;
+        int polls = 0;
+        const bool ok = cutter.cut(W("mixed.ac3"), W("a1.ac3"), {{0.0, total}}, true, {7}, nullptr,
+                                   [&]() { return ++polls > 40; });
+        check(!ok && cutter.lastError().contains("aborted"), "A1 abort inside a run: " + cutter.lastError());
+    }
+}
+
+// ---- --real: dynamic range compression on a recording -------------------------
+static int runReal(const QString& file, qint64 from)
+{
+    const QVector<QByteArray> all = readFrames(file);
+    if (from < 0) {
+        for (qint64 i = 1000; i + 80 < all.size() && from < 0; i += 500) {
+            bool uniform = true;
+            for (qint64 k = i - 16; k < i + 64; ++k)
+                uniform = uniform && all[int(k)].size() == all[int(i)].size() &&
+                          metaOf(all[int(k)]).acmod == metaOf(all[int(i)]).acmod;
+            if (uniform) from = i;
+        }
+    }
+    check(from >= 16 && from + 64 < all.size(), QString("real: range found at frame %1 of %2").arg(from).arg(all.size()));
+    if (gFailed) return 1;
+    const qint64 to = from + 31;
+
+    QVector<QByteArray> frames = all;
+    TTAudioRepair::FrameTable table;
+    QString err;
+    const bool built8 = repairInto(file, from, to, 0x00, -1, &frames, &table, &err);
+    check(built8, "real: table built (no channel masked)" + (built8 ? QString() : ": " + err));
+    if (gFailed) return 1;
+    const qint64 a = from - 16;
+    writeFrames(W("real_src.ac3"), all.mid(int(a), 96));
+    writeFrames(W("real_out.ac3"), frames.mid(int(a), 96));
+
+    Pcm s0, s1, o0;
+    check(decodeFile(W("real_src.ac3"), 0, &s0) && decodeFile(W("real_src.ac3"), 1, &s1) &&
+          decodeFile(W("real_out.ac3"), 0, &o0), "real: decoded");
+    if (gFailed) return 1;
+
+    const TTAc3FrameMeta m = metaOf(all[int(from)]);
+    QVector<QPair<int, int>> channels;
+    const int nch = m.acmod == 7 ? 6 : 2;
+    for (int c = 0; c < nch; ++c)
+        if (!(nch == 6 && c == 3)) channels.append({c, c});   // the LFE is band-limited by the encoder
+
+    const double gain = worstLevelDiff(s1, 17, s0, 17, 30, {{0, 0}});
+    printf("material: %s\nmaterial: compression changes the level by up to %.2f dB in this range\n",
+           qPrintable(metaText(m)), gain);
+    if (gain < 0.3) {
+        printf("SKIP: no dynamic range compression in frames %lld..%lld - nothing to prove here\n",
+               (long long)from, (long long)to);
+        return 77;
+    }
+    const int lag = lagSamples(o0.ch[0], 24 * 1536, s0.ch[0], 24 * 1536);
+    check(lag == 0, QString("real: lag %1 samples").arg(lag));
+    const double lev = worstLevelDiff(o0, 17, s0, 17, 30, channels);
+    check(lev <= kLevelTolDb,
+          QString("real: level decoded without compression, worst difference %1 dB").arg(lev, 0, 'f', 2));
+    bool same = true;
+    for (qint64 i = from; i <= to; ++i)
+        same = same && metaText(norm(metaOf(frames[int(i)]))) == metaText(norm(metaOf(all[int(i)])));
+    check(same, "real: header fields equal the source's: " + metaText(metaOf(frames[int(from)])));
+    return gFailed ? 1 : 0;
+}
+
 static int runSelfTest()
 {
     check(makeFixtures(), "fixtures generated (ffmpeg)");
     if (gFailed) return 1;
     caseParser();
     caseUnit();
+    check(decodeFile(W("s51.ac3"), -1, &gRef51) && decodeFile(W("st.ac3"), -1, &gRefSt), "references decoded");
+    if (gFailed) return 1;
+    caseRepairSameLayout();
+    caseRepairConverted();
+    caseRepairEdges();
+    caseHeaderChange();
+    caseCutter();
     return gFailed ? 1 : 0;
 }
 
@@ -345,13 +711,15 @@ int main(int argc, char** argv)
     QCoreApplication app(argc, argv);
     setlocale(LC_NUMERIC, "C");   // as the application's main() does
     const QStringList args = app.arguments();
-    if (args.size() != 2) {
-        fprintf(stderr, "usage: %s <workdir>\n", argv[0]);
+    const bool real = args.size() >= 4 && args.at(1) == "--real";
+    if (!real && args.size() != 2) {
+        fprintf(stderr, "usage: %s <workdir>\n       %s --real <recording.ac3> <workdir> [first-frame]\n",
+                argv[0], argv[0]);
         return 2;
     }
-    gWork = args.at(1);
+    gWork = real ? args.at(3) : args.at(1);
     QDir().mkpath(gWork);
-    const int rc = runSelfTest();
+    const int rc = real ? runReal(args.at(2), args.size() > 4 ? args.at(4).toLongLong() : -1) : runSelfTest();
     printf("%s (%d checks, %d failed)\n", gFailed ? "FAILED" : "ALL PASS", gChecks, gFailed);
     return rc;
 }
