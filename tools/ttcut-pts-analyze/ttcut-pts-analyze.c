@@ -1,3 +1,12 @@
+/*----------------------------------------------------------------------------*/
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
+/*----------------------------------------------------------------------------*/
+
 #define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +30,6 @@
  * PTS spacing are extras).
  *
  * Extracted from ttcut-esrepair.c — functions copied verbatim.
- *
- * Copyright (C) 2026 TTCut-ng Project
- * License: GPL v2 or later
  */
 
 /* TS constants */
