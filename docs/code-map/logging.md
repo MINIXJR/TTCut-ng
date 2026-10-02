@@ -11,7 +11,9 @@ sources:
   - gui/ttcutmain.cpp
   - gui/ttcutmainwindow.cpp
   - gui/ttcutsettingslogging.cpp
+  - gui/ttcutsettingslogging.h
   - gui/ttcutsettingspaths.cpp
+  - gui/ttcutsettingspaths.h
   - common/ttsettings.cpp
   - gui/ttmpvlibbackend.cpp
 ---

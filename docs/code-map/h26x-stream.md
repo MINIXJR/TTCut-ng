@@ -15,10 +15,12 @@ sources:
   - avstream/ttavstream.cpp
   - avstream/ttdisplayordermap.cpp
   - data/ttopenvideotask.cpp
+  - data/ttopenvideotask.h
   - data/ttpreviewclip.cpp
   - data/ttavdata.cpp
   - gui/ttcutframenavigation.cpp
   - gui/ttvideotreeview.cpp
+  - gui/ttvideotreeview.h
   - gui/ttquickjumpdialog.cpp
   - mpeg2window/ttmpeg2window2.cpp
   - data/ttframesearchtask.cpp

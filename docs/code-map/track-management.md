@@ -12,6 +12,7 @@ sources:
   - data/ttavdata.cpp
   - data/ttopenaudiotask.cpp
   - data/ttopensubtitletask.cpp
+  - data/ttopensubtitletask.h
   - data/ttcutprojectdata.h
   - data/ttcutprojectdata.cpp
   - data/tth26xcuttask.cpp
@@ -27,6 +28,7 @@ sources:
   - gui/ttcutmainwindow.cpp
   - gui/ttcurrentframe.cpp
   - gui/ttcutsettingsaudio.cpp
+  - gui/ttcutsettingsaudio.h
   - mpeg2window/ttmpeg2window2.h
   - common/ttcut.h
   - common/ttcut.cpp

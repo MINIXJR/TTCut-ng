@@ -12,10 +12,18 @@ sources:
   - gui/ttcutmainwindow_headless.cpp
   - gui/ttcutavcutdlg.cpp
   - gui/ttcutsettingsdlg.cpp
+  - gui/ttcutsettingsdlg.h
   - gui/ttcutsettingsencoder.cpp
+  - gui/ttcutsettingsencoder.h
   - gui/ttcutsettingsencoderdefaults.cpp
+  - gui/ttcutsettingsencoderdefaults.h
   - gui/ttcutsettingsmuxer.cpp
+  - gui/ttcutsettingsmuxer.h
   - gui/ttcutsettingspaths.cpp
+  - gui/ttcutsettingssearch.cpp
+  - gui/ttcutsettingssearch.h
+  - gui/ttcombofill.h
+  - gui/ttcutsettingspaths.h
   - extern/ttmplexprovider.cpp
   - common/ttencodernames.h
   - data/ttaudioonlycuttask.cpp

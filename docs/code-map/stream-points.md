@@ -11,6 +11,7 @@ sources:
   - gui/ttcutframenavigation.cpp
   - gui/ttaudiorepairdialog.h
   - gui/ttcutsettingsstreampoints.cpp
+  - gui/ttcutsettingsstreampoints.h
   - data/ttstreampoint.h
   - data/ttstreampoint.cpp
   - data/ttstreampointmodel.h
@@ -24,7 +25,9 @@ sources:
   - data/ttavlist.h
   - data/ttaudioanomalyscantask.cpp
   - data/ttstreampoint_audioworker.cpp
+  - data/ttstreampoint_audioworker.h
   - data/ttstreampoint_videoworker.cpp
+  - data/ttstreampoint_videoworker.h
   - data/ttsearchtask_aspectscan.cpp
   - mpeg2window/ttmpeg2window2.h
   - mpeg2window/ttmpeg2window2.cpp

@@ -5,17 +5,23 @@ sources:
   - data/ttanalysislog.cpp
   - data/ttanalysislog.h
   - data/ttsearchtask.cpp
+  - avstream/ttlumasample.h
   - data/ttsearchtask.h
   - data/ttsearchtask_aspectscan.cpp
   - data/ttsearchtask_aspectscan.h
   - data/ttsearchtask_blackframe.cpp
+  - data/ttsearchtask_blackframe.h
   - data/ttsearchtask_logo.cpp
+  - data/ttsearchtask_logo.h
   - data/ttsearchtask_scenechange.cpp
+  - data/ttsearchtask_scenechange.h
   - data/ttaspectdetect.cpp
   - data/ttaspectdetect.h
   - data/ttstreampoint.h
   - data/ttstreampoint_videoworker.cpp
+  - data/ttstreampoint_videoworker.h
   - data/ttstreampoint_audioworker.cpp
+  - data/ttstreampoint_audioworker.h
   - data/ttstreampointmodel.cpp
   - data/ttframesearchtask.cpp
   - data/ttframesearchtask.h
@@ -30,6 +36,7 @@ sources:
   - gui/ttaudiorepairdialog.h
   - gui/ttaudiorepairdialog.cpp
   - common/ttthreadtaskpool.cpp
+  - common/ttthreadtaskpool.h
   - common/ttthreadtask.cpp
   - common/ttsettings.h
   - common/ttsettings.cpp

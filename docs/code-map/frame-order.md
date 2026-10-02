@@ -3,6 +3,7 @@ base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
 last_verified: 2026-09-26
 sources:
   - gui/ttcurrentframe.cpp
+  - gui/ttframepositiontext.h
   - gui/ttcurrentframe.h
   - gui/ttcutmainwindow.cpp
   - gui/ttgotoframedialog.cpp
