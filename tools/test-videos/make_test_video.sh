@@ -1,7 +1,8 @@
 #!/bin/bash
 # Generate test videos with known black-frame, scene-change, and logo
-# markers for TTCut-ng search verification. Six codec variants share the
-# same 120-second Tux timeline:
+# markers for TTCut-ng search verification. Eight variants (seven streams
+# and one two-segment recording directory) share the same 120-second Tux
+# timeline:
 #
 #   0-30s   BLUE  + Tux moves L->R
 #   30-31s  BLACK 1 (1s pure black)
@@ -19,6 +20,9 @@
 #                  mbaff | paff (H.264 interlaced variants)
 #                  pal (MPEG-2 DVB-SD)
 #
+# Six more files ("duplicate") carry a 30-second timeline for the
+# equal-frame search, see below.
+#
 # Tux artwork (c) Larry Ewing. Used here for testing only.
 #
 # Outputs go to the gitignored ./cache/ subdirectory. Existing files are
@@ -31,11 +35,14 @@
 # fresh checkout), recreate them by hand before relying on the probe.
 #
 # Usage:
-#   ./make_test_video.sh             # all six files
+#   ./make_test_video.sh             # everything
 #   ./make_test_video.sh hevc4k      # only HEVC 4K
 #   ./make_test_video.sh h264        # all H.264 variants
-#   ./make_test_video.sh mpeg2       # both MPEG-2 variants
+#   ./make_test_video.sh mpeg2       # all MPEG-2 variants
+#   ./make_test_video.sh mpeg2_576i_fieldpic    # only the field-picture variant
+#   ./make_test_video.sh mpeg2_576i_multifile   # only the two-segment recording
 #   ./make_test_video.sh paff        # only the slow JM PAFF run
+#   ./make_test_video.sh duplicate   # the six 30-second duplicate files
 #   ./make_test_video.sh --force ... # regenerate even if files exist
 
 set -euo pipefail
@@ -46,7 +53,7 @@ OUTDIR="$SCRIPTDIR/cache"
 mkdir -p "$OUTDIR"
 cd "$OUTDIR"
 
-TUX_SVG="/usr/local/src/TTCut-ng/ui/pixmaps/Tux.svg"
+TUX_SVG="$(realpath "$SCRIPTDIR/../../ui/pixmaps/Tux.svg")"
 JM_LENCOD="/usr/local/src/jm-reference/bin/lencod_static"
 JM_CFG_DIR="/usr/local/src/jm-reference/cfg"
 
