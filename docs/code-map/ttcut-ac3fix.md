@@ -84,7 +84,7 @@ flowchart TD
 | `FRAME` → `PATCH` | The frame is first copied into a local buffer, so the read buffer is never modified. Patched only when the frame is inconsistent, force-fix is on and an output file is open. |
 | `PATCH` → `OUT` | Bits 7–5 of byte 6 set to 7 (3/2). Nothing else in the frame changes: neither CRC is recomputed, and the bits after `acmod` keep their position although their meaning depends on `acmod` (2/0 is followed by `dsurmod`, 3/2 by `cmixlev` and `surmixlev`). |
 | `FRAME` → `OUT` | Whenever an output file is open — with or without `--force-fix` — **every parsed frame** is written and nothing else. Bytes the walker skipped are not written, so the output is the input minus everything that did not parse. A write error ends the run with exit 1 and no statistics. |
-| `STATS` → `REPORT` | stdout: banner (`print_ac3_banner`), then the statistics block; in analyze mode with a count above 0 a recommendation naming `--force-fix`. stderr: progress in steps of 10 %, and at end of file either "Partial frame at file edges" (unusable bytes fewer than one frame) or "Warning: N bytes could not be parsed". Exit code 0 whatever was found. |
+| `STATS` → `REPORT` | stdout: banner (`print_ac3_banner`), then the statistics block; in analyze mode with a count above 0 a recommendation naming `--force-fix`. stderr: progress in steps of 10 %, and one message about unusable bytes — "Partial frame at file edges" (fewer than one frame) or "Warning: N bytes could not be parsed" — which is printed **only when bytes are left in the buffer at end of file**: skipped bytes in the middle of a file whose last frame is complete produce no message (measured 2026-10-02, 3000 junk bytes after frame 100). Exit code 0 whatever was found. |
 | `REPORT` → `DEMUX` | A **text contract**: the script takes the number after `Inconsistent frames:` with `grep -oP`, 0 when the line is missing. The exit code of the analyze run is not evaluated, and of the fix run only the last output line is shown (`| tail -1`). |
 | `ESA` → `DECODE` | `ffmpeg -v error -i <track> -t 2 -f null -` on the **unrepaired** track, stderr discarded; only the exit status is used and only the first two seconds are decoded. |
 | `DECODE` ⇢ `DEMUX` | Exit 0 → "inconsistent headers but decode OK — skipping fix", the track stays as it is. Non-zero → the fix run. The test exists because the bitrate rule alone marks valid stereo tracks at 384 kbit/s and above. |
@@ -98,9 +98,11 @@ flowchart TD
   `min_bitrate` or more" is a guess about the broadcaster, not a defect test.
   The count is therefore a candidate count; the decision to repair lies with
   the decode test in `ttcut-demux`.
-- **`parse_ac3_header`** — 48 kHz only. A 44.1 or 32 kHz track yields zero
-  frames and the whole file as unparsed bytes; the report then says
-  `Inconsistent frames: 0`, which `ttcut-demux` prints as "headers OK".
+- **`parse_ac3_header`** — 48 kHz only. A 44.1 or 32 kHz track is walked
+  byte by byte, and what parses are chance sync words inside the payload:
+  measured 2026-10-02 on an 8 s 44.1 kHz stereo file, 3 "frames" (one of them
+  counted as inconsistent) and 443 746 unparsed bytes. A fix run on it writes
+  those 3 frames, 4864 of 448 610 bytes.
 - **Output is not a copy** — every run with an output file drops the bytes
   that did not parse, and a sync word inside such bytes is accepted as a frame
   without further checks. The tool runs before the sanitizer that would have
@@ -133,7 +135,7 @@ flowchart TD
   in TTCut-ng).
 - **A5** Junk before or between frames is removed by the fix run, unreported,
   and a false sync inside it is written as a frame.
-- **A6** A 44.1 kHz AC3 track is reported as "headers OK" with zero frames.
+- **A6** A 44.1 kHz AC3 track: what the report says and what a fix run writes.
 - **A7** `bsid` is not tested; fields without a reader (`lfeon`, `bsid`,
   `bsmod`, `channels`).
 - **A8** Messages and arguments: the error text names an option `-o` that
