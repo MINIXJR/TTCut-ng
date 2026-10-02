@@ -390,6 +390,10 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
     Samples eines neu kodierten Rahmens bei −14 bis −16 dB unter dem
     Signal statt um −30 dB. Der Encoder von ffmpeg kennt keine kurzen
     Blöcke. Hörbarkeit nicht geprüft.
+  - **Dual-Mono-Spuren (1+1).** Der Decoder meldet für acmod 0 ein
+    Stereo-Layout, der Ersatzrahmen einer Tonreparatur wäre deshalb 2/0
+    statt 1+1 — zwischen 1+1-Nachbarn. Aus dem Code gelesen, nicht
+    gemessen (kein 1+1-Material zur Hand); war vor dem Umbau schon so.
   - **Mischkoeffizienten** der Umrechnung 5.1 ↔ Stereo sind die Vorgaben
     von libswresample; die Wirkung der übernommenen Mischpegel auf einen
     Abspieler, der 5.1 nach Stereo mischt, ist nicht gemessen.
