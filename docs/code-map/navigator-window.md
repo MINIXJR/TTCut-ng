@@ -10,6 +10,7 @@ sources:
   - gui/ttwindowgeometry.cpp
   - gui/ttcentredtitlestyle.h
   - gui/ttcentredtitlestyle.cpp
+  - gui/ttthemedicon.h
   - gui/ttcutmainwindow.cpp
   - gui/ttcuttreeview.cpp
   - gui/ttquickjumpdialog.cpp
@@ -91,6 +92,12 @@ flowchart LR
   progress-bar animation under Breeze/Oxygen (measured in the header of
   `gui/ttcentredtitlestyle.h`, harness `tools/diag/test_pulse_stylesheet`).
   Centred titles therefore come from the proxy.
+- **Icons come from the desktop theme, not from the application.**
+  `ttThemedIcon(themeName, fallback)` (`gui/ttthemedicon.h`) returns
+  `QIcon::fromTheme` with the widget style's standard pixmap as fallback; it
+  is the one form every button and action icon uses (62 calls in eleven GUI
+  files). What a button shows therefore depends on the icon theme of the
+  session; offscreen runs and screenshot runs get whatever theme is found.
 - **The display's item pointer is raw.** `TTAVData::onRemoveAVItem` hands the
   GUI a neighbour before removing an item and a null item right after the last
   one, without an event loop in between, so the display never paints a freed
