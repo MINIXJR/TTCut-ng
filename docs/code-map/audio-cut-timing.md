@@ -1,5 +1,5 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
+base_commit: 2a88baf1e3f7b687a7b65fcdd67166d71f3c524c
 last_verified: 2026-10-02
 sources:
   - data/ttavdata.cpp
@@ -24,6 +24,8 @@ sources:
   - extern/ttaudiorepairitem.h
   - extern/ttaudiocutter.h
   - extern/ttaudiocutter.cpp
+  - extern/ttac3reencoder.h
+  - extern/ttac3reencoder.cpp
   - avstream/ttac3acmod.h
   - avstream/ttac3acmod.cpp
   - avstream/ttcommon.h
@@ -111,7 +113,7 @@ flowchart TD
 | `PLAN → KEEP` | (start,end) auf das **Audio-Frame-Raster** gerundet (Vielfache der Frame-Dauer = `frame_time` von Kopf 0, Samples / Abtastrate: MP2@48k = 24 ms, AC3@48k = 32 ms, MP2@44,1k = 26,122 ms — audio-es-input.md). Feed-Forward: `numFrames` je Segment so gewählt, dass die kumulierte Audiolänge der Videolänge folgt. |
 | `PLAN → DRIFT` | Kumulierter A/V-Versatz in ms nach jedem Segment (Audiolänge − Videolänge, Summe aller vorherigen). Im eingeschwungenen Zustand ±½ Audioframe. |
 | `KEEP → CUT` | Rasteralignierte (start,end). `TTAudioCutter::cut` behält nur Frames, die **komplett** ins Segment passen (`pktTime + frameDur > endTime` → stop) → verliert ≤1 Frame je Segmentende; genau das kompensiert `planAudioCut` per `numFrames`. `TTAudioCutter::cut` hat zwei neue optionale Parameter, beide von `cutAudioTracks` durchgereicht: `progressCb(int percent)` (0..100, aus geschriebener Sekundenmenge / `totalKeepSec`, nur bei Wertänderung, garantiert 100 am Ende außer bei Abbruch) und `shouldAbort()` (im Paket-Lesezyklus jedes Segments gepollt; bei `true` wird `mLastError = "aborted by user"` gesetzt, kein `setError()`-Log auf Warn-Ebene, Funktion räumt regulär auf und liefert `false`). Ein Abbruch ist damit von einem echten Fehler nur über die Textkonstante unterscheidbar (`TTAudioCutter::lastError()`). |
-| `ACMOD → CUT` | Ziel-`acmod` pro Segment (nur AC3): `TTAVData::computeTargetAcmods` ruft pro geplantem Fenster `ttAnalyzeAcmodWindow(stream, start, end)` (`avstream/ttac3acmod.cpp`, seit `ada97fd2`) — dieselbe Funktion, die auch die Hinweis-Spalte der Schnittliste speist (`burst-detection.md`, Kante `HDR → ACMOD`). Arbeitet auf der In-Memory-`TTAudioHeaderList`; der frühere `TTAudioCutter::analyzeAcmod`-Dateiscan (Sync-Word, feste 32-ms-Frame) ist entfernt. Frames mit abweichendem `acmod` werden dekodiert → umkanaliert (`swr`) → neu kodiert; sonst Stream-Copy. |
+| `ACMOD → CUT` | Ziel-`acmod` pro Segment (nur AC3): `TTAVData::computeTargetAcmods` ruft pro geplantem Fenster `ttAnalyzeAcmodWindow(stream, start, end)` (`avstream/ttac3acmod.cpp`, seit `ada97fd2`) — dieselbe Funktion, die auch die Hinweis-Spalte der Schnittliste speist (`burst-detection.md`, Kante `HDR → ACMOD`). Arbeitet auf der In-Memory-`TTAudioHeaderList`; der frühere `TTAudioCutter::analyzeAcmod`-Dateiscan (Sync-Word, feste 32-ms-Frame) ist entfernt. Frames mit abweichendem `acmod` laufen durch `TTAc3Reencoder` (dekodiert ohne Dynamikkompression, umkanaliert, mit den Kopffeldern des Quellrahmens neu kodiert, Ton an derselben Stelle); sonst Stream-Copy. Der Schnitt reicht dafür **jedes** Paket eines Segments mit Ziel-acmod an die Einheit (auch die vor dem Segmentanfang und das erste dahinter: Warmlauf und Vorgriff), hält einen Rahmen zurück, bis sein Ersatz einen Rahmen später fertig ist, und schreibt ihn dann vor dem laufenden Paket. Scheitert das Neu-Kodieren, geht der Originalrahmen mit einer Warnung hinaus. |
 | `ACMOD → REPAIR` / `REPAIR → CUT` | `cutAudioTracks` baut die Tabelle **nach** `computeTargetAcmods`, pro Spur und AC3 only: je aktiviertem `TTAudioRepairItem` (`isEnabled()`, `trackIndex() == idx`) ein Aufruf `TTAudioRepair::buildRepairTable(stream->filePath(), item, targetAcmod, &err)`, gemergt in eine `FrameTable`. `targetAcmod` ist der gemeinsame Ziel-acmod **aller Keep-Segmente**, die der Item-Bereich berührt; das Item darf über den Rand seiner Fenster hinausragen — `TTAudioCutter::cut` schlägt nur Rahmen nach, die es schreibt, also nur solche innerhalb eines Fensters. In `TTAudioCutter::cut` sitzt der Lookup **vor** der acmod-Prüfung im Paket-Loop: Frame-Nr. = Paketzeit aufs 32-ms-Raster gerundet → `repairTable->constFind(frameNo)` → Treffer schreibt die Ersatzbytes mit dem laufenden PTS-Offset und `continue`t, ohne den acmod-Reencode-Zweig je zu erreichen. Kein Treffer fällt in die normale Stream-Copy/Reencode-Logik. **Fehlerpfad = Spur-Abbruch, nicht Gesamtabbruch:** `buildRepairTable`-Fehler (Encoder fehlt, Decode-Fehler, Quell-acmod wechselt innerhalb des Item-Bereichs) setzt `repairFailed`; die Spur wird **vor** `TTAudioCutter::cut` übersprungen (`onCut(idx, outFile, lang, false); continue`) — dieselbe Teilfehlschlag-Meldung wie ein normaler Spurfehler, kein Byte dieser Spur wird geschrieben. **Ein Item-Bereich, der Fenster mit verschiedenem Ziel-acmod berührt** (nur beim Normalisieren möglich, `mixedTargets`), zählt ebenso als `repairFailed` (Meldung „repair range … reaches into cut segments with different channel layouts"); ein Item, dessen Bereich in **keinem** Fenster liegt (weggeschnitten), wird still übersprungen — `TTAudioCutter::cut` hätte diese Frames ohnehin nie geschrieben. Ein OOM bei der Ersatzpaket-Allokation fällt auf das unreparierte Originalpaket zurück (geloggte Warnung), statt eine Lücke zu schreiben. **Ergänzt 2026-08-20 (Final-Review):** ein durch die Lade-Validierung DEAKTIVIERTES Item (`isEnabled() == false`) wird weiterhin übersprungen, aber mit einer Warnzeile pro Item; und jeder Spur-Fehlschlag legt seinen Grund in `TTAVData::audioCutFailureReasons()` ab, aus der die Teilfehlschlag-Meldung der drei Schnittpfade (MPEG-2 `onDoCut`, `TTH26xCutTask`, `TTAudioOnlyCutTask`) ihren Text zieht — die handlungsanweisende Meldung zu den verschiedenen Kanalbelegungen erscheint in der Oberfläche, nicht nur im Log. |
 | `CUT → OUT` | Einzeldurchlauf über alle Segmente. Fortlaufender PTS-Versatz (`ptsOffset = nextOutputPts − pkt->pts` je Segmentanfang) macht die Ausgabe lückenlos (entfernt die Zwischensegment-Lücke). Ausgabeformat aus Dateiendung. |
 | `DRIFT → COL4` | Drift-ms pro Schnitt → Cut-Listen-Spalte 4 (`TTCutTreeView::onAudioDriftUpdated`, setzt Spalte 4, Zeile i = Eintrag i). Der Slot hängt an **einem** Signal, `TTAVData::cutAudioDriftCalculated`, und das nur zwischen `TTCutMainWindow::onCutPreview` (connect) und `onCutPreviewFinished` (disconnect). Gesendet wird es von `TTAVData::onCutPreviewFinished` — Drift über **alle** Schnitte des Projekts, egal welche die Vorschau zeigte — und vom reinen Tonschnitt (`onAudioOnlyCutFinished`); dessen Werte erreichen die Spalte außerhalb eines Vorschau-Fensters nicht. Nur Track 0. Details und offene Fragen: [cut-preview.md](cut-preview.md). |
@@ -207,12 +209,13 @@ flowchart TD
 
 ## Bekannte Fallstricke
 
-- **acmod-Normalisierung: neu kodierte Rahmen passen nicht nahtlos zu den
-  kopierten** (gemessen 2026-10-02, `TODO.md`): `dialnorm` −31 statt des
-  Werts der Quelle, Dynamikkompression der Quelle fest im Ton und kein
-  Kompressionswort, Ton um 256 Samples später (Encoder-Verzögerung). Je
-  nach Abspieler ist der neu kodierte Teil um den Kompressionsgewinn der
-  Quelle oder um die `dialnorm`-Differenz lauter als der kopierte.
+- **acmod-Normalisierung: was ein neu kodierter Rahmen mit seinem Quellrahmen
+  teilt** (Gate `ac3_reencode`): Kopffelder, Lage des Tons (Versatz 0) und
+  den Pegel bei Dekodierung ohne Kompression. Nicht geteilt wird das
+  Kompressionswort — ein Abspieler mit Dynamikkompression gibt den neu
+  kodierten Teil ohne sie wieder (`TODO.md`). Der Rückfall „Originalrahmen
+  bei Fehlschlag" ist nur an der Einheit getestet: libav verschleiert
+  Dekodierfehler, keine Eingabe erreicht ihn im Schnitt verlässlich.
 
 - **Ein Delay lässt sich auf gleichförmigem Material nicht nachweisen.** Ein
   Dauerton kodiert zu wiederkehrenden AC3-Rahmen; ein Versatz um ganze Rahmen
@@ -236,7 +239,7 @@ flowchart TD
 - **Die Reparaturbilanz des Demuxers erreicht diese Kette NICHT.** `TTESInfo`
   parst pro Tonspur `audio_N_silence_ms` (eingefügte Stille) und
   `audio_N_removed_ms` (entferntes Audio zur A/V-Korrektur) nach
-  `TTESAudioTrack::silenceMs`/`removedMs`, abrufbar über `audioSilenceMs(track)`
+  `TTAudioTrackInfo::silenceMs`/`removedMs`, abrufbar über `audioSilenceMs(track)`
   / `audioRemovedMs(track)`. **In der App ruft diese Getter niemand auf** (Stand
   2026-07-21; einziger Aufrufer im Baum ist der Diag-Harness
   `tools/diag/test_esinfo`). Das ist **kein Versehen in der Zeitkette**: die
@@ -268,25 +271,14 @@ flowchart TD
 
 ## Redundanz / Konsolidierungskandidaten
 
-- **[2026-09-05, Code-Audit Batch E2, `717fcf5a`]** `TTAudioCutter::cut` hält
-  seinen Zustand je Aufruf in einem `CutSession`-Struct (Container, Ausgabe-
-  Zeitachse, Fortschritts-/`[DRIFT]`-Buchhaltung, AC3-Umkodierkette) und ruft
-  aus der weiterhin EINEN Paketschleife `openCutSession`, `ensureAc3Codecs`,
-  `writeRepairedPacket`, `writeReencodedPacket`, `writeStreamCopyPacket`;
-  die dreifach kopierte „Paket ist im Muxer"-Buchhaltung ist
-  `CutSession::notePacketWritten`. Einzel-Pass und fortlaufender PTS unverändert.
-  Gate: `tools/diag/test_audiocutter_paths` (Stream-Copy, acmod→Stereo,
-  acmod→5.1, Reparaturtabelle, Abbruch) byteidentisch, `gate_cut_identity.sh`
-  auf fünf Tux-Fixtures identisch. **Befund dabei — GELÖST (2026-09-05,
-  `de37d225`/`0259ae1a`, Details in `docs/completed-work.md`):** wechselnde
-  Ziel-acmods zwischen Segmenten stürzten in `swr_convert` ab, weil Encoder
-  und Resampler nur einmal, vom ersten umkodierten Frame, angelegt wurden.
-  Fix: `ensureAc3Codecs` legt den Encoder neu an, sobald sich das
-  Ziel-Layout ändert (`CutSession::ac3EncIs51`); `writeReencodedPacket` legt
-  den Resampler neu an, sobald Layout/Format/Rate des dekodierten Frames von
-  der eingerichteten Signatur abweichen (`CutSession::swrInLayout` /
-  `swrInFormat` / `swrInRate`). Belegt durch `tools/diag/test_audiocutter_paths`
-  Lauf B3 (`targetAcmods = {2, 2, 7}`).
+- **AC3 dekodieren → umkanalieren → neu kodieren**
+  - sites: `extern/ttac3reencoder.cpp:TTAc3Reencoder` (einzige Stelle; benutzt von `extern/ttaudiorepair.cpp:buildRepairTable` und `extern/ttaudiocutter.cpp:TTAudioCutter::cut`)
+  - shared purpose: einen AC3-Rahmen so neu kodieren, dass er zwischen kopierten Nachbarn wie sein Quellrahmen spielt
+  - status: consolidate → erledigt 2026-10-02 (vorher zwei Ketten, in `buildRepairTable` und im Schnitt)
+- **`TTAudioCutter::cut`: Zustand und Schritte der einen Paketschleife**
+  - sites: `extern/ttaudiocutter.cpp:CutSession`, `openCutSession`, `writeBytesPacket`, `writeStreamCopyPacket`, `writeOnOutputTimeline`
+  - shared purpose: Container, Ausgabe-Zeitachse und Fortschritts-/`[DRIFT]`-Buchhaltung je Aufruf; „Paket ist im Muxer" ist `CutSession::notePacketWritten`
+  - status: kept separate → eine Schleife, benannte Schritte; Gate `tools/diag/test_audiocutter_paths`
 - **[KONSOLIDIERT `b28a7bd`..`7849f66`]** Die Producer bauen die Sequenz nicht mehr
   jeder selbst. `TTAVData::cutAudioTracks` ist die eine Implementierung von
   Spur-Schleife → `planAudioCut` → `targetAcmods` (AC3, interner

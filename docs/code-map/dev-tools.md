@@ -1,5 +1,5 @@
 ---
-base_commit: 9b26d98ac3fbe92d1de819b174f1695d3b1dd9ec
+base_commit: 2a88baf1e3f7b687a7b65fcdd67166d71f3c524c
 last_verified: 2026-10-02
 sources:
   - build-package.sh
@@ -115,14 +115,15 @@ flowchart TD
 | `MTV` → `JM` → `CACHE` | PAFF only: raw YUV of the timeline (about 7 GB, deleted afterwards) through the JM reference encoder with `paff.cfg`, limit two hours; the result must carry VUI and `field_pic_flag`. Without the encoder the variant is skipped with a message and exit 0. |
 | `CACHE` → `GATES` | The gate runner and the gate scripts name the cache files directly (`V264`, `A264`, `MBAFF`, `PAFF`, `MP2`, …); a missing file makes a gate SKIP. `EXPECTED.md` holds the expected frame numbers of the search markers for six of the files. The cache directory is gitignored and on this machine a symbolic link. |
 | `BA` → `BP` | `burst_analysis.py scan` reads the RMS level per audio frame with ffmpeg `astats` and lists boundary times where the rebuilt window logic would or would not fire; `dump` prints the chunks around given cut indices. Window bounds, the two tested chunks and the context level (`context_median`: `sorted[n/2]`) follow the detector. Its numbers are candidates; the README says the C++ tool decides. |
-| `BP` ⇢ `DET` | `ttcut-burst-probe <audio> <seconds> [--cutin] [--min-delta dB]` calls the detector once and prints `present=1 burstDb=… contextDb=… delta=…` or `present=0`; exit 0 = burst, 1 = none, 2 = usage error. Built only on request (`EXCLUDE_FROM_ALL`), from `extern/ttaudiocutter.cpp` and three more sources. |
+| `BP` ⇢ `DET` | `ttcut-burst-probe <audio> <seconds> [--cutin] [--min-delta dB]` calls the detector once and prints `present=1 burstDb=… contextDb=… delta=…` or `present=0`; exit 0 = burst, 1 = none, 2 = usage error. Built only on request (`EXCLUDE_FROM_ALL`), from `extern/ttaudiocutter.cpp` and the sources it needs (re-encoder, bit reader, `ttavutil`, logger, settings). |
 
 ## Assumptions, contracts & pitfalls
 
 - **Two fixture directories, two makers** — `tools/testdata` comes from the
   screenshot script, `tools/test-videos/cache` from `make_test_video.sh`;
   both are gitignored and both feed gates. Neither maker is called by the
-  gate runner.
+  gate runner. (`ac3_reencode` and other audio gates generate their own
+  material with ffmpeg into the run's work directory.)
 - **`build-package.sh` copies what is on disk** — a file that is neither
   tracked nor named in an exclude rule ends up in the build copy (15.7 MB
   in 574 files on 2026-10-02). A change of the rules warrants a comparison

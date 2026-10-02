@@ -15,7 +15,7 @@ and to files that are being reworked anyway.
   (`avstream/tth26*`, `ttnaluparser`, `ttdisplayordermap`, `ttavutil`, `extern/ttessmartcut`, `ttffmpegwrapper`,
   `tthevcseam`, `ttmkvmergeprovider`, the settings pages and the C tools under
   `tools/`) and the libav audio cut and repair (`extern/ttaudiocutter`,
-  `extern/ttaudiorepair`) use four spaces consistently and stay that way; do not mix widths
+  `extern/ttaudiorepair`, `extern/ttac3reencoder`) use four spaces consistently and stay that way; do not mix widths
   inside a file. The scanner lists these files as outliers against `2`; the
   verdict store carries them as `deliberate`.
 - **cpp/class_prefix**: `TT`

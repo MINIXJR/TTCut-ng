@@ -1,5 +1,5 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
+base_commit: 2a88baf1e3f7b687a7b65fcdd67166d71f3c524c
 last_verified: 2026-10-02
 sources:
   - extern/ttaudiocutter.cpp
@@ -167,8 +167,9 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
   entsprechen `ffmpeg -drc_scale 0` und liegen 0,6–1,9 dB unter einer
   Dekodierung ohne `flush`. `kBurstAbsoluteFloorDb` und die
   Delta-Schwelle wurden mit dem Detektor selbst vermessen, gelten also für
-  diese Pegel. Die Schwesterstellen ohne `flush` dekodieren mit
-  Kompression (`TODO.md`).
+  diese Pegel. Der Neu-Kodierer (`TTAc3Reencoder`) dekodiert ebenfalls
+  ohne, dort ausdrücklich gesetzt; Stille-Erkennung und Anomalie-Scan
+  dekodieren mit.
 - **Der erste Rahmen nach dem Sprung ist ungenau** — 0,1–0,3 dB neben dem
   Wert einer durchlaufenden Dekodierung (116 von 120 Grenzen, nur dieser
   Rahmen). Beim Cut-In gehört er zu den zwei geprüften Rahmen.

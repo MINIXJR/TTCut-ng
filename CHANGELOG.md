@@ -5,6 +5,13 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **Repaired and layout-converted AC3 frames no longer stand out.** A frame
+  that TTCut-ng re-encodes (audio repair, channel layout normalisation) was
+  louder than its stream-copied neighbours — by 8 dB on players that apply
+  the dialogue level, by 1–2 dB in mpv and in the preview — and its audio
+  sat 5 ms late, with a short dip at the start of the range and fades in the
+  wrong place. Re-encoded frames now carry the source's header fields, keep
+  their level and sit sample-accurate. Gate: `ac3_reencode`.
 - **AC3 header repair in ttcut-demux decides on the whole track.** The test
   that keeps valid stereo tracks from being "repaired" decoded only the
   first two seconds, so wrong headers that start later stayed. The track is
