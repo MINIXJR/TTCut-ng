@@ -16,8 +16,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/audio_fifo.h>
 #include <libavutil/channel_layout.h>
-#include <libavutil/dict.h>
 #include <libavutil/error.h>
+#include <libavutil/opt.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
 }
@@ -96,11 +96,11 @@ bool fail(QString* error, const QString& msg)
 }
 
 // Mix levels as ffmpeg's AC3 encoder expects them (it matches floats against
-// its tables with a tolerance of 0.01). Literal strings keep the values
-// independent of the numeric locale. Index = code in the bit stream.
-const char* const kCmixlev[3]   = {"0.707", "0.595", "0.500"};
-const char* const kSurmixlev[3] = {"0.707", "0.500", "0.000"};
-const char* const kExtmixlev[8] = {"1.414", "1.189", "1.000", "0.841", "0.707", "0.595", "0.500", "0.000"};
+// its tables with a tolerance of 0.01). Index = code in the bit stream.
+const double kCmixlev[3]   = {0.7071067811865476, 0.5946035575013605, 0.5};
+const double kSurmixlev[3] = {0.7071067811865476, 0.5, 0.0};
+const double kExtmixlev[8] = {1.4142135623730951, 1.189207115002721, 1.0, 0.8408964152537145,
+                              0.7071067811865476, 0.5946035575013605, 0.5, 0.0};
 
 bool hasCenter(int acmod)   { return (acmod & 1) && acmod != 1; }
 bool hasSurround(int acmod) { return (acmod & 4) != 0; }
@@ -125,43 +125,45 @@ bool sameRun(const RunKey& a, const RunKey& b)
            m.dsurexmod == n.dsurexmod && m.dheadphonmod == n.dheadphonmod && m.adconvtyp == n.adconvtyp;
 }
 
-// Encoder options for the header fields of a source frame. A field is passed
-// only when it means something in the source frame's own layout (a stereo
-// frame can carry extended mix levels that describe nothing) and its code is
-// not reserved; everything else keeps the encoder's default.
-AVDictionary* encoderOptions(const TTAc3FrameMeta& m)
+// Gives the encoder the header fields of a source frame. A field is set only
+// when it means something in the source frame's own layout (a stereo frame
+// can carry extended mix levels that describe nothing) and its code is not
+// reserved; everything else keeps the encoder's default.
+// The options are set as numbers, not through an option dictionary: option
+// strings are parsed with the C library's strtod, and "0.707" fails under a
+// numeric locale with a decimal comma (the encoder then does not open).
+void setEncoderOptions(AVCodecContext* enc, const TTAc3FrameMeta& m)
 {
-    AVDictionary* o = nullptr;
-    av_dict_set_int(&o, "dialnorm", qBound(-31, m.dialnorm, -1), 0);
-    av_dict_set_int(&o, "copyright", m.copyright, 0);
-    av_dict_set_int(&o, "original", m.origbs, 0);
+    void* o = enc->priv_data;
+    av_opt_set_int(o, "dialnorm", qBound(-31, m.dialnorm, -1), 0);
+    av_opt_set_int(o, "copyright", m.copyright, 0);
+    av_opt_set_int(o, "original", m.origbs, 0);
     if (hasCenter(m.acmod) && m.cmixlev >= 0 && m.cmixlev <= 2)
-        av_dict_set(&o, "center_mixlev", kCmixlev[m.cmixlev], 0);
+        av_opt_set_double(o, "center_mixlev", kCmixlev[m.cmixlev], 0);
     if (hasSurround(m.acmod) && m.surmixlev >= 0 && m.surmixlev <= 2)
-        av_dict_set(&o, "surround_mixlev", kSurmixlev[m.surmixlev], 0);
+        av_opt_set_double(o, "surround_mixlev", kSurmixlev[m.surmixlev], 0);
     if (m.acmod == 2 && m.dsurmod >= 0 && m.dsurmod <= 2)
-        av_dict_set_int(&o, "dsur_mode", m.dsurmod, 0);
+        av_opt_set_int(o, "dsur_mode", m.dsurmod, 0);
     if (m.mixlevel >= 0) {
-        av_dict_set_int(&o, "mixing_level", 80 + m.mixlevel, 0);
-        av_dict_set_int(&o, "room_type", m.roomtyp >= 0 && m.roomtyp <= 2 ? m.roomtyp : 0, 0);
+        av_opt_set_int(o, "mixing_level", 80 + m.mixlevel, 0);
+        av_opt_set_int(o, "room_type", m.roomtyp >= 0 && m.roomtyp <= 2 ? m.roomtyp : 0, 0);
     }
     if (m.acmod > 2 && m.dmixmod >= 0) {
-        av_dict_set_int(&o, "dmix_mode", m.dmixmod, 0);
+        av_opt_set_int(o, "dmix_mode", m.dmixmod, 0);
         if (hasCenter(m.acmod)) {
-            av_dict_set(&o, "ltrt_cmixlev", kExtmixlev[m.ltrtcmixlev & 7], 0);
-            av_dict_set(&o, "loro_cmixlev", kExtmixlev[m.lorocmixlev & 7], 0);
+            av_opt_set_double(o, "ltrt_cmixlev", kExtmixlev[m.ltrtcmixlev & 7], 0);
+            av_opt_set_double(o, "loro_cmixlev", kExtmixlev[m.lorocmixlev & 7], 0);
         }
         if (hasSurround(m.acmod)) {              // codes 0..2 are reserved for surround
-            if (m.ltrtsurmixlev >= 3) av_dict_set(&o, "ltrt_surmixlev", kExtmixlev[m.ltrtsurmixlev & 7], 0);
-            if (m.lorosurmixlev >= 3) av_dict_set(&o, "loro_surmixlev", kExtmixlev[m.lorosurmixlev & 7], 0);
+            if (m.ltrtsurmixlev >= 3) av_opt_set_double(o, "ltrt_surmixlev", kExtmixlev[m.ltrtsurmixlev & 7], 0);
+            if (m.lorosurmixlev >= 3) av_opt_set_double(o, "loro_surmixlev", kExtmixlev[m.lorosurmixlev & 7], 0);
         }
     }
     if (m.dsurexmod >= 0) {
-        if (m.acmod >= 6) av_dict_set_int(&o, "dsurex_mode", m.dsurexmod, 0);
-        if (m.acmod == 2) av_dict_set_int(&o, "dheadphone_mode", qMin(m.dheadphonmod, 2), 0);
-        av_dict_set_int(&o, "ad_conv_type", m.adconvtyp, 0);
+        if (m.acmod >= 6) av_opt_set_int(o, "dsurex_mode", m.dsurexmod, 0);
+        if (m.acmod == 2) av_opt_set_int(o, "dheadphone_mode", qMin(m.dheadphonmod, 2), 0);
+        av_opt_set_int(o, "ad_conv_type", m.adconvtyp, 0);
     }
-    return o;
 }
 
 } // namespace
@@ -214,10 +216,8 @@ bool TTAc3Reencoder::Private::openDecoder(QString* error)
     // into the replacement. avcodec_flush_buffers resets this option
     // (ac3_decode_flush clears the decoder's context) - this class never
     // flushes and reopens the decoder instead.
-    AVDictionary* opts = nullptr;
-    av_dict_set(&opts, "drc_scale", "0", 0);
-    const int ret = avcodec_open2(dec, codec, &opts);
-    av_dict_free(&opts);
+    av_opt_set_double(dec->priv_data, "drc_scale", 0.0, 0);
+    const int ret = avcodec_open2(dec, codec, nullptr);
     if (ret < 0) {
         avcodec_free_context(&dec);   // push() then reports "not open"
         return fail(error, QString("could not open the AC3 decoder: %1").arg(avErr(ret)));
@@ -270,9 +270,8 @@ bool TTAc3Reencoder::Private::openRun(const RunKey& k, QString* error)
     if (k.meta.bsmod <= 4 || channels == 1)
         enc->audio_service_type = static_cast<AVAudioServiceType>(k.meta.bsmod);
 
-    AVDictionary* opts = encoderOptions(k.meta);
-    const int ret = avcodec_open2(enc, codec, &opts);
-    av_dict_free(&opts);
+    setEncoderOptions(enc, k.meta);
+    const int ret = avcodec_open2(enc, codec, nullptr);
     if (ret < 0)
         return fail(error, QString("could not open the AC3 encoder: %1").arg(avErr(ret)));
     if (enc->frame_size != kFrameSamples)

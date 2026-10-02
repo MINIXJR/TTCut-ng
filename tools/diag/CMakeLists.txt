@@ -217,7 +217,8 @@ function(diag_tool name)
 endfunction()
 
 set(AUDIOREPAIR_SRC
-  ${ROOT}/extern/ttaudiorepair.cpp)
+  ${ROOT}/extern/ttaudiorepair.cpp
+  ${AC3REENC_SRC})
 
 set(SILENCE_SRC
   ${ROOT}/data/ttstreampoint_audioworker.cpp

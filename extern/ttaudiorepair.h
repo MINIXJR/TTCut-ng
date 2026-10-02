@@ -14,8 +14,9 @@ using FrameTable = QMap<qint64, QByteArray>;
 
 // Build replacement frames for one repair item. Decodes the item's source
 // frames, silences the masked channels (5 ms raised-cosine fades at range
-// start/end), re-encodes with the source's sample rate/bit rate and the
-// given target acmod (-1 = keep the source channel layout). On failure
+// start/end) and re-encodes them through TTAc3Reencoder: with the source
+// frame's bit rate and header fields, sample-aligned, in the given target
+// acmod (-1 = keep the source channel layout). On failure
 // returns an empty table and sets errorOut — callers MUST treat that as
 // abort-the-cut, never as skip-the-repair (spec: Fehlerbild Punkt 2).
 // Open audioFile with libavformat and find its first audio stream. On

@@ -17,10 +17,12 @@
 // (not codecpar) so this works even if avformat left codecpar's channel
 // layout unpopulated for a raw elementary stream.
 //
-// Frame-exact 1:1 decode/encode (no encoder priming/delay) was verified in
-// the Task 1 calibration spike (repair_prototype.py) -- a mismatch between
-// requested and produced replacement-frame count is therefore treated as an
-// implementation bug here, not tolerated as "encoder behavior".
+// Decoding, layout conversion, encoding and the frame alignment are
+// TTAc3Reencoder's (ttac3reencoder.h): the AC3 encoder delays its input by
+// 256 samples, and the re-encoder compensates for that, so the fades below
+// land on the first and the last sample of the range. One replacement comes
+// out per frame pushed -- a mismatch between requested and produced
+// replacement-frame count is an implementation bug, not "encoder behavior".
 //
 // Abort contract (Task 4 review fix round, C1/I2/I3): a repair range MUST
 // be uniform in source channel-mode (acmod/channel count) and source frame
@@ -34,13 +36,13 @@
 // header). This module never silently upmixes, ignores an out-of-range
 // channel mask bit, or truncates a short swr conversion.
 #include "ttaudiorepair.h"
+#include "ttac3reencoder.h"
 
 #include <QScopeGuard>
 
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
-#include <libswresample/swresample.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 }
@@ -144,26 +146,12 @@ FrameTable buildRepairTable(const QString& audioFile,
         return fail(QStringLiteral("invalid frame range"));
     }
 
-    // Every exit releases what was acquired (all free functions accept a null
-    // handle), so each error below is a plain return fail(...).
-    AVFormatContext* fmtCtx    = nullptr;
-    AVCodecContext*  decCtx    = nullptr;
-    AVCodecContext*  encCtx    = nullptr;   // created lazily from the first decoded frame
-    SwrContext*      swrCtx    = nullptr;
-    AVFrame*         convFrame = nullptr;
-    AVPacket*        pkt       = nullptr;
-    AVPacket*        encPkt    = nullptr;
-    AVFrame*         frame     = nullptr;
+    AVFormatContext* fmtCtx = nullptr;
+    AVPacket*        pkt    = nullptr;
     AVChannelLayout  sourceRefLayout = {};  // established at the first in-range frame
     const auto releaseAll = qScopeGuard([&]() {
         av_packet_free(&pkt);
-        av_packet_free(&encPkt);
-        av_frame_free(&frame);
-        av_frame_free(&convFrame);
         av_channel_layout_uninit(&sourceRefLayout);
-        swr_free(&swrCtx);
-        avcodec_free_context(&encCtx);
-        avcodec_free_context(&decCtx);
         avformat_close_input(&fmtCtx);
     });
 
@@ -171,199 +159,116 @@ FrameTable buildRepairTable(const QString& audioFile,
     QString openError;
     if (!openFirstAudioStream(audioFile, &fmtCtx, &audioIdx, &openError))
         return fail(openError);
-    AVStream* inStream = fmtCtx->streams[audioIdx];
-    AVCodecParameters* cp = inStream->codecpar;
+    AVCodecParameters* cp = fmtCtx->streams[audioIdx]->codecpar;
     if (cp->sample_rate <= 0)
         return fail(QStringLiteral("invalid sample rate"));
 
-    const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
-    decCtx = dec ? avcodec_alloc_context3(dec) : nullptr;
-    if (!decCtx ||
-        avcodec_parameters_to_context(decCtx, cp) < 0 ||
-        avcodec_open2(decCtx, dec, nullptr) < 0)
-        return fail(QStringLiteral("could not open AC3 decoder"));
-
-    const AVCodec* enc = avcodec_find_encoder(AV_CODEC_ID_AC3);
-    if (!enc)
-        return fail(QStringLiteral("AC3 encoder not available"));
+    TTAc3Reencoder reencoder;
+    QString reError;
+    if (!reencoder.open(cp, &reError))
+        return fail(reError);
 
     const int fadeLen = fadeLenSamples(cp->sample_rate);
-    // 2-frame decoder warm-up before frameFrom (AC3 has no DPB, but the
-    // synthesis filterbank carries overlap state across frames).
+    // Decoder warm-up before frameFrom (the synthesis filterbank carries
+    // overlap state across frames); one frame behind frameTo supplies the
+    // 256 samples that complete the last replacement.
     const qint64 warmupStart = item.frameFrom() >= 2 ? item.frameFrom() - 2 : 0;
     const qint64 expectedCount = item.frameTo() - item.frameFrom() + 1;
 
-    pkt    = av_packet_alloc();
-    encPkt = av_packet_alloc();
-    frame  = av_frame_alloc();
-    // Allocation failure is an out-of-memory condition, not something the
-    // loop below could survive: pkt/frame are dereferenced unconditionally on
-    // the first iteration. Report it as the error the caller must abort on
-    // rather than crashing on a null pointer (final review M10).
-    if (!pkt || !encPkt || !frame)
-        return fail(QStringLiteral("out of memory allocating the AC3 packet/frame buffers"));
+    pkt = av_packet_alloc();
+    if (!pkt)
+        return fail(QStringLiteral("out of memory allocating the AC3 packet buffer"));
     FrameTable table;
     qint64 frameIdx = -1;
     qint64 sourceFrameSize = -1; // CBR byte size, captured from the first touched packet
 
-    while (av_read_frame(fmtCtx, pkt) >= 0) {
-        if (pkt->stream_index != audioIdx) { av_packet_unref(pkt); continue; }
-        ++frameIdx;
-        if (frameIdx < warmupStart) { av_packet_unref(pkt); continue; }
-        if (frameIdx > item.frameTo()) { av_packet_unref(pkt); break; }
-
-        // Splice invariant (I2): every source frame touched (warm-up and
-        // content) must be the same CBR byte size, or the byte-for-byte
-        // splice the caller does against the source file desyncs.
-        if (sourceFrameSize < 0) {
-            sourceFrameSize = pkt->size;
-        } else if (pkt->size != sourceFrameSize) {
-            return fail(QString("source frame size changed within the repair range at frame %1 "
-                              "(%2 vs %3 bytes) -- not a constant-bitrate region")
-                         .arg(frameIdx).arg(pkt->size).arg(sourceFrameSize));
-        }
-
-        int sendRet = avcodec_send_packet(decCtx, pkt);
-        av_packet_unref(pkt);
-        if (sendRet < 0) {
-            return fail(QString("AC3 decode send_packet failed at frame %1: %2")
-                         .arg(frameIdx).arg(avErr(sendRet)));
-        }
-        int decRet = avcodec_receive_frame(decCtx, frame);
-        if (decRet < 0) {
-            return fail(QString("AC3 decode produced no frame at %1: %2")
-                         .arg(frameIdx).arg(avErr(decRet)));
-        }
-
-        if (frameIdx < item.frameFrom()) {
-            av_frame_unref(frame);
-            continue; // decoder warm-up only, discarded from the table
-        }
-        if (frame->format != AV_SAMPLE_FMT_FLTP) {
-            return fail(QStringLiteral("AC3 decoder produced an unexpected sample format"));
-        }
-
-        // Channel-mode consistency (C1): the repair range must be uniform
-        // in source channel layout. Established from the first in-range
-        // frame; any later frame that differs (acmod/channel-count change,
-        // e.g. a mid-range switch to a commercial break's 2.0 track) aborts
-        // the whole table rather than being silently up/downmixed against
-        // the first frame's layout. The channel mask is validated against
-        // the SAME first-frame channel count: a bit referring to a channel
-        // that does not exist in this stream (e.g. LFE/bit 3 on a 2-channel
-        // stream) is an error, not a silently-skipped no-op.
+    // Channel-mode consistency (C1) and the mask, checked on the decoded
+    // frame: the repair range must be uniform in source channel layout, and
+    // a mask bit must refer to a channel the stream has. Then mask and fades.
+    const TTAc3Reencoder::PcmEdit edit = [&](AVFrame* frame, QString* error) {
         if (frameIdx == item.frameFrom()) {
             av_channel_layout_copy(&sourceRefLayout, &frame->ch_layout);
             const int nCh = frame->ch_layout.nb_channels;
             const quint8 validMask = (nCh >= 8) ? quint8(0xFF) : quint8((1u << nCh) - 1);
             if (item.channelMask() & ~validMask) {
-                return fail(QString("channel mask 0x%1 references channel(s) beyond the "
-                                  "stream's %2 channel(s) at frame %3")
-                             .arg(item.channelMask(), 0, 16).arg(nCh).arg(frameIdx));
+                *error = QString("channel mask 0x%1 references channel(s) beyond the "
+                                 "stream's %2 channel(s) at frame %3")
+                             .arg(item.channelMask(), 0, 16).arg(nCh).arg(frameIdx);
+                return false;
             }
         } else if (av_channel_layout_compare(&frame->ch_layout, &sourceRefLayout) != 0) {
-            return fail(QString("repair range spans a channel-mode change at frame %1")
-                         .arg(frameIdx));
+            *error = QString("repair range spans a channel-mode change at frame %1").arg(frameIdx);
+            return false;
         }
-
-        if (!encCtx) {
-            encCtx = avcodec_alloc_context3(enc);
-            if (!encCtx) {
-                return fail(QStringLiteral("avcodec_alloc_context3 failed for AC3 encoder"));
-            }
-            encCtx->sample_rate = frame->sample_rate;
-            // The bit rate of the repaired frames, from their size: an AC3
-            // frame carries 1536 samples, so bytes * 8 / (1536 / rate) bit/s
-            // (1536 B -> 384 kbit/s, 768 B -> 192 kbit/s at 48 kHz). All
-            // touched frames have this size (checked above), and the encoded
-            // size is checked against it below - a replacement that does not
-            // splice byte-for-byte is still a hard error (I2).
-            encCtx->bit_rate = sourceFrameSize * 8 * frame->sample_rate / 1536;
-            encCtx->time_base = AVRational{1, frame->sample_rate};
-            encCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-            if (targetAcmod < 0) {
-                // Keep the source channel layout, read from the decoded
-                // frame (robust even if codecpar left ch_layout unpopulated
-                // for a raw AC3 elementary stream).
-                av_channel_layout_copy(&encCtx->ch_layout, &frame->ch_layout);
-            } else if (targetAcmod == 7 || targetAcmod == 6) {
-                AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
-                av_channel_layout_copy(&encCtx->ch_layout, &layout51);
-            } else {
-                AVChannelLayout layoutStereo = AV_CHANNEL_LAYOUT_STEREO;
-                av_channel_layout_copy(&encCtx->ch_layout, &layoutStereo);
-            }
-            if (avcodec_open2(encCtx, enc, nullptr) < 0) {
-                return fail(QStringLiteral("could not open AC3 encoder"));
-            }
-        }
-
         applyMaskAndFade(frame, item.channelMask(), fadeLen,
-                          frameIdx == item.frameFrom(), frameIdx == item.frameTo());
+                         frameIdx == item.frameFrom(), frameIdx == item.frameTo());
+        return true;
+    };
 
-        AVFrame* encInput = frame;
-        const bool sameLayout =
-            av_channel_layout_compare(&frame->ch_layout, &encCtx->ch_layout) == 0;
-        if (!sameLayout) {
-            if (!swrCtx) {
-                int swrRet = swr_alloc_set_opts2(&swrCtx,
-                    &encCtx->ch_layout, encCtx->sample_fmt, encCtx->sample_rate,
-                    &frame->ch_layout, static_cast<AVSampleFormat>(frame->format), frame->sample_rate,
-                    0, nullptr);
-                if (swrRet < 0 || !swrCtx || swr_init(swrCtx) < 0) {
-                    return fail(QStringLiteral("swr init failed for target acmod conversion"));
-                }
-                convFrame = av_frame_alloc();
+    // I2 splice invariant: a replacement must have the source's CBR frame
+    // size, or the caller's byte-offset splice corrupts the stream.
+    QList<TTAc3Reencoder::Replacement> finished;
+    auto takeFinished = [&](QString* error) {
+        for (const TTAc3Reencoder::Replacement& r : finished) {
+            if (r.bytes.size() != sourceFrameSize) {
+                *error = QString("encoded replacement frame size mismatch at frame %1: "
+                                 "got %2 bytes, source frames are %3 bytes")
+                             .arg(r.tag).arg(r.bytes.size()).arg(sourceFrameSize);
+                return false;
             }
-            av_frame_unref(convFrame);
-            av_channel_layout_copy(&convFrame->ch_layout, &encCtx->ch_layout);
-            convFrame->format = encCtx->sample_fmt;
-            convFrame->sample_rate = encCtx->sample_rate;
-            convFrame->nb_samples = frame->nb_samples;
-            if (av_frame_get_buffer(convFrame, 0) < 0) {
-                return fail(QStringLiteral("av_frame_get_buffer failed for swr output"));
-            }
-            // I3: swr_convert's return is the number of samples actually
-            // produced (or a negative AVERROR) -- a short conversion left
-            // uninitialized tail samples in convFrame that must not be fed
-            // to the encoder silently.
-            int swrOut = swr_convert(swrCtx, convFrame->data, convFrame->nb_samples,
-                                      const_cast<const uint8_t**>(frame->data), frame->nb_samples);
-            if (swrOut < 0) {
-                return fail(QString("swr_convert failed at frame %1: %2")
-                             .arg(frameIdx).arg(avErr(swrOut)));
-            }
-            if (swrOut != convFrame->nb_samples) {
-                return fail(QString("swr_convert produced %1 samples at frame %2, expected %3")
-                             .arg(swrOut).arg(frameIdx).arg(convFrame->nb_samples));
-            }
-            encInput = convFrame;
+            table.insert(r.tag, r.bytes);
         }
-        encInput->pts = frameIdx;
+        finished.clear();
+        return true;
+    };
 
-        int sendRet2 = avcodec_send_frame(encCtx, encInput);
-        if (sendRet2 < 0) {
-            return fail(QString("AC3 encode send_frame failed at %1: %2")
-                         .arg(frameIdx).arg(avErr(sendRet2)));
+    TTAc3Reencoder::Request request;
+    request.targetAcmod = targetAcmod;
+    bool sawFrameBehind = false;
+
+    while (av_read_frame(fmtCtx, pkt) >= 0) {
+        if (pkt->stream_index != audioIdx) { av_packet_unref(pkt); continue; }
+        ++frameIdx;
+        if (frameIdx < warmupStart) { av_packet_unref(pkt); continue; }
+
+        if (frameIdx > item.frameTo()) {
+            // The frame behind the range: lookahead only, exempt from the
+            // uniformity checks below.
+            const bool ok = reencoder.push(pkt, false, request, frameIdx, {}, &finished, &reError);
+            av_packet_unref(pkt);
+            if (!ok) return fail(reError);
+            sawFrameBehind = true;
+            break;
         }
-        int recvRet = avcodec_receive_packet(encCtx, encPkt);
-        if (recvRet < 0) {
-            return fail(QString("AC3 encode produced no packet at %1: %2")
-                         .arg(frameIdx).arg(avErr(recvRet)));
+
+        // Splice invariant (I2): every source frame touched (warm-up and
+        // content) must be the same CBR byte size.
+        if (sourceFrameSize < 0) {
+            sourceFrameSize = pkt->size;
+            // The bit rate of the repaired frames, from their size: an AC3
+            // frame carries 1536 samples (1536 B -> 384 kbit/s at 48 kHz).
+            request.bitRate = sourceFrameSize * 8 * cp->sample_rate / 1536;
+        } else if (pkt->size != sourceFrameSize) {
+            const QString msg = QString("source frame size changed within the repair range at frame %1 "
+                                        "(%2 vs %3 bytes) -- not a constant-bitrate region")
+                                    .arg(frameIdx).arg(pkt->size).arg(sourceFrameSize);
+            av_packet_unref(pkt);
+            return fail(msg);
         }
-        // I2 splice invariant: the replacement frame's byte size must match
-        // the source's CBR frame size exactly, or the caller's byte-offset
-        // splice into the source file corrupts the stream.
-        if (encPkt->size != sourceFrameSize) {
-            return fail(QString("encoded replacement frame size mismatch at frame %1: "
-                              "got %2 bytes, source frames are %3 bytes")
-                         .arg(frameIdx).arg(encPkt->size).arg(sourceFrameSize));
-        }
-        table.insert(frameIdx, QByteArray(reinterpret_cast<const char*>(encPkt->data),
-                                           encPkt->size));
-        av_packet_unref(encPkt);
-        av_frame_unref(frame);
+
+        const bool inRange = frameIdx >= item.frameFrom();
+        const bool ok = reencoder.push(pkt, inRange, request, frameIdx,
+                                       inRange ? edit : TTAc3Reencoder::PcmEdit(), &finished, &reError);
+        av_packet_unref(pkt);
+        if (!ok)
+            return fail(reError.contains("frame") ? reError
+                                                  : QString("%1 (frame %2)").arg(reError).arg(frameIdx));
+        if (!takeFinished(&reError)) return fail(reError);
     }
+    // The file ended with the range: silence completes the last frame.
+    if (!sawFrameBehind && !reencoder.finish(&finished, &reError))
+        return fail(reError);
+    if (!takeFinished(&reError)) return fail(reError);
 
     if (table.size() != expectedCount) {
         // Two very different causes, and calling both an implementation bug
@@ -374,8 +279,7 @@ FrameTable buildRepairTable(const QString& audioFile,
         //    holds the last frame number the demuxer delivered, so
         //    frameIdx < frameTo means we ran into EOF, not a logic error.
         // b) Anything else: the range was fully read but produced too few
-        //    replacement frames, which AC3 encoding (frame-exact, no
-        //    priming/delay) cannot do - that IS an implementation bug.
+        //    replacement frames - that IS an implementation bug.
         if (frameIdx < item.frameTo()) {
             return fail(QString("repair range %1-%2 reaches past the end of the audio file "
                                  "(it holds %3 frames) -- the recording was probably "
@@ -383,7 +287,7 @@ FrameTable buildRepairTable(const QString& audioFile,
                             .arg(item.frameFrom()).arg(item.frameTo()).arg(frameIdx + 1));
         }
         return fail(QString("replacement-frame count mismatch: expected %1, got %2 "
-                             "(implementation bug -- AC3 encode is frame-exact, no priming/delay)")
+                             "(implementation bug)")
                         .arg(expectedCount).arg(table.size()));
     }
     return table;
