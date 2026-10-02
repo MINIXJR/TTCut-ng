@@ -1056,6 +1056,44 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Audit-Lauf 7 eine gelöschte Quelle (`extern/imuxprovider.h`) — der Pfad-
     Abgleich fand es.
 
+- **Audit-Lauf 20: Lese-Hypothesen der Karte `dev-tools.md`** → **DONE
+  (2026-10-02, Zweig `cleanup/code-audit-run20`)**.
+  - **T1** `nal-verify.py`: lief mit zwei ffmpeg-Abschnitten, übersprang
+    `h264_analyze` und `ldecod`, obwohl beide vorhanden sind
+    (`os.path.exists` auf den nackten Programmnamen), ignorierte seine
+    dokumentierten Argumente, fünf Funktionen ohne Aufrufer, Exit 0 trotz
+    Fehlern → entfernt (User-Entscheid).
+  - **T3** `make_damage_fixtures.sh` + `damage_ts.py`: kein Aufrufer, Ziel
+    `CLAUDE_TMP/…/demuxrepair/fixtures` existiert nicht mehr, kein Gate
+    liest es → entfernt (User-Entscheid).
+  - **T5** `ttcut-screenshots.sh` mit `/bin/false` als Programm: „0 updated,
+    0 unchanged", Exit 0. Jetzt Exit-Status der App und „kein Bild" als
+    Fehler; Gate `screenshots_script` (alt rot). Offscreen läuft durch (21
+    Bilder, 7 s); Gleichheit zu `xcb` nicht gemessen.
+  - **T4** `make_test_video.sh`: Tux-Pfad relativ zum Skript, Zahlen und
+    Aufrufhilfe berichtigt; Suite `mtv` vorher/nachher gleich.
+  - **T6** Paketkopie: 76,7 MB in 2039 Dateien, davon 1466 ungetrackt
+    (`.qtc_clangd`, `.cache`, `.superpowers`, `.claude`, ein Core-Dump von
+    50 MB) → Ausschlussregeln, jetzt 15,7 MB in 574 Dateien. Paket vorher und
+    nachher gebaut: dieselben 16 Dateien, bis auf Programm und
+    Debian-Changelog prüfsummengleich.
+  - **T2** Burst-Nachbau gegen den Detektor an einer echten AC3-Spur: Median
+    bei gerader Rahmenzahl verschieden (24 von 25 Fenstern) → angeglichen.
+    Pegel je Rahmen 0,6–1,9 dB verschieden; der Detektor trifft exakt
+    `ffmpeg -drc_scale 0`, sein Decoder meldet aber `drc_scale=1`; nicht
+    die Locale. Ursache offen → `TODO.md`.
+  - Fallen: (1) Das Gate auf dem ALTEN Skript startet das echte Programm mit
+    `xcb` — ein Fenster auf dem Desktop und ein geändertes
+    `docs/MainWindow.png`. (2) `build-package.sh` ändert
+    `debian/changelog` bis zum Ende des Laufs; solange nichts mit
+    `git add -u` einsammeln. (3) Ein Vergleich mit den Wiki-Bildern sagt
+    nichts über offscreen gegen xcb: sie stammen von anderem Material.
+    (4) Shell-Hier-Dokument ohne Anführungszeichen am Endezeichen: Backticks
+    im Text werden ausgeführt — ein `dpkg-buildpackage` in der Doku-Zeile
+    startete so einen Paketbau im Repo selbst (1,1 GB Quellarchiv neben dem
+    Repo, `build-deb/`, `debian/.debhelper`, die drei Werkzeug-Binaries
+    ersetzt). Immer `<<'EOF'`.
+
 - **Audit-Lauf 19: Lese-Hypothesen der Karte `ttcut-ac3fix.md`** → **DONE
   (2026-10-02, Zweig `cleanup/code-audit-run19`)**. Material: erzeugte
   AC3-Dateien (rosa Rauschen, 448 kbit/s, 250 Rahmen) und vier echte

@@ -364,6 +364,23 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
+- **Burst-Erkennung: Pegel des Detektors entsprechen `ffmpeg -drc_scale 0`**
+  (Audit-Lauf 20, 2026-10-02, gemessen, Ursache offen).
+  `TTAudioCutter::detectBurst` liefert je Tonrahmen 0,6–1,9 dB niedrigere
+  Pegel als `ffmpeg … -af astats` auf derselben Datei (DVB-AC3, 448 kbit/s;
+  gleiche Rahmen, gleiche Zeiten, unabhängig per PCM nachgerechnet). Die
+  Werte des Detektors sind auf zwei Nachkommastellen die von
+  `ffmpeg -drc_scale 0`, die von `astats` die des Standards `-drc_scale 1`.
+  Der Decoder im Detektor meldet aber selbst `drc_scale=1`
+  (`av_opt_get_double` nach `avcodec_open2`). Nicht die Locale (mit
+  `LC_ALL=C` gleich). Offen: woher der Unterschied kommt, ob er auch MP2
+  betrifft, und ob die Schwelle der Anwendung (Vorgabe 20 dB, absolutes
+  Gate −40 dB) auf Pegeln mit oder ohne Dynamikkompression gedacht war —
+  die Messungen zu `kBurstAbsoluteFloorDb` wurden mit dem Detektor selbst
+  gemacht, sind also in sich stimmig. Erst messen, dann erklären; die
+  Debug-Kopie des Detektors, die jeden Rahmen ausgibt, ist in Minuten neu
+  gebaut (`fprintf` nach `rmsValues.append`).
+
 - **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
   gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom
   Hauptbildschirm, nicht vom Bildschirm des Hauptfensters. Beim User stehen
