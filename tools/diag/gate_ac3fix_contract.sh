@@ -12,8 +12,9 @@
 # does not end the calling shell.
 #
 #   usage: gate_ac3fix_contract.sh <ttcut-ac3fix> <ttcut-demux> <workdir>
-# rc is read inside the condition strings that check() evaluates.
-# shellcheck disable=SC2034
+# check() evaluates its condition string: the single quotes are meant
+# (SC2016), and rc is read inside those strings (SC2034).
+# shellcheck disable=SC2016,SC2034
 set -u
 BIN=${1:?usage: $0 <ttcut-ac3fix> <ttcut-demux> <workdir>}
 DEMUX=${2:?usage: $0 <ttcut-ac3fix> <ttcut-demux> <workdir>}
@@ -29,13 +30,14 @@ check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }   # LABEL CONDITION
 # Pink noise, so that every frame differs. 448 kbit/s at 48 kHz = 1792 bytes
 # per frame, 250 frames in 8 s.
 noise() { ffmpeg -y -v error -f lavfi -i "anoisesrc=d=8:c=pink:r=$1:a=0.3" "${@:2}"; }
-noise 48000 -ac 2 -c:a ac3 -b:a 448k stereo.ac3 &&
-noise 48000 -af "pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0" -c:a ac3 -b:a 448k s51.ac3 &&
-noise 44100 -ac 2 -c:a ac3 -b:a 448k stereo441.ac3 &&
-noise 48000 -ac 2 -c:a eac3 -b:a 448k -f eac3 eac3.ac3 ||
-  { echo "FAIL: fixture generation (ffmpeg)"; exit 1; }
+if ! { noise 48000 -ac 2 -c:a ac3 -b:a 448k stereo.ac3 &&
+        noise 48000 -af "pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0" -c:a ac3 -b:a 448k s51.ac3 &&
+        noise 44100 -ac 2 -c:a ac3 -b:a 448k stereo441.ac3 &&
+        noise 48000 -ac 2 -c:a eac3 -b:a 448k -f eac3 eac3.ac3; }; then
+  echo "FAIL: fixture generation (ffmpeg)"; exit 1
+fi
 : > empty.ac3
-python3 - <<'PY' || { echo "FAIL: fixture generation (python)"; exit 1; }
+if ! python3 - <<'PY'; then echo "FAIL: fixture generation (python)"; exit 1; fi
 import random
 FS = 1792
 def acmod(data, value, first=0):

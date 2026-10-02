@@ -1056,6 +1056,49 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Audit-Lauf 7 eine gelöschte Quelle (`extern/imuxprovider.h`) — der Pfad-
     Abgleich fand es.
 
+- **Audit-Lauf 19: Lese-Hypothesen der Karte `ttcut-ac3fix.md`** → **DONE
+  (2026-10-02, Zweig `cleanup/code-audit-run19`)**. Material: erzeugte
+  AC3-Dateien (rosa Rauschen, 448 kbit/s, 250 Rahmen) und vier echte
+  Aufnahmen; ffmpeg 9.0.2.
+  - **Echtes Material:** Die Zählregel „Stereo-Header ab 384 kbit/s" schlägt
+    bei 2 von 4 Spuren an (30 638 und 29 Rahmen). Beides ist gültiges Stereo
+    mit 448 kbit/s neben 5.1, dekodiert ohne eine Fehlerzeile. Ein Fall, der
+    die Reparatur brauchte, lag nicht vor.
+  - **A1** bestätigt: Analyse-Lauf mit rc=1 unter `set -e` beendet den Demux
+    ohne Meldung (altes Skript mit Stub: rc=1, keine `.info`). Jetzt Warnung.
+  - **A2** bestätigt: Status der Pipeline war der von `tail -1`; eine
+    Reparatur, die nach dem Schreiben scheiterte, wurde über die Spur
+    geschoben. Jetzt beide Exit-Codes ausgewertet.
+  - **A3** teils: Der Dekodiertest trennte 5.1-mit-Stereo-Header (rc=69) von
+    gültigem Stereo (rc=0), auch bei 63 zerstörten Rahmen am Anfang — eine
+    Fehlauslösung ließ sich nicht provozieren. Lücke: falsche Header ab
+    Rahmen 100 → rc=0, 150 Rahmen blieben. Der Exit-Status ist kein Maß: er
+    kippt erst über zwei Dritteln Fehlerrate. Jetzt volle Dekodierung mit
+    gezählten Fehlerzeilen (2,8–3,5 s je 70-Minuten-Spur, nur bei Anschlag).
+  - **A4** bestätigt: 5.1 mit Stereo-Header wird byte-gleich zum Original
+    repariert; gültiges Stereo zwangsrepariert ist in 250 von 250 Rahmen
+    CRC-defekt. Das Ergebnis prüfte niemand. Jetzt ersetzt die Kopie die Spur
+    nur bei weniger Fehlerzeilen (beschädigtes Stereo: 315 gegen 1761).
+  - **A5** bestätigt: 3000 Fremdbytes mitten in der Datei fielen im Fix-Lauf
+    weg, vor dem Sanitizer, der sie gemeldet hätte. Jetzt bleibt jedes Byte.
+    Dabei gefunden: Fremdbytes in der Dateimitte gaben gar keine Meldung.
+  - **A6/A7** bestätigt, anders als vermutet: 44,1 kHz und E-AC3 ergaben je
+    3 Zufallsrahmen statt 0; ein Fix-Lauf schrieb 4864 von 448 610 Bytes.
+    Jetzt zählt ein Rahmen hinter Fremdbytes nur mit folgendem Sync-Wort,
+    `bsid` über 10 ist kein AC3.
+  - **A8** bestätigt: gleiche Ein-/Ausgabedatei leerte die Datei bei rc=0,
+    dritter Dateiparameter ignoriert, Fehlertext nannte `-o`. **A9**: Wiki.
+  - Gate neu `ac3fix_contract` (17 Prüfungen, 11 davon auf dem alten Stand
+    rot). `gate_ac3fix.sh` alt gegen neu: alle Berichte gleich, die zwei
+    reparierten Dateien nur um die vier jetzt erhaltenen Fremdbytes länger.
+    Demux-Identität auf vier Fixtures gleich. Echte Spuren: Bericht vorher
+    und nachher gleich, Kopie byte-gleich zur Eingabe.
+  - Fallen: (1) ffmpeg erkennt `spur.ac3.fixed` nicht an der Endung — ohne
+    `-f ac3` zählte die Prüfung der Kopie zu wenige Fehler, und das Gate
+    (D4) fand es. (2) Ohne `-loglevel repeat+…` faltet ffmpeg gleiche
+    Zeilen zusammen. (3) Nullen als Nutzlast dekodieren fehlerfrei; für
+    „beschädigt" Zufallsbytes nehmen. (4) `/usr/bin/time` fehlt hier.
+
 - **Audit-Lauf 17: Lese-Hypothesen der Karte `demux-helpers.md`** → **DONE
   (2026-09-27, Zweig `cleanup/code-audit-run17`)**. Echtes Material: Babylon
   Berlin 05x05 (1035 OCR-Untertitel, spupng-Dump mit denselben Flags wie

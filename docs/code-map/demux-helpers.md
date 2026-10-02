@@ -1,6 +1,6 @@
 ---
-base_commit: d1ecf5ba2d9cfd5294f0772e5658e91ead8fe8ed
-last_verified: 2026-09-27
+base_commit: 2464de4b5ebb02f0bcb181609548e7f88c763da5
+last_verified: 2026-10-02
 sources:
   - tools/ttcut-demux/ttcut-ocr-glyphs
   - tools/ttcut-demux/ocr-glyphs/note_thin__♪.txt

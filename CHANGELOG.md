@@ -5,6 +5,19 @@ All notable changes to TTCut-ng are documented in this file.
 ## Unreleased
 
 ### Fixed
+- **AC3 header repair in ttcut-demux decides on the whole track.** The test
+  that keeps valid stereo tracks from being "repaired" decoded only the
+  first two seconds, so wrong headers that start later stayed. The track is
+  now decoded completely, and the repaired copy as well: it replaces the
+  track only when it decodes with fewer errors. A failing `ttcut-ac3fix` no
+  longer ends the demux run without a message.
+- **ttcut-ac3fix keeps every byte.** A run with an output file dropped all
+  bytes that belonged to no frame, unreported, before the audio sanitizer
+  could report them; the output is now the input with only the patched
+  header bits changed. Foreign bytes in mid-file are reported, a 44.1 kHz or
+  E-AC3 track is named as unsupported instead of being read as a few chance
+  frames, and using the input as output is refused instead of emptying the
+  file. Gate: `ac3fix_contract`.
 - **Audio-change marker "5.1 → 5.1" is gone.** A broadcaster switching from
   5.1 to stereo drops the LFE channel two frames before the others; that
   gave a marker labelled "Audio 5.1 → 5.1" and a second one three frames
