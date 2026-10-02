@@ -38,11 +38,14 @@ def read_rms(path, start=None, duration=None):
     astats' Overall.RMS_level ist 20*log10(sqrt(sum(v^2)/N)) ueber alle Kanaele
     in dBFS -- dieselbe Formel wie TTAudioCutter::detectBurst.
 
-    Die Werte sind trotzdem nicht die des Detektors: gemessen 2026-10-02 an
-    einer DVB-AC3-Spur liegen sie je Rahmen 0,6..1,9 dB hoeher. Die Pegel des
-    Detektors entsprechen "ffmpeg -drc_scale 0"; warum, ist offen (TODO.md).
+    -drc_scale 0: der Detektor dekodiert ohne die Dynamikkompression des
+    AC3-Stroms. Er springt an die Grenze und ruft avcodec_flush_buffers, und
+    der AC3-Decoder von libavcodec setzt dabei seine Optionen auf null zurueck
+    (gemessen 2026-10-02, ffmpeg 9.0.2). Ohne die Option liegen die Pegel je
+    Rahmen 0,6..1,9 dB hoeher als die des Detektors. Andere Decoder kennen
+    die Option nicht und ignorieren sie.
     """
-    cmd = ["ffmpeg", "-v", "error"]
+    cmd = ["ffmpeg", "-v", "error", "-drc_scale", "0"]
     if start is not None:
         cmd += ["-ss", f"{start:.6f}"]
     if duration is not None:
