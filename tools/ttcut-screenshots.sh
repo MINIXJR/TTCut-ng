@@ -7,6 +7,9 @@
 # Default output: /usr/local/src/TTCut-ng.wiki/images
 #
 # Prerequisites: ffmpeg, built ttcut-ng binary in build/
+#
+# TTCUT_BINARY overrides the program to run (the gate uses that to check
+# what happens when the run fails).
 #-----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -22,7 +25,7 @@ AUDIO_FILE="$TESTDATA_DIR/tux_test.ac3"
 PROJECT_FILE="$TESTDATA_DIR/tux_test.ttcut"
 SVG_FILE="$PROJECT_DIR/ui/pixmaps/Tux.svg"
 TEMPLATE_FILE="$SCRIPT_DIR/ttcut-test.ttcut"
-BINARY="$PROJECT_DIR/build/ttcut-ng"
+BINARY="${TTCUT_BINARY:-$PROJECT_DIR/build/ttcut-ng}"
 
 #-----------------------------------------------------------------------------
 # Preflight checks
@@ -182,8 +185,19 @@ echo "  Temp:    $TMP_SCREENSHOTS"
 echo "  Output:  $OUTPUT_DIR"
 echo "  Project: $PROJECT_FILE"
 
-QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PROJECT_FILE" 2>&1 | \
-    grep -E "Screenshot" || true
+# The run's own exit status decides, not that of a filter behind it: a run
+# that failed used to end as "0 updated, 0 unchanged" with exit code 0.
+APP_LOG="$TMP_SCREENSHOTS/run.log"
+APP_RC=0
+QT_QPA_PLATFORM=xcb "$BINARY" --screenshots "$TMP_SCREENSHOTS" --project "$PROJECT_FILE" \
+    > "$APP_LOG" 2>&1 || APP_RC=$?
+grep -E "Screenshot" "$APP_LOG" || true
+if [ "$APP_RC" -ne 0 ]; then
+    echo "ERROR: screenshot run failed (exit code $APP_RC). Last lines of its output:"
+    tail -n 20 "$APP_LOG"
+    rm -rf "$TMP_SCREENSHOTS"
+    exit 1
+fi
 
 #-----------------------------------------------------------------------------
 # Compare and copy only changed screenshots
@@ -208,6 +222,11 @@ done
 
 # Clean up temp dir
 rm -rf "$TMP_SCREENSHOTS"
+
+if [ $((UPDATED + UNCHANGED)) -eq 0 ]; then
+    echo "ERROR: the screenshot run produced no image."
+    exit 1
+fi
 
 echo ""
 echo "Screenshots: $UPDATED updated, $UNCHANGED unchanged."
