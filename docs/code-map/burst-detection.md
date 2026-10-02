@@ -1,6 +1,6 @@
 ---
 base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-26
+last_verified: 2026-10-02
 sources:
   - extern/ttaudiocutter.cpp
   - extern/ttaudiocutter.h
@@ -159,6 +159,19 @@ aus dem Mermaid-Block. Durchgezogen = Daten, gestrichelt = löst aus.
 | `PROBE -.-> DET` | `tools/ttcut-burst-probe` ruft `TTAudioCutter::detectBurst` **direkt** auf und umgeht damit beide Wrapper samt ihrem `minDelta <= 0`-Frühausstieg. **Genau deshalb** steht derselbe Guard ein zweites Mal am Anfang von `TTAudioCutter::detectBurst` („Callers short-circuit on <= 0 before opening the file; guard anyway"). |
 
 ## Annahmen & Verträge
+
+- **Der Detektor dekodiert AC3 ohne die Dynamikkompression des Stroms.**
+  `detectBurst` ruft nach `av_seek_frame` `avcodec_flush_buffers`, und der
+  AC3-Decoder von libavcodec setzt dabei seine Optionen auf null zurück
+  (`drc_scale` 1 → 0; gemessen 2026-10-02, ffmpeg 9.0.2). Die Pegel
+  entsprechen `ffmpeg -drc_scale 0` und liegen 0,6–1,9 dB unter einer
+  Dekodierung ohne `flush`. `kBurstAbsoluteFloorDb` und die
+  Delta-Schwelle wurden mit dem Detektor selbst vermessen, gelten also für
+  diese Pegel. Die Schwesterstellen ohne `flush` dekodieren mit
+  Kompression (`TODO.md`).
+- **Der erste Rahmen nach dem Sprung ist ungenau** — 0,1–0,3 dB neben dem
+  Wert einer durchlaufenden Dekodierung (116 von 120 Grenzen, nur dieser
+  Rahmen). Beim Cut-In gehört er zu den zwei geprüften Rahmen.
 
 - Detektor: Quell-Audio Track 0; boundaryTime in Sekunden der Quell-Zeitachse
   (Audio-Start = Video-Frame 0, ttcut-demux-Trim). Track 0 ist nach dem

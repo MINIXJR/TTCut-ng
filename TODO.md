@@ -364,22 +364,33 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
-- **Burst-Erkennung: Pegel des Detektors entsprechen `ffmpeg -drc_scale 0`**
-  (Audit-Lauf 20, 2026-10-02, gemessen, Ursache offen).
-  `TTAudioCutter::detectBurst` liefert je Tonrahmen 0,6–1,9 dB niedrigere
-  Pegel als `ffmpeg … -af astats` auf derselben Datei (DVB-AC3, 448 kbit/s;
-  gleiche Rahmen, gleiche Zeiten, unabhängig per PCM nachgerechnet). Die
-  Werte des Detektors sind auf zwei Nachkommastellen die von
-  `ffmpeg -drc_scale 0`, die von `astats` die des Standards `-drc_scale 1`.
-  Der Decoder im Detektor meldet aber selbst `drc_scale=1`
-  (`av_opt_get_double` nach `avcodec_open2`). Nicht die Locale (mit
-  `LC_ALL=C` gleich). Offen: woher der Unterschied kommt, ob er auch MP2
-  betrifft, und ob die Schwelle der Anwendung (Vorgabe 20 dB, absolutes
-  Gate −40 dB) auf Pegeln mit oder ohne Dynamikkompression gedacht war —
-  die Messungen zu `kBurstAbsoluteFloorDb` wurden mit dem Detektor selbst
-  gemacht, sind also in sich stimmig. Erst messen, dann erklären; die
-  Debug-Kopie des Detektors, die jeden Rahmen ausgibt, ist in Minuten neu
-  gebaut (`fprintf` nach `rmsValues.append`).
+- **AC3 dekodieren: Dynamikkompression je nach Codepfad an oder aus**
+  (Audit-Lauf 20 und Nachmessung 2026-10-02; Ursache geklärt, Entscheidung
+  offen). `avcodec_flush_buffers` setzt im AC3- und E-AC3-Decoder von
+  libavcodec die Optionen auf null zurück (`ac3_decode_flush` löscht den
+  Kontext ab `frame_type`; gemessen mit ffmpeg 9.0.2: `drc_scale` 2 → 0,
+  `target_level` −20 → 0). Die Anwendung öffnet ihre AC3-Decoder ohne
+  Optionen, also mit der Vorgabe `drc_scale=1`. Daraus folgt:
+  - `TTAudioCutter::detectBurst` springt und ruft `flush` → dekodiert
+    **ohne** die Dynamikkompression des Stroms. Gemessen: Pegel je Rahmen
+    gleich `ffmpeg -drc_scale 0`, 0,6–1,9 dB unter dem Standard; eine von
+    außen gesetzte `drc_scale` bleibt wirkungslos.
+  - Die anderen vier Stellen rufen kein `flush` (nach Code, nicht einzeln
+    gemessen): Stille-Erkennung (`TTStreamPointAudioWorker`), Anomalie-Scan
+    (`TTAudioAnomalyScanTask`), acmod-Normalisierung (`TTAudioCutter`) und
+    Tonreparatur (`TTAudioRepair`) dekodieren **mit** Kompression.
+  - **Zu entscheiden:** ob die Anwendung `drc_scale` an jeder Stelle
+    ausdrücklich setzt, statt sie einer Nebenwirkung zu überlassen. Für die
+    beiden Stellen, die neu kodieren, ist das eine Klangfrage: die
+    Kompression steckt dann fest im neu kodierten Rahmen, während die
+    kopierten Nachbarn sie nur als Steuerwort tragen — ein Abspieler ohne
+    Kompression (mpv-Vorgabe) und einer mit würden den Übergang
+    verschieden wiedergeben. Das ist eine Vermutung aus dem Code; ein
+    Pegelsprung am Rand eines neu kodierten Bereichs ist nicht gemessen.
+    Für die Analyse-Stellen hängen die Schwellen an den heutigen Pegeln.
+  - Daneben, gemessen: der erste Rahmen nach dem Sprung weicht um
+    0,1–0,3 dB ab (116 von 120 Grenzen, nur dieser Rahmen). Beim Cut-In
+    ist er einer der zwei geprüften Rahmen.
 
 - **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
   gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom

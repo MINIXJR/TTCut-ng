@@ -1081,7 +1081,16 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     bei gerader Rahmenzahl verschieden (24 von 25 Fenstern) → angeglichen.
     Pegel je Rahmen 0,6–1,9 dB verschieden; der Detektor trifft exakt
     `ffmpeg -drc_scale 0`, sein Decoder meldet aber `drc_scale=1`; nicht
-    die Locale. Ursache offen → `TODO.md`.
+    die Locale. **Ursache (Nachmessung am selben Tag):**
+    `avcodec_flush_buffers` setzt im AC3-Decoder die Optionen auf null
+    (`ac3_decode_flush` löscht den Kontext ab `frame_type`). Gefunden mit
+    einem Messprogramm, das die Schritte des Detektors einzeln zuschaltet:
+    Sprung ohne `flush` → Kompression an, mit `flush` → aus, unabhängig von
+    der gesetzten `drc_scale`. Der Nachbau ruft ffmpeg jetzt mit
+    `-drc_scale 0`; danach an 120 Grenzen alle Rahmen gleich bis auf den
+    ersten nach dem Sprung (0,1–0,3 dB). Folgen für die übrigen
+    AC3-Decoder der Anwendung → `TODO.md`. Falle: `av_opt_get` VOR dem
+    `flush` zeigt 1 und führt in die Irre.
   - Fallen: (1) Das Gate auf dem ALTEN Skript startet das echte Programm mit
     `xcb` — ein Fenster auf dem Desktop und ein geändertes
     `docs/MainWindow.png`. (2) `build-package.sh` ändert
