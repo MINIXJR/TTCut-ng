@@ -5,7 +5,7 @@ Detektors an *einer* Schnittgrenze, ohne GUI.
 
 ## Bauen
 
-Nicht Teil des Anwendungs-Builds (es kompiliert `ttffmpegwrapper.cpp` erneut):
+Nicht Teil des Anwendungs-Builds (`EXCLUDE_FROM_ALL`; es kompiliert `extern/ttaudiocutter.cpp` und drei weitere Quellen erneut):
 
 ```bash
 cmake --build build --target ttcut-burst-probe
@@ -14,8 +14,11 @@ cmake --build build --target ttcut-burst-probe
 ## Aufruf
 
 ```bash
-./ttcut-burst-probe <audio.ac3> <boundarySec> [--cutin]
+./ttcut-burst-probe <audio.ac3> <boundarySec> [--cutin] [--min-delta dB]
 ```
+
+`--min-delta` ist der Mindestsprung über dem Umgebungspegel (Vorgabe 20, wie die
+Einstellung der Anwendung; 0 schaltet die Erkennung ab).
 
 Grenzzeit wie im Code (`data/ttavdata.cpp`):
 `cutOutTime = (cutOutIndex + 1 - extraFrames) / frameRate`, `extraFrames = 0` außer

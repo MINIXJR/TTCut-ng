@@ -14,7 +14,7 @@ Ergebnisse von `ttcut-burst-probe` ab, gilt das C++-Tool.
 
 ## Nachgebildete Logik
 
-Fenster (`extern/ttffmpegwrapper.cpp`):
+Fenster (`extern/ttaudiocutter.cpp`, `TTAudioCutter::detectBurst`):
 
 ```
 CutOut: [boundary - 0.200, boundary + frameDur/2)
