@@ -1,6 +1,6 @@
 ---
 base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-26
+last_verified: 2026-10-02
 sources:
   - data/ttaudioanomalyscantask.h
   - data/ttaudioanomalyscantask.cpp
@@ -114,6 +114,15 @@ flowchart TD
 | `FT` → `CUTTER` | Tables of all items merged. In the packet loop the frame number is `qRound64(pktTime / frameDurSec)`; a hit writes the replacement bytes with the packet's PTS offset and skips the acmod re-encode check. |
 
 ## Assumptions, contracts & pitfalls
+
+- **A replacement frame is not a drop-in for the frame it replaces**
+  (measured 2026-10-02 on a DVB track, `TODO.md`): it carries the encoder's
+  `dialnorm` −31 instead of the source's value, it has the source's dynamic
+  range compression applied to the audio and no compression word, and its
+  audio sits 256 samples later than in the source (the AC3 encoder's delay).
+  "Frame-exact" in `extern/ttaudiorepair.cpp` means the frame count. The
+  unmasked channels are therefore not bit-neutral either: depending on the
+  player they come out 1–2 dB or 8 dB louder than the copied neighbours.
 
 - **One AC3 frame numbering, two ways to count it.** The scan, the
   replacement table and the audition count packets (ordinal in the file);

@@ -1,6 +1,6 @@
 ---
 base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
-last_verified: 2026-09-26
+last_verified: 2026-10-02
 sources:
   - data/ttavdata.cpp
   - data/ttavdata.h
@@ -206,6 +206,13 @@ flowchart TD
   Versuch liegen (kein Aufräumen bei einem echten Fehler).
 
 ## Bekannte Fallstricke
+
+- **acmod-Normalisierung: neu kodierte Rahmen passen nicht nahtlos zu den
+  kopierten** (gemessen 2026-10-02, `TODO.md`): `dialnorm` −31 statt des
+  Werts der Quelle, Dynamikkompression der Quelle fest im Ton und kein
+  Kompressionswort, Ton um 256 Samples später (Encoder-Verzögerung). Je
+  nach Abspieler ist der neu kodierte Teil um den Kompressionsgewinn der
+  Quelle oder um die `dialnorm`-Differenz lauter als der kopierte.
 
 - **Ein Delay lässt sich auf gleichförmigem Material nicht nachweisen.** Ein
   Dauerton kodiert zu wiederkehrenden AC3-Rahmen; ein Versatz um ganze Rahmen

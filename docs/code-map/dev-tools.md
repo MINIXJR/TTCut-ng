@@ -1,5 +1,5 @@
 ---
-base_commit: cd82376bffff4012c698437f32239e3b6dfb7b65
+base_commit: 9b26d98ac3fbe92d1de819b174f1695d3b1dd9ec
 last_verified: 2026-10-02
 sources:
   - build-package.sh
@@ -145,11 +145,12 @@ flowchart TD
   changes** (the "newer than the script" rule) — the PAFF variant then costs
   the JM run again. Two `.info` files in the cache are made by hand, the
   script does not write them.
-- **`burst_analysis.py` is a rebuild, not the detector** — and its levels
-  are not the detector's: measured 2026-10-02 on a DVB AC3 track, `astats`
-  gives 0.6–1.9 dB more per frame. The detector's levels equal
-  `ffmpeg -drc_scale 0` although its decoder reports `drc_scale` 1; the
-  reason is open (`TODO.md`).
+- **`burst_analysis.py` is a rebuild, not the detector** — it calls ffmpeg
+  with `-drc_scale 0`, because the detector decodes without the stream's
+  dynamic range compression (`burst-detection.md`). Measured 2026-10-02 at
+  120 boundaries of a DVB AC3 track: all chunks equal to the detector's
+  except the first one of each window (0.1–0.3 dB), which the detector
+  decodes right after its seek.
 
 ## Redundancy / consolidation candidates
 
@@ -164,4 +165,4 @@ flowchart TD
 - **Burst window logic**
   - sites: `extern/ttaudiocutter.cpp:TTAudioCutter::detectBurst`, `tools/burst-analysis/burst_analysis.py:window_bounds`, `tools/burst-analysis/burst_analysis.py:chunks_in_window`
   - shared purpose: which audio frames belong to the window at a cut boundary and which of them are tested
-  - status: kept separate → the Python copy exists to scan a whole stream without the detector; window and median rule were compared with the detector in audit run 20, the per-frame levels differ (see pitfalls)
+  - status: kept separate → the Python copy exists to scan a whole stream without the detector; window, median rule and levels were compared with the detector on 2026-10-02 (see pitfalls)
