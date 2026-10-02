@@ -85,6 +85,10 @@ echo "==> Copying source to build directory..."
 # configuration. The --include rules must precede the --exclude ones, since
 # rsync applies the first matching rule.
 #
+# Editor and assistant state (.qtc_clangd, .cache anywhere, .superpowers,
+# .claude) and core dumps in the root go too: measured 2026-10-02, they were
+# 61 MB of a 77 MB copy, 1400 files, none of them tracked.
+#
 # --filter=':- .gitignore' was considered and rejected in favor of these
 # explicit rules, which are byte-verified against a reference package. (An
 # earlier version of this comment claimed the filter would silently drop the
@@ -93,6 +97,8 @@ echo "==> Copying source to build directory..."
 rsync -a --exclude='.git' --exclude='*.o' --exclude='ttcut-ng' \
          --exclude='/Makefile' --exclude='*.pro.user' \
          --exclude='/build/' --exclude='/build-deb/' --exclude='/build-asan/' \
+         --exclude='/.qtc_clangd/' --exclude='.cache/' \
+         --exclude='/.superpowers/' --exclude='/.claude/' --exclude='/core.*' \
          --include='/tools/diag/*.cpp' --include='/tools/diag/*.sh' \
          --include='/tools/diag/*.py' --include='/tools/diag/*.txt' \
          --exclude='/tools/diag/test_*' \

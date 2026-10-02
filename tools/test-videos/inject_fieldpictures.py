@@ -33,16 +33,6 @@ import sys
 PICTURE_START   = b'\x00\x00\x01\x00'
 EXTENSION_START = b'\x00\x00\x01\xB5'
 
-def find_next_start_code(data: bytes, pos: int) -> int:
-    """Return index of next start code (0x00 0x00 0x01 0xXX) at or after pos.
-    Returns len(data) if none found."""
-    n = len(data)
-    while pos < n - 3:
-        if data[pos] == 0 and data[pos+1] == 0 and data[pos+2] == 1:
-            return pos
-        pos += 1
-    return n
-
 def find_picture_coding_ext(data: bytes, pic_start: int, search_limit: int = 2048) -> int:
     """Given the byte position of a picture_start_code (0x00 0x00 0x01 0x00),
     return the byte position of the picture_coding_extension byte 0

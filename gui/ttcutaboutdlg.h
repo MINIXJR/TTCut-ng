@@ -24,7 +24,7 @@ class TTCutAboutDlg : public QDialog, Ui::TTCutAboutDlg
   Q_OBJECT
 
   public:
-    TTCutAboutDlg(QWidget* parent = 0);
+    explicit TTCutAboutDlg(QWidget* parent = nullptr);
     ~TTCutAboutDlg();
 
   protected slots:

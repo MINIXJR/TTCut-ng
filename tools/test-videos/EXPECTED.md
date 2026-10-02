@@ -1,6 +1,6 @@
 # TTCut-ng Search Test Matrix — Expected Results
 
-Six synthetic test videos under `cache/`, all sharing the same 120-second Tux timeline. Per-codec frame numbers differ because the timeline maps differently at 50fps vs 25fps and decode-vs-display order varies with B-frame configuration.
+Expected results for six of the synthetic test videos under `cache/`, all sharing the same 120-second Tux timeline. `make_test_video.sh` writes more files (a field-picture variant, a two-segment recording, six 30-second duplicates); they have no table here. Per-codec frame numbers differ because the timeline maps differently at 50fps vs 25fps and decode-vs-display order varies with B-frame configuration.
 
 ## Common Timeline (display-time-based)
 

@@ -7,7 +7,7 @@ um Schwellwerte an realem Material zu belegen statt zu schaetzen. Ergaenzt
 `ttcut-burst-probe`: Das C++-Tool prueft EINE Grenze mit dem echten Detektor,
 dieses Skript scannt einen ganzen Stream und findet Kandidatenstellen.
 
-Fensterdefinition (extern/ttffmpegwrapper.cpp):
+Fensterdefinition (extern/ttaudiocutter.cpp, TTAudioCutter::detectBurst):
     CutOut: [boundary - 0.200, boundary + frameDur/2)
     CutIn : [boundary - frameDur/2, boundary + 0.200)
 Ein Frame liegt im Fenster, wenn
@@ -25,7 +25,6 @@ Siehe docs/superpowers/specs/2026-07-08-burst-detection-unified-threshold-design
 """
 import argparse
 import os
-import statistics
 import subprocess
 import sys
 
@@ -38,6 +37,10 @@ def read_rms(path, start=None, duration=None):
 
     astats' Overall.RMS_level ist 20*log10(sqrt(sum(v^2)/N)) ueber alle Kanaele
     in dBFS -- dieselbe Formel wie TTAudioCutter::detectBurst.
+
+    Die Werte sind trotzdem nicht die des Detektors: gemessen 2026-10-02 an
+    einer DVB-AC3-Spur liegen sie je Rahmen 0,6..1,9 dB hoeher. Die Pegel des
+    Detektors entsprechen "ffmpeg -drc_scale 0"; warum, ist offen (TODO.md).
     """
     cmd = ["ffmpeg", "-v", "error"]
     if start is not None:
@@ -81,6 +84,14 @@ def window_bounds(boundary, frame_dur, is_cut_out):
     return boundary - tail, boundary + CTX_SEC
 
 
+def context_median(values):
+    """Kontextpegel wie im Detektor: sorted[n/2], bei gerader Anzahl also der
+    obere der beiden mittleren Werte -- nicht ihr Mittel (statistics.median).
+    """
+    s = sorted(values)
+    return s[len(s) // 2]
+
+
 def chunks_in_window(chunks, lo, hi, frame_dur):
     """Detektor-Kriterium, nicht 'lo <= t < hi'."""
     return [(t, r) for (t, r) in chunks if t + frame_dur > lo and t < hi]
@@ -103,7 +114,7 @@ def cmd_dump(args):
             print(f"  nur {len(win)} chunks -> Detektor liefert false (need >=3)\n")
             continue
 
-        median = statistics.median([r for _, r in win])
+        median = context_median([r for _, r in win])
         tested = win[-2:] if not args.cutin else win[:2]
         peak = max(r for _, r in tested)
         print(f"  Kontext-Median {median:.2f} dB ueber {len(win)} chunks")
@@ -130,7 +141,7 @@ def cmd_scan(args):
 
     mid_delta, below_floor = [], []
     for i in range(n_ctx, len(chunks) - 1):
-        median = statistics.median([r for _, r in chunks[i - n_ctx:i + 1]])
+        median = context_median([r for _, r in chunks[i - n_ctx:i + 1]])
         peak = max(chunks[i][1], chunks[i + 1][1])   # zwei geprueften Chunks
         delta = peak - median
 

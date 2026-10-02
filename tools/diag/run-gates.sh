@@ -157,6 +157,7 @@ ffmpeg_edge_packets    unit  120  -
 audiofix_edge_ac3      unit  120  -
 audiofix_edge_mp2      unit  120  -
 ac3fix_contract        unit  120  -
+screenshots_script     unit  60   -
 h264_leading           tux   600  test_h264_leading
 sar                    tux   120  test_sar
 decode_cancel          tux   300  test_decode_cancel
@@ -422,6 +423,20 @@ gate_demux_gapsync()         { need "$DEMUX"; "$D/gate_demux_gapsync.sh"; }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
 gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
+# tools/ttcut-screenshots.sh must fail when the application run fails or
+# leaves no image (audit run 20, T5); it used to report "0 updated" with exit
+# code 0. The fixture has to exist, or the script would first encode it.
+gate_screenshots_script() {
+  need "$TESTDATA/tux_test.264" "$TESTDATA/tux_test.ac3"
+  local b rc want log
+  for b in /bin/false /bin/true; do
+    log="$W/$(basename "$b").log"
+    rc=0; TTCUT_BINARY=$b "$ROOT/tools/ttcut-screenshots.sh" "$W/out" > "$log" 2>&1 || rc=$?
+    want="screenshot run failed"; [ "$b" = /bin/true ] && want="produced no image"
+    if [ "$rc" -eq 1 ] && grep -q "$want" "$log"; then echo "PASS: $b -> exit 1, \"$want\""
+    else echo "FAIL: $b -> exit $rc, expected 1 and \"$want\""; exit 1; fi
+  done
+}
 gate_ac3fix_contract()       { need "$AC3FIX" "$DEMUX"; "$D/gate_ac3fix_contract.sh" "$AC3FIX" "$DEMUX" "$W"; }
 
 # ---- tier tux ----------------------------------------------------------------
