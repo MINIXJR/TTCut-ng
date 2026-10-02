@@ -25,8 +25,10 @@ class TTAudioCutter
 {
 public:
     // Audio ES cutting - time-based stream-copy (ms-accurate)
-    // If normalizeAcmod is true and targetAcmods is provided, frames with wrong acmod
-    // at segment boundaries are re-encoded to match the target channel layout.
+    // If normalizeAcmod is true and targetAcmods is provided, frames with another
+    // acmod are re-encoded to the target channel layout through TTAc3Reencoder
+    // (sample-aligned, with the source frame's header fields); a frame that
+    // cannot be re-encoded is written as it is, with a warning.
     // progressCb (optional) is called with 0..100, only on value changes,
     // strictly increasing, final value 100 (requires a known total duration).
     // shouldAbort (optional) is polled inside the per-segment packet loop; a
@@ -64,10 +66,8 @@ private:
     //! defined in the .cpp together with the named steps of the packet loop.
     struct CutSession;
     bool openCutSession(CutSession& s, const QString& inputFile, const QString& outputFile);
-    static bool ensureAc3Codecs(CutSession& s, int targetAcmod);
-    static bool writeRepairedPacket(CutSession& s, const AVPacket* pkt,
-                                    const QByteArray& bytes, double pktTime);
-    static void writeReencodedPacket(CutSession& s, AVPacket* pkt);
+    static bool writeBytesPacket(CutSession& s, int64_t outPts, int64_t duration,
+                                 const QByteArray& bytes, double pktTime, const char* what);
     static void writeStreamCopyPacket(CutSession& s, AVPacket* pkt, double pktTime);
     static void writeOnOutputTimeline(CutSession& s, AVPacket* pkt, double pktTime,
                                       const char* what);

@@ -48,6 +48,7 @@ set(AC3REENC_SRC
 # (none of them touch TTFFmpegWrapper, so WRAPPER_SRC would be overkill).
 set(AUDIOCUT_SRC
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${AC3REENC_SRC}
   ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttsettings.cpp)
