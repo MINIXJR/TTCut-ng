@@ -158,6 +158,7 @@ set(TTCUT_HEADERS
   extern/tth264bitstream.h
   extern/ttaudiorepair.h
   extern/ttaudiorepairitem.h
+  extern/ttac3reencoder.h
   extern/ttmuxlistdata.h
   extern/ttmkvmergeprovider.h
   gui/ttcutsettingsmuxer.h
@@ -282,6 +283,7 @@ set(TTCUT_CORE_SOURCES
   extern/tth264bitstream.cpp
   extern/tthevcseam.cpp
   extern/ttaudiorepair.cpp
+  extern/ttac3reencoder.cpp
   extern/ttmuxlistdata.cpp
   extern/ttmkvmergeprovider.cpp
   gui/ttcutsettingsmuxer.cpp
