@@ -390,10 +390,23 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
   3. **Zeitversatz:** Der Ton in neu kodierten Rahmen liegt **256 Samples
      (5,3 ms) später** als in der Quelle (Kreuzkorrelation 1,0; kopierte
      Rahmen: 0). Der AC3-Encoder hat diese Verzögerung
-     (`initial_padding`), sie wird nicht ausgeglichen. Am Anfang des
-     Bereichs wiederholen sich damit 5,3 ms, am Ende fehlen 5,3 ms. Der
-     Kommentar in `extern/ttaudiorepair.cpp` („no encoder priming/delay")
-     stimmt für die Rahmenzahl, nicht für die Lage des Tons.
+     (`initial_padding`), sie wird nicht ausgeglichen. An den Rändern, in
+     128-Sample-Blöcken gemessen: am Anfang ein Einbruch (ein Block 18 dB
+     unter der Quelle — der Encoder beginnt mit einem leeren
+     Überlappungspuffer), danach verzögerter Ton; am Ende fehlen die
+     letzten 256 Samples des Bereichs. Auf den maskierten Kanälen liegt
+     die Ausblendung 256 Samples zu spät (der Ton kommt nach dem Einbruch
+     noch einmal kurz zurück), und die Einblendung am Ende fällt ganz weg:
+     der Kanal ist bis zur Rahmengrenze still, den Übergang macht nur die
+     Blocküberlappung des Decoders. Der Kommentar in
+     `extern/ttaudiorepair.cpp` („no encoder priming/delay") stimmt für
+     die Rahmenzahl, nicht für die Lage des Tons.
+  4. **Weitere Kopffelder** der neu kodierten Rahmen sind Encoder-Vorgaben
+     statt der Werte der Quelle: `cmixlev` 1 statt 0 (Center im Downmix
+     −4,5 statt −3 dB), `surmixlev` 1 statt 0 (Surround −6 statt −3 dB),
+     `dsurmod` 0 statt 1, `bsid` 8 statt 6 (die Quelle trägt die erweiterten
+     Mischpegel), `audprodie` und `copyright` 0 statt 1. Wirkung auf einen
+     Abspieler, der 5.1 nach Stereo mischt: nicht gemessen.
   - Nicht gemessen: Hörbarkeit; 5.1→Stereo (dort nur die Kopffelder:
     ebenfalls −31 und `compre=0`); MP2 ist nicht betroffen (wird nie neu
     kodiert).
