@@ -1,5 +1,5 @@
 ---
-base_commit: 01a7ab6423fca0f6fe92bf3ff002638278d4c682
+base_commit: 2e5c29e13ce384daaa30e2f0407fa29f42e6b93c
 last_verified: 2026-10-02
 sources:
   - data/ttaudioanomalyscantask.h
@@ -7,6 +7,8 @@ sources:
   - extern/ttaudiorepairitem.h
   - extern/ttaudiorepair.h
   - extern/ttaudiorepair.cpp
+  - extern/ttac3reencoder.h
+  - extern/ttac3reencoder.cpp
   - gui/ttaudiorepairdialog.h
   - gui/ttaudiorepairdialog.cpp
   - gui/ttstreampointwidget.cpp
@@ -60,8 +62,9 @@ flowchart TD
     DEL["TTCutMainWindow<br/>onStreamPointDelete / DeleteAll"]
     CUT["TTAVData::cutAudioTracks"]
     TABLE["TTAudioRepair::buildRepairTable"]
+    REENC["TTAc3Reencoder<br/>aligned re-encode"]
     FT["FrameTable<br/>AC3 frame → bytes"]
-    CUTTER["TTAudioCutter::cut<br/>writeRepairedPacket"]
+    CUTTER["TTAudioCutter::cut<br/>writeBytesPacket"]
 
     MW -.->|start task| SCAN
     SCAN -->|markers with AC3 range| PTS
@@ -84,7 +87,8 @@ flowchart TD
     ANNO -->|annotated markers| PTS
     ITEM -->|enabled repairs of a track| CUT
     CUT -->|item, target acmod| TABLE
-    TABLE --> FT
+    TABLE -->|packets, mask/fade edit| REENC
+    REENC -->|replacement frames, one frame late| FT
     FT -->|merged table| CUTTER
 ```
 
@@ -110,19 +114,23 @@ flowchart TD
 | `ANNO` → `PTS` | The restored markers, annotated, go into the model in one `addPoints` call (the project path; a scan's markers take `onPointsDetected`). |
 | `ITEM` → `CUT` | `cutAudioTracks`, `.ac3` tracks only: every repair of this track index; disabled ones are skipped with a warning. Item seconds = frame · `frame_time` of the first header. Touching no keep window → skipped. A repair may reach past the window(s) it touches — the cutter writes only frames inside the windows, so the part outside is never looked up; this holds for the short preview windows as for the final cut. Only when the touched windows want **different** target acmods (normalising) the whole track fails with “reaches into cut segments with different channel layouts”. |
 | `CUT` → `TABLE` | The item and the common target acmod of the windows it touches (`targetAcmods[s]` when normalising, else -1). |
-| `TABLE` → `FT` | Decode from `frameFrom − 2` (warm-up), silence the masked channels with 5 ms raised-cosine fades at both range ends, re-encode at the bit rate of the replaced frames (`frame bytes · 8 · rate / 1536`; one file may switch bit rate, e.g. stereo 192 / 5.1 384 kbit/s). Frame number = packet ordinal in the file. Hard errors (empty table + message): channel-mode change inside the range, frame-size change, mask bit beyond the channel count, encoded size ≠ source frame size, range past the file end. |
-| `FT` → `CUTTER` | Tables of all items merged. In the packet loop the frame number is `qRound64(pktTime / frameDurSec)`; a hit writes the replacement bytes with the packet's PTS offset and skips the acmod re-encode check. |
+| `TABLE` → `REENC` | `buildRepairTable` pushes every packet from `frameFrom − 2` (decoder warm-up) to one frame **behind** `frameTo`, in file order; the frames of the range with the edit that silences the masked channels (5 ms raised-cosine fades on the first and the last frame, in the source layout), and a request: the common target acmod and the bit rate of the replaced frames (`frame bytes · 8 · rate / 1536`; one file may switch bit rate, e.g. stereo 192 / 5.1 384 kbit/s). The frame behind the range only supplies the 256 samples that complete the last replacement and is exempt from the checks; a range ending with the file is completed with silence. Hard errors raised here (empty table + message): frame-size change among warm-up and range frames, channel-mode change inside the range, mask bit beyond the channel count, range past the file end. |
+| `REENC` → `FT` | One replacement per frame of the range, tagged with the frame number (= packet ordinal in the file), finished one push after its frame. Each is decoded with `drc_scale` 0 (the stream's dynamic range compression is not applied; the encoder cannot write compression words), carries the header fields of its source frame (`dialnorm`, mix levels incl. the extended ones, `dsurmod`, `bsmod`, production info, copyright, original — a field only when it means something in the source frame's own layout and its code is not reserved), and holds exactly the audio of the frame it replaces: the unit feeds the encoder 1280 zero samples first, drops the first packet and so compensates the encoder's 256-sample delay. A header change inside the range starts a new encoder without a seam. `buildRepairTable` rejects a replacement whose size differs from the source frame's. |
+| `FT` → `CUTTER` | Tables of all items merged. In the packet loop the frame number is `qRound64(pktTime / frameDurSec)`; a hit writes the replacement bytes with the packet's PTS offset (`writeBytesPacket`) and is not re-encoded by the acmod normalisation (it was built in the target layout already). |
 
 ## Assumptions, contracts & pitfalls
 
-- **A replacement frame is not a drop-in for the frame it replaces**
-  (measured 2026-10-02 on a DVB track, `TODO.md`): it carries the encoder's
-  `dialnorm` −31 instead of the source's value, it has the source's dynamic
-  range compression applied to the audio and no compression word, and its
-  audio sits 256 samples later than in the source (the AC3 encoder's delay).
-  "Frame-exact" in `extern/ttaudiorepair.cpp` means the frame count. The
-  unmasked channels are therefore not bit-neutral either: depending on the
-  player they come out 1–2 dB or 8 dB louder than the copied neighbours.
+- **What a replacement frame shares with the frame it replaces, and what
+  not** (gate `ac3_reencode`; on a DVB recording `gate_ac3_reencode_real.sh`):
+  header fields, position of the audio (lag 0) and the level when decoded
+  without compression (within 0.1 dB) are the source's; the fades land on
+  the first and the last sample of the range. Not shared: the compression
+  word. A player that applies dynamic range compression plays the replaced
+  range without it — 1 to 2 dB off on the measured recording (`TODO.md`).
+- **The decoder's noise filling is random.** libav fills mantissas without
+  bits from a running generator; two decodes of the same frame differ when
+  the frames before it differ. Comparisons of decoded audio need the decoder
+  option `cons_noisegen` (as `test_ac3_reencode` sets it).
 
 - **One AC3 frame numbering, two ways to count it.** The scan, the
   replacement table and the audition count packets (ordinal in the file);

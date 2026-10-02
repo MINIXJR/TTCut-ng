@@ -39,10 +39,16 @@ set(WRAPPER_SRC
   ${ROOT}/avstream/ttnaluparser.cpp
   ${BITSTREAM_SRC})
 
+# TTAc3Reencoder and the bit reader its header parser uses.
+set(AC3REENC_SRC
+  ${ROOT}/extern/ttac3reencoder.cpp
+  ${ROOT}/avstream/ttbitstream.cpp)
+
 # TTAudioCutter's own dependencies, for the harnesses that call it directly
 # (none of them touch TTFFmpegWrapper, so WRAPPER_SRC would be overkill).
 set(AUDIOCUT_SRC
   ${ROOT}/extern/ttaudiocutter.cpp
+  ${AC3REENC_SRC}
   ${ROOT}/avstream/ttavutil.cpp
   ${ROOT}/common/ttmessagelogger.cpp
   ${ROOT}/common/ttsettings.cpp)
@@ -212,7 +218,8 @@ function(diag_tool name)
 endfunction()
 
 set(AUDIOREPAIR_SRC
-  ${ROOT}/extern/ttaudiorepair.cpp)
+  ${ROOT}/extern/ttaudiorepair.cpp
+  ${AC3REENC_SRC})
 
 set(SILENCE_SRC
   ${ROOT}/data/ttstreampoint_audioworker.cpp
@@ -289,6 +296,7 @@ diag_tool(test_audiocut        AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audiocut_abort  AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audiocutter_paths AV SOURCES ${AUDIOCUT_SRC})
 diag_tool(test_audioprogress   AV SOURCES ${AUDIOCUT_SRC})
+diag_tool(test_ac3_reencode    AV SOURCES ${AUDIOCUT_SRC} ${AUDIOREPAIR_SRC} ${AC3REENC_SRC})
 diag_tool(test_rawmap          AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_frameindex_dump AV SOURCES ${WRAPPER_SRC})
 diag_tool(test_probe_video     AV SOURCES ${WRAPPER_SRC})
@@ -526,7 +534,7 @@ add_custom_target(diag DEPENDS
   test_decode_cancel_yuv test_mpeg2order test_output_name
   test_quickjump_thumbheight test_sar test_segshape test_smartcut_seam
   test_stale_abort
-  test_preview_clip)
+  test_preview_clip test_ac3_reencode)
 
 # --- the cut-abort harness suite -------------------------------------------
 # One command builds every harness the abort verification matrix runs, so a

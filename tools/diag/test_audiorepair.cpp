@@ -290,9 +290,10 @@ static void selfTest()
 
     // C must be silent outside the fade windows -- but the naive
     // "everything past sample fadeLen" cut does NOT measure true silence:
-    // the AC3 decoder's block-overlap reconstruction smears the fade-in
-    // edge roughly 256 samples further into the frame than the fade
-    // window itself (measured/confirmed in code review: the previous
+    // until 2026-10-02 the replacement audio sat 256 samples late (the
+    // AC3 encoder's delay, since compensated by TTAc3Reencoder), and the
+    // decoder's block overlap still spreads an edge over neighbouring
+    // samples (measured/confirmed in code review: the previous
     // "mid" check at n>=240 was actually still sampling the fade's own
     // decoded tail, landing at decoded samples 256-495; the region is
     // genuinely quiet only from about sample 512 onward, and clean from

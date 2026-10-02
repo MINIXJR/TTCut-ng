@@ -34,7 +34,8 @@
 #     test_pulse_animation, test_pulse_stylesheet, test_repairdialog_mpv_lifecycle
 #   compare two builds, need a baseline: gate_cut_identity.sh,
 #     gate_refactor_identity.sh, gate_ac3fix.sh
-#   need material outside the repository: gate_audiofix.sh (NAS corpus, no skip
+#   need material outside the repository: gate_ac3_reencode_real.sh (a DVB AC3
+#     recording), gate_audiofix.sh (NAS corpus, no skip
 #     path), gate_h264_leading.sh corpus cases, test_wrapper_map and
 #     test_stillframe (expectations frozen on corpus files), test_aspectscan
 #     (no Tux fixture has an aspect switch), test_auto_anomaly_scan_trigger
@@ -106,6 +107,7 @@ mkv_framerate          unit  300  test_mkvmux
 mux_script             unit  120  test_mux_script
 mpeg2_framerate        unit  300  test_mpeg2_framerate
 audio_es_input         unit  300  test_audio_es_input
+ac3_reencode           unit  300  test_ac3_reencode
 framerate_assumed      unit  120  test_h26x_framerate
 framerate_hint         unit  120  test_framerate_hint
 subtitle_core          unit  60   test_subtitle_core
@@ -388,6 +390,7 @@ gate_mpeg2_framerate_cut() {
   echo "PASS: 720p50 cut is 10 s of video and 10 s of audio"; }
 gate_quickjump_thumbheight() { "$D/test_quickjump_thumbheight"; }
 gate_audio_es_input()        { "$D/test_audio_es_input" "$W"; }
+gate_ac3_reencode()          { "$D/test_ac3_reencode" "$W"; }
 gate_window_geometry()       { "$D/test_window_geometry"; }
 gate_container_sync()        { "$D/test_container_sync"; }
 gate_settings_cancel()       { "$D/test_settings_cancel"; }

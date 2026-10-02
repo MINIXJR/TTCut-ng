@@ -8,6 +8,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "ttaudiocutter.h"
+#include "ttac3reencoder.h"
 #include "../avstream/ttavutil.h"
 #include "../common/ttmessagelogger.h"
 #include "../common/ttsettings.h"
@@ -21,7 +22,6 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
-#include <libswresample/swresample.h>
 }
 
 // ----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ extern "C" {
 // ----------------------------------------------------------------------------
 
 // Per-call state of cut(): both containers, the output timeline, the progress
-// and [DRIFT] accounting and the lazily created AC3 re-encode chain. Lives on
+// and [DRIFT] accounting and the count of re-encoded frames. Lives on
 // cut()'s stack; the helpers below it are the named steps of its packet loop.
 struct TTAudioCutter::CutSession
 {
@@ -54,21 +54,7 @@ struct TTAudioCutter::CutSession
     int     totalPacketsWritten = 0;
     int64_t lastWrittenPtsTicks = 0;        // out time_base ticks
 
-    // AC3 acmod normalization, created on the first frame that needs it.
-    // The encoder is bound to one target layout and the resampler to one
-    // input layout/format/rate; both are re-created when a later frame
-    // needs another one (ranges with different target acmods, or a source
-    // that switches between stereo and 5.1 inside a re-encoded range).
-    AVCodecContext*    ac3DecCtx = nullptr;
-    AVCodecContext*    ac3EncCtx = nullptr;
-    bool               ac3EncIs51 = false;      // layout the encoder was opened with
-    struct SwrContext* swrCtx    = nullptr;
-    AVChannelLayout    swrInLayout {};          // input signature the resampler was set up for
-    int                swrInFormat = -1;
-    int                swrInRate   = 0;
-    AVFrame*           ac3Frame  = nullptr;
-    AVFrame*           ac3ConvertedFrame = nullptr;
-    int                acmodReencoded = 0;
+    int acmodReencoded = 0;                 // frames replaced by the acmod normalization
 
     void reportProgress()
     {
@@ -85,32 +71,6 @@ struct TTAudioCutter::CutSession
         lastWrittenPtsTicks = pts;
         writtenSec += frameDurSec;
         reportProgress();
-    }
-
-    //! Drop the resampler and its output frame; the next re-encoded frame
-    //! sets them up again for its own layout.
-    void closeResampler()
-    {
-        if (swrCtx)             swr_free(&swrCtx);
-        if (ac3ConvertedFrame)  av_frame_free(&ac3ConvertedFrame);
-        av_channel_layout_uninit(&swrInLayout);
-        swrInFormat = -1;
-        swrInRate   = 0;
-    }
-
-    //! Drop the encoder together with the resampler (whose output layout is
-    //! the encoder's); the decoder stays, it follows the stream on its own.
-    void closeEncoder()
-    {
-        closeResampler();
-        if (ac3EncCtx)          avcodec_free_context(&ac3EncCtx);
-    }
-
-    void closeCodecs()
-    {
-        closeEncoder();
-        if (ac3DecCtx)          avcodec_free_context(&ac3DecCtx);
-        if (ac3Frame)           av_frame_free(&ac3Frame);
     }
 
     void closeContainers()
@@ -199,170 +159,27 @@ bool TTAudioCutter::openCutSession(CutSession& s, const QString& inputFile, cons
     return true;
 }
 
-// Decoder and encoder for the acmod re-encode, created on first use. The
-// decoder is kept for the run; the encoder is re-created when the target
-// layout changes between ranges (before 2026-09-05 it kept the first
-// target's layout and a later 5.1-target range fed stereo frames through a
-// 5.1-input resampler - SIGSEGV in swr_convert, reproduced by
-// test_audiocutter_paths run B3). Any failure returns false and the frame
-// takes the stream-copy path instead.
-bool TTAudioCutter::ensureAc3Codecs(CutSession& s, int targetAcmod)
-{
-    const bool wants51 = (targetAcmod == 7 || targetAcmod == 6);
-    if (s.ac3EncCtx && s.ac3EncIs51 != wants51)
-        s.closeEncoder();
-
-    if (!s.ac3DecCtx) {
-        const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AC3);
-        s.ac3DecCtx = dec ? avcodec_alloc_context3(dec) : nullptr;
-        if (!s.ac3DecCtx) return false;
-        if (avcodec_parameters_to_context(s.ac3DecCtx, s.inStream->codecpar) < 0 ||
-            avcodec_open2(s.ac3DecCtx, dec, nullptr) < 0) {
-            avcodec_free_context(&s.ac3DecCtx);
-            return false;
-        }
-        s.ac3Frame = av_frame_alloc();
-        if (!s.ac3Frame) {
-            avcodec_free_context(&s.ac3DecCtx);
-            return false;
-        }
-    }
-    if (!s.ac3EncCtx) {
-        const AVCodec* enc = avcodec_find_encoder(AV_CODEC_ID_AC3);
-        if (!enc) {
-            qWarning() << "AC3 encoder not available — skipping AC3 re-encode";
-            return false;
-        }
-        s.ac3EncCtx = avcodec_alloc_context3(enc);
-        if (!s.ac3EncCtx) {
-            qWarning() << "avcodec_alloc_context3 failed for AC3 encoder";
-            return false;
-        }
-        s.ac3EncCtx->sample_rate = s.inStream->codecpar->sample_rate;
-        s.ac3EncCtx->bit_rate = s.inStream->codecpar->bit_rate > 0
-            ? s.inStream->codecpar->bit_rate : 384000;
-        s.ac3EncCtx->time_base = s.inStream->time_base;
-        // Set target channel layout based on target acmod
-        if (wants51) {
-            // 5.1: 3/2 + LFE
-            AVChannelLayout layout51 = AV_CHANNEL_LAYOUT_5POINT1;
-            av_channel_layout_copy(&s.ac3EncCtx->ch_layout, &layout51);
-        } else {
-            // Stereo: 2/0
-            AVChannelLayout layoutStereo = AV_CHANNEL_LAYOUT_STEREO;
-            av_channel_layout_copy(&s.ac3EncCtx->ch_layout, &layoutStereo);
-        }
-        s.ac3EncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        if (avcodec_open2(s.ac3EncCtx, enc, nullptr) < 0) {
-            qWarning() << "avcodec_open2 failed for AC3 encoder";
-            avcodec_free_context(&s.ac3EncCtx);
-            return false;
-        }
-        s.ac3EncIs51 = wants51;
-    }
-    return true;
-}
-
-// Repair-table hit: the substitute bytes go out with the packet's PTS offset
-// and the usual accounting. Returns false when the substitute packet could
-// not be allocated (OOM) - the caller then writes the ORIGINAL frame rather
-// than leaving a gap, exactly like the re-encode path falls back on its own
-// init failures.
-bool TTAudioCutter::writeRepairedPacket(CutSession& s, const AVPacket* pkt,
-                                        const QByteArray& bytes, double pktTime)
+// Writes ready-made frame bytes (a repair-table hit or a re-encoded frame)
+// at an output pts with the usual accounting. Returns false when the packet
+// could not be allocated (OOM); the caller then writes the original frame
+// rather than leaving a gap.
+bool TTAudioCutter::writeBytesPacket(CutSession& s, int64_t outPts, int64_t duration,
+                                     const QByteArray& bytes, double pktTime, const char* what)
 {
     AVPacket* rp = av_packet_alloc();
     const bool allocOk = rp && av_new_packet(rp, bytes.size()) == 0;
     if (!allocOk) {
         if (rp) av_packet_free(&rp);
         TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("  Warning: repair packet allocation failed at %1 -- writing original frame instead").arg(pktTime));
+            QString("  Warning: packet allocation%1 failed at %2 -- writing original frame instead").arg(what).arg(pktTime));
         return false;
     }
     memcpy(rp->data, bytes.constData(), bytes.size());
-    rp->pts = pkt->pts + s.ptsOffset;
-    rp->duration = pkt->duration;
-    writeOnOutputTimeline(s, rp, pktTime, " (repair)");
+    rp->pts = outPts;
+    rp->duration = duration;
+    writeOnOutputTimeline(s, rp, pktTime, what);
     av_packet_free(&rp);
     return true;
-}
-
-// Decode the frame, convert its channel layout to the encoder's and write the
-// re-encoded packet. A failure anywhere drops the frame (neither written nor
-// stream-copied), as the inline version did.
-void TTAudioCutter::writeReencodedPacket(CutSession& s, AVPacket* pkt)
-{
-    avcodec_send_packet(s.ac3DecCtx, pkt);
-    const int decRet = avcodec_receive_frame(s.ac3DecCtx, s.ac3Frame);
-    if (decRet != 0) return;
-
-    // Setup resampler on first use (channel layout conversion), and again
-    // whenever the decoded frame's layout, format or rate differs from the
-    // one it was set up for (a source switching between stereo and 5.1
-    // inside a re-encoded range; a resampler built for six input planes
-    // reads past a stereo frame's two).
-    if (s.swrCtx && (av_channel_layout_compare(&s.swrInLayout, &s.ac3Frame->ch_layout) != 0 ||
-                     s.swrInFormat != s.ac3Frame->format ||
-                     s.swrInRate   != s.ac3Frame->sample_rate)) {
-        s.closeResampler();
-    }
-    if (!s.swrCtx) {
-        int swrRet = swr_alloc_set_opts2(&s.swrCtx,
-            &s.ac3EncCtx->ch_layout, s.ac3EncCtx->sample_fmt, s.ac3EncCtx->sample_rate,
-            &s.ac3Frame->ch_layout, (AVSampleFormat)s.ac3Frame->format, s.ac3Frame->sample_rate,
-            0, nullptr);
-        if (swrRet < 0 || !s.swrCtx) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("AC3 re-encode: swr_alloc_set_opts2 failed: %1").arg(ttAvErrorToString(swrRet)));
-            return;
-        }
-        swrRet = swr_init(s.swrCtx);
-        if (swrRet < 0) {
-            TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-                QString("AC3 re-encode: swr_init failed: %1").arg(ttAvErrorToString(swrRet)));
-            swr_free(&s.swrCtx);
-            return;
-        }
-        av_channel_layout_copy(&s.swrInLayout, &s.ac3Frame->ch_layout);
-        s.swrInFormat = s.ac3Frame->format;
-        s.swrInRate   = s.ac3Frame->sample_rate;
-
-        s.ac3ConvertedFrame = av_frame_alloc();
-        if (!s.ac3ConvertedFrame) return;
-        av_channel_layout_copy(&s.ac3ConvertedFrame->ch_layout, &s.ac3EncCtx->ch_layout);
-        s.ac3ConvertedFrame->format = s.ac3EncCtx->sample_fmt;
-        s.ac3ConvertedFrame->sample_rate = s.ac3EncCtx->sample_rate;
-        s.ac3ConvertedFrame->nb_samples = s.ac3Frame->nb_samples;
-        av_frame_get_buffer(s.ac3ConvertedFrame, 0);
-    }
-
-    // Convert channel layout
-    s.ac3ConvertedFrame->nb_samples = s.ac3Frame->nb_samples;
-    swr_convert(s.swrCtx,
-        s.ac3ConvertedFrame->data, s.ac3ConvertedFrame->nb_samples,
-        const_cast<const uint8_t**>(s.ac3Frame->data), s.ac3Frame->nb_samples);
-
-    s.ac3ConvertedFrame->pts = pkt->pts + s.ptsOffset;
-
-    // Re-encode with target channel layout
-    const int sendRet = avcodec_send_frame(s.ac3EncCtx, s.ac3ConvertedFrame);
-    if (sendRet < 0) {
-        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
-            QString("AC3 re-encode: avcodec_send_frame failed: %1").arg(ttAvErrorToString(sendRet)));
-        return;
-    }
-    AVPacket* encPkt = av_packet_alloc();
-    if (encPkt && avcodec_receive_packet(s.ac3EncCtx, encPkt) == 0) {
-        encPkt->pts = pkt->pts + s.ptsOffset;
-        encPkt->dts = encPkt->pts;
-        encPkt->stream_index = 0;
-        encPkt->pos = -1;
-        if (av_write_frame(s.outFmtCtx, encPkt) >= 0) {
-            s.acmodReencoded++;
-            s.notePacketWritten(encPkt->pts);
-        }
-    }
-    av_packet_free(&encPkt);
 }
 
 // Normal stream-copy of one frame onto the output timeline.
@@ -428,17 +245,55 @@ bool TTAudioCutter::cut(const QString& inputFile,
     for (const auto& seg : cutList)
         s.totalKeepSec += qMax(0.0, seg.second - seg.first);
 
-    AVPacket* pkt = av_packet_alloc();
-    if (!pkt) {
+    AVPacket* pkt  = av_packet_alloc();
+    AVPacket* held = av_packet_alloc();   // a frame whose replacement is not finished yet
+    if (!pkt || !held) {
+        av_packet_free(&pkt);
+        av_packet_free(&held);
         s.closeContainers();
         setError("Cannot allocate packet");
         return false;
     }
 
-    // AC3 acmod normalization: decoder/encoder are created lazily by
-    // ensureAc3Codecs() on the first frame that needs them.
+    // AC3 acmod normalization through TTAc3Reencoder. A replacement is
+    // finished one frame late (it needs the 256 samples that follow), so the
+    // source frame is held until then - and written as it is, with a
+    // warning, when the re-encode fails. If the re-encoder cannot be set up
+    // at all, every frame is stream-copied.
     const bool acmodNormActive = normalizeAcmod &&
                                  inStream->codecpar->codec_id == AV_CODEC_ID_AC3;
+    TTAc3Reencoder reencoder;
+    bool reencoderOpen = false;
+    if (acmodNormActive) {
+        QString reErr;
+        reencoderOpen = reencoder.open(inStream->codecpar, &reErr);
+        if (!reencoderOpen)
+            qWarning() << "AC3 re-encode not available, frames are stream-copied:" << reErr;
+    }
+    TTAc3Reencoder::Request reRequest;
+    reRequest.bitRate = inStream->codecpar->bit_rate > 0 ? inStream->codecpar->bit_rate : 384000;
+    double heldTime = 0.0;
+    const double outTick = av_q2d(inStream->time_base);
+
+    auto writeHeldOriginal = [&](const QString& why) {
+        if (held->size <= 0) return;
+        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+            QString("AC3 re-encode failed at %1 (%2) -- writing the original frame").arg(heldTime).arg(why));
+        writeOnOutputTimeline(s, held, heldTime, " (not re-encoded)");   // held->pts is on the output timeline
+        av_packet_unref(held);
+    };
+    // At most one frame is pending at a time, so a replacement always belongs
+    // to the frame in `held`.
+    auto writeReplacements = [&](const QList<TTAc3Reencoder::Replacement>& reps) {
+        for (const TTAc3Reencoder::Replacement& r : reps) {
+            if (writeBytesPacket(s, r.tag, s.frameDuration, r.bytes, r.tag * outTick, " (re-encoded)")) {
+                s.acmodReencoded++;
+                av_packet_unref(held);
+            } else {
+                writeHeldOriginal(QStringLiteral("out of memory"));
+            }
+        }
+    };
 
     qDebug() << "[DRIFT] cutAudioStream start: input"
              << inputFile << "segments" << cutList.size()
@@ -473,6 +328,13 @@ bool TTAudioCutter::cut(const QString& inputFile,
             }
         }
 
+        const bool useReencoder = reencoderOpen && segTargetAcmod >= 0;
+        if (useReencoder) reencoder.reset();
+        reRequest.targetAcmod = segTargetAcmod;
+        QList<TTAc3Reencoder::Replacement> reps;
+        QString reErr;
+        bool sawPacketBehind = false;
+
         bool segmentStarted = false;
         while (av_read_frame(s.inFmtCtx, pkt) >= 0) {
             if (shouldAbort && shouldAbort()) {
@@ -499,14 +361,29 @@ bool TTAudioCutter::cut(const QString& inputFile,
 
             double pktTime = pkt->pts * av_q2d(inStream->time_base);
 
-            // Skip packets before start time (1ms tolerance for frame alignment)
+            // Skip packets before start time (1ms tolerance for frame alignment).
+            // The re-encoder gets them as warm-up for a run that starts with
+            // the segment. Usually there is none: a seek to a time on the
+            // frame grid lands on the segment's first frame, and the run
+            // starts with a cold decoder - which gives the same replacement
+            // (see TTAc3Reencoder::push).
             if (pktTime < startTime - 0.001) {
+                if (useReencoder) reencoder.push(pkt, false, reRequest, 0, {}, &reps, &reErr);
                 av_packet_unref(pkt);
                 continue;
             }
 
-            // Stop at end time — only include frames that fit completely
+            // Stop at end time — only include frames that fit completely.
+            // The first packet behind the segment completes a run that ends
+            // with it.
             if (pktTime + s.frameDurSec > endTime + 0.001) {
+                if (useReencoder) {
+                    reps.clear();
+                    if (reencoder.push(pkt, false, reRequest, 0, {}, &reps, &reErr))
+                        writeReplacements(reps);
+                    writeHeldOriginal(reErr);
+                    sawPacketBehind = true;
+                }
                 av_packet_unref(pkt);
                 break;
             }
@@ -520,33 +397,60 @@ bool TTAudioCutter::cut(const QString& inputFile,
             // Repair lookup: replace the packet's payload before any acmod
             // handling. Frame number = packet time snapped to the 32 ms grid
             // (CBR raster) -- same grid TTAudioRepairItem's frame numbers use.
-            // A hit writes the substitute bytes with the same PTS-offset/
-            // accounting as the stream-copy path below and skips the acmod
-            // re-encode check entirely: repaired frames never go through it.
+            // Repaired frames never go through the acmod re-encode.
+            const QByteArray* repairBytes = nullptr;
             if (repairTable && !repairTable->isEmpty()) {
-                qint64 frameNo = qRound64(pktTime / s.frameDurSec);
-                auto it = repairTable->constFind(frameNo);
-                if (it != repairTable->constEnd() && writeRepairedPacket(s, pkt, *it, pktTime)) {
-                    av_packet_unref(pkt);
-                    continue;
-                }
+                const qint64 frameNo = qRound64(pktTime / s.frameDurSec);
+                const auto it = repairTable->constFind(frameNo);
+                if (it != repairTable->constEnd()) repairBytes = &it.value();
             }
 
             // Check if this frame needs acmod re-encoding
             bool needsReencode = false;
-            if (segTargetAcmod >= 0 && pkt->size >= 7) {
-                int frameAcmod = (pkt->data[6] >> 5) & 0x07;
+            if (useReencoder && !repairBytes && pkt->size >= 7) {
+                const int frameAcmod = (pkt->data[6] >> 5) & 0x07;
                 needsReencode = (frameAcmod != segTargetAcmod);
             }
-            if (needsReencode)
-                needsReencode = ensureAc3Codecs(s, segTargetAcmod);
 
-            if (needsReencode)
-                writeReencodedPacket(s, pkt);
-            else
+            const int64_t outPts = pkt->pts + s.ptsOffset;
+            if (useReencoder) {
+                // Every packet goes to the re-encoder: it finishes the frame
+                // held from the iteration before, which is written first.
+                reps.clear();
+                const bool ok = reencoder.push(pkt, needsReencode, reRequest, outPts, {}, &reps, &reErr);
+                writeReplacements(reps);
+                if (!ok) {
+                    writeHeldOriginal(reErr);
+                    if (needsReencode)
+                        TTMessageLogger::getInstance()->warningMsg(__FILE__, __LINE__,
+                            QString("AC3 re-encode failed at %1 (%2) -- writing the original frame").arg(pktTime).arg(reErr));
+                    reencoder.reset();
+                    needsReencode = false;
+                }
+            }
+
+            if (needsReencode) {
+                av_packet_unref(held);
+                if (av_packet_ref(held, pkt) == 0) {
+                    held->pts = outPts;
+                    heldTime = pktTime;
+                } else {
+                    writeStreamCopyPacket(s, pkt, pktTime);
+                }
+            } else if (!repairBytes ||
+                       !writeBytesPacket(s, outPts, pkt->duration, *repairBytes, pktTime, " (repair)")) {
                 writeStreamCopyPacket(s, pkt, pktTime);
+            }
             av_packet_unref(pkt);
         }
+        // The file ended inside the segment: silence completes a pending run.
+        if (useReencoder && !sawPacketBehind && !aborted) {
+            reps.clear();
+            if (reencoder.finish(&reps, &reErr))
+                writeReplacements(reps);
+            writeHeldOriginal(reErr);
+        }
+        av_packet_unref(held);
         if (aborted) break;
     }
 
@@ -555,12 +459,12 @@ bool TTAudioCutter::cut(const QString& inputFile,
     if (!aborted && progressCb && s.totalKeepSec > 0.0 && s.lastPercent < 100)
         progressCb(100);
 
-    s.closeCodecs();
     if (s.acmodReencoded > 0 && TTSettings::instance()->logFFmpegDecoder()) {
         qDebug() << "  AC3 acmod normalization: re-encoded" << s.acmodReencoded << "frames";
     }
 
     av_packet_free(&pkt);
+    av_packet_free(&held);
     av_write_trailer(s.outFmtCtx);
 
     // Capture out-stream time_base before context cleanup (used by [DRIFT] log)

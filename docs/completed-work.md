@@ -2516,6 +2516,60 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
 
 ### Audio
 
+- **Neu kodierte AC3-Rahmen passen zu ihren kopierten Nachbarn** → **DONE
+  (2026-10-02, Zweig `fix/ac3-reencode-alignment`)**. Betraf Tonreparatur
+  und acmod-Normalisierung. Gemessen an einer DVB-Aufnahme (448 kbit/s,
+  `dialnorm` −23, mit Kompressionswörtern) und an erzeugtem Material.
+  - **Vorher** (32 reparierte Rahmen, Vergleich je Rahmen und Kanal gegen
+    die Quelle): Ton 256 Samples zu spät (Verzögerung des AC3-Encoders,
+    Kreuzkorrelation 1,0); am Anfang ein Einbruch, am Ende fehlten 256
+    Samples, die Ausblendung der maskierten Kanäle lag 256 Samples zu
+    spät, die Einblendung fiel weg; `dialnorm` −31 statt −23 (+8,0 dB bei
+    Abspielern, die `dialnorm` anwenden — nachgestellt mit
+    `-target_level -31`); Kompression fest im Ton (+1,2…+1,7 dB ohne
+    Kompression im Abspieler, also in mpv und der Vorschau); weitere
+    Kopffelder auf Encoder-Vorgabe.
+  - **Entscheide des Anwenders:** alle drei beheben; ohne Kompression
+    dekodieren (`drc_scale` 0), weil der Encoder keine Kompressionswörter
+    schreiben kann; alle Kopffelder übernehmen.
+  - **Umbau:** eine Einheit `TTAc3Reencoder` für beide Stellen (vorher zwei
+    Ketten Dekodieren → Umkanalieren → Kodieren). Ausrichtung: je Lauf
+    1280 Null-Samples Vorlauf, erstes Paket verwerfen, 256 Samples Vorgriff
+    auf den Folgerahmen. Der Schnitt hält einen Rahmen zurück, bis sein
+    Ersatz fertig ist; scheitert das Neu-Kodieren, geht der Originalrahmen
+    hinaus (vorher: Lücke).
+  - **Nachher**, Gate `ac3_reencode` (63 Prüfungen, davon 24 auf dem alten
+    Stand rot): Versatz 0; Ränder 34 und 42 dB unter dem Signal; Blenden an
+    der Bereichsgrenze; Kopffelder gleich. Echte Aufnahme
+    (`gate_ac3_reencode_real.sh`): Versatz −256 → 0; Pegel ohne Kompression
+    2,40 → 0,08 dB (5.1) und 5,44 → 0,00 dB (Stereo); Kopffelder gleich.
+    Unveränderte Pfade: Schnitt-Identität auf fünf Fixtures gleich,
+    `test_audiocutter_paths` Stream-Kopie/Tabelle/Abbruch byte-gleich.
+  - **Kopffeld-Regel:** ein Feld wird nur übernommen, wenn es im Layout des
+    Quellrahmens etwas bedeutet — echte Stereo-Rahmen tragen erweiterte
+    Mischpegel (`xbsi1`) mit lauter Nullen, die als „Center +3 dB" gelesen
+    würden.
+  - Fallen: (1) Codec-Optionen als Zeichenketten scheitern unter deutscher
+    Zahlen-Locale — `"0.707"` liest `strtod` als 0, der Encoder öffnet
+    nicht; das Gate (Fall L1) fand es, jetzt `av_opt_set_double`.
+    (2) Der AC3-Decoder füllt Mantissen ohne Bits mit Rauschen aus einem
+    laufenden Generator: gleiche Rahmen dekodieren je nach Vorgeschichte
+    10–17 dB unter dem Signal verschieden; für Vergleiche `cons_noisegen`.
+    (3) Rosa Rauschen über die volle Bandbreite kodiert bei 448 kbit/s so
+    schlecht (Fehler 12 dB unter dem Signal), dass keine Naht messbar ist;
+    das Gate nimmt es bei 1,5 kHz tiefpassgefiltert. (4) Prüfmeldungen der
+    Form `check(f(&err), "…" + err)` lesen `err` vor dem Aufruf.
+  - **Widerlegt: „der acmod-Pfad braucht einen Decoder-Warmlauf".** Die
+    Spec führte den kalten Decoder-Start am Laufanfang als vierte Abweichung
+    (aus dem Code gelesen). Gemessen: Der Sprung an einen Segmentanfang auf
+    dem Rahmenraster landet genau auf dem ersten Rahmen, der Decoder startet
+    dort also weiterhin kalt — und das Ersatzpaket ist trotzdem dasselbe:
+    erzeugtes Material 4 von 4 byte-gleich, DVB-Aufnahme an 12 Rahmen mit
+    kurzem Block 11 byte-gleich, Fehler der ersten 256 Samples in allen 16
+    Fällen gleich. Ein kalt dekodierter Rahmenanfang ist genau der Anteil
+    des Signals, den der erste Block des Encoders sieht. Kein Umbau; die
+    Kommentare sagen jetzt, was gemessen ist.
+
 - **Audit-Lauf 11: Lese-Hypothesen der Karte `audio-es-input.md`** → **DONE
   (2026-09-26, Zweig `cleanup/code-audit-run11`)**. Gemessen mit einer
   Wegwerf-Sonde (Typerkennung, Kopfliste, `planAudioCut` + `TTAudioCutter::cut`,
