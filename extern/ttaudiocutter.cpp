@@ -362,8 +362,11 @@ bool TTAudioCutter::cut(const QString& inputFile,
             double pktTime = pkt->pts * av_q2d(inStream->time_base);
 
             // Skip packets before start time (1ms tolerance for frame alignment).
-            // The re-encoder remembers them: a run that starts with the
-            // segment needs the frame before it for the decoder's overlap.
+            // The re-encoder gets them as warm-up for a run that starts with
+            // the segment. Usually there is none: a seek to a time on the
+            // frame grid lands on the segment's first frame, and the run
+            // starts with a cold decoder - which gives the same replacement
+            // (see TTAc3Reencoder::push).
             if (pktTime < startTime - 0.001) {
                 if (useReencoder) reencoder.push(pkt, false, reRequest, 0, {}, &reps, &reErr);
                 av_packet_unref(pkt);

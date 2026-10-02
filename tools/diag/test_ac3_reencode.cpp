@@ -621,6 +621,20 @@ static void caseCutter()
             const double tail = esrDb(o.ch[0], 99 * 1536, gRefSt.ch[0], 149 * 1536, 1536);
             check(lag == 0 && head < kSeamEsrDb && tail < kSeamEsrDb,
                   QString("N3 lag %1, first frame %2 dB, last frame %3 dB").arg(lag).arg(head, 0, 'f', 1).arg(tail, 0, 'f', 1));
+            // The run starts with its segment, and the seek lands on its first
+            // frame: the re-encoder's decoder starts cold there. The first 256
+            // samples must be right all the same (measured: a cold and a warm
+            // start give the same replacement). A stand-alone decode cannot
+            // see them (it starts cold itself), so the 5.1 encode of the frame
+            // before - the same signal - is put in front.
+            QVector<QByteArray> probe{readFrames(W("s51.ac3")).value(49)};
+            probe += out;
+            writeFrames(W("n3_probe.ac3"), probe);
+            Pcm q;
+            decodeFile(W("n3_probe.ac3"), -1, &q);
+            const double first = worstBlockEsr(q.ch[0], 1536, gRef51.ch[0], 50 * 1536, 0, 1);
+            check(first < kSeamEsrDb,
+                  QString("N3 first 256 samples of a run that starts with its segment: %1 dB").arg(first, 0, 'f', 1));
         }
     }
     {   // A1: abort while a frame is held back

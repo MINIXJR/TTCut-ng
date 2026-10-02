@@ -86,7 +86,8 @@ public:
 
     // Every source packet of a contiguous stretch, in order.
     //   reencode == false: the frame is remembered; it is decoded only when
-    //   a neighbouring run needs it (warm-up before a run, lookahead behind).
+    //   a neighbouring run uses it (as warm-up before a run - optional, see
+    //   push() - or as the lookahead behind a run, which is needed).
     //   reencode == true: the frame is to be replaced.
     // Finished replacements are appended to out in the order their frames
     // were pushed. After a false return call reset() before pushing again.
