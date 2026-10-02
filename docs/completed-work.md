@@ -1088,9 +1088,15 @@ einem Eintrag, gehört der Befund in die betroffene Karte unter
     Sprung ohne `flush` → Kompression an, mit `flush` → aus, unabhängig von
     der gesetzten `drc_scale`. Der Nachbau ruft ffmpeg jetzt mit
     `-drc_scale 0`; danach an 120 Grenzen alle Rahmen gleich bis auf den
-    ersten nach dem Sprung (0,1–0,3 dB). Folgen für die übrigen
-    AC3-Decoder der Anwendung → `TODO.md`. Falle: `av_opt_get` VOR dem
+    ersten nach dem Sprung (0,1–0,3 dB). Falle: `av_opt_get` VOR dem
     `flush` zeigt 1 und führt in die Irre.
+  - **Folgemessung** an den beiden Neu-Kodier-Pfaden (Tonreparatur,
+    acmod-Normalisierung) auf derselben Spur: neu kodierte Rahmen tragen
+    `dialnorm` −31 statt −23 (+8,0 dB bei Abspielern mit `dialnorm`), die
+    Kompression der Quelle fest im Ton (+1,2…+1,7 dB bei Abspielern ohne
+    Kompression) und den Ton 256 Samples später. Offen → `TODO.md`. Falle:
+    der Pegelvergleich je Rahmen streute um ±5 dB, solange der Zeitversatz
+    nicht ausgeglichen war — erst die Kreuzkorrelation zeigte ihn.
   - Fallen: (1) Das Gate auf dem ALTEN Skript startet das echte Programm mit
     `xcb` — ein Fenster auf dem Desktop und ein geändertes
     `docs/MainWindow.png`. (2) `build-package.sh` ändert

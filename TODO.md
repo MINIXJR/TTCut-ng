@@ -364,33 +364,60 @@ v1 (Scanner + Reparatur-Dialog + Schnittpfad, siehe CHANGELOG „Unreleased").
 
 ## Low Priority
 
-- **AC3 dekodieren: Dynamikkompression je nach Codepfad an oder aus**
-  (Audit-Lauf 20 und Nachmessung 2026-10-02; Ursache geklärt, Entscheidung
-  offen). `avcodec_flush_buffers` setzt im AC3- und E-AC3-Decoder von
-  libavcodec die Optionen auf null zurück (`ac3_decode_flush` löscht den
-  Kontext ab `frame_type`; gemessen mit ffmpeg 9.0.2: `drc_scale` 2 → 0,
-  `target_level` −20 → 0). Die Anwendung öffnet ihre AC3-Decoder ohne
-  Optionen, also mit der Vorgabe `drc_scale=1`. Daraus folgt:
-  - `TTAudioCutter::detectBurst` springt und ruft `flush` → dekodiert
-    **ohne** die Dynamikkompression des Stroms. Gemessen: Pegel je Rahmen
-    gleich `ffmpeg -drc_scale 0`, 0,6–1,9 dB unter dem Standard; eine von
-    außen gesetzte `drc_scale` bleibt wirkungslos.
-  - Die anderen vier Stellen rufen kein `flush` (nach Code, nicht einzeln
-    gemessen): Stille-Erkennung (`TTStreamPointAudioWorker`), Anomalie-Scan
-    (`TTAudioAnomalyScanTask`), acmod-Normalisierung (`TTAudioCutter`) und
-    Tonreparatur (`TTAudioRepair`) dekodieren **mit** Kompression.
-  - **Zu entscheiden:** ob die Anwendung `drc_scale` an jeder Stelle
-    ausdrücklich setzt, statt sie einer Nebenwirkung zu überlassen. Für die
-    beiden Stellen, die neu kodieren, ist das eine Klangfrage: die
-    Kompression steckt dann fest im neu kodierten Rahmen, während die
-    kopierten Nachbarn sie nur als Steuerwort tragen — ein Abspieler ohne
-    Kompression (mpv-Vorgabe) und einer mit würden den Übergang
-    verschieden wiedergeben. Das ist eine Vermutung aus dem Code; ein
-    Pegelsprung am Rand eines neu kodierten Bereichs ist nicht gemessen.
-    Für die Analyse-Stellen hängen die Schwellen an den heutigen Pegeln.
-  - Daneben, gemessen: der erste Rahmen nach dem Sprung weicht um
-    0,1–0,3 dB ab (116 von 120 Grenzen, nur dieser Rahmen). Beim Cut-In
-    ist er einer der zwei geprüften Rahmen.
+- **Neu kodierte AC3-Rahmen passen nicht zu ihren kopierten Nachbarn**
+  (gemessen 2026-10-02, Entscheidung offen). Betrifft die beiden Pfade, die
+  AC3 dekodieren und neu kodieren: Tonreparatur
+  (`TTAudioRepair::buildRepairTable`) und acmod-Normalisierung
+  (`TTAudioCutter`). Gemessen an einer DVB-Aufnahme (448 kbit/s, Quelle
+  `dialnorm` −23, mit Kompressionswörtern), mit den Funktionen der Anwendung
+  selbst: Reparatur von 32 Rahmen (Maske C+LFE) in einem 20-s-Schnitt, und
+  ein Schnitt über einen Stereo→5.1-Wechsel mit Ziel 5.1; Vergleich je Rahmen
+  und Kanal gegen die Quelle, beide mit demselben Dekodierer dekodiert.
+  Drei Abweichungen, jede für sich gemessen:
+  1. **`dialnorm`:** Der Encoder schreibt seine Vorgabe −31, die Quelle
+     trägt −23. Ein Abspieler, der `dialnorm` anwendet (nachgestellt mit
+     `ffmpeg -target_level -31`; kein echter AV-Receiver gemessen), gibt
+     die neu kodierten Rahmen **8,0 dB lauter** wieder als die Nachbarn.
+  2. **Dynamikkompression:** Der Dekodierer der Anwendung wendet die
+     Kompression des Stroms an (`drc_scale` 1), der Encoder schreibt keine
+     Kompressionswörter (`compre=0`; Dekodierung mit und ohne Kompression
+     gleich). Die Kompression steckt damit fest im Ton. Ein Abspieler ohne
+     Kompression (mpv-Vorgabe `ac3drc=0`, also auch die Vorschau der
+     Anwendung) gibt die neu kodierten Rahmen um genau den
+     Kompressionsgewinn der Quelle versetzt wieder: Reparaturbereich
+     **+1,2 bis +1,7 dB** (Mittel +1,45), Stereo-Teil des acmod-Schnitts
+     −2,3 bis +5,1 dB. Mit Kompression im Abspieler: ±0,07 dB.
+  3. **Zeitversatz:** Der Ton in neu kodierten Rahmen liegt **256 Samples
+     (5,3 ms) später** als in der Quelle (Kreuzkorrelation 1,0; kopierte
+     Rahmen: 0). Der AC3-Encoder hat diese Verzögerung
+     (`initial_padding`), sie wird nicht ausgeglichen. Am Anfang des
+     Bereichs wiederholen sich damit 5,3 ms, am Ende fehlen 5,3 ms. Der
+     Kommentar in `extern/ttaudiorepair.cpp` („no encoder priming/delay")
+     stimmt für die Rahmenzahl, nicht für die Lage des Tons.
+  - Nicht gemessen: Hörbarkeit; 5.1→Stereo (dort nur die Kopffelder:
+    ebenfalls −31 und `compre=0`); MP2 ist nicht betroffen (wird nie neu
+    kodiert).
+  - **Zu entscheiden:** (1) `dialnorm` der Quelle in den Encoder
+    übernehmen — eindeutig. (3) Encoder-Verzögerung ausgleichen (Eingang
+    um 256 Samples vorziehen) — eindeutig, braucht aber Vorgriff auf den
+    Folgerahmen. (2) hat keine Lösung, die für jeden Abspieler stimmt: der
+    Encoder von ffmpeg kann keine Kompressionswörter schreiben. Ohne
+    Kompression dekodieren (`drc_scale` 0) macht den Übergang für
+    Abspieler ohne Kompression nahtlos und verschiebt den Versatz zu denen
+    mit Kompression.
+  - Hintergrund, gemessen: `avcodec_flush_buffers` setzt im AC3-Decoder von
+    libavcodec die Optionen auf null (`ac3_decode_flush`; `drc_scale`
+    2 → 0). Deshalb dekodiert `TTAudioCutter::detectBurst`, das nach
+    seinem Sprung `flush` ruft, **ohne** Kompression, während die anderen
+    AC3-Decoder der Anwendung (auch Stille-Erkennung und Anomalie-Scan;
+    diese beiden nach Code, nicht einzeln gemessen) **mit** dekodieren.
+    Wer `drc_scale` setzen will, muss es nach jedem `flush` erneut tun.
+  - Messweg zum Nachbauen (die Programme lagen in `CLAUDE_TMP`, nicht
+    gesichert): ein Harness aus `TTAudioRepair::buildRepairTable` +
+    `TTAudioCutter::cut` auf der echten Spur; Auswertung in Python: Rahmen
+    der Ausgabe per Bytevergleich der Quelle zuordnen, beide mit
+    `ffmpeg -drc_scale {0,1} [-target_level -31]` nach PCM, RMS je Rahmen
+    und Kanal, Versatz per Kreuzkorrelation.
 
 - **Zeitsprung-Dialog auf dem zweiten Bildschirm** (Audit-Lauf 16, N4, nicht
   gemessen). `TTQuickJumpDialog` nimmt Vorgabegröße und Klemmung vom
