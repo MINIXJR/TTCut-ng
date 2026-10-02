@@ -1,10 +1,16 @@
+/*----------------------------------------------------------------------------*/
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
+/*----------------------------------------------------------------------------*/
+
 /* ttcut-audiofix - structural sanitizer for MP2/AC3/E-AC3 elementary streams.
  * Walks the ES frame by frame, drops junk bytes between valid frames,
  * reports CRC-damaged frames. No time insertion (that is ttcut-demux Rev 3's
  * job) and no re-encode. Exit: 0 clean, 1 defects found/fixed, 2 error.
- *
- * Copyright (C) 2026 TTCut-ng Project
- * License: GPL v2 or later
  */
 #include <stdio.h>
 #include <stdlib.h>

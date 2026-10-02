@@ -1176,6 +1176,65 @@ repair_audio_with_silence_inserts() {
     return 0
 }
 
+# ac3_decode_errors FILE
+# Number of error lines of a full decode. "repeat" keeps ffmpeg from folding
+# equal lines into one, so the count grows with the damage. The exit status
+# of ffmpeg is no measure: it turns non-zero only above an error rate of two
+# thirds (measured 2026-10-02: 150 undecodable frames of 250 give 0). The
+# input format is named because the repaired copy does not end in ".ac3".
+ac3_decode_errors() {
+    ffmpeg -nostdin -hide_banner -loglevel repeat+error -f ac3 -i "$1" -f null - 2>&1 | wc -l
+}
+
+# repair_ac3_track FILE
+# AC3 header repair of one track. ttcut-ac3fix counts stereo headers at a
+# 5.1 bitrate, which also fits valid stereo; so the track is repaired only
+# when it does not decode cleanly, and replaced only when the repaired copy
+# decodes with fewer errors. Every failure leaves the track as it is. Sets
+# AC3_FIXED_FRAMES to the number of repaired frames, 0 when nothing changed.
+repair_ac3_track() {
+    local AUDIO_FILE="$1" NAME OUT RC=0 INCONSISTENT ERRORS_BEFORE ERRORS_AFTER TEMP_FIXED
+    NAME=$(basename "$AUDIO_FILE")
+    AC3_FIXED_FRAMES=0
+
+    OUT=$(ttcut-ac3fix -a "$AUDIO_FILE" 2>&1) || RC=$?
+    if [ "$RC" -ne 0 ]; then
+        warn "  $NAME: ttcut-ac3fix analyze failed (rc=$RC), leaving untouched"
+        return 0
+    fi
+    INCONSISTENT=$(echo "$OUT" | grep -oP 'Inconsistent frames:\s+\K[0-9]+' || echo "0")
+    if [ "$INCONSISTENT" -eq 0 ]; then
+        info "  $NAME: headers OK"
+        return 0
+    fi
+
+    ERRORS_BEFORE=$(ac3_decode_errors "$AUDIO_FILE")
+    if [ "$ERRORS_BEFORE" -eq 0 ]; then
+        info "  $NAME: $INCONSISTENT inconsistent headers but decode OK — skipping fix"
+        return 0
+    fi
+
+    TEMP_FIXED="${AUDIO_FILE}.fixed"
+    OUT=$(ttcut-ac3fix -F -f "$AUDIO_FILE" "$TEMP_FIXED" 2>&1) || RC=$?
+    if [ "$RC" -ne 0 ] || [ ! -s "$TEMP_FIXED" ]; then
+        warn "  $NAME: fix failed (rc=$RC), leaving untouched"
+        rm -f "$TEMP_FIXED"
+        return 0
+    fi
+
+    ERRORS_AFTER=$(ac3_decode_errors "$TEMP_FIXED")
+    if [ "$ERRORS_AFTER" -ge "$ERRORS_BEFORE" ]; then
+        info "  $NAME: $INCONSISTENT inconsistent headers, repair does not decode better ($ERRORS_BEFORE -> $ERRORS_AFTER errors) — skipping fix"
+        rm -f "$TEMP_FIXED"
+        return 0
+    fi
+
+    mv "$TEMP_FIXED" "$AUDIO_FILE"
+    AC3_FIXED_FRAMES=$(echo "$OUT" | grep -oP 'Fixed frames:\s+\K[0-9]+' || echo "$INCONSISTENT")
+    info "  $NAME: $AC3_FIXED_FRAMES frames fixed"
+    return 0
+}
+
 # Parse arguments
 ES_MODE=true   # ES demux is the only mode; -e is kept as a no-op for compatibility
 AC3FIX=true
@@ -1956,37 +2015,9 @@ with open('$OUTPUT_VIDEO','rb') as f:
                 for i in "${!AUDIO_FILES[@]}"; do
                     AUDIO_FILE="${AUDIO_FILES[$i]}"
                     [[ "$AUDIO_FILE" != *.ac3 ]] && continue
-
-                    # Analyze: run in analyze mode, capture output
-                    ANALYZE_OUT=$(ttcut-ac3fix -a "$AUDIO_FILE" 2>&1)
-
-                    # Extract inconsistent frame count from output
-                    INCONSISTENT=$(echo "$ANALYZE_OUT" | grep -oP 'Inconsistent frames:\s+\K[0-9]+' || echo "0")
-
-                    if [ "$INCONSISTENT" -gt 0 ]; then
-                        # Decode test: if AC3 decodes fine, skip fix (prevents corrupting valid stereo AC3)
-                        if ffmpeg -v error -i "$AUDIO_FILE" -t 2 -f null - 2>/dev/null; then
-                            info "  $(basename "$AUDIO_FILE"): $INCONSISTENT inconsistent headers but decode OK — skipping fix"
-                            continue
-                        fi
-
-                        # Fix: write to temp file, then replace
-                        TEMP_FIXED="${AUDIO_FILE}.fixed"
-                        if ttcut-ac3fix -F -f "$AUDIO_FILE" "$TEMP_FIXED" 2>&1 | tail -1; then
-                            if [ -s "$TEMP_FIXED" ]; then
-                                mv "$TEMP_FIXED" "$AUDIO_FILE"
-                                info "  $(basename "$AUDIO_FILE"): $INCONSISTENT frames fixed"
-                                AC3_FIX_RESULTS[$i]="$INCONSISTENT"
-                            else
-                                warn "  $(basename "$AUDIO_FILE"): fix produced empty file"
-                                rm -f "$TEMP_FIXED"
-                            fi
-                        else
-                            warn "  $(basename "$AUDIO_FILE"): fix failed"
-                            rm -f "$TEMP_FIXED"
-                        fi
-                    else
-                        info "  $(basename "$AUDIO_FILE"): headers OK"
+                    repair_ac3_track "$AUDIO_FILE"
+                    if [ "$AC3_FIXED_FRAMES" -gt 0 ]; then
+                        AC3_FIX_RESULTS[$i]="$AC3_FIXED_FRAMES"
                     fi
                 done
                 echo ""

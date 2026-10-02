@@ -1,3 +1,12 @@
+/*----------------------------------------------------------------------------*/
+/* SPDX-License-Identifier: GPL-3.0-or-later                                  */
+/*                                                                            */
+/* TTCut-ng - frame-accurate video cutter                                     */
+/* Copyright (c) 2024-2026 MINIXJR                                            */
+/*                                                                            */
+/* Free software under the GNU GPL v3 or later - see the LICENSE file.        */
+/*----------------------------------------------------------------------------*/
+
 /*
  * ttcut-ac3fix - AC3 Header Repair Tool for TTCut
  *
@@ -11,8 +20,9 @@
  * This is a common issue with DVB recordings where the broadcaster
  * incorrectly sets the channel configuration in the AC3 header.
  *
- * Copyright (C) 2026 TTCut-ng Project
- * License: GPL v2 or later
+ * The output is the input with nothing but those acmod bits changed: bytes
+ * that belong to no frame are copied through, so that ttcut-audiofix, which
+ * runs next in ttcut-demux, still sees and reports them.
  */
 
 #include <stddef.h>
@@ -22,6 +32,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 
 /* AC3 Sync Word */
 #define AC3_SYNC_WORD 0x0B77
@@ -50,11 +61,6 @@ static const uint16_t ac3_bitrates[] = {
     32, 40, 48, 56, 64, 80, 96, 112,
     128, 160, 192, 224, 256, 320, 384, 448,
     512, 576, 640
-};
-
-/* Number of channels for each acmod */
-static const uint8_t ac3_channels[] = {
-    2, 1, 2, 3, 3, 4, 4, 5
 };
 
 /* acmod names */
@@ -87,13 +93,9 @@ typedef struct {
 typedef struct {
     uint8_t fscod;        /* Sample rate code (0=48kHz, 1=44.1kHz, 2=32kHz) */
     uint8_t frmsizecod;   /* Frame size code */
-    uint8_t bsid;         /* Bitstream ID */
-    uint8_t bsmod;        /* Bitstream mode */
     uint8_t acmod;        /* Audio coding mode (channel config) */
-    uint8_t lfeon;        /* LFE channel on */
     uint16_t frame_size;  /* Frame size in bytes */
     uint16_t bitrate;     /* Bitrate in kbps */
-    uint8_t channels;     /* Number of full-bandwidth channels */
 } ac3_frame_info_t;
 
 /* Command line options */
@@ -108,7 +110,10 @@ typedef struct {
     uint16_t min_bitrate; /* Minimum bitrate to consider for fixing (default: 384) */
 } ac3fix_options_t;
 
-/* Parse AC3 frame header */
+/* Parse AC3 frame header. False for anything that is not a 48 kHz AC3 frame
+ * header: no sync word, another sample rate (their frame size tables are
+ * not here), a reserved frame size code, or a bsid above 10 (E-AC3 shares
+ * the sync word and uses 11 to 16). */
 static bool parse_ac3_header(const uint8_t *data, size_t len, ac3_frame_info_t *info)
 {
     if (len < 7)
@@ -122,11 +127,8 @@ static bool parse_ac3_header(const uint8_t *data, size_t len, ac3_frame_info_t *
     info->fscod = (data[4] >> 6) & 0x03;
     info->frmsizecod = data[4] & 0x3F;
 
-    /* Only support 48kHz for now */
-    if (info->fscod != 0) {
-        /* 44.1kHz and 32kHz have different frame size tables */
+    if (info->fscod != 0)
         return false;
-    }
 
     if (info->frmsizecod >= 38)
         return false;
@@ -138,16 +140,11 @@ static bool parse_ac3_header(const uint8_t *data, size_t len, ac3_frame_info_t *
     info->bitrate = ac3_bitrates[info->frmsizecod / 2];
 
     /* Byte 5: bsid (bits 7-3), bsmod (bits 2-0) */
-    info->bsid = (data[5] >> 3) & 0x1F;
-    info->bsmod = data[5] & 0x07;
+    if (((data[5] >> 3) & 0x1F) > 10)
+        return false;
 
     /* Byte 6: acmod (bits 7-5), then other fields depending on acmod */
     info->acmod = (data[6] >> 5) & 0x07;
-    info->channels = ac3_channels[info->acmod];
-
-    /* LFE is more complex to parse - depends on acmod and other fields */
-    /* For simplicity, assume LFE is present if acmod indicates surround */
-    info->lfeon = (info->acmod == AC3_ACMOD_3F2R) ? 1 : 0;
 
     return true;
 }
@@ -166,8 +163,6 @@ static bool is_inconsistent_header(const ac3_frame_info_t *info, uint16_t min_bi
  */
 static bool patch_ac3_header(uint8_t *data, size_t frame_size, uint8_t new_acmod)
 {
-    (void)frame_size;  /* Unused for now */
-
     if (frame_size < 7)
         return false;
 
@@ -335,18 +330,64 @@ static int process_one_frame(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3f
     return 0;
 }
 
+/* Copies bytes that belong to no frame to the output, when there is one.
+ * Returns 1 after a write error, 0 otherwise. */
+static int pass_unparsed(ac3fix_io_t *io, const uint8_t *data, size_t len)
+{
+    if (io->out_fp && len > 0 && fwrite(data, 1, len, io->out_fp) != len) {
+        fprintf(stderr, "\nError: Write failed\n");
+        return 1;
+    }
+    return 0;
+}
+
+/* What the walker does with the bytes at one position. */
+typedef enum {
+    AC3_AT_FRAME,      /* a frame starts here */
+    AC3_AT_JUNK,       /* this byte belongs to no frame */
+    AC3_AT_NEED_MORE,  /* undecided until more of the file is in the buffer */
+    AC3_AT_TAIL        /* the frame that starts here is cut off by the end of the file */
+} ac3_position_t;
+
+/* Decides whether a frame starts at data. A header directly behind an
+ * accepted frame (in_sync) is taken as it is. Anywhere else - at the start
+ * of the file or behind foreign bytes - a sync word and a parsable header
+ * also turn up by chance, so the frame counts only when the next sync word
+ * follows it or the file ends with it. */
+static ac3_position_t classify_ac3_position(const uint8_t *data, size_t avail, bool eof,
+                                            bool in_sync, ac3_frame_info_t *info)
+{
+    if (!parse_ac3_header(data, avail, info))
+        return AC3_AT_JUNK;
+
+    if (info->frame_size > avail) {
+        if (!eof)
+            return AC3_AT_NEED_MORE;
+        return in_sync ? AC3_AT_TAIL : AC3_AT_JUNK;
+    }
+
+    if (!in_sync) {
+        size_t after = avail - info->frame_size;
+        if (after < 2)
+            return eof ? AC3_AT_FRAME : AC3_AT_NEED_MORE;
+        if (data[info->frame_size] != 0x0B || data[info->frame_size + 1] != 0x77)
+            return AC3_AT_JUNK;
+    }
+    return AC3_AT_FRAME;
+}
+
 /* Walks the input frame by frame: counts frames per acmod, reports format
  * changes, patches inconsistent stereo headers in force-fix mode and
- * writes every frame to the output when there is one. Bytes that belong
- * to no frame are skipped and reported at the end. Returns 1 after a
- * write error, 0 otherwise. */
+ * writes the whole input to the output when there is one - frames through
+ * process_one_frame, bytes that belong to no frame unchanged. Those bytes
+ * are counted and reported at the end. Returns 1 after a write error,
+ * 0 otherwise. */
 static int walk_ac3_frames(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix_stats_t *stats)
 {
     uint8_t *buffer = io->buffer;
     size_t buffer_pos = 0;
     size_t file_pos = 0;
     uint8_t frame_buffer[4096];  /* Max AC3 frame is ~3840 bytes */
-    size_t bytes_read;
     int progress_last = -1;
     double frame_duration = 1536.0 / 48000.0;  /* AC3 frame duration at 48kHz */
     /* Size of the last frame parsed, used to tell a partial frame at the end
@@ -354,44 +395,49 @@ static int walk_ac3_frames(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix
     size_t last_frame_size = 0;
     /* Bytes skipped because they belong to no valid frame. Counted because
      * the scan drops them one at a time, so the leftover in the buffer at EOF
-     * is always under 7 bytes and says nothing about how much was garbage. */
+     * says nothing about how much was garbage. */
     size_t skipped_junk = 0;
+    bool eof = false;
+    bool in_sync = false;   /* the previous position was an accepted frame */
 
-    while ((bytes_read = fread(buffer + buffer_pos, 1, io->buffer_size - buffer_pos, io->in_fp)) > 0
-           || buffer_pos > 0) {
+    while (!eof) {
+        size_t bytes_read = fread(buffer + buffer_pos, 1, io->buffer_size - buffer_pos, io->in_fp);
+        if (bytes_read == 0)
+            eof = true;
         buffer_pos += bytes_read;
         size_t processed = 0;
+        bool stop = false;   /* need more data, or the tail was reached */
 
         /* Find and process AC3 frames */
-        while (processed + 7 <= buffer_pos) {
-            /* Look for sync word */
-            if (buffer[processed] != 0x0B || buffer[processed + 1] != 0x77) {
-                processed++;
-                skipped_junk++;
-                continue;
-            }
-
-            /* Parse header */
+        while (!stop && processed + 7 <= buffer_pos) {
             ac3_frame_info_t info;
-            if (!parse_ac3_header(buffer + processed, buffer_pos - processed, &info)) {
+            switch (classify_ac3_position(buffer + processed, buffer_pos - processed,
+                                          eof, in_sync, &info)) {
+            case AC3_AT_JUNK:
+                if (pass_unparsed(io, buffer + processed, 1))
+                    return 1;
                 processed++;
+                file_pos++;
                 skipped_junk++;
-                continue;
-            }
+                in_sync = false;
+                break;
 
-            /* Check if we have complete frame */
-            if (processed + info.frame_size > buffer_pos) {
-                /* Need more data */
+            case AC3_AT_NEED_MORE:
+            case AC3_AT_TAIL:
+                stop = true;
+                break;
+
+            case AC3_AT_FRAME:
+                if (process_one_frame(opts, io, stats, buffer + processed, &info, frame_buffer))
+                    return 1;
+
+                in_sync = true;
+                last_frame_size = info.frame_size;
+                processed += info.frame_size;
+                file_pos += info.frame_size;
+                stats->duration_s += frame_duration;
                 break;
             }
-
-            if (process_one_frame(opts, io, stats, buffer + processed, &info, frame_buffer))
-                return 1;
-
-            last_frame_size = info.frame_size;
-            processed += info.frame_size;
-            file_pos += info.frame_size;
-            stats->duration_s += frame_duration;
 
             /* Progress indicator */
             int progress = (int)((file_pos * 100) / io->file_size);
@@ -407,22 +453,23 @@ static int walk_ac3_frames(const ac3fix_options_t *opts, ac3fix_io_t *io, ac3fix
             memmove(buffer, buffer + processed, buffer_pos - processed);
             buffer_pos -= processed;
         }
-
-        /* If no progress and buffer is getting full, we have a problem.
-         * Less than one frame left is the partial frame every recording ends
-         * in - VDR cuts mid-frame - and not worth a warning. More than that
-         * is real trailing garbage. */
-        if (bytes_read == 0 && buffer_pos > 0) {
-            size_t unusable = skipped_junk + buffer_pos;
-            if (last_frame_size > 0 && unusable < last_frame_size)
-                fprintf(stderr, "\nPartial frame at file edges (%zu bytes), recording cut mid-frame\n",
-                        unusable);
-            else
-                fprintf(stderr, "\nWarning: %zu bytes could not be parsed (%zu of them at end of file)\n",
-                        unusable, buffer_pos);
-            break;
-        }
     }
+
+    /* What is left in the buffer at the end of the file belongs to no frame
+     * either. Less than one frame in total is the partial frame every
+     * recording ends in - VDR cuts mid-frame - and not worth a warning. More
+     * than that is real garbage, wherever in the file it was. */
+    if (pass_unparsed(io, buffer, buffer_pos))
+        return 1;
+    size_t unusable = skipped_junk + buffer_pos;
+    if (stats->total_frames == 0)
+        fprintf(stderr, "\nWarning: no 48 kHz AC3 frame found (other sample rates and E-AC3 are not supported)\n");
+    else if (unusable > 0 && unusable < last_frame_size)
+        fprintf(stderr, "\nPartial frame at file edges (%zu bytes), recording cut mid-frame\n",
+                unusable);
+    else if (unusable > 0)
+        fprintf(stderr, "\nWarning: %zu bytes could not be parsed (%zu of them at end of file)\n",
+                unusable, buffer_pos);
     return 0;
 }
 
@@ -552,6 +599,9 @@ static int parse_ac3fix_args(int argc, char **argv, ac3fix_options_t *opts)
                 opts->input_file = argv[i];
             } else if (positional == 1) {
                 opts->output_file = argv[i];
+            } else {
+                fprintf(stderr, "Error: Unexpected argument: %s\n", argv[i]);
+                return 1;
             }
             positional++;
             continue;
@@ -606,29 +656,32 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* force_fix writes; without an output file there is nothing to write
+     * to, and the run would report "Fixed frames: N" for nothing. */
+    if (opts.force_fix && !opts.output_file) {
+        fprintf(stderr, "Error: --force-fix requires an output file.\n");
+        return 1;
+    }
+    if (opts.force_fix)
+        opts.analyze_only = false;
+
     if (!opts.output_file && !opts.analyze_only) {
         opts.analyze_only = true;
         printf("Note: No output file specified, running in analyze mode\n\n");
     }
 
-    if (opts.force_fix && opts.analyze_only) {
-        opts.analyze_only = false;  /* force_fix implies writing */
-    }
+    if (opts.output_file && !opts.analyze_only) {
+        struct stat in_st, out_st;
+        bool out_exists = stat(opts.output_file, &out_st) == 0;
 
-    /* force_fix without an output file would silently produce no output:
-     * process_ac3_file's write loop is gated on (output_file != NULL), so it
-     * would read the whole file and report "Fixed frames: N" but write
-     * nothing. Reject up front instead of misleading the user. */
-    if (!opts.analyze_only && !opts.output_file) {
-        fprintf(stderr, "Error: --force-fix requires an output file (-o).\n");
-        return 1;
-    }
-
-    /* Check if output exists */
-    if (opts.output_file && !opts.force) {
-        FILE *f = fopen(opts.output_file, "r");
-        if (f) {
-            fclose(f);
+        /* Opening the output truncates it - the input would be gone before
+         * the first byte was read. */
+        if (out_exists && stat(opts.input_file, &in_st) == 0 &&
+            in_st.st_dev == out_st.st_dev && in_st.st_ino == out_st.st_ino) {
+            fprintf(stderr, "Error: Input and output are the same file.\n");
+            return 1;
+        }
+        if (out_exists && !opts.force) {
             fprintf(stderr, "Error: Output file exists. Use -f to overwrite.\n");
             return 1;
         }
