@@ -59,7 +59,7 @@ do_run() {
   run copy_tux       -f "$TUX" "$D/tux_copy.ac3"
   run missing_input  -a "$FIX/does_not_exist.ac3"
   run empty_input    -a "$FIX/empty.ac3"
-  echo "captured $(ls "$D" | wc -l) files in $D"
+  echo "captured $(find "$D" -mindepth 1 -maxdepth 1 | wc -l) files in $D"
 }
 
 do_compare() {

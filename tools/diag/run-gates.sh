@@ -83,6 +83,7 @@ M2VFP="$CACHE/tux_mpeg2_576i_fieldpic_test.m2v"        # field pictures every 50
 MP2="$CACHE/tux_mpeg2_576i_pal_test.mp2"            # 192 kbit/s, 576 B frames
 DEMUX="$ROOT/tools/ttcut-demux/ttcut-demux"
 AUDIOFIX="$ROOT/tools/ttcut-audiofix/ttcut-audiofix"
+AC3FIX="$ROOT/tools/ttcut-ac3fix/ttcut-ac3fix"
 
 # ---- table: name | tier | timeout s | cmake targets (- = none) ---------------
 # The gate function is gate_<name>; W (work dir) is set and current when it runs.
@@ -155,6 +156,7 @@ demux_gapsync          unit  300  -
 ffmpeg_edge_packets    unit  120  -
 audiofix_edge_ac3      unit  120  -
 audiofix_edge_mp2      unit  120  -
+ac3fix_contract        unit  120  -
 h264_leading           tux   600  test_h264_leading
 sar                    tux   120  test_sar
 decode_cancel          tux   300  test_decode_cancel
@@ -420,6 +422,7 @@ gate_demux_gapsync()         { need "$DEMUX"; "$D/gate_demux_gapsync.sh"; }
 gate_ffmpeg_edge_packets()   { need "$DEMUX"; "$D/gate_ffmpeg_edge_packets.sh" "$DEMUX"; }
 gate_audiofix_edge_ac3()     { need "$AUDIOFIX" "$A264"; "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$A264" 768; }
 gate_audiofix_edge_mp2()     { need "$AUDIOFIX" "$MP2";  "$D/gate_audiofix_edge.sh" "$AUDIOFIX" "$MP2" 576; }
+gate_ac3fix_contract()       { need "$AC3FIX" "$DEMUX"; "$D/gate_ac3fix_contract.sh" "$AC3FIX" "$DEMUX" "$W"; }
 
 # ---- tier tux ----------------------------------------------------------------
 # Only the progressive fixture has a documented drop count (0, IDR start); the
